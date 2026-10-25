@@ -4,11 +4,81 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.467.0
+version: 1.468.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общий error-first результат HTTP RPC и reuse mutation decoder — 25.10.2026
+
+В server.go добавлен локальный writeRPCResult для уже завершённого RPC.
+Он проверяет error до обращения к protobuf и вызывает прежний writeMessage с
+native status/field/page. writeReadRPCResult сохраняет свою сигнатуру и200,
+делегируя тому же kernel. В четырёх endpoint-файлах заменены59 terminal tails:
+42 ответа200,13 ответов201 и4 ответа202. Это не общий executor команд:
+выбор RPC, typed request, actor/project/mutation/OCC, closed action switches и
+специальная validation остаются native. У принятого purge/turn/promotion202
+по-прежнему нет смысла завершённой фоновой операции.
+
+В тех же файлах28 checked decodeJSON→requireMutation prefixes заменены
+существующим неизменённым decodeMutationBody. JSON по-прежнему разбирается до
+mutation headers; If-Match и Idempotency-Key — прежние value fields generated
+params, их раннее чтение не вызывает getters/side effects. Разбор с промежуточной
+validation, иной decoder/error mapper, optional body и unchecked m,_ paths не
+обобщались. Типы, scopes, RPC, разрешения и owner transitions не менялись.
+
+Матрица error/nil/partial/upstream-invalid/accepted/streaming/header paths
+составлена до реализации общей границы; финальные exact bindings охватывают
+59 ответов и28 preparations. Стриминг upload/avatar сохраняет все frames,
+size/digest/read/CloseAndRecv и terminal error prefix. Provider device paths
+с writeProviderDeviceProblem/точной account projection и environment draft
+getter/validator не попали в общий result wrapper.
+
+Обратная подстановка фактических helper bodies/arguments восстановила полные
+AST пяти исходных Go-файлов, comments/directives/signatures и все native
+request/RPC/streaming prefixes:88 expansions (59 tails,1 read wrapper,28
+checked preparations). Девять actual-source mutations отклонены: error order,
+status collapse202→200, неверный RPC, field selector, parser recovery, decoder
+version/type/key drift. Дополнительно сверены direct header fields generated
+params: чтение до decode не разыменовывает promoted pointer и не вызывает код.
+
+В rpc_result_test.go добавлены78 subcases:200/201/202 whole/nested/page,
+неверная public shape/unsafe integer, nil/typednil/partial/panic-on-inspection
+ответы с ошибкой и все16 non-OK gRPC codes. Сравниваются статус, все headers,
+JSON кроме fresh canonical correlation UUID, localization/ETag и неизменность
+входного protobuf. Старый read test и6 decoder subcases продолжают проверять
+общий kernel; fixtures не являются доступом к реальному owner/provider.
+
+Финальный gateway на Go1.26.6: pinned gofmt0,03с, весь build6,63с и весь
+unit23,83с — PASS LOCAL; mod=readonly/-p2, count1, GOENV/GOWORK off,
+GOMAXPROCS4.11 packages,0 skipped/failed. После расширения scope весь build/
+unit повторён; итоговые hashes всех6 Go inputs совпали с source proof. Старые
+промежуточные результаты не подменяют проверку окончательного scope.
+
+Detector:6732 sources/222 прежних exclusions,1568 raw/1096 retained/472
+unresolved против1582/1074/508. Исчезли37 keys/52 occurrences, появились27
+keys/38 shorter windows. Семь прежних entries/13 occurrences удалены только
+после доказанного absence,936 entries сохранены. После чтения актуальных
+фрагментов/nominal contexts добавлены25 exact pair/hash/count решений для35
+окон: общие kernels уже выделены, остаются typed RPC bindings, crossed method
+boundaries, разные projections/device errors либо явные protobuf field layouts.
+50 count/hash mutations и7 попыток вернуть stale entries отвергнуты actual
+assessor. Промежуточный assessor закономерно останавливался на stale records;
+окончательные все5 stages — PASS LOCAL.
+
+Три новых decoder windows organization-role/runtime configuration оставлены
+unresolved: там ещё целесообразно применить существующий helper. Они не
+оформлялись исключениями. Все472 группы остаются в scope #1823. Go comments:
+21568/21568, пропусков0; добавлены4 содержательно описанных объявления.
+Пороги/нормализация/generated exclusions и API/contracts/modules не менялись.
+
+Context7 /golang/go проверил ResponseWriter/WriteHeader: explicit status до
+body не заменяется implicit200. Version-index1.26.7 не нашёл docs по запросу,
+проверены main docs и фактический stdlib source закреплённого Go1.26.6; versions
+не обновлялись. PostgreSQL component/browser/full E2E/OCI/apply/deploy/live
+и независимая QA текущего SHA — NOT RUN. Прочие unit/deployable sources с
+предыдущих проверок неизменны.
 
 ## Общие HTTP timeout/request/drain primitives локальных форм — 25.10.2026
 

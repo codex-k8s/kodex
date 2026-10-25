@@ -68,32 +68,20 @@ func (server *Server) UploadAgentAvatar(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	response, err := stream.CloseAndRecv()
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "agent", "")
+	writeRPCResult(w, http.StatusOK, response, err, "agent", "")
 }
 
 // SetAgentAvatar decodes the artifact selector and mutation context for the dedicated owner avatar command, then projects the agent; the reference alone does not prove artifact eligibility.
 // SetAgentAvatar разбирает селектор файла и mutation context отдельной команды аватара владельца, затем проецирует сотрудника; ссылка сама допуск файла не доказывает.
 func (server *Server) SetAgentAvatar(w http.ResponseWriter, r *http.Request, ref generated.AgentRef, p generated.SetAgentAvatarParams) {
-	body, ok := decodeJSON[generated.AgentAvatarInput](w, r)
-	if !ok {
-		return
-	}
-	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, mutation, ok := decodeMutationBody[generated.AgentAvatarInput](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
 	response, err := server.control.Command.SetAgentAvatar(r.Context(), &controlplanev1.SetAgentAvatarRequest{
 		Mutation: mutation, AgentRef: ref, ArtifactRef: body.ArtifactRef,
 	})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "agent", "")
+	writeRPCResult(w, http.StatusOK, response, err, "agent", "")
 }
 
 // RemoveAgentAvatar invokes the dedicated owner removal with mutation/version pins and returns the public agent; it does not directly remove underlying artifact storage.
@@ -104,11 +92,7 @@ func (server *Server) RemoveAgentAvatar(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	response, err := server.control.Command.RemoveAgentAvatar(r.Context(), &controlplanev1.RemoveAgentAvatarRequest{Mutation: mutation, AgentRef: ref})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "agent", "")
+	writeRPCResult(w, http.StatusOK, response, err, "agent", "")
 }
 
 // GetAgentAvatarContent first reads owner-visible agent metadata, then redirects a referenced artifact avatar to the escaped preview route or emits a deterministic PNG fallback with a private five-minute cache. Fallback encoding errors after headers are ignored; artifact eligibility is rechecked by its own route.
@@ -230,22 +214,14 @@ func (server *Server) GetProviderAccount(w http.ResponseWriter, r *http.Request,
 // CreateProviderAccount decodes definition/name with a create idempotency context, invokes the dedicated owner command and projects HTTP201 without authorizing the provider or assigning external credentials.
 // CreateProviderAccount разбирает definition/name и контекст идемпотентного create, вызывает отдельную команду владельца и проецирует HTTP201 без авторизации провайдера и назначения внешних credentials.
 func (server *Server) CreateProviderAccount(w http.ResponseWriter, r *http.Request, p generated.CreateProviderAccountParams) {
-	body, ok := decodeJSON[generated.ProviderAccountCreateInput](w, r)
-	if !ok {
-		return
-	}
-	mutation, ok := requireMutation(w, p.IdempotencyKey, "")
+	body, mutation, ok := decodeMutationBody[generated.ProviderAccountCreateInput](w, r, p.IdempotencyKey, "")
 	if !ok {
 		return
 	}
 	response, err := server.control.Command.CreateProviderAccount(r.Context(), &controlplanev1.CreateProviderAccountRequest{
 		Mutation: mutation, DefinitionKey: string(body.DefinitionKey), Name: body.Name,
 	})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusCreated, response, "account", "")
+	writeRPCResult(w, http.StatusCreated, response, err, "account", "")
 }
 
 // StartProviderAccountDeviceAuthorization forwards mutation/version pins to the specialized owner device-code start, preserves device-specific problem mapping and returns HTTP202 without completing interactive authentication.
@@ -285,11 +261,7 @@ func (server *Server) AuthorizeProviderAccountApiKey(w http.ResponseWriter, r *h
 		return
 	}
 	response, err := server.control.Command.AuthorizeProviderAccountAPIKey(r.Context(), &controlplanev1.AuthorizeProviderAccountAPIKeyRequest{Mutation: mutation, AccountRef: ref, ApiKey: apiKey})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "account", "")
+	writeRPCResult(w, http.StatusOK, response, err, "account", "")
 }
 
 // RefreshProviderAccountAuthorization sends exact account and mutation pins to the owner refresh command and returns an accepted public account response; HTTP202 is not proof that external refresh has completed.
@@ -300,11 +272,7 @@ func (server *Server) RefreshProviderAccountAuthorization(w http.ResponseWriter,
 		return
 	}
 	response, err := server.control.Command.RefreshProviderAccountAuthorization(r.Context(), &controlplanev1.RefreshProviderAccountAuthorizationRequest{Mutation: mutation, AccountRef: ref})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusAccepted, response, "account", "")
+	writeRPCResult(w, http.StatusAccepted, response, err, "account", "")
 }
 
 // VerifyProviderAccountDeviceAuthorization invokes explicit owner verification with mutation pins, requires a nonnil exact-account reply and projects HTTP200; it does not infer success from merely possessing a device code.
@@ -360,30 +328,18 @@ func (server *Server) RevokeProviderAccount(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	response, err := server.control.Command.RevokeProviderAccount(r.Context(), &controlplanev1.RevokeProviderAccountRequest{Mutation: mutation, AccountRef: ref})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "account", "")
+	writeRPCResult(w, http.StatusOK, response, err, "account", "")
 }
 
 // SetProviderAccountEnabled decodes the enabled flag and mutation/version pins for the dedicated owner command; enabling display state does not independently authenticate or admit the account.
 // SetProviderAccountEnabled разбирает enabled и mutation/version pins отдельной команды владельца; включение состояния само по себе аккаунт не аутентифицирует и не допускает.
 func (server *Server) SetProviderAccountEnabled(w http.ResponseWriter, r *http.Request, ref generated.ProviderAccountRef, p generated.SetProviderAccountEnabledParams) {
-	body, ok := decodeJSON[generated.EnabledInput](w, r)
-	if !ok {
-		return
-	}
-	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, mutation, ok := decodeMutationBody[generated.EnabledInput](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
 	response, err := server.control.Command.SetProviderAccountEnabled(r.Context(), &controlplanev1.SetProviderAccountEnabledRequest{Mutation: mutation, AccountRef: ref, Enabled: body.Enabled})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "account", "")
+	writeRPCResult(w, http.StatusOK, response, err, "account", "")
 }
 
 // SetProviderAccountConcurrency requires a limit1..256 and an explicit expected version before invoking the owner command and projecting its response; running execution claims and capacity reconciliation remain owner-managed.
@@ -408,11 +364,7 @@ func (server *Server) SetProviderAccountConcurrency(w http.ResponseWriter, r *ht
 	response, err := server.control.Command.SetProviderAccountConcurrency(r.Context(), &controlplanev1.SetProviderAccountConcurrencyRequest{
 		Mutation: mutation, AccountRef: ref, MaximumConcurrentExecutions: body.MaximumConcurrentExecutions,
 	})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "account", "")
+	writeRPCResult(w, http.StatusOK, response, err, "account", "")
 }
 
 // ListPromptTemplateVariables forwards optional project, agent, runtime revision, query, source and page selectors to the shared variable-catalog implementation without expanding a prompt.
@@ -482,30 +434,18 @@ func (server *Server) DeleteRuntimeEnvironment(w http.ResponseWriter, r *http.Re
 		return
 	}
 	response, err := server.control.Command.DeleteRuntimeEnvironment(r.Context(), &controlplanev1.DeleteRuntimeEnvironmentRequest{Mutation: mutation, EnvironmentRef: ref})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "environment", "")
+	writeRPCResult(w, http.StatusOK, response, err, "environment", "")
 }
 
 // SetRuntimeEnvironmentEnabled decodes an explicit flag and mutation context for owner enable/disable, returning public metadata rather than provisioning or stopping pods itself.
 // SetRuntimeEnvironmentEnabled разбирает явный флаг и mutation context включения либо отключения владельца, возвращая metadata вместо самостоятельного создания и остановки подов.
 func (server *Server) SetRuntimeEnvironmentEnabled(w http.ResponseWriter, r *http.Request, ref generated.RuntimeEnvironmentRef, p generated.SetRuntimeEnvironmentEnabledParams) {
-	body, ok := decodeJSON[generated.EnabledInput](w, r)
-	if !ok {
-		return
-	}
-	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, mutation, ok := decodeMutationBody[generated.EnabledInput](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
 	response, err := server.control.Command.SetRuntimeEnvironmentEnabled(r.Context(), &controlplanev1.SetRuntimeEnvironmentEnabledRequest{Mutation: mutation, EnvironmentRef: ref, Enabled: body.Enabled})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "environment", "")
+	writeRPCResult(w, http.StatusOK, response, err, "environment", "")
 }
 
 // GetRuntimeEnvironmentReadiness reads the selected environment's owner readiness view and public-projects it without performing runtime probes or changing admission state.
@@ -532,11 +472,7 @@ func (server *Server) DeleteSchedule(w http.ResponseWriter, r *http.Request, ref
 		return
 	}
 	response, err := server.control.Command.DeleteSchedule(r.Context(), &controlplanev1.DeleteScheduleRequest{Mutation: mutation, ScheduleRef: ref})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "schedule", "")
+	writeRPCResult(w, http.StatusOK, response, err, "schedule", "")
 }
 
 // ListScheduleRevisions forwards exact schedule/page selectors and projects revision metadata with the established terminal-cursor policy, without activating a revision.
@@ -556,11 +492,7 @@ func (server *Server) ListScheduleRuns(w http.ResponseWriter, r *http.Request, r
 // UpdateIntegrationConnection decodes public configuration/name and mutation pins, converts configuration with structpb while ignoring its conversion error as before, then invokes the dedicated owner update. It does not install credentials or execute remote tools.
 // UpdateIntegrationConnection разбирает публичную конфигурацию, имя и mutation pins, преобразует structpb с прежним игнорированием ошибки, затем вызывает отдельный update владельца. Credentials не устанавливает и удалённые инструменты не выполняет.
 func (server *Server) UpdateIntegrationConnection(w http.ResponseWriter, r *http.Request, ref generated.ConnectionRef, p generated.UpdateIntegrationConnectionParams) {
-	body, ok := decodeJSON[generated.IntegrationConnectionUpdateInput](w, r)
-	if !ok {
-		return
-	}
-	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, mutation, ok := decodeMutationBody[generated.IntegrationConnectionUpdateInput](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -568,11 +500,7 @@ func (server *Server) UpdateIntegrationConnection(w http.ResponseWriter, r *http
 	response, err := server.control.Command.UpdateIntegrationConnection(r.Context(), &controlplanev1.UpdateIntegrationConnectionRequest{
 		Mutation: mutation, ConnectionRef: ref, Name: body.Name, PublicConfiguration: configuration,
 	})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "connection", "")
+	writeRPCResult(w, http.StatusOK, response, err, "connection", "")
 }
 
 // DeleteIntegrationConnection delegates exact connection deletion with mutation/version pins and projects the result without bypassing owner lifecycle, secret revocation or dependency policy.
@@ -583,11 +511,7 @@ func (server *Server) DeleteIntegrationConnection(w http.ResponseWriter, r *http
 		return
 	}
 	response, err := server.control.Command.DeleteIntegrationConnection(r.Context(), &controlplanev1.DeleteIntegrationConnectionRequest{Mutation: mutation, ConnectionRef: ref})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "connection", "")
+	writeRPCResult(w, http.StatusOK, response, err, "connection", "")
 }
 
 // ListRoleImageRecipeRevisions binds the route project to request context and reads the exact recipe's historical page without building, admitting or promoting an image.
@@ -608,11 +532,7 @@ func (server *Server) PromoteRoleImage(w http.ResponseWriter, r *http.Request, p
 	if !ok {
 		return
 	}
-	body, ok := decodeJSON[generated.RoleImagePromotionInput](w, r)
-	if !ok {
-		return
-	}
-	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, mutation, ok := decodeMutationBody[generated.RoleImagePromotionInput](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -620,9 +540,5 @@ func (server *Server) PromoteRoleImage(w http.ResponseWriter, r *http.Request, p
 		Mutation: mutation, RecipeRef: recipeRef, ImageArtifactRef: body.ImageArtifactRef,
 		ExpectedProvenanceSha256: body.ExpectedProvenanceSha256,
 	})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusAccepted, response, "receipt", "")
+	writeRPCResult(w, http.StatusAccepted, response, err, "receipt", "")
 }

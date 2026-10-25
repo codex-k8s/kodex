@@ -4099,22 +4099,6 @@
     },
     {
       "format": "go",
-      "firstPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
-      "secondPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
-      "fragmentSHA256": "ce697f3f829fce682b09248e0e8261d43154e4e3e779ac7178c73556ea8dc0c5",
-      "count": 1,
-      "reason": "Окно139 tokens сравнивает UpdateAssistantConversationTitle с хвостом Git detach и CopyGitManagedConfiguration. Различаются generated JSON body, точный Assistant/Command RPC, ConversationRef против ConfigurationRef, writeMessage против checked writeManagedResult и HTTP200/201. Decode/mutation/error/result primitives уже общие; полного связного алгоритма на всём окне нет. Generic callback mutation wrapper ради коротких typed guards скроет маршрутизацию и разную проверку ответа. Сохранены только exact paths/hash/count1, не HTTP mutation endpoints целиком."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
-      "secondPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
-      "fragmentSHA256": "623e9f37b0b323d925073a6622a70d302e6c13b45ca1ade0c14f9471b3f33faa",
-      "count": 1,
-      "reason": "Окно103 tokens пересекает хвост TrashProject и RestoreProject против хвоста RebindSystemSTTConsumers и начала DetachGitManagedConfiguration. Это разные project lifecycle и managed-ownership commands с nominal requests и строгой проверкой detachment reply далее. requireMutation и writeRPCProblem уже общие; повторены короткие guards/typed calls, а универсальный command dispatcher скрыл бы специализированные переходы. Предметные комментарии изменили hash прежнего окна; повторно прочитаны оба конца, scope/count1 не расширены. Сохранены только точные два пути/fragment/count1, не команды или файлы целиком."
-    },
-    {
-      "format": "go",
       "firstPath": "services/external/control-api-gateway/internal/transport/http/interaction_identity_endpoints.go",
       "secondPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
       "fragmentSHA256": "7fa158a967c18eb41c07ebdd17c4179c8943040632ae86a72624bbdc90076c25",
@@ -5504,38 +5488,6 @@
       "fragmentSHA256": "f43635d4fac26c158bdedaf81d8ae40c59ed045fd3b4f2d34ed790525b4c0aef",
       "count": 1,
       "reason": "После реального выноса errors.As/40001 и mutex-счётчика в recordReadSerializationConflict прежнее140-token окно сократилось до109. Остаток пересекает хвост разных TraceQueryStart (close struct-channel против отправки backend PID), private typed context-key guards, вызов общего helper и разные сигнатуры component fixtures. SQL matching Contains/HasPrefix, start signals, owner arguments и page/metadata/preview outcomes намеренно различаются. Более общая trace factory или key-any dispatcher скроет эти связи ради короткого glue; сам подсчёт уже единственный. Оба файла прочитаны полностью; full-AST expansion proof сохраняет initialized tracer callers, markers/SQL/timings/directives, production retry bytes прежние. Сохранены лишь точные два пути/fragment/count1; остальные тесты и фрагменты не исключены."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
-      "secondPath": "services/external/control-api-gateway/internal/transport/http/mvp_endpoints.go",
-      "fragmentSHA256": "623e9f37b0b323d925073a6622a70d302e6c13b45ca1ade0c14f9471b3f33faa",
-      "count": 6,
-      "reason": "Шесть окон112–114 tokens пересекают хвост предыдущей проекции и короткий typed command относительно RestoreProject: RemoveAgentAvatar, StartProviderAccountDeviceAuthorization, ReauthorizeProviderAccountDeviceCode, DeleteRuntimeEnvironment, DeleteSchedule, DeleteIntegrationConnection. Полностью прочитаны эти wrappers и RestoreProject. Общие requireMutation, RPC problem mapping и writeMessage уже вынесены; точная account-проверка отдельно вынесена в закрытый providerAccountCommandResponse для verify/reauthorize/delete с полным AST-доказательством. Сохранённый код связывает nominal request/ref с отдельным RPC и своим полем ответа; device start/reauthorize используют другой error mapper и HTTP202. Общий command dispatcher скрыл бы разные owner lifecycle и public projections. Оставлены только эти два пути, данный fragmentSHA и ровно6 вхождений; полный gateway build/unit и negative device/error/header checks выполнены, live-переходы не заявлены."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/external/control-api-gateway/internal/transport/http/mvp_endpoints.go",
-      "secondPath": "services/external/control-api-gateway/internal/transport/http/mvp_endpoints.go",
-      "fragmentSHA256": "aea53832d876c0636df11084cb6d63e144ca9f58d23b75b362507b08ae94aa9b",
-      "count": 1,
-      "reason": "Одно перекрывающееся окно307 tokens: VerifyProviderAccountDeviceAuthorization→ReauthorizeProviderAccountDeviceCode против ReauthorizeProviderAccountDeviceCode→DeleteProviderAccount. Это sliding window через отдельные typed endpoints, не копия одного provider lifecycle. Настоящая общая exact-account проверка и account projection уже вынесены в закрытый helper на три reply types; после раскрытия весь прежний mvp AST совпадает. Остались mutation guard, nominal request/RPC и явный error/status profile: Verify/Delete writeRPCProblem+HTTP200, Reauthorize writeProviderDeviceProblem+HTTP202. Нельзя унифицировать их как один универсальный owner command; разные transient hints проверены через generated routes для всех16 non-OK gRPC codes и missing headers до RPC. Retention ограничен этим файлом, exact fragmentSHA и count1; пороги/исключения файлов не меняются."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
-      "secondPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
-      "fragmentSHA256": "623e9f37b0b323d925073a6622a70d302e6c13b45ca1ade0c14f9471b3f33faa",
-      "count": 1,
-      "reason": "Одно точное окно114 tokens пересекает хвост TrashProject и RestoreProject против хвоста TrashArtifact и RestoreArtifact. Полностью прочитаны оба коротких restore wrappers и границы окна. requireMutation, writeRPCProblem и writeMessage уже общие; остались nominal ProjectRef/ArtifactRef, отдельные RestoreProject/RestoreArtifact RPC и разные public fields project/artifact. Универсальное восстановление смешало бы owner scopes и самостоятельные lifecycle команды. Код этих endpoints не менялся, полный gateway build/unit на текущем дереве прошёл. Решение ограничено self-pair command_endpoints.go, exact fragmentSHA и count1; файл или класс команд не исключаются."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
-      "secondPath": "services/external/control-api-gateway/internal/transport/http/environment_draft_endpoints.go",
-      "fragmentSHA256": "623e9f37b0b323d925073a6622a70d302e6c13b45ca1ade0c14f9471b3f33faa",
-      "count": 2,
-      "reason": "Два точных окна114/117 tokens: хвост TrashProject и RestoreProject против границ ValidateRuntimeEnvironmentDraft и DiscardRuntimeEnvironmentDraft. Оба draft wrappers прочитаны целиком. Общие mutation guards, RPC problem mapper и writeEnvironmentDraft/writeEnvironmentDraftResult уже вынесены; draft projection проверяет точный ref и свой публичный shape, а restore возвращает project. Сохранены разные nominal requests/RPC для validation, discard и project restore, без универсального lifecycle dispatch. Полный gateway build/unit выполнен; эти файлы не менялись. Retention ограничен exact двумя путями, fragmentSHA и ровно2 occurrences; drift вызывает отказ assessor."
     },
     {
       "format": "yaml",
@@ -7155,14 +7107,6 @@
     },
     {
       "format": "go",
-      "firstPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
-      "secondPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
-      "fragmentSHA256": "99c46a90a9d5cf6d2ccafe4035f78f14a2468426bed5eeef304d58a0f717921c",
-      "count": 1,
-      "reason": "226-token окно HTTP CreateSchedule/UpdateSchedule содержит явные разные protobuf request bindings. Нетривиальные target и Input/PromptInputs Struct conversions уже общие в scheduleInput; nullable scalar conversions — stringValue. Create сначала связывает route project, использует ProjectRef и creation mutation без IfMatch, возвращая201; Update использует ScheduleRef/IfMatch и возвращает200. Decode/ошибки уже общие helpers. Универсальный request builder потребовал бы reflection либо промежуточный Create/Update envelope и скрыл бы project-versus-existing-resource boundary. Сохранены native order и все timing/DST/misfire/overlap fields; решение exact path/hash/count1."
-    },
-    {
-      "format": "go",
       "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/mvp_queries.go",
       "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/mvp_queries.go",
       "fragmentSHA256": "1cc2b7f198a90236d667883fb0ce71f3bc04dbce496578caf4f262af9f08df8c",
@@ -7544,6 +7488,206 @@
       "fragmentSHA256": "6c623821612015a42c78e24e45801550fbbabad90bac024878b570439947547e",
       "count": 1,
       "reason": "Окно145 tokens содержит cookie CSRF и обязательные HTTP headers двух самодостаточных page.evaluate callbacks. Полные mutateAPI и mutateLocalApi прочитаны: первый принимает caller key/POST/PATCH/PUT/DELETE/expectedStatus, повторяет transport failure до двух раз с тем же key и отдельным APIMutationFailure; второй сохраняет однократный POST/PUT, новый key на явный вызов, прежний JSON/error contract и любой успешный 2xx. Перенос общего Node helper внутрь browser callback невозможен без отдельного realm bridge; объединение полных функций изменило бы idempotency/retry/error boundary. Две действительно идентичные local mutations уже вынесены в local-api.ts. Сохранено только это окно exact pair/hash/count1, не callbacks, функции либо E2E-файлы целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/access_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "fragmentSHA256": "d46d479cb1dff6dfe3a37a412c988293924cff128381e8a0b8c7be4830bbdcb9",
+      "count": 1,
+      "reason": "Окно 100 tokens. Сравниваются хвост CreateAccessRole/начало CreateAccessRoleVersion и хвост AddPlatformMembership/начало ChangePlatformMembership. Decoder уже decodeMutationBody; role revision с PermissionKeys/AllowedScopes/ChangeComment не является membership role/active update. Общего цельного алгоритма на окне нет, новый generic owner dispatcher стёр бы номинальные RPC и authority selectors. Слева: CreateAccessRole/CreateAccessRoleVersion; справа: AddPlatformMembership/ChangePlatformMembership. Сохранены только exact pair/hash/count1, не функции, файлы или transport целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
+      "fragmentSHA256": "f36529b1dfc71c75ff1617684bada3b27e39286d4bbcc87f56213239d4a56093",
+      "count": 1,
+      "reason": "Окно 117 tokens. Окно пересекает соседние методы. Decode/mutation и error-first output уже общие; title ConversationRef, plan Revision и account/environment Enabled принадлежат отдельным типизированным операциям. Их requested values не являются authority. Объединять typed request/RPC/result-selector bindings через callback либо generic action только ради этого glue нельзя. Слева: CreateAssistantConversation/UpdateAssistantConversationTitle; справа: UpdateAssistantPlanDraft/ValidateAssistantPlan. Сохранены только exact pair/hash/count1, не функции, файлы или transport целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/attachment_set_endpoints.go",
+      "fragmentSHA256": "199dc63eb0f379626b1ddf08d2487db2e7621548d439eaa8c14fa51be01f6464",
+      "count": 1,
+      "reason": "Окно 103 tokens. Начало окна содержит результат предшествующего метода, затем другой nominal request с общим decodeMutationBody. Conversation title, AttachmentSet ArtifactRefs, Agent metadata, Workflow draft, Gate decision и Artifact binding имеют самостоятельные RPC/поля/guards; полноценный общий algorithm в окне отсутствует. Общие decode/error/public projection primitives уже используются. Слева: CreateAssistantConversation/UpdateAssistantConversationTitle; справа: AddAttachmentSetItems/RemoveAttachmentSetItems. Сохранены только exact pair/hash/count1, не функции, файлы или transport целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "fragmentSHA256": "199dc63eb0f379626b1ddf08d2487db2e7621548d439eaa8c14fa51be01f6464",
+      "count": 4,
+      "reason": "Окно 100/103 tokens. Начало окна содержит результат предшествующего метода, затем другой nominal request с общим decodeMutationBody. Conversation title, AttachmentSet ArtifactRefs, Agent metadata, Workflow draft, Gate decision и Artifact binding имеют самостоятельные RPC/поля/guards; полноценный общий algorithm в окне отсутствует. Общие decode/error/public projection primitives уже используются. Слева: CreateAssistantConversation/UpdateAssistantConversationTitle; справа: CreateAgent/UpdateAgent/CreateWorkflow/UpdateWorkflowDraft/AddSessionTurn/ResolveOwnerGate/ChangeIntegrationGrant/ChangeArtifactBinding. Сохранены только exact pair/hash/count4, не функции, файлы или transport целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/mvp_endpoints.go",
+      "fragmentSHA256": "f36529b1dfc71c75ff1617684bada3b27e39286d4bbcc87f56213239d4a56093",
+      "count": 2,
+      "reason": "Окно 117 tokens. Окно пересекает соседние методы. Decode/mutation и error-first output уже общие; title ConversationRef, plan Revision и account/environment Enabled принадлежат отдельным типизированным операциям. Их requested values не являются authority. Объединять typed request/RPC/result-selector bindings через callback либо generic action только ради этого glue нельзя. Слева: CreateAssistantConversation/UpdateAssistantConversationTitle; справа: RevokeProviderAccount/SetProviderAccountEnabled/DeleteRuntimeEnvironment/SetRuntimeEnvironmentEnabled. Сохранены только exact pair/hash/count2, не функции, файлы или transport целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
+      "fragmentSHA256": "fc8e858bf1721adf8d7b23bca80923c52e0956bae541a2de3c56665a6c0172a2",
+      "count": 1,
+      "reason": "Окно 132 tokens. Окна пересекают UpdateAssistantPlanDraft, ValidateAssistantPlan и RejectAssistantPlan. Summary/Operations mapping, exact Revision и разные owner transitions/results должны оставаться явными; validate не является reject либо draft update. Общие decodeMutationBody/writeRPCResult уже вынесены, общий lifecycle executor ради typed glue не добавлялся. Слева: UpdateAssistantPlanDraft/ValidateAssistantPlan; справа: ValidateAssistantPlan/RejectAssistantPlan. Сохранены только exact pair/hash/count1, не функции, файлы или transport целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "fragmentSHA256": "d78a27bd650adf0ca9ab67dc99bc01676e22252ec87f5c1f5315b738f322ad88",
+      "count": 1,
+      "reason": "Окно 165 tokens. Перекрываются TrashProject/RestoreProject/PurgeProject. Trash сначала привязывает active project context, restore работает с trashed resource без такого fabricated context, purge выдаёт202 acceptance. RequireMutation и public result уже общие; общий transition(mode) скрыл бы разные scope/lifecycle/RPC contracts и acceptance/completion границу. Слева: TrashProject/RestoreProject; справа: RestoreProject/PurgeProject. Сохранены только exact pair/hash/count1, не функции, файлы или transport целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "fragmentSHA256": "8958b2106bd6288abf3b7017701d0f05d05100e593bd54f4c6d28c0d67945cab",
+      "count": 1,
+      "reason": "Окно 102 tokens. Хвост одного метода и nominal mutation/RPC/result следующего. RestoreProject, RestoreArtifact, RemoveAgentAvatar, RefreshProviderAccountAuthorization, RevokeProviderAccount, DeleteRuntimeEnvironment, DeleteSchedule и DeleteIntegrationConnection имеют разные selectors, owner commands и200/202. RequireMutation/writeRPCResult уже общие; обобщённое исполнение удаления/восстановления/authorization вместо точных команд не вводится. Слева: TrashProject/RestoreProject; справа: DeleteArtifact/RestoreArtifact. Сохранены только exact pair/hash/count1, не функции, файлы или transport целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/mvp_endpoints.go",
+      "fragmentSHA256": "8958b2106bd6288abf3b7017701d0f05d05100e593bd54f4c6d28c0d67945cab",
+      "count": 6,
+      "reason": "Окно 100/102 tokens. Хвост одного метода и nominal mutation/RPC/result следующего. RestoreProject, RestoreArtifact, RemoveAgentAvatar, RefreshProviderAccountAuthorization, RevokeProviderAccount, DeleteRuntimeEnvironment, DeleteSchedule и DeleteIntegrationConnection имеют разные selectors, owner commands и200/202. RequireMutation/writeRPCResult уже общие; обобщённое исполнение удаления/восстановления/authorization вместо точных команд не вводится. Слева: TrashProject/RestoreProject; справа: SetAgentAvatar/RemoveAgentAvatar/AuthorizeProviderAccountApiKey/RefreshProviderAccountAuthorization/DeleteProviderAccount/RevokeProviderAccount/PreviewPromptTemplate/DeleteRuntimeEnvironment/ListRuntimeEnvironmentAgents/DeleteSchedule/UpdateIntegrationConnection/DeleteIntegrationConnection. Сохранены только exact pair/hash/count6, не функции, файлы или transport целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/mvp_endpoints.go",
+      "fragmentSHA256": "4e6e801897dfc7fa54e42d45aab34faaeb2fe70cfd88b581d8c2f1579f6e3042",
+      "count": 1,
+      "reason": "Окно 118 tokens. Окно пересекает предыдущий ответ и project-scoped command. Membership permission/active update не является RoleImage promotion с ImageArtifactRef/provenance; project context и common decode уже отдельные primitives. Native typed RPC/nominal refs и201/202/field mapping остаются явными, общий protected command скрывал бы разные grants/lifecycle. Слева: AddProjectMembership/ChangeProjectMembership; справа: ListRoleImageRecipeRevisions/PromoteRoleImage. Сохранены только exact pair/hash/count1, не функции, файлы или transport целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/mvp_endpoints.go",
+      "fragmentSHA256": "a79efa340d2a8ed507a50079874e4dfe4529d6ce9b0547b30de431f1e2b3093d",
+      "count": 1,
+      "reason": "Окно 118 tokens. Сравниваются конец CreateAgent/начало UpdateAgent и конец streamed avatar upload/начало SetAgentAvatar. Metadata/role/runtime selectors отличаются от exact ArtifactRef; поток CloseAndRecv не превращается в обычный create. Decode и final response kernel уже общие, nominal calls и stream/field bindings не объединяются. Слева: CreateAgent/UpdateAgent; справа: UploadAgentAvatar/SetAgentAvatar. Сохранены только exact pair/hash/count1, не функции, файлы или transport целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "fragmentSHA256": "58991de403fce1c14b53770f680276d12b13f8dadef3a2a763aea2f0a7ac87c0",
+      "count": 1,
+      "reason": "Окно 116 tokens. Окно соединяет результат CreateAgent с UpdateAgent и результат CommandAgent с CreateInstructionDraft. Metadata/role/runtime update не создаёт instruction draft и имеет другой body/RPC; общие decodeMutationBody и writeRPCResult уже используются. Вынос оставшегося nominal glue потребовал бы dispatcher/callback вместо явной owner command. Слева: CreateAgent/UpdateAgent; справа: CommandAgent/CreateInstructionDraft. Сохранены только exact pair/hash/count1, не функции, файлы или transport целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "fragmentSHA256": "a002e3953d11c1548459574bb043826fda58334802ee7e88974092ec77aca2c7",
+      "count": 1,
+      "reason": "Окно 100 tokens. Окно пересекает CreateWorkflow/UpdateWorkflowDraft против AddSessionTurn/ResolveOwnerGate. workflowDraft mapping не является gateDecision/comment/attachment command; общий decoder уже вынесен. Gate authority/decision не назначаются callback из payload, поэтому typed request и specialized RPC остаются явными. Слева: CreateWorkflow/UpdateWorkflowDraft; справа: AddSessionTurn/ResolveOwnerGate. Сохранены только exact pair/hash/count1, не функции, файлы или transport целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "fragmentSHA256": "9951d47f8ea41d3d8253193568cc508548ee10d7f27c4ec43b534f744455f568",
+      "count": 1,
+      "reason": "Окно 111 tokens. Начало двух разных closed action switches: CANCEL/RETRY run и TEST/ENABLE integration. Decode/mutation/result уже общие, но action enums, exact RunRef/ConnectionRef и команды различны. Обобщённый action executor изменил бы проверяемость закрытого реестра; на окне нет отдельного общего business algorithm. Слева: sliceOrEmpty/CommandRun; справа: ConfigureIntegrationConnectionCredential/CommandIntegrationConnection. Сохранены только exact pair/hash/count1, не функции, файлы или transport целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "fragmentSHA256": "c2d2e8bd1a4a225798ffbb76d3e9e90ce16105d37507c7209084390e77cfe200",
+      "count": 1,
+      "reason": "Окно 201 tokens. Окно включает CreateSchedule/UpdateSchedule и начало следующего command. Длинные typed literals перечисляют те же schedule input fields, но nominal protobuf requests, ProjectRef/ScheduleRef и201/200 различаются. target/input/prompt converters и decode/result уже общие. Intermediate object с повторным копированием всех полей либо reflection не удаляет алгоритм и скрывает точные RPC bindings. Слева: CreateSchedule/UpdateSchedule; справа: UpdateSchedule/CommandSchedule. Сохранены только exact pair/hash/count1, не функции, файлы или transport целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "fragmentSHA256": "5cbe8bcef3b6e47f7b2a933512b7b24e256dbf60009c95f0f2a4bb99f0e00070",
+      "count": 1,
+      "reason": "Окно 105 tokens. Перекрываются ChangeArtifactBinding/DeleteArtifact/RestoreArtifact. Binding AgentRef/Enabled, deletion ImpactDigest и восстановление — разные owner операции; mutation/result уже общие. Одноимённый ArtifactRef не разрешает общий lifecycle transition либо удаление impact guard. Слева: ChangeArtifactBinding/DeleteArtifact; справа: DeleteArtifact/RestoreArtifact. Сохранены только exact pair/hash/count1, не функции, файлы или transport целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "fragmentSHA256": "b3db9736d77b83ba1af801ab7b3a2507d9b53651aea1b2c89d2a2e2f1c95f978",
+      "count": 1,
+      "reason": "Окно 123 tokens. Окна пересекают artifact binding/delete и restore/purge. Delete/Purge требуют ImpactDigest, Restore его не имеет; purge возвращает другой whole response. RequireMutation/error-first output уже общие; общий action wrapper скрыл бы разные native requests и eligibility/irreversibility boundaries. Слева: ChangeArtifactBinding/DeleteArtifact; справа: RestoreArtifact/PurgeArtifact. Сохранены только exact pair/hash/count1, не функции, файлы или transport целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/environment_draft_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/environment_draft_endpoints.go",
+      "fragmentSHA256": "cf432e753a7c67d418f867d8599f7c4206017bdc82964f2ef5f1127e804c971c",
+      "count": 1,
+      "reason": "Окно 122 tokens. Окно пересекает Save/Validate/Publish и Publish/Discard/следующий mapper. Точные ValidateRuntimeEnvironmentDraft/DiscardRuntimeEnvironmentDraft команды и GetDraft проекция не являются одним переходом. writeEnvironmentDraft уже общий специализированный validator/projector; getter остаётся после error gate, callback dispatcher ради короткого RPC glue не добавляется. Слева: SaveRuntimeEnvironmentDraft/ValidateRuntimeEnvironmentDraft/PublishRuntimeEnvironmentDraft; справа: PublishRuntimeEnvironmentDraft/DiscardRuntimeEnvironmentDraft/environmentDraftSpecificationInput. Сохранены только exact pair/hash/count1, не функции, файлы или transport целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/environment_draft_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
+      "fragmentSHA256": "f2589f0afbdf69a35e9c225704917fa32c05962189e131895f6a91fa87d1e3b3",
+      "count": 1,
+      "reason": "Окно 103 tokens. Сравнивается environment draft validation с managed enablement или provider device lifecycle. writeEnvironmentDraft, writeProviderDeviceProblem и account command projector проверяют разные shapes/refs/диагностику; getter нельзя вычислять до error gate. RequireMutation уже общий; совпадение header/RPC glue не делает разные commands/response contracts одним algorithm. Слева: SaveRuntimeEnvironmentDraft/ValidateRuntimeEnvironmentDraft; справа: RebindSystemSTTConsumers/DetachGitManagedConfiguration. Сохранены только exact pair/hash/count1, не функции, файлы или transport целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/environment_draft_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/mvp_endpoints.go",
+      "fragmentSHA256": "f2589f0afbdf69a35e9c225704917fa32c05962189e131895f6a91fa87d1e3b3",
+      "count": 2,
+      "reason": "Окно 111/113 tokens. Сравнивается environment draft validation с managed enablement или provider device lifecycle. writeEnvironmentDraft, writeProviderDeviceProblem и account command projector проверяют разные shapes/refs/диагностику; getter нельзя вычислять до error gate. RequireMutation уже общий; совпадение header/RPC glue не делает разные commands/response contracts одним algorithm. Слева: SaveRuntimeEnvironmentDraft/ValidateRuntimeEnvironmentDraft; справа: CreateProviderAccount/StartProviderAccountDeviceAuthorization/VerifyProviderAccountDeviceAuthorization/ReauthorizeProviderAccountDeviceCode. Сохранены только exact pair/hash/count2, не функции, файлы или transport целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/mvp_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/mvp_endpoints.go",
+      "fragmentSHA256": "9252216b9938e98f18058fda235d1415ca709859500e69c20497b05330bcb78e",
+      "count": 1,
+      "reason": "Окно 105 tokens. Окно пересекает provider create/start-device и API-key authorize/refresh. API-key input validation и переменная key остаются native; device start имеет специализированный problem mapper, refresh — обычный result/202. Общие mutation и стандартная projection уже вынесены; protocol-specific paths не объединяются. Слева: CreateProviderAccount/StartProviderAccountDeviceAuthorization; справа: AuthorizeProviderAccountApiKey/RefreshProviderAccountAuthorization. Сохранены только exact pair/hash/count1, не функции, файлы или transport целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/mvp_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/mvp_endpoints.go",
+      "fragmentSHA256": "3dcf111cd1b0a396f7d4b327f4c28ed5356183c4a6eb0250ebaab58632fb5372",
+      "count": 1,
+      "reason": "Окно 129 tokens. Соседние provider paths start-device/refresh/verify имеют разные RPC,200/202 и output validation. Start использует writeProviderDeviceProblem + writeMessage, verify — writeRPCProblem + exact-account writeProviderAccountCommandResponse. Общие primitives уже имеются; общий callback executor только скрыл бы различия private device boundary. Слева: CreateProviderAccount/StartProviderAccountDeviceAuthorization; справа: RefreshProviderAccountAuthorization/VerifyProviderAccountDeviceAuthorization. Сохранены только exact pair/hash/count1, не функции, файлы или transport целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/mvp_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/mvp_endpoints.go",
+      "fragmentSHA256": "0af56af7a95aeac2867f04d625a7b09ca3fda54bf9692356447710be3299faae",
+      "count": 1,
+      "reason": "Окно 100 tokens. StartProviderAccountDeviceAuthorization и ReauthorizeProviderAccountDeviceCode — distinct owner operations. Error mapper общий device-specific, но success projection различна: обычный writeMessage против exact-account command validation. RequireMutation уже общий; нельзя смешивать shapes, протокол reauth и startup в одну generic команду. Слева: StartProviderAccountDeviceAuthorization; справа: ReauthorizeProviderAccountDeviceCode. Сохранены только exact pair/hash/count1, не функции, файлы или transport целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/mvp_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/mvp_endpoints.go",
+      "fragmentSHA256": "407d33fa0712e6fab31164c3ecb3f3b146dd4886d8d205d9082f2178ef4eaa09",
+      "count": 1,
+      "reason": "Окно 134 tokens. Перекрываются API-key/refresh/verify и delete/revoke/enable boundaries. Refresh202 и revoke200 — разные remote credential lifecycle effects, не общий transition. Mutation и стандартный error-first result уже общие; номинальные RPC/refs и соседние method signatures сохраняются. Слева: AuthorizeProviderAccountApiKey/RefreshProviderAccountAuthorization/VerifyProviderAccountDeviceAuthorization; справа: DeleteProviderAccount/RevokeProviderAccount/SetProviderAccountEnabled. Сохранены только exact pair/hash/count1, не функции, файлы или transport целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/mvp_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/mvp_endpoints.go",
+      "fragmentSHA256": "4c425eba9093c45e094212a79aadcf35578a74f7eec26fc0f857eb1e797b0c56",
+      "count": 1,
+      "reason": "Окно 301 tokens. Длинное окно перекрывает сразу verify/reauthorize/delete/revoke. Verify/delete используют writeRPCProblem, reauthorize — writeProviderDeviceProblem; success имеет exact-account projection и200/202, revoke — стандартный result. Единого цельного protocol/lifecycle algorithm на всём окне нет; shared RequireMutation/result/projectors уже выделены, generic credential transition скрыл бы security distinctions. Слева: VerifyProviderAccountDeviceAuthorization/ReauthorizeProviderAccountDeviceCode/DeleteProviderAccount; справа: ReauthorizeProviderAccountDeviceCode/DeleteProviderAccount/RevokeProviderAccount. Сохранены только exact pair/hash/count1, не функции, файлы или transport целиком."
     }
   ]
 }

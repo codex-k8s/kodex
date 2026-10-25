@@ -364,14 +364,20 @@ func writeMessage(writer http.ResponseWriter, statusCode int, message proto.Mess
 	_ = json.NewEncoder(writer).Encode(value)
 }
 
-// writeReadRPCResult handles an already completed read RPC: an error uses the existing closed problem mapper before the message is inspected; success uses the existing public projection with HTTP200. Callers retain request authority, RPC choice and any response-specific validation.
-// writeReadRPCResult обрабатывает уже завершённый RPC чтения: ошибка проходит прежнее закрытое отображение до обращения к сообщению, успех — прежнюю публичную проекцию с HTTP200. Полномочия запроса, выбор RPC и специальные проверки ответа остаются у вызывающего.
-func writeReadRPCResult(writer http.ResponseWriter, message proto.Message, err error, field, pageField string) {
+// writeRPCResult projects an already completed RPC using the caller's exact success status and public field/page selectors. Errors go through the existing closed problem mapper before any protobuf access, so nil or partial replies cannot become success. It does not invoke a command, retry a write or establish resource authority.
+// writeRPCResult проецирует уже завершённый RPC с точным статусом успеха и публичными field/page selectors вызывающего. Ошибка проходит прежнее закрытое отображение до обращения к protobuf, поэтому nil и частичный ответ не становятся успехом. Команду не вызывает, запись не повторяет и полномочия на ресурс не назначает.
+func writeRPCResult(writer http.ResponseWriter, statusCode int, message proto.Message, err error, field, pageField string) {
 	if err != nil {
 		writeRPCProblem(writer, err)
 		return
 	}
-	writeMessage(writer, http.StatusOK, message, field, pageField)
+	writeMessage(writer, statusCode, message, field, pageField)
+}
+
+// writeReadRPCResult handles an already completed read RPC: an error uses the existing closed problem mapper before the message is inspected; success uses the existing public projection with HTTP200. Callers retain request authority, RPC choice and any response-specific validation.
+// writeReadRPCResult обрабатывает уже завершённый RPC чтения: ошибка проходит прежнее закрытое отображение до обращения к сообщению, успех — прежнюю публичную проекцию с HTTP200. Полномочия запроса, выбор RPC и специальные проверки ответа остаются у вызывающего.
+func writeReadRPCResult(writer http.ResponseWriter, message proto.Message, err error, field, pageField string) {
+	writeRPCResult(writer, http.StatusOK, message, err, field, pageField)
 }
 
 // messageMap validates the typed runtime catalog, marshals lowerCamelCase proto JSON, checks/normalizes the public shape and applies browser projections in a fresh map. Run graph response snapshots are removed; on failure no projected map is returned, and this is not an owner authorization operation.

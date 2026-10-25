@@ -64,11 +64,7 @@ func (server *Server) CreateProject(w http.ResponseWriter, r *http.Request, p ge
 	}
 	m, _ := requireMutation(w, p.IdempotencyKey, "")
 	response, err := server.control.Command.CreateProject(r.Context(), &controlplanev1.CreateProjectRequest{Mutation: m, Name: body.Name, Purpose: body.Purpose, Language: string(body.Language)})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusCreated, response, "project", "")
+	writeRPCResult(w, http.StatusCreated, response, err, "project", "")
 }
 
 // UpdateProject binds route-project context, decodes editable fields and mutation/version pins, then invokes the owner update and public-projects the result without changing ownership locally.
@@ -78,20 +74,12 @@ func (server *Server) UpdateProject(w http.ResponseWriter, r *http.Request, ref 
 	if !ok {
 		return
 	}
-	body, ok := decodeJSON[generated.ProjectInput](w, r)
-	if !ok {
-		return
-	}
-	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, m, ok := decodeMutationBody[generated.ProjectInput](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
 	response, err := server.control.Command.UpdateProject(r.Context(), &controlplanev1.UpdateProjectRequest{Mutation: m, ProjectRef: ref, Name: body.Name, Purpose: body.Purpose, Language: string(body.Language)})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "project", "")
+	writeRPCResult(w, http.StatusOK, response, err, "project", "")
 }
 
 // TrashProject binds project context and sends exact project plus mutation pins to the dedicated trash transition; cleanup and restoration deadlines belong to owner state.
@@ -106,11 +94,7 @@ func (server *Server) TrashProject(w http.ResponseWriter, r *http.Request, ref g
 		return
 	}
 	response, err := server.control.Command.TrashProject(r.Context(), &controlplanev1.TrashProjectRequest{Mutation: m, ProjectRef: ref})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "project", "")
+	writeRPCResult(w, http.StatusOK, response, err, "project", "")
 }
 
 // RestoreProject delegates exact project restoration with mutation/version pins under the existing request context, then projects public state; no active-project context is fabricated for a trashed resource.
@@ -121,11 +105,7 @@ func (server *Server) RestoreProject(w http.ResponseWriter, r *http.Request, ref
 		return
 	}
 	response, err := server.control.Command.RestoreProject(r.Context(), &controlplanev1.RestoreProjectRequest{Mutation: m, ProjectRef: ref})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "project", "")
+	writeRPCResult(w, http.StatusOK, response, err, "project", "")
 }
 
 // PurgeProject requests the dedicated owner purge transition with exact project/version/idempotency and returns HTTP202. Acceptance does not mean the asynchronous irreversible cleanup has finished.
@@ -136,49 +116,29 @@ func (server *Server) PurgeProject(w http.ResponseWriter, r *http.Request, ref g
 		return
 	}
 	response, err := server.control.Command.PurgeProject(r.Context(), &controlplanev1.PurgeProjectRequest{Mutation: m, ProjectRef: ref})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusAccepted, response, "project", "")
+	writeRPCResult(w, http.StatusAccepted, response, err, "project", "")
 }
 
 // AddPlatformMembership decodes the selected user and public role, forwards create mutation context to the owner and returns HTTP201; caller privilege is not derived from that requested role.
 // AddPlatformMembership разбирает выбранного пользователя и публичную роль, передаёт create mutation владельцу и выдаёт HTTP201; полномочия вызывающего из запрошенной роли не выводятся.
 func (server *Server) AddPlatformMembership(w http.ResponseWriter, r *http.Request, p generated.AddPlatformMembershipParams) {
-	body, ok := decodeJSON[generated.PlatformMembershipCreateInput](w, r)
-	if !ok {
-		return
-	}
-	m, ok := requireMutation(w, p.IdempotencyKey, "")
+	body, m, ok := decodeMutationBody[generated.PlatformMembershipCreateInput](w, r, p.IdempotencyKey, "")
 	if !ok {
 		return
 	}
 	response, err := server.control.Command.AddPlatformMembership(r.Context(), &controlplanev1.AddPlatformMembershipRequest{Mutation: m, UserRef: body.UserRef, Role: platformRole(string(body.PlatformRole))})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusCreated, response, "membership", "")
+	writeRPCResult(w, http.StatusCreated, response, err, "membership", "")
 }
 
 // ChangePlatformMembership sends exact membership, requested role/active flag and mutation pins to owner policy, returning the public result rather than applying IdP membership directly.
 // ChangePlatformMembership передаёт точное членство, роль, active и mutation pins политике владельца, возвращая публичный результат вместо прямого изменения членства IdP.
 func (server *Server) ChangePlatformMembership(w http.ResponseWriter, r *http.Request, membershipRef generated.MembershipRef, p generated.ChangePlatformMembershipParams) {
-	body, ok := decodeJSON[generated.PlatformMembershipChangeInput](w, r)
-	if !ok {
-		return
-	}
-	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, m, ok := decodeMutationBody[generated.PlatformMembershipChangeInput](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
 	response, err := server.control.Command.ChangePlatformMembership(r.Context(), &controlplanev1.ChangePlatformMembershipRequest{Mutation: m, MembershipRef: membershipRef, Role: platformRole(string(body.PlatformRole)), Active: body.Active})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "membership", "")
+	writeRPCResult(w, http.StatusOK, response, err, "membership", "")
 }
 
 // RemovePlatformMembership invokes the owner removal with exact membership and mutation/version context; access revocation and session effects remain owned by the domain transaction.
@@ -189,11 +149,7 @@ func (server *Server) RemovePlatformMembership(w http.ResponseWriter, r *http.Re
 		return
 	}
 	response, err := server.control.Command.RemovePlatformMembership(r.Context(), &controlplanev1.RemovePlatformMembershipRequest{Mutation: m, MembershipRef: membershipRef})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "membership", "")
+	writeRPCResult(w, http.StatusOK, response, err, "membership", "")
 }
 
 // AddProjectMembership binds route-project context and maps requested permission names before the owner create. The mapper may omit unknown names; only the owner decides whether the actor may assign the resulting permissions.
@@ -209,11 +165,7 @@ func (server *Server) AddProjectMembership(w http.ResponseWriter, r *http.Reques
 	}
 	m, _ := requireMutation(w, p.IdempotencyKey, "")
 	response, err := server.control.Command.AddProjectMembership(r.Context(), &controlplanev1.AddProjectMembershipRequest{Mutation: m, ProjectRef: ref, UserRef: body.UserRef, Permissions: permissions(body.Permissions)})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusCreated, response, "membership", "")
+	writeRPCResult(w, http.StatusCreated, response, err, "membership", "")
 }
 
 // ChangeProjectMembership binds project context and forwards exact project/membership, permissions, active flag and mutation pins to the dedicated owner command without treating request permissions as authority.
@@ -223,20 +175,12 @@ func (server *Server) ChangeProjectMembership(w http.ResponseWriter, r *http.Req
 	if !ok {
 		return
 	}
-	body, ok := decodeJSON[generated.ProjectMembershipChangeInput](w, r)
-	if !ok {
-		return
-	}
-	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, m, ok := decodeMutationBody[generated.ProjectMembershipChangeInput](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
 	response, err := server.control.Command.ChangeProjectMembership(r.Context(), &controlplanev1.ChangeProjectMembershipRequest{Mutation: m, ProjectRef: projectRef, MembershipRef: membershipRef, Permissions: permissions(body.Permissions), Active: body.Active})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "membership", "")
+	writeRPCResult(w, http.StatusOK, response, err, "membership", "")
 }
 
 // RemoveProjectMembership binds the route project and delegates exact membership removal with mutation pins; it does not directly revoke credentials or update another service's storage.
@@ -251,11 +195,7 @@ func (server *Server) RemoveProjectMembership(w http.ResponseWriter, r *http.Req
 		return
 	}
 	response, err := server.control.Command.RemoveProjectMembership(r.Context(), &controlplanev1.RemoveProjectMembershipRequest{Mutation: m, ProjectRef: projectRef, MembershipRef: membershipRef})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "membership", "")
+	writeRPCResult(w, http.StatusOK, response, err, "membership", "")
 }
 
 // CreateAgent binds project context and forwards editable metadata, optional role/runtime references and initial instructions to owner creation, returning HTTP201 without starting an agent.
@@ -271,40 +211,24 @@ func (server *Server) CreateAgent(w http.ResponseWriter, r *http.Request, projec
 	}
 	m, _ := requireMutation(w, p.IdempotencyKey, "")
 	response, err := server.control.Command.CreateAgent(r.Context(), &controlplanev1.CreateAgentRequest{Mutation: m, ProjectRef: projectRef, Name: body.Name, Purpose: body.Purpose, RoleDescription: body.RoleDescription, RoleDefinitionRef: stringValue(body.RoleDefinitionRef), RuntimeRef: stringValue(body.RuntimeRef), InitialInstructions: stringValue(body.InitialInstructions)})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusCreated, response, "agent", "")
+	writeRPCResult(w, http.StatusCreated, response, err, "agent", "")
 }
 
 // UpdateAgent decodes editable metadata and role/runtime selectors with mutation pins for the dedicated owner update; it does not republish initial instructions or grant runtime capabilities itself.
 // UpdateAgent разбирает metadata и role/runtime selectors с mutation pins отдельного update владельца; начальные инструкции заново не публикует и runtime capabilities сам не выдаёт.
 func (server *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ref generated.AgentRef, p generated.UpdateAgentParams) {
-	body, ok := decodeJSON[generated.AgentInput](w, r)
-	if !ok {
-		return
-	}
-	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, m, ok := decodeMutationBody[generated.AgentInput](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
 	response, err := server.control.Command.UpdateAgent(r.Context(), &controlplanev1.UpdateAgentRequest{Mutation: m, AgentRef: ref, Name: body.Name, Purpose: body.Purpose, RoleDescription: body.RoleDescription, RoleDefinitionRef: stringValue(body.RoleDefinitionRef), RuntimeRef: stringValue(body.RuntimeRef)})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "agent", "")
+	writeRPCResult(w, http.StatusOK, response, err, "agent", "")
 }
 
 // CommandAgent routes only the explicit enable/disable/archive/capability/integration actions to their specialized owner RPCs under one mutation context. Unknown actions fail before RPC; request action/refs do not bypass owner permission policy.
 // CommandAgent направляет только явные enable/disable/archive/capability/integration действия в специальные RPC владельца с одним mutation context. Неизвестные действия отклоняются до RPC; action и ссылки политику прав не обходят.
 func (server *Server) CommandAgent(w http.ResponseWriter, r *http.Request, ref generated.AgentRef, p generated.CommandAgentParams) {
-	body, ok := decodeJSON[generated.AgentCommand](w, r)
-	if !ok {
-		return
-	}
-	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, m, ok := decodeMutationBody[generated.AgentCommand](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -323,40 +247,24 @@ func (server *Server) CommandAgent(w http.ResponseWriter, r *http.Request, ref g
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "agent", "")
+	writeRPCResult(w, http.StatusOK, response, err, "agent", "")
 }
 
 // CreateInstructionDraft decodes content and mutation/version pins, invokes the owner draft command and returns HTTP201 without publishing or applying the text to a running turn.
 // CreateInstructionDraft разбирает content и mutation/version pins, вызывает черновик владельца и выдаёт HTTP201 без публикации и применения текста к действующему ходу.
 func (server *Server) CreateInstructionDraft(w http.ResponseWriter, r *http.Request, ref generated.AgentRef, p generated.CreateInstructionDraftParams) {
-	body, ok := decodeJSON[generated.CreateInstructionDraftJSONBody](w, r)
-	if !ok {
-		return
-	}
-	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, m, ok := decodeMutationBody[generated.CreateInstructionDraftJSONBody](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
 	response, err := server.control.Command.CreateInstructionDraft(r.Context(), &controlplanev1.CreateInstructionDraftRequest{Mutation: m, AgentRef: ref, Content: body.Content})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusCreated, response, "agent", "")
+	writeRPCResult(w, http.StatusCreated, response, err, "agent", "")
 }
 
 // CommandAgentInstructions keeps validate/publish/rollback as distinct owner paths: validate/rollback reject plan-selection fields, while publish delegates to impact-aware handling. Unknown actions fail closed; mutation pins do not replace owner authorization.
 // CommandAgentInstructions сохраняет validate/publish/rollback отдельными путями: validate и rollback запрещают plan-selection поля, publish передаётся impact-aware обработке. Неизвестное действие отклоняется; mutation pins авторизацию не заменяют.
 func (server *Server) CommandAgentInstructions(w http.ResponseWriter, r *http.Request, ref generated.AgentRef, p generated.CommandAgentInstructionsParams) {
-	body, ok := decodeJSON[generated.InstructionCommand](w, r)
-	if !ok {
-		return
-	}
-	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, m, ok := decodeMutationBody[generated.InstructionCommand](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -382,11 +290,7 @@ func (server *Server) CommandAgentInstructions(w http.ResponseWriter, r *http.Re
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "agent", "")
+	writeRPCResult(w, http.StatusOK, response, err, "agent", "")
 }
 
 // workflowDraft maps optional workflow input/steps into a new protobuf draft, copying input options but retaining RequiredCapabilityKeys slice references. Numeric casts and many semantic constraints are unchecked here and belong to validation; it does not publish a version.
@@ -436,40 +340,24 @@ func (server *Server) CreateWorkflow(w http.ResponseWriter, r *http.Request, pro
 		request.Draft = workflowDraft(body)
 	}
 	response, err := server.control.Command.CreateWorkflow(r.Context(), request)
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusCreated, response, "workflow", "")
+	writeRPCResult(w, http.StatusCreated, response, err, "workflow", "")
 }
 
 // UpdateWorkflowDraft sends the full mapped draft and mutation/version context to the dedicated owner update, returning public workflow state without activation or execution.
 // UpdateWorkflowDraft передаёт полный преобразованный draft и mutation/version context отдельному update владельца, возвращая состояние без активации и выполнения.
 func (server *Server) UpdateWorkflowDraft(w http.ResponseWriter, r *http.Request, ref generated.WorkflowRef, p generated.UpdateWorkflowDraftParams) {
-	body, ok := decodeJSON[generated.WorkflowInput](w, r)
-	if !ok {
-		return
-	}
-	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, m, ok := decodeMutationBody[generated.WorkflowInput](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
 	response, err := server.control.Command.UpdateWorkflowDraft(r.Context(), &controlplanev1.UpdateWorkflowDraftRequest{Mutation: m, WorkflowRef: ref, Draft: workflowDraft(body)})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "workflow", "")
+	writeRPCResult(w, http.StatusOK, response, err, "workflow", "")
 }
 
 // CommandWorkflow permits only validate, publish and archive, preserving distinct typed owner RPCs and mutation pins. Unknown actions return INVALID_REQUEST rather than a generic transition.
 // CommandWorkflow допускает только validate, publish и archive с отдельными типизированными RPC и mutation pins. Неизвестное действие даёт INVALID_REQUEST, а не универсальный переход.
 func (server *Server) CommandWorkflow(w http.ResponseWriter, r *http.Request, ref generated.WorkflowRef, p generated.CommandWorkflowParams) {
-	body, ok := decodeJSON[generated.WorkflowCommand](w, r)
-	if !ok {
-		return
-	}
-	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, m, ok := decodeMutationBody[generated.WorkflowCommand](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -486,11 +374,7 @@ func (server *Server) CommandWorkflow(w http.ResponseWriter, r *http.Request, re
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "workflow", "")
+	writeRPCResult(w, http.StatusOK, response, err, "workflow", "")
 }
 
 // CreateRun decodes launch input, maps target/input and sends project/task/session/attachment selectors to the dedicated owner LaunchRun with fixed CONTROL_CENTER source. Struct conversion errors are ignored as before; ownership, queue/admission and graph creation remain owner-managed.
@@ -503,11 +387,7 @@ func (server *Server) CreateRun(w http.ResponseWriter, r *http.Request, p genera
 	input, _ := structpb.NewStruct(valueOrEmpty(body.Input))
 	m, _ := requireMutation(w, p.IdempotencyKey, "")
 	response, err := server.control.Command.LaunchRun(r.Context(), &controlplanev1.LaunchRunRequest{Mutation: m, ProjectRef: body.ProjectRef, Target: targetProto(string(body.TargetType), body.TargetRef), Title: stringValue(body.Title), Task: body.Task, Input: input, AttachmentSetRef: stringValue(body.AttachmentSetRef), SessionRef: stringValue(body.SessionRef), Source: controlplanev1.RunSource_RUN_SOURCE_CONTROL_CENTER})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusCreated, response, "", "")
+	writeRPCResult(w, http.StatusCreated, response, err, "", "")
 }
 
 // valueOrEmpty returns a fresh empty map for an absent optional map, otherwise the original map without copying or validating its contents.
@@ -531,11 +411,7 @@ func sliceOrEmpty(value *[]string) []string {
 // CommandRun dispatches only CANCEL or RETRY to their dedicated owner commands with exact run, reason and mutation pins. It does not kill pods, reuse old attempt grants or implement terminal graph cleanup locally.
 // CommandRun направляет только CANCEL и RETRY отдельным командам владельца с точными run, reason и mutation pins. Поды не убивает, старые grants попыток не использует и terminal cleanup графа локально не реализует.
 func (server *Server) CommandRun(w http.ResponseWriter, r *http.Request, ref generated.RunRef, p generated.CommandRunParams) {
-	body, ok := decodeJSON[generated.RunCommand](w, r)
-	if !ok {
-		return
-	}
-	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, m, ok := decodeMutationBody[generated.RunCommand](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -549,11 +425,7 @@ func (server *Server) CommandRun(w http.ResponseWriter, r *http.Request, ref gen
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "", "")
+	writeRPCResult(w, http.StatusOK, response, err, "", "")
 }
 
 // AddSessionTurn delegates a user turn with exact session/run/node/task/attachment selectors and create idempotency context to the owner, returning HTTP201 without directly resuming a provider session.
@@ -565,21 +437,13 @@ func (server *Server) AddSessionTurn(w http.ResponseWriter, r *http.Request, ses
 	}
 	m, _ := requireMutation(w, p.IdempotencyKey, "")
 	response, err := server.control.Command.AddSessionTurn(r.Context(), &controlplanev1.AddSessionTurnRequest{Mutation: m, SessionRef: sessionRef, RunRef: body.RunRef, NodeRef: stringValue(body.NodeRef), Task: body.Task, AttachmentSetRef: stringValue(body.AttachmentSetRef)})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusCreated, response, "", "")
+	writeRPCResult(w, http.StatusCreated, response, err, "", "")
 }
 
 // ResolveOwnerGate forwards the explicit decision, comment, attachment and mutation/version pins to the owner, then requires an exact nonnil gate reply. The handler never manufactures a decision from chat text or executes the external effect itself.
 // ResolveOwnerGate передаёт явное решение, комментарий, вложение и mutation/version pins владельцу, затем требует точный ненулевой gate-ответ. Решение из текста чата не создаётся, внешний эффект сам handler не выполняет.
 func (server *Server) ResolveOwnerGate(w http.ResponseWriter, r *http.Request, ref generated.GateRef, p generated.ResolveOwnerGateParams) {
-	body, ok := decodeJSON[generated.GateResolution](w, r)
-	if !ok {
-		return
-	}
-	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, m, ok := decodeMutationBody[generated.GateResolution](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -617,41 +481,25 @@ func (server *Server) CreateSchedule(w http.ResponseWriter, r *http.Request, pro
 	m, _ := requireMutation(w, p.IdempotencyKey, "")
 	target, input, promptInputs := scheduleInput(body)
 	response, err := server.control.Command.CreateSchedule(r.Context(), &controlplanev1.CreateScheduleRequest{Mutation: m, ProjectRef: projectRef, Name: body.Name, Target: target, Preset: string(body.Preset), CronExpression: stringValue(body.CronExpression), TimeOfDay: stringValue(body.TimeOfDay), DayOfWeek: stringValue(body.DayOfWeek), Timezone: body.Timezone, Input: input, SessionPolicy: string(body.SessionPolicy), NotificationPolicy: string(body.NotificationPolicy), DstGapPolicy: string(body.DstGapPolicy), DstFoldPolicy: string(body.DstFoldPolicy), MisfirePolicy: string(body.MisfirePolicy), OverlapPolicy: string(body.OverlapPolicy), AutomationText: body.AutomationText, PromptInputs: promptInputs})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusCreated, response, "schedule", "")
+	writeRPCResult(w, http.StatusCreated, response, err, "schedule", "")
 }
 
 // UpdateSchedule maps the full selected schedule with mutation/version pins to the owner update, preserving explicit timing/materialization policy fields without locally acquiring or rescheduling occurrences.
 // UpdateSchedule передаёт полное выбранное расписание с mutation/version pins update владельца, сохраняя явные поля времени и материализации без локальных claims и перепланирования occurrence.
 func (server *Server) UpdateSchedule(w http.ResponseWriter, r *http.Request, ref generated.ScheduleRef, p generated.UpdateScheduleParams) {
-	body, ok := decodeJSON[generated.ScheduleInput](w, r)
-	if !ok {
-		return
-	}
-	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, m, ok := decodeMutationBody[generated.ScheduleInput](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
 	target, input, promptInputs := scheduleInput(body)
 	response, err := server.control.Command.UpdateSchedule(r.Context(), &controlplanev1.UpdateScheduleRequest{Mutation: m, ScheduleRef: ref, Name: body.Name, Target: target, Preset: string(body.Preset), CronExpression: stringValue(body.CronExpression), TimeOfDay: stringValue(body.TimeOfDay), DayOfWeek: stringValue(body.DayOfWeek), Timezone: body.Timezone, Input: input, SessionPolicy: string(body.SessionPolicy), NotificationPolicy: string(body.NotificationPolicy), DstGapPolicy: string(body.DstGapPolicy), DstFoldPolicy: string(body.DstFoldPolicy), MisfirePolicy: string(body.MisfirePolicy), OverlapPolicy: string(body.OverlapPolicy), AutomationText: body.AutomationText, PromptInputs: promptInputs})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "schedule", "")
+	writeRPCResult(w, http.StatusOK, response, err, "schedule", "")
 }
 
 // CommandSchedule handles enable/pause through the dedicated enabled flag and archive through a separate owner RPC, rejecting unknown actions. Active occurrence and cancellation semantics stay in owner state rather than this switch.
 // CommandSchedule обрабатывает enable/pause отдельным enabled-флагом, archive — другим RPC владельца, отклоняя неизвестные действия. Семантика действующих occurrence и отмены остаётся у владельца, а не в switch.
 func (server *Server) CommandSchedule(w http.ResponseWriter, r *http.Request, ref generated.ScheduleRef, p generated.CommandScheduleParams) {
-	body, ok := decodeJSON[generated.ScheduleCommand](w, r)
-	if !ok {
-		return
-	}
-	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, m, ok := decodeMutationBody[generated.ScheduleCommand](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -666,11 +514,7 @@ func (server *Server) CommandSchedule(w http.ResponseWriter, r *http.Request, re
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "schedule", "")
+	writeRPCResult(w, http.StatusOK, response, err, "schedule", "")
 }
 
 // CreateIntegrationConnection copies optional public configuration into a new map, converts it with the existing ignored Struct error and creates the owner connection with idempotency context. No credential or remote-tool invocation is performed here.
@@ -692,21 +536,13 @@ func (server *Server) CreateIntegrationConnection(w http.ResponseWriter, r *http
 		Mutation: m, DefinitionKey: body.DefinitionKey, Name: body.Name,
 		PublicConfiguration: public,
 	})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusCreated, response, "connection", "")
+	writeRPCResult(w, http.StatusCreated, response, err, "connection", "")
 }
 
 // ConfigureIntegrationConnectionCredential converts the optional decoded value to mutable bytes, clears the decoded field and defers clearing those bytes around the owner command with mutation pins. This best effort does not guarantee erasure of immutable string/decoder copies.
 // ConfigureIntegrationConnectionCredential преобразует необязательное decoded value в изменяемые байты, очищает поле и откладывает очистку байтов вокруг команды владельца с mutation pins. Это не гарантирует стирание неизменяемых string/decoder copies.
 func (server *Server) ConfigureIntegrationConnectionCredential(w http.ResponseWriter, r *http.Request, ref generated.ConnectionRef, p generated.ConfigureIntegrationConnectionCredentialParams) {
-	body, ok := decodeJSON[generated.IntegrationCredentialInput](w, r)
-	if !ok {
-		return
-	}
-	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, m, ok := decodeMutationBody[generated.IntegrationCredentialInput](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -716,21 +552,13 @@ func (server *Server) ConfigureIntegrationConnectionCredential(w http.ResponseWr
 	response, err := server.control.Command.ConfigureIntegrationConnectionCredential(r.Context(), &controlplanev1.ConfigureIntegrationConnectionCredentialRequest{
 		Mutation: m, ConnectionRef: ref, CredentialValue: credential,
 	})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "connection", "")
+	writeRPCResult(w, http.StatusOK, response, err, "connection", "")
 }
 
 // CommandIntegrationConnection supports only test and enable/disable, using dedicated owner RPCs under mutation/version context. Unknown actions fail before RPC, and a test response is not a grant to use remote tools.
 // CommandIntegrationConnection допускает только test и enable/disable с отдельными RPC владельца и mutation/version context. Неизвестное действие отклоняется до RPC; ответ проверки не выдаёт grant удалённых инструментов.
 func (server *Server) CommandIntegrationConnection(w http.ResponseWriter, r *http.Request, ref generated.ConnectionRef, p generated.CommandIntegrationConnectionParams) {
-	body, ok := decodeJSON[generated.IntegrationConnectionCommand](w, r)
-	if !ok {
-		return
-	}
-	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, m, ok := decodeMutationBody[generated.IntegrationConnectionCommand](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -744,11 +572,7 @@ func (server *Server) CommandIntegrationConnection(w http.ResponseWriter, r *htt
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "connection", "")
+	writeRPCResult(w, http.StatusOK, response, err, "connection", "")
 }
 
 // ChangeIntegrationGrant copies approval scope paths and maps requested policy/targets into the dedicated owner grant command with mutation pins. Enum lookup alone is not validation, and caller-supplied policy cannot itself authorize execution.
@@ -768,30 +592,18 @@ func (server *Server) ChangeIntegrationGrant(w http.ResponseWriter, r *http.Requ
 	}
 	response, err := server.control.Command.ChangeIntegrationGrant(r.Context(), &controlplanev1.ChangeIntegrationGrantRequest{Mutation: m, ConnectionRef: ref, CapabilityKey: body.CapabilityKey, AgentRef: stringValue(body.AgentRef), WorkflowRef: stringValue(body.WorkflowRef), Enabled: body.Enabled, ApprovalScopePaths: approvalScopePaths,
 		ApprovalPolicy: controlplanev1.IntegrationApprovalPolicy(controlplanev1.IntegrationApprovalPolicy_value["INTEGRATION_APPROVAL_POLICY_"+string(body.ApprovalPolicy)])})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "connection", "")
+	writeRPCResult(w, http.StatusOK, response, err, "connection", "")
 }
 
 // ChangeArtifactBinding sends exact artifact/agent/enabled selectors and mutation pins to the owner binding command without granting raw-file access or removing quarantine locally.
 // ChangeArtifactBinding передаёт точные artifact/agent/enabled и mutation pins команде привязки владельца без выдачи доступа к байтам и локального снятия карантина.
 func (server *Server) ChangeArtifactBinding(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef, p generated.ChangeArtifactBindingParams) {
-	body, ok := decodeJSON[generated.ArtifactBindingInput](w, r)
-	if !ok {
-		return
-	}
-	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, m, ok := decodeMutationBody[generated.ArtifactBindingInput](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
 	response, err := server.control.Command.ChangeArtifactBinding(r.Context(), &controlplanev1.ChangeArtifactBindingRequest{Mutation: m, ArtifactRef: ref, AgentRef: body.AgentRef, Enabled: body.Enabled})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "artifact", "")
+	writeRPCResult(w, http.StatusOK, response, err, "artifact", "")
 }
 
 // DeleteArtifact forwards exact artifact, impact digest and mutation/version pins to owner deletion, preserving its dependency/impact policy rather than deleting storage directly.
@@ -802,11 +614,7 @@ func (server *Server) DeleteArtifact(w http.ResponseWriter, r *http.Request, ref
 		return
 	}
 	response, err := server.control.Command.DeleteArtifact(r.Context(), &controlplanev1.DeleteArtifactRequest{Mutation: m, ArtifactRef: ref, ImpactDigest: p.XImpactDigest})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "artifact", "")
+	writeRPCResult(w, http.StatusOK, response, err, "artifact", "")
 }
 
 // RestoreArtifact delegates exact artifact restoration with mutation/version pins and public-projects the returned metadata without reclassifying scan safety.
@@ -817,11 +625,7 @@ func (server *Server) RestoreArtifact(w http.ResponseWriter, r *http.Request, re
 		return
 	}
 	response, err := server.control.Command.RestoreArtifact(r.Context(), &controlplanev1.RestoreArtifactRequest{Mutation: m, ArtifactRef: ref})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "artifact", "")
+	writeRPCResult(w, http.StatusOK, response, err, "artifact", "")
 }
 
 // PurgeArtifact invokes the dedicated irreversible owner purge with impact and mutation pins, then projects the full returned response; this handler does not remove storage or invent completion state itself.
@@ -832,11 +636,7 @@ func (server *Server) PurgeArtifact(w http.ResponseWriter, r *http.Request, ref 
 		return
 	}
 	response, err := server.control.Command.PurgeArtifact(r.Context(), &controlplanev1.PurgeArtifactRequest{Mutation: m, ArtifactRef: ref, ImpactDigest: p.XImpactDigest})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "", "")
+	writeRPCResult(w, http.StatusOK, response, err, "", "")
 }
 
 // GetArtifactImpact queries owner impact for the selected action and explicitly maps counts, digest, blockers, permission hint and active-run summaries into the public shape. The read neither authorizes purge nor validates every response field itself.
@@ -963,11 +763,7 @@ func (server *Server) uploadArtifact(w http.ResponseWriter, r *http.Request, upl
 		return
 	}
 	response, err := stream.CloseAndRecv()
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusCreated, response, "artifact", "")
+	writeRPCResult(w, http.StatusCreated, response, err, "artifact", "")
 }
 
 // organizationArtifactUploadClient adapts only the differing generated organization stream message types to the common upload port, retaining the original stream context and ownership.
