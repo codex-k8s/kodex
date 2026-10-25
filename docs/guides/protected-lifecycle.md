@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.40
+version: 1.1.41
 updated: 2026-10-25
 ---
 
@@ -480,6 +480,26 @@ delivery ID, canonical payload digest и фактический post/interaction
   current tuple процесса, occurrence и `ScheduledRun`.
 
 ## Свежая `RuntimeRevision`
+
+Исторический `current_version_id` окружения в terminal `DELETED` не считается
+действующим потребителем секрета. Отзыв и recovery материала используют один
+инвариант: текущая версия любого не удалённого окружения, включая `DISABLED`,
+существующая agent binding и immutable revision активного запуска независимо
+удерживают соответствующий секрет/его ревизию. Удаление ENV не снимает защиту
+binding или активного запуска. История окружений и завершённых запусков
+сохраняется без обязанности бессрочно хранить материал секретов; текущая
+активная ревизия самого секрета остаётся доступной до штатного отзыва.
+Owner/scope, OCC, idempotency и exact UID/RV cleanup при этом не меняются.
+Claim повторно связывает cached candidate с активным ENV, агентом и exact
+binding/version/digest до записи RuntimeRevision. Зависимые row locks берутся
+ENV → agent → binding через `FOR SHARE SKIP LOCKED` внутри малого savepoint:
+изменение либо занятая строка освобождают частичные locks и оставляют работу
+в очереди, ошибка SQL закрыто отклоняется. Успешные locks сохраняются до owner
+commit. Historical version pin не заменяется текущим head; fallback для пустого
+pin разрешён только существующему системному профилю помощника. Caller context
+ограничивает прочие database waits. Этот fence не заменяет отдельный свежий
+допуск секрета при credential projection.
+Регрессия: `TestDeletedEnvironmentSecretRetentionComponent` ([#1875](https://github.com/codex-k8s/kodex/issues/1875)).
 
 Декларация `platform.run.delegate` не создаёт разрешённые цели делегирования.
 План процесса связывает этап с фактическим исполнителем, а не с текстовым

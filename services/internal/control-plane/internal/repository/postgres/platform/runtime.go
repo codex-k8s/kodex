@@ -516,6 +516,13 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		if activeExecutions >= providerAccountCapacity[candidate.providerAccountID] {
 			continue
 		}
+		environmentEligible, err := retainRuntimeEnvironmentCandidate(ctx, tx, scope.organizationID, candidate)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		if !environmentEligible {
+			continue
+		}
 		candidateTx, err := tx.Begin(ctx)
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
