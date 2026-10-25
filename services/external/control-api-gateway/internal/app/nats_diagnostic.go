@@ -41,19 +41,35 @@ const (
 // natsStartupError сохраняет типизированную причину приватно, выдавая лишь
 // закрытые этап и класс через прежнюю границу форматирования ошибки процесса.
 type natsStartupError struct {
-	stage natsStartupStage
-	cause error
+	stage  natsStartupStage
+	cause  error
+	budget error
 }
 
 // Error never formats its cause, URLs, paths, server replies or JWT material.
 // Error никогда не форматирует причину, URL, пути, ответы сервера либо JWT.
 func (failure *natsStartupError) Error() string {
-	return natsStageLabel(failure.stage) + " error_class=" + natsFailureClass(failure.stage, failure.cause)
+	diagnostic := natsStageLabel(failure.stage) + " error_class=" + natsFailureClass(failure.stage, failure.cause)
+	if failure.budget != nil {
+		status := "unknown"
+		if errors.Is(failure.budget, context.Canceled) {
+			status = "canceled"
+		} else if errors.Is(failure.budget, context.DeadlineExceeded) {
+			status = "deadline"
+		}
+		diagnostic += " wait_status=" + status
+	}
+	return diagnostic
 }
 
 // Unwrap permits private errors.Is/As classification without changing cause identity.
 // Unwrap разрешает приватную errors.Is/As проверку, не меняя идентичность причины.
-func (failure *natsStartupError) Unwrap() error { return failure.cause }
+func (failure *natsStartupError) Unwrap() error {
+	if failure.budget != nil {
+		return errors.Join(failure.cause, failure.budget)
+	}
+	return failure.cause
+}
 
 // Format closes every formatting verb over the same public diagnostic so even
 // debug formatting cannot serialize the wrapper's private fields.

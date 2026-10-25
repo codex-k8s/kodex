@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/nats-io/jwt/v2"
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nkeys"
 )
 
@@ -216,7 +217,19 @@ func TestNATSStartupDiagnosticComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 	material := createNATSFixtureMaterial(t, directory)
-	id := strings.TrimSpace(string(natsFixtureDocker(t, ctx, "create", "--pull", "never", "--name", name, "--label", "kodex.qa.fixture=control-api-nats-startup", "--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()), "--cpus", "1", "--memory", "128m", "--pids-limit", "64", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--publish", "127.0.0.1::4222", "--mount", "type=bind,src="+directory+",dst=/fixture,readonly", image, "-c", "/fixture/nats.conf")))
+	// A fixed disposable binding survives the same container's controlled restart;
+	// this fixture never redirects the client to another listener after failure.
+	// Фиксированная одноразовая привязка переживает управляемый restart того же
+	// контейнера; fixture не перенаправляет клиента после ошибки на иной listener.
+	reservation, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal("reserve disposable NATS endpoint")
+	}
+	reservedAddress := reservation.Addr().String()
+	if err := reservation.Close(); err != nil {
+		t.Fatal("release disposable endpoint reservation")
+	}
+	id := strings.TrimSpace(string(natsFixtureDocker(t, ctx, "create", "--pull", "never", "--name", name, "--label", "kodex.qa.fixture=control-api-nats-startup", "--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()), "--cpus", "1", "--memory", "128m", "--pids-limit", "64", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--publish", reservedAddress+":4222", "--mount", "type=bind,src="+directory+",dst=/fixture,readonly", image, "-c", "/fixture/nats.conf")))
 	if !regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(id) {
 		t.Fatal("component container ID is invalid")
 	}
@@ -224,7 +237,7 @@ func TestNATSStartupDiagnosticComponent(t *testing.T) {
 	writeNATSFixtureFile(t, directory, "container.json", state)
 	natsFixtureDocker(t, ctx, "start", id)
 	address := strings.TrimSpace(string(natsFixtureDocker(t, ctx, "port", id, "4222/tcp")))
-	if !regexp.MustCompile(`^127\.0\.0\.1:[0-9]+$`).MatchString(address) {
+	if !regexp.MustCompile(`^127\.0\.0\.1:[0-9]+$`).MatchString(address) || address != reservedAddress {
 		t.Fatal("component endpoint is not disposable loopback")
 	}
 	ready := false
@@ -301,4 +314,59 @@ func TestNATSStartupDiagnosticComponent(t *testing.T) {
 			}
 		})
 	}
+	t.Run("startup rejected JWT is not retried", func(t *testing.T) {
+		startup, cancelStartup := context.WithTimeout(ctx, 10*time.Second)
+		defer cancelStartup()
+		input := config
+		input.NATSCredentialsFile = material.rejectedCredentials
+		attempts := 0
+		connection, err := connectNATSStartup(startup, input, logger, func(config Config, logger *slog.Logger) (*nats.Conn, error) {
+			attempts++
+			return connectNATS(config, logger)
+		})
+		if connection != nil {
+			connection.Close()
+			t.Fatal("rejected JWT returned a startup connection")
+		}
+		var failure *natsStartupError
+		if attempts != 1 || !errors.As(err, &failure) || natsFailureClass(failure.stage, failure.cause) != "authorization" {
+			t.Fatal("permanent native JWT rejection retried or lost its closed class")
+		}
+	})
+	t.Run("startup waits for delayed broker", func(t *testing.T) {
+		natsFixtureDocker(t, ctx, "stop", "--time", "1", id)
+		startup, cancelStartup := context.WithTimeout(ctx, 10*time.Second)
+		defer cancelStartup()
+		attempts := 0
+		connection, err := connectNATSStartup(startup, config, logger, func(config Config, logger *slog.Logger) (*nats.Conn, error) {
+			attempts++
+			candidate, connectError := connectNATS(config, logger)
+			if attempts == 1 {
+				if candidate != nil {
+					candidate.Close()
+					t.Fatal("stopped broker accepted the first native connection")
+				}
+				if !initialNATSRetryable(connectError) {
+					t.Fatal("stopped native broker did not produce marked initial no_servers")
+				}
+				// Real dependency readiness changes only after a real failed attempt;
+				// no fake outcome, transport downgrade or production sleep is used.
+				// Реальная готовность меняется лишь после реальной ошибки подключения;
+				// fake outcome, downgrade транспорта и production sleep не используются.
+				natsFixtureDocker(t, ctx, "start", id)
+				if current := strings.TrimSpace(string(natsFixtureDocker(t, ctx, "port", id, "4222/tcp"))); current != reservedAddress {
+					t.Fatal("restarted native broker changed the pinned disposable endpoint")
+				}
+			}
+			return candidate, connectError
+		})
+		if err != nil || connection == nil {
+			t.Fatal("initial no_servers did not recover within the original native startup budget")
+		}
+		defer connection.Close()
+		if attempts < 2 || !connection.IsConnected() || startup.Err() != nil {
+			t.Fatal("native startup wait bypassed failed-first-attempt or readiness")
+		}
+	})
+
 }

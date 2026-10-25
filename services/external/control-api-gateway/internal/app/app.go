@@ -97,7 +97,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, secrets.Close()) }()
-	bus, err := connectNATS(config, logger)
+	bus, err := connectNATSStartup(startup, config, logger, connectNATS)
 	if err != nil {
 		return err
 	}
