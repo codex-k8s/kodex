@@ -14,6 +14,13 @@ import (
 // TestRepositoryBundleGitSingleCommitAndIndependentReadback publishes 108 approved files over the existing isolated HTTPS Git fixture and proves one parent/commit, exact file bytes/modes, unchanged source ref and rejection of a replacement proposal. This is local Git proof, not a live repository publication.
 // TestRepositoryBundleGitSingleCommitAndIndependentReadback публикует108 approved files через прежнюю isolated HTTPS Git fixture, доказывая one parent/commit, exact file bytes/modes, прежний source ref и отказ replacement proposal. Это local Git proof, не live repository publication.
 func TestRepositoryBundleGitSingleCommitAndIndependentReadback(t *testing.T) {
+	testRepositoryBundleGitSingleCommitAndIndependentReadback(t)
+}
+
+// testRepositoryBundleGitSingleCommitAndIndependentReadback shares the isolated HTTPS Git scenario between the standalone test and the shipped capability inventory, preserving exact source bytes, single-commit CAS and independent readback assertions.
+// testRepositoryBundleGitSingleCommitAndIndependentReadback совместно использует изолированный HTTPS Git сценарий в отдельном тесте и каталоге возможностей, сохраняя проверки точных bytes, single-commit CAS и независимого readback.
+func testRepositoryBundleGitSingleCommitAndIndependentReadback(t *testing.T) {
+	t.Helper()
 	root := t.TempDir()
 	repository := filepath.Join(root, "repo.git")
 	gitFixtureRun(t, root, nil, "init", "--bare", "--quiet", repository)

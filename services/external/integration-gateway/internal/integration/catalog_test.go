@@ -11,6 +11,7 @@ import (
 
 	api "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
+	"github.com/codex-k8s/kodex/libs/go/repositorybundle"
 	"github.com/codex-k8s/kodex/services/external/integration-gateway/internal/integrationfixture"
 )
 
@@ -164,6 +165,14 @@ func TestEveryAdvertisedOperation(t *testing.T) {
 		}
 		for _, capability := range definition.Spec.Capabilities {
 			t.Run(capability.Operation, func(t *testing.T) {
+				if capability.Operation == repositorybundle.Operation {
+					if key != "github" || definition.Spec.Adapter != "GITHUB" || capability.Key != repositorybundle.Operation || capability.Risk != "WRITE" || capability.ApprovalPolicy != "HUMAN_EACH_EFFECT" {
+						t.Fatal("repository bundle catalog route changed")
+					}
+					t.Run("private-work-admission", testRepositoryBundlePrivateAdapterAdmission)
+					t.Run("single-commit-and-readback", testRepositoryBundleGitSingleCommitAndIndependentReadback)
+					return
+				}
 				raw, ok := inputs[capability.Operation]
 				if !ok {
 					t.Fatal("advertised operation lacks component scenario")

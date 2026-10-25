@@ -43,6 +43,13 @@ func repositoryBundleAdapterWork(t *testing.T) (*Adapter, *cp.RepositoryBundlePu
 // TestRepositoryBundlePrivateAdapterAdmission exercises the actual shipped schema→typed work→credential reader boundary, rejects substitutions/unknown nested fields and verifies recovery has metadata only; it never pushes Git.
 // TestRepositoryBundlePrivateAdapterAdmission проверяет actual shipped schema→typed work→credential reader boundary, отклоняет substitutions/unknown nested fields и подтверждает metadata-only recovery; Git push не выполняется.
 func TestRepositoryBundlePrivateAdapterAdmission(t *testing.T) {
+	testRepositoryBundlePrivateAdapterAdmission(t)
+}
+
+// testRepositoryBundlePrivateAdapterAdmission shares the actual private adapter admission, denial and read-only recovery scenarios between the standalone test and the shipped capability inventory; it never invokes a generic write route.
+// testRepositoryBundlePrivateAdapterAdmission совместно использует реальные проверки допуска private adapter, отказа и read-only recovery в отдельном тесте и каталоге поставляемых возможностей; generic write route не вызывается.
+func testRepositoryBundlePrivateAdapterAdmission(t *testing.T) {
+	t.Helper()
 	adapter, base, archive := repositoryBundleAdapterWork(t)
 	for _, name := range []string{"valid", "blocked continuation", "wrong owner", "wrong source", "wrong manifest", "wrong grant", "nested unknown", "configuration unknown", "recovery", "recovery with bytes", "recovery short SHA"} {
 		t.Run(name, func(t *testing.T) {
