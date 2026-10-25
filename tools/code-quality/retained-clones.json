@@ -6976,6 +6976,94 @@
       "fragmentSHA256": "2ab055de366aa3914084c9607faef82a3751a1a94fb523f49de274b2684eeb6d",
       "count": 1,
       "reason": "В historical continuation_task_projection_v1 (instructions v2) и instructions_v4 совпадают сериализованные provider/runtime/environment/workspace/Kubernetes/callback поля после session_context, включая нулевые значения и null collections. Файлы остаются независимыми byte-level compatibility fixtures для TestContinuationTaskProducerMatchesRunnerOracle, который читает v2/v3/v4 через os.ReadFile и закрепляет SHA256 v4. Генерация обоих snapshots общей фабрикой или склейка JSON во время теста устранила бы независимый исторический oracle и могла бы скрыть изменение сериализации; production producer уже общий, fixtures не исполняются как инструкции."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/mvp_get_provider_account.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/mvp_list_provider_accounts.sql",
+      "fragmentSHA256": "9d1f26b372b686f38117253bf9915fc23039bf7d8122c9ccecc8bbe3b5e747d6",
+      "count": 1,
+      "reason": "mvp_get_provider_account (:one) и mvp_list_provider_accounts (:many) повторяют только порядок provider-account полей и LATERAL последней authorization attempt вне RESERVED. Get фильтрует exact organization/account_ref; List дополнительно задаёт query/state/definition, cursor и стабильную страницу ORDER BY updated_at/ref LIMIT page_size. Это разные именованные запросы с разной cardinality и StrictNamedArgs; по GO-DOC-002 каждый SQL хранится целиком в своём файле. Общий scanner уже читает эту проекцию; SQL-конкатенация или новая DB view ради общего SELECT изменили бы loader/schema boundary."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/prompt_context_memories.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_context_memories.sql",
+      "fragmentSHA256": "dbb1fd67843151bdeb068f522eaba4d15863e5b3198b3aa8d9fb769b8024a200",
+      "count": 1,
+      "reason": "prompt_context_memories и runtime_context_memories имеют одинаковые tenant/project/agent/memory/source-run eligibility predicates, projection и bounded ORDER BY binding.ref LIMIT65, но runtime добавляет FOR SHARE OF binding,record,revision,current, а preview остаётся без row locks. Существующий общий runtimeContextSnapshotForActorMode выбирает две фиксированные query и уже разделяет parsing/digest/limits. По GO-DOC-002 SQL остаётся отдельным именованным файлом; объединение запросов убрало бы защиту runtime snapshot либо навязало блокировки readonly preview."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/prompt_context_skills.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_context_skills.sql",
+      "fragmentSHA256": "add51c9bf482517eed7073b015e726201c44f7f9b781d175bd743f05a0181596",
+      "count": 1,
+      "reason": "prompt_context_skills и runtime_context_skills сохраняют одинаковые ACTIVE/PUBLISHED/CLEAN/reviewed/visibility predicates и ORDER BY binding.ref LIMIT33; только runtime удерживает FOR SHARE OF binding,bundle,revision до caller transaction. Общий runtimeContextSnapshotForActorMode уже выбирает fixed locking/nonlocking query и объединяет scanner/validation. Это необходимое разделение lock contracts preview и runtime, а не копия runtime helper; SQL-фрагменты не собираются динамически, каждый именованный query самодостаточен по GO-DOC-002."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/provider_account_deletion_schedule_authorizations.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/provider_authorization_abandoned_cleanup.sql",
+      "fragmentSHA256": "837ddced404853eef8a988d1690ef525edc49b6032fa2649163d9b9c50b0867b",
+      "count": 1,
+      "reason": "provider_account_deletion_schedule_authorizations и provider_authorization_abandoned_cleanup одинаково создают deduplicated AUTHORIZATION_METADATA cleanup task и deterministic materializer_attempt_ref. Первый ограничен exact organization/account_id и планирует все authorization attempts удаляемого account; второй выбирает только preparation_state ABANDONED для account. Общий SELECT payload не означает одинаковый lifecycle eligibility. Оставлены отдельные :exec SQL с собственным StrictNamedArgs и явными predicates по GO-DOC-002; универсальный write builder либо новая DB function расширили бы текущую границу изменения."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/provider_financial_guard.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/provider_financial_publish.sql",
+      "fragmentSHA256": "45f385b30211ec056853ce040f5f8e4cf781a688718fa48e756285a4177dcc5a",
+      "count": 1,
+      "reason": "provider_financial_guard читает previous collector и удерживает FOR UPDATE OF account; provider_financial_publish атомарно UPDATE/RETURNING проверяет те же exact live lease/revision/root/node/turn/session/credential pins плюс monotonic lease/sequence replacement. Проверки в UPDATE нужны независимо от предварительного SELECT: общий application guard не заменяет их внутри изменения состояния. Общий readProviderFinancialCollector уже объединяет чтение callers. Самостоятельные SQL не превращаются в динамический predicate fragment и не требуют новой schema function; набор bindings и конкурентная защита остаются явными."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/role_images_get_active_artifact.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/role_images_lock_artifact.sql",
+      "fragmentSHA256": "b0c6be94c4b37783f9a67e4f1499a991a08d06ca054f9ead24e3026e3e3fa0e8",
+      "count": 1,
+      "reason": "role_images_get_active_artifact читает tenant artifact descriptors по organization/ref без row lock; role_images_lock_artifact дополнительно возвращает внутренний id, полные admission/promotion claims/fences/expiry и выполняет FOR UPDATE OF artifact. Совпавшая часть — порядок evidence/recipe/build DTO columns, но полный scanner tuple и lock contract различны. Это отдельные :one queries в GO-DOC-002, а не две одинаковые операции; единый SELECT или общий read helper не должен превращать readonly lookup в mutation lock либо терять claim metadata."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/role_images_get_active_artifact.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/role_images_get_promotion_candidate.sql",
+      "fragmentSHA256": "1965c19600057213a6588d96b877f669322494bbd8e40aacc795ee55d7890a7a",
+      "count": 1,
+      "reason": "role_images_get_active_artifact получает artifact по organization/ref; role_images_get_promotion_candidate выбирает latest recipe-pinned artifact с current recipe version/generation/spec/policy/runtime contract, evidence/admission/promotion eligibility и отдельным promotable flag. Повторяются только evidence/descriptor columns; candidate также нормализует REJECTED verdict. Общий DTO scanner не доказывает право promotion. Сохранены самостоятельные :one query и их разные WHERE/ORDER/LIMIT по GO-DOC-002 без новой view или динамической сборки SQL."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_configuration__publish.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/workers_reconcilewarmruntime_publish_system_provider_policy.sql",
+      "fragmentSHA256": "d66e7fbbbb5e513908a68ca8290666b29548a3d59380e9973f64a37636d0eeb1",
+      "count": 1,
+      "reason": "runtime_configuration__publish и workers_reconcilewarmruntime_publish_system_provider_policy имеют сходный inserted_policy/inserted_config/updated_agent CTE, но warm reconciler дополнительно проверяет current_config_id, явно приводит candidates к jsonb, переводит только system-assistant runtime в RECOVERING, сбрасывает warm refs и атомарно пишет отдельный audit. Command publish остаётся частью своей owner transaction. Это разные специализированные writes с разными StrictNamedArgs и result dependencies; общий динамический CTE или универсальная mutation скрыли бы lifecycle/CAS/audit различия, а новая DB function не входит в refactor."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_secret_has_active_operation.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_secret_operation_lock.sql",
+      "fragmentSHA256": "f68ef27b882d9ce7e31b1754fe7070f1734a88fb4968eb73b8833e0e88ee80cf",
+      "count": 1,
+      "reason": "runtime_secret_has_active_operation выбирает PREPARED/CLAIMED CREATE/ROTATE/REVOKE по уже разрешённому secret_id и блокирует только operation; runtime_secret_operation_lock разрешает exact organization/operation_ref и блокирует operation вместе с secret. Совпадает фиксированная операция/current-secret projection, которую уже читает общий scanRuntimeSecretOperation. Различные predicates, named bindings и lock targets нельзя подменять одним SELECT. Самостоятельные SQL-файлы сохраняют явную concurrency/lifecycle границу по GO-DOC-002."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_secret_has_active_operation.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_secret_operation_lock_by_digest.sql",
+      "fragmentSHA256": "f68ef27b882d9ce7e31b1754fe7070f1734a88fb4968eb73b8833e0e88ee80cf",
+      "count": 1,
+      "reason": "runtime_secret_has_active_operation ищет активную mutation по secret_id с FOR UPDATE OF operation; runtime_secret_operation_lock_by_digest ищет grant по organization/token_digest и блокирует operation,secret. ConsumeRuntimeSecretOperation предварительно проверяет exact broker permission, затем отдельно state/expiry/current version/owner. Общий scanRuntimeSecretOperation уже переиспользуется. Совпадение projection не разрешает смешать concurrency probe с grant consume locator или убрать tenant/secret lock; оставлены отдельные named query и StrictNamedArgs по GO-DOC-002."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_secret_has_active_operation.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_secret_operation_lock_idempotency.sql",
+      "fragmentSHA256": "f68ef27b882d9ce7e31b1754fe7070f1734a88fb4968eb73b8833e0e88ee80cf",
+      "count": 1,
+      "reason": "runtime_secret_has_active_operation проверяет активную mutation по secret_id с lock только operation; runtime_secret_operation_lock_idempotency разрешает exact organization/actor/kind/idempotency_key и блокирует operation,secret для безопасного replay inspection. Caller ещё сверяет target/intent digest. Общий scanRuntimeSecretOperation уже декодирует совпавшие columns. Унификация SELECT по совпавшей проекции изменила бы locator, bindings и lock scope; сохранены отдельные самодостаточные named SQL по GO-DOC-002 без нового generic mutation helper."
     }
   ]
 }

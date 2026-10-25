@@ -4,11 +4,76 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.451.0
+version: 1.452.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Различия SQL-снимков, блокировок и атомарных проверок — 25.10.2026
+
+На основе `6b0d61afc4419a70cd59704ea0d28a1d89cede23` разобраны11 SQL-групп
+в19 полностью прочитанных запросах. SQL и Go остаются побайтно прежними;
+меняются только адресные решения реестра и этот журнал. GO-DOC-002 требует
+отдельный самодостаточный именованный query, точную cardinality, явные
+bindings и фиксированное встраивание SQL. Общий SELECT-фрагмент не собирается
+динамически и не выносится в новую DB view/function ради счётчика.
+
+У prompt_context_memories/skills и runtime_context_memories/skills совпадают
+eligibility/projection/order/limits, но runtime удерживает FOR SHARE над
+binding и соответствующими record/revisions либо bundle/revision. Readonly
+preview не должен получать эти блокировки. Существующий общий
+runtimeContextSnapshotForActorMode уже выбирает фиксированный query и
+объединяет scanning/validation/digest/limits. Get/list provider account
+различаются cardinality, locator и search/state/definition/cursor/page.
+
+Три пары runtime-secret projections сохраняют разные authority locators:
+active mutation по разрешённому secret_id, operation_ref в организации,
+grant token_digest в организации и organization/actor/kind/idempotency key.
+Active probe блокирует только operation; остальные запросы блокируют также
+secret. Общий scanRuntimeSecretOperation уже декодирует одинаковые columns,
+а caller проверяет owner, kind/state/expiry/current version и intent.
+Совпавший SELECT не позволяет подменить один locator либо lock другим.
+
+Две пары image artifact projections разделяют readonly organization/ref
+lookup, locked full admission/promotion claim tuple и latest recipe-pinned
+promotion candidate с evidence/policy/runtime-contract checks и promotable
+flag. Общая форма descriptors не означает одинаковое право или scanner tuple.
+Cleanup authorization metadata запросы различают account deletion и только
+ABANDONED preparation. Два runtime configuration CTE имеют разные CAS,
+RECOVERING и audit dependencies для command и warm-system reconciler.
+
+Financial guard удерживает account lock и читает предыдущего collector;
+financial publish атомарно повторяет live lease/revision/root/node/turn/
+session/current credential pins внутри UPDATE и дополнительно проверяет
+monotonic collector/sequence replacement. Результат предыдущего SELECT не
+заменяет эту проверку в момент записи. Существующий readProviderFinancialCollector
+уже объединяет чтение callers; generic SQL mutation скрыла бы эту границу.
+
+Каждое из11 решений содержит точную пару SQL-путей, fragment SHA256, count1
+и собственную причину. Матрица источников сверяет SHA256, named/positional
+bindings, query name/cardinality и lock clauses.872 прежних решения не
+менялись.22 count/hash mutations отклонены actual assessor. Порог detector,
+нормализация и exclusions прежние; raw clone set не изменился:1623 raw,
+1014 retained occurrences/883 entries,609 unresolved против620.
+
+Локальные проверки:17 unit-тестов анализатора — PASS (0,37с); существующие
+TestRuntimeRevisionIncludesExplicitContext,
+TestFinancialCollectorConcurrencyAndReplay и
+TestRoleImageArtifactLockPreservesTupleAndErrors — PASS (4,48с), с GOWORK=off,
+GOMAXPROCS=4 и очищенным child env. Это hermetic unit/fake-row проверки,
+не PostgreSQL component execution. Все5 стадий inventory/detector/assessment/
+Go-docs/ignore boundaries — PASS LOCAL;21505/21505 Go descriptions.
+
+UI/Go/SQL не менялись после предыдущих итоговых проверок: PWA lint/build/
+410 suites/4076 tests относятся к тому же побайтному UI-дереву6b0d61a;
+control-plane build/unit — к прежнему Go-деревуf7c6728. Browser/full E2E,
+живой PostgreSQL, deployment/apply и продуктовая QA не запускались.
+Context7 resolve PostgreSQL вернул Invalid API key; ключи не менялись.
+Проверена официальная PostgreSQL18 документация SELECT/Locking Clause:
+конкретные lock targets и режимы нельзя уравнять по сходству projection.
+Оставшиеся609 групп входят в открытый scope #1823; готовность к merge/deploy
+этим разбором не объявляется.
 
 ## Общее отображение Markdown и самостоятельные JSON-контракты — 25.10.2026
 
