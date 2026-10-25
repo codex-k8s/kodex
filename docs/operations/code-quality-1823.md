@@ -4,11 +4,62 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.437.0
+version: 1.438.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие поля SYSTEM/PROJECT integration grant plan — 25.10.2026
+
+На основе `0341c11a26122f25cace8594e2c5c3b17820f9e7` удалены две копии
+редактируемых полей политики разрешения. Общий feature-компонент
+AssistantIntegrationGrantPolicyFields содержит metadata, описание риска,
+APPLIED readback и controls. useIntegrationGrantPlanPolicy сохраняет одну
+реализацию четырёх computed и двух обработчиков; readonly fields — только
+реактивная проекция для представления, без owner/authority pins.
+
+SYSTEM и PROJECT формы сохраняют собственные owner predicates, exact
+candidate/applied checks, асинхронные watchers, catalogs, versions, abort
+lifetime и исходный parameter→dirty порядок. PROJECT compact summary,
+разворачивание и batch read bundle остаются прежними. Общий компонент
+не делает API-запросов и получает закрытую подпись SYSTEM/PROJECT от формы.
+Разметка раскрывается без дополнительного DOM div; CSS declarations
+fieldset/label/field/code/dd перенесены вместе с общим представлением.
+
+Независимое обратное раскрытие проверяет полные script AST обеих форм,
+полные template AST с прежними expressions/bindings, неизменённые остальные
+imports и CSS declarations. Парсеры TypeScript/Vue проверяют diagnostics
+до использования AST. Тело общей функции совпадает с прежними четырьмя
+computed и двумя обработчиками; добавленная fields-проекция проверяет
+точные источники всех четырёх полей. Это доказательство структурного
+сохранения; реальная browser/layout acceptance им не заменяется.
+
+Новая unit/SSR suite проверяет отсутствие default подстановки, сужение
+политики при смене каталога, изоляцию соседних форм, malformed paths,
+порядок сброса paths до policy, сортировку/дедуп выбора, неизвестные пути,
+лимит16, disabled и отсутствие controls при APPLIED.
+
+Проверки текущего дерева: equivalence PASS LOCAL (0.67s); typecheck PASS LOCAL (51.59s); unit PASS LOCAL (62.31s); build PASS LOCAL (59.79s); lint PASS LOCAL (144.33s); format PASS LOCAL (0.77s);410 suites/4069 tests, включая4 новых проверки; inventory/assessment/Go docs/5 exact-ignore guards PASS LOCAL.
+Ранние lint/typecheck обнаружили соответственно неявный number в строке
+новой оснастки и mutable тип для readonly policies; оба исправлены,
+итоговые результаты относятся к повторному запуску после исправлений.
+Child env исключает credentials и inherited KODEX/VITE inputs.
+Зависимости установлены npm ci по неизменённому lock-файлу с ignore-scripts.
+
+Detector: raw1667→1666, retained851 прежний, unresolved816→815.
+Между двумя формами HTML окно423 tokens исчезло, TS окна302/260
+сократились до184/142. Третье107-token окно осталось прежним: оно
+не объявлено устранённым. Сумма совпавших токенов этой пары1092→433.
+Новые TS windows остаются unresolved; registry740, пороги и исключения
+не расширялись. Inventory6698 sources/222 exclusions.
+Go по-прежнему21493/21493 EN→RU,0 пропусков; Go-код на этом этапе не менялся.
+
+Context7 resolve вновь вернул Invalid API key; ключи не менялись и не
+переносились. Проверены официальные Vue [Props](https://vuejs.org/guide/components/props.html)
+и [Component Events](https://vuejs.org/guide/components/events.html).
+Browser, полный E2E, deploy/live и независимая приёмка — NOT RUN.
+PR остаётся Draft;815 групп ещё не разобраны, Issue#1823 не закрывается.
 
 ## Полнота Go-комментариев: 21493 из 21493 — 25.10.2026
 
