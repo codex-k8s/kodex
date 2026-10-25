@@ -1051,6 +1051,10 @@ components:
         outputTokens: { type: integer, format: int64, minimum: 0 }
         reasoningOutputTokens: { type: integer, format: int64, minimum: 0 }
         modelContextWindow: { type: integer, format: int64, minimum: 0 }
+        completeness:
+          type: string
+          enum: [UNKNOWN, PARTIAL, COMPLETE]
+          description: Полнота наблюдений; отсутствие в legacy означает UNKNOWN, не измеренный ноль.
     RunDelta:
       type: object
       additionalProperties: false

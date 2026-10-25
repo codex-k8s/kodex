@@ -48,60 +48,21 @@ var nativeToolCallIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,
 // полномочий или смысловой гарантией отсутствия чувствительных данных в любой подходящей строке.
 var nativeSafeLabelPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$`)
 
-// UsageCompleteness describes numeric response observations seen by this process, not the provider's
-// entire bill or a successful execution. Zero is UNKNOWN and remains optional in Result JSON.
-// UsageCompleteness описывает числовые response наблюдения этого процесса, не полный счёт провайдера
-// и не успех исполнения. Нулевое UNKNOWN остаётся необязательным полем JSON Result.
-type UsageCompleteness uint8
+// UsageCompleteness aliases the shared wire quality without changing the broker enum layout.
+// UsageCompleteness использует общее качество wire без изменения enum broker.
+type UsageCompleteness = runtimecontract.UsageCompleteness
 
 const (
-	// UsageUnknown means no numeric response observation has been accepted, even if display estimates exist.
-	// UsageUnknown означает отсутствие принятых числовых response наблюдений, даже при наличии display оценок.
-	UsageUnknown UsageCompleteness = iota
-	// UsagePartial records some numeric observations without a sole terminal or with a missing response usage.
-	// UsagePartial отмечает часть числовых наблюдений без единственного terminal либо при пропущенном response usage.
-	UsagePartial
-	// UsageComplete requires numeric observations, exactly one observed terminal and no missing usage;
-	// it does not certify provider billing completeness or independently validate the execution outcome.
-	// UsageComplete требует числовые наблюдения, один отмеченный terminal и отсутствие пропущенного usage;
-	// она не подтверждает полный биллинг провайдера и самостоятельно не проверяет исход исполнения.
-	UsageComplete
+	// UsageUnknown preserves the zero-valued optional broker field for missing observations.
+	// UsageUnknown сохраняет нулевое необязательное broker-поле для отсутствующих наблюдений.
+	UsageUnknown = runtimecontract.UsageUnknown
+	// UsagePartial preserves confirmed subtotals without asserting complete measurement.
+	// UsagePartial сохраняет подтверждённые подытоги без утверждения полноты измерений.
+	UsagePartial = runtimecontract.UsagePartial
+	// UsageComplete preserves explicit numeric zero and complete terminal observations.
+	// UsageComplete сохраняет явный числовой ноль и полные terminal-наблюдения.
+	UsageComplete = runtimecontract.UsageComplete
 )
-
-// MarshalJSON emits only the closed UNKNOWN/PARTIAL/COMPLETE spelling and rejects unsupported numeric values.
-// MarshalJSON выдаёт только закрытые UNKNOWN/PARTIAL/COMPLETE и отвергает неподдержанные числовые значения.
-func (quality UsageCompleteness) MarshalJSON() ([]byte, error) {
-	switch quality {
-	case UsageUnknown:
-		return []byte(`"UNKNOWN"`), nil
-	case UsagePartial:
-		return []byte(`"PARTIAL"`), nil
-	case UsageComplete:
-		return []byte(`"COMPLETE"`), nil
-	default:
-		return nil, errors.New("Codex usage completeness is invalid")
-	}
-}
-
-// UnmarshalJSON accepts only exact closed string values and assigns the nonnil receiver after validation.
-// UnmarshalJSON принимает лишь точные закрытые строки и назначает ненулевой receiver после проверки.
-func (quality *UsageCompleteness) UnmarshalJSON(raw []byte) error {
-	var value string
-	if strictDecode(raw, &value) != nil {
-		return errors.New("Codex usage completeness is invalid")
-	}
-	switch value {
-	case "UNKNOWN":
-		*quality = UsageUnknown
-	case "PARTIAL":
-		*quality = UsagePartial
-	case "COMPLETE":
-		*quality = UsageComplete
-	default:
-		return errors.New("Codex usage completeness is invalid")
-	}
-	return nil
-}
 
 // Result carries the public outcome, safe native facts, measured usage and archive metadata by value.
 // Private capture/diagnostic pointers establish additional provenance that arbitrary exported fields or

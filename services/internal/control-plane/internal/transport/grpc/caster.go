@@ -641,7 +641,7 @@ func castRunTarget(value entity.RunTarget) *controlplanev1.RunTarget {
 // castTokenUsage copies all typed token counters and context-window metadata to transport without aggregation, pricing or financial-eligibility decisions.
 // castTokenUsage копирует все типизированные счётчики токенов и метаданные окна контекста в транспорт без агрегирования, расчёта цены или решения финансовой допустимости.
 func castTokenUsage(value entity.TokenUsage) *controlplanev1.TokenUsage {
-	return &controlplanev1.TokenUsage{TotalTokens: value.TotalTokens, InputTokens: value.InputTokens, CachedInputTokens: value.CachedInputTokens, CacheWriteInputTokens: value.CacheWriteInputTokens, OutputTokens: value.OutputTokens, ReasoningOutputTokens: value.ReasoningOutputTokens, ModelContextWindow: value.ModelContextWindow}
+	return &controlplanev1.TokenUsage{Completeness: controlplanev1.UsageCompleteness(value.Completeness), TotalTokens: value.TotalTokens, InputTokens: value.InputTokens, CachedInputTokens: value.CachedInputTokens, CacheWriteInputTokens: value.CacheWriteInputTokens, OutputTokens: value.OutputTokens, ReasoningOutputTokens: value.ReasoningOutputTokens, ModelContextWindow: value.ModelContextWindow}
 }
 
 // usageFromProto maps nil usage to a zero domain value and otherwise copies every typed counter/context window through protobuf getters without interpreting provider limits.
@@ -650,7 +650,11 @@ func usageFromProto(value *controlplanev1.TokenUsage) entity.TokenUsage {
 	if value == nil {
 		return entity.TokenUsage{}
 	}
-	return entity.TokenUsage{TotalTokens: value.GetTotalTokens(), InputTokens: value.GetInputTokens(), CachedInputTokens: value.GetCachedInputTokens(), CacheWriteInputTokens: value.GetCacheWriteInputTokens(), OutputTokens: value.GetOutputTokens(), ReasoningOutputTokens: value.GetReasoningOutputTokens(), ModelContextWindow: value.GetModelContextWindow()}
+	quality := runtimecontract.UsageCompleteness(value.GetCompleteness())
+	if value.GetCompleteness() < 0 || value.GetCompleteness() > controlplanev1.UsageCompleteness_USAGE_COMPLETENESS_COMPLETE {
+		quality = runtimecontract.UsageCompleteness(255)
+	}
+	return entity.TokenUsage{Completeness: quality, TotalTokens: value.GetTotalTokens(), InputTokens: value.GetInputTokens(), CachedInputTokens: value.GetCachedInputTokens(), CacheWriteInputTokens: value.GetCacheWriteInputTokens(), OutputTokens: value.GetOutputTokens(), ReasoningOutputTokens: value.GetReasoningOutputTokens(), ModelContextWindow: value.GetModelContextWindow()}
 }
 
 // castRun projects run/session/root/retry lineage, usage, incidents, attachment/gate refs, readiness and optional assistant pin from the authorized snapshot; it does not create provenance or mutate execution state.

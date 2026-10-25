@@ -6,6 +6,7 @@ import type {
   RunGraph,
   RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
+import { usageCompleteness } from "@/features/runs/token-usage";
 
 export type RunEventOutcome = "applied" | "duplicate" | "gap" | "invalid";
 
@@ -71,6 +72,11 @@ export function mergeRunGraph(
 }
 
 function isConsistent(event: RunEvent): boolean {
+  try {
+    usageCompleteness(event.run.usage);
+  } catch {
+    return false;
+  }
   if (
     event.serviceCode !== undefined &&
     ![

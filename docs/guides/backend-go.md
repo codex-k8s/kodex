@@ -4,7 +4,7 @@ title: Серверная разработка на Go
 type: guide
 status: approved
 owner: developer
-version: 1.4.10
+version: 1.4.11
 updated: 2026-10-25
 ---
 
@@ -15,6 +15,16 @@ Go-сервиса. Каноническое дерево каталогов пр
 PostgreSQL и миграции - в `GO-DOC-002`, надежная доставка событий - в
 `GO-DOC-004`, межсервисное взаимодействие - в `GO-DOC-005`, а общие
 библиотеки - в `GO-DOC-006`.
+
+## Полнота измерений токенов
+
+Числовые counters не доказывают полноту наблюдений. Закрытое качество UNKNOWN/
+PARTIAL/COMPLETE сохраняется вместе с расходом через success/failure callback,
+Proto, owner JSON aggregate и REST/WebSocket до интерфейса. Legacy без качества
+остаётся UNKNOWN, включая положительные counters; numeric0 при COMPLETE видим.
+PARTIAL показывает только подтверждённый subtotal. Повтор completion сохраняет
+turnRef dedup. Это не provider billing, баланс или допуск по квоте. Точная
+матрица переходов и доставки приведена в `OPS-DOC-USAGE-COMPLETENESS-1840`.
 
 ## Направление зависимостей
 

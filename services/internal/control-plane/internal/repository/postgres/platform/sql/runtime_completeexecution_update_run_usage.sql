@@ -4,7 +4,13 @@ WITH current AS (
     FROM control_plane.runs
     WHERE id=$1::uuid
 ), total AS (
-    SELECT COALESCE(sum((item.value->>'total_tokens')::bigint),0)::bigint AS total_tokens,
+    SELECT CASE
+             WHEN count(*) FILTER (WHERE (item.value ? 'completeness' AND jsonb_typeof(item.value->'completeness') <> 'string') OR COALESCE(item.value->>'completeness', 'UNKNOWN') NOT IN ('UNKNOWN', 'PARTIAL', 'COMPLETE')) > 0 THEN 'INVALID'
+             WHEN count(*) FILTER (WHERE item.value->>'completeness' IN ('PARTIAL', 'COMPLETE')) = 0 THEN 'UNKNOWN'
+             WHEN bool_and(COALESCE(item.value->>'completeness', 'UNKNOWN') = 'COMPLETE') THEN 'COMPLETE'
+             ELSE 'PARTIAL'
+           END AS completeness,
+           COALESCE(sum((item.value->>'total_tokens')::bigint),0)::bigint AS total_tokens,
            COALESCE(sum((item.value->>'input_tokens')::bigint),0)::bigint AS input_tokens,
            COALESCE(sum((item.value->>'cached_input_tokens')::bigint),0)::bigint AS cached_input_tokens,
            COALESCE(sum((item.value->>'cache_write_input_tokens')::bigint),0)::bigint AS cache_write_input_tokens,
@@ -18,6 +24,7 @@ WITH current AS (
 )
 UPDATE control_plane.runs run
 SET usage=jsonb_build_object(
+        'completeness',total.completeness,
         'total_tokens',total.total_tokens,
         'input_tokens',total.input_tokens,
         'cached_input_tokens',total.cached_input_tokens,

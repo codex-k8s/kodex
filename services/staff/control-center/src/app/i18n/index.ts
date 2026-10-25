@@ -2384,6 +2384,8 @@ const ru = {
     promptPreviewSafeHint: "Безопасный состав и версии, не полный ввод модели.",
     usage: {
       title: "Использование токенов",
+      unknown: "Полнота расхода неизвестна",
+      partial: "Неполный расход: показан подтверждённый подытог",
       total: "Всего",
       input: "Вход",
       cached: "Из кэша",
@@ -7095,6 +7097,8 @@ const en = {
     promptPreviewSafeHint: "Safe sections and revisions, not full model input.",
     usage: {
       title: "Token usage",
+      unknown: "Usage completeness is unknown",
+      partial: "Partial usage: confirmed subtotal",
       total: "Total",
       input: "Input",
       cached: "Cached",

@@ -1051,6 +1051,15 @@ message TokenUsage {
   int64 output_tokens = 5;
   int64 reasoning_output_tokens = 6;
   int64 model_context_window = 7;
+  // Отсутствующее поле/zero у старых записей означает UNKNOWN, не измеренный ноль.
+  UsageCompleteness completeness = 8;
+}
+
+// Полнота измерений хода; не является биллингом или допуском по квоте.
+enum UsageCompleteness {
+  USAGE_COMPLETENESS_UNSPECIFIED = 0;
+  USAGE_COMPLETENESS_PARTIAL = 1;
+  USAGE_COMPLETENESS_COMPLETE = 2;
 }
 
 // AssistantRunPin — серверная read-only привязка хода к точному диалогу и

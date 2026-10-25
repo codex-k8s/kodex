@@ -348,11 +348,19 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 	return completeExecutedTurn(ctx, input, client, result, runtime.checkWorkspace, runtime.logger)
 }
 
+// completionUsage preserves counters and the parser's closed quality in every executed callback.
+// completionUsage сохраняет счётчики и закрытое качество parser во всех callback после исполнения.
+func completionUsage(result codex.Result) runtimecontract.TokenUsage {
+	usage := result.Usage
+	usage.Completeness = result.UsageCompleteness
+	return usage
+}
+
 // completeMeasuredFailure sends a failed terminal payload with measured usage and safe provider diagnostics; archive pins are included only when the result's private capture proof verifies against this input. Delivery detaches from cancellation without rerunning the provider.
 // completeMeasuredFailure отправляет failed terminal payload с измеренным usage и безопасной provider-диагностикой; archive pins включаются лишь при проверке private capture proof результата против данного входа. Доставка отделена от отмены без повторного провайдера.
 func completeMeasuredFailure(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, code string) error {
 	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt,
-		Success: false, SafeErrorCode: safeFailureCode(code), ResultSummary: "i18n:" + code, Usage: result.Usage}
+		Success: false, SafeErrorCode: safeFailureCode(code), ResultSummary: "i18n:" + code, Usage: completionUsage(result)}
 	payload.ProviderDiagnostic = result.ProviderDiagnostic(input)
 	if result.HasVerifiedRollout(input) {
 		payload.CodexSessionID, payload.ArchiveRelativePath, payload.ArchiveSHA256, payload.ArchiveSizeBytes = result.SessionID, result.ArchiveRelativePath, result.ArchiveSHA256, result.ArchiveSizeBytes
@@ -397,7 +405,7 @@ func completeExecutedTurn(ctx context.Context, input model.Input, client *callba
 		result = result.WithWorkspaceDiagnostic(input, workspaceCompletionPublish, workspaceCompletionDenialReason(err))
 		return completeExecutedFailure(ctx, input, client, result, "RUNTIME_ARTIFACT_INVALID", "i18n:RUNTIME_ARTIFACT_INVALID")
 	}
-	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: true, ResultSummary: result.FinalMessage, Usage: result.Usage, Artifacts: artifacts, CodexSessionID: result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath, ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
+	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: true, ResultSummary: result.FinalMessage, Usage: completionUsage(result), Artifacts: artifacts, CodexSessionID: result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath, ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
 	if payload.Validate() != nil {
 		return completeExecutedFailure(ctx, input, client, result, "RUNTIME_RESULT_INVALID", "i18n:RUNTIME_RESULT_INVALID")
 	}
@@ -413,12 +421,12 @@ func completeExecutedFailure(ctx context.Context, input model.Input, client *cal
 		code, summary = "RUNTIME_ARTIFACT_INVALID", "i18n:RUNTIME_ARTIFACT_INVALID"
 	}
 	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt,
-		Success: false, ResultSummary: summary, SafeErrorCode: safeFailureCode(code), Usage: result.Usage,
+		Success: false, ResultSummary: summary, SafeErrorCode: safeFailureCode(code), Usage: completionUsage(result),
 		CodexSessionID: result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath,
 		ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
 	payload.ProviderDiagnostic = result.ProviderDiagnostic(input)
 	if (result.Outcome != "SUCCEEDED" && result.Outcome != "FAILED") || payload.Validate() != nil {
-		return completeFailureWithSummaryAndUsage(ctx, input, client, code, summary, result.Usage)
+		return completeFailureWithSummaryAndUsage(ctx, input, client, code, summary, completionUsage(result))
 	}
 	return client.Complete(context.WithoutCancel(ctx), input, payload)
 }
@@ -427,7 +435,7 @@ func completeExecutedFailure(ctx context.Context, input model.Input, client *cal
 // completeResultFailure проецирует выполненный failed result в terminal callback с нормализованным отказом, измеренным usage, archive metadata и безопасной diagnostic provenance; callback validation отклоняет неверные tuple или usage.
 func completeResultFailure(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, summary string) error {
 	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: false, ResultSummary: summary,
-		SafeErrorCode: safeFailureCode(result.FailureCode), Usage: result.Usage, CodexSessionID: result.SessionID,
+		SafeErrorCode: safeFailureCode(result.FailureCode), Usage: completionUsage(result), CodexSessionID: result.SessionID,
 		ArchiveRelativePath: result.ArchiveRelativePath, ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
 	payload.ProviderDiagnostic = result.ProviderDiagnostic(input)
 	return client.Complete(context.WithoutCancel(ctx), input, payload)

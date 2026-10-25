@@ -332,9 +332,10 @@ describe("RunSessionDetailsDialog", () => {
     }
   });
 
-  it("сохраняет все строки измеренного расхода и скрывает полностью пустую сводку", async () => {
+  it("сохраняет все строки расхода и явно помечает неизвестную полноту", async () => {
     const empty = await renderActivity([]);
-    expect(empty).not.toContain("runs.usage.title");
+    expect(empty).toContain("runs.usage.unknown");
+    expect(empty).not.toContain("runs.usage.total");
 
     const measured = await renderActivity([], {
       ...run,
@@ -358,6 +359,33 @@ describe("RunSessionDetailsDialog", () => {
     ]) {
       expect(measured).toContain(`runs.usage.${key}`);
     }
+  });
+
+  it("различает измеренный ноль COMPLETE и подтверждённый subtotal PARTIAL", async () => {
+    const complete = await renderActivity([], {
+      ...run,
+      usage: { ...run.usage, completeness: "COMPLETE" },
+    });
+    expect(complete).toContain("runs.usage.total");
+    expect(complete).toMatch(/<dd\b[^>]*>0<\/dd>/);
+    expect(complete).not.toContain("runs.usage.unknown");
+    const partial = await renderActivity([], {
+      ...run,
+      usage: {
+        ...run.usage,
+        completeness: "PARTIAL",
+        totalTokens: 100,
+        inputTokens: 100,
+      },
+    });
+    expect(partial).toContain("runs.usage.partial");
+    expect(partial).toMatch(/<dd\b[^>]*>100<\/dd>/);
+    const legacy = await renderActivity([], {
+      ...run,
+      usage: { ...run.usage, totalTokens: 100, inputTokens: 100 },
+    });
+    expect(legacy).toContain("runs.usage.unknown");
+    expect(legacy).toMatch(/<dd\b[^>]*>100<\/dd>/);
   });
 
   it("использует canonical компактный transcript с actual USER/FINAL и одной revision инструмента", async () => {
