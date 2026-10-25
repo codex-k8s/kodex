@@ -10,6 +10,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// TestImpactSearchRejectsInvalidInput rejects oversized, NUL-containing or invalid UTF-8 searches
+// across managed configuration, environment and secret impact before dereferencing the repository.
+// TestImpactSearchRejectsInvalidInput отклоняет чрезмерный поиск, NUL и неверный UTF-8 в анализе
+// влияния управляемой конфигурации, окружения и секрета до обращения к repository.
 func TestImpactSearchRejectsInvalidInput(t *testing.T) {
 	var repository *Repository
 	for _, search := range []string{strings.Repeat("a", 201), "a\x00b", string([]byte{0xff})} {

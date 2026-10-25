@@ -9,6 +9,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 )
 
+// TestCallbackContinuationTask preserves the complete owner child-result snapshot as untrusted
+// task data and rejects malformed, incomplete or oversized input without truncation.
+// TestCallbackContinuationTask сохраняет полный снимок результатов дочерних исполнений владельца
+// как недоверенные данные задачи и отклоняет неверный, неполный и чрезмерный вход без усечения.
 func TestCallbackContinuationTask(t *testing.T) {
 	snapshot := `{"completedChildren":[{"runRef":"run_child","state":"SUCCEEDED","resultSummary":"Verified result","artifactRefs":["art_result"]}],"remainingStepKeys":["step002"]}`
 	task, err := callbackContinuationTask([]byte(snapshot))

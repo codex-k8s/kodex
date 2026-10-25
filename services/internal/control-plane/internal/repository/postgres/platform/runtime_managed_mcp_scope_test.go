@@ -8,6 +8,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 )
 
+// TestManagedMCPStartupScopePreservesNilAndConstrainedEmpty distinguishes unrestricted nil layers
+// from constrained empty layers and checks the intersection that requires the complete Context7
+// startup pair.
+// TestManagedMCPStartupScopePreservesNilAndConstrainedEmpty различает неограниченные nil-слои и
+// явно пустые ограничения и проверяет пересечение, требующее полную пару Context7 при запуске.
 func TestManagedMCPStartupScopePreservesNilAndConstrainedEmpty(t *testing.T) {
 	resolve, query := runtimecontract.Context7ResolveCapability, runtimecontract.Context7QueryCapability
 	for _, scenario := range []struct {
@@ -34,6 +39,10 @@ func TestManagedMCPStartupScopePreservesNilAndConstrainedEmpty(t *testing.T) {
 	}
 }
 
+// TestManagedMCPExcludedScopeCannotAdoptContext7Grant skips excluded MCP dependencies without
+// database access but rejects an attached Context7 grant in that excluded scope.
+// TestManagedMCPExcludedScopeCannotAdoptContext7Grant пропускает исключённые зависимости MCP без
+// доступа к БД, но отклоняет присоединённое разрешение Context7 в исключённой области.
 func TestManagedMCPExcludedScopeCannotAdoptContext7Grant(t *testing.T) {
 	blocked := []string{"platform.run.delegate"}
 	if err := requireManagedMCPStartupDependencies(t.Context(), nil, "unused", "unused", nil, blocked); err != nil {

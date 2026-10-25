@@ -5,6 +5,12 @@ import (
 	"testing"
 )
 
+// TestRuntimeGrantSnapshotOwnerDigestMatchesWireFixture checks the complete shared wire fixture
+// digest and verifies changes to each integration grant version/policy/definition/operation/schema
+// pin cannot retain that digest.
+// TestRuntimeGrantSnapshotOwnerDigestMatchesWireFixture проверяет дайджест полной общей wire
+// fixture и невозможность сохранить его при изменении каждой привязки версии разрешения, политики,
+// определения, операции и схемы.
 func TestRuntimeGrantSnapshotOwnerDigestMatchesWireFixture(t *testing.T) {
 	values := fixture.Snapshot(t)
 	want := stringMap(values, "revisionDigest")
@@ -24,7 +30,12 @@ func TestRuntimeGrantSnapshotOwnerDigestMatchesWireFixture(t *testing.T) {
 	}
 }
 
-// Проверяет настоящий ClaimExecution из disposable PG, включая оба grants.
+// testClaimedIntegrationGrantDigestPins checks a supplied claimed snapshot has nonempty exact
+// grant pins, mutates each pin to verify digest binding and restores it; this helper does not
+// itself claim execution.
+// testClaimedIntegrationGrantDigestPins проверяет непустые точные привязки разрешений переданного
+// захваченного снимка, изменяет каждую для проверки дайджеста и восстанавливает её; сам helper не
+// захватывает исполнение.
 func testClaimedIntegrationGrantDigestPins(t *testing.T, snapshot map[string]any) {
 	t.Helper()
 	expected := stringMap(snapshot, "revisionDigest")

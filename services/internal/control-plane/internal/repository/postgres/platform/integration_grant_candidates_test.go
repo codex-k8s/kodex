@@ -5,6 +5,10 @@ import (
 	"testing"
 )
 
+// TestIntegrationCandidateContextClosed requires complete exact USE recipient/project/capability
+// context and valid search while allowing GRANT discovery without an existing grant.
+// TestIntegrationCandidateContextClosed требует полный точный контекст получателя, проекта и
+// capability для USE и допустимый поиск, разрешая поиск GRANT без существующего разрешения.
 func TestIntegrationCandidateContextClosed(t *testing.T) {
 	valid := query.IntegrationCandidates{Purpose: "USE", Context: query.IntegrationCandidateContext{ProjectRef: "project_example", RecipientKind: "AGENT", RecipientRef: "agent_example", CapabilityKey: "synthetic.journal.read"}}
 	if err := validateIntegrationCandidates("CONNECTION", valid); err != nil {

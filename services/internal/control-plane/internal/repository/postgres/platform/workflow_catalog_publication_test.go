@@ -10,6 +10,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestExecutionWorkflowPublicationOwnerDecoder checks owner publication and shared decoder
+// preserve full typed workflow fields and version pins, rejecting unsafe schema and
+// self-dependency instead of omitting them.
+// TestExecutionWorkflowPublicationOwnerDecoder проверяет сохранение полных типизированных полей
+// workflow и привязок версий публикацией владельца и общим декодером, отклоняя небезопасную схему
+// и зависимость шага от самого себя вместо их пропуска.
 func TestExecutionWorkflowPublicationOwnerDecoder(t *testing.T) {
 	item := entity.Workflow{Ref: "wfl_workflow01", ProjectRef: "prj_project001", Version: 7, Published: &entity.WorkflowVersion{Ref: "wfv_workflow01", VersionNumber: 3, Name: "Процесс", Purpose: "Цель", CoordinatorAgentRef: "agt_coordinator", Instructions: "Полная инструкция", CompletionCriteria: "Проверено", Concurrency: 1, TimeoutSeconds: 3600, Inputs: []entity.WorkflowInputField{{Key: "field-001", Label: "Задача", Type: "LONG_TEXT", DefaultValue: "Значение", Required: true}}, Steps: []entity.WorkflowStep{{Key: "step-001", Position: 1, Name: "INTAKE", AgentRef: "agt_specialist", Instructions: "Собрать план", ExpectedResult: "manager-plan.md", TimeoutSeconds: 900, RequiredCapabilityKeys: []string{"platform.run.launch"}}}, ResultSchema: map[string]any{"type": "object", "properties": map[string]any{"status": map[string]any{"type": "string"}}}}}
 	raw, digest, err := executionWorkflowPublication(item, strings.Repeat("a", 64))

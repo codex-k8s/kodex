@@ -8,6 +8,12 @@ import (
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 )
 
+// TestPromptProvenanceVersionPreservesHistoricalDigest keeps unversioned historical digests stable
+// despite prompt metadata, admits valid version-one materialization and rejects unsupported or
+// incorrectly typed provenance versions.
+// TestPromptProvenanceVersionPreservesHistoricalDigest сохраняет исторический дайджест без версии
+// при добавлении метаданных prompt, принимает допустимую материализацию первой версии и отклоняет
+// неподдерживаемые и неверно типизированные версии происхождения.
 func TestPromptProvenanceVersionPreservesHistoricalDigest(t *testing.T) {
 	values := map[string]any{"runtimeRevisionRef": "revision", "runtimeRevisionVersion": int64(1), "providerSecretName": "secret", "providerSecretUID": "uid", "providerSecretResourceVersion": "1"}
 	before, err := runtimeRevisionDigestFromSnapshot(values)
@@ -39,6 +45,10 @@ func TestPromptProvenanceVersionPreservesHistoricalDigest(t *testing.T) {
 	}
 }
 
+// TestRuntimeRevisionIncludesExplicitContext binds even an explicitly empty context snapshot into
+// the runtime digest and changes that digest when its agent lineage changes.
+// TestRuntimeRevisionIncludesExplicitContext включает в runtime-дайджест даже явно пустой снимок
+// контекста и меняет дайджест при смене привязки агента этого снимка.
 func TestRuntimeRevisionIncludesExplicitContext(t *testing.T) {
 	values := map[string]any{"runtimeRevisionRef": "revision", "runtimeRevisionVersion": int64(1),
 		"providerSecretName": "secret", "providerSecretUID": "uid", "providerSecretResourceVersion": "1"}

@@ -5,12 +5,22 @@ import (
 	"testing"
 )
 
+// TestProjectMembershipSearchIncludesVisibleProjectName checks the membership SQL contains visible
+// project-name search; it does not execute or authorize the query.
+// TestProjectMembershipSearchIncludesVisibleProjectName проверяет наличие поиска по отображаемому
+// имени проекта в SQL участников; не исполняет запрос и не проверяет его авторизацию.
 func TestProjectMembershipSearchIncludesVisibleProjectName(t *testing.T) {
 	if !strings.Contains(queryProjectMembershipList, "project.name ILIKE") {
 		t.Fatal("project membership search must include the visible project name")
 	}
 }
 
+// TestOrganizationCatalogSearchIncludesVisibleProjectName checks agent, workflow, schedule,
+// environment and secret SQL references the visible project name, without running PostgreSQL
+// search.
+// TestOrganizationCatalogSearchIncludesVisibleProjectName проверяет наличие отображаемого имени
+// проекта в SQL агентов, workflow, расписаний, окружений и секретов без выполнения поиска в
+// PostgreSQL.
 func TestOrganizationCatalogSearchIncludesVisibleProjectName(t *testing.T) {
 	queries := map[string]string{
 		"agents":       queryQueriesListagentsSelectAgentsOrganizationIdRefProjectId,
@@ -28,6 +38,10 @@ func TestOrganizationCatalogSearchIncludesVisibleProjectName(t *testing.T) {
 	}
 }
 
+// TestRunCatalogSearchIncludesVisibleColumns checks both page and total SQL retain activity/result
+// summaries, initiator and target-name search expressions.
+// TestRunCatalogSearchIncludesVisibleColumns проверяет сохранение выражений поиска по сводкам
+// активности и результата, инициатору и имени цели в SQL страницы и общего количества.
 func TestRunCatalogSearchIncludesVisibleColumns(t *testing.T) {
 	statements := map[string]string{
 		"page":  queryQueriesListrunsSelectRunsOrganizationIdRefProjectId,

@@ -5,6 +5,10 @@ import (
 	"time"
 )
 
+// TestResumableSessionCursorOrdersNewestFirst checks descending creation time and reference
+// tie-breaking, excluding the cursor item itself and admitting first-page candidates.
+// TestResumableSessionCursorOrdersNewestFirst проверяет убывание времени создания и выбор по ref
+// при равенстве времени, исключение самого элемента курсора и допуск кандидатов первой страницы.
 func TestResumableSessionCursorOrdersNewestFirst(t *testing.T) {
 	now := time.Date(2026, time.September, 27, 2, 0, 0, 0, time.UTC)
 	cursor := resumableSessionCursor{Ref: "run_m", CreatedAt: now}

@@ -9,6 +9,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestInteractionSourceDoesNotBypassManagedReadGate checks shipped source admission obeys the
+// actual approval policy, rejects notification effects and preserves explicit owner-decision input
+// without recursive approval.
+// TestInteractionSourceDoesNotBypassManagedReadGate проверяет соблюдение фактической политики
+// подтверждения поставляемым источником, отклонение эффектов уведомлений и сохранение явного ввода
+// решения владельца без рекурсивного подтверждения.
 func TestInteractionSourceDoesNotBypassManagedReadGate(t *testing.T) {
 	shipped, err := integrationpackage.LoadShipped()
 	if err != nil {
@@ -31,6 +37,10 @@ func TestInteractionSourceDoesNotBypassManagedReadGate(t *testing.T) {
 	}
 }
 
+// TestInteractionIncidentUsesPinnedAttemptBudget projects an exhausted one-attempt delivery budget
+// as an open incident with retry-exhausted guidance rather than a hidden retry.
+// TestInteractionIncidentUsesPinnedAttemptBudget проецирует исчерпанный бюджет одной попытки
+// доставки в открытый инцидент с указанием исчерпания повторов вместо скрытого повтора.
 func TestInteractionIncidentUsesPinnedAttemptBudget(t *testing.T) {
 	incident := projectInteractionIncident(entity.Incident{}, "FAILED", 1, 1)
 	if incident.State != "OPEN" || incident.SafeNextStep != "i18n:INTERACTION_DELIVERY_RETRY_EXHAUSTED" {
@@ -38,6 +48,10 @@ func TestInteractionIncidentUsesPinnedAttemptBudget(t *testing.T) {
 	}
 }
 
+// TestInteractionSourceUsesActualDecisionInputSchema mutates the shipped decision enum and checks
+// only its actual allowed decision with a gate reference passes input validation.
+// TestInteractionSourceUsesActualDecisionInputSchema изменяет enum решений поставляемого пакета и
+// проверяет, что валидацию проходит только фактически разрешённое решение с ref подтверждения.
 func TestInteractionSourceUsesActualDecisionInputSchema(t *testing.T) {
 	shipped, err := integrationpackage.LoadShipped()
 	if err != nil {

@@ -9,6 +9,12 @@ import (
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 )
 
+// TestPlatformStageGateV3SeparatesCodeFromAuthAndDeployment checks bounded exact EN/RU v3 guidance
+// separates code-only work from authorization/deployment proof without adding exemptions or a
+// current compliance verdict.
+// TestPlatformStageGateV3SeparatesCodeFromAuthAndDeployment проверяет, что ограниченная точная
+// инструкция EN/RU v3 отделяет работу с кодом от доказательств авторизации и развёртывания без
+// исключений и утверждения текущего соответствия.
 func TestPlatformStageGateV3SeparatesCodeFromAuthAndDeployment(t *testing.T) {
 	for _, locale := range []string{"en", "ru"} {
 		t.Run(locale, func(t *testing.T) {
@@ -34,6 +40,10 @@ func TestPlatformStageGateV3SeparatesCodeFromAuthAndDeployment(t *testing.T) {
 	}
 }
 
+// TestPlatformStageGateV3KeepsPublishedV2BytePins checks exact historical v2 refs/digests remain
+// unchanged and contain no later CODE_ONLY guidance.
+// TestPlatformStageGateV3KeepsPublishedV2BytePins проверяет неизменность точных исторических ref и
+// дайджестов v2 и отсутствие в них более поздней инструкции CODE_ONLY.
 func TestPlatformStageGateV3KeepsPublishedV2BytePins(t *testing.T) {
 	for locale, expected := range map[string]string{"en": "c840a732d1d1a31379545262d93c55a78e55bbcc615f623b8bbf8a559b912094", "ru": "853b0a340ae4ad97c3c116f0fc1d0164ed668c8c064468730429108423e9cdd5"} {
 		binding, err := platformInstructionBindingForRevision("platform-source-conformity-v2", locale)
@@ -43,6 +53,12 @@ func TestPlatformStageGateV3KeepsPublishedV2BytePins(t *testing.T) {
 	}
 }
 
+// TestPlatformStageGateV3ContinuationChangesOnlyInstructionDependency checks v2-to-v3 continuation
+// changes only the instruction dependency, preserves execution components and retains the old
+// snapshot dependency ref/digest.
+// TestPlatformStageGateV3ContinuationChangesOnlyInstructionDependency проверяет изменение только
+// зависимости инструкции при продолжении v2→v3, сохранение компонентов исполнения и прежних ref и
+// дайджеста зависимости старого снимка.
 func TestPlatformStageGateV3ContinuationChangesOnlyInstructionDependency(t *testing.T) {
 	snapshot := workflowPromptFixture()
 	oldBinding, err := platformInstructionBindingForRevision("platform-source-conformity-v2", snapshot.Locale)

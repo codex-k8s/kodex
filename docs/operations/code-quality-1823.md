@@ -4,11 +4,59 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.433.0
+version: 1.434.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Предикаты, курсоры и prompt provenance:83 описания — 25.10.2026
+
+На основе `652b4f493386cc6f315c4aca64c5dc82cb1cb547` полностью прочитаны45
+test Go-файлов (2040 исходных строк) и5 embedded SQL-fixtures (39 строк).
+83 объявления получили содержательное описание EN→RU, включая local
+scopedDescriptor и node. Сигнатуры, assertions, SQL, fixture values,
+диагностика, тайминги и исполняемые выражения не менялись.
+
+| Область | Описанное фактическое поведение и предел проверки |
+| --- | --- |
+| Financial/provider | Callback key привязан к lease/generation/sequence. Scan fixture сохраняет decimal balance и закрыто отвергает corrupt JSON/receipt time. Deleting account допускает только exact active projection/generation; provider effects не выполняются |
+| Search/capture | Membership/run/gate SQL string guards сохраняют visible columns; runtime files guard требует MATERIALIZED и owner visibility. Наличие строки не доказывает живое SQL поведение, число вычислений либо авторизацию |
+| Workflow repair | Structurally readable, но unexecutable конфигурация доступна для ремонта и assistant inspection; corrupt JSON отклоняется. Row reflection требует matching destination types |
+| Integration/interaction | Closed workload routes, outcome localization, bounded invocation refs и persisted delta. Shipped input schema/approval policy проверяются локально; exhausted one-attempt incident не предлагает скрытый retry |
+| Runtime activity/retry | Published commentary исключает hidden/user phases. Tool projections учитывают state/revision/duration. Marked40001 повторяется, forbidden не повторяется;40001/40P01 отдельно от unique violation |
+| Secret scope | Cursor связан с project/query; terminal/draft receipts с полным owner tuple и generation. SQL consumer проверяет tenant/project/scope и exact descriptor/revoke, без plaintext, свежего claim и Kubernetes Secret доступа |
+| MCP startup | nil layers отдельно от constrained empty, exact intersection и complete grant pair. Excluded scope не принимает Context7 grant. Stale-success SQL только проверяется по guards, recovery не исполняется |
+| Continuation | Callback snapshot сохраняется полностью как untrusted data; oversized/malformed input не усечён. Producer и shared consumer сохраняют полное notice и старую историю, failed append не меняет candidate |
+| Prompt/version | Guidance v2/v3/v4/v5 сохраняет exact historical refs/digests и instruction-only diff без выдачи authority. Текстовые проверки не доказывают agent compliance, auth либо deployment |
+| Prospective/schedule | Preview допускает отсутствующие объявленные поля, runtime требует required. Owner format marker назначает template authority; однократная интерполяция сохраняет literal user text, revision доступна лишь после сохранения |
+| Runtime provenance | Owner grant digest связывает version/policy/schema pins. Explicit empty context и agent lineage входят в runtime digest, warm specification исключает revision identity. Claim helper проверяет переданный snapshot, сам не захватывает исполнение |
+| Owner/actions | Invalid impact tuples отличаются от hidden foreign persisted tuples; own membership actions скрыты; environment actions следуют явным permissions/state/revisions. Это presentation predicates, не verified transport |
+| SQL component helpers | Outbox assertion проверяет durable event name/kind/project/version и отсутствие duplicate replay, без broker delivery. EXPLAIN helper считает actual loops в disposable PG независимо от timing. Schedule fixture проходит publish/rebind/claim и readback, но эти component paths в текущем пакете не запускались |
+
+45 полных expected-AST/directive сравнений — PASS LOCAL (0.32s).62
+затронутые unit Test-функции — PASS LOCAL (23.38s, checks434-final).
+Unit child env исключает credentials и все inherited KODEX inputs;
+GOWORK=off/GOMAXPROCS=4/-p2. Component helpers/entrypoints PostgreSQL —
+NOT RUN/SKIP. Полный platform package unit и tracer race последнего test-only
+пакета относятся к652b4f4/checks433-final; здесь повторены только затронутые
+unit. Последний полный production control-plane build/unit остаётся
+38ea7e4/checks429-final: production Go с тех пор не менялся.
+
+Inventory/detector/assessment,5 exact-ignore guards, gofmt и git diff --check —
+PASS LOCAL.17 analyzer unit не повторялись, implementation неизменен.
+Inventory6695 sources/222 exclusions, registry740 прежний. Detector1667
+raw/851 retained occurrences/816 unresolved; окна не добавились и не исчезли,
+clone-set прежний. Новых решений сохранения, exclusions или thresholds нет.
+Реальная дедубликация в этом comments-only пакете не заявляется.
+
+Go21493:21249 EN→RU,244 missing только в128 test-файлах, production missing0.
+PR437 Go/3277 объявлений, missing0;467 whole changed blobs. #1823 открыт,
+#1829 Draft. Новых library API и Context7 запросов нет; прежний fallback
+отражён выше. PG/RLS/OCC/races, remote effects, browser/полный E2E/deploy/live —
+NOT RUN/SKIP. Manifests неизменны; прежние30 renders и исходный standalone
+staging/control-api-gateway FAIL не повторялись. Main/QA и env сохранены,
+секреты не раскрывались и не переносились.
 
 ## Общий test tracer полных grant projections — 25.10.2026
 

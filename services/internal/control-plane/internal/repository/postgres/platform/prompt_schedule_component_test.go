@@ -13,6 +13,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// bindScheduleTemplateFixture creates, validates and publishes a template, rebinds it to one
+// schedule with explicit absence or previous owner expectation, and reads the exact consumer
+// binding.
+// bindScheduleTemplateFixture создаёт, валидирует и публикует шаблон, связывает его с одним
+// расписанием с явным ожиданием отсутствия либо прежнего владельца и читает точную привязку
+// потребителя.
 func bindScheduleTemplateFixture(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, projectRef, scheduleRef, key, content string, previous ...entity.ManagedConfigurationConsumer) (string, entity.ManagedConfigurationConsumer) {
 	t.Helper()
 	execute := func(kind command.Kind, version *int64, payload command.ManagedConfigurationInput) command.Result {
@@ -43,6 +49,11 @@ func bindScheduleTemplateFixture(t *testing.T, ctx context.Context, service *pla
 	return created.ManagedRevision.Ref, bound.Consumers[0]
 }
 
+// checkCapturedScheduleRuntime claims one exact schedule Run and verifies its captured template,
+// fresh Run interpolation, prompt provenance and committed root-turn task agree.
+// checkCapturedScheduleRuntime захватывает один точный Run расписания и проверяет согласованность
+// захваченного шаблона, подстановки нового Run, происхождения prompt и сохранённой задачи
+// корневого turn.
 func checkCapturedScheduleRuntime(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, runRef, templateRef string) {
 	t.Helper()
 	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim"}, "runtime-controller")

@@ -9,6 +9,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestRunCatalogPosition round-trips exact creation time and Run reference, treats an empty cursor
+// as first page and rejects legacy-only, malformed or extra-part positions.
+// TestRunCatalogPosition проверяет обратимое кодирование точного времени создания и ref Run,
+// считает пустой курсор первой страницей и отклоняет legacy ref без времени, неверные и составные
+// лишние позиции.
 func TestRunCatalogPosition(t *testing.T) {
 	created := time.Date(2026, time.September, 27, 9, 45, 7, 123456000, time.UTC)
 	position := runCatalogPosition(entity.Run{Ref: "run_newer", CreatedAt: created})

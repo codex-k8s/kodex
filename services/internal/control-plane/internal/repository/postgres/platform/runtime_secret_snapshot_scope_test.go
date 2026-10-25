@@ -7,6 +7,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestRuntimeSecretTerminalSnapshotRejectsMissingOrMixedScope accepts only complete
+// organization/project owner tuples and rejects missing, unknown or mixed scope in terminal secret
+// JSON snapshots.
+// TestRuntimeSecretTerminalSnapshotRejectsMissingOrMixedScope принимает только полные наборы
+// владельца организации либо проекта и отклоняет отсутствующую, неизвестную и смешанную область в
+// завершённых JSON-снимках секрета.
 func TestRuntimeSecretTerminalSnapshotRejectsMissingOrMixedScope(t *testing.T) {
 	for _, test := range []struct {
 		name, scope, organization, project string
@@ -32,6 +38,11 @@ func TestRuntimeSecretTerminalSnapshotRejectsMissingOrMixedScope(t *testing.T) {
 	}
 }
 
+// TestRuntimeSecretDraftReceiptPinsFullCurrentOwnerTuple binds completed draft receipts and their
+// secret to the current draft/ref/generation and exact organization/project scope.
+// TestRuntimeSecretDraftReceiptPinsFullCurrentOwnerTuple связывает завершённую квитанцию черновика
+// и её секрет с текущими ref черновика и секрета, поколением и точной областью организации и
+// проекта.
 func TestRuntimeSecretDraftReceiptPinsFullCurrentOwnerTuple(t *testing.T) {
 	current := entity.RuntimeSecretDraft{Ref: "draft_example", SecretRef: "sec_example", ScopeKind: "ORGANIZATION", OrganizationRef: "org_example", Generation: 3}
 	valid := entity.RuntimeSecretDraftResult{Draft: current, Secret: &entity.RuntimeSecret{Ref: current.SecretRef, ScopeKind: current.ScopeKind, OrganizationRef: current.OrganizationRef}}

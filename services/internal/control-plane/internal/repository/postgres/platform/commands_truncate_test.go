@@ -6,6 +6,11 @@ import (
 	"unicode/utf8"
 )
 
+// TestTruncateKeepsDatabaseCharacterLimit checks trimming and ellipsis respect character limits
+// for ASCII/Unicode, including zero and marker-only boundaries.
+// TestTruncateKeepsDatabaseCharacterLimit проверяет соблюдение ограничения символов после удаления
+// краевых пробелов и добавления многоточия для ASCII и Unicode, включая нулевую границу и место
+// только для маркера.
 func TestTruncateKeepsDatabaseCharacterLimit(t *testing.T) {
 	t.Parallel()
 
@@ -34,6 +39,10 @@ func TestTruncateKeepsDatabaseCharacterLimit(t *testing.T) {
 	}
 }
 
+// TestBoundedRunTitleUsesUTF8ByteLimit checks titles stay valid UTF-8 within240 bytes, preserve
+// already bounded input and mark omitted content with an ellipsis.
+// TestBoundedRunTitleUsesUTF8ByteLimit проверяет корректный UTF-8 заголовков в пределах240 байт,
+// сохранение уже допустимого входа и обозначение пропущенного текста многоточием.
 func TestBoundedRunTitleUsesUTF8ByteLimit(t *testing.T) {
 	t.Parallel()
 	for _, title := range []string{

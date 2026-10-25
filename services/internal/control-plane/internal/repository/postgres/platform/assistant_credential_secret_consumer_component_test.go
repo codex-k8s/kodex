@@ -11,14 +11,28 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// queryAssistantCredentialSecretSeed creates scoped synthetic secret/revision descriptor rows
+// without storing plaintext or creating a Kubernetes Secret.
+// queryAssistantCredentialSecretSeed создаёт строки искусственного секрета и дескриптора ревизии с
+// заданной областью без plaintext и создания Kubernetes Secret.
+//
 //go:embed testdata/sql/assistant_credential_secret_seed.sql
 var queryAssistantCredentialSecretSeed string
 
+// queryAssistantCredentialSecretRevoke revokes only the fixture secret selected by exact
+// organization and reference.
+// queryAssistantCredentialSecretRevoke отзывает только тестовый секрет, выбранный по точной
+// организации и ref.
+//
 //go:embed testdata/sql/assistant_credential_secret_revoke.sql
 var queryAssistantCredentialSecretRevoke string
 
-// Проверяется только owner SQL consumer: фикстура не подменяет RuntimeRevision,
-// не доказывает создание свежего claim и не обращается к Kubernetes Secrets.
+// testAssistantCredentialSecretConsumer checks the owner SQL consumer matches exact
+// organization/project scope and descriptor pins and rejects revocation; it proves neither fresh
+// runtime claims nor Kubernetes Secret access.
+// testAssistantCredentialSecretConsumer проверяет совпадение точной области организации и проекта
+// и привязок дескриптора в SQL-потребителе владельца и отказ после отзыва; не доказывает свежий
+// runtime claim либо доступ к Kubernetes Secret.
 func testAssistantCredentialSecretConsumer(t *testing.T, ctx context.Context, pool *pgxpool.Pool, actorID, organizationID, projectID string) {
 	t.Helper()
 	tx, err := pool.Begin(ctx)
@@ -26,6 +40,10 @@ func testAssistantCredentialSecretConsumer(t *testing.T, ctx context.Context, po
 		t.Fatal(err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	// scopedDescriptor keeps the fixture secret ref, explicit scope/project and immutable descriptor
+	// together for scoped consumer assertions.
+	// scopedDescriptor хранит вместе ref тестового секрета, явную область и проект и неизменный
+	// дескриптор для проверок потребителя с заданной областью.
 	type scopedDescriptor struct {
 		ref, scope, project string
 		descriptor          entity.RuntimeSecretRevisionDescriptor

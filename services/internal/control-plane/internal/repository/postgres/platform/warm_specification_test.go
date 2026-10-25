@@ -2,6 +2,12 @@ package platform
 
 import "testing"
 
+// TestWarmSpecificationFingerprint excludes runtime revision identity from the warm specification
+// fingerprint while binding the listed content, model, credential, environment and session
+// dependencies without mutating the source.
+// TestWarmSpecificationFingerprint исключает идентичность runtime-ревизии из отпечатка тёплой
+// спецификации, привязывая перечисленные зависимости содержимого, модели, credential, окружения и
+// сессии без изменения источника.
 func TestWarmSpecificationFingerprint(t *testing.T) {
 	base := map[string]any{"runtimeRevisionRef": "rrev_original", "runtimeRevisionVersion": int64(71),
 		"providerSecretName": "secret", "providerSecretUID": "uid", "providerSecretResourceVersion": "1"}
