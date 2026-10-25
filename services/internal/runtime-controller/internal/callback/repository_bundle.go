@@ -17,15 +17,7 @@ import (
 // repositoryBundleAvailable advertises the specialized producer only for a project employee with an exact pinned human-each-effect bundle grant; discovery is not authority.
 // repositoryBundleAvailable показывает specialized producer лишь project employee с exact pinned human-each-effect bundle grant; discovery не является authority.
 func repositoryBundleAvailable(input runtimecontract.RunnerInput) bool {
-	if input.ProjectRef == "" || input.IsAssistant() {
-		return false
-	}
-	for _, grant := range input.IntegrationGrants {
-		if grant.CapabilityKey == repositorybundle.Operation && grant.Operation == repositorybundle.Operation && grant.Risk == "WRITE" && grant.ApprovalPolicy == "HUMAN_EACH_EFFECT" {
-			return true
-		}
-	}
-	return false
+	return runtimecontract.RuntimeRepositoryBundleAvailable(input)
 }
 
 // repositoryBundleGrant selects only the exact immutable grant and closed typed operation; it cannot select a foreign connection or turn a generic grant into bulk write authority.

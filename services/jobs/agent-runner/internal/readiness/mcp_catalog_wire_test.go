@@ -47,9 +47,9 @@ func checkCatalogFixture(t *testing.T, catalog []byte, names []string, inputs ..
 	return checkMCP(t.Context(), server.Client(), endpoint, "synthetic-capability", names, inputs...)
 }
 
-// TestRuntimeMCPCatalogWireConsumer consumes sixteen explicitly provided controller-produced wire fixtures and verifies all scope/file/delegation/launch combinations through readiness.
+// TestRuntimeMCPCatalogWireConsumer consumes seventeen explicitly provided controller-produced wire fixtures and verifies scope/file/delegation/launch/bundle combinations through readiness.
 // Missing fixture-path configuration skips this producer-dependent check rather than proving wire compatibility.
-// TestRuntimeMCPCatalogWireConsumer читает шестнадцать явно переданных wire-образцов producer контроллера и проверяет сочетания области, файлов, делегирования и запуска через readiness.
+// TestRuntimeMCPCatalogWireConsumer читает семнадцать явно переданных wire-образцов producer контроллера и проверяет сочетания области, файлов, делегирования, запуска и пакета через readiness.
 // Отсутствующий путь образца пропускает зависимую от producer проверку, а не доказывает wire-совместимость.
 func TestRuntimeMCPCatalogWireConsumer(t *testing.T) {
 	path := os.Getenv("KODEX_RUNTIME_MCP_CATALOG_FIXTURE")
@@ -65,7 +65,7 @@ func TestRuntimeMCPCatalogWireConsumer(t *testing.T) {
 		Input   runtimecontract.RunnerInput
 		Catalog json.RawMessage
 	}
-	if json.Unmarshal(raw, &fixtures) != nil || len(fixtures) != 16 {
+	if json.Unmarshal(raw, &fixtures) != nil || len(fixtures) != 17 {
 		t.Fatal("catalog fixture invalid")
 	}
 	seen := make(map[string]bool, len(fixtures))
@@ -78,7 +78,42 @@ func TestRuntimeMCPCatalogWireConsumer(t *testing.T) {
 			if err := checkCatalogFixture(t, fixture.Catalog, runtimecontract.RuntimeMCPToolNames(fixture.Input), fixture.Input); err != nil {
 				t.Fatalf("actual controller catalog rejected: %v stage=%s", err, FailureStage(err))
 			}
+			if fixture.Name == "repository-bundle-and-files" {
+				unauthorized := fixture.Input
+				unauthorized.IntegrationGrants = append([]runtimecontract.RunnerIntegrationGrant(nil), fixture.Input.IntegrationGrants...)
+				unauthorized.IntegrationGrants[0].ApprovalPolicy = "NONE"
+				if err := checkCatalogFixture(t, fixture.Catalog, runtimecontract.RuntimeMCPToolNames(unauthorized), unauthorized); err == nil || FailureStage(err) != "CATALOG_BINDING" {
+					t.Fatal("extra repository bundle tool bypassed the immutable grant boundary")
+				}
+				var envelope struct {
+					JSONRPC string `json:"jsonrpc"`
+					ID      string `json:"id"`
+					Result  struct {
+						Tools []map[string]any `json:"tools"`
+					} `json:"result"`
+				}
+				if json.Unmarshal(fixture.Catalog, &envelope) != nil {
+					t.Fatal("catalog decode failed")
+				}
+				filtered := make([]map[string]any, 0, len(envelope.Result.Tools))
+				for _, tool := range envelope.Result.Tools {
+					if tool["name"] != runtimecontract.RepositoryBundlePrepareTool {
+						filtered = append(filtered, tool)
+					}
+				}
+				envelope.Result.Tools = filtered
+				missing, err := json.Marshal(envelope)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := checkCatalogFixture(t, missing, runtimecontract.RuntimeMCPToolNames(fixture.Input), fixture.Input); err == nil || FailureStage(err) != "CATALOG_BINDING" {
+					t.Fatal("missing repository bundle tool passed readiness")
+				}
+			}
 		})
+	}
+	if !seen["repository-bundle-and-files"] {
+		t.Fatal("repository bundle catalog fixture missing")
 	}
 	for _, launch := range []bool{false, true} {
 		for _, vfs := range []bool{false, true} {

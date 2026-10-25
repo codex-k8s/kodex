@@ -4,7 +4,7 @@ title: Публикация CLEAN bundle исходников одним commit
 type: operations
 status: approved
 owner: developer
-version: 1.0.3
+version: 1.0.4
 updated: 2026-10-25
 ---
 
@@ -233,10 +233,31 @@ authority publisher в текущем staging этим изменением не
 ## Доставка schema и потребителей
 
 Изменены CP, integration-gateway, runtime-controller, control-api-gateway и
-PWA; agent-runner input ABI не меняется. Штатный outbox producer уже умеет
-captured regular files, новый runner image сам по себе не требуется. До
+PWA. JSON input ABI agent-runner не меняется, но закрытый MCP-каталог меняется:
+новый `prepare_repository_bundle_publication` должен присутствовать одновременно
+в фактическом tools/list контроллера и `RuntimeMCPToolNames` потребителя.
+Поэтому необходимы новый trusted runner и собранный из него допущенный RoleImage;
+прежний runner отклоняет новый grant на `CATALOG_BINDING` до запуска модели.
+Штатный outbox capture файлов не заменяет эту проверку совместимости. До
 создания capability grant и model turn нужно доставить всю цепочку и authority
 registry новой RPC service. Отсутствие исполнителя либо schema — закрытый отказ.
+
+Порядок включения: схема и приложения → согласованная trusted-base/admission
+контрольная точка → новый проектный RoleImage через build/admit/promote →
+публикация окружения QA-сотрудника → новый exact grant и свежий RuntimeRevision.
+При несовместимом runner новое разрешение остаётся выключенным; старые READ
+grants позволяют отдельно подготовить файлы. Нельзя ослаблять exact tools/list,
+добавлять инструмент в prompt вместо контракта или повторять failed run без
+изменения подтверждённой причины. Глобальная политика Kubernetes применяется
+только в отдельно разрешённой владельцем области.
+
+Матрица каталога: обычный проектный turn и exact capability/operation + WRITE +
+HUMAN_EACH_EFFECT показывают инструмент; assistant, warm, отсутствующие project
+или grant, другая operation/risk/policy — нет. Фактические лишний и отсутствующий
+инструменты отклоняются readiness. Общий предикат — в `runtimecontract`, он не
+заменяет owner-проверки grant/lease/CLEAN перед prepare. Prepare, Gate, claim,
+Begin, completion, cancel/revoke и UNKNOWN сохраняют матрицу разделов выше;
+изменение каталога не создаёт переход состояния или внешний Git-эффект.
 
 1. Root получает clean source SHA и exact опубликованный CP image с matching
    provenance. Отсутствие активных owner work проверяет existing migration

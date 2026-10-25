@@ -6,6 +6,28 @@ import "slices"
 // ExecutionSnapshotTool называет ограниченное диагностическое чтение текущего исполнения.
 const ExecutionSnapshotTool = "get_execution_snapshot"
 
+// RepositoryBundlePrepareTool names the specialized metadata-only publication tool in the closed producer/consumer catalog.
+// RepositoryBundlePrepareTool задаёт имя специализированного инструмента публикации по метаданным в закрытом каталоге производителя и потребителя.
+const RepositoryBundlePrepareTool = "prepare_repository_bundle_publication"
+
+// RepositoryBundlePublishOperation binds catalog eligibility to the exact repository publication capability and operation.
+// RepositoryBundlePublishOperation связывает допуск в каталог с точными capability и operation публикации репозитория.
+const RepositoryBundlePublishOperation = "github.repository.bundle.publish"
+
+// RuntimeRepositoryBundleAvailable advertises preparation only for an ordinary project turn with an exact human-approved write grant; owner-side fresh checks still authorize each invocation.
+// RuntimeRepositoryBundleAvailable показывает подготовку только обычному проектному ходу с точным WRITE-разрешением и обязательным Human Gate; каждый вызов дополнительно проверяется владельцем состояния.
+func RuntimeRepositoryBundleAvailable(input RunnerInput) bool {
+	if input.Mode != RunnerModeTurn || input.AssistantScope != AssistantScopeNone || input.ProjectRef == "" {
+		return false
+	}
+	for _, grant := range input.IntegrationGrants {
+		if grant.CapabilityKey == RepositoryBundlePublishOperation && grant.Operation == RepositoryBundlePublishOperation && grant.Risk == "WRITE" && grant.ApprovalPolicy == "HUMAN_EACH_EFFECT" {
+			return true
+		}
+	}
+	return false
+}
+
 // RuntimeExecutionSnapshotAvailable exposes diagnostic read capability only for an active turn;
 // control-plane RecordRunToolCall still checks the fresh lease before returning a result.
 // RuntimeExecutionSnapshotAvailable открывает диагностическое чтение только для активного хода;
@@ -59,6 +81,9 @@ func RuntimeMCPToolNames(input RunnerInput) []string {
 	}
 	if len(input.IntegrationGrants) != 0 {
 		result = append(result, "get_integration_catalog", "invoke_integration")
+	}
+	if RuntimeRepositoryBundleAvailable(input) {
+		result = append(result, RepositoryBundlePrepareTool)
 	}
 	if len(input.ManagedMCPProfiles) != 0 {
 		result = append(result, Context7ResolveTool, Context7QueryTool)
