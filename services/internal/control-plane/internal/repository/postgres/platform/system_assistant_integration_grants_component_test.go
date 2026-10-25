@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	serviceplatform "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
@@ -22,11 +21,28 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// querySystemAssistantGrantSideEffects embeds aggregate grant/receipt/audit/outbox/open-gate
+// counts used to detect effects after rejected organizational authority or replay. The outbox
+// count is fixture-global as before; no credential payload or external system is queried.
+// querySystemAssistantGrantSideEffects встраивает aggregate grant/receipt/audit/outbox/open-gate
+// counts для обнаружения effects после отказа organizational authority либо replay. Outbox count
+// по-прежнему общий для fixture; credential payload или внешняя система не запрашивается.
+//
 //go:embed testdata/sql/system_assistant_grant_side_effects.sql
 var querySystemAssistantGrantSideEffects string
 
-// Только disposable PostgreSQL: реальный owner graph, синтетические lease/ACK,
-// без вызова model, GitHub, Kubernetes или иных внешних effects.
+// TestSystemAssistantIntegrationGrantsComponent checks organizational SYSTEM grant policies, exact
+// runtime/invocation/gate pins and signed-project denials, then owner-confirmed immutable plans
+// and idempotent receipts. It covers revocation before replay/OCC, duplicate and five-capability
+// atomic plans, later-effect conflicts without partial writes, STALE refresh and cancel graphs,
+// while PROJECT context never advertises SYSTEM grant authority. All leases/ACK/provider effects
+// are synthetic on disposable PostgreSQL and do not prove external execution.
+// TestSystemAssistantIntegrationGrantsComponent проверяет organizational SYSTEM grant policies,
+// точные runtime/invocation/gate pins и signed-project denials, затем owner-confirmed immutable
+// plans и idempotent receipts. Покрывает revocation до replay/OCC, duplicate и five-capability
+// atomic plans, later-effect conflicts без partial writes, STALE refresh и cancel graphs; PROJECT
+// context никогда не объявляет SYSTEM grant authority. Все leases/ACK/provider effects
+// синтетические на disposable PostgreSQL и не доказывают внешнее выполнение.
 func TestSystemAssistantIntegrationGrantsComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
@@ -35,19 +51,7 @@ func TestSystemAssistantIntegrationGrantsComponent(t *testing.T) {
 		t.Fatal("open isolated system grant PostgreSQL")
 	}
 	defer pool.Close()
-	r, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = r.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
-		t.Fatal(err)
-	}
-	if err = r.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3, StagingRepository: "registry.invalid/staging", PromotedRepository: "registry.invalid/roles", DefaultImageReference: "registry.invalid/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
-		t.Fatal(err)
-	}
-	if err = r.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
+	r := newSyntheticRuntimeComponentRepository(t, ctx, pool)
 	prepareObservedWarmFixture(t, ctx, r)
 	principal := func(workload, operation, actor, tenant string) value.Principal {
 		return resolvedTestPrincipal(t, ctx, r, port.ProofPrincipalInput{ExternalActorID: actor, ExternalTenantID: tenant, CallerWorkload: workload, Operation: operation}, workload)

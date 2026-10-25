@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	serviceplatform "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
@@ -22,17 +21,42 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// systemGrantProjectionCounter counts exact full-connection/grant query projections atomically
+// through the pgx tracer. It stores no query text, arguments or results and does not count
+// unrelated SQL or prove all read costs.
+// systemGrantProjectionCounter атомарно считает точные full-connection/grant query projections
+// через pgx tracer. Не сохраняет query text, arguments или results и не считает прочие SQL либо
+// полную стоимость чтения.
 type systemGrantProjectionCounter struct{ fullReads atomic.Int64 }
 
+// TraceQueryStart increments the counter only for the two exact full projection query strings and
+// returns the original context. It records no request data and does not modify query execution or
+// authorization.
+// TraceQueryStart увеличивает counter только для двух точных строк full projection queries и
+// возвращает исходный context. Не сохраняет request data и не меняет query execution или
+// authorization.
 func (counter *systemGrantProjectionCounter) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
 	if data.SQL == queryQueriesAttachconnectionSelectIntegrationGrantsOrganizationIdConnectionIdRef || data.SQL == queryQueriesGetintegrationconnectionSelectIntegrationConnectionsOrganizationIdRef {
 		counter.fullReads.Add(1)
 	}
 	return ctx
 }
+
+// TraceQueryEnd implements the required tracer completion callback without retaining rows, errors,
+// arguments or timing. Full-read counting occurs only at TraceQueryStart.
+// TraceQueryEnd реализует обязательный tracer completion callback без хранения rows, errors,
+// arguments или timing. Full-read counting выполняется только в TraceQueryStart.
 func (*systemGrantProjectionCounter) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {
 }
 
+// TestSystemAssistantGrantHeaderClosed checks the exact synthetic header and rejects mismatched
+// ref, missing name/version/definition key/revision, malformed digest and an unbound requested
+// ref. It tests the lexical/header predicate only, not database eligibility or live package
+// provenance.
+// TestSystemAssistantGrantHeaderClosed проверяет точный synthetic header и отклоняет несовпадающий
+// ref, отсутствие name/version/definition key/revision, malformed digest и несвязанный requested
+// ref. Проверяет только lexical/header predicate, а не database eligibility или live package
+// provenance.
 func TestSystemAssistantGrantHeaderClosed(t *testing.T) {
 	header := systemAssistantGrantConnectionHeader{ref: "int_owned", name: "Owned", version: 1, definitionKey: "github", definitionVersion: "6.0.0", definitionDigest: strings.Repeat("a", 64)}
 	if !validSystemAssistantGrantConnectionHeader(header, header.ref) {
@@ -65,6 +89,18 @@ func TestSystemAssistantGrantHeaderClosed(t *testing.T) {
 	}
 }
 
+// TestSystemAssistantGrantHeaderBatchComponent proposes and atomically applies 21 SYSTEM READ
+// grants while the tracer requires zero full connection projections during proposal. It preserves
+// immutable owner tuples, exact versions and one replay receipt, rejects caller owner pins,
+// signed-project/foreign scope and revoked-owner replay. PostgreSQL, warm runtime and integration
+// credentials are disposable/synthetic; timing is observational and not a deployed performance
+// acceptance.
+// TestSystemAssistantGrantHeaderBatchComponent предлагает и атомарно применяет 21 SYSTEM READ
+// grant, пока tracer требует ноль full connection projections при proposal. Сохраняет immutable
+// owner tuples, exact versions и один replay receipt, отклоняет caller owner pins,
+// signed-project/foreign scope и revoked-owner replay. PostgreSQL, warm runtime и integration
+// credentials disposable/synthetic; timing является наблюдением, а не развёрнутой performance
+// acceptance.
 func TestSystemAssistantGrantHeaderBatchComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
@@ -79,19 +115,7 @@ func TestSystemAssistantGrantHeaderBatchComponent(t *testing.T) {
 		t.Fatal("open isolated SYSTEM header fixture")
 	}
 	defer pool.Close()
-	r, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = r.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
-		t.Fatal(err)
-	}
-	if err = r.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3, StagingRepository: "registry.invalid/staging", PromotedRepository: "registry.invalid/roles", DefaultImageReference: "registry.invalid/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
-		t.Fatal(err)
-	}
-	if err = r.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
+	r := newSyntheticRuntimeComponentRepository(t, ctx, pool)
 	prepareObservedWarmFixture(t, ctx, r)
 	principal := func(workload, operation, actor, tenant string) value.Principal {
 		return resolvedTestPrincipal(t, ctx, r, port.ProofPrincipalInput{ExternalActorID: actor, ExternalTenantID: tenant, CallerWorkload: workload, Operation: operation}, workload)

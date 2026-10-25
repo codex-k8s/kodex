@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	serviceplatform "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
@@ -21,17 +20,46 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// queryManagedMCPReadbackFixture embeds the first synthetic credential descriptor and
+// CONNECTED/configured/version projection for one disposable readback connection. It contains no
+// real credential bytes and makes no external adapter request.
+// queryManagedMCPReadbackFixture встраивает первый synthetic credential descriptor и
+// CONNECTED/configured/version projection одной disposable readback connection. Не содержит actual
+// credential bytes и не выполняет внешний adapter request.
+//
 //go:embed testdata/sql/managed_mcp_readback_fixture.sql
 var queryManagedMCPReadbackFixture string
 
+// queryManagedMCPReadbackStale embeds a new six-minute-old synthetic success receipt with
+// owner-triggered input capture. It creates separate historical evidence rather than rewriting an
+// immutable previous receipt, allowing freshness rejection to be tested.
+// queryManagedMCPReadbackStale встраивает новый synthetic success receipt возрастом шесть минут с
+// owner-triggered input capture. Создаёт отдельное историческое evidence вместо перезаписи
+// immutable предыдущего receipt, позволяя проверить отказ по freshness.
+//
 //go:embed testdata/sql/managed_mcp_readback_stale.sql
 var queryManagedMCPReadbackStale string
 
+// queryManagedMCPReadbackRecredential embeds a new synthetic credential revision and connection
+// version binding. Prior receipt pins/history remain unchanged so the readback must reject
+// freshness after credential drift.
+// queryManagedMCPReadbackRecredential встраивает новую synthetic credential revision и привязку
+// connection version. Прежние receipt pins/history не меняются, поэтому readback обязан отклонить
+// freshness после credential drift.
+//
 //go:embed testdata/sql/managed_mcp_readback_recredential.sql
 var queryManagedMCPReadbackRecredential string
 
-// Выполняет поставляемую read-only SQL на отдельной мигрированной БД. Health
-// completion синтетический; внешний adapter, provider и live данные не нужны.
+// TestManagedMCPHealthReadbackComponent runs the shipped diagnostic SQL on disposable PostgreSQL
+// and feeds its safe projection to the shipped Node classifier with a PATH-only child environment.
+// It checks exact connection/agent/grant/version scope, synthetic probe completion,
+// stale/credential drift and absence of forbidden fields. Provider health is synthetic; this
+// scenario neither calls Context7 nor proves a deployed adapter probe.
+// TestManagedMCPHealthReadbackComponent выполняет поставляемый diagnostic SQL на disposable
+// PostgreSQL и передаёт безопасную projection поставляемому Node classifier с PATH-only child
+// environment. Проверяет точные connection/agent/grant/version scope, synthetic probe completion,
+// stale/credential drift и отсутствие запрещённых полей. Provider health синтетическая; сценарий
+// не вызывает Context7 и не доказывает развёрнутый adapter probe.
 func TestManagedMCPHealthReadbackComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
@@ -40,19 +68,7 @@ func TestManagedMCPHealthReadbackComponent(t *testing.T) {
 		t.Fatal("open isolated readback PostgreSQL")
 	}
 	defer pool.Close()
-	r, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = r.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
-		t.Fatal(err)
-	}
-	if err = r.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3, StagingRepository: "registry.invalid/staging", PromotedRepository: "registry.invalid/roles", DefaultImageReference: "registry.invalid/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
-		t.Fatal(err)
-	}
-	if err = r.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
+	r := newSyntheticRuntimeComponentRepository(t, ctx, pool)
 	seedObservedCatalogFixture(t, ctx, r)
 	owner := resolvedTestPrincipal(t, ctx, r, port.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.command.integrations.create"}, "control-api-gateway")
 	gateway := resolvedTestPrincipal(t, ctx, r, port.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "integration-gateway", Operation: "platform.runtime.integration-tests.claim"}, "integration-gateway")

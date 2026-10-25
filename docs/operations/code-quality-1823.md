@@ -4,11 +4,73 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.412.0
+version: 1.413.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая синтетическая component fixture — 25.10.2026
+
+На основе `b2d6f8cc53e3b8a2d0f4c44c7d1ba677e0011b53` полностью прочитаны
+13 изменённых тестовых файлов(4093 исходные строки) и23 встроенных SQL(143 строки).
+46 прежних объявлений и новый newSyntheticRuntimeComponentRepository описаны
+EN→RU, включая local fixture types, tracer и отрицательные DNS resolvers.
+Новый файл component_runtime_fixture_test.go входит в own-source inventory.
+Применимые разделы GO-DOC-001/002/003/006, GUIDE-DOC-006 и GOV-DOC-003 сверены;
+нового внешнего API, зависимости или production runtime primitive нет.
+
+Тринадцать точных constructor/provider/role-image/Bootstrap блоков заменены
+одним test-only helper. Все literal values, порядок New→ConfigureProviderCredential
+→ConfigureRoleImages→Bootstrap, исходные Fatal(err), caller context и свежий
+synthetic signing-key slice сохранены. Pool, Close, timeout, tracer, seed,
+principals, commands и assertions остаются у callers. До helper caller уже
+проверил pool error; при успешном выносе err остаётся nil, как после прежнего
+New и трёх успешных операций. Helper помечает свой frame через t.Helper;
+ошибка по-прежнему завершает тест с выполнением caller defers.
+
+Независимый AST proof разворачивает helper во всех13 callers и сравнивает
+полную прежнюю модель каждого файла. Отдельно проверяет точные args,
+предшествующие pool error guard/Close, identical constructor/config/Bootstrap,
+условие nil caller error и удаление только двух допустимых неиспользуемых imports.
+14 полных expected-AST/directive сравнений — PASS. У Bootstrap, test SQL и всех
+business assertions тела неизменны. Другая first-run gpt-5.6-sol fixture остаётся
+без Bootstrap; прежний MVP helper с другими digest/registry/Fatalf не подменён.
+
+| Fixture / lifecycle | Сохранённые проверки и ограничения |
+| --- | --- |
+| Task-session history | Stable pagination/source digest, no durable effects, exact lineage, current lease/USER eligibility и revocation; общая Session не открывает чужой Run |
+| Integration candidate visibility | Transaction-local counter, exact stage cardinality, unique count/cursor/query/tenant. Production predicate не меняется |
+| Integration grant policy | NONE/EACH_EFFECT/SCOPED, immutable claim pins, approval/rejection/callback, active-policy conflicts и cancel graph/replay |
+| Health snapshots | Immutable input/fences, bounded projection READ retry, permanent/error/drift denial, fresh receipts, refresh/expiry/recovery/revocation и durable pending budget без premature runtime grants |
+| Shipped health readback | Existing SQL→safe Node classifier с PATH-only child env; exact scope/version/credential freshness и запрет forbidden fields. Сам shipped SQL/classifier не менялся и не объявляется заново полностью аудированным |
+| Project connection purpose | No effect до owner apply; signed/foreign/generic denial, STALE revision refresh, exact org-owned purpose, receipt replay, revoked/trash boundary |
+| Runtime tool phase | PROJECT/SYSTEM/ordinary authors, exact execution pins/own read, no implied grant, rollback-only admin negatives и terminal denial. Production immutable trigger не ослаблен |
+| Native MCP startup | Audit failure rollback, one durable DUE/receipt, sole gateway probe, no premature revision/lease, immutable history, cold/expired/drift/partial-grants denial, cancel/delete |
+| SYSTEM grants/header | Closed header,21 READ atomic apply без full projection, exact owner tuple/replay, signed-project/foreign/revoked denial; policy/compound/STALE/cancel matrix сохранена |
+| PROJECT grants | Exact purpose/public scope/current package и diagnostic unsupported package; executable path остаётся закрытым, cursor/lease visibility не расширена;21 READ atomic plan/replay/STALE/revocation |
+| Workflow catalog | Публикация, historical active-run pins, visibility-before-limit, cursor drift и revoked origin остаются прежними |
+| Egress | Exact synthetic Context7 DNS и owner origins, invalid/inactive/stale-managed denial; отдельный empty first-run generation/replay без DNS. Live DNS/Kubernetes apply отсутствует |
+| Claim/renew/complete/cancel/retry/expiry/delete | Меняются только test setup и комментарии. Existing commands/fences/OCC/receipts/events/terminal assertions не переписываются; helper не выдаёт authority и не обращается к живой среде |
+
+Полный control-plane build/unit — PASS LOCAL (checks413-final),
+GOWORK=off/GOMAXPROCS=4/-p2;13 external fixture и2 admin/template inputs исключены.
+17 analyzer unit и5 exact-ignore guards — PASS. Component PostgreSQL cases,
+выполнение нового Bootstrap helper на БД, live DNS/adapter/provider, browser/E2E
+и deploy/live — NOT RUN/SKIP. Compile/unit/static proof не заменяют эти сценарии.
+
+Финальный detector1770 raw/902 retained occurrences/868 unresolved,
+registry776 валиден и неизменен. С основанием исчезли20 fragment/format/kind/
+path-pair keys, появилось2 раскрытых после удаления более крупных overlapping
+windows: SYSTEM header/principals и PROJECT connection/grant setup. Это прежние
+сохранённые части сценариев, их дальнейший разбор остаётся в общем backlog,
+новых исключений для них нет. Net unresolved уменьшилось на18.
+Точная исходная последовательность New/config/Bootstrap осталась только в helper.
+Inventory6684 own sources/222 exclusions; thresholds/generated exclusions прежние.
+
+Во всём Go21484 объявления:20124 EN→RU,1360 без описаний. Текущий PR189
+Go-файлов/1993 объявления, все1993 описаны. Общий #1823 открыт, PR #1829 Draft.
+Основной клон/QA f2e64eb сохранён, прикладные секреты не читались и не переносились.
 
 ## Required Workflow, leased catalog и continuation — 25.10.2026
 

@@ -4,11 +4,9 @@ import (
 	"context"
 	_ "embed"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	serviceplatform "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
@@ -19,29 +17,85 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// queryManagedMCPStartupFixture embeds initial synthetic credential metadata and connection
+// state/version for a disposable startup fixture. It reads no Kubernetes Secret or upstream
+// response.
+// queryManagedMCPStartupFixture встраивает initial synthetic credential metadata и connection
+// state/version disposable startup fixture. Не читает Kubernetes Secret или upstream response.
+//
 //go:embed testdata/sql/managed_mcp_startup_fixture.sql
 var queryManagedMCPStartupFixture string
 
+// queryManagedMCPStartupSuccess embeds a separate fourteen-minute-old synthetic successful probe
+// receipt whose exact input is assigned by the owner trigger. Historical receipts are not
+// rewritten; the stale proof drives startup recovery.
+// queryManagedMCPStartupSuccess встраивает отдельный synthetic successful probe receipt возрастом
+// четырнадцать минут с exact input от owner trigger. Исторические receipts не переписываются;
+// stale proof запускает startup recovery.
+//
 //go:embed testdata/sql/managed_mcp_startup_success.sql
 var queryManagedMCPStartupSuccess string
 
+// queryManagedMCPStartupCounts embeds exact connection/run counts for refresh tasks, DUE work,
+// runtime revisions/claimed leases, claim audit, idempotency receipt and pending creation time.
+// The isolated readback distinguishes durable queue work from premature runtime authority.
+// queryManagedMCPStartupCounts встраивает exact connection/run counts для refresh tasks, DUE work,
+// runtime revisions/claimed leases, claim audit, idempotency receipt и pending creation time.
+// Изолированный readback отличает durable queue work от преждевременной runtime authority.
+//
 //go:embed testdata/sql/managed_mcp_startup_counts.sql
 var queryManagedMCPStartupCounts string
 
+// queryManagedMCPStartupExpired embeds a first-attempt DUE refresh older than the thirty-second
+// startup window. It tests preservation of the original durable budget rather than granting a
+// fresh wait window after restart.
+// queryManagedMCPStartupExpired встраивает first-attempt DUE refresh старше тридцатисекундного
+// startup window. Проверяет сохранение исходного durable budget вместо выдачи нового wait window
+// после restart.
+//
 //go:embed testdata/sql/managed_mcp_startup_expired.sql
 var queryManagedMCPStartupExpired string
 
+// queryManagedMCPStartupFailure embeds a new failed synthetic probe receipt at the current owner
+// input. It tests latest-failure rejection without changing earlier immutable successful history.
+// queryManagedMCPStartupFailure встраивает новый failed synthetic probe receipt на текущем owner
+// input. Проверяет latest-failure rejection без изменения прежней immutable successful history.
+//
 //go:embed testdata/sql/managed_mcp_startup_failure.sql
 var queryManagedMCPStartupFailure string
 
+// queryManagedMCPStartupChangeCredential embeds a second synthetic credential descriptor and
+// increments the connection version. Existing health receipt input remains pinned to the old
+// credential, so startup must reject the drift.
+// queryManagedMCPStartupChangeCredential встраивает второй synthetic credential descriptor и
+// увеличивает connection version. Existing health receipt input остаётся закреплённым за прежней
+// credential, поэтому startup обязан отклонить drift.
+//
 //go:embed testdata/sql/managed_mcp_startup_change_credential.sql
 var queryManagedMCPStartupChangeCredential string
 
+// queryManagedMCPStartupHistory embeds an MD5 checksum of one serialized fixture receipt to detect
+// accidental rewriting across recovery. This test comparison is not a cryptographic provenance
+// proof or health authorization.
+// queryManagedMCPStartupHistory встраивает MD5 checksum одного сериализованного fixture receipt
+// для обнаружения непреднамеренной перезаписи при recovery. Test comparison не является
+// cryptographic provenance proof или health authorization.
+//
 //go:embed testdata/sql/managed_mcp_startup_history.sql
 var queryManagedMCPStartupHistory string
 
-// Полный native claim → durable DUE → gateway probe → fresh runtime claim.
-// Отдельная migrated disposable БД; upstream и provider не вызываются.
+// TestManagedMCPStartupRecoveryComponent checks native runtime claim creates one durable DUE
+// refresh with audit/receipt and no premature execution revision/lease, including rollback after
+// injected audit failure. It verifies replay/poll budgets, sole gateway probe authority, synthetic
+// recovery and immutable old receipt, then rejects cold/expired/failed/drift/partial-grant startup
+// and preserves cancel/delete boundaries. No upstream/provider is called; PostgreSQL execution
+// requires the disposable component environment.
+// TestManagedMCPStartupRecoveryComponent проверяет создание native runtime claim одного durable
+// DUE refresh с audit/receipt без преждевременных execution revision/lease, включая rollback после
+// injected audit failure. Проверяет replay/poll budgets, исключительные gateway probe authority,
+// synthetic recovery и immutable old receipt, затем отклоняет
+// cold/expired/failed/drift/partial-grant startup и сохраняет cancel/delete boundaries.
+// Upstream/provider не вызывается; PostgreSQL execution требует disposable component environment.
 func TestManagedMCPStartupRecoveryComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
@@ -50,19 +104,7 @@ func TestManagedMCPStartupRecoveryComponent(t *testing.T) {
 		t.Fatal("open isolated startup recovery PostgreSQL")
 	}
 	defer pool.Close()
-	r, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = r.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
-		t.Fatal(err)
-	}
-	if err = r.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3, StagingRepository: "registry.invalid/staging", PromotedRepository: "registry.invalid/roles", DefaultImageReference: "registry.invalid/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
-		t.Fatal(err)
-	}
-	if err = r.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
+	r := newSyntheticRuntimeComponentRepository(t, ctx, pool)
 	prepareObservedWarmFixture(t, ctx, r)
 	principal := func(workload, operation, actor, tenant string) value.Principal {
 		return resolvedTestPrincipal(t, ctx, r, port.ProofPrincipalInput{ExternalActorID: actor, ExternalTenantID: tenant, CallerWorkload: workload, Operation: operation}, workload)
@@ -83,6 +125,12 @@ func TestManagedMCPStartupRecoveryComponent(t *testing.T) {
 		return result
 	}
 	project := execute(command.CreateProject, "project", nil, command.ProjectInput{Name: "Startup recovery fixture", Language: "en"}).Project
+	// fixture holds the exact synthetic connection, agent and run values for one startup scenario.
+	// Versions are snapshots for assertions and later owner commands, not a replacement for current
+	// scope, health or lease validation.
+	// fixture хранит точные synthetic connection, agent и run values одного startup scenario. Versions
+	// являются snapshots для assertions и последующих owner commands, а не заменой current scope,
+	// health или lease validation.
 	type fixture struct {
 		connection entity.IntegrationConnection
 		agent      entity.Agent
