@@ -451,6 +451,7 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 	if err := repository.cancelConfigurationWriteBacks(ctx, tx, scope, "", payload.Ref); err != nil {
 		return commandOutcome{}, err
 	}
+	if err := repository.cancelRepositoryBundleDependency(ctx, tx, scope, "CONNECTION", payload.Ref); err != nil { return commandOutcome{}, err }
 	if input.Kind == command.UpdateConnection {
 		return repository.updateIntegrationConnection(ctx, tx, scope, input.Mutation, payload)
 	}
@@ -784,6 +785,18 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 	if !capability.AllowsApprovalPolicy(payload.ApprovalPolicy) {
 		return commandOutcome{}, errs.ErrInvalid
 	}
+	if payload.Enabled && capability.Operation == repositoryBundleOperation {
+		if input.Kind != command.ChangeIntegrationGrant {
+			return commandOutcome{}, errs.ErrForbidden
+		}
+		eligible, err := repositoryBundleRecipientEligible(ctx, tx, scope, targetType, targetRef)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		if !eligible {
+			return commandOutcome{}, errs.ErrForbidden
+		}
+	}
 	if payload.Enabled {
 		if payload.ApprovalPolicy == "HUMAN_SCOPED" {
 			if capability.ValidateApprovalScopePaths(payload.ApprovalScopePaths) != nil {
@@ -835,6 +848,7 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 	if err := repository.cancelConfigurationWriteBacks(ctx, tx, scope, "", payload.ConnectionRef); err != nil {
 		return commandOutcome{}, err
 	}
+	if err := repository.cancelRepositoryBundleDependency(ctx, tx, scope, "CONNECTION", payload.ConnectionRef); err != nil { return commandOutcome{}, err }
 	tag, err := tx.Exec(ctx, queryConfigurationChangeintegrationgrantUpdateIntegrationConnectionsVersion, connectionID, connectionVersion)
 	if err != nil {
 		return commandOutcome{}, errs.ErrUnavailable

@@ -17,7 +17,7 @@ func TestGitHubContentReadSeparatesSourceAndPageBudgets(t *testing.T) {
 		t.Fatal(err)
 	}
 	definition := definitions["github"]
-	if definition.Metadata.Version != "6.0.0" {
+	if definition.Metadata.Version != "6.1.0" {
 		t.Fatal("unexpected GitHub source budget revision")
 	}
 	for _, version := range []string{"3.0.0", "3.1.0", "4.0.0", "5.0.0"} {

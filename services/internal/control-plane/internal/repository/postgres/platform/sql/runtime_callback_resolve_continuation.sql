@@ -23,7 +23,11 @@ SELECT parent_node.run_id::text,
                        SELECT jsonb_agg(pin.value->>'ref' ORDER BY pin.value->>'ref')
                        FROM jsonb_array_elements(receipt.result_snapshot->'artifacts') pin(value)
                    ), '[]'::jsonb)
-               ) ORDER BY callback_edge.created_at, callback_edge.ref)
+               ) || CASE WHEN EXISTS (SELECT 1 FROM control_plane.repository_bundle_publications publication
+                   WHERE publication.organization_id=child.organization_id AND publication.origin_run_id=child.id
+                     AND publication.root_run_id=callback_edge.root_run_id AND publication.project_id=child.project_id)
+                 THEN jsonb_build_object('repositoryPublicationOutcome',control_plane.repository_bundle_callback_outcome(child.organization_id,child.id))
+                 ELSE '{}'::jsonb END ORDER BY callback_edge.created_at, callback_edge.ref)
                FROM control_plane.run_edges callback_edge
                JOIN control_plane.callback_receipts receipt ON receipt.callback_edge_id = callback_edge.id
                JOIN control_plane.run_nodes child_node ON child_node.id = callback_edge.source_node_id
@@ -61,11 +65,30 @@ SELECT parent_node.run_id::text,
                      AND delegated.materialization_state = 'MATERIALIZED'
                )
            ), '[]'::jsonb)
-       )
+       ) || CASE WHEN own_publication.id IS NULL THEN '{}'::jsonb ELSE jsonb_build_object(
+           'repositoryPublicationOutcome',control_plane.repository_bundle_callback_outcome(parent_node.organization_id,parent_run.id),
+           'repositoryPublicationIntegration',jsonb_build_object(
+               'invocation_ref',own_invocation.ref,'state',own_invocation.state,
+               'result_summary',left(COALESCE(own_invocation.result_summary,''),4000),
+               'safe_error_code',COALESCE(own_invocation.safe_error_code,''),
+               'owner_decision',jsonb_build_object('gate_ref',own_gate.ref,'gate_version',own_gate.version,
+                   'decision',COALESCE(own_gate.decision,''),'comment',own_gate.decision_comment))) END,
+       own_publication.id IS NOT NULL
 FROM control_plane.run_nodes parent_node
 JOIN control_plane.runs parent_run ON parent_run.id = parent_node.run_id
 JOIN control_plane.runs root ON root.id = parent_node.root_run_id
 JOIN control_plane.agents parent_agent ON parent_agent.id = parent_node.agent_id
+LEFT JOIN control_plane.repository_bundle_publications own_publication
+  ON own_publication.organization_id=parent_node.organization_id AND own_publication.origin_node_id=parent_node.id
+ AND own_publication.origin_run_id=parent_run.id AND own_publication.root_run_id=root.id
+ AND own_publication.project_id=parent_run.project_id
+LEFT JOIN control_plane.integration_invocations own_invocation
+  ON own_invocation.id=own_publication.integration_invocation_id AND own_invocation.organization_id=parent_node.organization_id
+ AND own_invocation.operation='github.repository.bundle.publish' AND own_invocation.node_id=parent_node.id AND own_invocation.run_id=parent_run.id
+LEFT JOIN control_plane.owner_gates own_gate
+  ON own_gate.id=own_publication.owner_gate_id AND own_gate.organization_id=parent_node.organization_id
+ AND own_gate.integration_invocation_id=own_invocation.id AND own_gate.root_run_id=root.id
+ AND own_gate.project_id=parent_run.project_id AND own_gate.scope_kind='PROJECT'
 LEFT JOIN control_plane.workflow_versions workflow_version
   ON workflow_version.id = root.workflow_version_id
 WHERE parent_node.organization_id = @organization_id::uuid
@@ -76,6 +99,26 @@ WHERE parent_node.organization_id = @organization_id::uuid
       WHERE launch.origin_node_id=parent_node.id AND launch.state='OPEN'
   )
   AND root.state IN ('RUNNING', 'WAITING_HUMAN')
+  AND (own_publication.id IS NULL OR (
+      own_publication.state IN ('SUCCEEDED','REJECTED','CANCELLED','EXPIRED','FAILED')
+      AND ((own_gate.state='APPROVED' AND own_invocation.state IN ('SUCCEEDED','FAILED'))
+        OR (own_gate.state='REJECTED' AND own_invocation.state='REJECTED')
+        OR (own_gate.state='CANCELLED' AND own_invocation.state='CANCELLED'))
+  ))
+  AND ((own_publication.id IS NULL AND NOT EXISTS (
+      SELECT 1 FROM control_plane.run_edges callback
+      JOIN control_plane.callback_receipts receipt ON receipt.callback_edge_id=callback.id AND receipt.organization_id=parent_node.organization_id
+      JOIN control_plane.repository_bundle_publications received_publication ON received_publication.organization_id=parent_node.organization_id
+        AND received_publication.root_run_id=root.id AND received_publication.origin_run_id=receipt.child_run_id
+      WHERE callback.organization_id=parent_node.organization_id AND callback.root_run_id=root.id
+        AND callback.target_node_id=parent_node.id AND callback.type='CALLBACK_TO')) OR (
+      parent_agent.enabled AND parent_agent.state='READY'
+      AND EXISTS (SELECT 1 FROM control_plane.projects project WHERE project.id=parent_run.project_id AND project.lifecycle='ACTIVE')
+      AND EXISTS (SELECT 1 FROM control_plane.subjects initiator
+        JOIN control_plane.catalog_access_targets target ON target.organization_id=initiator.organization_id AND target.kind='AGENT' AND target.id=parent_agent.id
+        WHERE initiator.id=root.initiated_by AND initiator.organization_id=parent_node.organization_id AND initiator.active
+          AND control_plane.catalog_resource_visible(parent_node.organization_id,initiator.id,'agent.launch','AGENT',target.id,target.project_id,target.owner_id,target.related_ids,statement_timestamp(),false))
+  ))
   AND (
       NOT EXISTS(SELECT 1 FROM control_plane.required_workflow_launches launch WHERE launch.origin_node_id=parent_node.id)
       OR EXISTS(

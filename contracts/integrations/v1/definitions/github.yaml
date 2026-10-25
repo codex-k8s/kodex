@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: github
-  version: 6.0.0
+  version: 6.1.0
   origin: SHIPPED
 spec:
   name: GitHub
@@ -239,6 +239,40 @@ spec:
         idempotency: READ_ONLY
         timeoutSeconds: 30
         maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.repository.bundle.publish
+      name: Опубликовать bundle исходников
+      description: Передайте CLEAN typed JSON bundle и canonical manifest инструменту prepare_repository_bundle_publication; владелец подтверждает полный manifest, затем одна новая proposal branch получает один commit через CAS. Inline bytes и generic invoke_integration для этой операции не используются.
+      operation: github.repository.bundle.publish
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {key: archive_ref, type: STRING, format: PLAIN, required: true, maximumLength: 96}
+        - {key: archive_revision, type: INTEGER, required: true, minimum: 1, maximum: 9007199254740991}
+        - {key: archive_version, type: INTEGER, required: true, minimum: 1, maximum: 9007199254740991}
+        - {key: archive_sha256, type: STRING, format: PLAIN, required: true, maximumLength: 64}
+        - {key: archive_size_bytes, type: INTEGER, required: true, minimum: 1, maximum: 1048576}
+        - {key: manifest_ref, type: STRING, format: PLAIN, required: true, maximumLength: 96}
+        - {key: manifest_revision, type: INTEGER, required: true, minimum: 1, maximum: 9007199254740991}
+        - {key: manifest_version, type: INTEGER, required: true, minimum: 1, maximum: 9007199254740991}
+        - {key: manifest_sha256, type: STRING, format: PLAIN, required: true, maximumLength: 64}
+        - {key: manifest_size_bytes, type: INTEGER, required: true, minimum: 1, maximum: 131072}
+        - {key: base_commit_sha, type: STRING, format: PLAIN, required: true, maximumLength: 40}
+      outputFields:
+        - {key: commit_sha, type: STRING, format: PLAIN, required: true, maximumLength: 40}
+        - {key: tree_sha, type: STRING, format: PLAIN, required: true, maximumLength: 40}
+        - {key: proposal_branch, type: STRING, format: PLAIN, required: true, maximumLength: 256}
+        - {key: manifest_sha256, type: STRING, format: PLAIN, required: true, maximumLength: 64}
+        - {key: file_count, type: INTEGER, required: true, minimum: 1, maximum: 256}
+        - {key: total_bytes, type: INTEGER, required: true, minimum: 0, maximum: 1048576}
+      execution:
+        idempotency: EFFECT_KEY
+        timeoutSeconds: 120
+        maxAttempts: 1
         retryBackoffMilliseconds: 250
     - key: github.repository.content.create
       name: Создать файл

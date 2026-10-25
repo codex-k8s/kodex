@@ -36,8 +36,16 @@ WHERE invocation.id=@invocation_id::uuid
   AND gate.root_run_id=root.id
   AND node.state='SUCCEEDED'
   AND node.finished_at IS NOT NULL
-  AND invocation.updated_at>node.finished_at
+  AND (invocation.updated_at>node.finished_at OR invocation.operation='github.repository.bundle.publish')
   AND root.state IN ('RUNNING','WAITING_HUMAN')
+  AND (invocation.operation<>'github.repository.bundle.publish' OR (
+    agent.enabled AND agent.state='READY'
+    AND EXISTS (SELECT 1 FROM control_plane.projects project WHERE project.id=run.project_id AND project.lifecycle='ACTIVE')
+    AND EXISTS (SELECT 1 FROM control_plane.subjects initiator
+      JOIN control_plane.catalog_access_targets target ON target.organization_id=initiator.organization_id AND target.kind='AGENT' AND target.id=agent.id
+      WHERE initiator.id=root.initiated_by AND initiator.organization_id=invocation.organization_id AND initiator.active
+        AND control_plane.catalog_resource_visible(invocation.organization_id,initiator.id,'agent.launch','AGENT',target.id,target.project_id,target.owner_id,target.related_ids,statement_timestamp(),false))
+  ))
   AND ((gate.state='APPROVED' AND invocation.state IN ('SUCCEEDED','FAILED'))
     OR (gate.state='REJECTED' AND invocation.state='REJECTED')
     OR (gate.state='CANCELLED' AND invocation.state='CANCELLED'))

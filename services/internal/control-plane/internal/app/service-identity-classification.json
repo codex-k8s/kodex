@@ -2107,6 +2107,46 @@
       "operation_id": "platform.provider-accounts.credential.renewal.work.check",
       "source_binding_sha256": "d0c218702f8864fa9243f03e383eb8d4877a1cbbca1a7289d9b57f07a1f436b1",
       "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.repository-bundles.get",
+      "source_binding_sha256": "870f54149b5feea7bbee3c65c99fcb8cc29d63a420c468971153b82e86fa2b93",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.repository-bundles.prepare",
+      "source_binding_sha256": "29b37ac8d25b106f3f612194d5d11449e20ed95342adb66a222ccb95962f0d16",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.repository-bundles.work.begin",
+      "source_binding_sha256": "433e6a0d9372f8a87720d967604a308b45d87079978f73b2fa95655d74a118cc",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.repository-bundles.work.claim",
+      "source_binding_sha256": "69391703ce3755aaf5ac5309b18d1ca2a8e9ffe50ee9715d40cca879182b898c",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.repository-bundles.work.complete",
+      "source_binding_sha256": "de7f622e911782de73dfabe3257e79f8380ddfbbd980df3e0462e056921b6bbc",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.repository-bundles.work.content.read",
+      "source_binding_sha256": "621ada83e562d8ed9eb2cf1992d40aa03d716ff8e323635808db229b9e10d20f",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.repository-bundles.work.fail",
+      "source_binding_sha256": "370483ee5f2a17bad26d0ca090a299d71b989a7b43e25e90e972ec427560c5c8",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.repository-bundles.work.renew",
+      "source_binding_sha256": "b050b2af3eb49d8be42e66301878601a76a3b8f04e8b93f959c1ceb625fbfe6d",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
     }
   ]
 }

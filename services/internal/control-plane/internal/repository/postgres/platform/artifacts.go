@@ -922,6 +922,9 @@ func (repository *Repository) changeArtifactLifecycle(ctx context.Context, tx pg
 	if tag.RowsAffected() != 1 {
 		return commandOutcome{}, errs.ErrConflict
 	}
+	if input.Kind == command.DeleteArtifact {
+		if err := repository.cancelRepositoryBundleDependency(ctx, tx, scope, "ARTIFACT", payload.ArtifactRef); err != nil { return commandOutcome{}, err }
+	}
 	item, err := scanArtifact(tx.QueryRow(ctx, queryQueriesGetartifactSelectArtifactBindingsArtifactIdIdOrganizationId, scope.organizationID, payload.ArtifactRef, scope.role, scope.actorID))
 	if err != nil {
 		return commandOutcome{}, err

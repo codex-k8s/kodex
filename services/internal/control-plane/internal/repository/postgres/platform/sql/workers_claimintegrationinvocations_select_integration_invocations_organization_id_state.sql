@@ -36,7 +36,7 @@ WHERE i.organization_id=$1::uuid
     AND c.definition_key='synthetic'
     AND i.operation='synthetic.journal.write'
   ))
-  AND i.operation NOT IN ('mattermost.inbound','mattermost.gate_decisions')
+  AND i.operation NOT IN ('mattermost.inbound','mattermost.gate_decisions','github.repository.bundle.publish')
   AND c.enabled AND c.state='CONNECTED'
   AND d.enabled AND d.adapter_owner=$3 AND d.execution_route=$4 AND d.adapter_readiness='READY'
   AND c.definition_version=i.definition_version AND c.definition_digest=i.definition_digest

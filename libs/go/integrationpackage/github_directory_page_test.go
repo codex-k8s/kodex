@@ -16,7 +16,7 @@ func TestGitHubDirectoryListSchemaPinsAndOffsetBounds(t *testing.T) {
 		t.Fatal(err)
 	}
 	definition := definitions["github"]
-	if definition.Metadata.Version != "6.0.0" {
+	if definition.Metadata.Version != "6.1.0" {
 		t.Fatal("directory wire change lacks a new exact package version")
 	}
 	if _, ok := ResolveShippedRevision(definition, "4.0.0", definition.Digest); ok {

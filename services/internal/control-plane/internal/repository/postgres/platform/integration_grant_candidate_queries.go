@@ -117,6 +117,15 @@ func (repository *Repository) ListIntegrationGrantCapabilityCandidates(ctx conte
 		if _, err := capability.ResourceScopeValues(configuration); err != nil {
 			return errs.ErrUnavailable
 		}
+		if capability.Operation == repositoryBundleOperation {
+			eligible, err := repositoryBundleRecipientEligible(ctx, tx, current, row.RecipientKind, row.RecipientRef)
+			if err != nil {
+				return err
+			}
+			if !eligible {
+				row.Reason = "RECIPIENT_UNAVAILABLE"
+			}
+		}
 		result.Items = append(result.Items, entity.IntegrationCapabilityCandidate{Capability: projection, Grantable: row.Reason == "READY", Reason: row.Reason, CurrentGrantRef: grantRef, CurrentGrantVersion: grantVersion, Pins: pins})
 		return nil
 	})

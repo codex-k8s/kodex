@@ -13,6 +13,7 @@ require (
 	github.com/codex-k8s/kodex/libs/go/httpserver v0.0.0
 	github.com/codex-k8s/kodex/libs/go/integrationegresspolicy v0.0.0
 	github.com/codex-k8s/kodex/libs/go/integrationpackage v0.0.0
+	github.com/codex-k8s/kodex/libs/go/repositorybundle v0.0.0
 	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0
 	github.com/codex-k8s/kodex/libs/go/mailpolicy v0.0.0
 	github.com/codex-k8s/kodex/libs/go/objectstorage v0.0.0
@@ -184,3 +185,5 @@ replace github.com/codex-k8s/kodex/libs/go/securefile => ../../../libs/go/secure
 replace github.com/codex-k8s/kodex/libs/go/sttapi => ../../../libs/go/sttapi
 
 replace github.com/codex-k8s/kodex/libs/go/httpserver => ../../../libs/go/httpserver
+
+replace github.com/codex-k8s/kodex/libs/go/repositorybundle => ../../../libs/go/repositorybundle

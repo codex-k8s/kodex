@@ -6,6 +6,7 @@ import {
 
 // Закрытый реестр безопасных сообщений владельца состояния: ru, en.
 export const serverTokenTranslations = {
+  REPOSITORY_BUNDLE_CHANGED: ["Состояние публикации набора файлов обновлено", "Repository bundle publication updated"],
   PROVIDER_RESULT_UNVERIFIABLE: [
     "Не удалось подтвердить ответ модели. Начните новый ход.",
     "The model response could not be verified. Start a new turn.",

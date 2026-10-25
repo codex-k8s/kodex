@@ -10,12 +10,14 @@ import { entityCardMessages } from "@/features/workflows/catalog/messages";
 import { automationPreviewMessages } from "@/features/automations/prompt-preview-messages";
 import { vulnerabilityMessages } from "@/features/role-images/vulnerability-messages";
 import { fileRevisionMessages } from "@/features/files/revision-messages";
+import { repositoryBundleMessages } from "@/features/workboard/repository-bundle-messages";
 
 import { currentLocale } from "@/shared/locale";
 import { serverMessagesFor } from "@/shared/ui/server-message-catalog";
 import { additionalPermissionMessages } from "@/shared/ui/permission-message-catalog";
 
 const ru = {
+  repositoryBundle: repositoryBundleMessages.ru,
   fileRevision: fileRevisionMessages.ru,
   imageVulnerabilities: vulnerabilityMessages.ru,
   ...sttActivationMessages.ru,
@@ -4723,6 +4725,7 @@ const ru = {
 
 const en = {
   ...ru,
+  repositoryBundle: repositoryBundleMessages.en,
   fileRevision: fileRevisionMessages.en,
   imageVulnerabilities: vulnerabilityMessages.en,
   ...sttActivationMessages.en,

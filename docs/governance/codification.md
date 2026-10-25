@@ -4,11 +4,13 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 2.2.14
+version: 2.2.15
 updated: 2026-10-25
 ---
 
 # Кодификация документов и задач
+
+- `OPS-DOC-1859` — [Публикация CLEAN bundle исходников одним commit](../operations/repository-bundle-publication-1859.md).
 
 - `OPS-DOC-1470` — [Независимость служебной идентичности и восстановление readers](../operations/mvp-1470-service-identity.md).
 - `OPS-DOC-1763` — [Совместная отладка прототипа системного помощника](../operations/assistant-prototype-debug-1763.md).

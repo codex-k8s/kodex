@@ -140,6 +140,9 @@ func (repository *Repository) projectAssistantIntegrationGrantCandidatesTx(ctx c
 		if !executable {
 			item.Reason = "PACKAGE_UNAVAILABLE"
 		}
+		if capability.Operation == repositoryBundleOperation {
+			item.Grantable, item.Reason = false, "RECIPIENT_UNAVAILABLE"
+		}
 		item.Capability, err = integrationCapabilityProjection(capability)
 		if err != nil {
 			return result, err

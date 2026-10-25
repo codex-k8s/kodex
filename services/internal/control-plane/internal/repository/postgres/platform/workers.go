@@ -1179,6 +1179,19 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 		return nil, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	result, err := repository.resolveIntegrationInvocationTx(ctx, tx, scope, input, boundedInput, false)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, serializableTransactionError(err, errs.ErrUnavailable)
+	}
+	return result, nil
+}
+
+// resolveIntegrationInvocationTx owns the shared native invocation/gate creation in the caller's transaction. The bundle discriminator is supplied only by the specialized owner after exact artifact/origin admission; generic resolve cannot create a bundle effect.
+// resolveIntegrationInvocationTx создаёт общий native invocation/gate в транзакции caller. Bundle discriminator передаёт только специализированный owner после exact artifact/origin admission; generic resolve не создаёт bundle effect.
+func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context, tx pgx.Tx, scope scope, input map[string]string, boundedInput map[string]any, bundle bool) (map[string]any, error) {
 	encodedInput, err := json.Marshal(boundedInput)
 	if err != nil || len(encodedInput) > 512<<10 {
 		return nil, errs.ErrInvalid
@@ -1217,6 +1230,9 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 		if err := requireCurrentManagedMCPHealth(ctx, tx, scope.organizationID, nodeID, input["connection_ref"]); err != nil {
 			return nil, err
 		}
+	}
+	if (capability.Operation == repositoryBundleOperation) != bundle {
+		return nil, errs.ErrForbidden
 	}
 	canonicalInput, err := capability.ValidateInput(encodedInput)
 	if err != nil {
@@ -1354,9 +1370,6 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 		} else if err != nil {
 			return nil, serializableTransactionError(err, errs.ErrUnavailable)
 		}
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, serializableTransactionError(err, errs.ErrUnavailable)
 	}
 	return map[string]any{
 		"invocationRef": resolvedRef, "grantRef": grantRef, "operation": capability.Operation,
@@ -1532,6 +1545,12 @@ func (repository *Repository) GetIntegrationInvocation(ctx context.Context, prin
 }
 
 func (repository *Repository) completeIntegrationInvocation(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
+	return repository.completeIntegrationInvocationTx(ctx, tx, scope, input, false)
+}
+
+// completeIntegrationInvocationTx preserves native receipt and continuation ownership while allowing only the specialized bundle owner to finalize that closed effect kind.
+// completeIntegrationInvocationTx сохраняет native receipt/continuation ownership, позволяя завершить закрытый bundle effect только специализированному owner.
+func (repository *Repository) completeIntegrationInvocationTx(ctx context.Context, tx pgx.Tx, scope scope, input command.Command, bundle bool) (commandOutcome, error) {
 	if _, err := integrationExecutionRoute(input.Principal.CallerWorkload); err != nil {
 		return commandOutcome{}, err
 	}
@@ -1552,6 +1571,15 @@ func (repository *Repository) completeIntegrationInvocation(ctx context.Context,
 		if hex.EncodeToString(digest[:]) != payload.ResponseDigest {
 			return commandOutcome{}, errs.ErrInvalid
 		}
+	}
+	var operation string
+	if err := tx.QueryRow(ctx, queryRepositoryBundleInvocationOperation, pgx.StrictNamedArgs{"organization_id": scope.organizationID, "invocation_ref": payload.InvocationRef}).Scan(&operation); errors.Is(err, pgx.ErrNoRows) {
+		return commandOutcome{}, errs.ErrNotFound
+	} else if err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if (operation == repositoryBundleOperation) != bundle {
+		return commandOutcome{}, errs.ErrForbidden
 	}
 	var invocationID, invocationRef, runID, rootRunID, projectID, projectRef, nodeRef, storedDigest, state, leaseRef string
 	var effectKey, inputDigest, receiptRef, receiptEffectKey, receiptInputDigest string

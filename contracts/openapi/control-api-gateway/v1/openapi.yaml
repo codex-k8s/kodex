@@ -4079,6 +4079,32 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/OwnerGate" }
         default: { $ref: "#/components/responses/Problem" }
+  /api/v1/owner-gates/{gateRef}/repository-bundle:
+    get:
+      tags: [Decisions]
+      operationId: getOwnerGateRepositoryBundle
+      description: Точная bounded страница полного immutable manifest. Следующие страницы закреплены version и manifest SHA256; endpoint не разрешает публикацию.
+      parameters:
+        - { $ref: "#/components/parameters/GateRef" }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, maximum: 256, default: 0 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 32, default: 16 }
+        - name: expectedVersion
+          in: query
+          schema: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        - name: expectedManifestSha256
+          in: query
+          schema: { type: string, pattern: '^[0-9a-f]{64}$' }
+      responses:
+        "200":
+          description: Manifest page до 24 КиБ с явной полнотой
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RepositoryBundleManifestPage" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/v1/owner-gates/{gateRef}/resolution:
     post:
       tags: [Decisions]
@@ -15981,6 +16007,69 @@ components:
         items: { type: array, maxItems: 100, items: { $ref: "#/components/schemas/SystemAssistantIntegrationGrantCandidate" } }
         total: { type: integer, format: int64, minimum: 0 }
         nextPageToken: { type: string, maxLength: 512 }
+    RepositoryBundleArtifactPin:
+      type: object
+      additionalProperties: false
+      required: [ref, revision, version, sha256, sizeBytes]
+      properties:
+        ref: { $ref: "#/components/schemas/OpaqueRef" }
+        revision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        sizeBytes: { type: integer, format: int64, minimum: 1, maximum: 1048576 }
+    RepositoryBundleFile:
+      type: object
+      additionalProperties: false
+      required: [path, mode, bytes, sha256]
+      properties:
+        path: { type: string, minLength: 1, maxLength: 512 }
+        mode: { type: string, enum: ['100644', '100755'] }
+        bytes: { type: integer, format: int64, minimum: 0, maximum: 1048576 }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+    RepositoryBundlePublication:
+      type: object
+      additionalProperties: false
+      required: [ref, version, projectRef, originRunRef, originRuntimeRevisionRef, invocationRef, gateRef, connectionRef, connectionVersion, grantRef, grantVersion, repositoryRef, baseCommitSha, proposalBranch, archive, manifest, approvalDigest, fileCount, totalBytes, state, createdAt, expiresAt]
+      properties:
+        ref: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        originRunRef: { $ref: "#/components/schemas/OpaqueRef" }
+        originRuntimeRevisionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        invocationRef: { $ref: "#/components/schemas/OpaqueRef" }
+        gateRef: { $ref: "#/components/schemas/OpaqueRef" }
+        connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        grantRef: { $ref: "#/components/schemas/OpaqueRef" }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        connectionVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        grantVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        archive: { $ref: "#/components/schemas/RepositoryBundleArtifactPin" }
+        manifest: { $ref: "#/components/schemas/RepositoryBundleArtifactPin" }
+        repositoryRef: { type: string, minLength: 3, maxLength: 201 }
+        proposalBranch: { type: string, minLength: 1, maxLength: 128 }
+        baseCommitSha: { type: string, pattern: '^[0-9a-f]{40}$' }
+        approvalDigest: { type: string, pattern: '^[0-9a-f]{64}$' }
+        fileCount: { type: integer, minimum: 1, maximum: 256 }
+        totalBytes: { type: integer, format: int64, minimum: 0, maximum: 1048576 }
+        state: { type: string, enum: [WAITING_APPROVAL, QUEUED, CLAIMED, EFFECT_STARTED, UNKNOWN_OUTCOME, SUCCEEDED, REJECTED, CANCELLED, EXPIRED, FAILED] }
+        candidateCommitSha: { type: string, pattern: '^[0-9a-f]{40}$' }
+        candidateTreeSha: { type: string, pattern: '^[0-9a-f]{40}$' }
+        failureCode: { type: string, enum: [UNAVAILABLE, AUTHORITY_CHANGED, CONTENT_INVALID, BASE_INVALID, DEADLINE_EXCEEDED, BRANCH_CONFLICT, OUTCOME_UNCONFIRMED] }
+        continuationState: { type: string, enum: [BLOCKED, CANCELLED] }
+        continuationCode: { type: string, enum: [CALLBACK_INPUT_TOO_LARGE, CONTINUATION_AUTHORITY_CHANGED] }
+        continuationNodeRef: { $ref: "#/components/schemas/OpaqueRef" }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        confirmedAt: { type: string, format: date-time }
+    RepositoryBundleManifestPage:
+      type: object
+      additionalProperties: false
+      required: [proposal, files, offset, nextOffset, complete]
+      properties:
+        proposal: { $ref: "#/components/schemas/RepositoryBundlePublication" }
+        files: { type: array, maxItems: 32, items: { $ref: "#/components/schemas/RepositoryBundleFile" } }
+        offset: { type: integer, minimum: 0, maximum: 256 }
+        nextOffset: { type: integer, minimum: 0, maximum: 256 }
+        complete: { type: boolean }
     OwnerGate:
       type: object
       additionalProperties: false

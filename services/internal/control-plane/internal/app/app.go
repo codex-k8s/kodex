@@ -300,6 +300,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	controlplanev1.RegisterRuntimeWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterManagedConfigurationSourceWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterManagedConfigurationGitWriteBackWorkServiceServer(grpcServer, transport)
+	controlplanev1.RegisterRepositoryBundlePublicationServiceServer(grpcServer, transport)
 	controlplanev1.RegisterRuntimeSecretWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterProviderCredentialRenewalWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterRuntimeSecretDraftWorkServiceServer(grpcServer, transport)

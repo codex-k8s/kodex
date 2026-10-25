@@ -238,6 +238,9 @@ func integrationGatePreview(definitions map[string]integrationpackage.Package, k
 			complete = false
 		}
 	}
+	if operation == repositoryBundleOperation {
+		complete = false
+	}
 	result["fields"], result["contentComplete"] = fields, complete
 	return result, nil
 }

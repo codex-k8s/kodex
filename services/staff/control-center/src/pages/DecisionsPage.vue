@@ -43,6 +43,7 @@ import type {
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import { runPath } from "@/shared/routes";
 import AsyncState from "@/shared/ui/AsyncState.vue";
+import RepositoryBundleManifest from "@/features/workboard/RepositoryBundleManifest.vue";
 import AttachmentComposer from "@/shared/ui/AttachmentComposer.vue";
 import type {
   AttachmentComposerHandle,
@@ -55,6 +56,17 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 
+const verifiedBundleManifests = ref<Record<string, number>>({});
+function requiresBundleManifest(gate: OwnerGate): boolean {
+  return gate.integrationIntent?.operation === "github.repository.bundle.publish";
+}
+function bundleManifestReady(gate: OwnerGate): boolean {
+  return !requiresBundleManifest(gate) || verifiedBundleManifests.value[gate.ref] === gate.version;
+}
+function setBundleVerified(gate: OwnerGate, verified: boolean): void {
+  if (verified) verifiedBundleManifests.value[gate.ref] = gate.version;
+  else Reflect.deleteProperty(verifiedBundleManifests.value, gate.ref);
+}
 const platform = usePlatformStore();
 const route = useRoute();
 const { locale, t } = useI18n();
@@ -606,6 +618,7 @@ async function decide(gate: OwnerGate): Promise<void> {
     !gate.allowedDecisions.includes(decision)
   )
     return;
+  if (decision === "APPROVE" && !bundleManifestReady(gate)) return;
   const comment = comments.value[gate.ref]?.trim() ?? "";
   if (requiresDecisionComment(decision) && !comment) {
     validationMessages.value[gate.ref] =
@@ -1043,6 +1056,13 @@ const serverMessage = useServerMessage();
             </p>
           </section>
 
+          <RepositoryBundleManifest
+            v-if="requiresBundleManifest(selected.gate)"
+            :key="`${selected.gate.ref}:${selected.gate.version}`"
+            :gate-ref="selected.gate.ref"
+            :gate-version="selected.gate.version"
+            @verified="setBundleVerified(selected.gate, $event)"
+          />
           <section
             v-if="selected.gate.integrationIntent"
             class="decision-integration-intent"
@@ -1298,7 +1318,8 @@ const serverMessage = useServerMessage();
                 type="button"
                 :disabled="
                   busyRef === selected.gate.ref ||
-                  !attachmentsReady(selected.gate.ref)
+                  !attachmentsReady(selected.gate.ref) ||
+                  (selectedDecision === 'APPROVE' && !bundleManifestReady(selected.gate))
                 "
                 :aria-busy="busyRef === selected.gate.ref"
                 @click="decide(selected.gate)"

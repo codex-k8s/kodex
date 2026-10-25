@@ -10,9 +10,15 @@ import { activeDeploymentPods, isProvenStoppedPod } from './stable-archive-trans
 
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
-const migrationVersion = '20261025000100';
-const migrationFile = `${migrationVersion}_outbox_unpublished_predecessor_index.sql`;
-const annotation = 'kodex.dev/cp-outbox-index-migration-plan';
+const immutableProfiles = {
+  'outbox-index': {version:'20261025000100',file:'20261025000100_outbox_unpublished_predecessor_index.sql',annotation:'kodex.dev/cp-outbox-index-migration-plan',previousVersion:20261020000200,emptyField:'indexAbsent',preconditionFile:'control-plane-migration-precondition.sql'},
+  'repository-bundle': {version:'20261025000200',file:'20261025000200_repository_bundle_publications.sql',annotation:'kodex.dev/cp-repository-bundle-migration-plan',previousVersion:20261025000100,emptyField:'publicationAbsent',preconditionFile:'repository-bundle-migration-precondition.sql',postconditionFile:'repository-bundle-migration-postcondition.sql'},
+};
+// Только два известных immutable профиля; caller не задаёт version/SQL/authority.
+export function immutableMigrationProfile(profile = 'outbox-index') {
+  ensure(Object.hasOwn(immutableProfiles,profile),'IMMUTABLE_MIGRATION_PROFILE_INVALID');
+  return Object.freeze({...immutableProfiles[profile]});
+}
 const caBundleSpec = {sources:[{secret:{name:'kodex-installation-ca',key:'tls.crt'}}],
   target:{namespaceSelector:{matchLabels:{'kubernetes.io/metadata.name':namespace}},configMap:{key:'ca.pem'}}};
 const dsnPath = '/var/run/secrets/kodex/control-plane/postgres-migration/dsn';
@@ -50,7 +56,8 @@ export function immutableMigrationImage(source, evidence) {
 }
 
 // Штатный render задаёт только существующую migrator boundary; executable spec строится закрыто заново.
-export function planImmutableControlPlaneMigration(before, source, inspect, id, evidence, attempt = 1) {
+export function planImmutableControlPlaneMigration(before, source, inspect, id, evidence, attempt = 1, profile = 'outbox-index') {
+  const {version:migrationVersion} = immutableMigrationProfile(profile);
   ensure([1,2].includes(attempt), 'MIGRATION_ATTEMPT_INVALID');
   ensure(before?.kind === 'Job' && before.apiVersion === 'batch/v1' && before.metadata?.name === 'control-plane-migrate' &&
     before.metadata.namespace === namespace && before.metadata.uid && before.metadata.resourceVersion &&
@@ -100,7 +107,7 @@ export function planImmutableControlPlaneMigration(before, source, inspect, id, 
   // Фиксированное имя без TTL сохраняет server-side fence неизвестного create между планами.
   delete checkJob.spec.ttlSecondsAfterFinished;
   checkJob.spec.template.spec.containers[0].args = ['check'];
-  return {version:2,kind:'CONTROL_PLANE_MIGRATION',id,source,profile:'outbox-index',migrationVersion,attempt,checkJob,
+  return {version:2,kind:'CONTROL_PLANE_MIGRATION',id,source,profile,migrationVersion,attempt,checkJob,
     beforeUID:before.metadata.uid,beforeResourceVersion:before.metadata.resourceVersion,beforeSpecSHA256:fingerprint(before.spec),
     imageEvidence:structuredClone(evidence),job};
 }
@@ -148,8 +155,11 @@ export async function waitMigrationMaintenance(observe, ready, code, {now = Date
   }
 }
 
-// Существующая CLI получает отдельный закрытый протокол только для immutable outbox-index Job.
+// Существующая CLI обслуживает только два закрытых immutable schema-профиля на прежней least-privilege границе.
 export async function runImmutableControlPlaneMigration(phase, options, io) {
+  const profile = options['--profile'] ?? 'outbox-index';
+  const configuration = immutableMigrationProfile(profile);
+  const {version:migrationVersion,file:migrationFile,annotation} = configuration;
   const { kube, clusterUID, privateJSON, writePrivate, renderedBase, migrationReadback } = io;
   const context = options['--context'];
   ensure(context === 'k3d-kodex', 'IMMUTABLE_MIGRATION_CONTEXT_INVALID');
@@ -226,7 +236,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       phase === 'Running' && !deleting && !extra.length, 'MIGRATION_POSTGRES_IDENTITY_INVALID');
     return {pod:'kodex-postgresql-0',uid,ownerUID};
   };
-  const preconditionSQL = source => readFileSync(`${source.path}/tools/release/control-plane-migration-precondition.sql`);
+  const preconditionSQL = source => readFileSync(`${source.path}/tools/release/${configuration.preconditionFile}`);
   const precondition = (source, expectedPostgres, expectedSQL, requireStopped = false) => {
     ensure(fingerprint(postgresIdentity()) === fingerprint(expectedPostgres), 'MIGRATION_POSTGRES_IDENTITY_CHANGED');
     const sql = preconditionSQL(source);
@@ -238,8 +248,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     ensure(fingerprint(postgresIdentity()) === fingerprint(expectedPostgres), 'MIGRATION_POSTGRES_IDENTITY_CHANGED');
     const fields = ['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions',
       'pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'];
-    ensure(result.readOnly === 'on' && result.database === 'control_plane' && result.gooseVersion === 20261020000200 &&
-      result.indexAbsent === true && fields.every(key => result[key] === 0) && Number.isSafeInteger(result.oldClaimSessions) &&
+    ensure(result.readOnly === 'on' && result.database === 'control_plane' && result.gooseVersion === configuration.previousVersion &&
+      result[configuration.emptyField] === true && fields.every(key => result[key] === 0) && Number.isSafeInteger(result.oldClaimSessions) &&
       result.oldClaimSessions >= 0 && (!requireStopped || result.oldClaimSessions === 0), 'MIGRATION_OWNER_PRECONDITION_FAILED');
     return result;
   };
@@ -257,7 +267,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
   const predecessor = (paths, anchor, expected, currentMarker) => {
     ensure(!existsSync(`${paths.evidencePath}.lock`), 'MIGRATION_PREDECESSOR_WRITER_ACTIVE');
     const parent = privateJSON(paths.planPath), hash = fingerprint(parent);
-    ensure([1,2].includes(parent.version) && parent.kind === 'CONTROL_PLANE_MIGRATION' && parent.profile === 'outbox-index' &&
+    ensure([1,2].includes(parent.version) && parent.kind === 'CONTROL_PLANE_MIGRATION' && parent.profile === profile &&
       (parent.attempt ?? 1) === 1 && !parent.predecessor && parent.migrationVersion === migrationVersion &&
       parent.clusterUID === clusterUID && parent.context === context && parent.namespaceUID === namespaceUID() &&
       parent.anchor.uid === anchor.metadata.uid && [0,2].includes(anchor.spec.replicas) &&
@@ -287,7 +297,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     const nsUID = namespaceUID(); ensure(nsUID, 'MIGRATION_NAMESPACE_INVALID'); imageScope(imageEvidence,nsUID);
     const previous = options['--predecessor-plan'] ? predecessor({planPath:resolve(options['--predecessor-plan']),
       evidencePath:resolve(options['--predecessor-evidence'])},anchor) : undefined;
-    const plan = planImmutableControlPlaneMigration(before(render,anchor),source,inspectSource,randomUUID(),imageEvidence,previous ? 2 : 1);
+    const plan = planImmutableControlPlaneMigration(before(render,anchor),source,inspectSource,randomUUID(),imageEvidence,previous ? 2 : 1,profile);
     ensure(!optionalJob(plan.checkJob.metadata.name), 'MIGRATION_CHECK_ALREADY_EXISTS');
     const previousImage = anchor.spec?.template?.spec?.containers?.find(container => container.name === 'control-plane')?.image;
     ensure(anchor.spec.replicas === 2 && !anchor.spec.paused && anchor.metadata.labels['kodex.dev/local-profile'] === 'stable' &&
@@ -302,13 +312,14 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       baseRenderPath:resolve(options['--base-render']),baseRenderSHA256:fingerprint(render),migrationFileSHA256:sourceDigest(source)});
     if (previous) plan.predecessor = previous;
     plan.postgres = postgresIdentity();plan.preconditionSQLSHA256 = createHash('sha256').update(preconditionSQL(source)).digest('hex');
+    if(configuration.postconditionFile) plan.postconditionSQLSHA256=createHash('sha256').update(readFileSync(`${source.path}/tools/release/${configuration.postconditionFile}`)).digest('hex');
     precondition(source,plan.postgres,plan.preconditionSQLSHA256);
     writePrivate(options['--plan'],plan);
     process.stdout.write(`${JSON.stringify({status:'PLANNED',jobName:plan.job.metadata.name,sourceRevision:source.revision,planSHA256:fingerprint(plan)})}\n`);
     return;
   }
   const plan = privateJSON(options['--plan']);
-  ensure([1,2].includes(plan.version) && plan.kind === 'CONTROL_PLANE_MIGRATION' && plan.profile === 'outbox-index' &&
+  ensure([1,2].includes(plan.version) && plan.kind === 'CONTROL_PLANE_MIGRATION' && plan.profile === profile &&
     plan.migrationVersion === migrationVersion && plan.context === context && plan.clusterUID === clusterUID &&
     plan.namespaceUID === namespaceUID() && plan.anchor?.kind === 'Deployment' && plan.anchor.name === 'control-plane', 'PLAN_SCOPE_MISMATCH');
   imageScope(plan.imageEvidence,plan.namespaceUID);
@@ -369,6 +380,15 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(fingerprint(dependencies()) === fingerprint(plan.dependencies), 'MIGRATION_DEPENDENCY_CHANGED');
       const logs = actual.status?.succeeded === 1 ? kube(['-n',namespace,'logs',`job/${plan.job.metadata.name}`,'-c','migrate','--limit-bytes=262144']) : '';
       const result = migrationReadback(actual,plan,logs,pods);
+      if(result.status==='PASS' && configuration.postconditionFile) {
+        const sql=readFileSync(`${plan.source.path}/tools/release/${configuration.postconditionFile}`);
+        ensure(createHash('sha256').update(sql).digest('hex')===plan.postconditionSQLSHA256,'MIGRATION_POSTCONDITION_SOURCE_CHANGED');
+        ensure(fingerprint(postgresIdentity())===fingerprint(plan.postgres),'MIGRATION_POSTGRES_IDENTITY_CHANGED');
+        const proof=JSON.parse(kube(['-n',namespace,'exec','-i','kodex-postgresql-0','--','psql','-XqAt','-U','postgres','-d','control_plane','-v','ON_ERROR_STOP=1'],sql));
+        ensure(fingerprint(postgresIdentity())===fingerprint(plan.postgres),'MIGRATION_POSTGRES_IDENTITY_CHANGED');
+        ensure(validRepositoryBundleMigrationPostcondition(proof),'MIGRATION_POSTCONDITION_FAILED');
+        result.schemaPostcondition='PASS';
+      }
       journal.append({type:'READBACK',...result}); return result;
     };
     const noActiveMigrations = () => {
@@ -378,7 +398,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     const verifyInputs = anchor => {
       ensure(plan.version === 2, 'MIGRATION_NEW_PROTOCOL_REQUIRED');
       const render = renderedBase(plan.baseRenderPath);
-      const rebuilt = planImmutableControlPlaneMigration(before(render,anchor),plan.source,inspectSource,plan.id,plan.imageEvidence,plan.attempt);
+      const rebuilt = planImmutableControlPlaneMigration(before(render,anchor),plan.source,inspectSource,plan.id,plan.imageEvidence,plan.attempt,profile);
       ensure(fingerprint(render) === plan.baseRenderSHA256 && fingerprint(rebuilt.job) === fingerprint(plan.job) &&
         fingerprint(rebuilt.checkJob) === fingerprint(plan.checkJob) &&
         sourceDigest(plan.source) === plan.migrationFileSHA256 && fingerprint(dependencies()) === fingerprint(plan.dependencies), 'MIGRATION_PLAN_DRIFT');
@@ -492,4 +512,11 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     const result = readJob();output(result);
     if (['FAIL','READBACK_UNCONFIRMED'].includes(result.status)) process.exitCode = 1;
   } finally { journal.close(); }
+}
+
+// Проверяет только metadata точной новой schema; Goose log сам не доказывает безопасный owner/retention/purge профиль.
+export function validRepositoryBundleMigrationPostcondition(proof) {
+  return proof?.readOnly==='on' && proof.database==='control_plane' && proof.gooseVersion===20261025000200 &&
+    proof.tableOwner==='control_plane_owner' && proof.noBodyColumns===true && proof.foreignKeys===13 &&
+    proof.deferredForeignKeys===13 && proof.guardEnabled===true && proof.retentionConsumer===true && proof.purgeGraphGuard===true;
 }

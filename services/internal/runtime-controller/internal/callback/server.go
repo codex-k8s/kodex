@@ -31,6 +31,7 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/libs/go/providerfinancewire"
+	"github.com/codex-k8s/kodex/libs/go/repositorybundle"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/runtime-controller/internal/workload"
 	"github.com/google/uuid"
@@ -823,6 +824,9 @@ func tools(input runtimecontract.RunnerInput) []map[string]any {
 	if len(input.IntegrationGrants) != 0 {
 		result = append(result, integrationCatalogTool(), integrationTool())
 	}
+	if repositoryBundleAvailable(input) {
+		result = append(result, repositoryBundleTool())
+	}
 	result = append(result, managedMCPTools(input)...)
 	return result
 }
@@ -1003,6 +1007,8 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		if err == nil {
 			result, err = server.workflowCatalog(request.Context(), input, params.Arguments)
 		}
+	case repositorybundle.ToolName:
+		result, err = server.prepareRepositoryBundle(request.Context(), input, params.Arguments, rpc.ID)
 	case "invoke_integration":
 		result, err = server.invoke(request.Context(), input, params.Arguments, rpc.ID)
 	case runtimecontract.Context7ResolveTool, runtimecontract.Context7QueryTool:
@@ -2442,6 +2448,10 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 		return map[string]any{"workflow_ref": workflow}, "platform.run.launch", "", workflowLaunchAvailable(input)
 	case "get_workflow_catalog":
 		return workflowCatalogSafeParameters(arguments), "platform.run.launch", "", workflowLaunchAvailable(input)
+	case repositorybundle.ToolName:
+		if grant, ok := repositoryBundleGrant(input, arguments); ok {
+			return map[string]any{"connection_ref": grant.ConnectionRef, "capability_key": grant.CapabilityKey}, grant.CapabilityKey, grant.Ref, true
+		}
 	case "invoke_integration":
 		if grant, ok := integrationGrantForCall(input, arguments); ok {
 			return map[string]any{"connection_ref": grant.ConnectionRef, "capability_key": grant.CapabilityKey}, grant.CapabilityKey, grant.Ref, true
@@ -2550,6 +2560,14 @@ func safeToolCallResult(tool string, result any, toolErr error) string {
 		}{1, value.SourceSHA256, value.ProjectionSHA256, len(value.Messages), value.Truncated})
 		return string(raw)
 	}
+	if tool == repositorybundle.ToolName {
+		value, ok := result.(repositoryBundleToolResult)
+		if !ok || value.ProposalRef == "" || value.GateRef == "" || !runtimecontract.ValidSHA256Text(value.ManifestSHA256) {
+			return "TOOL_UNAVAILABLE"
+		}
+		raw, _ := json.Marshal(value)
+		return string(raw)
+	}
 	if tool == "invoke_integration" || tool == runtimecontract.Context7ResolveTool || tool == runtimecontract.Context7QueryTool {
 		value, ok := result.(integrationToolResult)
 		if !ok || !safeInvocationRef(value.InvocationRef) || !runtimecontract.ValidSHA256Text(value.inputSHA256) {
@@ -2631,7 +2649,7 @@ func (server *Server) delegate(ctx context.Context, input runtimecontract.Runner
 // и самостоятельного повторения внешнего effect.
 func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {
 	grant, allowed := integrationGrantForCall(input, arguments)
-	if !allowed {
+	if !allowed || grant.Operation == repositorybundle.Operation || grant.CapabilityKey == repositorybundle.Operation {
 		return nil, &integrationCallInputError{reason: "grant_selection"}
 	}
 	bounded, ok := arguments["input"].(map[string]any)
