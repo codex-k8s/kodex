@@ -12,7 +12,11 @@ SELECT node.id::text,
        invocation.ref,
        invocation.state,
        COALESCE(invocation.result_summary,''),
-       COALESCE(invocation.safe_error_code,'')
+       COALESCE(invocation.safe_error_code,''),
+       gate.ref,
+       gate.version,
+       COALESCE(gate.decision,''),
+       gate.decision_comment
 FROM control_plane.integration_invocations invocation
 JOIN control_plane.run_nodes node ON node.id=invocation.node_id
 JOIN control_plane.runs run ON run.id=node.run_id
