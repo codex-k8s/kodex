@@ -4,11 +4,67 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.463.0
+version: 1.464.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Полный разбор SQL-групп и обязательные query headers — 25.10.2026
+
+Прочитаны целиком32 запроса (2621 строка), покрывающие все28 оставшихся
+SQL-групп, и сверены go:embed bindings/production calls. Для каждой точной
+пары/hash/count сохранена отдельная причина. Это адресные решения после
+чтения полных statements, без исключения SQL-формата или файлов из detector.
+
+| Группа | Почему сохранены отдельные statements/выражения |
+| --- | --- |
+| Event delta / Get / List / graph | разные owner/public eligibility, permission hints, :one/:many, columns/cursor; scanRunNode/scanArtifact/scanGate/scanRun уже общие |
+| Role-image/artifact count и page | одинаковая eligibility при разных total/page/cursor/result contracts в одном snapshot; catalog_resource_visible и organization access primitives уже общие |
+| Supply availability / claim / current | boolean preflight не выдаёт claim; native candidate требует SKIP LOCKED, immutable pins и отдельного owner transition/recheck |
+| Environment impact / revision preparation | search/target exclusion/cursor/totals против bounded1001 source bindings и authority_project; разные Scan layouts |
+| Runtime attachments / workflow capabilities | completeness count и file/set projections, INPUT/SESSION/KNOWLEDGE provenance; NULL human-gate capabilities отличаются от empty array/coordinator delegation |
+| Effective prompt / preview / runtime | разные outputs и nullable-project equality; общий fallback не позволяет нормализовать IS NOT DISTINCT FROM в обычное равенство |
+| Assistant context / plan | общие projection_v3/operation functions уже существуют; JSON runtime snapshot отличается от typed owner/profile/conversation read с lock |
+| Session promotion / cleanup / authority | отдельные агрегаты, lifecycle/locks/RETURNING и цельные data-changing WITH; общий transition mode или второй statement изменили бы границу |
+| RuntimeRevision INSERT |63 разных destination columns и63 positional bindings, а не повторная операция; явная field/value bijection сохраняется |
+
+Новых SQL builders, schema objects, migrations, generic protected actions или
+дополнительных DB calls нет. Все32 audited SQL-файла побайтно равны предыдущему
+HEAD; повторяемые business constraints остаются в native statements. Эта
+проверка не доказывает исполнение запросов либо поведение concurrency в БД.
+
+При запуске публичного make check-sql-boundary обнаружены две отдельные
+проблемы. По умолчанию выбирался Go1.27.1; проект требует1.26.6. Явный
+GOTOOLCHAIN=go1.26.6 задан только дочернему процессу, системные настройки
+и dependencies не менялись. Затем checker выявил отсутствие обязательных
+headers у project_trash__recovery_authority.sql и
+project_trash__recovery_readiness.sql. Добавлена одна canonical -- name ... :one
+строка в каждый файл; всё прежнее SQL-тело, args, embeds и Go code неизменны.
+Приватный report runner теперь также явно выбирает Go1.26.6/GOENV off/GOWORK off.
+Исторические build/unit не переобозначаются выполненными этим compiler.
+
+На окончательном дереве с Go1.26.6: make check-sql-boundary — PASS LOCAL
+(2,42с), весь CP go build mod=readonly/-p2 — PASS LOCAL (26,08с), весь CP
+unit count1/mod=readonly/-p2 — PASS LOCAL (47,35с). Child env без
+credentials/KODEX/VITE/KUBECONFIG/GOFLAGS, GOMAXPROCS4. Hashes обоих header-only
+SQL sources до/после совпали; обратное удаление ровно одной строки полностью
+восстанавливает исходники. SQL boundary теперь проверяет весь production SQL,
+а не только32 запроса аудита. PostgreSQL component suites без disposable inputs
+не исполнялись; browser/E2E/OCI/apply/deploy/live и отдельная QA — NOT RUN.
+
+Context7 /websites/postgresql_18 проверил same-snapshot/RETURNING semantics
+data-changing WITH и SKIP LOCKED. Внешние документы не заменяют фактического
+DB test. Общие helpers/SQL functions не вводились на основании поверхностного
+совпадения predicates между разными authority/lifecycle contexts.
+
+Detector:6726 sources/222 прежних exclusions,1589 raw/1073 retained/516
+unresolved против1589/1045/544. Raw clone-set fingerprint неизменен;
+все914 прежних entries неизменны, добавлены28 exact SQL decisions.56 count/hash
+mutations отклонены actual assessor. В SQL не осталось неразобранных групп;
+остальные516 входят в scope #1823. Go descriptions прежние21564/21564,
+пропусков0; порог/нормализация/generated boundaries не менялись.
+
 
 ## Общие параметры authority-сертификатов с точным render — 25.10.2026
 

@@ -7312,6 +7312,230 @@
       "fragmentSHA256": "ff5ed18470a95cc8d4966ec997b42850b063262b8c31e4dfaa6ffec0d697c1fc",
       "count": 1,
       "reason": "Окно automation-scheduler/session-archive/secret-broker сопоставлено с interaction-gateway/runtime-controller/началом callback-server. У каждого собственные Secret/SAN/URI; callback-server отдельно сохраняет только server auth. Общие параметры выпуска уже вынесены. Не объединяем runtime callback и обычную workload identity и не расширяем EKU; итоговые три render побайтно прежние."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/commands_emitrunevent_select_node_delta.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/queries_getrungraph_select_artifacts_node_id_ref.sql",
+      "fragmentSHA256": "148f00e935a5521db4be2da770ad9a0b2adba9c3902271f55f55524665bc4e0e",
+      "count": 1,
+      "reason": "Node delta читает один tenant/node ref (:one), GetRunGraph — набор узлов выбранного root/edge graph (:many) с ORDER BY. В обоих оставлена точная materialized delegation/callback и required-workflow provenance для ChildRunRefs; Go уже переиспользует scanRunNode. Общая row projection не заменяет разные WHERE/cardinality. Вынос join-фрагмента в динамический SQL либо новый DB view изменил бы текущий контракт именованных запросов без полезного runtime primitive."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/internal-rpc-authority/internal/repository/postgres/authority/sql/verifier__accept_context.sql",
+      "secondPath": "services/internal/internal-rpc-authority/internal/repository/postgres/authority/sql/verifier__activate_snapshot.sql",
+      "fragmentSHA256": "c993ade3b2dedc9ddaee37d1a821308dff6e7ac11348d95d4715f132f415c13a",
+      "count": 1,
+      "reason": "AcceptVerification атомарно связывает issued context, exact/advanced snapshot, свежую attestation и одноразовую JTI reservation; ActivateSnapshot обновляет только durable watermark и возвращает один bool. Общие ограничения signed predecessor/history и monotonic revision нужны в обоих цельных SQL statements. Их нельзя заменить вызовом activation перед reservation: изменятся statement snapshot, replay atomicity и error priority. Валидаторы issued binding/attestation уже являются общими DB primitives; универсальный protected action здесь не вводится."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/role_image_managed__count.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/role_images_list_recipes.sql",
+      "fragmentSHA256": "ef833e10992b0dc6ab3aeb20d3793474fe966e2da7be8c7e744ec4d65e672f5b",
+      "count": 1,
+      "reason": "Count и page role-image каталога намеренно используют одинаковые owner/tenant/scope/role/state/query predicates и общие organization_role_image_actor_allowed/catalog_resource_visible. Count возвращает total до cursor; list — typed recipe columns, keyset order и page_limit. Caller выполняет их в одном ReadOnly RepeatableRead с точным набором StrictNamedArgs и добавляет cursor args после count. Сохраняем два самостоятельных named SQL, не вводя строковую сборку clause либо schema migration ради декларативных полей."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/catalog_artifacts_count.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/queries_listartifacts_select_artifact_bindings_artifact_id_id_organization_id.sql",
+      "fragmentSHA256": "02dfdd41fdb7ec925f22e23779084b4736fea97fa468a6d117f9415ad8072607",
+      "count": 1,
+      "reason": "Artifact count и page разделяют lifecycle/media/source/tenant/view eligibility; catalog_resource_visible уже общий. Count должен считать весь фильтр, list добавляет cursor/order/limit и вычисляет manage hint. Общая часть является декларацией двух целых named statements с различной cardinality, а не отдельной операцией. Объединение в универсальный query изменило бы row shape/count contract и не требуется для переиспользования существующего scanArtifact."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/role_images_claim_promotion_candidate.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/role_images_get_supply_work_availability.sql",
+      "fragmentSHA256": "e4f4559e6892732860d3e8d0cd7277f5382b7aac26d03cf5c89e27b51650c248",
+      "count": 1,
+      "reason": "Promotion availability — non-locking EXISTS bool; claim выбирает один artifact/request/recipe и выполняет FOR UPDATE OF всех трёх SKIP LOCKED в Serializable owner transaction. Evidence digests, exact recipe snapshot и reclaim states обязаны совпадать, но availability не выдаёт fence/claim. Сохраняем два полных запроса и отдельные authority/lock/effect contracts; общий mode-параметр не должен превращать readiness в команду."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/role_images_claim_admission_candidate.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/role_images_get_supply_work_availability.sql",
+      "fragmentSHA256": "7e6f1d862d23372f8c38062640dfe365432be74bd123a9d59e9b5e26e50b403b",
+      "count": 1,
+      "reason": "Admission availability проверяет PENDING/latest completed build, а также истёкшие CLAIMED и устаревшую policy; candidate claim после maintenance выбирает один PENDING artifact с policy pins и FOR UPDATE SKIP LOCKED. Совпадающий EXISTS recipe/build — декларативный предикат внутри разных statements. Не объединяем boolean preflight с захватом ресурса и не меняем порядок expire/reject/idempotency/native write."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/commands_getrunforgraph_select_runs_organization_id_ref.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/queries_getrun_select_runs_organization_id_ref_project_id.sql",
+      "fragmentSHA256": "03f9e11c8fa4f47b937717b807b7bcda76658521ed92ec1caf87ad6b84288d05",
+      "count": 1,
+      "reason": "GetRunForGraph и пользовательский GetRun имеют общий базовый run/session/target join и scanRun, но второй возвращает дополнительные cancel/launch hints и требует ACTIVE project, authority_project и run.view. Первый применяется в owner command/readback с уже установленной границей. Общие columns не разрешают подменить один запрос другим либо убрать domain eligibility; два named SQL сохраняют свои arg/cardinality contracts."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/commands_getrunforgraph_select_runs_organization_id_ref.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/mvp_list_schedule_runs.sql",
+      "fragmentSHA256": "1682247d4f3c64aa0427522d1cba7b4e1358fe3c5b0faf9bf0205bdb0e934679",
+      "count": 1,
+      "reason": "Run readback и schedule-runs page используют похожие joins к project/session/root/parent/retry/agent/workflow. Schedule query начинает результат с schedule/ref/revision, ограничивается конкретным schedule и имеет cursor/order/limit; readback — tenant/run-ref :one. Декларативное совпадение не является общим запуском workflow: сохраняем отдельные SELECT layouts и ранее проверяемые native caller scopes."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/environment_impact_consumers.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/revision_impact__environment_consumers.sql",
+      "fragmentSHA256": "a24a7d73895b444e6cbf077266839be837b1e6130c3f5bf018994348bd9f43c5",
+      "count": 1,
+      "reason": "Environment impact UI page и revision-impact preparation по-разному формируют результат. Первый использует eligible/page CTE, исключает target revision, применяет search/cursor и возвращает totals даже при пустой странице; второй возвращает source bindings с authority_project и hard limit1001 для bounded plan. Общая domain visibility уже вызывается из SQL, но объединение проекций потеряло бы pagination/count/limit semantics и разные Scan layouts."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/commands_emitrunevent_select_gate_delta.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/queries_getownergate_select_owner_gates_organization_id_ref_project_id.sql",
+      "fragmentSHA256": "d56986cdc7f8329e714b5078514df53b9ed41422dbdb067ce2f2ff117b2db132",
+      "count": 1,
+      "reason": "Event gate projection и пользовательский GetOwnerGate разделяют native joins, включая organization-assistant ownership, но публичный query дополнительно требует VIEW/owner scope и вычисляет RESOLVE_GATES hint. Event path сериализует уже изменённый owner state и использует scanGate без hint. Сохраняем две целые схемы чтения, чтобы actor permission не подменялся общим неавторизованным event query."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/role_images_admission_current.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/role_images_claim_admission_candidate.sql",
+      "fragmentSHA256": "2ffe3e4533207b338e066f2bb2f68ed4e58f0c83bc46ae74bd8d159af5a184c1",
+      "count": 1,
+      "reason": "Admission-current возвращает EXISTS для точного artifact_id и его current recipe/latest completed build; candidate query выбирает один PENDING artifact по configured policy и блокирует его SKIP LOCKED. Одинаковые immutable recipe/build pins не делают queries взаимозаменяемыми: bool recheck не выдаёт claim, а claim не заменяет позднюю свежую eligibility. Не вводим новый DB API или динамическую SQL-композицию ради общего набора сравнений."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_claimexecution_select_claimable_agent_executions.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_claimexecution_select_claimable_agent_executions.sql",
+      "fragmentSHA256": "039fbd1b56a67f7f5d0405e676f65ea5e040b328250287fdf4e999c30a46dc64",
+      "count": 1,
+      "reason": "Один exact completeness gate previous_set.item_count=count(eligible revision/content pins) используется в списке attachment sets, второй — в полной runtime artifact projection. Оба нужны для закрытого исключения частичного исторического набора, но окружающие JSON outputs/UNION scopes отличаются. Общий Go helper не может заменить условие внутри одного locked SELECT; новая relational materialization ради этих строк усложнила бы cardinality и scope. Явно сохраняем общий инвариант во всех потребителях."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/commands_changeagentbinding_select_agent_readback.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/queries_getagent_select_agents_organization_id_ref_system_key.sql",
+      "fragmentSHA256": "c81341312a33001068132e7f57680748a993c3cc72647d159e1d716c63637845",
+      "count": 1,
+      "reason": "Agent binding readback возвращает command-owned project agent, а GetAgent включает system_key, optional project, manage/launch hints и отдельные organization/project eligibility predicates. Подобные role/runtime/artifact columns имеют разные позиции и количество Scan outputs. Не заменяем публичный readback внутренним query и не вводим общий map, скрывающий trusted scope и nullable/system shape."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/commands_emitrunevent_select_artifact_delta.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/queries_getartifact_select_artifact_bindings_artifact_id_id_organization_id.sql",
+      "fragmentSHA256": "b19eaa8a1b184dfbd0d92490c381b7cced64c493696ebe5a43134d78987d53ca",
+      "count": 1,
+      "reason": "Artifact event delta и GetArtifact используют общую базовую metadata/KNOWLEDGE projection и общий scanArtifact, но событие возвращает false вместо manage hint и читается в owner mutation transaction. Detail query имеет actor-bound view eligibility и вычисляемые action hints. Сохраняем разные целые named statements/аргументы, не выдавая event projection за публичный read path."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/commands_emitrunevent_select_artifact_delta.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/queries_listartifacts_select_artifact_bindings_artifact_id_id_organization_id.sql",
+      "fragmentSHA256": "b19eaa8a1b184dfbd0d92490c381b7cced64c493696ebe5a43134d78987d53ca",
+      "count": 1,
+      "reason": "Artifact event delta и ListArtifacts похожи по metadata/KNOWLEDGE columns, но event — tenant/ref :one с false action hint, list — :many с actor visibility, filters/keyset/order/limit и manage hint. scanArtifact уже общий. Их декларативное совпадение не оправдывает универсальный SQL mode, снятие доступа или изменение event/list cardinality."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/managed_configuration_effective_prompt.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_claimexecution_select_claimable_agent_executions.sql",
+      "fragmentSHA256": "1a7c39235291accab500ddc17cb6b3e9112e3003c471f48ab9dc91a8162430fa",
+      "count": 1,
+      "reason": "Effective-prompt read и claim execution имеют общее preference managed revision перед active instruction, но первый возвращает revision/timestamps, второй встроен в большой locked runtime SELECT и выбирает ref/digest/content. Native binding/scope/state predicates и UNION priority/revision order сохраняются. Новой DB function/view или сборки SQL из fragments для общей declarative projection не требуется; runtime snapshot не должен делаться отдельным запросом вне исходного statement."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/commands_emitrunevent_select_node_delta.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/queries_getrungraph_select_artifacts_node_id_ref.sql",
+      "fragmentSHA256": "1d26c5b56a89b227a28ebdbaf3ca05f7cda8dd4d8523524360654222aa9dcaa9",
+      "count": 1,
+      "reason": "Базовая Node projection используется для event delta :one и graph nodes :many; общим уже является Go scanRunNode. Обязательные node/run/parent/agent/turn columns не являются повторной командой, а result ABI двух named queries. Разные root/ref predicates, materialized child provenance и graph order остаются явными; не меняем schema/migration или cardinality для удаления column declarations."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/session_archive_fail_task.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/session_archive_materialize_tasks.sql",
+      "fragmentSHA256": "300b853695ab01411ffa93a709dd6d504435b3506d12ef96b747cc872fe30880",
+      "count": 1,
+      "reason": "Fail-task строит cleanup obligation после exact locked task failure; materializer делает это для expired tasks и отдельно исключает project PURGE_PENDING. Совпадает shape INSERT DELETE_OBJECT, но исходный набор, lifecycle/retry/error state и storage updates различны. Каждый data-changing WITH сохраняется одним statement с собственным RETURNING flow; общий generic transition или второй SQL вызов изменил бы атомарность и snapshot."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_claimexecution_select_claimable_agent_executions.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_claimexecution_select_claimable_agent_executions.sql",
+      "fragmentSHA256": "1850f08e320e793f7ebee368b3bb914ef93ed4d9d8657fea444bdbf8af7c4b0e",
+      "count": 1,
+      "reason": "Совпадают exact artifact/item/content pins для current input file manifest и completeness count в WHERE claimable SELECT. Первая ветвь формирует данные конкретного файла и проверяет FINALIZED set; вторая запрещает выбор execution при неполном наборе. Сохраняем оба явных gate в разных relational contexts вместо ослабления completeness до фильтра отдельных rows или добавления новой materialization ради повторяемых сравнений."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_claimexecution_select_assistant_context.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_proposeassistantplan_select_context.sql",
+      "fragmentSHA256": "e5d19fc5508784f5c021ebb8a280f2268fce342e32cbe1820da752da12079d4c",
+      "count": 1,
+      "reason": "Claim assistant-context JSON и ProposeAssistantPlan используют общие assistant_context_projection_v3 и три специализированные operation functions. При этом первый возвращает один JSON snapshot, второй — typed owner/conversation/profile/actor fields с дополнительными joins, membership и FOR UPDATE OF conversation. Общие capability calls уже вынесены в DB primitives; целые запросы и свежая lock/authority boundary не объединяются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_claimexecution_insert_runtime_revision.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_claimexecution_insert_runtime_revision.sql",
+      "fragmentSHA256": "3276e7335444e5b726be1fb33281f4375249707d004c7d8abd3efe37181c2199",
+      "count": 1,
+      "reason": "Detector сопоставил перекрывающиеся фрагменты списка разных columns runtime_revisions INSERT. Это63 различных destination fields, которым соответствуют63 positional arguments/casts в том же явном statement; одинаковая пунктуация не является повторной логикой. Сохраняем точную field/value bijection и immutable snapshot contract без генератора универсального INSERT или произвольной map записи authority."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/commands_emitrunevent_select_gate_delta.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/queries_getownergate_select_owner_gates_organization_id_ref_project_id.sql",
+      "fragmentSHA256": "5f915ecf197d857e04930007d3ffb05a0dc9877f196d01074aaba3200cff70eb",
+      "count": 1,
+      "reason": "Совпадает обязательный gate column prefix у event delta и GetOwnerGate, но latter добавляет permission hint и actor-bound organization/project eligibility. Общий scanGate уже обслуживает обе формы с явным режимом наличия hint. Сохраняем native SELECT shapes/args и не добавляем новый schema object ради повторения обязательных поля/ref declarations."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_claimexecution_select_claimable_agent_executions.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_claimexecution_select_claimable_agent_executions.sql",
+      "fragmentSHA256": "fd1dab177d6580ba7a659c4a43eb5cba68746b0ad100667852513805dfa76dad",
+      "count": 1,
+      "reason": "Две JSON step-capability lookup ветви обслуживают workflowCapabilities и humanGateCapabilities. Первая имеет coordinator override platform.run.delegate; вторая различает human_gate_after=false→NULL и отсутствие workflow→empty array. Общий eagerly joined source/универсальный mode усложнил бы эти conditional/nullability contracts ради25 декларативных строк; сохраняем явные CASE branches внутри одного locked native query."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/prompt_preview_agent.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_claimexecution_select_claimable_agent_executions.sql",
+      "fragmentSHA256": "385556e60291685faa831ab48e9c2d5f68db4462fa36a983d8e345ece5f9c41f",
+      "count": 1,
+      "reason": "Prompt preview и runtime claim разделяют managed→instruction fallback, но preview использует IS NOT DISTINCT FROM для nullable project, требует enabled/non-ARCHIVED agent и возвращает UI context; claim использует native project equality и присоединяет prompt в исполнении с runtime pins/locks. Их нельзя считать одним query либо нормализовать NULL semantics. Оставляем адресное совпадение с явными разными scope predicates."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/configuration_applyassistantplancommand_promote_session_storage_project.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/configuration_applyassistantplancommand_promote_session_storage_project.sql",
+      "fragmentSHA256": "b9906636be8a03efd39a17029f1c49afad3a0fdb6269af1c5240a207e7a35689",
+      "count": 1,
+      "reason": "В session promotion boundary повторяются NOT EXISTS по session_archives, archive_tasks, storage, owner_gates и другим owner tables. Это разные aggregate relations и пути session/root correlation, а не один guard с лишними именами. Все остаются в одном statement под locked target_session и общим boundary.allowed, чтобы перенос проекта не пропускал ни одну foreign project lineage."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/configuration_applyassistantplancommand_promote_session_storage_project.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/configuration_applyassistantplancommand_promote_session_storage_project.sql",
+      "fragmentSHA256": "5593e643203b34e98b8db2f8469861c02f7b7f5adf5b3e3db0e95c1032bcbb2d",
+      "count": 1,
+      "reason": "Похожие UPDATE CTE переносят project_id в разных aggregates: runtime revisions по session, artifacts/events/receipts по run, storage по session+organization с version increment. Они читают один target_session/boundary и возвращают свои typed keys. Универсальная table/field операция скрыла бы закрытый набор связанных ресурсов и различия ownership; сохраняем атомарный explicit promotion graph без dynamic SQL."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_claimexecution_select_claimable_agent_executions.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/runtime_claimexecution_select_claimable_agent_executions.sql",
+      "fragmentSHA256": "7f6a6745e93ebb4c42e28a5d1bd43a96d94b92ac53a81392ec49b9e50352d184",
+      "count": 1,
+      "reason": "Сравнения immutable artifact revision/item/content повторены в count допуска полного previous attachment set и в rows исторического file manifest. В обоих важны CLEAN, exact metadata/digest/size и условный DELETED после run.created_at; результатами служат разные counts/records. Сохраняем оба relational gate, не превращая частично eligible set в разрешённый runtime input."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/configuration_applyassistantplancommand_promote_session_storage_project.sql",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/sql/configuration_applyassistantplancommand_promote_session_storage_project.sql",
+      "fragmentSHA256": "3b2b27350df87a343e79e688774754b23f72b7220f4863cf0d4cff8c28cfbdbc",
+      "count": 1,
+      "reason": "Session promotion проверяет разные project lineage sources: runs/runtime revisions напрямую по locked session, events/artifacts/receipts через session_runs, download grants через run_artifacts и attachment bindings через runs/turns. Одинаковая форма NOT EXISTS project mismatch является обязательным покрытием разных aggregates. Оставляем явный полный boundary в одном statement, не заменяя закрытые связи общим resource payload."
     }
   ]
 }
