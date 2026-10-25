@@ -4,11 +4,61 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.465.0
+version: 1.466.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая Python-оснастка OCI и assertions cache/readback — 25.10.2026
+
+Устранены все три оставшиеся Python-группы. В test-only
+oci_archive_test_fixtures.py вынесены запись tar members и assertions успешного
+verifier/исходных bytes/режима0400. Writer сохраняет порядок mapping,
+TarInfo defaults, explicit size, BytesIO и uncompressed w; chmod0600 исходного
+архива, receipt/hash и разные verifier arguments остались в native fixtures.
+Повреждённые/traversal members не нормализуются: их по-прежнему проверяют
+отдельные negative tests. Поддержаны direct-script и package imports.
+
+В BuildLocalRunnerProfile общий _assert_cache_identity_changes сохраняет
+первую full-сборку, изменение одного source input, fixture Git commit, вторую
+сборку и обе отдельные проверки sourceInputSHA256/buildInputSHA256. Два теста
+с прежними именами задают свои revision/pin/path/commit message. Fixture
+source/state/mock docker/import и ограниченные env/timeouts прежние; реальные
+OCI build/import или node cache не использовались.
+
+В DeployLocalSelectionTest общий _assert_readback_result исполняет прежний
+bash invocation с явными synthetic env и сверяет прежние returncode/error
+assertions. RBAC и source/image rollout cases, command strings с mock
+yq/kubectl, mutations и subTest остались раздельными. Deployment/cluster/owner
+операции не добавлялись, production shell scripts не менялись.
+
+Обратная подстановка фактических четырёх helper bodies/signatures в8 местах
+восстановила полные AST четырёх исходных Python-модулей. Native comments и76
+явных test declarations прежние; с inherited cases исполняются84 теста.
+Шесть сравнений реальных старых/новых writer methods на empty/binary/Unicode/
+invalid-path fixtures дали побайтно одинаковые tar и прежний режим0600.
+Никакой extraction синтетических traversal paths не выполнялось.
+
+Python3.14.4: seed19 tests1,63с, stable9 tests1,02с, runner27 tests19,11с,
+deploy-selection29 tests2,92с — PASS LOCAL. После дополнительного выноса
+preserved-byte assertions оба затронутых archive suites повторены; runner и
+deploy sources с их успешного запуска не менялись, hashes сверены. Syntax
+всех5 файлов и package import двух fixture modules — PASS LOCAL. Результат
+не является OCI deployment/admission либо live readback. Production Go,
+frontend/contracts/deploy/modules и registry побайтно прежние; повторять их
+build/unit только из-за test-only Python выноса не требовалось.
+
+Detector:6731 sources/222 прежних exclusions,1584 raw/1074 retained/510
+unresolved против1587/1074/513. Удалены3 exact raw keys, новых нет; registry
+943 entries не менялся, дополнительных исключений нет. Все5 стадий отчёта
+прошли; Go descriptions прежние21564/21564, пропусков0. Остальные510 групп
+входят в scope #1823, пороги/нормализация/generated boundaries прежние.
+
+Context7 /python/cpython проверил TarFile.addfile/TarInfo.size/binary fileobj и
+uncompressed write mode; используется прежний API. Dependencies и credential
+sources не менялись. Реальные browser/E2E/PG component/OCI build/apply/deploy/
+live и независимая QA текущего SHA — NOT RUN.
 
 ## Общие локальные API mutations и объединение impact-страниц — 25.10.2026
 

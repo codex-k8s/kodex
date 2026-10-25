@@ -12,6 +12,18 @@ SCRIPT = Path(__file__).with_name("deploy-local.sh")
 
 
 class DeployLocalSelectionTest(unittest.TestCase):
+    def _assert_readback_result(self, command, error, **fixture_values):
+        """Сверяет исход mock shell readback и ожидаемую безопасную диагностику.
+
+        Command с подменёнными yq/kubectl, synthetic inputs и subTest остаются
+        у сценария; helper не читает render и не обращается к кластеру.
+        """
+        result = subprocess.run(['bash', '-euo', 'pipefail', '-c', command],
+            env=dict(os.environ, **fixture_values),
+            text=True, capture_output=True, timeout=5)
+        self.assertEqual(result.returncode == 0, error is None, result.stderr)
+        if error: self.assertIn(error, result.stderr)
+
     def run_selection(self, workload=None, stage="core"):
         arguments = [
             "bash", str(SCRIPT), "--context", "synthetic-local",
@@ -627,11 +639,8 @@ readback_local_image_admission_controller_rbac
             cases.append((actual, 'mismatch'))
         for actual, error in cases:
             with self.subTest(error=error, actual=actual):
-                result = subprocess.run(['bash', '-euo', 'pipefail', '-c', command],
-                    env=dict(os.environ, EXPECTED=json.dumps(expected), ACTUAL=json.dumps(actual)),
-                    text=True, capture_output=True, timeout=5)
-                self.assertEqual(result.returncode == 0, error is None, result.stderr)
-                if error: self.assertIn(error, result.stderr)
+                self._assert_readback_result(command, error,
+                    EXPECTED=json.dumps(expected), ACTUAL=json.dumps(actual))
 
     def test_protected_publisher_and_owner_are_ready_before_image_controller(self):
         source = SCRIPT.read_text()
@@ -735,11 +744,8 @@ readback_local_supply_chain_deployment_inputs image-admission-controller
             cases.append((actual, 'readback'))
         for actual, error in cases:
             with self.subTest(error=error, actual=actual):
-                result = subprocess.run(['bash', '-euo', 'pipefail', '-c', command],
-                    env=dict(os.environ, EXPECTED_TEMPLATE=json.dumps(template), ACTUAL_DEPLOYMENT=json.dumps(actual)),
-                    text=True, capture_output=True, timeout=5)
-                self.assertEqual(result.returncode == 0, error is None, result.stderr)
-                if error: self.assertIn(error, result.stderr)
+                self._assert_readback_result(command, error,
+                    EXPECTED_TEMPLATE=json.dumps(template), ACTUAL_DEPLOYMENT=json.dumps(actual))
 
     def test_full_core_applies_the_synthetic_integration_fixture(self):
         source = SCRIPT.read_text()

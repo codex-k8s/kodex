@@ -1,14 +1,17 @@
 """Проверка штатных platform OCI на одноразовых синтетических архивах."""
 
 import hashlib
-import io
 import json
 import os
 from pathlib import Path
 import subprocess
-import tarfile
 import tempfile
 import unittest
+
+if __package__:
+    from .oci_archive_test_fixtures import assert_preserved_archive, write_tar_members
+else:
+    from oci_archive_test_fixtures import assert_preserved_archive, write_tar_members
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -52,11 +55,7 @@ class StableArchive(unittest.TestCase):
         self.save()
 
     def save(self):
-        with tarfile.open(self.archive, "w") as archive:
-            for name, value in self.members.items():
-                info = tarfile.TarInfo(name)
-                info.size = len(value)
-                archive.addfile(info, io.BytesIO(value))
+        write_tar_members(self.archive, self.members)
         self.archive.chmod(0o600)
         self.receipt["archiveSHA256"] = hashlib.sha256(self.archive.read_bytes()).hexdigest()
         self.save_receipt()
@@ -72,9 +71,7 @@ class StableArchive(unittest.TestCase):
     def test_compiled_platform_archive_preserves_bytes(self):
         self.prepare()
         result = self.verify()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.output.read_bytes(), self.archive.read_bytes())
-        self.assertEqual(self.output.stat().st_mode & 0o777, 0o400)
+        assert_preserved_archive(self, result, self.archive, self.output)
 
     def test_frontend_entrypoint_and_user_are_supported(self):
         self.component, self.user = "staff-control-center", "101:101"

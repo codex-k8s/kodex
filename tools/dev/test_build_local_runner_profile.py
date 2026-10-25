@@ -341,11 +341,16 @@ class BuildLocalRunnerProfile(unittest.TestCase):
             result = subprocess.run(['sh', '-ec', gate], env={**self.env, **versions, **overrides}, capture_output=True, timeout=5)
             self.assertEqual(result.returncode == 0, expected == 0, result.stderr.decode())
 
-    def test_security_revision_changes_real_source_input_and_cache_identity(self):
+    def _assert_cache_identity_changes(self, relative_path, previous_value, next_value, commit_message):
+        """Меняет один fixture input после первой сборки и сверяет оба cache digests.
+
+        Git и builder работают только с source/state из setUp; сами значения
+        pin/revision и имя отдельного сценария задаёт вызывающий тест.
+        """
         self.assertEqual(self.run_builder('--image-profile', 'full').returncode, 0)
-        dockerfile = self.source / 'services/jobs/agent-runner/Dockerfile'
-        dockerfile.write_text(dockerfile.read_text().replace('KODEX_TOOLCHAIN_SECURITY_REVISION=20261005', 'KODEX_TOOLCHAIN_SECURITY_REVISION=20261006'))
-        for args in (('add', '.'), ('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'security fixture')):
+        source_input = self.source / relative_path
+        source_input.write_text(source_input.read_text().replace(previous_value, next_value))
+        for args in (('add', '.'), ('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', commit_message)):
             subprocess.run(['git', *args], cwd=self.source, check=True, capture_output=True, env=self.env)
         result = self.run_builder('--image-profile', 'full')
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -354,18 +359,21 @@ class BuildLocalRunnerProfile(unittest.TestCase):
         self.assertEqual(len({proof['sourceInputSHA256'] for proof in proofs}), 2)
         self.assertEqual(len({proof['buildInputSHA256'] for proof in proofs}), 2)
 
+    def test_security_revision_changes_real_source_input_and_cache_identity(self):
+        self._assert_cache_identity_changes(
+            'services/jobs/agent-runner/Dockerfile',
+            'KODEX_TOOLCHAIN_SECURITY_REVISION=20261005',
+            'KODEX_TOOLCHAIN_SECURITY_REVISION=20261006',
+            'security fixture',
+        )
+
     def test_go_security_pin_changes_real_source_input_and_cache_identity(self):
-        self.assertEqual(self.run_builder('--image-profile', 'full').returncode, 0)
-        helper = self.source / 'services/jobs/agent-runner/build-go-tool.sh'
-        helper.write_text(helper.read_text().replace('golang.org/x/crypto v0.56.0', 'golang.org/x/crypto v0.57.0'))
-        for args in (('add', '.'), ('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'tool fixture')):
-            subprocess.run(['git', *args], cwd=self.source, check=True, capture_output=True, env=self.env)
-        result = self.run_builder('--image-profile', 'full')
-        self.assertEqual(result.returncode, 0, result.stderr)
-        proofs = [json.loads(path.read_text()) for path in (self.state / 'cache').glob('*.provenance.json')]
-        self.assertEqual(len(proofs), 2)
-        self.assertEqual(len({proof['sourceInputSHA256'] for proof in proofs}), 2)
-        self.assertEqual(len({proof['buildInputSHA256'] for proof in proofs}), 2)
+        self._assert_cache_identity_changes(
+            'services/jobs/agent-runner/build-go-tool.sh',
+            'golang.org/x/crypto v0.56.0',
+            'golang.org/x/crypto v0.57.0',
+            'tool fixture',
+        )
 
     def test_actual_browser_probe_uses_native_path_and_closes_without_raw_errors(self):
         full = (ROOT / 'services/jobs/agent-runner/Dockerfile').read_text().split(' AS full-runtime\n', 1)[1]
