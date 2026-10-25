@@ -4,7 +4,7 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 2.2.15
+version: 2.2.16
 updated: 2026-10-25
 ---
 
@@ -20,6 +20,7 @@ updated: 2026-10-25
 
 - `OPS-DOC-WORKFLOW-GATE-1872` — [Точные решения Gate опубликованного этапа](../operations/workflow-gate-decisions-1872.md).
 - `OPS-DOC-COMPLETION-RECEIPT-1881` — [Согласованное чтение receipt при завершении с артефактами](../operations/completion-receipt-preflight-1881.md).
+- `OPS-DOC-BACKUP-READER-1887` — [Адресное восстановление назначенной backup reader identity](../operations/backup-reader-reconcile-1887.md).
 
 Документ задает устойчивые идентификаторы и реестр документации.
 

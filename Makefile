@@ -409,6 +409,12 @@ test-scoped-backup-drill:
 	@timeout 60s python3 -m unittest tools/dev/test_scoped_backup_drill.py tools/release/test_backup_release_pin.py
 	@bash -n tools/release/pin-backup-controller-release.sh tools/release/render-web-only.sh
 
+.PHONY: test-scoped-backup-reader
+test-scoped-backup-reader:
+	@timeout 60s python3 -m unittest discover -s tools/dev -p 'test*backup_reader*.py'
+	@bash -n deploy/k8s/base/platform-state/postgresql/reconcile-runtime-credentials.sh
+	@./scripts/tests/local-backup-controller-credentials-contract-test.sh
+
 .PHONY: test-control-plane-migration
 test-control-plane-migration:
 	@timeout 180s node --test tools/release/control-plane-migration.test.mjs tools/release/control-plane-immutable-migration.test.mjs
