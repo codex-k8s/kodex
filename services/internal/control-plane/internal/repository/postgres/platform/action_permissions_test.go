@@ -10,6 +10,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// actionPermissionsFixture implements only the QueryRow/Scan seam of an embedded transaction for
+// presentation-permission unit tests. It records query use and supplies synthetic memberships or
+// an error; unoverridden transaction methods are not usable and no PostgreSQL connection exists.
+// actionPermissionsFixture реализует лишь QueryRow/Scan seam встроенной transaction для
+// unit-тестов presentation permissions. Фиксирует вызов запроса и возвращает synthetic memberships
+// либо ошибку; прочие transaction methods непригодны, PostgreSQL connection нет.
 type actionPermissionsFixture struct {
 	pgx.Tx
 	t           *testing.T
@@ -18,6 +24,12 @@ type actionPermissionsFixture struct {
 	called      bool
 }
 
+// QueryRow marks the fixture queried, asserts the exact presentation SQL and
+// organization/project/actor argument tuple, and returns its own Scan implementation. Unexpected
+// query shape fails the test; no SQL executes.
+// QueryRow отмечает fixture queried, проверяет точные presentation SQL и
+// organization/project/actor arguments и возвращает собственный Scan. Неожиданная query shape
+// завершает тест ошибкой; SQL не исполняется.
 func (fixture *actionPermissionsFixture) QueryRow(_ context.Context, sql string, args ...any) pgx.Row {
 	fixture.t.Helper()
 	fixture.called = true
@@ -28,6 +40,12 @@ func (fixture *actionPermissionsFixture) QueryRow(_ context.Context, sql string,
 	return fixture
 }
 
+// Scan returns the configured failure or assigns the configured permission slice to the expected
+// first destination. It deliberately implements one fixed row shape without cloning data or
+// validating arbitrary Scan arguments.
+// Scan возвращает настроенную ошибку либо назначает permission slice первому ожидаемому
+// destination. Намеренно реализует одну фиксированную row shape без копирования данных и проверки
+// произвольных Scan arguments.
 func (fixture *actionPermissionsFixture) Scan(dest ...any) error {
 	if fixture.failure != nil {
 		return fixture.failure
@@ -36,6 +54,14 @@ func (fixture *actionPermissionsFixture) Scan(dest ...any) error {
 	return nil
 }
 
+// TestProjectActionPermissionsPresentation table-checks missing/wrapped membership absence,
+// backend failure, empty/unknown/cancel-only permissions and owner/admin/no-project shortcuts. It
+// verifies both exact permission flags/error and whether the synthetic query ran; this exercises
+// presentation hints rather than actual command authorization or DB policy.
+// TestProjectActionPermissionsPresentation таблично проверяет отсутствие membership с wrapping,
+// backend failure, empty/unknown/cancel-only permissions и owner/admin/no-project shortcuts.
+// Сверяет точные permission flags/error и факт synthetic query; проверяет presentation hints, а не
+// реальную command authorization и DB policy.
 func TestProjectActionPermissionsPresentation(t *testing.T) {
 	t.Parallel()
 	all := actorActionPermissions{true, true, true, true, true, true, true}

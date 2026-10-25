@@ -7,6 +7,14 @@ import (
 	"testing"
 )
 
+// TestAssistantTaskSessionCursorBindsFreshActorSourceAndOffset round-trips an exact cursor and
+// checks foreign actor/scope gives Invalid, changed source VersionMismatch,
+// malformed/noncanonical/zero/excessive offset fails and empty cursor starts page0. All pins are
+// synthetic; no session read or access decision occurs.
+// TestAssistantTaskSessionCursorBindsFreshActorSourceAndOffset проверяет round-trip exact cursor:
+// foreign actor/scope даёт Invalid, changed source — VersionMismatch,
+// malformed/noncanonical/zero/excessive offset отклоняется, пустой cursor начинает page0. Все pins
+// synthetic; session read и access decision не выполняются.
 func TestAssistantTaskSessionCursorBindsFreshActorSourceAndOffset(t *testing.T) {
 	binding, source := strings.Repeat("a", 64), strings.Repeat("b", 64)
 	token := encodeAssistantTaskSessionCursor(binding, source, 10)
@@ -29,6 +37,14 @@ func TestAssistantTaskSessionCursorBindsFreshActorSourceAndOffset(t *testing.T) 
 	}
 }
 
+// TestAssistantTaskSessionSQLKeepsCanonicalSourceEligibilityAndBudget checks both source/message
+// SQL retain exact tenant/project/authority/visibility and message revision/session/turn/attempt
+// lineage, newest-first LIMIT11 paging and absence of private payload fields. It asserts embedded
+// SQL strings without testing PostgreSQL eligibility or event bytes.
+// TestAssistantTaskSessionSQLKeepsCanonicalSourceEligibilityAndBudget проверяет exact
+// tenant/project/authority/visibility в source/message SQL, message revision/session/turn/attempt
+// lineage, newest-first LIMIT11 paging и отсутствие private payload fields. Проверяет embedded SQL
+// strings без PostgreSQL eligibility и event bytes.
 func TestAssistantTaskSessionSQLKeepsCanonicalSourceEligibilityAndBudget(t *testing.T) {
 	for _, sql := range []string{queryAssistantTaskSessionSources, queryAssistantTaskSessionMessages} {
 		for _, required := range []string{"anchor.organization_id=@organization_id::uuid", "source.organization_id=session.organization_id", "source.project_id IS NOT DISTINCT FROM session.project_id", "project.lifecycle='ACTIVE'", "@authority_project_id", "'run.view'", "catalog_resource_visible"} {

@@ -9,6 +9,14 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestAssistantWorkflowRejectingGuardProducesOnlyClosedField mutates concurrency, timeout, step
+// shape/key and bounded text in a fresh workflow fixture, requiring Invalid with the exact closed
+// field and no private marker. Stage/category/index must survive diagnostic wrapping; this is an
+// in-memory hydration test, not workflow execution.
+// TestAssistantWorkflowRejectingGuardProducesOnlyClosedField изменяет concurrency, timeout, step
+// shape/key и bounded text свежей workflow fixture, требуя Invalid с точным closed field без
+// private marker. Stage/category/index сохраняются после diagnostic wrapping; это hydration test в
+// памяти, а не исполнение workflow.
 func TestAssistantWorkflowRejectingGuardProducesOnlyClosedField(t *testing.T) {
 	for _, test := range []struct {
 		name, field string
@@ -37,6 +45,13 @@ func TestAssistantWorkflowRejectingGuardProducesOnlyClosedField(t *testing.T) {
 	}
 }
 
+// TestAssistantWorkflowDiagnosticUsesTheSharedUnicodePredicate checks937 multibyte Cyrillic
+// codepoints remain valid during hydration, guarding against a second byte-based instruction
+// validator. It exercises the diagnostic path with a synthetic graph and does not claim runtime
+// prompt delivery.
+// TestAssistantWorkflowDiagnosticUsesTheSharedUnicodePredicate проверяет допустимость937
+// многобайтных Cyrillic codepoints при hydration, защищая от второго byte-based instruction
+// validator. Проверяет diagnostic path на synthetic graph без утверждения runtime prompt delivery.
 func TestAssistantWorkflowDiagnosticUsesTheSharedUnicodePredicate(t *testing.T) {
 	_, before, steps := assistantWorkflowFrontierFixture(t)
 	steps[0].(map[string]any)["purpose"] = strings.Repeat("я", 937)

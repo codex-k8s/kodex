@@ -4,11 +4,54 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.427.0
+version: 1.428.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Тестовые описания: assistant plans, retry и projections — 25.10.2026
+
+На основе `1841447b4a5080c037e588c95f8eabf2baa04984` полностью прочитаны
+16 test Go-файлов (1348 исходных строк),47 объявлений описаны EN→RU.
+Исполняемые выражения, fixtures, SQL strings, assertions и diagnostics не
+менялись.16 полных expected-AST/directive сравнений — PASS LOCAL.
+
+Описаны actionPermissionsFixture QueryRow/Scan и отсутствие реального SQL,
+закрытое agent/environment binding mapping, file revision immutable baseline,
+raw content/staging/redaction boundaries, image catalog owner/provenance pins,
+retry/rollback/cancel/deadline и partial-result guard, terminal plan receipt,
+независимые plan variants и atomic version carry, project grant/recovery
+routing, search/task-session SQL guards, workflow diagnostics/DAG/metadata,
+workspace quota serialization и audit cursor.
+
+Комментарии прямо различают виды доказательств: SQL string assertions не
+доказывают DB eligibility, typed command mapping не выполняет owner mutation,
+serialized policy round-trip не применяет container quota. Единственный
+component helper testAssistantCatalogCandidatePromotion использует caller PG
+fixture и synthetic promotion readback для PROJECT/SYSTEM; он не строит и
+не публикует образ и не доказывает registry pull. Fixture mocks не являются
+поддержкой произвольных pgx methods, private error markers остаются synthetic.
+
+38 затронутых Test-функций — PASS LOCAL (checks428-final focused-unit),
+GOWORK=off/GOMAXPROCS=4/-p2, inherited credentials/KODEX inputs исключены.
+Полный unit/build control-plane не повторялся: исполняемый AST неизменён,
+его последнее полное доказательство относится к1841447 (checks427-final).
+Analyzer implementation не менялся;17 analyzer unit остаются предыдущим
+PASS, а5 exact-ignore guards/inventory/detector/assessment и gofmt/git diff
+--check выполнены заново. Component PG promotion helper, real RLS/OCC/races,
+providers/storage/AV/broker/Secrets, browser/полный E2E/deploy/live — NOT
+RUN/SKIP. Manifests неизменны, прежние30 exact matches и standalone staging
+control-api-gateway FAIL не выдаются за текущую live-проверку.
+
+Inventory6691/222. Go21490:20990 EN→RU,500 missing только в test-файлах,
+production missing0. PR359 Go/2980 объявлений, missing0;389 whole changed
+blobs. Detector1685 raw/886 retained occurrences/799 unresolved и clone-set
+hash прежние, registry771 не менялся, exclusions/thresholds не расширялись.
+Новых внешних library API нет; прежние Context7 failure/fallback документы
+применимы, нового library lookup здесь не требовалось. #1823 открыт,
+#1829 Draft; main f2e64eb проверен чистым. QA не менялся, secret values не
+извлекались, env не менялись и секреты не переносились.
 
 ## Production descriptions завершены; общий выбор impact items — 25.10.2026
 

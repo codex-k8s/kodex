@@ -14,12 +14,24 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+// assistantReadRollbackStub overrides only Rollback on an embedded transaction, recording
+// successful-context cleanup and optionally failing it for read-retry tests. It is not a live
+// transaction and no other embedded method is supported.
+// assistantReadRollbackStub переопределяет лишь Rollback встроенной transaction, фиксируя cleanup
+// при действующем контексте и при необходимости возвращая ошибку для read-retry tests. Это не live
+// transaction, остальные встроенные методы не поддержаны.
 type assistantReadRollbackStub struct {
 	pgx.Tx
 	events *[]string
 	err    error
 }
 
+// Rollback returns an already canceled context error without recording cleanup; otherwise appends
+// rollback and returns the configured synthetic failure. The shared event slice must be
+// initialized by the test; no DB rollback occurs.
+// Rollback возвращает ошибку уже отменённого контекста без записи cleanup; иначе добавляет
+// rollback и возвращает настроенную synthetic failure. Общий event slice назначает тест; DB
+// rollback не выполняется.
 func (tx assistantReadRollbackStub) Rollback(ctx context.Context) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -28,6 +40,13 @@ func (tx assistantReadRollbackStub) Rollback(ctx context.Context) error {
 	return tx.err
 }
 
+// TestAssistantLockedReadRetriesFreshWholeAttemptAfterRollback simulates one explicit40001 then
+// success and asserts the complete scope/lease/fence/owner sequence restarts only after rollback,
+// returning only the fresh committed value. Events are synthetic and do not reproduce a PostgreSQL
+// isolation race.
+// TestAssistantLockedReadRetriesFreshWholeAttemptAfterRollback моделирует один explicit40001 и
+// успех и проверяет полный повтор scope/lease/fence/owner лишь после rollback с возвратом только
+// fresh committed value. События synthetic и не воспроизводят PostgreSQL isolation race.
 func TestAssistantLockedReadRetriesFreshWholeAttemptAfterRollback(t *testing.T) {
 	events := []string{}
 	attempts := 0
@@ -47,6 +66,13 @@ func TestAssistantLockedReadRetriesFreshWholeAttemptAfterRollback(t *testing.T) 
 	}
 }
 
+// TestAssistantLockedReadRetriesOnlyExplicit40001 table-checks wrapped database/domain failures
+// retry only40001 up to three attempts, map to the safe fallback and never expose a private error
+// sentinel. It tests classification and retry budget in callbacks without live SQL failures.
+// TestAssistantLockedReadRetriesOnlyExplicit40001 таблично проверяет повтор wrapped
+// database/domain failures лишь для40001 до трёх attempts, safe fallback mapping и отсутствие
+// private error sentinel. Проверяет classification и retry budget в callbacks без live SQL
+// failures.
 func TestAssistantLockedReadRetriesOnlyExplicit40001(t *testing.T) {
 	for _, cause := range []error{
 		&pgconn.PgError{Code: "40001"}, &pgconn.PgError{Code: "40P01"}, &pgconn.PgError{Code: "23505"},
@@ -77,6 +103,13 @@ func TestAssistantLockedReadRetriesOnlyExplicit40001(t *testing.T) {
 	}
 }
 
+// TestAssistantLockedReadRechecksRevokeAndDropsPartialResult simulates40001 followed by
+// NotFound/Forbidden/Invalid from a fresh attempt and requires exactly two calls, zero partial
+// result and the new denial. It checks retry result handling rather than mutating real grants or
+// leases.
+// TestAssistantLockedReadRechecksRevokeAndDropsPartialResult моделирует40001 и затем
+// NotFound/Forbidden/Invalid свежей попытки, требуя ровно два вызова, нулевой partial result и
+// новый отказ. Проверяет retry result handling без изменения реальных grants и leases.
 func TestAssistantLockedReadRechecksRevokeAndDropsPartialResult(t *testing.T) {
 	for _, denied := range []error{errs.ErrNotFound, errs.ErrForbidden, errs.ErrInvalid} {
 		attempts := 0
@@ -93,6 +126,14 @@ func TestAssistantLockedReadRechecksRevokeAndDropsPartialResult(t *testing.T) {
 	}
 }
 
+// TestAssistantLockedReadPreservesCallerCancellationAndDeadline checks cancellation before an
+// attempt prevents all calls, cancellation during one prevents continuation and each callback
+// inherits the exact original deadline. It asserts safe Unavailable mapping with synthetic40001,
+// without waiting for a DB deadline.
+// TestAssistantLockedReadPreservesCallerCancellationAndDeadline проверяет отсутствие вызовов при
+// отмене до attempt, запрет continuation при отмене внутри и наследование точного исходного
+// deadline каждым callback. Проверяет safe Unavailable mapping с synthetic40001 без ожидания DB
+// deadline.
 func TestAssistantLockedReadPreservesCallerCancellationAndDeadline(t *testing.T) {
 	for _, cancelBefore := range []bool{true, false} {
 		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
@@ -121,6 +162,12 @@ func TestAssistantLockedReadPreservesCallerCancellationAndDeadline(t *testing.T)
 	}
 }
 
+// TestAssistantLockedReadRollbackFailurePreventsRetry combines a retryable40001 with a synthetic
+// rollback failure and requires one attempt, one rollback event, an empty result and safe
+// Unavailable. It proves the callback cleanup guard, not actual database recovery.
+// TestAssistantLockedReadRollbackFailurePreventsRetry совмещает retryable40001 и synthetic
+// rollback failure, требуя одну attempt, один rollback event, пустой результат и safe Unavailable.
+// Доказывает callback cleanup guard, а не реальное восстановление БД.
 func TestAssistantLockedReadRollbackFailurePreventsRetry(t *testing.T) {
 	events := []string{}
 	attempts := 0

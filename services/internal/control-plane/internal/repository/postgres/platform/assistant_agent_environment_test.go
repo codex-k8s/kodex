@@ -9,6 +9,14 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestAssistantAgentEnvironmentBindingClosedInput checks context ownership and
+// hydration/normalization into the typed agent-environment binding with exact
+// agent/environment/version/OCC pins. Forged secrets, target/revision substitutions and no-op
+// rebinding must fail. This pure unit path does not apply an environment or test live grants.
+// TestAssistantAgentEnvironmentBindingClosedInput проверяет context ownership и
+// hydration/normalization в typed agent-environment binding с точными
+// agent/environment/version/OCC pins. Forged secrets, подмена target/revision и no-op rebind
+// должны отклоняться. Чистый unit path не применяет environment и не проверяет live grants.
 func TestAssistantAgentEnvironmentBindingClosedInput(t *testing.T) {
 	t.Parallel()
 	operation := entity.AssistantPlanOperation{

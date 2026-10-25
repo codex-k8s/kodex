@@ -10,6 +10,14 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// assistantWorkflowFrontierFixture constructs a fresh33-step six-wave graph with custom
+// dependency, preserved inputs/instructions/result schema and a final human gate, then proposes39
+// steps by adding a fourth review peer per wave. It returns source and mutable proposal
+// separately; fixture shape failure aborts the test, no runtime graph is created.
+// assistantWorkflowFrontierFixture создаёт свежий33-step six-wave graph с custom dependency,
+// сохранёнными inputs/instructions/result schema и final human gate, затем предлагает39 steps с
+// четвёртым review peer каждой wave. Возвращает source и mutable proposal отдельно; неверная
+// fixture shape завершает тест, runtime graph не создаётся.
 func assistantWorkflowFrontierFixture(t *testing.T) (entity.WorkflowVersion, map[string]any, []any) {
 	t.Helper()
 	raw := []any{}
@@ -72,6 +80,14 @@ func assistantWorkflowFrontierFixture(t *testing.T) (entity.WorkflowVersion, map
 	return draft, before, updated
 }
 
+// TestAssistantWorkflowStructuralUpdateRetainsDependencies hydrates the33→39 structural edit, maps
+// the typed draft and checks After equals the exact applied DAG with stable keys and no
+// server-assigned key in mutable input. Shared assertions cover old edges and new peer
+// prerequisites; no workflow is persisted or launched.
+// TestAssistantWorkflowStructuralUpdateRetainsDependencies гидратирует33→39 structural edit,
+// строит typed draft и проверяет After как exact applied DAG со stable keys без server-assigned
+// key в mutable input. Общие assertions проверяют old edges и new peer prerequisites; workflow не
+// сохраняется и не запускается.
 func TestAssistantWorkflowStructuralUpdateRetainsDependencies(t *testing.T) {
 	draft, before, updated := assistantWorkflowFrontierFixture(t)
 	operation, err := hydrateAssistantWorkflowFields(before, 7, entity.AssistantPlanOperation{Type: "UPDATE_WORKFLOW", Key: "update", Title: "Add architectural peers", Summary: "Preserve DAG", Parameters: map[string]any{"workflowRef": before["workflowRef"], "steps": updated}})
@@ -98,6 +114,14 @@ func TestAssistantWorkflowStructuralUpdateRetainsDependencies(t *testing.T) {
 	}
 }
 
+// assertAssistantWorkflowFrontier asserts39 unique steps, unchanged inputs/result
+// schema/instructions, retention of every original edge, four-peer aggregation, new peers
+// depending on Developer and a final human gate. It fails the caller test on mismatch and checks
+// only the supplied in-memory graph.
+// assertAssistantWorkflowFrontier проверяет39 unique steps, неизменные inputs/result
+// schema/instructions, каждое исходное ребро, four-peer aggregation, зависимость новых peers от
+// Developer и final human gate. Завершает caller test при несовпадении и проверяет лишь переданный
+// граф в памяти.
 func assertAssistantWorkflowFrontier(t *testing.T, original, updated entity.WorkflowVersion) {
 	t.Helper()
 	byKey := map[string]entity.WorkflowStep{}
@@ -131,6 +155,14 @@ func assertAssistantWorkflowFrontier(t *testing.T, original, updated entity.Work
 	}
 }
 
+// TestAssistantWorkflowStructuralUpdateRejectsInvalidGraph rejects deleting/reordering original
+// steps, duplicate/foreign keys, caller-supplied dependencies and duplicate source edges through
+// independent fresh fixtures. It checks closed Invalid hydration failures without running a
+// scheduler or evaluating delegation grants.
+// TestAssistantWorkflowStructuralUpdateRejectsInvalidGraph отклоняет удаление и перестановку
+// прежних steps, duplicate/foreign keys, caller-supplied dependencies и duplicate source edges на
+// отдельных свежих fixtures. Проверяет closed Invalid hydration failures без scheduler и оценки
+// delegation grants.
 func TestAssistantWorkflowStructuralUpdateRejectsInvalidGraph(t *testing.T) {
 	for _, name := range []string{"deleted", "forward", "duplicate-key", "foreign-key", "caller-dependencies", "duplicate-source-dependency"} {
 		t.Run(name, func(t *testing.T) {
@@ -158,6 +190,14 @@ func TestAssistantWorkflowStructuralUpdateRejectsInvalidGraph(t *testing.T) {
 	}
 }
 
+// TestAssistantWorkflowUnchangedStructurePreservesExactCustomDAG changes one purpose string
+// without structural edits and requires every original dependency slice to remain exactly equal
+// after typed mapping. It guards custom DAG preservation in memory without claiming published
+// version or runtime frontier equality.
+// TestAssistantWorkflowUnchangedStructurePreservesExactCustomDAG меняет один purpose string без
+// structural edits и требует точного равенства каждого исходного dependency slice после typed
+// mapping. Защищает custom DAG в памяти без утверждения о published version и runtime frontier
+// equality.
 func TestAssistantWorkflowUnchangedStructurePreservesExactCustomDAG(t *testing.T) {
 	draft, before, _ := assistantWorkflowFrontierFixture(t)
 	steps := append([]any(nil), before["steps"].([]any)...)
@@ -178,6 +218,14 @@ func TestAssistantWorkflowUnchangedStructurePreservesExactCustomDAG(t *testing.T
 	}
 }
 
+// TestAssistantWorkflowEditedPlanRegeneratesNormalizedAfter edits a hydrated plan with forged
+// Before/After and a new name, requiring original source/target/OCC preservation and regenerated
+// After matching the typed draft. It reuses the full frontier assertions; owner edit validation
+// here is pure and does not authorize apply.
+// TestAssistantWorkflowEditedPlanRegeneratesNormalizedAfter редактирует hydrated plan с forged
+// Before/After и новым name, требуя сохранения original source/target/OCC и regenerated After,
+// совпадающего с typed draft. Использует полные frontier assertions; чистая owner edit validation
+// здесь не разрешает apply.
 func TestAssistantWorkflowEditedPlanRegeneratesNormalizedAfter(t *testing.T) {
 	draft, before, updated := assistantWorkflowFrontierFixture(t)
 	original, err := hydrateAssistantWorkflowFields(before, 7, entity.AssistantPlanOperation{Type: "UPDATE_WORKFLOW", Key: "update", Title: "Add peers", Summary: "Preserve DAG", Parameters: map[string]any{"workflowRef": before["workflowRef"], "steps": updated}})

@@ -15,7 +15,16 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
-// Одинаковый discovery path проверяется для собственного PROJECT и SYSTEM.
+// testAssistantCatalogCandidatePromotion uses the caller-provided component fixture for PROJECT or
+// SYSTEM discovery: an admitted candidate is hidden until owner promotion
+// request/claim/authorization/completion, then exact inventory appears and a foreign tenant is
+// denied. Promotion readback is synthetic; the helper neither builds/pushes an image nor proves
+// registry or runtime pull.
+// testAssistantCatalogCandidatePromotion использует переданную component fixture для PROJECT либо
+// SYSTEM discovery: admitted candidate скрыт до owner promotion
+// request/claim/authorization/completion, затем exact inventory виден, чужой tenant отклоняется.
+// Promotion readback synthetic; helper не собирает и не публикует образ и не доказывает registry
+// либо runtime pull.
 func testAssistantCatalogCandidatePromotion(t *testing.T, ctx context.Context, r *Repository, service *platformservice.Service,
 	owner, reader value.Principal, lease map[string]any, catalog *roleimageservice.Catalog, detail roleimagerepo.Detail,
 	prefix string, readCatalog func(string) entity.AssistantConfigurationCatalogResponse) {
@@ -91,6 +100,15 @@ func testAssistantCatalogCandidatePromotion(t *testing.T, ctx context.Context, r
 	})
 }
 
+// TestAssistantCatalogArtifactRequiresExactEligibleOwnerAndPins checks an accepted promoted
+// historical artifact may omit inventory without invention. Independent
+// owner/scope/ref/version/generation/manifest/reference/verdict/state/receipt mutations must
+// return Unavailable and expose no partial evidence; the test uses synthetic values without
+// admission or registry calls.
+// TestAssistantCatalogArtifactRequiresExactEligibleOwnerAndPins проверяет отсутствие выдуманного
+// inventory у accepted promoted historical artifact. Независимые подмены
+// owner/scope/ref/version/generation/manifest/reference/verdict/state/receipt должны дать
+// Unavailable без partial evidence; используются synthetic values без admission и registry calls.
 func TestAssistantCatalogArtifactRequiresExactEligibleOwnerAndPins(t *testing.T) {
 	digest := strings.Repeat("a", 64)
 	entry := entity.AssistantConfigurationCatalogEntry{Ref: "imgart_owned123", Version: 3, RecipeGeneration: 8,
@@ -128,6 +146,14 @@ func TestAssistantCatalogArtifactRequiresExactEligibleOwnerAndPins(t *testing.T)
 	}
 }
 
+// TestAssistantCatalogInventoryRejectsCorruptionAndForeignProvenance checks malformed inventory
+// JSON, mismatched inventory hash and foreign provenance fail hydration and leave ToolInventory
+// absent. It verifies the metadata decoder using a synthetic pinned artifact, not a real probe or
+// signature verification.
+// TestAssistantCatalogInventoryRejectsCorruptionAndForeignProvenance проверяет отказ hydration для
+// повреждённого inventory JSON, неверного inventory hash и чужого provenance с отсутствующим
+// ToolInventory. Проверяет metadata decoder на synthetic pinned artifact, а не real probe и
+// signature verification.
 func TestAssistantCatalogInventoryRejectsCorruptionAndForeignProvenance(t *testing.T) {
 	digest := strings.Repeat("a", 64)
 	artifact := entity.ImageArtifact{SpecSHA256: digest, ImmutableBuildSHA256: digest, RoleRuntimeContractSHA256: digest,
