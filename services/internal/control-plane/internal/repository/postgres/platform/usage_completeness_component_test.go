@@ -146,6 +146,7 @@ func TestUsageCompletenessComponent(t *testing.T) {
 				actual.Usage.TotalTokens != total || actual.Usage.InputTokens != total || actual.Usage.ModelContextWindow != 475000 {
 				t.Fatal("authoritative root lost exact numeric subtotal or aggregate completeness")
 			}
+			assertStoredUsageLegacyCompatibility(t, ctx, pool, root.Ref, child.Ref)
 		})
 	}
 }
