@@ -1,0 +1,17 @@
+# Общие параметры выпуска только для закрытого набора authority-сертификатов.
+# Identity, Secret, SAN и EKU остаются у ресурсов; patch не выбирает новых получателей.
+- op: add
+  path: /metadata/annotations
+  value: {argocd.argoproj.io/sync-wave: "-9"}
+- op: add
+  path: /spec/duration
+  value: 720h
+- op: add
+  path: /spec/renewBefore
+  value: 120h
+- op: add
+  path: /spec/privateKey
+  value: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+- op: add
+  path: /spec/issuerRef
+  value: {name: kodex-installation-ca, kind: Issuer}

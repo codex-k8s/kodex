@@ -7256,6 +7256,62 @@
       "fragmentSHA256": "de4141b1163333fba4efdc0d1ae4e643a62b3e2987b10d3d6d13673e5f5bf057",
       "count": 1,
       "reason": "IntegrationIntent в HTTP и browser stream сохраняет обязательные connectionRef/name, definition/capability/operation, resourceScope, effectPreview и effectKey; соседний decision consequence имеет named enum ref в AsyncAPI и inline enum в OpenAPI. Это явные схемы двух transport contracts, не повтор операции применения effect. External refs не поддерживаются текущим AsyncAPI generator; импорт generated type без локальной схемы потерял бы validation. Оставляем exact property/type/limits без смены публичных моделей."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/platform-state/authority-certificates.yaml",
+      "secondPath": "deploy/k8s/base/platform-state/authority-certificates.yaml",
+      "fragmentSHA256": "a1ae1e2db154c3034e3c8026fe95a91be2468c87bab7bf663e52c5f1cdb993ea",
+      "count": 1,
+      "reason": "Окна включают SPIFFE/EKU publisher, Certificate readback-attestor и restore-controller, затем restore-operator. Общие issuer, TTL, rotation key и sync-wave уже вынесены в отдельный Kustomize patch для точного закрытого набора16 имён. Остаются отдельные resource/Secret names, DNS SAN и URI identity разных служебных ролей; нельзя заменить их одним сертификатом или общей wildcard identity."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/platform-state/authority-certificates.yaml",
+      "secondPath": "deploy/k8s/base/platform-state/authority-certificates.yaml",
+      "fragmentSHA256": "f63ec319172cabcdd91ff611f3b818564dd18a5a5807c733ecd712acba210ea6",
+      "count": 1,
+      "reason": "Окно restore-operator client-only и role-image-builder сопоставлено с secret-broker/control-api-gateway. Оператор сохраняет только client auth и отсутствие DNS SAN; workload-сертификаты имеют собственные DNS/SPIFFE и Secret. Пять общих параметров уже задаются одной политикой; оставшиеся identity/EKU различия объявлены явно и подтверждены полными неизменными renders."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/platform-state/authority-certificates.yaml",
+      "secondPath": "deploy/k8s/base/platform-state/authority-certificates.yaml",
+      "fragmentSHA256": "09e407b4cbee2368d1c2e9bb86870d0cdd8fc6fdaab034b9879663a93ec829b7",
+      "count": 1,
+      "reason": "Перекрываются отдельные декларации role-image-builder, image-admission и image-promotion. После общего defaults patch совпадает только форма Certificate, но их Secret names, DNS SAN и SPIFFE SA относятся к разным workload. Оставляем эти security pins явно, без генератора из непроверенного имени и без объединения admission/build/promotion identities."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/platform-state/authority-certificates.yaml",
+      "secondPath": "deploy/k8s/base/platform-state/authority-certificates.yaml",
+      "fragmentSHA256": "28c3492d1f80dca764034ad4a24c316ebfb0ee05702ca031e8e6ebc2d01ebf17",
+      "count": 1,
+      "reason": "Хвост image-admission и декларация image-promotion сопоставлены с control-plane/integration-gateway. Общие issuer/сроки/ключ/sync-wave уже вынесены; конкретные Secret, DNS и SPIFFE URI по-прежнему различны. Декларативный повтор сохраняет закрытый реестр получателей и не выдаёт admission/promotion полномочия другим сервисам."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/platform-state/authority-certificates.yaml",
+      "secondPath": "deploy/k8s/base/platform-state/authority-certificates.yaml",
+      "fragmentSHA256": "91180ce5a9ec8bdedf56e0f433ce3dc9c64a7c0c746932300a2b311d5a8767a7",
+      "count": 1,
+      "reason": "Повторяющиеся окна проходят через image-promotion/automation-scheduler/session-archive/secret-broker и automation-scheduler/session-archive/secret-broker/control-api-gateway. Это разные Certificate objects с отдельными private-key Secrets и transport identities. Общие пять assignments уже определены один раз; сохраняем явные native SAN/URI/EKU вместо широкой wildcard политики или сертификата на несколько ролей."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/platform-state/authority-certificates.yaml",
+      "secondPath": "deploy/k8s/base/platform-state/authority-certificates.yaml",
+      "fragmentSHA256": "196cda13601a2b96e86a07fafc84a98a0807025717aa4c86b62ffd552e637edc",
+      "count": 1,
+      "reason": "Окна image-promotion/automation-scheduler и integration-gateway/interaction-gateway имеют одинаковую форму Kubernetes Certificate, но разные имена ресурса/Secret, DNS SAN и SPIFFE service account. Lifetime, renewal, key policy, issuer и sync-wave уже в общем ограниченном patch. Оставшиеся строки являются точными identity pins, а не копией алгоритма выпуска ключа."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/platform-state/authority-certificates.yaml",
+      "secondPath": "deploy/k8s/base/platform-state/authority-certificates.yaml",
+      "fragmentSHA256": "ff5ed18470a95cc8d4966ec997b42850b063262b8c31e4dfaa6ffec0d697c1fc",
+      "count": 1,
+      "reason": "Окно automation-scheduler/session-archive/secret-broker сопоставлено с interaction-gateway/runtime-controller/началом callback-server. У каждого собственные Secret/SAN/URI; callback-server отдельно сохраняет только server auth. Общие параметры выпуска уже вынесены. Не объединяем runtime callback и обычную workload identity и не расширяем EKU; итоговые три render побайтно прежние."
     }
   ]
 }

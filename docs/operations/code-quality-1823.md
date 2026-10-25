@@ -4,11 +4,68 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.462.0
+version: 1.463.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие параметры authority-сертификатов с точным render — 25.10.2026
+
+В platform-state пять общих параметров16 authority-сертификатов вынесены в
+один JSON6902 Kustomize patch: sync-wave -9, duration720h, renewBefore120h,
+ECDSA256/Always и прежний installation Issuer. Убраны80 повторных assignments.
+Целевой selector фиксирует group/version/kind и закрытый anchored name-regex:
+четыре служебные роли, одиннадцать явных workload и отдельный callback-server.
+Имена resource/Secret, DNS SAN, SPIFFE URI и EKU остаются в native manifests.
+Другие Certificate не получают эту политику. Kustomization меняется только
+добавлением одного patch, без новых labels, recipients или namespace rules.
+
+Проверка сравнила все16 исходных native объектов после удаления ровно пяти
+общих полей и actual patch из пяти операций. У каждого прежний отдельный
+Secret; issuer/TTL/key config совпадают с исходными. Restore-operator сохраняет
+только client auth без DNS SAN; callback-server — только server auth.
+Selector отклоняет8 неизвестных/соседних/prefix/suffix имён. Результат
+Kustomize v5.8.2 совпал до/после не только по decoded objects, но и побайтно:
+
+| Сборка | Объекты | Exact authority Certificates |
+| --- | --- | --- |
+| platform-state base | 48 | 16 |
+| web-only | 427 | 16 |
+| web-with-mattermost | 437 | 16 |
+
+Граница жизненного цикла остаётся прежней декларацией:
+
+| Переход/граница | Сохранённое состояние |
+| --- | --- |
+| Первичный выпуск/обновление | тот же issuer, конкретный Secret/SAN/SPIFFE/EKU, duration/renewBefore |
+| Ротация private key | прежние ECDSA256/Always; CA и overlap policy не меняются |
+| Readback/startup/failure | прежние mounts/RBAC/NetworkPolicy/peer pins и readiness; все ресурсы итогового профиля идентичны |
+| Revoke/delete/cancel/retry | новых commands, grants, claims, transitions и controller actions нет; существующий owner/runtime код не меняется |
+
+Ни один Certificate или Secret к кластеру не применялся, issuance/rotation/live
+readiness не проверялись. Это локальная эквивалентность полного environment
+render, а не подтверждение фактического сертификата работающего процесса.
+
+Три render — PASS LOCAL (0,17/3,22/3,12с); make test-web-only-release —
+PASS LOCAL (36,82с), make test-internal-rpc-authority-abi-render — PASS LOCAL
+(21,87с), make test-interaction-gateway-render — PASS LOCAL (8,24с).
+Оснастка использует kubectl kustomize без обращения к Kubernetes API. Child env
+без credentials/KODEX/VITE/KUBECONFIG; hashes всех3 YAML sources до/после
+совпали. Runtime Go/PWA/contracts/module dependencies не менялись; build/unit
+не повторялись для неизменённого кода. Context7 проверил Kustomize patches/
+target API; фактическое поведение подтверждено установленным renderer.
+
+Detector:6726 sources/222 прежних exclusions,1589 raw/1045 retained/544
+unresolved против1589/1038/551. Исчезли7 raw keys, появились7 более коротких
+окон native Certificate declarations; все разобраны после реального выноса
+общих параметров.907 прежних registry entries неизменны, добавлены7 exact
+path/hash/count1 причин с разными Secret/SAN/SPIFFE/EKU. Ни одного исключения
+на файл целиком, изменения порога/нормализации или generated boundaries нет.
+Все собственные совпадения authority-certificates.yaml разобраны. Собственные
+Go descriptions остаются21564/21564; остальные544 группы входят в scope #1823.
+Полные E2E/browser/PG component/OCI/apply/deploy/live и отдельная QA — NOT RUN.
+
 
 ## Общие AsyncAPI imports и неизменные wire projections — 25.10.2026
 
