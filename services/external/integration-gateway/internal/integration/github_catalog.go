@@ -11,6 +11,12 @@ import (
 	"github.com/google/go-github/v74/github"
 )
 
+// maximumGitHubContentUpdateBytes bounds decoded update content independently of safe responses;
+// package validation still enforces a smaller managed input schema before provider execution.
+// maximumGitHubContentUpdateBytes ограничивает декодированный update content отдельно от безопасных ответов;
+// проверка package по-прежнему применяет меньшую managed input schema до обращения к провайдеру.
+const maximumGitHubContentUpdateBytes = 256 << 10
+
 // githubCatalogInput decodes the registered GitHub catalog's operation-specific fields, including explicit pointer-valued optional limits/pins.
 // It is a transport shape, not a grant; package schemas and selected operation handlers enforce field eligibility and scope separately.
 // githubCatalogInput декодирует поля зарегистрированного каталога GitHub, включая указатели для явно заданных необязательных лимитов и привязок.
@@ -173,8 +179,12 @@ func (adapter *Adapter) executeGitHubCatalog(ctx context.Context, client *github
 	case "github.repository.content.read":
 		return executeGitHubContentRead(ctx, client, owner, repo, request, capability, in)
 	case "github.repository.content.create", "github.repository.content.update", "github.repository.content.delete":
+		maximumContentBytes := maximumResponseBytes
+		if request.Operation == "github.repository.content.update" {
+			maximumContentBytes = maximumGitHubContentUpdateBytes
+		}
 		content, err := base64.StdEncoding.Strict().DecodeString(in.Content)
-		if err != nil || len(content) > maximumResponseBytes {
+		if err != nil || len(content) > maximumContentBytes {
 			return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 		}
 		options := &github.RepositoryContentFileOptions{Message: github.Ptr(in.Message), Content: content, Branch: github.Ptr(in.Branch)}
