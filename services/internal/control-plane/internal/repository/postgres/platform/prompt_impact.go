@@ -12,12 +12,33 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryPromptImpactConsumers embeds a deterministic page of at most 1001 live prompt-template
+// consumers with consumer/binding versions, source revision and owner tuple. It does not filter by
+// actor permissions; access is checked before items enter a plan or are applied.
+// queryPromptImpactConsumers встраивает упорядоченную выборку максимум 1001 действующего
+// потребителя шаблона с версиями потребителя и привязки, исходной ревизией и владельцем. Не
+// фильтрует по правам субъекта; доступ проверяется перед включением в план и применением.
+//
 //go:embed sql/prompt_impact_consumers.sql
 var queryPromptImpactConsumers string
 
+// queryPromptImpactLockConsumer embeds row locks for the exact tenant, consumer kind/ref and
+// prompt-template binding, returning current consumer and binding versions. Null or mismatched
+// versions require caller rejection; locks alone do not authorize a rebind.
+// queryPromptImpactLockConsumer встраивает блокировки строк точных организации, вида и ссылки
+// потребителя и привязки шаблона, возвращая текущие версии потребителя и привязки. Null либо
+// несовпадение версий требует отказа вызывающего кода; блокировки сами не разрешают перепривязку.
+//
 //go:embed sql/prompt_impact_lock_consumer.sql
 var queryPromptImpactLockConsumer string
 
+// readPromptImpactConsumers reads and scans bounded consumer metadata in the supplied transaction,
+// assigning PENDING to each item. Query, scan or rows errors return Unavailable and discard the
+// accumulated list; it closes rows but neither authorizes items nor commits.
+// readPromptImpactConsumers читает ограниченную выборку метаданных потребителей в переданной
+// транзакции, назначая каждому элементу PENDING. Ошибки запроса, сканирования или rows дают
+// Unavailable и отбрасывают накопленный список; закрывает rows, но не проверяет доступ к элементам
+// и не завершает транзакцию.
 func readPromptImpactConsumers(ctx context.Context, tx pgx.Tx, s scope, set managedSet) ([]entity.RevisionImpactItem, error) {
 	rows, err := tx.Query(ctx, queryPromptImpactConsumers, pgx.StrictNamedArgs{"organization_id": s.organizationID, "configuration_id": set.id})
 	if err != nil {
@@ -39,6 +60,15 @@ func readPromptImpactConsumers(ctx context.Context, tx pgx.Tx, s scope, set mana
 	return items, nil
 }
 
+// preparePromptTemplateImpact requires an already typed managed-configuration input and UI-owned
+// set without prior plan/selection, then locks a VALID draft and validates prompt scope. It bounds
+// all consumers, omits inaccessible items, assigns refs and persists an exact source/draft/digest
+// plan in the caller transaction. It returns an outcome without publishing or committing.
+// preparePromptTemplateImpact требует уже типизированный вход managed-конфигурации и набор под
+// управлением UI без прежнего плана и выбора, затем блокирует VALID черновик и проверяет область
+// шаблона. Ограничивает число всех потребителей, пропускает недоступных, назначает ссылки и
+// сохраняет план с точными исходной версией, черновиком и дайджестом в переданной транзакции.
+// Возвращает результат без публикации и завершения транзакции.
 func (r *Repository) preparePromptTemplateImpact(ctx context.Context, tx pgx.Tx, s scope, set managedSet, input command.Command) (commandOutcome, error) {
 	p := input.Payload.(command.ManagedConfigurationInput)
 	if set.ManagedBy != "UI" || p.PlanRef != "" || len(p.SelectedItemRefs) != 0 {
@@ -86,6 +116,14 @@ func (r *Repository) preparePromptTemplateImpact(ctx context.Context, tx pgx.Tx,
 	return commandOutcome{result: command.Result{RevisionImpactPlan: &plan}, projectID: set.projectID, projectRef: set.ProjectRef, resourceKind: "MANAGED_CONFIGURATION", resourceRef: set.Ref, summary: "i18n:PROMPT_TEMPLATE_IMPACT_PREPARED"}, nil
 }
 
+// authorizePromptImpactPublish validates typed input and exact plan kind/source/draft identity,
+// rechecks plan access, resolves the managed set and locks the requested revision. It rejects
+// digest drift and validates prompt scope; full PREPARED/source-version/selection checks belong to
+// the publication path.
+// authorizePromptImpactPublish проверяет типизированный вход и точные вид, источник и черновик
+// плана, повторно проверяет доступ к плану, разрешает набор и блокирует запрошенную ревизию.
+// Отклоняет изменение дайджеста и проверяет область шаблона; полные проверки PREPARED, исходной
+// версии и выбора выполняются в пути публикации.
 func (r *Repository) authorizePromptImpactPublish(ctx context.Context, tx pgx.Tx, s scope, input command.Command) error {
 	p, ok := input.Payload.(command.ManagedConfigurationInput)
 	if !ok {
@@ -116,6 +154,14 @@ func (r *Repository) authorizePromptImpactPublish(ctx context.Context, tx pgx.Tx
 	return err
 }
 
+// promptPlanForPublish reauthorizes the plan and requires PREPARED plus exact source aggregate
+// version/current revision, draft revision/number and target digest. It loads actor-scoped items
+// and applies explicit selection validation, returning rows without changing bindings or
+// committing.
+// promptPlanForPublish повторно проверяет доступ к плану, требует PREPARED и точные версию
+// исходного агрегата, текущую ревизию, ссылку и номер черновика и целевой дайджест. Загружает
+// элементы с учётом субъекта и проверяет явный выбор, возвращая строки без изменения привязок и
+// завершения транзакции.
 func (r *Repository) promptPlanForPublish(ctx context.Context, tx pgx.Tx, s scope, set managedSet, revision lockedManagedRevision, p command.ManagedConfigurationInput) (revisionImpactRow, []entity.RevisionImpactItem, error) {
 	row, err := r.revisionImpact(ctx, tx, s, p.PlanRef)
 	if err != nil {
@@ -141,6 +187,18 @@ func (r *Repository) promptPlanForPublish(ctx context.Context, tx pgx.Tx, s scop
 	return row, items, nil
 }
 
+// applyPromptImpact processes PENDING items through nested transaction savepoints: fresh access,
+// exact locked versions and source binding are checked before typed rebind. Classified failures
+// roll back only that attempt and record an item outcome; unexpected failures abort the caller
+// path. Successful attempts require readback of the new binding before savepoint commit, then the
+// impact plan is finalized in the outer transaction. Partial local results on error are not
+// committed success.
+// applyPromptImpact обрабатывает PENDING элементы через вложенные транзакционные savepoint: перед
+// типизированной перепривязкой проверяет свежий доступ, точные заблокированные версии и исходную
+// привязку. Классифицированные ошибки откатывают попытку и записывают исход элемента; неожиданные
+// прерывают вызывающий путь. Успешная попытка требует повторного чтения новой привязки до
+// завершения savepoint, затем план завершается во внешней транзакции. Частичный локальный
+// результат при ошибке не означает зафиксированный успех.
 func (r *Repository) applyPromptImpact(ctx context.Context, tx pgx.Tx, s scope, set managedSet, input command.Command, row revisionImpactRow, items []entity.RevisionImpactItem) (managedSet, entity.RevisionImpactPlan, error) {
 	published := set.CurrentRevision.Ref
 	for i := range items {

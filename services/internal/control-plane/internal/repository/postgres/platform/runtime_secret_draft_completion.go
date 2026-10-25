@@ -18,6 +18,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// validDraftEncrypted validates a nonnil encrypted staging descriptor against the draft-derived
+// namespace/name/key, lowercase 32-byte hex ciphertext hash and bounded nonempty
+// UID/resource-version/key ID plus positive key generation. It checks descriptor shape and
+// identity, not ciphertext bytes or broker authenticity.
+// validDraftEncrypted проверяет непустой дескриптор зашифрованного staging по выведенным из
+// черновика namespace, имени и ключу, строчному hex-хешу из 32 байт, ограниченным непустым UID,
+// resource version и key ID и положительному поколению ключа. Проверяет форму и идентичность
+// дескриптора, но не ciphertext и не подлинность брокера.
 func validDraftEncrypted(d secretDraftRow, descriptor *entity.RuntimeSecretDraftEncryptedDescriptor) bool {
 	if descriptor == nil {
 		return false
@@ -29,6 +37,15 @@ func validDraftEncrypted(d secretDraftRow, descriptor *entity.RuntimeSecretDraft
 		len(descriptor.SecretUID) > 0 && len(descriptor.SecretUID) <= 128 && len(descriptor.SecretResourceVersion) > 0 && len(descriptor.SecretResourceVersion) <= 128 &&
 		len(descriptor.EncryptionKeyID) > 0 && len(descriptor.EncryptionKeyID) <= 128 && descriptor.EncryptionKeyGeneration > 0
 }
+
+// finishDraftOperation serializes the terminal result and updates the operation state, failure
+// code and snapshot in the supplied transaction. FAILED also cancels PREPARED impact plans; any
+// write/encoding failure is Unavailable. The caller must already hold and validate the operation
+// claim; this helper does not commit.
+// finishDraftOperation сериализует конечный результат и обновляет состояние операции, код ошибки и
+// снимок в переданной транзакции. FAILED также отменяет PREPARED планы влияния; любая ошибка
+// записи или кодирования даёт Unavailable. Вызывающий код уже должен удерживать и проверять захват
+// операции; helper не завершает транзакцию.
 func (r *Repository) finishDraftOperation(ctx context.Context, tx pgx.Tx, o secretDraftOperationRow, result entity.RuntimeSecretDraftResult, failure string) error {
 	raw, err := json.Marshal(result)
 	if err != nil {
@@ -45,6 +62,17 @@ func (r *Repository) finishDraftOperation(ctx context.Context, tx pgx.Tx, o secr
 	}
 	return nil
 }
+
+// publishSecretDraft locks the secret and checks expected version/current revision and ACTIVE or
+// PROVISIONING state. It validates exact versioned materialization identity and content digest,
+// inserts revision metadata and conditionally activates the secret with a new version and empty
+// hints. It returns public metadata and its revision descriptor; it neither creates Kubernetes
+// objects nor commits.
+// publishSecretDraft блокирует секрет и проверяет ожидаемые версию, текущую ревизию и ACTIVE либо
+// PROVISIONING. Проверяет точную идентичность версионной материализации и дайджест содержимого,
+// записывает метаданные ревизии и условно активирует секрет с новой версией и пустыми подсказками.
+// Возвращает публичные метаданные и дескриптор ревизии; не создаёт объекты Kubernetes и не
+// завершает транзакцию.
 func (r *Repository) publishSecretDraft(ctx context.Context, tx pgx.Tx, s scope, d secretDraftRow, o secretDraftOperationRow, materialization *entity.RuntimeSecretMaterialization) (*entity.RuntimeSecret, error) {
 	secret, err := r.lockRuntimeSecret(ctx, tx, s.organizationID, d.public.SecretRef)
 	if err != nil {
@@ -75,6 +103,20 @@ func (r *Repository) publishSecretDraft(ctx context.Context, tx pgx.Tx, s scope,
 	return result, nil
 }
 
+// FinishRuntimeSecretDraft requires the action-specific workload permission and exact
+// claimant/generation, then locks draft and operation in a Serializable transaction using database
+// time. COMPLETE rechecks current owner access even on terminal replay; repeated results must
+// match stored descriptors. New COMPLETE/FAIL requires a live claim and draft version, applies the
+// kind-specific transition, records terminal snapshot/audit and commits. RECOVER/CLEANUP use the
+// specialized recovery path. Returned descriptors are worker evidence, not independent proof of
+// Kubernetes effects.
+// FinishRuntimeSecretDraft требует разрешение workload для конкретного действия и точные claimant
+// и generation, затем блокирует черновик и операцию в Serializable транзакции со временем БД.
+// COMPLETE повторно проверяет текущий доступ владельца даже при конечном повторе; повторный
+// результат должен совпасть с сохранёнными дескрипторами. Новые COMPLETE/FAIL требуют действующий
+// захват и версию черновика, выполняют переход своего вида, записывают конечный снимок и аудит и
+// завершают транзакцию. RECOVER/CLEANUP используют специализированное восстановление. Дескрипторы
+// — сведения worker, а не независимое доказательство эффектов Kubernetes.
 func (r *Repository) FinishRuntimeSecretDraft(ctx context.Context, p value.Principal, input repoport.RuntimeSecretDraftWorkInput) (entity.RuntimeSecretDraftResult, error) {
 	var empty entity.RuntimeSecretDraftResult
 	permission := map[string]string{"COMPLETE": "platform.runtime-secret-drafts.operations.complete", "FAIL": "platform.runtime-secret-drafts.operations.fail", "RECOVER": "platform.runtime-secret-drafts.materialization.recover", "CLEANUP": "platform.runtime-secret-drafts.cleanup.complete"}[input.Action]
@@ -246,6 +288,19 @@ func (r *Repository) FinishRuntimeSecretDraft(ctx context.Context, p value.Princ
 	return result, nil
 }
 
+// recoverSecretDraft handles recovery inside the already locked caller transaction. CLEANUP
+// acknowledges only exact stored descriptors on a terminal operation; recovery rejects live work,
+// reuses durable cleanup pins, checks materialization identity and retention, and records bounded
+// KEEP/DELETE intent without external deletion. It may fail expired work, expire drafts and mark
+// cleanup settled when its predicates allow. Errors can follow local mutations, so callers must
+// roll back; audit and cleanup intent are not broker readback.
+// recoverSecretDraft восстанавливает состояние внутри уже заблокированной транзакции вызывающего
+// кода. CLEANUP подтверждает только точные сохранённые дескрипторы конечной операции;
+// восстановление отклоняет действующую работу, использует устойчивые привязки очистки, проверяет
+// идентичность материализации и удержание и записывает KEEP/DELETE без внешнего удаления. Может
+// завершить просроченную работу ошибкой, истечь черновик и отметить очистку завершённой по
+// условиям. Ошибки возможны после локальных изменений и требуют rollback; аудит и намерение
+// очистки не заменяют повторное чтение брокера.
 func (r *Repository) recoverSecretDraft(ctx context.Context, tx pgx.Tx, s scope, d *secretDraftRow, o *secretDraftOperationRow, input repoport.RuntimeSecretDraftWorkInput, now time.Time) (entity.RuntimeSecretDraftResult, error) {
 	result := entity.RuntimeSecretDraftResult{Draft: d.public, State: o.state, EncryptedAction: "KEEP", MaterializationAction: "KEEP"}
 	if input.Action == "CLEANUP" {
@@ -377,11 +432,27 @@ func (r *Repository) recoverSecretDraft(ctx context.Context, tx pgx.Tx, s scope,
 	return result, nil
 }
 
+// secretDraftPublishedRecoveryAlreadySettled recognizes an already completed cleanup for a
+// COMPLETED operation and PUBLISHED draft when a supplied materialization remains KEEP. It
+// suppresses duplicate cleanup intent/audit only after the caller has validated descriptor
+// identity and retention.
+// secretDraftPublishedRecoveryAlreadySettled распознаёт уже завершённую очистку COMPLETED операции
+// и PUBLISHED черновика, когда переданная материализация остаётся KEEP. Подавляет повторное
+// намерение очистки и аудит только после проверки вызывающим кодом идентичности дескриптора и
+// удержания.
 func secretDraftPublishedRecoveryAlreadySettled(d secretDraftRow, o secretDraftOperationRow, input repoport.RuntimeSecretDraftWorkInput, result entity.RuntimeSecretDraftResult) bool {
 	return o.cleanupCompleted && o.state == "COMPLETED" && d.public.State == "PUBLISHED" &&
 		input.Materialization != nil && result.MaterializationAction == "KEEP"
 }
 
+// secretDraftRecoverySettled requires no persisted cleanup descriptors and no encrypted input,
+// then accepts failed work without materialization or published completed work retaining its
+// materialization with both actions KEEP. It is a pure predicate over already checked recovery
+// data, not an external absence probe.
+// secretDraftRecoverySettled требует отсутствия сохранённых дескрипторов очистки и зашифрованного
+// ввода, затем допускает FAILED без материализации либо опубликованную COMPLETED работу с
+// удерживаемой материализацией и обоими действиями KEEP. Это чистое условие над уже проверенными
+// данными восстановления, а не внешняя проверка отсутствия объекта.
 func secretDraftRecoverySettled(d secretDraftRow, o secretDraftOperationRow, input repoport.RuntimeSecretDraftWorkInput, result entity.RuntimeSecretDraftResult) bool {
 	noPersistedCleanup := o.recoveryEncrypted == nil && o.recoveryMaterialization == nil &&
 		(len(o.encryptedCleanup) == 0 || string(o.encryptedCleanup) == "null") &&
@@ -395,8 +466,20 @@ func secretDraftRecoverySettled(d secretDraftRow, o secretDraftOperationRow, inp
 	return failedWithoutEffects || publishedWithRetainedMaterialization
 }
 
+// errorsIsNotFound preserves errors.Is matching for the domain NotFound sentinel through wrapped
+// errors. It does not classify driver failures or convert any other error.
+// errorsIsNotFound сохраняет сопоставление errors.Is с доменным NotFound через обёртки ошибок. Не
+// классифицирует ошибки драйвера и не преобразует другие ошибки.
 func errorsIsNotFound(err error) bool { return errors.Is(err, errs.ErrNotFound) }
 
+// CheckRuntimeSecretDraftWork requires the dedicated readiness workload principal and checks
+// database table/sequence privileges and the active-operation index. It returns Unavailable on
+// false/query failure; it does not probe broker, Kubernetes, key delivery or a complete
+// materialization workflow.
+// CheckRuntimeSecretDraftWork требует специальный workload principal для readiness и проверяет
+// права на таблицы и sequence БД и индекс активной операции. При false либо ошибке запроса
+// возвращает Unavailable; не проверяет брокер, Kubernetes, доставку ключей и полный путь
+// материализации.
 func (r *Repository) CheckRuntimeSecretDraftWork(ctx context.Context, p value.Principal) error {
 	if !validRuntimeSecretWorkPrincipal(p, "platform.runtime-secret-drafts.readiness.check") {
 		return errs.ErrForbidden
@@ -408,6 +491,15 @@ func (r *Repository) CheckRuntimeSecretDraftWork(ctx context.Context, p value.Pr
 	return nil
 }
 
+// ListRuntimeSecretDraftRecovery requires recovery workload authority, validates bounded page size
+// and sdop_ cursor, then reads eligible refs and locks their draft/operation rows in a
+// RepeatableRead transaction. One extra ref determines the next cursor; it returns work
+// descriptors only after commit, without claiming work or performing cleanup.
+// ListRuntimeSecretDraftRecovery требует workload-полномочия восстановления, проверяет
+// ограниченный размер страницы и курсор sdop_, затем читает допустимые ссылки и блокирует их
+// черновики и операции в RepeatableRead транзакции. Дополнительная ссылка определяет следующий
+// курсор; возвращает рабочие дескрипторы только после Commit, не захватывая работу и не выполняя
+// очистку.
 func (r *Repository) ListRuntimeSecretDraftRecovery(ctx context.Context, p value.Principal, page query.Page) ([]entity.RuntimeSecretDraftWork, string, error) {
 	if !validRuntimeSecretWorkPrincipal(p, "platform.runtime-secret-drafts.operations.recover") {
 		return nil, "", errs.ErrForbidden

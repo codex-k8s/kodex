@@ -7,6 +7,14 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestPromptStructuredVariablesUseCanonicalWorkspacePathsAndExactRuntime checks synthetic
+// INPUT/SESSION/KNOWLEDGE categorization, canonical input paths, workflow mirroring and selected
+// runtime environment/tool fields. It exercises map construction without materializing files or
+// starting a runtime.
+// TestPromptStructuredVariablesUseCanonicalWorkspacePathsAndExactRuntime проверяет распределение
+// синтетических INPUT/SESSION/KNOWLEDGE, канонические пути input, копирование в workflow и
+// выбранные поля окружения и инструментов. Проверяет сборку карт без материализации файлов и
+// запуска runtime.
 func TestPromptStructuredVariablesUseCanonicalWorkspacePathsAndExactRuntime(t *testing.T) {
 	artifacts := []map[string]any{
 		promptArtifactFixture("artifact_abcdefgh", "input.txt", runtimecontract.AttachmentScopeInput, "aset_abcdefgh", 1),
@@ -41,6 +49,12 @@ func TestPromptStructuredVariablesUseCanonicalWorkspacePathsAndExactRuntime(t *t
 	}
 }
 
+// TestPromptStructuredVariablesRejectInvalidArtifact passes a traversal-like synthetic filename
+// and requires prompt variable construction to fail. It verifies descriptor rejection, not
+// filesystem isolation or a complete malicious-path corpus.
+// TestPromptStructuredVariablesRejectInvalidArtifact передаёт синтетическое имя с переходом к
+// родительскому каталогу и требует ошибки сборки переменных. Проверяет отказ дескриптора, но не
+// изоляцию файловой системы и не полный набор вредоносных путей.
 func TestPromptStructuredVariablesRejectInvalidArtifact(t *testing.T) {
 	artifact := promptArtifactFixture("artifact_abcdefgh", "../secret", runtimecontract.AttachmentScopeInput, "aset_abcdefgh", 1)
 	if _, err := promptStructuredVariables([]map[string]any{artifact}, nil, runtimecontract.RuntimeEnvironmentImage{}, "renv_example", "aset_abcdefgh", ""); err == nil {
@@ -48,6 +62,14 @@ func TestPromptStructuredVariablesRejectInvalidArtifact(t *testing.T) {
 	}
 }
 
+// TestPromptWorkspaceSeparatesEditableInputFromReadonlyProvenance checks canonical workspace
+// navigation, original read-only/digest descriptors and working-copy paths only for INPUT. It also
+// asserts selected guidance boundary phrases; those text assertions do not prove runtime
+// permission enforcement or actual file immutability.
+// TestPromptWorkspaceSeparatesEditableInputFromReadonlyProvenance проверяет каноническую навигацию
+// workspace, признаки read-only и дайджесты оригиналов и пути рабочих копий только для INPUT.
+// Также проверяет выбранные фразы ограничений в инструкции; проверки текста не доказывают
+// runtime-контроль прав и реальную неизменяемость файлов.
 func TestPromptWorkspaceSeparatesEditableInputFromReadonlyProvenance(t *testing.T) {
 	items := []map[string]any{
 		promptArtifactFixture("artifact_abcdefgh", "edit.txt", runtimecontract.AttachmentScopeInput, "aset_abcdefgh", 1),
@@ -86,6 +108,13 @@ func TestPromptWorkspaceSeparatesEditableInputFromReadonlyProvenance(t *testing.
 	}
 }
 
+// TestPromptWorkspaceExistsWithoutArtifactPublicationCapability requires an empty artifact set to
+// retain canonical workspace, input and guide descriptors without inventing a checkout. It
+// exercises pure variable construction and does not configure or verify a capability system.
+// TestPromptWorkspaceExistsWithoutArtifactPublicationCapability требует сохранения канонических
+// дескрипторов workspace, input и руководства при пустом наборе артефактов без выдуманного
+// checkout. Проверяет чистую сборку переменных, не настраивает и не проверяет систему
+// capabilities.
 func TestPromptWorkspaceExistsWithoutArtifactPublicationCapability(t *testing.T) {
 	variables, err := promptStructuredVariables(nil, nil, runtimecontract.RuntimeEnvironmentImage{}, "", "", "")
 	if err != nil {
@@ -98,6 +127,14 @@ func TestPromptWorkspaceExistsWithoutArtifactPublicationCapability(t *testing.T)
 	}
 }
 
+// TestPromptWorkspaceDistinguishesMountedFilesFromOwnResultDiscovery checks guidance phrases for
+// paginated own-result discovery, provenance, mandatory EOF reads and denial behavior with both
+// empty and mounted synthetic inputs. File counts must remain unchanged; no actual discovery API
+// is invoked.
+// TestPromptWorkspaceDistinguishesMountedFilesFromOwnResultDiscovery проверяет фразы инструкции о
+// постраничном поиске собственных результатов, происхождении, обязательном чтении до EOF и
+// поведении при отказе для пустого и смонтированного синтетического ввода. Число файлов не должно
+// меняться; реальный API поиска не вызывается.
 func TestPromptWorkspaceDistinguishesMountedFilesFromOwnResultDiscovery(t *testing.T) {
 	for _, artifacts := range [][]map[string]any{nil, {promptArtifactFixture("artifact_abcdefgh", "result.txt", runtimecontract.AttachmentScopeInput, "aset_abcdefgh", 1)}} {
 		variables, err := promptStructuredVariables(artifacts, nil, runtimecontract.RuntimeEnvironmentImage{}, "", "aset_abcdefgh", "wfl_example")
@@ -116,6 +153,14 @@ func TestPromptWorkspaceDistinguishesMountedFilesFromOwnResultDiscovery(t *testi
 	}
 }
 
+// TestPromptWorkspaceUsesVerifiedLocalSourcesBeforeRemoteDiscovery checks that generated guidance
+// prefers verified mounted originals, preserves exact pins and explicit full-read gates, and
+// forbids replay through local fallback after denial. It asserts instruction text only, without
+// performing local or remote reads.
+// TestPromptWorkspaceUsesVerifiedLocalSourcesBeforeRemoteDiscovery проверяет, что инструкция
+// предпочитает проверенные смонтированные оригиналы, сохраняет точные привязки и явные требования
+// полного чтения и запрещает локальный обход после отказа. Проверяет только текст, не выполняя
+// локального или удалённого чтения.
 func TestPromptWorkspaceUsesVerifiedLocalSourcesBeforeRemoteDiscovery(t *testing.T) {
 	variables, err := promptStructuredVariables([]map[string]any{
 		promptArtifactFixture("artifact_abcdefgh", "brief.txt", runtimecontract.AttachmentScopeInput, "aset_abcdefgh", 1),
@@ -145,6 +190,13 @@ func TestPromptWorkspaceUsesVerifiedLocalSourcesBeforeRemoteDiscovery(t *testing
 	}
 }
 
+// promptArtifactFixture returns a fresh synthetic JSON-shaped artifact map with float64 numeric
+// fields, a fixed nonsecret digest and supplied identity/scope/path inputs. It supplies test
+// metadata, not an uploaded artifact or authority proof.
+// promptArtifactFixture возвращает новую синтетическую карту артефакта формы JSON с числовыми
+// полями float64, фиксированным несекретным дайджестом и переданными идентичностью, областью и
+// путевыми данными. Даёт тестовые метаданные, а не загруженный артефакт или доказательство
+// полномочий.
 func promptArtifactFixture(ref, name, scope, setRef string, position int64) map[string]any {
 	return map[string]any{
 		"ref": ref, "fileName": name, "mediaType": "text/plain", "sizeBytes": float64(1),

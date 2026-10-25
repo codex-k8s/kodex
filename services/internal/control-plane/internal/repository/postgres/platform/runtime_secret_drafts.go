@@ -194,13 +194,9 @@ func (r *Repository) secretDraftOwnerScope(ctx context.Context, tx pgx.Tx, s sco
 // возвращаются только публичные метаданные; при ошибках результат пуст, ошибка commit —
 // Unavailable. Ошибка отложенного rollback с request context игнорируется.
 func (r *Repository) GetRuntimeSecretDraft(ctx context.Context, p value.Principal, ref string) (entity.RuntimeSecretDraft, error) {
-	s, err := r.resolveScope(ctx, p)
+	s, tx, err := r.beginScopedSnapshotRead(ctx, p)
 	if err != nil {
 		return entity.RuntimeSecretDraft{}, err
-	}
-	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return entity.RuntimeSecretDraft{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	d, err := scanSecretDraft(tx.QueryRow(ctx, querySecretDraftGet, pgx.StrictNamedArgs{"organization_id": s.organizationID, "draft_ref": ref}))

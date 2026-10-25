@@ -4,11 +4,64 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.420.0
+version: 1.421.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Assistant staging, prompt impact и secret-draft completion — 25.10.2026
+
+На основе `3a0b73d1d25a8d791f7eb5b5249f81eaa182b3f0` полностью прочитаны
+девять Go-файлов(1784 исходные строки) и31 SQL(344 строки).67 ранее
+неописанных объявлений получили предметные EN→RU комментарии, включая два
+локальных типа, семь cleanup SQL bindings и семь тестовых объявлений.
+Существующие runtime guidance strings и assertions не менялись.
+
+GetRuntimeSecretDraft использует существующий beginScopedSnapshotRead вместо
+копии resolveScope→ReadOnly RepeatableRead BeginTx. В этом методе receiver r,
+principal p и scope s; alias names не меняют общий алгоритм. Сохранены exact
+scope errors и BeginTx→Unavailable, нулевой результат, caller context,
+rollback, owner/create/view checks и commit. Сам helper и его файл неизменны.
+Независимый proof разворачивает вызов и сравнивает весь runtime_secret_drafts.go
+AST с исходным. Все его комментарии сохранены дословно.
+
+| Путь / переход | Сохранённые проверки и эффекты |
+| --- | --- |
+| Agent/environment plan hydration/edit/recheck | Authorized assistant contexts, allowed binding operation, exact project/agent version и ready current environment revision/digest; before/after заново читаются, Input очищается, edit сохраняет Selected |
+| Binding command/lock | Закрытый набор полей и точные target/after refs, положительный expected version; typed command не заменяет авторизацию. Environment lock требует ACTIVE и active project, permission остаётся отдельно |
+| Conversation archive/restore/purge | Actor-owned row lock и owner/project view до OCC. Archive требует отсутствие busy run и отвергает редактируемые планы, restore/purge требуют ARCHIVED; purge проходит owner-request DB function. SYSTEM_ASSISTANT_CHANGED и commit принадлежат owner transaction |
+| Proposal staging | Полный authorize/idempotency/preflight до внешней записи, exact lease/fence/profile/intent/source metadata и CLEAN inspection всех файлов. Preflight commit предшествует staging; late error может оставить частичные внешние объекты, owner command перепроверяет состояние |
+| Edited draft staging/resolve | Прежние plan/revision/op content pins, reuse через ledger либо новый inspected request. Inline content заменяется locator/digest/size; typed file/revision проверяет точные filename/media/digest/size/target. Ledger/cleanup protocol не подменяется rollback БД |
+| Impact owner/replay | Owner tuple назначается из authoritative consumer state, а не payload. Exact secret/environment/consumer scopes и fresh permissions до выдачи receipt; malformed expected tuple Invalid, mismatch actual NotFound |
+| Prompt impact prepare/publish | UI-owned VALID draft, bounded consumers и filtered access, exact PREPARED/source version/current revision/draft/digest pins. Apply использует savepoint на элемент, fresh authorization и locked versions, затем readback новой привязки перед savepoint commit |
+| Prompt variables/tests | Canonical file scopes/paths и exact runtime metadata, INPUT working copies отдельно от read-only originals. Guidance не выдаёт capabilities; string assertions не доказывают runtime enforcement. JSON float64 conversion описан с его фактическими сравнениями границ |
+| Secret-draft COMPLETE / terminal replay | Action-specific workload permission, exact claimant/generation и owner access даже при повторе COMPLETE. Новая работа требует live claim и draft version; SAVE/VALIDATE/PUBLISH/DISCARD проверяют свои states/descriptors. Terminal snapshot/audit и secret publication входят в Serializable owner transaction |
+| Secret-draft FAIL | Exact live claim/version и closed failure code; SAVE→FAILED, PUBLISH→VALID, terminal result FAILED и PREPARED impact plans→CANCELLED. Идентичный FAIL replay читает stored result, другой code отклоняется |
+| Secret-draft RECOVER | Live work отклоняется; durable UID/RV/digests и retention определяют KEEP/DELETE. Expired work закрывается, draft может стать EXPIRED, cleanup intent устойчиво сохраняется; внешнего удаления в repository нет |
+| Secret-draft CLEANUP / settled recovery | Exact terminal descriptors подтверждают ACK; settled predicates не выполняют broker lookup. Published retained materialization остаётся KEEP без повторного cleanup intent/audit после проверки вызывающим кодом |
+| Secret-draft recovery list/readiness | Recovery list требует workload permission, bounded sdop_ cursor и locks без claim/effects. Readiness проверяет DB privileges/index, не broker/Kubernetes/key delivery и не полную материализацию |
+| Provider credential cleanup SQL bindings | Global trusted sweep, account/task SKIP LOCKED, attempt bounds, monotonic claim generation, exact live owner/generation complete/fail и terminal receipt. SQL-проекции сами не доказывают внешнюю очистку |
+
+Других исполняемых изменений нет: девять файлов меняют только комментарии,
+десятый — один вызов helper.10 полных expected-AST/directive сравнений и
+independent snapshot expansion — PASS. Полный control-plane build/unit —
+PASS LOCAL(checks421-final), GOWORK=off/GOMAXPROCS=4/-p2 с исключением всех
+inherited KODEX inputs.17 analyzer unit,5 exact-ignore guards, gofmt и
+git diff --check — PASS. PostgreSQL/RLS/OCC/claim races, broker/Kubernetes,
+реальная материализация/cleanup, storage/AV/runtime, browser/E2E/deploy/live —
+NOT RUN/SKIP. Используется прежний API pgx; проверенная официальная
+документация BeginTx/TxOptions/Tx из предыдущего пакета остаётся применимой,
+Context7 ранее отклонил запрос из-за ошибки ключа.
+
+Detector1708 raw/886 retained occurrences/822 unresolved, registry771
+неизменен и валиден. Новых или исчезнувших fragment keys нет; позиции
+изменились из-за комментариев. Thresholds/exclusions прежние:6685 own sources/
+222 exclusions. Вынос одного фактического повтора не выдаётся за уменьшение
+числа detector groups. Go21489:20620 EN→RU,869 missing. PR262 Go-файла/
+2610 объявлений, missing0;265 whole changed blobs. #1823 открыт, #1829 Draft,
+QA/main f2e64eb сохранён. Env-файлы и прикладные секреты не читались,
+не менялись и не переносились.
 
 ## Общее открытие снимка чтения — 25.10.2026
 

@@ -15,11 +15,30 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryAssistantPreparedContentSource embeds the exact active assistant conversation/runtime
+// revision/live lease lineage, deadline and profile snapshot check, including artifact.manage for
+// file revision creation. It returns source identity/version/context digest, never file bytes or
+// independent authority.
+// queryAssistantPreparedContentSource встраивает точную проверку активного разговора ассистента,
+// runtime-ревизии, действующей аренды, срока исполнения и снимка профиля, включая artifact.manage
+// для новой ревизии файла. Возвращает идентичность, версию и дайджест исходного контекста, но не
+// содержимое файла и не самостоятельные полномочия.
+//
 //go:embed sql/assistant_prepared_content_source.sql
 var queryAssistantPreparedContentSource string
 
-// stageAssistantPlanProposal проверяет весь typed plan ДО внешней записи.
-// После записи в owner command поступают только locator и safe commitment.
+// stageAssistantPlanProposal authorizes and validates the entire typed proposal in a ReadCommitted
+// preflight transaction, honoring existing idempotency receipts before external storage. It binds
+// each inspected CLEAN file to actor/project/lease/fence/intent metadata, commits preflight, then
+// stages files and replaces inline content with locators and commitments. A later staging error
+// can leave earlier external objects; the final owner command must revalidate and own atomic plan
+// writes.
+// stageAssistantPlanProposal проверяет доступ и весь типизированный план в предварительной
+// ReadCommitted транзакции, учитывая существующие квитанции идемпотентности до внешнего хранения.
+// Связывает каждый проверенный CLEAN файл с субъектом, проектом, арендой, fence и намерением,
+// завершает предварительную транзакцию, затем сохраняет файлы и заменяет inline-содержимое
+// ссылками и обязательствами. Поздняя ошибка может оставить ранее созданные внешние объекты;
+// итоговая команда владельца повторно проверяет состояние и атомарно записывает план.
 func (repository *Repository) stageAssistantPlanProposal(ctx context.Context, current scope, input *command.Command) error {
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
@@ -45,6 +64,12 @@ func (repository *Repository) stageAssistantPlanProposal(ctx context.Context, cu
 	if err != nil {
 		return err
 	}
+	// fileStage pairs one hydrated file operation with its exact prepared-content request until all
+	// proposal validation completes. It is local staging data; constructing it performs no external
+	// write.
+	// fileStage связывает подготовленную файловую операцию с точным запросом хранения до завершения
+	// проверки всего предложения. Это локальные данные подготовки; их создание не выполняет внешнюю
+	// запись.
 	type fileStage struct {
 		operation entity.AssistantPlanOperation
 		request   preparedContentRequest
@@ -132,10 +157,25 @@ func (repository *Repository) stageAssistantPlanProposal(ctx context.Context, cu
 	return nil
 }
 
+// filePreparedDigest returns the operation digest with one leading sha256: prefix removed. It does
+// not validate hexadecimal form, length, provenance or content equality.
+// filePreparedDigest возвращает дайджест операции без одного начального префикса sha256:. Не
+// проверяет шестнадцатеричный формат, длину, происхождение и соответствие содержимому.
 func filePreparedDigest(operation entity.AssistantPlanOperation) string {
 	return strings.TrimPrefix(assistantString(operation.Parameters, "digest"), "sha256:")
 }
 
+// stageAssistantPlanDraft preflights an edited plan in a ReadCommitted transaction using a copied
+// operation slice, exact prior prepared-content bindings and authorized draft snapshots. Unchanged
+// content is resolved from its ledger; changed content is inspected before external staging after
+// commit. It builds a copied payload with locators and no inline content; partial external staging
+// can survive an error and requires the existing ledger/cleanup protocol.
+// stageAssistantPlanDraft предварительно проверяет изменённый план в ReadCommitted транзакции с
+// копией среза операций, точными прежними привязками подготовленного содержимого и проверенными
+// снимками черновика. Неизменное содержимое разрешается через реестр; изменённое проверяется до
+// внешнего сохранения после Commit. Собирает копию payload со ссылками без inline-содержимого;
+// частичные внешние записи могут сохраниться при ошибке и требуют существующего протокола реестра
+// и очистки.
 func (repository *Repository) stageAssistantPlanDraft(ctx context.Context, current scope, input *command.Command) error {
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
@@ -169,6 +209,12 @@ func (repository *Repository) stageAssistantPlanDraft(ctx context.Context, curre
 	if err != nil {
 		return err
 	}
+	// draftFile carries either already resolved prepared content or a new staging request for one
+	// operation key. A nil request means reuse; this local union does not itself authorize or write
+	// content.
+	// draftFile хранит уже разрешённое подготовленное содержимое либо новый запрос хранения для ключа
+	// операции. Nil запрос означает повторное использование; эта локальная структура сама не проверяет
+	// полномочия и не записывает содержимое.
 	type draftFile struct {
 		key     string
 		staged  preparedContent
@@ -260,6 +306,14 @@ func (repository *Repository) stageAssistantPlanDraft(ctx context.Context, curre
 	return nil
 }
 
+// resolveAssistantFileOperationTx resolves exact plan/revision/operation content pins in the
+// caller transaction, then checks filename, media type, digest, size and revision target as
+// applicable. It installs prepared descriptors and ledger references into a copied typed command
+// and clears raw Content; no external file write or commit occurs here.
+// resolveAssistantFileOperationTx разрешает точные привязки содержимого к плану, ревизии и
+// операции в переданной транзакции, затем сверяет имя, тип, дайджест, размер и цель ревизии, где
+// применимо. Добавляет подготовленные дескрипторы и ссылки реестра в копию типизированной команды
+// и очищает Content; внешней записи файла и завершения транзакции здесь нет.
 func (repository *Repository) resolveAssistantFileOperationTx(ctx context.Context, tx pgx.Tx, current scope, planID string, revision int64, operation entity.AssistantPlanOperation, planned command.Command) (command.Command, error) {
 	size, ok := assistantInt64(operation.Parameters, "sizeBytes")
 	if !ok || !assistantProjectFileContentReady(operation) {
