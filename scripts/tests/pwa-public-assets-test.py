@@ -67,7 +67,7 @@ def verify(resources, hot=False):
         assert transport == {
             "serverName": "staff-control-center.kodex-system.svc.cluster.local",
             "insecureSkipVerify": False,
-            "rootCAsSecrets": ["staff-control-center-backend-tls"],
+            "rootCAs": [{"secret": "staff-control-center-backend-tls"}],
             "certificatesSecrets": ["staff-control-center-ingress-client-tls"],
         }
     return public, private, api
