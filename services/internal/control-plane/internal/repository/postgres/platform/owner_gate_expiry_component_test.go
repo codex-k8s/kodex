@@ -52,7 +52,7 @@ func TestOwnerGateExpiryComponent(t *testing.T) {
 	coordinator := createLifecycleAgent(t, ctx, service, owner, project.Ref, "gate-expiry-coordinator", "Координатор")
 	coordinator = *execute(t, owner, command.ChangeAgentCapability, "delegate", &coordinator.Version, command.AgentBindingInput{AgentRef: coordinator.Ref, BindingRef: "platform.run.delegate", Enabled: true}).Agent
 	specialist := createLifecycleAgent(t, ctx, service, owner, project.Ref, "gate-expiry-specialist", "Исполнитель")
-	for _, name := range []string{"poll", "late-approve", "republished", "legacy", "cancel", "approve", "workflow-first", "race"} {
+	for _, name := range []string{"poll", "late-approve", "republished", "legacy", "cancel", "approve", "workflow-first", "parallel-first", "parallel-late", "race"} {
 		if !t.Run(name, func(t *testing.T) {
 			ttl := int32(2)
 			stepTimeout := int32(600)
@@ -64,6 +64,14 @@ func TestOwnerGateExpiryComponent(t *testing.T) {
 				step.ApprovalTimeoutSeconds = nil
 			}
 			draft := entity.WorkflowVersion{Name: name, CoordinatorAgentRef: coordinator.Ref, Concurrency: 1, TimeoutSeconds: 3600, ResultSchema: map[string]any{}, Steps: []entity.WorkflowStep{step}}
+			parallel := name == "parallel-first" || name == "parallel-late"
+			if parallel {
+				early := step
+				early.Key, early.HumanGateAfter, early.GateDecisions, early.ApprovalTimeoutSeconds, early.TimeoutSeconds = "early", false, nil, nil, 2
+				early.Parallel, early.ParallelGroup = true, 1
+				step.Position, step.Parallel, step.ParallelGroup = 2, true, 1
+				draft.Concurrency, draft.Steps = 2, []entity.WorkflowStep{early, step}
+			}
 			key := name + "-"
 			workflow := execute(t, owner, command.CreateWorkflow, key+"create", nil, command.WorkflowInput{ProjectRef: project.Ref, Name: name, CoordinatorAgentRef: coordinator.Ref, Draft: &draft}).Workflow
 			workflow = execute(t, owner, command.ValidateWorkflow, key+"validate", &workflow.Version, command.WorkflowInput{Ref: workflow.Ref}).Workflow
@@ -80,8 +88,16 @@ func TestOwnerGateExpiryComponent(t *testing.T) {
 				execute(t, worker, command.CompleteExecution, key+suffix, nil, command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, ResultSummary: "Результат подготовлен", Usage: turnUsageFixture()})
 			}
 			initial := claim("coordinator", run.Ref)
+			var siblingRef string
+			if parallel {
+				sibling := execute(t, worker, command.DelegateExecution, key+"sibling", nil, command.DelegateInput{LeaseRef: stringMap(initial, "leaseRef"), Fence: stringMap(initial, "fence"), Generation: runtimeRevisionMapInt64(initial, "generation"), TargetAgentRef: specialist.Ref, WorkflowStepKey: "early", Task: "Начать параллельную проверку."}).Run
+				siblingRef = sibling.Ref
+			}
 			child := execute(t, worker, command.DelegateExecution, key+"child", nil, command.DelegateInput{LeaseRef: stringMap(initial, "leaseRef"), Fence: stringMap(initial, "fence"), Generation: runtimeRevisionMapInt64(initial, "generation"), TargetAgentRef: specialist.Ref, WorkflowStepKey: "review", Task: "Подготовить результат."}).Run
 			complete("coordinator-done", initial)
+			if parallel {
+				claim("sibling-claim", siblingRef)
+			}
 			lease := claim("child-claim", child.Ref)
 			if name == "republished" {
 				longTTL := int32(600)
@@ -144,6 +160,10 @@ func TestOwnerGateExpiryComponent(t *testing.T) {
 						t.Fatal("concurrent expiry and late approval did not converge")
 					}
 				}
+			} else if name == "parallel-late" {
+				if _, err := mutate(owner, command.ResolveOwnerGate, key+"late", &gate.Version, payload); !errors.Is(err, errs.ErrForbidden) {
+					t.Fatal("earlier sibling timeout did not reject late approval")
+				}
 			} else if name == "late-approve" {
 				for i := 0; i < 2; i++ {
 					if _, err := mutate(owner, command.ResolveOwnerGate, key+"late", &gate.Version, payload); !errors.Is(err, errs.ErrAlreadyResolved) {
@@ -158,7 +178,7 @@ func TestOwnerGateExpiryComponent(t *testing.T) {
 			switch name {
 			case "legacy":
 				expected = "OPEN"
-			case "cancel", "workflow-first":
+			case "cancel", "workflow-first", "parallel-first", "parallel-late":
 				expected = "CANCELLED"
 			case "approve":
 				expected = "APPROVED"
@@ -196,6 +216,27 @@ func TestOwnerGateExpiryComponent(t *testing.T) {
 			}
 			if expected == "EXPIRED" && (current.State != "FAILED" || current.SafeErrorCode != "OWNER_GATE_EXPIRED") {
 				t.Fatal("gate expiry was relabeled as execution timeout")
+			}
+			if name == "workflow-first" || parallel {
+				if current.State != "FAILED" || current.SafeErrorCode != "RUNTIME_TIMEOUT" {
+					t.Fatal("earlier execution clock lost precedence")
+				}
+				_, graph, err := service.GetRunGraph(ctx, owner, run.Ref)
+				if err != nil {
+					t.Fatal("read timed out graph")
+				}
+				found := false
+				for _, node := range graph.Nodes {
+					if node.Ref == gate.NodeRef {
+						found = true
+						if node.State != "CANCELLED" {
+							t.Fatal("timeout selected gate instead of execution node")
+						}
+					}
+				}
+				if !found {
+					t.Fatal("timed out gate node missing")
+				}
 			}
 			if !contains([]string{"SUCCEEDED", "FAILED", "CANCELLED"}, current.State) {
 				execute(t, owner, command.CancelRun, key+"cleanup", &current.Version, command.RunCommandInput{RunRef: run.Ref, Reason: "Завершить отдельную проверку"})

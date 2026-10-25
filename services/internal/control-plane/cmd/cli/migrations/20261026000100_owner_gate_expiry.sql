@@ -1,4 +1,8 @@
 -- +goose Up
+SET ROLE control_plane_owner;
+SET LOCAL lock_timeout = '8s';
+SET LOCAL statement_timeout = '30s';
+
 ALTER TABLE control_plane.owner_gates
     ADD COLUMN expires_at timestamptz,
     DROP CONSTRAINT owner_gates_state_check,
@@ -30,6 +34,10 @@ $$;
 -- +goose StatementEnd
 CREATE TRIGGER owner_gate_expiry_immutable BEFORE UPDATE ON control_plane.owner_gates
     FOR EACH ROW EXECUTE FUNCTION control_plane.guard_owner_gate_expiry();
+REVOKE ALL ON FUNCTION control_plane.guard_owner_gate_expiry() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION control_plane.guard_owner_gate_expiry() TO control_plane_runtime;
+
+RESET ROLE;
 
 -- +goose Down
 -- +goose StatementBegin

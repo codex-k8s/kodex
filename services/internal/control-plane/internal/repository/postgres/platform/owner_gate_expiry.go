@@ -23,6 +23,12 @@ var queryOwnerGateExpiryCandidates string
 //go:embed sql/owner_gate_expiry__lock.sql
 var queryOwnerGateExpiryLock string
 
+// queryOwnerGateEarlierExecution includes parallel siblings whose earlier deadline closes this root.
+// queryOwnerGateEarlierExecution учитывает параллельные этапы, ранний срок которых закрывает этот корень.
+//
+//go:embed sql/owner_gate_expiry__earlier_execution.sql
+var queryOwnerGateEarlierExecution string
+
 // ownerGateExpiredSummary identifies a server expiry, never an owner's rejection or approval.
 // ownerGateExpiredSummary обозначает истечение серверного срока, а не отказ или согласие владельца.
 const ownerGateExpiredSummary = "i18n:OWNER_GATE_EXPIRED"
@@ -52,16 +58,55 @@ func (repository *Repository) expireWorkflowOwnerGate(ctx context.Context, tx pg
 	if !due {
 		return candidate, "", false, nil
 	}
-	deadline, elapsed, err := readRuntimeExecutionDeadline(ctx, tx, current.organizationID, candidate.runID)
+	earlier, elapsed, err := repository.earlierGateExecutionDeadline(ctx, tx, current, candidate, expiresAt)
 	if err != nil {
 		return candidate, "", false, err
 	}
-	if elapsed && !deadline.EffectiveDeadlineAt.After(expiresAt) {
-		err = repository.failRuntimeGraph(ctx, tx, current, input, candidate, "RUNTIME_TIMEOUT", runtimeTimeoutSummary)
-		return candidate, runtimeTimeoutSummary, err == nil, err
+	if elapsed {
+		err = repository.failRuntimeGraph(ctx, tx, current, input, earlier, "RUNTIME_TIMEOUT", runtimeTimeoutSummary)
+		return earlier, runtimeTimeoutSummary, err == nil, err
 	}
 	err = repository.failRuntimeGraphWithGateExpiry(ctx, tx, current, input, candidate, "OWNER_GATE_EXPIRED", ownerGateExpiredSummary, gateID)
 	return candidate, ownerGateExpiredSummary, err == nil, err
+}
+
+// earlierGateExecutionDeadline selects the earliest eligible clock in the full root, including
+// parallel siblings, and in ancestor roots. Its actual execution node owns timeout closure;
+// an unrelated waiting gate must not become the failed execution node.
+// earlierGateExecutionDeadline выбирает ранние действующие часы всего корня, включая параллельные
+// этапы и внешних предков. Timeout относится к настоящему execution node, а не ожидающему Gate.
+func (repository *Repository) earlierGateExecutionDeadline(ctx context.Context, tx pgx.Tx, current scope, gate claimableExecution, expiresAt time.Time) (claimableExecution, bool, error) {
+	var candidate claimableExecution
+	var at time.Time
+	err := tx.QueryRow(ctx, queryOwnerGateEarlierExecution, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID, "root_run_id": gate.rootRunID, "expires_at": expiresAt,
+	}).Scan(&candidate.nodeID, &candidate.nodeRef, &candidate.runID, &candidate.runRef, &candidate.rootRunID,
+		&candidate.projectID, &candidate.projectRef, &at)
+	found := err == nil
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return candidate, false, errs.ErrUnavailable
+	}
+	deadline, elapsed, err := readRuntimeExecutionDeadline(ctx, tx, current.organizationID, gate.runID)
+	if err != nil {
+		return candidate, false, err
+	}
+	if elapsed && !deadline.EffectiveDeadlineAt.After(expiresAt) && (!found || deadline.EffectiveDeadlineAt.Before(at)) {
+		for _, clock := range deadline.Clocks {
+			if !clock.DeadlineAt.Equal(deadline.EffectiveDeadlineAt) {
+				continue
+			}
+			err = tx.QueryRow(ctx, queryRuntimeDeadlineOwner, pgx.StrictNamedArgs{
+				"organization_id": current.organizationID, "run_ref": clock.RunRef,
+			}).Scan(&candidate.nodeID, &candidate.nodeRef, &candidate.runID, &candidate.runRef, &candidate.rootRunID,
+				&candidate.projectID, &candidate.projectRef)
+			if err != nil {
+				return candidate, false, errs.ErrUnavailable
+			}
+			return candidate, true, nil
+		}
+		return candidate, false, errs.ErrUnavailable
+	}
+	return candidate, found, nil
 }
 
 // reconcileOwnerGateExpiries uses the existing authorized runtime claim poll as a bounded tick;

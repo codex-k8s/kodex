@@ -423,6 +423,22 @@ func workflowDraft(body generated.WorkflowInput) *controlplanev1.WorkflowVersion
 	return draft
 }
 
+// validWorkflowGateTimeouts rejects out-of-range native HTTP integers before narrowing to int32.
+// It preserves absent policy and never silently wraps an oversized or negative owner value.
+// validWorkflowGateTimeouts отклоняет недопустимые HTTP integer до сужения в int32. Отсутствие
+// политики сохраняется; слишком большое или отрицательное значение не превращается в иной срок.
+func validWorkflowGateTimeouts(body generated.WorkflowInput) bool {
+	if body.Steps == nil {
+		return true
+	}
+	for _, step := range *body.Steps {
+		if step.ApprovalTimeoutSeconds != nil && (!step.HumanGate || *step.ApprovalTimeoutSeconds < 1 || *step.ApprovalTimeoutSeconds > 604800) {
+			return false
+		}
+	}
+	return true
+}
+
 // CreateWorkflow binds project context and creates owner workflow metadata, attaching a mapped draft only when a nonempty step list is present. An input-fields-only body does not create Draft here; publication is a separate command.
 // CreateWorkflow привязывает проект и создаёт metadata процесса владельца, прикладывая draft только при непустых шагах. Одни input fields Draft здесь не создают; публикация выполняется отдельно.
 func (server *Server) CreateWorkflow(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef, p generated.CreateWorkflowParams) {
@@ -432,6 +448,10 @@ func (server *Server) CreateWorkflow(w http.ResponseWriter, r *http.Request, pro
 	}
 	body, ok := decodeJSON[generated.WorkflowInput](w, r)
 	if !ok {
+		return
+	}
+	if !validWorkflowGateTimeouts(body) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
 	m, _ := requireMutation(w, p.IdempotencyKey, "")
@@ -452,6 +472,10 @@ func (server *Server) CreateWorkflow(w http.ResponseWriter, r *http.Request, pro
 func (server *Server) UpdateWorkflowDraft(w http.ResponseWriter, r *http.Request, ref generated.WorkflowRef, p generated.UpdateWorkflowDraftParams) {
 	body, ok := decodeJSON[generated.WorkflowInput](w, r)
 	if !ok {
+		return
+	}
+	if !validWorkflowGateTimeouts(body) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
 	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)

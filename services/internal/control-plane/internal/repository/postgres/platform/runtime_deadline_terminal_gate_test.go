@@ -70,6 +70,10 @@ type terminalDeadlineTx struct {
 func (tx *terminalDeadlineTx) QueryRow(_ context.Context, sql string, args ...any) pgx.Row {
 	return terminalDeadlineRow(func(dest ...any) error {
 		switch {
+		case sql == queryOwnerGateExpiryLock:
+			// Legacy fixture has no independent gate policy; expiry must not mutate it.
+			// В прежней оснастке нет отдельного срока Gate; новый путь её не меняет.
+			return pgx.ErrNoRows
 		case sql == queryRuntimeDeadlineGate:
 			*dest[0].(*string) = "owner-run-id"
 			return nil
