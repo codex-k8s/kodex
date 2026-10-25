@@ -2,7 +2,6 @@ package platform
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
@@ -30,11 +29,7 @@ func TestRoleImageAdmissionMaintenanceComponent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := repository.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1,
-		PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute,
-		AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3, StagingRepository: "registry.invalid/staging",
-		PromotedRepository: "registry.invalid/roles", DefaultImageReference: "registry.invalid/roles/system@sha256:" + strings.Repeat("c", 64),
-		LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
+	if err := repository.ConfigureRoleImages(syntheticRoleImageComponentConfig()); err != nil {
 		t.Fatal(err)
 	}
 	if err := repository.Bootstrap(ctx); err != nil {

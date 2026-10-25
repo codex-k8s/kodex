@@ -4,11 +4,63 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.455.0
+version: 1.456.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая синтетическая конфигурация role-image component fixtures — 25.10.2026
+
+В23 component test files одинаковые12 полей RoleImageConfig заменены двумя
+нулеаргументными test-only factories. syntheticRoleImageComponentConfig
+сохраняет15 прежних callers с registry.invalid/staging и /roles;
+namespacedRoleImageComponentConfig сохраняет8 callers с /kodex/staging,
+/kodex/roles и прежней default image. Второй helper вызывает первый и меняет
+лишь три фиксированные ссылки. Revisions/digests, все минутные lease/claim
+сроки, MaximumAttempts3 и синтетические bytes прежние; DefaultImageDigest
+по-прежнему назначается ConfigureRoleImages. Каждый вызов выделяет новый
+signing-key slice. Оба helper находятся только в _test.go и не читают env,
+credentials, storage, principal либо clock.
+
+Вызов ConfigureRoleImages, его err guard и положение относительно New,
+ConfigureProviderCredential, Bootstrap, seed, owner resolve и service creation
+остались у каждого caller. Контексты45/60/90 секунд, isolated DSN/tracer/pool
+Close, конкретные owner operations и остальные assertions не объединялись.
+Native B1/B2 cancellation, ordinary expiry/replay, admission failure/risk,
+organization/project scope, bootstrap/renewal, immutable/prepared files и
+assistant runtime scenarios сохраняют собственные lifecycle/authority inputs.
+Транспорт, домен, repository production methods, SQL и schema не менялись.
+
+Обратная проверка строго разбирает исходники с AllErrors/ParseComments,
+сопоставляет actual bodies/signatures двух helpers, все12 поля каждого
+исходного literal и оба набора ссылок. Fresh-key expression проверяется
+отдельно. После подстановки исходного literal и учёта только действительно
+неиспользуемых strings/time imports восстанавливаются полные AST всех23
+файлов, включая comments/directives и все assertions. Это source equivalence,
+а не исполнение PostgreSQL lifecycle. Два новых Go declarations имеют
+содержательные EN→RU descriptions.
+
+Первый unit run обнаружил два лишних imports time в существующих helpers;
+они удалены. Итоговый весь control-plane: build — PASS LOCAL (5,88с),
+unit с count1 — PASS LOCAL (36,02с), при GOWORK off/GOMAXPROCS4 и очищенном
+child env. SHA256 всех24 изменённых Go sources до/после совпадают. Component
+тесты без разрешённых disposable inputs пропускаются; живой PostgreSQL,
+браузер/full E2E, provider, deploy/apply и отдельная QA — NOT RUN.
+
+Detector:6716 sources/222 прежних exclusions,1613 raw/1023 retained/590
+unresolved против1619/1023/596. Исчезли15 прежних raw keys;9 новых окон
+остаётся в unresolved и не скрывается исключениями. Реестр892 entries
+побайтно прежний.15 попыток зарегистрировать отсутствующие keys отклонены
+actual assessor; новая test factory включена в inventory. Все5 стадий
+отчёта — PASS LOCAL;21528/21528 собственных Go declarations описаны EN→RU.
+Порог, нормализация, generated exclusions и production sources не расширялись.
+
+Context7 resolve Go вернул Invalid API key; ключи не менялись. Проверены
+официальные Go Spec Composite literals/Calls и собственные RoleImageConfig/
+ConfigureRoleImages. PWA и production Go не менялись относительно409f51d;
+предыдущий полный PWA baseline остаётся dbb3837. Оставшиеся590 групп входят
+в scope #1823, продолжение PR остаётся Draft.
 
 ## Общий gRPC principal и ответ RoleImageService — 25.10.2026
 

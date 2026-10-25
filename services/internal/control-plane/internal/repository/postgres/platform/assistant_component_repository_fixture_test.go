@@ -2,9 +2,7 @@ package platform
 
 import (
 	"context"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
@@ -37,12 +35,7 @@ func newConfiguredAssistantComponentRepository(t *testing.T, pool *pgxpool.Pool,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := repository.ConfigureRoleImages(RoleImageConfig{
-		PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64),
-		BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3,
-		StagingRepository: "registry.invalid/kodex/staging", PromotedRepository: "registry.invalid/kodex/roles",
-		DefaultImageReference: "registry.invalid/kodex/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32)),
-	}); err != nil {
+	if err := repository.ConfigureRoleImages(namespacedRoleImageComponentConfig()); err != nil {
 		t.Fatal(err)
 	}
 	return repository
