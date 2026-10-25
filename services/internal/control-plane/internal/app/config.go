@@ -1,7 +1,6 @@
 package app
 
 import (
-	"errors"
 	"net"
 	"net/url"
 	"os"
@@ -226,7 +225,7 @@ func loadConfig() (Config, error) {
 		ProviderCleanupTimeout:      10 * time.Second,
 	}
 	if err := env.Parse(&config); err != nil {
-		return Config{}, errors.New("parse control-plane environment")
+		return Config{}, startupFailure(stageParseControlPlaneEnvironment, nil)
 	}
 	if err := config.validate(); err != nil {
 		return Config{}, err
@@ -240,29 +239,29 @@ func loadConfig() (Config, error) {
 // В обычном профиле RPC также проверяется каталог сокета полномочий; остальные указанные файлы и удалённые узлы не опрашиваются.
 func (config Config) validate() error {
 	if config.RPCProfile != "" && config.RPCProfile != "trusted-cluster" {
-		return errors.New("control-plane RPC profile is invalid")
+		return startupFailure(stageControlPlaneRPCProfileIsInvalid, nil)
 	}
 	if !filepath.IsAbs(config.SkillScannerSocket) || filepath.Clean(config.SkillScannerSocket) != config.SkillScannerSocket || strings.ContainsAny(config.SkillScannerSocket, "\x00\n\r") || config.SkillScannerTimeout < time.Second || config.SkillScannerTimeout > time.Minute {
-		return errors.New("control-plane skill scanner configuration is invalid")
+		return startupFailure(stageControlPlaneSkillScannerConfigurationIsInvalid, nil)
 	}
 	for _, address := range []string{config.GRPCListen, config.TechnicalListen} {
 		if _, _, err := net.SplitHostPort(address); err != nil {
-			return errors.New("control-plane listen address is invalid")
+			return startupFailure(stageControlPlaneListenAddressIsInvalid, nil)
 		}
 	}
 	for _, path := range []string{config.ServerCertificateFile, config.ServerPrivateKeyFile, config.ClientCAFile, config.PostgresDSNFile, config.PostgresCAFile, config.ObjectStorageAccessKeyFile, config.ObjectStorageSecretKeyFile, config.NATSCAFile, config.NATSCertificateFile, config.NATSPrivateKeyFile, config.NATSCredentialsFile, config.ProviderResolverCAFile, config.ProviderApplicationGrantFile, config.AuthorityVerifierSocket, config.AuthorityPolicyFile, config.ProofSignerFile, config.ProofSignerTrustFile, config.AutomationGrantTrustFile, config.SessionArchiveGrantTrustFile, config.IntegrationGrantTrustFile, config.RuntimeGrantTrustFile, config.RoleImageBuilderGrantTrustFile, config.ImageAdmissionGrantTrustFile, config.ImagePromotionGrantTrustFile, config.SecretBrokerGrantTrustFile, config.ControlPlaneGrantTrustFile, config.LeaseSigningKeyFile, config.RoleEnvironmentCatalogFile, config.OIDCCAFile} {
 		if !filepath.IsAbs(path) || filepath.Clean(path) != path {
-			return errors.New("control-plane file path is invalid")
+			return startupFailure(stageControlPlaneFilePathIsInvalid, nil)
 		}
 	}
 	if config.InteractionGrantTrustFile != "" && (!filepath.IsAbs(config.InteractionGrantTrustFile) || filepath.Clean(config.InteractionGrantTrustFile) != config.InteractionGrantTrustFile) {
-		return errors.New("control-plane interaction grant trust path is invalid")
+		return startupFailure(stageControlPlaneInteractionGrantTrustPathIsInvalid, nil)
 	}
 	if config.EmailGrantTrustFile != "" && (!filepath.IsAbs(config.EmailGrantTrustFile) || filepath.Clean(config.EmailGrantTrustFile) != config.EmailGrantTrustFile) {
-		return errors.New("control-plane email grant trust path is invalid")
+		return startupFailure(stageControlPlaneEmailGrantTrustPathIsInvalid, nil)
 	}
 	if config.EmailConfigurationFile != "" && (!filepath.IsAbs(config.EmailConfigurationFile) || filepath.Clean(config.EmailConfigurationFile) != config.EmailConfigurationFile) {
-		return errors.New("control-plane email configuration path is invalid")
+		return startupFailure(stageControlPlaneEmailConfigurationPathIsInvalid, nil)
 	}
 	if config.PostgresTLSServerName == "" || net.ParseIP(config.PostgresTLSServerName) != nil ||
 		config.NATSTLSServerName == "" || net.ParseIP(config.NATSTLSServerName) != nil || config.NATSURL == "" ||
@@ -298,7 +297,7 @@ func (config Config) validate() error {
 		config.RelayPollInterval < 50*time.Millisecond || config.RelayLeaseDuration < time.Second ||
 		config.RelayPublishTimeout <= 0 || config.RelayFinalizeTimeout <= 0 || config.RelayPublishTimeout+config.RelayFinalizeTimeout >= config.RelayLeaseDuration ||
 		!validProviderCredentialCleanupConfig(config) {
-		return errors.New("control-plane bounded configuration is invalid")
+		return startupFailure(stageControlPlaneBoundedConfigurationIsInvalid, nil)
 	}
 	issuer, issuerErr := url.Parse(config.OIDCIssuer)
 	jwks, jwksErr := url.Parse(config.OIDCJWKSURL)
@@ -306,14 +305,14 @@ func (config Config) validate() error {
 	if issuerErr != nil || issuer.Scheme != "https" || issuer.Hostname() != config.OIDCTLSServerName || issuer.User != nil || issuer.RawQuery != "" || issuer.Fragment != "" ||
 		jwksErr != nil || jwks.Scheme != "https" || jwks.Hostname() != issuer.Hostname() || jwks.User != nil || jwks.RawQuery != "" || jwks.Fragment != "" || jwks.Path == "" ||
 		connectErr != nil || connectHost == "" || net.ParseIP(connectHost) != nil || connectPort != "443" {
-		return errors.New("control-plane OIDC boundary is invalid")
+		return startupFailure(stageControlPlaneOIDCBoundaryIsInvalid, nil)
 	}
 	if !validObjectStorageBoundary(config) {
-		return errors.New("control-plane object storage boundary is invalid")
+		return startupFailure(stageControlPlaneObjectStorageBoundaryIsInvalid, nil)
 	}
 	if config.RPCProfile != "trusted-cluster" {
 		if info, err := os.Lstat(filepath.Dir(config.AuthorityVerifierSocket)); err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-			return errors.New("control-plane authority socket directory is invalid")
+			return startupFailure(stageControlPlaneAuthoritySocketDirectoryIsInvalid, nil)
 		}
 	}
 	return nil
