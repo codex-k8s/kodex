@@ -44,13 +44,6 @@ func (server *RoleImageServer) ListOrganizationRoleImageRecipeRevisions(ctx cont
 		return nil, transportError(err)
 	}
 	response := &controlplanev1.ListOrganizationRoleImageRecipeRevisionsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	for _, item := range items {
-		response.Revisions = append(response.Revisions, &controlplanev1.RoleImageRecipeRevision{
-			Ref: item.Ref, RecipeRef: item.RecipeRef, Revision: int64(item.Revision), RecipeVersion: int64(item.RecipeVersion),
-			RecipeGeneration: int64(item.RecipeGeneration), SpecSha256: item.SpecSHA256, ProvenanceSha256: item.ProvenanceSHA256,
-			SourceSha256: item.SourceSHA256, ImmutableBuildSha256: item.ImmutableBuildSHA256, ImageArtifactRef: item.ImageArtifactRef,
-			ManifestDigest: item.ManifestDigest, PromotedReference: item.PromotedReference, PromotionReceiptSha256: item.PromotionReceiptSHA256, CreatedAt: timestamp(item.CreatedAt),
-		})
-	}
+	response.Revisions = castResponseItems(items, castRoleImageRecipeRevision)
 	return response, nil
 }

@@ -36,15 +36,9 @@ func castAssistantCurrentConfiguration(value entity.AssistantCurrentConfiguratio
 		result.SecretBindings = append(result.SecretBindings, &controlplanev1.RuntimeSecretBinding{Name: item.Name, SecretRef: item.SecretRef, Revision: item.Revision})
 	}
 	for _, item := range value.TemplateVariables {
-		reason, err := castTemplateAvailabilityReason(item.Reason, item.Available)
+		variable, err := castTemplateVariable(item)
 		if err != nil {
 			return nil, err
-		}
-		variable := &controlplanev1.TemplateVariable{Name: item.Name, ValueType: item.Type, Description: item.Description,
-			Example: item.Example, Source: item.Source, Collection: item.Collection, ItemValueType: item.ItemType,
-			RangeExample: item.RangeExample, Available: item.Available, Reason: reason}
-		for _, field := range item.ItemFields {
-			variable.ItemFields = append(variable.ItemFields, &controlplanev1.TemplateVariableField{Name: field.Name, ValueType: field.Type, Description: field.Description})
 		}
 		result.TemplateVariables = append(result.TemplateVariables, variable)
 	}

@@ -4,11 +4,88 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.447.0
+version: 1.448.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие проекции переменных и ревизий образа — 25.10.2026
+
+На основе `ee12f9ac01d58182120c04855c87ddf6ee8f36e9` два содержательных
+повтора заменены private casters control-plane. castTemplateVariable используется
+в ListTemplateVariables и castAssistantCurrentConfiguration; он проверяет
+закрытую availability reason до выделения wire variable, возвращает исходную
+ошибку без partial result и копирует все schema/example/collection/item fields
+в прежнем порядке. Nil/empty ItemFields сохраняет nil. Разрешённые значения
+переменных и полномочия на их источник этот caster не вычисляет.
+
+castRoleImageRecipeRevision переносит все14 прежних полей recipe snapshot,
+включая три прежних uint64→int64 conversion и timestamp. Оба списка —
+платформенный ListRoleImageRecipeRevisions и организационный
+ListOrganizationRoleImageRecipeRevisions — используют этот caster через
+существующий castResponseItems для свежих nil Revisions fields. Порядок,
+пагинация, nil/empty результат и один converter call на элемент сохранены.
+Разные principal/queryResponse и roleImagePrincipal, owner service reads,
+provenance/promotion validation остаются у прежних владельцев.
+
+Ещё один обнаруженный read envelope ListInteractionIdentities переведён в
+существующий queryResponse с exact FullMethodName и однократным error mapping.
+Его address-based castInteractionIdentity(&item) не заменён value mapper.
+Identity bind/revoke и другие команды файла не менялись. Новые helpers
+содержательно документированы EN→RU; нового shared module, dependency,
+authority, grant, transaction, retry, deadline либо события нет.
+
+Обратная проверка закрепляет реальные signatures/bodies обоих casters,
+раскрывает2 recipe mapper calls и2 fallible template calls и восстанавливает
+полные AST4 исходных файлов с comments/directives. Проверены fresh nil
+Revisions fields, исходные/current byte digests, неизменность mapper,
+queryResponse и server boundary. Template error-variable переименование
+err/reasonErr учитывается явно; helper error guard и final variable/nil return
+проверены. Отдельная полная inverse-AST проверка ListInteractionIdentities
+восстанавливает пятый файл, включая commands, pointer projection и документы.
+Parser diagnostics закрыто отклоняются до использования AST.
+
+Первый build/unit был успешен после двух casters; после добавления identity
+read envelope повтор выполнен на окончательном Go-коде. Итоговые команды
+всего control-plane: `go build -p 2 ./...` — PASS LOCAL,9,29с;
+`go test -p 2 -count=1 ./...` — PASS LOCAL,37,98с. GOWORK=off,
+GOMAXPROCS=4; credentials, inherited KODEX/VITE inputs и KUBECONFIG удалены
+из child env. Существующий TestTemplateAvailabilityClosedReasons исполняется
+в этом unit-контуре; зеркальные тесты простых field copies не добавлены.
+После итоговых проверок Go-код не менялся.
+
+Detector:6709 собственных sources/222 exclusions,1628 raw-групп против1631.
+7 прежних raw keys/7 occurrences исчезли;3 новых keys/3 occurrences и ещё1
+occurrence существующего key появились при перестроении окон. Оба точных
+ключа прежних TemplateVariable/RoleImageRecipeRevision projection исчезли,
+что отдельно проверено по pair/hash исходного отчёта. Реестр не скрывает их.
+
+Три registry keys с count0 сняты. Четвёртый key interaction/revision-impact
+изменился count1→2 и тоже снят: оба текущих command windows оставлены
+unresolved для выноса reply envelope в уже существующий executeResponse.
+Новое environment-draft/revision-impact command window также открыто.
+Count не повышался.813 остальных entries сохранены без изменения. После
+полного чтения добавлены только2 bounded query keys/count1: nominal
+access/schedule/recipe fields после общих helpers и identity/agent-instruction
+read bindings с сохранением pointer conventions. Теперь815 entries,
+942 retained occurrences и686 unresolved против687 на предыдущем SHA.
+
+Настоящий assessor отклоняет4 count/hash mutations новых решений и возврат
+всех4 снятых entries, включая прежний count1 при текущих2 occurrences.
+Три command windows остаются unresolved, оба прежних projection keys
+отсутствуют. Unit17 анализаторов, полный5-stage report,21505/21505 Go
+EN→RU descriptions без пропусков,5 ignore boundaries, gofmt и
+`git diff --check` — PASS LOCAL. Threshold, source scope и generated
+exclusions не расширялись. Issue#1823 остаётся открытым, PR#1829 — Draft.
+
+Context7 resolve Go вновь вернул Invalid API key. Использована официальная
+[спецификация range](https://go.dev/ref/spec#For_range) и
+[function calls](https://go.dev/ref/spec#Calls); secrets/MCP credentials не
+переносились и не менялись. Frontend/gateway/deploy/scripts, contracts и
+Go.mod на этом этапе не менялись. Прежние их проверки остаются историческими.
+PostgreSQL component, browser/full E2E, HTTP Docker fixture, apply/deploy и
+live acceptance текущего этапа — NOT RUN.
 
 ## Общая обвязка запросов конфигурации и метаданных — 25.10.2026
 

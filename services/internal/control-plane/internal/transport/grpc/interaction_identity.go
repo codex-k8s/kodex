@@ -5,6 +5,7 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
 // BindInteractionIdentity passes connection, external team/channel/user digest and subject
@@ -37,19 +38,17 @@ func (server *Server) RevokeInteractionIdentity(ctx context.Context, request *co
 // ListInteractionIdentities читает авторизованную страницу identity подключения и преобразует
 // каждую identity вместе с токеном продолжения.
 func (server *Server) ListInteractionIdentities(ctx context.Context, request *controlplanev1.ListInteractionIdentitiesRequest) (*controlplanev1.ListInteractionIdentitiesResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListInteractionIdentities_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	items, next, err := server.service.ListInteractionIdentities(ctx, p, request.GetConnectionRef(), page(request.GetPage()))
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListInteractionIdentitiesResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	for _, item := range items {
-		response.Identities = append(response.Identities, castInteractionIdentity(&item))
-	}
-	return response, nil
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_ListInteractionIdentities_FullMethodName, func(p value.Principal) (*controlplanev1.ListInteractionIdentitiesResponse, error) {
+		items, next, err := server.service.ListInteractionIdentities(ctx, p, request.GetConnectionRef(), page(request.GetPage()))
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.ListInteractionIdentitiesResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+		for _, item := range items {
+			response.Identities = append(response.Identities, castInteractionIdentity(&item))
+		}
+		return response, nil
+	})
 }
 
 // castInteractionIdentity preserves absent identity and copies owner-resolved connection, external

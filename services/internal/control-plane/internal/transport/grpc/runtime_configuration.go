@@ -107,16 +107,9 @@ func (server *Server) ListTemplateVariables(ctx context.Context, request *contro
 		}
 		response := &controlplanev1.ListTemplateVariablesResponse{Total: result.Total, Page: &controlplanev1.PageInfo{NextPageToken: result.NextPageToken}, ContextPin: castPromptContextPin(result.ContextPin)}
 		for _, item := range result.Variables {
-			reason, reasonErr := castTemplateAvailabilityReason(item.Reason, item.Available)
+			variable, reasonErr := castTemplateVariable(item)
 			if reasonErr != nil {
 				return nil, reasonErr
-			}
-			variable := &controlplanev1.TemplateVariable{Name: item.Name, ValueType: item.Type,
-				Description: item.Description, Example: item.Example, Source: item.Source, Collection: item.Collection,
-				ItemValueType: item.ItemType, RangeExample: item.RangeExample, Available: item.Available,
-				Reason: reason}
-			for _, field := range item.ItemFields {
-				variable.ItemFields = append(variable.ItemFields, &controlplanev1.TemplateVariableField{Name: field.Name, ValueType: field.Type, Description: field.Description})
 			}
 			response.Variables = append(response.Variables, variable)
 		}

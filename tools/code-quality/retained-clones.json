@@ -5427,22 +5427,6 @@
     },
     {
       "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/interaction_identity.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/revision_impact.go",
-      "fragmentSHA256": "22a60e18a76cbacef31adef24a2588d1a153dce65bc945acd6e6c5557de865ad",
-      "count": 1,
-      "reason": "Interaction identity bind/revoke/list и prompt/instruction/environment impact prepare различают authority-bearing identity и publication planning. Exact method/command/input pairs остаются типизированными; execute уже обрабатывает общие principal/mutation/errors. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/interaction_identity.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/revision_impact.go",
-      "fragmentSHA256": "6f953ffcf3e612b5d1e24fefe549dc66b5fb3f5088c9ea13bec178cbd957b900",
-      "count": 1,
-      "reason": "Стык identity revoke/list и instruction/environment impact/plan query имеет разные command и query намерения и protobuf replies. Общее execute/principal/error plumbing уже выделено, универсальный transition или read dispatcher не нужен. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
-    },
-    {
-      "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_renewal.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/provider_renewal.go",
       "fragmentSHA256": "22eb5d95363f4568f6422a328ae9fb6d6b96f76f91b82124ccf67811ba911374",
@@ -6372,14 +6356,6 @@
     {
       "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/mvp_queries.go",
-      "fragmentSHA256": "6423ea74a05a8703930a12dafa67d941ce64fb6e9a57ca6dcb2043c010021f5c",
-      "count": 1,
-      "reason": "Повторно разобранные typed transport windows после19 queryResponse migrations: access.go: ListAccessSubjects, ListOIDCGroups; mvp_queries.go: ListRoleImageRecipeRevisions, ListScheduleRuns. Все затронутые читающие RPC и пересекаемые особые ветви прочитаны целиком; exact method/domain input/response matrix проверена. Principal/error boundary повторно не реализуется в converted queries: это существующий queryResponse, прямые value mapping циклы уже castResponseItems. Оставлены nominal generated requests/replies, конкретные owner reads/filters/public fields и границы соседних объявлений: ListAccessSubjects→ListAccessSubjectsResponse.Page,Subjects; ListOIDCGroups→Groups,ListOIDCGroupsResponse.Page; ListRoleImageRecipeRevisions→ListRoleImageRecipeRevisionsResponse.Page,Revisions; ListScheduleRuns→ListScheduleRunsResponse.Page,Occurrences. Revision, recipe version/generation и provenance/build/manifest/promotion pins не объединяются. Occurrence связывает schedule revision и конкретный run. Универсальная фабрика typed RPC скрыла бы эти разные mappings; commands и read helper не объединяются. Только данная пара файлов, raw fragment SHA-256 и count 1; изменение hash/count требует нового разбора, целые файлы и family не исключаются."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
       "fragmentSHA256": "c384f1dcb81305eecb8b50beac1c96bfaa5b0a9db312d0929641b7882ed7e7a7",
       "count": 1,
@@ -6448,14 +6424,6 @@
       "fragmentSHA256": "02983291c8da15cf3268d5025c8a05627145c729a0227fc21817687cedccbdde",
       "count": 1,
       "reason": "Повторно разобранные typed transport windows после19 queryResponse migrations: mvp_queries.go: ListRuntimeEnvironmentAgents, ListScheduleRevisions; queries.go: GetIntegrationConnection, ListIntegrationConnections. Все затронутые читающие RPC и пересекаемые особые ветви прочитаны целиком; exact method/domain input/response matrix проверена. Principal/error boundary повторно не реализуется в converted queries: это существующий queryResponse, прямые value mapping циклы уже castResponseItems. Оставлены nominal generated requests/replies, конкретные owner reads/filters/public fields и границы соседних объявлений: ListRuntimeEnvironmentAgents→Agents,ListRuntimeEnvironmentAgentsResponse.Page; ListScheduleRevisions→ListScheduleRevisionsResponse.Page,Revisions; GetIntegrationConnection→GetIntegrationConnectionResponse.Connection; ListIntegrationConnections→Connections,ListIntegrationConnectionsResponse.Page.  Универсальная фабрика typed RPC скрыла бы эти разные mappings; commands и read helper не объединяются. Только данная пара файлов, raw fragment SHA-256 и count 1; изменение hash/count требует нового разбора, целые файлы и family не исключаются."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/mvp_queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/mvp_queries.go",
-      "fragmentSHA256": "60664ae2815cd4384a9388f50b9b566145852eb9dd24dcefc7ef72308c384f18",
-      "count": 1,
-      "reason": "Повторно разобранные typed transport windows после19 queryResponse migrations: mvp_queries.go: ListScheduleRuns; mvp_queries.go: ListRoleImageRecipeRevisions. Все затронутые читающие RPC и пересекаемые особые ветви прочитаны целиком; exact method/domain input/response matrix проверена. Principal/error boundary повторно не реализуется в converted queries: это существующий queryResponse, прямые value mapping циклы уже castResponseItems. Оставлены nominal generated requests/replies, конкретные owner reads/filters/public fields и границы соседних объявлений: ListScheduleRuns→ListScheduleRunsResponse.Page,Occurrences; ListRoleImageRecipeRevisions→ListRoleImageRecipeRevisionsResponse.Page,Revisions. Revision, recipe version/generation и provenance/build/manifest/promotion pins не объединяются. Occurrence связывает schedule revision и конкретный run. Универсальная фабрика typed RPC скрыла бы эти разные mappings; commands и read helper не объединяются. Только данная пара файлов, raw fragment SHA-256 и count 1; изменение hash/count требует нового разбора, целые файлы и family не исключаются."
     },
     {
       "format": "go",
@@ -6536,6 +6504,22 @@
       "fragmentSHA256": "a36a732dc8e48d6a7137a4942c6fd8b1d2b319f5bfe9b6ac44c59d8c2fc2bd46",
       "count": 1,
       "reason": "Повторно разобранные typed transport windows после19 queryResponse migrations: runtime_configuration.go: GetAgentRuntimeConfiguration, ListAgentRuntimeConfigurationVersions, ListRuntimeEnvironmentSets; runtime_configuration.go: GetRuntimeEnvironmentSet, ListRuntimeEnvironmentVersions, ListTemplateVariables. Все затронутые читающие RPC и пересекаемые особые ветви прочитаны целиком; exact method/domain input/response matrix проверена. Principal/error boundary повторно не реализуется в converted queries: это существующий queryResponse, прямые value mapping циклы уже castResponseItems. Оставлены nominal generated requests/replies, конкретные owner reads/filters/public fields и границы соседних объявлений: GetAgentRuntimeConfiguration→GetAgentRuntimeConfigurationResponse.RuntimeConfiguration; ListAgentRuntimeConfigurationVersions→Configurations,ListAgentRuntimeConfigurationVersionsResponse.Page; ListRuntimeEnvironmentSets→Environments,ListRuntimeEnvironmentSetsResponse.Page; GetRuntimeEnvironmentSet→GetRuntimeEnvironmentSetResponse.Environment; ListRuntimeEnvironmentVersions→ListRuntimeEnvironmentVersionsResponse.Page,Versions; ListTemplateVariables→ListTemplateVariablesResponse.ContextPin,ListTemplateVariablesResponse.Page,ListTemplateVariablesResponse.Total,Variables. TemplateContext создаётся только при наличии preview/context pins; reason enum и availability проверяются до выдачи частичного ответа. Универсальная фабрика typed RPC скрыла бы эти разные mappings; commands и read helper не объединяются. Только данная пара файлов, raw fragment SHA-256 и count 1; изменение hash/count требует нового разбора, целые файлы и family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/mvp_queries.go",
+      "fragmentSHA256": "1fcfe31f3afa89279581dd13081b5877def6bf0f3752f644bc7726da9944cf10",
+      "count": 1,
+      "reason": "Остаточное окно AccessService subject/OIDC metadata reads и ListScheduleRuns/ListRoleImageRecipeRevisions после выноса общего recipe caster. Полные тела и границы соседних методов прочитаны: [['ListAccessSubjects', 'ListOIDCGroups', 'ListAccessRoles'], ['ListScheduleRuns', 'ListRoleImageRecipeRevisions', 'normalizedProviderState']]. Общие principal/error уже queryResponse; коллекции простых значений уже castResponseItems, recipe fields теперь castRoleImageRecipeRevision. ScheduleRunOccurrence связывает schedule/revision/run, AccessService возвращает subject/group metadata, recipe caster переносит build/provenance/promotion pins; единой бизнесовой projection здесь нет. Остались nominal generated requests/replies, owner reads и явные поля/page; новый универсальный dispatcher скрыл бы эти разные mappings. Только данная пара paths/fragment SHA-256/count1, изменение закрыто требует нового разбора."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/interaction_identity.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "fragmentSHA256": "6be34fdec2e427c589b769da7ed334fb92b32929541f0b77d99ff786f89b966d",
+      "count": 1,
+      "reason": "Остаточное окно ListInteractionIdentities и agent/instruction reads после переноса identity read в существующий queryResponse. Полные тела и матрица прочитаны: [['RevokeInteractionIdentity', 'ListInteractionIdentities'], ['GetAgent', 'ListAgentInstructionVersions']]. Principal/error уже общие; connection-scoped identity query и agent/instruction refs остаются отдельными owner reads. Identity projection использует castInteractionIdentity(&item), instruction projection сохраняет адрес исходного элемента; менять адресные соглашения ради generic value mapper не требуется. Typed response/page/field bindings и соседние объявления остаются явными, command identity bind/revoke не объединяются с query. Только данная пара paths/fragment SHA-256/count1; изменение count/hash требует нового разбора."
     }
   ]
 }
