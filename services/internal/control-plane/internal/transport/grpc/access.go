@@ -9,170 +9,153 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // ListPermissionRegistry reads the permission catalog through the exact AccessService method principal and casts definitions; this registry describes available permissions rather than granting the caller or a listed subject any access. Domain failures retain transportError mapping.
 // ListPermissionRegistry читает каталог полномочий с principal точного метода AccessService и преобразует определения; реестр описывает доступные полномочия, но не выдаёт доступ вызывающему или перечисленному субъекту. Доменные отказы сохраняют отображение transportError.
 func (server *Server) ListPermissionRegistry(ctx context.Context, _ *controlplanev1.ListPermissionRegistryRequest) (*controlplanev1.ListPermissionRegistryResponse, error) {
-	p, err := principal(ctx, controlplanev1.AccessService_ListPermissionRegistry_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	items, err := server.service.ListPermissionRegistry(ctx, p)
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListPermissionRegistryResponse{}
-	response.Permissions = castResponseItems(items, castPermissionDefinition)
-	return response, nil
+	return queryResponse(ctx, controlplanev1.AccessService_ListPermissionRegistry_FullMethodName, func(p value.Principal) (*controlplanev1.ListPermissionRegistryResponse, error) {
+		items, err := server.service.ListPermissionRegistry(ctx, p)
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.ListPermissionRegistryResponse{}
+		response.Permissions = castResponseItems(items, castPermissionDefinition)
+		return response, nil
+	})
 }
 
 // ListAccessSubjects resolves the verified method principal, forwards query/page and the requested subject kind, and casts only the returned subject page with its next token. Subject filters are query data and do not establish caller identity or membership.
 // ListAccessSubjects разрешает проверенный principal метода, передаёт query/page и запрошенный вид субъекта и преобразует лишь возвращённую страницу с её следующим токеном. Фильтры являются данными запроса и не назначают идентичность или членство вызывающего.
 func (server *Server) ListAccessSubjects(ctx context.Context, request *controlplanev1.ListAccessSubjectsRequest) (*controlplanev1.ListAccessSubjectsResponse, error) {
-	p, err := principal(ctx, controlplanev1.AccessService_ListAccessSubjects_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	kind := accessSubjectKind(request.GetKind())
-	items, next, err := server.service.ListAccessSubjects(ctx, p, query.Filter{Query: request.GetQuery(), Page: page(request.GetPage())}, kind)
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListAccessSubjectsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	response.Subjects = castResponseItems(items, castAccessSubject)
-	return response, nil
+	return queryResponse(ctx, controlplanev1.AccessService_ListAccessSubjects_FullMethodName, func(p value.Principal) (*controlplanev1.ListAccessSubjectsResponse, error) {
+		kind := accessSubjectKind(request.GetKind())
+		items, next, err := server.service.ListAccessSubjects(ctx, p, query.Filter{Query: request.GetQuery(), Page: page(request.GetPage())}, kind)
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.ListAccessSubjectsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+		response.Subjects = castResponseItems(items, castAccessSubject)
+		return response, nil
+	})
 }
 
 // ListOIDCGroups pages stored OIDC-group metadata through the authenticated AccessService operation and returns the repository cursor unchanged; casting group counts and synchronization timestamps neither queries the identity provider nor changes membership.
 // ListOIDCGroups читает страницы сохранённых метаданных OIDC-групп через аутентифицированную операцию AccessService и возвращает курсор репозитория без изменения; преобразование счётчиков и времени синхронизации не запрашивает провайдера идентичности и не меняет членство.
 func (server *Server) ListOIDCGroups(ctx context.Context, request *controlplanev1.ListOIDCGroupsRequest) (*controlplanev1.ListOIDCGroupsResponse, error) {
-	p, err := principal(ctx, controlplanev1.AccessService_ListOIDCGroups_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	items, next, err := server.service.ListOIDCGroups(ctx, p, query.Filter{Query: request.GetQuery(), Page: page(request.GetPage())})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListOIDCGroupsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	response.Groups = castResponseItems(items, castOIDCGroup)
-	return response, nil
+	return queryResponse(ctx, controlplanev1.AccessService_ListOIDCGroups_FullMethodName, func(p value.Principal) (*controlplanev1.ListOIDCGroupsResponse, error) {
+		items, next, err := server.service.ListOIDCGroups(ctx, p, query.Filter{Query: request.GetQuery(), Page: page(request.GetPage())})
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.ListOIDCGroupsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+		response.Groups = castResponseItems(items, castOIDCGroup)
+		return response, nil
+	})
 }
 
 // ListAccessRoles forwards query aliases, paging and the explicit includeArchived flag under the exact method principal, then casts the returned role page. Including archived metadata does not reactivate a role or bypass repository eligibility.
 // ListAccessRoles передаёт поисковые варианты, пагинацию и явный includeArchived с principal точного метода, затем преобразует страницу ролей. Включение архивных метаданных не активирует роль и не обходит проверку доступности репозитория.
 func (server *Server) ListAccessRoles(ctx context.Context, request *controlplanev1.ListAccessRolesRequest) (*controlplanev1.ListAccessRolesResponse, error) {
-	p, err := principal(ctx, controlplanev1.AccessService_ListAccessRoles_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	items, next, err := server.service.ListAccessRoles(ctx, p, query.Filter{
-		Query: request.GetQuery(), Aliases: request.GetQueryAliases(), Page: page(request.GetPage()),
-	}, request.GetIncludeArchived())
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListAccessRolesResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	response.Roles = castResponseItems(items, castAccessRole)
-	return response, nil
+	return queryResponse(ctx, controlplanev1.AccessService_ListAccessRoles_FullMethodName, func(p value.Principal) (*controlplanev1.ListAccessRolesResponse, error) {
+		items, next, err := server.service.ListAccessRoles(ctx, p, query.Filter{
+			Query: request.GetQuery(), Aliases: request.GetQueryAliases(), Page: page(request.GetPage()),
+		}, request.GetIncludeArchived())
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.ListAccessRolesResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+		response.Roles = castResponseItems(items, castAccessRole)
+		return response, nil
+	})
 }
 
 // ListAccessRoleVersions requests the exact role reference and version page with a verified method principal, returning the current role metadata together with stored versions and cursor. Reading a version neither publishes it nor attaches it to a binding.
 // ListAccessRoleVersions запрашивает точную ссылку роли и страницу версий с проверенным principal метода, возвращая текущие метаданные роли, сохранённые версии и курсор. Чтение версии не публикует её и не назначает привязке.
 func (server *Server) ListAccessRoleVersions(ctx context.Context, request *controlplanev1.ListAccessRoleVersionsRequest) (*controlplanev1.ListAccessRoleVersionsResponse, error) {
-	p, err := principal(ctx, controlplanev1.AccessService_ListAccessRoleVersions_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	role, items, next, err := server.service.ListAccessRoleVersions(ctx, p, request.GetRoleRef(), page(request.GetPage()))
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListAccessRoleVersionsResponse{Role: castAccessRole(role), Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	response.Versions = castResponseItems(items, castAccessRoleVersion)
-	return response, nil
+	return queryResponse(ctx, controlplanev1.AccessService_ListAccessRoleVersions_FullMethodName, func(p value.Principal) (*controlplanev1.ListAccessRoleVersionsResponse, error) {
+		role, items, next, err := server.service.ListAccessRoleVersions(ctx, p, request.GetRoleRef(), page(request.GetPage()))
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.ListAccessRoleVersionsResponse{Role: castAccessRole(role), Page: &controlplanev1.PageInfo{NextPageToken: next}}
+		response.Versions = castResponseItems(items, castAccessRoleVersion)
+		return response, nil
+	})
 }
 
 // ListAccessBindings builds the typed binding filter from page, subject/role/project selectors, revoked-state inclusion and query aliases, then casts the authorized result page. Payload references select resources; authority still comes from the verified method principal and service.
 // ListAccessBindings строит типизированный фильтр привязок из страницы, селекторов субъекта/роли/проекта, включения отозванных записей и поисковых вариантов, затем преобразует разрешённую страницу. Ссылки payload выбирают ресурсы; полномочия по-прежнему определяют проверенный principal метода и сервис.
 func (server *Server) ListAccessBindings(ctx context.Context, request *controlplanev1.ListAccessBindingsRequest) (*controlplanev1.ListAccessBindingsResponse, error) {
-	p, err := principal(ctx, controlplanev1.AccessService_ListAccessBindings_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	items, next, err := server.service.ListAccessBindings(ctx, p, query.AccessBindingFilter{
-		Page: page(request.GetPage()), SubjectKind: accessSubjectKind(request.GetSubjectKind()),
-		SubjectRef: request.GetSubjectRef(), RoleRef: request.GetRoleRef(), ProjectRef: request.GetProjectRef(),
-		IncludeRevoked: request.GetIncludeRevoked(), Query: request.GetQuery(), Aliases: request.GetQueryAliases(),
+	return queryResponse(ctx, controlplanev1.AccessService_ListAccessBindings_FullMethodName, func(p value.Principal) (*controlplanev1.ListAccessBindingsResponse, error) {
+		items, next, err := server.service.ListAccessBindings(ctx, p, query.AccessBindingFilter{
+			Page: page(request.GetPage()), SubjectKind: accessSubjectKind(request.GetSubjectKind()),
+			SubjectRef: request.GetSubjectRef(), RoleRef: request.GetRoleRef(), ProjectRef: request.GetProjectRef(),
+			IncludeRevoked: request.GetIncludeRevoked(), Query: request.GetQuery(), Aliases: request.GetQueryAliases(),
+		})
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.ListAccessBindingsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+		response.Bindings = castResponseItems(items, castAccessBinding)
+		return response, nil
 	})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListAccessBindingsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	response.Bindings = castResponseItems(items, castAccessBinding)
-	return response, nil
 }
 
 // QueryEffectiveAccess evaluates the requested subject, target and permission keys through the authorized service, supplying zero time so the owner chooses the evaluation instant. Returns that instant and each explanation without treating the queried subject as the caller.
 // QueryEffectiveAccess вычисляет доступ запрошенного субъекта к цели и ключам полномочий через авторизованный сервис, передавая нулевое время для выбора момента владельцем данных. Возвращает этот момент и все объяснения, не считая запрошенного субъекта вызывающим.
 func (server *Server) QueryEffectiveAccess(ctx context.Context, request *controlplanev1.QueryEffectiveAccessRequest) (*controlplanev1.QueryEffectiveAccessResponse, error) {
-	p, err := principal(ctx, controlplanev1.AccessService_QueryEffectiveAccess_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	result, err := server.service.QueryEffectiveAccess(ctx, p, request.GetSubjectRef(), domainAccessScope(request.GetTarget()), request.GetPermissionKeys(), time.Time{})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.QueryEffectiveAccessResponse{Subject: castAccessSubject(result.Subject), EvaluatedAt: timestamppb.New(result.EvaluatedAt)}
-	for _, item := range result.Decisions {
-		response.Decisions = append(response.Decisions, castEffectiveDecision(item))
-	}
-	return response, nil
+	return queryResponse(ctx, controlplanev1.AccessService_QueryEffectiveAccess_FullMethodName, func(p value.Principal) (*controlplanev1.QueryEffectiveAccessResponse, error) {
+		result, err := server.service.QueryEffectiveAccess(ctx, p, request.GetSubjectRef(), domainAccessScope(request.GetTarget()), request.GetPermissionKeys(), time.Time{})
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.QueryEffectiveAccessResponse{Subject: castAccessSubject(result.Subject), EvaluatedAt: timestamppb.New(result.EvaluatedAt)}
+		for _, item := range result.Decisions {
+			response.Decisions = append(response.Decisions, castEffectiveDecision(item))
+		}
+		return response, nil
+	})
 }
 
 // ExplainAccess queries exactly one permission under the verified method principal and requires exactly one returned decision before casting its explanation. An unexpected decision cardinality maps to Invalid rather than selecting an arbitrary result.
 // ExplainAccess запрашивает ровно одно полномочие с проверенным principal метода и требует единственное возвращённое решение перед преобразованием объяснения. Неожиданное количество решений отображается в Invalid вместо выбора произвольного результата.
 func (server *Server) ExplainAccess(ctx context.Context, request *controlplanev1.ExplainAccessRequest) (*controlplanev1.ExplainAccessResponse, error) {
-	p, err := principal(ctx, controlplanev1.AccessService_ExplainAccess_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	result, err := server.service.QueryEffectiveAccess(ctx, p, request.GetSubjectRef(), domainAccessScope(request.GetTarget()), []string{request.GetPermissionKey()}, time.Time{})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	if len(result.Decisions) != 1 {
-		return nil, transportError(errs.ErrInvalid)
-	}
-	return &controlplanev1.ExplainAccessResponse{Subject: castAccessSubject(result.Subject), Result: castEffectiveDecision(result.Decisions[0]), EvaluatedAt: timestamppb.New(result.EvaluatedAt)}, nil
+	return queryResponse(ctx, controlplanev1.AccessService_ExplainAccess_FullMethodName, func(p value.Principal) (*controlplanev1.ExplainAccessResponse, error) {
+		result, err := server.service.QueryEffectiveAccess(ctx, p, request.GetSubjectRef(), domainAccessScope(request.GetTarget()), []string{request.GetPermissionKey()}, time.Time{})
+		if err != nil {
+			return nil, err
+		}
+		if len(result.Decisions) != 1 {
+			return nil, errs.ErrInvalid
+		}
+		return &controlplanev1.ExplainAccessResponse{Subject: castAccessSubject(result.Subject), Result: castEffectiveDecision(result.Decisions[0]), EvaluatedAt: timestamppb.New(result.EvaluatedAt)}, nil
+	})
 }
 
 // SimulateAccess validates the optional evaluation timestamp and constructs a hypothetical role/binding with a fixed simulation version reference, copied permissions and mapped scope/conditions. Returns current and simulated decisions through the service; it does not persist the hypothetical binding.
 // SimulateAccess проверяет необязательный момент оценки и строит гипотетические роль/привязку с фиксированной ссылкой версии simulation, копией полномочий и преобразованными scope/conditions. Возвращает текущее и моделируемое решения через сервис; гипотетическую привязку не сохраняет.
 func (server *Server) SimulateAccess(ctx context.Context, request *controlplanev1.SimulateAccessRequest) (*controlplanev1.SimulateAccessResponse, error) {
-	p, err := principal(ctx, controlplanev1.AccessService_SimulateAccess_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	evaluatedAt, err := optionalDomainTime(request.GetEvaluatedAt())
-	if err != nil {
-		return nil, transportError(err)
-	}
-	role := request.GetRole()
-	binding := request.GetBinding()
-	result, err := server.service.SimulateAccess(ctx, p, command.AccessSimulationInput{
-		SubjectRef: request.GetSubjectRef(), PermissionKey: request.GetPermissionKey(), Target: domainAccessScope(request.GetTarget()),
-		Role:        command.AccessRoleInput{PermissionKeys: append([]string(nil), role.GetPermissionKeys()...), AllowedScopes: accessScopeKinds(role.GetAllowedScopes())},
-		Binding:     command.AccessBindingInput{SubjectKind: accessSubjectKind(binding.GetSubjectKind()), SubjectRef: binding.GetSubjectRef(), RoleVersionRef: "simulation", Scope: domainAccessScope(binding.GetScope()), Conditions: domainAccessConditions(binding.GetConditions())},
-		EvaluatedAt: evaluatedAt,
+	return queryResponse(ctx, controlplanev1.AccessService_SimulateAccess_FullMethodName, func(p value.Principal) (*controlplanev1.SimulateAccessResponse, error) {
+		evaluatedAt, err := optionalDomainTime(request.GetEvaluatedAt())
+		if err != nil {
+			return nil, err
+		}
+		role := request.GetRole()
+		binding := request.GetBinding()
+		result, err := server.service.SimulateAccess(ctx, p, command.AccessSimulationInput{
+			SubjectRef: request.GetSubjectRef(), PermissionKey: request.GetPermissionKey(), Target: domainAccessScope(request.GetTarget()),
+			Role:        command.AccessRoleInput{PermissionKeys: append([]string(nil), role.GetPermissionKeys()...), AllowedScopes: accessScopeKinds(role.GetAllowedScopes())},
+			Binding:     command.AccessBindingInput{SubjectKind: accessSubjectKind(binding.GetSubjectKind()), SubjectRef: binding.GetSubjectRef(), RoleVersionRef: "simulation", Scope: domainAccessScope(binding.GetScope()), Conditions: domainAccessConditions(binding.GetConditions())},
+			EvaluatedAt: evaluatedAt,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.SimulateAccessResponse{Subject: castAccessSubject(result.Subject), Current: castEffectiveDecision(result.Current), Simulated: castEffectiveDecision(result.Simulated), EvaluatedAt: timestamppb.New(result.EvaluatedAt)}, nil
 	})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.SimulateAccessResponse{Subject: castAccessSubject(result.Subject), Current: castEffectiveDecision(result.Current), Simulated: castEffectiveDecision(result.Simulated), EvaluatedAt: timestamppb.New(result.EvaluatedAt)}, nil
 }
 
 // CreateAccessRole maps role fields and mutation metadata into the specialized CreateAccessRole command using the exact authenticated RPC path, then casts the owner result. The request supplies role content rather than caller identity or a preassigned role reference.

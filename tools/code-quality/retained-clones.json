@@ -5035,14 +5035,6 @@
     },
     {
       "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
-      "fragmentSHA256": "892a59227af45314155db038516d8d0a20a09f42d68577ec9d2197adf8fe04c1",
-      "count": 1,
-      "reason": "Окно100 tokens пересекает конец typed collection mapping и начало ExplainAccess/CompleteRuntimeSecretOperation. Первое объясняет решение по subject/permission, второе завершает broker claim с generation/materialization; общими остаются append/return и principal guard. DTO, authority и доменные эффекты различны; общий dispatcher или caster с reflection ради этого scaffold ухудшит проверку границы без общего алгоритма. Исключена только точная пара/hash/count1. После добавления предметных EN→RU комментариев окно пересмотрено по обоим исходникам: Go AST access.go не изменился, второй файл неизменен; обновлён только content hash точного того же scaffold."
-    },
-    {
-      "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_renewal.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
       "fragmentSHA256": "b50e13a51a818e50cf271c5d10d044fd9034cd8e310171906037ad41cac0f3b2",
@@ -6149,30 +6141,6 @@
       "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "0130ff3e40e581537ee745a378f401ec7d9a92f1803610bf79b82a962a0754a4",
-      "count": 1,
-      "reason": "Остаточные self-windows queries.go, 1 occurrences, пересекают объявления GetProject, ListPlatformMembershipCandidates, ListProjectMemberships, ListTrashedProjects. Полные тела прочитаны; exact RPC→domain input→public field matrix проверена отдельно. Поля этого набора: Memberships, Page, Project, Projects, Users. Principal/error boundary уже queryResponse, повторные range→caster→append циклы уже castResponseItems. Остаются nominal generated requests/replies, service methods, refs/filters и выбор поля ответа; universal query dispatcher либо фабрика closures скрыла бы эту owner mapping ради короткого transport glue.  Сохраняется только данный внутрефайловый fragment SHA-256 и count1; изменение hash/count требует нового разбора, остальные методы и файл целиком не исключаются."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "537b166fb4715ac260badac526539099334086191039fd8ce78f77876aaedb46",
-      "count": 2,
-      "reason": "Остаточные self-windows queries.go, 2 occurrences, пересекают объявления GetAgent, GetProject, GetSchedule, ListAgentInstructionVersions, ListAgents, ListIntegrationDefinitions, ListPlatformMemberships, ListSchedules, ListTrashedProjects. Полные тела прочитаны; exact RPC→domain input→public field matrix проверена отдельно. Поля этого набора: Agent, Agents, CoreReady, Definitions, InstructionVersions, Memberships, NextActions, Page, Project, Projects, Schedule, Schedules. Principal/error boundary уже queryResponse, повторные range→caster→append циклы уже castResponseItems. Остаются nominal generated requests/replies, service methods, refs/filters и выбор поля ответа; universal query dispatcher либо фабрика closures скрыла бы эту owner mapping ради короткого transport glue. projection &items[index] остаётся отдельной и сохраняет адрес исходного элемента. CoreReady и NextActions остаются частью конкретного reply. MANAGE_MEMBERS назначается отдельным явным NextAction. Сохраняется только данный внутрефайловый fragment SHA-256 и count2; изменение hash/count требует нового разбора, остальные методы и файл целиком не исключаются."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "9bd0bd6f78fdc0a50a3f51038cd8f54a39ec12aae8d1d52769f195bb85a17ebc",
-      "count": 1,
-      "reason": "Остаточные self-windows queries.go, 1 occurrences, пересекают объявления GetAdministration, GetIntegrationConnection, GetProject, ListIntegrationConnections, ListPlatformMemberships, ListTrashedProjects. Полные тела прочитаны; exact RPC→domain input→public field matrix проверена отдельно. Поля этого набора: Connection, Connections, Memberships, NextActions, Page, Project, Projects, State. Principal/error boundary уже queryResponse, повторные range→caster→append циклы уже castResponseItems. Остаются nominal generated requests/replies, service methods, refs/filters и выбор поля ответа; universal query dispatcher либо фабрика closures скрыла бы эту owner mapping ради короткого transport glue. MANAGE_MEMBERS назначается отдельным явным NextAction. Сохраняется только данный внутрефайловый fragment SHA-256 и count1; изменение hash/count требует нового разбора, остальные методы и файл целиком не исключаются."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
       "fragmentSHA256": "47bdbea9d17bc5acfd02e1d74091d32a936757fc0ee7993bc2ffe5dd9504b590",
       "count": 2,
       "reason": "Остаточные self-windows queries.go, 2 occurrences, пересекают объявления GetOwnerGate, GetProject, GetRun, GetRunGraph, ListArtifacts, ListOwnerGates, ListPlatformMemberships, ListRuns, ListTrashedProjects. Полные тела прочитаны; exact RPC→domain input→public field matrix проверена отдельно. Поля этого набора: Artifacts, Gate, Gates, Graph, Memberships, NextActions, Page, Project, Projects, Run, Runs, Total. Principal/error boundary уже queryResponse, повторные range→caster→append циклы уже castResponseItems. Остаются nominal generated requests/replies, service methods, refs/filters и выбор поля ответа; universal query dispatcher либо фабрика closures скрыла бы эту owner mapping ради короткого transport glue. выбор snapshot read и ненулевой пустой preallocated runs slice не заменены nil mapper. ограничение sourceKinds≤5 и отдельные enum filters остаются в методе. singular/plural state filters сохраняют свою прежнюю конверсию. MANAGE_MEMBERS назначается отдельным явным NextAction. UNSPECIFIED state отклоняется до domain read. Сохраняется только данный внутрефайловый fragment SHA-256 и count2; изменение hash/count требует нового разбора, остальные методы и файл целиком не исключаются."
@@ -6192,46 +6160,6 @@
       "fragmentSHA256": "916ff69e74869e1268f0ce4dae97c192fa737fd3e6cdae91290a8967e2695848",
       "count": 1,
       "reason": "Остаточные self-windows queries.go, 1 occurrences, пересекают объявления GetAdministration, GetProject, ListAuditEvents, ListPlatformMemberships. Полные тела прочитаны; exact RPC→domain input→public field matrix проверена отдельно. Поля этого набора: Events, Memberships, NextActions, Page, Project, State. Principal/error boundary уже queryResponse, повторные range→caster→append циклы уже castResponseItems. Остаются nominal generated requests/replies, service methods, refs/filters и выбор поля ответа; universal query dispatcher либо фабрика closures скрыла бы эту owner mapping ради короткого transport glue. MANAGE_MEMBERS назначается отдельным явным NextAction. Сохраняется только данный внутрефайловый fragment SHA-256 и count1; изменение hash/count требует нового разбора, остальные методы и файл целиком не исключаются."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "ca2500dba758a4f3e6c287b75d725a4c9f8e561653e7fff29be7a15e9b086f8b",
-      "count": 2,
-      "reason": "Остаточные self-windows queries.go, 2 occurrences, пересекают объявления ListIntegrationConnections, ListIntegrationDefinitions, ListPlatformMembershipCandidates, ListPlatformMemberships, ListProjectMemberships. Полные тела прочитаны; exact RPC→domain input→public field matrix проверена отдельно. Поля этого набора: Connections, CoreReady, Definitions, Memberships, NextActions, Page, Users. Principal/error boundary уже queryResponse, повторные range→caster→append циклы уже castResponseItems. Остаются nominal generated requests/replies, service methods, refs/filters и выбор поля ответа; universal query dispatcher либо фабрика closures скрыла бы эту owner mapping ради короткого transport glue. CoreReady и NextActions остаются частью конкретного reply. MANAGE_MEMBERS назначается отдельным явным NextAction. Сохраняется только данный внутрефайловый fragment SHA-256 и count2; изменение hash/count требует нового разбора, остальные методы и файл целиком не исключаются."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "389524798e623a809f8637398f1527078f3df2b8db3f4bb076ba8007f3d3a94b",
-      "count": 1,
-      "reason": "Остаточные self-windows queries.go, 1 occurrences, пересекают объявления ListAgents, ListPlatformMembershipCandidates, ListProjectMembershipCandidates, ListProjectMemberships. Полные тела прочитаны; exact RPC→domain input→public field matrix проверена отдельно. Поля этого набора: Agents, Memberships, Page, Users. Principal/error boundary уже queryResponse, повторные range→caster→append циклы уже castResponseItems. Остаются nominal generated requests/replies, service methods, refs/filters и выбор поля ответа; universal query dispatcher либо фабрика closures скрыла бы эту owner mapping ради короткого transport glue.  Сохраняется только данный внутрефайловый fragment SHA-256 и count1; изменение hash/count требует нового разбора, остальные методы и файл целиком не исключаются."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "442a1d53048d7a62c5aed5f3cae317583b663b0140ba56091bc4679ba88c44e8",
-      "count": 2,
-      "reason": "Остаточные self-windows queries.go, 2 occurrences, пересекают объявления GetAgent, GetIntegrationConnection, ListAgents, ListIntegrationConnections, ListPlatformMembershipCandidates, ListProjectMemberships. Полные тела прочитаны; exact RPC→domain input→public field matrix проверена отдельно. Поля этого набора: Agent, Agents, Connection, Connections, Memberships, Page, Users. Principal/error boundary уже queryResponse, повторные range→caster→append циклы уже castResponseItems. Остаются nominal generated requests/replies, service methods, refs/filters и выбор поля ответа; universal query dispatcher либо фабрика closures скрыла бы эту owner mapping ради короткого transport glue.  Сохраняется только данный внутрефайловый fragment SHA-256 и count2; изменение hash/count требует нового разбора, остальные методы и файл целиком не исключаются."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "cf3acce51035f03f27ce22f4ca84f044606e08f853726425a69ee10db3d0b079",
-      "count": 1,
-      "reason": "Остаточные self-windows queries.go, 1 occurrences, пересекают объявления ListIntegrationConnections, ListIntegrationDefinitions, ListPlatformMembershipCandidates, ListProjectMemberships. Полные тела прочитаны; exact RPC→domain input→public field matrix проверена отдельно. Поля этого набора: Connections, CoreReady, Definitions, Memberships, NextActions, Page, Users. Principal/error boundary уже queryResponse, повторные range→caster→append циклы уже castResponseItems. Остаются nominal generated requests/replies, service methods, refs/filters и выбор поля ответа; universal query dispatcher либо фабрика closures скрыла бы эту owner mapping ради короткого transport glue. CoreReady и NextActions остаются частью конкретного reply. Сохраняется только данный внутрефайловый fragment SHA-256 и count1; изменение hash/count требует нового разбора, остальные методы и файл целиком не исключаются."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "df1dd70b69e294943b341f95c123527f705e3e236f579fe78e398d5f8139ebee",
-      "count": 1,
-      "reason": "Остаточные self-windows queries.go, 1 occurrences, пересекают объявления GetAttachmentSet, GetSchedule, ListPlatformMembershipCandidates, ListProjectMembershipCandidates, ListProjectMemberships, ListSchedules. Полные тела прочитаны; exact RPC→domain input→public field matrix проверена отдельно. Поля этого набора: AttachmentSet, Memberships, Page, Schedule, Schedules, Users. Principal/error boundary уже queryResponse, повторные range→caster→append циклы уже castResponseItems. Остаются nominal generated requests/replies, service methods, refs/filters и выбор поля ответа; universal query dispatcher либо фабрика closures скрыла бы эту owner mapping ради короткого transport glue. сохраняются отдельные attachment-set projection и page token. Сохраняется только данный внутрефайловый fragment SHA-256 и count1; изменение hash/count требует нового разбора, остальные методы и файл целиком не исключаются."
     },
     {
       "format": "go",
@@ -6296,6 +6224,150 @@
       "fragmentSHA256": "d95876081bde89324e16bb8ba911996bacbec88d5923023a8d0151c3360b68cb",
       "count": 1,
       "reason": "Остаточные self-windows queries.go, 1 occurrences, пересекают объявления GetArtifact, GetSchedule, ListArtifactRevisions, ListIntegrationDefinitions. Полные тела прочитаны; exact RPC→domain input→public field matrix проверена отдельно. Поля этого набора: Artifact, CoreReady, Definitions, Items, NextActions, Page, Schedule, Total. Principal/error boundary уже queryResponse, повторные range→caster→append циклы уже castResponseItems. Остаются nominal generated requests/replies, service methods, refs/filters и выбор поля ответа; universal query dispatcher либо фабрика closures скрыла бы эту owner mapping ради короткого transport glue. CoreReady и NextActions остаются частью конкретного reply. Сохраняется только данный внутрефайловый fragment SHA-256 и count1; изменение hash/count требует нового разбора, остальные методы и файл целиком не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "fragmentSHA256": "54f96adf3f62c0ec4be4e02176695eb81b98c5b730ef9ac3c63005b4f7bef4ab",
+      "count": 1,
+      "reason": "Остаточные typed read-adapter windows после переноса AccessService principal/error boundary в существующий queryResponse: access.go: ListAccessSubjects, ListPermissionRegistry; queries.go: ListPlatformCapabilities, ListRuntimeSelections. Полные AccessService тела и матрица exact RPC/domain call/response проверены; queries.go прочитан целиком на предыдущем этапе и его байты не менялись. Общая обвязка допуска/ошибок уже queryResponse, value-caster циклы уже castResponseItems. Здесь остаются nominal generated request/reply, конкретный domain read, фильтры, public field и соседние объявления: ListAccessSubjects→ListAccessSubjectsResponse.Page,Subjects; ListPermissionRegistry→Permissions; ListPlatformCapabilities→Capabilities; ListRuntimeSelections→Runtimes. Subject kind остаётся фильтром, не caller identity. Каталог описывает permissions, но не выдаёт их. Дополнительный универсальный диспетчер скрыл бы разные owner reads ради короткой типизированной связи. Исключение ограничено этой парой файлов, fragment SHA-256 и count 1; изменение hash/count закрыто отклоняется, весь файл либо RPC family не исключается."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "fragmentSHA256": "d744d346d7da463af9e490151a1c4c53aa8d12aa8a739c487affff20efac54ba",
+      "count": 1,
+      "reason": "Остаточные typed read-adapter windows после переноса AccessService principal/error boundary в существующий queryResponse: access.go: ListAccessSubjects, ListPermissionRegistry; queries.go: ListRuntimeSelections, SearchPlatform. Полные AccessService тела и матрица exact RPC/domain call/response проверены; queries.go прочитан целиком на предыдущем этапе и его байты не менялись. Общая обвязка допуска/ошибок уже queryResponse, value-caster циклы уже castResponseItems. Здесь остаются nominal generated request/reply, конкретный domain read, фильтры, public field и соседние объявления: ListAccessSubjects→ListAccessSubjectsResponse.Page,Subjects; ListPermissionRegistry→Permissions; ListRuntimeSelections→Runtimes; SearchPlatform→Results,SearchPlatformResponse.Page,SearchPlatformResponse.Total. Subject kind остаётся фильтром, не caller identity. Каталог описывает permissions, но не выдаёт их. Сохраняется положительный legacy limit override. Дополнительный универсальный диспетчер скрыл бы разные owner reads ради короткой типизированной связи. Исключение ограничено этой парой файлов, fragment SHA-256 и count 1; изменение hash/count закрыто отклоняется, весь файл либо RPC family не исключается."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "fragmentSHA256": "0725ee6ae82f4626e89c01407dc40d40f9df64b02afd42f5a14bf6f446ad3670",
+      "count": 1,
+      "reason": "Остаточные typed read-adapter windows после переноса AccessService principal/error boundary в существующий queryResponse: access.go: ListAccessSubjects, ListOIDCGroups; access.go: ListAccessRoles, ListOIDCGroups. Полные AccessService тела и матрица exact RPC/domain call/response проверены; queries.go прочитан целиком на предыдущем этапе и его байты не менялись. Общая обвязка допуска/ошибок уже queryResponse, value-caster циклы уже castResponseItems. Здесь остаются nominal generated request/reply, конкретный domain read, фильтры, public field и соседние объявления: ListAccessSubjects→ListAccessSubjectsResponse.Page,Subjects; ListOIDCGroups→Groups,ListOIDCGroupsResponse.Page; ListAccessRoles→ListAccessRolesResponse.Page,Roles; ListOIDCGroups→Groups,ListOIDCGroupsResponse.Page. includeArchived не активирует архивные роли. Subject kind остаётся фильтром, не caller identity. Читаются сохранённые метаданные без синхронизации OIDC. Дополнительный универсальный диспетчер скрыл бы разные owner reads ради короткой типизированной связи. Исключение ограничено этой парой файлов, fragment SHA-256 и count 1; изменение hash/count закрыто отклоняется, весь файл либо RPC family не исключается."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "fragmentSHA256": "dd89ee6931c8c7d990ef35324653fdbafe6de93d1da1962642336736632c809e",
+      "count": 1,
+      "reason": "Остаточные typed read-adapter windows после переноса AccessService principal/error boundary в существующий queryResponse: access.go: ListAccessSubjects, ListOIDCGroups; access.go: ListAccessRoleVersions, ListAccessRoles. Полные AccessService тела и матрица exact RPC/domain call/response проверены; queries.go прочитан целиком на предыдущем этапе и его байты не менялись. Общая обвязка допуска/ошибок уже queryResponse, value-caster циклы уже castResponseItems. Здесь остаются nominal generated request/reply, конкретный domain read, фильтры, public field и соседние объявления: ListAccessSubjects→ListAccessSubjectsResponse.Page,Subjects; ListOIDCGroups→Groups,ListOIDCGroupsResponse.Page; ListAccessRoleVersions→ListAccessRoleVersionsResponse.Page,ListAccessRoleVersionsResponse.Role,Versions; ListAccessRoles→ListAccessRolesResponse.Page,Roles. Версии и текущая роль читаются по точному RoleRef без публикации. includeArchived не активирует архивные роли. Subject kind остаётся фильтром, не caller identity. Читаются сохранённые метаданные без синхронизации OIDC. Дополнительный универсальный диспетчер скрыл бы разные owner reads ради короткой типизированной связи. Исключение ограничено этой парой файлов, fragment SHA-256 и count 1; изменение hash/count закрыто отклоняется, весь файл либо RPC family не исключается."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "fragmentSHA256": "b0ca189c5bfaf82d36a71d04e7c9315cae24200c59bf11582426e5b1841e8965",
+      "count": 1,
+      "reason": "Остаточные typed read-adapter windows после переноса AccessService principal/error boundary в существующий queryResponse: access.go: ListAccessSubjects, ListOIDCGroups; access.go: ListAccessBindings, ListAccessRoleVersions. Полные AccessService тела и матрица exact RPC/domain call/response проверены; queries.go прочитан целиком на предыдущем этапе и его байты не менялись. Общая обвязка допуска/ошибок уже queryResponse, value-caster циклы уже castResponseItems. Здесь остаются nominal generated request/reply, конкретный domain read, фильтры, public field и соседние объявления: ListAccessSubjects→ListAccessSubjectsResponse.Page,Subjects; ListOIDCGroups→Groups,ListOIDCGroupsResponse.Page; ListAccessBindings→Bindings,ListAccessBindingsResponse.Page; ListAccessRoleVersions→ListAccessRoleVersionsResponse.Page,ListAccessRoleVersionsResponse.Role,Versions. SubjectKind/SubjectRef/RoleRef/ProjectRef/includeRevoked/query aliases остаются явными фильтрами. Версии и текущая роль читаются по точному RoleRef без публикации. Subject kind остаётся фильтром, не caller identity. Читаются сохранённые метаданные без синхронизации OIDC. Дополнительный универсальный диспетчер скрыл бы разные owner reads ради короткой типизированной связи. Исключение ограничено этой парой файлов, fragment SHA-256 и count 1; изменение hash/count закрыто отклоняется, весь файл либо RPC family не исключается."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "fragmentSHA256": "be3c9dec42899304f03b788e3b15394e2177dc778e90cb12466255eed661fac0",
+      "count": 1,
+      "reason": "Остаточные typed read-adapter windows после переноса AccessService principal/error boundary в существующий queryResponse: access.go: ListAccessRoles, ListAccessSubjects, ListOIDCGroups; queries.go: ListPlatformMembershipCandidates, ListPlatformMemberships, ListProjectMemberships. Полные AccessService тела и матрица exact RPC/domain call/response проверены; queries.go прочитан целиком на предыдущем этапе и его байты не менялись. Общая обвязка допуска/ошибок уже queryResponse, value-caster циклы уже castResponseItems. Здесь остаются nominal generated request/reply, конкретный domain read, фильтры, public field и соседние объявления: ListAccessRoles→ListAccessRolesResponse.Page,Roles; ListAccessSubjects→ListAccessSubjectsResponse.Page,Subjects; ListOIDCGroups→Groups,ListOIDCGroupsResponse.Page; ListPlatformMembershipCandidates→ListPlatformMembershipCandidatesResponse.Page,Users; ListPlatformMemberships→ListPlatformMembershipsResponse.NextActions,ListPlatformMembershipsResponse.Page,Memberships; ListProjectMemberships→ListProjectMembershipsResponse.Page,Memberships. includeArchived не активирует архивные роли. Subject kind остаётся фильтром, не caller identity. Читаются сохранённые метаданные без синхронизации OIDC. MANAGE_MEMBERS назначается отдельным NextAction. Дополнительный универсальный диспетчер скрыл бы разные owner reads ради короткой типизированной связи. Исключение ограничено этой парой файлов, fragment SHA-256 и count 1; изменение hash/count закрыто отклоняется, весь файл либо RPC family не исключается."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "fragmentSHA256": "b0ca189c5bfaf82d36a71d04e7c9315cae24200c59bf11582426e5b1841e8965",
+      "count": 1,
+      "reason": "Остаточные typed read-adapter windows после переноса AccessService principal/error boundary в существующий queryResponse: access.go: ListAccessSubjects, ListOIDCGroups; queries.go: ListIntegrationConnections, ListIntegrationDefinitions. Полные AccessService тела и матрица exact RPC/domain call/response проверены; queries.go прочитан целиком на предыдущем этапе и его байты не менялись. Общая обвязка допуска/ошибок уже queryResponse, value-caster циклы уже castResponseItems. Здесь остаются nominal generated request/reply, конкретный domain read, фильтры, public field и соседние объявления: ListAccessSubjects→ListAccessSubjectsResponse.Page,Subjects; ListOIDCGroups→Groups,ListOIDCGroupsResponse.Page; ListIntegrationConnections→Connections,ListIntegrationConnectionsResponse.Page; ListIntegrationDefinitions→Definitions,ListIntegrationDefinitionsResponse.CoreReady,ListIntegrationDefinitionsResponse.NextActions,ListIntegrationDefinitionsResponse.Page. Subject kind остаётся фильтром, не caller identity. Сохраняются CoreReady и NextActions. Читаются сохранённые метаданные без синхронизации OIDC. Дополнительный универсальный диспетчер скрыл бы разные owner reads ради короткой типизированной связи. Исключение ограничено этой парой файлов, fragment SHA-256 и count 1; изменение hash/count закрыто отклоняется, весь файл либо RPC family не исключается."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "fragmentSHA256": "084180d24f2d8555d0806ba039e6d442a88a5e26dde6aafe754a5d73fc43a0a0",
+      "count": 1,
+      "reason": "Остаточные typed read-adapter windows после переноса AccessService principal/error boundary в существующий queryResponse: access.go: ListAccessRoles, ListOIDCGroups; access.go: ListAccessBindings, QueryEffectiveAccess. Полные AccessService тела и матрица exact RPC/domain call/response проверены; queries.go прочитан целиком на предыдущем этапе и его байты не менялись. Общая обвязка допуска/ошибок уже queryResponse, value-caster циклы уже castResponseItems. Здесь остаются nominal generated request/reply, конкретный domain read, фильтры, public field и соседние объявления: ListAccessRoles→ListAccessRolesResponse.Page,Roles; ListOIDCGroups→Groups,ListOIDCGroupsResponse.Page; ListAccessBindings→Bindings,ListAccessBindingsResponse.Page; QueryEffectiveAccess→Decisions,QueryEffectiveAccessResponse.EvaluatedAt,QueryEffectiveAccessResponse.Subject. SubjectKind/SubjectRef/RoleRef/ProjectRef/includeRevoked/query aliases остаются явными фильтрами. includeArchived не активирует архивные роли. Читаются сохранённые метаданные без синхронизации OIDC. SubjectRef не заменяет caller; time.Time{} оставляет выбор evaluation instant владельцу. Дополнительный универсальный диспетчер скрыл бы разные owner reads ради короткой типизированной связи. Исключение ограничено этой парой файлов, fragment SHA-256 и count 1; изменение hash/count закрыто отклоняется, весь файл либо RPC family не исключается."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "fragmentSHA256": "91c6a6873a3a6c78d17b400ecbe9c432987526542abef08b742bed82b9d9c555",
+      "count": 1,
+      "reason": "Остаточные typed read-adapter windows после переноса AccessService principal/error boundary в существующий queryResponse: access.go: ListAccessRoles, ListOIDCGroups; queries.go: ListProjectMembershipCandidates, ListProjectMemberships. Полные AccessService тела и матрица exact RPC/domain call/response проверены; queries.go прочитан целиком на предыдущем этапе и его байты не менялись. Общая обвязка допуска/ошибок уже queryResponse, value-caster циклы уже castResponseItems. Здесь остаются nominal generated request/reply, конкретный domain read, фильтры, public field и соседние объявления: ListAccessRoles→ListAccessRolesResponse.Page,Roles; ListOIDCGroups→Groups,ListOIDCGroupsResponse.Page; ListProjectMembershipCandidates→ListProjectMembershipCandidatesResponse.Page,Users; ListProjectMemberships→ListProjectMembershipsResponse.Page,Memberships. includeArchived не активирует архивные роли. Читаются сохранённые метаданные без синхронизации OIDC. Дополнительный универсальный диспетчер скрыл бы разные owner reads ради короткой типизированной связи. Исключение ограничено этой парой файлов, fragment SHA-256 и count 1; изменение hash/count закрыто отклоняется, весь файл либо RPC family не исключается."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "fragmentSHA256": "084180d24f2d8555d0806ba039e6d442a88a5e26dde6aafe754a5d73fc43a0a0",
+      "count": 1,
+      "reason": "Остаточные typed read-adapter windows после переноса AccessService principal/error boundary в существующий queryResponse: access.go: ListAccessRoles, ListOIDCGroups; queries.go: GetAgent, ListAgents. Полные AccessService тела и матрица exact RPC/domain call/response проверены; queries.go прочитан целиком на предыдущем этапе и его байты не менялись. Общая обвязка допуска/ошибок уже queryResponse, value-caster циклы уже castResponseItems. Здесь остаются nominal generated request/reply, конкретный domain read, фильтры, public field и соседние объявления: ListAccessRoles→ListAccessRolesResponse.Page,Roles; ListOIDCGroups→Groups,ListOIDCGroupsResponse.Page; GetAgent→GetAgentResponse.Agent; ListAgents→Agents,ListAgentsResponse.Page. includeArchived не активирует архивные роли. Читаются сохранённые метаданные без синхронизации OIDC. Дополнительный универсальный диспетчер скрыл бы разные owner reads ради короткой типизированной связи. Исключение ограничено этой парой файлов, fragment SHA-256 и count 1; изменение hash/count закрыто отклоняется, весь файл либо RPC family не исключается."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "fragmentSHA256": "12c974348506b8ec5199634b5057b2ca60af6984c44eff9455f472702713c772",
+      "count": 1,
+      "reason": "Остаточные typed read-adapter windows после переноса AccessService principal/error boundary в существующий queryResponse: access.go: ListAccessRoles, ListOIDCGroups; queries.go: ListIntegrationConnections, ListIntegrationDefinitions. Полные AccessService тела и матрица exact RPC/domain call/response проверены; queries.go прочитан целиком на предыдущем этапе и его байты не менялись. Общая обвязка допуска/ошибок уже queryResponse, value-caster циклы уже castResponseItems. Здесь остаются nominal generated request/reply, конкретный domain read, фильтры, public field и соседние объявления: ListAccessRoles→ListAccessRolesResponse.Page,Roles; ListOIDCGroups→Groups,ListOIDCGroupsResponse.Page; ListIntegrationConnections→Connections,ListIntegrationConnectionsResponse.Page; ListIntegrationDefinitions→Definitions,ListIntegrationDefinitionsResponse.CoreReady,ListIntegrationDefinitionsResponse.NextActions,ListIntegrationDefinitionsResponse.Page. includeArchived не активирует архивные роли. Сохраняются CoreReady и NextActions. Читаются сохранённые метаданные без синхронизации OIDC. Дополнительный универсальный диспетчер скрыл бы разные owner reads ради короткой типизированной связи. Исключение ограничено этой парой файлов, fragment SHA-256 и count 1; изменение hash/count закрыто отклоняется, весь файл либо RPC family не исключается."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "fragmentSHA256": "9d2b960f307ccac70feb2b064b77573ef3ee8c648bbbc832920d720f68e5290e",
+      "count": 1,
+      "reason": "Остаточные typed read-adapter windows после переноса AccessService principal/error boundary в существующий queryResponse: access.go: ListAccessRoleVersions, ListAccessRoles; queries.go: GetProject, ListTrashedProjects. Полные AccessService тела и матрица exact RPC/domain call/response проверены; queries.go прочитан целиком на предыдущем этапе и его байты не менялись. Общая обвязка допуска/ошибок уже queryResponse, value-caster циклы уже castResponseItems. Здесь остаются nominal generated request/reply, конкретный domain read, фильтры, public field и соседние объявления: ListAccessRoleVersions→ListAccessRoleVersionsResponse.Page,ListAccessRoleVersionsResponse.Role,Versions; ListAccessRoles→ListAccessRolesResponse.Page,Roles; GetProject→GetProjectResponse.Project; ListTrashedProjects→ListTrashedProjectsResponse.Page,Projects. Версии и текущая роль читаются по точному RoleRef без публикации. includeArchived не активирует архивные роли. Дополнительный универсальный диспетчер скрыл бы разные owner reads ради короткой типизированной связи. Исключение ограничено этой парой файлов, fragment SHA-256 и count 1; изменение hash/count закрыто отклоняется, весь файл либо RPC family не исключается."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "fragmentSHA256": "65f60c448fcb9452b2f1de8e8bf71ed4d3f6603d68cdf30f0d7f839f52ee0df9",
+      "count": 1,
+      "reason": "Остаточные typed read-adapter windows после переноса AccessService principal/error boundary в существующий queryResponse: access.go: ListAccessBindings, QueryEffectiveAccess; queries.go: GetIntegrationConnection, ListIntegrationConnections. Полные AccessService тела и матрица exact RPC/domain call/response проверены; queries.go прочитан целиком на предыдущем этапе и его байты не менялись. Общая обвязка допуска/ошибок уже queryResponse, value-caster циклы уже castResponseItems. Здесь остаются nominal generated request/reply, конкретный domain read, фильтры, public field и соседние объявления: ListAccessBindings→Bindings,ListAccessBindingsResponse.Page; QueryEffectiveAccess→Decisions,QueryEffectiveAccessResponse.EvaluatedAt,QueryEffectiveAccessResponse.Subject; GetIntegrationConnection→GetIntegrationConnectionResponse.Connection; ListIntegrationConnections→Connections,ListIntegrationConnectionsResponse.Page. SubjectKind/SubjectRef/RoleRef/ProjectRef/includeRevoked/query aliases остаются явными фильтрами. SubjectRef не заменяет caller; time.Time{} оставляет выбор evaluation instant владельцу. Дополнительный универсальный диспетчер скрыл бы разные owner reads ради короткой типизированной связи. Исключение ограничено этой парой файлов, fragment SHA-256 и count 1; изменение hash/count закрыто отклоняется, весь файл либо RPC family не исключается."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "fragmentSHA256": "6f17091b6ce3b68c04ab30cc474f6a4b507d5ff47a4eee3653e6a36cb6725869",
+      "count": 3,
+      "reason": "Остаточные typed read-adapter windows после переноса AccessService principal/error boundary в существующий queryResponse: access.go: ListAccessBindings, QueryEffectiveAccess; queries.go: GetAgent, GetProject, GetSchedule, ListAgents, ListSchedules, ListTrashedProjects. Полные AccessService тела и матрица exact RPC/domain call/response проверены; queries.go прочитан целиком на предыдущем этапе и его байты не менялись. Общая обвязка допуска/ошибок уже queryResponse, value-caster циклы уже castResponseItems. Здесь остаются nominal generated request/reply, конкретный domain read, фильтры, public field и соседние объявления: ListAccessBindings→Bindings,ListAccessBindingsResponse.Page; QueryEffectiveAccess→Decisions,QueryEffectiveAccessResponse.EvaluatedAt,QueryEffectiveAccessResponse.Subject; GetAgent→GetAgentResponse.Agent; GetProject→GetProjectResponse.Project; GetSchedule→GetScheduleResponse.Schedule; ListAgents→Agents,ListAgentsResponse.Page; ListSchedules→ListSchedulesResponse.Page,Schedules; ListTrashedProjects→ListTrashedProjectsResponse.Page,Projects. SubjectKind/SubjectRef/RoleRef/ProjectRef/includeRevoked/query aliases остаются явными фильтрами. SubjectRef не заменяет caller; time.Time{} оставляет выбор evaluation instant владельцу. Дополнительный универсальный диспетчер скрыл бы разные owner reads ради короткой типизированной связи. Исключение ограничено этой парой файлов, fragment SHA-256 и count 3; изменение hash/count закрыто отклоняется, весь файл либо RPC family не исключается."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "fragmentSHA256": "c48d865a45726b256b5cd7371a41f531e207be220dc803556985c453e156591f",
+      "count": 2,
+      "reason": "Остаточные typed read-adapter windows после переноса AccessService principal/error boundary в существующий queryResponse: access.go: ListAccessBindings, QueryEffectiveAccess; queries.go: GetArtifactRevision, GetRun, ListArtifactRevisions, ListRuns. Полные AccessService тела и матрица exact RPC/domain call/response проверены; queries.go прочитан целиком на предыдущем этапе и его байты не менялись. Общая обвязка допуска/ошибок уже queryResponse, value-caster циклы уже castResponseItems. Здесь остаются nominal generated request/reply, конкретный domain read, фильтры, public field и соседние объявления: ListAccessBindings→Bindings,ListAccessBindingsResponse.Page; QueryEffectiveAccess→Decisions,QueryEffectiveAccessResponse.EvaluatedAt,QueryEffectiveAccessResponse.Subject; GetArtifactRevision→GetArtifactRevisionResponse.Revision; GetRun→GetRunResponse.Run; ListArtifactRevisions→Items,ListArtifactRevisionsResponse.Page,ListArtifactRevisionsResponse.Total; ListRuns→ListRunsResponse.Page,ListRunsResponse.Total,Runs. SubjectKind/SubjectRef/RoleRef/ProjectRef/includeRevoked/query aliases остаются явными фильтрами. SubjectRef не заменяет caller; time.Time{} оставляет выбор evaluation instant владельцу. Дополнительный универсальный диспетчер скрыл бы разные owner reads ради короткой типизированной связи. Исключение ограничено этой парой файлов, fragment SHA-256 и count 2; изменение hash/count закрыто отклоняется, весь файл либо RPC family не исключается."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "fragmentSHA256": "2996eb8085303df9e08a321b4b450b51080016b56d032ee00b2d621ae06bb4ec",
+      "count": 2,
+      "reason": "Остаточные typed read-adapter windows после переноса AccessService principal/error boundary в существующий queryResponse: queries.go: GetProject, ListPlatformMemberships, ListTrashedProjects; queries.go: GetAgent, GetSchedule, ListAgentInstructionVersions, ListAgents, ListIntegrationDefinitions, ListSchedules. Полные AccessService тела и матрица exact RPC/domain call/response проверены; queries.go прочитан целиком на предыдущем этапе и его байты не менялись. Общая обвязка допуска/ошибок уже queryResponse, value-caster циклы уже castResponseItems. Здесь остаются nominal generated request/reply, конкретный domain read, фильтры, public field и соседние объявления: GetProject→GetProjectResponse.Project; ListPlatformMemberships→ListPlatformMembershipsResponse.NextActions,ListPlatformMembershipsResponse.Page,Memberships; ListTrashedProjects→ListTrashedProjectsResponse.Page,Projects; GetAgent→GetAgentResponse.Agent; GetSchedule→GetScheduleResponse.Schedule; ListAgentInstructionVersions→InstructionVersions,ListAgentInstructionVersionsResponse.Page; ListAgents→Agents,ListAgentsResponse.Page; ListIntegrationDefinitions→Definitions,ListIntegrationDefinitionsResponse.CoreReady,ListIntegrationDefinitionsResponse.NextActions,ListIntegrationDefinitionsResponse.Page; ListSchedules→ListSchedulesResponse.Page,Schedules. &items[index] сохраняет адрес исходного элемента. Сохраняются CoreReady и NextActions. MANAGE_MEMBERS назначается отдельным NextAction. Дополнительный универсальный диспетчер скрыл бы разные owner reads ради короткой типизированной связи. Исключение ограничено этой парой файлов, fragment SHA-256 и count 2; изменение hash/count закрыто отклоняется, весь файл либо RPC family не исключается."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "fragmentSHA256": "8e455c8f760bd04962e3452f2dcf1c14f963384cfcf8fbb9e6a4f409e6ec1ae8",
+      "count": 1,
+      "reason": "Остаточные typed read-adapter windows после переноса AccessService principal/error boundary в существующий queryResponse: queries.go: GetProject, ListPlatformMemberships, ListTrashedProjects; queries.go: GetAdministration, GetIntegrationConnection, ListIntegrationConnections. Полные AccessService тела и матрица exact RPC/domain call/response проверены; queries.go прочитан целиком на предыдущем этапе и его байты не менялись. Общая обвязка допуска/ошибок уже queryResponse, value-caster циклы уже castResponseItems. Здесь остаются nominal generated request/reply, конкретный domain read, фильтры, public field и соседние объявления: GetProject→GetProjectResponse.Project; ListPlatformMemberships→ListPlatformMembershipsResponse.NextActions,ListPlatformMembershipsResponse.Page,Memberships; ListTrashedProjects→ListTrashedProjectsResponse.Page,Projects; GetAdministration→GetAdministrationResponse.State; GetIntegrationConnection→GetIntegrationConnectionResponse.Connection; ListIntegrationConnections→Connections,ListIntegrationConnectionsResponse.Page. MANAGE_MEMBERS назначается отдельным NextAction. Дополнительный универсальный диспетчер скрыл бы разные owner reads ради короткой типизированной связи. Исключение ограничено этой парой файлов, fragment SHA-256 и count 1; изменение hash/count закрыто отклоняется, весь файл либо RPC family не исключается."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "fragmentSHA256": "3e7f4b4e75aeded52f87c94fc446df013cd2a3aafa1d2896b67130301eacab64",
+      "count": 2,
+      "reason": "Остаточные typed read-adapter windows после переноса AccessService principal/error boundary в существующий queryResponse: queries.go: ListProjectMembershipCandidates, ListProjectMemberships; queries.go: GetSchedule, ListAgents, ListProjectMembershipCandidates, ListSchedules. Полные AccessService тела и матрица exact RPC/domain call/response проверены; queries.go прочитан целиком на предыдущем этапе и его байты не менялись. Общая обвязка допуска/ошибок уже queryResponse, value-caster циклы уже castResponseItems. Здесь остаются nominal generated request/reply, конкретный domain read, фильтры, public field и соседние объявления: ListProjectMembershipCandidates→ListProjectMembershipCandidatesResponse.Page,Users; ListProjectMemberships→ListProjectMembershipsResponse.Page,Memberships; GetSchedule→GetScheduleResponse.Schedule; ListAgents→Agents,ListAgentsResponse.Page; ListProjectMembershipCandidates→ListProjectMembershipCandidatesResponse.Page,Users; ListSchedules→ListSchedulesResponse.Page,Schedules.  Дополнительный универсальный диспетчер скрыл бы разные owner reads ради короткой типизированной связи. Исключение ограничено этой парой файлов, fragment SHA-256 и count 2; изменение hash/count закрыто отклоняется, весь файл либо RPC family не исключается."
     }
   ]
 }

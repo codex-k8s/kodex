@@ -4,11 +4,75 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.445.1
+version: 1.446.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая обвязка читающих RPC доступа — 25.10.2026
+
+На основе `d0b617ff6e4899f8acacee7fc91ed4e07b0694a2` девять читающих
+адаптеров AccessService в `access.go` используют существующий queryResponse:
+ListPermissionRegistry, ListAccessSubjects, ListOIDCGroups, ListAccessRoles,
+ListAccessRoleVersions, ListAccessBindings, QueryEffectiveAccess, ExplainAccess
+и SimulateAccess. Principal разрешается по прежнему точному FullMethodName
+до вызова callback; все11 прежних domain/context error sites отображаются
+transportError ровно один раз. Typed request/reply, service calls, page tokens,
+фильтры доступа, нулевой evaluation instant, проверка timestamp симуляции и
+проверка единственного explanation decision остаются в явном методе.
+
+Новый helper либо общий диспетчер не добавлен. Существующий queryResponse
+не изменялся. Callback не создаёт authority, retries, deadlines, grants,
+транзакции, lease или события. Это прежние read-only owner calls; principal
+по-прежнему берётся из проверенного transport context, subject/ref из запроса
+не становится caller identity. Существующие command adapters не менялись.
+
+Обратная AST-проверка закрепляет signature/body настоящего queryResponse,
+точные method pins,9 success paths и11 guarded nonnil error paths. Callback
+раскрывается в исходное тело; после удаления единственного нового import
+восстанавливается полный AST access.go, включая комментарии/directives.
+Parser diagnostics закрыто отклоняются до работы с AST. Отдельно проверено
+отсутствие defer/go/nested closures/labels/branches, для которых перенос
+области err потребовал бы другого доказательства. Все прежние заявления
+queryResponse об однократном вызове и error mapping сохранены.
+
+Новый предметно описанный EN→RU тест проверяет все9 адаптеров с nil receiver,
+nil request и без verified context: ответ nil и Unauthenticated должны
+предшествовать обращению к service и проверкам данных запроса. Это локальная
+проверка приоритета допуска, не доказательство успешной живой авторизации.
+Сборка всего control-plane (`go build -p 2 ./...`) — PASS LOCAL,9,44с;
+unit всего модуля (`go test -p 2 -count=1 ./...`) — PASS LOCAL,37,67с.
+Для обоих GOWORK=off, GOMAXPROCS=4; credentials, KODEX/VITE inputs и
+KUBECONFIG исключены из дочернего окружения. PostgreSQL component — NOT RUN.
+
+Detector:6707 собственных исходников,222 exclusions,1627 raw-групп.
+29 прежних ключей/32 occurrences исчезли,30 ключей/35 occurrences появились:
+это изменение сырых окон и их представителей, не увеличение runtime paths.
+9 stale registry entries с12 occurrences удалены только после проверки
+нулевого текущего count; queries.go и runtime_secrets.go остались побайтно
+неизменными. После чтения всех AccessService тел и проверки сохранённой полной
+матрицы queries.go добавлены18 точных решений/23 occurrences для nominal
+request/reply, owner-read и public-field bindings. Общие principal/error и
+прямые collection mapping уже вынесены; новый generic dispatcher скрывал бы
+этот явный typed contract. Причины перечисляют фактические методы и особые
+фильтры. Все778 остальных решений сохранены без изменения. Теперь796 entries,
+921 retained occurrence,706 неразобранных против714 на предыдущем SHA.
+
+Все36 count/hash mutations новых решений и9 возвратов retired keys закрыто
+отклоняются настоящим assessor. Unit17 анализаторов, полный5-stage отчёт,
+Go-реестр21503/21503 EN→RU без пропусков,5 ignore boundaries, gofmt и
+`git diff --check` — PASS LOCAL. Threshold, source scope и generated
+exclusions не расширялись. Остальные clone groups остаются открытой частью
+#1823; этот этап не выдаётся за завершение полного объёма.
+
+Context7 resolve-library-id для Go снова ответил Invalid API key. Использованы
+официальные [function literals](https://go.dev/ref/spec#Function_literals) и
+[declarations and scope](https://go.dev/ref/spec#Declarations_and_scope).
+Go.mod, generated contracts, frontend, gateway, deploy manifests и scripts
+не изменялись на этом этапе. Прежние renders/frontend/gateway проверки
+остаются историческими. Browser/full E2E, HTTP Docker fixture, deploy/apply и
+live acceptance на этом этапе — NOT RUN. PR#1829 остаётся Draft.
 
 ## Общая проекция элементов gRPC-ответов — 25.10.2026
 
