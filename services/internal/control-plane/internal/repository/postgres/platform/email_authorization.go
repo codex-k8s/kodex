@@ -20,16 +20,54 @@ import (
 )
 
 var (
+	// queryEmailAuthorizationInvocation embeds a share-locked RUNNING invocation source under exact
+	// tenant, gateway lease/fence/generation/expiry and current connection/package/grant/runtime pins.
+	// It permits the existing approved-gate continuation shape for a succeeded node and projects
+	// bounded input/resource scope plus root actor; parameter locators alone grant no email authority.
+	// queryEmailAuthorizationInvocation встраивает share-locked RUNNING invocation source внутри
+	// точных tenant, gateway lease/fence/generation/expiry и current connection/package/grant/runtime
+	// pins. Разрешает прежнюю approved-gate continuation shape для succeeded node и проецирует bounded
+	// input/resource scope с root actor; одни parameter locators не выдают email authority.
 	//go:embed sql/email_authorization_invocation.sql
 	queryEmailAuthorizationInvocation string
+	// queryEmailAuthorizationTest embeds a share-locked CLAIMED email connection-test source with
+	// exact gateway lease/fence/generation/expiry and enabled TESTING connection/ready adapter. It
+	// projects the creating actor and fixed READ health operation without an agent scope; caller
+	// resource/policy checks remain mandatory.
+	// queryEmailAuthorizationTest встраивает share-locked CLAIMED email connection-test source с
+	// точными gateway lease/fence/generation/expiry и enabled TESTING connection/ready adapter.
+	// Проецирует creating actor и fixed READ health operation без agent scope; caller resource/policy
+	// checks остаются обязательными.
 	//go:embed sql/email_authorization_test.sql
 	queryEmailAuthorizationTest string
+	// queryEmailAuthorizationGet embeds a share-locked authorization lookup bound to organization,
+	// source, lease, generation and fence digest. It returns the stored query/decision projections for
+	// exact semantic replay comparison, not a refreshed expiry.
+	// queryEmailAuthorizationGet встраивает share-locked authorization lookup с привязкой к
+	// organization, source, lease, generation и fence digest. Возвращает сохранённые query/decision
+	// projections для exact semantic replay comparison, а не обновлённый expiry.
 	//go:embed sql/email_authorization_get.sql
 	queryEmailAuthorizationGet string
+	// queryEmailAuthorizationInsert embeds first-write authorization persistence with source IDs,
+	// lease/fence/generation, semantic digest, safe projections and expiry. A duplicate
+	// organization/source/lease/generation is ignored, so the caller must reread and compare the
+	// existing decision rather than assuming the proposed row was accepted.
+	// queryEmailAuthorizationInsert встраивает first-write authorization persistence с source IDs,
+	// lease/fence/generation, semantic digest, safe projections и expiry. Повтор
+	// organization/source/lease/generation игнорируется, поэтому caller обязан перечитать и сравнить
+	// существующий decision вместо предположения о принятии новой строки.
 	//go:embed sql/email_authorization_insert.sql
 	queryEmailAuthorizationInsert string
 )
 
+// emailAuthorizationSource holds the private authoritative invocation/test projection:
+// owner/resource/grant locators, operation/effect/package/risk pins, bounded input, public
+// configuration and gate approval. Raw byte fields stay inside authorization processing and are
+// not a public result, log payload or caller-issued grant.
+// emailAuthorizationSource хранит private authoritative invocation/test projection:
+// owner/resource/grant locators, operation/effect/package/risk pins, bounded input, public
+// configuration и gate approval. Raw byte fields остаются внутри authorization processing и не
+// являются public result, log payload или caller-issued grant.
 type emailAuthorizationSource struct {
 	id, connectionRef, actorRef, agentRef, projectRef, projectID, grantRef string
 	operation, effectKey, definitionVersion, definitionDigest, risk        string
@@ -37,6 +75,12 @@ type emailAuthorizationSource struct {
 	gateApproved                                                           bool
 }
 
+// emailBindingSource prefers InvocationRef when present and otherwise returns ConnectionTestRef
+// without validation. Callers must already enforce the mutually exclusive execution-binding shape;
+// a nonempty ref is only a locator.
+// emailBindingSource предпочитает InvocationRef при наличии, иначе возвращает ConnectionTestRef
+// без валидации. Callers обязаны заранее потребовать взаимоисключающую execution-binding shape;
+// непустой ref является только locator.
 func emailBindingSource(binding entity.EmailExecutionBinding) string {
 	if binding.InvocationRef != "" {
 		return binding.InvocationRef
@@ -44,11 +88,28 @@ func emailBindingSource(binding entity.EmailExecutionBinding) string {
 	return binding.ConnectionTestRef
 }
 
+// emailFenceDigest returns lowercase SHA-256 of the exact fence bytes, including the ordinary hash
+// of an empty string. It performs no normalization, freshness or ownership check and does not
+// retain the raw fence.
+// emailFenceDigest возвращает lowercase SHA-256 точных fence bytes, включая обычный hash пустой
+// строки. Не выполняет normalization, freshness или ownership check и не сохраняет raw fence.
 func emailFenceDigest(binding entity.EmailExecutionBinding) string {
 	digest := sha256.Sum256([]byte(binding.Fence))
 	return hex.EncodeToString(digest[:])
 }
 
+// emailAuthorization resolves the exact live invocation/test source in the caller transaction,
+// uses its actor ref for current integration/project/agent access, checks the exact callable email
+// package/risk/resource scope and current mailbox. It delegates canonical
+// command/digest/policy/gate checks, then bounds decision expiry by the lease and authorization
+// maximum age. AgentScope is present only for an agent source; shared exact scopes are explanatory
+// output. It creates no receipt, commit or external email effect itself.
+// emailAuthorization разрешает exact live invocation/test source в caller transaction, использует
+// его actor ref для current integration/project/agent access, проверяет exact callable email
+// package/risk/resource scope и current mailbox. Делегирует canonical command/digest/policy/gate
+// checks, затем ограничивает decision expiry lease и authorization maximum age. AgentScope
+// присутствует только для agent source; общие exact scopes являются пояснительным output. Сам не
+// создаёт receipt, commit или внешний email effect.
 func (repository *Repository) emailAuthorization(ctx context.Context, tx pgx.Tx, current scope, input query.EmailAuthorization) (entity.EmailAuthorization, emailAuthorizationSource, error) {
 	var source emailAuthorizationSource
 	statement := queryEmailAuthorizationInvocation
@@ -121,6 +182,18 @@ func (repository *Repository) emailAuthorization(ctx context.Context, tx pgx.Tx,
 	return result, source, nil
 }
 
+// ResolveEmailAuthorization accepts only unscoped email-bridge work with a valid live
+// binding/digest/revision and a five-second budget. It reauthorizes current state, stores
+// query/decision copies with raw fences cleared, rereads the bound ledger and requires canonical
+// input/decision equality plus unexpired original expiry before commit. The returned copy restores
+// the caller fence only after commit; replay does not renew authorization. Existing ignored
+// marshal/rollback errors remain unchanged and no SMTP/IMAP/POP action is performed.
+// ResolveEmailAuthorization принимает только unscoped email-bridge work с допустимыми live
+// binding/digest/revision и пятисекундным budget. Заново авторизует current state, сохраняет
+// query/decision copies с очищенными raw fences, перечитывает bound ledger и требует canonical
+// input/decision equality с неистёкшим исходным expiry до commit. Возвращаемая копия
+// восстанавливает caller fence только после commit; replay не продлевает authorization. Прежние
+// ignored marshal/rollback errors не меняются, SMTP/IMAP/POP action не выполняется.
 func (repository *Repository) ResolveEmailAuthorization(ctx context.Context, principal value.Principal, input query.EmailAuthorization) (entity.EmailAuthorization, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()

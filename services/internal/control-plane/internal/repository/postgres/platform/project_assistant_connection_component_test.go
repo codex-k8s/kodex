@@ -8,8 +8,6 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
-	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
-	serviceplatform "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
@@ -56,14 +54,7 @@ func TestProjectAssistantConnectionComponent(t *testing.T) {
 		t.Fatal("open isolated connection PostgreSQL")
 	}
 	defer pool.Close()
-	r := newSyntheticRuntimeComponentRepository(t, ctx, pool)
-	seedObservedCatalogFixture(t, ctx, r)
-	owner := resolvedTestPrincipal(t, ctx, r, port.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.assistant.turns.add"}, "control-api-gateway")
-	worker := resolvedTestPrincipal(t, ctx, r, port.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim"}, "runtime-controller")
-	service, err := serviceplatform.New(r)
-	if err != nil {
-		t.Fatal(err)
-	}
+	r, service, owner, worker := newProjectAssistantComponentFixture(t, ctx, pool)
 	execute := func(kind command.Kind, actor value.Principal, key string, version *int64, payload any) command.Result {
 		t.Helper()
 		result, err := service.Execute(ctx, command.Command{Kind: kind, Principal: actor, Mutation: value.Mutation{IdempotencyKey: "project-connection-" + key, ExpectedVersion: version}, Payload: payload})

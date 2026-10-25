@@ -4,11 +4,53 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.413.0
+version: 1.414.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Principals и PROJECT fixture; email adapter — 25.10.2026
+
+На основе `fb2428a8dbbdca1b0b398eede8aa63c57eee23be` два SYSTEM-теста
+используют resolveSystemGrantComponentPrincipals; две PROJECT fixture целиком
+объединены в newProjectAssistantComponentFixture. SYSTEM owner operation
+`platform.command.system-assistant.integration-grants.change` и PROJECT owner
+operation `platform.assistant.turns.add` различаются и остаются точными.
+Worker, actor/tenant literals, workload, порядок Repository→seed→principals→service,
+caller pool/error guard/defer/timeout/tracer и assertions сохранены. Helpers
+используют t.Helper, fixture authority не объявляется реальной bearer-проверкой.
+
+Четыре email-файла полностью прочитаны вместе с15 embedded SQL: credentials,
+authorization, configuration и receipts.40 прежних объявлений и2 новых test
+helpers описаны EN→RU. Production executable AST, SQL и imports email неизменны.
+
+| Путь | Сохранённые границы и эффекты |
+| --- | --- |
+| Credentials | Только metadata/digest и exact owner tuple; Secret bytes не читаются. Canonical generation/identity и OCC проверяются до записи; commit принадлежит caller |
+| Authorization | Exact lease/fence/generation, grant/package/runtime и gate continuation проверяются до actor/resource/mailbox. ResolveEmailAuthorization пишет ledger; replay сравнивает canonical query/decision и исходный срок, не продлевает его. Raw fence возвращается после commit |
+| Configuration | Decode/shape/projection предшествуют DB acceptance и document insert. Пустой release seed сохраняет stored config; init/import/read не объявлены одной транзакцией |
+| Receipts | FOR UPDATE сохраняется и для view; latest decision для UI может быть просрочен. Reconciliation требует fresh interactive authority и UNKNOWN receipt с закрытым source; создаёт metadata без resend/commit. Explicit decision ref сравнивается с latest; implicit expired даёт NotFound, explicit expired — Forbidden |
+| Lifecycle | Никаких новых claim/renew/retry/cancel/delete/terminal переходов. Owner transaction, receipt replay, current actorRef, pins/digests и внешние effects не меняются |
+
+Девять полных expected-AST/directive сравнений и независимое разворачивание
+двух SYSTEM closures и двух полных PROJECT setup — PASS. Proof сравнивает
+точные args/порядок, pool error guard/Close и весь оставшийся AST. Первоначальная
+ошибка private verifier из-за alias AST nodes устранена копированием expression
+при подстановке; product logic для прохождения проверки не изменялась.
+Полный control-plane build/unit — PASS LOCAL (checks414-final),
+GOWORK=off/GOMAXPROCS=4/-p2,13 external и2 admin/template inputs исключены.
+17 analyzer unit и5 exact-ignore guards — PASS. PostgreSQL component/helper
+execution, SMTP/IMAP/POP, browser/E2E, deploy/live — NOT RUN/SKIP.
+Context7 `/jackc/pgx/v5.10.0`: QueryRow/Scan/ErrNoRows, Rows.Close/Err,
+manual Commit/deferred Rollback проверены; зависимости и версии не менялись.
+
+Detector1768 raw/902 retained occurrences/866 unresolved: удалены обе прежние
+SYSTEM/PROJECT fragment groups, новых keys нет. Registry776 валиден и неизменен.
+6684 own sources/222 exclusions; thresholds/generated exclusions прежние.
+Go21486:20166 EN→RU,1320 missing. PR193 Go-файла/2035 объявлений, missing0;
+196 whole changed blobs. Общая задача открыта, PR #1829 Draft; QA/main f2e64eb
+сохранён. Прикладные секреты не читались и не переносились.
 
 ## Общая синтетическая component fixture — 25.10.2026
 

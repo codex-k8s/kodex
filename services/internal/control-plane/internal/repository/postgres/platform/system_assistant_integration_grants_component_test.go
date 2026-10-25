@@ -56,8 +56,7 @@ func TestSystemAssistantIntegrationGrantsComponent(t *testing.T) {
 	principal := func(workload, operation, actor, tenant string) value.Principal {
 		return resolvedTestPrincipal(t, ctx, r, port.ProofPrincipalInput{ExternalActorID: actor, ExternalTenantID: tenant, CallerWorkload: workload, Operation: operation}, workload)
 	}
-	owner := principal("control-api-gateway", "platform.command.system-assistant.integration-grants.change", "20000000-0000-4000-8000-000000000001", "20000000-0000-4000-8000-000000000002")
-	worker := principal("runtime-controller", "platform.runtime.execution.claim", "kodex-system-subject", "kodex-installation")
+	owner, worker := resolveSystemGrantComponentPrincipals(t, ctx, r)
 	gateway := principal("integration-gateway", "platform.runtime.integrations.claim", "kodex-system-subject", "kodex-installation")
 	warm := principal("runtime-controller", "platform.runtime.warm.report", "kodex-system-subject", "kodex-installation")
 	s, err := serviceplatform.New(r)
