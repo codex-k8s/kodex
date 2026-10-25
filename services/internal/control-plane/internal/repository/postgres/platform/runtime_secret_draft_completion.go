@@ -81,6 +81,11 @@ func (r *Repository) FinishRuntimeSecretDraft(ctx context.Context, p value.Princ
 	if permission == "" || !validRuntimeSecretWorkPrincipal(p, permission) || input.OperationRef == "" || input.ClaimGeneration < 0 {
 		return empty, errs.ErrForbidden
 	}
+	if input.Action == "RECOVER" {
+		if result, handled, err := r.recoverTerminalSecretDraft(ctx, p, input); handled || err != nil {
+			return result, err
+		}
+	}
 	s, err := r.resolveScope(ctx, p)
 	if err != nil {
 		return empty, err
@@ -103,6 +108,12 @@ func (r *Repository) FinishRuntimeSecretDraft(ctx context.Context, p value.Princ
 		return empty, err
 	}
 	if o.claimantID != input.ClaimantID || o.claimGeneration != input.ClaimGeneration {
+		return empty, errs.ErrConflict
+	}
+	if input.Action == "RECOVER" && terminalSecretDraftRecovery(d, o) {
+		if tx.Rollback(ctx) != nil {
+			return empty, errs.ErrUnavailable
+		}
 		return empty, errs.ErrConflict
 	}
 	var now time.Time

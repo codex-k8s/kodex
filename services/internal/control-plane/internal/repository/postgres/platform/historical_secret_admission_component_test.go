@@ -14,6 +14,7 @@ import (
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -24,8 +25,8 @@ import (
 //go:embed testdata/sql/historical_secret_admission_snapshot.sql
 var historicalSecretAdmissionSnapshot string
 
-// TestHistoricalEnvironmentSecretAdmissionComponent keeps an eligible historical pin usable while retired or revoked material must fail before bind/rollback effects. The disposable fixture creates every business state through native owner commands and synthetic broker callbacks; production is deliberately unchanged for the initial RED checkpoint.
-// TestHistoricalEnvironmentSecretAdmissionComponent сохраняет пригодный historical pin доступным, а retired/revoked material обязан отклоняться до bind/rollback effects. Disposable fixture создаёт каждое business state штатными owner commands и синтетическими broker callbacks; production намеренно не меняется для исходного RED checkpoint.
+// TestHistoricalEnvironmentSecretAdmissionComponent keeps an eligible historical pin usable while retired or revoked material must fail before bind/rebind/rollback effects. Native owner commands and synthetic broker callbacks create every business state; consumer-rebind uses the actual impact snapshot exposed by the public operation profile.
+// TestHistoricalEnvironmentSecretAdmissionComponent сохраняет пригодный historical pin доступным, а retired/revoked material обязан отклоняться до bind/rebind/rollback effects. Все business states создаются native owner commands и синтетическими broker callbacks; consumer-rebind использует настоящий impact snapshot публичного operation profile.
 func TestHistoricalEnvironmentSecretAdmissionComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
@@ -128,7 +129,7 @@ func TestHistoricalEnvironmentSecretAdmissionComponent(t *testing.T) {
 				}
 				return result
 			}
-			for _, operation := range []string{"publish", "bind", "rollback"} {
+			for _, operation := range []string{"publish", "bind", "rebind", "rollback"} {
 				if mode == "eligible-historical" && operation == "publish" {
 					continue
 				}
@@ -144,6 +145,19 @@ func TestHistoricalEnvironmentSecretAdmissionComponent(t *testing.T) {
 						candidate := contents
 						candidate.SecretBindings = []entity.RuntimeSecretBinding{{Name: "HISTORICAL_MARKER", SecretRef: secret.Ref, Revision: 1}}
 						payload = candidate
+					} else if operation == "rebind" {
+						fresh, err := service.GetAgentRuntimeConfiguration(ctx, owner, helper.AgentRef)
+						if err != nil {
+							t.Fatal("read native consumer before public rebind fixture")
+						}
+						execute(command.BindAgentRuntimeEnvironment, "bind-empty-v2-for-rebind", &fresh.AgentVersion,
+							command.RuntimeEnvironmentBindingInput{AgentRef: helper.AgentRef, EnvironmentRef: environment.Ref})
+						impact, err := service.GetRuntimeEnvironmentImpact(ctx, owner, environment.Ref, historical.Ref, "", query.Page{Size: 10})
+						if err != nil || len(impact.Consumers) != 1 || impact.Consumers[0].AgentRef != helper.AgentRef || impact.Consumers[0].VersionRef != environment.CurrentVersion.Ref {
+							t.Fatal("public historical rebind has no exact current consumer snapshot")
+						}
+						kind, version = command.RebindRuntimeEnvironment, environment.Version
+						payload = command.RuntimeEnvironmentRebindInput{EnvironmentRef: environment.Ref, VersionRef: historical.Ref, Consumers: impact.Consumers}
 					}
 					before := snapshot()
 					result, err := invoke(kind, operation, &version, payload)
@@ -162,6 +176,13 @@ func TestHistoricalEnvironmentSecretAdmissionComponent(t *testing.T) {
 					if operation == "bind" && (result.RuntimeConfiguration == nil || result.RuntimeConfiguration.Environment.CurrentVersion.Ref != historical.Ref ||
 						len(result.RuntimeConfiguration.Environment.CurrentVersion.SecretDescriptors) != 1 || result.RuntimeConfiguration.Environment.CurrentVersion.SecretDescriptors[0].Revision != 1) {
 						t.Fatal("historical bind silently selected a newer secret or ENV version")
+					}
+					if operation == "rebind" {
+						fresh, err := service.GetAgentRuntimeConfiguration(ctx, owner, helper.AgentRef)
+						if err != nil || len(result.EnvironmentBindings) != 1 || fresh.Environment.CurrentVersion.Ref != historical.Ref ||
+							len(fresh.Environment.CurrentVersion.SecretDescriptors) != 1 || fresh.Environment.CurrentVersion.SecretDescriptors[0].Revision != 1 {
+							t.Fatal("public historical rebind silently selected a newer secret or ENV version")
+						}
 					}
 					if operation == "rollback" && (result.RuntimeEnvironment == nil || result.RuntimeEnvironment.CurrentVersion.Digest != historical.Digest ||
 						len(result.RuntimeEnvironment.CurrentVersion.SecretDescriptors) != 1 || result.RuntimeEnvironment.CurrentVersion.SecretDescriptors[0].Revision != 1) {

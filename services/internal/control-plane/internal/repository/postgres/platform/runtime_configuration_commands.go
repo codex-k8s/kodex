@@ -732,6 +732,9 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 			"name": strings.TrimSpace(payload.Name), "description": strings.TrimSpace(payload.Description),
 		}).Scan(&changed)
 	} else if input.Kind == command.RollbackRuntimeEnvironment && payload.PublishedVersionRef != "" {
+		if err := requireRuntimeEnvironmentSecretVersion(ctx, tx, scope.organizationID, payload.Ref, "", payload.PublishedVersionRef); err != nil {
+			return commandOutcome{}, err
+		}
 		err = tx.QueryRow(ctx, queryRuntimeConfigurationRollbackEnvironment, pgx.StrictNamedArgs{
 			"version_ref": versionRef, "organization_id": scope.organizationID, "environment_id": environmentID,
 			"version_number": currentRevision + 1, "source_ref": payload.PublishedVersionRef, "created_by": scope.actorID,
@@ -832,6 +835,20 @@ func (repository *Repository) bindRuntimeEnvironment(ctx context.Context, tx pgx
 	}
 	if *input.Mutation.ExpectedVersion != agent.agentVersion {
 		return commandOutcome{}, errs.ErrVersionMismatch
+	}
+	scopeKind := "PROJECT"
+	if agent.projectID == "" {
+		scopeKind = "ORGANIZATION"
+	}
+	target, err := scanRuntimeEnvironmentSecretTarget(tx.QueryRow(ctx, queryRuntimeEnvironmentSecretBindingTarget, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID, "project_id": agent.projectID, "scope_kind": scopeKind,
+		"environment_ref": payload.EnvironmentRef, "version_ref": payload.VersionRef,
+	}))
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	if err := requireRuntimeEnvironmentSecretDescriptors(ctx, tx, scope.organizationID, target); err != nil {
+		return commandOutcome{}, err
 	}
 	digest := digestBytes([]byte(payload.AgentRef), []byte(payload.EnvironmentRef), []byte(strconvFormat(agent.bindingVersion+1)))
 	var bindingRef string

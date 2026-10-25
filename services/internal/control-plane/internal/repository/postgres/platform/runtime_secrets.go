@@ -717,6 +717,9 @@ func (repository *Repository) RecoverRuntimeSecretMaterialization(ctx context.Co
 	if !validRuntimeSecretWorkPrincipal(principal, "platform.runtime-secrets.operations.recover") || input.OperationRef == "" || !validRuntimeSecretMaterialization(&input.Materialization) {
 		return platformrepo.RuntimeSecretRecoveryResult{}, errs.ErrForbidden
 	}
+	if result, handled, err := repository.recoverTerminalRuntimeSecret(ctx, principal, input); handled || err != nil {
+		return result, err
+	}
 	current, tx, err := repository.runtimeSecretOperationTransaction(ctx, principal)
 	if err != nil {
 		return platformrepo.RuntimeSecretRecoveryResult{}, err
@@ -725,6 +728,12 @@ func (repository *Repository) RecoverRuntimeSecretMaterialization(ctx context.Co
 	locked, err := repository.lockRuntimeSecretOperation(ctx, tx, current.organizationID, input.OperationRef)
 	if err != nil {
 		return platformrepo.RuntimeSecretRecoveryResult{}, err
+	}
+	if terminalRuntimeSecretRecovery(locked) {
+		if err := tx.Rollback(ctx); err != nil {
+			return platformrepo.RuntimeSecretRecoveryResult{}, errs.ErrUnavailable
+		}
+		return platformrepo.RuntimeSecretRecoveryResult{}, errs.ErrConflict
 	}
 	result := platformrepo.RuntimeSecretRecoveryResult{Action: "DELETE", OperationState: locked.state}
 	if locked.state == "CLAIMED" && repository.authorizeRuntimeSecretOperationOwner(ctx, tx, current, locked) != nil {
@@ -738,30 +747,6 @@ func (repository *Repository) RecoverRuntimeSecretMaterialization(ctx context.Co
 		return result, nil
 	}
 	if locked.kind != "CREATE" && locked.kind != "ROTATE" || !repository.materializationMatchesOperation(locked, &input.Materialization) {
-		if err := tx.Commit(ctx); err != nil {
-			return platformrepo.RuntimeSecretRecoveryResult{}, errs.ErrConflict
-		}
-		return result, nil
-	}
-	if locked.state == "COMPLETED" {
-		descriptor, descriptorErr := repository.runtimeSecretRevision(ctx, tx, locked.secretID, locked.targetRevision)
-		var retained bool
-		if err := tx.QueryRow(ctx, queryRuntimeSecretRevisionRetained, current.organizationID, locked.secretID, locked.targetRevision).Scan(&retained); err != nil {
-			return platformrepo.RuntimeSecretRecoveryResult{}, errs.ErrUnavailable
-		}
-		if descriptorErr == nil && runtimeSecretMaterializationMatchesDescriptor(input.Materialization, descriptor) &&
-			locked.secretVersion >= locked.expectedSecretVersion && retained {
-			secret, decodeErr := decodeRuntimeSecretSnapshot(locked.terminalSnapshot)
-			if decodeErr != nil {
-				return platformrepo.RuntimeSecretRecoveryResult{}, errs.ErrUnavailable
-			}
-			result.Action, result.Secret = "KEEP", &secret
-		}
-		if !retained && descriptorErr == nil && runtimeSecretMaterializationMatchesDescriptor(input.Materialization, descriptor) {
-			if _, err := tx.Exec(ctx, queryRuntimeSecretRetireRevision, locked.secretID, locked.targetRevision); err != nil {
-				return platformrepo.RuntimeSecretRecoveryResult{}, errs.ErrUnavailable
-			}
-		}
 		if err := tx.Commit(ctx); err != nil {
 			return platformrepo.RuntimeSecretRecoveryResult{}, errs.ErrConflict
 		}

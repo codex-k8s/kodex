@@ -661,6 +661,11 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			if err := decodeStoredRuntimeEnvironment(candidate.rawEnvironmentValues, candidate.rawSecretProjections, &environmentValues, &secretProjections); err != nil {
 				return commandOutcome{}, errs.ErrConflict
 			}
+			if len(secretProjections) > 0 {
+				if err := requireRuntimeEnvironmentSecretVersion(ctx, tx, scope.organizationID, candidate.runtimeEnvironmentRef, candidate.runtimeEnvironmentID, ""); err != nil {
+					return commandOutcome{}, err
+				}
+			}
 			environmentTools, err := runtimecontract.DecodeRuntimeEnvironmentTools(candidate.rawEnvironmentTools)
 			if err != nil {
 				return commandOutcome{}, errs.ErrConflict
