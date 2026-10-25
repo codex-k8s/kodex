@@ -20,6 +20,14 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// TestRuntimeFilesLockedReadComponent creates isolated PostgreSQL plus an in-memory store and
+// synthetic scanner/credential/image configuration, bootstraps warm owner metadata and delegates
+// the direct-run lifecycle containing file retry tests. The90s component fixture is opt-in and
+// tests no real provider, registry, Kubernetes or AV service.
+// TestRuntimeFilesLockedReadComponent создаёт isolated PostgreSQL с in-memory store и synthetic
+// scanner/credential/image configuration, подготавливает warm owner metadata и вызывает direct-run
+// lifecycle с file retry tests. Component fixture с90s budget opt-in и не проверяет реальные
+// provider, registry, Kubernetes и AV service.
 func TestRuntimeFilesLockedReadComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
@@ -46,13 +54,32 @@ func TestRuntimeFilesLockedReadComponent(t *testing.T) {
 	testDirectRunLifecycle(t, ctx, repository)
 }
 
+// runtimeFilesReadTrace counts matching file-catalog read attempts and40001 conflicts under mutex
+// and sends the first backend PID through an initialized buffered channel. It is test
+// synchronization state, not runtime authorization or a production query observer.
+// runtimeFilesReadTrace считает matching file-catalog read attempts и40001 conflicts под mutex и
+// передаёт первый backend PID через назначенный buffered channel. Это test synchronization state,
+// а не runtime authorization и production query observer.
 type runtimeFilesReadTrace struct {
 	mu                  sync.Mutex
 	attempts, conflicts int
 	started             chan uint32
 }
+
+// runtimeFilesReadTraceKey tags only the named file-catalog query context so its end callback can
+// count serialization failure. The private zero-sized key carries no caller identity or file
+// grant.
+// runtimeFilesReadTraceKey помечает лишь named file-catalog query context для подсчёта
+// serialization failure end callback. Private zero-sized key не несёт caller identity и file
+// grant.
 type runtimeFilesReadTraceKey struct{}
 
+// TraceQueryStart matches the exact SQL-name prefix, counts the attempt and sends the first
+// connection PID under lock before returning a tagged context. Other SQL is untouched; the fixture
+// must supply a buffered channel to avoid blocking the tracer.
+// TraceQueryStart сопоставляет exact SQL-name prefix, считает attempt и передаёт первый connection
+// PID под lock до возврата tagged context. Другой SQL не меняется; fixture задаёт buffered
+// channel, чтобы tracer не блокировался.
 func (trace *runtimeFilesReadTrace) TraceQueryStart(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
 	if !strings.HasPrefix(data.SQL, "-- name: runtime_files_read_catalog :one") {
 		return ctx
@@ -65,6 +92,11 @@ func (trace *runtimeFilesReadTrace) TraceQueryStart(ctx context.Context, conn *p
 	trace.mu.Unlock()
 	return context.WithValue(ctx, runtimeFilesReadTraceKey{}, true)
 }
+
+// TraceQueryEnd counts only tagged wrapped pgconn40001 failures under lock, ignoring every other
+// query/error. It never retries the read or rewrites the original failure.
+// TraceQueryEnd считает под lock лишь tagged wrapped pgconn40001 failures, игнорируя остальные
+// query/error. Сам не повторяет чтение и не переписывает исходную ошибку.
 func (trace *runtimeFilesReadTrace) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryEndData) {
 	if matched, _ := ctx.Value(runtimeFilesReadTraceKey{}).(bool); !matched {
 		return
@@ -77,8 +109,16 @@ func (trace *runtimeFilesReadTrace) TraceQueryEnd(ctx context.Context, _ *pgx.Co
 	}
 }
 
-// Exact renew удерживает строку lease до того, как RR read возьмёт snapshot
-// и начнёт ждать FOR SHARE. Commit воспроизводит production 40001 без sleep.
+// testRuntimeFilesConcurrentLeaseRenew for search/manifest/metadata/preview/expiry coordinates a
+// locked renewal and exact backend waiter within5s, requiring one40001 and a whole second read. It
+// preserves cursor/content pins, rejects expiry with no partial page and checks expected effect
+// counters. A separate uncanceled one-second cleanup restores expiry; it needs real disposable
+// PostgreSQL and synthetic file fixtures, not a running tool or provider.
+// testRuntimeFilesConcurrentLeaseRenew для search/manifest/metadata/preview/expiry согласует
+// locked renewal и exact backend waiter за5s, требуя один40001 и полный second read. Сохраняет
+// cursor/content pins, отклоняет expiry без partial page и проверяет ожидаемые effect counters.
+// Отдельный uncanceled one-second cleanup восстанавливает expiry; нужны real disposable PostgreSQL
+// и synthetic file fixtures, а не running tool и provider.
 func testRuntimeFilesConcurrentLeaseRenew(t *testing.T, parent context.Context, repository *Repository, lease map[string]any, first entity.ExecutionFilePage) {
 	for _, operation := range []string{"search", "manifest", "metadata", "preview", "expiry"} {
 		t.Run(operation, func(t *testing.T) {
@@ -141,6 +181,12 @@ func testRuntimeFilesConcurrentLeaseRenew(t *testing.T, parent context.Context, 
 			}()
 			file := first.Items[0]
 			exact := query.ExecutionFileRef{EntryRef: file.EntryRef, ArtifactRef: file.ArtifactRef, Revision: file.Revision, Digest: file.Digest}
+			// outcome carries the operation-specific page/metadata/preview and error through a buffered result
+			// channel. Only the selected operation populates its field; the parent checks freshness, exact
+			// pins and trace/effect counts before accepting it.
+			// outcome передаёт operation-specific page/metadata/preview и error через buffered result channel.
+			// Лишь выбранная operation заполняет своё поле; parent проверяет freshness, exact pins и
+			// trace/effect counts до принятия результата.
 			type outcome struct {
 				page     entity.ExecutionFilePage
 				metadata entity.ExecutionFileMetadata

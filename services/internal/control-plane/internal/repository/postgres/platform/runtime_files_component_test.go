@@ -19,12 +19,32 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// fixtureRuntimeFilesMutateFrozen embeds an intentional frozen-catalog total update that the real
+// immutable trigger must reject in the disposable fixture. It is a negative test, not an API to
+// extend a runtime catalog grant.
+// fixtureRuntimeFilesMutateFrozen встраивает намеренное frozen-catalog total update, отклоняемое
+// real immutable trigger в disposable fixture. Это negative test, а не API расширения runtime
+// catalog grant.
+//
 //go:embed testdata/sql/runtime_files_mutate_frozen.sql
 var fixtureRuntimeFilesMutateFrozen string
 
+// fixtureRuntimeFilesDiagnoseCapture embeds catalog/entry counts and project artifact
+// permission/source-state diagnostics for one fixture catalog ref. It reads metadata for failure
+// diagnosis, not object bytes or a new eligibility decision returned to a client.
+// fixtureRuntimeFilesDiagnoseCapture встраивает catalog/entry counts и project artifact
+// permission/source-state diagnostics одного fixture catalog ref. Читает metadata для диагностики
+// ошибки, а не object bytes и новое eligibility decision клиенту.
+//
 //go:embed testdata/sql/runtime_files_diagnose_capture.sql
 var fixtureRuntimeFilesDiagnoseCapture string
 
+// diagnoseRuntimeFiles logs fixture catalog counts and permission/source states, or a
+// diagnostic-query error without failing the test itself. The calling assertion determines
+// failure; this helper does not repair catalog state or expose file contents.
+// diagnoseRuntimeFiles логирует fixture catalog counts и permission/source states либо
+// diagnostic-query error, сам не завершая тест ошибкой. Failure определяет assertion caller;
+// helper не исправляет catalog state и не раскрывает file contents.
 func diagnoseRuntimeFiles(t *testing.T, ctx context.Context, repository *Repository, ref string) {
 	t.Helper()
 	var total, entries int64
@@ -36,6 +56,13 @@ func diagnoseRuntimeFiles(t *testing.T, ctx context.Context, repository *Reposit
 	t.Logf("catalog counts total=%d entries=%d permissions=%v states=%v", total, entries, permissions, sourceStates)
 }
 
+// runtimeFilesTestPrincipal resolves a synthetic runtime-controller fixture principal for the
+// supplied runtime-files operation suffix. It uses the owner proof resolver rather than forging
+// Principal fields, but does not perform mTLS or prove arbitrary suffixes are valid permissions.
+// runtimeFilesTestPrincipal разрешает synthetic runtime-controller fixture principal для
+// переданного runtime-files operation suffix. Использует owner proof resolver вместо подделки
+// Principal fields, но не выполняет mTLS и не доказывает допустимость произвольного suffix как
+// permission.
 func runtimeFilesTestPrincipal(t *testing.T, ctx context.Context, repository *Repository, operation string) value.Principal {
 	t.Helper()
 	return resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
@@ -43,6 +70,12 @@ func runtimeFilesTestPrincipal(t *testing.T, ctx context.Context, repository *Re
 	}, "runtime-controller")
 }
 
+// runtimeFilesTestContext requires a typed validated fileCatalog descriptor in the claim, then
+// builds query pins from its ref/digest and the exact lease/fence/generation with caller purpose.
+// Missing/invalid catalog aborts the test; the result is a locator, not freshly granted authority.
+// runtimeFilesTestContext требует typed validated fileCatalog descriptor в claim, затем строит
+// query pins из ref/digest и exact lease/fence/generation с caller purpose. Отсутствующий либо
+// неверный catalog завершает тест; результат является locator, а не свежими полномочиями.
 func runtimeFilesTestContext(t *testing.T, lease map[string]any, purpose string) query.ExecutionFileContext {
 	t.Helper()
 	catalog, ok := lease["fileCatalog"].(runtimecontract.RuntimeFileCatalog)
@@ -53,6 +86,16 @@ func runtimeFilesTestContext(t *testing.T, lease map[string]any, purpose string)
 		CatalogRef: catalog.Ref, CatalogDigest: catalog.Digest, Purpose: purpose}
 }
 
+// testRuntimeFileQueries checks real owner search/manifest/metadata/preview parity, bounded
+// literal search/cursors, exact revision/catalog/lease/permission pins and frozen immutability. It
+// exercises concurrent-renew retry and sanitized catalog tool-call lifecycle, rejecting private
+// parameters, foreign grants and write capability injection, then checks project-file freshness.
+// Fixture storage/provider data remain synthetic; no runner tool or live API is used.
+// testRuntimeFileQueries проверяет real owner search/manifest/metadata/preview parity, bounded
+// literal search/cursors, exact revision/catalog/lease/permission pins и frozen immutability.
+// Проверяет concurrent-renew retry и очищенный catalog tool-call lifecycle с отказом private
+// parameters, foreign grants и write capability injection, затем project-file freshness. Fixture
+// storage/provider data synthetic; runner tool и live API не используются.
 func testRuntimeFileQueries(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, lease map[string]any) {
 	t.Helper()
 	execution := runtimeFilesTestContext(t, lease, runtimecontract.FilePurposeWorkspaceInput)
@@ -179,6 +222,14 @@ func testRuntimeFileQueries(t *testing.T, ctx context.Context, repository *Repos
 	testRuntimeProjectFiles(t, ctx, repository, service, owner, lease)
 }
 
+// testRuntimeProjectFiles verifies a pinned project catalog permits exact old bytes, excludes
+// files uploaded after capture and closes both search visibility and body access after
+// authoritative deletion. It uses caller fixture service/store and does not expand the old catalog
+// or prove physical purge.
+// testRuntimeProjectFiles проверяет exact old bytes через pinned project catalog, исключение
+// файлов после capture и закрытие search visibility и body access после authoritative deletion.
+// Использует caller fixture service/store, не расширяет прежний catalog и не доказывает physical
+// purge.
 func testRuntimeProjectFiles(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, lease map[string]any) {
 	t.Helper()
 	execution := runtimeFilesTestContext(t, lease, runtimecontract.FilePurposeProject)
@@ -231,6 +282,12 @@ func testRuntimeProjectFiles(t *testing.T, ctx context.Context, repository *Repo
 	}
 }
 
+// testRuntimeSkillFileManifest reads the exact SKILL-purpose catalog manifest and asserts nonempty
+// or empty eligibility according to the caller fixture expectation, logging diagnostics on
+// mismatch. It does not read skill file bytes, run the skill or authorize publishing it.
+// testRuntimeSkillFileManifest читает exact SKILL-purpose catalog manifest и проверяет nonempty
+// либо empty eligibility по caller fixture expectation с диагностикой при несовпадении. Не читает
+// skill file bytes, не исполняет skill и не разрешает её публикацию.
 func testRuntimeSkillFileManifest(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, lease map[string]any, available bool) {
 	t.Helper()
 	execution := runtimeFilesTestContext(t, lease, runtimecontract.FilePurposeSkill)

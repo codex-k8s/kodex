@@ -26,28 +26,89 @@ import (
 )
 
 var (
+	// immutableNextRevision embeds fixture-only insertion of the next revision from the current head
+	// while preserving source/creator metadata and supplying a new size/digest. It bypasses the public
+	// revision command to arrange an immutable-history test, not to authorize a production write.
+	// immutableNextRevision встраивает fixture-only вставку следующей ревизии из current head с
+	// сохранением source/creator metadata и новыми size/digest. Обходит public revision command для
+	// подготовки immutable-history теста, а не для разрешения production write.
 	//go:embed testdata/sql/immutable_artifact_next_revision.sql
 	immutableNextRevision string
+	// immutableNextContent embeds exact fixture revision content insertion with a synthetic object
+	// descriptor and supplied AV metadata. It creates test rows without uploading bytes, validating
+	// the real scanner or proving object ownership.
+	// immutableNextContent встраивает вставку content точной fixture revision с synthetic object
+	// descriptor и переданными AV metadata. Создаёт test rows без загрузки bytes, проверки реального
+	// scanner и доказательства object ownership.
 	//go:embed testdata/sql/immutable_artifact_next_content.sql
 	immutableNextContent string
+	// immutableAdvance embeds fixture head-pointer/version advancement to an already inserted
+	// revision. It intentionally changes current state so readers must retain old pins; it is not the
+	// production publication or authority path.
+	// immutableAdvance встраивает fixture продвижение head pointer/version к уже вставленной ревизии.
+	// Намеренно меняет current state, чтобы readers сохраняли old pins; это не production publication
+	// и authority path.
 	//go:embed testdata/sql/immutable_artifact_advance.sql
 	immutableAdvance string
+	// immutablePinnedRead embeds attachment-to-historical-revision lookup requiring exact metadata,
+	// tenant/project, active/CLEAN state and requested revision/digest. It returns versioned object
+	// pins for the test without reading object bytes or accepting current-head fallback.
+	// immutablePinnedRead встраивает attachment→historical-revision lookup с exact metadata,
+	// tenant/project, active/CLEAN state и запрошенными revision/digest. Возвращает versioned object
+	// pins тесту без чтения bytes и fallback на current head.
 	//go:embed testdata/sql/immutable_artifact_pinned_read.sql
 	immutablePinnedRead string
+	// immutableGraph embeds recursive project foreign-key reachability counts and ordered MD5
+	// fingerprints for diagnostic logging. These hashes describe the schema relation graph, not
+	// content integrity, authorization or an asserted purge acceptance baseline.
+	// immutableGraph встраивает recursive project foreign-key reachability counts и ordered MD5
+	// fingerprints для diagnostic logging. Хеши описывают schema relation graph, а не content
+	// integrity, authorization и утверждённый purge acceptance baseline.
 	//go:embed testdata/sql/immutable_artifact_graph.sql
 	immutableGraph string
+	// immutableTerminalReadback embeds post-purge head/current-pointer and remaining
+	// revision/grant/attachment/binding lineage counts plus anonymized artifact fields. The component
+	// test asserts this exact terminal shape; the query itself does not delete rows or objects.
+	// immutableTerminalReadback встраивает post-purge head/current-pointer, remaining
+	// revision/grant/attachment/binding lineage counts и обезличенные artifact fields. Component test
+	// проверяет точную terminal shape; запрос сам не удаляет rows и objects.
 	//go:embed testdata/sql/immutable_artifact_terminal_readback.sql
 	immutableTerminalReadback string
+	// immutableWrongUpdate embeds an intentional attempt to rewrite immutable revision metadata by
+	// fixture head ref. Successful execution is a test failure; it must run only in the caller
+	// disposable database.
+	// immutableWrongUpdate встраивает намеренную попытку переписать immutable revision metadata по
+	// fixture head ref. Успешное исполнение считается ошибкой теста; допускается лишь caller
+	// disposable database.
 	//go:embed testdata/sql/immutable_artifact_wrong_update.sql
 	immutableWrongUpdate string
+	// immutableWrongDelete embeds an intentional direct deletion of immutable revision rows for a
+	// fixture artifact. The test requires the real database guard to reject it, separately from the
+	// authorized purge lifecycle.
+	// immutableWrongDelete встраивает намеренное прямое удаление immutable revision rows fixture
+	// artifact. Тест требует отказа реального DB guard отдельно от разрешённого purge lifecycle.
 	//go:embed testdata/sql/immutable_artifact_wrong_delete.sql
 	immutableWrongDelete string
+	// immutableFrozenReadback embeds runtime safe snapshot, catalog digest and ordered entry JSON
+	// lookup through an exact lease. Before/after equality checks freeze preservation when the current
+	// artifact head changes; it is not an execution grant.
+	// immutableFrozenReadback встраивает чтение runtime safe snapshot, catalog digest и ordered entry
+	// JSON через exact lease. Before/after equality проверяет сохранение freeze при смене current
+	// artifact head; чтение не является execution grant.
 	//go:embed testdata/sql/immutable_artifact_frozen_readback.sql
 	immutableFrozenReadback string
 )
 
-// Проверяет настоящие PG guards и exact versioned bytes в безопасном Store.
-// Runtime/attachment snapshot не обновляется после смены current pointer.
+// TestImmutableArtifactRevisionComponent requires isolated PostgreSQL and a versioned in-memory
+// object store with synthetic credentials/images/AV. It captures attachment/skill/runtime pins,
+// advances the head via fixture SQL, verifies old metadata/bytes and immutable guards, then closes
+// blockers and purges every revision while preserving minimal lineage and terminal replay. It does
+// not test real S3, antivirus, registry, provider execution or browser delivery.
+// TestImmutableArtifactRevisionComponent требует isolated PostgreSQL и versioned in-memory object
+// store с synthetic credentials/images/AV. Фиксирует attachment/skill/runtime pins, продвигает
+// head через fixture SQL, проверяет old metadata/bytes и immutable guards, затем закрывает
+// blockers и удаляет все ревизии с сохранением minimal lineage и terminal replay. Не проверяет
+// реальные S3, antivirus, registry, provider execution и browser delivery.
 func TestImmutableArtifactRevisionComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()

@@ -12,6 +12,14 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 )
 
+// TestTemplateVariableCatalogContainsOnlyMaterializedNamespaces checks catalog names are
+// sorted/unique, required materialized namespaces exist and the unmaterialized runtime.config.ref
+// is absent. This tests the declared catalog contract, not whether every variable is available for
+// a particular actor or live revision.
+// TestTemplateVariableCatalogContainsOnlyMaterializedNamespaces проверяет sorted/unique catalog
+// names, обязательные materialized namespaces и отсутствие unmaterialized runtime.config.ref.
+// Проверяет объявленный catalog contract, а не доступность каждой variable конкретному actor и
+// live revision.
 func TestTemplateVariableCatalogContainsOnlyMaterializedNamespaces(t *testing.T) {
 	catalog := templateVariableCatalog()
 	names := make([]string, 0, len(catalog))
@@ -42,6 +50,14 @@ func TestTemplateVariableCatalogContainsOnlyMaterializedNamespaces(t *testing.T)
 	}
 }
 
+// TestTemplateVariableCatalogExamplesRenderAgainstCanonicalShape parses every catalog example with
+// missingkey=error and requires nonempty rendering against a synthetic canonical variable shape.
+// It validates example syntax/data shape only; it neither reads real file scopes nor establishes
+// runtime materialization provenance.
+// TestTemplateVariableCatalogExamplesRenderAgainstCanonicalShape разбирает каждый catalog example
+// с missingkey=error и требует nonempty rendering по synthetic canonical variable shape. Проверяет
+// лишь example syntax/data shape; не читает реальные file scopes и не устанавливает runtime
+// materialization provenance.
 func TestTemplateVariableCatalogExamplesRenderAgainstCanonicalShape(t *testing.T) {
 	file := map[string]any{"name": "example.txt", "path": "/workspace/input/example.txt"}
 	fileScope := map[string]any{"files": []map[string]any{file}, "files_count": 1,
@@ -85,6 +101,12 @@ func TestTemplateVariableCatalogExamplesRenderAgainstCanonicalShape(t *testing.T
 	}
 }
 
+// TestTemplateVariableCursorIsBoundToCatalogFilter round-trips the exact template-variable cursor
+// and rejects changed project/query, target context, source kind or actor. It verifies codec
+// filter binding with synthetic scope values, not row-level authorization or a fresh catalog read.
+// TestTemplateVariableCursorIsBoundToCatalogFilter проверяет round-trip exact template-variable
+// cursor и отказ при смене project/query, target context, source kind и actor. Проверяет codec
+// filter binding на synthetic scope values, а не row-level authorization и fresh catalog read.
 func TestTemplateVariableCursorIsBoundToCatalogFilter(t *testing.T) {
 	current := scope{organizationID: "organization", actorID: "actor"}
 	filter := query.Filter{ProjectRef: "prj_example", Query: "agent", TemplateContext: &query.TemplateVariableContext{AgentRef: "agt_example"}}
@@ -116,6 +138,12 @@ func TestTemplateVariableCursorIsBoundToCatalogFilter(t *testing.T) {
 	}
 }
 
+// TestTemplateVariableSourceKindIsClosed checks the documented empty/uppercase source-kind set and
+// rejects lowercase, unknown/system and whitespace variants. It exercises a pure classification
+// predicate without granting access to any namespace.
+// TestTemplateVariableSourceKindIsClosed проверяет объявленный набор empty/uppercase source kinds
+// и отклоняет lowercase, unknown/system и whitespace variants. Проверяет pure classification
+// predicate без выдачи доступа к namespace.
 func TestTemplateVariableSourceKindIsClosed(t *testing.T) {
 	for _, source := range []string{"", "AGENT", "AUTOMATION", "GATE", "INPUT", "ORGANIZATION", "PROJECT", "RUN", "RUNTIME", "SESSION", "USER", "WORKFLOW"} {
 		if !validTemplateVariableSourceKind(source) {
@@ -129,6 +157,12 @@ func TestTemplateVariableSourceKindIsClosed(t *testing.T) {
 	}
 }
 
+// TestTemplateVariableFilterMatchesSearchAndSourceTogether checks name/description search and
+// exact source filtering combine conjunctively, including Cyrillic description matching. It tests
+// one synthetic variable rather than performing a database search or expanding visibility.
+// TestTemplateVariableFilterMatchesSearchAndSourceTogether проверяет совместное применение
+// name/description search и exact source filter, включая Cyrillic description matching. Проверяет
+// одну synthetic variable без DB search и расширения visibility.
 func TestTemplateVariableFilterMatchesSearchAndSourceTogether(t *testing.T) {
 	item := entity.TemplateVariable{Name: "workflow.name", Description: "Название процесса", Source: "WORKFLOW"}
 	for _, test := range []struct {
@@ -147,6 +181,14 @@ func TestTemplateVariableFilterMatchesSearchAndSourceTogether(t *testing.T) {
 	}
 }
 
+// TestTemplateVariableAvailabilityUsesMaterializedValues checks availability derives from actual
+// flat/structured snapshot values, including empty file arrays/count0, while absent
+// project/workflow/environment refs stay unavailable. It verifies availability reasons for every
+// catalog entry without assigning authority from a variable name.
+// TestTemplateVariableAvailabilityUsesMaterializedValues проверяет вывод availability из
+// фактических flat/structured snapshot values, включая empty file arrays/count0, при недоступности
+// absent project/workflow/environment refs. Сверяет availability reasons всех catalog entries без
+// назначения authority по variable name.
 func TestTemplateVariableAvailabilityUsesMaterializedValues(t *testing.T) {
 	snapshot := entity.PromptMaterializationSnapshot{RunRef: "run_example", SessionRef: "ses_example",
 		Variables:           map[string]string{"agent.ref": "agt_example", "workflow.ref": "", "organization.ref": "org_example"},
@@ -173,6 +215,14 @@ func TestTemplateVariableAvailabilityUsesMaterializedValues(t *testing.T) {
 	}
 }
 
+// TestTemplateOrganizationNameAvailabilityRequiresMaterializedValue checks organization.name is
+// available only when its nonempty value was materialized; organization.ref alone cannot imply it.
+// The reason must match present/missing/empty cases, without querying organization metadata or
+// changing a snapshot.
+// TestTemplateOrganizationNameAvailabilityRequiresMaterializedValue проверяет availability
+// organization.name лишь при materialized nonempty value; одного organization.ref недостаточно.
+// Reason совпадает с present/missing/empty cases без чтения organization metadata и изменения
+// snapshot.
 func TestTemplateOrganizationNameAvailabilityRequiresMaterializedValue(t *testing.T) {
 	for _, test := range []struct {
 		name      string

@@ -4,11 +4,59 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.429.0
+version: 1.430.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Тестовые fixtures: immutable pins, claim/retry и Unicode — 25.10.2026
+
+На основе `38ea7e4ded5a11e6fa6890a8529e64a433a0a4b5` полностью прочитаны
+12 test Go-файлов (2395 исходных строк) и27 embedded SQL-fixtures (115 строк).
+92 объявления описаны EN→RU, включая local outcome двух concurrent-read
+helpers. Исполняемые выражения, SQL, fixtures, assertions, error messages,
+тайминги и параметры среды не менялись.
+
+| Проверяемая область | Описанное фактическое доказательство и ограничение |
+| --- | --- |
+| Immutable artifacts | Real disposable PG guards и versioned in-memory Store; fixture SQL меняет current head, но attachment/skill/runtime metadata и bytes остаются на old pins. Purge закрывает blockers и все object versions с minimal lineage. Scanner/images/provider descriptors synthetic; реальный S3/AV/registry не проверяются |
+| Catalog tasks | Owner claim/proof/generation/receipt/expiry и completed replay, три synthetic models и maintenance retirement. Encoder вычисляет digest локально, REMOTE_API/REMOTE_CODEX labels не доказывают фактический remote probe |
+| Provider reservation | Реальный owner reservation/OCC/idempotency с fake materializer counters, atomic replacement и запретом revival после delete/expiry. Наличие cleanup task не является завершением external cleanup; fake Discard ничего не удаляет |
+| Assistant locked read | Две fixture connections, bounded5s real UPDATE/FOR SHARE и40001 с whole retry. Mutex tracer наблюдает только matching query; тест проверяет two attempts/one conflict, stale-pin single denial и отсутствие durable catalog effects |
+| Claim batch isolation | Mixed/all-stale candidates, terminal closure всего graph, healthy progress, audit/receipt/events и lost-ACK replay. Sequential global audit SQL substitution восстанавливается defer; failure rollback отличается от idle no-receipt и expiry-only accounting |
+| Runtime files | Search/manifest/metadata/preview, bounded cursor/literal search и exact catalog/lease/revision/permission pins. Frozen trigger и sanitized tool lifecycle не дают write capability; project capture исключает поздние uploads, current deletion закрывает body access |
+| Runtime file locked read | Search/manifest/metadata/preview/expiry воспроизводят one40001/two attempts; exact backend PID wait и независимый one-second cleanup. Expected effect counters не приписываются отсутствию любого audit |
+| Template variables | Sorted unique declared namespaces, strict example rendering на synthetic shape, actor/filter/target cursor binding, exact source-kind и materialized-value availability. Catalog name не назначает authority и не доказывает доступность live value |
+| Workflow Unicode | Field codepoints отдельно от aggregate64KiB bytes, combining marks не считаются graphemes, closed diagnostics, self-only delegation invariant и typed hydration сохраняют DAG/gate. Никакого owner apply и runtime launch |
+| Platform evidence guidance | V4/V5 clauses, historical digest pins, v1-v5 EN/RU JSON rejoin, exact prompt/dependency/capability equality и cross-revision rejection. Наличие guidance text не доказывает agent compliance либо выполнение обязательной работы |
+| Session readiness | Fixed QueryRow/Scan fixture, exact tenant/run/session pins, closed blockers и error redaction. Unknown shape даёт Unavailable/nil; это presentation hint, а не живая session/lease readiness |
+| Runtime secrets | Exact permission-derived next actions, audit summary, recovery cursor/page, broker-only predicate и operation hash shape. Synthetic Principal и descriptor metadata не являются verified transport identity и чтением plaintext |
+
+12 полных expected-AST/directive сравнений — PASS LOCAL.28 затронутых
+unit Test-функций — PASS LOCAL (checks430-final focused-unit),
+GOWORK=off/GOMAXPROCS=4/-p2, credentials и inherited KODEX inputs исключены.
+PostgreSQL component entrypoints и их вложенные helpers — NOT RUN/SKIP;
+выделенная unit selection их не запускает. Полный build/unit control-plane
+не повторялся для comments-only tree с неизменным AST: последний полный PASS
+относится к38ea7e4/checks429-final. Analyzer implementation не менялся,
+его17 unit остаются прежним PASS;5 exact-ignore guards и inventory/detector/
+assessment выполнены заново. gofmt/git diff --check — PASS LOCAL.
+
+PG/RLS/OCC/claim/renew races, реальный provider/storage/AV/broker/Secrets,
+runner tools, browser/полный E2E/deploy/live — NOT RUN/SKIP. Manifests
+неизменны; прежние30 exact renders и standalone staging/control-api-gateway
+FAIL не повторялись. Новых внешних library API нет; новый Context7 lookup
+не выполнялся, прежние failure/fallback evidence сохранены.
+
+Inventory6693 sources/222 exclusions. Go21493:21085 EN→RU,408 missing в189
+test-файлах, production missing0. PR374 Go/3113 объявлений, missing0;
+404 whole changed blobs. Detector1668 raw/850 retained occurrences/818
+unresolved, registry739 не менялся. Один140-token assistant/runtime-files
+locked-read trace window сменил hash из-за комментария; алгоритмы и tokens
+прежние, исправлением повтора это не объявляется. Clone exclusions и
+thresholds не расширены. #1823 открыт, #1829 Draft; main/QA не менялись.
+Secret values не извлекались, env не менялись и секреты не переносились.
 
 ## Общий authenticated query response для37 RPC — 25.10.2026
 

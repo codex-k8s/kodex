@@ -14,15 +14,42 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// queryRuntimeClaimFixtureAdvanceAccount embeds fixture account-version advancement by ref to
+// stale the captured catalog dependency tuple. The component arrangement is disposable and does
+// not rotate any external provider credential.
+// queryRuntimeClaimFixtureAdvanceAccount встраивает fixture account-version advancement по ref для
+// устаревания captured catalog dependency tuple. Component arrangement disposable и не ротирует
+// внешний provider credential.
+//
 //go:embed testdata/sql/runtime_claim_advance_account.sql
 var queryRuntimeClaimFixtureAdvanceAccount string
 
+// queryRuntimeClaimFixtureGraphCounts embeds exact-run counts of open leases/turns and runtime
+// revisions after candidate failure. Zero counts verify owner rollback/terminal cleanup, not Pod
+// termination or external provider cancellation.
+// queryRuntimeClaimFixtureGraphCounts встраивает exact-run counts открытых leases/turns и runtime
+// revisions после candidate failure. Нули проверяют owner rollback/terminal cleanup, а не Pod
+// termination и external provider cancellation.
+//
 //go:embed testdata/sql/runtime_claim_failed_graph_counts.sql
 var queryRuntimeClaimFixtureGraphCounts string
 
+// queryRuntimeClaimFixtureAddSiblings embeds synthetic PLANNED/RUNNING sibling nodes under the
+// fixture root so failure must close the whole graph rather than only the selected node. It is
+// test arrangement SQL without request-derived authority.
+// queryRuntimeClaimFixtureAddSiblings встраивает synthetic PLANNED/RUNNING sibling nodes под
+// fixture root, чтобы failure закрывал весь граф, а не только выбранный node. Это test arrangement
+// SQL без authority из запроса.
+//
 //go:embed testdata/sql/runtime_claim_add_siblings.sql
 var queryRuntimeClaimFixtureAddSiblings string
 
+// testRuntimeCandidateIsolation runs mixed healthy/stale and all-stale claim scenarios
+// sequentially against the caller fixture. It delegates complete assertions to the batch helper
+// and must not be parallelized with its temporary global audit-query substitution.
+// testRuntimeCandidateIsolation последовательно запускает mixed healthy/stale и all-stale claim
+// scenarios на caller fixture. Передаёт полные assertions batch helper; не должен выполняться
+// параллельно с его временной global audit-query substitution.
 func testRuntimeCandidateIsolation(t *testing.T, ctx context.Context, repository *Repository) {
 	for _, allStale := range []bool{false, true} {
 		name := "mixed"
@@ -33,15 +60,47 @@ func testRuntimeCandidateIsolation(t *testing.T, ctx context.Context, repository
 	}
 }
 
+// queryRuntimeClaimReceiptCounts embeds audit, idempotency receipt and root-event counts for the
+// exact fixture run/claim key. It supports atomic owner-fact and lost-ACK replay assertions
+// without itself changing those facts.
+// queryRuntimeClaimReceiptCounts встраивает audit, idempotency receipt и root-event counts точных
+// fixture run/claim key. Поддерживает atomic owner-fact и lost-ACK replay assertions, сам не меняя
+// эти факты.
+//
 //go:embed testdata/sql/runtime_claim_receipt_counts.sql
 var queryRuntimeClaimReceiptCounts string
 
+// queryRuntimeClaimAuditUnavailable embeds a deliberate division-by-zero failure substituted for
+// the audit write only inside a sequential disposable test. It exercises rollback after real graph
+// changes rather than merely classifying a fabricated Go error.
+// queryRuntimeClaimAuditUnavailable встраивает deliberate division-by-zero failure, подставляемый
+// вместо audit write лишь внутри sequential disposable test. Проверяет rollback после настоящих
+// graph changes, а не только классификацию вымышленной Go error.
+//
 //go:embed testdata/sql/runtime_claim_audit_unavailable.sql
 var queryRuntimeClaimAuditUnavailable string
 
+// queryRuntimeClaimExpireTerminalLease embeds revival of a fixture terminal lease into an already
+// expired CLAIMED shape to exercise expiry-only maintenance accounting. This is a deliberately
+// invalid arrangement, not a supported runtime lifecycle operation.
+// queryRuntimeClaimExpireTerminalLease встраивает перевод fixture terminal lease в уже expired
+// CLAIMED shape для проверки expiry-only maintenance accounting. Это намеренно неверный
+// arrangement, а не поддержанная runtime lifecycle operation.
+//
 //go:embed testdata/sql/runtime_claim_expire_terminal_lease.sql
 var queryRuntimeClaimExpireTerminalLease string
 
+// testRuntimeCandidateIsolationBatch makes one captured dependency stale and checks its complete
+// graph fails without rolling back a healthy sibling claim. The all-stale case injects/restores
+// real audit SQL failure, verifies rollback and atomic receipt/events, lost-ACK replay, idle
+// no-receipt and expiry-only accounting. It also closes active projection proofs. Cleanup reseeds
+// fixture catalog through WithoutCancel; the sequential PG test does not execute a provider or
+// Pod.
+// testRuntimeCandidateIsolationBatch делает captured dependency устаревшей и проверяет failure
+// полного графа без rollback healthy sibling claim. All-stale case подставляет и восстанавливает
+// real audit SQL failure, проверяет rollback и atomic receipt/events, lost-ACK replay, idle
+// no-receipt и expiry-only accounting. Также закрывает active projection proofs. Cleanup заново
+// заполняет fixture catalog через WithoutCancel; sequential PG test не исполняет provider и Pod.
 func testRuntimeCandidateIsolationBatch(t *testing.T, ctx context.Context, repository *Repository, allStale bool, suffix string) {
 	seedObservedCatalogFixture(t, ctx, repository)
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{

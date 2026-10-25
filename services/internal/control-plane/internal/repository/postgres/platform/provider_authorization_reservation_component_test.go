@@ -19,38 +19,98 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// queryProviderAuthorizationExpireFixture embeds fixture-only expiry of a still-RESERVED
+// authorization attempt by exact ref. It makes cleanup maintenance due without waiting for real
+// wall-clock expiry or changing an external credential.
+// queryProviderAuthorizationExpireFixture встраивает fixture-only expiry ещё RESERVED
+// authorization attempt по exact ref. Делает cleanup maintenance due без ожидания настоящего
+// wall-clock expiry и изменения внешнего credential.
+//
 //go:embed testdata/sql/provider_authorization_expire_fixture.sql
 var queryProviderAuthorizationExpireFixture string
 
+// reservedProviderFixture records device attempts, API materialization calls and a synthetic
+// generation counter for durable reservation component tests. All provider/Secret descriptors are
+// fabricated; it is serial fixture state without external side effects or concurrency protection.
+// reservedProviderFixture фиксирует device attempts, API materialization calls и synthetic
+// generation counter для durable reservation component tests. Все provider/Secret descriptors
+// вымышлены; это serial fixture state без внешних effects и concurrency protection.
 type reservedProviderFixture struct {
 	attempts []string
 	apiCalls int
 	current  int
 }
 
+// Check always returns nil to satisfy the fixture readiness seam. It performs no provider, Secret
+// store or network readiness check.
+// Check всегда возвращает nil для fixture readiness seam. Не проверяет готовность provider, Secret
+// store и сети.
 func (*reservedProviderFixture) Check(context.Context) error { return nil }
+
+// StartDeviceAuthorization records the attempt, increments fixture generation and derives a
+// synthetic materializer ref from attempt/account with a five-minute test deadline. It returns a
+// reserved invalid-domain device URL and fixed test code without contacting an identity provider.
+// StartDeviceAuthorization фиксирует attempt, увеличивает fixture generation и выводит synthetic
+// materializer ref из attempt/account с пяти минутным test deadline. Возвращает device URL
+// зарезервированного invalid domain и fixed test code без обращения к identity provider.
 func (fixture *reservedProviderFixture) StartDeviceAuthorization(_ context.Context, attempt, account string) (platformservice.ProviderDeviceAuthorizationMaterialization, error) {
 	fixture.attempts = append(fixture.attempts, attempt)
 	fixture.current++
 	digest := sha256.Sum256([]byte(attempt + "\x00" + account))
 	return platformservice.ProviderDeviceAuthorizationMaterialization{MaterializerAttemptRef: "pmat_" + hex.EncodeToString(digest[:16]), MaterializerAttemptUID: fmt.Sprintf("64000000-0000-4000-8000-%012d", fixture.current), MaterializerAttemptVersion: "1", VerificationURI: "https://provider.invalid/device", UserCode: "TEST", ExpiresAt: time.Now().Add(5 * time.Minute)}, nil
 }
+
+// descriptor constructs deterministic synthetic credential metadata from the current fixture
+// generation, using no plaintext credential. It neither writes a Kubernetes Secret nor proves any
+// descriptor exists outside the test.
+// descriptor строит deterministic synthetic credential metadata из текущего fixture generation без
+// plaintext credential. Не записывает Kubernetes Secret и не доказывает существование descriptor
+// вне теста.
 func (fixture *reservedProviderFixture) descriptor() entity.ProviderCredentialDescriptor {
 	return entity.ProviderCredentialDescriptor{SecretName: fmt.Sprintf("runtime-provider-reserved-%d", fixture.current), SecretUID: fmt.Sprintf("65000000-0000-4000-8000-%012d", fixture.current), SecretResourceVersion: "1", ContentSHA256: strings.Repeat("7", 64)}
 }
+
+// ObserveDeviceAuthorization returns synthetic AUTHORIZED state and the current fabricated
+// descriptor regardless of supplied attempt. This is the positive fake materializer response used
+// to test owner activation, not a real provider observation.
+// ObserveDeviceAuthorization возвращает synthetic AUTHORIZED и текущий вымышленный descriptor
+// независимо от переданной attempt. Это положительный fake materializer response для проверки
+// owner activation, а не настоящее provider observation.
 func (fixture *reservedProviderFixture) ObserveDeviceAuthorization(context.Context, string) (platformservice.ProviderAuthorizationObservation, error) {
 	descriptor := fixture.descriptor()
 	return platformservice.ProviderAuthorizationObservation{State: "AUTHORIZED", ExternalAccountMasked: "Synthetic reserved account", Credential: &descriptor}, nil
 }
+
+// MaterializeAPIKey increments API-call and generation counters and returns fabricated
+// descriptor/masked account metadata, deliberately ignoring the supplied key bytes. The counter
+// detects duplicate materialization; no API key is stored or sent.
+// MaterializeAPIKey увеличивает API-call и generation counters и возвращает вымышленные
+// descriptor/masked account metadata, намеренно игнорируя key bytes. Counter обнаруживает
+// duplicate materialization; API key не сохраняется и не отправляется.
 func (fixture *reservedProviderFixture) MaterializeAPIKey(context.Context, string, string, []byte) (entity.ProviderCredentialDescriptor, string, error) {
 	fixture.apiCalls++
 	fixture.current++
 	return fixture.descriptor(), "Synthetic reserved API account", nil
 }
+
+// Discard returns nil without touching any external materialization. It satisfies the fake cleanup
+// seam and cannot prove physical Secret deletion or provider revocation.
+// Discard возвращает nil без изменения внешней materialization. Реализует fake cleanup seam и не
+// доказывает physical Secret deletion и provider revocation.
 func (*reservedProviderFixture) Discard(context.Context, platformservice.ProviderMaterializationDiscard) error {
 	return nil
 }
 
+// testProviderAuthorizationReservation uses real owner reservation/idempotency/OCC state with the
+// fake materializer to ensure device/API replay does not repeat external-call counters and changed
+// inputs fail. It covers replacement activation, crash-before-effect reservation, deletion/expiry
+// preventing revival and durable metadata-cleanup task discovery. It does not execute that cleanup
+// or verify real provider/Secret effects.
+// testProviderAuthorizationReservation использует real owner reservation/idempotency/OCC state с
+// fake materializer, проверяя отсутствие повторных external-call counters для device/API replay и
+// отказ changed inputs. Охватывает replacement activation, crash-before-effect reservation, запрет
+// revival после deletion/expiry и наличие durable metadata-cleanup task. Не исполняет cleanup и не
+// проверяет реальные provider/Secret effects.
 func testProviderAuthorizationReservation(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.command.provider-accounts.device-reauthorize"}, "control-api-gateway")

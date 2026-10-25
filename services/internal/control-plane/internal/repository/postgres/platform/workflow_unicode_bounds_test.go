@@ -10,6 +10,14 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestWorkflowSelfOnlyStagesCannotRequireUnavailableDelegation checks coordinator-only stages
+// reject a required delegation capability without a distinct target while remaining structurally
+// readable for repair. Adding a real distinct agent restores validity. This tests static
+// executable-graph rules, not actual delegation permission or worker execution.
+// TestWorkflowSelfOnlyStagesCannotRequireUnavailableDelegation проверяет отказ required delegation
+// capability у coordinator-only stages без distinct target при сохранении structural readability
+// для исправления. Добавление distinct agent восстанавливает validity. Проверяет static
+// executable-graph rules, а не actual delegation permission и worker execution.
 func TestWorkflowSelfOnlyStagesCannotRequireUnavailableDelegation(t *testing.T) {
 	v := validWorkflowFixture()
 	for i := range v.Steps {
@@ -32,6 +40,14 @@ func TestWorkflowSelfOnlyStagesCannotRequireUnavailableDelegation(t *testing.T) 
 	}
 }
 
+// TestWorkflowUnicodeTextBounds table-checks field-specific name/purpose/completion/step/input
+// codepoint limits with ASCII, Cyrillic and emoji boundaries, overflow and invalid UTF-8. Each
+// case uses a fresh valid graph; acceptance here does not bypass the separate aggregate byte
+// budget or authorize publication.
+// TestWorkflowUnicodeTextBounds таблично проверяет field-specific codepoint limits
+// name/purpose/completion/step/input на ASCII, Cyrillic и emoji boundaries, overflow и invalid
+// UTF-8. Каждый case использует fresh valid graph; acceptance не обходит separate aggregate byte
+// budget и не разрешает публикацию.
 func TestWorkflowUnicodeTextBounds(t *testing.T) {
 	t.Parallel()
 	fields := []struct {
@@ -78,6 +94,14 @@ func TestWorkflowUnicodeTextBounds(t *testing.T) {
 	}
 }
 
+// TestWorkflowUnicodeNativeShapedInstructions checks three mixed ASCII/Cyrillic instruction
+// samples retain their expected byte lengths yet pass the codepoint-bounded validator. It guards
+// prior byte-versus-codepoint confusion with synthetic native-shaped text, not delivered runtime
+// prompts.
+// TestWorkflowUnicodeNativeShapedInstructions проверяет expected byte lengths трёх mixed
+// ASCII/Cyrillic instruction samples при прохождении codepoint-bounded validator. Защищает от
+// byte-versus-codepoint confusion на synthetic native-shaped text, а не доставленных runtime
+// prompts.
 func TestWorkflowUnicodeNativeShapedInstructions(t *testing.T) {
 	t.Parallel()
 	for _, sample := range []struct {
@@ -99,6 +123,13 @@ func TestWorkflowUnicodeNativeShapedInstructions(t *testing.T) {
 	}
 }
 
+// TestWorkflowUnicodeAggregateRemainsByteBounded checks a one-step fixture reaches the exact
+// combined64KiB text budget, rejects one extra byte and rejects malformed root UTF-8. It preserves
+// aggregate byte bounds independently of per-field Unicode limits without storing or executing the
+// workflow.
+// TestWorkflowUnicodeAggregateRemainsByteBounded проверяет exact combined64KiB text budget
+// one-step fixture, отказ дополнительного байта и malformed root UTF-8. Сохраняет aggregate byte
+// bounds отдельно от per-field Unicode limits без сохранения и исполнения workflow.
 func TestWorkflowUnicodeAggregateRemainsByteBounded(t *testing.T) {
 	t.Parallel()
 	v := validWorkflowFixture()
@@ -119,6 +150,14 @@ func TestWorkflowUnicodeAggregateRemainsByteBounded(t *testing.T) {
 	}
 }
 
+// TestWorkflowUnicodeInvalidFieldIsClosedAndMatchesValidity checks malformed text, graph, inputs,
+// capabilities, timeout and byte budget produce the expected closed diagnostic field and agree
+// with validity. It uses fresh synthetic graphs and does not prove that arbitrary runtime failures
+// are diagnosed or redacted by every transport.
+// TestWorkflowUnicodeInvalidFieldIsClosedAndMatchesValidity проверяет expected closed diagnostic
+// field и согласие с validity для malformed text, graph, inputs, capabilities, timeout и byte
+// budget. Использует fresh synthetic graphs и не доказывает диагностику либо redaction
+// произвольных runtime failures всеми transports.
 func TestWorkflowUnicodeInvalidFieldIsClosedAndMatchesValidity(t *testing.T) {
 	t.Parallel()
 	for _, sample := range []struct {
@@ -160,6 +199,12 @@ func TestWorkflowUnicodeInvalidFieldIsClosedAndMatchesValidity(t *testing.T) {
 	}
 }
 
+// TestWorkflowUnicodeCountsCodepointsNotGraphemes checks500 base-plus-combining-mark pairs count
+// as1000 codepoints and one extra combining mark exceeds the step limit. It distinguishes Unicode
+// codepoints from grapheme clusters without normalizing or truncating user text.
+// TestWorkflowUnicodeCountsCodepointsNotGraphemes проверяет учёт500 base-plus-combining-mark pairs
+// как1000 codepoints и превышение step limit дополнительным combining mark. Различает Unicode
+// codepoints и grapheme clusters без нормализации и усечения user text.
 func TestWorkflowUnicodeCountsCodepointsNotGraphemes(t *testing.T) {
 	t.Parallel()
 	v := validWorkflowFixture()
@@ -173,6 +218,14 @@ func TestWorkflowUnicodeCountsCodepointsNotGraphemes(t *testing.T) {
 	}
 }
 
+// TestWorkflowUnicodeUpdateHydrationAndCommand checks valid native-shaped/emoji text survives
+// hydration, normalization and typed workflow mapping byte-for-byte, while overflow/invalid UTF-8
+// returns Invalid. Original dependency and human-gate pins remain. This is an in-memory proposal
+// path, not owner apply or runtime launch.
+// TestWorkflowUnicodeUpdateHydrationAndCommand проверяет byte-for-byte сохранение valid
+// native-shaped/emoji text через hydration, normalization и typed workflow mapping с Invalid для
+// overflow/invalid UTF-8. Сохраняются original dependency и human-gate pins. Это proposal path в
+// памяти, а не owner apply и runtime launch.
 func TestWorkflowUnicodeUpdateHydrationAndCommand(t *testing.T) {
 	t.Parallel()
 	for _, sample := range []struct {
