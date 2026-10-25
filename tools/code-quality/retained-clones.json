@@ -6864,6 +6864,118 @@
       "fragmentSHA256": "6c3e1e307b9084421edddbbefeb13279e38389e469f7ca46fd3a1f91843439ef",
       "count": 1,
       "reason": "Остаточные typed transport windows после47 queryResponse migrations: vfs.go: ListVFSNodes, SearchVFS; vfs.go: SearchVFS, castVFSNode. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Lifecycle/VFS-kind/path filters и total/page не скрываются factory. Search использует прежние owner filters, не generic list alias. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "json",
+      "firstPath": "contracts/authorization/v1/authority-manifest-trust-bundle.schema.json",
+      "secondPath": "contracts/authorization/v1/readback-credential-trust.schema.json",
+      "fragmentSHA256": "8716ddd0faff331cec49ba2e1cdf94dc7694b5867ad5449a4fe926c3e4de9ce9",
+      "count": 1,
+      "reason": "В authority-manifest-trust-bundle определения публичного ES256 JWK и key.not_before/not_after описывают подпись authority snapshot manifest; readback-credential-trust использует тот же формат координат для normal-readback credential signer. Root/purpose/aud, generation и владельцы контрактов в contracts/registry.yaml различны. Это две самостоятельные JSON Schema с локальными $defs, не две реализации проверки подписи; внешний общий $ref добавил бы resolver dependency к каждому отдельно публикуемому контракту."
+    },
+    {
+      "format": "json",
+      "firstPath": "contracts/authorization/v1/authority-manifest-trust-bundle.schema.json",
+      "secondPath": "contracts/authorization/v1/readback-credential.schema.json",
+      "fragmentSHA256": "4104eb2880b1885ab51665e634683c62804db2255dffb79ef1252c3338751472",
+      "count": 1,
+      "reason": "Фрагмент authority-manifest-trust-bundle заканчивает описание manifest signing key, тогда как readback-credential описывает possession_public_jwk держателя отдельного role-bound credential. Общие EC/P-256/verify/ES256, kid/x/y являются фиксированными ограничениями формата открытого ключа; issuer/aud, набор обязательных pins и назначение ключа различны. Оставлены автономные локальные $defs обоих версионированных контрактов из contracts/registry.yaml; общего исполняемого валидатора этот JSON не дублирует."
+    },
+    {
+      "format": "json",
+      "firstPath": "contracts/authorization/v1/authority-proof-trust.schema.json",
+      "secondPath": "contracts/authorization/v1/readback-credential-trust.schema.json",
+      "fragmentSHA256": "7f3fc5bf124c5a44d1382b9bc2420e9cfa9a37aa906d6ef1b9d24821516cf5ad",
+      "count": 1,
+      "reason": "authority-proof-trust ограничивает issuer, audiences и до32 proof verification keys; readback-credential-trust содержит до3 CURRENT/NEXT/PREVIOUS credential signer keys и независимые manifest-root pins. Пересечение включает декларацию P-256 JWK и начало key object, но не общий алгоритм обработки доверия. Слияние этих номинальных wire-схем или внешний $ref связало бы разные purpose/audience и доставку автономных контрактов; локальные определения остаются внутри каждой schema."
+    },
+    {
+      "format": "json",
+      "firstPath": "contracts/authorization/v1/authority-proof.schema.json",
+      "secondPath": "contracts/authorization/v1/authorization-context.schema.json",
+      "fragmentSHA256": "369b725edd3b4460fdf6cc473615d93df54805f542caea47cf0a2399006eae37",
+      "count": 1,
+      "reason": "authority-proof и authorization-context независимо задают unary/stream request_binding_mode и примитивы uuid/sha256/revision/unixTime/SPIFFE. Proof подтверждает происхождение actor/tenant/project для issuer, context привязывает проверенное authority к target/rpc/permission/replay. Одинаковая декларативная форма allOf и базовых типов сохраняет автономность двух контрактов registry и не является копией runtime helper. Общий внешний $ref изменил бы требования к resolver отдельно доставляемых schema."
+    },
+    {
+      "format": "json",
+      "firstPath": "contracts/authorization/v1/authority-proof.schema.json",
+      "secondPath": "contracts/authorization/v1/authorization-context.schema.json",
+      "fragmentSHA256": "c96aea87a7a8e3c1994522bfaa15cb96b9cbe495b1d8b5958e55f0b689e9c84d",
+      "count": 1,
+      "reason": "В authority-proof и authorization-context совпадают закрытые workload и credentialAuthentication объекты, поля auth_time/acr/amr и начало provenance. Proof имеет caller/proofAudience, context отдельно caller/target/rpc/permission и continuation; это самостоятельные подписанные wire-объекты с разной authority boundary. Локальные $defs намеренно повторяют фиксированный формат, чтобы обе опубликованные schema проверялись без внешних resolver dependencies; общий исполняемый код здесь не копируется."
+    },
+    {
+      "format": "json",
+      "firstPath": "contracts/authorization/v1/authority-proof.schema.json",
+      "secondPath": "contracts/authorization/v1/authorization-context.schema.json",
+      "fragmentSHA256": "590681307e6321e94748cd002efa9f2da43fbd1507e18261a88bcbdff91d445a",
+      "count": 1,
+      "reason": "Завершающие provenance/identity/authority определения authority-proof и authorization-context передают одинаковые actor_kind/actor/tenant/project, но context нормативно получает их только из проверенного proof и содержит отдельные комментарии о CONTRACT-MC-004 enum mapping. Это зафиксированные формы двух самостоятельных schema, не два механизма назначения authority. Сохранён каждый локальный $defs и собственный $id; внешний $ref ради совпадения создал бы новую межконтрактную resolver dependency."
+    },
+    {
+      "format": "json",
+      "firstPath": "contracts/authorization/v1/readback-attestation.schema.json",
+      "secondPath": "contracts/authorization/v1/readback-credential.schema.json",
+      "fragmentSHA256": "2548b33f36bc270de4bc1aa635e40123f949c0d020b8d40388594a0f583b7651",
+      "count": 1,
+      "reason": "readback-attestation и readback-credential одинаково связывают purpose KEY_DELIVERY_READBACK/SNAPSHOT_READBACK с intent_kind через allOf и используют boundedIdentity/positiveRevision/digest. Credential подтверждает possession и signer pins, attestation — обслуживаемый state, challenge и readback credential digest. Самостоятельные контрактные документы registry сохраняют локальные определения; объединять разные подписанные payload или вводить внешний resolver ради декларативного совпадения не требуется."
+    },
+    {
+      "format": "json",
+      "firstPath": "contracts/authorization/v1/readback-credential-trust.schema.json",
+      "secondPath": "contracts/authorization/v1/restore-role-trust.schema.json",
+      "fragmentSHA256": "1578f5be9c5d9eb000490c06bfb82c3a45d2f18f491ef777f64421cc1dcda4a1",
+      "count": 1,
+      "reason": "readback-credential-trust и restore-role-trust имеют одинаковую структуру history/CURRENT-NEXT-PREVIOUS/ES256 trustKey, но первый закрепляет независимый normal-readback manifest root и aud attestor, второй предназначен restore-controller. Их registry owners и trust domains раздельны; равенство поколений не подтверждает authority по GUIDE-DOC-003. Оба JSON Schema остаются самодостаточными с локальными $defs; универсальный trust schema или внешний $ref добавил бы новую связь между этими контрактами."
+    },
+    {
+      "format": "json",
+      "firstPath": "contracts/authorization/v1/readback-credential-trust.schema.json",
+      "secondPath": "contracts/authorization/v1/readback-manifest-trust-root.schema.json",
+      "fragmentSHA256": "54c1be1dec0d55923eb9e1912f203784a6d3bd09783da1713d052fa94d673e2e",
+      "count": 1,
+      "reason": "readback-credential-trust описывает credential_signer_generation, readback-manifest-trust-root — manifest_signer_generation и собственный root-controller issuer/aud/purpose. Одинаковы только декларативная форма ротации CURRENT/NEXT/PREVIOUS, история и публичный JWK; числовое равенство поколений разных trust domains не даёт authority. Сохранены два самостоятельных wire-контракта registry и их локальные определения вместо нового внешнего resolver или объединения уровней доверия."
+    },
+    {
+      "format": "json",
+      "firstPath": "contracts/authorization/v1/readback-credential.schema.json",
+      "secondPath": "contracts/authorization/v1/readback-root-verification-material.schema.json",
+      "fragmentSHA256": "5b275f527beb5465ce9ff093861e7f10a9aa393aa3019bf6c745ed3d91df82be",
+      "count": 1,
+      "reason": "В readback-credential и readback-root-verification-material повторён закрытый формат publicJwk EC/P-256/ES256/verify и kid/x/y. В первом это possession key workload credential с точными intent pins, во втором — независимо доставляемый открытый root для normal-readback. Контракты registry различают authority owner и root purpose; автономные schema используют только локальные $defs. Вынос в общий внешний $ref изменил бы доставку и resolver зависимость без устранения дублированного runtime поведения."
+    },
+    {
+      "format": "json",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/testdata/continuation_task_projection_v1.json",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/testdata/continuation_task_projection_v1_instructions_v3.json",
+      "fragmentSHA256": "c981502a26ac778b2c1eefc61bf648b1bf74246fb89b8f893734f5b6c105dc23",
+      "count": 1,
+      "reason": "В historical continuation_task_projection_v1 (instructions v2) и instructions_v3 совпадают начальные поля RunnerInput до instructions: exact run/node/session/turn/revision/attempt и prompt-template pins. Файлы остаются независимыми byte-level compatibility fixtures для TestContinuationTaskProducerMatchesRunnerOracle, который читает v2/v3/v4 через os.ReadFile и закрепляет SHA256 v4. Генерация обоих snapshots общей фабрикой или склейка JSON во время теста устранила бы независимый исторический oracle и могла бы скрыть изменение сериализации; production producer уже общий, fixtures не исполняются как инструкции."
+    },
+    {
+      "format": "json",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/testdata/continuation_task_projection_v1.json",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/testdata/continuation_task_projection_v1_instructions_v4.json",
+      "fragmentSHA256": "c981502a26ac778b2c1eefc61bf648b1bf74246fb89b8f893734f5b6c105dc23",
+      "count": 1,
+      "reason": "В historical continuation_task_projection_v1 (instructions v2) и instructions_v4 совпадают начальные поля RunnerInput до instructions: exact run/node/session/turn/revision/attempt и prompt-template pins. Файлы остаются независимыми byte-level compatibility fixtures для TestContinuationTaskProducerMatchesRunnerOracle, который читает v2/v3/v4 через os.ReadFile и закрепляет SHA256 v4. Генерация обоих snapshots общей фабрикой или склейка JSON во время теста устранила бы независимый исторический oracle и могла бы скрыть изменение сериализации; production producer уже общий, fixtures не исполняются как инструкции."
+    },
+    {
+      "format": "json",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/testdata/continuation_task_projection_v1.json",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/testdata/continuation_task_projection_v1_instructions_v3.json",
+      "fragmentSHA256": "2ab055de366aa3914084c9607faef82a3751a1a94fb523f49de274b2684eeb6d",
+      "count": 1,
+      "reason": "В historical continuation_task_projection_v1 (instructions v2) и instructions_v3 совпадают сериализованные provider/runtime/environment/workspace/Kubernetes/callback поля после session_context, включая нулевые значения и null collections. Файлы остаются независимыми byte-level compatibility fixtures для TestContinuationTaskProducerMatchesRunnerOracle, который читает v2/v3/v4 через os.ReadFile и закрепляет SHA256 v4. Генерация обоих snapshots общей фабрикой или склейка JSON во время теста устранила бы независимый исторический oracle и могла бы скрыть изменение сериализации; production producer уже общий, fixtures не исполняются как инструкции."
+    },
+    {
+      "format": "json",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/testdata/continuation_task_projection_v1.json",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/testdata/continuation_task_projection_v1_instructions_v4.json",
+      "fragmentSHA256": "2ab055de366aa3914084c9607faef82a3751a1a94fb523f49de274b2684eeb6d",
+      "count": 1,
+      "reason": "В historical continuation_task_projection_v1 (instructions v2) и instructions_v4 совпадают сериализованные provider/runtime/environment/workspace/Kubernetes/callback поля после session_context, включая нулевые значения и null collections. Файлы остаются независимыми byte-level compatibility fixtures для TestContinuationTaskProducerMatchesRunnerOracle, который читает v2/v3/v4 через os.ReadFile и закрепляет SHA256 v4. Генерация обоих snapshots общей фабрикой или склейка JSON во время теста устранила бы независимый исторический oracle и могла бы скрыть изменение сериализации; production producer уже общий, fixtures не исполняются как инструкции."
     }
   ]
 }

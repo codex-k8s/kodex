@@ -4,11 +4,72 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.450.0
+version: 1.451.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общее отображение Markdown и самостоятельные JSON-контракты — 25.10.2026
+
+На основе `f7c67285504e164e4c9be46ce437e14f6dcc431e` шесть одинаковых
+inline-шаблонов `SafeMarkdown.vue` заменены на `SafeMarkdownInline.vue`:
+заголовок, абзац, цитата, общий ordered/unordered list item, header cell и
+body cell таблицы. Тип InlineToken и linkTarget перенесены без изменения;
+parser, safeText/safeHref, local execution path handling, opaque ref filtering
+и structured-result branch остались прежними. Компонент получает readonly
+токены родительского parser и не строит HTML из строки. Новый marker class
+на inline code позволяет существующему scoped CSS применяться только к
+этим узлам через узкий deep selector; значения CSS declarations и оформление
+pre/code не менялись. Стили дочернего SafeStructuredData не расширялись.
+
+Обратная проверка восстанавливает полный исходный parent после возврата
+шести шаблонов, type, linkTarget, import и прежнего CSS selector. Каждый
+исходный шаблон отдельно совпадает с общим renderer после форматирования.
+На десяти fixtures SSR DOM до/после совпадает после удаления только Vue
+hydration comments/scope identifiers и нового собственного code class.
+Это не проверка визуальной геометрии в браузере.
+
+В постоянный SafeMarkdown unit-test добавлены семь контекстов: heading,
+paragraph, quote, unordered/ordered lists, table header/body. В каждом
+проверяются code/strong/em, escaped HTML, запрещённый javascript href,
+отсутствие img, external/internal/fragment/mailto targets с rel, локальный
+execution path без query и скрытие opaque ref. Итоговые локальные проверки
+всей PWA: format изменённой области — PASS; `npm run lint` — PASS (141,21с);
+`npm run build`, включающий typecheck, — PASS (55,73с); `npm run test:unit
+-- --maxWorkers=2` — PASS (105,25с),410 suites/4076 tests. Build сохраняет
+предупреждение о chunks больше500kB; оно не объявляется устранённым.
+Наследованные KODEX/VITE inputs, credentials и KUBECONFIG удалены из child env;
+проектные frontend dotenv-файлы отсутствовали. Содержимое трёх UI-файлов
+зафиксировано SHA256 до/после проверок. Browser/full E2E не запускались.
+
+Отдельно разобраны14 JSON-групп без изменения13 JSON-источников.
+Десять совпадений относятся к самостоятельным wire schemas registry:
+authority proof/context, manifest/proof/readback/restore trust, readback
+credential/attestation и root verification material. Для каждой пары
+записаны конкретные совпадающие поля и различные purpose/audience/owner
+или поколения ключей. Все10 schema используют только локальные $ref и
+компилируются отдельно по JSON Schema2020-12; общий внешний $ref создал бы
+новую resolver dependency вместо устранения runtime-кода. Четыре другие
+группы сохраняют отдельные v2/v3/v4 continuation RunnerInput fixtures:
+существующий TestContinuationTaskProducerMatchesRunnerOracle читает их
+как исторические bytes и закрепляет SHA256 v4. Его отдельный запуск —
+PASS LOCAL (5,03с); общая фабрика producer/expected snapshot скрыла бы
+изменение сериализации. JSON и fixture values не переписывались.
+
+Detector:6710 sources/222 exclusions,1623 raw-группы против1624. Прежний
+551-token HTML-клон SafeMarkdown отсутствует; новых raw keys нет.14 точных
+решений привязаны к паре путей, fragment SHA256 и count1;858 прежних entries
+сохранены без изменения. Итого872 entries/1003 retained occurrences/620
+unresolved против635.28 count/hash mutations отклонены actual assessor;
+17 unit-тестов анализатора прошли. Порог, нормализация и generated exclusions
+не расширялись. Все21505 собственных Go-объявлений сохраняют EN→RU описание.
+
+Context7 MCP вернул Invalid API key; ключи не менялись. Проверены официальные
+Vue3 документы Props и SFC CSS Features, включая scoped/deep selector.
+Зависимости, Go, контракты, SQL, authority/lifecycle transitions и deploy
+этим изменением не менялись. Полная оставшаяся область #1823 остаётся открытой;
+этот локальный результат не означает merge/deploy либо завершённую QA-приёмку.
 
 ## Общая граница остальных читающих адаптеров — 25.10.2026
 

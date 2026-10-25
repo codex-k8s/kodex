@@ -2,13 +2,10 @@
 import { useServerMessage } from "@/shared/ui/server-message";
 import { computed } from "vue";
 
+import SafeMarkdownInline, {
+  type InlineToken,
+} from "@/shared/ui/SafeMarkdownInline.vue";
 import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
-
-type InlineToken = {
-  type: "text" | "code" | "strong" | "emphasis" | "link";
-  text: string;
-  href?: string;
-};
 
 type MarkdownBlock =
   | { type: "paragraph" | "quote"; tokens: InlineToken[] }
@@ -68,10 +65,6 @@ function safeHref(raw: string): string | undefined {
   } catch {
     return undefined;
   }
-}
-
-function linkTarget(href: string | undefined): "_self" | "_blank" {
-  return href?.startsWith("/") || href?.startsWith("#") ? "_self" : "_blank";
 }
 
 function parseInline(source: string): InlineToken[] {
@@ -276,24 +269,7 @@ const serverMessage = useServerMessage();
     <template v-else>
       <template v-for="(block, blockIndex) in blocks" :key="blockIndex">
         <component :is="`h${block.level}`" v-if="block.type === 'heading'">
-          <template
-            v-for="(token, tokenIndex) in block.tokens"
-            :key="tokenIndex"
-          >
-            <code v-if="token.type === 'code'">{{ token.text }}</code>
-            <strong v-else-if="token.type === 'strong'">{{
-              token.text
-            }}</strong>
-            <em v-else-if="token.type === 'emphasis'">{{ token.text }}</em>
-            <a
-              v-else-if="token.type === 'link'"
-              :href="token.href"
-              rel="noopener noreferrer"
-              :target="linkTarget(token.href)"
-              >{{ token.text }}</a
-            >
-            <span v-else>{{ token.text }}</span>
-          </template>
+          <SafeMarkdownInline :tokens="block.tokens" />
         </component>
         <pre
           v-else-if="block.type === 'code'"
@@ -305,42 +281,11 @@ const serverMessage = useServerMessage();
           "
         >
           <li v-for="(item, itemIndex) in block.items" :key="itemIndex">
-            <template v-for="(token, tokenIndex) in item" :key="tokenIndex">
-              <code v-if="token.type === 'code'">{{ token.text }}</code>
-              <strong v-else-if="token.type === 'strong'">{{
-                token.text
-              }}</strong>
-              <em v-else-if="token.type === 'emphasis'">{{ token.text }}</em>
-              <a
-                v-else-if="token.type === 'link'"
-                :href="token.href"
-                rel="noopener noreferrer"
-                :target="linkTarget(token.href)"
-                >{{ token.text }}</a
-              >
-              <span v-else>{{ token.text }}</span>
-            </template>
+            <SafeMarkdownInline :tokens="item" />
           </li>
         </component>
         <blockquote v-else-if="block.type === 'quote'">
-          <template
-            v-for="(token, tokenIndex) in block.tokens"
-            :key="tokenIndex"
-          >
-            <code v-if="token.type === 'code'">{{ token.text }}</code>
-            <strong v-else-if="token.type === 'strong'">{{
-              token.text
-            }}</strong>
-            <em v-else-if="token.type === 'emphasis'">{{ token.text }}</em>
-            <a
-              v-else-if="token.type === 'link'"
-              :href="token.href"
-              rel="noopener noreferrer"
-              :target="linkTarget(token.href)"
-              >{{ token.text }}</a
-            >
-            <span v-else>{{ token.text }}</span>
-          </template>
+          <SafeMarkdownInline :tokens="block.tokens" />
         </blockquote>
         <div
           v-else-if="block.type === 'table'"
@@ -351,76 +296,21 @@ const serverMessage = useServerMessage();
             <thead>
               <tr>
                 <th v-for="(cell, cellIndex) in block.header" :key="cellIndex">
-                  <template
-                    v-for="(token, tokenIndex) in cell"
-                    :key="tokenIndex"
-                  >
-                    <code v-if="token.type === 'code'">{{ token.text }}</code>
-                    <strong v-else-if="token.type === 'strong'">{{
-                      token.text
-                    }}</strong>
-                    <em v-else-if="token.type === 'emphasis'">{{
-                      token.text
-                    }}</em>
-                    <a
-                      v-else-if="token.type === 'link'"
-                      :href="token.href"
-                      rel="noopener noreferrer"
-                      :target="linkTarget(token.href)"
-                      >{{ token.text }}</a
-                    >
-                    <span v-else>{{ token.text }}</span>
-                  </template>
+                  <SafeMarkdownInline :tokens="cell" />
                 </th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="(row, rowIndex) in block.rows" :key="rowIndex">
                 <td v-for="(cell, cellIndex) in row" :key="cellIndex">
-                  <template
-                    v-for="(token, tokenIndex) in cell"
-                    :key="tokenIndex"
-                  >
-                    <code v-if="token.type === 'code'">{{ token.text }}</code>
-                    <strong v-else-if="token.type === 'strong'">{{
-                      token.text
-                    }}</strong>
-                    <em v-else-if="token.type === 'emphasis'">{{
-                      token.text
-                    }}</em>
-                    <a
-                      v-else-if="token.type === 'link'"
-                      :href="token.href"
-                      rel="noopener noreferrer"
-                      :target="linkTarget(token.href)"
-                      >{{ token.text }}</a
-                    >
-                    <span v-else>{{ token.text }}</span>
-                  </template>
+                  <SafeMarkdownInline :tokens="cell" />
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
         <p v-else-if="block.type === 'paragraph'">
-          <template
-            v-for="(token, tokenIndex) in block.tokens"
-            :key="tokenIndex"
-          >
-            <code v-if="token.type === 'code'">{{ token.text }}</code>
-            <strong v-else-if="token.type === 'strong'">{{
-              token.text
-            }}</strong>
-            <em v-else-if="token.type === 'emphasis'">{{ token.text }}</em>
-            <a
-              v-else-if="token.type === 'link'"
-              :href="token.href"
-              rel="noopener noreferrer"
-              :target="linkTarget(token.href)"
-              >{{ token.text }}</a
-            >
-            <span v-else>{{ token.text }}</span>
-          </template>
+          <SafeMarkdownInline :tokens="block.tokens" />
         </p>
       </template>
     </template>
@@ -448,7 +338,8 @@ const serverMessage = useServerMessage();
   border-left: 3px solid var(--border-strong, var(--border));
   color: var(--muted);
 }
-.safe-markdown code {
+.safe-markdown code,
+.safe-markdown :deep(code:where(.markdown-inline-code)) {
   padding: 1px 4px;
   border-radius: 4px;
   background: var(--panel);
