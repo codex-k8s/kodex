@@ -7064,6 +7064,46 @@
       "fragmentSHA256": "f68ef27b882d9ce7e31b1754fe7070f1734a88fb4968eb73b8833e0e88ee80cf",
       "count": 1,
       "reason": "runtime_secret_has_active_operation проверяет активную mutation по secret_id с lock только operation; runtime_secret_operation_lock_idempotency разрешает exact organization/actor/kind/idempotency_key и блокирует operation,secret для безопасного replay inspection. Caller ещё сверяет target/intent digest. Общий scanRuntimeSecretOperation уже декодирует совпавшие columns. Унификация SELECT по совпавшей проекции изменила бы locator, bindings и lock scope; сохранены отдельные самодостаточные named SQL по GO-DOC-002 без нового generic mutation helper."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/assistant_project_integration_grant.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/assistant_system_integration_grant.go",
+      "fragmentSHA256": "ef2a8445b1aa71c5875dacc392618ba571bd4babd58c0c8f77e55a9b6a7051c9",
+      "count": 1,
+      "reason": "hydrateProjectAssistantIntegrationGrant и hydrateSystemAssistantIntegrationGrant сохраняют разные закрытые editable/owner field sets и разные canonical owner resolvers: PROJECT требует projectAssistantRef и exact project/profile/agent versions, SYSTEM разрешает канонического системного ассистента организации. Payload parsing уже общий assistantGrantHydrationPayload, а дальнейшие owner/header reads остаются явными. Обобщение этих typed boundary wrappers в selector из payload смешало бы разные authority contracts; retained только данный fragment/pair/count после выноса повторяемой проверки."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/assistant_project_integration_grant.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/assistant_system_integration_grant.go",
+      "fragmentSHA256": "adbc3cc6dc47c49d0e0fd42c86f90165736e2a68c05c163b5f0f9bb105631958",
+      "count": 1,
+      "reason": "В двух grant hydrators общими стали capability validation и exact snapshot QueryRow; совпавший остаток содержит вызовы этих primitives, no-op guard и номинальные server-owned Parameters maps. PROJECT назначает projectAssistantRef и дополнительные project/profile/agent pins через projectAssistantGrantOwnerPins, SYSTEM — systemAssistantRef. Scope-specific metadata нельзя выводить из editable input либо универсального kind selector. Общие операции уже вынесены, projection Before/After/Target строит assistantGrantHydratedOperation; явная сборка owner tuples остаётся у каждого caller."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/assistant_project_integration_grant.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/assistant_system_integration_grant.go",
+      "fragmentSHA256": "4357697b93bbb6c50b78f0147dac555fc582666210cc0b517385ae53dca8eec5",
+      "count": 1,
+      "reason": "projectAssistantIntegrationGrantCommand выдаёт ChangeProjectAssistantIntegrationGrant с отдельным AssistantRef, Grant payload и обязательными assistantScope/project/profile/agent-version pins; systemAssistantIntegrationGrantCommand выдаёт другой специализированный kind и SystemAssistantIntegrationGrantInput без PROJECT authority. Следующие snapshot methods вызывают свои canonical hydrators и общий assistantGrantPlanSnapshotsEqual. Это номинальные typed mappings и разные owner callbacks; универсальная protected mutation запрещена GUIDE-DOC-006, а четыре JSON comparisons уже общие."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/assistant_project_integration_grant.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/assistant_system_integration_grant.go",
+      "fragmentSHA256": "0dc844211a0c29270d0dae5bb5b67d31f1ae37a485973f603f1f7a8b97ee2de7",
+      "count": 1,
+      "reason": "rehydrateEditedProjectAssistantGrant и rehydrateEditedSystemAssistantGrant сохраняют разные editable/owner/identity sets, собственные snapshot-match и hydration callbacks и исходный stale→fresh error order. Шесть повторённых field loops уже заменены общим чистым assistantGrantFieldsEqual. PROJECT удерживает projectAssistantRef/project/profile identity, SYSTEM — organization/systemAssistantRef. Оставшийся orchestration связывает разные authority paths; generic mutation/payload dispatch не вводится ради одинаковой формы guard/request/error envelope."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/assistant_project_integration_grant.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/assistant_system_integration_grant.go",
+      "fragmentSHA256": "c4b75283d304bcaaa841853e68e23ea871561cb174c54d918c1b9f2443936f1d",
+      "count": 1,
+      "reason": "Конец rehydrateEditedProjectAssistantGrant повторно сравнивает шесть fresh owner identity pins, конец SYSTEM — только scopeKind/organizationRef/systemAssistantRef, затем оба сохраняют edited.Selected. Сравнение полей уже выполняет assistantGrantFieldsEqual; далее в raw window попадают разные соседние declarations. Это номинальные field lists и завершение двух specialized owner paths, не отдельный дублирующийся comparator. Сохранён только текущий fragment hash, точная пара файлов и count1; новое совпадение либо изменение требует отдельного разбора."
     }
   ]
 }

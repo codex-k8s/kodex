@@ -38,19 +38,11 @@ func (repository *Repository) hydrateProjectAssistantIntegrationGrant(ctx contex
 	if !onlyAssistantFields(operation.Parameters, assistantProjectGrantEditable...) {
 		return operation, errs.ErrInvalid
 	}
-	enabled, enabledOK := assistantBoolValue(operation.Parameters, "enabled")
-	paths := []string{}
-	if _, supplied := operation.Parameters["approvalScopePaths"]; supplied {
-		var ok bool
-		paths, ok = assistantStringsValue(operation.Parameters, "approvalScopePaths")
-		if !ok {
-			return operation, errs.ErrInvalid
-		}
+	payload, err := assistantGrantHydrationPayload(operation.Parameters)
+	if err != nil {
+		return operation, err
 	}
-	payload := command.SystemAssistantIntegrationGrantInput{ConnectionRef: assistantString(operation.Parameters, "connectionRef"), CapabilityKey: assistantString(operation.Parameters, "capabilityKey"), ApprovalPolicy: assistantString(operation.Parameters, "approvalPolicy"), Enabled: enabled, ApprovalScopePaths: paths}
-	if !enabledOK || !validCapabilityKey(payload.CapabilityKey) || len(paths) > 16 || !enabled && len(paths) != 0 {
-		return operation, errs.ErrInvalid
-	}
+	enabled, paths := payload.Enabled, payload.ApprovalScopePaths
 	_, target, err := repository.projectAssistantIntegrationGrantInput(ctx, tx, current, command.ProjectAssistantIntegrationGrantInput{AssistantRef: assistantString(operation.Parameters, "projectAssistantRef"), Grant: payload})
 	if err != nil {
 		return operation, err
@@ -63,24 +55,15 @@ func (repository *Repository) hydrateProjectAssistantIntegrationGrant(ctx contex
 	if err != nil {
 		return operation, err
 	}
-	capability, ok := definition.Capability(payload.CapabilityKey)
-	if !ok || !capability.CallableByAgent() || !capability.AllowsApprovalPolicy(payload.ApprovalPolicy) {
-		return operation, errs.ErrInvalid
+	capability, err := assistantGrantHydrationCapability(definition, payload)
+	if err != nil {
+		return operation, err
 	}
-	if payload.ApprovalPolicy == "HUMAN_SCOPED" && enabled {
-		if capability.ValidateApprovalScopePaths(paths) != nil {
-			return operation, errs.ErrInvalid
-		}
-	} else if len(paths) != 0 {
-		return operation, errs.ErrInvalid
+	snapshot, err := readAssistantGrantPlanSnapshot(ctx, tx, current.organizationID, connection.ref, target.ref, payload.CapabilityKey)
+	if err != nil {
+		return operation, err
 	}
-	var grantRef, policy string
-	var grantVersion int64
-	var existingEnabled bool
-	var existingPaths []string
-	if err = tx.QueryRow(ctx, querySystemAssistantIntegrationGrantSnapshot, current.organizationID, connection.ref, target.ref, payload.CapabilityKey).Scan(&grantRef, &grantVersion, &policy, &existingEnabled, &existingPaths); err != nil {
-		return operation, errs.ErrUnavailable
-	}
+	grantRef, grantVersion, policy, existingEnabled, existingPaths := snapshot.ref, snapshot.version, snapshot.policy, snapshot.enabled, snapshot.paths
 	if grantRef == "" {
 		policy = capability.ApprovalPolicy
 	}
@@ -91,15 +74,7 @@ func (repository *Repository) hydrateProjectAssistantIntegrationGrant(ctx contex
 	for field, value := range projectAssistantGrantOwnerPins(target, current) {
 		params[field] = value
 	}
-	before := cloneAssistantFields(params)
-	before["enabled"], before["approvalPolicy"], before["approvalScopePaths"] = existingEnabled, policy, append([]string{}, existingPaths...)
-	operation.Parameters, operation.Before, operation.After = params, before, cloneAssistantFields(params)
-	version := connection.version
-	operation.ExpectedVersion = &version
-	operation.Target = entity.AssistantPlanTarget{Kind: "INTEGRATION_CONNECTION", Ref: connection.ref, Name: connection.name, Version: &version}
-	operation.Action = "UPDATE"
-	operation.Selected = true
-	return operation, nil
+	return assistantGrantHydratedOperation(operation, params, existingEnabled, policy, existingPaths, connection.ref, connection.name, connection.version), nil
 }
 
 // projectAssistantIntegrationGrantCommand Maps closed PROJECT/ORGANIZATION plan input with
@@ -139,7 +114,7 @@ func (repository *Repository) projectAssistantIntegrationGrantSnapshotMatches(ct
 	if err != nil {
 		return false, err
 	}
-	return assistantJSONEqual(fresh.Before, original.Before) && assistantJSONEqual(fresh.After, original.After) && assistantJSONEqual(fresh.ExpectedVersion, original.ExpectedVersion) && assistantJSONEqual(fresh.Target, original.Target), nil
+	return assistantGrantPlanSnapshotsEqual(fresh, original), nil
 }
 
 // rehydrateEditedProjectAssistantGrant Preserves all owner pins and
@@ -155,15 +130,11 @@ func (repository *Repository) rehydrateEditedProjectAssistantGrant(ctx context.C
 	if !onlyAssistantFields(edited.Parameters, append(append([]string{}, assistantProjectGrantEditable...), assistantProjectGrantOwner...)...) {
 		return edited, errs.ErrInvalid
 	}
-	for _, field := range assistantProjectGrantOwner {
-		if !assistantJSONEqual(original.Parameters[field], edited.Parameters[field]) {
-			return edited, errs.ErrForbidden
-		}
+	if !assistantGrantFieldsEqual(original.Parameters, edited.Parameters, assistantProjectGrantOwner) {
+		return edited, errs.ErrForbidden
 	}
-	for _, field := range []string{"projectAssistantRef", "connectionRef", "capabilityKey"} {
-		if !assistantJSONEqual(original.Parameters[field], edited.Parameters[field]) {
-			return edited, errs.ErrForbidden
-		}
+	if !assistantGrantFieldsEqual(original.Parameters, edited.Parameters, []string{"projectAssistantRef", "connectionRef", "capabilityKey"}) {
+		return edited, errs.ErrForbidden
 	}
 	if !stale {
 		same, err := repository.projectAssistantIntegrationGrantSnapshotMatches(ctx, tx, current, original)
@@ -176,10 +147,8 @@ func (repository *Repository) rehydrateEditedProjectAssistantGrant(ctx context.C
 	if err != nil {
 		return edited, err
 	}
-	for _, field := range []string{"assistantScope", "scopeKind", "organizationRef", "projectRef", "assistantProfileRef", "projectAssistantRef"} {
-		if !assistantJSONEqual(fresh.Parameters[field], original.Parameters[field]) {
-			return edited, errs.ErrForbidden
-		}
+	if !assistantGrantFieldsEqual(fresh.Parameters, original.Parameters, []string{"assistantScope", "scopeKind", "organizationRef", "projectRef", "assistantProfileRef", "projectAssistantRef"}) {
+		return edited, errs.ErrForbidden
 	}
 	fresh.Selected = edited.Selected
 	return fresh, nil

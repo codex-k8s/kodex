@@ -4,11 +4,78 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.453.0
+version: 1.454.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие примитивы подготовки grant без объединения владельцев — 25.10.2026
+
+На основе SHA dbb3837c8716c5857f7d9d0a0d8b8ddd4a8f2727 две реализации
+подготовки SYSTEM/PROJECT integration grant используют шесть локальных
+helpers и один приватный snapshot type. Общими стали разбор enabled/paths/
+capability key, callable/approval/scope-path validation, exact snapshot
+QueryRow/Scan, формирование Before/After/Target/ExpectedVersion, сравнение
+четырёх JSON-проекций и сравнение заданного вызывающим набора полей.
+Это бизнесовая подготовка одного сервиса; она остаётся в repository package,
+не создаёт новый runtime module или generic protected command.
+
+Closed editable/owner lists и native owner/header/package reads остаются
+отдельными у SYSTEM/PROJECT. PROJECT сохраняет project/profile/agent pins
+и projectAssistantGrantOwnerPins; SYSTEM — канонического системного ассистента.
+Обе specialized command functions, execution authority recheck, SQL, locks,
+OCC/idempotency, commit, audit и события не менялись. Helpers не применяют grant.
+Матрица proposal/edit/stale-refresh/command/error paths сохраняет actor из
+проверенного current scope; input locators не назначают owner authority.
+
+Payload хранит прежние ненулевые пустые paths; ошибки разбора дают Invalid
+до owner reads. Capability rejection остаётся до snapshot. Fixed query
+сохраняет organization/connection/assistant/capability ordering и пять Scan
+destinations; любая ошибка Scan, включая NoRows, даёт прежний Unavailable,
+частичные поля не выдаются. No-op guard и fallback default policy остаются
+явными у caller. Общая projection сохраняет append-копии paths и общий
+указатель версии ExpectedVersion/Target. Edit сохраняет исходный порядок
+Invalid/Forbidden/freshness Conflict, native rehydrate, stable owner check
+и edited.Selected; stale не отключает owner identity checks.
+
+Обратная проверка восстанавливает полные AST обоих исходных файлов,
+включая comments/directives и все неизменённые функции. Отдельно сверяются
+точные сигнатуры и actual bodies всех шести helpers, layout snapshot type,
+imports и current source SHA256. Expected helper bodies выведены из
+прочитанных исходных фрагментов с явными substitutions; parser diagnostics
+отклоняются до семантического использования AST. Шесть исходников authority,
+outer routing, parsing и snapshot SQL побайтно не менялись.
+
+Три новые unit-функции содержат29 subcases: payload types/paths/count/
+disabled constraints, capability/policy/declared scope paths и snapshot
+bindings/error boundary. Fake transaction реализует только QueryRow,
+другой эффект не может незаметно пройти. Проверены missing/coerced bool,
+typed nil/empty paths,16/17 граница, inbound capability, unknown policy,
+duplicate/undeclared paths, NoRows/cancellation и partial driver failure.
+Итог всего control-plane: go build -p 2 ./... — PASS LOCAL (15,16с);
+go test -p 2 -count=1 ./... — PASS LOCAL (22,43с), с GOWORK=off/GOMAXPROCS=4
+и очищенным child env. SHA256 четырёх изменённых Go sources совпадают
+до/после проверок. Это unit-контур, не живой PostgreSQL component execution.
+
+Detector:6713 sources/222 прежних exclusions,1616 raw groups против1618.
+Семь прежних raw keys исчезли; пять новых keys после выноса относятся
+к явным native owner mappings/специализированным command boundaries и
+соседним declarations двух файлов. Полные caller bodies и все новые окна
+прочитаны; для каждого записаны конкретные SYSTEM/PROJECT различия.
+883 прежних registry entries не менялись; добавлены5 bounded count1 keys.
+Итого888 entries/1019 retained occurrences/597 unresolved против604.
+10 count/hash mutations и7 возвратов отсутствующих старых keys отклонены
+actual assessor;17 unit-проверок анализатора и5 стадий отчёта — PASS LOCAL.
+Порог, нормализация и generated exclusions не расширялись.
+
+Все14 новых именованных Go declarations (7 production/7 test) получили
+содержательные EN→RU descriptions;21519/21519 собственных объявлений описаны.
+Context7 resolve Go вернул Invalid API key; ключи не менялись. Проверены
+официальные Go Spec Calls/Struct types и существующий исходник integrationpackage.
+PWA не менялась после полного lint/typecheck/build/410 suites/4076 tests
+на dbb3837. Browser/full E2E, живой PostgreSQL, deployment/apply и независимая
+QA текущего HEAD не запускались. Оставшиеся597 групп входят в scope #1823.
 
 ## Общие сценарии проверки SYSTEM/PROJECT grant plan — 25.10.2026
 
