@@ -22,11 +22,7 @@ func (server *Server) CreateAttachmentSetDraft(writer http.ResponseWriter, reque
 		Mutation: mutation, ProjectRef: projectRef, Purpose: attachmentSetPurposeProto(string(body.Purpose)),
 		ArtifactRefs: sliceOrEmpty(body.ArtifactRefs),
 	})
-	if err != nil {
-		writeRPCProblem(writer, err)
-		return
-	}
-	writeMessage(writer, http.StatusCreated, response, "attachmentSet", "")
+	writeRPCResult(writer, http.StatusCreated, response, err, "attachmentSet", "")
 }
 
 // CreateOrganizationAttachmentSetDraft Creates an organization-scoped draft through its own RPC without synthesizing a project reference. Body decoding precedes mutation validation, and organization ownership is resolved by the trusted service context.
@@ -40,11 +36,7 @@ func (server *Server) CreateOrganizationAttachmentSetDraft(writer http.ResponseW
 		Mutation: mutation, Purpose: attachmentSetPurposeProto(string(body.Purpose)),
 		ArtifactRefs: sliceOrEmpty(body.ArtifactRefs),
 	})
-	if err != nil {
-		writeRPCProblem(writer, err)
-		return
-	}
-	writeMessage(writer, http.StatusCreated, response, "attachmentSet", "")
+	writeRPCResult(writer, http.StatusCreated, response, err, "attachmentSet", "")
 }
 
 // AddAttachmentSetItems Sends exact set and artifact references with mutation pins and an optional insertion position, defaulting to zero. The owner command checks eligibility, ordering and version; this adapter neither fetches nor admits file contents.
@@ -61,11 +53,7 @@ func (server *Server) AddAttachmentSetItems(writer http.ResponseWriter, request 
 	response, err := server.control.Command.AddAttachmentSetItems(request.Context(), &controlplanev1.AddAttachmentSetItemsRequest{
 		Mutation: mutation, AttachmentSetRef: ref, ArtifactRefs: body.ArtifactRefs, InsertAfterPosition: position,
 	})
-	if err != nil {
-		writeRPCProblem(writer, err)
-		return
-	}
-	writeMessage(writer, http.StatusCreated, response, "attachmentSet", "")
+	writeRPCResult(writer, http.StatusCreated, response, err, "attachmentSet", "")
 }
 
 // RemoveAttachmentSetItems Removes the selected references through the dedicated set command after body and version-header parsing. It changes set membership through the owner service rather than directly deleting stored artifacts.
@@ -78,11 +66,7 @@ func (server *Server) RemoveAttachmentSetItems(writer http.ResponseWriter, reque
 	response, err := server.control.Command.RemoveAttachmentSetItems(request.Context(), &controlplanev1.RemoveAttachmentSetItemsRequest{
 		Mutation: mutation, AttachmentSetRef: ref, ArtifactRefs: body.ArtifactRefs,
 	})
-	if err != nil {
-		writeRPCProblem(writer, err)
-		return
-	}
-	writeMessage(writer, http.StatusCreated, response, "attachmentSet", "")
+	writeRPCResult(writer, http.StatusCreated, response, err, "attachmentSet", "")
 }
 
 // FinalizeAttachmentSet Passes the exact set reference, expected version and idempotency key to the owner finalization command. No request body or local state transition is invented; the owner response retains the existing created status and envelope.
@@ -95,11 +79,7 @@ func (server *Server) FinalizeAttachmentSet(writer http.ResponseWriter, request 
 	response, err := server.control.Command.FinalizeAttachmentSet(request.Context(), &controlplanev1.FinalizeAttachmentSetRequest{
 		Mutation: mutation, AttachmentSetRef: ref,
 	})
-	if err != nil {
-		writeRPCProblem(writer, err)
-		return
-	}
-	writeMessage(writer, http.StatusCreated, response, "attachmentSet", "")
+	writeRPCResult(writer, http.StatusCreated, response, err, "attachmentSet", "")
 }
 
 // GetAttachmentSet Reads one set with pagination, normalizes the protobuf view and exposes a nonempty next-page token beside the set envelope. RPC and normalization errors stop before JSON publication; authorization remains with the owner query.

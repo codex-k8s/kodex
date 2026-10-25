@@ -11,14 +11,6 @@
     },
     {
       "format": "go",
-      "firstPath": "services/external/control-api-gateway/internal/transport/http/access_endpoints.go",
-      "secondPath": "services/external/control-api-gateway/internal/transport/http/access_endpoints.go",
-      "fragmentSHA256": "a546d076c695db2c593d513363359848ac2ecce217ba5d11bb02f4f3cec59c05",
-      "count": 1,
-      "reason": "Окно100 tokens сравнивает хвост typed role create/version request, общую error/public response форму и следующую generated handler signature. Самостоятельного общего бизнесового алгоритма на всём окне нет: создание role и новой revision имеют разные nominal requests, RoleRef и expected-version context. Decode/requireMutation/permission-scope conversion/error mapper уже отдельные helpers; generic mutation dispatcher скрыл бы owner transition ради короткого glue. Комментарии увеличили physical lines при прежнем AST. Сохранены только данный внутрефайловый fragment/hash/count1, не role команды целиком."
-    },
-    {
-      "format": "go",
       "firstPath": "services/external/control-api-gateway/internal/transport/http/organization_catalog_endpoints.go",
       "secondPath": "services/external/control-api-gateway/internal/transport/http/organization_catalog_endpoints.go",
       "fragmentSHA256": "59ac741cd6a3c3a9624caccca856a580108d180b65a87463cdd1de3ed7d32fac",
@@ -4795,14 +4787,6 @@
     },
     {
       "format": "go",
-      "firstPath": "services/external/control-api-gateway/internal/transport/http/access_endpoints.go",
-      "secondPath": "services/external/control-api-gateway/internal/transport/http/attachment_set_endpoints.go",
-      "fragmentSHA256": "b477298c556952965db3e41e4037f5212376fc1c8ac8f67753ce7913499e89d3",
-      "count": 1,
-      "reason": "Повторное окно пересекает завершение предыдущего обработчика и разные create RPC: AccessBinding и OrganizationAttachmentSetDraft. Общий разбор тела и mutation уже вынесен в decodeMutationBody, а writeMessage и writeRPCProblem общие. Оставшиеся nominal requests и subject/role либо purpose/artifact fields принадлежат разным владельцам; объединение в универсальный mutation dispatcher скроет эту связь ради короткого glue."
-    },
-    {
-      "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/session_archive.go",
       "fragmentSHA256": "cabd1575f47fca24157da07f7835397b99756d2eb3a8eb8f782677a68c38b87b",
@@ -7459,14 +7443,6 @@
     },
     {
       "format": "go",
-      "firstPath": "services/external/control-api-gateway/internal/transport/http/access_endpoints.go",
-      "secondPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
-      "fragmentSHA256": "d46d479cb1dff6dfe3a37a412c988293924cff128381e8a0b8c7be4830bbdcb9",
-      "count": 1,
-      "reason": "Окно 100 tokens. Сравниваются хвост CreateAccessRole/начало CreateAccessRoleVersion и хвост AddPlatformMembership/начало ChangePlatformMembership. Decoder уже decodeMutationBody; role revision с PermissionKeys/AllowedScopes/ChangeComment не является membership role/active update. Общего цельного алгоритма на окне нет, новый generic owner dispatcher стёр бы номинальные RPC и authority selectors. Слева: CreateAccessRole/CreateAccessRoleVersion; справа: AddPlatformMembership/ChangePlatformMembership. Сохранены только exact pair/hash/count1, не функции, файлы или transport целиком."
-    },
-    {
-      "format": "go",
       "firstPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
       "secondPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
       "fragmentSHA256": "f36529b1dfc71c75ff1617684bada3b27e39286d4bbcc87f56213239d4a56093",
@@ -7659,35 +7635,11 @@
     },
     {
       "format": "go",
-      "firstPath": "services/external/control-api-gateway/internal/transport/http/access_endpoints.go",
-      "secondPath": "services/external/control-api-gateway/internal/transport/http/organization_role_image_endpoints.go",
-      "fragmentSHA256": "d46d479cb1dff6dfe3a37a412c988293924cff128381e8a0b8c7be4830bbdcb9",
-      "count": 1,
-      "reason": "Окно 108 tokens. Окно пересекает хвост предыдущего метода и новый typed command. Role-version PermissionKeys/AllowedScopes/ChangeComment, organization image artifact/provenance promotion и agent overlay/runtime rollback имеют разные refs, RPC и validation. Decode/mutation уже decodeMutationBody; projection/error kernels также общие там, где совпадают. Nominal bindings не заменяются generic owner/action dispatcher. Слева: CreateAccessRole/CreateAccessRoleVersion; справа: ListSystemRoleImageRecipeRevisions/PromoteSystemRoleImage. Сохранено только exact pair/hash/count1, не методы, файлы либо формат целиком."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/external/control-api-gateway/internal/transport/http/access_endpoints.go",
-      "secondPath": "services/external/control-api-gateway/internal/transport/http/runtime_configuration_endpoints.go",
-      "fragmentSHA256": "d46d479cb1dff6dfe3a37a412c988293924cff128381e8a0b8c7be4830bbdcb9",
-      "count": 2,
-      "reason": "Окно 101/103 tokens. Окно пересекает хвост предыдущего метода и новый typed command. Role-version PermissionKeys/AllowedScopes/ChangeComment, organization image artifact/provenance promotion и agent overlay/runtime rollback имеют разные refs, RPC и validation. Decode/mutation уже decodeMutationBody; projection/error kernels также общие там, где совпадают. Nominal bindings не заменяются generic owner/action dispatcher. Слева: CreateAccessRole/CreateAccessRoleVersion; справа: PublishAgentRuntimeConfiguration/CreateConfigOverlayDraft/PublishRuntimeEnvironmentVersion/RollbackRuntimeEnvironment. Сохранено только exact pair/hash/count2, не методы, файлы либо формат целиком."
-    },
-    {
-      "format": "go",
       "firstPath": "services/external/control-api-gateway/internal/transport/http/assistant_endpoints.go",
       "secondPath": "services/external/control-api-gateway/internal/transport/http/managed_configuration_endpoints.go",
       "fragmentSHA256": "199dc63eb0f379626b1ddf08d2487db2e7621548d439eaa8c14fa51be01f6464",
       "count": 1,
       "reason": "Окно 103 tokens. Сравниваются хвост создания беседы/обновление title и хвост Git detach/явная Git-managed copy. ConversationRef/Title не являются ConfigurationRef/Name и не дают одинакового owner lifecycle. Decode/mutation уже общий; отдельный CopyGitManagedConfiguration и его result validator сохраняют source/ownership boundary вместо generic UI update. Слева: CreateAssistantConversation/UpdateAssistantConversationTitle; справа: DetachGitManagedConfiguration/CopyGitManagedConfiguration. Сохранено только exact pair/hash/count1, не методы, файлы либо формат целиком."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
-      "secondPath": "services/external/control-api-gateway/internal/transport/http/runtime_configuration_endpoints.go",
-      "fragmentSHA256": "d9b49dd733e20a17bd0d8c990a678c9cd8ba98d82f1f6c4950e3d171c908ba1e",
-      "count": 1,
-      "reason": "Окно 100 tokens. Перекрываются Change/RemovePlatformMembership и Create/ValidateConfigOverlayDraft. Mutation и error-first output уже общие; membership removal и runtime overlay validation имеют разные nominal RPC/refs, статус и result schema. Остались явные transport bindings и короткий caller guard, а не самостоятельный повторный business algorithm. Слева: ChangePlatformMembership/RemovePlatformMembership; справа: CreateConfigOverlayDraft/ValidateConfigOverlayDraft. Сохранено только exact pair/hash/count1, не методы, файлы либо формат целиком."
     },
     {
       "format": "go",
@@ -8440,6 +8392,86 @@
       "fragmentSHA256": "9954ef3a77b0d0347b23cb3081c50fd50e9a1b41157389bd38a4f2c4e5f062e1",
       "count": 2,
       "reason": "Два occurrences сопоставляют хвост SDK imports с DTO imports и с хвостом store exposure. Полностью проверены обе пары:nominal value/type bindings и существующие Ref/action references различны,вызовов/вычислений/getters/spreads нет. После identifier normalization сходны только списковые разделители;общая библиотека не заменяет эти разные контракты. Только данный путь/hash/count2 с закрытым контролем числа,не ignore импортов/типов/store в целом."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/access_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/access_endpoints.go",
+      "fragmentSHA256": "183020de7db55cd7ab5c52099cd031533e95c6d47f79874e782d378cd7682624",
+      "count": 1,
+      "reason": "После выноса отображения результата окно пересекает конец role create и начало входа role-version/binding-change. DecodeMutationBody и writeRPCResult уже общие; остаются разные сгенерированные типы, RoleRef/BindingRef и поля permissions/scope/conditions. Это явные адаптеры разных Access commands. Универсальный dispatcher ради двух вызовов скрыл бы переход владельца. Сохранено только точное окно одного пути/hash/count1, не методы целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/access_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "fragmentSHA256": "183020de7db55cd7ab5c52099cd031533e95c6d47f79874e782d378cd7682624",
+      "count": 1,
+      "reason": "Окно сравнивает вход role/binding с адаптером platform membership. Разбор mutation, ошибок и публичной проекции уже общий; role metadata/permissions и UserRef/PlatformRole принадлежат разным командам и сгенерированным запросам. Повторяются вызовы общих функций вокруг разных типизированных полей, а не самостоятельный алгоритм. Только эти два пути/hash/count1; общего исключения RPC или валидации нет."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/access_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/organization_role_image_endpoints.go",
+      "fragmentSHA256": "183020de7db55cd7ab5c52099cd031533e95c6d47f79874e782d378cd7682624",
+      "count": 1,
+      "reason": "Окно role-version сопоставлено с границей revision-list/promotion образа организации. Promotion отдельно связывает artifact/provenance/recipe и проверяет receipt; Access управляет другими permissions/role metadata. DecodeMutationBody, page и отображение результата уже общие. Специализированные RPC и проверки владельца должны оставаться явными. Только точная пара/hash/count1, не обработчики или promotion validation целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/access_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/runtime_configuration_endpoints.go",
+      "fragmentSHA256": "183020de7db55cd7ab5c52099cd031533e95c6d47f79874e782d378cd7682624",
+      "count": 2,
+      "reason": "Два совпадения сравнивают вход Access с ConfigOverlayDraft и RuntimeEnvironmentRollback. DecodeMutationBody и отображение результата уже вынесены; AgentRef/Content и EnvironmentRef/ссылка опубликованной версии имеют разные полномочия, жизненный цикл и сгенерированные RPC. Агентский runtime сохраняет writeAgentRuntimeRPCResult и проверку кандидатов провайдера. Проверены все четыре стороны; только точные пути/hash/count2, без разрешения новых совпадений."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/access_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/access_endpoints.go",
+      "fragmentSHA256": "65fc36a894e4bd14b362bc13d9a72eb01ea9940de87ba8a1220057d797775ad3",
+      "count": 1,
+      "reason": "Окно сравнивает короткие ArchiveAccessRole и RevokeAccessBinding после подключения общего отображения результата. RequireMutation уже разбирает версию и идемпотентность; остаются разные RPC, RoleRef/BindingRef и публичные поля role/binding. Нового общего алгоритма между этими вызовами нет. Объединение команд скрыло бы разные terminal effects владельца. Только точное окно одного пути/hash/count1, не жизненный цикл целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/access_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/command_endpoints.go",
+      "fragmentSHA256": "65fc36a894e4bd14b362bc13d9a72eb01ea9940de87ba8a1220057d797775ad3",
+      "count": 1,
+      "reason": "Короткое окно архивирования/отзыва Access сопоставлено с RemovePlatformMembership. RequireMutation и writeRPCResult уже содержат общий разбор заголовков, ошибок и проекций; остаются разные команды membership/role/binding и ссылки владельца. Универсальная обёртка invoke/delete уменьшила бы явность границы полномочий без выноса нового алгоритма. Сохранена только точная пара/hash/count1, не команды или файлы целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/access_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/runtime_configuration_endpoints.go",
+      "fragmentSHA256": "65fc36a894e4bd14b362bc13d9a72eb01ea9940de87ba8a1220057d797775ad3",
+      "count": 1,
+      "reason": "Окно terminal-команды Access сопоставлено с ValidateConfigOverlayDraft. Оба используют requireMutation, но один архивирует/отзывает объект доступа, другой валидирует агентский runtime draft и имеет отдельную проверку типизированного ответа. Заголовки и результаты уже обрабатываются общими функциями; сами переходы не взаимозаменяемы. Только точное окно двух путей/hash/count1, не валидация draft или правила ошибок."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/access_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/attachment_set_endpoints.go",
+      "fragmentSHA256": "2851041f6890b6f1417861330cdba92306a65f71ec08b2ad7f74b1f5f88899cd",
+      "count": 1,
+      "reason": "Окно пересекает результат Access и следующий binding create; другая сторона содержит project/organization attachment-set create. DecodeMutationBody и writeRPCResult уже общие; только проектный путь требует withProjectReference, организационную identity назначает сервер. Subject/RoleVersion/Scope/Conditions и Purpose/ArtifactRefs — разные поля и RPC владельцев. Общий mapper скрыл бы эти различия. Только точные пути/hash/count1, не функции целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/configuration_copy_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/configuration_copy_endpoints.go",
+      "fragmentSHA256": "1cf200326eb3b088902d5a64ee56d3ad1b6095508a1141926ad6b74bb2ea105f",
+      "count": 1,
+      "reason": "После выноса optional JSON/ref/versioned mutation остаётся окно отдельных ArchiveRoleImageConfiguration/ArchiveIntegrationDefinitionConfiguration. Входной алгоритм уже configurationArchiveMutation, проверка archived-view/ETag/no-store — writeArchivedConfiguration. Между ними разные типизированные RPC, короткая проверка ошибки и getter сгенерированного ответа. Dispatcher или callback ради этого кода добавил бы скрытый слой без нового алгоритма. Только точное окно одного пути/hash/count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/runtime_configuration_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/runtime_configuration_endpoints.go",
+      "fragmentSHA256": "14031993c46bae0eb255cf7c39ce5a16ca8fc4de0d1e30c1547bd72524fba7aa",
+      "count": 1,
+      "reason": "Окно CreateRuntimeEnvironmentSet/PublishRuntimeEnvironmentVersion содержит вызовы общих mutation/policy/value/tool/binding casters и заполнение двух сгенерированных запросов. Create использует ProjectRef, отсутствие IfMatch и HTTP201; publish — EnvironmentRef, IfMatch и HTTP200. Политику уже проверяет runtimeEnvironmentPolicyInput; остаются типизированные поля и короткие проверки результата. Универсальный setter скрыл бы разные контракты. Только точное окно одного пути/hash/count1."
     }
   ]
 }

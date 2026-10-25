@@ -4,11 +4,52 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.483.0
+version: 1.484.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Подключение общего RPC result и вход архивирования — 26.10.2026
+
+14 оставшихся обработчиков Access, attachment-set и runtime environment
+используют существующий writeRPCResult. Общая функция не менялась: ошибка
+обрабатывается до protobuf, прежние HTTP200/201 и поля role/binding/
+attachmentSet/environment передаются явно. Пара финальных statements выбрана
+по строгому AST: void *Server method, отсутствие промежуточных комментариев,
+константный статус и строковые поля, один writer/error и отсутствие shadowing.
+Никаких запросов, преобразований полей или проверок до RPC не переносилось.
+
+Два отдельных archive configuration RPC используют общий входной helper:
+optional empty JSON, формат ссылки, затем обязательная версия и mutation.
+Порядок отказов, request pointer, ключ идемпотентности и IfMatch сохранены;
+выбор owner command и writeArchivedConfiguration остаются у обработчиков.
+Новая именованная Go-функция описана EN→RU. Нет универсального dispatcher,
+новых полномочий, retries, transitions или событий.
+
+Четыре полных исходника восстановлены побайтово, включая все request fields,
+предшествующие guards и прочие функции. Восемь source mutations статуса,
+публичного поля, RPC error, mutation, optional body, locator и version admission
+отвергнуты точными AST-checks. Общий writer, его тесты и configuration-copy
+tests не менялись. Go1.26.6: весь gateway build6.23с, unit22.73с и vet1.87с —
+PASS LOCAL;11 packages с тестами,3098 PASS events с подтестами,0 FAIL/SKIP.
+Три package без test files прошли общую сборку. Прогон включает78 status/
+payload/gRPC случаев writer и прежние archive header/owner-error проверки.
+Gofmt четырёх файлов прошёл; hashes sources связаны с build/unit/proofs.
+
+После выноса изменились11 detector окон:11 прежних исчезли,11 новых относятся
+к коротким типизированным адаптерам вокруг уже общих input/result/caster
+функций. Проверены все стороны и23 пересекаемых функции. Для них сохранены
+10 exact pair/hash/count решений, одно с count2. Удалены только6 отсутствующих
+entries (7 прежних raw окон);1049 остальных entries сохранены. Начальный
+закрытый отказ assessor на stale entries устранён этим точным обновлением.
+20 count/hash mutations новых решений отвергнуты настоящим assessor.
+
+Итог:6764 sources,222 generated exclusions,1486 raw /1202 retained /
+284 unresolved (153 Go,106 TypeScript,25 Bash),registry1059. Все21579 Go
+объявления EN→RU; пять quality stages — PASS LOCAL. Thresholds, normalization,
+whole-file/format/test ignores не менялись. Browser/full E2E,live deploy и
+независимая QA — NOT RUN. Полная задача1823 ещё продолжается.
 
 ## Общий цикл передачи и хеширования HTTP body — 26.10.2026
 

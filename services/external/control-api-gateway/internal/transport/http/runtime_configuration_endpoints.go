@@ -200,11 +200,7 @@ func (server *Server) CreateRuntimeEnvironmentSet(writer http.ResponseWriter, re
 		SecretBindings: bindings, Tools: runtimeEnvironmentTools(body.Tools),
 		Policy: policy,
 	})
-	if err != nil {
-		writeRPCProblem(writer, err)
-		return
-	}
-	writeMessage(writer, http.StatusCreated, response, "environment", "")
+	writeRPCResult(writer, http.StatusCreated, response, err, "environment", "")
 }
 
 // PublishRuntimeEnvironmentVersion validates body, secret revision bounds, mutation pins and typed policy before the dedicated owner publication. Resource admission, image validation and materialization remain owner responsibilities rather than effects of this mapper.
@@ -233,11 +229,7 @@ func (server *Server) PublishRuntimeEnvironmentVersion(writer http.ResponseWrite
 		SecretBindings: bindings, Tools: runtimeEnvironmentTools(body.Tools),
 		Policy: policy,
 	})
-	if err != nil {
-		writeRPCProblem(writer, err)
-		return
-	}
-	writeMessage(writer, http.StatusOK, response, "environment", "")
+	writeRPCResult(writer, http.StatusOK, response, err, "environment", "")
 }
 
 // RollbackRuntimeEnvironment forwards the selected published-version reference and mutation context to the owner rollback and projects the environment without rewriting version history locally.
@@ -248,11 +240,7 @@ func (server *Server) RollbackRuntimeEnvironment(writer http.ResponseWriter, req
 		return
 	}
 	response, err := server.control.Command.RollbackRuntimeEnvironment(request.Context(), &controlplanev1.RollbackRuntimeEnvironmentRequest{Mutation: mutation, EnvironmentRef: environmentRef, PublishedVersionRef: body.PublishedVersionRef})
-	if err != nil {
-		writeRPCProblem(writer, err)
-		return
-	}
-	writeMessage(writer, http.StatusOK, response, "environment", "")
+	writeRPCResult(writer, http.StatusOK, response, err, "environment", "")
 }
 
 // ListTemplateVariables adapts route-project and optional agent/runtime/query/source/page selectors to the shared template-variable endpoint implementation without evaluating a template.
