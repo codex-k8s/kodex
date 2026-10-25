@@ -166,9 +166,7 @@ func (server *Server) ListAssistantConversations(ctx context.Context, request *c
 		return nil, transportError(err)
 	}
 	response := &controlplanev1.ListAssistantConversationsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	for _, item := range items {
-		response.Conversations = append(response.Conversations, castConversation(item))
-	}
+	response.Conversations = castResponseItems(items, castConversation)
 	return response, nil
 }
 

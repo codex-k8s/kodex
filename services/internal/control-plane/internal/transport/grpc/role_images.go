@@ -351,9 +351,7 @@ func (server *RoleImageServer) ListRoleEnvironments(ctx context.Context, _ *cont
 		return nil, transportError(err)
 	}
 	response := &controlplanev1.ListRoleEnvironmentsResponse{}
-	for _, item := range items {
-		response.Environments = append(response.Environments, castRoleEnvironment(item))
-	}
+	response.Environments = castResponseItems(items, castRoleEnvironment)
 	return response, nil
 }
 
@@ -373,9 +371,7 @@ func (server *RoleImageServer) ListRoleImageRecipes(ctx context.Context, request
 		return nil, transportError(err)
 	}
 	response := &controlplanev1.ListRoleImageRecipesResponse{Page: &controlplanev1.PageInfo{NextPageToken: nextPage}, Total: total}
-	for _, item := range items {
-		response.Recipes = append(response.Recipes, castRoleImageRecipe(item))
-	}
+	response.Recipes = castResponseItems(items, castRoleImageRecipe)
 	return response, nil
 }
 
@@ -750,9 +746,7 @@ func (server *RoleImageServer) ListOrganizationRoleImageRecipes(ctx context.Cont
 		return nil, transportError(err)
 	}
 	response := &controlplanev1.ListOrganizationRoleImageRecipesResponse{Page: &controlplanev1.PageInfo{NextPageToken: nextPage}, Total: total}
-	for _, item := range items {
-		response.Recipes = append(response.Recipes, castRoleImageRecipe(item))
-	}
+	response.Recipes = castResponseItems(items, castRoleImageRecipe)
 	return response, nil
 }
 

@@ -213,9 +213,7 @@ func (server *Server) ListRuntimeSecretDraftRecoveryWork(ctx context.Context, re
 		return nil, transportError(err)
 	}
 	response := &cp.ListRuntimeSecretDraftRecoveryWorkResponse{Page: &cp.PageInfo{NextPageToken: next}}
-	for _, work := range works {
-		response.Operations = append(response.Operations, castDraftWork(work))
-	}
+	response.Operations = castResponseItems(works, castDraftWork)
 	return response, nil
 }
 

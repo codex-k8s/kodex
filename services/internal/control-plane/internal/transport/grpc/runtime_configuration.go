@@ -41,9 +41,7 @@ func (server *Server) ListAgentRuntimeConfigurationVersions(ctx context.Context,
 		return nil, transportError(err)
 	}
 	response := &controlplanev1.ListAgentRuntimeConfigurationVersionsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	for _, item := range items {
-		response.Configurations = append(response.Configurations, castAgentRuntimeConfiguration(item))
-	}
+	response.Configurations = castResponseItems(items, castAgentRuntimeConfiguration)
 	return response, nil
 }
 
@@ -61,9 +59,7 @@ func (server *Server) ListRuntimeEnvironmentSets(ctx context.Context, request *c
 		return nil, transportError(err)
 	}
 	response := &controlplanev1.ListRuntimeEnvironmentSetsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	for _, item := range items {
-		response.Environments = append(response.Environments, castRuntimeEnvironment(item))
-	}
+	response.Environments = castResponseItems(items, castRuntimeEnvironment)
 	return response, nil
 }
 
@@ -97,9 +93,7 @@ func (server *Server) ListRuntimeEnvironmentVersions(ctx context.Context, reques
 		return nil, transportError(err)
 	}
 	response := &controlplanev1.ListRuntimeEnvironmentVersionsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	for _, item := range items {
-		response.Versions = append(response.Versions, castRuntimeEnvironmentVersion(item))
-	}
+	response.Versions = castResponseItems(items, castRuntimeEnvironmentVersion)
 	return response, nil
 }
 

@@ -66,9 +66,7 @@ func (server *Server) ListEmailMailboxCredentials(ctx context.Context, request *
 		return nil, transportError(err)
 	}
 	response := &cp.ListEmailMailboxCredentialsResponse{Total: total, Page: &cp.PageInfo{NextPageToken: next}}
-	for _, item := range items {
-		response.Items = append(response.Items, castEmailMailboxCredential(item))
-	}
+	response.Items = castResponseItems(items, castEmailMailboxCredential)
 	return response, nil
 }
 

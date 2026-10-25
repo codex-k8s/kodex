@@ -22,9 +22,7 @@ func (server *Server) ListVFSNodes(ctx context.Context, request *controlplanev1.
 		return nil, transportError(err)
 	}
 	response := &controlplanev1.ListVFSNodesResponse{Total: total, Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	for _, item := range items {
-		response.Nodes = append(response.Nodes, castVFSNode(item))
-	}
+	response.Nodes = castResponseItems(items, castVFSNode)
 	return response, nil
 }
 
@@ -42,9 +40,7 @@ func (server *Server) SearchVFS(ctx context.Context, request *controlplanev1.Sea
 		return nil, transportError(err)
 	}
 	response := &controlplanev1.SearchVFSResponse{Total: total, Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	for _, item := range items {
-		response.Nodes = append(response.Nodes, castVFSNode(item))
-	}
+	response.Nodes = castResponseItems(items, castVFSNode)
 	return response, nil
 }
 

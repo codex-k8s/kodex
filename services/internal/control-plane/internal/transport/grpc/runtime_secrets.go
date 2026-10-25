@@ -210,9 +210,7 @@ func (server *Server) ListRuntimeSecrets(ctx context.Context, request *controlpl
 		return nil, transportError(err)
 	}
 	response := &controlplanev1.ListRuntimeSecretsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	for _, item := range items {
-		response.Secrets = append(response.Secrets, castRuntimeSecret(item))
-	}
+	response.Secrets = castResponseItems(items, castRuntimeSecret)
 	return response, nil
 }
 
@@ -411,9 +409,7 @@ func (server *Server) ListOrganizationRuntimeSecrets(ctx context.Context, reques
 		return nil, transportError(err)
 	}
 	response := &controlplanev1.ListOrganizationRuntimeSecretsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	for _, item := range items {
-		response.Secrets = append(response.Secrets, castRuntimeSecret(item))
-	}
+	response.Secrets = castResponseItems(items, castRuntimeSecret)
 	return response, nil
 }
 

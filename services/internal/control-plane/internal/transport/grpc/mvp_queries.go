@@ -28,9 +28,7 @@ func (server *Server) ListProviderDefinitions(ctx context.Context, request *cont
 		return nil, transportError(err)
 	}
 	response := &controlplanev1.ListProviderDefinitionsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	for _, item := range items {
-		response.Definitions = append(response.Definitions, castProviderDefinition(item))
-	}
+	response.Definitions = castResponseItems(items, castProviderDefinition)
 	return response, nil
 }
 
@@ -264,9 +262,7 @@ func (server *Server) ListRuntimeEnvironmentAgents(ctx context.Context, request 
 		return nil, transportError(err)
 	}
 	response := &controlplanev1.ListRuntimeEnvironmentAgentsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	for _, item := range items {
-		response.Agents = append(response.Agents, castAgent(item))
-	}
+	response.Agents = castResponseItems(items, castAgent)
 	return response, nil
 }
 
@@ -284,9 +280,7 @@ func (server *Server) ListScheduleRevisions(ctx context.Context, request *contro
 		return nil, transportError(err)
 	}
 	response := &controlplanev1.ListScheduleRevisionsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	for _, item := range items {
-		response.Revisions = append(response.Revisions, castScheduleRevision(item))
-	}
+	response.Revisions = castResponseItems(items, castScheduleRevision)
 	return response, nil
 }
 

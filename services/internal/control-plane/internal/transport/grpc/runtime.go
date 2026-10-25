@@ -501,9 +501,7 @@ func (server *Server) SearchAssistantResources(ctx context.Context, request *con
 		return nil, transportError(err)
 	}
 	response := &controlplanev1.SearchAssistantResourcesResponse{Truncated: truncated}
-	for _, item := range items {
-		response.Results = append(response.Results, castSearchResult(item))
-	}
+	response.Results = castResponseItems(items, castSearchResult)
 	return response, nil
 }
 

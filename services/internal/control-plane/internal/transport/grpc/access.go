@@ -24,9 +24,7 @@ func (server *Server) ListPermissionRegistry(ctx context.Context, _ *controlplan
 		return nil, transportError(err)
 	}
 	response := &controlplanev1.ListPermissionRegistryResponse{}
-	for _, item := range items {
-		response.Permissions = append(response.Permissions, castPermissionDefinition(item))
-	}
+	response.Permissions = castResponseItems(items, castPermissionDefinition)
 	return response, nil
 }
 
@@ -43,9 +41,7 @@ func (server *Server) ListAccessSubjects(ctx context.Context, request *controlpl
 		return nil, transportError(err)
 	}
 	response := &controlplanev1.ListAccessSubjectsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	for _, item := range items {
-		response.Subjects = append(response.Subjects, castAccessSubject(item))
-	}
+	response.Subjects = castResponseItems(items, castAccessSubject)
 	return response, nil
 }
 
@@ -61,9 +57,7 @@ func (server *Server) ListOIDCGroups(ctx context.Context, request *controlplanev
 		return nil, transportError(err)
 	}
 	response := &controlplanev1.ListOIDCGroupsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	for _, item := range items {
-		response.Groups = append(response.Groups, castOIDCGroup(item))
-	}
+	response.Groups = castResponseItems(items, castOIDCGroup)
 	return response, nil
 }
 
@@ -81,9 +75,7 @@ func (server *Server) ListAccessRoles(ctx context.Context, request *controlplane
 		return nil, transportError(err)
 	}
 	response := &controlplanev1.ListAccessRolesResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	for _, item := range items {
-		response.Roles = append(response.Roles, castAccessRole(item))
-	}
+	response.Roles = castResponseItems(items, castAccessRole)
 	return response, nil
 }
 
@@ -99,9 +91,7 @@ func (server *Server) ListAccessRoleVersions(ctx context.Context, request *contr
 		return nil, transportError(err)
 	}
 	response := &controlplanev1.ListAccessRoleVersionsResponse{Role: castAccessRole(role), Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	for _, item := range items {
-		response.Versions = append(response.Versions, castAccessRoleVersion(item))
-	}
+	response.Versions = castResponseItems(items, castAccessRoleVersion)
 	return response, nil
 }
 
@@ -121,9 +111,7 @@ func (server *Server) ListAccessBindings(ctx context.Context, request *controlpl
 		return nil, transportError(err)
 	}
 	response := &controlplanev1.ListAccessBindingsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	for _, item := range items {
-		response.Bindings = append(response.Bindings, castAccessBinding(item))
-	}
+	response.Bindings = castResponseItems(items, castAccessBinding)
 	return response, nil
 }
 

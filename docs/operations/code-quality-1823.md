@@ -4,11 +4,89 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.444.0
+version: 1.445.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая проекция элементов gRPC-ответов — 25.10.2026
+
+На основе `4d57ff47e08fbfe13245288fc85d09f11f35b7b8`43 прямых
+range→caster→append цикла в11 transport-файлах control-plane заменены
+вызовами castResponseItems. Это один private helper конкретного unit,
+без нового shared module или dependency. Helper описан предметно EN→RU.
+Он добавляет результаты в новый nil-срез в исходном порядке, вызывает caster
+ровно один раз на элемент и сохраняет nil для nil/пустого входа.
+
+Отбирались только свежие protobuf response literals с ещё не заданным
+целевым полем: allocation непосредственно предшествует циклу, после него
+ответ возвращается без промежуточной выдачи либо alias. Range имеет одно
+действие append, caster — явная top-level функция, source — slice identifier.
+Циклы с &items[index], заранее выделенный runs slice GetRunGraph, inline
+compound projections и fallible casters не переписаны. Вызовы principal,
+queryResponse, roleImagePrincipal, доменного сервиса, error mapping,
+pagination/next-actions/total и все специальные фильтры остаются у caller.
+
+Обратное раскрытие проверяет фактические signature/body helper, выводит
+исходный range из его настоящего тела для каждого вызова и восстанавливает
+полные AST всех11 файлов. Отдельно проверены43 fresh-nil destination fields,
+однократность binding field/source/caster, отсутствие выдачи ответа до
+завершения mapping и совпадение всех комментариев/directives. Parser errors
+отклоняются до использования AST. Все прочие методы файлов, включая сложные
+ветви SearchAssistantResources, сохраняются целиком. Никаких новых command,
+lease/grant transitions, permissions, events, retries или deadlines нет.
+
+Финальные локальные проверки:
+
+- 43 обратных раскрытия/11 полных AST, comments/directives и helper
+  signature/body — PASS (1.08s).
+- Весь control-plane `go build -p 2 ./...` — PASS (9.29s).
+- Весь control-plane `go test -p 2 -count=1 ./...` — PASS (38.13s).
+- 17 unit-тестов анализаторов — PASS (0.57s),0 failed/0 skipped.
+- 24 новых exact decisions/30 occurrences — PASS;48 count/hash мутаций
+  и13 попыток возврата retired keys закрыто отклонены (0.87s).
+- Inventory/detector/assessment, Go completeness и5 ignore guards,
+  gofmt и `git diff --check` — PASS.
+
+Новый report содержит1624 raw-группы вместо1638:60 прежних exact keys/
+occurrences исчезли,46 появились при перестроении окон, чистое уменьшение14.
+Это не43 устранённые detector-группы:43 inline цикла заменены одной общей
+реализацией. После изменения13 прежних retention keys имеют count0; они
+сняты адресно, без rekey/hash/count widening. Остальные763 entries сохранены.
+В частности, часть representative pairs перестроилась и между неизменёнными
+source files; эти файлы отдельно сверены с исходным SHA.
+
+Полностью прочитан queries.go:38 объявлений и их RPC→domain input→reply
+field matrix. После выноса коллекций разобраны24 точных self-window keys,
+30 occurrences. Окна пересекают разные typed query declarations, generated
+requests/replies, exact RPC constants, refs/filters и public response fields.
+Principal/error boundary уже queryResponse; коллекции уже castResponseItems.
+Оставлен явный nominal glue вместо universal query dispatcher/closure factory.
+Специальные legacy search limit, run-state refusal, artifact source count,
+GetRunGraph allocation/snapshot choice, address-based instruction projection,
+impact fields и membership/definition actions перечислены в точных reasons.
+Весь файл, query family и проверки не исключались. Каждый key ограничен
+двумя точными путями, fragment SHA-256 и фактической кратностью1 либо2.
+30 сохранённых occurrences не объявляются удалёнными.
+
+Registry776→763→787, retained893→880→910, unresolved745→714.
+Inventory6706 sources/222 exclusions. Go21502/21502 EN→RU,0 missing;
+в текущем PR579 Go-файлов/3778 объявлений,0 пропусков. Пороги, normalization
+и ignored paths не менялись. Generated code, contracts и dependencies
+не менялись. Все response allocation/page fields и методы вне выбранных
+циклов сохранены полным AST-доказательством.
+
+Context7 resolve Go вернул Invalid API key; использованы официальные
+[range clauses](https://go.dev/ref/spec#For_range) и
+[append semantics](https://go.dev/ref/spec#Appending_to_and_copying_slices).
+Build/unit выполнялись с GOWORK=off/GOMAXPROCS=4 и очищенным child env
+без credentials/inherited KODEX inputs. Это локальный unit-контур;
+PostgreSQL component execution, browser/E2E, HTTP/Docker fixture,
+apply/deploy/live и продуктовая приёмка — NOT RUN. Manifest/frontend/gateway
+source этим этапом не менялся; прежние34 renders, ABI/release и frontend
+проверки не объявляются повторно выполненными на новом SHA.
+PR остаётся Draft, Issue#1823 открыт:714 групп ещё требуют решения.
 
 ## Общий egress семи баз и исправление standalone staging render — 25.10.2026
 

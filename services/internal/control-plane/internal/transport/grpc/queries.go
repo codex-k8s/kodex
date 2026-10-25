@@ -61,9 +61,7 @@ func (server *Server) ListPlatformCapabilities(ctx context.Context, _ *controlpl
 			return nil, err
 		}
 		response := &controlplanev1.ListPlatformCapabilitiesResponse{}
-		for _, item := range items {
-			response.Capabilities = append(response.Capabilities, castCapability(item))
-		}
+		response.Capabilities = castResponseItems(items, castCapability)
 		return response, nil
 	})
 }
@@ -79,9 +77,7 @@ func (server *Server) ListRuntimeSelections(ctx context.Context, _ *controlplane
 			return nil, err
 		}
 		response := &controlplanev1.ListRuntimeSelectionsResponse{}
-		for _, item := range items {
-			response.Runtimes = append(response.Runtimes, castRuntime(item))
-		}
+		response.Runtimes = castResponseItems(items, castRuntime)
 		return response, nil
 	})
 }
@@ -97,9 +93,7 @@ func (server *Server) SearchPlatform(ctx context.Context, request *controlplanev
 			return nil, err
 		}
 		response := &controlplanev1.SearchPlatformResponse{Total: total, Page: &controlplanev1.PageInfo{NextPageToken: next}}
-		for _, item := range items {
-			response.Results = append(response.Results, castSearchResult(item))
-		}
+		response.Results = castResponseItems(items, castSearchResult)
 		return response, nil
 	})
 }
@@ -125,9 +119,7 @@ func (server *Server) ListProjects(ctx context.Context, request *controlplanev1.
 			return nil, err
 		}
 		response := &controlplanev1.ListProjectsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}, NextActions: nextActions(actions)}
-		for _, item := range items {
-			response.Projects = append(response.Projects, castProject(item))
-		}
+		response.Projects = castResponseItems(items, castProject)
 		return response, nil
 	})
 }
@@ -143,9 +135,7 @@ func (server *Server) ListTrashedProjects(ctx context.Context, request *controlp
 			return nil, err
 		}
 		response := &controlplanev1.ListTrashedProjectsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-		for _, item := range items {
-			response.Projects = append(response.Projects, castProject(item))
-		}
+		response.Projects = castResponseItems(items, castProject)
 		return response, nil
 	})
 }
@@ -175,9 +165,7 @@ func (server *Server) ListPlatformMemberships(ctx context.Context, request *cont
 			return nil, err
 		}
 		response := &controlplanev1.ListPlatformMembershipsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}, NextActions: []controlplanev1.NextAction{controlplanev1.NextAction_NEXT_ACTION_MANAGE_MEMBERS}}
-		for _, item := range items {
-			response.Memberships = append(response.Memberships, castMembership(item))
-		}
+		response.Memberships = castResponseItems(items, castMembership)
 		return response, nil
 	})
 }
@@ -193,9 +181,7 @@ func (server *Server) ListPlatformMembershipCandidates(ctx context.Context, requ
 			return nil, err
 		}
 		response := &controlplanev1.ListPlatformMembershipCandidatesResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-		for _, item := range items {
-			response.Users = append(response.Users, castUser(item))
-		}
+		response.Users = castResponseItems(items, castUser)
 		return response, nil
 	})
 }
@@ -211,9 +197,7 @@ func (server *Server) ListProjectMemberships(ctx context.Context, request *contr
 			return nil, err
 		}
 		response := &controlplanev1.ListProjectMembershipsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-		for _, item := range items {
-			response.Memberships = append(response.Memberships, castMembership(item))
-		}
+		response.Memberships = castResponseItems(items, castMembership)
 		return response, nil
 	})
 }
@@ -229,9 +213,7 @@ func (server *Server) ListProjectMembershipCandidates(ctx context.Context, reque
 			return nil, err
 		}
 		response := &controlplanev1.ListProjectMembershipCandidatesResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-		for _, item := range items {
-			response.Users = append(response.Users, castUser(item))
-		}
+		response.Users = castResponseItems(items, castUser)
 		return response, nil
 	})
 }
@@ -251,9 +233,7 @@ func (server *Server) ListAgents(ctx context.Context, request *controlplanev1.Li
 			return nil, err
 		}
 		response := &controlplanev1.ListAgentsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-		for _, item := range items {
-			response.Agents = append(response.Agents, castAgent(item))
-		}
+		response.Agents = castResponseItems(items, castAgent)
 		return response, nil
 	})
 }
@@ -303,9 +283,7 @@ func (server *Server) ListWorkflows(ctx context.Context, request *controlplanev1
 			return nil, err
 		}
 		response := &controlplanev1.ListWorkflowsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-		for _, item := range items {
-			response.Workflows = append(response.Workflows, castWorkflow(item))
-		}
+		response.Workflows = castResponseItems(items, castWorkflow)
 		return response, nil
 	})
 }
@@ -341,9 +319,7 @@ func (server *Server) ListRuns(ctx context.Context, request *controlplanev1.List
 			return nil, err
 		}
 		response := &controlplanev1.ListRunsResponse{Total: total, Page: &controlplanev1.PageInfo{NextPageToken: next}}
-		for _, item := range items {
-			response.Runs = append(response.Runs, castRun(item))
-		}
+		response.Runs = castResponseItems(items, castRun)
 		return response, nil
 	})
 }
@@ -393,9 +369,7 @@ func (server *Server) ListRunEvents(ctx context.Context, request *controlplanev1
 			return nil, err
 		}
 		response := &controlplanev1.ListRunEventsResponse{CurrentSequence: current, Complete: complete}
-		for _, item := range items {
-			response.Events = append(response.Events, castEvent(item))
-		}
+		response.Events = castResponseItems(items, castEvent)
 		return response, nil
 	})
 }
@@ -419,9 +393,7 @@ func (server *Server) ListOwnerGates(ctx context.Context, request *controlplanev
 			return nil, err
 		}
 		response := &controlplanev1.ListOwnerGatesResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}, Total: total}
-		for _, item := range items {
-			response.Gates = append(response.Gates, castGate(item))
-		}
+		response.Gates = castResponseItems(items, castGate)
 		return response, nil
 	})
 }
@@ -475,9 +447,7 @@ func (server *Server) ListArtifacts(ctx context.Context, request *controlplanev1
 			return nil, err
 		}
 		response := &controlplanev1.ListArtifactsResponse{Total: total, Page: &controlplanev1.PageInfo{NextPageToken: next}}
-		for _, item := range items {
-			response.Artifacts = append(response.Artifacts, castArtifact(item))
-		}
+		response.Artifacts = castResponseItems(items, castArtifact)
 		return response, nil
 	})
 }
@@ -534,9 +504,7 @@ func (server *Server) ListArtifactRevisions(ctx context.Context, request *contro
 			return nil, err
 		}
 		response := &controlplanev1.ListArtifactRevisionsResponse{Total: total, Page: &controlplanev1.PageInfo{NextPageToken: next}}
-		for _, item := range items {
-			response.Items = append(response.Items, castArtifactRevision(item))
-		}
+		response.Items = castResponseItems(items, castArtifactRevision)
 		return response, nil
 	})
 }
@@ -581,9 +549,7 @@ func (server *Server) ListSchedules(ctx context.Context, request *controlplanev1
 			return nil, err
 		}
 		response := &controlplanev1.ListSchedulesResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-		for _, item := range items {
-			response.Schedules = append(response.Schedules, castSchedule(item))
-		}
+		response.Schedules = castResponseItems(items, castSchedule)
 		return response, nil
 	})
 }
@@ -618,9 +584,7 @@ func (server *Server) ListIntegrationDefinitions(ctx context.Context, request *c
 			NextActions: nextActions(actions), CoreReady: true,
 			Page: &controlplanev1.PageInfo{NextPageToken: next},
 		}
-		for _, item := range items {
-			response.Definitions = append(response.Definitions, castDefinition(item))
-		}
+		response.Definitions = castResponseItems(items, castDefinition)
 		return response, nil
 	})
 }
@@ -638,9 +602,7 @@ func (server *Server) ListIntegrationConnections(ctx context.Context, request *c
 			return nil, err
 		}
 		response := &controlplanev1.ListIntegrationConnectionsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-		for _, item := range items {
-			response.Connections = append(response.Connections, castConnection(item))
-		}
+		response.Connections = castResponseItems(items, castConnection)
 		return response, nil
 	})
 }
@@ -684,9 +646,7 @@ func (server *Server) ListAuditEvents(ctx context.Context, request *controlplane
 			return nil, err
 		}
 		response := &controlplanev1.ListAuditEventsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-		for _, item := range items {
-			response.Events = append(response.Events, castAudit(item))
-		}
+		response.Events = castResponseItems(items, castAudit)
 		return response, nil
 	})
 }
