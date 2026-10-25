@@ -12,6 +12,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// capabilityGrant holds a scanned exact grant/connection/package tuple with versions, policy and
+// current eligibility. This private projection is input to fresh package and actor checks, not
+// standalone execution authority.
+// capabilityGrant хранит прочитанный точный кортеж grant, подключения и пакета с версиями,
+// политикой и текущей допустимостью. Это внутреннее представление используется свежими проверками
+// пакета и субъекта, а не служит самостоятельным правом исполнения.
 type capabilityGrant struct {
 	ref, key, connectionRef, definitionKey, definitionVersion, definitionDigest string
 	connectionName                                                              string
@@ -20,6 +26,16 @@ type capabilityGrant struct {
 	eligible                                                                    bool
 }
 
+// effectiveIntegrationCapabilities reads at most 4096 agent grants and projects
+// requested/required, grantability and effective reason after exact package, callable-policy,
+// target and actor checks. Missing/forbidden packages become unavailable hints; backend failures
+// abort. Readiness/workflow rules affect effectiveness but no grant, connection or runtime state
+// is changed.
+// effectiveIntegrationCapabilities читает максимум 4096 grants агента и формирует
+// requested/required, возможность выдачи и причину доступности после проверки точного пакета,
+// вызываемости, политики, цели и субъекта. Отсутствующий или запрещённый пакет даёт признак
+// недоступности; ошибки хранилища прерывают чтение. Готовность и workflow влияют на доступность,
+// но grants, подключения и runtime-состояние не меняются.
 func (repository *Repository) effectiveIntegrationCapabilities(ctx context.Context, tx pgx.Tx, current scope, authority capabilityAuthority, agentRef string, ready bool, required []string, workflow bool) ([]entity.EffectiveCapability, error) {
 	rows, err := tx.Query(ctx, queryEffectiveCapabilitiesGrants, current.organizationID, agentRef)
 	if err != nil {
@@ -81,7 +97,14 @@ func (repository *Repository) effectiveIntegrationCapabilities(ctx context.Conte
 	return items, nil
 }
 
-// Preview и runtime читают одинаковые exact grants внутри owner transaction.
+// agentCapabilityAuthority reads the same exact grant projection used by preview, rejects more
+// than 4096 rows and passes only eligible connection/version/package/policy tuples into runtime
+// authority filtering. It returns capability keys and enriched grant metadata in the caller
+// transaction without creating grants.
+// agentCapabilityAuthority читает то же точное представление grants, что и preview, отклоняет
+// более 4096 строк и передаёт только допустимые кортежи подключения, версий, пакета и политики в
+// runtime-фильтрацию полномочий. Возвращает ключи capabilities и дополненные метаданные в
+// переданной транзакции без выдачи новых grants.
 func (repository *Repository) agentCapabilityAuthority(ctx context.Context, tx pgx.Tx, current scope, projectRef, agentRef string, requested []string) ([]string, []map[string]string, error) {
 	rows, err := tx.Query(ctx, queryEffectiveCapabilitiesGrants, current.organizationID, agentRef)
 	if err != nil {
@@ -107,6 +130,12 @@ func (repository *Repository) agentCapabilityAuthority(ctx context.Context, tx p
 	return repository.runtimeCapabilityAuthority(ctx, tx, current, projectRef, agentRef, requested, grants)
 }
 
+// integrationCapabilityAllowed requires integration.view for READ risk and integration.manage for
+// every other risk through the supplied authority predicate and exact target. It does not inspect
+// a grant, package pin or readiness itself.
+// integrationCapabilityAllowed требует integration.view для риска READ и integration.manage для
+// любого другого риска через переданный предикат полномочий и точную цель. Самостоятельно не
+// проверяет grant, привязку пакета и готовность.
 func integrationCapabilityAllowed(authority capabilityAuthority, capability integrationpackage.Capability, target entity.AccessScope) bool {
 	permission := "integration.manage"
 	if capability.Risk == "READ" {
@@ -115,8 +144,16 @@ func integrationCapabilityAllowed(authority capabilityAuthority, capability inte
 	return authority.allowed(permission, target)
 }
 
-// Свежий runtime использует current actor bindings и exact connection package.
-// Возвращаемый grant список фильтруется по connection, а не только общему key.
+// runtimeCapabilityAuthority builds current actor authority, filters requested platform keys and
+// revalidates every exact connection package, callable capability, policy and target permission.
+// Admitted grant maps are copied and enriched with operation, risk and input schema/digest;
+// unavailable packages are skipped, unexpected errors abort. It preserves traversal order without
+// deduplicating keys or committing.
+// runtimeCapabilityAuthority собирает текущие полномочия субъекта, фильтрует запрошенные
+// платформенные ключи и повторно проверяет точный пакет подключения, capability, политику и доступ
+// к цели. Допущенные карты grants копируются и дополняются операцией, риском и входной схемой с
+// дайджестом; недоступные пакеты пропускаются, неожиданные ошибки прерывают работу. Сохраняет
+// порядок обхода без устранения повторов ключей и завершения транзакции.
 func (repository *Repository) runtimeCapabilityAuthority(ctx context.Context, tx pgx.Tx, current scope, projectRef, agentRef string, requested []string, grants []map[string]string) ([]string, []map[string]string, error) {
 	authority, err := repository.capabilityAuthority(ctx, tx, current, projectRef, agentRef)
 	if err != nil {

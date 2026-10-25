@@ -4,11 +4,64 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.421.0
+version: 1.422.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Integration grants, egress и оставшиеся совместимые snapshot heads — 25.10.2026
+
+На основе `ea9f53104bb5527dd846c4079ebef8b233120a77` полностью прочитаны
+14 Go-файлов(1318 исходных строк) и24 SQL(403 строки).55 прежних объявлений
+описаны EN→RU, включая локальные candidate/connection types. Комментарии
+отражают проверки точных пакетов и scopes, а не расширяют права или readiness.
+
+Три полностью прочитанных метода — GetProviderFinancialOverview,
+providerUsageRead и ListRunEvents — используют существующий
+beginScopedSnapshotRead вместо копии resolveScope→ReadOnly RepeatableRead
+BeginTx. Principal p/principal, scope current/scope и разные нулевые return
+формы сохранены. Helper и его исходный файл не менялись. Независимый proof
+разворачивает три вызова и сравнивает целиком AST всех17 файлов с исходным
+SHA;17 expected-AST/directive сравнений также PASS. Все комментарии трёх
+файлов с исполняемым изменением сохранены дословно; остальные14 файлов
+меняют только описания.
+
+| Путь / переход | Сохранённые ограничения и эффекты |
+| --- | --- |
+| Financial overview | Current actor bindings и financial eligibility до exact account visibility; parser readback и five-minute display horizon. Прежний rollbackAssistantLockedRead очищает named result при error, commit failure остаётся Conflict |
+| Provider usage snapshot | Exact provider.account.view после открытия снимка; отказ закрывает tx и возвращает NotFound, успешный tx передаётся caller без commit. Error mapping неизменен |
+| Run events | Run/root-graph/access snapshot, bounded limit, обязательный delta.Run и integration binding checks. Artifact/gate/message provenance projections и callback-safe text предшествуют прежнему commit |
+| Assistant definition publication | Только organization-scoped UI-owned nonarchived set и VALID revision, exact refs/version/digest. План содержит IDs/digest без OpenAPI content; edits меняют только selection/title/summary, fresh hydration проверяет snapshots |
+| Effective/runtime capability projection | Exact grant/connection/package/policy и actor target permissions, bounded4096 rows. Missing package даёт unavailable hint или skip, backend failure прерывает чтение; output maps копируются, не создавая grant |
+| Scoped approval | Existing WAITING_APPROVAL invocation с exact gate/root/grant/connection, HUMAN_SCOPED non-READ package и canonical input/schema digest. Scope values bounded, sorted path copy сохраняет duplicates; запись scope и bind находятся в caller transaction |
+| Definition binding readback | Eligible nonnil connection в том же snapshot, organization.manage и managed-set access. ABSENT только при доказанном отсутствии; inconsistent joins/pins дают Unavailable; denied access не раскрывает binding |
+| Egress inventory/projection | Trusted global active connections с exact current owner binding либо точный shipped Context7 без binding. HTTPS origin сверяется со всеми OpenAPI servers, local fixture не расширяет CONNECT, hosts bounded/sorted. Serializable singleton lock и generation guard сохраняют stable reuse; cluster policy не применяется |
+| Grant admission/candidates | Общая owner admission function до receipt/OCC, exact recipient и package/configuration scope. Unknown capability различим только после owner visibility. Cursor digest связывает actor/project/context/current pins; page metadata не разрешает выдачу grant |
+| Approval policy change | Enabled change отклоняется при WAITING_APPROVAL/READY/RUNNING/UNKNOWN_OUTCOME; неизвестный outcome не превращается в разрешение повтора |
+| Health refresh lifecycle | Batch1..32 cancel stale pins, expire claim с30s retry, eligible periodic/retry candidates и новый DUE task с predecessor/attempt. Claimant/executor integration-gateway, immutable runtime/grant pins не меняются, network probe здесь не выполняется |
+| Completion admission | Recognized workload и typed payload до exact stored organization/ref/workload/lease/fence digest/generation query. Это проверка claim identity; свежесть lease, terminal state и результат эффекта проверяются в специализированном переходе |
+| Project assistant catalog/public scope | Purpose-bound connections и exact capability candidates, closed skip behavior, deterministic offset pages. GitHub public owner/repository scope исключает credential-key collisions и не предоставляет execution grant |
+| System assistant grant | Organization-role-image и exact integration.manage до canonical nonproject assistant. Enabled требует owner/connection ready; exact package/callability/policy и HUMAN_SCOPED paths определяют typed grant input без записи или commit |
+
+Новых SQL/API/полномочий, workload/grant, retry либо deploy inputs нет.
+Полный control-plane build/unit — PASS LOCAL(checks422-final), GOWORK=off,
+GOMAXPROCS=4/-p2, все inherited KODEX inputs исключены.17 analyzer unit,
+5 exact-ignore guards, gofmt и git diff --check — PASS. PostgreSQL/RLS/OCC/
+claim races, реальный provider/broker/Kubernetes/egress policy/TLS/runtime,
+browser/E2E/deploy/live — NOT RUN/SKIP. Используется прежний API pgx;
+проверенная официальная документация BeginTx/TxOptions/Tx остаётся применимой,
+Context7 ранее отклонил запрос из-за ошибки ключа.
+
+Detector1708 raw/886 retained occurrences/822 unresolved. Registry771 валиден
+и неизменен; новых и исчезнувших fragment keys нет, изменились позиции после
+комментариев. Три удалённых копии короче текущего detector threshold, поэтому
+уменьшение групп не заявляется. Thresholds/exclusions прежние:6685 own sources/
+222 exclusions. Go21489:20675 EN→RU,814 missing. PR276 Go-файлов/2665
+объявлений, missing0;279 whole changed blobs. #1823 открыт, #1829 Draft,
+QA/main f2e64eb сохранён. Env-файлы не менялись, секреты не переносились;
+обёртка GitHub использует только нужные bot credentials из разрешённого
+источника без вывода значений. Прикладные secret values не извлекались.
 
 ## Assistant staging, prompt impact и secret-draft completion — 25.10.2026
 

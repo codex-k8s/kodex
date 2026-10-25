@@ -1930,13 +1930,9 @@ func scanRunNode(row rowScanner) (entity.RunNode, error) {
 // callback provenance text. Полноту определяет относительно graph sequence; ошибки отбрасывают
 // страницу, отказ commit даёт Unavailable.
 func (repository *Repository) ListRunEvents(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.RunEvent, int64, bool, error) {
-	scope, err := repository.resolveScope(ctx, principal)
+	scope, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
 	if err != nil {
 		return nil, 0, false, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return nil, 0, false, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	run, err := repository.readRunWithIncidents(ctx, tx, scope, filter.ResourceRef)

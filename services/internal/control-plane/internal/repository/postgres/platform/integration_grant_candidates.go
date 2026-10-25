@@ -18,12 +18,34 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryIntegrationGrantCandidates embeds staged candidate projection from authoritative admission
+// with visibility and unavailable-shipped-OpenAPI filtering before count and pagination. It groups
+// readiness, applies search/cursor and returns bounded JSON rows plus total; result metadata does
+// not authorize a later grant.
+// queryIntegrationGrantCandidates встраивает поэтапную проекцию кандидатов из авторитетного
+// допуска с проверкой видимости и исключением непригодного поставленного OpenAPI до подсчёта и
+// пагинации. Группирует готовность, применяет поиск и курсор, возвращает ограниченные JSON-строки
+// и количество; метаданные не разрешают последующую выдачу grant.
+//
 //go:embed sql/integration_grant_candidates.sql
 var queryIntegrationGrantCandidates string
 
+// queryIntegrationCandidatePins embeds current connection/package, project and typed recipient
+// version pins within one organization, using empty/zero values when unspecified or missing. It
+// performs no actor permission check itself.
+// queryIntegrationCandidatePins встраивает текущие версии подключения, пакета, проекта и
+// типизированного получателя внутри организации, возвращая пустые либо нулевые значения при
+// отсутствии. Сам запрос не проверяет права субъекта.
+//
 //go:embed sql/integration_candidate_pins.sql
 var queryIntegrationCandidatePins string
 
+// integrationCandidateRow decodes one staged candidate with exact
+// connection/package/project/recipient pins, capability and readiness reason. It is a JSON read
+// projection passed to decoration, not a grant or durable execution snapshot.
+// integrationCandidateRow декодирует одного кандидата стадии с точными версиями подключения,
+// пакета, проекта и получателя, capability и причиной готовности. Это JSON-представление чтения
+// для дополнения, а не grant или устойчивый снимок исполнения.
 type integrationCandidateRow struct {
 	Ref               string `json:"ref"`
 	Name              string `json:"name"`
@@ -42,8 +64,22 @@ type integrationCandidateRow struct {
 	Reason            string `json:"reason"`
 }
 
+// integrationCandidateCursor carries the context digest and last candidate ref in an unsigned
+// base64 JSON page token. The server recomputes the digest and current eligibility; possession of
+// the cursor is not authority.
+// integrationCandidateCursor хранит дайджест контекста и последнюю ссылку кандидата в
+// неподписанном base64 JSON токене страницы. Сервер заново вычисляет дайджест и текущую
+// допустимость; владение курсором не даёт полномочий.
 type integrationCandidateCursor struct{ Scope, After string }
 
+// validateIntegrationCandidates validates bounded UTF-8 search, bounded reference syntax,
+// recipient kind and capability key, then enforces the closed GRANT stage context or
+// CONNECTION/USE workflow-step pairing. It does no lookup or access check and leaves page
+// token/size validation to the read path.
+// validateIntegrationCandidates проверяет ограниченный UTF-8 поиск, форму и размер ссылок, вид
+// получателя и ключ capability, затем закрытый контекст стадий GRANT либо пару workflow/step для
+// CONNECTION/USE. Не обращается к хранилищу и не проверяет доступ; токен и размер страницы
+// проверяются в пути чтения.
 func validateIntegrationCandidates(stage string, input query.IntegrationCandidates) error {
 	c := input.Context
 	if !utf8.ValidString(input.Filter.Query) || len([]rune(input.Filter.Query)) > 200 || strings.ContainsRune(input.Filter.Query, '\x00') {
@@ -92,6 +128,17 @@ func validateIntegrationCandidates(stage string, input query.IntegrationCandidat
 	return nil
 }
 
+// integrationCandidates validates input, opens a five-second read-only repeatable-read snapshot
+// and authorizes selected context resources before reading current pins. It binds cursor scope to
+// tenant/actor/authority project, stage, query and pins, reads one extra row, invokes the
+// decorator and commits. Errors may leave partial context or decorator effects; the result must
+// not be issued as a successful page or grant.
+// integrationCandidates проверяет вход, открывает read-only RepeatableRead снимок с бюджетом пять
+// секунд и проверяет доступ к выбранным ресурсам контекста до чтения текущих версий. Связывает
+// курсор с организацией, субъектом, проектом полномочий, стадией, запросом и версиями, читает
+// дополнительную строку, вызывает дополнение и завершает транзакцию. Ошибки могут оставлять
+// частичный контекст или эффекты дополнения; результат нельзя выдавать как успешную страницу или
+// grant.
 func (repository *Repository) integrationCandidates(ctx context.Context, principal value.Principal, stage string, input query.IntegrationCandidates, decorate func(context.Context, pgx.Tx, scope, integrationCandidateRow, entity.IntegrationCandidatePins) error) (entity.IntegrationCandidatePage, error) {
 	result := entity.IntegrationCandidatePage{}
 	if err := validateIntegrationCandidates(stage, input); err != nil {

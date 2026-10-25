@@ -15,20 +15,54 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// localOpenAPIFixtureHostname names the exact local TLS fixture excluded from the external CONNECT
+// destination projection. It is not a wildcard, user-configurable host or permission for unrelated
+// local services.
+// localOpenAPIFixtureHostname задаёт точный локальный TLS fixture, исключённый из внешней проекции
+// CONNECT. Это не wildcard, не настраиваемый пользователем хост и не разрешение для других
+// локальных сервисов.
 const localOpenAPIFixtureHostname = "integration-synthetic.kodex-system.svc.cluster.local"
 
+// queryIntegrationEgressOrigins embeds the trusted global origin inventory from active enabled
+// connections and exact current published owner bindings, plus exact SHIPPED Context7 connections
+// without managed bindings. A published draft alone does not add egress.
+// queryIntegrationEgressOrigins встраивает доверенную глобальную выборку origins активных
+// включённых подключений с точными текущими опубликованными привязками владельца и SHIPPED
+// Context7 без managed-привязок. Одна опубликованная ревизия без подключения не добавляет egress.
+//
 //go:embed sql/integration_egress_origins.sql
 var queryIntegrationEgressOrigins string
 
+// queryIntegrationEgressProjectionLock embeds the singleton egress projection row lock, returning
+// generation, target digest and document for atomic reuse or advancement. The caller validates
+// stored document consistency.
+// queryIntegrationEgressProjectionLock встраивает блокировку единственной строки egress-проекции,
+// возвращая поколение, целевой дайджест и документ для атомарного повторного использования либо
+// продвижения. Согласованность сохранённого документа проверяет вызывающий код.
+//
 //go:embed sql/integration_egress_projection_lock.sql
 var queryIntegrationEgressProjectionLock string
 
+// queryIntegrationEgressProjectionUpdate embeds generation-guarded replacement of the singleton
+// egress document and digest, returning the stored generation. The caller owns generation
+// selection, validation and commit.
+// queryIntegrationEgressProjectionUpdate встраивает замену единственного egress-документа и
+// дайджеста с проверкой прежнего поколения, возвращая сохранённое поколение. Выбор поколения,
+// проверка и Commit принадлежат вызывающему коду.
+//
 //go:embed sql/integration_egress_projection_update.sql
 var queryIntegrationEgressProjectionUpdate string
 
-// IntegrationEgressHostnames читает действующие owner bindings либо точный
-// SHIPPED Context7 package активного подключения без managed binding.
-// Наличие опубликованного draft без connection не открывает сетевой доступ.
+// IntegrationEgressHostnames reads the trusted global connection inventory, validates exact
+// executable package/configuration and derives sorted unique bounded hostnames. Context7 uses the
+// repo-owned fixed origin; OpenAPI requires a canonical HTTPS origin matching all capability
+// servers, and the exact local fixture is excluded. Any malformed row fails closed; it does not
+// apply network policy or probe TLS.
+// IntegrationEgressHostnames читает доверенную глобальную выборку подключений, проверяет точные
+// исполняемый пакет и конфигурацию и выводит отсортированные уникальные ограниченные имена хостов.
+// Context7 использует фиксированный origin репозитория; OpenAPI требует канонический HTTPS origin,
+// совпадающий со всеми серверами capabilities, точный локальный fixture исключается. Любая
+// повреждённая строка закрыто отклоняется; NetworkPolicy не применяется, TLS не проверяется.
 func (repository *Repository) IntegrationEgressHostnames(ctx context.Context) ([]string, error) {
 	rows, err := repository.pool.Query(ctx, queryIntegrationEgressOrigins)
 	if err != nil {
@@ -109,6 +143,14 @@ func (repository *Repository) IntegrationEgressHostnames(ctx context.Context) ([
 	return result, nil
 }
 
+// integrationEgressPackage resolves an exact SHIPPED Context7 revision only when both managed
+// format and content are absent. Any supplied managed snapshot goes through executable package
+// parsing without a shipped fallback, so incomplete or invalid managed data cannot silently select
+// another package.
+// integrationEgressPackage разрешает точную SHIPPED ревизию Context7, только если отсутствуют и
+// формат, и содержимое managed-снимка. Любой переданный managed-снимок проходит разбор
+// исполняемого пакета без подмены поставленным, поэтому неполные или неверные данные не
+// переключают пакет незаметно.
 func (repository *Repository) integrationEgressPackage(key, version, digest, format, content string) (integrationpackage.Package, error) {
 	if format == "" && content == "" {
 		shipped, exists := repository.integrationDefinitions[key]
@@ -125,8 +167,16 @@ func (repository *Repository) integrationEgressPackage(key, version, digest, for
 	return repository.executableIntegrationPackage(format, content)
 }
 
-// PrepareIntegrationEgressProjection фиксирует поколение под owner row lock.
-// Повтор двух реплик возвращает один документ, не создавая rollout storm.
+// PrepareIntegrationEgressProjection produces a candidate from validated hosts and the supplied
+// resolver/base digest, then locks the durable singleton in a Serializable transaction. Matching
+// target digests reuse only a fully consistent stored document; changes increment generation and
+// use an exact previous-generation update. It commits the projection without applying cluster
+// policy, issuing credentials or changing the source connections.
+// PrepareIntegrationEgressProjection строит кандидата из проверенных хостов, переданного resolver
+// и базового дайджеста, затем блокирует устойчивую единственную строку в Serializable транзакции.
+// При совпадении целевого дайджеста повторно использует только полностью согласованный документ;
+// изменения увеличивают поколение и записываются с проверкой прежнего. Завершает запись проекции
+// без применения политики кластера, выдачи credentials и изменения исходных подключений.
 func (repository *Repository) PrepareIntegrationEgressProjection(ctx context.Context, baseDigest string, resolver shared.Resolver) (shared.Document, error) {
 	hosts, err := repository.IntegrationEgressHostnames(ctx)
 	if err != nil {

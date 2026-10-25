@@ -34,13 +34,9 @@ var queryProviderFinancialOverview string
 // Commit/rollback failures очищают partial output; это stored observation view, а не live provider
 // balance или authorization grant.
 func (repository *Repository) GetProviderFinancialOverview(ctx context.Context, p value.Principal) (result entity.ProviderFinancialOverview, resultError error) {
-	current, err := repository.resolveScope(ctx, p)
+	current, tx, err := repository.beginScopedSnapshotRead(ctx, p)
 	if err != nil {
 		return entity.ProviderFinancialOverview{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return entity.ProviderFinancialOverview{}, errs.ErrUnavailable
 	}
 	defer func() {
 		rollbackAssistantLockedRead(ctx, tx, &resultError)

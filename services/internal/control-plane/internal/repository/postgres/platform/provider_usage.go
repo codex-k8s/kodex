@@ -481,13 +481,9 @@ func validProviderUsageCatalog(item providerUsageAccount) bool {
 // контекстом запроса и скрывается как NotFound; при успехе транзакцией управляет вызывающий.
 // Ошибка rollback здесь игнорируется.
 func (repository *Repository) providerUsageRead(ctx context.Context, p value.Principal, target func(scope) entity.AccessScope) (scope, pgx.Tx, error) {
-	current, err := repository.resolveScope(ctx, p)
+	current, tx, err := repository.beginScopedSnapshotRead(ctx, p)
 	if err != nil {
 		return scope{}, nil, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return scope{}, nil, errs.ErrUnavailable
 	}
 	if err := repository.requireAccess(ctx, tx, current, "provider.account.view", target(current)); err != nil {
 		_ = tx.Rollback(ctx)

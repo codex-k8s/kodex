@@ -10,14 +10,36 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryIntegrationGrantAdmission embeds the same authoritative GRANT admission function used by
+// selectors for an exact connection, recipient and capability within actor/authority-project
+// scope. It returns pins and a closed readiness reason without requiring an existing grant.
+// queryIntegrationGrantAdmission встраивает ту же авторитетную функцию допуска GRANT, что и
+// селекторы, для точных подключения, получателя и capability в области субъекта и проекта
+// полномочий. Возвращает версии и закрытую причину готовности, не требуя существующего grant.
+//
 //go:embed sql/integration_grant_admission.sql
 var queryIntegrationGrantAdmission string
 
+// queryIntegrationConnectionAuthority embeds the integration.manage visibility predicate for an
+// exact active tenant connection. It returns a boolean admission fact; absence and permission
+// handling belong to callers.
+// queryIntegrationConnectionAuthority встраивает предикат видимости integration.manage точного
+// активного подключения организации. Возвращает логический факт допуска; отсутствие и отказ в
+// доступе обрабатывает вызывающий код.
+//
 //go:embed sql/integration_connection_authority.sql
 var queryIntegrationConnectionAuthority string
 
-// Та же owner-функция обслуживает selector и admission до receipt/OCC.
-// Выдача не требует заранее существующего grant.
+// authorizeIntegrationGrant requires exactly one agent/workflow recipient and nonempty
+// connection/capability, then queries owner admission before receipt/version handling. A missing
+// capability is retried with an empty key only to establish owner visibility; hidden resources
+// remain NotFound. Enabled grants require READY, and exact package/configuration/resource scope
+// are validated without writing a grant or committing.
+// authorizeIntegrationGrant требует ровно одного получателя agent либо workflow и непустые
+// подключение и capability, затем проверяет допуск владельца до квитанции и версий. При
+// отсутствующем capability повторяет чтение с пустым ключом только для установления видимости
+// владельцев; скрытые ресурсы остаются NotFound. Включённый grant требует READY; точные пакет,
+// конфигурация и область ресурса проверяются без записи grant и Commit.
 func (repository *Repository) authorizeIntegrationGrant(ctx context.Context, tx pgx.Tx, current scope, payload command.IntegrationGrantInput) error {
 	if payload.ConnectionRef == "" || payload.CapabilityKey == "" || (payload.AgentRef == "") == (payload.WorkflowRef == "") {
 		return errs.ErrInvalid

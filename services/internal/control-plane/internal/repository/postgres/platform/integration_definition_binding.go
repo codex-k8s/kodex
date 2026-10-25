@@ -9,8 +9,16 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// attachIntegrationDefinitionBinding вызывается только адресным чтением после
-// connection eligibility и использует тот же repeatable-read snapshot.
+// attachIntegrationDefinitionBinding expects a nonnil eligible connection in the same read
+// snapshot and exposes binding details only with organization.manage and managed-set access. A
+// proven missing binding becomes ABSENT; inconsistent hidden joins or invalid pins fail
+// Unavailable, while denied access leaves the field untouched. It neither changes the binding nor
+// commits.
+// attachIntegrationDefinitionBinding ожидает непустое допустимое подключение в том же снимке
+// чтения и раскрывает привязку только при organization.manage и доступе к managed-набору.
+// Доказанное отсутствие привязки даёт ABSENT; несогласованные скрытые соединения либо неверные
+// версии дают Unavailable, отказ доступа оставляет поле без изменения. Не меняет привязку и не
+// завершает транзакцию.
 func (repository *Repository) attachIntegrationDefinitionBinding(ctx context.Context, tx pgx.Tx, current scope, item *entity.IntegrationConnection) error {
 	if err := repository.requireAccess(ctx, tx, current, "organization.manage", organizationTarget(current.organizationRef)); err != nil {
 		if errors.Is(err, errs.ErrNotFound) || errors.Is(err, errs.ErrForbidden) {

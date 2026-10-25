@@ -13,14 +13,34 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryProjectAssistantIntegrationGrantConnections embeds at most 101 active purpose-bound
+// connections for the exact project assistant with actor integration.manage visibility. It returns
+// refs/names only; capability and package admission is performed afterward.
+// queryProjectAssistantIntegrationGrantConnections встраивает максимум 101 активное подключение с
+// назначением для точного ассистента проекта и видимостью integration.manage субъекта. Возвращает
+// только ссылки и имена; допуск capabilities и пакета проверяется затем.
+//
 //go:embed sql/project_assistant_integration_grants__connections.sql
 var queryProjectAssistantIntegrationGrantConnections string
 
+// projectAssistantIntegrationCatalogTx requires at most 100 visible purpose-bound connections,
+// expands each through the exact candidate path and fails if its capability page is incomplete.
+// Only NotFound/package-unavailable connections are skipped; other errors abort. It filters text,
+// sorts connection/key pairs and returns ten-item offset pages without committing.
+// projectAssistantIntegrationCatalogTx требует максимум 100 видимых подключений с назначением,
+// раскрывает каждое через точный путь кандидатов и отклоняет неполную страницу capabilities.
+// Пропускает только NotFound или недоступный пакет; остальные ошибки прерывают чтение. Фильтрует
+// текст, сортирует пары подключения и ключа и возвращает offset-страницы по десять элементов без
+// Commit.
 func (repository *Repository) projectAssistantIntegrationCatalogTx(ctx context.Context, tx pgx.Tx, current scope, input entity.AssistantConfigurationCatalogRequest) ([]entity.ProjectAssistantIntegrationGrantCatalogEntry, int32, error) {
 	rows, err := tx.Query(ctx, queryProjectAssistantIntegrationGrantConnections, pgx.StrictNamedArgs{"organization_id": current.organizationID, "actor_id": current.actorID, "assistant_ref": input.AssistantRef})
 	if err != nil {
 		return nil, 0, errs.ErrUnavailable
 	}
+	// connection holds one connection ref/name from the authorized purpose-bound catalog while
+	// candidate rows are resolved. It carries display metadata, not a grant or cached permission.
+	// connection хранит ссылку и имя подключения из проверенного каталога назначений на время
+	// разрешения кандидатов. Содержит отображаемые метаданные, а не grant или кэш полномочий.
 	type connection struct{ ref, name string }
 	connections := []connection{}
 	for rows.Next() {
