@@ -21,27 +21,73 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// queryProjectAssistantProfilePinMutation attempts to change a conversation assistant identity to
+// verify immutable profile binding guards.
+// queryProjectAssistantProfilePinMutation пытается изменить идентичность ассистента беседы для
+// проверки неизменяемой привязки профиля.
+//
 //go:embed testdata/sql/project_assistant_profile_pin_mutation.sql
 var queryProjectAssistantProfilePinMutation string
 
+// queryProjectAssistantProfileReadback reads session target, bound assistant identity and explicit
+// conversation scope for exact profile assertions.
+// queryProjectAssistantProfileReadback читает цель сессии, связанную идентичность ассистента и
+// явную область беседы для точных проверок профиля.
+//
 //go:embed testdata/sql/project_assistant_profile_readback.sql
 var queryProjectAssistantProfileReadback string
 
+// queryProjectAssistantPurgeGraph computes the project foreign-key closure node/edge counts and
+// deterministic digests to detect schema drift before destructive fixture checks.
+// queryProjectAssistantPurgeGraph вычисляет число узлов и рёбер замыкания внешних ключей проекта и
+// детерминированные дайджесты для обнаружения изменения схемы до разрушающих тестовых проверок.
+//
 //go:embed testdata/sql/project_assistant_purge_graph.sql
 var queryProjectAssistantPurgeGraph string
 
+// queryProjectAssistantPurgePrepare synthesizes an OBJECTS_CLEARED receipt with the current
+// inventory digest for the exact pending fixture project; it does not clear external objects.
+// queryProjectAssistantPurgePrepare создаёт искусственную квитанцию OBJECTS_CLEARED с текущим
+// дайджестом инвентаря точного ожидающего тестового проекта; не очищает внешние объекты.
+//
 //go:embed testdata/sql/project_assistant_purge_prepare.sql
 var queryProjectAssistantPurgePrepare string
 
+// queryProjectAssistantPurgeExecute invokes the owner database purge function for the exact
+// fixture project and prepared inventory digest.
+// queryProjectAssistantPurgeExecute вызывает функцию очистки БД владельца для точного тестового
+// проекта и подготовленного дайджеста инвентаря.
+//
 //go:embed testdata/sql/project_assistant_purge_execute.sql
 var queryProjectAssistantPurgeExecute string
 
+// queryProjectAssistantPurgeReadback counts purged profile/conversation/session rows and retained
+// foreign profile/conversation rows to detect boundary violations.
+// queryProjectAssistantPurgeReadback считает удалённые строки профиля, беседы и сессии и
+// сохранённые строки чужих профиля и беседы для обнаружения нарушения границы.
+//
 //go:embed testdata/sql/project_assistant_purge_readback.sql
 var queryProjectAssistantPurgeReadback string
 
+// queryProjectAssistantArchivedFixture sets a fixture assistant lifecycle/enabled state and
+// advances its version to reproduce historical archived assignment.
+// queryProjectAssistantArchivedFixture назначает тестовому ассистенту состояние жизненного цикла и
+// включения и повышает версию для воспроизведения исторически архивированного назначения.
+//
 //go:embed testdata/sql/project_assistant_archived_fixture.sql
 var queryProjectAssistantArchivedFixture string
 
+// TestProjectAssistantProfilesComponent checks isolated immutable project profiles/conversations,
+// disabled/archived assignment, stale-image admission, exact runtime/financial pins, scoped
+// discovery and human-applied configuration plans. Its fixed FK-graph purge preserves foreign data
+// after a synthetic object-cleanup receipt. Disposable PostgreSQL, synthetic credentials/images
+// and an in-memory store do not prove real provider, Pod or object cleanup effects.
+// TestProjectAssistantProfilesComponent проверяет изолированные неизменные профили и беседы
+// проектов, отключённое и архивированное назначение, допуск при устаревшем образе, точные runtime
+// и финансовые привязки, поиск заданной области и планы настройки, применённые владельцем. Очистка
+// по закреплённому FK-графу сохраняет чужие данные после искусственной квитанции очистки объектов.
+// Одноразовый PostgreSQL, искусственные credentials и образы и in-memory store не доказывают
+// реальные эффекты провайдера, Pod либо очистки объектов.
 func TestProjectAssistantProfilesComponent(t *testing.T) {
 	dsn := isolatedAssistantComponentDSN(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
@@ -474,6 +520,12 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 	})
 }
 
+// executeWorkerAssistantPlan proposes one operation under the exact worker lease/fence/generation
+// and fails the fixture with structured plan diagnostics; owner validation/application remains
+// separate.
+// executeWorkerAssistantPlan предлагает одну операцию с точными worker lease, fence и поколением и
+// завершает fixture ошибкой со структурированной диагностикой плана; валидация и применение
+// владельцем выполняются отдельно.
 func executeWorkerAssistantPlan(t *testing.T, ctx context.Context, service *platformservice.Service, worker value.Principal, lease map[string]any, key string, operation entity.AssistantPlanOperation) command.Result {
 	t.Helper()
 	result, err := service.Execute(ctx, command.Command{Kind: command.ProposeAssistantPlan, Principal: worker,

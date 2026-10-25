@@ -11,6 +11,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 )
 
+// testModelCatalogVersion checks synthetic observed catalog paging/content pins survive
+// metadata-only changes, reject changed model capabilities or stale cursors and respect
+// cancellation.
+// testModelCatalogVersion проверяет сохранение пагинации и привязок содержимого искусственно
+// наблюдаемого каталога при смене только метаданных, отклонение смены capability модели и
+// устаревших курсоров и учёт отмены.
 func testModelCatalogVersion(t *testing.T, ctx context.Context, repository *Repository) {
 	seedObservedCatalogFixture(t, ctx, repository)
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.query.models.list"}, "control-api-gateway")
@@ -70,6 +76,10 @@ func testModelCatalogVersion(t *testing.T, ctx context.Context, repository *Repo
 	seedObservedCatalogFixture(t, ctx, repository)
 }
 
+// TestModelCatalogCursorBindsAuthority rejects a model catalog cursor under a different tenant,
+// actor or signed project filter.
+// TestModelCatalogCursorBindsAuthority отклоняет курсор каталога моделей при ином tenant, actor
+// либо фильтре подписанного проекта.
 func TestModelCatalogCursorBindsAuthority(t *testing.T) {
 	first := scope{organizationID: "tenant-a", actorID: "actor-a"}
 	token := encodeModelCapabilityCursor("provider", "model", "provider", "", modelCatalogActorFilter(first, "query"), "mcat_revision", "digest")

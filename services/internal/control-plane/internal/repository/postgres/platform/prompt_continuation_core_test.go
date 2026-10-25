@@ -16,6 +16,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/systemassistant"
 )
 
+// continuationCoreProducerFixture materializes the full current protected core and owner overlay
+// with exact platform/runtime pins and prior history, returning a matching previous snapshot.
+// continuationCoreProducerFixture материализует полное текущее защищённое ядро и overlay владельца
+// с точными привязками платформы и runtime и прежней историей, возвращая совпадающий предыдущий
+// снимок.
 func continuationCoreProducerFixture(t *testing.T) (entity.PromptMaterializationSnapshot, map[string]any, []byte) {
 	t.Helper()
 	source := workflowPromptFixture()
@@ -44,6 +49,14 @@ func continuationCoreProducerFixture(t *testing.T) (entity.PromptMaterialization
 	return source, current, previous
 }
 
+// TestContinuationCoreProducerPinsFullCurrentInstructionsWithoutDuplicateBody checks a compact
+// bounded continuation references the full current core/instructions exactly, preserves
+// source/history, rejoins the durable notice and passes the shared runner consumer without
+// duplicating core bodies.
+// TestContinuationCoreProducerPinsFullCurrentInstructionsWithoutDuplicateBody проверяет точную
+// ссылку компактного ограниченного продолжения на полное текущее ядро и инструкции, сохранение
+// источника и истории, восстановление устойчивого уведомления и принятие общим runner consumer без
+// повторения тел ядра.
 func TestContinuationCoreProducerPinsFullCurrentInstructionsWithoutDuplicateBody(t *testing.T) {
 	source, current, previous := continuationCoreProducerFixture(t)
 	beforeSource, _ := json.Marshal(source)
@@ -98,6 +111,12 @@ func TestContinuationCoreProducerPinsFullCurrentInstructionsWithoutDuplicateBody
 	t.Logf("main_instructions_bytes=%d continuation_notice_bytes=%d limit_bytes=%d", len(stringMap(current, "instructions")), len(notice.Materialization.Prompt), runtimecontract.MaximumContinuationNoticeBytes)
 }
 
+// TestContinuationCoreProjectionRejectsSourceMismatchWithoutMutation rejects altered
+// instruction/core/execution/target pins or a preexisting projection marker and proves failed
+// binding leaves the notice unchanged.
+// TestContinuationCoreProjectionRejectsSourceMismatchWithoutMutation отклоняет изменённые привязки
+// инструкции, ядра, исполнения и цели и уже существующий маркер проекции и доказывает неизменность
+// уведомления после неудачной привязки.
 func TestContinuationCoreProjectionRejectsSourceMismatchWithoutMutation(t *testing.T) {
 	for _, mutation := range []string{"instructions", "instructions-digest", "main-digest", "source-snapshot", "source-core", "agent", "project", "run", "session", "node", "turn", "attempt", "notice-core", "notice-target", "existing-marker"} {
 		t.Run(mutation, func(t *testing.T) {

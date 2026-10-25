@@ -6,6 +6,12 @@ import (
 	"testing"
 )
 
+// assertContinuationNoticeReadback requires exactly one persisted notice bound to the same
+// tenant/node/turn/session/attempt and runtime digest, matching the final delivered USER message
+// byte-for-byte.
+// assertContinuationNoticeReadback требует ровно одно сохранённое уведомление с теми же tenant,
+// узлом, turn, сессией, попыткой и runtime-дайджестом, побайтово совпадающее с последним
+// доставляемым USER-сообщением.
 func assertContinuationNoticeReadback(t *testing.T, ctx context.Context, repository *Repository, runRef string) {
 	t.Helper()
 	var count int

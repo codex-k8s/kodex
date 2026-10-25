@@ -15,14 +15,29 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// organizationRuntimeImageScopeReadbackQuery reads system image/environment organization scope,
+// current version/history count and one admitted project-image reference for cross-scope checks.
+// organizationRuntimeImageScopeReadbackQuery читает область организации системного образа и
+// окружения, текущую версию, число версий и ref одного допущенного образа проекта для межобластных
+// проверок.
+//
 //go:embed testdata/sql/organization_runtime_image_scope_readback.sql
 var organizationRuntimeImageScopeReadbackQuery string
 
+// organizationRuntimeImageMarkCustomQuery marks only the fixture image with a synthetic custom
+// signature identity; it does not perform image admission or signing.
+// organizationRuntimeImageMarkCustomQuery помечает только тестовый образ искусственной
+// идентичностью пользовательской подписи; не выполняет допуск либо подпись образа.
+//
 //go:embed testdata/sql/organization_runtime_image_mark_custom.sql
 var organizationRuntimeImageMarkCustomQuery string
 
-// Проверка использует только disposable fixture и откатывает имитацию
-// пользовательского admitted-образа: это не доказательство реальной сборки.
+// testOrganizationRuntimeImageScope checks organization/project image isolation and preserves a
+// synthetic custom organization image across bootstrap configuration drift inside a rolled-back
+// transaction, restoring repository configuration.
+// testOrganizationRuntimeImageScope проверяет изоляцию образов организации и проекта и сохранение
+// искусственного пользовательского образа организации при смене bootstrap-конфигурации в
+// откатываемой транзакции с восстановлением конфигурации repository.
 func testOrganizationRuntimeImageScope(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{

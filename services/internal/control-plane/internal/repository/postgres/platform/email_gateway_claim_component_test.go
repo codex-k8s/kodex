@@ -12,8 +12,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Штатная disposable suite передаёт настоящий owner claim через production
-// caster и protobuf в заранее собранный gateway test binary. Lease не продлевается.
+// testEmailGatewayClaim rejects generic credential data, then optionally casts and sends the owner
+// claim through protobuf to a configured bounded gateway test binary; without that binary it
+// returns without gateway validation.
+// testEmailGatewayClaim отклоняет общие credential-данные, затем при настройке ограниченного test
+// binary gateway преобразует и передаёт ему claim владельца через protobuf; без этого binary
+// возвращается без проверки gateway.
 func testEmailGatewayClaim(t *testing.T, item map[string]any, kind string) {
 	t.Helper()
 	if item["credential"] != nil {

@@ -10,6 +10,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// TestValidateIntegrationConfigurationUsesClosedTypedSchema checks HTTPS URL normalization and
+// deduplicated typed string lists, rejecting unknown public fields, plaintext URLs, empty required
+// lists and wrong types.
+// TestValidateIntegrationConfigurationUsesClosedTypedSchema проверяет нормализацию HTTPS URL и
+// удаление дублей типизированного списка строк, отклоняя неизвестные публичные поля, plaintext
+// URL, пустые обязательные списки и неверные типы.
 func TestValidateIntegrationConfigurationUsesClosedTypedSchema(t *testing.T) {
 	t.Parallel()
 	fields := []entity.IntegrationConfigurationField{
@@ -43,6 +49,10 @@ func TestValidateIntegrationConfigurationUsesClosedTypedSchema(t *testing.T) {
 	}
 }
 
+// TestConnectionActionsAreServerOwnedAndPermissionAware checks ordered connection actions follow
+// explicit management/grant permissions and connected, testing or disabled lifecycle state.
+// TestConnectionActionsAreServerOwnedAndPermissionAware проверяет порядок действий соединения по
+// явным правам управления и разрешений и состоянию подключения, тестирования либо отключения.
 func TestConnectionActionsAreServerOwnedAndPermissionAware(t *testing.T) {
 	t.Parallel()
 	connected := entity.IntegrationConnection{Enabled: true, State: "CONNECTED", MaskedCredentialsState: "CONFIGURED", CredentialSecretKey: "token"}
@@ -65,6 +75,12 @@ func TestConnectionActionsAreServerOwnedAndPermissionAware(t *testing.T) {
 	}
 }
 
+// TestDeletedCommandReplayRequiresExactCompleteTerminalSnapshot accepts complete deleted
+// connection/schedule/environment snapshots with exact version expectations and rejects a partial
+// connection tombstone or mismatched expected version.
+// TestDeletedCommandReplayRequiresExactCompleteTerminalSnapshot принимает полные снимки удалённых
+// соединения, расписания и окружения с точными ожиданиями версии и отклоняет частичный tombstone
+// соединения либо несовпадающую ожидаемую версию.
 func TestDeletedCommandReplayRequiresExactCompleteTerminalSnapshot(t *testing.T) {
 	t.Parallel()
 
@@ -121,6 +137,11 @@ func TestDeletedCommandReplayRequiresExactCompleteTerminalSnapshot(t *testing.T)
 	}
 }
 
+// TestManagedMailboxCredentialActionsKeepOwnerBoundary exposes mailbox credential configuration
+// only to a manager of an enabled READY mailbox, denying viewer, testing and disabled cases.
+// TestManagedMailboxCredentialActionsKeepOwnerBoundary показывает настройку credential почтового
+// ящика только управляющему включённого READY ящика, отклоняя читателя, тестирование и отключённое
+// состояние.
 func TestManagedMailboxCredentialActionsKeepOwnerBoundary(t *testing.T) {
 	for _, scenario := range []struct {
 		state                     string

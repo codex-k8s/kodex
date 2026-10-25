@@ -7,6 +7,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestProviderDeletionRejectsPrematureTerminalReadback rejects terminal deletion with cleanup,
+// lease blockers, missing completion or inconsistent reason/state and validates the complete
+// normalized blocker set.
+// TestProviderDeletionRejectsPrematureTerminalReadback отклоняет окончательное удаление с
+// незавершённой очисткой, blockers lease, отсутствующим завершением и несогласованными причиной и
+// состоянием и проверяет полный нормализованный набор blockers.
 func TestProviderDeletionRejectsPrematureTerminalReadback(t *testing.T) {
 	now := time.Now().UTC()
 	fixture := entity.ProviderAccountDeletion{Ref: "pdel_testterminal", Version: 2, State: "DELETED",

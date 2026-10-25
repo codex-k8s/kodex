@@ -13,9 +13,20 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryWorkerGrantWaiting checks whether the exact reader backend is blocked before the watermark
+// writer commits.
+// queryWorkerGrantWaiting проверяет блокировку точного backend читателя до commit писателя
+// watermark.
+//
 //go:embed testdata/sql/worker_grant_waiting.sql
 var queryWorkerGrantWaiting string
 
+// TestWorkerGrantHighWatermarkUsesCredentialGenerationAndRevision checks SQL text retains ordered
+// credential-generation/revision and exact-envelope guards without UNION snapshot fallback; it
+// does not execute watermark acceptance.
+// TestWorkerGrantHighWatermarkUsesCredentialGenerationAndRevision проверяет сохранение в SQL
+// упорядоченных ограничений поколения credential, ревизии и точного конверта без UNION fallback
+// снимка; не выполняет приём watermark.
 func TestWorkerGrantHighWatermarkUsesCredentialGenerationAndRevision(t *testing.T) {
 	for _, required := range []string{
 		"(workload_id, credential_generation, revision, issued_at, expires_at)",
@@ -35,6 +46,12 @@ func TestWorkerGrantHighWatermarkUsesCredentialGenerationAndRevision(t *testing.
 	}
 }
 
+// testEmailWorkerWatermark checks durable generation/revision monotonicity, exact replay and
+// envelope identity, then observes a real reader lock wait and rejects the old generation after
+// writer commit.
+// testEmailWorkerWatermark проверяет устойчивую монотонность поколения и ревизии, точный повтор и
+// идентичность конверта, затем наблюдает реальное ожидание блокировки читателя и отклоняет старое
+// поколение после commit писателя.
 func testEmailWorkerWatermark(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	now := time.Now().UTC().Truncate(time.Microsecond)

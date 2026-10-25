@@ -4,11 +4,64 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.434.0
+version: 1.435.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Authority, cancellation и immutable runtime:87 описаний — 25.10.2026
+
+На основе `ff6a1404b60951887c0943485dfa86bf0b9348e1` полностью прочитаны40
+test Go-файлов (3881 исходная строка) и22 embedded SQL (190 строк).
+87 именованных объявлений описаны EN→RU, включая local candidate и
+cancelResult. Исполняемые выражения, SQL, assertions, fixture values,
+диагностика и параметры времени не менялись.
+
+| Область | Описанные гарантии и ограничения |
+| --- | --- |
+| Integration cancel | Ready WRITE становится CANCELLED, claimed WRITE сохраняет UNKNOWN_OUTCOME. Durable readback закрывает lease/fence/scopes, проверяет один event origin и неизменные receipt/audit/outbox counters при replay/late rejection. Внешний provider effect не исполняется |
+| Receipt/preview authority | Fresh fixture proof и exact resource binding отдельно от verified transport. Foreign signed project и revoke закрывают terminal receipt до OCC/snapshot. Schedule DRAFT actor отдельно от saved revision author; owner preview не заменяет launch authority автора |
+| Organization image/context | Scope ORG/PROJECT образов и custom-image retention проверяются с synthetic signature, без настоящего admission/build. VFS listing/search сохраняют entity/digest/path и visibility |
+| Pure configuration/actions | Overlay reasoning key не зависит от позиции. Typed HTTPS/list schema, lifecycle actions, exact terminal tombstone/version и managed mailbox credential action не расширяют права |
+| Credential proofs | Exact method/scope и canonical digest отвергают forged locator до lookup. Claimed materialization сравнивает server-owned root/revision/generation и отклоняет foreign project/changed fence, не материализуя credentials. Trusted/protected profile проверяется предикатом, не живым mTLS |
+| Session/continuation | History сохраняет целые сообщения, независимые maps, encoded-byte и20-message budget; invalid message отрезает ранний prefix. Durable notice связан с tenant/node/session/turn/attempt и final USER body. Compact core notice сохраняет full instructions, source/history, exact pins и shared-consumer rejoin |
+| Worker watermark | SQL string guard сохраняет generation/revision/envelope. Отдельный PG helper воспроизводит actual backend wait и закрывает old-generation snapshot после writer commit; unit guard этого не доказывает |
+| Workflow prompt/catalog | Published DAG доступен каждому этапу, mutable slices скопированы, safe preview redacted. Data digest меняется независимо от service template;39-stage metadata остаётся compact. Synthetic catalog paging сохраняет content pins при metadata-only drift и закрывает stale capabilities/cursor |
+| Provider/cards/queued work | Premature terminal deletion отклоняется. Card single/list/replay используют current visible children, скрытые count/currentRun не раскрываются. Blockers filters сохраняют snapshot digest, exact cancel/replay закрывают Run; changed digest даёт stale conflict |
+| Graph/email/recovery | Retry/CONTINUES требуют exact lineage и Session. Late email reports проверяют expired binding, upgrade/replay, owner reconciliation и no resend с synthetic receipts. Optional gateway binary без настройки не вызывается: helper возвращается после проверки отсутствия generic credential |
+| Readiness/environment | Owner readiness переживает public redaction, но закрывается при stale/missing image/catalog и disabled dependencies. Initial SYSTEM publish проверяет selected/stale/unselected, audit rollback и idempotency; explicit old environment pin сохраняется до selective rebind |
+| Project assistant | Isolated profile/conversation/session, disabled/archived assignment, stale-image denial и exact runtime/financial pins; worker proposal не применяет owner plan. Purge проверяет закреплённый FK closure и foreign preservation после synthetic OBJECTS_CLEARED, без реальной очистки объектов |
+| Cancellation/Git/files | Node-to-run lock fixture ждёт cancellation и требует terminal после commit. Git-owned source меняется UI только через explicit copy/detach с published lineage. Preview files сохраняют owner context и скрывают descriptor families без capability |
+
+40 полных expected-AST/directive сравнений — PASS LOCAL (0.52s).
+30 выбранных unit Test-функций — PASS LOCAL (23.78s, checks435-final).
+TestProjectAssistantProfilesComponent явно исключён из unit selection;
+PG component helpers/entrypoints — NOT RUN/SKIP. Unit child env исключает
+credentials и все inherited KODEX inputs, GOWORK=off/GOMAXPROCS=4/-p2.
+Это не приёмка описанных component-ветвей на живом PostgreSQL или runtime.
+
+Inventory/detector/assessment,5 exact-ignore guards, gofmt/git diff --check —
+PASS LOCAL. Inventory6695 sources/222 exclusions, registry740 неизменен.
+Detector1667 raw/851 retained occurrences/816 unresolved. Fragment/path/count
+ключи всех occurrences прежние; три полные fingerprints сменили координаты
+после комментариев в project_assistant_component_test.go. Связанные три
+других файла побайтово прежние. Новый raw/clone-set hash фиксируется отдельно;
+неизменность полного coordinate fingerprint не заявляется. Новых групп,
+решений сохранения, exclusions либо thresholds нет; это comments-only пакет.
+
+Go21493:21336 EN→RU,157 missing только в88 test-файлах, production missing0.
+PR477 Go/3364 объявления, missing0;507 whole changed blobs. Полный platform
+package unit/race относятся к652b4f4/checks433-final, полный production
+control-plane build/unit —38ea7e4/checks429-final. Production Go неизменен,
+повтор полного build/unit/race и17 analyzer unit здесь не выполнялся.
+Новых внешних API и Context7 запросов нет, прежний fallback сохранён.
+
+PG/RLS/OCC/actual races, remote providers/storage/Secrets/SMTP, browser/полный
+E2E/deploy/live — NOT RUN/SKIP. Manifests неизменны, прежние30 renders и
+исходный standalone staging/control-api-gateway FAIL не повторялись. #1823
+открыт, #1829 Draft, main/QA и env сохранены. Секреты не раскрывались и
+не переносились.
 
 ## Предикаты, курсоры и prompt provenance:83 описания — 25.10.2026
 

@@ -14,6 +14,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// contextProjectReader registers an unbound context reader, grants only project.view in the exact
+// project and resolves the resulting fixture principal.
+// contextProjectReader регистрирует непривязанного читателя контекста, выдаёт только project.view
+// точного проекта и разрешает полученный тестовый principal.
 func contextProjectReader(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, projectRef, kind string) value.Principal {
 	t.Helper()
 	externalID := "20000000-0000-4000-8000-000000008461"
@@ -45,6 +49,11 @@ func contextProjectReader(t *testing.T, ctx context.Context, repository *Reposit
 	return resolvedTestPrincipal(t, ctx, repository, input, "control-api-gateway")
 }
 
+// testContextVFS checks typed skill/memory listing and global search agree on visibility, exact
+// entity/digest/path and bounded count without inventing another page.
+// testContextVFS проверяет согласованность типизированного списка навыков и памяти и глобального
+// поиска по видимости, точным entity, дайджесту и пути и ограниченному количеству без выдуманной
+// следующей страницы.
 func testContextVFS(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, projectRef, resourceRef, kind, digest string, visible bool) {
 	t.Helper()
 	folder := "skills"

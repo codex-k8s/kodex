@@ -13,12 +13,22 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testRetryTargetAuthority runs the same current target-launch authorization scenarios separately
+// for AGENT and WORKFLOW targets.
+// testRetryTargetAuthority выполняет одинаковые сценарии текущих полномочий запуска цели раздельно
+// для AGENT и WORKFLOW.
 func testRetryTargetAuthority(t *testing.T, ctx context.Context, repository *Repository) {
 	for _, kind := range []string{"AGENT", "WORKFLOW"} {
 		t.Run(kind, func(t *testing.T) { testRetryTargetKindAuthority(t, ctx, repository, kind) })
 	}
 }
 
+// testRetryTargetKindAuthority checks run.view cannot grant retry/continuation before OCC, exact
+// target launch enables them, and revocation denies receipt replay and Session-only continuation
+// without resurrecting cancelled work.
+// testRetryTargetKindAuthority проверяет отсутствие права повтора и продолжения у run.view до OCC,
+// их разрешение точным правом запуска цели и запрет чтения квитанции и продолжения только по
+// Session после отзыва без оживления отменённой работы.
 func testRetryTargetKindAuthority(t *testing.T, ctx context.Context, repository *Repository, kind string) {
 	t.Helper()
 	seedObservedCatalogFixture(t, ctx, repository)

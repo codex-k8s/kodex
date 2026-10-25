@@ -17,12 +17,29 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// queryEffectiveCapabilitiesMissingImage creates a disposable environment revision without an
+// image and redirects only the fixture agent binding to exercise closed scanner failure.
+// queryEffectiveCapabilitiesMissingImage создаёт одноразовую ревизию окружения без образа и
+// перенаправляет только привязку тестового агента для проверки закрытого отказа scanner.
+//
 //go:embed testdata/sql/effective_capabilities_missing_image.sql
 var queryEffectiveCapabilitiesMissingImage string
 
+// queryEffectiveCapabilitiesRestoreImage restores the exact fixture binding to the missing-image
+// revision parent while leaving immutable revision rows intact.
+// queryEffectiveCapabilitiesRestoreImage восстанавливает точную тестовую привязку на родительскую
+// ревизию версии без образа, сохраняя неизменные строки ревизий.
+//
 //go:embed testdata/sql/effective_capabilities_restore_image.sql
 var queryEffectiveCapabilitiesRestoreImage string
 
+// testEffectiveCapabilityReadinessRedaction checks owner readiness survives public image-contract
+// redaction but closes on stale image/catalog, disabled agent or missing stored image; rejected
+// configuration changes preserve previous valid readiness.
+// testEffectiveCapabilityReadinessRedaction проверяет сохранение готовности владельца при скрытии
+// публичного контракта образа и её закрытие при устаревшем образе и каталоге, отключённом агенте и
+// отсутствующем сохранённом образе; отклонённая смена конфигурации сохраняет прежнюю допустимую
+// готовность.
 func testEffectiveCapabilityReadinessRedaction(t *testing.T, ctx context.Context, repository *Repository) {
 	seedObservedCatalogFixture(t, ctx, repository)
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.command.projects.create"}, "control-api-gateway")

@@ -7,6 +7,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestSecretDraftRecoverySettled distinguishes retained published materialization or failed work
+// without effects from missing/deleting materialization and pending encrypted cleanup.
+// TestSecretDraftRecoverySettled отличает сохранённую опубликованную материализацию и ошибочную
+// работу без эффектов от отсутствующей либо удаляемой материализации и ожидающей очистки
+// encrypted-данных.
 func TestSecretDraftRecoverySettled(t *testing.T) {
 	retained := &entity.RuntimeSecretMaterialization{}
 	tests := []struct {
@@ -69,6 +74,12 @@ func TestSecretDraftRecoverySettled(t *testing.T) {
 	}
 }
 
+// TestSecretDraftPublishedRecoveryAlreadySettled requires published/completed work, completed
+// cleanup and retained materialization with KEEP actions before declaring recovery already
+// settled.
+// TestSecretDraftPublishedRecoveryAlreadySettled требует опубликованную и завершённую работу,
+// завершённую очистку и сохранённую материализацию с действиями KEEP перед признанием
+// восстановления уже завершённым.
 func TestSecretDraftPublishedRecoveryAlreadySettled(t *testing.T) {
 	retained := &entity.RuntimeSecretMaterialization{}
 	baseDraft := secretDraftRow{public: entity.RuntimeSecretDraft{State: "PUBLISHED"}}

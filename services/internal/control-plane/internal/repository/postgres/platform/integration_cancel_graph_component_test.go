@@ -14,11 +14,20 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// queryIntegrationCancelGraphReadback reads the cancelled invocation/run closure, active
+// leases/scopes, event origin count and durable receipt/audit/outbox counters.
+// queryIntegrationCancelGraphReadback читает замыкание отменённых invocation и Run, активные
+// leases и области, количество событий происхождения и устойчивые счётчики квитанций, аудита и
+// outbox.
+//
 //go:embed testdata/sql/integration_cancel_graph_readback.sql
 var queryIntegrationCancelGraphReadback string
 
-// Авторитетный readback общей отмены: lease/fence не живут после terminal,
-// неизвестный результат WRITE сохраняется, события имеют ровно одного origin.
+// assertIntegrationCancelGraph requires terminal Run cancellation, cleared invocation fencing, no
+// active leases/scopes and one cancellation event, returning counters for replay comparison.
+// assertIntegrationCancelGraph требует отменённый Run, очищенный fencing вызова, отсутствие
+// активных leases и областей и одно событие отмены, возвращая счётчики для сравнения повторного
+// исполнения.
 func assertIntegrationCancelGraph(t *testing.T, ctx context.Context, pool *pgxpool.Pool, invocationRef, runRef, wantState string) [3]int64 {
 	t.Helper()
 	var state, runState string
@@ -34,6 +43,12 @@ func assertIntegrationCancelGraph(t *testing.T, ctx context.Context, pool *pgxpo
 	return counts
 }
 
+// exerciseIntegrationCancelGraph checks ready versus claimed WRITE cancellation, unknown-outcome
+// preservation, exact replay, late completion denial and no remaining claimable work without
+// executing a provider effect.
+// exerciseIntegrationCancelGraph проверяет отмену ожидающего и захваченного WRITE, сохранение
+// неизвестного исхода, точный повтор, запрет позднего завершения и отсутствие доступной работы без
+// исполнения эффекта провайдера.
 func exerciseIntegrationCancelGraph(t *testing.T, ctx context.Context, pool *pgxpool.Pool, service *serviceplatform.Service, owner, worker, gateway value.Principal, connectionRef, prefix string, changeGrant func(string, string), launch func(string) string) {
 	t.Helper()
 	execute := func(kind command.Kind, actor value.Principal, key string, version *int64, payload any) command.Result {

@@ -7,6 +7,12 @@ import (
 	"testing"
 )
 
+// TestTerminalSessionStorageDiagnosticIsClosed captures and restores the default logger, requiring
+// only the exact safe WARN classification/identity fields and timestamp without private task or
+// credential locator data.
+// TestTerminalSessionStorageDiagnosticIsClosed перехватывает и восстанавливает logger по
+// умолчанию, требуя только точные безопасные поля WARN-классификации и идентичности и время без
+// закрытой задачи либо locator credential.
 func TestTerminalSessionStorageDiagnosticIsClosed(t *testing.T) {
 	var output bytes.Buffer
 	previous := slog.Default()
