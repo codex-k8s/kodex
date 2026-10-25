@@ -9,6 +9,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// testProviderBootstrapHistory checks forward-only provider bootstrap against owner-scoped
+// credential history, rejecting unknown or partial historical pins.
+// testProviderBootstrapHistory проверяет bootstrap провайдера без возврата к прежнему состоянию по
+// истории учётных данных владельца, отклоняя неизвестные и неполные исторические версии.
 func testProviderBootstrapHistory(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	t.Helper()
 	historical := repository.providerCredential

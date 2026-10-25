@@ -13,6 +13,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testManagedDraftLifecycle checks immutable managed draft save, repair, discard and publication
+// while rejecting stale mutations and UI changes to Git-owned revisions.
+// testManagedDraftLifecycle проверяет неизменяемое сохранение, исправление, удаление и публикацию
+// управляемого черновика с запретом устаревших команд и изменений ревизий Git через UI.
 func testManagedDraftLifecycle(t *testing.T, ctx context.Context, repository *Repository) {
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",

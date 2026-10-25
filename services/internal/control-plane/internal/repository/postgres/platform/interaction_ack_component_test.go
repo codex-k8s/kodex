@@ -14,6 +14,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// testInteractionACK checks one durable inbound ACK and its exact channel and root binding,
+// including completion replay, and returns the accepted run reference.
+// testInteractionACK проверяет единственное сохранённое подтверждение входящего сообщения и точную
+// привязку канала и корня, включая повтор завершения, и возвращает ссылку принятого запуска.
 func testInteractionACK(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool, owner value.Principal, connectionRef string) string {
 	t.Helper()
 	seedObservedCatalogFixture(t, ctx, repository)

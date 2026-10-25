@@ -20,6 +20,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// TestRunSessionReadinessComponent checks consistent Run and graph session-storage readiness,
+// atomic subscriber wakeups and closed failure on malformed or inaccessible snapshots.
+// TestRunSessionReadinessComponent проверяет согласованную готовность хранилища сессии в Run и
+// графе, однократное уведомление подписчиков и закрытый отказ для повреждённых или недоступных
+// снимков.
 func TestRunSessionReadinessComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()

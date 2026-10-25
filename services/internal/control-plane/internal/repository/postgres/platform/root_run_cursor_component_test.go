@@ -19,6 +19,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// TestRootRunCursorComponent checks root graph and event cursors with exact child eligibility,
+// canonical ordering and concurrent snapshot consistency without elevating child permissions.
+// TestRootRunCursorComponent проверяет курсоры корневого графа и событий с точной допустимостью
+// дочерних запусков, каноническим порядком и согласованностью конкурентных снимков без повышения
+// дочерних полномочий.
 func TestRootRunCursorComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()

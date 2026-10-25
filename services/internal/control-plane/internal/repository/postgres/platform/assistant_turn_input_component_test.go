@@ -20,6 +20,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// TestAssistantTurnInputBoundsComponent checks SYSTEM and PROJECT input bounds and exact USER text
+// in durable turns, events and outbox; invalid or repeated input must not duplicate state.
+// TestAssistantTurnInputBoundsComponent проверяет границы ввода SYSTEM и PROJECT и точный текст
+// USER в сохранённых шагах, событиях и outbox; неверный или повторный ввод не должен дублировать
+// состояние.
 func TestAssistantTurnInputBoundsComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()

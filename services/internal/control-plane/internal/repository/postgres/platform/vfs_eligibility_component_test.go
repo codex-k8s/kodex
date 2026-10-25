@@ -18,6 +18,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// testVFSEligibility checks one current VFS eligibility boundary across pages, direct download,
+// events and receipt replay, including revocation and trash.
+// testVFSEligibility проверяет единую актуальную допустимость VFS для страниц, прямой загрузки,
+// событий и повтора квитанций, включая отзыв доступа и корзину.
 func testVFSEligibility(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal) {
 	t.Helper()
 	created, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "vfs-eligibility-project"}, Payload: command.ProjectInput{Name: "VFS eligibility", Purpose: "Exact source versions and actions", Language: "en"}})

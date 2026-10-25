@@ -15,6 +15,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testCFGLifecycle checks copied configuration provenance and archive history while retaining
+// immutable consumer bindings and rejecting archived mutations.
+// testCFGLifecycle проверяет происхождение копий конфигурации и историю архивации с сохранением
+// неизменяемых привязок потребителей и запретом изменения архивных записей.
 func testCFGLifecycle(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner, reader value.Principal, projectRef, connectionRef string, published command.Result) {
 	t.Helper()
 	retained, err := service.GetEffectiveManagedConfiguration(ctx, reader, "INTEGRATION_DEFINITION", "INTEGRATION_CONNECTION", connectionRef)
@@ -111,6 +115,10 @@ func testCFGLifecycle(t *testing.T, ctx context.Context, repository *Repository,
 	testCFGRoleImageLifecycle(t, ctx, repository, service, owner, projectRef)
 }
 
+// testCFGRoleImageLifecycle checks role-image copy lineage and archive cancellation without
+// changing the shipped source or permitting archived builds.
+// testCFGRoleImageLifecycle проверяет происхождение копий образа роли и отмену работ при архивации
+// без изменения поставляемого источника и допуска архивных сборок.
 func testCFGRoleImageLifecycle(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, projectRef string) {
 	t.Helper()
 	resolved, err := repository.ResolvePrincipal(ctx, owner)

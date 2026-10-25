@@ -16,6 +16,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testAutomationScheduler checks scheduler claim races, fresh retry attempts and immutable
+// occurrence input through expiry, dead letter, overlap and cancellation.
+// testAutomationScheduler проверяет гонки захвата планировщика, новые попытки повтора и
+// неизменяемый ввод срабатывания при истечении срока, исчерпании попыток, перекрытии и отмене.
 func testAutomationScheduler(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	seedObservedCatalogFixture(t, ctx, repository)

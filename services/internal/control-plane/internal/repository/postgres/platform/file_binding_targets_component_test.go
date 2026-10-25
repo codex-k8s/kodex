@@ -16,6 +16,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testFileBindingTargets checks paginated file-binding targets and current visibility across
+// catalogs, direct reads, history and receipt replay.
+// testFileBindingTargets проверяет страницы целей файловых привязок и актуальную видимость в
+// каталогах, прямом чтении, истории и повторе квитанций.
 func testFileBindingTargets(t *testing.T, ctx context.Context, repository *Repository) {
 	seedObservedCatalogFixture(t, ctx, repository)
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.command.projects.create"}, "control-api-gateway")
@@ -222,6 +226,10 @@ func testFileBindingTargets(t *testing.T, ctx context.Context, repository *Repos
 	}
 }
 
+// testRunAttachmentTargets checks attachment readiness for agents and workflow aggregates,
+// including required capabilities and coordinator opt-in.
+// testRunAttachmentTargets проверяет готовность вложений для агентов и агрегатов workflow, включая
+// обязательные полномочия и согласие координатора.
 func testRunAttachmentTargets(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, projectRef, stepAgent, coordinator string) {
 	t.Helper()
 	read := func(target entity.RunTarget) entity.RunAttachmentEligibility {

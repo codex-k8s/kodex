@@ -15,6 +15,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testManagedIntegrationPackageExecution checks managed integration package pins and private test
+// claims, rejecting unsafe READ health approval and retaining only valid credential bindings.
+// testManagedIntegrationPackageExecution проверяет версии пакета управляемой интеграции и
+// приватные захваты теста, отклоняя небезопасное подтверждение READ-проверки и сохраняя только
+// допустимые привязки учётных данных.
 func testManagedIntegrationPackageExecution(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, connectionRef string, published command.Result) {
 	t.Helper()
 	connection, err := service.GetIntegrationConnection(ctx, owner, connectionRef)

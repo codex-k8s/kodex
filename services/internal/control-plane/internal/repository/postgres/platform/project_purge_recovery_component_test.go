@@ -22,6 +22,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// TestProjectPurgeRecoveryComponent checks owner recovery of uncertain project uploads, durable
+// cleanup obligations and late exact receipts after project deletion.
+// TestProjectPurgeRecoveryComponent проверяет восстановление неопределённых загрузок владельцем,
+// устойчивые обязательства очистки и поздние точные квитанции после удаления проекта.
 func TestProjectPurgeRecoveryComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
@@ -336,6 +340,10 @@ func TestProjectPurgeRecoveryComponent(t *testing.T) {
 	}
 }
 
+// TestProjectPurgeRecoveryAdoptedComponent checks that adopted content follows ordinary project
+// finalization and is not treated as an outstanding uncertain-upload obligation.
+// TestProjectPurgeRecoveryAdoptedComponent проверяет обычное завершение удаления проекта с
+// принятым содержимым без ошибочного учёта его как незакрытой неопределённой загрузки.
 func TestProjectPurgeRecoveryAdoptedComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
@@ -493,6 +501,10 @@ func TestProjectPurgeRecoveryAdoptedComponent(t *testing.T) {
 	}
 }
 
+// TestProjectPurgeRecoveryFairnessComponent checks that observing an older uncertain project does
+// not starve cleanup of a newer overdue project.
+// TestProjectPurgeRecoveryFairnessComponent проверяет, что наблюдение старого неопределённого
+// проекта не блокирует очистку более нового просроченного проекта.
 func TestProjectPurgeRecoveryFairnessComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()

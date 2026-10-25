@@ -19,8 +19,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
-// Те же public JSON scopes проверяются отдельно через generated BFF decoder/caster.
-// Здесь реальные owner transactions и PostgreSQL, без materialized locator fixture.
+// testPublicAccessQueryScopes checks public access scopes, nonpersistent simulation, and tenant
+// and protected-image authority through owner transactions.
+// testPublicAccessQueryScopes проверяет публичные области доступа, симуляцию без записи и
+// полномочия арендатора и защищённого образа через транзакции владельца.
 func testPublicAccessQueryScopes(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	ownerInput := platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", ExternalDisplayName: "Access query owner", CallerWorkload: "control-api-gateway", Operation: "platform.query.bootstrap"}

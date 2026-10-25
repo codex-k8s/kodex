@@ -16,6 +16,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testAssistantParallelAdmission checks concurrent assistant admission against account capacity,
+// including limit reduction and stopping one conversation without affecting others.
+// testAssistantParallelAdmission проверяет конкурентный допуск ассистентов по ёмкости учётной
+// записи, включая снижение лимита и остановку одной беседы без изменения остальных.
 func testAssistantParallelAdmission(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	prepareObservedWarmFixture(t, ctx, repository)
@@ -150,6 +154,10 @@ func testAssistantParallelAdmission(t *testing.T, ctx context.Context, repositor
 	}
 	assertActive(2)
 	setLimit(10, "parallel-limit-ten")
+	// outcome carries one racing claim result and error through the test channel without sharing
+	// mutable response state.
+	// outcome передаёт результат и ошибку одного конкурентного захвата через канал теста без общей
+	// изменяемой структуры ответа.
 	type outcome struct {
 		result command.Result
 		err    error

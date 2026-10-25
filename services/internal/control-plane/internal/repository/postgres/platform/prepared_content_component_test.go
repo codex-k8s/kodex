@@ -20,6 +20,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// preparedObjectsFixture wraps test object storage with a put counter, optional blocking channels
+// and synthetic unavailability for upload and cleanup races.
+// preparedObjectsFixture оборачивает тестовое хранилище счётчиком записей, необязательными
+// блокирующими каналами и синтетической недоступностью для гонок загрузки и очистки.
 type preparedObjectsFixture struct {
 	*objectstoragetest.Store
 	puts             atomic.Int64
@@ -27,6 +31,10 @@ type preparedObjectsFixture struct {
 	entered, release chan struct{}
 }
 
+// TestPreparedContentBindingComponent checks prepared-content adoption, immutable bindings and
+// cleanup fences without restoring purged bytes or changing native plan receipts.
+// TestPreparedContentBindingComponent проверяет принятие подготовленного содержимого, неизменяемые
+// привязки и ограничения очистки без восстановления удалённых данных и изменения квитанций планов.
 func TestPreparedContentBindingComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
@@ -446,6 +454,10 @@ func TestPreparedContentBindingComponent(t *testing.T) {
 	})
 }
 
+// Put counts each attempt, optionally waits for release or cancellation, then returns a synthetic
+// failure or delegates to the test store.
+// Put считает каждую попытку, при необходимости ожидает разрешения или отмены, затем возвращает
+// синтетическую ошибку либо вызывает тестовое хранилище.
 func (store *preparedObjectsFixture) Put(ctx context.Context, input objectstorage.PutInput) (objectstorage.Receipt, error) {
 	store.puts.Add(1)
 	if store.entered != nil {
@@ -462,6 +474,10 @@ func (store *preparedObjectsFixture) Put(ctx context.Context, input objectstorag
 	return store.Store.Put(ctx, input)
 }
 
+// TestPreparedContentLedgerComponent checks upload-ledger replay and uncertain outcomes without
+// repeating Put, and prevents cleanup while the writer lease remains active.
+// TestPreparedContentLedgerComponent проверяет повтор операций журнала загрузки и неопределённые
+// исходы без повторного Put, запрещая очистку при действующей аренде записи.
 func TestPreparedContentLedgerComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()

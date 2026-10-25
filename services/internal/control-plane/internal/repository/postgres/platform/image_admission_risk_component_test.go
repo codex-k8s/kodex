@@ -20,6 +20,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// imageRiskReportFixture builds canonical vulnerability evidence from fixed synthetic matches and
+// returns projection and report digests without running a scanner.
+// imageRiskReportFixture строит каноническое доказательство уязвимостей из фиксированных
+// синтетических совпадений и возвращает дайджесты проекции и отчёта без запуска сканера.
 func imageRiskReportFixture(t *testing.T, artifact entity.ImageArtifact, sbom string, blocking bool) (string, string, string) {
 	t.Helper()
 	matches := "[]"
@@ -40,7 +44,10 @@ func imageRiskReportFixture(t *testing.T, artifact entity.ImageArtifact, sbom st
 	return string(projection), runtimecontract.ImageVulnerabilitySHA256(projection), report.ReportSHA256
 }
 
-// Только disposable PostgreSQL: реальные owner TX, синтетические scanner bytes.
+// TestImageAdmissionRiskComponent checks owner-scoped risk acceptance and fresh admission pins,
+// attempt closure and project-history purge using synthetic scanner evidence.
+// TestImageAdmissionRiskComponent проверяет принятие риска в области владельца, свежие версии
+// допуска, закрытие попыток и очистку истории проекта на синтетических доказательствах сканера.
 func TestImageAdmissionRiskComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()

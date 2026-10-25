@@ -16,7 +16,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
-// Оснастка вызывается штатной suite PROJECT-профиля; provider и живые данные не используются.
+// testAssistantArtifactSearch checks lease-bound artifact metadata discovery without execution
+// authority and owner-approved helper file capabilities.
+// testAssistantArtifactSearch проверяет поиск метаданных артефактов по аренде без выдачи права
+// исполнения и подтверждённые владельцем файловые полномочия помощника.
 func testAssistantArtifactSearch(t *testing.T, ctx context.Context, r *Repository, service *platformservice.Service, owner, worker, reader value.Principal, lease map[string]any, foreignProject string) {
 	t.Helper()
 	project, agent := stringMap(lease, "projectRef"), stringMap(lease, "agentRef")

@@ -16,9 +16,18 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryManagedBindingCASRead reads the current SYSTEM_STT binding revision and version within the
+// supplied organization for compare-and-swap assertions.
+// queryManagedBindingCASRead читает текущую ревизию и версию привязки SYSTEM_STT в заданной
+// организации для проверок условной замены.
+//
 //go:embed testdata/sql/managed_binding_cas_read.sql
 var queryManagedBindingCASRead string
 
+// testManagedBindingCAS checks exact binding compare-and-swap for existing and absent consumers,
+// concurrent winners, receipt replay and atomic batch rollback.
+// testManagedBindingCAS проверяет точную условную замену существующих и отсутствующих привязок,
+// победителя гонки, повтор квитанции и атомарный откат пакета.
 func testManagedBindingCAS(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{

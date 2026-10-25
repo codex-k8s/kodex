@@ -4,11 +4,49 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.436.0
+version: 1.437.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Полнота Go-комментариев: 21493 из 21493 — 25.10.2026
+
+На основе `b4162419a356ea32e21e32462355deb40f2d90ed` добавлены содержательные
+EN→RU описания последних73 объявлений в48 test-файлах. Описаны назначение
+проверок, вспомогательные типы и11 embedded SQL bindings. Прочитаны
+декларации и релевантные сценарии/assertions,11 SQL целиком; это не заявление
+о полном построчном ревью всех12192 строк этих файлов.
+
+Пределы оснастки явно сохранены: fixed DNS resolver не выполняет DNS lookup,
+object storage считает/блокирует Put и имитирует недоступность, scanner evidence
+синтетические, credential projection использует fake Kubernetes.
+Подтверждение почтовой публикации проходит stage/apply/exact readback/complete;
+это не отправка письма и не доставка в живую среду. SQL missing-source
+принудительно возвращает пустой результат через WHERE FALSE, а deadline-reset
+пытается изменить immutable clocks для проверки отказа БД.
+
+Проверки текущего дерева:
+
+- 48 полных expected-AST/directive сравнений — PASS LOCAL (1.52s).
+- `go build -p 2 ./...` всего control-plane — PASS LOCAL (6.18s).
+- `go test -p 2 -count=1 ./...` всего control-plane — PASS LOCAL (36.16s).
+  Credentials и все inherited KODEX inputs исключены. Component opt-ins
+  отсутствуют; реальные PostgreSQL, внешние effects и E2E — NOT RUN/SKIP.
+- Inventory/detector/assessment и5 exact-ignore guards — PASS LOCAL.
+- Полный Go inventory:21493 объявлений,21493 EN→RU,0 пропусков.
+  В diff:565 Go-файлов/3521 объявление,0 пропусков.
+
+Inventory6695 sources/222 exclusions и registry740 не изменены.
+Raw1667/retained851/unresolved816 прежние.5 неразобранных окон получили новые
+fragmentSHA из-за комментариев; пары файлов, кратность и unresolved-статус
+проверены отдельно. Ещё29 общих групп изменили полный fingerprint координат.
+Это не устранение дубликатов; пороги, exclusions и retention не расширялись.
+
+Production Go не менялся в этом этапе. Все48 тестовых файлов сохранили AST и
+директивы, включая go:embed. Browser, live smoke, deploy, полный E2E и независимая
+приёмка — NOT RUN. PR остаётся Draft, Issue#1823 открыт; полнота комментариев
+не закрывает816 групп и не означает готовность всей задачи к слиянию.
 
 ## Component fixtures и protected scope:84 описания — 25.10.2026
 

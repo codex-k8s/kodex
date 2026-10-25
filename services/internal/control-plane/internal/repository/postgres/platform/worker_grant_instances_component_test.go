@@ -15,6 +15,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// TestWorkerGrantInstancesComponent checks exact worker instance grants and committed
+// credential-generation floors with a row-lock race; absent test DSN skips the component suite.
+// TestWorkerGrantInstancesComponent проверяет точные разрешения экземпляров исполнителя и
+// зафиксированный порог поколения учётных данных в гонке блокировок; без тестового DSN
+// компонентный сценарий пропускается.
 func TestWorkerGrantInstancesComponent(t *testing.T) {
 	dsn := os.Getenv("KODEX_CONTROL_PLANE_TEST_DSN")
 	if dsn == "" {

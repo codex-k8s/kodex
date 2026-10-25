@@ -17,6 +17,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// testEnvironmentDraft checks environment draft publication, immutable bases and selective impact
+// rebinding while preserving unselected consumers and exact assistant pins.
+// testEnvironmentDraft проверяет публикацию черновика среды, неизменяемые основания и выборочную
+// перепривязку по влиянию с сохранением невыбранных потребителей и точных версий ассистента.
 func testEnvironmentDraft(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",

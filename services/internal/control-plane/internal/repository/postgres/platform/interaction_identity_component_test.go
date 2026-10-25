@@ -16,6 +16,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// testInteractionIdentity checks exact interaction identity mapping, source-version invalidation
+// and revocation without granting mapped members gateway approval authority.
+// testInteractionIdentity проверяет точное сопоставление личности взаимодействия, сброс допуска
+// при смене версии источника и отзыв без выдачи участникам права подтверждения шлюза.
 func testInteractionIdentity(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",

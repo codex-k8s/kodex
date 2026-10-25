@@ -15,6 +15,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testConfigOverlayHistory checks published overlay history, scope-bound cursors and forward
+// rollback while hiding unpublished and foreign revisions.
+// testConfigOverlayHistory проверяет историю опубликованных наложений, курсоры с привязкой к
+// области и откат новой публикацией, скрывая неопубликованные и чужие ревизии.
 func testConfigOverlayHistory(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.command.projects.create"}, "control-api-gateway")

@@ -17,9 +17,19 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// querySecretDraftRecoveryObserve reads a draft operation timestamp and owner audit count to
+// detect mutation during recovery observation.
+// querySecretDraftRecoveryObserve читает время изменения операции черновика и число записей аудита
+// владельца для обнаружения изменений при наблюдении восстановления.
+//
 //go:embed testdata/sql/secret_draft_recovery_observe.sql
 var querySecretDraftRecoveryObserve string
 
+// testRuntimeSecretDraftLifecycle checks secret draft grants, fenced materialization recovery,
+// retained cleanup acknowledgements and expiry with synthetic external effects.
+// testRuntimeSecretDraftLifecycle проверяет разрешения черновика секрета, ограниченное
+// восстановление материализации, удержание подтверждений очистки и истечение срока на
+// синтетических внешних эффектах.
 func testRuntimeSecretDraftLifecycle(t *testing.T, ctx context.Context, r *Repository) {
 	t.Helper()
 	s, err := platformservice.New(r)

@@ -15,6 +15,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testSecretDraftImpactRebind checks secret-draft impact snapshots, selected replacement outcomes
+// and terminal cursor invalidation with synthetic publication acknowledgements.
+// testSecretDraftImpactRebind проверяет снимки влияния черновика секрета, исходы выбранных замен и
+// сброс курсора при завершении на синтетических подтверждениях публикации.
 func testSecretDraftImpactRebind(t *testing.T, ctx context.Context, r *Repository, s *platformservice.Service, owner value.Principal, secret entity.RuntimeSecret) {
 	t.Helper()
 	owner.CredentialAuthenticatedAt = time.Now().UTC()

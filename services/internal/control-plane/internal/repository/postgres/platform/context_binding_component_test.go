@@ -18,6 +18,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testContextBinding checks immutable Skill or memory bindings across VFS, runtime snapshots,
+// revocation and retention, preserving exact revision digests.
+// testContextBinding проверяет неизменяемые привязки Skill или памяти в VFS, снимках исполнения,
+// отзыве доступа и удержании данных с сохранением точных дайджестов ревизий.
 func testContextBinding(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, projectRef, resourceRef, revisionRef, key string, memory bool) {
 	t.Helper()
 	agent := createLifecycleAgent(t, ctx, service, owner, projectRef, key+"-agent", "Context consumer")

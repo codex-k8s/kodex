@@ -13,6 +13,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testInstructionBindingLifecycle checks selected instruction publication and forward rollback
+// with exact binding versions, idempotent events and foreign-revision rejection.
+// testInstructionBindingLifecycle проверяет выбранную публикацию инструкций и откат новой ревизией
+// с точными версиями привязки, однократными событиями и запретом чужих ревизий.
 func testInstructionBindingLifecycle(t *testing.T, ctx context.Context, r *Repository, service *platformservice.Service, owner value.Principal, agentRef string) {
 	agent, err := service.GetAgent(ctx, owner, agentRef)
 	if err != nil || agent.InstructionBinding == nil || !agent.InstructionBinding.Effective || agent.InstructionBinding.Version != 1 {

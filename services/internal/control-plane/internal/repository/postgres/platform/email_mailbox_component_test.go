@@ -22,6 +22,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testEmailMailboxOwner checks mailbox draft, publication, binding, removal and Git ownership with
+// delivery acknowledgements and durable expiry outcomes.
+// testEmailMailboxOwner проверяет черновик, публикацию, привязку, удаление и владение Git для
+// ящика с подтверждениями доставки и сохранёнными исходами истечения срока.
 func testEmailMailboxOwner(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner, reader value.Principal, connectionRef string, mailbox api.Mailbox) {
 	t.Helper()
 	create := command.Command{Kind: command.CreateEmailMailboxDraft, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "mailbox-owner-create"},
@@ -368,8 +372,16 @@ FROM control_plane.email_mailbox_publications p JOIN control_plane.integration_c
 	}
 }
 
+// mailboxOwnerResolver provides a fixed public-address resolver for mailbox policy fixtures
+// without performing DNS lookup.
+// mailboxOwnerResolver предоставляет резолвер с фиксированным публичным адресом для почтовой
+// оснастки без обращения к DNS.
 type mailboxOwnerResolver struct{}
 
+// Resolve returns the fixture address with a one-minute expiry independently of the requested
+// hostname and context.
+// Resolve возвращает адрес оснастки со сроком действия в одну минуту независимо от запрошенного
+// имени и контекста.
 func (mailboxOwnerResolver) Resolve(context.Context, string) (mailpolicy.Snapshot, error) {
 	return mailpolicy.Snapshot{Addresses: []netip.Addr{netip.MustParseAddr("1.1.1.1")}, ExpiresAt: time.Now().Add(time.Minute)}, nil
 }

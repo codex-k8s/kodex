@@ -24,30 +24,76 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// queryWorkflowLaunchProof reads required-workflow origin pins and live child lease and turn
+// counts for exact launch and terminal-state assertions.
+// queryWorkflowLaunchProof читает версии происхождения обязательного workflow и число действующих
+// дочерних аренд и шагов для проверок точного запуска и завершения.
+//
 //go:embed testdata/sql/workflow_launch_proof.sql
 var queryWorkflowLaunchProof string
 
+// queryWorkflowLaunchPurgeGraph fingerprints the project-reachable foreign-key graph so the test
+// can detect incomplete purge coverage.
+// queryWorkflowLaunchPurgeGraph вычисляет отпечаток достижимого от проекта графа внешних ключей
+// для обнаружения неполного покрытия очистки.
+//
 //go:embed testdata/sql/workflow_launch_purge_graph.sql
 var queryWorkflowLaunchPurgeGraph string
 
+// queryWorkflowLaunchOriginDiagnostics reads synthetic lease, node, turn and root diagnostics
+// together with current and pinned capabilities for launch failure analysis.
+// queryWorkflowLaunchOriginDiagnostics читает диагностику синтетических аренды, узла, шага и корня
+// вместе с текущими и зафиксированными полномочиями для разбора отказа запуска.
+//
 //go:embed testdata/sql/workflow_launch_origin_diagnostics.sql
 var queryWorkflowLaunchOriginDiagnostics string
 
+// queryRuntimeDeadlineProof reads immutable execution clocks, active graph counts and the
+// authoritative before-deadline predicate.
+// queryRuntimeDeadlineProof читает неизменяемые часы исполнения, число активных объектов графа и
+// авторитетный предикат соблюдения срока.
+//
 //go:embed testdata/sql/runtime_deadline_proof.sql
 var queryRuntimeDeadlineProof string
 
+// queryRuntimeDeadlineArchiveProof reads the exact session archive digest and byte size for the
+// selected run.
+// queryRuntimeDeadlineArchiveProof читает точный дайджест архива сессии и размер в байтах для
+// выбранного запуска.
+//
 //go:embed testdata/sql/runtime_deadline_archive_proof.sql
 var queryRuntimeDeadlineArchiveProof string
 
+// queryRuntimeDeadlineResetDenied attempts to shift immutable execution clocks so the test can
+// require database rejection of a deadline reset.
+// queryRuntimeDeadlineResetDenied пытается сдвинуть неизменяемые часы исполнения, чтобы тест
+// потребовал отказа БД при сбросе срока.
+//
 //go:embed testdata/sql/runtime_deadline_reset_denied.sql
 var queryRuntimeDeadlineResetDenied string
 
+// queryRuntimeDelegateInputMissing forces an empty source result with WHERE FALSE to test missing
+// delegation input without changing the production query.
+// queryRuntimeDelegateInputMissing принудительно возвращает пустой источник через WHERE FALSE для
+// проверки отсутствующего ввода делегирования без изменения производственного запроса.
+//
 //go:embed testdata/sql/runtime_delegate_input_missing.sql
 var queryRuntimeDelegateInputMissing string
 
+// queryRuntimeDelegateFrontierProof counts graph, revision, receipt, audit and event state to
+// prove rejected delegation leaves no partial effects.
+// queryRuntimeDelegateFrontierProof считает состояние графа, ревизий, квитанций, аудита и событий
+// для доказательства отсутствия частичных эффектов отклонённого делегирования.
+//
 //go:embed testdata/sql/runtime_delegate_frontier_proof.sql
 var queryRuntimeDelegateFrontierProof string
 
+// TestWorkflowLaunchComponent checks required and nested workflow launch provenance, dependency
+// frontiers, immutable input, deadlines, callback continuation and terminal authority closure in
+// isolated PostgreSQL.
+// TestWorkflowLaunchComponent проверяет происхождение обязательных и вложенных запусков workflow,
+// фронт зависимостей, неизменяемый ввод, сроки, продолжение по обратному вызову и закрытие
+// полномочий в изолированном PostgreSQL.
 func TestWorkflowLaunchComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()

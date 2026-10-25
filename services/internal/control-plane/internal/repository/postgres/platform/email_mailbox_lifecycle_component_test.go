@@ -18,6 +18,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testMailboxObservationLifecycle checks publication and health observation fences, immutable
+// receipts and unexplained version drift, including a publication-lock race.
+// testMailboxObservationLifecycle проверяет ограничения публикации и наблюдения состояния,
+// неизменяемость квитанций и необъяснённое расхождение версий, включая гонку с блокировкой
+// публикации.
 func testMailboxObservationLifecycle(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, original entity.EmailMailboxConfigurationView) {
 	t.Helper()
 	connectionRef := original.ConnectionRef
@@ -267,6 +272,10 @@ func testMailboxObservationLifecycle(t *testing.T, ctx context.Context, reposito
 	})
 }
 
+// completeMailboxLifecycleFixture stages the synthetic policy, marks it applied and reports exact
+// revision readback before completing mailbox publication.
+// completeMailboxLifecycleFixture подготавливает синтетическую политику, отмечает применение и
+// сообщает точную ревизию перед завершением публикации ящика.
 func completeMailboxLifecycleFixture(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, work entity.EmailMailboxPublicationWork) {
 	t.Helper()
 	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "email-bridge", Operation: "platform.email.configuration.report"}, "email-bridge")

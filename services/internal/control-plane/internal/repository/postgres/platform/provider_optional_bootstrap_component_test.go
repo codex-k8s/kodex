@@ -15,6 +15,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// TestProviderOptionalBootstrapComponent checks repeatable provider-free bootstrap and exactly one
+// initial warm session after synthetic first-provider authorization, then idle state on disable.
+// TestProviderOptionalBootstrapComponent проверяет повторяемый bootstrap без провайдера и
+// единственную начальную тёплую сессию после синтетической авторизации первого провайдера, затем
+// состояние ожидания при отключении.
 func TestProviderOptionalBootstrapComponent(t *testing.T) {
 	dsn := isolatedAssistantComponentDSN(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)

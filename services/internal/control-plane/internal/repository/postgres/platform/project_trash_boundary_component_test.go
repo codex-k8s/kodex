@@ -19,6 +19,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// TestProjectTrashBoundaryComponent checks trash visibility, launch and schedule fences, restore
+// and retention purge while preserving unrelated audit records.
+// TestProjectTrashBoundaryComponent проверяет скрытие корзины, ограничения запуска и расписаний,
+// восстановление и очистку по сроку хранения с сохранением несвязанных записей аудита.
 func TestProjectTrashBoundaryComponent(t *testing.T) {
 	dsn := isolatedAssistantComponentDSN(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
@@ -341,6 +345,10 @@ func TestProjectTrashBoundaryComponent(t *testing.T) {
 	}
 }
 
+// assertProjectLockFence holds the project deletion lock and requires a competing launch lookup to
+// fail with PostgreSQL lock timeout.
+// assertProjectLockFence удерживает блокировку удаления проекта и требует отказа конкурирующего
+// поиска для запуска по тайм-ауту блокировки PostgreSQL.
 func assertProjectLockFence(t *testing.T, ctx context.Context, pool *pgxpool.Pool, organizationID, projectRef string) {
 	t.Helper()
 	deleter, err := pool.Begin(ctx)
@@ -367,6 +375,10 @@ func assertProjectLockFence(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	}
 }
 
+// assertProjectTrashHidden requires trashed project and agent references to disappear from direct
+// reads, catalogs and global search.
+// assertProjectTrashHidden требует скрытия ссылок проекта и агента из прямого чтения, каталогов и
+// глобального поиска после помещения в корзину.
 func assertProjectTrashHidden(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, projectRef, agentRef string) {
 	t.Helper()
 	if _, err := service.GetProject(ctx, owner, projectRef); !errors.Is(err, errs.ErrNotFound) {

@@ -20,6 +20,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// TestProspectiveWorkflowPromptComponent checks prospective workflow prompt eligibility and
+// immutable input provenance, distinguishing deferred preview values from required execution
+// input.
+// TestProspectiveWorkflowPromptComponent проверяет допустимость предварительного промпта workflow
+// и происхождение неизменяемого ввода, отличая отложенные значения предпросмотра от обязательного
+// ввода исполнения.
 func TestProspectiveWorkflowPromptComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()

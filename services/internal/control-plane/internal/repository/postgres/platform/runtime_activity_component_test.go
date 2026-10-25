@@ -19,6 +19,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// TestRuntimeActivityMessagesAndToolLifecycleComponent checks exact runtime message provenance,
+// financial replay and tool start/finish history, rejecting activity after the terminal lease
+// transition.
+// TestRuntimeActivityMessagesAndToolLifecycleComponent проверяет точное происхождение сообщений
+// исполнения, повтор финансовых данных и историю начала и завершения инструментов, отклоняя
+// активность после закрытия аренды.
 func TestRuntimeActivityMessagesAndToolLifecycleComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()

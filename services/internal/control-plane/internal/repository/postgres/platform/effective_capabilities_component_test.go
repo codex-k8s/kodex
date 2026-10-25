@@ -15,6 +15,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testEffectiveCapabilities checks capability intersection and current authority before version
+// checks or receipt replay; agent assignment cannot elevate the actor.
+// testEffectiveCapabilities проверяет пересечение полномочий и актуальный доступ до проверки
+// версии или повтора квитанции; назначение агенту не должно повышать полномочия участника.
 func testEffectiveCapabilities(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.command.projects.create"}, "control-api-gateway")
