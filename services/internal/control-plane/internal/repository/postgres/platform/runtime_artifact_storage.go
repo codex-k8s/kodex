@@ -17,6 +17,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// prepareCommandObjects serializes completion receipt reads with the owner transaction before
+// requiring an active lease; fresh artifact admission stays exact and ObjectStore writes stay outside tx.
+// prepareCommandObjects сериализует completion receipt reads с owner transaction до требования
+// активного lease; допуск свежих artifacts остаётся точным, ObjectStore writes выполняются вне tx.
 func (repository *Repository) prepareCommandObjects(ctx context.Context, scope scope, input *command.Command) ([]objectstorage.Receipt, error) {
 	if input == nil {
 		return nil, nil
@@ -44,6 +48,10 @@ func (repository *Repository) prepareCommandObjects(ctx context.Context, scope s
 	defer func() { _ = tx.Rollback(ctx) }()
 	if err := repository.authorizeCommand(ctx, tx, scope, *input); err != nil {
 		return nil, err
+	}
+	if _, err := tx.Exec(ctx, queryCommandsExecuteLockIdempotencyScope, scope.organizationID, scope.actorID,
+		input.Mutation.Operation, input.Mutation.IdempotencyKey); err != nil {
+		return nil, errs.ErrUnavailable
 	}
 	var storedDigest string
 	var storedPayload []byte

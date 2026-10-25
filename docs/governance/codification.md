@@ -4,7 +4,7 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 2.2.14
+version: 2.2.15
 updated: 2026-10-25
 ---
 
@@ -19,6 +19,7 @@ updated: 2026-10-25
 - `OPS-DOC-TERMINAL-GATE-1873` — [Окончательный отказ закрытого Gate после deadline](../operations/terminal-gate-deadline-1873.md).
 
 - `OPS-DOC-WORKFLOW-GATE-1872` — [Точные решения Gate опубликованного этапа](../operations/workflow-gate-decisions-1872.md).
+- `OPS-DOC-COMPLETION-RECEIPT-1881` — [Согласованное чтение receipt при завершении с артефактами](../operations/completion-receipt-preflight-1881.md).
 
 Документ задает устойчивые идентификаторы и реестр документации.
 

@@ -4,11 +4,19 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.43
+version: 1.1.44
 updated: 2026-10-25
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Preflight completion с artifacts использует ту же canonical
+organization/actor/operation/idempotency-key lock, что и основной Execute:
+matching receipt и intent разрешаются до требования активного lease.
+Отсутствующий receipt сохраняет все свежие lease/grant/CLEAN/actor checks;
+ObjectStore выполняется после commit preflight. Повтор не создаёт новую
+attempt и не открывает terminal graph. Матрица и независимый decoded-payload
+regression: [#1881](../operations/completion-receipt-preflight-1881.md).
 
 Gate результата этапа наследует только exact `GateDecisions` опубликованного
 этапа, закреплённого за execution root/node/agent и immutable RuntimeRevision.
