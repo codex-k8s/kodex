@@ -499,6 +499,11 @@ commit. Historical version pin не заменяется текущим head; fa
 pin разрешён только существующему системному профилю помощника. Caller context
 ограничивает прочие database waits. Этот fence не заменяет отдельный свежий
 допуск секрета при credential projection.
+Область конфигурации выводится из точных agent/ENV metadata: системный помощник
+с общим ENV может иметь проектный контекст conversation/session/run. Такой
+контекст не превращает ENV в проектный ресурс. Для обычного агента сохраняется
+совпадение проекта ENV, агента и запуска; исключение разрешено лишь точному
+системному профилю с `ORGANIZATION` ENV и отсутствующим проектом агента/ENV.
 Регрессия: `TestDeletedEnvironmentSecretRetentionComponent` ([#1875](https://github.com/codex-k8s/kodex/issues/1875)).
 
 Декларация `platform.run.delegate` не создаёт разрешённые цели делегирования.

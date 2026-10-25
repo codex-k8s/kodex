@@ -61,6 +61,7 @@ func TestDeletedEnvironmentSecretRetentionComponent(t *testing.T) {
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
 	}, "runtime-controller")
 	t.Run("effective-version-fallback", func(t *testing.T) { testRuntimeEnvironmentCandidateVersionFallback(t, ctx, pool) })
+	t.Run("system-project-context", func(t *testing.T) { testSystemProjectEnvironmentCandidate(t, ctx, repository, service, owner, worker) })
 	for _, mode := range []string{"deleted-only", "binding-and-active-revision", "stale-candidate"} {
 		t.Run(mode, func(t *testing.T) {
 			invoke := func(kind command.Kind, key string, version *int64, payload any) (command.Result, error) {
@@ -238,19 +239,21 @@ func TestDeletedEnvironmentSecretRetentionComponent(t *testing.T) {
 				t.Fatalf("unreferenced current secret revision was retired before revoke: %v", err)
 			}
 			foreignProject := execute(command.CreateProject, "foreign-project", nil, command.ProjectInput{Name: "Foreign retention scope " + mode, Language: "en"}).Project
+			own := runtimeSecretOwnerPrincipal(owner, "secret.revoke")
+			own.ProjectRef = gateTestProjectID(t, ctx, repository, owner, project.Ref)
 			foreign := runtimeSecretOwnerPrincipal(owner, "secret.revoke")
-			foreign.ProjectRef = foreignProject.Ref
+			foreign.ProjectRef = gateTestProjectID(t, ctx, repository, owner, foreignProject.Ref)
 			if _, err := service.PrepareRuntimeSecretOperation(ctx, foreign, revokeInput("foreign")); !errors.Is(err, errs.ErrNotFound) && !errors.Is(err, errs.ErrForbidden) {
 				t.Fatalf("foreign project reached secret revocation: %v", err)
 			}
 			stale := revokeInput("stale")
 			staleVersion := secret.Version - 1
 			stale.Mutation.ExpectedVersion = &staleVersion
-			if _, err := service.PrepareRuntimeSecretOperation(ctx, runtimeSecretOwnerPrincipal(owner, "secret.revoke"), stale); !errors.Is(err, errs.ErrVersionMismatch) {
+			if _, err := service.PrepareRuntimeSecretOperation(ctx, own, stale); !errors.Is(err, errs.ErrVersionMismatch) {
 				t.Fatalf("stale revoke version accepted: %v", err)
 			}
 			finalInput := revokeInput("final")
-			revoke, err := service.PrepareRuntimeSecretOperation(ctx, runtimeSecretOwnerPrincipal(owner, "secret.revoke"), finalInput)
+			revoke, err := service.PrepareRuntimeSecretOperation(ctx, own, finalInput)
 			if err != nil {
 				t.Fatalf("deleted history still blocks unused secret: %v", err)
 			}
@@ -263,7 +266,7 @@ func TestDeletedEnvironmentSecretRetentionComponent(t *testing.T) {
 			if err != nil || revoked.State != "REVOKED" {
 				t.Fatalf("complete unused secret revoke: %v", err)
 			}
-			replay, err := service.PrepareRuntimeSecretOperation(ctx, runtimeSecretOwnerPrincipal(owner, "secret.revoke"), finalInput)
+			replay, err := service.PrepareRuntimeSecretOperation(ctx, own, finalInput)
 			if err != nil || replay.OperationRef != revoke.OperationRef || replay.TerminalSecret == nil || replay.TerminalSecret.State != "REVOKED" {
 				t.Fatalf("terminal revoke receipt did not replay: %v", err)
 			}

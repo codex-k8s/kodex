@@ -9,8 +9,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// queryRuntimeClaimEnvironmentCandidate locks the active ENV, agent and exact binding in dependent stages; only the canonical system assistant may use an unpinned current-version fallback.
-// queryRuntimeClaimEnvironmentCandidate блокирует активное ENV, агента и exact binding зависимыми этапами; лишь канонический системный помощник допускает current-version fallback без pin.
+// queryRuntimeClaimEnvironmentCandidate locks the active ENV, agent and exact binding in dependent stages. Agent/ENV metadata owns configuration scope: a canonical SYSTEM run may have project context while using organization-owned ENV; only that system profile permits an unpinned current-version fallback.
+// queryRuntimeClaimEnvironmentCandidate блокирует активное ENV, агента и exact binding зависимыми этапами. Metadata агента/ENV задаёт область конфигурации: канонический SYSTEM run может иметь проектный контекст с общим ENV; лишь этот системный профиль допускает current-version fallback без pin.
 //
 //go:embed sql/runtime_claimexecution_lock_environment_candidate.sql
 var queryRuntimeClaimEnvironmentCandidate string
