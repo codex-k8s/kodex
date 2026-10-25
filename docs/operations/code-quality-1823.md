@@ -4,11 +4,39 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.487.0
+version: 1.488.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Адресный разбор деклараций hoisted mocks — 26.10.2026
+
+Семь detector окон в шести test modules описывают только imports и
+независимые объявления пустых spy:access,assistant,runtime,provider SDK/feature
+иrole-image SDK. Сохранены точные nominal operation lists и literal mock
+boundaries. Общего исполняемого алгоритма эти окна не содержат;новая async
+factory до imports или глобальный superset mocks усложнили бы границу тестов.
+
+AST проверил14 сторон и полные пересекаемые объявления:const,synchronous
+vi.hoisted callback без параметров,только vi.fn() без реализации и аргументов
+либо object из таких named properties.9 фактических опасных source mutations
+(реализация spy,иной hoist target,async callback,let) отвергнуты. Дополнительное
+восьмое окно5d080 не включено:оно пересекает mutateMock с реальным callback;
+этот участок остаётся в разборе. Ни один исходный test/production файл не
+меняется;все шесть source hashes прежние.
+
+1064 прежних entries сохранены;семь exact pair/hash/count=1 решений дают
+registry1071. Raw1481 прежний,retained1214,unresolved267;6767 sources/222
+прежних generated exclusions. Go21580/21580 EN→RU. Count/hash mutants каждого
+нового решения закрыто отвергнуты assessor. Quality-tool units и пять quality
+stages PASS LOCAL;это проверки реестра,не новый app unit-прогон.
+
+Context7 после ошибки API key не использовался. Проверена официальная
+документация Vitest vi.hoisted/import availability и статический module mock:
+https://vitest.dev/api/vi.html#vi-hoisted. Фактическая Vitest4.1.6 прежняя.
+Остальные исполняемые повторы продолжают разбираться;полная готовность,
+browser/full E2E/deploy/live и независимая QA не заявляются.
 
 ## Общая CLI-граница локальных user tools — 26.10.2026
 

@@ -8512,6 +8512,62 @@
       "fragmentSHA256": "b2e524993a25d68cc3efaf546af5b7fcd222f4080709436cfb102bc44d68bf90",
       "count": 1,
       "reason": "Адресное окно регистрации двух типизированных useImpactPageLoader:общие запрос/отмена/поколение/поиск/пагинация уже находятся в composable. Здесь различаются RoleImageImpactPage/RevisionImpactPage,roleImagePlanIdentity/publicationPlanIdentity и readImageImpact/readPublicationImpact;проверенные feature-адаптеры получают прежние plan/signal/query/token/pageSize/organization. ClearSelection role и publication различается учётом deselected;publication afterLoad отдельно выбирает PENDING. Универсальный feature dispatcher ради одинаковой записи параметров скрыл бы конкретные API/identity границы. Решение ограничено этой парой,hash и одним occurrence;соседние clock/editable/toggle этим решением не покрываются."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/access/store.test.ts",
+      "secondPath": "services/staff/control-center/src/features/access/store.test.ts",
+      "fragmentSHA256": "286a29bc931988e84455a058539968e5fd3d1b311fac5d26213874b15ed1fe01",
+      "count": 1,
+      "reason": "Соседние самостоятельные access API mocks объявлены отдельными const vi.hoisted(()=>vi.fn());каждое имя соответствует своей операции и отдельно наблюдаемому spy. Полные пересекаемые объявления проверены AST:только imports и синхронные hoisted callbacks без аргументов/реализаций spy. Общего исполняемого алгоритма в окне нет. Imported factory недоступна до imports;новый async dynamic import или объединённый superset mocks добавили бы границу ради деклараций. Exact решение ограничено этой парой,hash,count=1 и не покрывает настройки поведения,assertions либо callbacks ниже."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/access/store.test.ts",
+      "secondPath": "services/staff/control-center/src/features/assistant/store.test.ts",
+      "fragmentSHA256": "286a29bc931988e84455a058539968e5fd3d1b311fac5d26213874b15ed1fe01",
+      "count": 1,
+      "reason": "Два тестовых модуля объявляют разные закрытые наборы access/assistant/runtime операций как самостоятельные const vi.hoisted(()=>vi.fn());их имена и доступные методы относятся к конкретному тестируемому owner boundary. Полные пересекаемые объявления проверены AST:только imports и синхронные hoisted callbacks без аргументов/реализаций spy. Общего исполняемого алгоритма в окне нет. Imported factory недоступна до imports;новый async dynamic import или объединённый superset mocks добавили бы границу ради деклараций. Exact решение ограничено этой парой,hash,count=1 и не покрывает настройки поведения,assertions либо callbacks ниже."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/access/store.test.ts",
+      "secondPath": "services/staff/control-center/src/features/runtime/store.test.ts",
+      "fragmentSHA256": "bc4d6df722705a3624cfe98b2f7d39613279f693f9c485012e4b80ab1e5a9fea",
+      "count": 1,
+      "reason": "Два тестовых модуля объявляют разные закрытые наборы access/assistant/runtime операций как самостоятельные const vi.hoisted(()=>vi.fn());их имена и доступные методы относятся к конкретному тестируемому owner boundary. Полные пересекаемые объявления проверены AST:только imports и синхронные hoisted callbacks без аргументов/реализаций spy. Общего исполняемого алгоритма в окне нет. Imported factory недоступна до imports;новый async dynamic import или объединённый superset mocks добавили бы границу ради деклараций. Exact решение ограничено этой парой,hash,count=1 и не покрывает настройки поведения,assertions либо callbacks ниже."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/providers/api.test.ts",
+      "secondPath": "services/staff/control-center/src/features/providers/store.test.ts",
+      "fragmentSHA256": "df0e11c97008d51a73031cffd66e740f04e7badacb164eeb6b43ec14e6834532",
+      "count": 1,
+      "reason": "Тесты provider SDK,provider feature API и role-image SDK объявляют разные закрытые object-наборы независимых пустых vi.fn в const vi.hoisted;SDK и feature method names намеренно различны и подменяются в разных literal module targets. Полные пересекаемые объявления проверены AST:только imports и синхронные hoisted callbacks без аргументов/реализаций spy. Общего исполняемого алгоритма в окне нет. Imported factory недоступна до imports;новый async dynamic import или объединённый superset mocks добавили бы границу ради деклараций. Exact решение ограничено этой парой,hash,count=1 и не покрывает настройки поведения,assertions либо callbacks ниже."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/providers/api.test.ts",
+      "secondPath": "services/staff/control-center/src/features/role-images/api.test.ts",
+      "fragmentSHA256": "df0e11c97008d51a73031cffd66e740f04e7badacb164eeb6b43ec14e6834532",
+      "count": 1,
+      "reason": "Тесты provider SDK,provider feature API и role-image SDK объявляют разные закрытые object-наборы независимых пустых vi.fn в const vi.hoisted;SDK и feature method names намеренно различны и подменяются в разных literal module targets. Полные пересекаемые объявления проверены AST:только imports и синхронные hoisted callbacks без аргументов/реализаций spy. Общего исполняемого алгоритма в окне нет. Imported factory недоступна до imports;новый async dynamic import или объединённый superset mocks добавили бы границу ради деклараций. Exact решение ограничено этой парой,hash,count=1 и не покрывает настройки поведения,assertions либо callbacks ниже."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/providers/api.test.ts",
+      "secondPath": "services/staff/control-center/src/features/providers/store.test.ts",
+      "fragmentSHA256": "610ba9902e540bcbae04372e6a62abc532f3cc77d4b69272ee0c84684888f5cb",
+      "count": 1,
+      "reason": "Тесты provider SDK,provider feature API и role-image SDK объявляют разные закрытые object-наборы независимых пустых vi.fn в const vi.hoisted;SDK и feature method names намеренно различны и подменяются в разных literal module targets. Полные пересекаемые объявления проверены AST:только imports и синхронные hoisted callbacks без аргументов/реализаций spy. Общего исполняемого алгоритма в окне нет. Imported factory недоступна до imports;новый async dynamic import или объединённый superset mocks добавили бы границу ради деклараций. Exact решение ограничено этой парой,hash,count=1 и не покрывает настройки поведения,assertions либо callbacks ниже."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/providers/store.test.ts",
+      "secondPath": "services/staff/control-center/src/features/role-images/api.test.ts",
+      "fragmentSHA256": "e4dfaaff96454131235f9f5583050229aebc1fe157ea99aaf67c983b5b04bfde",
+      "count": 1,
+      "reason": "Тесты provider SDK,provider feature API и role-image SDK объявляют разные закрытые object-наборы независимых пустых vi.fn в const vi.hoisted;SDK и feature method names намеренно различны и подменяются в разных literal module targets. Полные пересекаемые объявления проверены AST:только imports и синхронные hoisted callbacks без аргументов/реализаций spy. Общего исполняемого алгоритма в окне нет. Imported factory недоступна до imports;новый async dynamic import или объединённый superset mocks добавили бы границу ради деклараций. Exact решение ограничено этой парой,hash,count=1 и не покрывает настройки поведения,assertions либо callbacks ниже."
     }
   ]
 }
