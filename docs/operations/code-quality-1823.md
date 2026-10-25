@@ -4,11 +4,41 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.479.0
+version: 1.480.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Одна фабрика тестового Vue renderer — 26.10.2026
+
+28 одинаковых createRenderer<object,object> заготовок в26 unit-test файлах
+заменены на createNoopRenderer из test-utils. Фабрика каждый раз создаёт
+новые renderer/options/functions; общих singleton/app/node нет. Десять
+операций прежние: insert/remove/patchProp/text setters ничего не делают,
+createElement/Text/Comment возвращают свежие пустые objects,parent/sibling —
+null. Это оснастка setup/lifecycle,не доказательство DOM/layout/browser.
+Родительские mocks/props/reactivity/provide/emits/i18n,mount/unmount,
+disposers/request settling и test assertions не менялись.
+
+Закрытая AST-проверка просмотрела все28 calls:ровно10 операций,без параметров,
+spread/getter/modifier/побочных эффектов. Четыре исходных порядка свойств
+эквивалентны именованной деструктуризации Vue3.5.41; другие host renderers
+не менялись.26 полных исходников восстановлены побайтово до форматирования
+и по AST после него;helper проверен на ту же чистую форму,семь отрицательных
+мутаций helper/caller отвергнуты. Вся новая зависимость только тестовая.
+
+Те же391 теста26 файлов прошли до11.60с и после11.10с,0 FAIL/SKIP.
+Prettier check27 файлов2.02с,ESLint27 файлов15.96с и полный PWA typecheck
+50.00с — PASS LOCAL. Context7:Vue custom-renderer API/RendererOptions;
+установленный runtime-core3.5.41 также проверен локально. Dependencies,
+production PWA и generated output не менялись.
+
+Detector устранил29 raw групп,новых/stale0;все1044 registry entries прежние.
+Итог:6761 sources,222 generated exclusions,1488 raw /1184 retained /
+304 unresolved (158 Go,121 TypeScript,25 Bash). Go coverage21574/21574.
+Пять quality stages и границы исключений — PASS LOCAL. Полный browser E2E,
+живой кластер/deploy и независимая QA — NOT RUN;их готовность не заявляется.
 
 ## Общий допуск четырёх storage E2E сценариев — 26.10.2026
 

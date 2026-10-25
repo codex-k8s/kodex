@@ -1,6 +1,6 @@
+import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import {
   createSSRApp,
-  createRenderer,
   defineComponent,
   nextTick,
   reactive,
@@ -98,18 +98,7 @@ function mount(
     problems: Ref<string[]>;
     visibleProblems: Ref<string[]>;
   };
-  const renderer = createRenderer<object, object>({
-    insert() {},
-    remove() {},
-    patchProp() {},
-    createElement: () => ({}),
-    createText: () => ({}),
-    createComment: () => ({}),
-    setText() {},
-    setElementText() {},
-    parentNode: () => null,
-    nextSibling: () => null,
-  });
+  const renderer = createNoopRenderer();
   const app = renderer.createApp(
     defineComponent({
       setup(_, context) {

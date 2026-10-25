@@ -1,7 +1,7 @@
+import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  createRenderer,
   defineComponent,
   nextTick,
   reactive,
@@ -84,18 +84,7 @@ async function mountRows(initialItems = items(12), dashboard = true) {
   const component = HomeResultRows as unknown as {
     setup(props: RowsProps, context: SetupContext): RowsState;
   };
-  const renderer = createRenderer<object, object>({
-    patchProp() {},
-    insert() {},
-    remove() {},
-    createElement: () => ({}),
-    createText: () => ({}),
-    createComment: () => ({}),
-    setText() {},
-    setElementText() {},
-    parentNode: () => null,
-    nextSibling: () => null,
-  });
+  const renderer = createNoopRenderer();
   const app = renderer.createApp(
     defineComponent({
       setup(_props, context) {

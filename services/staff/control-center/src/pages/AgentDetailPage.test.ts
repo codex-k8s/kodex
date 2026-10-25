@@ -1,5 +1,5 @@
+import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import {
-  createRenderer,
   defineComponent,
   h,
   nextTick,
@@ -89,18 +89,7 @@ type EditorState = {
 };
 function mountEditor(): EditorState {
   let state!: EditorState;
-  const renderer = createRenderer<object, object>({
-    insert() {},
-    remove() {},
-    createElement: () => ({}),
-    createText: () => ({}),
-    createComment: () => ({}),
-    setText() {},
-    setElementText() {},
-    parentNode: () => null,
-    nextSibling: () => null,
-    patchProp() {},
-  });
+  const renderer = createNoopRenderer();
   const component = defineComponent({
     setup(props, context) {
       state = (

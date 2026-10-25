@@ -1,7 +1,7 @@
+import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import { renderToString } from "@vue/server-renderer";
 import { compileStyle } from "@vue/compiler-sfc";
 import {
-  createRenderer,
   createSSRApp,
   defineComponent,
   h,
@@ -467,18 +467,7 @@ describe("RunSessionDetailsDialog", () => {
         log.scrollTop = Math.min(top, log.scrollHeight - log.clientHeight);
       }),
     };
-    const renderer = createRenderer<object, object>({
-      createElement: () => ({}),
-      createText: () => ({}),
-      createComment: () => ({}),
-      setText() {},
-      setElementText() {},
-      patchProp() {},
-      insert() {},
-      remove() {},
-      parentNode: () => null,
-      nextSibling: () => null,
-    });
+    const renderer = createNoopRenderer();
     const message = (sequence: number): PresentedRunEvent => ({
       ...event,
       ref: `evt_message_${String(sequence)}`,
@@ -624,18 +613,7 @@ describe("RunSessionDetailsDialog", () => {
   });
 
   it("раскрытие профиля меняет только локальное отображение, не transcript или props", () => {
-    const renderer = createRenderer<object, object>({
-      createElement: () => ({}),
-      createText: () => ({}),
-      createComment: () => ({}),
-      setText() {},
-      setElementText() {},
-      patchProp() {},
-      insert() {},
-      remove() {},
-      parentNode: () => null,
-      nextSibling: () => null,
-    });
+    const renderer = createNoopRenderer();
     const props = {
       run,
       node,

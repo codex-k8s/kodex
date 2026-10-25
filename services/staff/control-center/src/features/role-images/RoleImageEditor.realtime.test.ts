@@ -1,5 +1,5 @@
+import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import {
-  createRenderer,
   createSSRApp,
   defineComponent,
   nextTick,
@@ -121,18 +121,7 @@ async function mount(
     cancelCurrentBuild: () => Promise<void>;
     promote: () => Promise<void>;
   };
-  const renderer = createRenderer<object, object>({
-    insert() {},
-    remove() {},
-    patchProp() {},
-    createElement: () => ({}),
-    createText: () => ({}),
-    createComment: () => ({}),
-    setText() {},
-    setElementText() {},
-    parentNode: () => null,
-    nextSibling: () => null,
-  });
+  const renderer = createNoopRenderer();
   const app = renderer
     .createApp(
       defineComponent({

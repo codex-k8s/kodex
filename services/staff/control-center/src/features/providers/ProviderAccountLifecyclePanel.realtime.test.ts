@@ -1,6 +1,6 @@
+import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  createRenderer,
   defineComponent,
   nextTick,
   reactive,
@@ -104,18 +104,7 @@ function mount() {
   const updated = vi.fn();
   const unavailable = vi.fn();
   let state!: State;
-  const renderer = createRenderer<object, object>({
-    insert() {},
-    remove() {},
-    createElement: () => ({}),
-    createText: () => ({}),
-    createComment: () => ({}),
-    setText() {},
-    setElementText() {},
-    parentNode: () => null,
-    nextSibling: () => null,
-    patchProp() {},
-  });
+  const renderer = createNoopRenderer();
   const app = renderer.createApp(
     defineComponent({
       emits: ["updated", "unavailable"],

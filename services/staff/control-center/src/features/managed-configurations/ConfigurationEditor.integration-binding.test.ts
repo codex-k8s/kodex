@@ -1,6 +1,6 @@
+import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  createRenderer,
   createSSRApp,
   defineComponent,
   h,
@@ -121,18 +121,7 @@ const apps: App[] = [];
 afterEach(() => apps.splice(0).forEach((app) => app.unmount()));
 async function setup(): Promise<State> {
   let state: State | undefined;
-  const renderer = createRenderer<object, object>({
-    patchProp() {},
-    insert() {},
-    remove() {},
-    createElement: () => ({}),
-    createText: () => ({}),
-    createComment: () => ({}),
-    setText() {},
-    setElementText() {},
-    parentNode: () => null,
-    nextSibling: () => null,
-  });
+  const renderer = createNoopRenderer();
   const original = (
     Editor as unknown as {
       setup: (props: object, context: SetupContext) => State;
@@ -262,18 +251,7 @@ describe("picker точной привязки подключения", () => {
       chooseDropdown(item: Entry): void;
     }
     let picker: PickerState | undefined;
-    const renderer = createRenderer<object, object>({
-      patchProp() {},
-      insert() {},
-      remove() {},
-      createElement: () => ({}),
-      createText: () => ({}),
-      createComment: () => ({}),
-      setText() {},
-      setElementText() {},
-      parentNode: () => null,
-      nextSibling: () => null,
-    });
+    const renderer = createNoopRenderer();
     const original = (
       AsyncEntityPicker as unknown as {
         setup: (props: object, context: SetupContext) => PickerState;

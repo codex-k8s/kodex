@@ -1,8 +1,9 @@
+import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import { readFileSync } from "node:fs";
 import { computed, ssrContextKey, watch } from "vue";
 import { effectScope, nextTick, ref, shallowRef, type Ref } from "vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createRenderer, defineComponent, type SetupContext } from "vue";
+import { defineComponent, type SetupContext } from "vue";
 import AsyncEntityPicker from "./AsyncEntityPicker.vue";
 import { reactive } from "vue";
 import {
@@ -179,18 +180,7 @@ describe("смена контекста async selector", () => {
       modelValue: "old",
     });
     let state!: Record<string, unknown>;
-    const renderer = createRenderer<object, object>({
-      patchProp() {},
-      insert() {},
-      remove() {},
-      createElement: () => ({}),
-      createText: () => ({}),
-      createComment: () => ({}),
-      setText() {},
-      setElementText() {},
-      parentNode: () => null,
-      nextSibling: () => null,
-    });
+    const renderer = createNoopRenderer();
     const source = AsyncEntityPicker as unknown as {
       setup(props: unknown, context: SetupContext): Record<string, unknown>;
     };

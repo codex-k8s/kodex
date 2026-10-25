@@ -1,7 +1,7 @@
+import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import { createPinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  createRenderer,
   defineComponent,
   nextTick,
   ssrContextKey,
@@ -141,18 +141,7 @@ async function mount() {
   const source = RunPage as unknown as {
     setup(props: object, context: SetupContext): typeof state;
   };
-  const renderer = createRenderer<object, object>({
-    patchProp() {},
-    insert() {},
-    remove() {},
-    createElement: () => ({}),
-    createText: () => ({}),
-    createComment: () => ({}),
-    setText() {},
-    setElementText() {},
-    parentNode: () => null,
-    nextSibling: () => null,
-  });
+  const renderer = createNoopRenderer();
   const app = renderer.createApp(
     defineComponent({
       setup(props, context) {

@@ -1,3 +1,4 @@
+import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import { readFile } from "node:fs/promises";
 
 import { createPinia } from "pinia";
@@ -5,7 +6,6 @@ import { createI18n } from "vue-i18n";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  createRenderer,
   defineComponent,
   nextTick,
   ssrContextKey,
@@ -108,18 +108,7 @@ afterEach(() => {
 });
 function mountedPage(configure: (app: App) => void): IntegrationsSetup {
   let state: IntegrationsSetup | undefined;
-  const renderer = createRenderer<object, object>({
-    insert() {},
-    remove() {},
-    patchProp() {},
-    createElement: () => ({}),
-    createText: () => ({}),
-    createComment: () => ({}),
-    setText() {},
-    setElementText() {},
-    parentNode: () => null,
-    nextSibling: () => null,
-  });
+  const renderer = createNoopRenderer();
   const app = renderer.createApp(
     defineComponent({
       setup(_props, context) {

@@ -1,8 +1,8 @@
+import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
 import {
-  createRenderer,
   defineComponent,
   h,
   reactive,
@@ -155,18 +155,7 @@ async function editor(localized = false) {
 
 function mountedEditor(): Awaited<ReturnType<typeof editor>> {
   let state!: Awaited<ReturnType<typeof editor>>;
-  const renderer = createRenderer<object, object>({
-    insert() {},
-    remove() {},
-    createElement: () => ({}),
-    createText: () => ({}),
-    createComment: () => ({}),
-    setText() {},
-    setElementText() {},
-    parentNode: () => null,
-    nextSibling: () => null,
-    patchProp() {},
-  });
+  const renderer = createNoopRenderer();
   const component = defineComponent({
     setup(props, context) {
       state = (

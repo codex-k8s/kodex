@@ -1,7 +1,7 @@
+import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import { renderToString } from "@vue/server-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  createRenderer,
   createSSRApp,
   defineComponent,
   nextTick,
@@ -79,18 +79,7 @@ function deferred() {
 function mount() {
   const props = reactive({ run: run() });
   let state!: State;
-  const renderer = createRenderer<object, object>({
-    insert() {},
-    remove() {},
-    createElement: () => ({}),
-    createText: () => ({}),
-    createComment: () => ({}),
-    setText() {},
-    setElementText() {},
-    parentNode: () => null,
-    nextSibling: () => null,
-    patchProp() {},
-  });
+  const renderer = createNoopRenderer();
   const app = renderer.createApp(
     defineComponent({
       setup(_props, context) {

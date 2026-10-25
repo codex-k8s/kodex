@@ -1,6 +1,6 @@
+import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import { readFileSync } from "node:fs";
 import {
-  createRenderer,
   createSSRApp,
   defineComponent,
   effectScope,
@@ -601,18 +601,7 @@ describe("AsyncEntityPicker", () => {
       searchInput: Ref<HTMLInputElement | undefined>;
     }
     let state!: State;
-    const renderer = createRenderer<object, object>({
-      patchProp() {},
-      insert() {},
-      remove() {},
-      createElement: () => ({}),
-      createText: () => ({}),
-      createComment: () => ({}),
-      setText() {},
-      setElementText() {},
-      parentNode: () => null,
-      nextSibling: () => null,
-    });
+    const renderer = createNoopRenderer();
     const source = AsyncEntityPicker as unknown as {
       setup(props: unknown, context: SetupContext): State;
     };

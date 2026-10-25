@@ -1,6 +1,6 @@
+import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import { renderToString } from "@vue/server-renderer";
 import {
-  createRenderer,
   createSSRApp,
   defineComponent,
   h,
@@ -45,18 +45,7 @@ function mount(completionCriteria: string) {
     completionCriteriaTooLong: Ref<boolean>;
     completionCriteriaDescription: Ref<string>;
   };
-  const renderer = createRenderer<object, object>({
-    insert() {},
-    remove() {},
-    patchProp() {},
-    createElement: () => ({}),
-    createText: () => ({}),
-    createComment: () => ({}),
-    setText() {},
-    setElementText() {},
-    parentNode: () => null,
-    nextSibling: () => null,
-  });
+  const renderer = createNoopRenderer();
   const app = renderer
     .createApp(
       defineComponent({
