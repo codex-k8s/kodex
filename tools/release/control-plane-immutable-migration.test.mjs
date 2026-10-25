@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { planControlPlaneMigration, migrationReadback } from './control-plane-migration.mjs';
 import { fingerprint } from './scoped-release.mjs';
 import { validateStableReceipt } from './stable-image-publication.mjs';
-import { waitMigrationMaintenance, immutableMigrationProfile, validRepositoryBundleMigrationPostcondition } from './control-plane-immutable-migration.mjs';
+import { waitMigrationMaintenance, immutableMigrationProfile, validOwnerGateExpiryMigrationPostcondition, validRepositoryBundleMigrationPostcondition } from './control-plane-immutable-migration.mjs';
 
 const revision = 'a'.repeat(40), digest = `sha256:${'b'.repeat(64)}`;
 const source = {path:'/fixture/source',revision};
@@ -166,7 +166,7 @@ if(a.includes('patch')){
  save();if(a.includes('kube-system'))process.stdout.write(JSON.stringify({metadata:{uid:'cluster'}}));else process.stdout.write(s.namespaceUID);
 }else if(a.includes('bundles.trust.cert-manager.io')){save();process.stdout.write('bundle-uid|1|'+JSON.stringify(s.bundleSpec??{sources:[{secret:{name:'kodex-installation-ca',key:'tls.crt'}}],target:{namespaceSelector:{matchLabels:{'kubernetes.io/metadata.name':'kodex-system'}},configMap:{key:'ca.pem'}}}));
 }else if(a.includes('configmap')){save();process.stdout.write('ca-uid|'+s.dependencyVersion+'|'+(s.caLabel??'control-plane-postgresql-ca')+'|'+JSON.stringify([{apiVersion:'trust.cert-manager.io/v1alpha1',kind:'Bundle',name:'control-plane-postgresql-ca',controller:true,uid:s.caOwner??'bundle-uid'}]));
-}else if(a.includes('exec')){const sql=fs.readFileSync(0,'utf8');if(!sql.includes('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;')||!sql.includes('ROLLBACK;'))fail();if(sql.includes('noBodyColumns')){out({readOnly:'on',database:'control_plane',gooseVersion:20261025000200,tableOwner:'control_plane_owner',noBodyColumns:true,foreignKeys:13,deferredForeignKeys:13,guardEnabled:true,retentionConsumer:true,purgeGraphGuard:true,purgeNodes:105,purgeEdges:283,purgeNodeFingerprint:'f51a0de25bd942a250997775617eeaee',purgeEdgeFingerprint:'be6e23d9e894687a69a19e9b5777ab09',...s.postcondition});}else out({readOnly:'on',database:'control_plane',gooseVersion:${config.previousVersion},${config.emptyField}:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,claimedRuntimeLeases:0,openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeArchiveTasks:0,activeModelCatalogTasks:0,activeRenewalTasks:0,...s.precondition});
+}else if(a.includes('exec')){const sql=fs.readFileSync(0,'utf8');if(!sql.includes('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;')||!sql.includes('ROLLBACK;'))fail();if(sql.includes('expiryColumn')){out({readOnly:'on',database:'control_plane',gooseVersion:20261026000100,tableOwner:'control_plane_owner',expiryColumn:true,stateConstraint:true,resolutionConstraint:true,expiryConstraint:true,dueIndex:true,immutableGuard:true,runtimeExecute:true,publicExecuteRevoked:true,...s.postcondition});}else if(sql.includes('noBodyColumns')){out({readOnly:'on',database:'control_plane',gooseVersion:20261025000200,tableOwner:'control_plane_owner',noBodyColumns:true,foreignKeys:13,deferredForeignKeys:13,guardEnabled:true,retentionConsumer:true,purgeGraphGuard:true,purgeNodes:105,purgeEdges:283,purgeNodeFingerprint:'f51a0de25bd942a250997775617eeaee',purgeEdgeFingerprint:'be6e23d9e894687a69a19e9b5777ab09',...s.postcondition});}else out({readOnly:'on',database:'control_plane',gooseVersion:${config.previousVersion},${config.emptyField}:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,claimedRuntimeLeases:0,openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeArchiveTasks:0,activeModelCatalogTasks:0,activeRenewalTasks:0,...s.precondition});
 }else if(a.includes('kodex-postgresql-0')){save();process.stdout.write((s.pgUID??'pg-uid')+'|StatefulSet|kodex-postgresql|sts-uid|kodex-postgresql|Running|');
 }else if(a.some(x=>x.startsWith('jsonpath='))){save();process.stdout.write('dependency-'+a[a.indexOf('get')+1]+'|'+s.dependencyVersion+'|'+(s.applicationOwner??'kodex'));
 }else if(a.includes('deployment'))out(s.deployment);
@@ -384,6 +384,9 @@ test('repository bundle closed profile uses the same canonical immutable transpo
 test('repository bundle schema proof is closed on missing/foreign ownership, bytes, retention and purge guards',()=>{
  const proof={readOnly:'on',database:'control_plane',gooseVersion:20261025000200,tableOwner:'control_plane_owner',noBodyColumns:true,foreignKeys:13,deferredForeignKeys:13,guardEnabled:true,retentionConsumer:true,purgeGraphGuard:true,purgeNodes:105,purgeEdges:283,purgeNodeFingerprint:'f51a0de25bd942a250997775617eeaee',purgeEdgeFingerprint:'be6e23d9e894687a69a19e9b5777ab09'};
  assert.equal(validRepositoryBundleMigrationPostcondition(proof),true);
+ assert.equal(validRepositoryBundleMigrationPostcondition({...proof,gooseVersion:20261026000100}),false);
+ assert.equal(validRepositoryBundleMigrationPostcondition({...proof,gooseVersion:20261026000100},20261026000100),true);
+ assert.equal(validRepositoryBundleMigrationPostcondition({...proof,gooseVersion:20261027000100},20261027000100),false);
  for(const key of Object.keys(proof)){const missing={...proof};delete missing[key];assert.equal(validRepositoryBundleMigrationPostcondition(missing),false,key);}
  for(const [key,value] of Object.entries({gooseVersion:20261025000100,tableOwner:'postgres',noBodyColumns:false,foreignKeys:12,deferredForeignKeys:12,guardEnabled:false,retentionConsumer:false,purgeGraphGuard:false,purgeNodes:104,purgeEdges:289,purgeNodeFingerprint:'0'.repeat(32),purgeEdgeFingerprint:'0'.repeat(32)}))assert.equal(validRepositoryBundleMigrationPostcondition({...proof,[key]:value}),false,key);
 });
@@ -431,4 +434,35 @@ test('corrected postcondition revalidation is read-only and binds resumed execut
  const changed=f.run('inspect',['--revalidate-postcondition-revision',git('rev-parse','HEAD')]);
  assert.notEqual(changed.status,0);assert.match(changed.stderr,/REVALIDATION_SOURCE_INVALID/);
  assert.deepEqual(readFileSync(f.evidence),journal);
+});
+
+
+test('owner gate expiry profile binds exact successor schema and immutable migrator execution',()=>{
+ const config=immutableMigrationProfile('owner-gate-expiry');
+ const plan=planControlPlaneMigration(base(),source,()=>({revision}),'expiry-fixture','owner-gate-expiry',publication());
+ assert.equal(plan.profile,'owner-gate-expiry');assert.equal(plan.migrationVersion,'20261026000100');
+ assert.equal(plan.job.metadata.name,'control-plane-migrate-20261026000100');
+ assert.equal(plan.checkJob.metadata.name,'control-plane-migration-check-20261026000100');
+ assert.deepEqual(plan.job.spec.template.spec.containers,makePlan().job.spec.template.spec.containers);
+ assert.deepEqual(plan.job.spec.template.spec.volumes,makePlan().job.spec.template.spec.volumes);
+ assert.equal(config.previousVersion,20261025000200);
+ const {job,pod}=execution(plan);job.metadata.annotations={[config.annotation]:fingerprint(plan)};
+ assert.equal(migrationReadback(job,plan,'goose: current version: 20261026000100',[pod]).status,'PASS');
+ assert.equal(migrationReadback(job,plan,'goose: current version: 20261025000200',[pod]).status,'READBACK_UNCONFIRMED');
+});
+test('owner gate expiry schema proof rejects omitted or invalid deadline guards',()=>{
+ const proof={readOnly:'on',database:'control_plane',gooseVersion:20261026000100,tableOwner:'control_plane_owner',expiryColumn:true,stateConstraint:true,resolutionConstraint:true,expiryConstraint:true,dueIndex:true,immutableGuard:true,runtimeExecute:true,publicExecuteRevoked:true};
+ assert.equal(validOwnerGateExpiryMigrationPostcondition(proof),true);
+ for(const key of Object.keys(proof)){
+   const missing={...proof};delete missing[key];assert.equal(validOwnerGateExpiryMigrationPostcondition(missing),false,key);
+   assert.equal(validOwnerGateExpiryMigrationPostcondition({...proof,[key]:false}),false,key);
+ }
+});
+test('owner gate expiry CLI requires schema proof and never repeats completed DDL after failed readback',t=>{
+ const f=cli(t,'owner-gate-expiry');pass(f,'plan','PLANNED');pass(f,'check');pass(f,'stop','STOPPED');
+ f.edit(s=>s.postcondition={immutableGuard:false});const bad=f.run('apply');assert.notEqual(bad.status,0);assert.match(bad.stderr,/POSTCONDITION_FAILED/);
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,2);
+ f.edit(s=>delete s.postcondition);const good=pass(f,'inspect');assert.equal(JSON.parse(good.stdout).schemaPostcondition,'PASS');
+ pass(f,'resume','RESUMED');assert.equal(f.read().deployment.spec.replicas,2);
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,2);
 });

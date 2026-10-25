@@ -11,10 +11,11 @@ import { activeDeploymentPods, isProvenStoppedPod } from './stable-archive-trans
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'owner-gate-expiry': {version:'20261026000100',file:'20261026000100_owner_gate_expiry.sql',annotation:'kodex.dev/cp-owner-gate-expiry-migration-plan',previousVersion:20261025000200,emptyField:'expiryAbsent',preconditionFile:'owner-gate-expiry-migration-precondition.sql',postconditionFile:'owner-gate-expiry-migration-postcondition.sql'},
   'outbox-index': {version:'20261025000100',file:'20261025000100_outbox_unpublished_predecessor_index.sql',annotation:'kodex.dev/cp-outbox-index-migration-plan',previousVersion:20261020000200,emptyField:'indexAbsent',preconditionFile:'control-plane-migration-precondition.sql'},
   'repository-bundle': {version:'20261025000200',file:'20261025000200_repository_bundle_publications.sql',annotation:'kodex.dev/cp-repository-bundle-migration-plan',previousVersion:20261025000100,emptyField:'publicationAbsent',preconditionFile:'repository-bundle-migration-precondition.sql',postconditionFile:'repository-bundle-migration-postcondition.sql'},
 };
-// Только два известных immutable профиля; caller не задаёт version/SQL/authority.
+// Только известные immutable профили; caller не задаёт version/SQL/authority.
 export function immutableMigrationProfile(profile = 'outbox-index') {
   ensure(Object.hasOwn(immutableProfiles,profile),'IMMUTABLE_MIGRATION_PROFILE_INVALID');
   return Object.freeze({...immutableProfiles[profile]});
@@ -155,7 +156,7 @@ export async function waitMigrationMaintenance(observe, ready, code, {now = Date
   }
 }
 
-// Существующая CLI обслуживает только два закрытых immutable schema-профиля на прежней least-privilege границе.
+// Существующая CLI обслуживает только закрытые immutable schema-профили на прежней least-privilege границе.
 export async function runImmutableControlPlaneMigration(phase, options, io) {
   const profile = options['--profile'] ?? 'outbox-index';
   const configuration = immutableMigrationProfile(profile);
@@ -390,7 +391,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
         ensure(fingerprint(postgresIdentity())===fingerprint(plan.postgres),'MIGRATION_POSTGRES_IDENTITY_CHANGED');
         const proof=JSON.parse(kube(['-n',namespace,'exec','-i','kodex-postgresql-0','--','psql','-XqAt','-U','postgres','-d','control_plane','-v','ON_ERROR_STOP=1'],sql));
         ensure(fingerprint(postgresIdentity())===fingerprint(plan.postgres),'MIGRATION_POSTGRES_IDENTITY_CHANGED');
-        ensure(validRepositoryBundleMigrationPostcondition(proof),'MIGRATION_POSTCONDITION_FAILED');
+        ensure((profile==='owner-gate-expiry' ? validOwnerGateExpiryMigrationPostcondition(proof) : validRepositoryBundleMigrationPostcondition(proof)),'MIGRATION_POSTCONDITION_FAILED');
         result.schemaPostcondition='PASS';
         if(revalidation) result.revalidation={...revalidation,proof,postgres:plan.postgres,
           execution:pods.map(p=>({podUID:p.metadata.uid,imageID:p.status.containerStatuses.find(c=>c.name==='migrate').imageID}))};
@@ -557,10 +558,17 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
 }
 
 // Проверяет только metadata точной новой schema; Goose log сам не доказывает безопасный owner/retention/purge профиль.
-export function validRepositoryBundleMigrationPostcondition(proof) {
-  return proof?.readOnly==='on' && proof.database==='control_plane' && proof.gooseVersion===20261025000200 &&
+export function validRepositoryBundleMigrationPostcondition(proof, expectedVersion = 20261025000200) {
+  return [20261025000200,20261026000100].includes(expectedVersion) && proof?.readOnly==='on' && proof.database==='control_plane' && proof.gooseVersion===expectedVersion &&
     proof.tableOwner==='control_plane_owner' && proof.noBodyColumns===true && proof.foreignKeys===13 &&
     proof.deferredForeignKeys===13 && proof.guardEnabled===true && proof.retentionConsumer===true && proof.purgeGraphGuard===true &&
     proof.purgeNodes===105 && proof.purgeEdges===283 && proof.purgeNodeFingerprint==='f51a0de25bd942a250997775617eeaee' &&
     proof.purgeEdgeFingerprint==='be6e23d9e894687a69a19e9b5777ab09';
+}
+
+// Проверяет nullable schema, точные CHECK-условия и неизменяемый срок без чтения бизнес-payload.
+export function validOwnerGateExpiryMigrationPostcondition(proof) {
+  return proof?.readOnly==='on' && proof.database==='control_plane' && proof.gooseVersion===20261026000100 &&
+    proof.tableOwner==='control_plane_owner' && ['expiryColumn','stateConstraint','resolutionConstraint',
+      'expiryConstraint','dueIndex','immutableGuard','runtimeExecute','publicExecuteRevoked'].every(key=>proof[key]===true);
 }

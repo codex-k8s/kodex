@@ -91,6 +91,15 @@ SQL failure возвращает закрытый отказ и не счита�
 ранним approve и с поздним approve, перезагрузкой браузера и адресным рестартом.
 Модельные и внешние действия остаются в исходных пределах QA.
 
+Штатный `tools/release/control-plane-migration.mjs` принимает закрытый профиль
+`--profile owner-gate-expiry`: plan → check → stop → apply → inspect → resume.
+Он сохраняет прежние UID/версии, immutable image/publication pins, stop/join и
+единственный журнал эффектов. Precondition требует предыдущую Goose-версию
+`20261025000200`, отсутствие колонки и активных работ, включая WAITING_HUMAN.
+Read-only postcondition проверяет точные CHECK, nullable колонку, индекс,
+неизменяемость срока и execute-права. Тот же SQL выполняется в PostgreSQL suite.
+Неизвестный исход требует inspect, а не повторного apply с новым планом.
+
 Миграция `20261026000100` выполняется штатным migrator через owner-role до
 поставки нового CP: новые owner read всегда читают колонку. Она добавляет nullable
 поле и forward-only ограничения;

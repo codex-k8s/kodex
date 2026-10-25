@@ -123,9 +123,23 @@ run_migration() {
         const {validRepositoryBundleMigrationPostcondition} = await import(pathToFileURL(process.argv[1]));
         let input = "";
         for await (const chunk of process.stdin) input += chunk;
-        if (!validRepositoryBundleMigrationPostcondition(JSON.parse(input)))
+        if (!validRepositoryBundleMigrationPostcondition(JSON.parse(input), 20261026000100))
           throw new Error("Repository bundle schema postcondition failed");
         process.stdout.write("Repository bundle schema read-only query passed\n");
+      ' "$repository_root/tools/release/control-plane-immutable-migration.mjs"
+  fi
+  if [[ "$test_pattern" == *TestOwnerGateExpiryComponent* ]]; then
+    psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" \
+      --no-password -X -qAt -v ON_ERROR_STOP=1 \
+      --file "$repository_root/tools/release/owner-gate-expiry-migration-postcondition.sql" | \
+      node --input-type=module -e '
+        const {pathToFileURL} = await import("node:url");
+        const {validOwnerGateExpiryMigrationPostcondition} = await import(pathToFileURL(process.argv[1]));
+        let input = "";
+        for await (const chunk of process.stdin) input += chunk;
+        if (!validOwnerGateExpiryMigrationPostcondition(JSON.parse(input)))
+          throw new Error("Owner gate expiry schema postcondition failed");
+        process.stdout.write("Owner gate expiry schema read-only query passed\n");
       ' "$repository_root/tools/release/control-plane-immutable-migration.mjs"
   fi
   # Новые самостоятельные suites получают отдельную копию ещё пустой схемы,
