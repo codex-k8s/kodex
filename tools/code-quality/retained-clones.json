@@ -8504,6 +8504,14 @@
       "fragmentSHA256": "e2b0b8f93c57cc0525dab9f5ee685c1ae502f609e266084b38fa7f6a920a078d",
       "count": 1,
       "reason": "writeSkillBundle/writeMemoryRecord используют разные типизированные converters с отдельными revision/redaction/eligibility правилами, затем проверяют ref и пишут ETag/JSON через общие primitives. Повторяется короткое связывание номинальных DTO с одинаковой HTTP-формой, не ещё одна реализация converter. Универсальный writer с отдельными valid/ref/version metadata ослабил бы связь данных с типом ради трёх вызовов. Сохранено только точное окно одного пути/hash/count1, не view validation или файл целиком."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/managed-configurations/RoleImageImpactSelection.vue",
+      "secondPath": "services/staff/control-center/src/features/runtime/PublicationImpactSelection.vue",
+      "fragmentSHA256": "b2e524993a25d68cc3efaf546af5b7fcd222f4080709436cfb102bc44d68bf90",
+      "count": 1,
+      "reason": "Адресное окно регистрации двух типизированных useImpactPageLoader:общие запрос/отмена/поколение/поиск/пагинация уже находятся в composable. Здесь различаются RoleImageImpactPage/RevisionImpactPage,roleImagePlanIdentity/publicationPlanIdentity и readImageImpact/readPublicationImpact;проверенные feature-адаптеры получают прежние plan/signal/query/token/pageSize/organization. ClearSelection role и publication различается учётом deselected;publication afterLoad отдельно выбирает PENDING. Универсальный feature dispatcher ради одинаковой записи параметров скрыл бы конкретные API/identity границы. Решение ограничено этой парой,hash и одним occurrence;соседние clock/editable/toggle этим решением не покрываются."
     }
   ]
 }

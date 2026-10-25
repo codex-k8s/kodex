@@ -4,11 +4,52 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.485.0
+version: 1.486.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общий цикл чтения impact-списков — 26.10.2026
+
+RoleImageImpactSelection и PublicationImpactSelection используют общий
+useImpactPageLoader в shared/ui. Он владеет AbortController, поколением ответа,
+400ms debounce и appendImpactPage. Немедленный identity watch остаётся после
+инициализации всех refs/pageSize. Поздние success/error/finally не меняют новый
+запрос;busy,порядок reset и cancel,scope аргументы и cursor guard сохранены.
+Два соседних unmount hooks выполняют прежние abort→generation→debounce→clock.
+Выбор PENDING,учёт явно снятых строк публикации,лимит1000,scope cache
+eligibility и emit guards остаются в соответствующем feature. Все template и
+style bytes прежние. ImpactPageSlice только экспортирован как type.
+
+До production-правок и после них44 адресных проверки PASS LOCAL;18 новых
+проверяют настоящий client lifecycle через renderer без DOM:initial read,
+late success/error,поиск400ms,busy,новую версию плана,pagination,unmount и
+terminal guard. Для SSR-варианта SFC Vite предоставлен только module context;
+watch/onBeforeUnmount не подменяются. Первый запуск новой оснастки выявил
+нехватку SSR context и неверные ожидания fixtures;исправлена оснастка до
+production-изменений,исходное поведение прошло весь baseline.
+
+Весь PWA unit:413 файлов,4114 тестов,0 FAIL/SKIP,58.38с — PASS LOCAL.
+Prettier5 файлов0.83с/check0.82с,ESLint9.69с,typecheck+production build57.62с
+— PASS LOCAL;прежнее предупреждение размера chunk сохраняется.
+Два полных script AST inverse и четыре inverse фактического общего load/watch
+восстанавливают native алгоритмы и порядок lifecycle;6 опасных source mutations
+отвергнуты. Shared interface тело и два template/style tails побайтно прежние.
+
+Detector:6766 источников,222 прежних generated exclusions,1483 raw/1207
+retained/276 unresolved. Три старых окна исчезли,два новых появились;одно
+точное решение касается только типизированной регистрации callback-параметров.
+1063 прежних entries сохранены,registry1064. Соседние clock/editable/toggle
+остаются в разборе;полная готовность не заявляется. Go21580/21580 EN→RU.
+
+Context7 resolve вернул ошибку API key;секреты не искались и не менялись.
+Проверена официальная документация Vue watchers/immediate/автоматическая
+остановка sync setup watchers и onBeforeUnmount:
+https://vuejs.org/guide/essentials/watchers.html и
+https://vuejs.org/api/composition-api-lifecycle.html#onbeforeunmount.
+Фактическая Vue3.5.41 прежняя. Browser/full E2E,live/deploy и независимая QA
+этого изменения — NOT RUN. Все результаты локальные,не GitHub CI.
 
 ## Общая проверка reference/version и завершение detail образа — 26.10.2026
 

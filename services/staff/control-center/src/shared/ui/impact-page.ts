@@ -1,4 +1,4 @@
-interface ImpactPageSlice {
+export interface ImpactPageSlice {
   readonly plan: { readonly state: string };
   readonly items: readonly { readonly ref: string }[];
   readonly total: number;
