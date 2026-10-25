@@ -16,15 +16,37 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// queryProjectPurgeMovedArchiveFixture seeds immutable global-session archive/task metadata before
+// project movement without creating a real external archive.
+// queryProjectPurgeMovedArchiveFixture подготавливает неизменные метаданные архива и задачи общей
+// сессии до переноса в проект без создания реального внешнего архива.
+//
 //go:embed testdata/sql/project_purge_moved_archive_fixture.sql
 var queryProjectPurgeMovedArchiveFixture string
 
+// queryProjectPurgeMovedArtifactFixture reads the exact object key/version of the fixture session
+// result produced through CompleteExecution.
+// queryProjectPurgeMovedArtifactFixture читает точные ключ и версию объекта результата тестовой
+// сессии, созданного через CompleteExecution.
+//
 //go:embed testdata/sql/project_purge_moved_artifact_fixture.sql
 var queryProjectPurgeMovedArtifactFixture string
 
+// queryProjectPurgeLargeHistoryFixture adds fifty-five thousand synthetic events under the exact
+// Run owner lineage to exercise bounded project purge at scale.
+// queryProjectPurgeLargeHistoryFixture добавляет пятьдесят пять тысяч искусственных событий с
+// точным происхождением владельца Run для проверки ограниченной очистки большого проекта.
+//
 //go:embed testdata/sql/project_purge_large_history_fixture.sql
 var queryProjectPurgeLargeHistoryFixture string
 
+// testAssistantConversationProjectMove checks private conversation movement and replay preserve
+// run/event/revision and immutable global archive/artifact ownership, then purges large history
+// while retaining foreign events; objects use fixture storage and no PVC is created.
+// testAssistantConversationProjectMove проверяет сохранение происхождения Run, событий и ревизий и
+// владения неизменными общими архивом и артефактом при переносе частной беседы и повторе, затем
+// очищает большую историю с сохранением чужих событий; объекты находятся в тестовом storage, PVC
+// не создаётся.
 func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	prepareObservedWarmFixture(t, ctx, repository)

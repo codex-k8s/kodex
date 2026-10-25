@@ -19,9 +19,21 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// queryAgentBootstrapEnvironmentReadback fingerprints exact environment/revision/binding rows and
+// version-history count to detect even timestamp-only bootstrap rewrites.
+// queryAgentBootstrapEnvironmentReadback составляет отпечатки точных строк окружения, ревизии и
+// привязки и числа версий для обнаружения даже изменения только времени при bootstrap.
+//
 //go:embed testdata/sql/agent_bootstrap_environment_readback.sql
 var queryAgentBootstrapEnvironmentReadback string
 
+// TestAgentBootstrapPreservesPublishedProjectEnvironmentComponent checks new-agent creation and
+// replay preserve the owner published environment, binding and history under same/changed default
+// images, while an empty project gets its own initial exact pin; images/credentials are synthetic.
+// TestAgentBootstrapPreservesPublishedProjectEnvironmentComponent проверяет сохранение
+// опубликованного владельцем окружения, привязки и истории при создании нового агента и повторе с
+// прежним и изменённым образом по умолчанию, а пустому проекту назначает собственную начальную
+// точную привязку; образы и credentials искусственные.
 func TestAgentBootstrapPreservesPublishedProjectEnvironmentComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()

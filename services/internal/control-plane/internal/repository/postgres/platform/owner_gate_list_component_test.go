@@ -12,6 +12,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testOwnerGateList checks bounded distinct gate pages/counts, canonical state-set cursors and
+// literal case-insensitive search, rejecting changed/unknown/duplicate or conflicting filters.
+// testOwnerGateList проверяет ограниченные неповторяющиеся страницы и счётчики подтверждений,
+// канонические курсоры набора состояний и буквальный поиск без учёта регистра, отклоняя
+// изменённые, неизвестные, повторные и конфликтующие фильтры.
 func testOwnerGateList(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, projectRef string) {
 	t.Helper()
 	filter := query.Filter{ProjectRef: projectRef, Page: query.Page{Size: 1}}

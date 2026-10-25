@@ -13,6 +13,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// testProjectTrashCancelsRuns checks trash establishes the thirty-day retention window and
+// atomically closes Run nodes/gates/leases, while project restoration does not revive the
+// cancelled Run.
+// testProjectTrashCancelsRuns проверяет тридцатидневное удержание при переносе в корзину и
+// атомарное закрытие узлов, подтверждений и leases Run без оживления отменённого исполнения после
+// восстановления проекта.
 func testProjectTrashCancelsRuns(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{

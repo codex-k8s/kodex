@@ -10,7 +10,13 @@ import (
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 )
 
-// Использует настоящую lease из claim fixture и возвращает terminal readback.
+// testTrustedRuntimeProjection checks trusted owner-derived credential projection from an exact
+// live fixture lease, stable repeats and recovery pins, rejecting changed
+// fence/attempt/workload/caller scope and returning a terminal-lease invalidation assertion.
+// testTrustedRuntimeProjection проверяет доверенную проекцию credential, выведенную владельцем из
+// точной активной тестовой lease, устойчивые повторы и привязки восстановления, отклоняя смену
+// fence, попытки, workload и области вызывающего и возвращая проверку аннулирования после
+// завершения lease.
 func testTrustedRuntimeProjection(t *testing.T, ctx context.Context, repository *Repository, lease map[string]any) func() {
 	t.Helper()
 	var input platformrepo.RuntimeCredentialProjectionInput

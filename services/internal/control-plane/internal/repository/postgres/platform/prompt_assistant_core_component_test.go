@@ -28,15 +28,31 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// queryPromptAssistantCoreUnknownNotice copies a fixture continuation notice with an unsupported
+// service revision to test the closed database constraint.
+// queryPromptAssistantCoreUnknownNotice копирует тестовое уведомление продолжения с
+// неподдерживаемой служебной ревизией для проверки закрытого ограничения БД.
+//
 //go:embed testdata/sql/prompt_assistant_core_unknown_notice.sql
 var queryPromptAssistantCoreUnknownNotice string
 
+// queryPromptAssistantCoreForeignProject creates a synthetic foreign organization/actor/project
+// tuple for negative assistant-core scope checks.
+// queryPromptAssistantCoreForeignProject создаёт искусственный чужой набор организации, actor и
+// проекта для отрицательных проверок области ядра ассистента.
+//
 //go:embed testdata/sql/prompt_assistant_core_foreign_project.sql
 var queryPromptAssistantCoreForeignProject string
 
-// Оснастка создаёт новый installation, SYSTEM project context и независимые
-// PROJECT. Run, claim, complete и следующий turn проходят штатные команды;
-// provider не вызывается, чужая организация существует только в test fixture.
+// TestAssistantCoreInheritanceComponent checks SYSTEM and isolated PROJECT assistants share the
+// exact server core but keep overlays/capabilities separate across preview, claim and
+// continuation. Fresh immutable snapshots, compact core references, dependency-sensitive resume
+// and closed foreign/schema guards use synthetic runtime completions without provider execution.
+// TestAssistantCoreInheritanceComponent проверяет общее точное серверное ядро SYSTEM и
+// изолированных PROJECT ассистентов при раздельных overlay и capability в предпросмотре, захвате и
+// продолжении. Свежие неизменные снимки, компактные ссылки ядра, зависимый от контекста resume и
+// закрытые межобластные ограничения и ограничения схемы используют искусственное завершение
+// runtime без исполнения провайдера.
 func TestAssistantCoreInheritanceComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()

@@ -20,9 +20,21 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// queryRuntimeTerminalStorageFixture sets exact fixture session storage state and synthetic
+// archive linkage without performing snapshot, restore or external object work.
+// queryRuntimeTerminalStorageFixture назначает точное состояние тестового хранилища сессии и
+// искусственную связь архива без исполнения снимка, восстановления и внешней работы с объектами.
+//
 //go:embed testdata/sql/runtime_terminal_storage_fixture.sql
 var queryRuntimeTerminalStorageFixture string
 
+// TestRuntimeTerminalStorageComponent checks transient storage blocks claim without terminalizing,
+// while ERROR/PURGED atomically close AGENT/SYSTEM execution graphs, roll back on audit failure
+// and replay without duplicate durable effects; storage descriptors are synthetic.
+// TestRuntimeTerminalStorageComponent проверяет блокировку захвата переходным состоянием хранилища
+// без окончательного завершения, а ERROR и PURGED атомарно закрывают графы AGENT и SYSTEM,
+// откатываются при ошибке аудита и повторяются без дублирования устойчивых эффектов; дескрипторы
+// хранилища искусственные.
 func TestRuntimeTerminalStorageComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()

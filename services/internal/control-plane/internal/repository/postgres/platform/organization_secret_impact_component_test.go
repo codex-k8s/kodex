@@ -16,13 +16,28 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// queryImpactPermissionRegistryReadback reads only the closed fixture permission set and allowed
+// resource kinds for organization/project secret authority checks.
+// queryImpactPermissionRegistryReadback читает только закрытый тестовый набор разрешений и
+// допустимых видов ресурсов для проверки полномочий секретов организации и проекта.
+//
 //go:embed testdata/sql/impact_permission_registry_readback.sql
 var queryImpactPermissionRegistryReadback string
 
+// queryImpactLegacyReceipt copies an exact fixture receipt under another key with supplied
+// synthetic response bytes to test rejection of missing owner snapshots.
+// queryImpactLegacyReceipt копирует точную тестовую квитанцию под другим ключом с переданными
+// искусственными байтами ответа для проверки отклонения отсутствующего снимка владельца.
+//
 //go:embed testdata/sql/impact_legacy_receipt.sql
 var queryImpactLegacyReceipt string
 
-// Проверяется доменный fenced path на disposable БД без внешних Secret writes.
+// testOrganizationSecretImpact checks bound/unbound organization environment impact and selective
+// secret rebind, owner scope before OCC, exact replay and denial of legacy/revoked receipts;
+// synthetic rotation performs no external Secret write.
+// testOrganizationSecretImpact проверяет влияние и выборочную смену привязки секрета у связанных и
+// несвязанных окружений организации, область владельца до OCC, точный повтор и запрет legacy и
+// отозванных квитанций; искусственная ротация не выполняет внешнюю запись Secret.
 func testOrganizationSecretImpact(t *testing.T, ctx context.Context, r *Repository, service *platformservice.Service, pool *pgxpool.Pool, owner value.Principal, current scope, assistantRef string, base entity.RuntimeEnvironmentDraftSpecification, projectID string) {
 	t.Helper()
 	rows, err := pool.Query(ctx, queryImpactPermissionRegistryReadback)

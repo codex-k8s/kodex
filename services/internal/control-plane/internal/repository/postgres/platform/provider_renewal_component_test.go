@@ -16,12 +16,23 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// TestProviderCredentialRenewalComponent runs disposable renewal completion, unknown-read recovery
+// and account-version cancellation variants with synthetic provider descriptors and receipts.
+// TestProviderCredentialRenewalComponent выполняет одноразовые варианты завершения продления,
+// восстановления неизвестного исхода чтением и отмены после смены версии аккаунта с искусственными
+// дескрипторами и квитанциями провайдера.
 func TestProviderCredentialRenewalComponent(t *testing.T) {
 	t.Run("completion", func(t *testing.T) { testProviderCredentialRenewalComponent(t, false, false) })
 	t.Run("unknown-read-recovery", func(t *testing.T) { testProviderCredentialRenewalComponent(t, true, false) })
 	t.Run("account-version-cancels-authorized-intent", func(t *testing.T) { testProviderCredentialRenewalComponent(t, false, true) })
 }
 
+// testProviderCredentialRenewalComponent checks exact renewal claim/authorize/read-recovery
+// fencing, cancellation and terminal denial, then requires one credential/version/audit effect
+// under lost-ACK replay; it performs no real OAuth renewal.
+// testProviderCredentialRenewalComponent проверяет точный fencing захвата, авторизации и
+// восстановления чтением продления, отмену и окончательный запрет, затем требует один эффект
+// credential, версии и аудита при повторе после потери ACK; не выполняет реальное OAuth-продление.
 func testProviderCredentialRenewalComponent(t *testing.T, recoverUnknown, cancelIntent bool) {
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()

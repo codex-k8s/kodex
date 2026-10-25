@@ -9,6 +9,12 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 )
 
+// TestProjectAssistantPublicGitHubScope checks exact public owner/repository values and canonical
+// digest while rejecting unknown/duplicate/credential fields, unsafe locators and
+// unsupported-provider scope leakage.
+// TestProjectAssistantPublicGitHubScope проверяет точные публичные owner и repository и
+// канонический дайджест, отклоняя неизвестные, повторные и credential-поля, небезопасные locator и
+// раскрытие области неподдерживаемого провайдера.
 func TestProjectAssistantPublicGitHubScope(t *testing.T) {
 	definitions, err := integrationpackage.LoadShipped()
 	if err != nil {

@@ -16,6 +16,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testSkillBundleDraft checks owner-bound artifact provenance/retention, VFS visibility, OCC and
+// scanner/review-gated skill publication through archive/restore/purge; its configured scanner is
+// synthetic, not malware detection.
+// testSkillBundleDraft проверяет назначенное владельцем происхождение и удержание артефактов,
+// VFS-видимость, OCC и публикацию навыка с обязательными scanner и review через архивирование,
+// восстановление и очистку; настроенный scanner искусственный и не обнаруживает malware.
 func testSkillBundleDraft(t *testing.T, ctx context.Context, repository *Repository) {
 	seedObservedCatalogFixture(t, ctx, repository)
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
@@ -184,8 +190,16 @@ func testSkillBundleDraft(t *testing.T, ctx context.Context, repository *Reposit
 	}
 }
 
+// componentSkillScanner provides a deterministic successful scan verdict for skill lifecycle
+// fixtures without inspecting malware or external services.
+// componentSkillScanner предоставляет детерминированный успешный результат сканирования для тестов
+// жизненного цикла навыка без поиска malware и внешних сервисов.
 type componentSkillScanner struct{}
 
+// Scan ignores input bytes and returns the fixed synthetic scanner engine verdict used to unlock
+// the review/publication fixture.
+// Scan игнорирует входные байты и возвращает фиксированный искусственный результат scanner,
+// используемый для перехода теста к review и публикации.
 func (componentSkillScanner) Scan(context.Context, []byte) (skillpolicy.ScanVerdict, error) {
 	return skillpolicy.ScanVerdict{Engine: "component-scanner-fixed-revision"}, nil
 }

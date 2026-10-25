@@ -18,6 +18,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testReadonlyArtifactClaim runs both read-only selected-context and revoked-upload variants to
+// keep artifact read authority separate from output writes.
+// testReadonlyArtifactClaim выполняет варианты выбранного контекста только для чтения и отозванной
+// загрузки для разделения полномочий чтения артефакта и записи результата.
 func testReadonlyArtifactClaim(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner, worker, reader value.Principal, projectRef, agentRef, setRef, artifactRef string) {
 	t.Helper()
 	for _, write := range []bool{false, true} {
@@ -25,6 +29,12 @@ func testReadonlyArtifactClaim(t *testing.T, ctx context.Context, repository *Re
 	}
 }
 
+// testArtifactReadWriteBoundary checks current agent opt-in and actor permissions at
+// claim/read/write, retries after restored opt-in and rejects output after upload revocation, then
+// redacts file availability without removing unrelated editor access.
+// testArtifactReadWriteBoundary проверяет текущий opt-in агента и права actor при захвате, чтении
+// и записи, повторяет после восстановления opt-in и отклоняет результат после отзыва загрузки,
+// затем скрывает доступность файлов без удаления постороннего доступа редактора.
 func testArtifactReadWriteBoundary(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner, worker, reader value.Principal, projectRef, agentRef, setRef, artifactRef string, write bool) {
 	t.Helper()
 	prefix := "readonly-context-"

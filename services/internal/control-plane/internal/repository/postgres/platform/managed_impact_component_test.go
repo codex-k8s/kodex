@@ -17,6 +17,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testManagedImpactPagination checks filtered pages retain the full consumer commitment, reject
+// changed-query cursors and match an independently recomputed canonical binding digest.
+// testManagedImpactPagination проверяет сохранение полного обязательства потребителей
+// отфильтрованными страницами, отклонение курсора после смены запроса и совпадение с независимо
+// вычисленным каноническим дайджестом привязок.
 func testManagedImpactPagination(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, projectRef string, configuration command.Result) {
 	t.Helper()
 	ref, revision := configuration.ManagedConfiguration.Ref, configuration.ManagedRevision.Ref

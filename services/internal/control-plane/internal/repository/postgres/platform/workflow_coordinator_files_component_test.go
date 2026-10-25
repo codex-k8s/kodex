@@ -26,19 +26,39 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// runtimeFileCatalogFailureTx injects a configured QueryRow failure into file-catalog capture
+// without a database; unexpected transaction methods retain the embedded stub behavior.
+// runtimeFileCatalogFailureTx внедряет настроенную ошибку QueryRow в захват файлового каталога без
+// БД; неожиданные методы транзакции сохраняют поведение встроенной заглушки.
 type runtimeFileCatalogFailureTx struct {
 	pgx.Tx
 	err error
 }
 
+// runtimeFileCatalogFailureRow carries the exact synthetic database cause to Scan without
+// supplying row values.
+// runtimeFileCatalogFailureRow передаёт точную искусственную причину ошибки БД в Scan без значений
+// строки.
 type runtimeFileCatalogFailureRow struct{ err error }
 
+// Scan returns the configured cause unchanged and does not write destinations.
+// Scan возвращает настроенную причину без изменений и не записывает назначения.
 func (row runtimeFileCatalogFailureRow) Scan(...any) error { return row.err }
 
+// QueryRow returns a failing row for any fixture query, preserving the same cause for
+// error-classification assertions.
+// QueryRow возвращает ошибочную строку для любого тестового запроса, сохраняя ту же причину для
+// проверки классификации ошибки.
 func (tx runtimeFileCatalogFailureTx) QueryRow(context.Context, string, ...any) pgx.Row {
 	return runtimeFileCatalogFailureRow{err: tx.err}
 }
 
+// TestRuntimeFileCatalogDatabaseFailureIsNotEligibility checks missing-function database errors
+// remain unavailable with their original typed cause for both empty and artifact-enabled
+// capabilities, never terminal eligibility denial.
+// TestRuntimeFileCatalogDatabaseFailureIsNotEligibility проверяет сохранение недоступности и
+// исходной типизированной причины ошибки отсутствующей функции БД как без capability, так и с
+// файловой capability, без превращения в окончательный отказ доступности кандидата.
 func TestRuntimeFileCatalogDatabaseFailureIsNotEligibility(t *testing.T) {
 	for _, capabilities := range [][]string{{}, {runtimecontract.ArtifactCapability}} {
 		cause := &pgconn.PgError{Code: "42883", Message: "undefined function"}
@@ -51,20 +71,43 @@ func TestRuntimeFileCatalogDatabaseFailureIsNotEligibility(t *testing.T) {
 	}
 }
 
-// Контур выполняет обычные owner-команды и реальные VFS queries одной новой
-// disposable-базы. Provider, сеть и staging в этом сценарии не используются.
+// TestWorkflowCoordinatorFilesComponent runs the ordinary same-root coordinator result-reading
+// scenario against disposable PostgreSQL and fixture object storage without a provider or network.
+// TestWorkflowCoordinatorFilesComponent выполняет обычный сценарий чтения результатов
+// координатором того же корня на одноразовом PostgreSQL и тестовом object storage без провайдера и
+// сети.
 func TestWorkflowCoordinatorFilesComponent(t *testing.T) {
 	testWorkflowCoordinatorFilesComponent(t, false)
 }
 
+// TestWorkflowRetryCurrentRootComponent runs the native retry variant requiring a fresh
+// root/children while retaining the original Session and immutable historical root.
+// TestWorkflowRetryCurrentRootComponent выполняет вариант нативного повтора с новым корнем и
+// дочерними исполнениями при сохранении исходной Session и неизменного исторического корня.
 func TestWorkflowRetryCurrentRootComponent(t *testing.T) {
 	testWorkflowCoordinatorFilesComponent(t, true)
 }
 
+// TestWorkflowRetryLargeRussianNoticeComponent runs the retry variant with large Russian
+// instructions, preserving full generated task and persisted history while bounding the
+// continuation notice.
+// TestWorkflowRetryLargeRussianNoticeComponent выполняет вариант повтора с большой русской
+// инструкцией, сохраняя полную сгенерированную задачу и устойчивую историю при ограничении
+// уведомления продолжения.
 func TestWorkflowRetryLargeRussianNoticeComponent(t *testing.T) {
 	testWorkflowCoordinatorFilesComponent(t, true)
 }
 
+// testWorkflowCoordinatorFilesComponent checks intrinsic RUN_RESULT reads, frozen callback pins,
+// nested/predecessor catalogs and revocation without granting coordinator artifact writes. The
+// retry branch creates fresh root pins; the ordinary branch tests lifecycle/legacy denial. DDL
+// faults require the exact disposable administrator; synthetic completions and fixture storage do
+// not execute a real provider or Pod.
+// testWorkflowCoordinatorFilesComponent проверяет встроенное чтение RUN_RESULT, замороженные
+// привязки callback, вложенные каталоги и каталоги предшественника и отзыв без выдачи координатору
+// записи артефактов. Ветка повтора создаёт новые корневые привязки; обычная ветка проверяет отказ
+// по lifecycle и legacy. DDL faults требуют точного администратора одноразовой БД; искусственное
+// завершение и тестовое storage не исполняют реальный provider либо Pod.
 func testWorkflowCoordinatorFilesComponent(t *testing.T, freshRetry bool) {
 	ctx, stop := context.WithTimeout(t.Context(), 90*time.Second)
 	defer stop()

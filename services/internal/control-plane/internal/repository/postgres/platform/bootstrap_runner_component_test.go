@@ -11,6 +11,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testBootstrapRunnerAdvancesForNewAgent checks changed defaults affect a new project bootstrap
+// only, preserving the existing project explicit environment/image pin for both current and newly
+// created agents.
+// testBootstrapRunnerAdvancesForNewAgent проверяет влияние изменённого значения по умолчанию
+// только на bootstrap нового проекта, сохраняя явную привязку окружения и образа существующего
+// проекта для прежнего и нового агента.
 func testBootstrapRunnerAdvancesForNewAgent(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{

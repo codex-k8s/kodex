@@ -17,6 +17,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testPromptContextPreview checks authoritative agent/stage preview pins, safe redaction, stable
+// repeat digests and stale agent/context rejection, then exercises declared scope and
+// variable-catalog consistency.
+// testPromptContextPreview проверяет авторитетные привязки предпросмотра агента и этапа,
+// безопасное скрытие значений, устойчивый дайджест повтора и отклонение устаревшего агента и
+// контекста, затем согласованность объявленной области и каталога переменных.
 func testPromptContextPreview(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.command.projects.create"}, "control-api-gateway")
@@ -106,6 +112,12 @@ func testPromptContextPreview(t *testing.T, ctx context.Context, repository *Rep
 	}
 }
 
+// testProspectiveOrganizationName checks organization identity agrees across owner snapshot,
+// variable availability, canonical rendered sections and context digest, rejecting foreign project
+// and stale preview pins.
+// testProspectiveOrganizationName проверяет совпадение идентичности организации в снимке
+// владельца, доступности переменной, канонических разделах результата и дайджесте контекста,
+// отклоняя чужой проект и устаревшие привязки предпросмотра.
 func testProspectiveOrganizationName(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, kind, ref string, selection query.PromptPreviewContext, organizationRef, organizationName string) {
 	t.Helper()
 	readOwner, err := repository.ResolvePrincipal(ctx, owner)
@@ -149,6 +161,12 @@ func testProspectiveOrganizationName(t *testing.T, ctx context.Context, reposito
 	}
 }
 
+// testPromptDeclaredScope publishes a template with an unchanged declared target pin, creates a
+// fresh draft and checks unavailable file scope is rejected while permitted deferred
+// run/continuation variables remain publishable.
+// testPromptDeclaredScope публикует шаблон с неизменной объявленной привязкой цели, создаёт свежий
+// черновик и проверяет запрет недоступной файловой области при допустимости публикации разрешённых
+// отложенных переменных Run и продолжения.
 func testPromptDeclaredScope(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, agent entity.Agent) command.Result {
 	t.Helper()
 	draft, err := service.Execute(ctx, command.Command{Kind: command.CreatePromptTemplateDraft, Principal: owner,
@@ -202,6 +220,11 @@ func testPromptDeclaredScope(t *testing.T, ctx context.Context, service *platfor
 	return saved
 }
 
+// testPromptVariableContextPin checks variable pages share one target digest, reject changed
+// query/agent cursors or explicit stale pins and keep unselected file families unavailable.
+// testPromptVariableContextPin проверяет общий дайджест цели у страниц переменных, отклонение
+// курсора после смены запроса и агента либо явной устаревшей привязки и недоступность невыбранных
+// семейств файлов.
 func testPromptVariableContextPin(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, agentRef string) {
 	t.Helper()
 	filter := query.Filter{Page: query.Page{Size: 1}, TemplateContext: &query.TemplateVariableContext{TargetKind: "AGENT", TargetRef: agentRef}}

@@ -4,11 +4,63 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.435.0
+version: 1.436.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Component fixtures и protected scope:84 описания — 25.10.2026
+
+На основе `fa69e51fcb9a67329fbf02c401607e437d71e56c` полностью прочитаны40
+Go test-файлов (6348 исходных строк) и18 embedded SQL (187 строк).
+84 объявления описаны EN→RU. Комментарии добавлены к actual test bodies,
+fixture types/methods и SQL bindings; исполняемые выражения, параметры среды,
+SQL, assertions, диагностика и бюджеты не менялись.
+
+| Область | Описанное доказательство и предел |
+| --- | --- |
+| Prompt preview/impact | Owner organization identity согласована snapshot/catalog/render/context pin; safe preview скрывает values, stale agent/query/digest отклоняются. Declared scope допускает только разрешённые deferred переменные. Publication проходит настоящий PrepareImpact, selective outcomes сохраняют old binding при конфликте |
+| Organization secret | Exact ORG tuple до OCC, bound/unbound environment impact/rebind, revoke/legacy receipt denial и old explicit environment pin. Draft grant reissue, claim/validate/publish/recovery и immediate reveal/revoke проверяют свежий owner и revoke. Ciphertext/materialization/cleanup ACK synthetic, не AEAD/Kubernetes effects |
+| STT/profiles | Owner catalog допускается до настройки STT, trusted/protected operations/workloads разделены. Pure projection predicate связан с owner session/generation/method/expiry и не доказывает live mTLS. Role migration повторяется в rollback, сохраняя prior immutable revision |
+| Skill/memory | Artifact provenance назначает owner, VFS/context/history и retention проверяются через archive/restore/purge. Scanner fixed synthetic, не malware detection. Purged memory summary скрыта также в истории и replay receipt |
+| Move/purge | Private conversation move сохраняет run/event/revision и immutable global archive/artifact lineage.55000 synthetic events очищаются с foreign preservation; fixture object storage без настоящего PVC/remote archive |
+| Admission failure | Exact fence/version/attempt, fresh-proof replay, owner expiry/hook recovery и superseded denial закрывают terminal без fabricated evidence. Synthetic record/failure race имеет одного победителя и один event, не настоящий build/signature admission |
+| Coordinator files | Intrinsic RUN_RESULT не даёт artifact WRITE, frozen callback pins отдельно от mutable lifecycle. Own/nested/predecessor catalogs сохраняют exact selectors. DB failure остаётся Unavailable, не terminal eligibility. Retry создаёт fresh root/children в прежней Session; large Russian task/history не усечены bounded notice |
+| Integration/OpenAPI | Same-key grant остаётся connection-scoped с narrowed schema; selectors/count/cursor/replay не обходят revoke и workflow stage intersection. Import хранит canonical package и redacted plan; fixture resolver не делает DNS/HTTP, synthetic health retry/backoff/fence/disable не доказывают remote service |
+| Environment/bootstrap | CreateAgent/replay не переписывает опубликованные owner environment/binding/history даже при смене default image; новый project получает initial pin. Pure hydration сохраняет protected spec, materializes sparse patches и closed HTTP methods. SYSTEM scope не заимствует authority текущей страницы |
+| Files/catalog/schedule | Read-only selected context не даёт output write; upload revoke закрывает completion, file revoke оставляет unrelated editor. Run/artifact/gate totals и pages используют ту же eligibility и literal filters. Saved/draft Schedule preview сохраняет execution author/Session и не мутирует состояние |
+| Terminal storage/core | Transit storage не terminal, ERROR/PURGED закрывают graph/claims/revisions атомарно с audit rollback/replay. SYSTEM/PROJECT core и overlays не смешиваются, snapshots/history immutable, compact notice сохраняет full-current instructions и shared consumer pins |
+| Test harnesses | Isolated DSN helper проверяет exact loopback admin/app/template и создаёт random DB с bounded cleanup; missing opt-in SKIP. Owner composition строит два отдельных test binary, owner-only DSN и loopback gRPC, broker AEAD/fake Kubernetes; live mTLS/SSO/inference не проверяются |
+
+40 полных expected-AST/directive сравнений — PASS LOCAL (0.77s).
+7 чистых unit Test-функций — PASS LOCAL (23.12s, checks436-final).
+12 component entrypoints явно исключены из selection; component helpers,
+реальные PG paths, DDL faults, races и owner composition — NOT RUN/SKIP.
+Child env исключает credentials и все inherited KODEX inputs,
+GOWORK=off/GOMAXPROCS=4/-p2. Наличие подробного описания не означает
+выполнение соответствующего component сценария.
+
+Inventory/detector/assessment,5 exact-ignore guards, gofmt/git diff --check —
+PASS LOCAL. Inventory6695 sources/222 exclusions, registry740 прежний.
+Detector1667 raw/851 retained occurrences/816 unresolved. Четыре открытых
+окна111/120/117/101 tokens сменили fragment hash после вставки комментариев,
+сохранив pairs/count/tokens; это не дедубликация, все четыре остаются open.
+24 прежних fragment/path/count группы имеют иные full coordinate fingerprints.
+Новые raw/clone-set hashes фиксируются отдельно. Registry, thresholds и
+exclusions не менялись; алгоритмы подтверждены прежним полным AST.
+
+Go21493:21420 EN→RU,73 missing только в48 test-файлах, production missing0.
+PR517 Go/3448 объявлений, missing0;547 whole changed blobs. Полный platform
+package unit/race относятся к652b4f4/checks433-final, полный production
+control-plane build/unit —38ea7e4/checks429-final. Production Go и analyzer
+implementation прежние, полный build/unit/race и17 analyzer unit не повторялись.
+Внешних API/dependencies и новых Context7 запросов нет, fallback сохранён.
+
+Remote providers/storage/Secrets/SMTP, browser/полный E2E/deploy/live —
+NOT RUN/SKIP. Manifests неизменны, прежние30 renders и исходный standalone
+staging/control-api-gateway FAIL не повторялись. #1823 открыт, #1829 Draft;
+main/QA и env сохранены, секреты не раскрывались и не переносились.
 
 ## Authority, cancellation и immutable runtime:87 описаний — 25.10.2026
 

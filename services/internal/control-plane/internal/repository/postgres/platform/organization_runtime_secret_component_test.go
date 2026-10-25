@@ -20,17 +20,39 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// organizationSecretActorActiveSQL toggles only the exact fixture subject activity to test
+// immediate owner revocation and restoration.
+// organizationSecretActorActiveSQL переключает активность только точного тестового субъекта для
+// проверки немедленного отзыва владельца и восстановления.
+//
 //go:embed testdata/sql/organization_secret_actor_active.sql
 var organizationSecretActorActiveSQL string
 
+// organizationSecretRoleStateSQL changes only the fixture subject organization OWNER system-role
+// bindings to test role revocation independently of actor activity.
+// organizationSecretRoleStateSQL изменяет только привязки системной роли OWNER организации
+// тестового субъекта для проверки отзыва роли независимо от активности actor.
+//
 //go:embed testdata/sql/organization_secret_role_state.sql
 var organizationSecretRoleStateSQL string
 
+// organizationSecretOperationExpireSQL expires the exact draft operation lease to exercise orphan
+// recovery and cleanup acknowledgements.
+// organizationSecretOperationExpireSQL делает просроченной lease точной операции черновика для
+// проверки восстановления осиротевших данных и подтверждений очистки.
+//
 //go:embed testdata/sql/organization_secret_operation_expire.sql
 var organizationSecretOperationExpireSQL string
 
-// Изолированная PostgreSQL suite доказывает owner authority и устойчивые
-// receipts. Дескрипторы синтетические: AEAD/Kubernetes проверяются broker suite.
+// TestOrganizationRuntimeSecretComponent checks organization-only owner/fresh-auth authority
+// through draft grant reissue, claim/validate/publish/recovery, immediate reveal/revoke and exact
+// receipts under actor/role revocation. Synthetic ciphertext/materialization descriptors and
+// cleanup ACKs do not prove AEAD or Kubernetes Secret effects.
+// TestOrganizationRuntimeSecretComponent проверяет полномочия владельца только организации и
+// свежую аутентификацию через переиздание grant черновика, claim, валидацию, публикацию,
+// восстановление, немедленное раскрытие и отзыв и точные квитанции при отзыве actor и роли.
+// Искусственные дескрипторы ciphertext и материализации и cleanup ACK не доказывают AEAD либо
+// эффекты Kubernetes Secret.
 func TestOrganizationRuntimeSecretComponent(t *testing.T) {
 	dsn := isolatedAssistantComponentDSN(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)

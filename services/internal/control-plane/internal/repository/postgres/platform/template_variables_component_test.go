@@ -12,6 +12,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testTemplateVariableContext checks global/agent/sealed-runtime variable availability and
+// reasons, source-filter paging and context-bound cursors, denying mismatched agent pins or
+// missing runtime-read authority.
+// testTemplateVariableContext проверяет доступность переменных и причины глобального, агентского и
+// запечатанного runtime-контекста, страницы фильтра источника и курсоры контекста, отклоняя
+// несовпадающего агента и отсутствие права чтения runtime.
 func testTemplateVariableContext(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, projectRef, agentRef, runtimeRef string) {
 	t.Helper()
 	read := func(filter query.Filter) map[string]entity.TemplateVariable {

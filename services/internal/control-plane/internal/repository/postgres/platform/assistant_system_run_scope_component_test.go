@@ -18,10 +18,21 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// queryAssistantRunScopeEffects reads fixture organization Run/receipt/audit/turn counts and
+// global outbox count to detect durable effects from rejected signed-project commands.
+// queryAssistantRunScopeEffects читает счётчики Run, квитанций, аудита и turn тестовой организации
+// и общий счётчик outbox для обнаружения устойчивых эффектов отклонённых команд подписанного
+// проекта.
+//
 //go:embed testdata/sql/assistant_run_scope_effects.sql
 var queryAssistantRunScopeEffects string
 
-// Проверяется signed-project boundary авторитетного чтения, без provider/Pod.
+// TestAssistantSystemRunProjectScopeComponent checks exact SYSTEM run/target pins and
+// concurrent-renew read behavior, then denies project-signed run/graph/cancel/retry/receipt access
+// before OCC without durable effects; no real provider or Pod is used.
+// TestAssistantSystemRunProjectScopeComponent проверяет точные привязки SYSTEM Run и цели и чтение
+// при конкурентном renew, затем запрещает подписанному проекту доступ к Run, графу, отмене,
+// повтору и квитанции до OCC без устойчивых эффектов; реальный провайдер и Pod не используются.
 func TestAssistantSystemRunProjectScopeComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()

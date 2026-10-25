@@ -10,6 +10,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// TestTrustedSTTProjectionBindsOwnerSession checks synthetic trusted STT authority matches the
+// owner session/generation, exact workload/method and short expiry, rejecting protected-profile
+// mixing or caller-assigned scope; it does not verify transport.
+// TestTrustedSTTProjectionBindsOwnerSession проверяет совпадение искусственных доверенных
+// полномочий STT с сессией и поколением владельца, точными workload и методом и коротким сроком,
+// отклоняя смешение с защищённым профилем и область вызывающего; не проверяет transport.
 func TestTrustedSTTProjectionBindsOwnerSession(t *testing.T) {
 	repository := &Repository{trustedCluster: true}
 	p := value.Principal{ActorID: "11111111-1111-4111-8111-111111111111", AuthorityTenant: "22222222-2222-4222-8222-222222222222",

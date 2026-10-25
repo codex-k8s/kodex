@@ -12,9 +12,14 @@ import (
 	"time"
 )
 
-// Публичная PG-оснастка выделяет пустую template-копию. Два независимых
-// тестовых бинаря связываются настоящим Proto/gRPC; DB-полномочия получает
-// исключительно CP owner, а broker видит лишь loopback rendezvous.
+// TestSecretOwnerCompositionComponent builds and joins separate CP owner and broker test binaries
+// over a loopback protobuf/gRPC rendezvous with the database DSN only in the owner child. It
+// exercises broker AEAD and fake Kubernetes recovery for both scopes with bounded cleanup, not
+// live mTLS, SSO or inference.
+// TestSecretOwnerCompositionComponent собирает и завершает отдельные test binary владельца CP и
+// брокера через loopback protobuf и gRPC rendezvous, передавая DSN БД только дочернему владельцу.
+// Проверяет AEAD брокера и восстановление с fake Kubernetes для обеих областей с ограниченной
+// очисткой, без живых mTLS, SSO и inference.
 func TestSecretOwnerCompositionComponent(t *testing.T) {
 	dsn := isolatedAssistantComponentDSN(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 240*time.Second)

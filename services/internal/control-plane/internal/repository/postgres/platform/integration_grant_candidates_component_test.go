@@ -13,6 +13,11 @@ import (
 	"testing"
 )
 
+// testIntegrationGrantSelectors checks bounded USE pagination, GRANT project/recipient/capability
+// selectors, exact version pins and literal search, rejecting a cursor under a changed query.
+// testIntegrationGrantSelectors проверяет ограниченную USE-пагинацию, GRANT selectors проекта,
+// получателя и capability, точные привязки версий и буквальный поиск, отклоняя курсор при смене
+// запроса.
 func testIntegrationGrantSelectors(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, project entity.Project, agent entity.Agent, connection entity.IntegrationConnection) {
 	t.Helper()
 	input := query.IntegrationCandidates{Purpose: "USE", Context: query.IntegrationCandidateContext{ProjectRef: project.Ref, RecipientKind: "AGENT", RecipientRef: agent.Ref, CapabilityKey: "synthetic.journal.write"}, Filter: query.Filter{Page: query.Page{Size: 1}}}
@@ -49,6 +54,12 @@ func testIntegrationGrantSelectors(t *testing.T, ctx context.Context, service *p
 	}
 }
 
+// testIntegrationGrantRevocation checks stale packages and unavailable connections cannot be
+// granted, exact read/list/candidate authority agrees, and tenant mismatch or revoked binding
+// blocks receipt replay/counts before exposing resources.
+// testIntegrationGrantRevocation проверяет запрет разрешений для устаревшего пакета и недоступного
+// соединения, согласованность точных полномочий единичного, списочного и candidate-чтения и
+// блокировку квитанций и счётчиков при чужом tenant и отозванной привязке до раскрытия ресурсов.
 func testIntegrationGrantRevocation(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, project entity.Project, agent entity.Agent, connection entity.IntegrationConnection) {
 	t.Helper()
 	resolvedOwner, err := repository.ResolvePrincipal(ctx, owner)
@@ -170,6 +181,10 @@ func testIntegrationGrantRevocation(t *testing.T, ctx context.Context, repositor
 	}
 }
 
+// testIntegrationGrantWorkflow checks workflow recipient grants and immutable publication pins do
+// not bypass a stage capability intersection and rejects an unknown stage.
+// testIntegrationGrantWorkflow проверяет невозможность обхода пересечения capability этапа
+// разрешением получателя workflow и привязками неизменной публикации и отклоняет неизвестный этап.
 func testIntegrationGrantWorkflow(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, project entity.Project, agent entity.Agent, connection entity.IntegrationConnection) {
 	t.Helper()
 	if _, err := service.Execute(ctx, command.Command{Kind: command.ChangeAgentCapability, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "selector-workflow-capability", ExpectedVersion: &agent.Version}, Payload: command.AgentBindingInput{AgentRef: agent.Ref, BindingRef: "platform.run.launch", Enabled: true}}); err != nil {

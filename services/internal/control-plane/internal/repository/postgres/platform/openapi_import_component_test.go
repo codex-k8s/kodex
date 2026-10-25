@@ -20,6 +20,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// openAPIImportComponentSource defines a bounded synthetic HTTPS OpenAPI source with one read
+// health operation and one gated ticket write for import lifecycle checks.
+// openAPIImportComponentSource задаёт ограниченный искусственный HTTPS OpenAPI-источник с одной
+// health-операцией чтения и одной подтверждаемой записью заявки для проверки жизненного цикла
+// импорта.
 const openAPIImportComponentSource = `openapi: 3.1.0
 info: {title: Заявки, version: 1.0.0}
 servers:
@@ -49,8 +54,15 @@ paths:
       responses: {'200': {description: OK}}
 `
 
+// importedOriginResolver provides a fixed synthetic origin snapshot without DNS or HTTP access.
+// importedOriginResolver предоставляет фиксированный искусственный снимок origin без DNS и
+// HTTP-доступа.
 type importedOriginResolver struct{}
 
+// Resolve accepts only the fixture hostname and returns one pinned address with a one-minute
+// expiry, rejecting other names.
+// Resolve принимает только тестовый hostname и возвращает один закреплённый адрес со сроком в одну
+// минуту, отклоняя остальные имена.
 func (importedOriginResolver) Resolve(_ context.Context, host string) (egresspolicy.Snapshot, error) {
 	if host != "api.example.test" {
 		return egresspolicy.Snapshot{}, errors.New("unexpected test origin")
@@ -58,6 +70,13 @@ func (importedOriginResolver) Resolve(_ context.Context, host string) (egresspol
 	return egresspolicy.Snapshot{Addresses: []netip.Addr{netip.MustParseAddr("93.184.215.14")}, ExpiresAt: time.Now().Add(time.Minute)}, nil
 }
 
+// testOpenAPIImportLifecycle checks canonical bounded import, redacted owner publication plans,
+// exact binding/egress projection and synthetic health retry/fence/permanent/disable outcomes,
+// rejecting ungated writes without contacting the imported service.
+// testOpenAPIImportLifecycle проверяет канонический ограниченный импорт, скрытые планы публикации
+// владельца, точные привязки и egress-проекцию и искусственные исходы health retry, fence,
+// постоянной ошибки и отключения, отклоняя запись без подтверждения без обращения к импортируемому
+// сервису.
 func testOpenAPIImportLifecycle(t *testing.T, ctx context.Context, repository *Repository) {
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",

@@ -16,10 +16,21 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// queryAssistantFileBodyAbsent counts fixture body markers across plans/revisions, receipts, audit
+// and outbox to verify durable metadata never stores raw file content.
+// queryAssistantFileBodyAbsent считает тестовые маркеры тела в планах и ревизиях, квитанциях,
+// аудите и outbox для проверки отсутствия исходного содержимого файлов в устойчивых метаданных.
+//
 //go:embed testdata/sql/assistant_file_body_absent.sql
 var queryAssistantFileBodyAbsent string
 
-// Сценарий использует только штатные owner/worker маршруты и disposable БД.
+// testAssistantFileRevisionLifecycle checks fresh-runtime-only native file revision proposals,
+// owner edited staged content, exact historical downloads, one forward head update/replay and
+// bounded history without raw body persistence or expansion of old create authority.
+// testAssistantFileRevisionLifecycle проверяет нативное предложение ревизии файла только из
+// свежего runtime, подготовленное содержимое после правки владельцем, точные исторические
+// скачивания, одно последующее обновление head и повтор и ограниченную историю без сохранения тела
+// и расширения старого права создания.
 func testAssistantFileRevisionLifecycle(t *testing.T, ctx context.Context, r *Repository, service *platformservice.Service, owner, worker value.Principal, oldLease map[string]any, project, agent, ref, foreignProject string) {
 	t.Helper()
 	execute := func(kind command.Kind, principal value.Principal, key string, version *int64, payload any) command.Result {

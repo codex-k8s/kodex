@@ -16,16 +16,38 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// queryImageAdmissionFailureExpiry expires only the claimed artifact selected by exact
+// organization/ref for owner-side failure recovery tests.
+// queryImageAdmissionFailureExpiry делает просроченным только захваченный артефакт точной
+// организации и ref для тестов восстановления ошибки владельцем.
+//
 //go:embed testdata/sql/image_admission_failure_expiry.sql
 var queryImageAdmissionFailureExpiry string
 
+// queryImageAdmissionFailureReadback reads the terminal artifact and latest admission attempt,
+// exact terminal snapshot and absence of open attempts or retained claim evidence.
+// queryImageAdmissionFailureReadback читает окончательный артефакт и последнюю попытку допуска,
+// точный окончательный снимок и отсутствие открытых попыток и сохранённых данных claim.
+//
 //go:embed testdata/sql/image_admission_failure_readback.sql
 var queryImageAdmissionFailureReadback string
 
+// queryImageAdmissionFailureEventCount counts exact organization/recipe/state outbox facts to
+// enforce one terminal admission event.
+// queryImageAdmissionFailureEventCount считает точные факты outbox организации, рецепта и
+// состояния для требования одного окончательного события допуска.
+//
 //go:embed testdata/sql/image_admission_failure_event_count.sql
 var queryImageAdmissionFailureEventCount string
 
-// Только синтетические owner/build данные в disposable PostgreSQL.
+// TestImageAdmissionFailureComponent checks fenced/OCC technical failure, exact fresh-proof
+// replay, worker expiry and owner/hook recovery, superseded artifact denial and one-winner
+// record/failure races without fabricated admission evidence; all builds and claims are synthetic
+// disposable fixtures.
+// TestImageAdmissionFailureComponent проверяет fencing и OCC технического отказа, точный повтор со
+// свежим proof, истечение worker и восстановление владельцем и hook, запрет вытесненного артефакта
+// и единственного победителя гонки записи и отказа без выдуманного доказательства допуска; все
+// сборки и claims искусственные в одноразовой fixture.
 func TestImageAdmissionFailureComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()

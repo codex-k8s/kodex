@@ -13,8 +13,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Каждая новая матрица получает пустую мигрированную БД. Fixture не изменяет
-// общий installation singleton и не оставляет историю для TestBootstrapComponent.
+// isolatedAssistantComponentDSN requires matching loopback admin/application fixture DSNs and the
+// fixed empty migrated template, creates one random isolated database and registers bounded exact
+// cleanup; missing runtime opt-in skips the caller test.
+// isolatedAssistantComponentDSN требует совпадающие loopback DSN администратора и приложения и
+// фиксированный пустой мигрированный шаблон, создаёт одну случайную изолированную БД и
+// регистрирует ограниченную точную очистку; отсутствие runtime opt-in пропускает вызывающий тест.
 func isolatedAssistantComponentDSN(t *testing.T) string {
 	t.Helper()
 	runtimeDSN := os.Getenv("KODEX_CONTROL_PLANE_TEST_DSN")

@@ -15,6 +15,13 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testMemoryRecords checks immutable memory revision lineage, OCC, VFS/context binding and
+// paginated history through archive/restore/purge, requiring redacted summaries in
+// current/history/idempotent receipts and denying restore after purge.
+// testMemoryRecords проверяет неизменное происхождение ревизий памяти, OCC, VFS и контекстную
+// привязку и постраничную историю через архивирование, восстановление и очистку, требуя скрытые
+// сводки в текущем состоянии, истории и идемпотентных квитанциях и запрещая восстановление после
+// очистки.
 func testMemoryRecords(t *testing.T, ctx context.Context, repository *Repository) {
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",

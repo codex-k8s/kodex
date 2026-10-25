@@ -15,6 +15,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// narrowedSyntheticPackageFixture copies the synthetic package and narrows only the journal write
+// value length to sixteen, failing if that declared field is absent.
+// narrowedSyntheticPackageFixture копирует искусственный пакет и сужает только длину значения
+// записи журнала до шестнадцати, завершая тест ошибкой при отсутствии объявленного поля.
 func narrowedSyntheticPackageFixture(t *testing.T, repository *Repository) string {
 	t.Helper()
 	definition, err := integrationpackage.Parse(asJSON(repository.integrationDefinitions["synthetic"]))
@@ -37,6 +41,12 @@ func narrowedSyntheticPackageFixture(t *testing.T, repository *Repository) strin
 	return ""
 }
 
+// testManagedRuntimeCapabilityAuthority checks same-key capabilities stay connection-scoped in
+// public projection and runtime grants, exercising selectors/revocation/workflow intersection and
+// preserving the exact narrowed package input schema.
+// testManagedRuntimeCapabilityAuthority проверяет ограничение capability с одинаковым ключом
+// точным соединением в публичной проекции и runtime grants, проходя selectors, отзыв и пересечение
+// workflow и сохраняя точную суженную входную схему пакета.
 func testManagedRuntimeCapabilityAuthority(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, allowed entity.IntegrationConnection, definition integrationpackage.Package) {
 	t.Helper()
 	project, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "managed-cap-project"}, Payload: command.ProjectInput{Name: "Managed capability scope", Language: "en"}})
