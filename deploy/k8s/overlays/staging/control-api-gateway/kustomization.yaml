@@ -3,7 +3,6 @@ kind: Kustomization
 resources: [../../../base/control-api-gateway]
 patches:
   - path: deployment-patch.yaml
-  - path: ingress-patch.yaml
 labels:
   - pairs: {kodex.dev/environment: staging}
     includeSelectors: false

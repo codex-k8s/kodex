@@ -6067,22 +6067,6 @@
     },
     {
       "format": "yaml",
-      "firstPath": "deploy/k8s/components/internal-rpc-authority-control-api-gateway-issuer/networkpolicy.yaml",
-      "secondPath": "deploy/k8s/components/internal-rpc-authority-stt-tts-service-issuer/networkpolicy.yaml",
-      "fragmentSHA256": "9817ae633fb1263d52d185c40fbc61af7644121d69dc3260e14eb6465bd7c5e9",
-      "count": 1,
-      "reason": "Ролевой префикс NetworkPolicy control-api-gateway/STT после реального выноса всех шести общих egress rules в component с закрытым набором пяти policies. Остаются resource name, exact app/issuer selector, policyTypes и ingress от observability/prometheus. Это отдельные ресурсы для разных workload; перенос selector в общий генерируемый шаблон сделал бы security scope косвенным. Общий сетевой алгоритм здесь уже удалён. Решение ограничено двумя указанными путями, полным fragment SHA-256 и count1; stale hash/count закрыто отклоняется. Файлы и остальные совпадения не исключены."
-    },
-    {
-      "format": "yaml",
-      "firstPath": "deploy/k8s/components/internal-rpc-authority-control-plane-verifier/networkpolicy.yaml",
-      "secondPath": "deploy/k8s/components/internal-rpc-authority-runtime-controller-issuer/networkpolicy.yaml",
-      "fragmentSHA256": "25c908823ea9e170590a1d036a383933753a5f48d8b843e0f940b20811a2a58e",
-      "count": 1,
-      "reason": "Ролевой префикс NetworkPolicy control-plane verifier/runtime-controller issuer. Шесть общих exact egress rules уже одна component; отдельные resource name, app selector и verifier/issuer labels задают разные границы, а полные политики сохраняют metrics ingress9092 против9091. Уплотнение через общий selector либо дополнительный генератор изменило бы читаемость security boundary, а не удалило новый runtime. Оба конечных ресурса сверены целиком. Решение ограничено двумя указанными путями, полным fragment SHA-256 и count1; stale hash/count закрыто отклоняется. Файлы и остальные совпадения не исключены."
-    },
-    {
-      "format": "yaml",
       "firstPath": "deploy/k8s/components/internal-rpc-authority-issuer-sidecar-common/patch.yaml",
       "secondPath": "deploy/k8s/components/internal-rpc-authority-runtime-controller-issuer/issuer-patch.yaml",
       "fragmentSHA256": "4c0a61e056ca7234b963a9a9f3f8d551693ab00660cc257ff4730f2177c0f5ad",
@@ -6112,6 +6096,118 @@
       "fragmentSHA256": "5a3bc0ff74d3532908d7058e6ea070847fabc369592f166240602eaf952ddc65",
       "count": 1,
       "reason": "Grant-agent resources/security/mounts обычного component против native runtime-controller. Одинаковые defaults служат разным containers/initContainers profiles; native имеет restartPolicy Always и startup /readyz вместо /healthz, принадлежит порядку до artifact-spool и основного controller. Workload/output/signer refs назначены отдельно. Общий ordinary patch на controller добавил бы контейнер, нарушив native contract; второй cross-path генератор ради этих остаточных полей не вводится. Решение ограничено двумя указанными путями, полным fragment SHA-256 и count1; stale hash/count закрыто отклоняется. Файлы и остальные совпадения не исключены."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/automation-scheduler/issuer-networkpolicy.yaml",
+      "secondPath": "deploy/k8s/base/email-bridge/issuer-networkpolicy.yaml",
+      "fragmentSHA256": "961228ad43700bf0a45c6868d5d052411f1441ab7521b7f7d837953c797cc5de",
+      "count": 1,
+      "reason": "Префикс role-policy automation-scheduler/email-bridge после выноса всех шести egress rules в общий component. Остаются разные resource name и точный app/issuer podSelector, policyTypes и Prometheus ingress9091. Оба полных policy trees восстановлены без изменения значений; новый генератор policy names/selectors ради декларативного префикса сделал бы security scope косвенным. Решение ограничено двумя точными путями, fragment SHA-256 и count1; stale hash/count отклоняется, другие группы и файлы не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/automation-scheduler/issuer-networkpolicy.yaml",
+      "secondPath": "deploy/k8s/base/integration-gateway/issuer-networkpolicy.yaml",
+      "fragmentSHA256": "961228ad43700bf0a45c6868d5d052411f1441ab7521b7f7d837953c797cc5de",
+      "count": 1,
+      "reason": "Префикс role-policy automation-scheduler/integration-gateway после реального удаления дублированного egress. Совпадает синтаксическая форма, но resource identity и app selector относятся к разным workload. Полные списки правил теперь общие; явные resource name/selector и ingress остаются у владельца роли. Только это окно сохраняется вместо дополнительного генератора identities. Решение ограничено двумя точными путями, fragment SHA-256 и count1; stale hash/count отклоняется, другие группы и файлы не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/automation-scheduler/issuer-networkpolicy.yaml",
+      "secondPath": "deploy/k8s/base/interaction-gateway/issuer-networkpolicy.yaml",
+      "fragmentSHA256": "961228ad43700bf0a45c6868d5d052411f1441ab7521b7f7d837953c797cc5de",
+      "count": 1,
+      "reason": "Префикс role-policy automation-scheduler/interaction-gateway после выноса шести exact egress rules. Имена policies и app selectors различны, а issuer-enabled условие и metrics ingress9091 одинаковы. Common runtime уже один, полное обратное раскрытие подтверждает прежний scope; перенос имён и selector bindings в общий шаблон не удаляет нового алгоритма. Решение ограничено двумя точными путями, fragment SHA-256 и count1; stale hash/count отклоняется, другие группы и файлы не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/automation-scheduler/issuer-networkpolicy.yaml",
+      "secondPath": "deploy/k8s/base/secret-broker/issuer-networkpolicy.yaml",
+      "fragmentSHA256": "961228ad43700bf0a45c6868d5d052411f1441ab7521b7f7d837953c797cc5de",
+      "count": 1,
+      "reason": "Префикс automation-scheduler/secret-broker policy, заканчивающийся перед дополнительным metrics port9092 secret-broker. Общий egress уже component; nominal resource/app binding и отдельный verifier metrics ingress остаются явными. Полная матрица семи source profiles сохраняет единственное отличие secret-broker — второй ingress port, поэтому универсальная policy generator здесь не требуется. Решение ограничено двумя точными путями, fragment SHA-256 и count1; stale hash/count отклоняется, другие группы и файлы не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/automation-scheduler/issuer-networkpolicy.yaml",
+      "secondPath": "deploy/k8s/base/session-archive/issuer-networkpolicy.yaml",
+      "fragmentSHA256": "961228ad43700bf0a45c6868d5d052411f1441ab7521b7f7d837953c797cc5de",
+      "count": 1,
+      "reason": "Префикс automation-scheduler/session-archive policy после выноса egress. У каждой роли своё имя и exact app selector; session-archive дополнительно принадлежит собственной namespace transformer composition. Явные namespace назначения общего egress сохранены, чтобы role placement не подменял адрес PostgreSQL/readback/restore. Сохраняется только декларативный identity/ingress префикс. Решение ограничено двумя точными путями, fragment SHA-256 и count1; stale hash/count отклоняется, другие группы и файлы не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/automation-scheduler/issuer-networkpolicy.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-control-plane-verifier/networkpolicy.yaml",
+      "fragmentSHA256": "961228ad43700bf0a45c6868d5d052411f1441ab7521b7f7d837953c797cc5de",
+      "count": 1,
+      "reason": "Префикс automation-scheduler issuer policy/control-plane verifier policy. Роли имеют разные resource names, app selector и issuer/verifier labels; полные profiles также сохраняют ingress9091 против9092 и разный explicit/same namespace egress profile. Общие правила вынесены по двум закрытым профилям. Один общий selector либо общий namespace fallback изменил бы границу, поэтому номинальные role bindings сохранены. Решение ограничено двумя точными путями, fragment SHA-256 и count1; stale hash/count отклоняется, другие группы и файлы не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/automation-scheduler/issuer-networkpolicy.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-runtime-controller-issuer/networkpolicy.yaml",
+      "fragmentSHA256": "961228ad43700bf0a45c6868d5d052411f1441ab7521b7f7d837953c797cc5de",
+      "count": 1,
+      "reason": "Префикс automation-scheduler/runtime-controller role-policies после выделения общих egress blocks. У политик разные workload/resource identities; automation сохраняет explicit namespace targets, runtime-controller — прежний same-namespace profile. Prometheus ingress и issuer label по форме одинаковы, но не являются отдельным алгоритмом. Полные renders и исходные resource bindings сохранены. Решение ограничено двумя точными путями, fragment SHA-256 и count1; stale hash/count отклоняется, другие группы и файлы не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/automation-scheduler/kustomization.yaml",
+      "secondPath": "deploy/k8s/base/integration-gateway/kustomization.yaml",
+      "fragmentSHA256": "8e335ad233352623df828fecea7267f0f68df4f8910147b850ced57fd6430aa3",
+      "count": 1,
+      "reason": "Полные короткие kustomization automation-scheduler/integration-gateway: одинаковые относительные имена файлов разрешаются внутри разных unit directories и означают разные Deployment/Service/config/observability resources. Один новый common egress component уже общий. Вынос самих resources в универсальную базу потребовал бы генерации/переименования unit-owned ресурсов и изменил бы явное deploy ownership ради схемы файла. Решение ограничено двумя точными путями, fragment SHA-256 и count1; stale hash/count отклоняется, другие группы и файлы не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/automation-scheduler/kustomization.yaml",
+      "secondPath": "deploy/k8s/base/secret-broker/kustomization.yaml",
+      "fragmentSHA256": "e03d1db160188009f5c3211c0967b7bdc56b6a3c661fd4e25dbb87deddfa2fb4",
+      "count": 1,
+      "reason": "Префикс kustomization automation-scheduler/secret-broker заканчивается до дополнительных secret-broker verifier components. Относительные resource paths принадлежат разным unit, одинаковые filenames не означают одинаковые ресурсы. Общий egress вынесен, но самостоятельная secret-broker issuer/verifier composition и свой app source должны оставаться видимыми. Дополнительная универсальная base generator не вводится. Решение ограничено двумя точными путями, fragment SHA-256 и count1; stale hash/count отклоняется, другие группы и файлы не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/automation-scheduler/networkpolicy.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-namespaced-network-egress-common/patch.yaml",
+      "fragmentSHA256": "549a4f0dfc86a2744ea66385d43ba36b19fa76802137eec002eb71c0faae185c",
+      "count": 1,
+      "reason": "Хвост main automation-scheduler exact-runtime-paths против общего issuer egress: одинаковые collector/Sentry destinations и ports. Полная main policy выбирает scheduler-job и разрешает owner CP RPC, работает независимо от issuer label; issuer policy имеет другой selector и PostgreSQL/readback/restore paths. Подключение целого issuer egress к main расширило бы доступ и связало бы trusted-cluster DNS/telemetry с sidecar. Partial rule generator по индексам atomic egress list ради этого окна не вводится. Решение ограничено двумя точными путями, fragment SHA-256 и count1; stale hash/count отклоняется, другие группы и файлы не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/platform-state/networkpolicy.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-namespaced-network-egress-common/patch.yaml",
+      "fragmentSHA256": "9304e84197288c3fbed1d8bfadf188b02a46e8f9cb2bd34aff2a4694f86c887e",
+      "count": 1,
+      "reason": "DNS/PostgreSQL фрагмент platform-state postgresql-runtime-credentials-exact-paths против общего issuer egress. Прочитан весь отдельный YAML document: он выбирает credential controller, имеет ingress[] и ровно два egress назначения. Общий issuer профиль содержит ещё четыре назначения и другой selector. Выдавать controller весь issuer egress ради дедубликации нельзя; generator произвольных slices/indices усложнил бы эту закрытую allowlist. Решение ограничено двумя точными путями, fragment SHA-256 и count1; stale hash/count отклоняется, другие группы и файлы не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/role-image-builder/issuer-networkpolicy.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-control-api-gateway-issuer/networkpolicy.yaml",
+      "fragmentSHA256": "001c3d50f662710ddbc83da40d70345825473acd291fec340e2adde488553bf4",
+      "count": 1,
+      "reason": "Префикс role-image-builder/API gateway role-policy. После удаления shared egress остаются разные resource names и exact app binding; первый подключает explicit namespace egress profile, второй same-namespace profile. Обе роли сохраняют свой ingress9091. Синтаксическая форма selector/Prometheus prefix не является новым runtime и не оправдывает генерацию security identities. Решение ограничено двумя точными путями, fragment SHA-256 и count1; stale hash/count отклоняется, другие группы и файлы не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/role-image-builder/issuer-networkpolicy.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-stt-tts-service-issuer/networkpolicy.yaml",
+      "fragmentSHA256": "001c3d50f662710ddbc83da40d70345825473acd291fec340e2adde488553bf4",
+      "count": 1,
+      "reason": "Префикс role-image-builder/STT role-policy после выноса egress. Deployment/resource selector identities разные, shared network profiles сохраняют исходные explicit/same namespace назначения. Общая форма Prometheus ingress не заменяет отдельную role mapping. Полные source expansions и все итоговые resources сверены; сохраняется только точное окно. Решение ограничено двумя точными путями, fragment SHA-256 и count1; stale hash/count отклоняется, другие группы и файлы не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/components/internal-rpc-authority-namespaced-network-egress-common/patch.yaml",
+      "secondPath": "deploy/k8s/components/internal-rpc-authority-network-egress-common/patch.yaml",
+      "fragmentSHA256": "e7f4b185500e2eb6a6466ed0fa54cf4e79910e00f5a9eeb2c5831311547e0871",
+      "count": 1,
+      "reason": "Observability-хвост двух общих egress components: явный namespace профиль семи баз и прежний same-namespace профиль пяти protected policies. Полные списки различаются namespaceSelector PostgreSQL/readback/restore. Egress list atomic; повторное применение общего полного списка убрало бы эти constraints, а cross-file index patch потребовал бы скрытой связи с порядком правил. Два закрытых полных network profiles сохраняют явность; общая форма только последних telemetry rules остаётся адресно. Решение ограничено двумя точными путями, fragment SHA-256 и count1; stale hash/count отклоняется, другие группы и файлы не исключаются."
     }
   ]
 }

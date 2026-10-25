@@ -4,11 +4,97 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.443.0
+version: 1.444.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общий egress семи баз и исправление standalone staging render — 25.10.2026
+
+На основе `82706568b3556addca9cd00c8efa1599e0680c85` шесть одинаковых
+правил egress вынесены из семи issuer policies баз automation-scheduler,
+email-bridge, integration-gateway, interaction-gateway, role-image-builder,
+secret-broker и session-archive в один namespaced-network-egress component.
+Ролевые policies сократились511→148 строк, общий patch —62 строки;
+вместе это301 удалённая строка и один список6 rules вместо семи копий.
+Target закрыт ровно на семь прежних policy names.
+
+В отличие от ранее вынесенного same-namespace профиля, эти политики явно
+выбирают kodex-system для PostgreSQL/readback/restore. Все три пары
+namespaceSelector+podSelector сохранены. Оба полных network profiles
+остаются отдельными; привязка namespace не заменена неявным локальным
+namespace или индексным преобразованием atomic egress list. Selectors,
+policyTypes, ingress, порядок правил и ресурсов каждого unit сохранены.
+Secret-broker сохраняет дополнительный metrics ingress9092. Source proof
+восстанавливает все7 полных исходных YAML trees и точные kustomizations,
+отклоняет duplicate keys и проверяет неизменность прежнего common component.
+
+Прежний standalone staging/control-api-gateway FAIL исправлен удалением
+устаревшей ссылки и файла ingress-patch.yaml. В gateway base нет такого
+Ingress; production overlay также не создаёт его. Публичный API остаётся
+в ingress PWA. Deployment patch staging, значения TLS/runtime env и
+существующий маршрут PWA не менялись; это исправление render, а не
+доказательство живой маршрутизации или staging acceptance.
+
+В публичный web-only release script добавлены обе самостоятельные сборки
+gateway staging/production. Они требуют единственный gateway Deployment
+в kodex-system, точные environment labels Deployment/Pod, внутренний
+ClusterIP Service и отсутствие отдельного gateway Ingress. Все прежние
+release assertions сохранены побайтно после удаления нового guard block.
+Первый прогон выявил ошибочное переименование соседнего builder-loop;
+оно исправлено до публикации, полное сравнение со старым script и
+повторный release PASS подтверждают сохранность прежних проверок.
+
+Финальные проверки:
+
+- 34 текущих renders успешны:33 целиком совпали с исходным опубликованным
+  SHA, один staging render перешёл из известного FAIL в успешную сборку.
+  Все внутренние массивы и их порядок сохранены у прежних успешных renders.
+- Reverse dependency graph обнаружил23 затронутых потребителя; все входят
+  в эти34 сравнения. Семь полных policies, kustomizations, closed target и
+  изменение только устаревшей staging-ссылки — PASS source proof.
+- Публичная ABI render-проверка обоих web-профилей/negative fixtures —
+  PASS (19.67s) на неизменных после неё YAML.
+- Полная `make test-web-only-release`, включая новый overlay guard —
+  PASS (34.41s) после исправления script.
+- 2 валидных standalone profiles приняты;16 независимых мутаций
+  Ingress/Deployment identity/namespace/environment/Service отклонены.
+- 17 unit-тестов анализаторов — PASS (0.62s),0 failed/0 skipped.
+- 14 exact decisions/14 occurrences и28 negative count/hash мутаций — PASS.
+- Inventory/detector/assessment, Go completeness и5 ignore guards,
+  `bash -n` и `git diff --check` — PASS LOCAL.
+
+Детектор перестроил окна:13 прежних исчезли,14 появились; raw1637→1638,
+то есть raw-групп стало на одну больше. Это не объявляется уменьшением
+raw count. Крупные прежние policy windows402 tokens сменились короткими
+role-selector windows110–116 tokens после реального удаления301 строки.
+Два старых selector-prefix retention keys исчезли при смене representative
+pairs; их исходные component files не менялись. Оба отсутствующих ключа
+удалены с проверкой count0, остальные762 прежних entries сохранены.
+
+14 новых точных решений охватывают девять nominal policy prefixes,
+две короткие unit kustomizations и три отдельных network fragments:
+main scheduler telemetry, закрытый DNS/PostgreSQL controller allowlist и
+хвост двух namespace profiles. Main policy работает независимо от issuer
+label и имеет иной CP RPC path; credential controller разрешает только
+два назначения, не весь issuer egress. Общий issuer block к ним не
+подключался. Каждый decision ограничен двумя путями, полным fragment
+SHA-256 и count1; generic/file/service exclusions не добавлялись.
+
+Registry764→762→776, retained881→879→893, unresolved756→745.
+Inventory6705 sources/222 exclusions, Go21501/21501 EN→RU,0 missing.
+Пороги, normalization и ignored paths не менялись. Go/frontend application
+source не затрагивался; их прежние build/unit не объявлены повторными.
+
+Context7 resolve Kustomize вернул Invalid API key; использованы официальные
+[Kustomize components](https://github.com/kubernetes-sigs/kustomize/blob/master/examples/components.md),
+[Kubernetes kustomization](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/#customizing)
+и [NetworkPolicy selectors](https://kubernetes.io/docs/concepts/services-networking/network-policies/#behavior-of-to-and-from-selectors).
+Проверки локальные/offline без credentials, inherited KODEX inputs и
+KUBECONFIG. Browser/E2E, PostgreSQL component execution, apply/deploy/live
+и продуктовая приёмка — NOT RUN. Исправленный render не означает запуск
+в staging. PR остаётся Draft, Issue#1823 открыт:745 групп требуют решения.
 
 ## Общие verifier defaults и exact egress — 25.10.2026
 
