@@ -1011,8 +1011,8 @@ func validDigest(value string) bool {
 	return err == nil
 }
 
-// mapError maps known HTTP precondition, conflict and not-found failures to closed repository sentinels.
-// RU: mapError переводит известные HTTP-отказы precondition, conflict и not-found в закрытые ошибки репозитория.
+// mapError preserves repository sentinels and otherwise retains only a closed typed-cause class, discarding native details.
+// RU: mapError сохраняет ошибки репозитория, а для остальных отказов оставляет только закрытый класс причины без исходных деталей.
 func mapError(err error) error {
 	var responseError *smithyhttp.ResponseError
 	if errors.As(err, &responseError) {
@@ -1023,5 +1023,5 @@ func mapError(err error) error {
 			return ErrNotFound
 		}
 	}
-	return errors.New("S3 operation failed")
+	return operationFailure{class: classifyOperationFailure(err)}
 }

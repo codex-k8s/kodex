@@ -67,6 +67,9 @@ func TestInspectOperationReadFailuresNeverBecomeAbsence(t *testing.T) {
 			if err == nil || result.State != "" || guard.writes != 0 {
 				t.Fatalf("listed version %s failure %d became an observation or write", phase, status)
 			}
+			if status == http.StatusServiceUnavailable && !strings.Contains(err.Error(), "S3 operation failed: server") {
+				t.Fatalf("listed version %s failure lost the closed S3 class", phase)
+			}
 		}
 	}
 }
