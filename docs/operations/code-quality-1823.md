@@ -4,11 +4,59 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.477.0
+version: 1.478.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие локальные сборочные проверки и mount-предикат — 26.10.2026
+
+Четыре локальных image builders используют tools/dev/lib/local-image-build.sh:
+единые разбор CLI, проверка source/state/context/tools и чтение manifest digest.
+Библиотека не меняет cwd/options и не читает env-файлы; передаёт значения
+литерально через printf -v в явно названные переменные caller. Dockerfiles,
+input digests, targets, cache, import и индивидуальная диагностика сохранены.
+Полное обратное восстановление четырёх исходных скриптов побайтовое.
+96 парных сценариев (192 запуска с имитацией внешних команд) сохранили
+status/stdout/stderr/trace, файлы и режим0600; проверены также scope,
+литеральные значения и шесть неверных имён выходных переменных.
+
+В Pod admission четыре одинаковых read-only mount проверки применяются
+через CEL all к точной паре role/relay. Их отдельные allowlists и прочие
+validations/messages прежние. Trusted transformer поддерживает общий
+предикат и прежнюю форму, сохраняя восемь логических callback-запретов,
+проверку их числа и отказ при дрейфе структуры. Actor/authority,
+контракты, lifecycle и runtime workloads не меняются.
+
+Проверка local-image-cache-import-contract исправлена под существующий
+неперезаписывающий importer: --force запрещён, существующий alias сначала
+наблюдается и проверяется. Сам importer не менялся. Публичная проверка
+включила19 тестов; три имеющихся supply-chain теста и14 trusted-render
+тестов прошли. Bash syntax и ShellCheck прошли для библиотеки, четырёх
+потребителей и source-contract проверки.
+
+На Go1.26.6 прошли четыре существующих admission-теста:151 и23 событий PASS
+с подтестами, без FAIL/SKIP. Дополнительная приватная Go overlay проверка
+сравнила прежние/новые CEL программы на134 случаях для local и trusted
+профилей; физический тестовый файл в репозитории не создавался. Trusted
+renderer сохранил прежний вывод на прежнем input, идемпотентность и закрыто
+отклонил три структурных дрейфа. Два полных render-профиля дали427/437
+объектов: изменился только один CEL scalar, все остальные bytes совпали.
+Публичные test-web-only-release и test-internal-rpc-authority-abi-render
+прошли локально. Реальные Docker build/import и кластер не использовались.
+
+Context7: GNU Bash manual (scope/printf -v) и Kubernetes website
+(типизация CEL, all и локальность policy variables). Четыре оставшихся
+коротких typed admission окна сохранены по отдельным paths/hash/count
+с конкретными причинами; общий mount алгоритм действительно вынесен.
+Шесть raw групп устранены, новых нет;1040 прежних entries сохранены,
+добавлены четыре. Итог:6760 sources,222 прежних generated exclusions,
+1524 raw /1184 retained /340 unresolved. Все21574 собственных Go
+объявления имеют EN→RU комментарии; новых Go-объявлений нет.
+Пять этапов quality, проверка точных решений и границ исключений — PASS LOCAL.
+Полная задача1823 ещё не закончена. Browser/full E2E, live deployment и
+независимая QA-приёмка этой волной не выполнялись (NOT RUN).
 
 ## Одна исходная конфигурация admission parameters — 26.10.2026
 

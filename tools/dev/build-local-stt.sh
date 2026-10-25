@@ -1,36 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Библиотека выбирается рядом с этим скриптом через Bash builtins до разбора CLI.
+# shellcheck source=lib/local-image-build.sh
+source "${BASH_SOURCE[0]%"${BASH_SOURCE[0]##*/}"}lib/local-image-build.sh"
+
 fail() {
   printf 'Kodex local STT build failed: %s\n' "$*" >&2
   exit 1
 }
 
-usage() {
-  printf 'Usage: %s --source-root <path> --state-directory <path> --context <context>\n' "$0" >&2
-}
-
-source_root=""
-state_directory=""
-context=""
-while (($# > 0)); do
-  case "$1" in
-    --source-root) source_root=${2:-}; shift 2 ;;
-    --state-directory) state_directory=${2:-}; shift 2 ;;
-    --context) context=${2:-}; shift 2 ;;
-    --help) usage; exit 0 ;;
-    *) usage; fail "unsupported argument: $1" ;;
-  esac
-done
-
-[[ "$source_root" == /* && -f "$source_root/tools/dev/Dockerfile.local-stt" ]] ||
-  fail 'source root is invalid'
-[[ "$state_directory" == /* && "$state_directory" != / ]] || fail 'state directory is invalid'
-[[ -n "$context" ]] || fail 'exact context is required'
-for command_name in docker jq sha256sum tar; do
-  command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
-done
-docker buildx version >/dev/null 2>&1 || fail 'docker buildx is required'
+source_root="" state_directory="" context=""
+kodex_local_image_build_parse source_root state_directory context "$@"
+kodex_local_image_build_validate "$source_root" "$state_directory" "$context" \
+  "tools/dev/Dockerfile.local-stt"
 
 builder=kodex-local-dev
 "$source_root/tools/dev/ensure-local-buildx-builder.sh" "$builder"
@@ -54,10 +37,7 @@ if [[ ! -s "$archive" ]]; then
   mv "$next_archive" "$archive"
 fi
 
-manifest_digest=$(tar -xOf "$archive" index.json | jq -er '
-  if (.manifests | length) != 1 then error("one image manifest is required")
-  else .manifests[0].digest end
-') || fail 'STT OCI manifest digest is unavailable'
+manifest_digest=$(kodex_local_image_manifest_digest "$archive") || fail 'STT OCI manifest digest is unavailable'
 [[ "$manifest_digest" =~ ^sha256:[a-f0-9]{64}$ ]] || fail 'STT OCI manifest digest is invalid'
 exact_reference="$repository@$manifest_digest"
 

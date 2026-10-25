@@ -77,19 +77,37 @@ def runtime_admission_profile(resource):
     if resource.get("kind") != "ValidatingAdmissionPolicy" or resource["metadata"]["name"] != "runtime-role-pod-exact-secret-projection":
         return
     validations = resource["spec"]["validations"]
+    callback_contract_drift = "RUNTIME_ADMISSION_CALLBACK_CONTRACT_DRIFT"
     if any(item.get("message") == RUNTIME_PROFILE_MESSAGE for item in validations):
         return
     pattern = re.compile(
         r"size\((?:object\.spec\.volumes|(?:variables\.(?:roleContainers|relayContainers)\[0\]|"
         r"object\.spec\.initContainers\[1\])\.volumeMounts)\.filter\((volume|mount),\s*"
         r"\1\.name == 'callback-(?:ca|client)'.*?\)\) == 1", re.DOTALL)
+    # Общий all имеет ровно два именованных consumer. Callback predicates внутри
+    # него по-прежнему представляют четыре отдельных запрета role/relay, а не два.
+    support_scope_pattern = re.compile(
+        r"\[variables\.roleContainers\[0\],\s*variables\.relayContainers\[0\]\]\.all\(container,\s*"
+        r"(?P<body>.*?)\)\s*&&\s*size\(variables\.roleContainers\[0\]\.volumeMounts", re.DOTALL)
+    support_callback_pattern = re.compile(
+        r"size\(container\.volumeMounts\.filter\(mount,\s*"
+        r"mount\.name == 'callback-(?:ca|client)'.*?\)\) == 1", re.DOTALL)
     changed = 0
     for item in validations:
         expression, count = pattern.subn(lambda match: match.group(0)[:-1] + "0", item["expression"])
         changed += count
+        support_scopes = list(support_scope_pattern.finditer(expression))
+        require(len(support_scopes) <= 1, callback_contract_drift)
+        if support_scopes:
+            scope = support_scopes[0]
+            body, support_count = support_callback_pattern.subn(
+                lambda match: match.group(0)[:-1] + "0", scope.group("body"))
+            require(support_count == 2, callback_contract_drift)
+            expression = expression[:scope.start("body")] + body + expression[scope.end("body"):]
+            changed += 2 * support_count
         # Закрытые allowlists дополнительно запрещают даже malformed callback mounts.
         item["expression"] = expression.replace("'callback-ca',", "").replace("'callback-client',", "")
-    require(changed == 8, "RUNTIME_ADMISSION_CALLBACK_CONTRACT_DRIFT")
+    require(changed == 8, callback_contract_drift)
     validations.append({"expression": "has(object.metadata.labels) && 'kodex.dev/security-profile' in object.metadata.labels && object.metadata.labels['kodex.dev/security-profile'] == 'trusted-cluster'",
                         "message": RUNTIME_PROFILE_MESSAGE})
 

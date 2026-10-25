@@ -8320,6 +8320,38 @@
       "fragmentSHA256": "ba082a3c6aeb7099f084b704308e4dcafc1b0fd6cafa86b74d20fa6e197f3622",
       "count": 1,
       "reason": "Окно четырёх технических projected/config/secret volumes сравнивает controller Deployment и recovery CronJob. Имплицитная ServiceAccount identity и root Pod lifecycle различаются; recovery получает самостоятельные DB/CA inputs и отдельный запуск, expiry/token generation принадлежит Kubernetes. Совпадают CA/OTEL/Sentry filenames/defaultModes, а не общий алгоритм claim/renew/rotation. Эти независимые security projections остаются явными рядом с соответствующим workload, без нового polymorphic renderer. Сохранён только exact window/hash/count1; ресурсы и key values не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/runtime-controller/runtime-materialization-admission.yaml",
+      "secondPath": "deploy/k8s/base/runtime-controller/runtime-materialization-admission.yaml",
+      "fragmentSHA256": "f4272c0c7c258fcd71b21ce2d953beb72791c47bc2c0898bd057a6036e444300",
+      "count": 1,
+      "reason": "Короткое окно сопоставляет заголовки и owner-label guard независимых admission policies для ServiceAccount и NetworkPolicy. MatchConstraints ограничены разными kinds/API groups; последующие проверки управляют разными объектами и полями. CEL variables локальны политике и не могут разделяться между документами. Перенос короткого guard в общий renderer или объединение политик изменил бы typed evaluation и диагностику. Сохранено только точное внутрефайловое окно/hash/count1; остальные выражения и ресурсы анализируются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/runtime-controller/runtime-materialization-admission.yaml",
+      "secondPath": "deploy/k8s/base/runtime-controller/runtime-materialization-admission.yaml",
+      "fragmentSHA256": "65e8af8c27b83596dd98f326324db1e27a4b793046ebc5abf2247e727a9a596b",
+      "count": 1,
+      "reason": "Окно сравнивает actor/owner-label условия ServiceAccount и RBAC admission policies. Это декларации независимых типизированных границ: ServiceAccount проверяет свою identity, RBAC — разрешённые rules/subjects/roleRef. Общего исполняемого алгоритма вне этих коротких guards нет; CEL не предоставляет межполитические переменные или пользовательские функции. Сохранение отдельных matchConstraints и сообщений делает полномочия явными. Только данная пара fragment/hash/count1, без исключения политик целиком."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/runtime-controller/runtime-materialization-admission.yaml",
+      "secondPath": "deploy/k8s/base/runtime-controller/runtime-materialization-admission.yaml",
+      "fragmentSHA256": "46a4fa9c875c898169f1aa1cd51a3dbd3da961b9f916866b06caf8ed716a0dd5",
+      "count": 1,
+      "reason": "Короткое окно revision annotations сравнивает ConfigMap input и Pod admission. У ConfigMap закрытый набор data keys/digests, у Pod дополнительные credential-projection name/uid/resourceVersion/digest и собственная контейнерная структура. Общие labels не делают эти validation paths взаимозаменяемыми. Вынос между отдельными типизированными политиками потребовал бы нового renderer либо объединения разных объектов, скрывая отдельные отказы. Сохранено лишь точное окно/hash/count1, не identity validation целиком."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/runtime-controller/runtime-materialization-admission.yaml",
+      "secondPath": "deploy/k8s/base/runtime-controller/runtime-materialization-admission.yaml",
+      "fragmentSHA256": "6b9d90a8bbfd7f3c169478d1a626623dd6b13132d3e0cea85866d4c2fc145b6f",
+      "count": 1,
+      "reason": "Окно трёх EnvVar полей относится к отдельным role и relay validations одной Pod policy. Role дополнительно требует пустой workspace-init.env; сообщения отказа и разрешённые наборы контейнеров различаются. CEL all допустим для реально общего mount-предиката и уже применён там, но объединение этих validations утратило бы отдельную диагностику. Shared variable потребовала бы параметризованной функции, недоступной в CEL; перенос трёх явных полей в позиционные списки ухудшил бы typed связь. Только exact fragment/hash/count1, без исключения env либо файлов."
     }
   ]
 }

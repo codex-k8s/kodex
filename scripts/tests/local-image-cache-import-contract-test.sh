@@ -31,8 +31,16 @@ grep -Fq '"${ctr_command[@]}" images import --platform linux/amd64 --base-name "
   fail 'both import profiles must preserve the exact native platform and repository digest'
 [[ $(grep -Fc -- '--label io.cri-containerd.image=managed --label io.cri-containerd.pinned=pinned' "$image_import") -eq 2 ]] ||
   fail 'both import profiles must publish managed and durable pin labels atomically'
-grep -Fq '"${ctr_command[@]}" images tag --local --force "$tag" "$exact_reference"' "$image_import" ||
-  fail 'atomic pinned exact digest alias is absent'
+grep -Fq '"${ctr_command[@]}" images tag --local "$tag" "$exact_reference"' "$image_import" ||
+  fail 'atomic non-overwriting pinned exact digest alias is absent'
+# Exact digest alias не перезаписывается: прежняя identity сначала наблюдается и проверяется.
+if grep -Eq 'images[[:space:]]+tag.*--force' "$image_import"; then
+  fail 'immutable image alias publication must not use force'
+fi
+grep -Fq 'existing=$("${ctr_command[@]}" images list "name==$exact_reference"' "$image_import" ||
+  fail 'immutable alias observation before publication is absent'
+grep -Fq '    verify_image_descriptor "$exact_reference"' "$image_import" ||
+  fail 'existing immutable alias descriptor must be verified'
 [[ $(grep -Fc '    publish_digest_alias' "$image_import") -eq 2 ]] ||
   fail 'both import profiles must publish the exact digest alias'
 [[ $(grep -Fc '  verify_imported_image' "$image_import") -eq 2 ]] ||
