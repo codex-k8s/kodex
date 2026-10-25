@@ -4,11 +4,60 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.473.0
+version: 1.474.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие технические настройки registry и телеметрия — 25.10.2026
+
+Компонент image-registry-technical-defaults переиспользует совпадающие Pod,
+registry и sidecar hardening/resources четырёх физически раздельных ролей:
+pull, staging push, admin, promotion. Общими стали image/pull policy,
+probe timing, registry mounts и технические параметры volumes. Pull сохраняет
+отдельный readOnly:true на promoted storage. Три certificate-guard используют
+одни image/command/readiness/mounts; native env с точными SNI/ports/auth inputs
+остаются у ролей. После strategic merge test+move восстанавливает прежний
+порядок контейнеров. Перед patch проверяются имена main/sidecar/volumes.
+
+ServiceAccount, labels/selectors, replicas/strategy различия, Secret/PVC names,
+TLS и application credential bindings, HTTP endpoints и отдельные политики
+доступа сохраняются. Компонент не выдаёт grants и не создаёт новый deployable.
+Общая техническая настройка не объединяет полномочия registry ролей.
+
+observability-egress-common содержит два прежних правила OTEL4317/Sentry8443
+для закрытого набора7 policies:4 runtime workloads, artifact-retention,
+role-image-builder и image-owner-protected. Namespace+pod остаются в одном AND
+peer. DNS/CP/BuildKit/storage/admission destinations остаются на прежних местах;
+nested Component применяется до позиционных DNS/CP вставок. Secret-broker
+сохраняет исходный порядок egress-gateway→DNS через прежний move.
+
+Final Kustomize5.8.2:9 render побайтно совпали с исходным95131e4, всего1004
+rendered objects без нормализации. Отдельные bases76/10/11/11/11/10/11,
+полные web-профили427/437.28 изолированных Kustomize запусков подтвердили4
+полные native Deployment модели,12 actual JSON guard failures, неизменность
+постороннего Deployment и различение3 unsafe mutations: ambient token,
+writable pull storage и неверный sidecar order. Все7 policy sets совпали.
+Финальные local public checks: web-only-release33.41с,authority ABI20.65с,
+interaction render7.79с — PASS LOCAL. Hashes15 исходников связаны с proof/render.
+Ранее исправленная ошибка отступа Component не вошла в итоговый результат;
+полный final render/public checks повторён после расширения certificate reuse.
+
+Detector:6752 sources/222 прежних generated exclusions,1539 raw/1175 retained/
+364 unresolved; registry1035. Исчезли10 прежних raw windows, появились3 nominal
+окна registry identities/credentials. Удалён1 отсутствующий старый retention,
+1021 остальных entries сохранён. Добавлены14 exact pair/hash/count1 решений:
+3 новых окна и11 явно прочитанных env/credential/selector/RBAC declarations.
+29 негативных изменений registry проверены настоящим assessor. Нормализация,
+thresholds, форматы и source exclusions не менялись. Go21574/21574 EN→RU,
+пропусков0. Остаток364 (158 Go/150 TypeScript/19 YAML/37 Bash) остаётся в scope.
+
+Context7 /kubernetes-sigs/kustomize: ordered patches, Component, JSON6902,
+strategic merge и exact anchored targets. Версии зависимостей не обновлялись.
+Go/PWA/контракты/миграции не менялись; предыдущие build/unit относятся к прежним
+неизменённым исходникам. Deploy/browser/full E2E/live QA не выполнены этим
+пакетом. PR остаётся Draft до завершения scope #1823.
 
 ## Общие технические Deployment и runtime egress — 25.10.2026
 

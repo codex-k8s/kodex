@@ -1,0 +1,108 @@
+# Общие Pod/registry/sidecar настройки; именные проверки выполняются до изменения массивов.
+- op: test
+  path: /spec/template/spec/containers/0/name
+  value: registry
+- op: test
+  path: /spec/template/spec/volumes/2/name
+  value: tmp
+- op: test
+  path: /spec/template/spec/volumes/3/name
+  value: readiness-script
+- op: add
+  path: /spec/revisionHistoryLimit
+  value: 2
+- op: add
+  path: /spec/template/spec/shareProcessNamespace
+  value: true
+- op: add
+  path: /spec/template/spec/automountServiceAccountToken
+  value: false
+- op: add
+  path: /spec/template/spec/enableServiceLinks
+  value: false
+- op: add
+  path: /spec/template/spec/terminationGracePeriodSeconds
+  value: 30
+- op: add
+  path: /spec/template/spec/securityContext
+  value:
+    runAsNonRoot: true
+    fsGroup: 10001
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+- op: add
+  path: /spec/template/spec/containers/0/image
+  value: registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
+- op: add
+  path: /spec/template/spec/containers/0/imagePullPolicy
+  value: IfNotPresent
+- op: add
+  path: /spec/template/spec/containers/0/resources
+  value:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+- op: add
+  path: /spec/template/spec/containers/0/securityContext
+  value:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+      - ALL
+- op: add
+  path: /spec/template/spec/containers/0/readinessProbe/periodSeconds
+  value: 5
+- op: add
+  path: /spec/template/spec/containers/0/readinessProbe/timeoutSeconds
+  value: 2
+- op: add
+  path: /spec/template/spec/containers/0/readinessProbe/failureThreshold
+  value: 3
+- op: add
+  path: /spec/template/spec/containers/0/livenessProbe/periodSeconds
+  value: 15
+- op: add
+  path: /spec/template/spec/containers/0/livenessProbe/timeoutSeconds
+  value: 2
+- op: add
+  path: /spec/template/spec/containers/0/livenessProbe/failureThreshold
+  value: 3
+- op: add
+  path: /spec/template/spec/volumes/2/emptyDir
+  value:
+    sizeLimit: 32Mi
+- op: add
+  path: /spec/template/spec/volumes/3/configMap
+  value:
+    name: kodex-registry-readiness
+    defaultMode: 365
+- op: copy
+  from: /spec/template/spec/containers/0/securityContext
+  path: /spec/template/spec/containers/1/securityContext
+- op: add
+  path: /spec/template/spec/containers/1/resources
+  value:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
+- op: add
+  path: /spec/template/spec/containers/0/volumeMounts
+  value:
+  - name: data
+    mountPath: /var/lib/registry
+  - name: credentials
+    mountPath: /var/run/secrets/kodex/registry
+    readOnly: true
+  - name: tmp
+    mountPath: /tmp

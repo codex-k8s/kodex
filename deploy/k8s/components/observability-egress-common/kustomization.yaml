@@ -1,0 +1,10 @@
+# Только прежние telemetry consumers; namespace и pod selectors остаются в одном AND peer.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+patches:
+- path: patch.yaml
+  target:
+    group: networking.k8s.io
+    version: v1
+    kind: NetworkPolicy
+    name: (automation-scheduler-exact-runtime-paths|integration-gateway-exact-runtime-paths|interaction-gateway-exact-runtime-paths|secret-broker-exact-runtime-paths|artifact-retention-exact-runtime-paths|role-image-builder-exact-runtime-paths|kodex-image-owner-protected-exact-paths)

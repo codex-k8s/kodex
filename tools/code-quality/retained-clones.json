@@ -363,14 +363,6 @@
     },
     {
       "format": "yaml",
-      "firstPath": "deploy/k8s/base/artifact-retention/networkpolicy.yaml",
-      "secondPath": "deploy/k8s/base/stt-tts-service/networkpolicy.yaml",
-      "fragmentSHA256": "2812c2bf4e3bac7c09b6fc25bc4227d9253a72c9900062fc642c9e7552a1d082",
-      "count": 1,
-      "reason": "Совпали два ограниченных egress назначения telemetry: OTLP collector и Sentry relay с точными namespaceSelector/podSelector и портами. Эти разрешения принадлежат разным исходным workload, а не общей политике, применимой к любым pod. Дедупликация через более широкий selector расширила бы authority; самостоятельные декларации оставлены по точным путям и фрагменту."
-    },
-    {
-      "format": "yaml",
       "firstPath": "deploy/k8s/base/stt-tts-service-provider-smoke/networkpolicy.yaml",
       "secondPath": "deploy/k8s/base/stt-tts-service/networkpolicy.yaml",
       "fragmentSHA256": "1a57a60f3fe56ed6a25c5955ddc99df15e0ddaa96f60db5e3c9ed3f705f3c454",
@@ -8176,6 +8168,118 @@
       "fragmentSHA256": "01c9373ddb489b3e063e89a58dd5a726b90af4a9ebbde09bc620a6f01d7228a7",
       "count": 1,
       "reason": "OAuth2 grafana/headlamp policies выбирают разные instances и namespaces observability/platform-admin; shared DNS/OIDC peer shape не выдаёт общих полномочий на эти surfaces. Installation consumer работает с явными именами и последующим SSO ingress readback, оба peer selectors остаются в одном AND элементе. Общий installer/YAML generator ради декларативного окна не вводится. Оставлен только этот exact fragment/hash/count1, остальные ports/профили/политики не исключаются."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/image-supply-chain/registry.yaml",
+      "secondPath": "deploy/k8s/base/image-supply-chain/registry.yaml",
+      "fragmentSHA256": "9c0d0cd2e6b2bb87db76c9478ec6b290b38ee5c6458bbfb20e66014b55193b2a",
+      "count": 1,
+      "reason": "Окно пересекает окончание pull credential projection и заголовки отдельных push/admin Deployment. Общие registry/POD/sidecar fields уже вынесены в image-registry-technical-defaults. Остаются конкретные Secret и ServiceAccount names, scope labels/selectors и разные loopback/TLS HTTP endpoints. Объединение этих деклараций в одну роль нарушило бы физическое разделение pull/staging push/admin. Сохранён только exact внутрефайловый fragment/hash/count1, не manifests целиком."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/image-supply-chain/registry.yaml",
+      "secondPath": "deploy/k8s/base/image-supply-chain/registry.yaml",
+      "fragmentSHA256": "4161a315a15e7b89d5628efb793f0a49f7cf3450e2df46038085f06de9913c8c",
+      "count": 1,
+      "reason": "Окно содержит границу push/admin/promotion документов и обязательные nominal Kubernetes bindings: metadata, selector/template labels, ServiceAccount, storage/credentials и разные HTTP_ADDR5002/5003. Общий technical component и certificate-guard implementation уже переиспользуются; отдельные identities не являются копией исполняемого алгоритма. Generic renderer для сокрытия role bindings не вводится. Только точный fragment/hash/count1; никакой общей выдачи credential или прав."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/image-supply-chain/registry.yaml",
+      "secondPath": "deploy/k8s/base/image-supply-chain/registry.yaml",
+      "fragmentSHA256": "26a0f63944049e129318772763c72b706d1c6a303805e8eb0a536da01318b0c1",
+      "count": 1,
+      "reason": "Нативные certificate-guard env задают разные admin/promotion SNI/ports и username/password filenames; volumes связывают разные Secret и staging/promoted PVC. Общие image/command/probe/mount/security/resources уже вынесены. Здесь остаётся защищаемая связь роль→transport/application credential→storage, включая различную область записи. Сохранено только это exact window/hash/count1, не содержимое credentials и не весь registry файл."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/automation-scheduler/deployment.yaml",
+      "secondPath": "deploy/k8s/base/secret-broker/deployment.yaml",
+      "fragmentSHA256": "007aa62425e08165b9143833d96224b3cf8b991267f0ada5e5d9aeb2c6abc1c6",
+      "count": 1,
+      "reason": "Env scheduler/secret-broker связывают разные workload-owned CA/certificate/private-key/grant filenames и имена ключей конфигурации. Downward API environment общий, но authority paths и дополнительные broker server/client key inputs самостоятельны. Общие rollout/probes/hardening/CPU уже вынесены ранее; строковые подстановки не должны скрывать issuer и mount ownership. Сохранено только данное exact pair/hash/count1 окно без исключения env или transport областей."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/automation-scheduler/deployment.yaml",
+      "secondPath": "deploy/k8s/base/secret-broker/deployment.yaml",
+      "fragmentSHA256": "6aea930c514cac9fe7e7a30c4e09966f06c4a6fe6f93e4714b8a0682ebfc5f11",
+      "count": 1,
+      "reason": "Окно scheduler/broker OTEL/Sentry env содержит разные workload-owned CA и DSN filenames; после него у broker отдельный gRPC8443, у scheduler только metrics9090. Technical defaults и runtime telemetry network rules уже общие. Обобщать этот конфигурационный payload потребовало бы зависимых substitutions в secret mounts вместо явного wiring, не вынесло бы новый алгоритм. Только exact pair/hash/count1; реальные секреты не включены."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/automation-scheduler/deployment.yaml",
+      "secondPath": "deploy/k8s/base/integration-gateway/deployment.yaml",
+      "fragmentSHA256": "3da51d04fd77924642b396938d395707986b732b21e488cf605f17256af4ddc2",
+      "count": 1,
+      "reason": "Mount declarations scheduler/integration задают одинаковые категории TLS/CA/grant/OTEL с разными абсолютными workload mount roots. Integration дополнительно получает credentials и scratch volume. Это явные пути, используемые соответствующим config/env, после выноса общего technical runtime. Generic mount renderer не добавляется ради синтаксиса YAML и не получает authority на общие секреты. Сохранено только это exact pair/hash/count1 окно."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/automation-scheduler/deployment.yaml",
+      "secondPath": "deploy/k8s/base/interaction-gateway/deployment.yaml",
+      "fragmentSHA256": "7f9f9be205adff034aa1aaa77812b15e4e7c6b25bca42ed68ea61c366ad9b1d6",
+      "count": 1,
+      "reason": "Окно scheduler/interaction пересекает workload-specific observability mount roots и Secret/ConfigMap/emptyDir declarations. Разный workload-tls Secret связывает точную identity; interaction имеет отдельные integration credentials. Общая policy телеметрии и hardening уже переиспользованы, а trust и grant inputs остаются явно проверяемыми в unit. Это bounded exact pair/hash/count1, не blanket ignore volumes/Deployments."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/automation-scheduler/networkpolicy.yaml",
+      "secondPath": "deploy/k8s/base/integration-gateway/networkpolicy.yaml",
+      "fragmentSHA256": "4096b54cd873f398cb9f265b4bf4883e33d29506023b8955d99d18d413adc6e7",
+      "count": 1,
+      "reason": "NetworkPolicy header automation-scheduler/integration-gateway содержат разные default-deny names, app selectors и exact-runtime-paths names/component selectors. Default deny выбирает конкретный workload; runtime policies также принадлежат разным unit. Общие egress DNS/CP и telemetry rules уже вынесены в компоненты, остаётся Kubernetes nominal schema и identity binding. Сохранён только указанный exact pair/hash/count1; порты и направления не исключены из проверки."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/automation-scheduler/networkpolicy.yaml",
+      "secondPath": "deploy/k8s/base/interaction-gateway/networkpolicy.yaml",
+      "fragmentSHA256": "4096b54cd873f398cb9f265b4bf4883e33d29506023b8955d99d18d413adc6e7",
+      "count": 1,
+      "reason": "NetworkPolicy header automation-scheduler/interaction-gateway содержат разные default-deny names, app selectors и exact-runtime-paths names/component selectors. Default deny выбирает конкретный workload; runtime policies также принадлежат разным unit. Общие egress DNS/CP и telemetry rules уже вынесены в компоненты, остаётся Kubernetes nominal schema и identity binding. Сохранён только указанный exact pair/hash/count1; порты и направления не исключены из проверки."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/automation-scheduler/networkpolicy.yaml",
+      "secondPath": "deploy/k8s/base/secret-broker/networkpolicy.yaml",
+      "fragmentSHA256": "4096b54cd873f398cb9f265b4bf4883e33d29506023b8955d99d18d413adc6e7",
+      "count": 1,
+      "reason": "NetworkPolicy header automation-scheduler/secret-broker содержат разные default-deny names, app selectors и exact-runtime-paths names/component selectors. Default deny выбирает конкретный workload; runtime policies также принадлежат разным unit. Общие egress DNS/CP и telemetry rules уже вынесены в компоненты, остаётся Kubernetes nominal schema и identity binding. Сохранён только указанный exact pair/hash/count1; порты и направления не исключены из проверки."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/control-plane/deployment.yaml",
+      "secondPath": "deploy/k8s/base/control-plane/deployment.yaml",
+      "fragmentSHA256": "fed2ddc4d90793b3e816909d0913640cc7e96c8f0e3b0bd30d5bcdfbb9c8b6c1",
+      "count": 1,
+      "reason": "Самопересечение configMapKeyRef env списка control-plane: builder/frontend/toolchain digests, trusted repository/digest, runtime contract revision/hash — разные именованные поля одной policy. Повторяется синтаксис EnvVarSource, а не один алгоритм; удаление поля или универсальный envFrom изменили бы публичные env names/config wiring. Сохранено только данное overlapping window/hash/count1, без исключения файла или всего env."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/control-plane/deployment.yaml",
+      "secondPath": "deploy/k8s/base/runtime-controller/deployment.yaml",
+      "fragmentSHA256": "1e260e2f80a098d72f77c6b9e2a11506bc3d70976f98a6d8332939a96c5993cc",
+      "count": 1,
+      "reason": "Окна ConfigMap env control-plane/runtime-controller связывают разные names к конкретным ключам общей image-admission policy: CP требует build/trusted-base данные, controller — promoted repository/runtime contract/AppArmor. Общий источник policy уже один; отдельные декларации потребителей необходимы для конфигурационного API. Только этот exact pair/hash/count1, не дополнительная копия бизнес-логики и не широкий ignore."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-readback-attestor/runtime.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-restore/runtime.yaml",
+      "fragmentSHA256": "556f1f335cdd09c84638ae70e35c5b9bc4b557fcb7f4b3541907c2079356d272",
+      "count": 1,
+      "reason": "EnvFrom и env readback-attestor/restore-controller содержат разные ConfigMap names и authority-owned database/TLS/client-CA filenames. Оба процесса имеют раздельные ServiceAccount, UID и grants. Совпадающая Downward API schema не оправдывает общий credential mount root либо скрытую строковую генерацию. Сохранён лишь exact pair/hash/count1 fragment, остальные технические deployment совпадения продолжают учитываться."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-restore/rbac.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-restore/rbac.yaml",
+      "fragmentSHA256": "b9031e146eea2ef329316da4e19ffc64849fa5cf11d35ff38aaeec8f2cde4308",
+      "count": 1,
+      "reason": "RoleBinding declarations связывают разные roleRef и закрытые наборы ServiceAccount: evidence-readers controller/recovery против backup-reader operator/PITR. Перед ними get разрешён на разные exact resourceNames/types. Общий шаблон не должен смешивать Secret evidence с PostgreSQL backup permissions; повторение обязательной RBAC schema вокруг разных identities не является общим алгоритмом. Только этот внутрефайловый exact fragment/hash/count1."
     }
   ]
 }

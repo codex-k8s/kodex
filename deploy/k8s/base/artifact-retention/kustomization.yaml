@@ -12,3 +12,5 @@ resources:
   - prometheusrule.yaml
   - dashboard.yaml
 patches: null
+components:
+- ../../components/observability-egress-common

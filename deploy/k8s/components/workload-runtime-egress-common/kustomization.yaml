@@ -2,6 +2,8 @@
 # Secret-broker сохраняет исходный egress-gateway перед DNS через move2→0.
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
+components:
+- ../observability-egress-common
 patches:
 - path: patch.yaml
   target:

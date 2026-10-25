@@ -52,15 +52,3 @@ spec:
               app.kubernetes.io/name: kodex-image-registry
               kodex.dev/registry-scope: pull
       ports: [{protocol: TCP, port: 5000}]
-    - to:
-        - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: observability}
-          podSelector:
-            matchLabels: {app.kubernetes.io/name: opentelemetry-collector}
-      ports: [{protocol: TCP, port: 4317}]
-    - to:
-        - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: observability}
-          podSelector:
-            matchLabels: {app.kubernetes.io/name: sentry-relay}
-      ports: [{protocol: TCP, port: 8443}]

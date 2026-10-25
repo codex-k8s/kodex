@@ -36,3 +36,6 @@ configMapGenerator:
       - release-artifact-materializer.sh
 generatorOptions:
   disableNameSuffixHash: true
+components:
+  - ../../components/observability-egress-common
+  - ../../components/image-registry-technical-defaults

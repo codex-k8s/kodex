@@ -12,6 +12,7 @@ resources:
 - issuer-networkpolicy.yaml
 - prometheusrule.yaml
 components:
+- ../../components/observability-egress-common
 - ../../components/internal-rpc-authority-role-image-builder-issuer
 - ../../components/internal-rpc-authority-namespaced-network-egress-common
 patches: null
