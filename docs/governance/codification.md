@@ -4,7 +4,7 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 2.2.19
+version: 2.2.20
 updated: 2026-10-25
 ---
 
@@ -26,6 +26,7 @@ updated: 2026-10-25
 - `OPS-DOC-INTEGRATION-COMPLETION-1899` — [Идемпотентность completion при восстановлении интеграции](../operations/integration-completion-generation-1899.md).
 - `OPS-DOC-USAGE-COMPLETENESS-1840` — [Полнота измеренного расхода токенов](../operations/usage-completeness-1840.md).
 - `OPS-DOC-BACKUP-READER-1887` — [Адресное восстановление назначенной backup reader identity](../operations/backup-reader-reconcile-1887.md).
+- `OPS-DOC-ARTIFACT-COMMIT-ACK-1889` — [Сохранность артефакта при неизвестном результате COMMIT](../operations/artifact-commit-ack-1889.md).
 
 Документ задает устойчивые идентификаторы и реестр документации.
 
