@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { planControlPlaneMigration, migrationReadback } from './control-plane-migration.mjs';
 import { fingerprint } from './scoped-release.mjs';
@@ -46,6 +46,16 @@ test('migration readback normalizes only empty container mounts omitted by nativ
   assert.throws(()=>migrationReadback(removedSource,plan,''),/MIGRATION_JOB_SPEC_CHANGED/);
  }
 });
+// Только созданные оснасткой публичные исходники получают доступ для runtime.
+// Приватный родитель, планы, квитанции и fake kubectl сюда не входят; umask процесса сохраняется.
+function makeFixtureSourceReadable(directory) {
+ chmodSync(directory,0o755);
+ for(const entry of readdirSync(directory,{withFileTypes:true})) {
+  const path=join(directory,entry.name);
+  if(entry.isDirectory())makeFixtureSourceReadable(path);
+  else {assert.equal(entry.isFile(),true);chmodSync(path,0o644);}
+ }
+}
 function cliFixture(t, profile = 'legacy', missingBase = false) {
  const dir=mkdtempSync('/tmp/cpm-');t.after(()=>rmSync(dir,{recursive:true,force:true}));const repo=join(dir,'source');mkdirSync(repo,{mode:0o755});const migration='services/internal/control-plane/cmd/cli/migrations/20260908000300_email_legacy_package_admission.sql';mkdirSync(join(repo,'services/internal/control-plane/cmd/cli/migrations'),{recursive:true});writeFileSync(join(repo,migration),'-- Синтетическая миграция CLI fixture\n');writeFileSync(join(repo,'services/internal/control-plane/cmd/cli/migrations/20260908000500_email_mailbox_observation_receipts.sql'),'-- Синтетическая additive миграция\n');
  writeFileSync(join(repo,'services/internal/control-plane/cmd/cli/migrations/20260913000100_runtime_materialization_global_identity.sql'),'-- Синтетическая materialization миграция\n');
@@ -60,6 +70,7 @@ function cliFixture(t, profile = 'legacy', missingBase = false) {
  writeFileSync(join(repo,'services/internal/control-plane/cmd/cli/migrations/20261019000300_project_purge_audit_references.sql'),'-- Синтетическая forward audit references миграция\n');
  writeFileSync(join(repo,'services/internal/control-plane/cmd/cli/migrations/20261019000400_project_purge_deferred_graph.sql'),'-- Синтетическая forward deferred graph миграция\n');
  writeFileSync(join(repo,'services/internal/control-plane/cmd/cli/migrations/20261020000200_provider_financial_catalog_floor.sql'),'-- Синтетическая forward financial миграция\n');
+ makeFixtureSourceReadable(repo);
  const git=(...a)=>execFileSync('git',['-C',repo,...a],{stdio:['ignore','pipe','pipe']}).toString().trim();git('init','-q');git('remote','add','origin','https://github.com/codex-k8s/kodex.git');git('add','.');git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','Оснастка');const rev=git('rev-parse','HEAD');
  const base=fixture(repo),render=join(dir,'render.json');delete base.metadata.uid;delete base.metadata.resourceVersion;delete base.status;writeFileSync(render,JSON.stringify(base),{mode:0o600});
  const state=join(dir,'state.json'), plan=join(dir,'plan.json'), evidence=join(dir,'evidence.jsonl');writeFileSync(state,JSON.stringify({...(missingBase?{}:{base:fixture(repo)}),deployment:{metadata:{uid:'deployment-uid',resourceVersion:'7'},spec:{replicas:2,template:{spec:{containers:[{name:'control-plane'}]}}}},calls:[],mode:'',profile,replicas:0,pods:[]}),{mode:0o600});const executable=join(dir,'kubectl');writeFileSync(executable,`#!/usr/bin/env node
