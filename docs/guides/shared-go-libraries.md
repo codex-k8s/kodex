@@ -4,8 +4,8 @@ title: Общие библиотеки Go
 type: guide
 status: approved
 owner: architect
-version: 1.0.4
-updated: 2026-10-06
+version: 1.0.5
+updated: 2026-10-25
 ---
 
 # Общие библиотеки Go
@@ -78,6 +78,18 @@ version. Циклические зависимости между библиот
 - migration/compatibility policy.
 
 ## Каталог обязательных библиотек
+
+### `kubernetesadmission`
+
+Общий read-only admission gate publisher adapters: GET policy, GET binding,
+построение expected source и точное сравнение spec при наличии UID/version,
+наблюдаемого положительного generation и type-checking status без warnings.
+`Check` сохраняет fixed error identities вызывающего; `SameJSON` сохраняет
+nil/empty semantics. Неполная конфигурация checker закрыто отклоняется.
+Модуль не создаёт client, retry, namespace, registry, mutation или grant.
+Имена policy, порядок их проверки, source registration, TLS/RBAC и budget
+остаются у callers. Это последовательное observation, не атомарный snapshot
+или гарантия admission каждого будущего запроса.
 
 ### `serviceruntime`
 

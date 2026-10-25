@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.30
-updated: 2026-10-16
+version: 1.7.31
+updated: 2026-10-25
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -147,6 +147,17 @@ securityContext), `/grpc/grpc-go` (transport credentials, metadata/interceptors)
 `/jackc/pgx` (QueryRow/ErrNoRows) и `/pressly/goose` (transactional SQL migrations).
 
 ## CAS поставки Kubernetes
+
+Проверка admission перед публикацией использует общий `libs/go/kubernetesadmission`
+и закрытый caller-owned реестр точных policy/binding names и expected sources.
+Сначала читается policy, затем binding; expected source вызывается только после
+обоих успешных чтений. Наличие UID/resourceVersion, положительное observed
+поколение, type-checking status без warnings и точные spec обязательны.
+Fixed caller errors не отражают provider response либо policy body. Ошибка
+останавливает publisher до следующего действия; checker ничего не публикует.
+Два последовательных GET не являются атомарным snapshot или допуском будущей
+записи: namespace, TLS/RBAC, policy registry и native publication fences остаются
+отдельными обязанностями adapter. JSON equality не нормализует nil/empty.
 
 В SRE-переходах status update контроллера может изменить `resourceVersion`
 после quiesce без изменения конфигурации. Непосредственно перед единственным

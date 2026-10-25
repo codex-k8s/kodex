@@ -1,14 +1,13 @@
 package emailprojection
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"strconv"
 
 	api "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
+	"github.com/codex-k8s/kodex/libs/go/kubernetesadmission"
 	"github.com/codex-k8s/kodex/libs/go/mailpolicy"
-	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -39,14 +38,7 @@ const (
 // preserving the existing nil/empty encoding distinction.
 // samePublicationJSON сравнивает сериализованные JSON bytes и возвращает false при ошибке любого
 // marshal, сохраняя прежнее различие кодирования nil и empty.
-func samePublicationJSON(left, right any) bool {
-	a, err := json.Marshal(left)
-	if err != nil {
-		return false
-	}
-	b, err := json.Marshal(right)
-	return err == nil && bytes.Equal(a, b)
-}
+func samePublicationJSON(left, right any) bool { return kubernetesadmission.SameJSON(left, right) }
 
 // CheckPublicationAdmission requires the fixed namespace and observed warning-free admission
 // policy plus exact expected binding/spec before any mailbox publication effect.
@@ -56,27 +48,7 @@ func (publisher *Kubernetes) CheckPublicationAdmission(ctx context.Context) erro
 	if publisher.namespace != "kodex-system" {
 		return ErrInvalid
 	}
-	policy, err := publisher.client.AdmissionregistrationV1().ValidatingAdmissionPolicies().Get(ctx, mailpolicy.PublicationAdmissionName, metav1.GetOptions{})
-	if err != nil {
-		return ErrUnavailable
-	}
-	binding, err := publisher.client.AdmissionregistrationV1().ValidatingAdmissionPolicyBindings().Get(ctx, mailpolicy.PublicationAdmissionName, metav1.GetOptions{})
-	if err != nil {
-		return ErrUnavailable
-	}
-	policySource, bindingSource := mailpolicy.PublicationAdmissionResources()
-	policyRaw, _ := json.Marshal(policySource)
-	bindingRaw, _ := json.Marshal(bindingSource)
-	var expectedPolicy admissionv1.ValidatingAdmissionPolicy
-	var expectedBinding admissionv1.ValidatingAdmissionPolicyBinding
-	if json.Unmarshal(policyRaw, &expectedPolicy) != nil || json.Unmarshal(bindingRaw, &expectedBinding) != nil {
-		return ErrInvalid
-	}
-	if policy.UID == "" || policy.ResourceVersion == "" || policy.Generation < 1 || policy.Status.ObservedGeneration != policy.Generation || policy.Status.TypeChecking == nil || len(policy.Status.TypeChecking.ExpressionWarnings) != 0 ||
-		binding.UID == "" || binding.ResourceVersion == "" || !samePublicationJSON(policy.Spec, expectedPolicy.Spec) || !samePublicationJSON(binding.Spec, expectedBinding.Spec) {
-		return ErrConflict
-	}
-	return nil
+	return kubernetesadmission.Check(ctx, publisher.client.AdmissionregistrationV1(), mailpolicy.PublicationAdmissionName, mailpolicy.PublicationAdmissionResources, kubernetesadmission.Failures{Invalid: ErrInvalid, Unavailable: ErrUnavailable, Conflict: ErrConflict})
 }
 
 // publicationObjects renders the validated mail document into typed ConfigMap/network resources

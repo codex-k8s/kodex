@@ -2,7 +2,6 @@
 package integrationegress
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,8 +9,8 @@ import (
 	"time"
 
 	shared "github.com/codex-k8s/kodex/libs/go/integrationegresspolicy"
+	"github.com/codex-k8s/kodex/libs/go/kubernetesadmission"
 	"github.com/codex-k8s/kodex/libs/go/mailpolicy"
-	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -109,14 +108,7 @@ func New(client kubernetes.Interface) (*Kubernetes, error) {
 // nil/empty distinctions rather than normalizing resource specs.
 // sameJSON сравнивает marshaled JSON bytes с false при ошибке, сохраняя прежние различия nil и
 // empty вместо нормализации resource specs.
-func sameJSON(left, right any) bool {
-	a, err := json.Marshal(left)
-	if err != nil {
-		return false
-	}
-	b, err := json.Marshal(right)
-	return err == nil && bytes.Equal(a, b)
-}
+func sameJSON(left, right any) bool { return kubernetesadmission.SameJSON(left, right) }
 
 // CheckAdmission reads all three registered admission policies/bindings and requires exact specs,
 // observed generation, identity/version and warning-free type checking before publication.
@@ -132,27 +124,8 @@ func (publisher *Kubernetes) CheckAdmission(ctx context.Context) error {
 		{shared.CreationBoundaryName, shared.CreationBoundaryResources},
 	}
 	for _, item := range registered {
-		policy, err := publisher.client.AdmissionregistrationV1().ValidatingAdmissionPolicies().Get(ctx, item.name, metav1.GetOptions{})
-		if err != nil {
-			return ErrUnavailable
-		}
-		binding, err := publisher.client.AdmissionregistrationV1().ValidatingAdmissionPolicyBindings().Get(ctx, item.name, metav1.GetOptions{})
-		if err != nil {
-			return ErrUnavailable
-		}
-		policySource, bindingSource := item.source()
-		policyRaw, _ := json.Marshal(policySource)
-		bindingRaw, _ := json.Marshal(bindingSource)
-		var expectedPolicy admissionv1.ValidatingAdmissionPolicy
-		var expectedBinding admissionv1.ValidatingAdmissionPolicyBinding
-		if json.Unmarshal(policyRaw, &expectedPolicy) != nil || json.Unmarshal(bindingRaw, &expectedBinding) != nil {
-			return ErrInvalid
-		}
-		if policy.UID == "" || policy.ResourceVersion == "" || policy.Generation < 1 ||
-			policy.Status.ObservedGeneration != policy.Generation || policy.Status.TypeChecking == nil ||
-			len(policy.Status.TypeChecking.ExpressionWarnings) != 0 || binding.UID == "" || binding.ResourceVersion == "" ||
-			!sameJSON(policy.Spec, expectedPolicy.Spec) || !sameJSON(binding.Spec, expectedBinding.Spec) {
-			return ErrConflict
+		if err := kubernetesadmission.Check(ctx, publisher.client.AdmissionregistrationV1(), item.name, item.source, kubernetesadmission.Failures{Invalid: ErrInvalid, Unavailable: ErrUnavailable, Conflict: ErrConflict}); err != nil {
+			return err
 		}
 	}
 	return nil

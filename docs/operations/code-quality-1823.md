@@ -4,11 +4,85 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.457.0
+version: 1.458.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общий admission gate двух Kubernetes publisher adapters — 25.10.2026
+
+CheckPublicationAdmission у mailbox publisher и CheckAdmission у integration
+egress используют новый libs/go/kubernetesadmission. Check выполняет прежние
+GET policy, GET binding, source, marshal/decode и exact identity/status/spec
+проверки. UID/resourceVersion обязательны, generation положительно и наблюдаемо,
+type-checking status присутствует и не содержит warnings. Source вызывается
+лишь после двух успешных чтений; первая ошибка останавливает дальнейшие шаги.
+Failures передаёт три fixed native error identities без отражения provider
+errors/body. Неполная server-owned конфигурация checker закрыто отклоняется
+до reads. Это дополнительный отказ для некорректного dependency configuration;
+оба настоящих caller используют заданные client/source/non-nil sentinels.
+
+Names/expected sources и их registry order остаются у native adapters.
+Mailbox сохраняет guard namespace kodex-system и одну mail policy; integration
+сохраняет последовательность mail publication/integration publication/creation
+boundary. При ошибке проверка завершается до публикации, при успехе loop
+продолжается. Native PublishMailbox/Publish, generation/digest fences, ConfigMap/
+NetworkPolicy/Deployment writes, service switching и receipts не менялись.
+Shared SameJSON сохраняет serialized byte equality, nil/empty distinction,
+порядок marshal и false на ошибке. Два прежних private comparison names
+остаются тонкими wrappers, все их callers сохранены.
+
+Обратная проверка actual library signature/body, error field bindings,
+namespace guard/registry и JSON wrappers восстанавливает оба полных исходных
+AST, включая comments/directives и все остальные методы. Успешный return nil
+helper при inlining в integration loop соответствует прежнему продолжению
+цикла; parser errors закрыто отклоняются до semantic use. Источники mail
+publisher construction/error definitions и остальные control-plane handlers
+не менялись. Два GET не становятся атомарным snapshot и не доказывают допуск
+каждой будущей записи; TLS/RBAC/name registration остаются у adapter.
+Этот инвариант закреплён в GUIDE-DOC-003 и каталог модуля — в GO-DOC-006.
+
+Четыре unit-функции библиотеки проверяют16 metadata/status/spec cases,
+6 read/source precedence cases,5 incomplete dependency/error configurations
+и8 JSON encoding cases плюс неизменность входа. Fake client допускает только
+два exact cluster-scoped GET в исходном порядке; на ранней ошибке следующий
+GET/source не выполняется. Expected specs заданы независимо от checker.
+Проверены warnings, missing type checking, observed generation mismatch,
+nil/empty pointer presence, binding action/name mismatch, source marshal/type
+failure и точная sentinel identity без provider reflection.
+
+Отдельный module с README/build ownership добавлен в control-plane require/
+replace и его Docker COPY. Все3 Kubernetes зависимости остаются v0.36.3;
+module graph содержит22 local modules, для каждого проверено наличие исходника
+в Docker context. Dockerfile отличается единственной COPY строкой, base digests,
+build flags и entrypoint прежние; CP go.sum не менялся. Общий test-go-modules.sh
+обнаруживает новый module автоматически. Фактическая сборка OCI image здесь
+не запускалась; проверка module graph/COPY не объявляется Docker build.
+
+Новая библиотека: build — PASS LOCAL (19,47с), unit — PASS LOCAL (37,32с).
+Весь control-plane: build с mod=readonly — PASS LOCAL (8,23с), unit с count1
+и mod=readonly — PASS LOCAL (39,13с). Workspace отключён, GOMAXPROCS4,
+credentials/KODEX/VITE/KUBECONFIG исключены из child env. SHA256 четырёх Go
+sources до/после CP checks совпадают. Новые10 именованных declarations имеют
+EN→RU descriptions;21539/21539 собственных Go declarations документированы.
+
+Detector:6719 sources/222 прежних exclusions,1608 raw/1026 retained/582
+unresolved против1609/1026/583. Исчезли два старых keys: общий258-token Go
+admission fragment и Docker COPY окно. Одно новое221-token Docker окно
+перечитано вместе с обоими полными Dockerfile: module graphs, service source,
+binaries и entrypoints разные; общий suffix COPY сохраняет явные build inputs.
+Обновлено только это exact path/hash/count1 решение.894 прежних entries
+не менялись, итог895 entries.2 count/hash mutations и2 возврата исчезнувших
+keys отклонены actual assessor. Все5 стадий отчёта — PASS LOCAL; порог,
+нормализация и generated exclusions не расширялись.
+
+Context7 resolve Kubernetes client-go вернул Invalid API key; ключи не менялись.
+Проверены официальные Kubernetes ValidatingAdmissionPolicy/client-go typed
+API и закреплённые исходники v0.36.3 через сборку. Browser/full E2E, PostgreSQL
+component, OCI image build, apply/deploy/live admission и независимая QA —
+NOT RUN. PWA не менялась после dbb3837. Остальные582 группы входят в scope
+#1823, продолжение PR остаётся Draft.
 
 ## Общая подготовка двух assistant component fixtures и SQL access projections — 25.10.2026
 

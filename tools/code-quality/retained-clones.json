@@ -2956,14 +2956,6 @@
     {
       "format": "docker",
       "firstPath": "services/external/control-api-gateway/Dockerfile",
-      "secondPath": "services/internal/control-plane/Dockerfile",
-      "fragmentSHA256": "5374a6eeb93bc88aa811f27b33229c6c2800a9e62af69bdaeab5f611a12220e3",
-      "count": 1,
-      "reason": "Окно COPY локальных Go-модулей control API и control plane похоже после нормализации имён, но фактические библиотеки и выходные бинарники различны. Это перекрытие списка, не повтор исполняемой сборочной операции; отдельные Dockerfile сохраняют явные зависимости. После добавления точного httpserver COPY новое окно повторно сверено с полными Dockerfile обоих компонентов; сохранены прежние разные dependency/runtime inputs и exact count1."
-    },
-    {
-      "format": "docker",
-      "firstPath": "services/external/control-api-gateway/Dockerfile",
       "secondPath": "services/jobs/role-image-builder/Dockerfile",
       "fragmentSHA256": "c810c77148d0dba6bf34da7c1aa73c2b5871fa6f37c23f64d5146e9fe5b7b973",
       "count": 1,
@@ -7160,6 +7152,14 @@
       "fragmentSHA256": "a046c7cf16afbd2638b670542ff4ef5b67b6f934947a7a83f009f40bed296536",
       "count": 1,
       "reason": "112-token окно внутри UNION ALL сопоставляет RUN и SESSION branches. RUN owner берётся из initiated_by и projectless разрешён лишь при target_type SYSTEM_ASSISTANT; SESSION owner — created_by, projectless допускается отдельным условием. Оба возвращают server-derived project/AGENT/WORKFLOW related refs, но таблицы, discriminator, refs и lifecycle predicates различны. resolveAccessTarget читает exact tenant/kind/ref, отклоняет противоречивый requested project и не выдаёт permission; последующий requireAccess/access.Evaluate остаётся отдельно. Универсальный SQL owner resolver стёр бы явные kind-specific eligibility clauses. Адресное решение ограничено этой парой путей, fragment SHA256 и count1."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/control-api-gateway/Dockerfile",
+      "secondPath": "services/internal/control-plane/Dockerfile",
+      "fragmentSHA256": "08cb9d0e337ef4068756f4f00599c8e3a35bfb230cd67bf4744ac67bd3687c64",
+      "count": 1,
+      "reason": "221-token окно COPY связывает часть explicit локальных module dependencies control-api-gateway и control-plane. Control-plane теперь отдельно копирует kubernetesadmission для двух native publication adapters; gateway этой зависимости не получает. Остальной общий suffix не является одной исполняемой build operation: module graphs, service source, выходные binaries и runtime entrypoints различны. Полные Dockerfile перечитаны; build cache/context и allowlist COPY остаются отдельными. Новый helper включён в CP module graph и его build context, base image/digest/flags прежние. Общий COPY всех libs либо общий Dockerfile расширил бы inputs и скрыл принадлежность зависимостей. Сохранено только это exact path pair/fragment hash/count1; Dockerfiles не исключаются."
     }
   ]
 }
