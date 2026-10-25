@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.41
+version: 1.1.42
 updated: 2026-10-25
 ---
 
@@ -505,6 +505,46 @@ pin разрешён только существующему системном�
 совпадение проекта ENV, агента и запуска; исключение разрешено лишь точному
 системному профилю с `ORGANIZATION` ENV и отсутствующим проектом агента/ENV.
 Регрессия: `TestDeletedEnvironmentSecretRetentionComponent` ([#1875](https://github.com/codex-k8s/kodex/issues/1875)).
+
+Новая привязка либо rollback исторической версии ENV повторно проверяет весь
+сохранённый дескриптор секрета через тот же scoped resolver, что create/publish:
+точные ref/revision, namespace/name/key, UID/RV и digest. Ревизия обязана быть
+явной и `ACTIVE`, сам секрет — `ACTIVE`; замена исторического pin текущей
+ревизией запрещена. Область выводится из ENV/agent metadata, включая системный
+профиль с проектным контекстом запуска. `SHARE NOWAIT` на exact Secret/revision
+сохраняются до commit; занятая строка даёт временную ошибку без изменения
+owner state. Claim выполняет ту же проверку внутри своего candidate savepoint:
+непригодный секрет использует существующий отказ `runtime_environment`, а
+storage/lock error не превращается в terminal отказ графа либо metadata miss.
+
+Terminal retirement recovery отличается от completion активной операции.
+Только завершённые legacy `CREATE|ROTATE` и `PUBLISH/COMPLETED` опубликованного
+draft обрабатываются в `READ COMMITTED` под прежними scoped locks Secret и
+operation/draft. Отдельный retention SELECT после получения Secret lock видит
+победивший admission commit. Retirement, cleanup intent и audit атомарны;
+точные claimant/generation draft и UID/RV материала сохраняются. Известная
+нетерминальная операция откатывает probe без effects и проходит прежний
+`SERIALIZABLE` путь заново. Если locked recheck уже terminal, он возвращает
+Conflict до любых effects или ответа `DELETE`; SQL/auth error не разрешает
+fallback. Ожидание блокировки в `SERIALIZABLE` само по себе не обновляет snapshot
+и не доказывает свежесть retention.
+
+| Сценарий | Авторитетный результат |
+| --- | --- |
+| Historical `ACTIVE` R1 при текущей R2 | Exact R1 допускается; receipt replay сохраняет pin |
+| R1 `RETIRED` либо Secret `REVOKED` | Publish/bind/rebind/rollback закрыто отклоняются без owner effects |
+| Admission удерживает SHARE и фиксирует ссылку первым | Terminal recovery после ожидания видит ссылку и возвращает `KEEP` |
+| Terminal recovery удерживает Secret lock первым | Admission временно недоступен; после retirement новый допуск R1 отклоняется |
+| Ошибка descriptor/retention/retirement/cleanup intent | Полный rollback, разрешение удалить материал не выдаётся |
+| Очистка ciphertext опубликованного draft | Отдельный точный intent/ACK; `KEEP` опубликованного материала не разрешает удалить его |
+
+Регрессии: `TestHistoricalEnvironmentSecretAdmissionComponent` и
+`TestHistoricalSecretRecoveryConcurrencyComponent`
+([#1876](https://github.com/codex-k8s/kodex/issues/1876)). Этот контракт не
+утверждает свежесть reference snapshot для всех secret mutations: completion
+активных операций сохраняет прежнюю изоляцию. Отдельная гонка concurrent
+`Complete REVOKE` с admission отслеживается в
+[#1878](https://github.com/codex-k8s/kodex/issues/1878).
 
 Декларация `platform.run.delegate` не создаёт разрешённые цели делегирования.
 План процесса связывает этап с фактическим исполнителем, а не с текстовым
