@@ -33,6 +33,49 @@ validate_render() {
 
 validate_render "$render" || fail 'active workloads do not share the declared authority ABI and image'
 
+# Общая компонента не назначает identity: каждый workload сохраняет точные
+# workload/SPIFFE/PostgreSQL pins. Проверяем результат после всех overlays.
+validate_issuer_identities() {
+  yq -o=json -I=0 '.' "$1" | jq -s -e '
+    def exact_env($key; $expected):
+      [.env[]? | select(.name == $key)] as $entries |
+      ($entries | length) == 1 and $entries[0] == $expected;
+    [ .[] | select(.kind == "Deployment") |
+      . as $deployment |
+      (.spec.template.spec.containers[]?, .spec.template.spec.initContainers[]?) |
+      select(.name == "internal-rpc-authority-issuer") |
+      {deployment: $deployment, issuer: .} ] as $issuers |
+    ($issuers | length) > 0 and
+    all($issuers[];
+      .deployment.metadata.name as $workload |
+      .deployment.metadata.namespace as $namespace |
+      .issuer |
+      exact_env("INTERNAL_RPC_AUTHORITY_WORKLOAD_ID";
+        {name: "INTERNAL_RPC_AUTHORITY_WORKLOAD_ID", value: $workload}) and
+      exact_env("INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID";
+        {name: "INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID",
+         value: ("spiffe://kodex.local/ns/" + $namespace + "/sa/" + $workload)}) and
+      exact_env("INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER";
+        {name: "INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER",
+         valueFrom: {secretKeyRef: {name: ("internal-rpc-authority-" + $workload + "-issuer-postgresql"), key: "username"}}}))
+  ' >/dev/null
+}
+validate_issuer_identities "$render" || fail 'issuer workload identity pins are invalid'
+
+# Каждая мутация независимо проверяет отсутствие подмены или дубликата identity.
+for mutation in \
+  '(.env[] | select(.name == "INTERNAL_RPC_AUTHORITY_WORKLOAD_ID")).value = "other-workload"' \
+  '(.env[] | select(.name == "INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID")).value = "spiffe://kodex.local/ns/kodex-system/sa/other-workload"' \
+  '(.env[] | select(.name == "INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER")).valueFrom.secretKeyRef.name = "other-issuer-postgresql"' \
+  '.env += [{name: "INTERNAL_RPC_AUTHORITY_WORKLOAD_ID", value: "other-workload"}]'; do
+  yq -o=json -I=0 '.' "$render" | jq -s \
+    'map(select(.kind == "Deployment" and .metadata.name == "control-api-gateway"))[0]' |
+    jq '(.spec.template.spec.containers[] | select(.name == "internal-rpc-authority-issuer")) |= ('"$mutation"')' >"$mutated"
+  if validate_issuer_identities "$mutated"; then
+    fail 'invalid issuer identity mutation was accepted'
+  fi
+done
+
 validate_controller_sidecars() {
   yq -o=json -I=0 '.' "$1" | jq -s -e '
   any(.[];

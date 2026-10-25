@@ -1,0 +1,113 @@
+# Общие поля issuer Pod; identity, Secret names и порядок списков задаёт workload patch.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: internal-rpc-authority-issuer-common
+spec:
+  template:
+    metadata:
+      labels:
+        kodex.dev/internal-rpc-authority-issuer: enabled
+        kodex.dev/internal-rpc-authority-abi: '2'
+    spec:
+      securityContext:
+        fsGroup: 29000
+        fsGroupChangePolicy: OnRootMismatch
+      initContainers:
+      - name: internal-rpc-authority-socket-init
+        image: ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
+        command:
+        - /usr/local/bin/internal-rpc-authority-socket-init
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 29000
+          runAsGroup: 29000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: authority-bootstrap-roots
+        secret:
+          secretName: internal-rpc-authority-bootstrap-roots
+          defaultMode: 292
+          items:
+          - key: manifest-root-public.jwk
+            path: bootstrap-public.jwk
+          - key: manifest-root-metadata.json
+            path: bootstrap-metadata.json
+      - name: internal-rpc-authority-snapshot
+        secret:
+          secretName: internal-rpc-authority-snapshot
+          defaultMode: 288
+      - name: internal-rpc-authority-manifest-trust
+        secret:
+          defaultMode: 292
+      - name: internal-rpc-authority-proof-trust
+        secret:
+          defaultMode: 292
+      - name: internal-rpc-authority-issuer-key
+        secret:
+          defaultMode: 292
+      - name: internal-rpc-authority-workload-tls
+        secret:
+          defaultMode: 288
+      - name: internal-rpc-authority-readback-attestor-ca
+        configMap:
+          name: internal-rpc-authority-readback-attestor-ca
+          defaultMode: 288
+      - name: internal-rpc-authority-restore-controller-ca
+        configMap:
+          name: internal-rpc-authority-restore-controller-ca
+          defaultMode: 288
+      - name: internal-rpc-authority-restore-controller-certificate
+        secret:
+          secretName: internal-rpc-authority-restore-controller-tls
+          defaultMode: 288
+          items:
+          - key: tls.crt
+            path: tls.crt
+      - name: internal-rpc-authority-restore-role-trust
+        secret:
+          secretName: internal-rpc-authority-restore-role-trust
+          defaultMode: 288
+          items:
+          - key: restore-role-trust.jws
+            path: restore-role-trust.jws
+      - name: internal-rpc-authority-postgresql
+        secret:
+          defaultMode: 288
+          items:
+          - key: dsn
+            path: dsn
+      - name: internal-rpc-authority-postgresql-ca
+        configMap:
+          name: internal-rpc-authority-postgresql-ca
+          defaultMode: 288
+      - name: internal-rpc-authority-observability
+        configMap:
+          name: internal-rpc-authority-otel-ca
+          defaultMode: 288
+          items:
+          - key: ca.pem
+            path: otel-ca.pem
+      - name: internal-rpc-authority-sentry-dsn
+        secret:
+          secretName: internal-rpc-authority-sentry
+          defaultMode: 288
+          items:
+          - key: dsn
+            path: sentry-dsn
+      - name: authority-readback-credential
+        secret:
+          defaultMode: 292
+      - name: authority-readback-possession
+        secret:
+          defaultMode: 292
+      - name: authority-restore-credential
+        secret:
+          defaultMode: 292
+      - name: authority-restore-ack
+        secret:
+          defaultMode: 292

@@ -1,0 +1,58 @@
+# Общий обычный grant-agent; workload/output/Secret pins остаются в workload patch.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: internal-rpc-authority-worker-grant-common
+spec:
+  template:
+    spec:
+      containers:
+      - name: platform-worker-grant-agent
+        image: ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
+        command:
+        - /usr/local/bin/internal-rpc-authority-platform-worker-grant-agent
+        ports:
+        - name: grant-metrics
+          containerPort: 9093
+          protocol: TCP
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: grant-metrics
+          periodSeconds: 2
+          timeoutSeconds: 2
+          failureThreshold: 30
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: grant-metrics
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 2
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: grant-metrics
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: 5m
+            memory: 16Mi
+          limits:
+            cpu: 100m
+            memory: 48Mi
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 29004
+          runAsGroup: 29000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: platform-worker-grant-signer
+          mountPath: /var/run/secrets/kodex/platform-worker-grant-signer
+          readOnly: true

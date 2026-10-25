@@ -4,11 +4,73 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.422.0
+version: 1.423.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие issuer-компоненты Kubernetes — 25.10.2026
+
+На основе `d3b293b4f2aca7acb2cd72772c025b3a342ce89f` проверены десять
+issuer patches и их Kustomize callers. До чтения выполнена безопасная проверка
+31 исходного файла issuer-компонент: неизвестных sensitive patterns нет.
+Общие поля вынесены в три декларативные компоненты без новых workloads:
+
+- internal-rpc-authority-issuer-pod-common: socket init, Pod security context,
+  общие trust/config volumes и file modes;
+- internal-rpc-authority-issuer-sidecar-common: обычный issuer, общий image,
+  probes, observability, security context и mounts;
+- internal-rpc-authority-worker-grant-sidecar-common: обычный grant-agent,
+  probes/resources/security и общий signer mount.
+
+Компоненты подключаются из прежних адресных issuer-компонент внутри
+изолированных unit bases. Их targets перечисляют только существующие workload
+names. Новых resources, ServiceAccount, RBAC, NetworkPolicy либо Secret нет.
+Role patches сохраняют workload/SPIFFE/PostgreSQL/Secret pins и варианты
+UID/GID, socket names, readiness/preStop, grant output path. Control-plane
+остаётся отдельным профилем. Native issuer/grant-agent runtime-controller
+сохраняют placement в initContainers, restartPolicy Always и startup ordering;
+обычная sidecar-компонента к ним не применяется.
+
+Исходные issuer patches занимали3009 строк; после выноса десять role patches
+занимают1405 и три общих patch313, всего1718. Служебные merge-key элементы
+в role patches намеренно сохраняют точный порядок env/mounts/volumes после
+стратегического слияния. Они не дают identity и не заполняют Secret values.
+
+| Проверяемая граница | Авторитетное доказательство |
+| --- | --- |
+| Все текущие consumers | По графу Kustomization resources/bases/components найдены31 затронутая точка сборки:10 bases,19 overlays и2 полных профиля |
+| Полный итоговый render | До правок сохранены канонические resource snapshots.30 успешных точек после выноса совпадают по всем полям и порядку внутренних списков; различия порядка ключей карт и внешнего порядка документов не учитываются |
+| Полные профили | web-only427 и web-with-mattermost437 resources полностью совпадают с исходным; наборы resources и identities не расширены |
+| Известный исходный FAIL | Standalone deploy/k8s/overlays/staging/control-api-gateway не собирался до правок: patch Ingress не находит ресурс. После правок воспроизводится тот же stderr/exit; этот путь не объявляется PASS и здесь не исправлялся |
+| Identity граница | Публичный ABI render test проверяет ровно один workload ID, SPIFFE с точными namespace/service account и PostgreSQL username Secret ref на каждого issuer; подмена любого из трёх pins и дубликат workload ID закрыто отклоняются в обоих профилях |
+| Native lifecycle | Прежние negative mutations init order/restartPolicy/startup/readiness и смешанного image/ABI проходят; native controller остаётся отдельным owner patch |
+| Дополнительные public проверки | integration-gateway, interaction-gateway, email-bridge и web-only-release render/security scripts — PASS LOCAL; они используют итоговые профили, не только исходные fragments |
+| Исходные полномочия | Secret refs, read-only mounts, file modes, DB identity, exact destinations, claims и workload grants сохранены в совпавшем render; реальный issuer→RPC→owner path не выполнялся |
+
+Kustomize v5.8.2. Context7 resolve снова отклонён из-за ошибки ключа.
+Проверены официальные [Components example](https://github.com/kubernetes-sigs/kustomize/blob/master/examples/components.md)
+и [Kubernetes Kustomize patches](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/#customizing).
+Компоненты используют обычные patches и адресное слияние полей; генераторы,
+load restrictions и исполняемые plugins не добавлялись и не менялись.
+
+Пять public render/security scripts, усиленный ABI test с четырьмя новыми
+негативными мутациями в двух профилях,17 analyzer unit,5 exact-ignore guards,
+полные inventory/detector/assessment, bash -n и git diff --check — PASS LOCAL.
+Один baseline render FAIL сохранён отдельно. Go-код не менялся; build/unit
+последний раз прошли на предыдущем SHA. Kubernetes apply, rollout, TLS/RPC,
+PostgreSQL/RLS/claim races, browser/E2E/deploy/live — NOT RUN.
+
+Detector1685 raw/886 retained occurrences/799 unresolved:52 старых fragment
+keys исчезли,29 новых более коротких окон остаются в разборе. Registry771
+не менялся, новых exclusions нет. Net raw/unresolved меньше на23. Inventory6691
+own sources(+6 декларативных файлов)/222 exclusions; thresholds прежние.
+Go21489:20675 EN→RU,814 missing, без изменений. PR276 Go-файлов/2665
+объявлений, missing0;306 whole changed blobs. #1823 открыт, #1829 Draft,
+QA/main f2e64eb сохранён. Env-файлы не менялись, секреты не переносились;
+обёртка GitHub использует только нужные bot credentials из разрешённого
+источника без вывода значений. Прикладные secret values не извлекались.
 
 ## Integration grants, egress и оставшиеся совместимые snapshot heads — 25.10.2026
 

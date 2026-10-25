@@ -1,0 +1,10 @@
+# Компонента применяется внутри изолированной базы одного workload.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+patches:
+- path: patch.yaml
+  target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: (automation-scheduler|control-api-gateway|email-bridge|integration-gateway|interaction-gateway|role-image-builder|runtime-controller|secret-broker|session-archive|stt-tts-service)
