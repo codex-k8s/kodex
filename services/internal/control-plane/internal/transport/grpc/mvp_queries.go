@@ -12,6 +12,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
 // ListProviderDefinitions returns the authorized provider-definition page after resolving the
@@ -19,17 +20,15 @@ import (
 // ListProviderDefinitions возвращает авторизованную страницу определений провайдеров после
 // получения principal данного метода.
 func (server *Server) ListProviderDefinitions(ctx context.Context, request *controlplanev1.ListProviderDefinitionsRequest) (*controlplanev1.ListProviderDefinitionsResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListProviderDefinitions_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	items, next, err := server.service.ListProviderDefinitions(ctx, p, query.Filter{Query: request.GetQuery(), Page: page(request.GetPage())})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListProviderDefinitionsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	response.Definitions = castResponseItems(items, castProviderDefinition)
-	return response, nil
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_ListProviderDefinitions_FullMethodName, func(p value.Principal) (*controlplanev1.ListProviderDefinitionsResponse, error) {
+		items, next, err := server.service.ListProviderDefinitions(ctx, p, query.Filter{Query: request.GetQuery(), Page: page(request.GetPage())})
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.ListProviderDefinitionsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+		response.Definitions = castResponseItems(items, castProviderDefinition)
+		return response, nil
+	})
 }
 
 // ListProviderAccounts resolves the transport principal before choosing the
@@ -40,50 +39,48 @@ func (server *Server) ListProviderDefinitions(ctx context.Context, request *cont
 // обзора либо списка аккаунтов. Обзор отвергает смешанные фильтры; owner services
 // определяют scope/eligibility, а wire-проекция не превращает баланс в право запуска.
 func (server *Server) ListProviderAccounts(ctx context.Context, request *controlplanev1.ListProviderAccountsRequest) (*controlplanev1.ListProviderAccountsResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListProviderAccounts_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	if request.GetFinancialSummaryOnly() {
-		if request.GetPage() != nil || request.GetQuery() != "" || request.GetState() != controlplanev1.ProviderAccountState_PROVIDER_ACCOUNT_STATE_UNSPECIFIED || request.GetDefinitionKey() != "" || request.GetUsageContext() != nil {
-			return nil, transportError(errs.ErrInvalid)
-		}
-		overview, err := server.service.GetProviderFinancialOverview(ctx, p)
-		if err != nil {
-			return nil, transportError(err)
-		}
-		result := &controlplanev1.ProviderFinancialOverview{Total: overview.Total, Exhausted: overview.Exhausted, Unknown: overview.Unknown, ObservedAt: timestamp(overview.ObservedAt), ValidUntil: timestamp(overview.ValidUntil)}
-		for _, account := range overview.Accounts {
-			projected := &controlplanev1.ProviderFinancialDisplayAccount{Ref: account.Ref, Name: account.Name}
-			if summary := account.FinancialSummary; summary != nil {
-				projected.FinancialSummary = &controlplanev1.ProviderFinancialSummary{Observation: providerfinancewire.ObservationToProto(summary.Observation), ReceivedAt: timestamp(summary.ReceivedAt), Version: summary.Version}
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_ListProviderAccounts_FullMethodName, func(p value.Principal) (*controlplanev1.ListProviderAccountsResponse, error) {
+		if request.GetFinancialSummaryOnly() {
+			if request.GetPage() != nil || request.GetQuery() != "" || request.GetState() != controlplanev1.ProviderAccountState_PROVIDER_ACCOUNT_STATE_UNSPECIFIED || request.GetDefinitionKey() != "" || request.GetUsageContext() != nil {
+				return nil, errs.ErrInvalid
 			}
-			result.Accounts = append(result.Accounts, projected)
+			overview, err := server.service.GetProviderFinancialOverview(ctx, p)
+			if err != nil {
+				return nil, err
+			}
+			result := &controlplanev1.ProviderFinancialOverview{Total: overview.Total, Exhausted: overview.Exhausted, Unknown: overview.Unknown, ObservedAt: timestamp(overview.ObservedAt), ValidUntil: timestamp(overview.ValidUntil)}
+			for _, account := range overview.Accounts {
+				projected := &controlplanev1.ProviderFinancialDisplayAccount{Ref: account.Ref, Name: account.Name}
+				if summary := account.FinancialSummary; summary != nil {
+					projected.FinancialSummary = &controlplanev1.ProviderFinancialSummary{Observation: providerfinancewire.ObservationToProto(summary.Observation), ReceivedAt: timestamp(summary.ReceivedAt), Version: summary.Version}
+				}
+				result.Accounts = append(result.Accounts, projected)
+			}
+			return &controlplanev1.ListProviderAccountsResponse{FinancialSummary: result}, nil
 		}
-		return &controlplanev1.ListProviderAccountsResponse{FinancialSummary: result}, nil
-	}
 
-	state := ""
-	if request.GetState() != controlplanev1.ProviderAccountState_PROVIDER_ACCOUNT_STATE_UNSPECIFIED {
-		state = enumSuffix(request.GetState(), "PROVIDER_ACCOUNT_STATE_")
-	}
-	items, next, actions, err := server.service.ListProviderAccounts(ctx, p, query.Filter{
-		Query: request.GetQuery(), State: state, DefinitionKey: request.GetDefinitionKey(), Page: page(request.GetPage()), ProviderUsage: providerUsageContextInput(request.GetUsageContext()),
-	})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListProviderAccountsResponse{
-		Page: &controlplanev1.PageInfo{NextPageToken: next}, NextActions: nextActions(actions),
-	}
-	for _, item := range items {
-		account, err := castProviderAccountUsageRead(item)
-		if err != nil {
-			return nil, transportError(err)
+		state := ""
+		if request.GetState() != controlplanev1.ProviderAccountState_PROVIDER_ACCOUNT_STATE_UNSPECIFIED {
+			state = enumSuffix(request.GetState(), "PROVIDER_ACCOUNT_STATE_")
 		}
-		response.Accounts = append(response.Accounts, account)
-	}
-	return response, nil
+		items, next, actions, err := server.service.ListProviderAccounts(ctx, p, query.Filter{
+			Query: request.GetQuery(), State: state, DefinitionKey: request.GetDefinitionKey(), Page: page(request.GetPage()), ProviderUsage: providerUsageContextInput(request.GetUsageContext()),
+		})
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.ListProviderAccountsResponse{
+			Page: &controlplanev1.PageInfo{NextPageToken: next}, NextActions: nextActions(actions),
+		}
+		for _, item := range items {
+			account, err := castProviderAccountUsageRead(item)
+			if err != nil {
+				return nil, err
+			}
+			response.Accounts = append(response.Accounts, account)
+		}
+		return response, nil
+	})
 }
 
 // GetProviderAccount reads the account together with usage context and rejects errors from the
@@ -91,19 +88,17 @@ func (server *Server) ListProviderAccounts(ctx context.Context, request *control
 // GetProviderAccount читает аккаунт вместе с контекстом использования и отклоняет ошибки
 // типизированного преобразования использования.
 func (server *Server) GetProviderAccount(ctx context.Context, request *controlplanev1.GetProviderAccountRequest) (*controlplanev1.GetProviderAccountResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetProviderAccount_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	item, err := server.service.GetProviderAccountWithUsage(ctx, p, request.GetAccountRef(), providerUsageContextInput(request.GetUsageContext()))
-	if err != nil {
-		return nil, transportError(err)
-	}
-	account, err := castProviderAccountUsageRead(item)
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.GetProviderAccountResponse{Account: account}, nil
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_GetProviderAccount_FullMethodName, func(p value.Principal) (*controlplanev1.GetProviderAccountResponse, error) {
+		item, err := server.service.GetProviderAccountWithUsage(ctx, p, request.GetAccountRef(), providerUsageContextInput(request.GetUsageContext()))
+		if err != nil {
+			return nil, err
+		}
+		account, err := castProviderAccountUsageRead(item)
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.GetProviderAccountResponse{Account: account}, nil
+	})
 }
 
 // castProviderDefinition projects provider availability/readiness and ordered authorization-method/model catalogs through distinct typed casters, without probing the provider or selecting an eligible account.
@@ -128,18 +123,16 @@ func castProviderDefinition(value entity.ProviderDefinition) *controlplanev1.Pro
 // ListModelCapabilities передаёт провайдера, аккаунт, ожидаемую ревизию и digest доменному чтению
 // каталога моделей.
 func (server *Server) ListModelCapabilities(ctx context.Context, request *controlplanev1.ListModelCapabilitiesRequest) (*controlplanev1.ListModelCapabilitiesResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListModelCapabilities_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	catalog, err := server.service.ListModelCatalog(ctx, p, request.GetProviderDefinitionKey(), request.GetProviderAccountRef(), query.Filter{
-		ExpectedCatalogRevision: request.GetExpectedCatalogRevision(), ExpectedCatalogDigest: request.GetExpectedCatalogDigest(),
-		Query: request.GetQuery(), Page: page(request.GetPage()),
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_ListModelCapabilities_FullMethodName, func(p value.Principal) (*controlplanev1.ListModelCapabilitiesResponse, error) {
+		catalog, err := server.service.ListModelCatalog(ctx, p, request.GetProviderDefinitionKey(), request.GetProviderAccountRef(), query.Filter{
+			ExpectedCatalogRevision: request.GetExpectedCatalogRevision(), ExpectedCatalogDigest: request.GetExpectedCatalogDigest(),
+			Query: request.GetQuery(), Page: page(request.GetPage()),
+		})
+		if err != nil {
+			return nil, err
+		}
+		return castModelCatalog(catalog), nil
 	})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return castModelCatalog(catalog), nil
 }
 
 // castModelCatalog projects models, pagination and catalog revision pins while preserving optional
@@ -231,19 +224,17 @@ func providerAccountState(value string) controlplanev1.ProviderAccountState {
 // GetRuntimeEnvironmentReadiness преобразует доменное наблюдение готовности среды и привязки
 // опубликованной версии без проверки среды в этом методе.
 func (server *Server) GetRuntimeEnvironmentReadiness(ctx context.Context, request *controlplanev1.GetRuntimeEnvironmentReadinessRequest) (*controlplanev1.GetRuntimeEnvironmentReadinessResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetRuntimeEnvironmentReadiness_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	item, err := server.service.GetRuntimeEnvironmentReadiness(ctx, p, request.GetEnvironmentRef())
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.GetRuntimeEnvironmentReadinessResponse{Readiness: &controlplanev1.RuntimeEnvironmentReadiness{
-		EnvironmentRef: item.EnvironmentRef, EnvironmentVersion: item.EnvironmentVersion,
-		PublishedVersionRef: item.PublishedVersionRef, PublishedVersionDigest: item.PublishedVersionDigest,
-		Ready: item.Ready, Blockers: item.Blockers, ObservedAt: timestamp(item.ObservedAt),
-	}}, nil
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_GetRuntimeEnvironmentReadiness_FullMethodName, func(p value.Principal) (*controlplanev1.GetRuntimeEnvironmentReadinessResponse, error) {
+		item, err := server.service.GetRuntimeEnvironmentReadiness(ctx, p, request.GetEnvironmentRef())
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.GetRuntimeEnvironmentReadinessResponse{Readiness: &controlplanev1.RuntimeEnvironmentReadiness{
+			EnvironmentRef: item.EnvironmentRef, EnvironmentVersion: item.EnvironmentVersion,
+			PublishedVersionRef: item.PublishedVersionRef, PublishedVersionDigest: item.PublishedVersionDigest,
+			Ready: item.Ready, Blockers: item.Blockers, ObservedAt: timestamp(item.ObservedAt),
+		}}, nil
+	})
 }
 
 // ListRuntimeEnvironmentAgents reads the authorized environment-agent page using environment
@@ -251,19 +242,17 @@ func (server *Server) GetRuntimeEnvironmentReadiness(ctx context.Context, reques
 // ListRuntimeEnvironmentAgents читает авторизованную страницу агентов среды по ссылке среды,
 // запросу и фильтрам страницы.
 func (server *Server) ListRuntimeEnvironmentAgents(ctx context.Context, request *controlplanev1.ListRuntimeEnvironmentAgentsRequest) (*controlplanev1.ListRuntimeEnvironmentAgentsResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListRuntimeEnvironmentAgents_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	items, next, err := server.service.ListRuntimeEnvironmentAgents(ctx, p, query.Filter{
-		ResourceRef: request.GetEnvironmentRef(), Query: request.GetQuery(), Page: page(request.GetPage()),
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_ListRuntimeEnvironmentAgents_FullMethodName, func(p value.Principal) (*controlplanev1.ListRuntimeEnvironmentAgentsResponse, error) {
+		items, next, err := server.service.ListRuntimeEnvironmentAgents(ctx, p, query.Filter{
+			ResourceRef: request.GetEnvironmentRef(), Query: request.GetQuery(), Page: page(request.GetPage()),
+		})
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.ListRuntimeEnvironmentAgentsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+		response.Agents = castResponseItems(items, castAgent)
+		return response, nil
 	})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListRuntimeEnvironmentAgentsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	response.Agents = castResponseItems(items, castAgent)
-	return response, nil
 }
 
 // ListScheduleRevisions returns schedule revisions and the continuation token from the authorized
@@ -271,17 +260,15 @@ func (server *Server) ListRuntimeEnvironmentAgents(ctx context.Context, request 
 // ListScheduleRevisions возвращает ревизии расписания и токен продолжения из авторизованного
 // доменного чтения.
 func (server *Server) ListScheduleRevisions(ctx context.Context, request *controlplanev1.ListScheduleRevisionsRequest) (*controlplanev1.ListScheduleRevisionsResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListScheduleRevisions_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	items, next, err := server.service.ListScheduleRevisions(ctx, p, query.Filter{ResourceRef: request.GetScheduleRef(), Page: page(request.GetPage())})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListScheduleRevisionsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	response.Revisions = castResponseItems(items, castScheduleRevision)
-	return response, nil
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_ListScheduleRevisions_FullMethodName, func(p value.Principal) (*controlplanev1.ListScheduleRevisionsResponse, error) {
+		items, next, err := server.service.ListScheduleRevisions(ctx, p, query.Filter{ResourceRef: request.GetScheduleRef(), Page: page(request.GetPage())})
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.ListScheduleRevisionsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+		response.Revisions = castResponseItems(items, castScheduleRevision)
+		return response, nil
+	})
 }
 
 // castScheduleRevision projects immutable schedule fields, target version and digest, prompt
@@ -377,22 +364,20 @@ func (server *Server) PreviewSchedule(ctx context.Context, request *controlplane
 // ListScheduleRuns возвращает авторизованные срабатывания расписания с ревизией расписания и
 // представлением запуска.
 func (server *Server) ListScheduleRuns(ctx context.Context, request *controlplanev1.ListScheduleRunsRequest) (*controlplanev1.ListScheduleRunsResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListScheduleRuns_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	items, next, err := server.service.ListScheduleRuns(ctx, p, query.Filter{ResourceRef: request.GetScheduleRef(), Page: page(request.GetPage())})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListScheduleRunsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	for _, item := range items {
-		response.Occurrences = append(response.Occurrences, &controlplanev1.ScheduleRunOccurrence{
-			ScheduleRef: item.ScheduleRef, ScheduleRevisionRef: item.ScheduleRevisionRef,
-			ScheduleRevision: item.ScheduleRevision, Run: castRun(item.Run),
-		})
-	}
-	return response, nil
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_ListScheduleRuns_FullMethodName, func(p value.Principal) (*controlplanev1.ListScheduleRunsResponse, error) {
+		items, next, err := server.service.ListScheduleRuns(ctx, p, query.Filter{ResourceRef: request.GetScheduleRef(), Page: page(request.GetPage())})
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.ListScheduleRunsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+		for _, item := range items {
+			response.Occurrences = append(response.Occurrences, &controlplanev1.ScheduleRunOccurrence{
+				ScheduleRef: item.ScheduleRef, ScheduleRevisionRef: item.ScheduleRevisionRef,
+				ScheduleRevision: item.ScheduleRevision, Run: castRun(item.Run),
+			})
+		}
+		return response, nil
+	})
 }
 
 // ListRoleImageRecipeRevisions projects the authorized recipe-revision page including build,
@@ -400,26 +385,24 @@ func (server *Server) ListScheduleRuns(ctx context.Context, request *controlplan
 // ListRoleImageRecipeRevisions преобразует авторизованную страницу ревизий рецепта с привязками
 // сборки, происхождения, образа и продвижения.
 func (server *Server) ListRoleImageRecipeRevisions(ctx context.Context, request *controlplanev1.ListRoleImageRecipeRevisionsRequest) (*controlplanev1.ListRoleImageRecipeRevisionsResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListRoleImageRecipeRevisions_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	items, next, err := server.service.ListRoleImageRecipeRevisions(ctx, p, query.Filter{ResourceRef: request.GetRecipeRef(), Page: page(request.GetPage())})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListRoleImageRecipeRevisionsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	for _, item := range items {
-		response.Revisions = append(response.Revisions, &controlplanev1.RoleImageRecipeRevision{
-			Ref: item.Ref, RecipeRef: item.RecipeRef, Revision: int64(item.Revision), RecipeVersion: int64(item.RecipeVersion),
-			RecipeGeneration: int64(item.RecipeGeneration), SpecSha256: item.SpecSHA256,
-			ProvenanceSha256: item.ProvenanceSHA256, SourceSha256: item.SourceSHA256,
-			ImmutableBuildSha256: item.ImmutableBuildSHA256, ImageArtifactRef: item.ImageArtifactRef,
-			ManifestDigest: item.ManifestDigest, PromotedReference: item.PromotedReference,
-			PromotionReceiptSha256: item.PromotionReceiptSHA256, CreatedAt: timestamp(item.CreatedAt),
-		})
-	}
-	return response, nil
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_ListRoleImageRecipeRevisions_FullMethodName, func(p value.Principal) (*controlplanev1.ListRoleImageRecipeRevisionsResponse, error) {
+		items, next, err := server.service.ListRoleImageRecipeRevisions(ctx, p, query.Filter{ResourceRef: request.GetRecipeRef(), Page: page(request.GetPage())})
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.ListRoleImageRecipeRevisionsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+		for _, item := range items {
+			response.Revisions = append(response.Revisions, &controlplanev1.RoleImageRecipeRevision{
+				Ref: item.Ref, RecipeRef: item.RecipeRef, Revision: int64(item.Revision), RecipeVersion: int64(item.RecipeVersion),
+				RecipeGeneration: int64(item.RecipeGeneration), SpecSha256: item.SpecSHA256,
+				ProvenanceSha256: item.ProvenanceSHA256, SourceSha256: item.SourceSHA256,
+				ImmutableBuildSha256: item.ImmutableBuildSHA256, ImageArtifactRef: item.ImageArtifactRef,
+				ManifestDigest: item.ManifestDigest, PromotedReference: item.PromotedReference,
+				PromotionReceiptSha256: item.PromotionReceiptSHA256, CreatedAt: timestamp(item.CreatedAt),
+			})
+		}
+		return response, nil
+	})
 }
 
 // normalizedProviderState removes the provider-account-state prefix from the enum string without

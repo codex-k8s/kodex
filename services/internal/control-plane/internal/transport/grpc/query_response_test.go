@@ -34,10 +34,12 @@ func TestQueryResponseRejectsMissingPrincipalBeforeRead(t *testing.T) {
 
 // TestPlatformQueriesAuthenticateBeforeValidationAndService checks representative converted
 // handlers reject missing context before dereferencing a nil service or validating malformed
-// run/artifact filters. It preserves the authentication-first error priority; actual method pins
+// run/artifact/provider filters or reading runtime configuration/secret metadata. It preserves
+// the authentication-first error priority; actual method pins
 // and the other handlers are checked by the full extraction proof, not inferred from this test.
 // TestPlatformQueriesAuthenticateBeforeValidationAndService проверяет отказ representative
-// handlers без context до разыменования nil service и проверки неверных run/artifact filters.
+// handlers без context до разыменования nil service, проверки неверных run/artifact/provider
+// filters либо чтения runtime configuration и метаданных секретов.
 // Сохраняет приоритет authentication error; exact method pins и прочие handlers проверяет
 // полный extraction proof, они не выводятся из этого теста.
 func TestPlatformQueriesAuthenticateBeforeValidationAndService(t *testing.T) {
@@ -54,6 +56,18 @@ func TestPlatformQueriesAuthenticateBeforeValidationAndService(t *testing.T) {
 		},
 		"excessive artifact sources": func(ctx context.Context) (bool, error) {
 			response, err := server.ListArtifacts(ctx, &cp.ListArtifactsRequest{SourceKinds: make([]cp.ArtifactSource, 6)})
+			return response != nil, err
+		},
+		"invalid financial summary filters": func(ctx context.Context) (bool, error) {
+			response, err := server.ListProviderAccounts(ctx, &cp.ListProviderAccountsRequest{FinancialSummaryOnly: true, Query: "invalid with financial summary"})
+			return response != nil, err
+		},
+		"template variable context": func(ctx context.Context) (bool, error) {
+			response, err := server.ListTemplateVariables(ctx, nil)
+			return response != nil, err
+		},
+		"runtime secret draft metadata": func(ctx context.Context) (bool, error) {
+			response, err := server.GetRuntimeSecretDraft(ctx, nil)
 			return response != nil, err
 		},
 	} {

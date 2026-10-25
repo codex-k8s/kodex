@@ -7,6 +7,7 @@ import (
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -64,15 +65,13 @@ func castDraftWork(w entity.RuntimeSecretDraftWork) *cp.RuntimeSecretDraftWork {
 // GetRuntimeSecretDraft читает draft через principal точного метода и owner service и возвращает
 // только разрешённую draft projection.
 func (server *Server) GetRuntimeSecretDraft(ctx context.Context, request *cp.GetRuntimeSecretDraftRequest) (*cp.GetRuntimeSecretDraftResponse, error) {
-	p, err := principal(ctx, cp.PlatformQueryService_GetRuntimeSecretDraft_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	d, err := server.service.GetRuntimeSecretDraft(ctx, p, request.GetDraftRef())
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &cp.GetRuntimeSecretDraftResponse{Draft: castSecretDraft(d)}, nil
+	return queryResponse(ctx, cp.PlatformQueryService_GetRuntimeSecretDraft_FullMethodName, func(p value.Principal) (*cp.GetRuntimeSecretDraftResponse, error) {
+		d, err := server.service.GetRuntimeSecretDraft(ctx, p, request.GetDraftRef())
+		if err != nil {
+			return nil, err
+		}
+		return &cp.GetRuntimeSecretDraftResponse{Draft: castSecretDraft(d)}, nil
+	})
 }
 
 // prepareSecretDraft resolves the exact command principal and delegates a specialized prepare

@@ -9,6 +9,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
 // GetAgentRuntimeConfiguration reads the authorized agent runtime view under the exact method
@@ -16,15 +17,13 @@ import (
 // GetAgentRuntimeConfiguration читает разрешённое agent runtime view под principal точного метода
 // и преобразует owner result без восстановления runtime state из request fields.
 func (server *Server) GetAgentRuntimeConfiguration(ctx context.Context, request *controlplanev1.GetAgentRuntimeConfigurationRequest) (*controlplanev1.GetAgentRuntimeConfigurationResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetAgentRuntimeConfiguration_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	item, err := server.service.GetAgentRuntimeConfiguration(ctx, p, request.GetAgentRef())
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.GetAgentRuntimeConfigurationResponse{RuntimeConfiguration: castRuntimeConfigurationView(item)}, nil
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_GetAgentRuntimeConfiguration_FullMethodName, func(p value.Principal) (*controlplanev1.GetAgentRuntimeConfigurationResponse, error) {
+		item, err := server.service.GetAgentRuntimeConfiguration(ctx, p, request.GetAgentRef())
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.GetAgentRuntimeConfigurationResponse{RuntimeConfiguration: castRuntimeConfigurationView(item)}, nil
+	})
 }
 
 // ListAgentRuntimeConfigurationVersions passes the agent locator and page to the owner, preserving
@@ -32,17 +31,15 @@ func (server *Server) GetAgentRuntimeConfiguration(ctx context.Context, request 
 // ListAgentRuntimeConfigurationVersions передаёт agent locator и page владельцу, сохраняя порядок
 // versions и next cursor через domain-to-wire casters.
 func (server *Server) ListAgentRuntimeConfigurationVersions(ctx context.Context, request *controlplanev1.ListAgentRuntimeConfigurationVersionsRequest) (*controlplanev1.ListAgentRuntimeConfigurationVersionsResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListAgentRuntimeConfigurationVersions_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	items, next, err := server.service.ListAgentRuntimeConfigurations(ctx, p, query.Filter{ResourceRef: request.GetAgentRef(), Page: page(request.GetPage())})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListAgentRuntimeConfigurationVersionsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	response.Configurations = castResponseItems(items, castAgentRuntimeConfiguration)
-	return response, nil
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_ListAgentRuntimeConfigurationVersions_FullMethodName, func(p value.Principal) (*controlplanev1.ListAgentRuntimeConfigurationVersionsResponse, error) {
+		items, next, err := server.service.ListAgentRuntimeConfigurations(ctx, p, query.Filter{ResourceRef: request.GetAgentRef(), Page: page(request.GetPage())})
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.ListAgentRuntimeConfigurationVersionsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+		response.Configurations = castResponseItems(items, castAgentRuntimeConfiguration)
+		return response, nil
+	})
 }
 
 // ListRuntimeEnvironmentSets reads owner-filtered runtime environments using project/search/page
@@ -50,17 +47,15 @@ func (server *Server) ListAgentRuntimeConfigurationVersions(ctx context.Context,
 // ListRuntimeEnvironmentSets читает отфильтрованные владельцем runtime environments по project,
 // search и page locators под проверенным query principal.
 func (server *Server) ListRuntimeEnvironmentSets(ctx context.Context, request *controlplanev1.ListRuntimeEnvironmentSetsRequest) (*controlplanev1.ListRuntimeEnvironmentSetsResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListRuntimeEnvironmentSets_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	items, next, err := server.service.ListRuntimeEnvironments(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), Page: page(request.GetPage())})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListRuntimeEnvironmentSetsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	response.Environments = castResponseItems(items, castRuntimeEnvironment)
-	return response, nil
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_ListRuntimeEnvironmentSets_FullMethodName, func(p value.Principal) (*controlplanev1.ListRuntimeEnvironmentSetsResponse, error) {
+		items, next, err := server.service.ListRuntimeEnvironments(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), Page: page(request.GetPage())})
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.ListRuntimeEnvironmentSetsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+		response.Environments = castResponseItems(items, castRuntimeEnvironment)
+		return response, nil
+	})
 }
 
 // GetRuntimeEnvironmentSet reads one environment through the exact query principal and owner scope
@@ -68,15 +63,13 @@ func (server *Server) ListRuntimeEnvironmentSets(ctx context.Context, request *c
 // GetRuntimeEnvironmentSet читает одно environment через principal точного query и owner scope до
 // сериализации.
 func (server *Server) GetRuntimeEnvironmentSet(ctx context.Context, request *controlplanev1.GetRuntimeEnvironmentSetRequest) (*controlplanev1.GetRuntimeEnvironmentSetResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetRuntimeEnvironmentSet_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	item, err := server.service.GetRuntimeEnvironment(ctx, p, request.GetEnvironmentRef())
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.GetRuntimeEnvironmentSetResponse{Environment: castRuntimeEnvironment(item)}, nil
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_GetRuntimeEnvironmentSet_FullMethodName, func(p value.Principal) (*controlplanev1.GetRuntimeEnvironmentSetResponse, error) {
+		item, err := server.service.GetRuntimeEnvironment(ctx, p, request.GetEnvironmentRef())
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.GetRuntimeEnvironmentSetResponse{Environment: castRuntimeEnvironment(item)}, nil
+	})
 }
 
 // ListRuntimeEnvironmentVersions reads the owner environment-version page and preserves its next
@@ -84,17 +77,15 @@ func (server *Server) GetRuntimeEnvironmentSet(ctx context.Context, request *con
 // ListRuntimeEnvironmentVersions читает owner environment-version page и сохраняет next cursor без
 // назначения current version из запроса.
 func (server *Server) ListRuntimeEnvironmentVersions(ctx context.Context, request *controlplanev1.ListRuntimeEnvironmentVersionsRequest) (*controlplanev1.ListRuntimeEnvironmentVersionsResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListRuntimeEnvironmentVersions_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	items, next, err := server.service.ListRuntimeEnvironmentVersions(ctx, p, query.Filter{ResourceRef: request.GetEnvironmentRef(), Page: page(request.GetPage())})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListRuntimeEnvironmentVersionsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	response.Versions = castResponseItems(items, castRuntimeEnvironmentVersion)
-	return response, nil
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_ListRuntimeEnvironmentVersions_FullMethodName, func(p value.Principal) (*controlplanev1.ListRuntimeEnvironmentVersionsResponse, error) {
+		items, next, err := server.service.ListRuntimeEnvironmentVersions(ctx, p, query.Filter{ResourceRef: request.GetEnvironmentRef(), Page: page(request.GetPage())})
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.ListRuntimeEnvironmentVersionsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+		response.Versions = castResponseItems(items, castRuntimeEnvironmentVersion)
+		return response, nil
+	})
 }
 
 // ListTemplateVariables passes optional exact preview/context pins to owner context resolution,
@@ -104,35 +95,33 @@ func (server *Server) ListRuntimeEnvironmentVersions(ctx context.Context, reques
 // resolution, затем проецирует variables и отклоняет неизвестные либо несовместимые с availability
 // reason enums без частичного вывода.
 func (server *Server) ListTemplateVariables(ctx context.Context, request *controlplanev1.ListTemplateVariablesRequest) (*controlplanev1.ListTemplateVariablesResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListTemplateVariables_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	filter := query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), SourceKind: request.GetSource(), Page: page(request.GetPage())}
-	if request.GetAgentRef() != "" || request.GetRuntimeRevisionRef() != "" || request.GetTargetKind() != "" || request.GetTargetRef() != "" || request.GetContext() != nil || request.GetExpectedContextDigest() != "" {
-		filter.TemplateContext = &query.TemplateVariableContext{AgentRef: request.GetAgentRef(), RuntimeRevisionRef: request.GetRuntimeRevisionRef(),
-			TargetKind: request.GetTargetKind(), TargetRef: request.GetTargetRef(), ExpectedContextDigest: request.GetExpectedContextDigest(), Preview: castPromptPreviewContext(request.GetContext())}
-	}
-	result, err := server.service.ListPromptContextVariables(ctx, p, filter)
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListTemplateVariablesResponse{Total: result.Total, Page: &controlplanev1.PageInfo{NextPageToken: result.NextPageToken}, ContextPin: castPromptContextPin(result.ContextPin)}
-	for _, item := range result.Variables {
-		reason, reasonErr := castTemplateAvailabilityReason(item.Reason, item.Available)
-		if reasonErr != nil {
-			return nil, transportError(reasonErr)
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_ListTemplateVariables_FullMethodName, func(p value.Principal) (*controlplanev1.ListTemplateVariablesResponse, error) {
+		filter := query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), SourceKind: request.GetSource(), Page: page(request.GetPage())}
+		if request.GetAgentRef() != "" || request.GetRuntimeRevisionRef() != "" || request.GetTargetKind() != "" || request.GetTargetRef() != "" || request.GetContext() != nil || request.GetExpectedContextDigest() != "" {
+			filter.TemplateContext = &query.TemplateVariableContext{AgentRef: request.GetAgentRef(), RuntimeRevisionRef: request.GetRuntimeRevisionRef(),
+				TargetKind: request.GetTargetKind(), TargetRef: request.GetTargetRef(), ExpectedContextDigest: request.GetExpectedContextDigest(), Preview: castPromptPreviewContext(request.GetContext())}
 		}
-		variable := &controlplanev1.TemplateVariable{Name: item.Name, ValueType: item.Type,
-			Description: item.Description, Example: item.Example, Source: item.Source, Collection: item.Collection,
-			ItemValueType: item.ItemType, RangeExample: item.RangeExample, Available: item.Available,
-			Reason: reason}
-		for _, field := range item.ItemFields {
-			variable.ItemFields = append(variable.ItemFields, &controlplanev1.TemplateVariableField{Name: field.Name, ValueType: field.Type, Description: field.Description})
+		result, err := server.service.ListPromptContextVariables(ctx, p, filter)
+		if err != nil {
+			return nil, err
 		}
-		response.Variables = append(response.Variables, variable)
-	}
-	return response, nil
+		response := &controlplanev1.ListTemplateVariablesResponse{Total: result.Total, Page: &controlplanev1.PageInfo{NextPageToken: result.NextPageToken}, ContextPin: castPromptContextPin(result.ContextPin)}
+		for _, item := range result.Variables {
+			reason, reasonErr := castTemplateAvailabilityReason(item.Reason, item.Available)
+			if reasonErr != nil {
+				return nil, reasonErr
+			}
+			variable := &controlplanev1.TemplateVariable{Name: item.Name, ValueType: item.Type,
+				Description: item.Description, Example: item.Example, Source: item.Source, Collection: item.Collection,
+				ItemValueType: item.ItemType, RangeExample: item.RangeExample, Available: item.Available,
+				Reason: reason}
+			for _, field := range item.ItemFields {
+				variable.ItemFields = append(variable.ItemFields, &controlplanev1.TemplateVariableField{Name: field.Name, ValueType: field.Type, Description: field.Description})
+			}
+			response.Variables = append(response.Variables, variable)
+		}
+		return response, nil
+	})
 }
 
 // castTemplateAvailabilityReason requires a known nonzero reason enum whose AVAILABLE value agrees

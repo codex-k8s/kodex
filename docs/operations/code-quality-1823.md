@@ -4,11 +4,90 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.446.0
+version: 1.447.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая обвязка запросов конфигурации и метаданных — 25.10.2026
+
+На основе `17fb7d9a6ab31282c288ab518e5f3a42cc24fcf7` существующий
+queryResponse применён ещё к19 читающим RPC в runtime_configuration.go,
+runtime_secrets.go, runtime_secret_drafts.go и mvp_queries.go. Это6 запросов
+конфигурации/переменных,3 запроса метаданных секретов, чтение draft metadata
+и9 запросов provider/catalog/readiness/schedule/image-recipe metadata.
+Новый dispatcher/helper не добавлен, queryResponse не менялся.
+
+В каждом методе остаются exact FullMethodName, typed request/reply, domain
+read и фильтры: agent/environment refs и page, optional TemplateContext pins,
+ORGANIZATION scope, secret/draft refs, provider usage/catalog revision/digest,
+financial-only branch, readiness blockers/version/digest, schedule revision
+и recipe provenance. Principal разрешается до callback; все24 прежних
+transportError sites отображаются один раз в общем helper, включая
+reasonErr для template variables и fallible provider-account projection.
+Financial-only и обычная ветви ListProviderAccounts сохраняют раздельные
+ответы и запрет несовместимых filters до owner read.
+
+PreviewSchedule прочитан целиком и оставлен с прежней обвязкой: одна ветвь
+уже возвращает отображённый materialization error. Повторный transportError
+из queryResponse изменил бы такой ответ. Worker commands, prepare/consume/
+finish/recover operations, credential-projection и RoleImageServer principal
+не переводились в общий query helper. Переходы, grants, события, owner writes,
+deadlines и retries не добавлены; request locators не заменяют authority.
+
+Обратная проверка закрепляет signature/body неизменённого queryResponse,
+точные19 method pins и callback signatures,24 guarded error sites и20
+success paths. После восстановления principal guards и прежних mapper calls
+совпадают полные AST всех4 файлов, включая комментарии/directives и все
+остальные методы/casters/команды. Исходные байты архивов сверены с базовым
+SHA, текущие — с extraction digests; parser diagnostics отклоняются до AST.
+Нет вложенных closures/defer/go/labels/branches, меняющих смысл переноса
+области err. Partial response при fallible projection по-прежнему не выдаётся.
+
+Существующий negative test дополнен тремя сценариями: financial summary с
+несовместимым query, чтение template variables и draft metadata с nil receiver/
+request без verified context. Ожидаются nil response и Unauthenticated до
+validation/service. Это локальная проверка приоритета допуска, не доказательство
+успешной живой авторизации либо доступа к БД.
+
+Сборка всего control-plane `go build -p 2 ./...` — PASS LOCAL,9,49с;
+unit всего модуля `go test -p 2 -count=1 ./...` — PASS LOCAL,36,61с.
+GOWORK=off, GOMAXPROCS=4; credentials, inherited KODEX/VITE inputs и
+KUBECONFIG удалены из child env. После проверок Go-код не менялся.
+Unit17 анализаторов, полный5-stage detector/assessment/Go-docs/ignore report,
+gofmt и `git diff --check` — PASS LOCAL. Go-реестр21503/21503 EN→RU,
+0 missing; новых именованных объявлений нет.
+
+Detector:6707 собственных sources/222 exclusions,1631 raw-группа против1627.
+22 прежних ключа/22 occurrences исчезли;24 новых ключа/25 occurrences
+появились, ещё одно occurrence добавилось у существующего ключа. Это
+перестроение окон; число raw не равно числу общих алгоритмов.
+Один прежний registry key получил count0 и снят. Второй прежний key изменился
+с count3 на4: полностью пересмотрены все4 access.go/queries.go окна, включая
+добавившуюся пару с ListIntegrationConnections/GetIntegrationConnection.
+Оба файла побайтно неизменны; слепого повышения count нет. Новая причина
+фиксирует все реальные методы и public fields.794 остальных entries сохранены
+без изменения.
+
+Добавлены22 точных keys/23 occurrences для оставшихся nominal RPC bindings
+и соседних границ объявлений после выноса principal/error envelope. Реестр
+теперь содержит817 entries/944 retained occurrences;687 групп ещё требуют
+решения против706 на предыдущем SHA.46 hash/count mutations, возврат старого
+count3 и исчезнувшего key закрыто отклоняются настоящим assessor. Две новые
+содержательные projection groups — TemplateVariable и RoleImageRecipeRevision —
+намеренно остаются unresolved для отдельного typed caster в рамках #1823;
+как номинальная обвязка они не исключены. Threshold, normalization и generated
+exclusions не расширялись. Полный scope Issue ещё не завершён.
+
+Context7 resolve Go вновь вернул Invalid API key; использована официальная
+[спецификация closures](https://go.dev/ref/spec#Function_literals) и
+[областей видимости](https://go.dev/ref/spec#Declarations_and_scope).
+Секреты не переносились, MCP credentials не менялись. Go.mod, contracts,
+frontend/gateway/deploy/scripts на этой волне не менялись. Их прежние проверки
+остаются историческими; PostgreSQL component, browser/full E2E, HTTP Docker
+fixture, apply/deploy и live acceptance текущего этапа — NOT RUN.
+PR#1829 остаётся Draft, Issue#1823 открыт.
 
 ## Общая обвязка читающих RPC доступа — 25.10.2026
 

@@ -8,6 +8,7 @@ import (
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
 // CheckRuntimeSecretWorkReadiness checks the exact work RPC principal and returns transport readiness; this endpoint does not probe Kubernetes materialization, secret bytes or the broker itself.
@@ -201,31 +202,27 @@ func (server *Server) ListRuntimeSecretRecoveryWork(ctx context.Context, request
 // ListRuntimeSecrets maps project/query/page to the domain metadata catalog under its exact query principal and returns typed secrets with the next cursor; visibility and action eligibility remain domain-owned.
 // ListRuntimeSecrets переносит project/query/page в доменный каталог метаданных с principal точного query RPC и возвращает типизированные секреты с курсором; видимость и доступность действий определяет домен.
 func (server *Server) ListRuntimeSecrets(ctx context.Context, request *controlplanev1.ListRuntimeSecretsRequest) (*controlplanev1.ListRuntimeSecretsResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListRuntimeSecrets_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	items, next, err := server.service.ListRuntimeSecrets(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), Page: page(request.GetPage())})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListRuntimeSecretsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	response.Secrets = castResponseItems(items, castRuntimeSecret)
-	return response, nil
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_ListRuntimeSecrets_FullMethodName, func(p value.Principal) (*controlplanev1.ListRuntimeSecretsResponse, error) {
+		items, next, err := server.service.ListRuntimeSecrets(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), Page: page(request.GetPage())})
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.ListRuntimeSecretsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+		response.Secrets = castResponseItems(items, castRuntimeSecret)
+		return response, nil
+	})
 }
 
 // GetRuntimeSecret uses the exact query RPC principal to read one secret metadata record and translates domain errors; obtaining metadata does not reveal its stored value.
 // GetRuntimeSecret с principal точного query RPC читает метаданные одного секрета и преобразует доменные ошибки; получение метаданных не раскрывает сохранённое значение.
 func (server *Server) GetRuntimeSecret(ctx context.Context, request *controlplanev1.GetRuntimeSecretRequest) (*controlplanev1.GetRuntimeSecretResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetRuntimeSecret_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	item, err := server.service.GetRuntimeSecret(ctx, p, request.GetSecretRef())
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.GetRuntimeSecretResponse{Secret: castRuntimeSecret(item)}, nil
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_GetRuntimeSecret_FullMethodName, func(p value.Principal) (*controlplanev1.GetRuntimeSecretResponse, error) {
+		item, err := server.service.GetRuntimeSecret(ctx, p, request.GetSecretRef())
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.GetRuntimeSecretResponse{Secret: castRuntimeSecret(item)}, nil
+	})
 }
 
 // PrepareCreateRuntimeSecret constructs a CREATE preparation with project metadata, type, expected content digest and mutation receipt, delegating identity/error mapping to the shared prepare helper. It does not create Kubernetes secret bytes.
@@ -400,17 +397,15 @@ func runtimeSecretScopeKind(kind string) controlplanev1.RuntimeResourceScopeKind
 // ListOrganizationRuntimeSecrets assigns ORGANIZATION scope in the server-owned domain filter and uses its distinct query RPC principal; only authorized metadata and the domain next cursor are returned.
 // ListOrganizationRuntimeSecrets назначает ORGANIZATION в принадлежащем серверу доменном фильтре и использует principal отдельного query RPC; возвращает лишь разрешённые метаданные и доменный курсор.
 func (server *Server) ListOrganizationRuntimeSecrets(ctx context.Context, request *controlplanev1.ListOrganizationRuntimeSecretsRequest) (*controlplanev1.ListOrganizationRuntimeSecretsResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListOrganizationRuntimeSecrets_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	items, next, err := server.service.ListRuntimeSecrets(ctx, p, query.Filter{RuntimeResourceScopeKind: "ORGANIZATION", Query: request.GetQuery(), Page: page(request.GetPage())})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListOrganizationRuntimeSecretsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	response.Secrets = castResponseItems(items, castRuntimeSecret)
-	return response, nil
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_ListOrganizationRuntimeSecrets_FullMethodName, func(p value.Principal) (*controlplanev1.ListOrganizationRuntimeSecretsResponse, error) {
+		items, next, err := server.service.ListRuntimeSecrets(ctx, p, query.Filter{RuntimeResourceScopeKind: "ORGANIZATION", Query: request.GetQuery(), Page: page(request.GetPage())})
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.ListOrganizationRuntimeSecretsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+		response.Secrets = castResponseItems(items, castRuntimeSecret)
+		return response, nil
+	})
 }
 
 // castRuntimeSecret encodes secret metadata, optional hints/current revision descriptor and action hints without a plaintext value. Returned nextActions are presentation data, not a substitute for command authorization.
