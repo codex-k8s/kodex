@@ -13,8 +13,6 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
-	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
-	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -64,19 +62,7 @@ func TestPreparedContentBindingComponent(t *testing.T) {
 		t.Fatal(err)
 	}
 	prepareObservedWarmFixture(t, ctx, repository)
-	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.assistant.conversations.create"}, "control-api-gateway")
-	service, err := platformservice.New(repository)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assistant, err := service.GetSystemAssistant(ctx, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	warm := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "runtime-controller", Operation: "platform.runtime.warm.report"}, "runtime-controller")
-	if _, err := service.ReportWarmRuntime(ctx, warm, command.WarmRuntimeInput{WorkloadInstance: "catalog-observed-warm-fixture", RuntimeRevision: assistant.DesiredRuntimeRevision, State: "READY"}); err != nil {
-		t.Fatal(err)
-	}
+	service, owner := newPreparedContentComponentService(t, ctx, repository)
 	projectResult, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "ledger-binding-project"}, Payload: command.ProjectInput{Name: "Ledger binding", Language: "ru"}})
 	if err != nil {
 		t.Fatal(err)
@@ -157,13 +143,7 @@ func TestPreparedContentBindingComponent(t *testing.T) {
 	if err := tx.QueryRow(ctx, `INSERT INTO control_plane.artifacts(ref,organization_id,project_id,file_name,media_type,size_bytes,digest,source,scan_state,object_receipt_ref,preview_state,revision,created_by) VALUES ($1,$2,$3,'file.txt','text/plain',3,$4,'CONTROL_CENTER','CLEAN','obj_binding_component','AVAILABLE',1,$5) RETURNING id::text,revision_id::text`, content.ArtifactRef, orgID, projectID, request.Digest, actorID).Scan(&artifactID, &revisionID); err != nil {
 		t.Fatal(err)
 	}
-	scanJSON, err := artifactAntivirusJSON(content.Prepared.Antivirus)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := tx.Exec(ctx, `INSERT INTO control_plane.artifact_content(artifact_id,object_key,object_version,object_etag,digest,size_bytes,antivirus_report) VALUES ($1,$2,$3,$4,$5,3,$6)`, artifactID, content.Prepared.ObjectKey, content.Prepared.ObjectVersion, content.Prepared.ObjectETag, content.Prepared.Digest, scanJSON); err != nil {
-		t.Fatal(err)
-	}
+	insertPreparedContentComponentReceipt(t, ctx, tx, artifactID, content.Prepared)
 	if err := repository.adoptPreparedContentTx(ctx, tx, current, content.LedgerID, revisionID); err != nil {
 		t.Fatal(err)
 	}

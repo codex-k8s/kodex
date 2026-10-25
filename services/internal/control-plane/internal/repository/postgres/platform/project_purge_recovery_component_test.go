@@ -339,19 +339,7 @@ func TestProjectPurgeRecoveryAdoptedComponent(t *testing.T) {
 	objects := &preparedObjectsFixture{Store: objectstoragetest.New()}
 	r := newPurgeRecoveryComponentRepository(t, ctx, pool, objects)
 	prepareObservedWarmFixture(t, ctx, r)
-	owner := resolvedTestPrincipal(t, ctx, r, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.assistant.conversations.create"}, "control-api-gateway")
-	service, err := platformservice.New(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assistant, err := service.GetSystemAssistant(ctx, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	warm := resolvedTestPrincipal(t, ctx, r, platformrepo.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "runtime-controller", Operation: "platform.runtime.warm.report"}, "runtime-controller")
-	if _, err := service.ReportWarmRuntime(ctx, warm, command.WarmRuntimeInput{WorkloadInstance: "catalog-observed-warm-fixture", RuntimeRevision: assistant.DesiredRuntimeRevision, State: "READY"}); err != nil {
-		t.Fatal(err)
-	}
+	service, owner := newPreparedContentComponentService(t, ctx, r)
 	created, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "purge-adopted-project"}, Payload: command.ProjectInput{Name: "Adopted purge fixture", Language: "ru"}})
 	if err != nil || created.Project == nil {
 		t.Fatal("create adopted project", err)
@@ -398,13 +386,7 @@ func TestProjectPurgeRecoveryAdoptedComponent(t *testing.T) {
 	if err := tx.QueryRow(ctx, `INSERT INTO control_plane.artifacts(ref,organization_id,project_id,file_name,media_type,size_bytes,digest,source,scan_state,object_receipt_ref,preview_state,revision,created_by) VALUES ($1,$2,$3,'adopted.txt','text/plain',3,$4,'CONTROL_CENTER','CLEAN','obj_adopted_recovery','AVAILABLE',1,$5) RETURNING id::text,revision_id::text`, content.ArtifactRef, orgID, projectID, request.Digest, actorID).Scan(&artifactID, &revisionID); err != nil {
 		t.Fatal(err)
 	}
-	scanJSON, err := artifactAntivirusJSON(content.Prepared.Antivirus)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := tx.Exec(ctx, `INSERT INTO control_plane.artifact_content(artifact_id,object_key,object_version,object_etag,digest,size_bytes,antivirus_report) VALUES ($1,$2,$3,$4,$5,3,$6)`, artifactID, content.Prepared.ObjectKey, content.Prepared.ObjectVersion, content.Prepared.ObjectETag, content.Prepared.Digest, scanJSON); err != nil {
-		t.Fatal(err)
-	}
+	insertPreparedContentComponentReceipt(t, ctx, tx, artifactID, content.Prepared)
 	if err := r.adoptPreparedContentTx(ctx, tx, current, content.LedgerID, revisionID); err != nil {
 		t.Fatal("adopt exact artifact revision", err)
 	}

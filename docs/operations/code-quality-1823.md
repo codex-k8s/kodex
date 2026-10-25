@@ -4,11 +4,52 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.460.0
+version: 1.461.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая оснастка prepared-content component tests — 25.10.2026
+
+В prepared-content binding и adopted project-purge тестах вынесены четыре
+повторяющихся блока в два локальных test-only helpers. Первый разрешает
+прежнего conversation-create owner, создаёт сервис, читает assistant,
+разрешает warm-report worker и сообщает READY той же desired revision
+в исходном порядке. Bootstrap, observed warm preparation, контекст со сроком
+90с, пул и Close остаются в исходных тестах. Другие turn/claim fixtures с
+иными proof inputs либо порядком не подменяются этой оснасткой.
+
+Второй helper кодирует прежний antivirus report и добавляет exact object
+receipt существующей трёхбайтовой fixture через caller transaction. SQL,
+шесть аргументов и Fatal errors неизменны; отдельные artifact INSERT с
+различающимися file/receipt literals, plan binding, adoption и commit остаются
+на местах. Helpers не загружают/удаляют bytes, не решают owner recovery и не
+проверяют свои же ожидаемые результаты вместо независимых assertions.
+
+Обратная подстановка actual bodies/signatures и четырёх точных call bindings
+восстановила оба полных исходных AST с comments/directives. Сохранены все
+проверки immutable binding, expiry/cleanup, terminal metadata masking,
+project inventory и surviving history. Production Go/SQL, contracts, shared
+libraries, dependencies, PWA и deploy не менялись. Два новых объявления имеют
+содержательные EN→RU comments; всего21564/21564, пропусков0.
+
+Весь control-plane: build mod=readonly — PASS LOCAL (6,23с), unit count1
+mod=readonly — PASS LOCAL (35,41с), GOWORK off/GOMAXPROCS4, child env без
+credentials/KODEX/VITE/KUBECONFIG. Хеши всех3 Go sources до/после совпали.
+Тесты, которым необходим PostgreSQL, без disposable inputs пропускаются;
+это не подтверждает component assertions. PostgreSQL component, browser,
+полный E2E, OCI build, apply/deploy/live и отдельная QA — NOT RUN.
+Использован прежний pgx API; актуальные документы Context7 app
+/jackc/pgx/v5.10.0 о transactions проверены в предыдущем разборе.
+
+Detector:6725 sources/222 прежних exclusions,1598 raw/1028 retained/570
+unresolved против1601/1028/573. Исчезли3 raw keys/occurrences, новых нет;
+все897 entries реестра неизменны. Три попытки регистрации исчезнувших keys
+отклонены actual assessor. Порог/нормализация/generated exclusions не менялись;
+все5 стадий отчёта — PASS LOCAL. Оставшиеся570 групп входят в scope #1823;
+PR продолжения остаётся Draft до завершения разбора.
+
 
 ## Общая подготовка impact snapshot и scoped transactions — 25.10.2026
 
