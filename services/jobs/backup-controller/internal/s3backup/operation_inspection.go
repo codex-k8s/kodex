@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"time"
+
+	"github.com/codex-k8s/kodex/services/jobs/backup-controller/internal/manifest"
 )
 
 // OperationState exposes only closed lock state and a digest of its exact receipt, never the operation ID or object locator.
@@ -24,12 +26,22 @@ func (repository *Repository) InspectOperation(ctx context.Context, now time.Tim
 	if now.IsZero() {
 		return OperationState{}, errors.New("backup operation inspection time is invalid")
 	}
-	receipt, err := repository.currentReceiptForKey(ctx, repository.key("locks/controller.json"))
-	if errors.Is(err, ErrNotFound) {
-		return OperationState{State: "ABSENT"}, nil
-	}
+	key := repository.key("locks/controller.json")
+	objects, err := repository.destination.currentInventory(ctx, key)
 	if err != nil {
 		return OperationState{}, err
+	}
+	var receipt manifest.Receipt
+	for _, object := range objects {
+		if object.Key == key {
+			receipt = object
+			break
+		}
+	}
+	// Only completed inventory absence proves ABSENT; a listed version disappearing during HEAD/GET remains an error.
+	// Только отсутствие в полном inventory доказывает ABSENT; исчезновение найденной версии во время HEAD/GET остаётся ошибкой.
+	if receipt.Key == "" {
+		return OperationState{State: "ABSENT"}, nil
 	}
 	payload, err := repository.destination.readBytes(ctx, receipt, 4<<10)
 	if err != nil {

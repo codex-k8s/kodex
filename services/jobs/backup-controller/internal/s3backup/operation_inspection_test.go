@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -15,7 +16,27 @@ import (
 // inspectionNoWrites отклоняет каждую мутацию: конфликт либо прежняя версия не могут скрыть попытку внешней записи.
 type inspectionNoWrites struct {
 	*fakeS3
-	writes int
+	writes     int
+	headStatus int
+	getStatus  int
+}
+
+// HeadObject injects exact-version metadata failures after a successful inventory, without changing stored versions.
+// HeadObject вводит ошибку метаданных точной версии после успешного inventory без изменения сохранённых версий.
+func (store *inspectionNoWrites) HeadObject(ctx context.Context, input *s3.HeadObjectInput, options ...func(*s3.Options)) (*s3.HeadObjectOutput, error) {
+	if store.headStatus != 0 {
+		return nil, responseError(store.headStatus)
+	}
+	return store.fakeS3.HeadObject(ctx, input, options...)
+}
+
+// GetObject injects exact-version content failures after metadata resolution, preserving read-only fixture semantics.
+// GetObject вводит ошибку содержимого точной версии после получения метаданных, сохраняя чтение без записи.
+func (store *inspectionNoWrites) GetObject(ctx context.Context, input *s3.GetObjectInput, options ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
+	if store.getStatus != 0 {
+		return nil, responseError(store.getStatus)
+	}
+	return store.fakeS3.GetObject(ctx, input, options...)
 }
 
 // PutObject records a forbidden write without changing fixture storage.
@@ -23,6 +44,31 @@ type inspectionNoWrites struct {
 func (store *inspectionNoWrites) PutObject(context.Context, *s3.PutObjectInput, ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
 	store.writes++
 	return nil, errors.New("inspection attempted a write")
+}
+
+// TestInspectOperationReadFailuresNeverBecomeAbsence rejects vanished or inaccessible listed versions instead of reporting a safe-to-repeat operation.
+// TestInspectOperationReadFailuresNeverBecomeAbsence отклоняет исчезнувшие либо недоступные найденные версии вместо сообщения об отсутствии блокировки.
+func TestInspectOperationReadFailuresNeverBecomeAbsence(t *testing.T) {
+	for _, status := range []int{http.StatusNotFound, http.StatusForbidden, http.StatusServiceUnavailable} {
+		for _, phase := range []string{"head", "get"} {
+			repository, fake := testRepository(t)
+			now := time.Date(2026, 10, 26, 0, 0, 0, 0, time.UTC)
+			if _, err := repository.AcquireOperationLock(t.Context(), "verify", "private-operation-canary", now, 10*time.Minute); err != nil {
+				t.Fatal(err)
+			}
+			guard := &inspectionNoWrites{fakeS3: fake}
+			if phase == "head" {
+				guard.headStatus = status
+			} else {
+				guard.getStatus = status
+			}
+			repository.destination.api = guard
+			result, err := repository.InspectOperation(t.Context(), now)
+			if err == nil || result.State != "" || guard.writes != 0 {
+				t.Fatalf("listed version %s failure %d became an observation or write", phase, status)
+			}
+		}
+	}
 }
 
 // DeleteObject records a forbidden delete without removing a fixture version.
