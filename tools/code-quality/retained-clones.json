@@ -7736,6 +7736,102 @@
       "fragmentSHA256": "120040549ad70f51abaa0b37e333e11828f19d40acac97f5c0a38b5b7142bc4f",
       "count": 1,
       "reason": "Окно 109 tokens. Окна пересекают Create/Validate/PublishConfigOverlayDraft.201 create,200 validation/publication и их nominal owner RPC сохраняются отдельно; mutation и typed error/getter/validator уже общие. Абстрагировать оставшийся caller glue через универсальный action executor означало бы скрыть разные lifecycle intentions, не удалить новый algorithm. Слева: CreateConfigOverlayDraft/ValidateConfigOverlayDraft; справа: ValidateConfigOverlayDraft/PublishConfigOverlayDraft. Сохранено только exact pair/hash/count1, не методы, файлы либо формат целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "fragmentSHA256": "795856b2ff1be4201ba05bba0e559eb651b56fdc17439ffb7c2bf06ac092976d",
+      "count": 1,
+      "reason": "Окно пересекает CreateAccessRoleVersion/ArchiveAccessRole/CreateAccessBinding и UpdateIntegrationConnection/DeleteIntegrationConnection/ConfigureIntegrationConnectionCredential. Общая error-first command boundary уже executeResponse; accessRoleInput, castAccessRole и castConnection остаются типизированными. Архивирование роли и удаление подключения используют разные FullMethodName, kind и поля RoleRef/ConnectionRef. Credential-операция за границей окна имеет самостоятельный защищённый service path. Новый общий executor скрыл бы эти различия ради кратких вызовов существующего helper."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "fragmentSHA256": "55d806e94d0557b73100679a441308f073cbcc9a7aec4e70cfcdee584f1d59ad",
+      "count": 1,
+      "reason": "Окно хвоста role-version и ArchiveAccessRole сравнивается с хвостом DeleteArtifact и RestoreArtifact, включая начало специализированного PurgeArtifact. Общий вызов execute и error-first проекция уже вынесены в executeResponse. RoleRef, ArtifactRef и отдельные nominal response types не взаимозаменяемы; purge сохраняет собственные principal/service/impact-digest проверки. Дублируемого связного алгоритма за пределами уже общего helper в данном пересекающем методы окне нет."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "fragmentSHA256": "876aa2ba1917043f1740ae9829d318f8adf62036fd6e2efc6d096bd4f6a675af",
+      "count": 1,
+      "reason": "Окно вокруг ArchiveAccessRole/CreateAccessBinding сопоставлено с концом ConfigureIntegrationConnectionCredential и TestIntegrationConnection/SetIntegrationConnectionEnabled. Архивирование роли, проверка подключения и смена enabled являются отдельными exact RPC/kind и response projections; error-first command wrapper уже executeResponse. Credential path нельзя заменять обычным command payload или разрешать его универсальным switch. Сохранены только данный fragment и пара путей, соседние секретные операции не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "fragmentSHA256": "5dba592c59900ce3c6ab72b07f66c27d89c36bca66a94767d8d5e69c76e179a3",
+      "count": 1,
+      "reason": "Окно ChangeAccessBinding/RevokeAccessBinding и DeleteArtifact/RestoreArtifact содержит вызовы существующего executeResponse и границы typed методов. У binding собственные RoleVersionRef, Scope, Conditions и отдельный revoke; у artifact — ArtifactRef/ImpactDigest и свой lifecycle. castAccessBinding и castArtifact уже отдельные преобразователи. Общей новой вычислительной части для выноса нет: унификация nominal request/response/method/kind связей скрыла бы проверяемость команд."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "fragmentSHA256": "5dd097bd75e907cc35e27e2000f2515a591b56c6383c4368d386d747b3f7b263",
+      "count": 1,
+      "reason": "Сопоставлены конец CreateAttachmentSetDraft и организационный CreateOrganizationAttachmentSetDraft с началом AddAttachmentSetItems. Проверка projectRef существует только у project create, организационный запрос намеренно не задаёт проект. Исполнение и castAttachmentSet уже едины в executeAttachmentSetMutation; остаются разные generated FullMethodName и response wrappers вокруг одного вызова helper. Перенос проектной валидации в универсальную обёртку изменил бы организационную границу."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "fragmentSHA256": "ba1e299a58c998ec10cc1779e1e98a31d7294f0f44301a5f2f1457d54852eef3",
+      "count": 1,
+      "reason": "Окно организационного CreateOrganizationAttachmentSetDraft и AddAttachmentSetItems пересекает две разные команды. Первая создаёт draft без project scope, вторая указывает AttachmentSetRef и InsertAfterPosition. Общее выполнение/ошибка/castAttachmentSet уже executeAttachmentSetMutation; номинальные request/getter/response поля и команды остаются в конкретных transport methods. Универсальный lifecycle dispatcher не удалил бы новой алгоритмической копии и затруднил бы проверку exact method."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "fragmentSHA256": "82cca8bd222e805fb2509fd809ed441b20e5937ffd4be0ac92835fd3ed60264a",
+      "count": 1,
+      "reason": "Окно AddAttachmentSetItems/RemoveAttachmentSetItems с началом FinalizeAttachmentSet: add задаёт InsertAfterPosition, remove принимает набор refs, finalize не принимает новые artifact refs. Все уже используют executeAttachmentSetMutation для выполнения и преобразования набора. Повторяются короткие typed response/error-return wrappers вокруг общего helper, а полный фрагмент пересекает разные owner transitions. Сохранена только точная внутрефайловая пара/hash/count; единая команда изменения lifecycle не вводится."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "00fb75c8c6df756a28b7b2c1315958e5401bf83ddc2b75233713d9b4aa9d07ea",
+      "count": 2,
+      "reason": "Два окна ChangeArtifactBinding/DeleteArtifact сопоставлены с CreateProject/UpdateProject и ChangeAgentCapability/ChangeAgentIntegrationGrant. Во всех случаях error-first вызов и проекция уже executeResponse, converters castArtifact/castProject/castAgent переиспользуются. Отличаются nominal RPC, command kind и payload: artifact lifecycle с ImpactDigest, editable project поля либо AgentRef/BindingRef. Повторное обобщение оставшегося короткого glue потребовало бы диспетчера команд без нового общего алгоритма."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "4b5abc4c2a748ce9bc19f6b7c657100a7cd1b41af688611ef6aba4c56a5fa827",
+      "count": 1,
+      "reason": "Окно хвоста ChangeArtifactBinding, DeleteArtifact и начала RestoreArtifact сравнивается с PublishInstructionDraft/RollbackInstructions. PublishInstructionDraft обязан дополнительно validatePublishedImpactResult для AGENT_INSTRUCTIONS и заданных plan/agent pins; rollback принимает опубликованный locator, artifact delete — impact digest. Error-first простые команды уже executeResponse; impact validator намеренно сохраняется отдельно. Полное окно нельзя объединить в общий lifecycle helper без потери явных postconditions."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "fragmentSHA256": "42130162037027dd95d296e3a92cf6e07cf45c2ea784c59e490ae9ec83166faa",
+      "count": 1,
+      "reason": "Окно DeleteArtifact/RestoreArtifact с началом PurgeArtifact сравнивается с ArchiveSchedule/DeleteSchedule и началом CreateIntegrationConnection. Общий executeResponse уже выполняет command boundary и success-only mapping. У artifact разные delete/restore/purge протоколы и ImpactDigest, у schedule разные archive/delete kind, у connection create конфигурация и Enabled. Различные nominal response fields и exact RPC остаются явными; связной дополнительной копии алгоритма в окне нет."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "a885082ec937a39f23d34914ccd075774a04c3e7fda21210e300940126965c69",
+      "count": 3,
+      "reason": "Три совпадения DeleteArtifact/RestoreArtifact с UpdateProject/TrashProject/RestoreProject, SetAgentAvatar/RemoveAgentAvatar и CreateInstructionDraft/ValidateInstructionDraft. Короткие wrappers уже вызывают executeResponse, error mapping и converters вынесены. ArtifactRef/ImpactDigest, ProjectRef, AgentRef/ArtifactRef и instruction content относятся к разным специализированным командам и nominal response types. Окна захватывают соседние методы; общий новый dispatcher скрыл бы точную привязку method/kind/payload без удаления отдельного алгоритма."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "fragmentSHA256": "678604c105704b6bf6b1407da3c858a5fabf61f55474786f9f620c62d017282f",
+      "count": 1,
+      "reason": "Окно RestoreArtifact/PurgeArtifact и DeleteIntegrationConnection/ConfigureIntegrationConnectionCredential: restore/delete уже executeResponse, следующие методы используют специализированные service APIs. PurgeArtifact передаёт ImpactDigest и возвращает lifecycle state, ConfigureIntegrationCredential передаёт credential только защищённому владельцу и возвращает публичный connection. Principal и transportError общие helpers, но секретный и безвозвратный пути различны. Объединение service callbacks ради похожей формы нарушило бы ясность trust boundaries."
     }
   ]
 }

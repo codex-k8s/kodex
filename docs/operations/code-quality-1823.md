@@ -4,11 +4,38 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.469.0
+version: 1.470.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Разбор типизированных gRPC-адаптеров — 25.10.2026
+
+Разобраны15 точных окон в access.go, commands_assets_integrations.go и
+commands_core.go. Исполняемые части уже общие: executeResponse либо
+executeAttachmentSetMutation; converters и principal/error mapping также
+переиспользуются. Остаются nominal request/response wrappers и пересечения
+соседних специализированных методов. Проектный attachment draft требует
+ProjectRef, организационный — нет; add/remove/finalize имеют разные inputs.
+Отдельные PurgeArtifact, credential configuration и instruction publication
+сохраняют собственные service APIs, impact checks и public projections.
+Универсальный dispatcher для этих методов не добавляется.
+
+В реестр добавлены12 адресных решений на15 occurrences с конкретными
+методами и различиями. Все967 прежних решений сохранены, исходники и общий
+clone set неизменны:1568 raw,1119 retained,449 unresolved; registry979.
+Порог, нормализация, inventory6733 и222 generated exclusions прежние.
+Комментарии Go21574/21574, пропусков0. Разобран только указанный набор,
+оставшиеся449 групп сохраняются в scope #1823.
+
+Все пять стадий inventory/detector/assessment/Go-docs/ignore boundaries
+прошли локально; clone set и весь Go source прежние. Устаревание новых
+решений проверено отрицательными изменениями count/hash actual assessor.
+
+Это изменение реестра и журнала. Build/unit из предыдущего пакета относятся
+к тем же исходникам gateway; новые запуски runtime, browser и full E2E здесь
+не выполнялись. Реальная приёмка и развёртывание текущего PR ещё не завершены.
 
 ## Переиспользование decoder и обработка runtime-ответа — 25.10.2026
 
