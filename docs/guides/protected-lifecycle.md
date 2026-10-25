@@ -4,11 +4,19 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.42
+version: 1.1.43
 updated: 2026-10-25
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Gate результата этапа наследует только exact `GateDecisions` опубликованного
+этапа, закреплённого за execution root/node/agent и immutable RuntimeRevision.
+Координатор не наследует aggregate Gate из наличия Human Gate у своих этапов:
+каждый такой этап сохраняет отдельный materialized node и собственное
+согласование. Новая публикация не меняет список текущего исполнения;
+integration/delivery policies не смешиваются с workflow step policy.
+Матрица: [#1872](../operations/workflow-gate-decisions-1872.md).
 
 Закрытый Gate проверяется после fresh authority и receipt replay, до применения
 его исторических clocks. Он не инициирует новый expiry ни terminal root, ни

@@ -1645,6 +1645,10 @@ func stringMap(values map[string]any, key string) string {
 	return value
 }
 
+// completeExecution atomically records one leased outcome and opens a result gate only with the
+// exact published step policy, resolved before callback mutations can advance the node's turn.
+// completeExecution атомарно фиксирует исход lease и открывает Gate только с точной policy
+// опубликованного этапа, разрешённой до callback mutations, способных сменить turn узла.
 func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.CompleteExecutionInput)
 	if !ok || validateRuntimeCompletion(payload) != nil {
@@ -1690,6 +1694,13 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	var turnID, sessionID, targetType string
 	if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionUpdateRunNodesStateProgressSummarySafeErrorCode, lease["nodeID"], nodeState, truncate(payload.ResultSummary, 2000), truncate(payload.SafeErrorCode, 100), "").Scan(&humanGateAfter, &turnID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
+	}
+	var gateDecisions []string
+	if payload.Success && humanGateAfter {
+		gateDecisions, err = repository.executionStepGateDecisions(ctx, tx, scope, lease)
+		if err != nil {
+			return commandOutcome{}, err
+		}
 	}
 	if turnID != "" {
 		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateSessionTurnsStateCompletedAt, turnID, map[bool]string{true: "COMPLETED", false: "FAILED"}[payload.Success]); err != nil {
@@ -1830,12 +1841,13 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		gateRef, _ := newRef("gat")
 		var gateID string
 		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionInsertOwnerGatesRefProjectIdNodeId, pgx.StrictNamedArgs{
-			"gate_ref":        gateRef,
-			"organization_id": scope.organizationID,
-			"project_id":      lease["projectID"],
-			"root_run_id":     lease["rootRunID"],
-			"node_id":         gateNodeID,
-			"context_summary": truncate(payload.ResultSummary, 1000),
+			"gate_ref":          gateRef,
+			"organization_id":   scope.organizationID,
+			"project_id":        lease["projectID"],
+			"root_run_id":       lease["rootRunID"],
+			"node_id":           gateNodeID,
+			"context_summary":   truncate(payload.ResultSummary, 1000),
+			"allowed_decisions": gateDecisions,
 		}).Scan(&gateID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}

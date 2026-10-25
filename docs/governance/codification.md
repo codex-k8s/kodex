@@ -18,6 +18,8 @@ updated: 2026-10-25
 - `OPS-DOC-WORKFLOW-DRAFT-1870` — [Создание и чтение черновика процесса без этапов](../operations/workflow-metadata-draft-1870.md).
 - `OPS-DOC-TERMINAL-GATE-1873` — [Окончательный отказ закрытого Gate после deadline](../operations/terminal-gate-deadline-1873.md).
 
+- `OPS-DOC-WORKFLOW-GATE-1872` — [Точные решения Gate опубликованного этапа](../operations/workflow-gate-decisions-1872.md).
+
 Документ задает устойчивые идентификаторы и реестр документации.
 
 ## Frontmatter

@@ -1629,6 +1629,10 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 	return repository.launchRunWithAttachmentPolicy(ctx, tx, scope, input, false)
 }
 
+// launchRunWithAttachmentPolicy pins the published workflow and materializes each step's own gate
+// flag; the coordinator's initial turn does not inherit an additional aggregate approval gate.
+// launchRunWithAttachmentPolicy закрепляет published workflow и флаг Gate каждого этапа;
+// начальный ход координатора не наследует дополнительное aggregate согласование.
 func (repository *Repository) launchRunWithAttachmentPolicy(ctx context.Context, tx pgx.Tx, scope scope, input command.Command, reuseAttachmentSnapshot bool) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.LaunchRunInput)
 	if !ok || payload.ProjectRef == "" || !runtimecontract.ValidAssistantTurnContent(payload.Task) || len([]rune(payload.Title)) > 240 || payload.Target.Ref == "" || !validBoundedRunInput(payload.Input) {
@@ -1805,8 +1809,7 @@ func (repository *Repository) launchRunWithAttachmentPolicy(ctx context.Context,
 		if err != nil {
 			return commandOutcome{}, fmt.Errorf("insert workflow coordinator execution node: %w", err)
 		}
-		initialGate := !workflowRequiresDelegation(workflowVersion) && workflowHasHumanGate(workflowVersion)
-		if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateRunNodesWorkflowStepKeyHumanGateAfter, nodeID, "workflow.coordinator.initial", initialGate); err != nil {
+		if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateRunNodesWorkflowStepKeyHumanGateAfter, nodeID, "workflow.coordinator.initial", false); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		if err := repository.insertPlannedWorkflowNodes(ctx, tx, scope, projectID, runID, nodeID, workflowVersion); err != nil {
@@ -1909,15 +1912,6 @@ func workflowCoordinatorTask(task, versionRef, versionDigest string, version ent
 		builder.WriteString(criteria)
 	}
 	return truncate(builder.String(), 96<<10)
-}
-
-func workflowHasHumanGate(version entity.WorkflowVersion) bool {
-	for _, step := range version.Steps {
-		if step.HumanGateAfter {
-			return true
-		}
-	}
-	return false
 }
 
 func (repository *Repository) insertAgentNode(ctx context.Context, tx pgx.Tx, scope scope, rootRunID, runID, parentNodeID, agentRef, displayName, turnID, summary string) (string, string, error) {

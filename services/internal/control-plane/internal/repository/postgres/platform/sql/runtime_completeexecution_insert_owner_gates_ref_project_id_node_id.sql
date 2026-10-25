@@ -20,7 +20,7 @@ VALUES (
     'i18n:OWNER_GATE_REVIEW_TITLE',
     'i18n:OWNER_GATE_REVIEW_PROMPT',
     @context_summary,
-    ARRAY['APPROVE', 'REJECT', 'REQUEST_CHANGES', 'CANCEL'],
+    @allowed_decisions::text[],
     'OPEN'
 )
 RETURNING id::text
