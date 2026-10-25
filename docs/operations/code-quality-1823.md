@@ -4,11 +4,43 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.486.0
+version: 1.487.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая CLI-граница локальных user tools — 26.10.2026
+
+Три install-user-material/nss/render-tools wrappers используют source-only
+user-tool-input.sh. Общие usage и разбор mode/state-directory сохраняют
+last-wins,help,unknown/missing-value outcomes и порядок mode→absolute path
+проверок с запретом root/HOME. Caller очищает свои аргументы после успешного
+разбора как исходный while/shift. Source-path case поддерживает абсолютный,
+относительный и basename запуск без нового внешнего dirname перед help.
+Fail messages и все preflight/install/download/digest/readback bodies прежние.
+Библиотека не меняет cwd/options и не читает env;документированный результат
+включает только mode/state_directory вызывающего wrapper.
+
+Три полных source byte inverse и обратная подстановка фактического общего
+usage/parser восстановили прежние исходники.324 paired CLI cases/648 launches
+включают whole scripts и continuation probes с обеими формами invocation:
+help/unknown/missing/repeated flags,apply/readback,path/root/HOME,spaces/newlines,
+литеральные shell metacharacters.42 успешных probes сохраняют точные значения
+и ноль оставшихся аргументов. Внешние команды подставлены;установки/download
+не исполнялись. Source-only проверка сохранила options/cwd/caller state.
+
+Bash syntax4 sources PASS LOCAL. ShellCheck4 sources:0 errors/warnings и0 новых
+diagnostics. Единственный прежний SC2016 info буквально относится к
+bcrypt grep-шаблону;JSON diagnostics до/после совпали,правила не ослаблялись.
+Два существующих публичных offline contracts:install24.89с иremote disposable
+8.64с — PASS LOCAL;они используют synthetic fixtures/fake commands.
+
+Detector:6767 sources,222 прежних generated exclusions,1481 raw/1207 retained/
+274 unresolved. Два Bash окна исчезли,новых нет;registry1064 побайтно прежний.
+Go21580/21580 EN→RU. Контракты/generated/dependencies/migrations не менялись.
+Реальная установка инструментов,живой кластер,browser/full E2E/deploy и
+независимая QA этого блока — NOT RUN;локальный contract не является live smoke.
 
 ## Общий цикл чтения impact-списков — 26.10.2026
 
