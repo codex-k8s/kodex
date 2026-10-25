@@ -34,6 +34,10 @@ type commandOutcome struct {
 
 const defaultAgentRunConcurrency = 8
 
+// Execute authorizes and atomically persists an idempotent owner command; prepared object versions
+// survive ambiguous COMMIT errors without fabricating success or retrying SQL.
+// Execute проверяет полномочия и атомарно сохраняет идемпотентную owner-команду; подготовленные версии
+// переживают неоднозначную ошибку COMMIT без выдуманного успеха либо повтора SQL.
 func (repository *Repository) Execute(ctx context.Context, input command.Command) (command.Result, error) {
 	scope, err := repository.resolveScope(ctx, input.Principal)
 	if err != nil {
@@ -182,6 +186,9 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 		return command.Result{}, fmt.Errorf("insert command idempotency receipt: %w", errs.ErrConflict)
 	}
 	if err := tx.Commit(ctx); err != nil {
+		// A lost COMMIT acknowledgement can already own every prepared object version.
+		// Потерянный ответ COMMIT уже может закрепить каждую подготовленную версию объекта.
+		keepPrepared = !errors.Is(err, pgx.ErrTxCommitRollback)
 		return command.Result{}, fmt.Errorf("commit command transaction: %w", errs.ErrConflict)
 	}
 	keepPrepared = resultContainsPreparedObjects(outcome.result, prepared)

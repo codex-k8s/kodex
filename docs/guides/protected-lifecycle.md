@@ -10,6 +10,17 @@ updated: 2026-10-25
 
 # Защищённые агрегаты и граф фонового выполнения
 
+Ошибка ответа COMMIT не доказывает rollback. Owner write, подготовивший объект
+до transaction, сохраняет его exact version при неизвестном commit outcome,
+включая transport error и cancel; возвращается прежняя ошибка, без fabricated
+success или SQL/PUT retry. Непосредственная компенсация допустима до попытки
+COMMIT либо при доказанном rollback (`pgx.ErrTxCommitRollback`), но не по одному
+`ErrTxClosed`. Повтор исходного намерения заново проверяет authority и читает
+сохранённый receipt. Возможный orphan не удаляется без owner-bound доказательства
+отсутствия ссылки; отдельные ledger/purge paths сохраняют свои правила.
+Матрица двух owner writes и regression с реально потерянным server COMMIT ACK:
+[#1889](../operations/artifact-commit-ack-1889.md).
+
 Preflight completion с artifacts использует ту же canonical
 organization/actor/operation/idempotency-key lock, что и основной Execute:
 matching receipt и intent разрешаются до требования активного lease.

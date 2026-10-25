@@ -4,7 +4,7 @@ title: Сохранность артефакта при неизвестном �
 type: operations
 status: approved
 owner: manager
-version: 1.0.0
+version: 1.0.1
 updated: 2026-10-25
 ---
 
@@ -66,6 +66,14 @@ component PASS. Тесты #1881 не меняются; их lost client reply �
 Execute не является потерей DB COMMIT ACK. Context7 недоступен (`Invalid API
 key`); проверены официальный [pgx Tx contract](https://pkg.go.dev/github.com/jackc/pgx/v5@v5.10.0#Tx)
 и закреплённый исходник `pgx/v5@v5.10.0/tx.go`.
+
+RED подтверждён на test-only `5de17d527`: четыре неизвестных исхода COMMIT
+сохранили DB cardinalities1, но Delete1 уничтожил exact bytes; server COMMIT/idle
+действительно получен wrapper. Два known rollback сохранили counts0 и Delete1.
+Исправление меняет только два final owner Commit-error branch: компенсация
+подавляется, если ошибка не является `pgx.ErrTxCommitRollback`. Replay ветки
+не меняются: новый проигравший prepared object не входит в прежний receipt.
+Неизменённая suite должна подтвердить GREEN на следующем отдельном checkpoint.
 
 Ручная проверка после разрешённой поставки: создать маленький CLEAN файл
 обычным сотрудником и загрузкой владельца; проверить download, digest и

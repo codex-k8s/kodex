@@ -4,7 +4,7 @@ title: Согласованное чтение receipt при завершени
 type: operations
 status: approved
 owner: manager
-version: 1.0.0
+version: 1.0.1
 updated: 2026-10-25
 ---
 
@@ -35,7 +35,7 @@ owner state/artifact/usage/receipt/audit/events commit. ObjectStore не вып�
 | Чужая identity/tenant либо неверный новый lease/fence/generation | Прежние verified context, scope и lease guards закрывают запрос; новый receipt или ObjectStore effect не создаются. |
 | Completion без artifacts | Preflight не нужен; основной Execute уже сериализует exact scope прежней lock. |
 | Cancel/deadline/revocation либо отмена ожидания lock | Свежая работа не получает права по старому key; существующие lease/deadline/authority guards и bounded contexts сохраняются. Matching receipt не создаёт новую attempt/grant и не открывает terminal root. |
-| Unknown commit/ObjectStore failure | Нового SQL retry нет; authoritative receipt readback и прежний cleanup подготовленных объектов. Ошибка не объявляется успешным effect. |
+| Unknown commit/ObjectStore failure | Нового SQL retry нет; authoritative receipt readback. При неизвестном COMMIT prepared objects сохраняются по [#1889](artifact-commit-ack-1889.md); подтверждённый rollback допускает cleanup. Ошибка не объявляется успешным effect. |
 
 Новая оснастка `TestCompletionReceiptComponent` использует обычного Agent,
 actual owner/worker claim и два независимых protobuf decode одинаковых bytes.

@@ -21,6 +21,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// UploadArtifact scans and stores one authorized upload outside its owner transaction, then binds
+// the exact object version to the artifact/receipt; an unknown COMMIT preserves the version on error.
+// UploadArtifact проверяет и сохраняет одну разрешённую загрузку вне owner transaction, затем связывает
+// exact object version с artifact/receipt; неизвестный COMMIT сохраняет версию при ошибке.
 func (repository *Repository) UploadArtifact(ctx context.Context, principal value.Principal, mutation value.Mutation, input platformrepo.ArtifactUpload) (entity.Artifact, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -171,6 +175,9 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 		return entity.Artifact{}, errs.ErrConflict
 	}
 	if err := tx.Commit(ctx); err != nil {
+		// Only a confirmed rollback permits deleting the version prepared by this upload.
+		// Только подтверждённый rollback разрешает удалить подготовленную этой загрузкой версию.
+		keepObject = !errors.Is(err, pgx.ErrTxCommitRollback)
 		return entity.Artifact{}, errs.ErrConflict
 	}
 	keepObject = true
