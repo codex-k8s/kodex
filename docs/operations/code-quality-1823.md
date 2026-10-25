@@ -4,11 +4,66 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.452.0
+version: 1.453.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие сценарии проверки SYSTEM/PROJECT grant plan — 25.10.2026
+
+На основе SHA88838120fcc6e398c9dad64452548b35776e0c7a одинаковые фабрики
+operation/candidate и четыре сценария двух integration-grant-plan тестов
+вынесены в integration-grant-plan.test-helpers.ts той же feature.
+Каждый scope по-прежнему явно задаёт свои pins, before/page, expected type,
+четыре настоящие guard/receipt functions и восемь запрещённых подмен.
+PROJECT сохраняет project/profile/agent-version pins и SYSTEM substitution;
+SYSTEM сохраняет собственный assistant ref и PROJECT substitution.
+Production guards, shared fields и model не менялись.
+
+Тестовые данные не строятся из production readonly-key registry или
+проверяемых predicates: общая фабрика хранит прежние независимые literal
+inputs, возвращает новые arrays/objects и structuredClone before/after.
+Receipt outcomes/resourceRef, owner rejection, editable policy/paths и
+candidate drift продолжают проверяться для обоих scope. Вспомогательный
+набор регистрирует прежние четыре теста отдельно в каждом исходном test file;
+нового общего runtime API либо выдачи полномочий нет.
+
+Обратная TypeScript AST-проверка подставляет конкретные callback bindings,
+scope label, expected type и patch array обратно в общий describe; полные
+восемь исходных тестов восстанавливаются. Сохранены42 места expect,
+16 отдельных owner patches, operation/candidate literals и полные pins/
+before/page. AST сравнивается структурно с literal text/operator kinds,
+без зависимости от source positions разных файлов; parser diagnostics
+отклоняются до разбора модели. Четыре production source файла побайтно
+равны базовому Git SHA. Типизированный generic Page сохраняет дополнительные
+поля ProjectAssistantIntegrationGrantCandidates без any либо ослабления guards.
+
+Точечный запуск двух исходных suites — PASS LOCAL:2 files/8 tests.
+Итоговый весь PWA: format — PASS (0,42с); npm run lint — PASS (142,06с);
+npm run build, включая typecheck, — PASS (59,79с);
+npm run test:unit -- --maxWorkers=2 — PASS (105,46с),
+410 suites/4076 tests. Проверены102 production source maps: нового test helper
+в них нет. Предупреждение о chunks больше500kB остаётся прежним.
+Наследованные credentials/KODEX/VITE inputs/KUBECONFIG исключены из child env;
+frontend dotenv-файлы отсутствовали. Три изменённых TS source зафиксированы
+SHA256 до/после проверок. Browser/full E2E не запускались.
+
+Исчезли ровно5 прежних raw keys двух test files, включая367-token receipt
+window; новых raw keys нет.6711 sources/222 прежних exclusions,
+1618 raw groups/1014 retained occurrences/604 unresolved против609.
+Все883 registry entries побайтно прежние; новых retention decisions нет.
+Попытка зарегистрировать каждый из5 уже отсутствующих keys отвергается
+actual assessor. Все3 изменённых test sources входят в inventory;17 unit
+проверок анализатора и5 стадий полного отчёта — PASS LOCAL.
+Все21505 собственных Go declarations сохраняют EN→RU описание.
+
+Context7 resolve Vitest вернул Invalid API key; ключи не менялись. Проверены
+официальные Vitest describe и TypeScript Generics. Go/SQL/contracts/dependencies/
+manifests и product behavior этим тестовым выносом не менялись.
+Полный control-plane build/unit относится к тому же Go-деревуf7c6728;
+browser, PostgreSQL component execution, live/deploy и QA-приёмка текущего
+HEAD не выполнялись. Остальные604 группы остаются scope открытого #1823.
 
 ## Различия SQL-снимков, блокировок и атомарных проверок — 25.10.2026
 
