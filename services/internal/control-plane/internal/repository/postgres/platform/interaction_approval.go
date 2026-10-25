@@ -10,6 +10,16 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// enqueueApprovedTerminalInteraction loads owner terminal-run delivery candidates and checks exact
+// WRITE/HUMAN_EACH_EFFECT capability against the pinned active package. It creates approval
+// gate/node/delivery intent, emits OWNER_GATE_OPENED and enqueues gate notices in the same
+// transaction. External notification waits for human resolution and a later delivery claim; no
+// core run is resumed here.
+// enqueueApprovedTerminalInteraction читает owner candidates доставки конечного запуска и
+// проверяет точную WRITE/HUMAN_EACH_EFFECT capability по pinned active package. Создаёт approval
+// gate/node/delivery intent, пишет OWNER_GATE_OPENED и ставит gate notices в той же транзакции.
+// Внешнее уведомление ждёт решения человека и последующего delivery claim; core run здесь не
+// возобновляется.
 func (repository *Repository) enqueueApprovedTerminalInteraction(ctx context.Context, tx pgx.Tx, current scope, projectID, rootRunID string) error {
 	rows, err := tx.Query(ctx, queryInteractionTerminalCandidates, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "project_id": projectID, "root_run_id": rootRunID,
@@ -17,6 +27,10 @@ func (repository *Repository) enqueueApprovedTerminalInteraction(ctx context.Con
 	if err != nil {
 		return errs.ErrUnavailable
 	}
+	// candidate holds one server-selected connection/grant/capability tuple while SQL rows are closed
+	// before per-candidate writes. It cannot supply caller-defined delivery authority.
+	// candidate хранит одну серверную connection/grant/capability tuple до закрытия SQL rows и
+	// последующих записей по candidates. Не задаёт права доставки от caller.
 	type candidate struct{ connectionRef, grantID, capabilityKey string }
 	candidates := []candidate{}
 	for rows.Next() {
@@ -72,7 +86,18 @@ func (repository *Repository) enqueueApprovedTerminalInteraction(ctx context.Con
 	return nil
 }
 
-// Optional delivery gate не возобновляет и не меняет terminal core Run.
+// resolveInteractionDeliveryGate handles only an optional delivery gate; missing rows return
+// handled=false for the normal gate path. It requires typed input and expected version established
+// by caller, current gate.resolve, OPEN/WAITING_APPROVAL and allowed decision without attachments.
+// Approve rechecks package/grant pins; reject/cancel close delivery.
+// Gate/node/notices/event/readback change in the caller transaction while terminal core run state
+// stays unchanged.
+// resolveInteractionDeliveryGate обрабатывает только optional delivery gate; отсутствие строки
+// даёт handled=false для обычного gate path. Требует установленные caller typed input и expected
+// version, текущее gate.resolve, OPEN/WAITING_APPROVAL и допустимое решение без attachments.
+// Approve заново проверяет package/grant pins; reject/cancel закрывают delivery.
+// Gate/node/notices/event/readback меняются в переданной транзакции, состояние конечного core run
+// сохраняется.
 func (repository *Repository) resolveInteractionDeliveryGate(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, bool, error) {
 	payload := input.Payload.(command.GateResolutionInput)
 	var gateID, nodeID, rootRunID, projectID, projectRef, gateState, nodeRef, runState string
@@ -157,6 +182,16 @@ func (repository *Repository) resolveInteractionDeliveryGate(ctx context.Context
 		projectID: projectID, projectRef: projectRef, resourceKind: "OWNER_GATE", resourceRef: payload.GateRef, summary: "i18n:OWNER_GATE_RESOLVED"}, true, nil
 }
 
+// cancelInteractionIntents invalidates connection delivery intents in SQL, turning claimed effects
+// UNKNOWN_OUTCOME and other eligible intents CANCELLED with leases cleared. It then cancels each
+// still-open approval gate/node and pending notices and emits resolution events without changing
+// core run state. Partial work requires outer rollback on error; it does not assert that an
+// external effect was undone.
+// cancelInteractionIntents инвалидирует connection delivery intents в SQL, переводя claimed
+// effects в UNKNOWN_OUTCOME, прочие допустимые intents — в CANCELLED с очисткой leases. Затем
+// отменяет каждый ещё открытый approval gate/node и pending notices и пишет resolution events без
+// изменения core run state. При ошибке частичная работа требует outer rollback; отмена не
+// доказывает откат внешнего эффекта.
 func (repository *Repository) cancelInteractionIntents(ctx context.Context, tx pgx.Tx, current scope, connectionRef string) error {
 	rows, err := tx.Query(ctx, queryInteractionApprovalInvalidate, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "connection_ref": connectionRef,
@@ -164,6 +199,11 @@ func (repository *Repository) cancelInteractionIntents(ctx context.Context, tx p
 	if err != nil {
 		return errs.ErrUnavailable
 	}
+	// pendingGate carries owner-resolved gate/node/root/project references and the unchanged core run
+	// state for invalidation events after closing rows. It is not a new grant to cancel arbitrary
+	// graphs.
+	// pendingGate хранит owner-resolved gate/node/root/project refs и неизменённое core run state для
+	// invalidation events после закрытия rows. Не выдаёт новый grant отмены произвольных графов.
 	type pendingGate struct{ id, ref, nodeID, nodeRef, rootRunID, projectID, runState string }
 	gates := []pendingGate{}
 	for rows.Next() {

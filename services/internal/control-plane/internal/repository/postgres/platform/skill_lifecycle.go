@@ -11,6 +11,18 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// transitionSkillBundle locks exact tenant bundle/OCC and dispatches draft review/publish/discard
+// or archive/restore/purge. Review/publish require matching clean scan digest/engine/time within
+// the24-hour age check; publish also requires approved review and exact file readback. It advances
+// revision/bundle state, disables bindings off ACTIVE and clears stored file descriptors on PURGED
+// in the caller transaction. Restore does not reenable old bindings; no object deletion or
+// independent commit occurs.
+// transitionSkillBundle блокирует точный tenant bundle/OCC и направляет draft
+// review/publish/discard либо archive/restore/purge. Review/publish требуют matching clean scan
+// digest/engine/time в24-hour age check; publish также требует approved review и точный file
+// readback. Продвигает revision/bundle state, отключает bindings вне ACTIVE и очищает stored file
+// descriptors при PURGED в переданной транзакции. Restore не включает прежние bindings; удаления
+// объектов и отдельного Commit нет.
 func (repository *Repository) transitionSkillBundle(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.SkillBundleInput)
 	if !ok {

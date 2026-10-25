@@ -10,6 +10,13 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// authorizeEnvironmentDraftImpact validates the typed draft and fresh validation digest; publish
+// additionally requires matching plan kind/draft/digest and current plan access. It does not
+// perform the full PREPARED/source-version/selection checks of publication or grant authority from
+// PlanRef.
+// authorizeEnvironmentDraftImpact проверяет typed draft и свежий validation digest; publish
+// дополнительно требует совпадения plan kind/draft/digest и текущего доступа к плану. Не выполняет
+// полные PREPARED/source-version/selection проверки публикации и не выдаёт права из PlanRef.
 func (r *Repository) authorizeEnvironmentDraftImpact(ctx context.Context, tx pgx.Tx, s scope, input command.Command) error {
 	payload, ok := input.Payload.(command.RuntimeEnvironmentDraftInput)
 	if !ok {
@@ -39,6 +46,15 @@ func (r *Repository) authorizeEnvironmentDraftImpact(ctx context.Context, tx pgx
 	return nil
 }
 
+// prepareEnvironmentDraftImpact locks a VALID owner-accessible draft, checks OCC, fresh digest and
+// previous environment version, then captures bounded eligible consumers with versions/bindings.
+// It persists an actor-bound PREPARED digest plan and items in the caller transaction. New
+// environments have no previous consumers; preparation neither publishes nor rebinds anything.
+// prepareEnvironmentDraftImpact блокирует доступный владельцу VALID draft, проверяет OCC, свежий
+// digest и прежнюю environment version, затем фиксирует ограниченный набор допустимых consumers с
+// версиями и bindings. Сохраняет actor-bound PREPARED digest plan и items в переданной транзакции.
+// Новое environment не имеет прежних consumers; подготовка ничего не публикует и не
+// перепривязывает.
 func (r *Repository) prepareEnvironmentDraftImpact(ctx context.Context, tx pgx.Tx, s scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.RuntimeEnvironmentDraftInput)
 	if !ok || payload.PlanRef != "" || len(payload.SelectedItemRefs) != 0 {
@@ -124,6 +140,16 @@ func (r *Repository) prepareEnvironmentDraftImpact(ctx context.Context, tx pgx.T
 		resourceKind: "RUNTIME_ENVIRONMENT_DRAFT", resourceRef: draft.Ref, summary: "i18n:RUNTIME_ENVIRONMENT_IMPACT_PREPARED"}, nil
 }
 
+// environmentDraftImpactForPublish rechecks plan access and exact PREPARED
+// source/draft/base-version/digest identity, loads actor-bound items and delegates bounded
+// known/distinct selection to the shared helper. Unselected items become NOT_SELECTED only after
+// all refs validate; failures return no item list. Current consumer eligibility is rechecked while
+// applying.
+// environmentDraftImpactForPublish перепроверяет доступ и точные PREPARED
+// source/draft/base-version/digest плана, читает actor-bound items и передаёт ограниченный выбор
+// известных distinct refs общему helper. Невыбранные items становятся NOT_SELECTED лишь после
+// проверки всех refs; ошибка не возвращает список items. Текущая допустимость consumers
+// перепроверяется при применении.
 func (r *Repository) environmentDraftImpactForPublish(ctx context.Context, tx pgx.Tx, s scope, draft entity.RuntimeEnvironmentDraft, payload command.RuntimeEnvironmentDraftInput) (revisionImpactRow, []entity.RevisionImpactItem, error) {
 	row, err := r.revisionImpact(ctx, tx, s, payload.PlanRef)
 	if err != nil {
@@ -140,28 +166,22 @@ func (r *Repository) environmentDraftImpactForPublish(ctx context.Context, tx pg
 	if err != nil {
 		return row, nil, err
 	}
-	if len(payload.SelectedItemRefs) > maximumRevisionImpactItems {
-		return row, nil, errs.ErrInvalid
-	}
-	known := map[string]bool{}
-	for _, item := range items {
-		known[item.Ref] = true
-	}
-	selected := map[string]bool{}
-	for _, ref := range payload.SelectedItemRefs {
-		if !known[ref] || selected[ref] {
-			return row, nil, errs.ErrInvalid
-		}
-		selected[ref] = true
-	}
-	for i := range items {
-		if !selected[items[i].Ref] {
-			items[i].Outcome = "NOT_SELECTED"
-		}
+	if err := selectRevisionImpactItems(items, payload.SelectedItemRefs); err != nil {
+		return row, nil, err
 	}
 	return row, items, nil
 }
 
+// applyEnvironmentDraftImpact attempts each PENDING rebind in a savepoint against the published
+// version and exact prior binding tuple. Known failures become item outcomes; unexpected failures
+// abort the outer owner transaction. Successful binding/readback is verified before savepoint
+// commit, each outcome requires one row and the plan finishes APPLIED even with classified failed
+// items. It does not independently commit the publication.
+// applyEnvironmentDraftImpact пытается перепривязать каждый PENDING item в savepoint к
+// опубликованной версии по точному прежнему binding tuple. Известные ошибки становятся item
+// outcomes, неожиданные прерывают внешнюю owner transaction. Успешные binding/readback проверяются
+// до savepoint commit, каждый outcome требует одну строку, план завершается APPLIED также с
+// классифицированными неуспешными items. Отдельно публикацию не фиксирует.
 func (r *Repository) applyEnvironmentDraftImpact(ctx context.Context, tx pgx.Tx, s scope, input command.Command, row revisionImpactRow, items []entity.RevisionImpactItem, environment entity.RuntimeEnvironmentSet) (entity.RevisionImpactPlan, error) {
 	for i := range items {
 		item := &items[i]

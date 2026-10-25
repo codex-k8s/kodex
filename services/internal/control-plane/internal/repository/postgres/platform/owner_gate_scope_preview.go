@@ -9,8 +9,14 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 )
 
-// Карточка показывает точное выбранное значение и поля схемы, которые
-// разрешено менять при следующем вызове без повторного согласования.
+// integrationScopedGatePreview resolves exact approval scope from the pinned capability and input,
+// bounds selected JSON at64KiB and derives sorted mutable schema paths outside selected subtrees.
+// Without showValues it returns path/type only but preserves scope digest. Errors are Unavailable;
+// this display map neither grants mutable-field authority nor submits an approval.
+// integrationScopedGatePreview разрешает точный approval scope по pinned capability и input,
+// ограничивает selected JSON до64KiB и выводит сортированные mutable schema paths вне выбранных
+// subtrees. Без showValues возвращает лишь path/type, сохраняя scope digest. Ошибки дают
+// Unavailable; display map не выдаёт право менять поля и не отправляет approval.
 func integrationScopedGatePreview(capability integrationpackage.Capability, input []byte, paths []string, showValues bool) (map[string]any, error) {
 	resolved, err := capability.ResolveApprovalScope(paths, input)
 	if err != nil {
@@ -57,6 +63,16 @@ func integrationScopedGatePreview(capability integrationpackage.Capability, inpu
 	return map[string]any{"selected": selected, "mutablePaths": mutable, "scopeDigest": resolved.Digest}, nil
 }
 
+// collectApprovalSchemaPaths recursively walks sorted object properties, escaping JSON Pointer
+// segments and treating nonobjects/nested missing properties as leaves. Root shape errors,
+// malformed children, depth>8 or an already accumulated count>256 reject; partial paths remain on
+// error. It does not expand array items or alternatives, and the entry-time count guard is not an
+// exact final256-leaf cap.
+// collectApprovalSchemaPaths рекурсивно обходит сортированные object properties, экранирует JSON
+// Pointer segments и считает nonobjects и nested missing properties листьями. Неверный root,
+// повреждённые children, depth>8 либо уже накопленное число>256 дают отказ; частичные paths
+// сохраняются при ошибке. Не разворачивает array items и alternatives, входная count-проверка не
+// является точным итоговым лимитом256 листьев.
 func collectApprovalSchemaPaths(schema map[string]any, prefix string, depth int, paths *[]string) error {
 	if depth > 8 || len(*paths) > 256 {
 		return errs.ErrUnavailable

@@ -12,7 +12,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Организационные runtime-ресурсы не наследуют project authority или grants.
+// requireOrganizationRuntimeResourceAccess requires no project-restricted authority and an
+// OWNER/ADMINISTRATOR role, then resolves the organization and checks both organization.manage and
+// the requested permission. Any lookup/access failure is hidden as NotFound; project grants do not
+// expand organization runtime authority.
+// requireOrganizationRuntimeResourceAccess требует отсутствия project-restricted authority и роль
+// OWNER/ADMINISTRATOR, затем разрешает организацию и проверяет organization.manage вместе с
+// запрошенным permission. Любой lookup/access failure скрывается как NotFound; project grants не
+// расширяют organization runtime authority.
 func (r *Repository) requireOrganizationRuntimeResourceAccess(ctx context.Context, tx pgx.Tx, s scope, permission string) error {
 	if s.authorityProjectID != "" || s.role != "OWNER" && s.role != "ADMINISTRATOR" {
 		return errs.ErrNotFound
@@ -24,6 +31,16 @@ func (r *Repository) requireOrganizationRuntimeResourceAccess(ctx context.Contex
 	return nil
 }
 
+// authorizeRuntimeSecretOperationOwner reconstructs the saved operation actor scope and exact
+// organization, selects only CREATE/ROTATE/REVEAL/REVOKE permissions and validates
+// organization/project shape. Organization uses its dedicated boundary; project creation checks
+// project, other operations check the existing secret owner target. Denials are hidden as
+// NotFound; worker identity does not replace the original actor.
+// authorizeRuntimeSecretOperationOwner восстанавливает scope сохранённого actor операции и точную
+// организацию, выбирает лишь CREATE/ROTATE/REVEAL/REVOKE permissions и проверяет
+// organization/project форму. Organization использует отдельную boundary; project create проверяет
+// project, прочие операции — owner target прежнего secret. Отказы скрываются как NotFound; worker
+// identity не заменяет исходного actor.
 func (r *Repository) authorizeRuntimeSecretOperationOwner(ctx context.Context, tx pgx.Tx, worker scope, operation lockedRuntimeSecretOperation) error {
 	owner, err := r.secretDraftOwnerScope(ctx, tx, worker, operation.actorID)
 	if err != nil || operation.organizationRef != owner.organizationRef {
@@ -53,6 +70,16 @@ func (r *Repository) authorizeRuntimeSecretOperationOwner(ctx context.Context, t
 	return nil
 }
 
+// listOrganizationRuntimeSecrets validates projectless filter, bounded query/page and
+// actor/organization-bound cursor before a read-only RepeatableRead. It requires organization
+// secret.view, scans only metadata/hints, closes rows before per-item action checks and emits a
+// scoped next cursor after page+1. Errors discard output; it never reveals plaintext values or
+// mutates secrets.
+// listOrganizationRuntimeSecrets проверяет projectless filter, ограниченные query/page и
+// actor/organization-bound cursor перед read-only RepeatableRead. Требует organization
+// secret.view, читает лишь metadata/hints, закрывает rows до проверки действий каждого item и
+// формирует scoped next cursor после page+1. Ошибки отбрасывают результат; plaintext values не
+// раскрываются, secrets не меняются.
 func (r *Repository) listOrganizationRuntimeSecrets(ctx context.Context, s scope, filter query.Filter) ([]entity.RuntimeSecret, string, error) {
 	if filter.ProjectRef != "" || len([]rune(filter.Query)) > 200 {
 		return nil, "", errs.ErrInvalid
@@ -116,6 +143,14 @@ func (r *Repository) listOrganizationRuntimeSecrets(ctx context.Context, s scope
 	return items, next, nil
 }
 
+// prepareOrganizationRuntimeSecretTarget accepts only projectless organization CREATE without a
+// supplied secret ref and rechecks secret.create. It reuses the locked name target or inserts
+// server-ref PROVISIONING metadata in the owner transaction. Backend conflicts use the write
+// mapper; no secret bytes, Kubernetes write or independent commit occurs.
+// prepareOrganizationRuntimeSecretTarget принимает лишь projectless organization CREATE без
+// переданного secret ref и перепроверяет secret.create. Использует прежний заблокированный name
+// target либо вставляет server-ref PROVISIONING metadata в owner transaction. Backend conflicts
+// проходят write mapper; secret bytes, Kubernetes write и отдельного Commit нет.
 func (r *Repository) prepareOrganizationRuntimeSecretTarget(ctx context.Context, tx pgx.Tx, s scope, input platformrepo.RuntimeSecretPrepareInput) (lockedRuntimeSecret, error) {
 	if input.Kind != "CREATE" || input.ScopeKind != "ORGANIZATION" || input.ProjectRef != "" || input.SecretRef != "" {
 		return lockedRuntimeSecret{}, errs.ErrInvalid

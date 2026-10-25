@@ -11,6 +11,17 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// ListManagedConfigurations reads SQL-visible managed sets, total and current revision in a
+// five-second read-only RepeatableRead snapshot with a scope-bound cursor. It derives next actions
+// from current project/organization and role-image source/build eligibility, preserving
+// Git/shipped ownership. Empty page can still carry total; read failures discard output, while
+// commit failure is Conflict. It neither exposes revision content nor authorizes subsequent
+// mutations.
+// ListManagedConfigurations читает SQL-visible managed sets, total и current revision в
+// пятисекундном read-only RepeatableRead со scope-bound cursor. Выводит next actions из текущей
+// project/organization и role-image source/build допустимости, сохраняя Git/shipped ownership.
+// Пустая страница может иметь total; read errors отбрасывают результат, commit failure даёт
+// Conflict. Не раскрывает revision content и не разрешает последующие изменения.
 func (repository *Repository) ListManagedConfigurations(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.ManagedConfigurationSet, int64, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()

@@ -18,10 +18,29 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryOwnerGateIntent embeds exact gate/root/node/invocation/delivery lineage with owner scope,
+// attachment source, pinned input and package metadata. Actor-scoped legacy membership visibility
+// and authority-project restriction filter reads; command authority and preview disclosure are
+// checked separately.
+// queryOwnerGateIntent встраивает точные gate/root/node/invocation/delivery lineage с owner scope,
+// attachment source, pinned input и package metadata. Actor-scoped legacy membership visibility и
+// authority-project restriction фильтруют чтение; права команды и раскрытие preview проверяются
+// отдельно.
+//
 //go:embed sql/owner_gate_intent.sql
 var queryOwnerGateIntent string
 
-// Проекция вызывается после разрешения Gate; receipt и event повторяют тот же owner scope.
+// projectGateIntent projects only an already resolved gate, first verifying stored scope. Actor
+// reads hide unavailable source attachments and scoped approval values without permission; events
+// never expose scoped values. It verifies canonical input digest and exact package pins, allowing
+// only terminal Forbidden-package history to remain redacted. Consequence count must match
+// decisions. Errors can leave partial view changes; this projection neither resolves a gate nor
+// grants authority.
+// projectGateIntent дополняет лишь уже разрешённый gate, сначала сверяя stored scope. Actor reads
+// скрывают недоступные source attachments и scoped approval values без права; events не раскрывают
+// scoped values. Сверяет canonical input digest и exact package pins, разрешая только terminal
+// history при Forbidden package остаться скрытой. Число consequences должно совпасть с decisions.
+// Ошибка допускает частичные изменения view; проекция не решает gate и не выдаёт полномочия.
 func (repository *Repository) projectGateIntent(ctx context.Context, runner queryRunner, current scope, gate *entity.OwnerGate, actorScoped bool) error {
 	if gate == nil {
 		return nil
@@ -131,6 +150,12 @@ func (repository *Repository) projectGateIntent(ctx context.Context, runner quer
 	return nil
 }
 
+// terminalOwnerGateHistory recognizes the closed historical gate states eligible for redacted
+// retired-package display, including CHANGES_REQUESTED. It describes gate history, not terminality
+// of the owning run or permission to execute a retired definition.
+// terminalOwnerGateHistory распознаёт закрытые исторические gate states для скрытого отображения
+// retired package, включая CHANGES_REQUESTED. Описывает историю gate, а не конечность owning run и
+// право исполнять retired definition.
 func terminalOwnerGateHistory(state string) bool {
 	switch state {
 	case "APPROVED", "REJECTED", "CHANGES_REQUESTED", "CANCELLED", "EXPIRED":
@@ -140,11 +165,30 @@ func terminalOwnerGateHistory(state string) bool {
 	}
 }
 
+// gatePreviewFieldBytes caps displayed UTF-8 string content of one ordinary preview field at4KiB
+// before safe truncation; it is not a bound for the whole encoded descriptor.
+// gatePreviewFieldBytes ограничивает отображаемое UTF-8 строковое содержимое одного обычного
+// preview field до4KiB перед безопасным усечением; не ограничивает полный encoded descriptor.
 const gatePreviewFieldBytes = 4 << 10
+
+// gatePreviewContentBytes provides a shared16KiB budget for displayed string content across a
+// preview. Numeric/boolean values and descriptor metadata are handled separately; the value does
+// not authorize disclosure.
+// gatePreviewContentBytes задаёт общий16KiB бюджет отображаемого строкового содержимого preview.
+// Числовые и boolean values и descriptor metadata обрабатываются отдельно; значение не разрешает
+// раскрытие.
 const gatePreviewContentBytes = 16 << 10
 
-// Только поля известных операций shipped registry. Бинарные и вложенные значения
-// не становятся текстовым preview; managed package не может расширить этот список.
+// integrationGatePreview bounds raw/canonical JSON and verifies SHA-256 of the parsed UseNumber
+// map before exposing a shipped-registry capability preview. Only known fields get descriptors;
+// attachments/nested data and guarded string names stay opaque, strings truncate safely
+// within4/16KiB budgets and integer conversion is int64. Unknown package/operation yields an
+// incomplete digest-only preview. This is not a strict EOF/schema decoder or an approval decision.
+// integrationGatePreview ограничивает raw/canonical JSON и сверяет SHA-256 разобранной UseNumber
+// map перед preview capability shipped registry. Лишь известные поля получают descriptors;
+// attachments/вложенные данные и защищённые строковые имена остаются opaque, строки безопасно
+// усекаются в бюджетах4/16KiB, integer conversion использует int64. Неизвестные package/operation
+// дают неполное digest-only preview. Это не строгий EOF/schema decoder и не решение о допуске.
 func integrationGatePreview(definitions map[string]integrationpackage.Package, key, capabilityKey, operation string, raw []byte, inputDigest string) (map[string]any, error) {
 	if len(raw) > 1<<20 {
 		return nil, errs.ErrUnavailable
@@ -242,6 +286,14 @@ func integrationGatePreview(definitions map[string]integrationpackage.Package, k
 	return result, nil
 }
 
+// gateConsequences maps known decisions to display-only external-effect/run-terminal flags and
+// safe summaries using separate integration/delivery/completes-run context. Unknown decisions are
+// skipped for caller cardinality rejection. It does not execute a transition or infer approval
+// authority from the flags.
+// gateConsequences сопоставляет известные decisions с отображаемыми external-effect/run-terminal
+// flags и safe summaries по отдельным integration/delivery/completes-run признакам. Неизвестные
+// decisions пропускаются для cardinality rejection caller. Не выполняет переход и не выводит права
+// approval из flags.
 func gateConsequences(decisions []string, integration, delivery, completesRun bool) []entity.OwnerGateDecisionConsequence {
 	result := make([]entity.OwnerGateDecisionConsequence, 0, len(decisions))
 	for _, decision := range decisions {

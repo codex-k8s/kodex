@@ -14,6 +14,16 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// ListOwnerGates normalizes bounded search and a cloned sorted closed state filter, validates the
+// scoped timestamp/ref cursor and reads SQL-visible page refs plus total in read-only
+// RepeatableRead. It closes rows before resolving each gate and projecting actor-safe intent, then
+// commits and returns the next cursor. Any failure discards output; list visibility and next
+// actions do not authorize resolution.
+// ListOwnerGates нормализует bounded search и скопированный сортированный closed state filter,
+// проверяет scoped timestamp/ref cursor и читает SQL-visible page refs с total в read-only
+// RepeatableRead. Закрывает rows до разрешения каждого gate и проекции actor-safe intent, затем
+// делает Commit и возвращает next cursor. Любая ошибка отбрасывает результат; list visibility и
+// next actions не разрешают решение gate.
 func (repository *Repository) ListOwnerGates(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.OwnerGate, int64, string, error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {

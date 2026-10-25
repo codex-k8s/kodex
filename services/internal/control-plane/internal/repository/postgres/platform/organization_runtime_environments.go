@@ -8,6 +8,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// requireRuntimeEnvironmentOwnerAccess accepts only ORGANIZATION without project or PROJECT with
+// an exact nonempty project ref. Organization uses the dedicated owner/admin boundary; project
+// resolves the owner target, hides authority-project mismatch as NotFound and requires
+// project.manage. It does not infer authority from scopeKind or payload refs.
+// requireRuntimeEnvironmentOwnerAccess допускает лишь ORGANIZATION без проекта либо PROJECT с
+// точным непустым project ref. Organization использует отдельную owner/admin boundary; project
+// разрешает owner target, скрывает authority-project mismatch как NotFound и требует
+// project.manage. Не выводит полномочия из scopeKind и payload refs.
 func (r *Repository) requireRuntimeEnvironmentOwnerAccess(ctx context.Context, tx pgx.Tx, s scope, scopeKind, projectRef string) error {
 	if scopeKind == "ORGANIZATION" {
 		if projectRef != "" {

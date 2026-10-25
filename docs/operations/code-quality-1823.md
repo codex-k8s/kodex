@@ -4,11 +4,66 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.426.0
+version: 1.427.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Production descriptions завершены; общий выбор impact items — 25.10.2026
+
+На основе `3945eb322286eb628334646240b5cc44e0cf43f4` полностью прочитаны
+последние20 production Go-файлов без EN→RU описаний (2979 исходных строк) и
+71 связанный SQL (695 строк, включая10 непосредственных embedded/159 строк).
+Описаны74 объявления, включая local candidate/pendingGate/claimed.
+Environment draft publication переиспользует прежний selectRevisionImpactItems
+вместо копии bounded/known/distinct selection и NOT_SELECTED marking.
+Нового helper, API, SQL, fixture, зависимости и runtime-диагностики нет.
+
+| Путь / переход | Сохранённые ограничения |
+| --- | --- |
+| Environment impact prepare/admit | Owner access, draft VALID/OCC, fresh validation digest и previous source version. Actor-bound PREPARED snapshot с bounded eligible consumers; prepare не публикует и не меняет bindings |
+| Environment selection/apply | Полные kind/state/source/draft/base/digest pins, plan access и actor-bound items. Общий helper сначала проверяет весь bounded known/distinct выбор, затем меняет лишь невыбранные outcomes. Savepoint rebind сохраняет exact prior tuple, classified failures и verified binding/readback; APPLIED допускает неуспешные items, unexpected errors требуют outer rollback |
+| Instruction binding/impact | Только owner PUBLISHED instruction той же организации и агента; binding version сохраняет ref при upsert. VALID draft/prompt context/OCC и effective-vs-managed override определяют0/1 item. Публикация перепроверяет source/digest/binding pins, stale выбранный consumer получает CONFLICT |
+| Terminal interaction gate | Server-owned terminal candidates, exact WRITE/HUMAN_EACH_EFFECT package capability. Optional delivery gate не возобновляет core Run; approve перепроверяет grant/package pins, reject/cancel закрывают delivery/node/notices с owner event в той же transaction |
+| Interaction invalidation | Claimed effect становится UNKNOWN_OUTCOME с закрытыми leases, остальные intents CANCELLED. Open approval gates/nodes/notices завершаются в owner transaction; отмена не доказывает отсутствие внешнего эффекта |
+| Interaction package | Только active enabled Mattermost CONNECTED/DEGRADED и exact definition pins. Inbound READ/NONE отдельно от gate decisions SENSITIVE/HUMAN_EACH_EFFECT, typed schema validation не заменяет human authority |
+| Managed catalog | Read-only5s RepeatableRead, SQL visibility/count/cursor, exact role-image source/build/manage next actions и shipped/Git ownership. Content не выдаётся; commit failure остаётся Conflict |
+| Model catalog claim/expire/complete | SKIP LOCKED owner accounts/credential tuple, bounded stale cancellation и fresh generation1 task/fence/request digest/DB expiry. Completion сравнивает full claim/credential pins и freshness, exact completed replay не переписывается. Observation/verification/platform event фиксируются одним Commit; это metadata path, не новый probe |
+| Organization runtime resources | Нет project authority, только current owner/admin с organization.manage и requested permission. Original operation actor восстанавливается из owner state; metadata/hints list не раскрывает plaintext, CREATE пишет только PROVISIONING metadata |
+| Outbox | CheckOutbox проверяет лишь table presence. Claim блокирует unpublished predecessor; scan failure может произойти после durable claim и требует lease expiry recovery. MarkPublished получает проверенную broker receipt от relay, SQL проверяет state/token без отдельного expiry check; DEAD_LETTER не пропускает ordering predecessor |
+| Gate scope/intent/preview | Exact server organization-assistant/project lineage, actor-safe attachments и scoped-value redaction. Terminal retired-package history остаётся скрытой без исполнения. Preview ограничивает parsed/canonical JSON и строковые bytes, не является strict EOF/schema parser либо authority; schema traversal entry-count guard не приписывается точный final256 cap |
+| Command permissions | Specialized authority dispatch раньше generic target. Runtime handlers сохраняют собственные lease/fence/lifecycle проверки даже при nil общего dispatcher. Owner lookup copies не меняют actor; existing resource project/owner приходит из БД, fresh grant/capability/retry/publish checks не заменяются receipt |
+| Project lifecycle | Exact tenant/project/OCC. Trash атомарно отменяет schedule occurrences с leases и active representative runs; restore ограничен retention deadline и ничего не возобновляет. PURGE_PENDING/receipt/READY archive cancellation не объявляются physical purge |
+| Impact persistence | Server ref/actor digest/version1 PREPARED и items в caller transaction; partial plan return не доказывает commit. Finish требует exact rows, сохраняет прежние Unavailable/Conflict различия и APPLIED version2 без независимого Commit |
+| Skill validation/lifecycle | Current artifact.view, exact CLEAN project/revision/object version/ETag/size/digest и SHA-256 readback до32MiB. Scanner/path/manifest verdicts сохраняются как safe VALIDATED/INVALID state; publish требует review/scan и новое file readback. Archive/purge отключают bindings, restore их не включает, PURGED очищает descriptors без удаления объектов |
+
+20 полных expected-AST/directive проверок и независимый selection-proof —
+PASS LOCAL. Для19 файлов исполняемый AST прежний; proof проверяет точное
+неизменное тело selectRevisionImpactItems и полный AST environment caller
+после обратной подстановки. Порядок двух чистых temporary map allocations
+helper отличается от прежней inline копии; validation/errors и момент
+первой item mutation совпадают. Другие persist/finish копии не объединялись:
+их error mapping различается и не должен скрыто меняться ради дедупликации.
+
+Полный control-plane build/unit,17 analyzer unit,5 exact-ignore guards,
+gofmt/git diff --check — PASS LOCAL (checks427-final), унаследованные
+credentials/KODEX inputs исключены. PostgreSQL/RLS/OCC/claims/expiry races,
+object/AV/provider/broker/Secret effects, browser/полный E2E/deploy/live —
+NOT RUN/SKIP. Kubernetes неизменён, прежние30 exact matches и standalone
+staging/control-api-gateway FAIL не повторялись и не объявляются новым PASS.
+Внешних library API не добавлено; прежние Context7 failure и официальные
+fallback документы сохраняются, env не исправлялся.
+
+Inventory6691 own sources/222 exclusions. Go21490:20943 EN→RU,547 missing;
+в production missing0, оставшиеся547 находятся в217 test-файлах. Это
+статический coverage комментариев, не продуктовая приёмка. PR343 Go/2933
+объявления, missing0;373 whole changed blobs. Detector1685 raw/886 retained
+occurrences/799 unresolved, registry771 не менялся; managed/memory catalog
+102-token window лишь сменило hash из-за комментария. Общая selection copy
+меньше порога detector, снижение raw не заявляется. Exclusions/thresholds
+не расширены. #1823 открыт, #1829 Draft. QA/main не менялись, secret values
+не извлекались, env не менялись и секреты не переносились.
 
 ## Каталоги, context bindings и mailbox lifecycle — 25.10.2026
 
