@@ -178,7 +178,8 @@ def source_storage(kube, plan):
 
 def credentials(kube, plan):
     storage = source_storage(kube, plan)
-    password = kube.key(SOURCE_NAMESPACE, "kodex-postgresql-runtime-credentials", "kodex_backup_reader")
+    # Штатный deploy-local rtrimstr("\n") удаляет LF файла openssl rand; raw key/S3 credentials сохраняют bytes.
+    password = kube.key(SOURCE_NAMESPACE, "kodex-postgresql-runtime-credentials", "kodex_backup_reader").removesuffix("\n")
     databases = [{"name": name, "host": POSTGRES_HOST, "port": 5432, "database": database,
                   "user": "kodex_backup_reader", "password": password, "tlsMode": "verify-full",
                   "tlsServerName": POSTGRES_HOST, "caFile": "/var/run/secrets/kodex/backup-controller/tls/ca.pem",

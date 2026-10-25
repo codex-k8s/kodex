@@ -167,6 +167,16 @@ class ScopedBackupReader(unittest.TestCase):
             reader.reader_apply(self.kube, self.plan, self.digest, self.output)
         self.assertEqual(self.kube.creates, before)
 
+    def test_generated_reader_file_newline_is_not_part_of_projected_password(self):
+        """Оператор принимает canonical openssl file, не расширяя алфавит SQL password."""
+        original = self.kube.key
+        def with_newline(namespace, name, key):
+            value = original(namespace, name, key)
+            return value + "\n" if name == reader.SOURCE_READER else value
+        self.kube.key = with_newline
+        reader.reader_apply(self.kube, self.plan, self.digest, self.output)
+        self.assertEqual(self.kube.resources[("secret", "qa-reader-" + RUN)]["values"]["kodex_backup_reader"], "a" * 64)
+
     def test_readback_rejects_foreign_receipt_and_added_sidecar(self):
         """Чужой locator и расширенная pod authority не принимаются как успешный repair."""
         receipt = reader.reader_apply(self.kube, self.plan, self.digest, self.output)

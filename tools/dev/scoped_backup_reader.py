@@ -114,7 +114,7 @@ def reader_apply(kube, plan, expected, output):
         kube.ensure_absent(drill.SOURCE_NAMESPACE, kind, name)
     kube.run(["create", "--dry-run=server", "-f", "-", "-o", "name"], drill.canonical(job))
     values = {"admin-password": kube.key(drill.SOURCE_NAMESPACE, SOURCE_ADMIN, "password"),
-              "kodex_backup_reader": kube.key(drill.SOURCE_NAMESPACE, SOURCE_READER, "kodex_backup_reader")}
+              "kodex_backup_reader": kube.key(drill.SOURCE_NAMESPACE, SOURCE_READER, "kodex_backup_reader").removesuffix("\n")}
     drill.require(re.fullmatch(r"[a-f0-9]+", values["kodex_backup_reader"]), "BACKUP_READER_PASSWORD_FORMAT_INVALID")
     validate_plan(kube, plan, expected)
     drill.write_private(str(output) + ".intent", {"schema": "kodex.backup-reader-intent/v1", "planSHA256": expected,

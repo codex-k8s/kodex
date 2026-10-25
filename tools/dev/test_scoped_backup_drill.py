@@ -95,6 +95,21 @@ class ScopedBackupDrill(unittest.TestCase):
         value = json.loads(self.kube.keys["backup-controller-repository"]["repository.json"])
         self.assertEqual(set(value), {"schemaVersion", "destination"})
 
+    def test_generated_reader_file_newline_matches_native_deploy_projection(self):
+        """LF generated reader file не входит в пароль; S3 и общий decoder сохраняют исходные bytes."""
+        import subprocess
+        for suffix in ("", "\n"):
+            with self.subTest(suffix=repr(suffix)):
+                source = "a" * 64 + suffix
+                self.kube.keys["kodex-postgresql-runtime-credentials"]["kodex_backup_reader"] = source
+                self.kube.keys[STORAGE]["secret-key"] = "PRIVATE_S3_SENTINEL\n"
+                value = drill.credentials(self.kube, self.plan)
+                native = json.loads(subprocess.check_output(["jq", "-Rsc", 'rtrimstr("\\n")'], input=source.encode()))
+                self.assertEqual([d["password"] for d in value["databases"]], [native, native])
+                self.assertEqual(native, "a" * 64)
+                self.assertEqual(value["destination"]["secretAccessKey"], "PRIVATE_S3_SENTINEL\n")
+                self.assertEqual(self.kube.keys["kodex-postgresql-runtime-credentials"]["kodex_backup_reader"], source)
+
     def test_unknown_create_retains_intent_and_cannot_be_retried(self):
         self.kube.unknown = True
         output = self.directory / "receipt.json"
