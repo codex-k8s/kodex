@@ -4,11 +4,83 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.411.0
+version: 1.412.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Required Workflow, leased catalog и continuation — 25.10.2026
+
+На основе `5c84b03ff0215049fb66916231ca86111e7f4fe6` полностью прочитаны
+10 файлов(1181 исходная строка): runtime_callback_context26,
+runtime_delegate_input43, runtime_secret_snapshot_scope15,
+session_continuation_input34, run_graph_cursor37, workflow_launch411,
+workflow_launch_readiness118, workflow_catalog142,
+workflow_catalog_publication113 и workflow_catalog_component_test242.
+32 сохранённых объявления описаны EN→RU; дублирующее объявление
+workflowSpecDigestPattern удалено. Повторно сверены применимые разделы
+GO-DOC-001/002/003/006, GUIDE-DOC-006 и GOV-DOC-003; прочитаны22 относящихся
+SQL, включая lease origin, catalog/published pins, advisory project locks,
+required-workflow insert/terminal и canonical terminal-graph closure.
+
+Вместо отдельной regexp все шесть production/test вызовов используют
+существующий exactSHA256→runtimecontract.ValidSHA256Text. Независимый AST proof
+сверяет идентичное regexp initializer `^[a-f0-9]{64}$`, точную цепочку двух
+обёрток и полный AST четырёх файлов: изменены только шесть callee expressions
+и удалено одно объявление. Длины, lowercase hex, нулевой digest, whitespace,
+prefix и malformed UTF-8 имеют прежнюю грамматику. Digest syntax по-прежнему
+не доказывает published content, provenance, lease или actor authority.
+Новая библиотека, dependency или внешний API не добавлены.
+
+Первый build дал FAIL из-за пропущенных потребителей package-level regexp в
+каталоге и его тесте: начальный поиск ограничивался workflow_launch-файлами.
+Неуспешный запуск сохранён отдельно в checks412-initial. Scope расширен до
+всех шести вызовов, новые файлы полностью прочитаны и описаны. После исправления
+всего scope заново выполнены проверки; ссылок на удалённый identifier нет.
+Это исправление собственного незавершённого выноса, не изменение owner policy.
+
+| Путь / переход | Сохранённые authority, pins и результат |
+| --- | --- |
+| Callback continuation task | JSON требует completedChildren и nonnil remainingStepKeys, фиксированный текст помечает summaries untrusted, общий content bound. Ошибка Conflict; повтор SessionContext, новый grant и delegation здесь не создаются |
+| Workflow delegation input | Exact сохранённые workflow/root input проверяются до additional data. Повреждённый owner snapshot — Unavailable; подмена existing JSON value либо превышение merged budget — Invalid. Fresh shallow map не превращает input в authority |
+| Session continuation read | SQL выбирает видимый SUCCEEDED run ACTIVE-сессии с exact tenant/session/target/project; malformed/bounds дают Conflict. Новая published schema и launch authority перепроверяются отдельным launch path |
+| Root graph cursor | Requested run уже разрешён caller. Child/root counters читаются с exact same-tenant/project/ref lineage; missing/mismatch — Unavailable. Child identity/lifecycle/permissions не заменяются root counters |
+| Secret draft receipt scope | Exact scope/org/project/draft/secret refs/generation и optional Secret identity. Predicate не проверяет content, terminal state или storage completion, не материализует secret payload |
+| Claim ancestor authorities | Required-launch origins из owner SQL→fresh canonical actor/role→exact project→effective platform.run.launch→specialized workflow target. Отказ actor/capability/access — Forbidden; новый claim/grant этот validator не выдаёт |
+| Pre-receipt launch authority | Exact live lease/fence/generation/runtime revision/attempt/deadline SQL→fresh root actor/capability/resource access. Старый receipt не оживляет lease; published pins и child materialization проверяются отдельно |
+| Create required launch | Сначала прежние bounded input/refs и fresh authority. Existing exact intent возвращает прежний child result; new intent сверяет locked published pins и tree bounds, затем canonical launchRun. Parent/proxy/edges/origin snapshot/event/readback остаются в caller owner-транзакции |
+| Project locks | Closed payload locator→точные related projects в устойчивом advisory-lock порядке. Claim/queued-provider cancel включают прежние active required roots; global lock не добавлен |
+| Leased discovery/read | Machine scope→RepeatableRead origin locks→fresh root actor/project/capability. Discovery view+launch SQL eligibility до limit; publication/active modes проверяют exact current pins. Только прежние origin/commit errors получают locked-read retry marker; caller rollback/commit неизменны |
+| Publication / active runs | Full typed publication сохраняет inputs/defaults/steps/DAG/gates/capabilities. Active cursor связан с runtime revision и current publication pins, но каждая run row сохраняет historical revision. run.view применяется до limit; данные не дают cancel/launch authority |
+| Readiness | Один dependency page snapshot и batch provider admission; closed reasons и context digests. Invalid graph/provider mismatch блокирует hint. Partial in-memory mutation при поздней ошибке описана; Session/Run/lease не создаются |
+| Child terminal / callback | До receipt/commit выполняются прежние bounded128 rounds. Terminal parent отменяет live child через OCC; proxy event отражает transition. Callback только nonterminal parent, успешный parent автоматически не создаётся |
+| Root terminal / cancel / owner gate | Canonical SQL закрывает live runs/nodes/turns/leases/gates и сохраняет UNKNOWN_OUTCOME uncertain effects/deliveries. Только returned RUN/NODE/GATE transitions создают прежние events; пустой повтор не создаёт transitions |
+| Renew / expiry / retry / delete | Нового перехода не добавлено. Fresh origin SQL по-прежнему требует живую lease/deadline; catalog retry охватывает прежний locked-read snapshot/rollback. Terminal/owner gate, новый retry graph и delete остаются у существующих специализированных owner paths |
+| Ошибка / commit | Caller-specific error mappings и partial result сохраняются. Helpers не фиксируют отдельно от command receipt и не повторяют external effects. Ignored reference-generation errors и asJSON fallback описаны, не объявлены исправленными |
+
+10 full-file expected-AST/directive сравнений и независимый proof шести digest
+callers — PASS. Полный control-plane build и unit — PASS LOCAL
+(checks412-final), GOWORK=off/GOMAXPROCS=4/-p2;13 external fixture и2 admin/template
+inputs исключены. 17 analyzer unit и5 exact-ignore guards — PASS.
+Existing callback/delegate-input/root-cursor/secret-result/digest pure regressions
+входят в unit. Workflow catalog component описан целиком, включая12 active runs,
+publication/cursor drift, visibility и revocation; disposable PostgreSQL scenario
+остаётся NOT RUN/SKIP. Browser/E2E/deploy/live также NOT RUN.
+
+Existing provider/role-image fixture helper не подставлялся в catalog test:
+его credential digest, registry refs и failure messages отличаются. Два
+прежних detector setup windows остаются в общем backlog; новые исключения не
+создавались. Inventory, thresholds и retained registry не расширены.
+
+Итоговый detector:1788 raw,902 retained occurrences,886 unresolved;
+registry776 валиден, новых/исчезнувших fragment/format/kind/path-pair keys нет.
+Малая копия regexp ниже порога detector удалена реальным переиспользованием
+общего predicate; снижение unresolved groups этим не заявляется.
+Во всём Go21483 объявления:20077 EN→RU,1406 без описаний. Текущий PR176
+Go-файлов/1946 объявлений, все1946 описаны. Whole inventory6683 sources/222
+exclusions. #1823 открыт, PR #1829 — Draft. QA/main snapshot f2e64eb сохранён;
+прикладные секреты не читались и не переносились.
 
 ## Сохранённый prompt, каталог переменных и core — 25.10.2026
 

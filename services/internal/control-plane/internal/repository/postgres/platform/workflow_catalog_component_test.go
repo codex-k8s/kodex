@@ -20,7 +20,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Каждая launch fixture получает pins тем же leased catalog, что native tool.
+// workflowCatalogLaunchInput uses the same leased execution-workflow catalog as the native tool,
+// changing only a value copy of principal permission and following at most ten pages. It checks
+// page size, published/digest/readiness pins for the requested ref and constructs the launch
+// payload; missing/invalid catalog data fails the test. It uses synthetic fixture identity and
+// does not manufacture owner authority or bypass catalog eligibility.
+// workflowCatalogLaunchInput использует тот же leased execution-workflow catalog, что native tool,
+// меняя только копию principal permission и проходя максимум десять страниц. Проверяет page size и
+// published/digest/readiness pins запрошенного ref и строит launch payload; отсутствующие либо
+// неверные catalog data завершают тест. Использует синтетическую fixture identity и не создаёт
+// owner authority или обход catalog eligibility.
 func workflowCatalogLaunchInput(t *testing.T, service *serviceplatform.Service, principal value.Principal, lease map[string]any, ref, task string) command.LaunchWorkflowInput {
 	t.Helper()
 	principal.Permission = "platform.runtime.execution.workflow.catalog"
@@ -35,7 +44,7 @@ func workflowCatalogLaunchInput(t *testing.T, service *serviceplatform.Service, 
 		}
 		for _, item := range result.Items {
 			if item.WorkflowRef == ref {
-				if item.PublishedRef == "" || !workflowSpecDigestPattern.MatchString(item.SpecDigest) || item.Readiness.RevisionRef != item.PublishedRef {
+				if item.PublishedRef == "" || !exactSHA256(item.SpecDigest) || item.Readiness.RevisionRef != item.PublishedRef {
 					t.Fatal("catalog pins missing")
 				}
 				return command.LaunchWorkflowInput{LeaseRef: input.LeaseRef, Fence: input.Fence, Generation: input.Generation, WorkflowRef: ref, Task: task, ExpectedPublishedRef: item.PublishedRef, ExpectedSpecDigest: item.SpecDigest, ExpectedWorkflowVersion: item.WorkflowVersion}
@@ -50,6 +59,20 @@ func workflowCatalogLaunchInput(t *testing.T, service *serviceplatform.Service, 
 	return command.LaunchWorkflowInput{}
 }
 
+// TestExecutionWorkflowCatalogComponent exercises disposable PostgreSQL leased discovery, complete
+// publication encoding and active-run pagination under exact actor/project/capability pins. It
+// rejects stale/foreign resources, cross-mode and publication-drift cursors, preserves historical
+// active-run revisions and applies visibility before limits, then rejects revoked origin
+// capability/closed lease. Provider, storage and role images are synthetic; the scenario skips
+// without an isolated component DSN and does not prove a live provider launch or deployed
+// acceptance.
+// TestExecutionWorkflowCatalogComponent проверяет на disposable PostgreSQL leased discovery,
+// полное publication encoding и active-run pagination внутри точных actor/project/capability pins.
+// Отклоняет stale/foreign resources, cross-mode и publication-drift cursors, сохраняет
+// исторические active-run revisions и применяет visibility до limits, затем отклоняет revoked
+// origin capability/closed lease. Provider, storage и role images синтетические; сценарий
+// пропускается без isolated component DSN и не доказывает live provider launch или развёрнутую
+// приёмку.
 func TestExecutionWorkflowCatalogComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
