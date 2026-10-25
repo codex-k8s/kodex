@@ -201,6 +201,52 @@ describe("DecisionsPage", () => {
     effectKey: "effect_fixture",
   });
 
+  it("generic поля и точная область видны до решения, как в модалке запуска", async () => {
+    const intent = commentIntent([
+      {
+        key: "action",
+        type: "STRING",
+        value: "CREATE",
+        opaque: false,
+        truncated: false,
+      },
+      {
+        key: "value",
+        type: "STRING",
+        value: "Точное содержимое QA",
+        opaque: false,
+        truncated: false,
+      },
+      {
+        key: "fault",
+        type: "STRING",
+        value: "RETRYABLE_ONCE",
+        opaque: false,
+        truncated: false,
+      },
+    ]);
+    intent.definitionKey = "synthetic";
+    intent.operation = intent.capabilityKey = "synthetic.journal.write";
+    intent.resourceScope = {
+      kind: "SYNTHETIC_JOURNAL",
+      values: { journal: "qa1830-exact-journal" },
+      digest: "a".repeat(64),
+    };
+    const html = await renderIntegration(intent);
+    const primary = html.replace(/<details\b[^]*?<\/details>/g, "");
+    for (const value of [
+      "CREATE",
+      "Точное содержимое QA",
+      "RETRYABLE_ONCE",
+      "qa1830-exact-journal",
+    ]) {
+      expect(primary).toContain(value);
+      expect(primary.indexOf(value)).toBeLessThan(
+        primary.indexOf('class="decision-actions"'),
+      );
+    }
+  });
+
   it.each(["ru", "en"] as const)(
     "показывает repo/Issue/comment из actual typed key fields ДО решения (%s)",
     async (locale) => {

@@ -22,7 +22,7 @@ import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
-import { integrationEffectPreview } from "@/features/workboard/integration-effect-preview";
+import IntegrationIntentPreview from "@/features/workboard/components/IntegrationIntentPreview.vue";
 import { useGateCatalog } from "@/features/workboard/gate-catalog";
 import { useGateProjects } from "@/features/workboard/gate-projects";
 import GateProjectFilter from "@/features/workboard/components/GateProjectFilter.vue";
@@ -50,7 +50,6 @@ import type {
 } from "@/shared/ui/attachment-composer";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
-import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
@@ -297,42 +296,6 @@ const selected = computed(() => {
   }
   return visibleItems.value.find((item) => item.gate.ref === selectedRef.value);
 });
-type ApprovalScopePreview = {
-  selected: Array<{ path: string; type: string; value: unknown }>;
-  mutablePaths: string[];
-};
-function isApprovalScopeField(
-  value: unknown,
-): value is ApprovalScopePreview["selected"][number] {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const field = value as Record<string, unknown>;
-  return (
-    typeof field.path === "string" &&
-    typeof field.type === "string" &&
-    "value" in field
-  );
-}
-const selectedApprovalScope = computed<ApprovalScopePreview | undefined>(() => {
-  const candidate =
-    selected.value?.gate.integrationIntent?.effectPreview.approvalScope;
-  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate))
-    return undefined;
-  const scope = candidate as Record<string, unknown>;
-  if (
-    !Array.isArray(scope.selected) ||
-    !scope.selected.every(isApprovalScopeField) ||
-    !Array.isArray(scope.mutablePaths) ||
-    !scope.mutablePaths.every((path) => typeof path === "string")
-  )
-    return undefined;
-  return scope as ApprovalScopePreview;
-});
-const selectedEffect = computed(() =>
-  integrationEffectPreview(selected.value?.gate.integrationIntent),
-);
-const selectedHasTechnicalPreview = computed(
-  () => Object.keys(selectedEffect.value.technical).length > 0,
-);
 const selectedActions = computed(() =>
   selected.value
     ? decisionActionLayout(selected.value.gate)
@@ -482,25 +445,6 @@ function decisionQuestion(item: DecisionInboxItem): string {
     connection: item.gate.integrationIntent.connectionName,
     risk: t(`decisions.integrationRisk.${integrationRisk(item.gate)}`),
   });
-}
-
-function approvalPathLabel(path: string): string {
-  return path
-    .split("/")
-    .filter(Boolean)
-    .map((part) => part.replaceAll("~1", "/").replaceAll("~0", "~"))
-    .join(".");
-}
-function effectFieldLabel(key: string): string {
-  if (key === "body" && selectedEffect.value.commentIssue)
-    return t("decisions.integrationCommentBody");
-  const translation = `decisions.integrationFieldLabels.${key}`;
-  return Object.hasOwn(
-    { issue_number: true, body: true, title: true, comment: true, text: true },
-    key,
-  )
-    ? t(translation)
-    : key;
 }
 
 function projectPath(item: DecisionInboxItem): string | undefined {
@@ -1043,135 +987,10 @@ const serverMessage = useServerMessage();
             </p>
           </section>
 
-          <section
+          <IntegrationIntentPreview
             v-if="selected.gate.integrationIntent"
-            class="decision-integration-intent"
-          >
-            <h3>
-              {{
-                selectedEffect.commentIssue
-                  ? $t("decisions.integrationIssueComment", {
-                      issue: selectedEffect.commentIssue,
-                    })
-                  : $t("integrationsRedesign.effectPreview")
-              }}
-            </h3>
-            <dl>
-              <div v-if="selectedEffect.repositoryName">
-                <dt>{{ $t("decisions.integrationRepository") }}</dt>
-                <dd>{{ selectedEffect.repositoryName }}</dd>
-              </div>
-              <div>
-                <dt>{{ $t("integrations.connections") }}</dt>
-                <dd>{{ selected.gate.integrationIntent.connectionName }}</dd>
-              </div>
-              <div>
-                <dt>{{ $t("decisions.integrationRiskLabel") }}</dt>
-                <dd>
-                  {{
-                    $t(
-                      `decisions.integrationRisk.${integrationRisk(selected.gate)}`,
-                    )
-                  }}
-                </dd>
-              </div>
-            </dl>
-            <p
-              v-if="!selectedEffect.complete"
-              class="decision-preview-warning"
-              role="status"
-            >
-              {{ $t("decisions.integrationPreviewIncomplete") }}
-            </p>
-            <section
-              v-if="selectedEffect.fields.length"
-              class="decision-effect-fields"
-            >
-              <h4>{{ $t("decisions.integrationParameters") }}</h4>
-              <dl>
-                <div v-for="field in selectedEffect.fields" :key="field.key">
-                  <dt>{{ effectFieldLabel(field.key) }}</dt>
-                  <dd>
-                    <span v-if="field.hidden">{{
-                      $t("decisions.integrationValueHidden")
-                    }}</span>
-                    <SafeStructuredData
-                      v-else
-                      :value="field.value"
-                      class="decision-effect-value"
-                      literal
-                    />
-                    <small
-                      v-if="field.truncated"
-                      class="decision-preview-warning"
-                      >{{ $t("decisions.integrationValueTruncated") }}</small
-                    >
-                  </dd>
-                </div>
-              </dl>
-            </section>
-            <section
-              v-if="selectedApprovalScope"
-              class="decision-approval-scope"
-            >
-              <h4>{{ $t("decisions.approvalScopeTitle") }}</h4>
-              <p>{{ $t("decisions.approvalScopeExplanation") }}</p>
-              <dl>
-                <div
-                  v-for="field in selectedApprovalScope.selected"
-                  :key="field.path"
-                >
-                  <dt>
-                    <code>{{ approvalPathLabel(field.path) }}</code>
-                  </dt>
-                  <dd><SafeStructuredData :value="field.value" literal /></dd>
-                </div>
-              </dl>
-              <p>{{ $t("decisions.approvalScopeMutable") }}</p>
-              <ul>
-                <li
-                  v-for="path in selectedApprovalScope.mutablePaths"
-                  :key="path"
-                >
-                  <code>{{ approvalPathLabel(path) }}</code>
-                </li>
-              </ul>
-            </section>
-            <details class="decision-technical-details">
-              <summary>{{ $t("decisions.technicalDetails") }}</summary>
-              <dl>
-                <div>
-                  <dt>{{ $t("decisions.integrationOperation") }}</dt>
-                  <dd>
-                    <code>{{ selected.gate.integrationIntent.operation }}</code>
-                  </dd>
-                </div>
-                <div>
-                  <dt>{{ $t("decisions.integrationCapability") }}</dt>
-                  <dd>
-                    <code>{{
-                      selected.gate.integrationIntent.capabilityKey
-                    }}</code>
-                  </dd>
-                </div>
-                <div>
-                  <dt>{{ $t("decisions.integrationEffectKey") }}</dt>
-                  <dd>
-                    <code>{{ selected.gate.integrationIntent.effectKey }}</code>
-                  </dd>
-                </div>
-              </dl>
-              <SafeStructuredData
-                :value="selected.gate.integrationIntent.resourceScope"
-                literal
-              />
-              <SafeStructuredData
-                v-if="selectedHasTechnicalPreview"
-                :value="selectedEffect.technical"
-                literal
-              />
-            </details>
-          </section>
+            :intent="selected.gate.integrationIntent"
+          />
 
           <section
             class="decision-audit"
@@ -1547,59 +1366,6 @@ const serverMessage = useServerMessage();
   margin-top: 4px;
   font-size: 1.2rem;
 }
-.decision-technical-details {
-  padding-top: 4px;
-  border-top: 1px solid var(--hairline);
-  color: var(--muted);
-}
-.decision-technical-details summary {
-  width: fit-content;
-  cursor: pointer;
-  font-weight: 600;
-}
-.decision-technical-details > dl {
-  display: grid;
-  gap: 6px;
-  margin: 10px 0;
-}
-.decision-technical-details > dl > div {
-  display: grid;
-  grid-template-columns: minmax(120px, 0.35fr) minmax(0, 1fr);
-  gap: 10px;
-}
-.decision-technical-details dt,
-.decision-technical-details dd {
-  min-width: 0;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-.decision-effect-fields > dl {
-  display: grid;
-  gap: 6px;
-}
-.decision-effect-fields > dl > div {
-  display: grid;
-  grid-template-columns: minmax(120px, 0.35fr) minmax(0, 1fr);
-  gap: 10px;
-}
-.decision-effect-fields dt,
-.decision-effect-fields dd {
-  min-width: 0;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-.decision-preview-warning {
-  color: var(--warning);
-}
-.decision-effect-value {
-  display: block;
-  max-height: 16rem;
-  overflow: auto;
-}
-small.decision-preview-warning {
-  display: block;
-  margin-top: 4px;
-}
 .decision-meta {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1652,47 +1418,6 @@ small.decision-preview-warning {
   padding: 14px;
   border-left: 3px solid var(--warning);
   background: var(--warning-soft);
-}
-.decision-integration-intent {
-  display: grid;
-  gap: 9px;
-  margin-top: 14px;
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--accent);
-  background: var(--panel);
-}
-.decision-integration-intent h3,
-.decision-integration-intent dl {
-  margin: 0;
-}
-.decision-integration-intent dl {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-.decision-integration-intent dt {
-  color: var(--subtle);
-  font-size: 0.74rem;
-}
-.decision-integration-intent dd {
-  margin: 4px 0 0;
-  overflow-wrap: anywhere;
-}
-.decision-approval-scope {
-  display: grid;
-  gap: 8px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-.decision-approval-scope h4,
-.decision-approval-scope p,
-.decision-approval-scope ul {
-  margin: 0;
-}
-.decision-approval-scope ul {
-  padding-left: 20px;
 }
 .decision-audit {
   display: grid;
@@ -1896,9 +1621,6 @@ small.decision-preview-warning {
     padding: 16px;
   }
   .decision-meta {
-    grid-template-columns: 1fr;
-  }
-  .decision-integration-intent dl {
     grid-template-columns: 1fr;
   }
   .decision-audit li,

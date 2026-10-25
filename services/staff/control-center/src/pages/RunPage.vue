@@ -37,6 +37,7 @@ import {
   runDefaultTaskTitleKey,
 } from "@/features/workboard/model";
 import { hasValidGateScope } from "@/features/workboard/gate-scope";
+import IntegrationIntentPreview from "@/features/workboard/components/IntegrationIntentPreview.vue";
 import RunActivityDrawer from "@/features/runs/RunActivityDrawer.vue";
 import RunGraphCanvas from "@/features/runs/RunGraphCanvas.vue";
 import { observeRunOutlineClearance } from "@/features/runs/run-outline-clearance";
@@ -701,33 +702,6 @@ function gateDisplayQuestion(gate: OwnerGate): string {
     ),
   });
 }
-function gateScopeFields(
-  gate: OwnerGate,
-): Array<{ path: string; value: unknown }> {
-  const scope = gate.integrationIntent?.effectPreview.approvalScope;
-  if (!scope || typeof scope !== "object" || Array.isArray(scope)) return [];
-  const selected = (scope as Record<string, unknown>).selected;
-  if (!Array.isArray(selected)) return [];
-  const entries: unknown[] = selected;
-  return entries.filter(
-    (field): field is { path: string; value: unknown } =>
-      field !== null &&
-      typeof field === "object" &&
-      !Array.isArray(field) &&
-      typeof (field as Record<string, unknown>).path === "string" &&
-      "value" in field,
-  );
-}
-function gateScopeValue(value: unknown): string {
-  return typeof value === "string" ? value : JSON.stringify(value);
-}
-function gateScopePath(path: string): string {
-  return path
-    .split("/")
-    .filter(Boolean)
-    .map((part) => part.replaceAll("~1", "/").replaceAll("~0", "~"))
-    .join(".");
-}
 function inspectGateNode(gate: OwnerGate): void {
   const sessionRef = sessionOwnership.value.get(gate.nodeRef);
   const node = sessionGraph.value?.nodes.find(
@@ -1153,42 +1127,10 @@ onBeforeUnmount(() => {
                   {{ gateDisplayQuestion(gate) }}
                 </p>
                 <SafeMarkdown v-else :content="gate.contextSummary" />
-                <template v-if="gate.integrationIntent">
-                  <dl class="gate-integration-details">
-                    <div>
-                      <dt>{{ $t("decisions.integrationOperation") }}</dt>
-                      <dd>
-                        <code>{{ gate.integrationIntent.operation }}</code>
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>{{ $t("decisions.integrationCapability") }}</dt>
-                      <dd>
-                        <code>{{ gate.integrationIntent.capabilityKey }}</code>
-                      </dd>
-                    </div>
-                  </dl>
-                  <div
-                    v-if="gateScopeFields(gate).length"
-                    class="gate-approval-scope"
-                  >
-                    <h3>{{ $t("decisions.approvalScopeTitle") }}</h3>
-                    <p>{{ $t("decisions.approvalScopeExplanation") }}</p>
-                    <dl>
-                      <div
-                        v-for="field in gateScopeFields(gate)"
-                        :key="field.path"
-                      >
-                        <dt>
-                          <code>{{ gateScopePath(field.path) }}</code>
-                        </dt>
-                        <dd>
-                          <code>{{ gateScopeValue(field.value) }}</code>
-                        </dd>
-                      </div>
-                    </dl>
-                  </div>
-                </template>
+                <IntegrationIntentPreview
+                  v-if="gate.integrationIntent"
+                  :intent="gate.integrationIntent"
+                />
                 <h3>{{ $t("decisions.consequences") }}</h3>
                 <SafeMarkdown :content="gate.consequencesSummary" />
               </div>
@@ -1471,37 +1413,6 @@ onBeforeUnmount(() => {
 .gate-question dd .button {
   min-height: 0;
   padding: 0;
-}
-.gate-integration-details {
-  display: grid !important;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.gate-integration-details code,
-.gate-approval-scope code {
-  overflow-wrap: anywhere;
-  white-space: normal;
-}
-.gate-approval-scope {
-  margin-top: 14px;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-muted, #f5f7fa);
-}
-.gate-approval-scope h3 {
-  margin-top: 0;
-}
-.gate-approval-scope > p {
-  color: var(--subtle);
-  font-size: 0.76rem;
-}
-.gate-approval-scope dl {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 14px;
-}
-.gate-approval-scope dd {
-  padding-top: 4px;
 }
 .gate-response {
   display: grid;
