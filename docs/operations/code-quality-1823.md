@@ -4,11 +4,51 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.410.0
+version: 1.411.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Сохранённый prompt, каталог переменных и core — 25.10.2026
+
+На основе `269ed4b53888c0a85ed7a22e37518ccd9f13f7f3` полностью прочитаны семь
+файлов(326 строк): prompt_preview.go, prompt_variable_catalog.go,
+prompt_assistant_core.go, prompt_integration_context.go,
+prompt_workflow_template.go, assistant_plan_effect_carry.go и
+artifact_content_read_diagnostic.go. Все10 прежних неописанных объявлений получили
+EN→RU комментарии; исполняемый код и compiler directives не менялись.
+Прочитаны три SQL: prompt_preview_snapshot, prompt_assistant_core и
+prompt_workflow_template. Дополнительно сверены точные тела filterIntegrationGrants
+и NewDiagnostic и caller carryAssistantPlanBindingPins в configuration.go;
+полный аудит этих трёх дополнительных файлов не заявляется.
+
+| Область | Что описано без изменения поведения |
+| --- | --- |
+| Сохранённый prompt | Scope проверяется до target validation; latest runtime revision exact tenant RUN/SESSION→snapshot decode/platform instructions→run.view→commit. Исторический snapshot не пересобирается из текущих bindings |
+| Каталог переменных | Ordinary fallback против prospective preview; bounded source/query/digest, project/version mismatch, fresh context digest в cursor, unavailable/files markers и variable-name page. Availability/cursor не являются runtime authority |
+| Assistant core | Server-owned SYSTEM/PROJECT profile и exact project/org SQL; текущие active binding/revision/content/digest. Обычному agent core не нужен; helper сначала очищает старый AssistantCore. История не переписывается |
+| Workflow template | Exact managed published/superseded revision; отсутствие binding допустимо. Дополнение ExtraTemplates не заменяет существующие extras и не добавляет самостоятельную проверку digest/access |
+| Integration context | Только callable/effective grants; порядок, повторы и descriptor aliases. Прежняя игнорируемая ParseInt error не исправлена, narrowing display projection не выдаёт invocation permission |
+| Binding pins | Четыре fresh shallow top-level maps; меняются только существующие keys. Caller обязан передавать pins предыдущего canonical BIND того же agent текущей owner-транзакции; helper не проверяет provenance и не меняет persisted immutable plan |
+| Artifact diagnostic | Storage early return; затем Reference/Driver default и PgError→cancel→deadline→commit-rollback precedence. Нормализованные stage/class/SQLSTATE без сохранения driver cause; это не proof retry/rollback/commit |
+| Lifecycle | Новых create/claim/renew/complete/cancel/delete/retry/expiry, grant, audit/event или external effect нет. Сохранены прежние read/owner-command paths и их errors |
+
+Семь полных expected-AST/directive сравнений с исходным SHA — PASS: это только
+комментарии. Полный control-plane build и unit — PASS LOCAL (`checks411-final`),
+GOWORK=off/GOMAXPROCS=4/-p2,13 external fixture и2 admin/template keys исключены.
+17 analyzer unit и5 exact-ignore guards — PASS. PostgreSQL, реальные bindings,
+artifact storage, browser/E2E и deploy/live — NOT RUN/SKIP.
+Нового библиотечного API нет; предыдущая проверка Context7 pgx/v5.10.0
+Pool.BeginTx/TxOptions остаётся применимой, dependency versions сохранены.
+
+Во всех семи файлах нет исходных detector groups; вынос ради нового общего
+helper не требуется. Итоговый whole-source detector не изменился:1788 raw,
+902 retained occurrences,886 unresolved, registry776 валиден. Новых или исчезнувших
+fragment/format/kind/path-pair keys нет; thresholds и exclusions не менялись.
+Во всём Go21484 объявления:20045 EN→RU,1439 без описаний. Текущий PR166
+Go-файлов/1914 объявлений, все1914 описаны. #1823 открыт, PR #1829 остаётся Draft.
+Основной клон/QA snapshot f2e64eb и прикладные секреты не затронуты.
 
 ## Контекст preview и история overlay: начало snapshot read — 25.10.2026
 
