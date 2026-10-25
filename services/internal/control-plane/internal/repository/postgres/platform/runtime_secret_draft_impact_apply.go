@@ -13,6 +13,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// bindSecretDraftImpact requires an unbound PREPARED plan with exact draft/secret versions,
+// validates selected item membership and uniqueness, then binds it to the same-owner operation and
+// stores PENDING/NOT_SELECTED choices. SQL also checks plan expiry; failures require caller
+// rollback and no independent commit occurs.
+// bindSecretDraftImpact требует непривязанный PREPARED план с точными версиями черновика и
+// секрета, проверяет принадлежность и уникальность выбранных элементов, затем связывает с
+// операцией того же владельца и сохраняет PENDING/NOT_SELECTED. SQL также проверяет срок плана;
+// ошибки требуют rollback вызывающего кода, отдельного Commit нет.
 func (r *Repository) bindSecretDraftImpact(ctx context.Context, tx pgx.Tx, s scope, d secretDraftRow, input repoport.RuntimeSecretDraftPrepareInput, operationRef string) error {
 	plan, err := r.secretDraftImpact(ctx, tx, s, input.ImpactPlanRef, "", "")
 	if err != nil {
@@ -50,6 +58,12 @@ func (r *Repository) bindSecretDraftImpact(ctx context.Context, tx pgx.Tx, s sco
 	return nil
 }
 
+// secretDraftImpactError classifies Forbidden/NotFound as FORBIDDEN and
+// Conflict/VersionMismatch/Invalid as CONFLICT through errors.Is. An empty result means the error
+// is not a supported per-item outcome and must propagate, not be silently skipped.
+// secretDraftImpactError классифицирует Forbidden/NotFound как FORBIDDEN,
+// Conflict/VersionMismatch/Invalid — как CONFLICT через errors.Is. Пустой результат означает
+// неподдерживаемый исход элемента: ошибка должна передаваться выше, а не незаметно пропускаться.
 func secretDraftImpactError(err error) string {
 	if errors.Is(err, errs.ErrForbidden) || errors.Is(err, errs.ErrNotFound) {
 		return "FORBIDDEN"
@@ -60,6 +74,12 @@ func secretDraftImpactError(err error) string {
 	return ""
 }
 
+// recordSecretDraftImpactItem conditionally records outcome and result environment/binding pins
+// for a still-PENDING plan item. It maps SQL failure to Unavailable but does not require a nonzero
+// affected-row count; caller plan/state ownership remains essential.
+// recordSecretDraftImpactItem условно записывает исход и результирующие environment/binding pins
+// ещё PENDING элемента плана. Ошибку SQL преобразует в Unavailable, но не требует ненулевое число
+// изменённых строк; владение планом и состоянием обеспечивает вызывающий код.
 func (r *Repository) recordSecretDraftImpactItem(ctx context.Context, tx pgx.Tx, id string, item entity.RuntimeSecretDraftImpactItem) error {
 	_, err := tx.Exec(ctx, querySecretDraftImpactOutcome, pgx.StrictNamedArgs{"plan_id": id, "item_ref": item.Ref, "outcome": item.Outcome, "environment_version_ref": item.ResultEnvironmentVersionRef, "binding_ref": item.ResultBindingRef, "binding_version": item.ResultBindingVersion})
 	if err != nil {
@@ -68,6 +88,18 @@ func (r *Repository) recordSecretDraftImpactItem(ctx context.Context, tx pgx.Tx,
 	return nil
 }
 
+// applySecretDraftImpact groups PENDING items by exact environment/source revision, sorts groups
+// and publishes each under a savepoint with own-version carry. Selected agent bindings get
+// separate savepoints and exact readback; classified failures become per-item outcomes, unexpected
+// failures abort the caller path. APPLIED plan state can include forbidden/conflict items, and an
+// environment publication can remain even when its binding fails. All effects still belong to the
+// outer secret owner transaction, not external retries.
+// applySecretDraftImpact группирует PENDING элементы по точным окружению и исходной ревизии,
+// сортирует группы и публикует каждую под savepoint с переносом собственной версии. Выбранные
+// agent bindings получают отдельные savepoints и точный readback; классифицированные ошибки
+// становятся исходами элементов, неожиданные прерывают путь. APPLIED план может содержать
+// forbidden/conflict элементы, публикация окружения может сохраниться при ошибке binding. Все
+// эффекты остаются во внешней транзакции владельца секрета, а не во внешних повторах.
 func (r *Repository) applySecretDraftImpact(ctx context.Context, tx pgx.Tx, s scope, o secretDraftOperationRow, secret entity.RuntimeSecret) error {
 	plan, err := r.secretDraftImpact(ctx, tx, s, "", "", o.id)
 	if err != nil {

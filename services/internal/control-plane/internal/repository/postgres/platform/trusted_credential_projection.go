@@ -12,6 +12,16 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// validRuntimeProjectionAuthority selects protected validation only for an empty profile on a
+// protected repository. Trusted-cluster requires runtime-controller and an exact materialization
+// method: initial input contains only profile/caller/method, recovery requires valid owner IDs,
+// bounded generation/digest and a future expiry within five minutes. It validates shape/profile,
+// not the live lease graph.
+// validRuntimeProjectionAuthority выбирает protected-проверку только для пустого профиля
+// защищённого repository. Trusted-cluster требует runtime-controller и точный метод
+// материализации: первый вход содержит только profile/caller/method, recovery требует корректные
+// owner IDs, ограниченные generation/digest и будущий срок в пределах пяти минут. Проверяет форму
+// и профиль, а не действующий lease graph.
 func (repository *Repository) validRuntimeProjectionAuthority(authority platformrepo.CredentialProjectionAuthority, recovery bool) bool {
 	if authority.RPCProfile == "" {
 		return !repository.trustedCluster && validRuntimeProjectionAuthority(authority)
@@ -36,8 +46,16 @@ func (repository *Repository) validRuntimeProjectionAuthority(authority platform
 		authority.ExpiresAt.After(now) && !authority.ExpiresAt.After(now.Add(5*time.Minute))
 }
 
-// Scope и поколение читаются в том же snapshot, что provider и runtime secrets.
-// Следующий owner query сохраняет все предикаты lease/fence/attempt/lineage.
+// resolveTrustedProjectionAuthority reads actor/tenant/project/expiry from the exact live
+// lease/revision owner snapshot and credential generation from the server registry in the caller
+// transaction. Recovery cannot extend expiry and must exactly match the supplied previous
+// authority after preserving its shorter deadline. It revalidates the profile but leaves full
+// provider/secret/lease-fence eligibility to the following owner query.
+// resolveTrustedProjectionAuthority читает actor/tenant/project/expiry из точного действующего
+// lease/revision owner snapshot и credential generation из серверного реестра в переданной
+// транзакции. Recovery не продлевает срок и должен точно совпасть с прежней authority после
+// сохранения её меньшего deadline. Перепроверяет профиль; полную provider/secret/lease-fence
+// допустимость проверяет следующий owner query.
 func (repository *Repository) resolveTrustedProjectionAuthority(ctx context.Context, tx pgx.Tx, organizationID string, input platformrepo.RuntimeCredentialProjectionInput) (platformrepo.CredentialProjectionAuthority, error) {
 	result := platformrepo.CredentialProjectionAuthority{
 		RPCProfile: transportprofile.TrustedCluster, CallerWorkloadID: "runtime-controller", CallerFullMethod: input.Authority.CallerFullMethod,

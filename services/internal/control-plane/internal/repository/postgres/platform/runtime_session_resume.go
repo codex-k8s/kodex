@@ -12,11 +12,29 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryRuntimeSessionResumeSnapshot embeds the confirmed LIVE storage snapshot for an exact
+// tenant/session/provider codex-session identity with nonempty source size/digest. The linked
+// immutable RuntimeRevision, not current task/history/lease, supplies previous configuration under
+// a shared storage lock.
+// queryRuntimeSessionResumeSnapshot встраивает подтверждённый LIVE storage snapshot точных
+// организации, сессии и provider codex-session identity с непустыми размером и дайджестом
+// источника. Прежнюю конфигурацию под разделяемой блокировкой storage задаёт связанная
+// неизменяемая RuntimeRevision, а не текущие task/history/lease.
+//
 //go:embed sql/runtime_session_resume_snapshot.sql
 var queryRuntimeSessionResumeSnapshot string
 
-// Возобновление использует только подтверждённый storage того же session и его
-// immutable revision. Текущий task/history/lease не является конфигурацией.
+// runtimeSessionResumeCompatible requires recognized assistant scope, OpenAI runtime and mandatory
+// provenance in both snapshots, then JSON-normalizes and compares the closed
+// configuration/dependency field set plus initiator and instruction dependencies. It excludes
+// task/history/lease and normalizes MCP observation-only changes. Missing fields or
+// parse/validation errors return false; compatibility does not grant access or prove storage
+// bytes.
+// runtimeSessionResumeCompatible требует известную область ассистента, OpenAI runtime и
+// обязательное происхождение обоих снимков, затем JSON-нормализует и сравнивает закрытый набор
+// конфигурации и зависимостей с инициатором и инструкциями. Исключает task/history/lease и
+// нормализует только наблюдательные изменения MCP. Отсутствие полей и ошибки разбора либо проверки
+// дают false; совместимость не выдаёт доступ и не доказывает storage bytes.
 func runtimeSessionResumeCompatible(previous, current map[string]any) bool {
 	for _, snapshot := range []map[string]any{previous, current} {
 		switch stringMap(snapshot, "assistantScope") {
@@ -97,9 +115,14 @@ func runtimeSessionResumeCompatible(previous, current map[string]any) bool {
 	return errA == nil && errB == nil && bytes.Equal(a, b)
 }
 
-// Новый owner health receipt не меняет семантику tools. Его свежесть проверяется
-// перед claim; resume сохраняет exact package/config/credential/grant pins,
-// но не сравнивает время и идентификатор повторного наблюдения той же системы.
+// runtimeSessionMCPDependencies validates MCP profiles against exact grants/agent/scope, then
+// removes only profile digest and health test ref/generation/time from a fresh JSON projection.
+// Empty profiles normalize to nil. Package/configuration/credential/grant pins remain; current
+// health freshness is checked before claim rather than inferred from resume equality.
+// runtimeSessionMCPDependencies проверяет MCP-профили по точным grants/agent/scope, затем удаляет
+// только дайджест профиля и health test ref/generation/time из новой JSON-проекции. Пустые профили
+// нормализуются в nil. Версии пакета, конфигурации, credential и grants сохраняются; текущее
+// здоровье проверяется до claim, а не выводится из равенства resume.
 func runtimeSessionMCPDependencies(snapshot map[string]any) (any, error) {
 	raw, err := json.Marshal(snapshot["managedMCPProfiles"])
 	if err != nil {
@@ -143,6 +166,14 @@ func runtimeSessionMCPDependencies(snapshot map[string]any) (any, error) {
 	return selected, nil
 }
 
+// runtimeSessionResumeID returns no resume ID for an empty ID, missing confirmed storage,
+// malformed snapshot or incompatible dependencies, preserving the cold path. Backend errors are
+// Unavailable; a compatible owner snapshot returns the same ID without renewing a lease, changing
+// storage or authorizing execution.
+// runtimeSessionResumeID не возвращает resume ID при пустом ID, отсутствии подтверждённого
+// storage, повреждённом снимке или несовместимых зависимостях, сохраняя cold path. Ошибка
+// хранилища даёт Unavailable; совместимый owner snapshot возвращает тот же ID без продления
+// аренды, изменения storage и разрешения исполнения.
 func runtimeSessionResumeID(ctx context.Context, tx pgx.Tx, current scope, snapshot map[string]any, sessionID string) (string, error) {
 	if sessionID == "" {
 		return "", nil

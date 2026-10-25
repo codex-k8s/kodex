@@ -4,11 +4,57 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.424.0
+version: 1.425.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Runtime storage, authority и reuse snapshot-read — 25.10.2026
+
+На основе `970786f69d08d5b49ada948de6ae4627611d773a` полностью прочитаны
+17 Go-файлов (1649 исходных строк) и33 SQL (493 строки).66 объявлений описаны
+EN→RU. В GetRuntimeRevisionPublicPair прежняя пара resolveScope/ReadOnly
+RepeatableRead BeginTx заменена существующим beginScopedSnapshotRead.
+Нового helper, API, SQL, схемы, fixture либо runtime-диагностики нет.
+
+| Путь / переход | Сохранённые границы |
+| --- | --- |
+| Public revision pair | Deadline5s, типизированный пустой результат, исходная обработка ошибок, оба run.view с project authority, rollback, current/previous read и commit. Тело общего helper не менялось; его разворачивание даёт прежний полный AST caller |
+| Artifact preparation | Current/pinned capability, root actor, exact lease/idempotency/deadline. Expired work проверяет байты без AV/Put; live preflight commit предшествует последовательным bounded validation/scan/upload. Поздняя ошибка допускает частично изменённый payload и требует outer owner rollback; cleanup использует независимый общий5s бюджет и остаётся best effort |
+| Prepared object guard | Проверяются metadata/CLEAN/AV и включение refs, без независимого чтения байтов, ETag/version либо доказательства commit. Guard не становится object storage receipt |
+| File catalog capture | Server-owned coordinator/result lineage, frozen input/skill pins, current visibility и closed purposes. Потоковый ref/digest commitment, freeze ровно одной строки и revision metadata в той же owner transaction; standalone grant и загрузки байтов нет |
+| Managed MCP current/startup | Exact READ/NONE grant pair, connection/package/config/credential pins, strict profile decoding при обычном outer JSON. Сравнение убирает только observation ref/generation/time. Recovery reread Conflict даёт false,nil без сброса другой task; DUE attempt1 выполняет integration-gateway, outer caller сохраняет audit/receipt/rollback |
+| Materialization request/proof | Owner lease/fence/generation/session/turn/attempt/input pins и закрытый точный RPC. Deterministic protobuf используется в рамках текущего binary, не объявляется универсальной canonical формой. First-write digest binding, current owner SQL lineage и exact registered operation не заменяются payload identifiers |
+| Retry/history/resume | Launch authority до replay receipt; history — непрерывный newest suffix20 messages/512KiB без пропуска либо обрезки. Resume требует confirmed LIVE storage и совместимые immutable dependency pins; task/history/lease исключены, missing/incompatible сохраняет cold path, query error даёт Unavailable |
+| Secret impact apply | Exact PREPARED owner plan/expiry, bounded distinct selection, deterministic environment ordering и version carry. Savepoint binding failures могут остаться item FORBIDDEN/CONFLICT внутри APPLIED плана после environment publication; неожиданная ошибка требует outer rollback |
+| Terminal storage / wake | ERROR/PURGED candidates проверяются до полной credential/config eligibility, roots dedup, failure graph в owner transaction. Wake имеет один DB-owned root/tenant anchor и RUN_CHANGED metadata; нет fanout либо нового run delta |
+| STT / trusted credential | Закрытые profile/caller/method и current organization ACL. Recovery exact authority не продлевает expiry, последующий owner query проверяет полные provider/secret/fence условия. Generation читает профильный durable registry; disabled trusted registration отклоняется, protected resolver не приписывается дополнительная disabled-проверка |
+| Worker instance / warm desired state | Shared durable generation floor и per-instance monotonic/replay watermark в одной transaction, SQL-time bounds и exact returned generation/revision. Подпись проверяется выше. Warm ref/version меняется только при новом executable dependency digest с audit/event в той же transaction; runtime здесь не стартует |
+
+17 expected-AST/directive проверок и отдельный snapshot-proof — PASS LOCAL.
+Для16 файлов совпал прежний полный AST; для revision pair отдельно доказаны
+неизменный helper, точный заменённый head и равенство полного AST после
+разворачивания helper. Полный control-plane build/unit,17 analyzer unit,
+5 exact-ignore guards, gofmt и git diff --check — PASS LOCAL (checks425-final).
+Унаследованные credentials и KODEX inputs исключены из тестового окружения.
+PostgreSQL/RLS/OCC/lease races, storage/AV/provider/broker effects, browser,
+полный E2E, deploy/live — NOT RUN/SKIP. Kubernetes не менялся и render не
+повторялся; прежние30 exact matches и известный standalone staging
+control-api-gateway FAIL не выдаются за новый PASS.
+
+Context7 resolve вновь вернул Invalid API key; значения ключей не извлекались
+и env не исправлялся. Проверена официальная документация
+[protobuf MarshalOptions](https://pkg.go.dev/google.golang.org/protobuf/proto#MarshalOptions):
+deterministic сериализация привязана к binary и не гарантирует canonical
+результат между языками либо разными сборками. Новых вызовов protobuf нет.
+
+Detector1685 raw/886 retained occurrences/799 unresolved, registry771 и полный
+clone-set hash прежние; новое извлечение меньше порога detector и не выдаётся
+за снижение его счётчика. Новых exclusions нет. Inventory6691 sources/222
+exclusions; Go21489:20815 EN→RU,674 missing. PR311 Go-файлов/2805 объявлений,
+missing0;341 whole changed blobs. #1823 открыт, #1829 Draft; основная и QA
+копии сохранены. Env не менялись, секреты не переносились и не публиковались.
 
 ## Assistant context, continuation/schedule prompt и run projections — 25.10.2026
 
