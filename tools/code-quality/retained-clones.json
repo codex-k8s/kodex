@@ -7536,6 +7536,14 @@
       "fragmentSHA256": "3b2b27350df87a343e79e688774754b23f72b7220f4863cf0d4cff8c28cfbdbc",
       "count": 1,
       "reason": "Session promotion проверяет разные project lineage sources: runs/runtime revisions напрямую по locked session, events/artifacts/receipts через session_runs, download grants через run_artifacts и attachment bindings через runs/turns. Одинаковая форма NOT EXISTS project mismatch является обязательным покрытием разных aggregates. Оставляем явный полный boundary в одном statement, не заменяя закрытые связи общим resource payload."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/e2e/integration-path.spec.ts",
+      "secondPath": "services/staff/control-center/e2e/local-api.ts",
+      "fragmentSHA256": "6c623821612015a42c78e24e45801550fbbabad90bac024878b570439947547e",
+      "count": 1,
+      "reason": "Окно145 tokens содержит cookie CSRF и обязательные HTTP headers двух самодостаточных page.evaluate callbacks. Полные mutateAPI и mutateLocalApi прочитаны: первый принимает caller key/POST/PATCH/PUT/DELETE/expectedStatus, повторяет transport failure до двух раз с тем же key и отдельным APIMutationFailure; второй сохраняет однократный POST/PUT, новый key на явный вызов, прежний JSON/error contract и любой успешный 2xx. Перенос общего Node helper внутрь browser callback невозможен без отдельного realm bridge; объединение полных функций изменило бы idempotency/retry/error boundary. Две действительно идентичные local mutations уже вынесены в local-api.ts. Сохранено только это окно exact pair/hash/count1, не callbacks, функции либо E2E-файлы целиком."
     }
   ]
 }

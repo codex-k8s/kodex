@@ -10,6 +10,7 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
+import { appendImpactPage } from "@/shared/ui/impact-page";
 import {
   publicationPlanIdentity,
   publicationSelection,
@@ -86,18 +87,7 @@ async function load(more = false): Promise<void> {
     );
     if (current !== generation) return;
     if (more && previous) {
-      if (previous.nextPageToken) cursors.add(previous.nextPageToken);
-      if (
-        (next.nextPageToken && cursors.has(next.nextPageToken)) ||
-        next.total !== previous.total ||
-        next.plan.state !== previous.plan.state ||
-        previous.items.length + next.items.length > next.total ||
-        next.items.some((item) =>
-          previous.items.some((old) => old.ref === item.ref),
-        )
-      )
-        throw new Error("Publication impact pagination changed");
-      page.value = { ...next, items: [...previous.items, ...next.items] };
+      page.value = appendImpactPage(previous, next, cursors);
     } else page.value = next;
     const defaults = new Set(selected.value);
     for (const item of next.items) {

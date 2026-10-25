@@ -4,11 +4,75 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.464.0
+version: 1.465.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие локальные API mutations и объединение impact-страниц — 25.10.2026
+
+Две побайтно одинаковые local mutations из local-assistant-launch.ts и
+local-openapi.ts перенесены в e2e/local-api.ts. Сохранены прежние сигнатура,
+самодостаточный page.evaluate callback, cookie CSRF, If-Match включая версию0,
+POST/PUT, JSON/body/error и новый UUID на каждый явный вызов. Автоматического
+retry нет: неизвестный transport/evaluate/JSON исход передаётся вызывающему.
+Read helpers не объединялись: у них различается transport retry contract.
+
+В shared/ui/impact-page.ts вынесен общий алгоритм двух компонентов
+RoleImageImpactSelection и PublicationImpactSelection. Он сначала запоминает
+использованный cursor, затем отвергает повтор cursor, drift total/plan.state,
+переполнение и пересечение ref, возвращает новую страницу с последней metadata
+и прежним порядком items. API, полная validation, stale-generation guard,
+AbortController, debounce/clock/cleanup и выбор элементов остались native.
+Role-image manual selection и publication PENDING auto-selection с deselected
+Set по-прежнему различаются. В helper нет сетевых вызовов или назначения
+полномочий; интерфейс структурный и не импортирует feature DTO.
+
+Обратная подстановка фактических helper signatures/bodies восстанавливает
+полные TypeScript AST всех четырёх исходников; parse diagnostics закрыто
+отклоняются. Browser callback/bindings и порядок cursor-before-validation
+прежние; два template/style tails и native comments побайтно сохранены.
+Добавлены20 unit cases:9 для порядка/metadata/cursors/drift/overlap и11 для
+CSRF/headers/version0/body/UUID/error redaction и отсутствия повторной записи.
+Mock Page исполняет сам callback с синтетическими document/fetch; это unit,
+без браузера, сети и live credentials.
+
+Весь frontend: format1,14с, lint142,86с, production build с typecheck57,79с,
+412 suites/4096 unit tests31,58с, test:e2e:check21,12с — PASS LOCAL. Последний
+только компилирует и перечисляет Playwright profiles через --list/check-only,
+без браузера, env-file credentials и protected inputs. В102 production source
+maps E2E helper и tests отсутствуют. Прежнее предупреждение о chunk size
+сохраняется. Первоначальный lint — FAIL:8 нарушений в новом test file;
+исправлены non-null/unsafe/require-await без ослабления правил, затем весь
+прогон прошёл. Отдельный format check перед повтором также выявил раскладку
+строк теста; применён закреплённый Prettier, исходный неуспех не скрывается.
+
+Detector:6730 sources/222 прежних exclusions,1587 raw/1074 retained/513
+unresolved против1589/1073/516. Удалены3 raw keys, добавлено одно короткое
+окно CSRF/headers между новым helper и integration-path mutateAPI. Последний
+прочитан целиком: caller key,2 transport attempts с одним key,POST/PATCH/PUT/
+DELETE,expectedStatus и APIMutationFailure отличаются от однократного local
+contract. Объединение callback через Node import невозможно без realm bridge;
+это exact pair/hash/count1 decision, без исключения функций/файлов. Все942
+прежних entries неизменны; count/hash mutations нового решения отвергнуты.
+Все5 стадий отчёта прошли, Go descriptions прежние21564/21564, пропусков0.
+Остальные513 групп входят в scope #1823; пороги и нормализация не менялись.
+
+Дополнительно проверены оставшиеся два затронутых Go-модуля закреплённым
+Go1.26.6: kubernetesadmission build20,98с/unit36,02с, gateway build14,40с/
+unit26,44с — PASS LOCAL; mod=readonly/-p2, unit count1, GOENV/GOWORK off,
+GOMAXPROCS4. Все tracked Go/SQL/module input hashes до/после сохранены и
+совпали. Третий затронутый модуль control-plane уже проверен тем же compiler
+на предыдущем cf55d28: build26,08с/unit47,35с; его источники не менялись.
+Новые тесты не обращались к живым provider/cluster/DB credentials; skipped
+PostgreSQL/optional suites не считаются component/live проверкой.
+
+Context7 проверил /microsoft/playwright/v1.61.0 (изолированный page.evaluate и
+serializable arguments) и /websites/vuejs (computed purity и lifecycle cleanup).
+Версии зависимостей и callbacks/lifecycle API не менялись. Source equivalence
+и unit не являются browser/layout или сквозной приёмкой. PostgreSQL component,
+реальный Playwright/E2E, OCI build, apply/deploy/live и отдельная QA — NOT RUN.
 
 ## Полный разбор SQL-групп и обязательные query headers — 25.10.2026
 
