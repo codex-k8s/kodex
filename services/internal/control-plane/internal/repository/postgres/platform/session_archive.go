@@ -18,12 +18,41 @@ import (
 )
 
 const (
-	sessionArchiveIdleAfter     = 15 * time.Minute
+	// sessionArchiveIdleAfter sets the fifteen-minute idle threshold supplied to snapshot
+	// materialization. Pending execution and live leases are independent SQL blockers; reaching this
+	// time alone does not authorize archival.
+	// sessionArchiveIdleAfter задаёт пятнадцатиминутный idle threshold для snapshot materialization.
+	// Pending execution и live leases остаются отдельными SQL blockers; одного истечения времени
+	// недостаточно для archival.
+	sessionArchiveIdleAfter = 15 * time.Minute
+	// sessionArchiveLeaseDuration sets the two-minute expiry requested on claim/renew. Exact
+	// lease/fence/generation and an unexpired prior claim remain mandatory; the constant does not
+	// extend a task by itself.
+	// sessionArchiveLeaseDuration задаёт двухминутный expiry для claim/renew. Exact
+	// lease/fence/generation и unexpired prior claim обязательны; сама константа task не продлевает.
 	sessionArchiveLeaseDuration = 2 * time.Minute
-	sessionArchiveRetention     = 30 * 24 * time.Hour
-	sessionArchiveMaxAttempts   = 5
+	// sessionArchiveRetention sets thirty-day archive retention for materialization/completion and
+	// superseded-object scheduling. Retention is a storage lifecycle input, not permission to read or
+	// delete an archive.
+	// sessionArchiveRetention задаёт тридцатидневный archive retention для materialization/completion
+	// и superseded-object scheduling. Retention — storage lifecycle input, а не permission читать либо
+	// удалять archive.
+	sessionArchiveRetention = 30 * 24 * time.Hour
+	// sessionArchiveMaxAttempts limits newly materialized archive tasks to five attempts before SQL
+	// dead-letter handling. It does not permit an external retry without the next owner claim or prove
+	// completion of prior work.
+	// sessionArchiveMaxAttempts ограничивает новые archive tasks пятью attempts до SQL dead-letter
+	// handling. Не разрешает external retry без next owner claim и не доказывает завершение прежней
+	// work.
+	sessionArchiveMaxAttempts = 5
 )
 
+// sessionArchiveCandidate holds selected task/runtime/session/source/archive descriptor pins
+// before a fresh owner claim is assigned. These internal locators and prior attempt data are not
+// worker authority until claim commit returns exact lease/fence/generation.
+// sessionArchiveCandidate хранит selected task/runtime/session/source/archive descriptor pins до
+// назначения fresh owner claim. Internal locators и prior attempt data не являются worker
+// authority до claim commit с exact lease/fence/generation.
 type sessionArchiveCandidate struct {
 	taskID, taskRef, kind, inputDigest, objectKey, objectVersion string
 	organizationRef, projectRef, sessionRef, providerAccountRef  string
@@ -38,6 +67,16 @@ type sessionArchiveCandidate struct {
 	attempt                                                      int32
 }
 
+// ClaimSessionArchiveTasks requires the exact worker/claim permission, nonblank instance and
+// limit1..16, then materializes the trusted global sweep and wakes changed storage before tenant
+// task selection. It assigns fresh lease/fence, per-attempt snapshot key, input digest and
+// generation, emitting storage notifications inside one ReadCommitted commit. Any error returns no
+// claims; external archive/PVC/object effects occur only after committed tasks leave this method.
+// ClaimSessionArchiveTasks требует exact worker/claim permission, nonblank instance и limit1..16,
+// затем выполняет trusted global materializer sweep и storage wake до tenant task selection.
+// Назначает fresh lease/fence, per-attempt snapshot key, input digest и generation со storage
+// notifications в одном ReadCommitted commit. Любая ошибка не выдаёт claims; external
+// archive/PVC/object effects начинаются после committed tasks вне метода.
 func (repository *Repository) ClaimSessionArchiveTasks(ctx context.Context, principal value.Principal, workloadInstance string, limit int32) ([]map[string]any, error) {
 	if principal.CallerWorkload != "session-archive" || principal.Permission != "platform.session-archive.tasks.claim" ||
 		strings.TrimSpace(workloadInstance) == "" || limit < 1 || limit > 16 {
@@ -175,6 +214,16 @@ func (repository *Repository) ClaimSessionArchiveTasks(ctx context.Context, prin
 	return items, nil
 }
 
+// digestSessionArchiveInput hashes the ordered JSON tuple of task/kind,
+// tenant/project/session/account/runtime/source pins, target object key/version and archive
+// ref/digest/size. Lease/fence/generation and attempt number are not tuple fields; snapshot
+// attempt identity is reflected in its object key. This digest is a commitment, not a signature or
+// authority check.
+// digestSessionArchiveInput хеширует ordered JSON tuple task/kind,
+// tenant/project/session/account/runtime/source pins, target object key/version и archive
+// ref/digest/size. Lease/fence/generation и attempt number не входят отдельными tuple fields;
+// snapshot attempt identity отражена в object key. Digest — commitment, а не signature либо
+// authority check.
 func digestSessionArchiveInput(candidate sessionArchiveCandidate, objectKey string) (string, error) {
 	raw, err := json.Marshal([]any{candidate.taskRef, candidate.kind, candidate.organizationRef,
 		candidate.projectRef, candidate.sessionRef, candidate.providerAccountRef,
@@ -189,6 +238,14 @@ func digestSessionArchiveInput(candidate sessionArchiveCandidate, objectKey stri
 	return hex.EncodeToString(digest[:]), nil
 }
 
+// RenewSessionArchiveTask requires the exact worker/renew permission and nonempty task/lease/fence
+// with positive generation, resolves tenant and hashes the supplied fence before SQL extends only
+// the matching live claim. No row is Forbidden and backend failure Unavailable; it returns the
+// same lease/fence/generation with stored expiry and performs no external work.
+// RenewSessionArchiveTask требует exact worker/renew permission и nonempty task/lease/fence с
+// positive generation, разрешает tenant и хеширует supplied fence до SQL продления только matching
+// live claim. No row даёт Forbidden, backend failure — Unavailable; возвращает те же
+// lease/fence/generation со stored expiry без external work.
 func (repository *Repository) RenewSessionArchiveTask(ctx context.Context, principal value.Principal, input command.SessionArchiveTaskInput) (map[string]any, error) {
 	if principal.CallerWorkload != "session-archive" || principal.Permission != "platform.session-archive.tasks.renew" ||
 		input.TaskRef == "" || input.LeaseRef == "" || input.Fence == "" || input.Generation < 1 {

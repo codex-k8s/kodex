@@ -4,11 +4,66 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.418.0
+version: 1.419.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Artifact/VFS/avatar/archive projections — 25.10.2026
+
+На основе `cd02a7e36da9e65d1c7c7b95cc28f8cdab80113f` полностью прочитаны
+15 Go-файлов(1863 исходные строки):10 production и5 test files.74 прежних
+объявления, включая local eligibleArtifact, описаны EN→RU. Прочитаны12 SQL
+(551 строка), включая весь VFS projection, avatar sync и отрицательную AV fixture.
+Ранее прочитанные11 archive SQL подтверждены byte-identical относительно
+`e405b3550087846aed384228a7af272f9e75ef05`; их код не менялся.
+
+GetArtifactRevision использует существующий beginScopedSnapshotRead вместо
+копии resolveScope→ReadOnly RepeatableRead BeginTx. Scope errors и
+BeginTx→Unavailable, caller5s context/deadline, deferred rollback, head access,
+exact revision read и commit сохранены. Helper и его файл byte-identical.
+Независимый proof сравнивает helper signature/body, разворачивает caller и
+сверяет весь artifact_revisions.go AST с исходным. Остальные14 файлов меняют
+только комментарии;15 full-file expected-AST/directive сравнений — PASS.
+ListArtifactRevisions сохраняет validation/cursor до BeginTx и не переведён
+на helper с другим порядком ошибок.
+
+| Путь / переход | Сохранённые ограничения и результат |
+| --- | --- |
+| Artifact read/receipt/event | Batch current visibility, order-preserving ref filtering и aggregate-version action hints; immutable revision pins отдельно определяют effective scan/preview. Late errors могут оставлять partial mutation — caller отбрасывает результат |
+| Revision list/get | ACTIVE current head admission до исторических metadata; cursor включает head version и revision position. Metadata не выдаёт download grant; caller ReadOnly transaction/commit прежние |
+| Binding projection | Same-project nonsystem agent.view в batches256; artifact admission отдельна. Ошибка фильтрации не позволяет выдать прежний нефильтрованный результат |
+| Avatar set/remove | Canonical relative PREVIEW URL; unchanged update проверяет syntax, changed — fresh artifact.bind и same-project CLEAN previewable bounded image. Agent OCC/protected guard, binding sync/retire и AGENT_CHANGED остаются в owner transaction |
+| AV scan/proof | Reader rewind до/после scanner, exact digest/size и fixed policy/engine. Valid metadata допускает старый scan и до1min future time, maximum age не добавлен; receipt JSON не является signature, content pins принадлежат immutable ledger |
+| VFS TREE/SEARCH | Одна SQL eligibility до totals/limit, exact historical input/skill/avatar pins и source-run visibility. Action/impact decoration не выполняет lifecycle commands; unsigned filter-bound cursor не закрепляет source revision |
+| Prompt files | Presence signal требует capability path, а не выдаёт file authority. Exact artifact.view+download на каждой deduplicated ref; scan/bytes admission не подменяются permission check |
+| Archive materialize/claim | Worker/permission и bounded batch, global trusted sweep перед tenant selection, fresh lease/fence/generation и per-attempt snapshot key, input commitment, storage notifications и единый commit |
+| Archive renew/expiry/retry | Renew только exact live tenant task/lease/fence/generation; expired claim не оживает. Прежние SQL backoff/dead-letter, partial-write rollback и cleanup paths сохранены |
+| Archive snapshot/restore/PVC/object complete/fail | Exact owner task lock и operation permission до kind-specific descriptor/source/PVC guards. NULL/partial lease закрыто отклоняется; DELETE_OBJECT отдельно допускает прежний storage-generation профиль. SQL completion — worker evidence, не самостоятельное доказательство внешнего действия |
+| Tests | Synthetic AV/in-memory storage, cursor/parser, seekable reader и failed-readback cleanup описаны с фактическими ограничениями. Disposable AV helper проверяет legacy quarantine/unbind/receipt/event, но в обычном unit не объявлен выполненным PostgreSQL acceptance |
+
+Нового lifecycle протокола, workload/grant, SQL/API, зависимости, scanner policy
+или storage effect нет. Применимые GO-DOC-001/002/003/006, GUIDE-DOC-006 и
+GOV-DOC-003 соблюдаются. Context7 pgx QueryRow/Scan/ErrNoRows/Rows/Commit/Rollback
+проверен в предыдущих пакетах; используется прежний API без смены версии.
+
+Полный control-plane build/unit — PASS LOCAL(checks419-final), GOWORK=off,
+GOMAXPROCS=4/-p2, inherited KODEX и18 static test inputs исключены.15 expected
+AST/directives и independent snapshot proof — PASS.17 analyzer unit и5
+exact-ignore guards — PASS. PostgreSQL/real AV/versioned storage/archive/PVC/
+claims/конкурентность, browser/E2E/deploy/live — NOT RUN/SKIP. Начальный
+comments-only build/unit также PASS, затем после выноса scope-read выполнены
+повторные полные build/unit; результаты сохранены раздельно.
+
+Detector1732 raw/887 retained occurrences/845 unresolved: удалены3 прежних
+artifact-revision scope-read fragment keys, раскрыт1 overlapping ключ между
+неизменёнными environment_impact и memory_record. Этот реальный повтор остаётся
+в общем backlog; новых исключений нет. Net unresolved меньше на2. Registry772
+валиден и неизменен, thresholds/generated exclusions прежние. Inventory6685
+own sources/222 exclusions. Go21489:20518 EN→RU,971 missing. PR248 Go-файлов/
+2508 объявлений, missing0;251 whole changed blobs. #1823 открыт, PR #1829 Draft;
+QA/main f2e64eb сохранён, прикладные секреты не читались и не переносились.
 
 ## Общий command response gRPC — 25.10.2026
 

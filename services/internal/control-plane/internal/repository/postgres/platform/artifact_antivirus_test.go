@@ -20,16 +20,36 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// queryArtifactAntivirusUnprovenContent embeds a disposable-only negative content insertion using
+// a caller-supplied antivirus report on an existing synthetic artifact. Production proof
+// constraints are expected to reject the tested absent/forged reports; the statement must not run
+// against live data.
+// queryArtifactAntivirusUnprovenContent встраивает disposable-only negative content insertion с
+// caller-supplied antivirus report существующего synthetic artifact. Production proof constraints
+// должны отклонить tested absent/forged reports; statement не запускается на live data.
+//
 //go:embed testdata/sql/artifact_antivirus_unproven_content.sql
 var queryArtifactAntivirusUnprovenContent string
 
-// Только синтетическая оснастка PostgreSQL/unit. Не доказывает реальный AV PASS
-// и не используется production composition root.
+// componentArtifactScanner is a synthetic scanner with injected error, infection and
+// digest-mismatch switches for local/component tests. Its ClamAV-looking metadata is fixture data
+// and must never stand in for production scanner composition or real AV acceptance.
+// componentArtifactScanner является synthetic scanner с injected error, infection и
+// digest-mismatch switches для local/component tests. ClamAV-looking metadata — fixture data, не
+// заменяющая production scanner composition либо real AV acceptance.
 type componentArtifactScanner struct {
 	err                error
 	infected, mismatch bool
 }
 
+// ScanReader returns injected failure first, checks initial context, then hashes at most size+1
+// bytes and requires exact length before constructing synthetic report metadata. The mismatch flag
+// replaces the digest and infected flag only sets verdict input; no antivirus daemon is contacted
+// or cancellation polled during copying.
+// ScanReader сначала возвращает injected failure, проверяет initial context, затем хеширует не
+// более size+1 bytes и требует exact length до synthetic report metadata. Mismatch flag заменяет
+// digest, infected flag задаёт verdict input; antivirus daemon не вызывается, cancellation во
+// время copying не опрашивается.
 func (scanner componentArtifactScanner) ScanReader(ctx context.Context, reader io.Reader, size int64) (value.ArtifactScan, error) {
 	if scanner.err != nil {
 		return value.ArtifactScan{}, scanner.err
@@ -50,6 +70,12 @@ func (scanner componentArtifactScanner) ScanReader(ctx context.Context, reader i
 		Digest: "sha256:" + hexDigest, SizeBytes: size, ScannedAt: time.Now().UTC(), Infected: scanner.infected}, nil
 }
 
+// configureComponentArtifactScanner marks its test frame and installs the default synthetic
+// scanner, failing the test on configuration error. It is test-only composition and proves no real
+// antivirus service readiness.
+// configureComponentArtifactScanner помечает test frame и устанавливает default synthetic scanner
+// с test failure при configuration error. Это test-only composition без доказательства real
+// antivirus service readiness.
 func configureComponentArtifactScanner(t *testing.T, repository *Repository) {
 	t.Helper()
 	if err := repository.ConfigureArtifactScanner(componentArtifactScanner{}); err != nil {
@@ -57,6 +83,12 @@ func configureComponentArtifactScanner(t *testing.T, repository *Repository) {
 	}
 }
 
+// TestArtifactAntivirusReaderBoundary covers missing/unavailable scanner, mismatched bytes, clean
+// and quarantined reports, requiring reader rewind and exact receipt round-trip for success. An
+// empty historical receipt must fail; synthetic hashes/verdicts do not certify a live AV scan.
+// TestArtifactAntivirusReaderBoundary проверяет missing/unavailable scanner, mismatched bytes,
+// clean и quarantined reports с reader rewind и exact receipt round-trip при success. Empty
+// historical receipt отклоняется; synthetic hashes/verdicts не подтверждают live AV scan.
 func TestArtifactAntivirusReaderBoundary(t *testing.T) {
 	digest := "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
 	for _, test := range []struct {
@@ -101,6 +133,16 @@ func TestArtifactAntivirusReaderBoundary(t *testing.T) {
 	}
 }
 
+// testArtifactAntivirus when invoked by disposable fixtures checks scanner admission, quarantine
+// download denial, clean readback, rejection of unproven stored content and legacy quarantined
+// binding cleanup/replay without new binding admission. It also reprojects historical result/event
+// data to blocked scan state; the helper restores synthetic scanner configuration through cleanup
+// and is not a live AV acceptance run.
+// testArtifactAntivirus при вызове disposable fixtures проверяет scanner admission, quarantine
+// download denial, clean readback, отказ unproven stored content и legacy quarantined binding
+// cleanup/replay без нового binding admission. Также заново проецирует historical result/event
+// data в blocked scan state; cleanup восстанавливает synthetic scanner configuration, helper не
+// является live AV acceptance.
 func testArtifactAntivirus(t *testing.T, ctx context.Context, repository *Repository) {
 	service, err := platformservice.New(repository)
 	if err != nil {

@@ -12,8 +12,22 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// avatarContentPathPrefix pins the same-origin artifact content endpoint prefix used by canonical
+// avatar URLs. The prefix is routing syntax and conveys no artifact ownership or download
+// authority.
+// avatarContentPathPrefix фиксирует same-origin artifact content endpoint prefix для canonical
+// avatar URLs. Prefix задаёт routing syntax и не выдаёт artifact ownership либо download
+// authority.
 const avatarContentPathPrefix = "/api/v1/artifacts/"
 
+// parseAvatarArtifactURL trims input and treats empty as clearing the avatar; otherwise accepts
+// only the exact relative artifact content URL with one purpose=PREVIEW and canonical bytes.
+// Absolute/host/user/fragment, nested refs and alternate query forms fail Invalid. It parses a
+// locator without checking existence, scan or permission.
+// parseAvatarArtifactURL обрезает пробелы и считает empty удалением avatar; иначе принимает только
+// exact relative artifact content URL с единственным purpose=PREVIEW и canonical bytes.
+// Absolute/host/user/fragment, nested refs и alternative query forms дают Invalid. Разбирает
+// locator без проверки existence, scan либо permission.
 func parseAvatarArtifactURL(value string) (string, string, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -41,10 +55,22 @@ func parseAvatarArtifactURL(value string) (string, string, error) {
 	return canonical, artifactRef, nil
 }
 
+// avatarArtifactContentURL concatenates the canonical artifact PREVIEW route from the supplied ref
+// without validation or escaping. Callers must validate ref/input and actual artifact eligibility
+// before exposing or binding it.
+// avatarArtifactContentURL собирает canonical artifact PREVIEW route из переданного ref без
+// validation либо escaping. Caller проверяет ref/input и actual artifact eligibility до выдачи или
+// binding.
 func avatarArtifactContentURL(artifactRef string) string {
 	return avatarContentPathPrefix + artifactRef + "/content?purpose=PREVIEW"
 }
 
+// setAgentAvatarReadback resets avatar presentation to FALLBACK/empty content path, then selects
+// ARTIFACT/canonical preview path when the stored artifact ref is nonempty. It mutates a nonnil
+// agent but performs no artifact access or content lookup.
+// setAgentAvatarReadback сбрасывает avatar presentation в FALLBACK/empty content path, затем
+// выбирает ARTIFACT/canonical preview path при nonempty stored artifact ref. Меняет nonnil agent
+// без artifact access либо content lookup.
 func setAgentAvatarReadback(agent *entity.Agent) {
 	agent.Avatar.Source = "FALLBACK"
 	agent.Avatar.ContentPath = ""
@@ -54,6 +80,14 @@ func setAgentAvatarReadback(agent *entity.Agent) {
 	}
 }
 
+// validateAvatarArtifact parses the canonical locator, resolves artifact.bind and checks access
+// before SQL requires same-project active CLEAN previewable bounded image under head SHARE lock.
+// Target-resolution errors become Invalid, permission failure NotFound, SQL absence Invalid and
+// mismatched ref Conflict. Empty input returns without lookup; no binding or commit occurs.
+// validateAvatarArtifact разбирает canonical locator, разрешает artifact.bind и проверяет access
+// до SQL требования same-project active CLEAN previewable bounded image под head SHARE lock.
+// Target-resolution errors дают Invalid, permission failure — NotFound, SQL absence — Invalid,
+// mismatched ref — Conflict. Empty input возвращается без lookup; binding и commit отсутствуют.
 func (repository *Repository) validateAvatarArtifact(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -90,6 +124,12 @@ func (repository *Repository) validateAvatarArtifact(
 	return canonical, nil
 }
 
+// validateAvatarUpdate for byte-identical old/new URL validates only canonical syntax, otherwise
+// runs full current artifact admission. Keeping an existing value therefore does not rebind it or
+// claim a fresh scan/permission check.
+// validateAvatarUpdate для byte-identical old/new URL проверяет только canonical syntax, иначе
+// запускает full current artifact admission. Сохранение existing value поэтому не выполняет
+// rebinding и не доказывает fresh scan/permission check.
 func (repository *Repository) validateAvatarUpdate(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -105,6 +145,14 @@ func (repository *Repository) validateAvatarUpdate(
 	return repository.validateAvatarArtifact(ctx, tx, current, projectID, nextValue)
 }
 
+// syncAgentAvatar runs the tenant/agent owner SQL to replace avatar binding, retire an
+// unreferenced old avatar and project exact artifact ref/revision. Missing candidate/update is
+// Conflict, backend failure Unavailable; it derives fallback/artifact presentation without
+// committing or independently checking actor permissions.
+// syncAgentAvatar выполняет tenant/agent owner SQL для замены avatar binding, retirement старого
+// avatar без других ссылок и проекции exact artifact ref/revision. Missing candidate/update даёт
+// Conflict, backend failure — Unavailable; выводит fallback/artifact presentation без commit либо
+// самостоятельной actor permission check.
 func (repository *Repository) syncAgentAvatar(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -133,6 +181,15 @@ func (repository *Repository) syncAgentAvatar(
 	return avatar, nil
 }
 
+// changeAgentAvatar requires typed input/version, locks the agent, rejects protected nonproject
+// agents and checks OCC before specialized set/remove validation. It updates URL, synchronizes
+// binding/revision and rereads the full agent projection, returning AGENT_CHANGED intent to the
+// enclosing owner transaction. No external upload or commit occurs; any later failure requires
+// caller rollback.
+// changeAgentAvatar требует typed input/version, блокирует agent, отклоняет protected nonproject
+// agents и проверяет OCC до specialized set/remove validation. Обновляет URL, синхронизирует
+// binding/revision и перечитывает full agent projection, возвращая AGENT_CHANGED intent enclosing
+// owner transaction. External upload и commit отсутствуют; поздний отказ требует caller rollback.
 func (repository *Repository) changeAgentAvatar(
 	ctx context.Context,
 	tx pgx.Tx,

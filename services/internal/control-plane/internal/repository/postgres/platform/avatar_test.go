@@ -7,6 +7,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 )
 
+// TestParseAvatarArtifactURL accepts one canonical same-origin preview path and whitespace
+// clearing, then rejects absolute/network-path, missing/alternate/extra query, nested path and
+// fragment variants. It tests syntax only; no artifact, scan or access backend is used.
+// TestParseAvatarArtifactURL принимает один canonical same-origin preview path и whitespace
+// clearing, затем отклоняет absolute/network-path, missing/alternate/extra query, nested path и
+// fragment variants. Проверяет только syntax без artifact, scan либо access backend.
 func TestParseAvatarArtifactURL(t *testing.T) {
 	t.Parallel()
 
