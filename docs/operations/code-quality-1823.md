@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.445.0
+version: 1.445.1
 updated: 2026-10-25
 ---
 
@@ -49,8 +49,8 @@ lease/grant transitions, permissions, events, retries или deadlines нет.
 - Inventory/detector/assessment, Go completeness и5 ignore guards,
   gofmt и `git diff --check` — PASS.
 
-Новый report содержит1624 raw-группы вместо1638:60 прежних exact keys/
-occurrences исчезли,46 появились при перестроении окон, чистое уменьшение14.
+Новый report содержит1624 raw-группы вместо1638:60 прежних точных вхождений
+исчезли,46 появились при перестроении окон, чистое уменьшение14.
 Это не43 устранённые detector-группы:43 inline цикла заменены одной общей
 реализацией. После изменения13 прежних retention keys имеют count0; они
 сняты адресно, без rekey/hash/count widening. Остальные763 entries сохранены.
