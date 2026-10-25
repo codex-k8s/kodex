@@ -155,6 +155,12 @@ def reader_readback(kube, plan, expected, receipt):
     config, expected_job = rendered(plan)
     name = expected_job["metadata"]["name"]
     job = json.loads(kube.run(["-n", drill.SOURCE_NAMESPACE, "get", "job", name, "-o", "json"]))
+    job_uid = resources[2]["identity"]["uid"]
+    metadata = job.get("metadata", {})
+    drill.require(metadata.get("uid") == job_uid and metadata.get("name") == name and
+                  metadata.get("namespace") == drill.SOURCE_NAMESPACE and
+                  all(metadata.get("labels", {}).get(k) == v for k, v in plan["labels"].items()),
+                  "BACKUP_READER_JOB_IDENTITY_CHANGED")
     drill.require(job.get("status", {}).get("succeeded") == 1 and not job.get("status", {}).get("failed"),
                   "BACKUP_READER_JOB_NOT_SUCCEEDED")
     actual_script = kube.run(["-n", drill.SOURCE_NAMESPACE, "get", "configmap", name,
@@ -174,11 +180,30 @@ def reader_readback(kube, plan, expected, receipt):
             actual = next((x for x in spec[key] if x["name"] == item["name"]), None)
             drill.require(actual is not None and all(actual.get(k) == v for k, v in item.items()),
                           "BACKUP_READER_JOB_SPEC_CHANGED")
-    logs = kube.run(["-n", drill.SOURCE_NAMESPACE, "logs", "job/" + name, "--tail=20"])
+    # Логи читаются у единственного завершённого Pod точной попытки, не через изменяемый job/name selector.
+    pods = json.loads(kube.run(["-n", drill.SOURCE_NAMESPACE, "get", "pods", "-l",
+        "batch.kubernetes.io/controller-uid=" + job_uid, "-o", "json"]))["items"]
+    drill.require(len(pods) == 1, "BACKUP_READER_POD_CARDINALITY")
+    pod = pods[0]
+    pod_meta = pod.get("metadata", {})
+    pod_name, pod_uid = pod_meta.get("name"), pod_meta.get("uid")
+    drill.require(isinstance(pod_name, str) and re.fullmatch(r"[a-z0-9][a-z0-9-]{0,252}", pod_name) and
+                  isinstance(pod_uid, str) and re.fullmatch(r"[a-f0-9-]{36}", pod_uid) and
+                  pod_meta.get("namespace") == drill.SOURCE_NAMESPACE and
+                  all(pod_meta.get("labels", {}).get(k) == v for k, v in plan["labels"].items()) and
+                  any(owner.get("kind") == "Job" and owner.get("uid") == job_uid and
+                      owner.get("controller") is True for owner in pod_meta.get("ownerReferences", [])) and
+                  pod.get("status", {}).get("phase") == "Succeeded", "BACKUP_READER_POD_IDENTITY_CHANGED")
+    logs = kube.run(["-n", drill.SOURCE_NAMESPACE, "logs", "pod/" + pod_name,
+                    "-c", wanted["containers"][0]["name"], "--tail=20"])
+    # Повторный UID read закрывает замену same-name объекта во время GET logs; UID нельзя восстановить.
+    drill.require(kube.identity(drill.SOURCE_NAMESPACE, "Job", name)["uid"] == job_uid and
+                  kube.identity(drill.SOURCE_NAMESPACE, "Pod", pod_name)["uid"] == pod_uid,
+                  "BACKUP_READER_LOG_ORIGIN_CHANGED")
     drill.require(logs.splitlines().count(b"PostgreSQL backup reader reconciliation verified") == 1,
                   "BACKUP_READER_AUTH_READBACK_MISSING")
     return {"state": "READER_AUTHENTICATION_VERIFIED", "databases": ["control_plane", "internal_rpc_authority"],
-            "jobUID": job["metadata"]["uid"], "planSHA256": expected}
+            "jobUID": job_uid, "podUID": pod_uid, "planSHA256": expected}
 
 
 def main():

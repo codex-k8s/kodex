@@ -73,3 +73,7 @@ revision; cleanup удаляет только временную проекци�
 exact projections, stale/active-consumer отказ и отсутствие второго Job после
 потери create ACK. Настоящая PostgreSQL аутентификация и backup/restore отмечаются
 отдельно только после живого readback.
+
+Readback связывает полный ответ Job с UID из receipt, а логи — с единственным
+завершённым Pod, принадлежащим этой Job. После чтения логов UID Job и Pod
+проверяются повторно: замена объекта с тем же именем не подтверждает repair.

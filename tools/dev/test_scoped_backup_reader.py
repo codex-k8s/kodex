@@ -67,12 +67,21 @@ class FakeKube:
             value["metadata"].update(identity)
             self.resources[(kind.lower(), name)] = value
             self.creates.append((kind, name))
+            if kind == "Job":
+                self.resources[("pod", name + "-pod")] = {"metadata": {
+                    "name": name + "-pod", "namespace": drill.SOURCE_NAMESPACE,
+                    "uid": str(uuid.uuid4()), "resourceVersion": "1", "labels": value["metadata"]["labels"],
+                    "ownerReferences": [{"kind": "Job", "uid": identity["uid"], "controller": True}]},
+                    "status": {"phase": "Succeeded"}}
             if kind == "Job" and self.unknown_job:
                 raise drill.Rejected("KUBERNETES_OPERATION_FAILED_OR_UNKNOWN")
             return identity["uid"].encode()
         if "pods" in args:
+            if args[-1] == "json":
+                return json.dumps({"items": [v for (kind, _), v in self.resources.items() if kind == "pod"]}).encode()
             return b"Running\n" if self.active else b"Succeeded\n"
         if "logs" in args:
+            assert any(arg.startswith("pod/") for arg in args) and "-c" in args
             return b"PostgreSQL backup reader reconciliation verified\n"
         index = args.index("get")
         kind, name = args[index + 1:index + 3]
@@ -169,6 +178,44 @@ class ScopedBackupReader(unittest.TestCase):
         job["status"] = {"succeeded": 1}
         job["spec"]["template"]["spec"]["containers"].append({"name": "unexpected"})
         with self.assertRaisesRegex(drill.Rejected, "SPEC_CHANGED"):
+            reader.reader_readback(self.kube, self.plan, self.digest, receipt)
+
+    def test_job_body_replacement_between_metadata_and_full_read_is_rejected(self):
+        """Предварительный metadata read не разрешает иной UID в последующем полном ответе API."""
+        receipt = reader.reader_apply(self.kube, self.plan, self.digest, self.output)
+        original = self.kube.run
+        def replaced(args, payload=None):
+            result = original(args, payload)
+            if "job" in args and args[-1] == "json":
+                value = json.loads(result)
+                value["metadata"]["uid"] = str(uuid.uuid4())
+                value["status"] = {"succeeded": 1}
+                return json.dumps(value).encode()
+            self.assertNotIn("logs", args)
+            return result
+        self.kube.run = replaced
+        with self.assertRaisesRegex(drill.Rejected, "JOB_IDENTITY_CHANGED"):
+            reader.reader_readback(self.kube, self.plan, self.digest, receipt)
+
+    def test_foreign_pod_and_replacement_during_logs_are_rejected(self):
+        """Job status не заменяет owner lineage Pod и повторную UID-проверку после logs."""
+        receipt = reader.reader_apply(self.kube, self.plan, self.digest, self.output)
+        name = "qa-reader-" + RUN
+        job = self.kube.resources[("job", name)]
+        job["status"] = {"succeeded": 1}
+        pod = self.kube.resources[("pod", name + "-pod")]
+        pod["metadata"]["ownerReferences"][0]["uid"] = str(uuid.uuid4())
+        with self.assertRaisesRegex(drill.Rejected, "POD_IDENTITY_CHANGED"):
+            reader.reader_readback(self.kube, self.plan, self.digest, receipt)
+        pod["metadata"]["ownerReferences"][0]["uid"] = job["metadata"]["uid"]
+        original = self.kube.run
+        def replaced(args, payload=None):
+            result = original(args, payload)
+            if "logs" in args:
+                pod["metadata"]["uid"] = str(uuid.uuid4())
+            return result
+        self.kube.run = replaced
+        with self.assertRaisesRegex(drill.Rejected, "LOG_ORIGIN_CHANGED"):
             reader.reader_readback(self.kube, self.plan, self.digest, receipt)
 
 
