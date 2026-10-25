@@ -6,6 +6,7 @@ import (
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
 // GetEmailMailboxConfiguration reads configuration under the verified principal with exact
@@ -13,15 +14,14 @@ import (
 // GetEmailMailboxConfiguration читает конфигурацию с проверенным principal и точными ссылками
 // подключения, конфигурации и ревизии, преобразуя представление ящика.
 func (server *Server) GetEmailMailboxConfiguration(ctx context.Context, request *cp.GetEmailMailboxConfigurationRequest) (*cp.GetEmailMailboxConfigurationResponse, error) {
-	p, err := principal(ctx, cp.PlatformQueryService_GetEmailMailboxConfiguration_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	result, err := server.service.GetEmailMailboxConfiguration(ctx, p, request.GetConnectionRef(), request.GetConfigurationRef(), request.GetRevisionRef())
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &cp.GetEmailMailboxConfigurationResponse{Configuration: castMailboxView(result)}, nil
+	return queryResponse(ctx, cp.PlatformQueryService_GetEmailMailboxConfiguration_FullMethodName, func(p value.Principal) (*cp.GetEmailMailboxConfigurationResponse, error) {
+		result, err := server.service.GetEmailMailboxConfiguration(ctx, p, request.GetConnectionRef(), request.GetConfigurationRef(), request.GetRevisionRef())
+		if err != nil {
+			return nil, err
+		}
+		return &cp.GetEmailMailboxConfigurationResponse{Configuration: castMailboxView(result)}, nil
+
+	})
 }
 
 // ListEmailMailboxConfigurations returns authorized mailbox views with the owner total,
@@ -29,19 +29,18 @@ func (server *Server) GetEmailMailboxConfiguration(ctx context.Context, request 
 // ListEmailMailboxConfigurations возвращает авторизованные представления ящиков с общим числом,
 // токеном продолжения и доступностью действий владельца.
 func (server *Server) ListEmailMailboxConfigurations(ctx context.Context, request *cp.ListEmailMailboxConfigurationsRequest) (*cp.ListEmailMailboxConfigurationsResponse, error) {
-	p, err := principal(ctx, cp.PlatformQueryService_ListEmailMailboxConfigurations_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	result, err := server.service.ListEmailMailboxConfigurations(ctx, p, request.GetConnectionRef(), request.GetQuery(), page(request.GetPage()))
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &cp.ListEmailMailboxConfigurationsResponse{Total: result.Total, Page: &cp.PageInfo{NextPageToken: result.NextPageToken}, NextActions: castMailboxActions(result.NextActions)}
-	for _, item := range result.Items {
-		response.Items = append(response.Items, castMailboxView(item))
-	}
-	return response, nil
+	return queryResponse(ctx, cp.PlatformQueryService_ListEmailMailboxConfigurations_FullMethodName, func(p value.Principal) (*cp.ListEmailMailboxConfigurationsResponse, error) {
+		result, err := server.service.ListEmailMailboxConfigurations(ctx, p, request.GetConnectionRef(), request.GetQuery(), page(request.GetPage()))
+		if err != nil {
+			return nil, err
+		}
+		response := &cp.ListEmailMailboxConfigurationsResponse{Total: result.Total, Page: &cp.PageInfo{NextPageToken: result.NextPageToken}, NextActions: castMailboxActions(result.NextActions)}
+		for _, item := range result.Items {
+			response.Items = append(response.Items, castMailboxView(item))
+		}
+		return response, nil
+
+	})
 }
 
 // ListEmailMailboxCredentials rejects unknown credential-kind enums, treats zero as no kind filter
@@ -49,25 +48,24 @@ func (server *Server) ListEmailMailboxConfigurations(ctx context.Context, reques
 // ListEmailMailboxCredentials отклоняет неизвестные enum вида credential, трактует ноль как
 // отсутствие фильтра и возвращает только авторизованную страницу метаданных credential.
 func (server *Server) ListEmailMailboxCredentials(ctx context.Context, request *cp.ListEmailMailboxCredentialsRequest) (*cp.ListEmailMailboxCredentialsResponse, error) {
-	p, err := principal(ctx, cp.PlatformQueryService_ListEmailMailboxCredentials_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	name, ok := cp.EmailMailboxCredentialKind_name[int32(request.GetKind())]
-	if !ok {
-		return nil, transportError(errs.ErrInvalid)
-	}
-	kind := strings.TrimPrefix(name, "EMAIL_MAILBOX_CREDENTIAL_KIND_")
-	if request.GetKind() == 0 {
-		kind = ""
-	}
-	items, total, next, err := server.service.ListEmailMailboxCredentials(ctx, p, request.GetConnectionRef(), kind, page(request.GetPage()))
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &cp.ListEmailMailboxCredentialsResponse{Total: total, Page: &cp.PageInfo{NextPageToken: next}}
-	response.Items = castResponseItems(items, castEmailMailboxCredential)
-	return response, nil
+	return queryResponse(ctx, cp.PlatformQueryService_ListEmailMailboxCredentials_FullMethodName, func(p value.Principal) (*cp.ListEmailMailboxCredentialsResponse, error) {
+		name, ok := cp.EmailMailboxCredentialKind_name[int32(request.GetKind())]
+		if !ok {
+			return nil, errs.ErrInvalid
+		}
+		kind := strings.TrimPrefix(name, "EMAIL_MAILBOX_CREDENTIAL_KIND_")
+		if request.GetKind() == 0 {
+			kind = ""
+		}
+		items, total, next, err := server.service.ListEmailMailboxCredentials(ctx, p, request.GetConnectionRef(), kind, page(request.GetPage()))
+		if err != nil {
+			return nil, err
+		}
+		response := &cp.ListEmailMailboxCredentialsResponse{Total: total, Page: &cp.PageInfo{NextPageToken: next}}
+		response.Items = castResponseItems(items, castEmailMailboxCredential)
+		return response, nil
+
+	})
 }
 
 // GetEmailMailboxCredentialReceipt reads the credential receipt by connection and idempotency key
@@ -75,15 +73,14 @@ func (server *Server) ListEmailMailboxCredentials(ctx context.Context, request *
 // GetEmailMailboxCredentialReceipt читает квитанцию credential по подключению и ключу
 // идемпотентности с проверенным principal и возвращает её метаданные.
 func (server *Server) GetEmailMailboxCredentialReceipt(ctx context.Context, request *cp.GetEmailMailboxCredentialReceiptRequest) (*cp.GetEmailMailboxCredentialReceiptResponse, error) {
-	p, err := principal(ctx, cp.PlatformQueryService_GetEmailMailboxCredentialReceipt_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	result, err := server.service.GetEmailMailboxCredentialReceipt(ctx, p, request.GetConnectionRef(), request.GetIdempotencyKey())
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &cp.GetEmailMailboxCredentialReceiptResponse{Credential: castEmailMailboxCredential(result)}, nil
+	return queryResponse(ctx, cp.PlatformQueryService_GetEmailMailboxCredentialReceipt_FullMethodName, func(p value.Principal) (*cp.GetEmailMailboxCredentialReceiptResponse, error) {
+		result, err := server.service.GetEmailMailboxCredentialReceipt(ctx, p, request.GetConnectionRef(), request.GetIdempotencyKey())
+		if err != nil {
+			return nil, err
+		}
+		return &cp.GetEmailMailboxCredentialReceiptResponse{Credential: castEmailMailboxCredential(result)}, nil
+
+	})
 }
 
 // PreviewEmailMailboxConfiguration converts content before owner preview and returns canonical
@@ -91,21 +88,20 @@ func (server *Server) GetEmailMailboxCredentialReceipt(ctx context.Context, requ
 // PreviewEmailMailboxConfiguration преобразует содержимое до просмотра владельцем и возвращает
 // canonical YAML, диагностику и необязательную спецификацию без публикации конфигурации.
 func (server *Server) PreviewEmailMailboxConfiguration(ctx context.Context, request *cp.PreviewEmailMailboxConfigurationRequest) (*cp.PreviewEmailMailboxConfigurationResponse, error) {
-	p, err := principal(ctx, cp.PlatformQueryService_PreviewEmailMailboxConfiguration_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	format, content, err := mailboxContent(request.GetContent())
-	if err != nil {
-		return nil, transportError(err)
-	}
-	result, err := server.service.PreviewEmailMailboxConfiguration(ctx, p, request.GetConnectionRef(), format, content)
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &cp.PreviewEmailMailboxConfigurationResponse{CanonicalYaml: result.CanonicalYAML, Diagnostics: castMailboxDiagnostics(result.Diagnostics), Valid: result.Valid}
-	if result.Specification != nil {
-		response.Specification = castMailboxSpecification(*result.Specification)
-	}
-	return response, nil
+	return queryResponse(ctx, cp.PlatformQueryService_PreviewEmailMailboxConfiguration_FullMethodName, func(p value.Principal) (*cp.PreviewEmailMailboxConfigurationResponse, error) {
+		format, content, err := mailboxContent(request.GetContent())
+		if err != nil {
+			return nil, err
+		}
+		result, err := server.service.PreviewEmailMailboxConfiguration(ctx, p, request.GetConnectionRef(), format, content)
+		if err != nil {
+			return nil, err
+		}
+		response := &cp.PreviewEmailMailboxConfigurationResponse{CanonicalYaml: result.CanonicalYAML, Diagnostics: castMailboxDiagnostics(result.Diagnostics), Valid: result.Valid}
+		if result.Specification != nil {
+			response.Specification = castMailboxSpecification(*result.Specification)
+		}
+		return response, nil
+
+	})
 }

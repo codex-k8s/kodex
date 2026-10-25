@@ -6,6 +6,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"strings"
 )
 
@@ -62,28 +63,27 @@ func integrationCandidateReason(reason string) (controlplanev1.IntegrationCandid
 // ListIntegrationGrantConnectionCandidates передаёт явную цель и контекст авторизованному чтению
 // кандидатов подключений и требует представимые причины до возврата привязок и пагинации.
 func (server *Server) ListIntegrationGrantConnectionCandidates(ctx context.Context, request *controlplanev1.ListIntegrationGrantConnectionCandidatesRequest) (*controlplanev1.ListIntegrationGrantConnectionCandidatesResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListIntegrationGrantConnectionCandidates_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	input := integrationCandidateInput(request.GetContext(), request.GetQuery(), request.GetPage())
-	input.Purpose = strings.TrimPrefix(request.GetPurpose().String(), "INTEGRATION_CANDIDATE_PURPOSE_")
-	result, err := server.service.ListIntegrationGrantConnectionCandidates(ctx, p, input)
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListIntegrationGrantConnectionCandidatesResponse{
-		Items: []*controlplanev1.IntegrationGrantConnectionCandidate{}, Page: &controlplanev1.PageInfo{NextPageToken: result.NextPageToken},
-		Total: result.Total, ContextDigest: result.ContextDigest, Context: castIntegrationCandidateContext(result.Context), Pins: castIntegrationCandidatePins(result.Pins),
-	}
-	for _, item := range result.Items {
-		reason, err := integrationCandidateReason(item.Reason)
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_ListIntegrationGrantConnectionCandidates_FullMethodName, func(p value.Principal) (*controlplanev1.ListIntegrationGrantConnectionCandidatesResponse, error) {
+		input := integrationCandidateInput(request.GetContext(), request.GetQuery(), request.GetPage())
+		input.Purpose = strings.TrimPrefix(request.GetPurpose().String(), "INTEGRATION_CANDIDATE_PURPOSE_")
+		result, err := server.service.ListIntegrationGrantConnectionCandidates(ctx, p, input)
 		if err != nil {
-			return nil, transportError(err)
+			return nil, err
 		}
-		response.Items = append(response.Items, &controlplanev1.IntegrationGrantConnectionCandidate{ConnectionRef: item.ConnectionRef, Name: item.Name, DefinitionKey: item.DefinitionKey, ProviderName: item.ProviderName, CredentialKind: item.CredentialKind, ProjectRef: item.ProjectRef, ResourceScope: item.ResourceScope, Grantable: item.Grantable, Usable: item.Usable, Reason: reason, Pins: castIntegrationCandidatePins(item.Pins)})
-	}
-	return response, nil
+		response := &controlplanev1.ListIntegrationGrantConnectionCandidatesResponse{
+			Items: []*controlplanev1.IntegrationGrantConnectionCandidate{}, Page: &controlplanev1.PageInfo{NextPageToken: result.NextPageToken},
+			Total: result.Total, ContextDigest: result.ContextDigest, Context: castIntegrationCandidateContext(result.Context), Pins: castIntegrationCandidatePins(result.Pins),
+		}
+		for _, item := range result.Items {
+			reason, err := integrationCandidateReason(item.Reason)
+			if err != nil {
+				return nil, err
+			}
+			response.Items = append(response.Items, &controlplanev1.IntegrationGrantConnectionCandidate{ConnectionRef: item.ConnectionRef, Name: item.Name, DefinitionKey: item.DefinitionKey, ProviderName: item.ProviderName, CredentialKind: item.CredentialKind, ProjectRef: item.ProjectRef, ResourceScope: item.ResourceScope, Grantable: item.Grantable, Usable: item.Usable, Reason: reason, Pins: castIntegrationCandidatePins(item.Pins)})
+		}
+		return response, nil
+
+	})
 }
 
 // ListIntegrationGrantProjectCandidates reads project candidates with GRANT purpose and projects
@@ -91,28 +91,27 @@ func (server *Server) ListIntegrationGrantConnectionCandidates(ctx context.Conte
 // ListIntegrationGrantProjectCandidates читает кандидатов проектов с целью GRANT и преобразует
 // проверенные причины, привязки элементов и контекст с пагинацией владельца.
 func (server *Server) ListIntegrationGrantProjectCandidates(ctx context.Context, request *controlplanev1.ListIntegrationGrantProjectCandidatesRequest) (*controlplanev1.ListIntegrationGrantProjectCandidatesResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListIntegrationGrantProjectCandidates_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	input := integrationCandidateInput(request.GetContext(), request.GetQuery(), request.GetPage())
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_ListIntegrationGrantProjectCandidates_FullMethodName, func(p value.Principal) (*controlplanev1.ListIntegrationGrantProjectCandidatesResponse, error) {
+		input := integrationCandidateInput(request.GetContext(), request.GetQuery(), request.GetPage())
 
-	result, err := server.service.ListIntegrationGrantProjectCandidates(ctx, p, input)
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListIntegrationGrantProjectCandidatesResponse{
-		Items: []*controlplanev1.IntegrationGrantProjectCandidate{}, Page: &controlplanev1.PageInfo{NextPageToken: result.NextPageToken},
-		Total: result.Total, ContextDigest: result.ContextDigest, Context: castIntegrationCandidateContext(result.Context), Pins: castIntegrationCandidatePins(result.Pins),
-	}
-	for _, item := range result.Items {
-		reason, err := integrationCandidateReason(item.Reason)
+		result, err := server.service.ListIntegrationGrantProjectCandidates(ctx, p, input)
 		if err != nil {
-			return nil, transportError(err)
+			return nil, err
 		}
-		response.Items = append(response.Items, &controlplanev1.IntegrationGrantProjectCandidate{ProjectRef: item.ProjectRef, Name: item.Name, Grantable: item.Grantable, Reason: reason, Pins: castIntegrationCandidatePins(item.Pins)})
-	}
-	return response, nil
+		response := &controlplanev1.ListIntegrationGrantProjectCandidatesResponse{
+			Items: []*controlplanev1.IntegrationGrantProjectCandidate{}, Page: &controlplanev1.PageInfo{NextPageToken: result.NextPageToken},
+			Total: result.Total, ContextDigest: result.ContextDigest, Context: castIntegrationCandidateContext(result.Context), Pins: castIntegrationCandidatePins(result.Pins),
+		}
+		for _, item := range result.Items {
+			reason, err := integrationCandidateReason(item.Reason)
+			if err != nil {
+				return nil, err
+			}
+			response.Items = append(response.Items, &controlplanev1.IntegrationGrantProjectCandidate{ProjectRef: item.ProjectRef, Name: item.Name, Grantable: item.Grantable, Reason: reason, Pins: castIntegrationCandidatePins(item.Pins)})
+		}
+		return response, nil
+
+	})
 }
 
 // ListIntegrationGrantRecipientCandidates reads recipient candidates with GRANT purpose and
@@ -120,28 +119,27 @@ func (server *Server) ListIntegrationGrantProjectCandidates(ctx context.Context,
 // ListIntegrationGrantRecipientCandidates читает кандидатов получателей с целью GRANT и сохраняет
 // типизированные поля получателя, проверенные причины и точные привязки результата.
 func (server *Server) ListIntegrationGrantRecipientCandidates(ctx context.Context, request *controlplanev1.ListIntegrationGrantRecipientCandidatesRequest) (*controlplanev1.ListIntegrationGrantRecipientCandidatesResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListIntegrationGrantRecipientCandidates_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	input := integrationCandidateInput(request.GetContext(), request.GetQuery(), request.GetPage())
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_ListIntegrationGrantRecipientCandidates_FullMethodName, func(p value.Principal) (*controlplanev1.ListIntegrationGrantRecipientCandidatesResponse, error) {
+		input := integrationCandidateInput(request.GetContext(), request.GetQuery(), request.GetPage())
 
-	result, err := server.service.ListIntegrationGrantRecipientCandidates(ctx, p, input)
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListIntegrationGrantRecipientCandidatesResponse{
-		Items: []*controlplanev1.IntegrationGrantRecipientCandidate{}, Page: &controlplanev1.PageInfo{NextPageToken: result.NextPageToken},
-		Total: result.Total, ContextDigest: result.ContextDigest, Context: castIntegrationCandidateContext(result.Context), Pins: castIntegrationCandidatePins(result.Pins),
-	}
-	for _, item := range result.Items {
-		reason, err := integrationCandidateReason(item.Reason)
+		result, err := server.service.ListIntegrationGrantRecipientCandidates(ctx, p, input)
 		if err != nil {
-			return nil, transportError(err)
+			return nil, err
 		}
-		response.Items = append(response.Items, &controlplanev1.IntegrationGrantRecipientCandidate{RecipientRef: item.RecipientRef, Name: item.Name, RecipientKind: controlplanev1.IntegrationGrantRecipientKind(controlplanev1.IntegrationGrantRecipientKind_value["INTEGRATION_GRANT_RECIPIENT_KIND_"+item.RecipientKind]), ProjectRef: item.ProjectRef, Grantable: item.Grantable, Reason: reason, Pins: castIntegrationCandidatePins(item.Pins)})
-	}
-	return response, nil
+		response := &controlplanev1.ListIntegrationGrantRecipientCandidatesResponse{
+			Items: []*controlplanev1.IntegrationGrantRecipientCandidate{}, Page: &controlplanev1.PageInfo{NextPageToken: result.NextPageToken},
+			Total: result.Total, ContextDigest: result.ContextDigest, Context: castIntegrationCandidateContext(result.Context), Pins: castIntegrationCandidatePins(result.Pins),
+		}
+		for _, item := range result.Items {
+			reason, err := integrationCandidateReason(item.Reason)
+			if err != nil {
+				return nil, err
+			}
+			response.Items = append(response.Items, &controlplanev1.IntegrationGrantRecipientCandidate{RecipientRef: item.RecipientRef, Name: item.Name, RecipientKind: controlplanev1.IntegrationGrantRecipientKind(controlplanev1.IntegrationGrantRecipientKind_value["INTEGRATION_GRANT_RECIPIENT_KIND_"+item.RecipientKind]), ProjectRef: item.ProjectRef, Grantable: item.Grantable, Reason: reason, Pins: castIntegrationCandidatePins(item.Pins)})
+		}
+		return response, nil
+
+	})
 }
 
 // ListIntegrationGrantCapabilityCandidates reads capability candidates with GRANT purpose and
@@ -149,26 +147,25 @@ func (server *Server) ListIntegrationGrantRecipientCandidates(ctx context.Contex
 // ListIntegrationGrantCapabilityCandidates читает кандидатов возможностей с целью GRANT и
 // возвращает проверенные причины, версию grant и типизированные представления возможностей.
 func (server *Server) ListIntegrationGrantCapabilityCandidates(ctx context.Context, request *controlplanev1.ListIntegrationGrantCapabilityCandidatesRequest) (*controlplanev1.ListIntegrationGrantCapabilityCandidatesResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListIntegrationGrantCapabilityCandidates_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	input := integrationCandidateInput(request.GetContext(), request.GetQuery(), request.GetPage())
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_ListIntegrationGrantCapabilityCandidates_FullMethodName, func(p value.Principal) (*controlplanev1.ListIntegrationGrantCapabilityCandidatesResponse, error) {
+		input := integrationCandidateInput(request.GetContext(), request.GetQuery(), request.GetPage())
 
-	result, err := server.service.ListIntegrationGrantCapabilityCandidates(ctx, p, input)
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListIntegrationGrantCapabilityCandidatesResponse{
-		Items: []*controlplanev1.IntegrationGrantCapabilityCandidate{}, Page: &controlplanev1.PageInfo{NextPageToken: result.NextPageToken},
-		Total: result.Total, ContextDigest: result.ContextDigest, Context: castIntegrationCandidateContext(result.Context), Pins: castIntegrationCandidatePins(result.Pins),
-	}
-	for _, item := range result.Items {
-		reason, err := integrationCandidateReason(item.Reason)
+		result, err := server.service.ListIntegrationGrantCapabilityCandidates(ctx, p, input)
 		if err != nil {
-			return nil, transportError(err)
+			return nil, err
 		}
-		response.Items = append(response.Items, &controlplanev1.IntegrationGrantCapabilityCandidate{Capability: castIntegrationCapability(item.Capability), Grantable: item.Grantable, CurrentGrantRef: item.CurrentGrantRef, CurrentGrantVersion: item.CurrentGrantVersion, Reason: reason, Pins: castIntegrationCandidatePins(item.Pins)})
-	}
-	return response, nil
+		response := &controlplanev1.ListIntegrationGrantCapabilityCandidatesResponse{
+			Items: []*controlplanev1.IntegrationGrantCapabilityCandidate{}, Page: &controlplanev1.PageInfo{NextPageToken: result.NextPageToken},
+			Total: result.Total, ContextDigest: result.ContextDigest, Context: castIntegrationCandidateContext(result.Context), Pins: castIntegrationCandidatePins(result.Pins),
+		}
+		for _, item := range result.Items {
+			reason, err := integrationCandidateReason(item.Reason)
+			if err != nil {
+				return nil, err
+			}
+			response.Items = append(response.Items, &controlplanev1.IntegrationGrantCapabilityCandidate{Capability: castIntegrationCapability(item.Capability), Grantable: item.Grantable, CurrentGrantRef: item.CurrentGrantRef, CurrentGrantVersion: item.CurrentGrantVersion, Reason: reason, Pins: castIntegrationCandidatePins(item.Pins)})
+		}
+		return response, nil
+
+	})
 }

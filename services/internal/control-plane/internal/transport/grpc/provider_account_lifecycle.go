@@ -9,6 +9,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
 // ListProviderAccountBlockers validates the optional blocker kind, reads an authorized page and
@@ -17,38 +18,37 @@ import (
 // страницу и отклоняет неизвестный либо неверно версионированный результат и отмену вне queued
 // turns.
 func (server *Server) ListProviderAccountBlockers(ctx context.Context, request *cp.ListProviderAccountBlockersRequest) (*cp.ListProviderAccountBlockersResponse, error) {
-	p, err := principal(ctx, cp.PlatformQueryService_ListProviderAccountBlockers_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	kind := ""
-	if request.GetKind() != cp.ProviderAccountBlockerKind_PROVIDER_ACCOUNT_BLOCKER_KIND_UNSPECIFIED {
-		name, known := cp.ProviderAccountBlockerKind_name[int32(request.GetKind())]
-		if !known {
-			return nil, transportError(errs.ErrInvalid)
+	return queryResponse(ctx, cp.PlatformQueryService_ListProviderAccountBlockers_FullMethodName, func(p value.Principal) (*cp.ListProviderAccountBlockersResponse, error) {
+		kind := ""
+		if request.GetKind() != cp.ProviderAccountBlockerKind_PROVIDER_ACCOUNT_BLOCKER_KIND_UNSPECIFIED {
+			name, known := cp.ProviderAccountBlockerKind_name[int32(request.GetKind())]
+			if !known {
+				return nil, errs.ErrInvalid
+			}
+			kind = strings.TrimPrefix(name, "PROVIDER_ACCOUNT_BLOCKER_KIND_")
 		}
-		kind = strings.TrimPrefix(name, "PROVIDER_ACCOUNT_BLOCKER_KIND_")
-	}
-	result, err := server.service.ListProviderAccountBlockers(ctx, p, query.ProviderAccountBlockers{
-		AccountRef: request.GetAccountRef(), Kind: kind, Query: request.GetQuery(), Page: page(request.GetPage()),
-	})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &cp.ListProviderAccountBlockersResponse{Total: result.Total, HiddenCount: result.HiddenCount,
-		AccountVersion: result.AccountVersion, DeletionIntentVersion: result.DeletionIntentVersion,
-		ContextDigest: result.ContextDigest, Page: &cp.PageInfo{NextPageToken: result.NextPageToken}}
-	for _, item := range result.Items {
-		kind := cp.ProviderAccountBlockerKind_value["PROVIDER_ACCOUNT_BLOCKER_KIND_"+item.Kind]
-		if kind == 0 || item.Version < 1 || item.CanCancel && item.Kind != "QUEUED_TURN" {
-			return nil, transportError(errs.ErrUnavailable)
-		}
-		response.Items = append(response.Items, &cp.ProviderAccountBlocker{
-			Kind: cp.ProviderAccountBlockerKind(kind), Ref: item.Ref, Version: item.Version,
-			Name: item.Name, ProjectRef: item.ProjectRef, CanCancel: item.CanCancel,
+		result, err := server.service.ListProviderAccountBlockers(ctx, p, query.ProviderAccountBlockers{
+			AccountRef: request.GetAccountRef(), Kind: kind, Query: request.GetQuery(), Page: page(request.GetPage()),
 		})
-	}
-	return response, nil
+		if err != nil {
+			return nil, err
+		}
+		response := &cp.ListProviderAccountBlockersResponse{Total: result.Total, HiddenCount: result.HiddenCount,
+			AccountVersion: result.AccountVersion, DeletionIntentVersion: result.DeletionIntentVersion,
+			ContextDigest: result.ContextDigest, Page: &cp.PageInfo{NextPageToken: result.NextPageToken}}
+		for _, item := range result.Items {
+			kind := cp.ProviderAccountBlockerKind_value["PROVIDER_ACCOUNT_BLOCKER_KIND_"+item.Kind]
+			if kind == 0 || item.Version < 1 || item.CanCancel && item.Kind != "QUEUED_TURN" {
+				return nil, errs.ErrUnavailable
+			}
+			response.Items = append(response.Items, &cp.ProviderAccountBlocker{
+				Kind: cp.ProviderAccountBlockerKind(kind), Ref: item.Ref, Version: item.Version,
+				Name: item.Name, ProjectRef: item.ProjectRef, CanCancel: item.CanCancel,
+			})
+		}
+		return response, nil
+
+	})
 }
 
 // CancelProviderAccountQueuedWork passes selected run refs and blocker digest to the cancellation

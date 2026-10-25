@@ -8,6 +8,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -46,23 +47,22 @@ func (s *Server) PrepareEnvironmentDraftImpact(ctx context.Context, request *cp.
 // GetRevisionImpactPlan читает авторизованную страницу плана и преобразует исходы потребителей и
 // привязки результата с общим числом и токеном продолжения.
 func (s *Server) GetRevisionImpactPlan(ctx context.Context, request *cp.GetRevisionImpactPlanRequest) (*cp.GetRevisionImpactPlanResponse, error) {
-	p, err := principal(ctx, cp.PlatformQueryService_GetRevisionImpactPlan_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	result, err := s.service.GetRevisionImpactPlan(ctx, p, request.GetPlanRef(), request.GetQuery(), page(request.GetPage()))
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &cp.GetRevisionImpactPlanResponse{Plan: castRevisionImpactPlan(&result.Plan), Total: result.Total, Page: &cp.PageInfo{NextPageToken: result.NextPageToken}}
-	for _, item := range result.Items {
-		response.Items = append(response.Items, &cp.RevisionImpactItem{Ref: item.Ref, ProjectRef: item.ProjectRef, ScopeKind: roleImageScopeKind(item.ScopeKind), OrganizationRef: item.OrganizationRef,
-			ConsumerKind: cp.RevisionImpactConsumerKind(cp.RevisionImpactConsumerKind_value["REVISION_IMPACT_CONSUMER_KIND_"+item.ConsumerKind]),
-			ConsumerRef:  item.ConsumerRef, ConsumerVersion: item.ConsumerVersion, BindingRef: item.BindingRef, BindingVersion: item.BindingVersion,
-			SourceRevisionRef: item.SourceRevisionRef, Outcome: cp.RevisionImpactOutcome(cp.RevisionImpactOutcome_value["REVISION_IMPACT_OUTCOME_"+item.Outcome]),
-			ResultRevisionRef: item.ResultRevisionRef, ResultBindingRef: item.ResultBindingRef, ResultBindingVersion: item.ResultBindingVersion, ResultConsumerVersion: item.ResultConsumerVersion})
-	}
-	return response, nil
+	return queryResponse(ctx, cp.PlatformQueryService_GetRevisionImpactPlan_FullMethodName, func(p value.Principal) (*cp.GetRevisionImpactPlanResponse, error) {
+		result, err := s.service.GetRevisionImpactPlan(ctx, p, request.GetPlanRef(), request.GetQuery(), page(request.GetPage()))
+		if err != nil {
+			return nil, err
+		}
+		response := &cp.GetRevisionImpactPlanResponse{Plan: castRevisionImpactPlan(&result.Plan), Total: result.Total, Page: &cp.PageInfo{NextPageToken: result.NextPageToken}}
+		for _, item := range result.Items {
+			response.Items = append(response.Items, &cp.RevisionImpactItem{Ref: item.Ref, ProjectRef: item.ProjectRef, ScopeKind: roleImageScopeKind(item.ScopeKind), OrganizationRef: item.OrganizationRef,
+				ConsumerKind: cp.RevisionImpactConsumerKind(cp.RevisionImpactConsumerKind_value["REVISION_IMPACT_CONSUMER_KIND_"+item.ConsumerKind]),
+				ConsumerRef:  item.ConsumerRef, ConsumerVersion: item.ConsumerVersion, BindingRef: item.BindingRef, BindingVersion: item.BindingVersion,
+				SourceRevisionRef: item.SourceRevisionRef, Outcome: cp.RevisionImpactOutcome(cp.RevisionImpactOutcome_value["REVISION_IMPACT_OUTCOME_"+item.Outcome]),
+				ResultRevisionRef: item.ResultRevisionRef, ResultBindingRef: item.ResultBindingRef, ResultBindingVersion: item.ResultBindingVersion, ResultConsumerVersion: item.ResultConsumerVersion})
+		}
+		return response, nil
+
+	})
 }
 
 // validatePublishedImpactResult requires an applied version-two plan with exact

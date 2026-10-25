@@ -203,17 +203,16 @@ func (server *Server) ConsumeRuntimeSecretDraftOperation(ctx context.Context, re
 // ListRuntimeSecretDraftRecoveryWork читает owner recovery page под principal точного worker и
 // сохраняет next cursor без cleanup effects.
 func (server *Server) ListRuntimeSecretDraftRecoveryWork(ctx context.Context, request *cp.ListRuntimeSecretDraftRecoveryWorkRequest) (*cp.ListRuntimeSecretDraftRecoveryWorkResponse, error) {
-	p, err := principal(ctx, cp.RuntimeSecretDraftWorkService_ListRuntimeSecretDraftRecoveryWork_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	works, next, err := server.service.ListRuntimeSecretDraftRecovery(ctx, p, page(request.GetPage()))
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &cp.ListRuntimeSecretDraftRecoveryWorkResponse{Page: &cp.PageInfo{NextPageToken: next}}
-	response.Operations = castResponseItems(works, castDraftWork)
-	return response, nil
+	return queryResponse(ctx, cp.RuntimeSecretDraftWorkService_ListRuntimeSecretDraftRecoveryWork_FullMethodName, func(p value.Principal) (*cp.ListRuntimeSecretDraftRecoveryWorkResponse, error) {
+		works, next, err := server.service.ListRuntimeSecretDraftRecovery(ctx, p, page(request.GetPage()))
+		if err != nil {
+			return nil, err
+		}
+		response := &cp.ListRuntimeSecretDraftRecoveryWorkResponse{Page: &cp.PageInfo{NextPageToken: next}}
+		response.Operations = castResponseItems(works, castDraftWork)
+		return response, nil
+
+	})
 }
 
 // CompleteRuntimeSecretDraftOperation reports COMPLETE with operation/claim generation and

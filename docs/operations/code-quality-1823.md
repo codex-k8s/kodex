@@ -4,11 +4,90 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.449.0
+version: 1.450.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая граница остальных читающих адаптеров — 25.10.2026
+
+На основе `e91ce36e7d8d70a3a7584a4227ab4ba26b81578f`47 читающих RPC
+в28 transport-файлах используют существующий queryResponse. Полные тела
+прочитаны до изменения: configuration history/writeback/impact, mailbox
+configuration/credentials/receipts/preview, effective capabilities,
+artifact targets/eligibility, integration/assistant grant candidates,
+interaction sources, memory revisions, purge recovery snapshot, provider
+blockers, runtime files/revision/secret impact/recovery, assistant views,
+VFS и execution workflow catalog.26 файлов получили только необходимый
+value import; новых helpers, именованных объявлений или зависимостей нет.
+
+Exact FullMethodName разрешается до callback;59 прежних transportError sites
+перенесены в общий mapper ровно один раз с исходным domain/context/caster
+error. Все49 success paths сохранены. Typed owner reads/filters, totals,
+pages/cursors/actions, optional presence, impact/version/digest pins и
+wire projections остаются явными у caller. Native ResolveIntegrationInvocation,
+claims, lifecycle commands и RoleImageServer с отдельным roleImagePrincipal
+не переводились в query helper. Owner eligibility, transactions, grants,
+claims, leases и events не реализуются заново этим refactor.
+
+Особые соглашения сохранены отдельно:9 методов сохраняют явно созданные
+пустые срезы (writeback proposals, effective capabilities, artifact
+targets и grant candidates). Address-based overlay/memory/managed revision
+projections остаются прежними. Recovery work сохраняет собственную page
+нормализацию; mailbox/blocker enums и candidate reasons по-прежнему закрыто
+отклоняются. Workflow catalog сохраняет wire validation и3 отдельных
+success branches: publication, active runs и catalog list. Ни page helper,
+ни castResponseItems не подменяют эти правила.
+
+Обратная проверка закрепляет actual unchanged signature/body queryResponse
+и побайтно прежний server.go. Она восстанавливает principal guard точного RPC,
+исходные59 mapper expressions и полный callback body каждого из47 методов.
+После удаления26 добавленных imports полные AST28 файлов, включая comments/
+directives и все остальные методы/casters/commands, совпадают с исходными
+архивами Git. Error-expression порядок,49 returns и current source digests
+проверены явно; parser diagnostics отклоняются до AST use. Модель каждого
+метода фиксирует actor из verified context, owner call, response и empty-list
+соглашения. Callback не получает новые authority либо fallback полномочия.
+
+Существующий negative auth test дополнен unknown mailbox credential enum,
+grant-candidate read и invalid workflow catalog request: без verified context
+ожидаются nil response/Unauthenticated до validation либо обращения к nil
+service/receiver. Это локальная проверка error priority, не живая авторизация.
+Итоговые команды всего control-plane: `go build -p 2 ./...` — PASS LOCAL,
+10,79с; `go test -p 2 -count=1 ./...` — PASS LOCAL,38,67с. GOWORK=off,
+GOMAXPROCS=4; credentials, inherited KODEX/VITE inputs и KUBECONFIG удалены
+из child env. Все Go-правки завершены до этих проверок.
+
+Detector:6709 sources/222 exclusions,1624 raw-группы против1625.
+40 прежних raw keys/44 occurrences исчезли;39 новых keys/42 occurrences
+появились и ещё1 occurrence добавилось у существующего key.18 registry
+entries с count0 сняты, включая representative changes в неизменённых
+role_images.go/access.go/queries.go и других peers. Их byte identity
+проверена. Один interaction/revision-impact key повторно разобран по обоим
+текущим вхождениям вместо прежнего одного; причина переписана под реальные
+методы и разные command/read contracts.818 остальных entries сохранены
+без изменения.
+
+После чтения47 методов и26 дополнительных peer bodies добавлены39 bounded
+keys/42 occurrences для оставшихся nominal DTO/owner mappings/соседних
+объявлений после общих primitives. Реестр:858 entries,989 retained occurrences,
+635 unresolved против659 на предыдущем SHA.80 count/hash mutations,
+возврат старого count1 и18 retired entries закрыто отклоняются настоящим
+assessor. Четыре ранее открытых mailbox/impact/grant-candidate windows
+отсутствуют после реального выноса envelope, а не скрыты исключениями.
+Whole-file/family ignores, threshold, normalization и generated exclusions
+не расширялись. Полный scope#1823 ещё открыт, PR#1829 остаётся Draft.
+
+Unit17 анализаторов, полный5-stage report,21505/21505 Go EN→RU descriptions
+без пропусков,5 ignore boundaries, gofmt и `git diff --check` — PASS LOCAL.
+Context7 resolve Go вновь вернул Invalid API key; использована официальная
+[спецификация function literals](https://go.dev/ref/spec#Function_literals)
+и [calls](https://go.dev/ref/spec#Calls). Secrets/MCP credentials не
+переносились и не менялись. Go.mod, contracts, frontend/gateway/deploy/scripts
+на этой волне не менялись; их прежние проверки остаются историческими.
+PostgreSQL component, browser/full E2E, HTTP Docker fixture, apply/deploy и
+live acceptance текущего этапа — NOT RUN.
 
 ## Общая проекция ответов специализированных команд — 25.10.2026
 

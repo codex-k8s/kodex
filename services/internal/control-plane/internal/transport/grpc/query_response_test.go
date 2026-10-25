@@ -34,12 +34,13 @@ func TestQueryResponseRejectsMissingPrincipalBeforeRead(t *testing.T) {
 
 // TestPlatformQueriesAuthenticateBeforeValidationAndService checks representative converted
 // handlers reject missing context before dereferencing a nil service or validating malformed
-// run/artifact/provider filters or reading runtime configuration/secret metadata. It preserves
+// run/artifact/provider/mailbox filters, workflow-catalog validation or reading configuration,
+// secret and grant-candidate metadata. It preserves
 // the authentication-first error priority; actual method pins
 // and the other handlers are checked by the full extraction proof, not inferred from this test.
 // TestPlatformQueriesAuthenticateBeforeValidationAndService проверяет отказ representative
-// handlers без context до разыменования nil service, проверки неверных run/artifact/provider
-// filters либо чтения runtime configuration и метаданных секретов.
+// handlers без context до разыменования nil service, проверки неверных run/artifact/provider/
+// mailbox filters и workflow catalog либо чтения configuration, secret и grant-candidate metadata.
 // Сохраняет приоритет authentication error; exact method pins и прочие handlers проверяет
 // полный extraction proof, они не выводятся из этого теста.
 func TestPlatformQueriesAuthenticateBeforeValidationAndService(t *testing.T) {
@@ -68,6 +69,18 @@ func TestPlatformQueriesAuthenticateBeforeValidationAndService(t *testing.T) {
 		},
 		"runtime secret draft metadata": func(ctx context.Context) (bool, error) {
 			response, err := server.GetRuntimeSecretDraft(ctx, nil)
+			return response != nil, err
+		},
+		"unknown mailbox credential kind": func(ctx context.Context) (bool, error) {
+			response, err := server.ListEmailMailboxCredentials(ctx, &cp.ListEmailMailboxCredentialsRequest{Kind: cp.EmailMailboxCredentialKind(1 << 30)})
+			return response != nil, err
+		},
+		"assistant grant candidates": func(ctx context.Context) (bool, error) {
+			response, err := server.GetSystemAssistantIntegrationGrantCandidates(ctx, nil)
+			return response != nil, err
+		},
+		"workflow catalog validation": func(ctx context.Context) (bool, error) {
+			response, err := server.GetExecutionWorkflowCatalog(ctx, &cp.GetExecutionWorkflowCatalogRequest{})
 			return response != nil, err
 		},
 	} {

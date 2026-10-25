@@ -173,30 +173,29 @@ func castRuntimeCredentialProjection(input platformrepo.RuntimeCredentialProject
 // ListRuntimeSecretRecoveryWork reads optional recovery pagination under the exact broker RPC principal and maps the domain page to operation descriptors. It does not claim work, choose a recovery action or reveal a secret value.
 // ListRuntimeSecretRecoveryWork читает необязательную страницу восстановления с principal точного RPC брокера и переносит доменную страницу в дескрипторы операций. Не захватывает работу, не выбирает действие восстановления и не раскрывает значение секрета.
 func (server *Server) ListRuntimeSecretRecoveryWork(ctx context.Context, request *controlplanev1.ListRuntimeSecretRecoveryWorkRequest) (*controlplanev1.ListRuntimeSecretRecoveryWorkResponse, error) {
-	p, err := principal(ctx, controlplanev1.RuntimeSecretWorkService_ListRuntimeSecretRecoveryWork_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	requestedPage := request.GetPage()
-	page := platformrepo.RuntimeSecretRecoveryPage{}
-	if requestedPage != nil {
-		page.Size = requestedPage.GetPageSize()
-		page.Token = requestedPage.GetPageToken()
-	}
-	items, next, err := server.service.ListRuntimeSecretRecoveryWork(ctx, p, page)
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListRuntimeSecretRecoveryWorkResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	for _, item := range items {
-		response.Operations = append(response.Operations, &controlplanev1.RuntimeSecretRecoveryWork{
-			OperationRef: item.OperationRef, Kind: runtimeSecretOperationKind(item.Kind),
-			ClaimantId: item.ClaimantID, ClaimGeneration: item.ClaimGeneration,
-			Namespace: item.Namespace, SecretRef: item.SecretRef, TargetRevision: item.TargetRevision,
-			SecretKey: item.SecretKey, ExpectedContentSha256: item.ExpectedContentSHA256,
-		})
-	}
-	return response, nil
+	return queryResponse(ctx, controlplanev1.RuntimeSecretWorkService_ListRuntimeSecretRecoveryWork_FullMethodName, func(p value.Principal) (*controlplanev1.ListRuntimeSecretRecoveryWorkResponse, error) {
+		requestedPage := request.GetPage()
+		page := platformrepo.RuntimeSecretRecoveryPage{}
+		if requestedPage != nil {
+			page.Size = requestedPage.GetPageSize()
+			page.Token = requestedPage.GetPageToken()
+		}
+		items, next, err := server.service.ListRuntimeSecretRecoveryWork(ctx, p, page)
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.ListRuntimeSecretRecoveryWorkResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+		for _, item := range items {
+			response.Operations = append(response.Operations, &controlplanev1.RuntimeSecretRecoveryWork{
+				OperationRef: item.OperationRef, Kind: runtimeSecretOperationKind(item.Kind),
+				ClaimantId: item.ClaimantID, ClaimGeneration: item.ClaimGeneration,
+				Namespace: item.Namespace, SecretRef: item.SecretRef, TargetRevision: item.TargetRevision,
+				SecretKey: item.SecretKey, ExpectedContentSha256: item.ExpectedContentSHA256,
+			})
+		}
+		return response, nil
+
+	})
 }
 
 // ListRuntimeSecrets maps project/query/page to the domain metadata catalog under its exact query principal and returns typed secrets with the next cursor; visibility and action eligibility remain domain-owned.

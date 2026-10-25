@@ -8,6 +8,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -77,15 +78,14 @@ func (server *Server) MoveAssistantConversationToProject(ctx context.Context, re
 // GetSystemAssistant читает и преобразует системного ассистента с principal, проверенным для
 // точного RPC.
 func (server *Server) GetSystemAssistant(ctx context.Context, _ *controlplanev1.GetSystemAssistantRequest) (*controlplanev1.GetSystemAssistantResponse, error) {
-	p, err := principal(ctx, controlplanev1.SystemAssistantService_GetSystemAssistant_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	item, err := server.service.GetSystemAssistant(ctx, p)
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.GetSystemAssistantResponse{Assistant: castAssistant(item)}, nil
+	return queryResponse(ctx, controlplanev1.SystemAssistantService_GetSystemAssistant_FullMethodName, func(p value.Principal) (*controlplanev1.GetSystemAssistantResponse, error) {
+		item, err := server.service.GetSystemAssistant(ctx, p)
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.GetSystemAssistantResponse{Assistant: castAssistant(item)}, nil
+
+	})
 }
 
 // CreateProjectAssistant passes project and profile fields through the dedicated create command
@@ -111,15 +111,14 @@ func (server *Server) CreateProjectAssistant(ctx context.Context, request *contr
 // GetProjectAssistant читает проектного ассистента с проверенным principal, передавая проверку
 // доступности проекта домену.
 func (server *Server) GetProjectAssistant(ctx context.Context, request *controlplanev1.GetProjectAssistantRequest) (*controlplanev1.GetProjectAssistantResponse, error) {
-	p, err := principal(ctx, controlplanev1.SystemAssistantService_GetProjectAssistant_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	item, err := server.service.GetProjectAssistant(ctx, p, request.GetProjectRef())
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.GetProjectAssistantResponse{Profile: castProjectAssistant(item)}, nil
+	return queryResponse(ctx, controlplanev1.SystemAssistantService_GetProjectAssistant_FullMethodName, func(p value.Principal) (*controlplanev1.GetProjectAssistantResponse, error) {
+		item, err := server.service.GetProjectAssistant(ctx, p, request.GetProjectRef())
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.GetProjectAssistantResponse{Profile: castProjectAssistant(item)}, nil
+
+	})
 }
 
 // castProjectAssistant copies the domain profile references, state, version and timestamps to its

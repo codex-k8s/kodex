@@ -7,6 +7,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -43,19 +44,18 @@ func (server *Server) ListMemoryRecords(ctx context.Context, request *controlpla
 // ListMemoryRecordRevisions authenticates the exact history query and returns paged revisions of the selected record without altering retention or visibility.
 // ListMemoryRecordRevisions проверяет вызов точного метода истории и возвращает страницы ревизий выбранной записи, не меняя срок хранения и видимость.
 func (server *Server) ListMemoryRecordRevisions(ctx context.Context, request *controlplanev1.ListMemoryRecordRevisionsRequest) (*controlplanev1.ListMemoryRecordRevisionsResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListMemoryRecordRevisions_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	items, total, next, err := server.service.ListMemoryRecordRevisions(ctx, p, request.GetRecordRef(), page(request.GetPage()))
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListMemoryRecordRevisionsResponse{Total: total, Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	for _, item := range items {
-		response.Revisions = append(response.Revisions, castMemoryRevision(&item))
-	}
-	return response, nil
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_ListMemoryRecordRevisions_FullMethodName, func(p value.Principal) (*controlplanev1.ListMemoryRecordRevisionsResponse, error) {
+		items, total, next, err := server.service.ListMemoryRecordRevisions(ctx, p, request.GetRecordRef(), page(request.GetPage()))
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.ListMemoryRecordRevisionsResponse{Total: total, Page: &controlplanev1.PageInfo{NextPageToken: next}}
+		for _, item := range items {
+			response.Revisions = append(response.Revisions, castMemoryRevision(&item))
+		}
+		return response, nil
+
+	})
 }
 
 // domainMemorySpecification requires a valid retention timestamp and copies submitted fields into the domain input; it does not establish source provenance or permission.

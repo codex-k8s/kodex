@@ -8,6 +8,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/emailpolicy"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -39,15 +40,14 @@ func (server *Server) ReportEmailEffectReceipt(ctx context.Context, request *con
 // GetEmailEffectReceipt читает квитанцию вызова с проверенным query principal и преобразует её
 // необязательное решение сверки.
 func (server *Server) GetEmailEffectReceipt(ctx context.Context, request *controlplanev1.GetEmailEffectReceiptRequest) (*controlplanev1.GetEmailEffectReceiptResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetEmailEffectReceipt_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	view, err := server.service.GetEmailEffectReceipt(ctx, p, request.GetInvocationRef())
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.GetEmailEffectReceiptResponse{Receipt: castEmailReceipt(view.Receipt), Decision: castEmailDecision(view.Decision)}, nil
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_GetEmailEffectReceipt_FullMethodName, func(p value.Principal) (*controlplanev1.GetEmailEffectReceiptResponse, error) {
+		view, err := server.service.GetEmailEffectReceipt(ctx, p, request.GetInvocationRef())
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.GetEmailEffectReceiptResponse{Receipt: castEmailReceipt(view.Receipt), Decision: castEmailDecision(view.Decision)}, nil
+
+	})
 }
 
 // ReconcileEmailEffect passes receipt reference, expected digest, reported outcome and note

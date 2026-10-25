@@ -10,6 +10,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -20,15 +21,14 @@ import (
 // GetRuntimeEnvironmentDraft читает черновик с principal, проверенным для данного query, и
 // преобразует возвращённый доменный снимок.
 func (server *Server) GetRuntimeEnvironmentDraft(ctx context.Context, request *controlplanev1.GetRuntimeEnvironmentDraftRequest) (*controlplanev1.GetRuntimeEnvironmentDraftResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetRuntimeEnvironmentDraft_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	draft, err := server.service.GetRuntimeEnvironmentDraft(ctx, p, request.GetDraftRef())
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.GetRuntimeEnvironmentDraftResponse{Draft: castEnvironmentDraft(&draft)}, nil
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_GetRuntimeEnvironmentDraft_FullMethodName, func(p value.Principal) (*controlplanev1.GetRuntimeEnvironmentDraftResponse, error) {
+		draft, err := server.service.GetRuntimeEnvironmentDraft(ctx, p, request.GetDraftRef())
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.GetRuntimeEnvironmentDraftResponse{Draft: castEnvironmentDraft(&draft)}, nil
+
+	})
 }
 
 // CreateRuntimeEnvironmentDraft requires a convertible specification and assigns PROJECT scope

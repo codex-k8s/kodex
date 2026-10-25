@@ -7,6 +7,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
 // GetRuntimeSecretImpact reads authorized secret revision impact and projects owner-scoped
@@ -14,21 +15,20 @@ import (
 // GetRuntimeSecretImpact читает авторизованное влияние ревизии секрета и преобразует потребителей
 // среды в области владельца с общим числом и пагинацией.
 func (server *Server) GetRuntimeSecretImpact(ctx context.Context, request *controlplanev1.GetRuntimeSecretImpactRequest) (*controlplanev1.GetRuntimeSecretImpactResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetRuntimeSecretImpact_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	result, err := server.service.GetRuntimeSecretImpact(ctx, p, request.GetSecretRef(), request.GetRevision(), request.GetQuery(), query.Page{Size: request.GetPage().GetPageSize(), Token: request.GetPage().GetPageToken()})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.GetRuntimeSecretImpactResponse{SecretRef: result.SecretRef, SecretVersion: result.SecretVersion, TargetRevision: result.TargetRevision, Total: result.Total,
-		Page: &controlplanev1.PageInfo{NextPageToken: result.NextPageToken}}
-	for _, item := range result.Consumers {
-		consumer := castRuntimeSecretImpactConsumer(item)
-		response.Consumers = append(response.Consumers, consumer)
-	}
-	return response, nil
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_GetRuntimeSecretImpact_FullMethodName, func(p value.Principal) (*controlplanev1.GetRuntimeSecretImpactResponse, error) {
+		result, err := server.service.GetRuntimeSecretImpact(ctx, p, request.GetSecretRef(), request.GetRevision(), request.GetQuery(), query.Page{Size: request.GetPage().GetPageSize(), Token: request.GetPage().GetPageToken()})
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.GetRuntimeSecretImpactResponse{SecretRef: result.SecretRef, SecretVersion: result.SecretVersion, TargetRevision: result.TargetRevision, Total: result.Total,
+			Page: &controlplanev1.PageInfo{NextPageToken: result.NextPageToken}}
+		for _, item := range result.Consumers {
+			consumer := castRuntimeSecretImpactConsumer(item)
+			response.Consumers = append(response.Consumers, consumer)
+		}
+		return response, nil
+
+	})
 }
 
 // RebindRuntimeSecret copies selected environment and consumer pins into the dedicated command and

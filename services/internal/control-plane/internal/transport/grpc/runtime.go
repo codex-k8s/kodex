@@ -14,6 +14,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -913,19 +914,18 @@ func (server *Server) ClaimIntegrationInvocations(ctx context.Context, request *
 // GetIntegrationInvocation читает состояние вызова с проверенным principal и возвращает безопасный
 // исход и ссылки квитанции эффекта.
 func (server *Server) GetIntegrationInvocation(ctx context.Context, request *controlplanev1.GetIntegrationInvocationRequest) (*controlplanev1.GetIntegrationInvocationResponse, error) {
-	p, err := principal(ctx, controlplanev1.RuntimeWorkService_GetIntegrationInvocation_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	result, err := server.service.GetIntegrationInvocation(ctx, p, request.GetInvocationRef())
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.GetIntegrationInvocationResponse{
-		State: mapString(result, "state"), ResultSummary: mapString(result, "resultSummary"),
-		SafeErrorCode: mapString(result, "safeErrorCode"), GateRef: mapString(result, "gateRef"),
-		EffectReceiptRef: mapString(result, "effectReceiptRef"),
-	}, nil
+	return queryResponse(ctx, controlplanev1.RuntimeWorkService_GetIntegrationInvocation_FullMethodName, func(p value.Principal) (*controlplanev1.GetIntegrationInvocationResponse, error) {
+		result, err := server.service.GetIntegrationInvocation(ctx, p, request.GetInvocationRef())
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.GetIntegrationInvocationResponse{
+			State: mapString(result, "state"), ResultSummary: mapString(result, "resultSummary"),
+			SafeErrorCode: mapString(result, "safeErrorCode"), GateRef: mapString(result, "gateRef"),
+			EffectReceiptRef: mapString(result, "effectReceiptRef"),
+		}, nil
+
+	})
 }
 
 // CompleteIntegrationInvocation preserves unknown outcome and optional effect-receipt fields

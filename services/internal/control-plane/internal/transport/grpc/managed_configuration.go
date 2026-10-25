@@ -8,6 +8,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -414,19 +415,18 @@ func (server *Server) ListManagedConfigurations(ctx context.Context, request *co
 // метода, преобразует ошибки владельца и сохраняет порядок ревизий. Ссылка истории не обходит
 // допустимость владельца.
 func (server *Server) ListManagedConfigurationHistory(ctx context.Context, request *controlplanev1.ListManagedConfigurationHistoryRequest) (*controlplanev1.ListManagedConfigurationHistoryResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListManagedConfigurationHistory_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	configuration, revisions, total, next, err := server.service.ListManagedConfigurationHistory(ctx, p, request.GetConfigurationRef(), page(request.GetPage()))
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListManagedConfigurationHistoryResponse{Configuration: castManagedConfiguration(&configuration), Total: total, Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	for index := range revisions {
-		response.Revisions = append(response.Revisions, castManagedRevision(&revisions[index]))
-	}
-	return response, nil
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_ListManagedConfigurationHistory_FullMethodName, func(p value.Principal) (*controlplanev1.ListManagedConfigurationHistoryResponse, error) {
+		configuration, revisions, total, next, err := server.service.ListManagedConfigurationHistory(ctx, p, request.GetConfigurationRef(), page(request.GetPage()))
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.ListManagedConfigurationHistoryResponse{Configuration: castManagedConfiguration(&configuration), Total: total, Page: &controlplanev1.PageInfo{NextPageToken: next}}
+		for index := range revisions {
+			response.Revisions = append(response.Revisions, castManagedRevision(&revisions[index]))
+		}
+		return response, nil
+
+	})
 }
 
 // GetManagedConfigurationImpact authenticates its exact method and reads the selected
@@ -436,15 +436,14 @@ func (server *Server) ListManagedConfigurationHistory(ctx context.Context, reque
 // ревизии с явными поиском и полями страницы. Проекция влияния является результатом чтения, а не
 // подтверждением изменений потребителей.
 func (server *Server) GetManagedConfigurationImpact(ctx context.Context, request *controlplanev1.GetManagedConfigurationImpactRequest) (*controlplanev1.GetManagedConfigurationImpactResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetManagedConfigurationImpact_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	impact, err := server.service.GetManagedConfigurationImpact(ctx, p, request.GetConfigurationRef(), request.GetRevisionRef(), query.Filter{Query: request.GetQuery(), Page: query.Page{Size: request.GetPage().GetPageSize(), Token: request.GetPage().GetPageToken()}})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.GetManagedConfigurationImpactResponse{Impact: castManagedImpact(impact)}, nil
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_GetManagedConfigurationImpact_FullMethodName, func(p value.Principal) (*controlplanev1.GetManagedConfigurationImpactResponse, error) {
+		impact, err := server.service.GetManagedConfigurationImpact(ctx, p, request.GetConfigurationRef(), request.GetRevisionRef(), query.Filter{Query: request.GetQuery(), Page: query.Page{Size: request.GetPage().GetPageSize(), Token: request.GetPage().GetPageToken()}})
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.GetManagedConfigurationImpactResponse{Impact: castManagedImpact(impact)}, nil
+
+	})
 }
 
 // GetRuntimeEnvironmentRoleImageConfiguration resolves the runtime-work principal and reads the
@@ -454,15 +453,14 @@ func (server *Server) GetManagedConfigurationImpact(ctx context.Context, request
 // ROLE_IMAGE выбранного RUNTIME_ENVIRONMENT. Фиксированные виды остаются серверными константами, а не
 // управляемым вызывающим кодом выбором команды.
 func (server *Server) GetRuntimeEnvironmentRoleImageConfiguration(ctx context.Context, request *controlplanev1.GetRuntimeEnvironmentRoleImageConfigurationRequest) (*controlplanev1.GetRuntimeEnvironmentRoleImageConfigurationResponse, error) {
-	p, err := principal(ctx, controlplanev1.RuntimeWorkService_GetRuntimeEnvironmentRoleImageConfiguration_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	binding, err := server.service.GetEffectiveManagedConfiguration(ctx, p, "ROLE_IMAGE", "RUNTIME_ENVIRONMENT", request.GetEnvironmentRef())
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.GetRuntimeEnvironmentRoleImageConfigurationResponse{Binding: castManagedBinding(binding)}, nil
+	return queryResponse(ctx, controlplanev1.RuntimeWorkService_GetRuntimeEnvironmentRoleImageConfiguration_FullMethodName, func(p value.Principal) (*controlplanev1.GetRuntimeEnvironmentRoleImageConfigurationResponse, error) {
+		binding, err := server.service.GetEffectiveManagedConfiguration(ctx, p, "ROLE_IMAGE", "RUNTIME_ENVIRONMENT", request.GetEnvironmentRef())
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.GetRuntimeEnvironmentRoleImageConfigurationResponse{Binding: castManagedBinding(binding)}, nil
+
+	})
 }
 
 // GetIntegrationConnectionDefinitionConfiguration keeps its own runtime-work method and reads the
@@ -472,15 +470,14 @@ func (server *Server) GetRuntimeEnvironmentRoleImageConfiguration(ctx context.Co
 // привязку INTEGRATION_DEFINITION для INTEGRATION_CONNECTION. Общим является преобразование
 // результата, а не полномочия или выбор метода образа окружения.
 func (server *Server) GetIntegrationConnectionDefinitionConfiguration(ctx context.Context, request *controlplanev1.GetIntegrationConnectionDefinitionConfigurationRequest) (*controlplanev1.GetIntegrationConnectionDefinitionConfigurationResponse, error) {
-	p, err := principal(ctx, controlplanev1.RuntimeWorkService_GetIntegrationConnectionDefinitionConfiguration_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	binding, err := server.service.GetEffectiveManagedConfiguration(ctx, p, "INTEGRATION_DEFINITION", "INTEGRATION_CONNECTION", request.GetConnectionRef())
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.GetIntegrationConnectionDefinitionConfigurationResponse{Binding: castManagedBinding(binding)}, nil
+	return queryResponse(ctx, controlplanev1.RuntimeWorkService_GetIntegrationConnectionDefinitionConfiguration_FullMethodName, func(p value.Principal) (*controlplanev1.GetIntegrationConnectionDefinitionConfigurationResponse, error) {
+		binding, err := server.service.GetEffectiveManagedConfiguration(ctx, p, "INTEGRATION_DEFINITION", "INTEGRATION_CONNECTION", request.GetConnectionRef())
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.GetIntegrationConnectionDefinitionConfigurationResponse{Binding: castManagedBinding(binding)}, nil
+
+	})
 }
 
 // GetSystemSTTConfiguration authenticates the query and maps the owner-resolved STT revision,
@@ -490,25 +487,24 @@ func (server *Server) GetIntegrationConnectionDefinitionConfiguration(ctx contex
 // готовность, поколение провайдера, лимиты и параметры. Срезы препятствий, языков и ключевых слов
 // копируются, байты реквизитов не передаются, распознавание не выполняется.
 func (server *Server) GetSystemSTTConfiguration(ctx context.Context, _ *controlplanev1.GetSystemSTTConfigurationRequest) (*controlplanev1.GetSystemSTTConfigurationResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetSystemSTTConfiguration_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	configuration, err := server.service.GetSystemSTTConfiguration(ctx, p)
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.GetSystemSTTConfigurationResponse{Configuration: &controlplanev1.SystemSTTConfiguration{
-		ConfigurationRef: configuration.ConfigurationRef, RevisionRef: configuration.RevisionRef, Revision: configuration.Revision,
-		Digest: configuration.Digest, ProviderAccountRef: configuration.ProviderAccountRef, Model: configuration.Model,
-		Language: configuration.Language, PermissionKey: configuration.PermissionKey, Ready: configuration.Ready,
-		ReadinessBlockers: append([]string(nil), configuration.ReadinessBlockers...), ProviderCredentialGeneration: configuration.ProviderCredentialGeneration,
-		Enabled: configuration.Enabled, MaximumAudioBytes: configuration.MaximumAudioBytes,
-		MaximumAudioDurationMilliseconds: configuration.MaximumAudioDurationMilliseconds, ProviderTimeoutMilliseconds: configuration.ProviderTimeoutMilliseconds,
-		Parameters: &controlplanev1.SystemSTTParameters{Languages: append([]string(nil), configuration.Parameters.Languages...),
-			Keywords: append([]string(nil), configuration.Parameters.Keywords...), Prompt: configuration.Parameters.Prompt,
-			Temperature: configuration.Parameters.Temperature, ChunkingStrategy: configuration.Parameters.ChunkingStrategy, Stream: configuration.Parameters.Stream},
-	}}, nil
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_GetSystemSTTConfiguration_FullMethodName, func(p value.Principal) (*controlplanev1.GetSystemSTTConfigurationResponse, error) {
+		configuration, err := server.service.GetSystemSTTConfiguration(ctx, p)
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.GetSystemSTTConfigurationResponse{Configuration: &controlplanev1.SystemSTTConfiguration{
+			ConfigurationRef: configuration.ConfigurationRef, RevisionRef: configuration.RevisionRef, Revision: configuration.Revision,
+			Digest: configuration.Digest, ProviderAccountRef: configuration.ProviderAccountRef, Model: configuration.Model,
+			Language: configuration.Language, PermissionKey: configuration.PermissionKey, Ready: configuration.Ready,
+			ReadinessBlockers: append([]string(nil), configuration.ReadinessBlockers...), ProviderCredentialGeneration: configuration.ProviderCredentialGeneration,
+			Enabled: configuration.Enabled, MaximumAudioBytes: configuration.MaximumAudioBytes,
+			MaximumAudioDurationMilliseconds: configuration.MaximumAudioDurationMilliseconds, ProviderTimeoutMilliseconds: configuration.ProviderTimeoutMilliseconds,
+			Parameters: &controlplanev1.SystemSTTParameters{Languages: append([]string(nil), configuration.Parameters.Languages...),
+				Keywords: append([]string(nil), configuration.Parameters.Keywords...), Prompt: configuration.Parameters.Prompt,
+				Temperature: configuration.Parameters.Temperature, ChunkingStrategy: configuration.Parameters.ChunkingStrategy, Stream: configuration.Parameters.Stream},
+		}}, nil
+
+	})
 }
 
 // castManagedRevision preserves nil and projects revision state, content, provenance links,

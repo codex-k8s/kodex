@@ -4,6 +4,7 @@ import (
 	"context"
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
 // castDraftImpactPlan projects draft and secret versions, source revision, digest, count, state
@@ -35,18 +36,17 @@ func (server *Server) PrepareRuntimeSecretDraftImpact(ctx context.Context, reque
 // GetRuntimeSecretDraftImpact читает авторизованную страницу влияния и преобразует затронутых
 // потребителей, исходы элементов и привязки результата среды и связи.
 func (server *Server) GetRuntimeSecretDraftImpact(ctx context.Context, request *cp.GetRuntimeSecretDraftImpactRequest) (*cp.GetRuntimeSecretDraftImpactResponse, error) {
-	p, err := principal(ctx, cp.PlatformQueryService_GetRuntimeSecretDraftImpact_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	result, err := server.service.GetRuntimeSecretDraftImpact(ctx, p, request.GetPlanRef(), request.GetQuery(), page(request.GetPage()))
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &cp.GetRuntimeSecretDraftImpactResponse{Plan: castDraftImpactPlan(result.Plan), Total: result.Total, Page: &cp.PageInfo{NextPageToken: result.NextPageToken}}
-	for _, item := range result.Items {
-		consumer := castRuntimeSecretImpactConsumer(item.Consumer)
-		response.Items = append(response.Items, &cp.RuntimeSecretDraftImpactItem{Ref: item.Ref, Consumer: consumer, Outcome: cp.RuntimeSecretDraftImpactOutcome(cp.RuntimeSecretDraftImpactOutcome_value["RUNTIME_SECRET_DRAFT_IMPACT_OUTCOME_"+item.Outcome]), ResultEnvironmentVersionRef: item.ResultEnvironmentVersionRef, ResultBindingRef: item.ResultBindingRef, ResultBindingVersion: item.ResultBindingVersion})
-	}
-	return response, nil
+	return queryResponse(ctx, cp.PlatformQueryService_GetRuntimeSecretDraftImpact_FullMethodName, func(p value.Principal) (*cp.GetRuntimeSecretDraftImpactResponse, error) {
+		result, err := server.service.GetRuntimeSecretDraftImpact(ctx, p, request.GetPlanRef(), request.GetQuery(), page(request.GetPage()))
+		if err != nil {
+			return nil, err
+		}
+		response := &cp.GetRuntimeSecretDraftImpactResponse{Plan: castDraftImpactPlan(result.Plan), Total: result.Total, Page: &cp.PageInfo{NextPageToken: result.NextPageToken}}
+		for _, item := range result.Items {
+			consumer := castRuntimeSecretImpactConsumer(item.Consumer)
+			response.Items = append(response.Items, &cp.RuntimeSecretDraftImpactItem{Ref: item.Ref, Consumer: consumer, Outcome: cp.RuntimeSecretDraftImpactOutcome(cp.RuntimeSecretDraftImpactOutcome_value["RUNTIME_SECRET_DRAFT_IMPACT_OUTCOME_"+item.Outcome]), ResultEnvironmentVersionRef: item.ResultEnvironmentVersionRef, ResultBindingRef: item.ResultBindingRef, ResultBindingVersion: item.ResultBindingVersion})
+		}
+		return response, nil
+
+	})
 }

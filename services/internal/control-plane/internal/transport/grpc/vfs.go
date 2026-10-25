@@ -6,6 +6,7 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
 // ListVFSNodes passes project, path, query, lifecycle, kind and page filters through the
@@ -13,17 +14,16 @@ import (
 // ListVFSNodes передаёт фильтры проекта, пути, запроса, lifecycle, видов и страницы
 // авторизованному списочному чтению и возвращает узлы с общим числом и курсором.
 func (server *Server) ListVFSNodes(ctx context.Context, request *controlplanev1.ListVFSNodesRequest) (*controlplanev1.ListVFSNodesResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListVFSNodes_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	items, total, next, err := server.service.ListVFSNodes(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), ResourceRef: request.GetPath(), Query: request.GetQuery(), State: request.GetLifecycleState(), VFSKinds: vfsKinds(request.GetKinds()), Page: page(request.GetPage())})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListVFSNodesResponse{Total: total, Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	response.Nodes = castResponseItems(items, castVFSNode)
-	return response, nil
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_ListVFSNodes_FullMethodName, func(p value.Principal) (*controlplanev1.ListVFSNodesResponse, error) {
+		items, total, next, err := server.service.ListVFSNodes(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), ResourceRef: request.GetPath(), Query: request.GetQuery(), State: request.GetLifecycleState(), VFSKinds: vfsKinds(request.GetKinds()), Page: page(request.GetPage())})
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.ListVFSNodesResponse{Total: total, Page: &controlplanev1.PageInfo{NextPageToken: next}}
+		response.Nodes = castResponseItems(items, castVFSNode)
+		return response, nil
+
+	})
 }
 
 // SearchVFS uses the distinct search principal and owner method with VFS filters while preserving
@@ -31,17 +31,16 @@ func (server *Server) ListVFSNodes(ctx context.Context, request *controlplanev1.
 // SearchVFS использует отдельные search principal и метод владельца с фильтрами VFS, сохраняя
 // общее число и токен продолжения.
 func (server *Server) SearchVFS(ctx context.Context, request *controlplanev1.SearchVFSRequest) (*controlplanev1.SearchVFSResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_SearchVFS_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	items, total, next, err := server.service.SearchVFS(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), ResourceRef: request.GetPath(), Query: request.GetQuery(), State: request.GetLifecycleState(), VFSKinds: vfsKinds(request.GetKinds()), Page: page(request.GetPage())})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.SearchVFSResponse{Total: total, Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	response.Nodes = castResponseItems(items, castVFSNode)
-	return response, nil
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_SearchVFS_FullMethodName, func(p value.Principal) (*controlplanev1.SearchVFSResponse, error) {
+		items, total, next, err := server.service.SearchVFS(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), ResourceRef: request.GetPath(), Query: request.GetQuery(), State: request.GetLifecycleState(), VFSKinds: vfsKinds(request.GetKinds()), Page: page(request.GetPage())})
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.SearchVFSResponse{Total: total, Page: &controlplanev1.PageInfo{NextPageToken: next}}
+		response.Nodes = castResponseItems(items, castVFSNode)
+		return response, nil
+
+	})
 }
 
 // castVFSNode projects filesystem and entity references, content/version metadata, lifecycle/scan

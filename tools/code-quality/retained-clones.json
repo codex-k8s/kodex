@@ -4109,14 +4109,6 @@
       "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
-      "fragmentSHA256": "b51fa8db12157d1407629e66d025c851da423773b23dce69851766897512f203",
-      "count": 1,
-      "reason": "115-token окно сравнивает ClaimImageAdmission и ClaimImagePromotion. Несмотря на одинаковые idempotency/principal→claim вызовы, admission несёт attempt/risk/source-evidence pins, promotion — отдельный token и свой authorize/complete путь. Они не объединяются универсальной claim командой; общие domain casters и principal/transportError уже вынесены. Сохранена только exact self-file fragment/count1 пара, не token/attempt checks."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
       "fragmentSHA256": "7b88ffa12464dc6af4c6c46afc8dd4124c3d723f6a17e108c4ae0e4df5878a78",
       "count": 1,
       "reason": "205-token окно RecordImageAdmission/FailImageAdmission сопоставляется с FailImageAdmission/ExpireImageAdmissionClaim. Копируются разные специализированные repository input types: record evidence/risk/signatures, terminal failure с error code и expiry с expected attempt/authority tuples. Одинаковые request getters обозначают обязательные pins, но не общий transition; их extraction в generic mutation DTO скрыло бы обязательные/запрещённые поля. Только exact self-file fragment/count1."
@@ -4128,22 +4120,6 @@
       "fragmentSHA256": "2b29fcc162625d8698c2e6bbb00ce19f7961fa21879691b36f6fdaf8bebfe8f5",
       "count": 1,
       "reason": "117-token окно ClaimImagePromotion/AuthorizeImagePromotion сопоставляется с AuthorizeImagePromotion/CompleteImagePromotion. Claim token, authorization token и completion readback принадлежат трём разным специализированным командам и typed envelopes, хотя principal/error template совпадает. Их порядок, exact method и immutable manifest/readback pins остаются явными; базовые casters уже общие. Только exact self-file fragment/count1, не весь promotion lifecycle."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/config_overlay_history.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
-      "fragmentSHA256": "20a080902aa34197f3669541ff1ec974f5c98d6af485e346966544cc1aa803a8",
-      "count": 1,
-      "reason": "Окно123 tokens пересекает хвост ListConfigOverlayRevisions и начало GetConfigOverlayRevision против хвоста ListManagedConfigurations и начала ListManagedConfigurationHistory. Совпадают typed page/error/cast plumbing, а owner queries, filter selectors, nominal replies и exact FullMethod различны. page/principal/transportError и casters уже общие; связного повторного алгоритма на всём окне нет. Generic list/read dispatcher с фабрикой ответов скрыл бы маршрутизацию и добавил callbacks ради одного append loop. Сохранена только эта точная пара/fragment/count1, не list/query файлы. После комментариев exact window и полные методы обеих сторон перечитаны; pair/count1 сохранены."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/email_mailbox_queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
-      "fragmentSHA256": "1702bfd4dda3fe38297880a042514a35807295d151411e1b84c74350df7e02a0",
-      "count": 1,
-      "reason": "Окно104 tokens сравнивает хвост GetEmailMailboxConfiguration/начало ListEmailMailboxConfigurations с хвостом runtime ROLE_IMAGE binding/началом integration-definition binding. Различаются публичный query principal и RuntimeWork exact methods, mailbox view и managed binding, connection/revision selectors и фиксированные owner kinds. Общие principal/error/cast примитивы уже выделены; общий read-any helper смешал бы разные eligibility boundaries ради коротких return/guard. Исключены только точные пути/hash/count1, не mail/runtime reads в целом. После комментариев exact window и полные методы обеих сторон перечитаны; pair/count1 сохранены."
     },
     {
       "format": "go",
@@ -4931,14 +4907,6 @@
     },
     {
       "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime_revision_diff.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/session_archive.go",
-      "fragmentSHA256": "442af4c357cb3572665a7ad089e1b098814d8fa720daeede58d7e4556a05fe76",
-      "count": 1,
-      "reason": "Окно совпадения включает imports и начало разных RPC GetRuntimeRevisionDiff и ClaimSessionArchiveTasks: principal и обработка ошибки общие, затем расходятся read-only diff и state-changing claim задач. Нового самостоятельного алгоритма тут нет; универсальный dispatcher связал бы разные полномочия и lifecycle без полезного сокращения. Исключается точное окно, не проверки или целые handlers. После комментариев exact window и полные методы обеих сторон перечитаны; pair/count1 сохранены."
-    },
-    {
-      "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/session_archive.go",
       "fragmentSHA256": "a45a95c29d8dc6866e87e1f5c46c25944b4b866d89a15eb435271f11cbcadd09",
@@ -5259,22 +5227,6 @@
     },
     {
       "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/integration_candidates.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/integration_candidates.go",
-      "fragmentSHA256": "0b4067cea676918b9c845e2cc5081001a687e6b5b5711f360be74ca30a795011",
-      "count": 1,
-      "reason": "Хвосты ListIntegrationGrantConnectionCandidates и ProjectCandidates имеют общий integrationCandidateReason и pins caster. Typed connection/project candidate DTO различаются definition/provider/credential/resourceScope/usable полями; result page/context/pins не являются отдельным повторяемым бизнесовым алгоритмом. Отдельные typed append оставлены. Решение ограничено прочитанными точными paths/fragment/count1; слой transport целиком не исключён."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/integration_candidates.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/integration_candidates.go",
-      "fragmentSHA256": "97705ada43900e7b9247639fd9d8c66b8a86b7e6686773bbf9e80c2a967d20e8",
-      "count": 2,
-      "reason": "Стыки Connection→Project и Project→Recipient списков сохраняют разные exact RPC/service reads и типы Items. Common input/context/pins/reason/page casters уже есть; connection purpose допускает явный выбор, остальные GRANT. Новый callback dispatcher скрыл бы эту разницу ради response boilerplate. Connection/Project и Recipient/Capability стыки совпадают общей сборкой page/context/pins и проверкой reason. Recipient kind/name и capability/grant version требуют разных nominal DTO; reason уже закрыто проверяется одним helper. Полностью общий list function потребовал бы передачи всей операции в callbacks. Решение ограничено прочитанными точными paths/fragment/count2; слой transport целиком не исключён."
-    },
-    {
-      "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/context_bindings.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/context_bindings.go",
       "fragmentSHA256": "4e1549186883247bfa502b9a397db4f668c5bb5d1541e8f64e7866836746b31b",
@@ -5291,35 +5243,11 @@
     },
     {
       "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/email_mailbox_queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secret_draft_impact.go",
-      "fragmentSHA256": "76117a2b5c9c88c4ab9b2ff5aa4102f2a85c54d21ad84802603804717f8b2249",
-      "count": 1,
-      "reason": "Mailbox configuration get/list сравнивается с secret draft impact prepare/get. Public query, preparation mutation и impact-plan reads не одна операция; response nominal types, selectors и lifetime pins различны. Principal/error/page/casters уже общие. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/environment_impact.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/secret_impact.go",
-      "fragmentSHA256": "df0ba0c9754d59861460bcc8630322ccd94bf07048bfcc38d74594c5b60bb5e2",
-      "count": 1,
-      "reason": "GetRuntimeEnvironmentImpact и GetRuntimeSecretImpact имеют одинаковый principal/domain/page каркас, но environment version/digest и secret revision semantics различны. Общие environment/secret consumer casters уже вынесены; generic owner impact read затруднил бы явные method bindings. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
-    },
-    {
-      "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/provider_renewal.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/provider_renewal.go",
       "fragmentSHA256": "22eb5d95363f4568f6422a328ae9fb6d6b96f76f91b82124ccf67811ba911374",
       "count": 1,
       "reason": "Provider renewal authorize и validate observation используют общий renewalTask с unknown/size/time/deterministic digest checks. Owner authorization и observation eligibility разные service methods и nominal replies; short request/error wrapper оставлен явным без общего callback. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime_files.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_files.go",
-      "fragmentSHA256": "d6938833b018b70e314882963f0a48b6ee4e3695ffee1008bf8ca1a8ab792856",
-      "count": 1,
-      "reason": "SearchExecutionFiles и GetExecutionFileManifest используют общий execution context, descriptor и catalog casters. Search передаёт query, manifest читает каталог без него; nominal service/RPC и output schema сохраняются, generic callback ради append loop не добавлен. Решение относится только к прочитанным точным paths/fragment/count1; нет исключения слоя целиком."
     },
     {
       "format": "go",
@@ -6005,14 +5933,6 @@
       "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "0bc74c1dec8ac43912552f4dca257220dd5bb64f669f9a39dd6ba10bd8ac119a",
-      "count": 1,
-      "reason": "Остаточные self-windows queries.go, 1 occurrences, пересекают объявления GetArtifact, GetProject, ListArtifactRevisions, ListPlatformMemberships. Полные тела прочитаны; exact RPC→domain input→public field matrix проверена отдельно. Поля этого набора: Artifact, Items, Memberships, NextActions, Page, Project, Total. Principal/error boundary уже queryResponse, повторные range→caster→append циклы уже castResponseItems. Остаются nominal generated requests/replies, service methods, refs/filters и выбор поля ответа; universal query dispatcher либо фабрика closures скрыла бы эту owner mapping ради короткого transport glue. MANAGE_MEMBERS назначается отдельным явным NextAction. Сохраняется только данный внутрефайловый fragment SHA-256 и count1; изменение hash/count требует нового разбора, остальные методы и файл целиком не исключаются."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
       "fragmentSHA256": "916ff69e74869e1268f0ce4dae97c192fa737fd3e6cdae91290a8967e2695848",
       "count": 1,
       "reason": "Остаточные self-windows queries.go, 1 occurrences, пересекают объявления GetAdministration, GetProject, ListAuditEvents, ListPlatformMemberships. Полные тела прочитаны; exact RPC→domain input→public field matrix проверена отдельно. Поля этого набора: Events, Memberships, NextActions, Page, Project, State. Principal/error boundary уже queryResponse, повторные range→caster→append циклы уже castResponseItems. Остаются nominal generated requests/replies, service methods, refs/filters и выбор поля ответа; universal query dispatcher либо фабрика closures скрыла бы эту owner mapping ради короткого transport glue. MANAGE_MEMBERS назначается отдельным явным NextAction. Сохраняется только данный внутрефайловый fragment SHA-256 и count1; изменение hash/count требует нового разбора, остальные методы и файл целиком не исключаются."
@@ -6040,22 +5960,6 @@
       "fragmentSHA256": "ccec51734d30774c159f4147bc9b5432e96afd34ddad018939f0205641ea76d7",
       "count": 2,
       "reason": "Остаточные self-windows queries.go, 2 occurrences, пересекают объявления GetOwnerGate, GetRun, GetRunGraph, GetWorkflow, ListArtifacts, ListRuns. Полные тела прочитаны; exact RPC→domain input→public field matrix проверена отдельно. Поля этого набора: Artifacts, Gate, Graph, Page, Run, Runs, Total, Workflow. Principal/error boundary уже queryResponse, повторные range→caster→append циклы уже castResponseItems. Остаются nominal generated requests/replies, service methods, refs/filters и выбор поля ответа; universal query dispatcher либо фабрика closures скрыла бы эту owner mapping ради короткого transport glue. выбор snapshot read и ненулевой пустой preallocated runs slice не заменены nil mapper. ограничение sourceKinds≤5 и отдельные enum filters остаются в методе. UNSPECIFIED state отклоняется до domain read. Сохраняется только данный внутрефайловый fragment SHA-256 и count2; изменение hash/count требует нового разбора, остальные методы и файл целиком не исключаются."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "167a0f75a053c334a9158a734046bcfad740980a39d890c518d7d24de31a0f88",
-      "count": 1,
-      "reason": "Остаточные self-windows queries.go, 1 occurrences, пересекают объявления GetArtifactImpact, GetRun, ListArtifacts, ListRuns. Полные тела прочитаны; exact RPC→domain input→public field matrix проверена отдельно. Поля этого набора: ActiveRuns, Artifacts, Impact, Page, Run, Runs, Total. Principal/error boundary уже queryResponse, повторные range→caster→append циклы уже castResponseItems. Остаются nominal generated requests/replies, service methods, refs/filters и выбор поля ответа; universal query dispatcher либо фабрика closures скрыла бы эту owner mapping ради короткого transport glue. отдельная impact projection сохраняет digest/counts/blockers/active-run fields. ограничение sourceKinds≤5 и отдельные enum filters остаются в методе. UNSPECIFIED state отклоняется до domain read. Сохраняется только данный внутрефайловый fragment SHA-256 и count1; изменение hash/count требует нового разбора, остальные методы и файл целиком не исключаются."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "4d5c7303b44089c0f5a3fe1e6e812c8278ef0daf97a328f2a985c1f20236337a",
-      "count": 1,
-      "reason": "Остаточные self-windows queries.go, 1 occurrences, пересекают объявления GetArtifactRevision, GetRun, ListArtifactRevisions, ListRuns. Полные тела прочитаны; exact RPC→domain input→public field matrix проверена отдельно. Поля этого набора: Items, Page, Revision, Run, Runs, Total. Principal/error boundary уже queryResponse, повторные range→caster→append циклы уже castResponseItems. Остаются nominal generated requests/replies, service methods, refs/filters и выбор поля ответа; universal query dispatcher либо фабрика closures скрыла бы эту owner mapping ради короткого transport glue. UNSPECIFIED state отклоняется до domain read. Сохраняется только данный внутрефайловый fragment SHA-256 и count1; изменение hash/count требует нового разбора, остальные методы и файл целиком не исключаются."
     },
     {
       "format": "go",
@@ -6187,14 +6091,6 @@
     },
     {
       "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "fragmentSHA256": "c48d865a45726b256b5cd7371a41f531e207be220dc803556985c453e156591f",
-      "count": 2,
-      "reason": "Остаточные typed read-adapter windows после переноса AccessService principal/error boundary в существующий queryResponse: access.go: ListAccessBindings, QueryEffectiveAccess; queries.go: GetArtifactRevision, GetRun, ListArtifactRevisions, ListRuns. Полные AccessService тела и матрица exact RPC/domain call/response проверены; queries.go прочитан целиком на предыдущем этапе и его байты не менялись. Общая обвязка допуска/ошибок уже queryResponse, value-caster циклы уже castResponseItems. Здесь остаются nominal generated request/reply, конкретный domain read, фильтры, public field и соседние объявления: ListAccessBindings→Bindings,ListAccessBindingsResponse.Page; QueryEffectiveAccess→Decisions,QueryEffectiveAccessResponse.EvaluatedAt,QueryEffectiveAccessResponse.Subject; GetArtifactRevision→GetArtifactRevisionResponse.Revision; GetRun→GetRunResponse.Run; ListArtifactRevisions→Items,ListArtifactRevisionsResponse.Page,ListArtifactRevisionsResponse.Total; ListRuns→ListRunsResponse.Page,ListRunsResponse.Total,Runs. SubjectKind/SubjectRef/RoleRef/ProjectRef/includeRevoked/query aliases остаются явными фильтрами. SubjectRef не заменяет caller; time.Time{} оставляет выбор evaluation instant владельцу. Дополнительный универсальный диспетчер скрыл бы разные owner reads ради короткой типизированной связи. Исключение ограничено этой парой файлов, fragment SHA-256 и count 2; изменение hash/count закрыто отклоняется, весь файл либо RPC family не исключается."
-    },
-    {
-      "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
       "fragmentSHA256": "2996eb8085303df9e08a321b4b450b51080016b56d032ee00b2d621ae06bb4ec",
@@ -6300,22 +6196,6 @@
     {
       "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secret_drafts.go",
-      "fragmentSHA256": "9b9d8ac5b8e71a5f5e8d2e0af6a184dfe672639271fc69e80c75fae9e131c04e",
-      "count": 1,
-      "reason": "Повторно разобранные typed transport windows после19 queryResponse migrations: queries.go: GetOverview, GetPlatformEventCursor, ListPlatformCapabilities; runtime_secret_drafts.go: GetRuntimeSecretDraft, castDraftWork, prepareSecretDraft. Все затронутые читающие RPC и пересекаемые особые ветви прочитаны целиком; exact method/domain input/response matrix проверена. Principal/error boundary повторно не реализуется в converted queries: это существующий queryResponse, прямые value mapping циклы уже castResponseItems. Оставлены nominal generated requests/replies, конкретные owner reads/filters/public fields и границы соседних объявлений: GetOverview→GetOverviewResponse.Overview; GetPlatformEventCursor→GetPlatformEventCursorResponse.CurrentSequence,GetPlatformEventCursorResponse.OrganizationRef; ListPlatformCapabilities→Capabilities; GetRuntimeSecretDraft→GetRuntimeSecretDraftResponse.Draft; castDraftWork→отдельный typed result/соседняя граница объявления; prepareSecretDraft→отдельный typed result/соседняя граница объявления. Читается owner-authorized draft metadata без grant/materialization effects. Окно захватывает границу объявления castDraftWork, а не переносит его encrypted/materialization descriptors в общий read dispatcher. Соседний prepareSecretDraft сохраняет command principal и owner preparation; его body не дедублицируется с чтением. Универсальная фабрика typed RPC скрыла бы эти разные mappings; commands и read helper не объединяются. Только данная пара файлов, raw fragment SHA-256 и count 1; изменение hash/count требует нового разбора, целые файлы и family не исключаются."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
-      "fragmentSHA256": "072161b321995cff3cc0576d343c8e967e062b5a84ec403a86ff2e56409959e1",
-      "count": 1,
-      "reason": "Повторно разобранные typed transport windows после19 queryResponse migrations: queries.go: GetOverview, ListPlatformCapabilities; runtime_configuration.go: GetAgentRuntimeConfiguration, ListAgentRuntimeConfigurationVersions. Все затронутые читающие RPC и пересекаемые особые ветви прочитаны целиком; exact method/domain input/response matrix проверена. Principal/error boundary повторно не реализуется в converted queries: это существующий queryResponse, прямые value mapping циклы уже castResponseItems. Оставлены nominal generated requests/replies, конкретные owner reads/filters/public fields и границы соседних объявлений: GetOverview→GetOverviewResponse.Overview; ListPlatformCapabilities→Capabilities; GetAgentRuntimeConfiguration→GetAgentRuntimeConfigurationResponse.RuntimeConfiguration; ListAgentRuntimeConfigurationVersions→Configurations,ListAgentRuntimeConfigurationVersionsResponse.Page.  Универсальная фабрика typed RPC скрыла бы эти разные mappings; commands и read helper не объединяются. Только данная пара файлов, raw fragment SHA-256 и count 1; изменение hash/count требует нового разбора, целые файлы и family не исключаются."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
       "fragmentSHA256": "2996eb8085303df9e08a321b4b450b51080016b56d032ee00b2d621ae06bb4ec",
       "count": 1,
@@ -6328,14 +6208,6 @@
       "fragmentSHA256": "8e455c8f760bd04962e3452f2dcf1c14f963384cfcf8fbb9e6a4f409e6ec1ae8",
       "count": 1,
       "reason": "Повторно разобранные typed transport windows после19 queryResponse migrations: queries.go: GetProject, ListPlatformMemberships, ListTrashedProjects; runtime_secrets.go: GetRuntimeSecret, ListRuntimeSecrets, PrepareCreateRuntimeSecret. Все затронутые читающие RPC и пересекаемые особые ветви прочитаны целиком; exact method/domain input/response matrix проверена. Principal/error boundary повторно не реализуется в converted queries: это существующий queryResponse, прямые value mapping циклы уже castResponseItems. Оставлены nominal generated requests/replies, конкретные owner reads/filters/public fields и границы соседних объявлений: GetProject→GetProjectResponse.Project; ListPlatformMemberships→ListPlatformMembershipsResponse.NextActions,ListPlatformMembershipsResponse.Page,Memberships; ListTrashedProjects→ListTrashedProjectsResponse.Page,Projects; GetRuntimeSecret→GetRuntimeSecretResponse.Secret; ListRuntimeSecrets→ListRuntimeSecretsResponse.Page,Secrets; PrepareCreateRuntimeSecret→PrepareCreateRuntimeSecretResponse.Operation. Возвращаются metadata, не secret bytes. Сохраняется явный MANAGE_MEMBERS NextAction. Соседний CREATE command сохраняет собственный prepareRuntimeSecret/mutation/grant path, не переносится в query helper. Универсальная фабрика typed RPC скрыла бы эти разные mappings; commands и read helper не объединяются. Только данная пара файлов, raw fragment SHA-256 и count 1; изменение hash/count требует нового разбора, целые файлы и family не исключаются."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
-      "fragmentSHA256": "0bc74c1dec8ac43912552f4dca257220dd5bb64f669f9a39dd6ba10bd8ac119a",
-      "count": 1,
-      "reason": "Повторно разобранные typed transport windows после19 queryResponse migrations: queries.go: GetProject, ListPlatformMemberships; runtime_configuration.go: GetAgentRuntimeConfiguration, ListAgentRuntimeConfigurationVersions. Все затронутые читающие RPC и пересекаемые особые ветви прочитаны целиком; exact method/domain input/response matrix проверена. Principal/error boundary повторно не реализуется в converted queries: это существующий queryResponse, прямые value mapping циклы уже castResponseItems. Оставлены nominal generated requests/replies, конкретные owner reads/filters/public fields и границы соседних объявлений: GetProject→GetProjectResponse.Project; ListPlatformMemberships→ListPlatformMembershipsResponse.NextActions,ListPlatformMembershipsResponse.Page,Memberships; GetAgentRuntimeConfiguration→GetAgentRuntimeConfigurationResponse.RuntimeConfiguration; ListAgentRuntimeConfigurationVersions→Configurations,ListAgentRuntimeConfigurationVersionsResponse.Page. Сохраняется явный MANAGE_MEMBERS NextAction. Универсальная фабрика typed RPC скрыла бы эти разные mappings; commands и read helper не объединяются. Только данная пара файлов, raw fragment SHA-256 и count 1; изменение hash/count требует нового разбора, целые файлы и family не исключаются."
     },
     {
       "format": "go",
@@ -6558,16 +6430,8 @@
       "firstPath": "services/internal/control-plane/internal/transport/grpc/interaction_identity.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/revision_impact.go",
       "fragmentSHA256": "f60f1e29e84774cc04db0193fea4c2a119812bdc04ddb48218e005231ba048c2",
-      "count": 1,
-      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: interaction_identity.go: BindInteractionIdentity, ListInteractionIdentities, RevokeInteractionIdentity; revision_impact.go: PrepareEnvironmentDraftImpact, PrepareInstructionsImpact, PreparePromptTemplateImpact. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы. Address-based castInteractionIdentity(&item) сохраняется отдельно. Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/interaction_identity.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/revision_impact.go",
-      "fragmentSHA256": "d085ad0fcd25c2f10aa1c23a2a3d62584a6268a731b0c579553089a466724b18",
-      "count": 1,
-      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: interaction_identity.go: BindInteractionIdentity, ListInteractionIdentities, RevokeInteractionIdentity; revision_impact.go: GetRevisionImpactPlan, PrepareEnvironmentDraftImpact, PrepareInstructionsImpact. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы. Address-based castInteractionIdentity(&item) сохраняется отдельно. Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+      "count": 2,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: interaction_identity.go: BindInteractionIdentity, ListInteractionIdentities, RevokeInteractionIdentity; revision_impact.go: GetRevisionImpactPlan, PrepareEnvironmentDraftImpact, PrepareInstructionsImpact, PreparePromptTemplateImpact. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна.  Исключение ограничено указанными paths/raw fragment SHA-256/count2; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
     },
     {
       "format": "go",
@@ -6644,14 +6508,6 @@
     {
       "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/revision_impact.go",
-      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_image_impact.go",
-      "fragmentSHA256": "03455324efad282992487d5da955821026f33e4a70b24c95e1ac705035c9b63b",
-      "count": 1,
-      "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: revision_impact.go: PrepareInstructionsImpact, PreparePromptTemplateImpact; role_image_impact.go: GetRoleImageImpactPlan, PrepareRoleImageImpactPlan. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы.  Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/transport/grpc/revision_impact.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/system_assistant.go",
       "fragmentSHA256": "7556eb8ec54d14a082f5f32dfb2043c765a3330ea075d611e5c528bdc601e234",
       "count": 1,
@@ -6696,6 +6552,318 @@
       "fragmentSHA256": "22d7a5d962c074174b474e135a920f39145b984c3f0f65c9717c039b749a1338",
       "count": 1,
       "reason": "Остаточные transport windows после объединения52 command response envelopes через существующий executeResponse: system_assistant.go: UpdateAssistantPlanDraft, ValidateAssistantPlan; system_assistant.go: RejectAssistantPlan, ValidateAssistantPlan. Полные тела и матрицы actual RPC/command kind/mutation/payload/prefix/response прочитаны; общий execute сохраняет principal, owner Command и error mapping, executeResponse добавляет только projection на success. Остались nominal generated DTO, точные owner operations/inputs/public fields и границы соседних объявлений. Native claim/report/credential operations, managedMutation и fallible publication имеют свои typed lifecycle/error contracts; универсальная фабрика по похожим полям смешала бы эти границы.  Только указанная пара paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, whole-file/family ignore не применяется."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/memory.go",
+      "fragmentSHA256": "fed6d714b3222f27fa1759b926aaaa9a3e6b05c70f12a380a82770529519f0f9",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: access.go: ListAccessRoleVersions, ListAccessRoles; memory.go: ListMemoryRecordRevisions, ListMemoryRecords. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Address-based memory revision projection сохранена. Отдельные status.Error и fallible castMemoryRecord не повторно отображаются через queryResponse. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/email_mailbox_queries.go",
+      "fragmentSHA256": "c48d865a45726b256b5cd7371a41f531e207be220dc803556985c453e156591f",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: access.go: ListAccessBindings, QueryEffectiveAccess; email_mailbox_queries.go: GetEmailMailboxCredentialReceipt, ListEmailMailboxCredentials. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Connection/idempotency locators не становятся authority. Неизвестный credential-kind отклоняется,0 оставляет пустой фильтр. SubjectRef не заменяет caller, момент evaluation принадлежит owner. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_files.go",
+      "fragmentSHA256": "2b7b57185e87ba27cb0768277f3f0ea3db1b8aae5117d1f9fd6836a16a73b92b",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: access.go: ExplainAccess, QueryEffectiveAccess; runtime_files.go: GetExecutionFileManifest, SearchExecutionFiles. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. SubjectRef не заменяет caller, момент evaluation принадлежит owner. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/config_overlay_history.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/email_mailbox_queries.go",
+      "fragmentSHA256": "415737ce18f6d75ef622bf4a225f99325bbaa09abc02eaa0197390b404e08a71",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: config_overlay_history.go: GetConfigOverlayRevision, ListConfigOverlayRevisions; email_mailbox_queries.go: GetEmailMailboxCredentialReceipt, ListEmailMailboxCredentials. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Connection/idempotency locators не становятся authority. castConfigOverlay(&item) сохраняет адресное соглашение. Неизвестный credential-kind отклоняется,0 оставляет пустой фильтр. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/configuration_writeback.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/email_receipts.go",
+      "fragmentSHA256": "57602772c3f6cf39de7058efdb39acb06b420b807ea312feeed9bec1749798d8",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: configuration_writeback.go: CancelManagedConfigurationGitWriteBack, GetManagedConfigurationGitWriteBack; email_receipts.go: GetEmailEffectReceipt, ReportEmailEffectReceipt. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. writeBackMutation имеет собственный response/error contract, не query callback. Binding validation и post-execute receipt presence guard сохранены отдельно. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/effective_capabilities.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/environment_impact.go",
+      "fragmentSHA256": "cd59b5553ebc8d54a980e37f85eca22c5b8e45145fe37f2222320d3aa68d5ac4",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: effective_capabilities.go: GetAgentEffectiveCapabilities; environment_impact.go: GetRuntimeEnvironmentImpact. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна.  Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/email_mailbox_queries.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
+      "fragmentSHA256": "0fcbe9b5459ce655ff6bee8499bf54d264d6170aa4fc5350c8fa1dec859718bd",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: email_mailbox_queries.go: GetEmailMailboxConfiguration, ListEmailMailboxConfigurations; managed_configuration.go: GetIntegrationConnectionDefinitionConfiguration, GetRuntimeEnvironmentRoleImageConfiguration. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна.  Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/email_mailbox_queries.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/revision_impact.go",
+      "fragmentSHA256": "6a0244b52689cdfe6a7b3439dde69f0589d08286cfa784e8112991bc071a3e00",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: email_mailbox_queries.go: GetEmailMailboxConfiguration, ListEmailMailboxConfigurations; revision_impact.go: GetRevisionImpactPlan, PrepareEnvironmentDraftImpact. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна.  Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/email_mailbox_queries.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secret_draft_impact.go",
+      "fragmentSHA256": "ede1de993d9c2d5fe3746e04a89ced450239f961510eb7bcffa2cfb40f7b3216",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: email_mailbox_queries.go: GetEmailMailboxConfiguration, ListEmailMailboxConfigurations; runtime_secret_draft_impact.go: GetRuntimeSecretDraftImpact, PrepareRuntimeSecretDraftImpact. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Отдельная mutation подготовки impact не подменяется чтением. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/email_mailbox_queries.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "fragmentSHA256": "272e6b500b0d24a299e27da9a76945def4059b9f0471eab5ab919179f7c4f5c9",
+      "count": 2,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: email_mailbox_queries.go: GetEmailMailboxCredentialReceipt, ListEmailMailboxCredentials; queries.go: GetArtifactImpact, GetRun, ListArtifacts, ListRuns. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Отдельная owner impact projection сохраняет blockers/counts/digests. Connection/idempotency locators не становятся authority. Неизвестный credential-kind отклоняется,0 оставляет пустой фильтр. Исключение ограничено указанными paths/raw fragment SHA-256/count2; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/email_mailbox_queries.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "fragmentSHA256": "04957c69d465f8aec7c075c4d6d43fcc282a76cd963fc7a441defc314ea161e5",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: email_mailbox_queries.go: GetEmailMailboxCredentialReceipt, ListEmailMailboxCredentials, PreviewEmailMailboxConfiguration; queries.go: GetArtifactRevision, GetAttachmentSet, ListArtifactRevisions. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Connection/idempotency locators не становятся authority. Неизвестный credential-kind отклоняется,0 оставляет пустой фильтр. Content validation остаётся после principal и до owner preview, specification presence сохраняется. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/email_receipts.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/system_assistant.go",
+      "fragmentSHA256": "59c0833ad5fa98b6c9ea7184c0edf600dd361e32d344d53081b89eb292e2879c",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: email_receipts.go: GetEmailEffectReceipt, ReportEmailEffectReceipt; system_assistant.go: CreateProjectAssistant, GetProjectAssistant. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Специализированная create command и post-result nil guard сохраняются. Binding validation и post-execute receipt presence guard сохранены отдельно. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/environment_impact.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/secret_impact.go",
+      "fragmentSHA256": "c0d0223aa9256cd10bd46bf2329dc9f343564bf49cd85784b2b2d59b02f07f93",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: environment_impact.go: GetRuntimeEnvironmentImpact; secret_impact.go: GetRuntimeSecretImpact. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна.  Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/integration_candidates.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/integration_candidates.go",
+      "fragmentSHA256": "d6ba56539397d24a1166868d6f1fa2acd2e577c91a92e233f5c6588c28133857",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: integration_candidates.go: ListIntegrationGrantConnectionCandidates; integration_candidates.go: ListIntegrationGrantProjectCandidates. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Purpose/context/pins и явно пустой Items сохраняются. Project candidates сохраняют context digest/pins и непустой указатель на пустой Items. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/integration_candidates.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/integration_candidates.go",
+      "fragmentSHA256": "9aaf7e950b83ac2d7585f44b280023f6fa4056e0169a051d26af7f4341a7d00c",
+      "count": 2,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: integration_candidates.go: ListIntegrationGrantConnectionCandidates, ListIntegrationGrantProjectCandidates; integration_candidates.go: ListIntegrationGrantCapabilityCandidates, ListIntegrationGrantProjectCandidates, ListIntegrationGrantRecipientCandidates. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Capability/current grant/reason/pins сохраняются, candidate read не выдаёт grant. Purpose/context/pins и явно пустой Items сохраняются. Project candidates сохраняют context digest/pins и непустой указатель на пустой Items. Recipient-kind и project/context/pins не унифицируются с project candidate. Исключение ограничено указанными paths/raw fragment SHA-256/count2; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/interaction.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime.go",
+      "fragmentSHA256": "40e9fb5da0bb227f556de3a7928e48057c056d70f283fd4be5bd07fff604774d",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: interaction.go: ClaimInteractionDeliveries, ListInteractionSources; runtime.go: ClaimIntegrationConnectionTests, FailScheduleOccurrence. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Это отдельная stateful claim operation с lease/gate/credential descriptors, не read helper. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "fragmentSHA256": "f1ed90c48b729a0e51e36cbcdce915b2707b2c70fd685561ba77d1d6cb6d4014",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: managed_configuration.go: GetManagedConfigurationImpact, ListManagedConfigurationHistory; queries.go: ListAgentInstructionVersions, ListWorkflows. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. &revisions[index] сохраняет адрес исходного элемента. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/managed_configuration.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "fragmentSHA256": "2ead5ef99cbafbb1263650370cec6a18c611bcb4c351a55718354e15adb68891",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: managed_configuration.go: GetIntegrationConnectionDefinitionConfiguration, GetSystemSTTConfiguration; queries.go: GetOverview, ListPlatformCapabilities. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна.  Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/project_purge_recovery.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secret_drafts.go",
+      "fragmentSHA256": "021061caae1c66704cb77f23776d76aff908a23cd18a2014d059fd3547caab47",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: project_purge_recovery.go: GetProjectPurgeRecovery, ResolveProjectPurgeRecovery, castProjectPurgeRecovery; runtime_secret_drafts.go: GetRuntimeSecretDraft, castDraftWork, prepareSecretDraft. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Только чтение owner recovery snapshot,без подтверждения/разрешения cleanup. Recovery resolution сохраняет snapshot digest/acknowledgement и guard отсутствующего owner result. Prepare grant/receipt path не объединяется с query. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/project_purge_recovery.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "fragmentSHA256": "d27865f1537ba03a4a3e8ac87677898adb4e4614bfc888d2e4f7c33dd42c1fa7",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: project_purge_recovery.go: GetProjectPurgeRecovery, ResolveProjectPurgeRecovery, castProjectPurgeRecovery; queries.go: GetOverview, GetPlatformEventCursor, ListPlatformCapabilities. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Только чтение owner recovery snapshot,без подтверждения/разрешения cleanup. Recovery resolution сохраняет snapshot digest/acknowledgement и guard отсутствующего owner result. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/project_purge_recovery.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/system_assistant.go",
+      "fragmentSHA256": "d27865f1537ba03a4a3e8ac87677898adb4e4614bfc888d2e4f7c33dd42c1fa7",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: project_purge_recovery.go: GetProjectPurgeRecovery, ResolveProjectPurgeRecovery, castProjectPurgeRecovery; system_assistant.go: CreateProjectAssistant, GetProjectAssistant, castProjectAssistant. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Специализированная create command и post-result nil guard сохраняются. Только чтение owner recovery snapshot,без подтверждения/разрешения cleanup. Recovery resolution сохраняет snapshot digest/acknowledgement и guard отсутствующего owner result. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/project_purge_recovery.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "fragmentSHA256": "466855694eabaff53d75f364ee1c5ad3ece7a4b658c56ba46f9a0fddca0a8e55",
+      "count": 2,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: project_purge_recovery.go: GetProjectPurgeRecovery, ResolveProjectPurgeRecovery; queries.go: GetArtifact, GetProject, ListArtifactRevisions, ListPlatformMemberships. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Только чтение owner recovery snapshot,без подтверждения/разрешения cleanup. Recovery resolution сохраняет snapshot digest/acknowledgement и guard отсутствующего owner result. Исключение ограничено указанными paths/raw fragment SHA-256/count2; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/project_purge_recovery.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
+      "fragmentSHA256": "466855694eabaff53d75f364ee1c5ad3ece7a4b658c56ba46f9a0fddca0a8e55",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: project_purge_recovery.go: GetProjectPurgeRecovery, ResolveProjectPurgeRecovery; runtime_configuration.go: GetAgentRuntimeConfiguration, ListAgentRuntimeConfigurationVersions. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Читается owner runtime view по agent locator. Только чтение owner recovery snapshot,без подтверждения/разрешения cleanup. Agent locator/page и configurations field остаются явными. Recovery resolution сохраняет snapshot digest/acknowledgement и guard отсутствующего owner result. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/project_purge_recovery.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
+      "fragmentSHA256": "f4483d7dad5fbab48543c707d665a03b7c6f6e09d875a3e9d5dd2d160a6ee8c8",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: project_purge_recovery.go: GetProjectPurgeRecovery, ResolveProjectPurgeRecovery; runtime_secrets.go: GetRuntimeSecret, PrepareCreateRuntimeSecret. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Только чтение owner recovery snapshot,без подтверждения/разрешения cleanup. Metadata projection не читает secret bytes. CREATE preparation/mutation/receipt не меняет authority metadata query. Recovery resolution сохраняет snapshot digest/acknowledgement и guard отсутствующего owner result. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/project_purge_recovery.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/system_assistant.go",
+      "fragmentSHA256": "b2d2f32c679d381a4abb113bdab88c192e7eeb86e0793001fc234778da02fc66",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: project_purge_recovery.go: GetProjectPurgeRecovery, ResolveProjectPurgeRecovery; system_assistant.go: CreateProjectAssistant, GetSystemAssistant. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Специализированная create command и post-result nil guard сохраняются. Только чтение owner recovery snapshot,без подтверждения/разрешения cleanup. Recovery resolution сохраняет snapshot digest/acknowledgement и guard отсутствующего owner result. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/vfs.go",
+      "fragmentSHA256": "9e9d5a687405bbe4270673f24631e40f1b895dbd13e46ff99d2172b2ce15ab1e",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: queries.go: ListRuntimeSelections, SearchPlatform; vfs.go: ListVFSNodes, SearchVFS. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Lifecycle/VFS-kind/path filters и total/page не скрываются factory. Search использует прежние owner filters, не generic list alias. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secret_drafts.go",
+      "fragmentSHA256": "f4c865a646ce3d4eeb9e7300da55ed4a527ecca0acf2b04c046530ea4f67cc82",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: queries.go: GetProject, ListProjects, ListTrashedProjects; runtime_secret_drafts.go: CompleteRuntimeSecretDraftOperation, ConsumeRuntimeSecretDraftOperation, ListRuntimeSecretDraftRecoveryWork. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Finish COMPLETE сохраняет claim generation/encrypted/materialization и optional secret result. Grant consumption/claim остаётся специализированной owner operation. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "fragmentSHA256": "13fe6b4dfc6aa292ac3589c474330afdc5d608a75546bba536e59df1198aec4c",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: queries.go: GetProject, ListPlatformMemberships; queries.go: GetArtifact, ListArtifactRevisions. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна.  Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_configuration.go",
+      "fragmentSHA256": "13fe6b4dfc6aa292ac3589c474330afdc5d608a75546bba536e59df1198aec4c",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: queries.go: GetProject, ListPlatformMemberships; runtime_configuration.go: GetAgentRuntimeConfiguration, ListAgentRuntimeConfigurationVersions. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Читается owner runtime view по agent locator. Agent locator/page и configurations field остаются явными. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/vfs.go",
+      "fragmentSHA256": "73e6c0419fb4afcf2303a20c00b9cc0eeadbaddd6379153dd3440c12ec6c2468",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: queries.go: GetArtifactRevision, ListArtifactRevisions; vfs.go: ListVFSNodes, SearchVFS. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Lifecycle/VFS-kind/path filters и total/page не скрываются factory. Search использует прежние owner filters, не generic list alias. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/queries.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/system_assistant.go",
+      "fragmentSHA256": "3dc8a750f3c87b19b08e3b1142f27780069586e3401e09bf76574ce4ee88716d",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: queries.go: GetAdministration, GetIntegrationConnection, ListAuditEvents; system_assistant.go: CreateProjectAssistant, GetSystemAssistant, MoveAssistantConversationToProject. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Специализированная create command и post-result nil guard сохраняются. Отдельный move command сохраняет post-result nil guard. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/revision_impact.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_image_impact.go",
+      "fragmentSHA256": "7794d5de2442851c2f398b7a13cdccdcd2cfad70c2350de156068ce0867cf552",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: revision_impact.go: PrepareInstructionsImpact, PreparePromptTemplateImpact; role_image_impact.go: GetRoleImageImpactPlan, PrepareRoleImageImpactPlan. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна.  Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/revision_impact.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_image_impact.go",
+      "fragmentSHA256": "97f46b22be9f86918415ef21e78918507a75294d9c3f7f30e4c6219af1d0ffd8",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: revision_impact.go: GetRevisionImpactPlan, PrepareEnvironmentDraftImpact; role_image_impact.go: GetRoleImageImpactPlan, PrepareRoleImageImpactPlan. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна.  Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/revision_impact.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/system_assistant_integration_grants.go",
+      "fragmentSHA256": "579ad04c9904d8f96a75f3749dd16b8a88199fb1cf5372466a49bfb8aae3e3b0",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: revision_impact.go: GetRevisionImpactPlan, PrepareEnvironmentDraftImpact; system_assistant_integration_grants.go: ChangeSystemAssistantIntegrationGrant, GetSystemAssistantIntegrationGrantCandidates. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Scope/assistant/connection/definition pins и Items=[]{} сохраняются;reason enum закрыт. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "fragmentSHA256": "204666d8eb120ebc4db051df0754bb46c6827b5673dc7d9b9f4120ce0a388d7b",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: role_images.go: ClaimImageBuild, ManageRoleImageRecipe; role_images.go: ClaimImageAdmission, FailImageBuild. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Admission claim сохраняет attempt/risk/evidence/policy descriptors, не platform query. RoleImageServer использует отдельный roleImagePrincipal/build lease/fence/authority generation. Failure сохраняет roleImageLeaseInput/attempt и closed diagnostics. RoleImage manage сохраняет отдельный principal/action/input и optional build/artifact presence. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "fragmentSHA256": "9387a1675aca07f0732cb7d582d45b8a04881a6236f4359b4bd10d395ce9bb01",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: role_images.go: ClaimImageAdmission, FailImageBuild; role_images.go: ClaimImagePromotion, ExpireImageAdmissionClaim. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Admission claim сохраняет attempt/risk/evidence/policy descriptors, не platform query. Promotion claim — отдельная RoleImage owner transition. Expiry сохраняет exact attempt/OCC/fence/generation/manifest/build/provenance/policy pins. Failure сохраняет roleImageLeaseInput/attempt и closed diagnostics. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/system_assistant.go",
+      "fragmentSHA256": "cd7d98f960d2540d340a98d0ad5222e58e2c62e33e4882c1abe420a929e8e02a",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: runtime.go: CompleteIntegrationConnectionTest, ResolveIntegrationInvocation; system_assistant.go: AddAssistantTurn, UpdateAssistantConversationTitle. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. QUEUE/context preparation и castAssistantTurnResult остаются отдельными. Invocation/grant/resourceScope owner operation не считается чистым query. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime_files.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_files.go",
+      "fragmentSHA256": "5d0505eac531af31776c1af42c062c36db783ee35ed105e434c4de8b32e5e67a",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: runtime_files.go: GetExecutionFileManifest, SearchExecutionFiles; runtime_files.go: GetExecutionFileManifest, GetExecutionFileMetadata. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна.  Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/vfs.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/vfs.go",
+      "fragmentSHA256": "6c3e1e307b9084421edddbbefeb13279e38389e469f7ca46fd3a1f91843439ef",
+      "count": 1,
+      "reason": "Остаточные typed transport windows после47 queryResponse migrations: vfs.go: ListVFSNodes, SearchVFS; vfs.go: SearchVFS, castVFSNode. Полные тела47 методов, новые peer bodies и предыдущие неизменённые peers прочитаны; actual method/owner call/filter/response matrix проверена. В converted reads principal/error envelope уже queryResponse, закрытые reason/caster primitives переиспользуются; остаются nominal generated DTO, конкретные owner locators/public fields и соседние объявления. Native commands/claims, RoleImage principal, recovery/managed mutation и fallible/mapped projection сохраняют свои lifecycle/error boundaries; фабрика по похожим полям не нужна. Lifecycle/VFS-kind/path filters и total/page не скрываются factory. Search использует прежние owner filters, не generic list alias. Исключение ограничено указанными paths/raw fragment SHA-256/count1; изменение count/hash закрыто требует нового разбора, целые файлы либо family не исключаются."
     }
   ]
 }

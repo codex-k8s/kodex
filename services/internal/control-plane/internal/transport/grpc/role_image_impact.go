@@ -6,6 +6,7 @@ import (
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -26,22 +27,21 @@ func (server *Server) PrepareRoleImageImpactPlan(ctx context.Context, request *c
 // GetRoleImageImpactPlan разрешает principal точного запроса, получает страницу плана из домена и
 // переносит привязки потребителя, результата и версии по порядку, не выполняя перепривязку окружений.
 func (server *Server) GetRoleImageImpactPlan(ctx context.Context, request *cp.GetRoleImageImpactPlanRequest) (*cp.GetRoleImageImpactPlanResponse, error) {
-	p, err := principal(ctx, cp.PlatformQueryService_GetRoleImageImpactPlan_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	result, err := server.service.GetRoleImageImpactPlan(ctx, p, request.GetPlanRef(), request.GetQuery(), page(request.GetPage()))
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &cp.GetRoleImageImpactPlanResponse{Plan: castRoleImageImpactPlan(&result.Plan), Total: result.Total, Page: &cp.PageInfo{NextPageToken: result.NextPageToken}}
-	for _, item := range result.Items {
-		response.Items = append(response.Items, &cp.RoleImageImpactItem{Ref: item.Ref, EnvironmentRef: item.EnvironmentRef, EnvironmentVersion: item.EnvironmentVersion,
-			SourceVersionRef: item.SourceVersionRef, SourceVersionDigest: item.SourceVersionDigest,
-			Consumer: castRuntimeEnvironmentConsumer(item.Consumer),
-			Outcome:  cp.RoleImageImpactOutcome(cp.RoleImageImpactOutcome_value["ROLE_IMAGE_IMPACT_OUTCOME_"+item.Outcome]), ResultEnvironmentVersionRef: item.ResultEnvironmentVersionRef, ResultBindingRef: item.ResultBindingRef, ResultBindingVersion: item.ResultBindingVersion})
-	}
-	return response, nil
+	return queryResponse(ctx, cp.PlatformQueryService_GetRoleImageImpactPlan_FullMethodName, func(p value.Principal) (*cp.GetRoleImageImpactPlanResponse, error) {
+		result, err := server.service.GetRoleImageImpactPlan(ctx, p, request.GetPlanRef(), request.GetQuery(), page(request.GetPage()))
+		if err != nil {
+			return nil, err
+		}
+		response := &cp.GetRoleImageImpactPlanResponse{Plan: castRoleImageImpactPlan(&result.Plan), Total: result.Total, Page: &cp.PageInfo{NextPageToken: result.NextPageToken}}
+		for _, item := range result.Items {
+			response.Items = append(response.Items, &cp.RoleImageImpactItem{Ref: item.Ref, EnvironmentRef: item.EnvironmentRef, EnvironmentVersion: item.EnvironmentVersion,
+				SourceVersionRef: item.SourceVersionRef, SourceVersionDigest: item.SourceVersionDigest,
+				Consumer: castRuntimeEnvironmentConsumer(item.Consumer),
+				Outcome:  cp.RoleImageImpactOutcome(cp.RoleImageImpactOutcome_value["ROLE_IMAGE_IMPACT_OUTCOME_"+item.Outcome]), ResultEnvironmentVersionRef: item.ResultEnvironmentVersionRef, ResultBindingRef: item.ResultBindingRef, ResultBindingVersion: item.ResultBindingVersion})
+		}
+		return response, nil
+
+	})
 }
 
 // castRoleImageImpactPlan preserves nil or projects plan identity/version, configuration/revision,

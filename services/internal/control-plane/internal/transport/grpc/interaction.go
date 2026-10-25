@@ -8,6 +8,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
 // ListInteractionSources reads authorized sources, requires a typed nonempty credential revision
@@ -15,31 +16,30 @@ import (
 // ListInteractionSources читает авторизованные источники, требует типизированную непустую ревизию
 // credential и преобразует метаданные определения, подключения и возможностей.
 func (server *Server) ListInteractionSources(ctx context.Context, _ *controlplanev1.ListInteractionSourcesRequest) (*controlplanev1.ListInteractionSourcesResponse, error) {
-	p, err := principal(ctx, controlplanev1.InteractionWorkService_ListInteractionSources_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	items, err := server.service.ListInteractionSources(ctx, p)
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListInteractionSourcesResponse{}
-	for _, item := range items {
-		credential, ok := item["credential"].(entity.IntegrationCredentialRevision)
-		if !ok || credential.Ref == "" {
-			return nil, transportError(errs.ErrUnavailable)
+	return queryResponse(ctx, controlplanev1.InteractionWorkService_ListInteractionSources_FullMethodName, func(p value.Principal) (*controlplanev1.ListInteractionSourcesResponse, error) {
+		items, err := server.service.ListInteractionSources(ctx, p)
+		if err != nil {
+			return nil, err
 		}
-		response.Sources = append(response.Sources, &controlplanev1.InteractionSource{
-			DefinitionKey: mapString(item, "definitionKey"), DefinitionVersion: mapString(item, "definitionVersion"), DefinitionDigest: mapString(item, "definitionDigest"), DefinitionPackage: interactionPackageBytes(item),
-			CredentialDescriptor: castIntegrationCredential(credential),
-			ConnectionRef:        mapString(item, "connectionRef"), CredentialMaterializationRef: mapString(item, "credentialRef"),
-			BaseUrl: mapString(item, "baseURL"), TeamName: mapString(item, "teamName"),
-			ChannelName: mapString(item, "channelName"), Locale: mapString(item, "locale"),
-			EnabledCapabilities: itemStrings(item, "capabilities"),
-			ConnectionVersion:   mapInt64(item, "connectionVersion"), CredentialRevisionRef: mapString(item, "credentialRevisionRef"), CredentialRevision: mapInt64(item, "credentialRevision"),
-		})
-	}
-	return response, nil
+		response := &controlplanev1.ListInteractionSourcesResponse{}
+		for _, item := range items {
+			credential, ok := item["credential"].(entity.IntegrationCredentialRevision)
+			if !ok || credential.Ref == "" {
+				return nil, errs.ErrUnavailable
+			}
+			response.Sources = append(response.Sources, &controlplanev1.InteractionSource{
+				DefinitionKey: mapString(item, "definitionKey"), DefinitionVersion: mapString(item, "definitionVersion"), DefinitionDigest: mapString(item, "definitionDigest"), DefinitionPackage: interactionPackageBytes(item),
+				CredentialDescriptor: castIntegrationCredential(credential),
+				ConnectionRef:        mapString(item, "connectionRef"), CredentialMaterializationRef: mapString(item, "credentialRef"),
+				BaseUrl: mapString(item, "baseURL"), TeamName: mapString(item, "teamName"),
+				ChannelName: mapString(item, "channelName"), Locale: mapString(item, "locale"),
+				EnabledCapabilities: itemStrings(item, "capabilities"),
+				ConnectionVersion:   mapInt64(item, "connectionVersion"), CredentialRevisionRef: mapString(item, "credentialRevisionRef"), CredentialRevision: mapInt64(item, "credentialRevision"),
+			})
+		}
+		return response, nil
+
+	})
 }
 
 // ClaimInteractionDeliveries reads workload delivery claims, requires typed credential metadata
