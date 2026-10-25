@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { Copy, Info, FileCode2, Plus, Search, ShieldCheck } from "@lucide/vue";
 import { ref, useId } from "vue";
-import IntegrationIntegerBounds from "./IntegrationIntegerBounds.vue";
-import { integrationFieldTypeKey } from "./field-type";
+import IntegrationFieldSchema from "./IntegrationFieldSchema.vue";
 import { useI18n } from "vue-i18n";
 import ConfigurationCopyDialog from "@/features/managed-configurations/ConfigurationCopyDialog.vue";
 import {
@@ -12,7 +11,6 @@ import {
 import type { ManagedConfiguration } from "@/shared/api/generated/openapi/types.gen";
 
 import type { IntegrationPackagePresentation } from "@/features/integrations/ui/model";
-import type { IntegrationConfigurationField } from "@/shared/api/generated/openapi/types.gen";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
@@ -57,9 +55,6 @@ function copied(configuration: ManagedConfiguration): void {
 
 function toggleDetails(key: string): void {
   expandedKey.value = expandedKey.value === key ? "" : key;
-}
-function fieldType(field: IntegrationConfigurationField): string {
-  return t(integrationFieldTypeKey(field.valueType));
 }
 function categoryLabel(category: string): string {
   const key = `integrationsRedesign.packageCategories.${category}`;
@@ -283,28 +278,10 @@ function categoryLabel(category: string): string {
                   </div>
                   <section class="configuration-schema">
                     <h4>Схема подключения</h4>
-                    <dl
+                    <IntegrationFieldSchema
                       v-if="item.definition.configurationFields.length"
-                      class="field-schema"
-                    >
-                      <div
-                        v-for="field in item.definition.configurationFields"
-                        :key="field.key"
-                      >
-                        <dt>
-                          <strong>{{ field.label }}</strong>
-                          <code>{{ field.key }}</code>
-                        </dt>
-                        <dd>
-                          <span class="type-token">{{ fieldType(field) }}</span>
-                          <span>{{
-                            field.required ? "обязательное" : "необязательное"
-                          }}</span>
-                          <span>{{ field.help }}</span>
-                          <IntegrationIntegerBounds :field="field" />
-                        </dd>
-                      </div>
-                    </dl>
+                      :fields="item.definition.configurationFields"
+                    />
                     <p v-else class="schema-empty">
                       Публичная конфигурация для подключения не требуется.
                     </p>
@@ -344,32 +321,10 @@ function categoryLabel(category: string): string {
                       </dl>
                       <section class="capability-inputs">
                         <h5>Входные поля</h5>
-                        <dl
+                        <IntegrationFieldSchema
                           v-if="capability.inputFields.length"
-                          class="field-schema"
-                        >
-                          <div
-                            v-for="field in capability.inputFields"
-                            :key="field.key"
-                          >
-                            <dt>
-                              <strong>{{ field.label }}</strong>
-                              <code>{{ field.key }}</code>
-                            </dt>
-                            <dd>
-                              <span class="type-token">{{
-                                fieldType(field)
-                              }}</span>
-                              <span>{{
-                                field.required
-                                  ? "обязательное"
-                                  : "необязательное"
-                              }}</span>
-                              <span>{{ field.help }}</span>
-                              <IntegrationIntegerBounds :field="field" />
-                            </dd>
-                          </div>
-                        </dl>
+                          :fields="capability.inputFields"
+                        />
                         <p v-else class="schema-empty">
                           Входные поля отсутствуют.
                         </p>
@@ -601,43 +556,10 @@ function categoryLabel(category: string): string {
 .capability-inputs h5 {
   font-size: 0.76rem;
 }
-.field-schema,
 .capability-policy {
   display: grid;
   gap: 6px;
   margin: 0;
-}
-.field-schema > div {
-  display: grid;
-  grid-template-columns: minmax(150px, 0.65fr) minmax(0, 1.35fr);
-  gap: 10px;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-}
-.field-schema dt,
-.field-schema dd {
-  display: grid;
-  min-width: 0;
-  gap: 3px;
-  margin: 0;
-}
-.field-schema code,
-.field-schema dd {
-  overflow-wrap: anywhere;
-  font-size: 0.72rem;
-}
-.field-schema dd {
-  color: var(--muted);
-}
-.type-token {
-  width: fit-content;
-  padding: 2px 5px;
-  border-radius: 5px;
-  color: var(--accent-strong);
-  background: var(--accent-soft);
-  font-family: var(--font-mono);
 }
 .manifest-facts {
   flex-wrap: wrap;
@@ -674,7 +596,7 @@ function categoryLabel(category: string): string {
   color: var(--muted);
   font-size: 0.8rem;
 }
-.capability-list code {
+.capability-list :deep(code) {
   overflow-wrap: anywhere;
   color: var(--text-secondary);
   font-size: 0.72rem;
@@ -733,7 +655,6 @@ function categoryLabel(category: string): string {
   .category-field {
     flex-basis: auto;
   }
-  .field-schema > div,
   .capability-policy {
     grid-template-columns: 1fr;
   }

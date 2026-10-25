@@ -4,11 +4,85 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.470.0
+version: 1.471.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая разметка схемы полей интеграции — 25.10.2026
+
+Две копии dt/dd-проекции configurationFields и capability.inputFields в
+IntegrationCatalogPanel переведены на IntegrationFieldSchema этой же feature.
+Типизированный readonly массив, порядок и field.key, label/help, required,
+fieldType и IntegrationIntegerBounds сохранены. Пустые списки и их разные
+сообщения остаются в родителе, как и загрузка, поиск, permissions, copy/connect
+и modal state. Компонент не выполняет запросы и не изменяет входные поля.
+
+CSS переносится вместе с разметкой: grid, typography, wrap, token и breakpoint
+700px прежние. Контекст цвета code внутри capability сохраняется через
+родительский scoped :deep(code), без нового wrapper DOM. Обратная подстановка
+двух фактических templates, исходной fieldType и CSS восстановила весь
+IntegrationCatalogPanel после канонического форматирования. Новый SFC template
+совпал с обеими прежними dl-ветками после единственной замены списка на props.
+Scoped CSS отдельно скомпилирован без ошибок, декларации/media прежние.
+
+36 сравнений серверного HTML для двух исходных inline templates и нового
+SFC прошли: ru/en, пять типов полей и required, пустой/многопольный список,
+края int64, односторонние/некорректные bounds, escaping label/key/help.
+Сравнивались элементы, текст и атрибуты; служебные Vue comments/scope IDs
+нормализованы. Исходные данные не менялись. Это локальный SSR, не браузер.
+
+PWA на Node24.21.0/Vue3.5.41: prettier0.67с,
+весь lint138.21с, typecheck/production build57.08с,
+все412 unit-файлов/4096 тестов30.41с — PASS LOCAL.
+Source hashes совпали с proof. Production source maps не содержат test/E2E
+helpers. Прежнее предупреждение размера chunks сохраняется. E2E/browser/live
+и deploy не запускались; прежний offline E2E listing не переобозначается новым.
+
+Повторный detector:6734 sources/222 прежних exclusions,1567 raw/1143 retained/
+424 unresolved. Исчезло одно HTML-окно благодаря выносу разметки; новых raw
+keys нет. Все1003 entries registry действительны:979 прежних неизменны плюс
+24 точных YAML-решения ниже. Go21574/21574, пропусков0. Generated output,
+contracts, dependencies, migration и прочие deployable не менялись.
+
+Context7 /websites/vuejs сверил readonly props, scoped child root и :deep.
+Версии не обновлялись. Остальные424 группы остаются в scope #1823.
+
+## Сериализованные определения интеграций — 25.10.2026
+
+Разобраны24 точных окна Confluence, Jira и Mattermost IntegrationPackage:
+конфигурация adapter/owner/route, scopes, registered operation keys, approvals,
+input/output schemas, bounds, cursor types и execution limits. Окна со схожими
+полями часто пересекают read/write/destructive операции. В частности,
+Confluence cursor строковый, Jira integer; comment update/delete различают
+body/expected_version, attachments — metadata/content, reactions — add/remove.
+Эти различия не заменяются общей capability или универсальным effect.
+
+Исполняемая валидация уже общая в integrationpackage. Parse сначала вызывает
+rejectUnsafeYAML: anchors, aliases, merge keys, дубли и лишние документы
+отклоняются. KnownFields затем отклоняет неизвестные поля. Поэтому YAML reuse
+через anchor/include нарушил бы поддерживаемый формат. Новые шаблоны,
+расширение parser и изменение package digest/версий ради сокращения деклараций
+не добавляются. Все3 определения и shipped generated output прежние.
+
+В registry добавлены24 exact pair/hash/count1 решений с названиями операций
+и конкретными различиями;979 предыдущих entries сохранены. Raw clone set
+не меняется:1568 raw/1143 retained/425 unresolved, registry1003. Inventory6733,
+222 generated exclusions, thresholds и нормализация прежние. Комментарии
+Go21574/21574, пропусков0. Остальные425 групп остаются в scope #1823.
+
+На исходном3194dd4 целевые TestLoadShippedDefinitions,
+TestParseRejectsUnknownDuplicateAliasAndTrailingDocument и
+TestPackageJSONMatchesYAMLAndRejectsAmbiguousDocuments прошли на Go1.26.6:
+1.63с,3 верхнеуровневых теста,0 failed/skipped. Проверены фактические
+Node/KnownFields API закреплённого go.yaml.in/yaml/v3@v3.0.4. Context7
+/yaml/go-yaml подтвердил Node Kind/Anchor/Alias/Content; запрос legacy3.0.5
+не нашёл документацию KnownFields, поэтому main options API не переносится
+в проект. Dependency versions и source parser остаются прежними.
+
+Меняются только registry и этот журнал. Runtime build/unit прежнего пакета
+относятся к неизменным sources; full E2E/browser/live/deploy не запускались.
 
 ## Разбор типизированных gRPC-адаптеров — 25.10.2026
 

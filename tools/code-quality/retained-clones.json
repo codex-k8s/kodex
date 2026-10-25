@@ -7832,6 +7832,198 @@
       "fragmentSHA256": "678604c105704b6bf6b1407da3c858a5fabf61f55474786f9f620c62d017282f",
       "count": 1,
       "reason": "Окно RestoreArtifact/PurgeArtifact и DeleteIntegrationConnection/ConfigureIntegrationConnectionCredential: restore/delete уже executeResponse, следующие методы используют специализированные service APIs. PurgeArtifact передаёт ImpactDigest и возвращает lifecycle state, ConfigureIntegrationCredential передаёт credential только защищённому владельцу и возвращает публичный connection. Principal и transportError общие helpers, но секретный и безвозвратный пути различны. Объединение service callbacks ради похожей формы нарушило бы ясность trust boundaries."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/confluence.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/jira.yaml",
+      "fragmentSHA256": "f6bff7ff611a44d2c5f0827b047dfce1482679200b903205bbaaabffc473b4d7",
+      "count": 1,
+      "reason": "Заголовки независимых Confluence и Jira packages: разные category, adapter, space_id/project_key, а у Jira дополнительно issue_type. Совпадают HTTPS origin/auth_scheme/username и TOKEN metadata, но это closed serialized configuration, не исполняемый общий клиент. Общий include ввёл бы новый package format и связь независимых revisions. Parse/rejectUnsafeYAML до typed decode запрещает anchors, aliases и merge keys; KnownFields запрещает внешний шаблон/include. Runtime validation уже общая в integrationpackage. Сохранён только данный pair/fragment/count1, без исключения файла или формата."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/confluence.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/jira.yaml",
+      "fragmentSHA256": "7e460348ee64fa5e98fe4a534ed359456ad638dbf574dd34fabeb6eabcf3f1dd",
+      "count": 1,
+      "reason": "Окно confluence.space.read/page.search и jira.project.read/issue.search пересекает границы capabilities. Space и project имеют разные operation/resourceScope и выбранные connectionFields; одинаковые bounded id/key/name outputs и READ_ONLY20s/3attempts не делают эти операции общей capability. Jira search требует bounded JQL, Confluence — title. Parse/rejectUnsafeYAML до typed decode запрещает anchors, aliases и merge keys; KnownFields запрещает внешний шаблон/include. Runtime validation уже общая в integrationpackage. Сохранён только данный pair/fragment/count1, без исключения файла или формата."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/confluence.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/jira.yaml",
+      "fragmentSHA256": "29652ab644ab24ecade74a856a7610684a5787bd56ebc68f439f9d84a2b928c9",
+      "count": 1,
+      "reason": "Confluence page.search и Jira issue.search имеют разные title512/query1024, pages/issues и следующие page.read/issue.read. Совпавшие limit1..50, cursor2048, count0..50, max output65536 и READ_ONLY30s/3attempts являются ограничениями двух зарегистрированных операций, а не общим runtime алгоритмом. Parse/rejectUnsafeYAML до typed decode запрещает anchors, aliases и merge keys; KnownFields запрещает внешний шаблон/include. Runtime validation уже общая в integrationpackage. Сохранён только данный pair/fragment/count1, без исключения файла или формата."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/confluence.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/confluence.yaml",
+      "fragmentSHA256": "c4afd99d01dc9846a95c55807703271d9063f11bb241307ff7845dd6f0e1d6d9",
+      "count": 1,
+      "reason": "Сопоставлены confluence.space.list/descendant.list и descendant.list/comment.list. Выход items65536/count0..100/string next_cursor1024 одинаков, но space.list не принимает input, descendant.list требует page_id, comment.list дополнительно parent_comment_id. Окно включает разные operation и начало самостоятельных inputs. Parse/rejectUnsafeYAML до typed decode запрещает anchors, aliases и merge keys; KnownFields запрещает внешний шаблон/include. Runtime validation уже общая в integrationpackage. Сохранён только данный pair/fragment/count1, без исключения файла или формата."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/confluence.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/confluence.yaml",
+      "fragmentSHA256": "83ca04fbfac99654aa262f05aaddd223c86e2857e9a558cb97e51b4cee41e934",
+      "count": 1,
+      "reason": "Окно space.list/descendant.list сопоставлено с comment.read/comment.create. У descendants READ/NONE и limit1..100, у создания комментария WRITE/HUMAN_EACH_EFFECT, parent_comment_id и body32768. Общая форма полей не позволяет наследовать approval или retry от чтения к effect. Parse/rejectUnsafeYAML до typed decode запрещает anchors, aliases и merge keys; KnownFields запрещает внешний шаблон/include. Runtime validation уже общая в integrationpackage. Сохранён только данный pair/fragment/count1, без исключения файла или формата."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/confluence.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/confluence.yaml",
+      "fragmentSHA256": "10e13fba41dc59b9a846ab6df9b0a899b3621578ccf05cc5264e47baeffc2008",
+      "count": 1,
+      "reason": "confluence.page.descendant.list и confluence.attachment.list намеренно отдельно декларируют page_id, bounded string cursor1024, limit1..100 и items/count/next_cursor. У них разные операции и виды ресурсов результата, хотя READ_ONLY30s/3attempts и shape страницы совпадают. Окно также захватывает начало comment.list/attachment.read. Parse/rejectUnsafeYAML до typed decode запрещает anchors, aliases и merge keys; KnownFields запрещает внешний шаблон/include. Runtime validation уже общая в integrationpackage. Сохранён только данный pair/fragment/count1, без исключения файла или формата."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/confluence.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/confluence.yaml",
+      "fragmentSHA256": "9cfb9a5821f723ada9580d2b7bec7fe81c358a50c0797b7c727246ea6b666cc7",
+      "count": 1,
+      "reason": "Соседние descendant.list и comment.list повторяют bounded pagination contract, но comment.list добавляет optional parent_comment_id. Обе операции закреплены отдельно за CONFLUENCE_SPACE и разными operation keys. Удалять различие inputs либо превращать capability в generic list нельзя; совпадение пересекает границу записей. Parse/rejectUnsafeYAML до typed decode запрещает anchors, aliases и merge keys; KnownFields запрещает внешний шаблон/include. Runtime validation уже общая в integrationpackage. Сохранён только данный pair/fragment/count1, без исключения файла или формата."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/confluence.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/confluence.yaml",
+      "fragmentSHA256": "27d37497a7d1fe62ffb90f018d41348a9119270c9bbaed8fa858c2a6ee7ade98",
+      "count": 1,
+      "reason": "Окно конца descendant.list и начала comment.list сопоставлено с концом comment.read и началом comment.create. Схожий page_id/parent_comment_id не объединяет READ/NONE и WRITE/HUMAN_EACH_EFFECT, а list сохраняет limit/cursor, create — обязательное тело32768 и EFFECT_KEY без повторов. Parse/rejectUnsafeYAML до typed decode запрещает anchors, aliases и merge keys; KnownFields запрещает внешний шаблон/include. Runtime validation уже общая в integrationpackage. Сохранён только данный pair/fragment/count1, без исключения файла или формата."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/confluence.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/confluence.yaml",
+      "fragmentSHA256": "f74230b3969a2006e23b7dd0080265422660d63dd6710e23e0cc670cfd4c8ef4",
+      "count": 1,
+      "reason": "Окно конца comment.list и начала comment.read сопоставлено с концом comment.create и началом comment.update. У read требуется page_id/comment_id, у update дополнительно expected_version и body с allowEmpty; error/effect semantics и approvals различны. Это независимые сериализованные ограничения, не общий handler. Parse/rejectUnsafeYAML до typed decode запрещает anchors, aliases и merge keys; KnownFields запрещает внешний шаблон/include. Runtime validation уже общая в integrationpackage. Сохранён только данный pair/fragment/count1, без исключения файла или формата."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/confluence.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/confluence.yaml",
+      "fragmentSHA256": "1c49977fff1b4fc2604772efd91e207d18e8463029881986849b66d6814621f2",
+      "count": 1,
+      "reason": "Сопоставлены confluence comment.create/update и update/delete. Общая comment output schema сохраняет parent_comment_id/body allowEmpty и version1..2147483647. Update требует expected_version/body, delete имеет DESTRUCTIVE и accepted boolean вместо comment projection. Окно пересекает разные effects и не задаёт общий lifecycle executor. Parse/rejectUnsafeYAML до typed decode запрещает anchors, aliases и merge keys; KnownFields запрещает внешний шаблон/include. Runtime validation уже общая в integrationpackage. Сохранён только данный pair/fragment/count1, без исключения файла или формата."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/confluence.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/jira.yaml",
+      "fragmentSHA256": "66749b24d1c7b83fb1e0a44e7045882b588b552e9ccf1ad7091e8c9eeecb1d8f",
+      "count": 1,
+      "reason": "Хвост confluence.page.comment.delete и начало attachment.list сравниваются с jira.issue.link.delete/attachment.list. Accepted boolean и EFFECT_KEY30s/1attempt похожи, но Confluence delete требует expected_version и space/page scope, Jira link.delete — issue_key/link_id и project scope. Cursor вложений Confluence строковый, Jira integer. Parse/rejectUnsafeYAML до typed decode запрещает anchors, aliases и merge keys; KnownFields запрещает внешний шаблон/include. Runtime validation уже общая в integrationpackage. Сохранён только данный pair/fragment/count1, без исключения файла или формата."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/confluence.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/confluence.yaml",
+      "fragmentSHA256": "c07934ed2d453cf04bb537532e60225d1b99ccf686e9d8742b893b8869edb908",
+      "count": 1,
+      "reason": "Окно confluence.attachment.list/read и read/delete. Read требует page_id/attachment_id и выдаёт title/media_type/size/version/content_base64, delete возвращает только accepted и требует Human Gate. Одинаковые owner scope поля не позволяют объединить read с destructive effect; ссылка/схема каждой capability самостоятельна. Parse/rejectUnsafeYAML до typed decode запрещает anchors, aliases и merge keys; KnownFields запрещает внешний шаблон/include. Runtime validation уже общая в integrationpackage. Сохранён только данный pair/fragment/count1, без исключения файла или формата."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/jira.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/jira.yaml",
+      "fragmentSHA256": "818c3ba2d0e1f9a36c19460a23746621840fc94608622b0300edb0fc97525111",
+      "count": 1,
+      "reason": "jira.issue.transition.list и jira.issue.link.list совпадают по READ/NONE, issue_key256, items65536/count100/integer next_cursor10000 и READ_ONLY30s/3attempts. Но это разные registered operation и наборы downstream результатов; следующие transition.apply и link.read имеют иные inputs/effect policy. Нормализация имён скрыла различие. Parse/rejectUnsafeYAML до typed decode запрещает anchors, aliases и merge keys; KnownFields запрещает внешний шаблон/include. Runtime validation уже общая в integrationpackage. Сохранён только данный pair/fragment/count1, без исключения файла или формата."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/jira.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/jira.yaml",
+      "fragmentSHA256": "d249ebca0acb99c07505c03062234b59a377d56292d16d7da39860bd9b417f52",
+      "count": 1,
+      "reason": "jira.issue.transition.list и jira.attachment.list имеют одинаковую bounded страницу с integer cursor, но разные operation keys и значения items. Первое продолжено transition.apply с effect, второе attachment.read с artifact data. Сериализованные ограничения должны оставаться закреплены за каждой capability и её digest. Parse/rejectUnsafeYAML до typed decode запрещает anchors, aliases и merge keys; KnownFields запрещает внешний шаблон/include. Runtime validation уже общая в integrationpackage. Сохранён только данный pair/fragment/count1, без исключения файла или формата."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/jira.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/jira.yaml",
+      "fragmentSHA256": "d749712164b66d5a9702a3ccfafc878440a34e1e1696e55ed501f10d7ede4b2c",
+      "count": 1,
+      "reason": "Окна jira comment.list/read и read/update пересекают записи. List имеет limit1..100/cursor0..10000, read требует issue_key/comment_id, update добавляет body32768 allowEmpty и HUMAN_EACH_EFFECT. Совпадение общей формы после READ_ONLY execution не является единой командой чтения/редактирования. Parse/rejectUnsafeYAML до typed decode запрещает anchors, aliases и merge keys; KnownFields запрещает внешний шаблон/include. Runtime validation уже общая в integrationpackage. Сохранён только данный pair/fragment/count1, без исключения файла или формата."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/jira.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/jira.yaml",
+      "fragmentSHA256": "c5c4a36b805d9ea2b586fda5194f04ea1669c40ac1c912b50d5708f460a22d45",
+      "count": 1,
+      "reason": "Окно jira comment.list/read сравнивается с update/delete. У read/update публичная comment projection id/body, но у delete DESTRUCTIVE, accepted boolean и effect-key receipt. READ_ONLY3attempts и EFFECT_KEY1attempt нельзя наследовать одним профилем; поля schema и operation declarations независимы. Parse/rejectUnsafeYAML до typed decode запрещает anchors, aliases и merge keys; KnownFields запрещает внешний шаблон/include. Runtime validation уже общая в integrationpackage. Сохранён только данный pair/fragment/count1, без исключения файла или формата."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/jira.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/jira.yaml",
+      "fragmentSHA256": "0c7ebe059d8f4188fea7d009408752e47a86f4401833152495c7ed1a950e665a",
+      "count": 1,
+      "reason": "Окно jira.issue.link.list/read и link.read/delete: link.read требует issue_key/link_id и возвращает id/type/inward_issue_key/outward_issue_key. Delete разрушителен и возвращает accepted; общие project scope/getter-like поля не являются общим исполняемым алгоритмом. Различные operation keys входят в immutable package. Parse/rejectUnsafeYAML до typed decode запрещает anchors, aliases и merge keys; KnownFields запрещает внешний шаблон/include. Runtime validation уже общая в integrationpackage. Сохранён только данный pair/fragment/count1, без исключения файла или формата."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/jira.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/jira.yaml",
+      "fragmentSHA256": "aa4d8df310077db12a9e1d02ec80f15d881e7ccd5388c70b917d75fc97213f0a",
+      "count": 1,
+      "reason": "Конец jira.issue.link.delete и начало attachment.list сравниваются с attachment.upload/delete. Совпадают accepted и EFFECT_KEY1attempt, но list — READ/NONE, delete — DESTRUCTIVE/HUMAN_EACH_EFFECT, upload — WRITE с file/media/content inputs. Связь issue/project scope не заменяет отдельные capability contracts. Parse/rejectUnsafeYAML до typed decode запрещает anchors, aliases и merge keys; KnownFields запрещает внешний шаблон/include. Runtime validation уже общая в integrationpackage. Сохранён только данный pair/fragment/count1, без исключения файла или формата."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/jira.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/jira.yaml",
+      "fragmentSHA256": "5b353b2ea411d58507ce60c7f4847c4dce00c3c842dd69d2b9f5eedc5283f665",
+      "count": 1,
+      "reason": "Окно jira.attachment.list/read сопоставлено с read/upload. READ attachment принимает issue_key/attachment_id; upload принимает file_name/media_type/content_base64 до32768 и отдельное approval/effect policy. Схожая bounded artifact projection не разрешает объединить source identity и загрузку. Parse/rejectUnsafeYAML до typed decode запрещает anchors, aliases и merge keys; KnownFields запрещает внешний шаблон/include. Runtime validation уже общая в integrationpackage. Сохранён только данный pair/fragment/count1, без исключения файла или формата."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/jira.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/jira.yaml",
+      "fragmentSHA256": "d44a362ba76ba2c358195992d242e997cd1d6227f48536ef0812bfa05a35dce5",
+      "count": 1,
+      "reason": "Окно jira.attachment.list/read сравнивается с upload/delete. Read возвращает file_name/size/media_type/optional content_base64 до65536, delete имеет accepted-only output и DESTRUCTIVE/Human Gate. Однотипные issue_key/attachment_id сохраняются в отдельных полных serialized operations, без общего destructive wrapper. Parse/rejectUnsafeYAML до typed decode запрещает anchors, aliases и merge keys; KnownFields запрещает внешний шаблон/include. Runtime validation уже общая в integrationpackage. Сохранён только данный pair/fragment/count1, без исключения файла или формата."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/mattermost.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/mattermost.yaml",
+      "fragmentSHA256": "4b7a2347af7fd489ab84279833bd65cc9c544c746d0bb1c64f6d77743f59274d",
+      "count": 1,
+      "reason": "mattermost.notifications и result_mirror имеют message16384/message_id120 и одинаковый effect policy, но разные operation keys и назначение: разрешённое уведомление против безопасного итога Run. Нормализованное окно захватывает также начало gate_decisions. Слияние capabilities изменило бы exact grant/operation eligibility. Parse/rejectUnsafeYAML до typed decode запрещает anchors, aliases и merge keys; KnownFields запрещает внешний шаблон/include. Runtime validation уже общая в integrationpackage. Сохранён только данный pair/fragment/count1, без исключения файла или формата."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/mattermost.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/mattermost.yaml",
+      "fragmentSHA256": "0b680103b2e24f61c2e208706d96306d200006f96094c2e6fc2e6931cef81446",
+      "count": 1,
+      "reason": "Окно mattermost.post.list/read и file.read/reaction.list. Post read выдаёт message/channel/body metadata, file read — bounded byte range с offset/limit/base64, reaction list — reactions32768/count1000. Common channel scope/post_id26 не даёт общей output schema или timeout: file read30s, остальные15/20s. Parse/rejectUnsafeYAML до typed decode запрещает anchors, aliases и merge keys; KnownFields запрещает внешний шаблон/include. Runtime validation уже общая в integrationpackage. Сохранён только данный pair/fragment/count1, без исключения файла или формата."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/mattermost.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/mattermost.yaml",
+      "fragmentSHA256": "3d613553664e2e2260163b38616f363433ed4a37a9a5c40f1fc4c1268da1663d",
+      "count": 1,
+      "reason": "mattermost.file.list и reaction.list являются разными READ/NONE operation keys одного проверенного post_id26. File list возвращает files32768/count0..50, reaction list — reactions32768/count0..1000. Общее shape не означает равенство limits и семантики, helper для serialized schema не поддерживается текущим loader. Parse/rejectUnsafeYAML до typed decode запрещает anchors, aliases и merge keys; KnownFields запрещает внешний шаблон/include. Runtime validation уже общая в integrationpackage. Сохранён только данный pair/fragment/count1, без исключения файла или формата."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/mattermost.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/mattermost.yaml",
+      "fragmentSHA256": "09f3b3cf5200b0ff544a32514e85de992d76becfca2958411721d46317e3cb5a",
+      "count": 1,
+      "reason": "mattermost.reaction.add/remove имеют post_id26/emoji_name64, status applied и EFFECT_KEY30s/1attempt после Human Gate. Это разные закрытые effects: добавить реакцию от бота либо удалить только собственную. Общая декларация не должна стирать operation key, иначе меняется grant/receipt binding конкретного эффекта. Parse/rejectUnsafeYAML до typed decode запрещает anchors, aliases и merge keys; KnownFields запрещает внешний шаблон/include. Runtime validation уже общая в integrationpackage. Сохранён только данный pair/fragment/count1, без исключения файла или формата."
     }
   ]
 }
