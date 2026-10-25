@@ -278,7 +278,7 @@ def backup_job(run, image, prefix):
 
 
 def repository_job(run, image, prefix, command, backup_id=None, restore_id=None, approval_id=None, target_sha=None):
-    names = {"verify": "verify", "list-verified": "list", "inspect-backup": "backupmeta", "inspect-restore-drill": "drillmeta"}
+    names = {"verify": "verify", "list-verified": "list", "inspect-backup": "backupmeta", "inspect-verification": "verifyread", "inspect-restore-drill": "drillmeta"}
     require(command in names, "READBACK_COMMAND_INVALID")
     require(command == "list-verified" or backup_id is not None, "BACKUP_ID_REQUIRED")
     require(command != "inspect-restore-drill" or all(v is not None for v in (restore_id, approval_id, target_sha)), "RESTORE_PINS_REQUIRED")
