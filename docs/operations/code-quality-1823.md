@@ -4,11 +4,51 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.482.0
+version: 1.483.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общий цикл передачи и хеширования HTTP body — 26.10.2026
+
+Artifact и audio forwarders используют приватный forwardHashedBody в том же
+HTTP package. Общий цикл учитывает прочитанные байты, проверяет размер до
+hash/send, передаёт независимые копии chunks и возвращает digest только после
+EOF на точном размере. Send-ошибка сохраняет приоритет над ошибкой reader;
+read-ошибка получает прежний индивидуальный sentinel. При отказе сохраняется
+observed count без digest. Новых contexts, deadlines, retries, logs или
+ограничения нулевых чтений не добавлено.
+
+Прежние guards и порядок buffer/limiter/hash initialization сохранены.
+Artifact допускает пустое тело и читает через maximumArtifactBytes+1;
+audio требует минимум1 байт и читает через declaredSize+1. Эти разные read
+budgets не объединялись. Общий maximum у audio равен declaredSize, поэтому
+его дополнительное сравнение логически тождественно прежнему. Callers по-прежнему
+владеют admission, cancellation, stream commit и HTTP error mapping.
+
+Новые32 публичных boundary cases сначала прошли на исходных forwarders
+(8.74с), затем в полном gateway unit-прогоне. Они проверяют nil/negative/max
+input, пустое тело, overrun/underrun, bytes вместе с EOF/read error, приоритет
+send error, нулевое чтение, SHA-256, разные размеры первого Read и сохранение
+chunks после следующего чтения. Два полных исходных production-файла
+восстановлены побайтово из общего loop; guards, initialization, error identities
+и остальные функции прежние. Шесть source/profile mutations отвергнуты
+точным AST-checker. Все четыре новых именованных Go объявления описаны EN→RU.
+
+Go1.26.6: весь gateway build6.53с, unit15.42с — PASS LOCAL;11 packages с
+тестами,3098 PASS events с подтестами,0 FAIL и0 пропущенных тестов. Три
+остальных package не содержат test files и прошли общую сборку. Go vet и
+gofmt четырёх файлов прошли. Hashes четырёх sources связаны с проверками.
+Context7: io.Reader/LimitReader; фактические io/hash contracts дополнительно
+проверены через локальную документацию Go1.26.6. Dependencies не обновлялись.
+
+Устранена одна raw группа, новых/stale нет; registry1055 entries не менялся.
+Итог:6764 sources,222 generated exclusions,1486 raw /1198 retained /
+288 unresolved (157 Go,106 TypeScript,25 Bash). Go coverage21578/21578.
+Пять quality stages — PASS LOCAL. Контракты, migrations, authority/lifecycle
+и production config не менялись. Browser/full E2E,live deploy и независимая
+QA — NOT RUN; локальные проверки не заменяют приёмку развёрнутой среды.
 
 ## Адресный разбор совпадений деклараций TypeScript — 26.10.2026
 

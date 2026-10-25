@@ -3,7 +3,6 @@ package httptransport
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -261,28 +260,6 @@ func forwardAudioPart(reader io.Reader, declaredSize int64, send func([]byte) er
 	digest := sha256.New()
 	buffer := make([]byte, maximumAudioChunkBytes)
 	limited := io.LimitReader(reader, declaredSize+1)
-	var received int64
-	for {
-		count, readErr := limited.Read(buffer)
-		if count > 0 {
-			received += int64(count)
-			if received > declaredSize {
-				return received, "", errAudioSizeMismatch
-			}
-			_, _ = digest.Write(buffer[:count])
-			if err := send(append([]byte(nil), buffer[:count]...)); err != nil {
-				return received, "", err
-			}
-		}
-		if readErr == io.EOF {
-			break
-		}
-		if readErr != nil {
-			return received, "", errAudioBodyRead
-		}
-	}
-	if received != declaredSize {
-		return received, "", errAudioSizeMismatch
-	}
-	return received, hex.EncodeToString(digest.Sum(nil)), nil
+	return forwardHashedBody(limited, buffer, digest, declaredSize, declaredSize,
+		errAudioSizeMismatch, errAudioBodyRead, send)
 }

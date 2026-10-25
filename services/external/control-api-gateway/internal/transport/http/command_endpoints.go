@@ -2,7 +2,6 @@ package httptransport
 
 import (
 	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"io"
 	"mime"
@@ -824,30 +823,8 @@ func forwardArtifactBody(reader io.Reader, declaredSize int64, send func([]byte)
 	buffer := make([]byte, 64<<10)
 	bounded := io.LimitReader(reader, maximumArtifactBytes+1)
 	digest := sha256.New()
-	var received int64
-	for {
-		count, readErr := bounded.Read(buffer)
-		if count > 0 {
-			received += int64(count)
-			if received > declaredSize || received > maximumArtifactBytes {
-				return received, "", errArtifactContentLengthMismatch
-			}
-			_, _ = digest.Write(buffer[:count])
-			if err := send(append([]byte(nil), buffer[:count]...)); err != nil {
-				return received, "", err
-			}
-		}
-		if readErr == io.EOF {
-			break
-		}
-		if readErr != nil {
-			return received, "", errArtifactBodyRead
-		}
-	}
-	if received != declaredSize {
-		return received, "", errArtifactContentLengthMismatch
-	}
-	return received, hex.EncodeToString(digest.Sum(nil)), nil
+	return forwardHashedBody(bounded, buffer, digest, declaredSize, maximumArtifactBytes,
+		errArtifactContentLengthMismatch, errArtifactBodyRead, send)
 }
 
 // DownloadArtifact maps the public preview/download purpose to the dedicated owner stream and delegates bounded HTTP output; selecting PREVIEW does not bypass owner eligibility or content policy.
