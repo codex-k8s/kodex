@@ -1024,7 +1024,9 @@ func (repository *Repository) changeAgent(ctx context.Context, tx pgx.Tx, scope 
 	}
 	setAgentAvatarReadback(&item)
 	if input.Kind == command.ArchiveAgent || input.Kind == command.SetAgentEnabled && !payload.Enabled {
-		if err := repository.cancelRepositoryBundleDependency(ctx, tx, scope, "AGENT", item.Ref); err != nil { return commandOutcome{}, err }
+		if err := repository.cancelRepositoryBundleDependency(ctx, tx, scope, "AGENT", item.Ref); err != nil {
+			return commandOutcome{}, err
+		}
 		if err := repository.suspendTargetSchedules(ctx, tx, scope, projectID, item.ProjectRef, "AGENT", item.Ref); err != nil {
 			return commandOutcome{}, err
 		}
