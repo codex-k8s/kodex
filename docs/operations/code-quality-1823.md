@@ -4,11 +4,58 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.476.0
+version: 1.477.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Одна исходная конфигурация admission parameters — 26.10.2026
+
+29 одинаковых строковых полей ConfigMap.data и ImageAdmissionPolicyParameters.
+spec теперь имеют один исходный источник: прежний ConfigMap policy data.
+Exact Kustomize replacement копирует весь map в spec именованного CR.
+CRD/schema,metadata,immutable flags,policy bindings/paramKind и значения прежние.
+Исходный CR со spec{} является input канонической сборки;raw CRD bytes
+сохранены. Render-local уже проецировал итоговый ConfigMap.data в CR.spec после
+fingerprint/materialization;этот порядок и установщик не менялись.
+
+Источники/потребители проверены:Go schema test читает неизменённый первый CRD,
+rendered claim/evidence test использует kubectl kustomize,Node forward-upgrade
+читает сохраняемый ConfigMap. Нового authority,policy digest,actor/grant,
+command/event или перехода lifecycle не добавлено. Отсутствующий или
+неоднозначный source закрыто останавливает replacement.
+
+Два фактических механизма,Kustomize5.8.2 и kubectl1.37.1/Kustomize5.8.1,
+собрали base/staging/production/web-only/web-with-mattermost побайтно как
+исходный964cf03:10 renders,2184 rendered objects,без нормализации.19 отдельных
+fixture renders доказали whole CR/CRD inverse,29 строковых полей,4 missing/
+ambiguous source failures,2 foreign CR без изменений,2 source propagation
+случая и3 unsafe mutations,различаемых equality guard. Hashes2 изменённых
+YAML+неизменённого canonical ConfigMap связаны с proof.
+
+Go1.26.6:2 существующих admission tests PASS LOCAL45.10с,0 skipped/failed;
+они проверяют CRD enum,tool registry,реальный offline staging render и
+claim/evidence policy path. Node24.21.0:forward-upgrade53 tests PASS LOCAL
+3.82с,0 skipped/failed. Public web-release32.16с и authority ABI
+render20.92с — PASS LOCAL. Проверки не применяли манифесты
+и не обращались к кластеру. Browser/full E2E/live QA остаются NOT RUN.
+
+Detector:6759 sources/222 прежних exclusions,1530 raw/1180 retained/350
+unresolved,registry1040. Исчезло1 mirror window,новых/stale окон0. Все1038
+прежних entries сохранены;2 новых exact pair/hash/count1 решения ограничены
+projected token/CA/OTEL/Sentry декларациями controller Deployment и PITR/
+recovery CronJobs с разными ServiceAccount и жизненными циклами. Это не
+исключение файлов/форматов/алгоритмов.4 негативных изменения новых registry
+entries проверены настоящим assessor. Go21574/21574 EN→RU,пропусков0.
+Остаток350:158 Go/150 TypeScript/5 YAML/37 Bash остаётся в scope.
+
+Context7 /kubernetes-sigs/kustomize:replacements/source/targets/fieldPaths и
+create;whole map copy и string types подтверждены обоими фактическими engines.
+Зависимости/Go/PWA/контракты/миграции не менялись. Первая preview-проверка
+остановилась до записей из-за ошибочного ожидаемого числа30 полей;сверено29,
+после исправления выполнены все final checks. PR остаётся Draft до окончания
+всего scope;merge/deploy/startup продолжения ещё предстоят.
 
 ## Общие точные правила локальной сети — 26.10.2026
 

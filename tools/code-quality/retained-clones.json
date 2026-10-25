@@ -8304,6 +8304,22 @@
       "fragmentSHA256": "a83275b0a0f519872c0a990cf5a9fe79d61f831af82b6f10d3f6c2f3cfaadfb5",
       "count": 1,
       "reason": "Окно TLS/htpasswd env registry admin/promotion задаёт одинаковые относительные filenames внутри разных Secret volume projections. Разные ServiceAccount/Secret/PVC и auth realm/ports/delete permissions остаются за пределами этого короткого EnvVar фрагмента. Общие Pod/registry/probes/resources/mounts/certificate guard уже вынесены; общий TLS credential source нарушил бы разделение ролей. Сохранено только данное exact внутрефайловое window/hash/count1, не env/file-wide исключение."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-restore/runtime.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-restore/runtime.yaml",
+      "fragmentSHA256": "c7bc76c7266a8dcee0002406ceae65b8c0788219bf0d50a4970711e08fefc700",
+      "count": 1,
+      "reason": "Окно projected token/CA/observability/Sentry volumes сравнивает Deployment restore-controller и CronJob PITR. Token600s назначает Kubernetes на текущую ServiceAccount, которая у controller/PITR различна; filesystem mode0400 и CA projections являются явными PodSpec contracts, не исполняемой ротацией. PITR имеет отдельный evidence signer и admission/readback scope, controller — DB/target registry/trust. Общий emitter для разных spec.template/spec.jobTemplate путей скрыл бы эту связь ради повторения деклараций. Только exact внутрефайловый fragment/hash/count1, не volumes целиком."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/internal-rpc-authority-restore/runtime.yaml",
+      "secondPath": "deploy/k8s/base/internal-rpc-authority-restore/runtime.yaml",
+      "fragmentSHA256": "ba082a3c6aeb7099f084b704308e4dcafc1b0fd6cafa86b74d20fa6e197f3622",
+      "count": 1,
+      "reason": "Окно четырёх технических projected/config/secret volumes сравнивает controller Deployment и recovery CronJob. Имплицитная ServiceAccount identity и root Pod lifecycle различаются; recovery получает самостоятельные DB/CA inputs и отдельный запуск, expiry/token generation принадлежит Kubernetes. Совпадают CA/OTEL/Sentry filenames/defaultModes, а не общий алгоритм claim/renew/rotation. Эти независимые security projections остаются явными рядом с соответствующим workload, без нового polymorphic renderer. Сохранён только exact window/hash/count1; ресурсы и key values не исключаются."
     }
   ]
 }
