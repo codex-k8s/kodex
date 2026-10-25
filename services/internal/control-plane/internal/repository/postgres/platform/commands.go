@@ -1017,6 +1017,7 @@ func (repository *Repository) changeAgent(ctx context.Context, tx pgx.Tx, scope 
 	}
 	setAgentAvatarReadback(&item)
 	if input.Kind == command.ArchiveAgent || input.Kind == command.SetAgentEnabled && !payload.Enabled {
+		if err := repository.cancelRepositoryBundleDependency(ctx, tx, scope, "AGENT", item.Ref); err != nil { return commandOutcome{}, err }
 		if err := repository.suspendTargetSchedules(ctx, tx, scope, projectID, item.ProjectRef, "AGENT", item.Ref); err != nil {
 			return commandOutcome{}, err
 		}
@@ -2743,6 +2744,9 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 		return commandOutcome{}, err
 	}
 	if integrationInvocationID != "" {
+		if err := repository.applyRepositoryBundleGateDecision(ctx, tx, scope, gateID, integrationInvocationID, rootRunID, projectID, payload.Decision); err != nil {
+			return commandOutcome{}, err
+		}
 		if integrationApprovalPolicy == "HUMAN_SCOPED" && payload.Decision == "APPROVE" {
 			if err := repository.approveIntegrationScope(ctx, tx, scope, gateID, integrationInvocationID, rootRunID, projectID); err != nil {
 				return commandOutcome{}, err

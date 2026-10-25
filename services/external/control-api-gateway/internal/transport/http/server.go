@@ -602,6 +602,18 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 	if descriptor.FullName() == "controlplane.v1.TokenUsage" && field.JSONName() == "completeness" {
 		return "UNKNOWN", true
 	}
+	if descriptor.FullName() == "controlplane.v1.GetRepositoryBundlePublicationResponse" {
+		if field.Kind() == protoreflect.BoolKind && field.JSONName() == "complete" {
+			return false, true
+		}
+		if field.Kind() == protoreflect.Int32Kind && (field.JSONName() == "offset" || field.JSONName() == "nextOffset") {
+			return float64(0), true
+		}
+	}
+	if (descriptor.FullName() == "controlplane.v1.RepositoryBundleFile" && field.JSONName() == "bytes") || (descriptor.FullName() == "controlplane.v1.RepositoryBundlePublication" && field.JSONName() == "totalBytes") {
+		return float64(0), true
+	}
+
 	if descriptor.FullName() == "controlplane.v1.ProviderFinancialOverview" && isProto64BitInteger(field.Kind()) {
 		return float64(0), true
 	}

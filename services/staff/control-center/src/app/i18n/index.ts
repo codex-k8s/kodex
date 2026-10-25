@@ -10,12 +10,14 @@ import { entityCardMessages } from "@/features/workflows/catalog/messages";
 import { automationPreviewMessages } from "@/features/automations/prompt-preview-messages";
 import { vulnerabilityMessages } from "@/features/role-images/vulnerability-messages";
 import { fileRevisionMessages } from "@/features/files/revision-messages";
+import { repositoryBundleMessages } from "@/features/workboard/repository-bundle-messages";
 
 import { currentLocale } from "@/shared/locale";
 import { serverMessagesFor } from "@/shared/ui/server-message-catalog";
 import { additionalPermissionMessages } from "@/shared/ui/permission-message-catalog";
 
 const ru = {
+  repositoryBundle: repositoryBundleMessages.ru,
   fileRevision: fileRevisionMessages.ru,
   imageVulnerabilities: vulnerabilityMessages.ru,
   ...sttActivationMessages.ru,
@@ -479,6 +481,7 @@ const ru = {
       ARTIFACT_NOT_ACTIVE: "Файл не активен",
       ARTIFACT_NOT_DELETED: "Файл не находится в корзине",
       ARTIFACT_HAS_BINDINGS: "У файла есть привязки",
+      ARTIFACT_HAS_RETAINED_REVISIONS: "Ревизии файла удерживаются действующими потребителями",
       ACTIVE_RUN_USES_ARTIFACT: "Файл используется активным запуском",
     },
     refresh: "Обновить",
@@ -4725,6 +4728,7 @@ const ru = {
 
 const en = {
   ...ru,
+  repositoryBundle: repositoryBundleMessages.en,
   fileRevision: fileRevisionMessages.en,
   imageVulnerabilities: vulnerabilityMessages.en,
   ...sttActivationMessages.en,
@@ -4910,6 +4914,7 @@ const en = {
       ARTIFACT_NOT_ACTIVE: "File is not active",
       ARTIFACT_NOT_DELETED: "File is not in the trash",
       ARTIFACT_HAS_BINDINGS: "File has bindings",
+      ARTIFACT_HAS_RETAINED_REVISIONS: "File revisions are retained by current consumers",
       ACTIVE_RUN_USES_ARTIFACT: "File is used by an active run",
     },
     refresh: "Refresh",

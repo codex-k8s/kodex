@@ -94,6 +94,7 @@ type Client struct {
 	RuntimeSecretDrafts     controlplanev1.RuntimeSecretDraftWorkServiceClient
 	ConfigurationSources    controlplanev1.ManagedConfigurationSourceWorkServiceClient
 	ConfigurationWriteBacks controlplanev1.ManagedConfigurationGitWriteBackWorkServiceClient
+	RepositoryBundles       controlplanev1.RepositoryBundlePublicationServiceClient
 	SessionArchive          controlplanev1.SessionArchiveWorkServiceClient
 	Interaction             controlplanev1.InteractionWorkServiceClient
 	RoleImages              controlplanev1.RoleImageServiceClient
@@ -206,6 +207,7 @@ func (client *Client) bindServices(protected *grpc.ClientConn) {
 	client.RuntimeSecretDrafts = controlplanev1.NewRuntimeSecretDraftWorkServiceClient(protected)
 	client.ConfigurationSources = controlplanev1.NewManagedConfigurationSourceWorkServiceClient(protected)
 	client.ConfigurationWriteBacks = controlplanev1.NewManagedConfigurationGitWriteBackWorkServiceClient(protected)
+	client.RepositoryBundles = controlplanev1.NewRepositoryBundlePublicationServiceClient(protected)
 	client.SessionArchive = controlplanev1.NewSessionArchiveWorkServiceClient(protected)
 	client.Interaction = controlplanev1.NewInteractionWorkServiceClient(protected)
 	client.RoleImages = controlplanev1.NewRoleImageServiceClient(protected)

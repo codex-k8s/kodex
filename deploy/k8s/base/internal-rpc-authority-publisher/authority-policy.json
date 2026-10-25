@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "policy_revision": 97,
+  "policy_revision": 98,
   "policy": {
     "authority_abi_version": 2,
     "trust_domain": "kodex.local",
@@ -215,6 +215,12 @@
           "platform.configuration-writebacks.work.complete",
           "platform.configuration-writebacks.work.fail",
           "platform.configuration-writebacks.work.renew",
+          "platform.repository-bundles.work.begin",
+          "platform.repository-bundles.work.claim",
+          "platform.repository-bundles.work.complete",
+          "platform.repository-bundles.work.content.read",
+          "platform.repository-bundles.work.fail",
+          "platform.repository-bundles.work.renew",
           "platform.runtime.integration-definition.get",
           "platform.runtime.integration-tests.claim",
           "platform.runtime.integration-tests.complete",
@@ -622,6 +628,7 @@
           "platform.query.vfs.search",
           "platform.query.workflows.get",
           "platform.query.workflows.list",
+          "platform.repository-bundles.get",
           "platform.role-images.environments.list",
           "platform.role-images.recipes.get",
           "platform.role-images.recipes.list",
@@ -792,6 +799,7 @@
           "DOMAIN_STATE"
         ],
         "allowed_operation_ids": [
+          "platform.repository-bundles.prepare",
           "platform.runtime.assistant.metadata.propose",
           "platform.runtime.assistant.plan.propose",
           "platform.runtime.assistant.resources.search",
@@ -13706,6 +13714,287 @@
         "authority_proof_producer_id": "control-plane.oidc",
         "authority_sources": [
           "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.repository-bundles.get",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RepositoryBundlePublicationService/GetRepositoryBundlePublication",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.repository-bundles.get",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.repository-bundles.prepare",
+        "caller_workload_id": "runtime-controller",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RepositoryBundlePublicationService/PrepareRepositoryBundlePublication",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.repository-bundles.prepare",
+        "authority_proof_producer_id": "control-plane.runtime-controller",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.repository-bundles.work.begin",
+        "caller_workload_id": "integration-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/integration-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/integration-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RepositoryBundlePublicationService/BeginRepositoryBundlePublication",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.repository-bundles.work.begin",
+        "authority_proof_producer_id": "control-plane.integration-gateway",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.repository-bundles.work.claim",
+        "caller_workload_id": "integration-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/integration-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/integration-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RepositoryBundlePublicationService/ClaimRepositoryBundlePublications",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.repository-bundles.work.claim",
+        "authority_proof_producer_id": "control-plane.integration-gateway",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.repository-bundles.work.complete",
+        "caller_workload_id": "integration-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/integration-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/integration-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RepositoryBundlePublicationService/CompleteRepositoryBundlePublication",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.repository-bundles.work.complete",
+        "authority_proof_producer_id": "control-plane.integration-gateway",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.repository-bundles.work.content.read",
+        "caller_workload_id": "integration-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/integration-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/integration-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RepositoryBundlePublicationService/ReadRepositoryBundlePublication",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.repository-bundles.work.content.read",
+        "authority_proof_producer_id": "control-plane.integration-gateway",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.repository-bundles.work.fail",
+        "caller_workload_id": "integration-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/integration-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/integration-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RepositoryBundlePublicationService/FailRepositoryBundlePublication",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.repository-bundles.work.fail",
+        "authority_proof_producer_id": "control-plane.integration-gateway",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.repository-bundles.work.renew",
+        "caller_workload_id": "integration-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/integration-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/integration-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RepositoryBundlePublicationService/RenewRepositoryBundlePublication",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.repository-bundles.work.renew",
+        "authority_proof_producer_id": "control-plane.integration-gateway",
+        "authority_sources": [
           "DOMAIN_STATE"
         ],
         "project_required": false,

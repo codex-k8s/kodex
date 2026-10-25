@@ -1,0 +1,181 @@
+syntax = "proto3";
+
+package controlplane.v1;
+
+option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
+
+import "controlplane/v1/control_plane.proto";
+import "google/protobuf/timestamp.proto";
+
+// Отдельный typed путь #1859; решение принимает штатный ResolveOwnerGate.
+// Runtime создаёт proposal, browser читает manifest, только IG получает work.
+service RepositoryBundlePublicationService {
+  rpc PrepareRepositoryBundlePublication(PrepareRepositoryBundlePublicationRequest) returns (RepositoryBundlePublicationResponse);
+  rpc GetRepositoryBundlePublication(GetRepositoryBundlePublicationRequest) returns (GetRepositoryBundlePublicationResponse);
+  rpc ClaimRepositoryBundlePublications(ClaimRepositoryBundlePublicationsRequest) returns (ClaimRepositoryBundlePublicationsResponse);
+  rpc RenewRepositoryBundlePublication(RepositoryBundleLeaseRequest) returns (RepositoryBundleLeaseResponse);
+  rpc BeginRepositoryBundlePublication(RepositoryBundleEffectRequest) returns (BeginRepositoryBundlePublicationResponse);
+  rpc CompleteRepositoryBundlePublication(RepositoryBundleEffectRequest) returns (RepositoryBundlePublicationResponse);
+  rpc FailRepositoryBundlePublication(FailRepositoryBundlePublicationRequest) returns (RepositoryBundlePublicationResponse);
+  rpc ReadRepositoryBundlePublication(RepositoryBundleLeaseRequest) returns (RepositoryBundleContent);
+}
+
+// Locator не является authority. CP сверяет весь immutable pin и доступ
+// инициатора через exact origin execution и CLEAN artifact history.
+message RepositoryBundleArtifactPin {
+  string ref = 1;
+  int64 revision = 2;
+  int64 version = 3;
+  string sha256 = 4;
+  int64 size_bytes = 5;
+}
+
+message PrepareRepositoryBundlePublicationRequest {
+  string lease_ref = 1;
+  string fence = 2;
+  int64 generation = 3;
+  string grant_ref = 4;
+  RepositoryBundleArtifactPin archive = 5;
+  RepositoryBundleArtifactPin manifest = 6;
+  string base_commit_sha = 7;
+  string idempotency_key = 8;
+}
+
+enum RepositoryBundlePublicationState {
+  REPOSITORY_BUNDLE_PUBLICATION_STATE_UNSPECIFIED = 0;
+  REPOSITORY_BUNDLE_PUBLICATION_STATE_WAITING_APPROVAL = 1;
+  REPOSITORY_BUNDLE_PUBLICATION_STATE_QUEUED = 2;
+  REPOSITORY_BUNDLE_PUBLICATION_STATE_CLAIMED = 3;
+  REPOSITORY_BUNDLE_PUBLICATION_STATE_EFFECT_STARTED = 4;
+  REPOSITORY_BUNDLE_PUBLICATION_STATE_UNKNOWN_OUTCOME = 5;
+  REPOSITORY_BUNDLE_PUBLICATION_STATE_SUCCEEDED = 6;
+  REPOSITORY_BUNDLE_PUBLICATION_STATE_REJECTED = 7;
+  REPOSITORY_BUNDLE_PUBLICATION_STATE_CANCELLED = 8;
+  REPOSITORY_BUNDLE_PUBLICATION_STATE_EXPIRED = 9;
+  REPOSITORY_BUNDLE_PUBLICATION_STATE_FAILED = 10;
+}
+
+message RepositoryBundlePublication {
+  string ref = 1;
+  int64 version = 2;
+  string project_ref = 3;
+  string origin_run_ref = 4;
+  string origin_runtime_revision_ref = 5;
+  string invocation_ref = 6;
+  string gate_ref = 7;
+  string connection_ref = 8;
+  int64 connection_version = 9;
+  string grant_ref = 10;
+  int64 grant_version = 11;
+  string repository_ref = 12;
+  string base_commit_sha = 13;
+  string proposal_branch = 14;
+  RepositoryBundleArtifactPin archive = 15;
+  RepositoryBundleArtifactPin manifest = 16;
+  string approval_digest = 17;
+  int32 file_count = 18;
+  int64 total_bytes = 19;
+  RepositoryBundlePublicationState state = 20;
+  string candidate_commit_sha = 21;
+  string candidate_tree_sha = 22;
+  google.protobuf.Timestamp created_at = 23;
+  google.protobuf.Timestamp expires_at = 24;
+  google.protobuf.Timestamp confirmed_at = 25;
+  string failure_code = 26;
+  // Git outcome независим от blocked callback presentation; нового WRITE нет.
+  string continuation_state = 27;
+  string continuation_code = 28;
+  string continuation_node_ref = 29;
+}
+
+message RepositoryBundlePublicationResponse {
+  RepositoryBundlePublication proposal = 1;
+}
+
+// Только точная proposal либо её Gate; offset не заменяет version/digest pin.
+message GetRepositoryBundlePublicationRequest {
+  string proposal_ref = 1;
+  string gate_ref = 2;
+  int64 expected_version = 3;
+  string expected_manifest_sha256 = 4;
+  int32 offset = 5;
+  int32 limit = 6;
+}
+
+message RepositoryBundleFile {
+  string path = 1;
+  string mode = 2;
+  int64 bytes = 3;
+  string sha256 = 4;
+}
+
+message GetRepositoryBundlePublicationResponse {
+  RepositoryBundlePublication proposal = 1;
+  repeated RepositoryBundleFile files = 2;
+  int32 offset = 3;
+  int32 next_offset = 4;
+  bool complete = 5;
+}
+
+message RepositoryBundleLease {
+  string proposal_ref = 1;
+  int64 attempt = 2;
+  int64 generation = 3;
+  string claimant = 4;
+  string fence = 5;
+  google.protobuf.Timestamp expires_at = 6;
+}
+
+message RepositoryBundleLeaseRequest {
+  RepositoryBundleLease lease = 1;
+}
+
+message RepositoryBundleLeaseResponse {
+  RepositoryBundleLease lease = 1;
+}
+
+message RepositoryBundlePublicationWork {
+  RepositoryBundleLease lease = 1;
+  RepositoryBundlePublication proposal = 2;
+  IntegrationInvocationClaim invocation = 3;
+  IntegrationInvocationWorkMode mode = 4;
+  bytes manifest = 5;
+  google.protobuf.Timestamp commit_time = 6;
+  google.protobuf.Timestamp deadline = 7;
+  google.protobuf.Timestamp effect_started_at = 8;
+}
+
+message ClaimRepositoryBundlePublicationsRequest {
+  string claimant = 1;
+  int32 limit = 2;
+}
+
+message ClaimRepositoryBundlePublicationsResponse {
+  repeated RepositoryBundlePublicationWork work = 1;
+}
+
+// Candidate фиксируется Begin до push. Последующий complete — exact readback,
+// а не разрешение на второй effect. Source branch не входит в refspec.
+message RepositoryBundleEffectRequest {
+  RepositoryBundleLease lease = 1;
+  string candidate_commit_sha = 2;
+  string candidate_tree_sha = 3;
+  string base_commit_sha = 4;
+  string manifest_sha256 = 5;
+  string archive_sha256 = 6;
+}
+
+message BeginRepositoryBundlePublicationResponse {
+  RepositoryBundlePublication proposal = 1;
+  bool already_started = 2;
+}
+
+message FailRepositoryBundlePublicationRequest {
+  RepositoryBundleLease lease = 1;
+  string failure_code = 2;
+}
+
+message RepositoryBundleContent {
+  RepositoryBundleArtifactPin metadata = 1;
+  bytes archive = 2;
+}

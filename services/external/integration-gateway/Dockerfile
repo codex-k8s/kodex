@@ -13,6 +13,7 @@ COPY libs/go/grpcserver/ libs/go/grpcserver/
 COPY libs/go/httpserver/ libs/go/httpserver/
 COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
 COPY libs/go/integrationpackage/ libs/go/integrationpackage/
+COPY libs/go/repositorybundle/ libs/go/repositorybundle/
 COPY libs/go/observability/ libs/go/observability/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/
 COPY libs/go/securefile/ libs/go/securefile/

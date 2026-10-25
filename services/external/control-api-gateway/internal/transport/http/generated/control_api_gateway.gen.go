@@ -5224,6 +5224,135 @@ func (e ProviderUsageState) Valid() bool {
 	}
 }
 
+// Defines values for RepositoryBundleFileMode.
+const (
+	N100644 RepositoryBundleFileMode = "100644"
+	N100755 RepositoryBundleFileMode = "100755"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryBundleFileMode enum.
+func (e RepositoryBundleFileMode) Valid() bool {
+	switch e {
+	case N100644:
+		return true
+	case N100755:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RepositoryBundlePublicationContinuationCode.
+const (
+	CALLBACKINPUTTOOLARGE        RepositoryBundlePublicationContinuationCode = "CALLBACK_INPUT_TOO_LARGE"
+	CONTINUATIONAUTHORITYCHANGED RepositoryBundlePublicationContinuationCode = "CONTINUATION_AUTHORITY_CHANGED"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryBundlePublicationContinuationCode enum.
+func (e RepositoryBundlePublicationContinuationCode) Valid() bool {
+	switch e {
+	case CALLBACKINPUTTOOLARGE:
+		return true
+	case CONTINUATIONAUTHORITYCHANGED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RepositoryBundlePublicationContinuationState.
+const (
+	RepositoryBundlePublicationContinuationStateBLOCKED   RepositoryBundlePublicationContinuationState = "BLOCKED"
+	RepositoryBundlePublicationContinuationStateCANCELLED RepositoryBundlePublicationContinuationState = "CANCELLED"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryBundlePublicationContinuationState enum.
+func (e RepositoryBundlePublicationContinuationState) Valid() bool {
+	switch e {
+	case RepositoryBundlePublicationContinuationStateBLOCKED:
+		return true
+	case RepositoryBundlePublicationContinuationStateCANCELLED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RepositoryBundlePublicationFailureCode.
+const (
+	AUTHORITYCHANGED   RepositoryBundlePublicationFailureCode = "AUTHORITY_CHANGED"
+	BASEINVALID        RepositoryBundlePublicationFailureCode = "BASE_INVALID"
+	BRANCHCONFLICT     RepositoryBundlePublicationFailureCode = "BRANCH_CONFLICT"
+	CONTENTINVALID     RepositoryBundlePublicationFailureCode = "CONTENT_INVALID"
+	DEADLINEEXCEEDED   RepositoryBundlePublicationFailureCode = "DEADLINE_EXCEEDED"
+	OUTCOMEUNCONFIRMED RepositoryBundlePublicationFailureCode = "OUTCOME_UNCONFIRMED"
+	UNAVAILABLE        RepositoryBundlePublicationFailureCode = "UNAVAILABLE"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryBundlePublicationFailureCode enum.
+func (e RepositoryBundlePublicationFailureCode) Valid() bool {
+	switch e {
+	case AUTHORITYCHANGED:
+		return true
+	case BASEINVALID:
+		return true
+	case BRANCHCONFLICT:
+		return true
+	case CONTENTINVALID:
+		return true
+	case DEADLINEEXCEEDED:
+		return true
+	case OUTCOMEUNCONFIRMED:
+		return true
+	case UNAVAILABLE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RepositoryBundlePublicationState.
+const (
+	RepositoryBundlePublicationStateCANCELLED       RepositoryBundlePublicationState = "CANCELLED"
+	RepositoryBundlePublicationStateCLAIMED         RepositoryBundlePublicationState = "CLAIMED"
+	RepositoryBundlePublicationStateEFFECTSTARTED   RepositoryBundlePublicationState = "EFFECT_STARTED"
+	RepositoryBundlePublicationStateEXPIRED         RepositoryBundlePublicationState = "EXPIRED"
+	RepositoryBundlePublicationStateFAILED          RepositoryBundlePublicationState = "FAILED"
+	RepositoryBundlePublicationStateQUEUED          RepositoryBundlePublicationState = "QUEUED"
+	RepositoryBundlePublicationStateREJECTED        RepositoryBundlePublicationState = "REJECTED"
+	RepositoryBundlePublicationStateSUCCEEDED       RepositoryBundlePublicationState = "SUCCEEDED"
+	RepositoryBundlePublicationStateUNKNOWNOUTCOME  RepositoryBundlePublicationState = "UNKNOWN_OUTCOME"
+	RepositoryBundlePublicationStateWAITINGAPPROVAL RepositoryBundlePublicationState = "WAITING_APPROVAL"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryBundlePublicationState enum.
+func (e RepositoryBundlePublicationState) Valid() bool {
+	switch e {
+	case RepositoryBundlePublicationStateCANCELLED:
+		return true
+	case RepositoryBundlePublicationStateCLAIMED:
+		return true
+	case RepositoryBundlePublicationStateEFFECTSTARTED:
+		return true
+	case RepositoryBundlePublicationStateEXPIRED:
+		return true
+	case RepositoryBundlePublicationStateFAILED:
+		return true
+	case RepositoryBundlePublicationStateQUEUED:
+		return true
+	case RepositoryBundlePublicationStateREJECTED:
+		return true
+	case RepositoryBundlePublicationStateSUCCEEDED:
+		return true
+	case RepositoryBundlePublicationStateUNKNOWNOUTCOME:
+		return true
+	case RepositoryBundlePublicationStateWAITINGAPPROVAL:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RevisionImpactItemConsumerKind.
 const (
 	RevisionImpactItemConsumerKindAGENT             RevisionImpactItemConsumerKind = "AGENT"
@@ -8394,16 +8523,17 @@ func (e VFSNodeScanState) Valid() bool {
 
 // Defines values for VFSNodeSelectionReason.
 const (
-	VFSNodeSelectionReasonACTIVERUNUSESARTIFACT VFSNodeSelectionReason = "ACTIVE_RUN_USES_ARTIFACT"
-	VFSNodeSelectionReasonARTIFACTHASBINDINGS   VFSNodeSelectionReason = "ARTIFACT_HAS_BINDINGS"
-	VFSNodeSelectionReasonARTIFACTNOTACTIVE     VFSNodeSelectionReason = "ARTIFACT_NOT_ACTIVE"
-	VFSNodeSelectionReasonARTIFACTNOTDELETED    VFSNodeSelectionReason = "ARTIFACT_NOT_DELETED"
-	VFSNodeSelectionReasonARTIFACTUSEDBYSKILL   VFSNodeSelectionReason = "ARTIFACT_USED_BY_SKILL"
-	VFSNodeSelectionReasonAVAILABLE             VFSNodeSelectionReason = "AVAILABLE"
-	VFSNodeSelectionReasonDIRECTORY             VFSNodeSelectionReason = "DIRECTORY"
-	VFSNodeSelectionReasonIMMUTABLECONTEXT      VFSNodeSelectionReason = "IMMUTABLE_CONTEXT"
-	VFSNodeSelectionReasonLIFECYCLEBLOCKED      VFSNodeSelectionReason = "LIFECYCLE_BLOCKED"
-	VFSNodeSelectionReasonPERMISSIONREQUIRED    VFSNodeSelectionReason = "PERMISSION_REQUIRED"
+	VFSNodeSelectionReasonACTIVERUNUSESARTIFACT        VFSNodeSelectionReason = "ACTIVE_RUN_USES_ARTIFACT"
+	VFSNodeSelectionReasonARTIFACTHASBINDINGS          VFSNodeSelectionReason = "ARTIFACT_HAS_BINDINGS"
+	VFSNodeSelectionReasonARTIFACTHASRETAINEDREVISIONS VFSNodeSelectionReason = "ARTIFACT_HAS_RETAINED_REVISIONS"
+	VFSNodeSelectionReasonARTIFACTNOTACTIVE            VFSNodeSelectionReason = "ARTIFACT_NOT_ACTIVE"
+	VFSNodeSelectionReasonARTIFACTNOTDELETED           VFSNodeSelectionReason = "ARTIFACT_NOT_DELETED"
+	VFSNodeSelectionReasonARTIFACTUSEDBYSKILL          VFSNodeSelectionReason = "ARTIFACT_USED_BY_SKILL"
+	VFSNodeSelectionReasonAVAILABLE                    VFSNodeSelectionReason = "AVAILABLE"
+	VFSNodeSelectionReasonDIRECTORY                    VFSNodeSelectionReason = "DIRECTORY"
+	VFSNodeSelectionReasonIMMUTABLECONTEXT             VFSNodeSelectionReason = "IMMUTABLE_CONTEXT"
+	VFSNodeSelectionReasonLIFECYCLEBLOCKED             VFSNodeSelectionReason = "LIFECYCLE_BLOCKED"
+	VFSNodeSelectionReasonPERMISSIONREQUIRED           VFSNodeSelectionReason = "PERMISSION_REQUIRED"
 )
 
 // Valid indicates whether the value is a known member of the VFSNodeSelectionReason enum.
@@ -8412,6 +8542,8 @@ func (e VFSNodeSelectionReason) Valid() bool {
 	case VFSNodeSelectionReasonACTIVERUNUSESARTIFACT:
 		return true
 	case VFSNodeSelectionReasonARTIFACTHASBINDINGS:
+		return true
+	case VFSNodeSelectionReasonARTIFACTHASRETAINEDREVISIONS:
 		return true
 	case VFSNodeSelectionReasonARTIFACTNOTACTIVE:
 		return true
@@ -13258,6 +13390,80 @@ type PublicRuntimeRevisionIdentity struct {
 	Version        int64      `json:"version"`
 }
 
+// RepositoryBundleArtifactPin defines model for RepositoryBundleArtifactPin.
+type RepositoryBundleArtifactPin struct {
+	Ref       OpaqueRef `json:"ref"`
+	Revision  int64     `json:"revision"`
+	Sha256    string    `json:"sha256"`
+	SizeBytes int64     `json:"sizeBytes"`
+	Version   int64     `json:"version"`
+}
+
+// RepositoryBundleFile defines model for RepositoryBundleFile.
+type RepositoryBundleFile struct {
+	Bytes  int64                    `json:"bytes"`
+	Mode   RepositoryBundleFileMode `json:"mode"`
+	Path   string                   `json:"path"`
+	Sha256 string                   `json:"sha256"`
+}
+
+// RepositoryBundleFileMode defines model for RepositoryBundleFile.Mode.
+type RepositoryBundleFileMode string
+
+// RepositoryBundleManifestPage defines model for RepositoryBundleManifestPage.
+type RepositoryBundleManifestPage struct {
+	Complete   bool                        `json:"complete"`
+	Files      []RepositoryBundleFile      `json:"files"`
+	NextOffset int                         `json:"nextOffset"`
+	Offset     int                         `json:"offset"`
+	Proposal   RepositoryBundlePublication `json:"proposal"`
+}
+
+// RepositoryBundlePublication defines model for RepositoryBundlePublication.
+type RepositoryBundlePublication struct {
+	ApprovalDigest           string                                        `json:"approvalDigest"`
+	Archive                  RepositoryBundleArtifactPin                   `json:"archive"`
+	BaseCommitSha            string                                        `json:"baseCommitSha"`
+	CandidateCommitSha       *string                                       `json:"candidateCommitSha,omitempty"`
+	CandidateTreeSha         *string                                       `json:"candidateTreeSha,omitempty"`
+	ConfirmedAt              *time.Time                                    `json:"confirmedAt,omitempty"`
+	ConnectionRef            OpaqueRef                                     `json:"connectionRef"`
+	ConnectionVersion        int64                                         `json:"connectionVersion"`
+	ContinuationCode         *RepositoryBundlePublicationContinuationCode  `json:"continuationCode,omitempty"`
+	ContinuationNodeRef      *OpaqueRef                                    `json:"continuationNodeRef,omitempty"`
+	ContinuationState        *RepositoryBundlePublicationContinuationState `json:"continuationState,omitempty"`
+	CreatedAt                time.Time                                     `json:"createdAt"`
+	ExpiresAt                time.Time                                     `json:"expiresAt"`
+	FailureCode              *RepositoryBundlePublicationFailureCode       `json:"failureCode,omitempty"`
+	FileCount                int                                           `json:"fileCount"`
+	GateRef                  OpaqueRef                                     `json:"gateRef"`
+	GrantRef                 OpaqueRef                                     `json:"grantRef"`
+	GrantVersion             int64                                         `json:"grantVersion"`
+	InvocationRef            OpaqueRef                                     `json:"invocationRef"`
+	Manifest                 RepositoryBundleArtifactPin                   `json:"manifest"`
+	OriginRunRef             OpaqueRef                                     `json:"originRunRef"`
+	OriginRuntimeRevisionRef OpaqueRef                                     `json:"originRuntimeRevisionRef"`
+	ProjectRef               OpaqueRef                                     `json:"projectRef"`
+	ProposalBranch           string                                        `json:"proposalBranch"`
+	Ref                      OpaqueRef                                     `json:"ref"`
+	RepositoryRef            string                                        `json:"repositoryRef"`
+	State                    RepositoryBundlePublicationState              `json:"state"`
+	TotalBytes               int64                                         `json:"totalBytes"`
+	Version                  int64                                         `json:"version"`
+}
+
+// RepositoryBundlePublicationContinuationCode defines model for RepositoryBundlePublication.ContinuationCode.
+type RepositoryBundlePublicationContinuationCode string
+
+// RepositoryBundlePublicationContinuationState defines model for RepositoryBundlePublication.ContinuationState.
+type RepositoryBundlePublicationContinuationState string
+
+// RepositoryBundlePublicationFailureCode defines model for RepositoryBundlePublication.FailureCode.
+type RepositoryBundlePublicationFailureCode string
+
+// RepositoryBundlePublicationState defines model for RepositoryBundlePublication.State.
+type RepositoryBundlePublicationState string
+
 // RevisionImpactItem defines model for RevisionImpactItem.
 type RevisionImpactItem struct {
 	BindingRef      OpaqueRef                      `json:"bindingRef"`
@@ -16935,6 +17141,14 @@ type ListOwnerGatesParamsState string
 // ListOwnerGatesParamsStates defines parameters for ListOwnerGates.
 type ListOwnerGatesParamsStates string
 
+// GetOwnerGateRepositoryBundleParams defines parameters for GetOwnerGateRepositoryBundle.
+type GetOwnerGateRepositoryBundleParams struct {
+	Offset                 *int    `form:"offset,omitempty" json:"offset,omitempty"`
+	Limit                  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	ExpectedVersion        *int64  `form:"expectedVersion,omitempty" json:"expectedVersion,omitempty"`
+	ExpectedManifestSha256 *string `form:"expectedManifestSha256,omitempty" json:"expectedManifestSha256,omitempty"`
+}
+
 // ResolveOwnerGateParams defines parameters for ResolveOwnerGate.
 type ResolveOwnerGateParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
@@ -20101,6 +20315,9 @@ type ServerInterface interface {
 
 	// (GET /api/v1/owner-gates/{gateRef})
 	GetOwnerGate(w http.ResponseWriter, r *http.Request, gateRef GateRef)
+
+	// (GET /api/v1/owner-gates/{gateRef}/repository-bundle)
+	GetOwnerGateRepositoryBundle(w http.ResponseWriter, r *http.Request, gateRef GateRef, params GetOwnerGateRepositoryBundleParams)
 
 	// (POST /api/v1/owner-gates/{gateRef}/resolution)
 	ResolveOwnerGate(w http.ResponseWriter, r *http.Request, gateRef GateRef, params ResolveOwnerGateParams)
@@ -34462,6 +34679,93 @@ func (siw *ServerInterfaceWrapper) GetOwnerGate(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetOwnerGate(w, r, gateRef)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOwnerGateRepositoryBundle operation middleware
+func (siw *ServerInterfaceWrapper) GetOwnerGateRepositoryBundle(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "gateRef" -------------
+	var gateRef GateRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "gateRef", r.PathValue("gateRef"), &gateRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "gateRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetOwnerGateRepositoryBundleParams
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "expectedVersion" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "expectedVersion", r.URL.Query(), &params.ExpectedVersion, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "expectedVersion"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "expectedVersion", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "expectedManifestSha256" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "expectedManifestSha256", r.URL.Query(), &params.ExpectedManifestSha256, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "expectedManifestSha256"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "expectedManifestSha256", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOwnerGateRepositoryBundle(w, r, gateRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -50510,6 +50814,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/overview", wrapper.GetOverview)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/owner-gates", wrapper.ListOwnerGates)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/owner-gates/{gateRef}", wrapper.GetOwnerGate)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/owner-gates/{gateRef}/repository-bundle", wrapper.GetOwnerGateRepositoryBundle)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/owner-gates/{gateRef}/resolution", wrapper.ResolveOwnerGate)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/platform-capabilities", wrapper.ListPlatformCapabilities)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/project-memberships", wrapper.ListOrganizationProjectMemberships)

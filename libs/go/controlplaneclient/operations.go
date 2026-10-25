@@ -55,6 +55,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.command.configuration-writebacks.approve":                 controlplanev1.PlatformCommandService_ApproveManagedConfigurationGitWriteBack_FullMethodName,
 		"platform.command.configuration-writebacks.reject":                  controlplanev1.PlatformCommandService_RejectManagedConfigurationGitWriteBack_FullMethodName,
 		"platform.command.configuration-writebacks.cancel":                  controlplanev1.PlatformCommandService_CancelManagedConfigurationGitWriteBack_FullMethodName,
+		"platform.repository-bundles.get":                                   controlplanev1.RepositoryBundlePublicationService_GetRepositoryBundlePublication_FullMethodName,
 		"platform.query.configuration-writebacks.get":                       controlplanev1.PlatformQueryService_GetManagedConfigurationGitWriteBack_FullMethodName,
 		"platform.query.configuration-writebacks.list":                      controlplanev1.PlatformQueryService_ListManagedConfigurationGitWriteBacks_FullMethodName,
 		"platform.query.email-mailbox.configurations.list":                  controlplanev1.PlatformQueryService_ListEmailMailboxConfigurations_FullMethodName,
@@ -435,6 +436,7 @@ func STTCredentialProjectionOperations() map[string]string {
 // RuntimeOperations регистрирует точные RPC исполнения, файлов, помощника, интеграций и warm runtime для runtime-клиентов.
 func RuntimeOperations() map[string]string {
 	return map[string]string{
+		"platform.repository-bundles.prepare":                 controlplanev1.RepositoryBundlePublicationService_PrepareRepositoryBundlePublication_FullMethodName,
 		"platform.runtime.execution.claim":                    controlplanev1.RuntimeWorkService_ClaimExecution_FullMethodName,
 		"platform.runtime.role-image-configuration.get":       controlplanev1.RuntimeWorkService_GetRuntimeEnvironmentRoleImageConfiguration_FullMethodName,
 		"platform.runtime.execution.artifact.read":            controlplanev1.RuntimeWorkService_ReadExecutionArtifact_FullMethodName,
@@ -534,6 +536,12 @@ func SessionArchiveOperations() map[string]string {
 // IntegrationGatewayOperations регистрирует для шлюза задачи Git-конфигурации и методы исполнения runtime-интеграций.
 func IntegrationGatewayOperations() map[string]string {
 	return map[string]string{
+		"platform.repository-bundles.work.claim":          controlplanev1.RepositoryBundlePublicationService_ClaimRepositoryBundlePublications_FullMethodName,
+		"platform.repository-bundles.work.renew":          controlplanev1.RepositoryBundlePublicationService_RenewRepositoryBundlePublication_FullMethodName,
+		"platform.repository-bundles.work.begin":          controlplanev1.RepositoryBundlePublicationService_BeginRepositoryBundlePublication_FullMethodName,
+		"platform.repository-bundles.work.complete":       controlplanev1.RepositoryBundlePublicationService_CompleteRepositoryBundlePublication_FullMethodName,
+		"platform.repository-bundles.work.fail":           controlplanev1.RepositoryBundlePublicationService_FailRepositoryBundlePublication_FullMethodName,
+		"platform.repository-bundles.work.content.read":   controlplanev1.RepositoryBundlePublicationService_ReadRepositoryBundlePublication_FullMethodName,
 		"platform.configuration-writebacks.work.claim":    controlplanev1.ManagedConfigurationGitWriteBackWorkService_ClaimManagedConfigurationGitWriteBackWork_FullMethodName,
 		"platform.configuration-writebacks.work.renew":    controlplanev1.ManagedConfigurationGitWriteBackWorkService_RenewManagedConfigurationGitWriteBackWork_FullMethodName,
 		"platform.configuration-writebacks.work.begin":    controlplanev1.ManagedConfigurationGitWriteBackWorkService_BeginManagedConfigurationGitWriteBackEffect_FullMethodName,

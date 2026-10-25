@@ -21,6 +21,7 @@ COPY libs/go/httpserver/ libs/go/httpserver/
 COPY libs/go/i18n/ libs/go/i18n/
 COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
 COPY libs/go/integrationpackage/ libs/go/integrationpackage/
+COPY libs/go/repositorybundle/ libs/go/repositorybundle/
 COPY libs/go/integrationgatewayauth/ libs/go/integrationgatewayauth/
 COPY libs/go/objectstorage/ libs/go/objectstorage/
 COPY libs/go/observability/ libs/go/observability/

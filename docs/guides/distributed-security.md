@@ -2359,6 +2359,25 @@ content и превышение лимитов не дают CLEAN. Ограни
 не открывают bytes или capability. AV не заменяет отдельный анализ
 prompt injection и не разрешает внешние действия без их Human Gate.
 
+### Типизированный контейнер с исходными файлами
+
+CLEAN JSON/Base64 либо archive-контейнер не является допуском decoded members.
+Перед любым publication Gate каждый member проходит native format policy с
+настоящим filename/MIME и независимый mandatory scanner по exact decoded bytes.
+Receipt сохраняет каждый path/mode/size/digest и scan policy/engine/evidence;
+extra/missing member, unknown format, quarantine, infected либо unavailable
+scanner закрывает весь набор, не выдаёт partial CLEAN. Изменение имени/MIME,
+перекодирование или omission не снимают quarantine. Новый purpose-context не
+выводится из outer CLEAN и требует явного согласованного policy-контракта.
+
+PostgreSQL хранит metadata/pins/receipts; body остаётся в original immutable
+ArtifactRevision/S3version. Publication удерживает exact source pins до terminal,
+включая UNKNOWN после revoke/expiry/root terminal. Retention pin не даёт права
+чтения: pre-effect content read повторяет fresh owner eligibility до и после
+object read; recovery подтверждает past remote fact по metadata без нового
+source download либо write. Unknown database commit не разрешает cleanup
+existing source objects, новый idempotency key или повтор внешнего эффекта.
+
 ## Очистка объектов после переноса сессии
 
 Неизменяемый location объекта не обязан совпадать с текущей областью после

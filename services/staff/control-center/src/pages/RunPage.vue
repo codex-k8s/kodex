@@ -73,6 +73,7 @@ import type {
 import { AppProblem, asProblem } from "@/shared/api/problem";
 import { runPath } from "@/shared/routes";
 import AsyncState from "@/shared/ui/AsyncState.vue";
+import RepositoryBundleManifest from "@/features/workboard/RepositoryBundleManifest.vue";
 import AttachmentComposer from "@/shared/ui/AttachmentComposer.vue";
 import type {
   AttachmentComposerHandle,
@@ -83,6 +84,17 @@ import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+const verifiedBundleManifests = ref<Record<string, number>>({});
+function requiresBundleManifest(gate: OwnerGate): boolean {
+  return gate.integrationIntent?.operation === "github.repository.bundle.publish";
+}
+function bundleManifestReady(gate: OwnerGate): boolean {
+  return !requiresBundleManifest(gate) || verifiedBundleManifests.value[gate.ref] === gate.version;
+}
+function setBundleVerified(gate: OwnerGate, verified: boolean): void {
+  if (verified) verifiedBundleManifests.value[gate.ref] = gate.version;
+  else Reflect.deleteProperty(verifiedBundleManifests.value, gate.ref);
+}
 const platform = usePlatformStore();
 const realtime = useRealtimeStore();
 const route = useRoute();
@@ -625,6 +637,7 @@ async function decide(
     !gate.allowedDecisions.includes(decision)
   )
     return;
+  if (decision === "APPROVE" && !bundleManifestReady(gate)) return;
   const generation = mutationGeneration;
   const project = run.value?.projectRef;
   const scopeRef = runRef.value;
@@ -1134,6 +1147,13 @@ onBeforeUnmount(() => {
                 <h3>{{ $t("decisions.consequences") }}</h3>
                 <SafeMarkdown :content="gate.consequencesSummary" />
               </div>
+              <RepositoryBundleManifest
+                v-if="requiresBundleManifest(gate)"
+                :key="`${gate.ref}:${gate.version}`"
+                :gate-ref="gate.ref"
+                :gate-version="gate.version"
+                @verified="setBundleVerified(gate, $event)"
+              />
               <div class="gate-response">
                 <label class="field"
                   ><span>{{ $t("decisions.comment") }}</span
@@ -1162,7 +1182,7 @@ onBeforeUnmount(() => {
                     "
                     class="button button--primary"
                     type="button"
-                    :disabled="busy || !gateAttachmentsReady(gate.ref)"
+                    :disabled="busy || !gateAttachmentsReady(gate.ref) || !bundleManifestReady(gate)"
                     @click="decide(gate, 'APPROVE')"
                   >
                     {{ $t("common.approve") }}</button

@@ -353,6 +353,7 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 				if err := repository.cancelConfigurationWriteBacks(ctx, tx, current, "", consumer.Ref); err != nil {
 					return commandOutcome{}, err
 				}
+				if err := repository.cancelRepositoryBundleDependency(ctx, tx, current, "CONNECTION", consumer.Ref); err != nil { return commandOutcome{}, err }
 			}
 			var allowed bool
 			if err := tx.QueryRow(ctx, queryManagedConfigurationValidateConsumer, pgx.StrictNamedArgs{

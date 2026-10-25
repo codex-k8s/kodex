@@ -210,7 +210,12 @@ func processIntegrationWork(ctx context.Context, control *controlplaneclient.Cli
 		return processed, err
 	}
 	writebacks, err := processConfigurationWriteBackWork(ctx, control.ConfigurationWriteBacks, adapter, metrics, config)
-	return processed + writebacks, err
+	processed += writebacks
+	if err != nil {
+		return processed, err
+	}
+	bundles, err := processRepositoryBundleWork(ctx, control.RepositoryBundles, adapter, metrics, config)
+	return processed + bundles, err
 }
 
 // completeTest reports the adapter's classified outcome with the exact test lease, fence and generation, rejecting a missing lease locally.

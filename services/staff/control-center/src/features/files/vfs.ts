@@ -119,6 +119,7 @@ export function validateVfsPage(
         "ARTIFACT_NOT_ACTIVE",
         "ARTIFACT_NOT_DELETED",
         "ARTIFACT_HAS_BINDINGS",
+        "ARTIFACT_HAS_RETAINED_REVISIONS",
         "ACTIVE_RUN_USES_ARTIFACT",
       ].includes(node.selectionReason) ||
       !Array.isArray(node.nextActions) ||

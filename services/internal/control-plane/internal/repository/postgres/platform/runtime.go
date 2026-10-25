@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
+	"github.com/codex-k8s/kodex/libs/go/repositorybundle"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
@@ -314,6 +315,8 @@ func toolCapabilityMatches(tool, capability string, integration, configurationAs
 	}
 	if integration {
 		switch tool {
+		case repositorybundle.ToolName:
+			return capability == repositorybundle.Operation
 		case runtimecontract.Context7ResolveTool:
 			return capability == runtimecontract.Context7ResolveCapability
 		case runtimecontract.Context7QueryTool:
@@ -1784,10 +1787,20 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateCurrentRunOutcome, lease["runID"], map[bool]string{true: "SUCCEEDED", false: "FAILED"}[payload.Success], truncate(payload.ResultSummary, 4000), truncate(payload.SafeErrorCode, 100), ""); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
+	if payload.Success && !rootAlreadyTerminal {
+		if err := repository.joinRepositoryBundleOrigin(ctx, tx, scope, lease); err != nil {
+			return commandOutcome{}, err
+		}
+	}
 	var requiredPending, hasRequiredOrigin bool
 	if tx.QueryRow(ctx, queryWorkflowLaunchRunPending, pgx.StrictNamedArgs{"run_id": lease["runID"], "node_id": lease["nodeID"]}).Scan(&requiredPending, &hasRequiredOrigin) != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
+	var bundlePending bool
+	if tx.QueryRow(ctx, queryRepositoryBundleCallbackWait, pgx.StrictNamedArgs{"organization_id": scope.organizationID, "run_id": lease["runID"]}).Scan(&bundlePending) != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	requiredPending = requiredPending || bundlePending
 	if requiredPending {
 		humanGateAfter = false
 	}
@@ -1814,6 +1827,18 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 			}
 		} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrUnavailable
+		} else if errors.Is(err, pgx.ErrNoRows) && !requiredPending && !continued {
+			record, found, resolveErr := repositoryBundleCallback(ctx, tx, scope, lease)
+			if resolveErr != nil {
+				return commandOutcome{}, resolveErr
+			}
+			if found {
+				record.childRunID, record.childRunRef, record.rootRunID, record.projectID = stringMap(lease, "runID"), stringMap(lease, "runRef"), stringMap(lease, "rootRunID"), stringMap(lease, "projectID")
+				record.runtimeRevisionID, record.resultSummary, record.artifactRefs = stringMap(lease, "runtimeRevisionID"), payload.ResultSummary, artifactRefs
+				if _, callbackErr := repository.recordChildCallback(ctx, tx, scope, record); callbackErr != nil {
+					return commandOutcome{}, callbackErr
+				}
+			}
 		}
 		if !hasRequiredOrigin {
 			if _, continuationErr := repository.scheduleCallbackContinuation(ctx, tx, scope, stringMap(lease, "nodeID"), stringMap(lease, "projectID")); continuationErr != nil {
@@ -2180,6 +2205,7 @@ func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, 
 }
 
 type callbackRecord struct {
+	repositoryBundle                                           bool
 	childRunID, childRunRef, rootRunID, projectID, parentRunID string
 	resultSummary, callbackEdgeID, callbackEdgeRef             string
 	parentNodeID, parentNodeRef                                string
@@ -2191,7 +2217,11 @@ func (repository *Repository) recordChildCallback(ctx context.Context, tx pgx.Tx
 	if record.artifactRefs == nil {
 		record.artifactRefs = []string{}
 	}
-	tag, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertCallbackReceiptsChildRunId, pgx.StrictNamedArgs{
+	receiptQuery := queryRuntimeCompleteexecutionInsertCallbackReceiptsChildRunId
+	if record.repositoryBundle {
+		receiptQuery = queryRepositoryBundleCallbackReceipt
+	}
+	tag, err := tx.Exec(ctx, receiptQuery, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID, "child_run_id": record.childRunID,
 		"callback_edge_id": record.callbackEdgeID, "runtime_revision_id": record.runtimeRevisionID,
 		"artifact_refs": record.artifactRefs,
@@ -2251,15 +2281,17 @@ func (repository *Repository) recordChildCallback(ctx context.Context, tx pgx.Tx
 	return false, nil
 }
 
-func (repository *Repository) scheduleCallbackContinuation(ctx context.Context, tx pgx.Tx, scope scope, parentNodeID, projectID string) (bool, error) {
+// scheduleCallbackContinuationTask materializes one existing callback join after all owner prerequisites; its caller owns presentation fault isolation for the new typed publication kind.
+// scheduleCallbackContinuationTask материализует один existing callback join после owner prerequisites; caller изолирует presentation faults нового typed publication kind.
+func (repository *Repository) scheduleCallbackContinuationTask(ctx context.Context, tx pgx.Tx, scope scope, parentNodeID, projectID string) (bool, error) {
 	var parentRunID, rootRunID, agentID, displayName, role, sessionID, agentRef, workflowVersionID, originStepKey, originNodeRef string
-	var originHumanGate, requiredContinuation bool
+	var originHumanGate, requiredContinuation, publicationJoin bool
 	var attempt int32
 	var callbackContext []byte
 	err := tx.QueryRow(ctx, queryRuntimeCallbackResolveContinuation, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID,
 		"parent_node_id":  parentNodeID,
-	}).Scan(&parentRunID, &rootRunID, &agentID, &attempt, &displayName, &role, &sessionID, &agentRef, &workflowVersionID, &originStepKey, &originHumanGate, &requiredContinuation, &originNodeRef, &callbackContext)
+	}).Scan(&parentRunID, &rootRunID, &agentID, &attempt, &displayName, &role, &sessionID, &agentRef, &workflowVersionID, &originStepKey, &originHumanGate, &requiredContinuation, &originNodeRef, &callbackContext, &publicationJoin)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -2346,6 +2378,13 @@ func (repository *Repository) scheduleCallbackContinuation(ctx context.Context, 
 	}); err != nil {
 		return false, errs.ErrUnavailable
 	}
+	if publicationJoin {
+		if _, err := tx.Exec(ctx, queryRuntimeIntegrationResumeChildRun, pgx.StrictNamedArgs{
+			"run_id": parentRunID, "organization_id": scope.organizationID,
+		}); err != nil {
+			return false, errs.ErrUnavailable
+		}
+	}
 	if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, nodeRef, "TURN_QUEUED", nodeRef, edgeRef, "", "", "i18n:CALLBACK_CONTINUATION_QUEUED", "RUNNING", "QUEUED"); err != nil {
 		return false, err
 	}
@@ -2359,6 +2398,16 @@ func (repository *Repository) scheduleCallbackContinuation(ctx context.Context, 
 // terminal invocation, передавая точное решение владельца в новую неизменяемую задачу без разрешения
 // нового внешнего эффекта и без открытия terminal root.
 func (repository *Repository) scheduleIntegrationContinuation(ctx context.Context, tx pgx.Tx, current scope, invocationID, projectID string) (bool, error) {
+	var callbackNodeID string
+	joinErr := tx.QueryRow(ctx, queryRepositoryBundleCallbackJoin, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID, "invocation_id": invocationID,
+	}).Scan(&callbackNodeID)
+	if joinErr == nil {
+		return repository.scheduleCallbackContinuation(ctx, tx, current, callbackNodeID, projectID)
+	}
+	if !errors.Is(joinErr, pgx.ErrNoRows) {
+		return false, errs.ErrUnavailable
+	}
 	var parentNodeID, runID, rootRunID, agentID, displayName, role, sessionID, agentRef, workflowVersionID string
 	var invocationRef, invocationState, resultSummary, safeErrorCode string
 	var decision integrationContinuationDecision
@@ -2369,7 +2418,15 @@ func (repository *Repository) scheduleIntegrationContinuation(ctx context.Contex
 		&agentRef, &workflowVersionID, &invocationRef, &invocationState, &resultSummary, &safeErrorCode,
 		&decision.GateRef, &decision.GateVersion, &decision.Decision, &decision.Comment)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
+		var publicationRef, nodeID string
+		originErr := tx.QueryRow(ctx, queryRepositoryBundleInvocationOrigin, pgx.StrictNamedArgs{"organization_id": current.organizationID, "invocation_id": invocationID}).Scan(&publicationRef, &nodeID)
+		if errors.Is(originErr, pgx.ErrNoRows) {
+			return false, nil
+		}
+		if originErr != nil {
+			return false, errs.ErrUnavailable
+		}
+		return false, repository.blockRepositoryBundleContinuationAuthority(ctx, tx, current, publicationRef, nodeID)
 	}
 	if err != nil {
 		return false, errs.ErrUnavailable

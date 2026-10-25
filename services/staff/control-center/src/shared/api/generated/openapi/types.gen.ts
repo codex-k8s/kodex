@@ -1366,7 +1366,7 @@ export type VfsNode = {
     scanState: '' | 'PENDING' | 'SCANNING' | 'CLEAN' | 'QUARANTINED' | 'FAILED';
     resourceKind: '' | 'ARTIFACT' | 'SKILL_BUNDLE' | 'MEMORY_RECORD';
     selectable: boolean;
-    selectionReason: 'AVAILABLE' | 'DIRECTORY' | 'PERMISSION_REQUIRED' | 'IMMUTABLE_CONTEXT' | 'LIFECYCLE_BLOCKED' | 'ARTIFACT_USED_BY_SKILL' | 'ARTIFACT_NOT_ACTIVE' | 'ARTIFACT_NOT_DELETED' | 'ARTIFACT_HAS_BINDINGS' | 'ACTIVE_RUN_USES_ARTIFACT';
+    selectionReason: 'AVAILABLE' | 'DIRECTORY' | 'PERMISSION_REQUIRED' | 'IMMUTABLE_CONTEXT' | 'LIFECYCLE_BLOCKED' | 'ARTIFACT_USED_BY_SKILL' | 'ARTIFACT_NOT_ACTIVE' | 'ARTIFACT_NOT_DELETED' | 'ARTIFACT_HAS_BINDINGS' | 'ARTIFACT_HAS_RETAINED_REVISIONS' | 'ACTIVE_RUN_USES_ARTIFACT';
     nextActions: Array<'DOWNLOAD' | 'DELETE' | 'RESTORE' | 'PURGE' | 'ARCHIVE' | 'BIND'>;
 };
 
@@ -3458,6 +3458,61 @@ export type ProjectAssistantIntegrationGrantCandidates = {
     items: Array<SystemAssistantIntegrationGrantCandidate>;
     total: number;
     nextPageToken?: string;
+};
+
+export type RepositoryBundleArtifactPin = {
+    ref: OpaqueRef;
+    revision: number;
+    version: number;
+    sha256: string;
+    sizeBytes: number;
+};
+
+export type RepositoryBundleFile = {
+    path: string;
+    mode: '100644' | '100755';
+    bytes: number;
+    sha256: string;
+};
+
+export type RepositoryBundlePublication = {
+    ref: OpaqueRef;
+    projectRef: OpaqueRef;
+    originRunRef: OpaqueRef;
+    originRuntimeRevisionRef: OpaqueRef;
+    invocationRef: OpaqueRef;
+    gateRef: OpaqueRef;
+    connectionRef: OpaqueRef;
+    grantRef: OpaqueRef;
+    version: number;
+    connectionVersion: number;
+    grantVersion: number;
+    archive: RepositoryBundleArtifactPin;
+    manifest: RepositoryBundleArtifactPin;
+    repositoryRef: string;
+    proposalBranch: string;
+    baseCommitSha: string;
+    approvalDigest: string;
+    fileCount: number;
+    totalBytes: number;
+    state: 'WAITING_APPROVAL' | 'QUEUED' | 'CLAIMED' | 'EFFECT_STARTED' | 'UNKNOWN_OUTCOME' | 'SUCCEEDED' | 'REJECTED' | 'CANCELLED' | 'EXPIRED' | 'FAILED';
+    candidateCommitSha?: string;
+    candidateTreeSha?: string;
+    failureCode?: 'UNAVAILABLE' | 'AUTHORITY_CHANGED' | 'CONTENT_INVALID' | 'BASE_INVALID' | 'DEADLINE_EXCEEDED' | 'BRANCH_CONFLICT' | 'OUTCOME_UNCONFIRMED';
+    continuationState?: 'BLOCKED' | 'CANCELLED';
+    continuationCode?: 'CALLBACK_INPUT_TOO_LARGE' | 'CONTINUATION_AUTHORITY_CHANGED';
+    continuationNodeRef?: OpaqueRef;
+    createdAt: string;
+    expiresAt: string;
+    confirmedAt?: string;
+};
+
+export type RepositoryBundleManifestPage = {
+    proposal: RepositoryBundlePublication;
+    files: Array<RepositoryBundleFile>;
+    offset: number;
+    nextOffset: number;
+    complete: boolean;
 };
 
 export type OwnerGate = {
@@ -10417,6 +10472,38 @@ export type GetOwnerGateResponses = {
 };
 
 export type GetOwnerGateResponse = GetOwnerGateResponses[keyof GetOwnerGateResponses];
+
+export type GetOwnerGateRepositoryBundleData = {
+    body?: never;
+    path: {
+        gateRef: OpaqueRef;
+    };
+    query?: {
+        offset?: number;
+        limit?: number;
+        expectedVersion?: number;
+        expectedManifestSha256?: string;
+    };
+    url: '/api/v1/owner-gates/{gateRef}/repository-bundle';
+};
+
+export type GetOwnerGateRepositoryBundleErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetOwnerGateRepositoryBundleError = GetOwnerGateRepositoryBundleErrors[keyof GetOwnerGateRepositoryBundleErrors];
+
+export type GetOwnerGateRepositoryBundleResponses = {
+    /**
+     * Manifest page до 24 КиБ с явной полнотой
+     */
+    200: RepositoryBundleManifestPage;
+};
+
+export type GetOwnerGateRepositoryBundleResponse = GetOwnerGateRepositoryBundleResponses[keyof GetOwnerGateRepositoryBundleResponses];
 
 export type ResolveOwnerGateData = {
     body: GateResolution;

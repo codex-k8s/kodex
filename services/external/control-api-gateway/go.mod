@@ -14,6 +14,7 @@ require (
 	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
 	github.com/codex-k8s/kodex/libs/go/oidcverifier v0.0.0
+	github.com/codex-k8s/kodex/libs/go/repositorybundle v0.0.0
 	github.com/codex-k8s/kodex/libs/go/runtimecontract v0.0.0
 	github.com/codex-k8s/kodex/libs/go/secretbrokerapi v0.0.0
 	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0
@@ -108,6 +109,8 @@ replace github.com/codex-k8s/kodex/libs/go/grpcserver => ../../../libs/go/grpcse
 replace github.com/codex-k8s/kodex/libs/go/integrationpackage => ../../../libs/go/integrationpackage
 
 replace github.com/codex-k8s/kodex/libs/go/emailbridgeapi => ../../../libs/go/emailbridgeapi
+
+replace github.com/codex-k8s/kodex/libs/go/repositorybundle => ../../../libs/go/repositorybundle
 
 replace github.com/codex-k8s/kodex/libs/go/runtimecontract => ../../../libs/go/runtimecontract
 

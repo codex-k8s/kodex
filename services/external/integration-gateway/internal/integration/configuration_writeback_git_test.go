@@ -33,24 +33,10 @@ func gitFixtureRun(t *testing.T, directory string, input []byte, args ...string)
 	return strings.TrimSpace(string(raw))
 }
 
-// TestWriteBackGitHTTPSExactProposalLeasePreservesSourceAndCleansCredential uses a real Git HTTP backend over loopback TLS with a private test CA and fake credential.
-// RU: TestWriteBackGitHTTPSExactProposalLeasePreservesSourceAndCleansCredential использует настоящий Git HTTP backend через loopback TLS с приватной тестовой CA и фиктивным credential.
-// It checks the candidate's base/blob/parent, proposal-only push, rejection of overwriting an existing proposal, private credential permissions and workspace removal.
-// RU: Тест проверяет base/blob/parent кандидата, push только proposal, запрет перезаписи существующей proposal-ветки, права credential и удаление workspace.
-// This proves the isolated fixture path, not production provider reachability, source-ref atomicity or secure filesystem erasure.
-// RU: Это доказательство изолированного пути оснастки, а не доступности production-провайдера, source-ref атомарности либо безопасного стирания файловой системы.
-func TestWriteBackGitHTTPSExactProposalLeasePreservesSourceAndCleansCredential(t *testing.T) {
-	root := t.TempDir()
-	repository := filepath.Join(root, "repo.git")
-	gitFixtureRun(t, root, nil, "init", "--bare", "--quiet", repository)
-	gitFixtureRun(t, repository, nil, "config", "http.receivepack", "true")
-	gitFixtureRun(t, repository, nil, "config", "uploadpack.allowFilter", "true")
-	gitFixtureRun(t, repository, nil, "config", "uploadpack.allowReachableSHA1InWant", "true")
-	baseContent := []byte("name: before\n")
-	blob := gitFixtureRun(t, repository, baseContent, "hash-object", "-w", "--stdin")
-	tree := gitFixtureRun(t, repository, []byte("100644 blob "+blob+"\tconfig.yaml\n"), "mktree")
-	base := gitFixtureRun(t, repository, []byte("Initial\n"), "commit-tree", tree)
-	gitFixtureRun(t, repository, nil, "update-ref", "refs/heads/main", base)
+// gitFixtureHTTPServer reuses a private loopback TLS Git HTTP backend with a synthetic credential and exact test-owned CA; it never reads host credentials or provider state.
+// gitFixtureHTTPServer переиспользует private loopback TLS Git HTTP backend с synthetic credential и exact test-owned CA; host credentials и provider state не читаются.
+func gitFixtureHTTPServer(t *testing.T, root string) (*httptest.Server, string, string) {
+	t.Helper()
 	const credential = "writeback-fixture-token"
 	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		username, password, ok := request.BasicAuth()
@@ -91,11 +77,33 @@ func TestWriteBackGitHTTPSExactProposalLeasePreservesSourceAndCleansCredential(t
 		writer.WriteHeader(status)
 		_, _ = io.Copy(writer, reader)
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
 	ca := filepath.Join(t.TempDir(), "ca.pem")
 	if err := os.WriteFile(ca, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw}), 0600); err != nil {
 		t.Fatal(err)
 	}
+	return server, ca, credential
+}
+
+// TestWriteBackGitHTTPSExactProposalLeasePreservesSourceAndCleansCredential uses a real Git HTTP backend over loopback TLS with a private test CA and fake credential.
+// RU: TestWriteBackGitHTTPSExactProposalLeasePreservesSourceAndCleansCredential использует настоящий Git HTTP backend через loopback TLS с приватной тестовой CA и фиктивным credential.
+// It checks the candidate's base/blob/parent, proposal-only push, rejection of overwriting an existing proposal, private credential permissions and workspace removal.
+// RU: Тест проверяет base/blob/parent кандидата, push только proposal, запрет перезаписи существующей proposal-ветки, права credential и удаление workspace.
+// This proves the isolated fixture path, not production provider reachability, source-ref atomicity or secure filesystem erasure.
+// RU: Это доказательство изолированного пути оснастки, а не доступности production-провайдера, source-ref атомарности либо безопасного стирания файловой системы.
+func TestWriteBackGitHTTPSExactProposalLeasePreservesSourceAndCleansCredential(t *testing.T) {
+	root := t.TempDir()
+	repository := filepath.Join(root, "repo.git")
+	gitFixtureRun(t, root, nil, "init", "--bare", "--quiet", repository)
+	gitFixtureRun(t, repository, nil, "config", "http.receivepack", "true")
+	gitFixtureRun(t, repository, nil, "config", "uploadpack.allowFilter", "true")
+	gitFixtureRun(t, repository, nil, "config", "uploadpack.allowReachableSHA1InWant", "true")
+	baseContent := []byte("name: before\n")
+	blob := gitFixtureRun(t, repository, baseContent, "hash-object", "-w", "--stdin")
+	tree := gitFixtureRun(t, repository, []byte("100644 blob "+blob+"\tconfig.yaml\n"), "mktree")
+	base := gitFixtureRun(t, repository, []byte("Initial\n"), "commit-tree", tree)
+	gitFixtureRun(t, repository, nil, "update-ref", "refs/heads/main", base)
+	server, ca, credential := gitFixtureHTTPServer(t, root)
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	workspace, err := newWriteBackGitWorkspace(ctx, server.URL+"/repo.git", "", []byte(credential), "Kodex", "configuration@kodex.invalid", time.Unix(1700000000, 0))

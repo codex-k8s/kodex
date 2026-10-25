@@ -1,0 +1,28 @@
+export const repositoryBundleMessages = {
+  ru: {
+    title: "Все файлы публикации",
+    effect: "Один commit в новую ветку предложения. Исходная ветка не изменяется. Автоматизация репозитория может запуститься по его правилам.",
+    loading: "Проверяем полный manifest…",
+    complete: "Полный набор проверен: {count} файлов, {bytes} байт.",
+    repository: "Репозиторий", base: "Исходный commit", branch: "Новая ветка",
+    path: "Файл", bytes: "Байт", mode: "Режим файла",
+    unavailable: "Полный manifest пока не подтверждён. Одобрение недоступно; решение можно отклонить или отменить.",
+    retryRead: "Повторить чтение manifest",
+    continuationAuthorityChanged: "Результат публикации сохранён. Продолжение заблокировано: необходимый допуск отозван или закрыт. Не повторяйте WRITE. Владелец может отменить запуск.",
+    continuationBlocked: "Результат Git сохранён. Продолжение заблокировано: полный ввод дочерних результатов превышает допустимый размер. Не повторяйте публикацию. Все исходные результаты доступны в графе запуска; владелец может отменить запуск.",
+    continuationCancelled: "Продолжение отменено. Сохранённый результат Git не изменён; повтор публикации не разрешён.",
+  },
+  en: {
+    title: "All publication files",
+    effect: "One commit on a new proposal branch. The source branch stays unchanged. Repository automation may run according to its rules.",
+    loading: "Verifying the complete manifest…",
+    complete: "Full set verified: {count} files, {bytes} bytes.",
+    repository: "Repository", base: "Base commit", branch: "New branch",
+    path: "File", bytes: "Bytes", mode: "File mode",
+    unavailable: "The complete manifest is not verified yet. Approval is unavailable; you can reject or cancel the decision.",
+    retryRead: "Read manifest again",
+    continuationAuthorityChanged: "The publication outcome is preserved. Continuation is blocked because its required authorization is closed. Do not repeat WRITE. The owner can cancel the run.",
+    continuationBlocked: "The Git result is preserved. Continuation is blocked because the complete child-result input exceeds its limit. Do not repeat publication. All original results remain in the run graph; the owner can cancel the run.",
+    continuationCancelled: "Continuation was cancelled. The recorded Git result is unchanged; publication must not be repeated.",
+  },
+};

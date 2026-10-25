@@ -1,0 +1,1027 @@
+apiVersion: integrations.kodex.io/v1
+kind: IntegrationPackage
+metadata:
+  key: github
+  version: 6.0.0
+  origin: SHIPPED
+spec:
+  name: GitHub
+  description: Содержимое репозитория, ветки, коммиты, issue, pull requests, reviews, checks и Actions в одном разрешённом репозитории.
+  category: source-control
+  adapter: GITHUB
+  adapterOwner: integration-gateway
+  executionRoute: MANAGED_MCP
+  readiness: READY
+  credential:
+    secretKey: token
+    kind: TOKEN
+  configurationFields:
+    - key: owner
+      type: STRING
+      format: IDENTIFIER
+      required: true
+      maximumLength: 100
+    - key: repository
+      type: STRING
+      format: IDENTIFIER
+      required: true
+      maximumLength: 100
+  networkDestinations:
+    - key: github_api
+      source: STATIC
+      hostname: api.github.com
+      port: 443
+      tls: REQUIRED
+    - key: github_git
+      source: STATIC
+      hostname: github.com
+      port: 443
+      tls: REQUIRED
+  healthCheck:
+    operation: github.repository.metadata.read
+    timeoutSeconds: 15
+    maxAttempts: 3
+  capabilities:
+    - key: github.repository.metadata.read
+      name: Прочитать метаданные репозитория
+      description: Возвращает безопасную проекцию состояния одного разрешённого репозитория.
+      operation: github.repository.metadata.read
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields: []
+      outputFields:
+        - {key: full_name, type: STRING, format: IDENTIFIER, required: true, maximumLength: 220}
+        - {key: default_branch, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
+        - {key: visibility, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
+        - {key: private, type: BOOLEAN, required: true}
+        - {key: archived, type: BOOLEAN, required: true}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 20
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.issue.create
+      name: Создать issue
+      description: Создаёт issue с детерминированной меткой эффекта после Human Gate.
+      operation: github.issue.create
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 256}
+        - {key: body, type: STRING, format: PLAIN, required: false, maximumLength: 65536}
+      outputFields:
+        - {key: number, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 256}
+        - {key: state, type: STRING, format: IDENTIFIER, required: true, maximumLength: 16}
+      execution:
+        idempotency: EFFECT_KEY
+        timeoutSeconds: 30
+        maxAttempts: 2
+        retryBackoffMilliseconds: 500
+    - key: github.issue.list
+      name: Получить список issue
+      description: Возвращает одну bounded страницу issue без pull requests и opaque provider payload.
+      operation: github.issue.list
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {key: state, type: STRING, format: IDENTIFIER, required: false, maximumLength: 16, allowedValues: [open, closed, all]}
+        - {key: limit, type: INTEGER, required: false, minimum: 1, maximum: 100}
+        - {key: cursor, type: INTEGER, required: false, minimum: 1, maximum: 10000}
+      outputFields:
+        - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 100}
+        - {key: issues, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: next_cursor, type: INTEGER, required: false, minimum: 1, maximum: 10000}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 20
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.issue.read
+      name: Прочитать issue
+      description: Возвращает bounded проекцию одного issue и закрыто отклоняет pull request.
+      operation: github.issue.read
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {key: issue_number, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+      outputFields:
+        - {key: number, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 256}
+        - {key: state, type: STRING, format: IDENTIFIER, required: true, maximumLength: 16}
+        - {key: body, type: STRING, format: PLAIN, required: false, maximumLength: 65536}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 20
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.issue.comment.create
+      name: Добавить комментарий к issue
+      description: Добавляет один комментарий с effect marker после Human Gate.
+      operation: github.issue.comment.create
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {key: issue_number, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: body, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      outputFields:
+        - {key: comment_id, type: INTEGER, required: true, minimum: 1, maximum: 9007199254740991}
+        - {key: issue_number, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+      execution:
+        idempotency: EFFECT_KEY
+        timeoutSeconds: 30
+        maxAttempts: 1
+        retryBackoffMilliseconds: 500
+    - key: github.issue.update
+      name: Обновить issue
+      description: Изменяет только разрешённые поля существующего issue после Human Gate.
+      operation: github.issue.update
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {key: issue_number, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: title, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+        - {key: body, type: STRING, format: PLAIN, required: false, maximumLength: 65536}
+        - {key: state, type: STRING, format: IDENTIFIER, required: false, maximumLength: 16, allowedValues: [open, closed]}
+      outputFields:
+        - {key: number, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 256}
+        - {key: state, type: STRING, format: IDENTIFIER, required: true, maximumLength: 16}
+      execution:
+        idempotency: EFFECT_KEY
+        timeoutSeconds: 30
+        maxAttempts: 1
+        retryBackoffMilliseconds: 500
+    - key: github.repository.content.list
+      name: Получить содержимое каталога
+      description: "Индекс каталога: ref=40 lowercase hex; cursor=offset, limit=20/max50. До eof копировать next_cursor, expected_catalog_digest=catalog_digest. Byte budget может уменьшить count; eof не означает чтение файлов. Contents cap >=1000 отклоняется."
+      operation: github.repository.content.list
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"path","type":"STRING","format":"PLAIN","required":false,"maximumLength":1024}
+        - {key: ref, type: STRING, format: IDENTIFIER, required: true, maximumLength: 40}
+        - {key: cursor, type: INTEGER, required: false, minimum: 0, maximum: 999}
+        - {key: limit, type: INTEGER, required: false, minimum: 1, maximum: 50}
+        - {key: expected_catalog_digest, type: STRING, format: PLAIN, required: false, maximumLength: 71}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {key: path, type: STRING, format: PLAIN, required: true, allowEmpty: true, maximumLength: 1024}
+        - {key: commit_sha, type: STRING, format: IDENTIFIER, required: true, maximumLength: 40}
+        - {key: catalog_digest, type: STRING, format: PLAIN, required: true, maximumLength: 71}
+        - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 50}
+        - {key: total_count, type: INTEGER, required: true, minimum: 0, maximum: 999}
+        - {key: cursor, type: INTEGER, required: true, minimum: 0, maximum: 999}
+        - {key: next_cursor, type: INTEGER, required: false, minimum: 1, maximum: 999}
+        - {key: eof, type: BOOLEAN, required: true}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 30
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.repository.content.read
+      name: Прочитать файл
+      description: UTF-8 без NUL до 8388608 байт. Commit/path→Contents file/path/SHA/size; none+empty content→SDK GetBlob того же repo по server SHA на api.github.com. Полная проверка size/Git SHA/UTF-8/NUL до страницы. Raw SDK/metadata 2MiB, exact blob 12MiB, error 64KiB. Страница 16384, native envelope 65536. expected_sha/next_offset_bytes до eof. URL/redirect/новый host/permission запрещены.
+      operation: github.repository.content.read
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"path","type":"STRING","format":"PLAIN","required":true,"maximumLength":1024}
+        - {"key":"ref","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"expected_sha","type":"STRING","format":"PLAIN","required":false,"maximumLength":40}
+        - {"key":"offset_bytes","type":"INTEGER","required":false,"minimum":0,"maximum":8388608}
+        - {"key":"maximum_bytes","type":"INTEGER","required":false,"minimum":4,"maximum":16384}
+      outputFields:
+        - {"key":"path","type":"STRING","format":"PLAIN","required":true,"maximumLength":1024}
+        - {"key":"type","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":40}
+        - {"key":"size","type":"INTEGER","required":true,"minimum":0,"maximum":8388608}
+        - {"key":"text","type":"STRING","format":"PLAIN","required":true,"maximumLength":16384,"allowEmpty":true}
+        - {"key":"commit_sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":40}
+        - {"key":"offset_bytes","type":"INTEGER","required":true,"minimum":0,"maximum":8388608}
+        - {"key":"next_offset_bytes","type":"INTEGER","required":true,"minimum":0,"maximum":8388608}
+        - {"key":"eof","type":"BOOLEAN","required":true}
+        - {"key":"source_digest","type":"STRING","format":"PLAIN","required":true,"maximumLength":71}
+        - {"key":"chunk_digest","type":"STRING","format":"PLAIN","required":true,"maximumLength":71}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 30
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.repository.content.create
+      name: Создать файл
+      description: Создать файл в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.repository.content.create
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"path","type":"STRING","format":"PLAIN","required":true,"maximumLength":1024}
+        - {"key":"branch","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"message","type":"STRING","format":"PLAIN","required":true,"maximumLength":1024}
+        - {"key":"content_base64","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+      outputFields:
+        - {"key":"sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"path","type":"STRING","format":"PLAIN","required":true,"maximumLength":1024}
+      execution:
+        idempotency: EFFECT_KEY
+        timeoutSeconds: 30
+        maxAttempts: 1
+        retryBackoffMilliseconds: 250
+    - key: github.repository.content.update
+      name: Обновить файл
+      description: Обновить файл в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.repository.content.update
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"path","type":"STRING","format":"PLAIN","required":true,"maximumLength":1024}
+        - {"key":"branch","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"message","type":"STRING","format":"PLAIN","required":true,"maximumLength":1024}
+        - {"key":"content_base64","type":"STRING","format":"PLAIN","required":true,"maximumLength":349528,"allowEmpty":true}
+        - {"key":"sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      outputFields:
+        - {"key":"sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"path","type":"STRING","format":"PLAIN","required":true,"maximumLength":1024}
+      execution:
+        idempotency: EFFECT_KEY
+        timeoutSeconds: 30
+        maxAttempts: 1
+        retryBackoffMilliseconds: 250
+    - key: github.repository.content.delete
+      name: Удалить файл
+      description: Удалить файл в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.repository.content.delete
+      risk: DESTRUCTIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"path","type":"STRING","format":"PLAIN","required":true,"maximumLength":1024}
+        - {"key":"branch","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"message","type":"STRING","format":"PLAIN","required":true,"maximumLength":1024}
+        - {"key":"sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      outputFields:
+        - {"key":"sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"path","type":"STRING","format":"PLAIN","required":true,"maximumLength":1024}
+      execution:
+        idempotency: EFFECT_KEY
+        timeoutSeconds: 30
+        maxAttempts: 1
+        retryBackoffMilliseconds: 250
+    - key: github.branch.list
+      name: Получить ветки
+      description: Получить ветки в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.branch.list
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
+        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 30
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.branch.read
+      name: Прочитать ветку
+      description: Прочитать ветку в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.branch.read
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"branch","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      outputFields:
+        - {"key":"name","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"protected","type":"BOOLEAN","required":true}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 30
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.branch.create
+      name: Создать ветку
+      description: Создать ветку в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.branch.create
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"branch","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      outputFields:
+        - {"key":"name","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"protected","type":"BOOLEAN","required":true}
+      execution:
+        idempotency: EFFECT_KEY
+        timeoutSeconds: 30
+        maxAttempts: 1
+        retryBackoffMilliseconds: 250
+    - key: github.branch.delete
+      name: Удалить ветку
+      description: Удалить ветку в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.branch.delete
+      risk: DESTRUCTIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"branch","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      outputFields:
+        - {"key":"accepted","type":"BOOLEAN","required":true}
+      execution:
+        idempotency: EFFECT_KEY
+        timeoutSeconds: 30
+        maxAttempts: 1
+        retryBackoffMilliseconds: 250
+    - key: github.commit.list
+      name: Получить коммиты
+      description: Получить коммиты в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.commit.list
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"ref","type":"STRING","format":"PLAIN","required":false,"maximumLength":256}
+        - {"key":"path","type":"STRING","format":"PLAIN","required":false,"maximumLength":1024}
+        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
+        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 30
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.commit.read
+      name: Прочитать коммит
+      description: Прочитать коммит в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.commit.read
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"ref","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {key: limit, type: INTEGER, required: false, minimum: 1, maximum: 100}
+        - {key: cursor, type: INTEGER, required: false, minimum: 1, maximum: 10000}
+      outputFields:
+        - {"key":"sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {key: message, type: STRING, format: PLAIN, required: true, maximumLength: 32768, allowEmpty: true}
+        - {"key":"url","type":"STRING","format":"PLAIN","required":true,"maximumLength":2048}
+        - {key: files, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 100}
+        - {key: next_cursor, type: INTEGER, required: false, minimum: 1, maximum: 10000}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 30
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.pull_request.list
+      name: Получить pull requests
+      description: Получить pull requests в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.pull_request.list
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"state","type":"STRING","format":"PLAIN","required":false,"maximumLength":16,"allowedValues":["open","closed","all"]}
+        - {"key":"head","type":"STRING","format":"PLAIN","required":false,"maximumLength":256}
+        - {"key":"base","type":"STRING","format":"PLAIN","required":false,"maximumLength":256}
+        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
+        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 30
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.pull_request.read
+      name: Прочитать pull request
+      description: Прочитать полное описание и состояние pull request с точными head SHA (sha), base_sha и changed_files для закрепления индекса. Это не чтение содержимого изменённых файлов.
+      operation: github.pull_request.read
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"pull_request_number","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+      outputFields:
+        - {"key":"number","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"title","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+        - {"key":"state","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"head","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"base","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {key: sha, type: STRING, format: IDENTIFIER, required: true, maximumLength: 40}
+        - {key: base_sha, type: STRING, format: IDENTIFIER, required: true, maximumLength: 40}
+        - {key: changed_files, type: INTEGER, required: true, minimum: 0, maximum: 2147483647}
+        - {"key":"draft","type":"BOOLEAN","required":true}
+        - {"key":"url","type":"STRING","format":"PLAIN","required":true,"maximumLength":2048}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 30
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.pull_request.create
+      name: Создать pull request
+      description: Создать pull request в одном разрешённом репозитории; draft задаёт черновик, по умолчанию false; ограниченный результат и отдельный receipt эффекта.
+      operation: github.pull_request.create
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"title","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":false,"maximumLength":32768,"allowEmpty":true}
+        - {"key":"head","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"base","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {key: draft, type: BOOLEAN, required: false}
+      outputFields:
+        - {"key":"number","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"title","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+        - {"key":"state","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"head","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"base","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"draft","type":"BOOLEAN","required":true}
+        - {"key":"url","type":"STRING","format":"PLAIN","required":true,"maximumLength":2048}
+      execution:
+        idempotency: EFFECT_KEY
+        timeoutSeconds: 30
+        maxAttempts: 1
+        retryBackoffMilliseconds: 250
+    - key: github.pull_request.update
+      name: Обновить pull request
+      description: Обновить pull request в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.pull_request.update
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"pull_request_number","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"title","type":"STRING","format":"PLAIN","required":false,"maximumLength":256}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":false,"maximumLength":32768,"allowEmpty":true}
+        - {"key":"state","type":"STRING","format":"PLAIN","required":false,"maximumLength":16,"allowedValues":["open","closed"]}
+        - {"key":"base","type":"STRING","format":"PLAIN","required":false,"maximumLength":256}
+      outputFields:
+        - {"key":"number","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"title","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+        - {"key":"state","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"head","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"base","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"draft","type":"BOOLEAN","required":true}
+        - {"key":"url","type":"STRING","format":"PLAIN","required":true,"maximumLength":2048}
+      execution:
+        idempotency: EFFECT_KEY
+        timeoutSeconds: 30
+        maxAttempts: 1
+        retryBackoffMilliseconds: 250
+    - key: github.pull_request.merge
+      name: Слить pull request
+      description: Слить pull request в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.pull_request.merge
+      risk: DESTRUCTIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"pull_request_number","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"merge_method","type":"STRING","format":"PLAIN","required":true,"maximumLength":16,"allowedValues":["merge","squash","rebase"]}
+        - {"key":"message","type":"STRING","format":"PLAIN","required":false,"maximumLength":1024}
+      outputFields:
+        - {"key":"merged","type":"BOOLEAN","required":true}
+        - {"key":"sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      execution:
+        idempotency: EFFECT_KEY
+        timeoutSeconds: 30
+        maxAttempts: 1
+        retryBackoffMilliseconds: 250
+    - key: github.pull_request.review.list
+      name: Получить reviews
+      description: Получить reviews в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.pull_request.review.list
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"pull_request_number","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
+        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 30
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.pull_request.review.read
+      name: Прочитать review
+      description: Прочитать review в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.pull_request.review.read
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"pull_request_number","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"review_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+      outputFields:
+        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+        - {"key":"state","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"commit_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 30
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.pull_request.review.create
+      name: Создать review
+      description: Создать review в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.pull_request.review.create
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"pull_request_number","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":false,"maximumLength":32768,"allowEmpty":true}
+        - {"key":"event","type":"STRING","format":"PLAIN","required":true,"maximumLength":32,"allowedValues":["APPROVE","REQUEST_CHANGES","COMMENT"]}
+      outputFields:
+        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+        - {"key":"state","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"commit_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      execution:
+        idempotency: EFFECT_KEY
+        timeoutSeconds: 30
+        maxAttempts: 1
+        retryBackoffMilliseconds: 250
+    - key: github.issue.comment.list
+      name: Получить комментарии issue
+      description: Получить комментарии issue в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.issue.comment.list
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"issue_number","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
+        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 30
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.issue.comment.read
+      name: Прочитать комментарий issue
+      description: Прочитать комментарий issue в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.issue.comment.read
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"issue_number","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"comment_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+      outputFields:
+        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 30
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.issue.comment.update
+      name: Обновить комментарий issue
+      description: Обновить комментарий issue в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.issue.comment.update
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"issue_number","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"comment_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+      outputFields:
+        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+      execution:
+        idempotency: EFFECT_KEY
+        timeoutSeconds: 30
+        maxAttempts: 1
+        retryBackoffMilliseconds: 250
+    - key: github.issue.comment.delete
+      name: Удалить комментарий issue
+      description: Удалить комментарий issue в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.issue.comment.delete
+      risk: DESTRUCTIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"issue_number","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"comment_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+      outputFields:
+        - {"key":"accepted","type":"BOOLEAN","required":true}
+      execution:
+        idempotency: EFFECT_KEY
+        timeoutSeconds: 30
+        maxAttempts: 1
+        retryBackoffMilliseconds: 250
+    - key: github.check_run.list
+      name: Получить checks
+      description: Получить checks в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.check_run.list
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"ref","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
+        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 30
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.check_run.read
+      name: Прочитать check
+      description: Прочитать check в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.check_run.read
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"check_run_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+      outputFields:
+        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+        - {"key":"name","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"status","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"conclusion","type":"STRING","format":"PLAIN","required":true,"maximumLength":256,"allowEmpty":true}
+        - {"key":"head_sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"title","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"summary","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 30
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.actions.workflow.list
+      name: Получить workflows
+      description: Получить workflows в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.actions.workflow.list
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
+        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 30
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.actions.workflow.read
+      name: Прочитать workflow
+      description: Прочитать workflow в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.actions.workflow.read
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"workflow_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+      outputFields:
+        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+        - {"key":"name","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"path","type":"STRING","format":"PLAIN","required":true,"maximumLength":1024}
+        - {"key":"state","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 30
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.actions.workflow.dispatch
+      name: Запустить workflow
+      description: Запустить workflow в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.actions.workflow.dispatch
+      risk: SENSITIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"workflow_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+        - {"key":"ref","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {key: workflow_inputs, type: STRING, format: PLAIN, required: false, maximumLength: 32768}
+      outputFields:
+        - {"key":"accepted","type":"BOOLEAN","required":true}
+      execution:
+        idempotency: EFFECT_KEY
+        timeoutSeconds: 30
+        maxAttempts: 1
+        retryBackoffMilliseconds: 250
+    - key: github.actions.run.list
+      name: Получить workflow runs
+      description: Получить workflow runs в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.actions.run.list
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"branch","type":"STRING","format":"PLAIN","required":false,"maximumLength":256}
+        - {"key":"state","type":"STRING","format":"PLAIN","required":false,"maximumLength":32,"allowedValues":["queued","in_progress","completed","waiting","requested","pending"]}
+        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
+        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 30
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.actions.run.read
+      name: Прочитать workflow run
+      description: Прочитать workflow run в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.actions.run.read
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"run_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+      outputFields:
+        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+        - {"key":"workflow_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+        - {"key":"name","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"status","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"conclusion","type":"STRING","format":"PLAIN","required":true,"maximumLength":256,"allowEmpty":true}
+        - {"key":"head_sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"head_branch","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"url","type":"STRING","format":"PLAIN","required":true,"maximumLength":2048}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 30
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.actions.run.rerun
+      name: Повторно запустить workflow run
+      description: Повторно запустить workflow run в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.actions.run.rerun
+      risk: SENSITIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"run_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+      outputFields:
+        - {"key":"accepted","type":"BOOLEAN","required":true}
+      execution:
+        idempotency: EFFECT_KEY
+        timeoutSeconds: 30
+        maxAttempts: 1
+        retryBackoffMilliseconds: 250
+    - key: github.actions.run.cancel
+      name: Отменить workflow run
+      description: Отменить workflow run в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.actions.run.cancel
+      risk: DESTRUCTIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"run_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+      outputFields:
+        - {"key":"accepted","type":"BOOLEAN","required":true}
+      execution:
+        idempotency: EFFECT_KEY
+        timeoutSeconds: 30
+        maxAttempts: 1
+        retryBackoffMilliseconds: 250
+    - key: github.actions.job.list
+      name: Получить jobs запуска
+      description: Получить jobs запуска в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.actions.job.list
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"run_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
+        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 30
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.actions.job.read
+      name: Прочитать job
+      description: Прочитать job в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      operation: github.actions.job.read
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"run_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+        - {"key":"job_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+      outputFields:
+        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+        - {"key":"run_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+        - {"key":"name","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"status","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"conclusion","type":"STRING","format":"PLAIN","required":true,"maximumLength":256,"allowEmpty":true}
+        - {"key":"head_sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 30
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.pull_request.file.list
+      name: Получить индекс изменённых файлов pull request
+      # next_cursor только от GitHub. Полный индекс: непрерывные offset
+      # 0..total_count, одинаковые pins/page_size; отдельная страница не полный read.
+      # Nullable blob SHA не заменяется hash. Удаление читается из base, rename
+      # использует previous_filename. Binary, отсутствующий source и raw >2 MiB
+      # остаются отказом. Path <=1024 UTF-8 байт без control characters; 4 максимально
+      # экранированных rename записи помещаются в общий 64 KiB envelope.
+      description: >-
+        Только метаданные, без patch/source. Pins из pull_request.read; drift запрещён.
+        limit 1..4 (default 4), cursor номер страницы (default 1); limit неизменен.
+        eof — конец индекса, НЕ source read; >3000 файлов: отказ без усечения.
+        Полный source: repository.content.read до EOF на точном head/base SHA.
+      operation: github.pull_request.file.list
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope: {kind: GITHUB_REPOSITORY, connectionFields: [owner, repository]}
+      inputFields:
+        - {key: pull_request_number, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: expected_head_sha, type: STRING, format: IDENTIFIER, required: true, maximumLength: 40}
+        - {key: expected_base_sha, type: STRING, format: IDENTIFIER, required: true, maximumLength: 40}
+        - {key: expected_changed_files, type: INTEGER, required: true, minimum: 0, maximum: 3000}
+        - {key: limit, type: INTEGER, required: false, minimum: 1, maximum: 4}
+        - {key: cursor, type: INTEGER, required: false, minimum: 1, maximum: 10000}
+      outputFields:
+        - {key: items, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 4}
+        - {key: next_cursor, type: INTEGER, required: false, minimum: 1, maximum: 10000}
+        - {key: head_sha, type: STRING, format: IDENTIFIER, required: true, maximumLength: 40}
+        - {key: base_sha, type: STRING, format: IDENTIFIER, required: true, maximumLength: 40}
+        - {key: total_count, type: INTEGER, required: true, minimum: 0, maximum: 3000}
+        - {key: page_size, type: INTEGER, required: true, minimum: 1, maximum: 4}
+        - {key: offset, type: INTEGER, required: true, minimum: 0, maximum: 3000}
+        - {key: eof, type: BOOLEAN, required: true}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}

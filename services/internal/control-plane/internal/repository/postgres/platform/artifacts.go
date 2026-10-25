@@ -922,6 +922,11 @@ func (repository *Repository) changeArtifactLifecycle(ctx context.Context, tx pg
 	if tag.RowsAffected() != 1 {
 		return commandOutcome{}, errs.ErrConflict
 	}
+	if input.Kind == command.DeleteArtifact {
+		if err := repository.cancelRepositoryBundleDependency(ctx, tx, scope, "ARTIFACT", payload.ArtifactRef); err != nil {
+			return commandOutcome{}, err
+		}
+	}
 	item, err := scanArtifact(tx.QueryRow(ctx, queryQueriesGetartifactSelectArtifactBindingsArtifactIdIdOrganizationId, scope.organizationID, payload.ArtifactRef, scope.role, scope.actorID))
 	if err != nil {
 		return commandOutcome{}, err
@@ -974,11 +979,12 @@ func (repository *Repository) GetArtifactImpact(ctx context.Context, principal v
 func (repository *Repository) artifactImpactTx(ctx context.Context, tx pgx.Tx, current scope, artifactRef, action string) (entity.ArtifactImpact, string, error) {
 	var artifactID, lifecycleState string
 	var activeRunsJSON []byte
+	var retainedRevisions bool
 	var version, bindingCount, attachmentCount, activeRuntimeCount, skillRevisionCount, activeBindingCount int64
 	err := tx.QueryRow(ctx, queryArtifactsImpact, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID,
 		"artifact_ref":    artifactRef,
-	}).Scan(&artifactID, &version, &lifecycleState, &bindingCount, &attachmentCount, &activeRuntimeCount, &activeRunsJSON, &skillRevisionCount, &activeBindingCount)
+	}).Scan(&artifactID, &version, &lifecycleState, &bindingCount, &attachmentCount, &activeRuntimeCount, &activeRunsJSON, &skillRevisionCount, &activeBindingCount, &retainedRevisions)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return entity.ArtifactImpact{}, "", errs.ErrNotFound
 	}
@@ -1014,14 +1020,18 @@ func (repository *Repository) artifactImpactTx(ctx context.Context, tx pgx.Tx, c
 		if activeRuntimeCount > 0 {
 			blockers = append(blockers, "ACTIVE_RUN_USES_ARTIFACT")
 		}
+		if retainedRevisions {
+			blockers = append(blockers, "ARTIFACT_HAS_RETAINED_REVISIONS")
+		}
 	}
 	digestPayload, _ := json.Marshal(struct {
 		ArtifactRef, Action, LifecycleState                                                                        string
 		ArtifactVersion, BindingCount, AttachmentCount, ActiveRuntimeCount, SkillRevisionCount, ActiveBindingCount int64
+		RetainedRevisions                                                                                          bool
 		Blockers                                                                                                   []string
 		ActiveRuns                                                                                                 []entity.ArtifactImpactRun
 		ActiveRunsTruncated                                                                                        bool
-	}{artifactRef, action, lifecycleState, version, bindingCount, attachmentCount, activeRuntimeCount, skillRevisionCount, activeBindingCount, blockers, activeRuns, activeRunsTruncated})
+	}{artifactRef, action, lifecycleState, version, bindingCount, attachmentCount, activeRuntimeCount, skillRevisionCount, activeBindingCount, retainedRevisions, blockers, activeRuns, activeRunsTruncated})
 	digestValue := sha256.Sum256(digestPayload)
 	return entity.ArtifactImpact{
 		ArtifactRef: artifactRef, Action: action, Digest: hex.EncodeToString(digestValue[:]),

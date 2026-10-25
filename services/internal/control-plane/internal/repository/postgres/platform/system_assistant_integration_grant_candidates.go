@@ -101,6 +101,9 @@ func (repository *Repository) GetSystemAssistantIntegrationGrantCandidates(ctx c
 		} else if !target.ready {
 			item.Reason = "RECIPIENT_UNAVAILABLE"
 		}
+		if capability.Operation == repositoryBundleOperation {
+			item.Grantable, item.Reason = false, "RECIPIENT_UNAVAILABLE"
+		}
 		item.Capability, err = integrationCapabilityProjection(capability)
 		if err != nil {
 			return result, err

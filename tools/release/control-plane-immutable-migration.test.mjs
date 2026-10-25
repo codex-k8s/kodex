@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { planControlPlaneMigration, migrationReadback } from './control-plane-migration.mjs';
 import { fingerprint } from './scoped-release.mjs';
 import { validateStableReceipt } from './stable-image-publication.mjs';
-import { waitMigrationMaintenance } from './control-plane-immutable-migration.mjs';
+import { waitMigrationMaintenance, immutableMigrationProfile, validRepositoryBundleMigrationPostcondition } from './control-plane-immutable-migration.mjs';
 
 const revision = 'a'.repeat(40), digest = `sha256:${'b'.repeat(64)}`;
 const source = {path:'/fixture/source',revision};
@@ -100,8 +100,20 @@ test('PASS needs exact goose version and one exact Job-owned non-restarted execu
   assert.throws(()=>migrationReadback(changed,plan,logs,[pod]),/LIFECYCLE_CHANGED/);
 });
 
+// Runtime получает только явно readable synthetic source subtree; private outer directory остаётся0700 при любом inherited umask.
+// Chmod ограничен свежесозданным source subtree ДОgit init: real worktree/credentials не затрагиваются.
+function readableSourceFixture(directory) {
+  chmodSync(directory,0o755);
+  for(const item of readdirSync(directory,{withFileTypes:true})) {
+    const path=join(directory,item.name);
+    if(item.isDirectory())readableSourceFixture(path);
+    else {assert.equal(item.isFile(),true,'fixture must not contain links');chmodSync(path,0o644);}
+  }
+}
+
 // Настоящий CLI с отдельным kubectl subprocess доказывает порядок intent/CAS/create и запрет повторов.
-function cli(t) {
+function cli(t, profile = 'outbox-index') {
+  const config=immutableMigrationProfile(profile),version=config.version,sqlFile=config.file,annotation=config.annotation;
   const dir=mkdtempSync('/tmp/cp-immutable-migration-');chmodSync(dir,0o700);t.after(()=>rmSync(dir,{recursive:true,force:true}));
   const repo=join(dir,'source'), migrations=join(repo,'services/internal/control-plane/cmd/cli/migrations');
   mkdirSync(migrations,{recursive:true,mode:0o755});chmodSync(repo,0o755);
@@ -109,7 +121,8 @@ function cli(t) {
   const bundleDirectory=join(repo,'deploy/k8s/base/platform-state');mkdirSync(bundleDirectory,{recursive:true,mode:0o755});
   writeFileSync(join(bundleDirectory,'ca-bundles.yaml'),readFileSync(new URL('../../deploy/k8s/base/platform-state/ca-bundles.yaml',import.meta.url)),{mode:0o644});
   const release=join(repo,'tools/release');mkdirSync(release,{recursive:true,mode:0o755});
-  writeFileSync(join(release,'control-plane-migration-precondition.sql'),readFileSync(new URL('./control-plane-migration-precondition.sql',import.meta.url)),{mode:0o644});
+  for(const file of [config.preconditionFile,...(config.postconditionFile?[config.postconditionFile]:[])]) writeFileSync(join(release,file),readFileSync(new URL('./'+file,import.meta.url)),{mode:0o644});
+  readableSourceFixture(repo);
   const git=(...args)=>execFileSync('git',['-C',repo,...args],{stdio:['ignore','pipe','pipe']}).toString().trim();
   git('init','-q');git('remote','add','origin','https://github.com/codex-k8s/kodex.git');git('add','.');
   git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','Оснастка');
@@ -153,7 +166,7 @@ if(a.includes('patch')){
  save();if(a.includes('kube-system'))process.stdout.write(JSON.stringify({metadata:{uid:'cluster'}}));else process.stdout.write(s.namespaceUID);
 }else if(a.includes('bundles.trust.cert-manager.io')){save();process.stdout.write('bundle-uid|1|'+JSON.stringify(s.bundleSpec??{sources:[{secret:{name:'kodex-installation-ca',key:'tls.crt'}}],target:{namespaceSelector:{matchLabels:{'kubernetes.io/metadata.name':'kodex-system'}},configMap:{key:'ca.pem'}}}));
 }else if(a.includes('configmap')){save();process.stdout.write('ca-uid|'+s.dependencyVersion+'|'+(s.caLabel??'control-plane-postgresql-ca')+'|'+JSON.stringify([{apiVersion:'trust.cert-manager.io/v1alpha1',kind:'Bundle',name:'control-plane-postgresql-ca',controller:true,uid:s.caOwner??'bundle-uid'}]));
-}else if(a.includes('exec')){const sql=fs.readFileSync(0,'utf8');if(!sql.includes('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;')||!sql.includes('ROLLBACK;'))fail();out({readOnly:'on',database:'control_plane',gooseVersion:20261020000200,indexAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,claimedRuntimeLeases:0,openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeArchiveTasks:0,activeModelCatalogTasks:0,activeRenewalTasks:0,...s.precondition});
+}else if(a.includes('exec')){const sql=fs.readFileSync(0,'utf8');if(!sql.includes('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;')||!sql.includes('ROLLBACK;'))fail();if(sql.includes('noBodyColumns')){out({readOnly:'on',database:'control_plane',gooseVersion:20261025000200,tableOwner:'control_plane_owner',noBodyColumns:true,foreignKeys:13,deferredForeignKeys:13,guardEnabled:true,retentionConsumer:true,purgeGraphGuard:true,...s.postcondition});}else out({readOnly:'on',database:'control_plane',gooseVersion:${config.previousVersion},${config.emptyField}:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,claimedRuntimeLeases:0,openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeArchiveTasks:0,activeModelCatalogTasks:0,activeRenewalTasks:0,...s.precondition});
 }else if(a.includes('kodex-postgresql-0')){save();process.stdout.write((s.pgUID??'pg-uid')+'|StatefulSet|kodex-postgresql|sts-uid|kodex-postgresql|Running|');
 }else if(a.some(x=>x.startsWith('jsonpath='))){save();process.stdout.write('dependency-'+a[a.indexOf('get')+1]+'|'+s.dependencyVersion+'|'+(s.applicationOwner??'kodex'));
 }else if(a.includes('deployment'))out(s.deployment);
@@ -173,7 +186,7 @@ else if(a.includes('job')){const name=a[a.indexOf('job')+1];
 else{save();process.exit(1);}
 `,{mode:0o700});
   const run=(phase,extra=[])=>spawnSync(process.execPath,[new URL('./control-plane-migration.mjs',import.meta.url).pathname,phase,
-    '--context','k3d-kodex','--profile','outbox-index','--plan',plan,...(phase==='plan'?['--source',repo,'--revision',revision,'--base-render',render,
+    '--context','k3d-kodex','--profile',profile,'--plan',plan,...(phase==='plan'?['--source',repo,'--revision',revision,'--base-render',render,
       '--publication-plan',publicationPlan,'--publication-evidence',publicationEvidence]:['--evidence',evidence]),
     ...(['apply','stop','resume','check'].includes(phase)?['--confirm','APPLY-STAGING-CP-MIGRATION']:[]),...extra],{encoding:'utf8',timeout:15000,env:{...process.env,PATH:`${dir}:${process.env.PATH}`}});
   return {run,get plan(){return plan;},get evidence(){return evidence;},retry(){const previous={plan,evidence};plan=join(dir,'retry-plan.json');evidence=join(dir,'retry-evidence.jsonl');const value=read(state);value.retry=true;value.previousJob=value.job;value.previousPod=value.pod;value.previousCheckJob=value.checkJob;delete value.job;delete value.pod;delete value.checkJob;delete value.checkPod;write(state,value);return ['--predecessor-plan',previous.plan,'--predecessor-evidence',previous.evidence];},publicationPlan,publicationEvidence,repo,read:()=>read(state),edit:fn=>{const value=read(state);fn(value);write(state,value);}};
@@ -351,4 +364,34 @@ test('new readback supports historical v1 attempt without weakening the native i
   const modern=makePlan(),exec=execution(modern);exec.pod.spec.initContainers[0].terminationMessagePath='/dev/termination-log';
   exec.pod.spec.initContainers[0].terminationMessagePolicy='File';exec.pod.spec.initContainers[0].imagePullPolicy='IfNotPresent';
   assert.equal(migrationReadback(exec.job,modern,`goose: current version: ${version}`,[exec.pod]).status,'PASS');
+});
+
+
+test('repository bundle closed profile uses the same canonical immutable transport and distinct source/schema pins',()=>{
+ const config=immutableMigrationProfile('repository-bundle');
+ const plan=planControlPlaneMigration(base(),source,()=>({revision}),'bundle-fixture','repository-bundle',publication());
+ assert.equal(plan.profile,'repository-bundle');assert.equal(plan.migrationVersion,'20261025000200');
+ assert.equal(plan.job.metadata.name,'control-plane-migrate-20261025000200');
+ assert.equal(plan.checkJob.metadata.name,'control-plane-migration-check-20261025000200');
+ assert.deepEqual(plan.job.spec.template.spec.containers,makePlan().job.spec.template.spec.containers);
+ assert.deepEqual(plan.job.spec.template.spec.volumes,makePlan().job.spec.template.spec.volumes);
+ assert.equal(config.previousVersion,20261025000100);
+ assert.throws(()=>immutableMigrationProfile('repository-bundle-v2'),/PROFILE_INVALID/);
+ const {job,pod}=execution(plan);job.metadata.annotations={[config.annotation]:fingerprint(plan)};
+ assert.equal(migrationReadback(job,plan,'goose: current version: 20261025000200',[pod]).status,'PASS');
+ assert.equal(migrationReadback(job,plan,'goose: current version: 20261025000100',[pod]).status,'READBACK_UNCONFIRMED');
+});
+test('repository bundle schema proof is closed on missing/foreign ownership, bytes, retention and purge guards',()=>{
+ const proof={readOnly:'on',database:'control_plane',gooseVersion:20261025000200,tableOwner:'control_plane_owner',noBodyColumns:true,foreignKeys:13,deferredForeignKeys:13,guardEnabled:true,retentionConsumer:true,purgeGraphGuard:true};
+ assert.equal(validRepositoryBundleMigrationPostcondition(proof),true);
+ for(const key of Object.keys(proof)){const missing={...proof};delete missing[key];assert.equal(validRepositoryBundleMigrationPostcondition(missing),false,key);}
+ for(const [key,value] of Object.entries({gooseVersion:20261025000100,tableOwner:'postgres',noBodyColumns:false,foreignKeys:12,deferredForeignKeys:12,guardEnabled:false,retentionConsumer:false,purgeGraphGuard:false}))assert.equal(validRepositoryBundleMigrationPostcondition({...proof,[key]:value}),false,key);
+});
+test('repository bundle actual CLI requires schema proof and resumes old CP after known terminal failed proof',t=>{
+ const f=cli(t,'repository-bundle');pass(f,'plan','PLANNED');pass(f,'check');pass(f,'stop','STOPPED');
+ f.edit(s=>s.postcondition={retentionConsumer:false});const bad=f.run('apply');assert.notEqual(bad.status,0);assert.match(bad.stderr,/POSTCONDITION_FAILED/);
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,2);
+ f.edit(s=>delete s.postcondition);const good=pass(f,'inspect');assert.equal(JSON.parse(good.stdout).schemaPostcondition,'PASS');
+ pass(f,'resume','RESUMED');assert.equal(f.read().deployment.spec.replicas,2);
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,2);
 });

@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.44
+version: 1.1.45
 updated: 2026-10-25
 ---
 
@@ -25,6 +25,13 @@ Gate результата этапа наследует только exact `Gate
 согласование. Новая публикация не меняет список текущего исполнения;
 integration/delivery policies не смешиваются с workflow step policy.
 Матрица: [#1872](../operations/workflow-gate-decisions-1872.md).
+
+Preview физического удаления использует тот же канонический retention
+predicate, что фактический owner guard. Его boolean входит в version-pinned
+impact digest, а закрытый blocker доставляется через API/VFS/PWA без
+выдуманных active consumers. Soft delete и physical purge имеют разные
+условия; отказ preview не заменяет свежую проверку под owner lock перед
+внешним удалением.
 
 Закрытый Gate проверяется после fresh authority и receipt replay, до применения
 его исторических clocks. Он не инициирует новый expiry ни terminal root, ни
