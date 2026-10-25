@@ -4,7 +4,7 @@ title: Сохранность артефакта при неизвестном �
 type: operations
 status: approved
 owner: manager
-version: 1.0.1
+version: 1.0.2
 updated: 2026-10-25
 ---
 
@@ -73,7 +73,19 @@ RED подтверждён на test-only `5de17d527`: четыре неизве
 Исправление меняет только два final owner Commit-error branch: компенсация
 подавляется, если ошибка не является `pgx.ErrTxCommitRollback`. Replay ветки
 не меняются: новый проигравший prepared object не входит в прежний receipt.
-Неизменённая suite должна подтвердить GREEN на следующем отдельном checkpoint.
+Первый запуск исправления обнаружил ошибку тестового owner read: repository
+получал principal до публичного преобразования identity. Исправлена только
+оснастка чтения: отдельный `platformservice.New` выполняет штатное разрешение
+principal для DownloadArtifact/GetRun; production authority не ослаблена.
+На чистом `2a981ee6377c2108a8db57d33be2f0cf26b53d6c` все шесть сценариев
+прошли native disposable PostgreSQL: COMPLETE и UPLOAD с потерей ACK, отменой
+caller после COMMIT и подтверждённым rollback. Четыре неизвестных исхода
+сохранили exact bytes, owner download и matching replay без дополнительного
+PUT; changed intent и чужой principal отклонены. Два rollback сохранили
+counts0/Delete1. Контейнер удалён, исходники после проверки не изменились.
+Это доказательство относится к указанному checkpoint; перенос на staging-ветку
+требует отдельной проверки нового SHA. Исторические RED и ошибка оснастки
+остаются в журнале, успешный запуск их не заменяет.
 
 Ручная проверка после разрешённой поставки: создать маленький CLEAN файл
 обычным сотрудником и загрузкой владельца; проверить download, digest и
