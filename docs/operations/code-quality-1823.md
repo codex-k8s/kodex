@@ -4,11 +4,43 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.478.0
+version: 1.479.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общий допуск четырёх storage E2E сценариев — 26.10.2026
+
+Существующая библиотека scripts/tests/lib/local-kubernetes-e2e.sh теперь
+содержит общие disposable input и cluster preflight четырёх wrappers:
+artifact-storage,backup-restore,session-archive и session-archive-backup-restore.
+Только два последних используют общий закрытый CLI loop. Индивидуальные
+usage/fail, дополнительные artifact/backup validations и список необходимых
+tools остаются у сценариев. Confirmation сохраняется в caller scope для
+вложенного restore; exact KUBECONFIG экспортируется в прежней точке.
+Порядок проверок: явное подтверждение,non-production context,безопасные
+kubeconfig/state,дополнительные scenario guards/tools,exact current-context,
+readyz,три namespace labels. Loader рядом со скриптом не меняет cwd/options.
+
+Полная инверсия четырёх wrappers и библиотеки побайтовая.116 парных случаев
+(232 запуска) сравнили status/stdout/stderr,confirmation/KUBECONFIG и точный
+порядок трёх разрешённых read calls через имитацию kubectl. Проверены
+отсутствующее/неверное подтверждение,production context,неверные/relative/
+symlink paths,ошибки API/context,каждый неверный или отсутствующий namespace
+label,invalid JSON,CLI help/unknown/missing value,литеральный context и
+повторный option. В stderr нормализованы только путь fixture и номер строки
+Bash;значения/порядок диагностик сохранены. Последующий E2E body,cleanup
+traps,Secret/DB/Job операции,authority и lifecycle не менялись.
+
+Bash syntax и ShellCheck пяти файлов,публичные offline
+local-storage-e2e-reliability-contract и local-kubernetes-e2e-diagnostics-contract
+прошли локально. Detector устранил семь групп,новых/stale нет;
+registry1044 entries не менялся. Итог:6760 собственных sources,222 прежних
+generated exclusions,1517 raw /1184 retained /333 unresolved. Все21574 Go
+объявления по-прежнему EN→RU. Пять quality stages — PASS LOCAL.
+Полные storage E2E,реальные credentials/cluster,deploy и независимая QA —
+NOT RUN. Проверка имитацией не является приёмкой развёрнутого приложения.
 
 ## Общие локальные сборочные проверки и mount-предикат — 26.10.2026
 

@@ -34,15 +34,10 @@ while (($# > 0)); do
   esac
 done
 
-confirmation=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION
-[[ ${KODEX_E2E_CONFIRM_DISPOSABLE:-} == "$confirmation" ]] ||
-  fail 'explicit disposable installation confirmation is required'
-[[ -n "$context" && "${context,,}" != *prod* && "${context,,}" != *production* ]] ||
-  fail 'exact non-production context is required'
-[[ "$kubeconfig" == /* && -f "$kubeconfig" && -r "$kubeconfig" && ! -L "$kubeconfig" ]] ||
-  fail 'Kubernetes configuration is absent or unsafe'
-[[ "$state_directory" == /* && -d "$state_directory" && ! -L "$state_directory" ]] ||
-  fail 'state directory is absent or unsafe'
+# Общие проверки выбираются рядом со скриптом без смены cwd.
+# shellcheck source=lib/local-kubernetes-e2e.sh
+source "${BASH_SOURCE[0]%"${BASH_SOURCE[0]##*/}"}lib/local-kubernetes-e2e.sh"
+kodex_e2e_require_disposable_storage_inputs
 if [[ -n "$requested_backup_id" && ! "$requested_backup_id" =~ ^[0-9]{8}T[0-9]{6}Z-[a-f0-9]{16}$ ]]; then
   fail 'requested verified backup identifier is invalid'
 fi
@@ -56,17 +51,9 @@ for command_name in date go head jq kubectl sed sleep yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 
-export KUBECONFIG="$kubeconfig"
-[[ $(kubectl config current-context) == "$context" ]] || fail 'Kubernetes context mismatch'
-kubectl get --raw=/readyz >/dev/null || fail 'Kubernetes API is unavailable'
-kubectl get namespace/kodex-system -o json | jq -e '
-  .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
-  .metadata.labels["kodex.dev/environment"] == "staging" and
-  .metadata.labels["kodex.dev/local-profile"] == "hot-reload"
-' >/dev/null || fail 'Kodex namespace is not the exact disposable local profile'
+kodex_e2e_require_disposable_storage_cluster
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
-source "$repository_root/scripts/tests/lib/local-kubernetes-e2e.sh"
 kodex_e2e_ensure_private_directory "$state_directory/e2e" ||
   fail 'private E2E state directory is unavailable'
 temporary_directory=$(mktemp -d "$state_directory/e2e/backup-restore.XXXXXX")

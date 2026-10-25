@@ -1,5 +1,47 @@
 #!/usr/bin/env bash
 
+# Проверяет допуск к disposable storage E2E до внешних вызовов.
+# Использует context/kubeconfig/state_directory вызывающего сценария и оставляет
+# confirmation для вложенного restore; fail и его workload-prefix принадлежат caller.
+kodex_e2e_require_disposable_storage_inputs() {
+  confirmation=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION
+  [[ ${KODEX_E2E_CONFIRM_DISPOSABLE:-} == "$confirmation" ]] ||
+    fail 'explicit disposable installation confirmation is required'
+  [[ -n "$context" && "${context,,}" != *prod* && "${context,,}" != *production* ]] ||
+    fail 'exact non-production context is required'
+  [[ "$kubeconfig" == /* && -f "$kubeconfig" && -r "$kubeconfig" && ! -L "$kubeconfig" ]] ||
+    fail 'Kubernetes configuration is absent or unsafe'
+  [[ "$state_directory" == /* && -d "$state_directory" && ! -L "$state_directory" ]] ||
+    fail 'state directory is absent or unsafe'
+}
+
+# Проверяет exact caller KUBECONFIG/context, API readiness и три namespace labels.
+# Экспорт KUBECONFIG сохраняется для дальнейшего сценария; запросы только читают состояние.
+kodex_e2e_require_disposable_storage_cluster() {
+  export KUBECONFIG="$kubeconfig"
+  [[ $(kubectl config current-context) == "$context" ]] || fail 'Kubernetes context mismatch'
+  kubectl get --raw=/readyz >/dev/null || fail 'Kubernetes API is unavailable'
+  kubectl get namespace/kodex-system -o json | jq -e '
+    .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+    .metadata.labels["kodex.dev/environment"] == "staging" and
+    .metadata.labels["kodex.dev/local-profile"] == "hot-reload"
+  ' >/dev/null || fail 'Kodex namespace is not the exact disposable local profile'
+}
+
+# Разбирает закрытый общий CLI session-archive сценариев в caller variables.
+# usage/fail остаются индивидуальными; значения присваиваются буквально без eval.
+kodex_e2e_parse_storage_cluster_arguments() {
+  while (($# > 0)); do
+    case "$1" in
+      --context) context=${2:-}; shift 2 ;;
+      --kubeconfig) kubeconfig=${2:-}; shift 2 ;;
+      --state-directory) state_directory=${2:-}; shift 2 ;;
+      --help) usage; exit 0 ;;
+      *) usage; fail "unsupported argument: $1" ;;
+    esac
+  done
+}
+
 kodex_e2e_ensure_private_directory() {
   local directory=$1
   [[ "$directory" == /* ]] || return 1
