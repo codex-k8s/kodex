@@ -15,7 +15,7 @@ import (
 // total/digest и уникальных consumers с одной owner-scope тройкой, затем выдаёт ETag версии среды.
 // Перепривязка и выдача доступа consumers не выполняются.
 func (server *Server) GetRuntimeEnvironmentImpact(w http.ResponseWriter, r *http.Request, environmentRef generated.RuntimeEnvironmentRef, versionRef generated.RuntimeEnvironmentVersionRef, p generated.GetRuntimeEnvironmentImpactParams) {
-	if !opaqueHTTPReference.MatchString(environmentRef) || !opaqueHTTPReference.MatchString(versionRef) || !validHTTPPage(p.PageSize, p.PageToken) || !validSearchText(stringValue(p.Query), 0, 200) {
+	if !opaqueHTTPReference.MatchString(environmentRef) || !opaqueHTTPReference.MatchString(versionRef) || !validFilteredHTTPPage(p.PageSize, p.PageToken, p.Query) {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}

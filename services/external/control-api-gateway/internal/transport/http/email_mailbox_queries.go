@@ -15,7 +15,7 @@ import (
 // чужие connection записи до выдачи.
 func (s *Server) ListEmailMailboxConfigurations(w http.ResponseWriter, r *http.Request, ref generated.ConnectionRef, p generated.ListEmailMailboxConfigurationsParams) {
 	setRuntimeSecretHeaders(w)
-	if !validHTTPPage(p.PageSize, p.PageToken) || !validSearchText(stringValue(p.Query), 0, 200) {
+	if !validFilteredHTTPPage(p.PageSize, p.PageToken, p.Query) {
 		writeLocalProblem(w, 400, "INVALID_REQUEST", false)
 		return
 	}

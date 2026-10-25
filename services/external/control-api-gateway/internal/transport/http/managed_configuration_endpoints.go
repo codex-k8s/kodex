@@ -546,7 +546,7 @@ func (server *Server) ListManagedConfigurationHistory(w http.ResponseWriter, r *
 // преобразования потребителей. Ответ является свидетельством влияния, а не подтверждением
 // перепривязки.
 func (server *Server) GetManagedConfigurationImpact(w http.ResponseWriter, r *http.Request, ref generated.ConfigurationRef, revisionRef generated.ConfigurationRevisionRef, p generated.GetManagedConfigurationImpactParams) {
-	if !opaqueHTTPReference.MatchString(ref) || !opaqueHTTPReference.MatchString(revisionRef) || !validHTTPPage(p.PageSize, p.PageToken) || !validSearchText(stringValue(p.Query), 0, 200) {
+	if !opaqueHTTPReference.MatchString(ref) || !opaqueHTTPReference.MatchString(revisionRef) || !validFilteredHTTPPage(p.PageSize, p.PageToken, p.Query) {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}

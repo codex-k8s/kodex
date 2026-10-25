@@ -4,11 +4,44 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.488.0
+version: 1.489.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая проверка filtered HTTP page — 26.10.2026
+
+Восемь paths одного gateway используют validFilteredHTTPPage рядом с
+validHTTPPage:impact окружения/секрета/managed configuration,revision/image/
+secret-draft plans,mailbox configuration list иprompt variable catalog.
+Сначала проверяются прежние page size1..100/token<=512bytes,затем optional
+query0..200runes с UTF-8/NUL validation. Query не обрезается и не нормализуется;
+новой проверки кодировки cursor нет. Передача query pointer сохраняет lazy
+порядок. Ссылочные guards,разные ref limits128/96,headers,typed RPC,authority
+и response projections остаются у каждого caller.
+
+Девять полных source byte inverse восстановили восемь native guard pairs и
+общий validation file без нового helper. Фактическое тело predicate сверено
+с прежними двумя проверками;вся lazy truth table сохраняет порядок page→query.
+Шесть actual unsafe source mutations bounds/boolean/page/query отвергнуты.
+Все source hashes9 связаны с checks/proof. Go1.26.6 gateway build6.33с,
+unit23.43с,go vet1.87с — PASS LOCAL:11 tested packages/3098 PASS events,
+0 test FAIL/SKIP,3 packages без test files собраны. Существующий impact
+search contract проверяет literal200-rune запросы,201/NUL/UTF8 отказы и
+RPC/error/ETag/no-store;новых тестов простого glue не добавлено. Gofmt9 PASS.
+
+Одно прежнее raw окно исчезло,одно новое появилось. Три exact решения
+ограничены nominal PrepareInstructions/Environment и read Revision/RoleImage/
+SecretDraft RPC mappings вокруг уже общих primitives.1071 прежних entries
+сохранены,registry1074. Кандидат0de737 с build projection loop не включён:
+он требует отдельного разбора исполняемого алгоритма. Остаток264 включает
+этот участок;полная готовность не заявляется.
+
+Detector:6767sources/222generated exclusions,1481raw/1217retained/264unresolved.
+Go21581/21581 EN→RU,новое объявление описывает literal search и границы,
+которые остаются у callers. Dependencies/contracts/generated/migrations
+прежние. Browser/full E2E/deploy/live и независимая QA — NOT RUN.
 
 ## Адресный разбор деклараций hoisted mocks — 26.10.2026
 

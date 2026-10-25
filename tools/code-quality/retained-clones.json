@@ -8568,6 +8568,30 @@
       "fragmentSHA256": "e4dfaaff96454131235f9f5583050229aebc1fe157ea99aaf67c983b5b04bfde",
       "count": 1,
       "reason": "Тесты provider SDK,provider feature API и role-image SDK объявляют разные закрытые object-наборы независимых пустых vi.fn в const vi.hoisted;SDK и feature method names намеренно различны и подменяются в разных literal module targets. Полные пересекаемые объявления проверены AST:только imports и синхронные hoisted callbacks без аргументов/реализаций spy. Общего исполняемого алгоритма в окне нет. Imported factory недоступна до imports;новый async dynamic import или объединённый superset mocks добавили бы границу ради деклараций. Exact решение ограничено этой парой,hash,count=1 и не покрывает настройки поведения,assertions либо callbacks ниже."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/instructions_impact_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/revision_impact_endpoints.go",
+      "fragmentSHA256": "fb38063b2775bb3aa02664d50b46664f6f9cb95bd1641ae50a8f5e6973c48762",
+      "count": 1,
+      "reason": "Типизированные PrepareInstructionsImpact/PrepareEnvironmentDraftImpact используют прежние общие requireMutation,fileTargetRef,writeRPCProblem и revisionImpactPlanView. Различаются request/actor resource и owner evidence:agent/sourceVersion/AGENT_INSTRUCTIONS против draft/DraftVersion/RUNTIME_ENVIRONMENT. Legacy mutation-first и ref-second порядок намеренно сохранён. Универсальный command dispatcher или callback только ради записи nominal request/plan conditions скрыл бы границы этих специализированных операций. Решение ограничено данной парой/hash/count=1;не распространяется на item loops,selection или response payload вне окна."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/revision_impact_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/role_image_impact_endpoints.go",
+      "fragmentSHA256": "ca8246edbf4b8008bc3b2f56913d5c1756abd0642b8d9aa48f8b2d951494388c",
+      "count": 1,
+      "reason": "Типизированное чтение RevisionImpactPlan и RoleImageImpactPlan уже использует общий validFilteredHTTPPage,page и writeRPCProblem. Окно содержит вызовы разных owner RPC/request/view и exact plan/ref/total/page/cursor checks;nominal RevisionImpactPlan и image lineage не объединяются. Универсальный RPC/converter dispatcher добавил бы callbacks вместо явной связи types и owner validation. Решение ограничено данной парой/hash/count=1;не распространяется на item loops,selection или response payload вне окна."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/role_image_impact_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/runtime_secret_draft_impact.go",
+      "fragmentSHA256": "fa7982fbd3a3f5f8ba76c5468e7f82f4a8cd3df97355e40fbc8292a55b31db89",
+      "count": 1,
+      "reason": "Типизированное чтение role-image и runtime-secret-draft impact уже использует общий validFilteredHTTPPage,page и writeRPCProblem. В окне сохраняются разные resource refs(8..128 против opaque<=96),query RPC/request/view и upstream bounds(текущий page size/UTF8 cursor против fixed100/byte cursor). Secret no-store headers остаются до проверки input. Общий dispatcher не должен скрывать эти намеренные security/contract различия. Решение ограничено данной парой/hash/count=1;не распространяется на item loops,selection или response payload вне окна."
     }
   ]
 }

@@ -28,6 +28,16 @@ func validHTTPPage(size *int, token *string) bool {
 	return (size == nil || *size >= 1 && *size <= 100) && (token == nil || len(*token) <= 512)
 }
 
+// validFilteredHTTPPage checks page controls before an optional literal search of zero to
+// 200 Unicode code points. It preserves UTF-8/NUL rejection without trimming the query,
+// validating cursor encoding or resolving the resource scope; callers retain those boundaries.
+// validFilteredHTTPPage проверяет параметры страницы перед необязательным буквальным поиском
+// от нуля до200 Unicode-символов. Сохраняет отказ неверному UTF-8/NUL без обрезания поиска,
+// проверки кодировки cursor и разрешения области ресурса; эти границы остаются у callers.
+func validFilteredHTTPPage(size *int, token, query *string) bool {
+	return validHTTPPage(size, token) && validSearchText(stringValue(query), 0, 200)
+}
+
 // requireVersionedMutation requires a valid idempotency key and canonical quoted positive If-Match
 // within the safe JSON integer range. Invalid headers produce HTTP 400 locally; resource ownership
 // and OCC remain with the owner command.

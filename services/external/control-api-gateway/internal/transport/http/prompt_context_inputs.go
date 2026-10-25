@@ -236,7 +236,7 @@ func (server *Server) QueryPromptTemplateVariables(w http.ResponseWriter, r *htt
 	}
 	context, ok := promptContextInput(body.Context)
 	source := stringValue(body.Source)
-	if !ok || !validPromptSelection(string(body.TargetKind), body.TargetRef, stringValue(body.ExpectedContextDigest), context) || !validHTTPPage(body.PageSize, body.PageToken) || !validSearchText(stringValue(body.Query), 0, 200) || !validTemplateVariableSource(source) {
+	if !ok || !validPromptSelection(string(body.TargetKind), body.TargetRef, stringValue(body.ExpectedContextDigest), context) || !validFilteredHTTPPage(body.PageSize, body.PageToken, body.Query) || !validTemplateVariableSource(source) {
 		writeLocalProblem(w, 400, "INVALID_REQUEST", false)
 		return
 	}
