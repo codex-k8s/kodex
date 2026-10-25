@@ -4,7 +4,7 @@ title: Offline-план отдельной static S3 identity для backup dril
 type: runbook
 status: approved
 owner: sre
-version: 1.1.0
+version: 1.2.0
 updated: 2026-10-25
 ---
 
@@ -80,7 +80,13 @@ exact candidate names, policy, две owner approvals и JSONPatch. Keys не с
 - dedicated keys: `qa-backup-key-static1003-8f87b5e6b10b49e2`;
 - identity: `qa-backup-static-static1003-8f87b5e6b10b49e2`;
 - policy: имя identity с суффиксом `-policy`;
-- QA prefixes: `qa-1830-static1003/` и `e2e-restore-static1003/`.
+- QA prefixes: `qa-1830-8f87b5e6b10b49e28a230c959375d827/` и
+  `e2e-restore-8f87b5e6b10b49e28a230c959375d827/`.
+
+Обе области данных включают **весь nonce immutable операции**, а не только run
+или имя identity. Повтор run с новым nonce не наследует права на прежние backup/
+restore objects. Plan/receipt используют schema v2; старые v1 preview/receipt
+не принимаются новым оператором. Source prefixes остаются прежними.
 
 ## Policy и предварительные условия окна обслуживания
 
@@ -113,6 +119,17 @@ Pinned [action resolver](https://github.com/seaweedfs/seaweedfs/blob/de34a1a87c0
 4. Root-only проверка отсутствия collision новых Secret/identity/policy names,
    отсутствия bucket policy, которая расширит effective доступ, и существующего
    dynamic shadow. Обнаруженное состояние не изменять: остановить подготовку.
+   До генерации пары и любого auth effect оператор также выполняет для каждой
+   exact QA области ListObjectsV2 и ListObjectVersions с prefix+`/`, max-keys1,
+   без delimiter/marker/cursor. Оба ответа должны быть полными пустыми страницами:
+   точные bucket/prefix/MaxKeys/IsTruncated, KeyCount0 для V2, отсутствие current
+   objects, versions, delete markers, common prefixes и continuation markers.
+   Wrong scope, unknown/missing/duplicate поля, invalid XML/namespace, truncation,
+   unavailable и malformed response закрыто отклоняются до keys/Secrets/STS.
+   Положительные XML fixtures привязаны к независимым декларациям pinned4.41
+   [ListBucketResultV2](https://github.com/seaweedfs/seaweedfs/blob/de34a1a87c02893507f961cda9574172ee5064e9/weed/s3api/s3api_object_handlers_list.go)
+   и [S3ListObjectVersionsResult](https://github.com/seaweedfs/seaweedfs/blob/de34a1a87c02893507f961cda9574172ee5064e9/weed/s3api/s3api_object_versioning.go).
+   Ответы не архивируются; сохраняются только hashes и matching scope metadata.
 5. Явное owner approval exact plan digest, baseline credential projection и
    двух outage; исходное разрешение full backup не заменяет это согласие.
 
@@ -222,6 +239,24 @@ nonce оператор не генерирует. Metadata recovery не соз�
 patch. С истёкшим approval доступна только команда `readback`; новый внешний
 effect требует нового явного разрешения. CLI ошибки и output redacted.
 
+`initial-freshness.done` сохраняется до первого key generation и привязан к
+exact journal plan/revision, baseline Pod UID и обоим nonce prefixes. Если процесс
+остановился **до** create INTENT, следующий apply снова проверяет current пустоту;
+одной старой записи недостаточно. После первого Secret INTENT rejoin требует
+исходный proof и exact owned immutable pair. Историческая начальная пустота не
+перепроверяется против собственных поздних backup/restore writes и не создаёт
+новую attempt. Receipt v2 включает этот proof; custody проверяет его scope до
+выдачи dedicated projection. Это не устраняет условие exclusive quiescent writers
+между S3 observation и Kubernetes effect: межресурсной транзакции здесь нет.
+
+Для `render-backup`, `render-readback` и `render-restore` в static mode также
+передаётся `--static-identity-receipt`; exact `--prefix` равен
+`qa-1830-8f87b5e6b10b49e28a230c959375d827`. Render/credentials destination используют
+этот repository prefix; restore inputs содержат exact operation target prefix.
+Fingerprint, preflight, restore, target inspection и cleanup читают одни и те же
+immutable targets.json. Apply restore повторно сверяет весь render с approved
+custody plan; prefix substitution не создаёт Secret и не доходит до restore.
+
 QA write probes используют только два exact own `_static-auth-probe/<owner>` key.
 PUT имеет If-None-Match:* и metadata owner; GET сверяет bounded synthetic body,
 HEAD — owner/ETag/VersionId; DELETE всегда содержит exact non-null VersionId.
@@ -299,6 +334,10 @@ transport/custody regressions с двумя timeout60s, без живых кли
 lost ACK на create/patch/QA write/delete/cleanup, old generation/UID replacement,
 expired readback, source mutation guard, no credential output, cold return и
 OrderedReady recovery. Новый plan на metadata живого STS — только наблюдение.
+Freshness regressions покрывают тот же run/new nonce, current object/old version/
+delete marker до keys, malformed/truncated/incomplete/outage, exact scope и
+origin-preserving rejoin после собственных writes. Legacy render без static
+receipt сохраняет прежний контракт; он не является fallback для static отказа.
 Actual static loader/policy/curl probes, quiescent proof, server-side dry-run,
 rollout, revocation, DB reader grants и полный backup/restore остаются NOT RUN.
 Готовность к review кода не является разрешением auth/deploy или full DR.

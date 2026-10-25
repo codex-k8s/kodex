@@ -99,7 +99,13 @@ def validate_sts(sts, owner=None):
     return indices[0]
 
 
-def policy(run):
+def qa_prefixes(owner):
+    """Одна immutable operation identity определяет обе непересекающиеся области данных."""
+    require(isinstance(owner, str) and NONCE.fullmatch(owner), "OWNER_NONCE_INVALID")
+    return {"repository": "qa-1830-" + owner, "target": "e2e-restore-" + owner}
+
+
+def policy(run, owner):
     """Декларативная prefix-policy, без legacy actions и без bucket Admin."""
     require(isinstance(run, str) and RUN.fullmatch(run), "RUN_INVALID")
     arn = lambda bucket: "arn:aws:s3:::" + bucket
@@ -110,8 +116,9 @@ def policy(run):
         {"Sid": "ReadVersioning", "Effect": "Allow", "Action": "s3:GetBucketVersioning",
          "Resource": [arn(bucket) for bucket in BUCKETS]},
     ]
+    scopes = qa_prefixes(owner)
     prefixes = ((BUCKETS[0], "organizations/"), (BUCKETS[1], "session-archive/v1/"),
-                (BUCKETS[2], "qa-1830-" + run + "/"), (BUCKETS[3], "e2e-restore-" + run + "/"))
+                (BUCKETS[2], scopes["repository"] + "/"), (BUCKETS[3], scopes["target"] + "/"))
     for index, (bucket, prefix) in enumerate(prefixes):
         statements.append({"Sid": "ListPrefix" + str(index), "Effect": "Allow",
                            "Action": ["s3:ListBucket", "s3:ListBucketVersions"], "Resource": arn(bucket),
@@ -162,14 +169,15 @@ def plan(snapshot, run, nonce):
     require(pod["name"] == "seaweedfs-0" and pod["ownerUID"] == STS_UID and pod["ready"] is True and
             pod["revision"] == status["currentRevision"] and pod["pvcName"] == pvc["name"] == "data-seaweedfs-0" and
             pvc["bound"] is True, "POD_PVC_TARGET_MISMATCH")
-    document = policy(run)
+    document = policy(run, nonce)
     identity = "qa-backup-static-" + run + "-" + nonce[:16]
     auth_name = "qa-backup-auth-" + run + "-" + nonce[:16]
     scoped_name = "qa-backup-key-" + run + "-" + nonce[:16]
     desired = copy.deepcopy(sts["spec"]["template"])
     desired["spec"]["volumes"][index]["secret"]["secretName"] = auth_name
     desired["metadata"]["annotations"].update({OWNER_ANNOTATION: nonce, POLICY_ANNOTATION: custody.digest(document)})
-    result = {"schema": "kodex.backup-static-plan/v1", "status": "OFFLINE_REVIEW_ONLY", "run": run, "owner": nonce,
+    result = {"schema": "kodex.backup-static-plan/v2", "status": "OFFLINE_REVIEW_ONLY", "run": run, "owner": nonce,
+              "qaPrefixes": qa_prefixes(nonce),
               "snapshot": copy.deepcopy(snapshot), "image": image_pin(), "policy": document,
               "policySHA256": custody.digest(document), "identityName": identity, "policyName": identity + "-policy",
               "authSecret": {"name": auth_name, "immutable": True, "keys": ["s3.json"], "uid": "NOT_CREATED"},

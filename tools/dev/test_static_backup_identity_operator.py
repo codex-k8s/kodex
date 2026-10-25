@@ -27,6 +27,11 @@ NEW_ACCESS, NEW_SECRET = "e" * 32, "f" * 64
 REVISION = "b" * 40
 
 
+def inventory_xml(bucket, prefix, versions):
+    path = contract.ROOT / "tools/dev/fixtures" / ("static-s3-empty-versions.xml" if versions else "static-s3-empty-current.xml")
+    return path.read_bytes().replace(b"__BUCKET__", bucket.encode()).replace(b"__PREFIX__", prefix.encode())
+
+
 class FakeKubernetes:
     def __init__(self, value):
         self.value = value
@@ -44,6 +49,7 @@ class FakeKubernetes:
         self.lose_ack, self.keep_key, self.policy_present, self.fail_probe, self.block_consumers = None, False, False, False, False
         self.bad_rollout, self.bad_pod = False, False
         self.versioning = "Enabled"
+        self.inventory_overrides, self.inventory_entries = {}, []
         self.clock = 0
         self.sync_pod(value["snapshot"]["pod"]["uid"])
 
@@ -197,7 +203,22 @@ class FakeLoopback:
             if method == "HEAD" or "versioning" in fields:
                 return 200, {}, b""
             allowed = {"kodex-artifacts": "organizations/", "kodex-session-archives": "session-archive/v1/",
-                       "kodex-backups": "qa-1830-fixture/", "kodex-restore-fixture": "e2e-restore-fixture/"}[bucket]
+                       "kodex-backups": "qa-1830-" + self.kube.value["owner"] + "/",
+                       "kodex-restore-fixture": "e2e-restore-" + self.kube.value["owner"] + "/"}[bucket]
+            if admin and bucket in ("kodex-backups", "kodex-restore-fixture") and "prefix" in fields:
+                versions = "versions" in fields
+                self.kube.trace.append(("ADMIN_INVENTORY", bucket, fields["prefix"], versions))
+                if (bucket, versions) in self.kube.inventory_overrides:
+                    result = self.kube.inventory_overrides[(bucket, versions)]
+                    if isinstance(result, Exception):
+                        raise result
+                    return result[0], {}, result[1]
+                raw = inventory_xml(bucket, fields["prefix"], versions)
+                root = b"ListVersionsResult" if versions else b"ListBucketResult"
+                for entry_bucket, entry_prefix, entry_kind in self.kube.inventory_entries:
+                    if entry_bucket == bucket and fields["prefix"] == entry_prefix and (versions or entry_kind == "Contents"):
+                        raw = raw.replace(b"</" + root + b">", b"<" + entry_kind.encode() + b"><Key>prior-data</Key></" + entry_kind.encode() + b"></" + root + b">")
+                return 200, {}, raw
             status = 200 if fields.get("prefix", "").startswith(allowed) else 403
             if self.kube.fail_probe:
                 status = 200
@@ -290,6 +311,111 @@ class OperatorTests(unittest.TestCase):
         with patch.object(operator.secrets, "token_hex", side_effect=AssertionError("new key forbidden")):
             self.operation.apply()
         self.assertEqual(self.kube.effects, before)
+
+    def test_initial_inventory_proof_persists_and_rejoin_does_not_reject_own_later_data(self):
+        receipt = self.apply()
+        proof = copy.deepcopy(receipt["initialFreshness"])
+        self.assertEqual(proof["state"], "EMPTY_COMPLETE")
+        self.assertEqual(proof["qaPrefixes"], self.value["qaPrefixes"])
+        for bucket, scope in (("kodex-backups", "repository"), ("kodex-restore-fixture", "target")):
+            self.kube.inventory_entries.append((bucket, self.value["qaPrefixes"][scope] + "/", "Version"))
+        reads = [item for item in self.kube.trace if item[0] == "ADMIN_INVENTORY"]
+        self.operation.readback()
+        with patch.object(operator.secrets, "token_hex", side_effect=AssertionError("new pair forbidden")):
+            again = self.operation.apply()
+        self.assertEqual(proof, again["initialFreshness"])
+        self.assertEqual(reads, [item for item in self.kube.trace if item[0] == "ADMIN_INVENTORY"])
+
+    def test_same_run_new_nonce_occupied_current_version_marker_denies_before_keys(self):
+        index = 0
+        for scope, bucket in (("repository", "kodex-backups"), ("target", "kodex-restore-fixture")):
+            for kind in ("Contents", "Version", "DeleteMarker"):
+                index += 1
+                value = contract.plan(self.value["snapshot"], "fixture", "b" * 32)
+                kube = FakeKubernetes(value)
+                kube.inventory_entries.append((bucket, value["qaPrefixes"][scope] + "/", kind))
+                state = self.directory / ("occupied-" + str(index))
+                state.mkdir(mode=0o700)
+                journal = operator.Journal(state)
+                self.addCleanup(journal.close)
+                approval = dict(self.approval, planSHA256=custody.digest(value))
+                operation = operator.Operator(kube, value, approval, REVISION, journal, loopback=FakeLoopback)
+                with self.subTest(scope=scope, kind=kind), patch.object(operator.secrets, "token_hex", side_effect=AssertionError("keys forbidden")), self.assertRaisesRegex(custody.Rejected, "QA_PREFIX_OCCUPIED"):
+                    operation.apply()
+                self.assertEqual(kube.effects, [])
+                self.assertEqual(set(kube.secrets), {contract.SOURCE_NAME})
+                self.assertFalse(journal.exists("initial-freshness", "done"))
+
+    def test_old_operation_data_is_outside_new_nonce_policy_and_inventory(self):
+        old = "qa-1830-" + "b" * 32 + "/"
+        self.kube.inventory_entries.extend([("kodex-backups", old, "Version"),
+                                            ("kodex-restore-fixture", "e2e-restore-" + "b" * 32 + "/", "DeleteMarker")])
+        receipt = self.apply()
+        self.assertNotIn(old, json.dumps(receipt["plan"]["policy"]))
+        self.assertTrue(all(item[2] in ("qa-1830-" + "a" * 32 + "/", "e2e-restore-" + "a" * 32 + "/")
+                            for item in self.kube.trace if item[0] == "ADMIN_INVENTORY"))
+
+    def test_empty_listing_unavailable_malformed_incomplete_or_truncated_denies_before_keys(self):
+        prefix = self.value["qaPrefixes"]["repository"] + "/"
+        for versions in (False, True):
+            raw = inventory_xml("kodex-backups", prefix, versions)
+            root = b"ListVersionsResult" if versions else b"ListBucketResult"
+            invalid = [b"", b"<List/>", raw.decode().encode("utf-16"), b"a" * 16385,
+                       raw.replace(b">false<", b">true<"),
+                       raw.replace(b"<IsTruncated>false</IsTruncated>", b""),
+                       raw.replace(b"<MaxKeys>1</MaxKeys>", b"<MaxKeys>0</MaxKeys>"),
+                       raw.replace(b"<Name>kodex-backups</Name>", b"<Name>foreign</Name>"),
+                       raw.replace(prefix.encode(), b"qa-1830-foreign/"),
+                       raw.replace(b"</" + root + b">", b"<NextKeyMarker>more</NextKeyMarker></" + root + b">"),
+                       raw.replace(b"</" + root + b">", b"<CommonPrefixes><Prefix>x</Prefix></CommonPrefixes></" + root + b">"),
+                       raw.replace(b"</" + root + b">", b"<IsTruncated>false</IsTruncated></" + root + b">"),
+                       raw.replace(operator.S3_XML_NAMESPACE.encode(), b"http://foreign.invalid/")]
+            if not versions:
+                invalid += [raw.replace(b"<KeyCount>0</KeyCount>", b"<KeyCount>1</KeyCount>"),
+                            raw.replace(b"<KeyCount>0</KeyCount>", b"")]
+            results = [(200, item) for item in invalid] + [(403, b""), (404, b""), (503, b""), custody.Rejected("SIMULATED_OUTAGE")]
+            for result in results:
+                kube = FakeKubernetes(self.value)
+                kube.inventory_overrides[("kodex-backups", versions)] = result
+                operation = operator.Operator(kube, self.value, self.approval, REVISION, self.journal, loopback=FakeLoopback)
+                with self.subTest(versions=versions, result=results.index(result)), patch.object(operator.secrets, "token_hex", side_effect=AssertionError("keys forbidden")), self.assertRaises(custody.Rejected):
+                    operation.apply()
+                self.assertEqual(kube.effects, [])
+                self.assertEqual(set(kube.secrets), {contract.SOURCE_NAME})
+
+    def test_restart_before_keys_rechecks_empty_scope_instead_of_reusing_old_observation(self):
+        with patch.object(operator.secrets, "token_hex", side_effect=custody.Rejected("SIMULATED_RESTART")), self.assertRaises(custody.Rejected):
+            self.operation.apply()
+        self.assertTrue(self.journal.exists("initial-freshness", "done"))
+        self.assertFalse(self.journal.exists("create-scoped", "intent"))
+        self.kube.inventory_entries.append(("kodex-backups", self.value["qaPrefixes"]["repository"] + "/", "Version"))
+        with patch.object(operator.secrets, "token_hex", side_effect=AssertionError("keys forbidden")), self.assertRaisesRegex(custody.Rejected, "QA_PREFIX_OCCUPIED"):
+            self.operation.apply()
+        self.assertEqual(self.kube.effects, [])
+
+    def test_freshness_scope_substitution_is_rejected_by_custody(self):
+        receipt = self.apply()
+        receipt["initialFreshness"] = dict(receipt["initialFreshness"], qaPrefixes={"repository": "foreign", "target": "foreign"})
+        with self.assertRaises(custody.Rejected):
+            custody.custody_plan(self.kube, self.value["scopedSecret"]["name"], "fixture", "repository", receipt)
+
+    def test_static_restore_render_inputs_fingerprint_and_cleanup_share_exact_nonce_prefix(self):
+        receipt = self.apply()
+        prefix = self.value["qaPrefixes"]["repository"]
+        image = "registry.local.kodex/kodex/backup-controller@sha256:" + "b" * 64
+        rendered = custody.restore_resources("fixture", image, prefix, receipt)
+        self.assertEqual(rendered["objectStorePrefix"], self.value["qaPrefixes"]["target"])
+        for name in ("fingerprintJob", "preflightJob", "restoreJob", "targetInspectionJob", "cleanupJob", "cleanupReadbackJob"):
+            env = rendered[name]["spec"]["template"]["spec"]["containers"][0]["env"]
+            self.assertIn({"name": "BACKUP_CONTROLLER_REPOSITORY_PREFIX", "value": prefix}, env)
+        for build in (custody.backup_job, custody.restore_resources):
+            with self.assertRaisesRegex(custody.Rejected, "STATIC_RENDER_PREFIX_MISMATCH"):
+                build("fixture", image, "qa-1830-fixture", receipt)
+        plan = custody.custody_plan(self.kube, self.value["scopedSecret"]["name"], "fixture", "repository", receipt)
+        result = custody.apply_restore_inputs(self.kube, plan, custody.digest(plan), rendered, custody.SOURCE_UID, self.directory / "restore.json")
+        values = transport.decode_secret(self.kube.secrets[result["name"]])
+        self.assertEqual(json.loads(values["repository.json"])["destination"]["prefix"], prefix)
+        self.assertEqual(json.loads(values["targets.json"])["objectStore"]["prefix"], self.value["qaPrefixes"]["target"])
 
     def test_backup_static_custody_uses_slash_source_prefixes_and_dedicated_reader(self):
         receipt = self.apply()
@@ -574,7 +700,7 @@ class TransportTests(unittest.TestCase):
 
     def test_no_source_mutation_arbitrary_host_filer_path_or_versionless_delete(self):
         cases = (("PUT", "/kodex-artifacts/organizations/x", (), False),
-                 ("DELETE", "/kodex-restore-fixture/e2e-restore-fixture/_static-auth-probe/" + "a" * 32, (), False),
+                 ("DELETE", "/kodex-restore-fixture/e2e-restore-" + "a" * 32 + "/_static-auth-probe/" + "a" * 32, (), False),
                  ("GET", "http://foreign.invalid/", (), False),
                  ("HEAD", "/etc/iam/identities/foreign.json", (), True))
         for method, path, query, filer in cases:
@@ -607,6 +733,10 @@ class TransportTests(unittest.TestCase):
         with self.assertRaises(local.Rejected) as rejected:
             local.validate_static_storage(self.kube, {}, "foreign", "fixture", 300)
         self.assertEqual(str(rejected.exception), "STATIC_STORAGE_AUTHORITY_REJECTED")
+        invalid = {"schema": operator.SCHEMA, "plan": dict(self.value, schema="kodex.backup-static-plan/v1"), "planSHA256": "0" * 64}
+        with self.assertRaises(local.Rejected) as rejected:
+            local.static_render_prefix("fixture", "qa-1830-fixture", invalid)
+        self.assertEqual(str(rejected.exception), "STATIC_RENDER_PLAN_INVALID")
 
     def test_endpoint_requires_only_exact_pod_uid_ip_and_s3_port(self):
         endpoint = {"metadata": {"namespace": custody.SOURCE_NAMESPACE, "labels": {"kubernetes.io/service-name": "seaweedfs-s3"}},

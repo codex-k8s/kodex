@@ -1,6 +1,7 @@
 """Offline contract/race fixtures; эти тесты не имитируют live acceptance."""
 
 import copy
+import fnmatch
 import importlib.util
 import json
 import os
@@ -124,7 +125,7 @@ class StaticPlan(unittest.TestCase):
         statements = self.value["policy"]["Statement"]
         lists = [item for item in statements if item["Sid"].startswith("ListPrefix")]
         self.assertEqual([item["Condition"]["StringLike"]["s3:prefix"] for item in lists],
-                         ["organizations/*", "session-archive/v1/*", "qa-1830-fixture/*", "e2e-restore-fixture/*"])
+                         ["organizations/*", "session-archive/v1/*", "qa-1830-" + "a" * 32 + "/*", "e2e-restore-" + "a" * 32 + "/*"])
         self.assertTrue(all(item["Condition"]["StringEquals"] == {"s3:RequestMethod": "GET"} for item in lists))
         head = statements[0]
         self.assertEqual(head["Condition"], {"StringEquals": {"s3:RequestMethod": "HEAD"}})
@@ -132,7 +133,7 @@ class StaticPlan(unittest.TestCase):
             actions = item["Action"] if isinstance(item["Action"], list) else [item["Action"]]
             self.assertFalse({"Admin", "s3:*", "s3:DeleteObject", "s3:DeleteBucket", "s3:PutBucketPolicy"} & set(actions))
             if "s3:PutObject" in actions or "s3:DeleteObjectVersion" in actions:
-                self.assertRegex(item["Resource"], r"^arn:aws:s3:::(kodex-backups/qa-1830-fixture|kodex-restore-fixture/e2e-restore-fixture)/\*$")
+                self.assertRegex(item["Resource"], r"^arn:aws:s3:::(kodex-backups/qa-1830-a{32}|kodex-restore-fixture/e2e-restore-a{32})/\*$")
 
     def test_run_traversal_prefix_injection_and_nonce_rejected(self):
         for run in ("../foreign", "fixture/*", "fixture/sibling", "", "a" * 21):
@@ -140,6 +141,20 @@ class StaticPlan(unittest.TestCase):
                 module.plan(self.snapshot, run, "a" * 32)
         with self.assertRaises(module.custody.Rejected):
             module.plan(self.snapshot, "fixture", "x" * 32)
+
+    def test_data_namespaces_use_full_operation_nonce_and_preserve_source_scope(self):
+        another = module.plan(self.snapshot, "fixture", "b" * 32)
+        self.assertEqual(self.value["schema"], "kodex.backup-static-plan/v2")
+        self.assertEqual(self.value["qaPrefixes"], {"repository": "qa-1830-" + "a" * 32, "target": "e2e-restore-" + "a" * 32})
+        self.assertTrue(set(self.value["qaPrefixes"].values()).isdisjoint(another["qaPrefixes"].values()))
+        self.assertEqual(self.value["policy"]["Statement"][:6], another["policy"]["Statement"][:6])
+        self.assertNotIn("qa-1830-" + "a" * 32, json.dumps(another["policy"]))
+        self.assertNotIn("e2e-restore-" + "a" * 32, json.dumps(another["policy"]))
+        pattern = self.value["qaPrefixes"]["repository"] + "/*"
+        self.assertTrue(fnmatch.fnmatchcase(self.value["qaPrefixes"]["repository"] + "/own", pattern))
+        for key in (self.value["qaPrefixes"]["repository"], self.value["qaPrefixes"]["repository"] + "-sibling/foreign",
+                    another["qaPrefixes"]["repository"] + "/foreign"):
+            self.assertFalse(fnmatch.fnmatchcase(key, pattern))
 
     def test_unknown_apply_readback_does_not_create_second_plan_or_key(self):
         self.assertEqual(self.value, module.plan(self.snapshot, "fixture", "a" * 32))

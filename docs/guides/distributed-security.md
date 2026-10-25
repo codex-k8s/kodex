@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.32
+version: 1.7.33
 updated: 2026-10-25
 ---
 
@@ -1229,6 +1229,13 @@ revision требует отдельного контроля writers, exact res
 readback обслуживаемого Pod/route. Возврат ссылки, Ready, store ACK и общий 403
 не доказывают отзыв credential: нужен точный отрицательный authentication probe.
 Неизвестный эффект сохраняет origin/inputs и не разрешает новый ключ или retry.
+
+Пустота одноразовой QA области не выводится из имени identity/run. Если контракт
+требует свежую область данных, её prefix связывается с immutable operation nonce,
+а current objects, versions и delete markers проверяются до credential grant.
+Неполный/truncated/неверный scope либо outage не означает пустоту. Начальный proof
+принадлежит exact origin; rejoin после собственных effects не превращает поздние
+own writes в начальную коллизию и не выдаёт доступ к namespace другой операции.
 
 При переносе legacy metadata snapshot digest, registry digest и hash входа
 публикации не взаимозаменяемы. Недостающую историческую связь разрешается

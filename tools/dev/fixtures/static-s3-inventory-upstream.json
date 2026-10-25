@@ -1,0 +1,18 @@
+{
+  "version": "4.41",
+  "commit": "de34a1a87c02893507f961cda9574172ee5064e9",
+  "current": {
+    "source": "https://github.com/seaweedfs/seaweedfs/blob/de34a1a87c02893507f961cda9574172ee5064e9/weed/s3api/s3api_object_handlers_list.go",
+    "declaration": "ListBucketResultV2",
+    "root": "ListBucketResult",
+    "requiredEmptyFields": ["Name", "Prefix", "MaxKeys", "IsTruncated", "KeyCount"]
+  },
+  "versions": {
+    "source": "https://github.com/seaweedfs/seaweedfs/blob/de34a1a87c02893507f961cda9574172ee5064e9/weed/s3api/s3api_object_versioning.go",
+    "declaration": "S3ListObjectVersionsResult",
+    "root": "ListVersionsResult",
+    "requiredEmptyFields": ["Name", "Prefix", "MaxKeys", "IsTruncated"]
+  },
+  "namespace": "http://s3.amazonaws.com/doc/2006-03-01/",
+  "note": "Синтетические XML fixtures повторяют независимый pinned upstream wire, без сетевой загрузки в тестах. Любой object/version/delete marker или неполная страница запрещают initial freshness."
+}

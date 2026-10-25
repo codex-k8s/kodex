@@ -22,9 +22,10 @@ import scoped_backup_drill as custody
 import static_backup_identity_plan as contract
 import static_backup_identity_transport as transport
 
-SCHEMA = "kodex.backup-static-identity/v1"
+SCHEMA = "kodex.backup-static-identity/v2"
 PURPOSE = "kodex-qa-backup-static"
 HEX64 = re.compile(r"[a-f0-9]{64}\Z")
+S3_XML_NAMESPACE = "http://s3.amazonaws.com/doc/2006-03-01/"
 
 
 def own_labels(value, purpose):
@@ -161,6 +162,44 @@ def version_id(value):
     return value
 
 
+def empty_inventory(raw, bucket, prefix, versions):
+    """Exact 4.41 empty response; ни truncation, ни пропущенные поля не означают пустоту."""
+    custody.require(len(raw) <= 16384 and b"\x00" not in raw and b"<!DOCTYPE" not in raw and b"<!ENTITY" not in raw, "QA_PREFIX_LISTING_MALFORMED")
+    try:
+        raw.decode("utf-8")
+        root = ET.fromstring(raw)
+    except (ET.ParseError, UnicodeError):
+        raise custody.Rejected("QA_PREFIX_LISTING_MALFORMED") from None
+    qualified = "{" + S3_XML_NAMESPACE + "}"
+    custody.require(root.tag == qualified + ("ListVersionsResult" if versions else "ListBucketResult") and
+                    not root.attrib and not (root.text or "").strip(), "QA_PREFIX_LISTING_MALFORMED")
+    fields = {}
+    for child in root:
+        custody.require(child.tag.startswith(qualified) and not child.attrib and not (child.tail or "").strip(),
+                        "QA_PREFIX_LISTING_MALFORMED")
+        name = child.tag[len(qualified):]
+        custody.require(name not in ("Contents", "Version", "DeleteMarker", "CommonPrefixes"), "QA_PREFIX_OCCUPIED")
+        custody.require(name not in fields and len(child) == 0, "QA_PREFIX_LISTING_MALFORMED")
+        fields[name] = child.text or ""
+    expected = {"Name": bucket, "Prefix": prefix, "MaxKeys": "1", "IsTruncated": "false"}
+    if not versions:
+        expected["KeyCount"] = "0"
+    custody.require(fields == expected, "QA_PREFIX_LISTING_INCOMPLETE_OR_WRONG_SCOPE")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def validate_freshness(value, proof):
+    required = {"state", "planSHA256", "qaPrefixes", "baselinePodUID", "observedAt", "inventories"}
+    custody.require(isinstance(proof, dict) and set(proof) == required and proof["state"] == "EMPTY_COMPLETE" and
+                    proof["planSHA256"] == custody.digest(value) and proof["qaPrefixes"] == value["qaPrefixes"] and
+                    proof["baselinePodUID"] == value["snapshot"]["pod"]["uid"] and type(proof["observedAt"]) is int and proof["observedAt"] > 0 and
+                    type(proof["inventories"]) is list and len(proof["inventories"]) == 2, "INITIAL_FRESHNESS_PROOF_INVALID")
+    for item, bucket, scope in zip(proof["inventories"], ("kodex-backups", "kodex-restore-fixture"), ("repository", "target")):
+        custody.require(set(item) == {"bucket", "prefix", "currentSHA256", "versionsSHA256"} and item["bucket"] == bucket and
+                        item["prefix"] == value["qaPrefixes"][scope] + "/" and HEX64.fullmatch(item["currentSHA256"]) and
+                        HEX64.fullmatch(item["versionsSHA256"]), "INITIAL_FRESHNESS_PROOF_INVALID")
+
+
 class Operator:
     """Один root-owned plan; effects fenced approval, metadata и durable журналом."""
 
@@ -277,6 +316,24 @@ class Operator:
             custody.require(status == 404 and xml_code(body) == "NoSuchBucketPolicy", "BUCKET_POLICY_PRESENT_OR_UNKNOWN")
             status, _headers, body = remote.request("GET", "/" + bucket, (("versioning", ""),), access, secret)
             custody.require(status == 200 and xml_code(body, "Status") == "Enabled", "BUCKET_VERSIONING_NOT_ENABLED")
+        inventories = []
+        for bucket, scope in (("kodex-backups", "repository"), ("kodex-restore-fixture", "target")):
+            prefix = self.value["qaPrefixes"][scope] + "/"
+            observation = {"bucket": bucket, "prefix": prefix}
+            for versions in (False, True):
+                query = (("versions", ""), ("prefix", prefix), ("max-keys", "1")) if versions else (
+                    ("list-type", "2"), ("prefix", prefix), ("max-keys", "1"))
+                status, _headers, body = remote.request("GET", "/" + bucket, query, access, secret)
+                custody.require(status == 200, "QA_PREFIX_FRESHNESS_UNAVAILABLE")
+                observation["versionsSHA256" if versions else "currentSHA256"] = empty_inventory(body, bucket, prefix, versions)
+            inventories.append(observation)
+        proof = {"state": "EMPTY_COMPLETE", "planSHA256": custody.digest(self.value), "qaPrefixes": self.value["qaPrefixes"],
+                 "baselinePodUID": pin["uid"], "observedAt": int(time.time()), "inventories": inventories}
+        validate_freshness(self.value, proof)
+        if not self.journal.exists("initial-freshness", "done"):
+            self.journal.write("initial-freshness", "done", proof)
+        else:
+            validate_freshness(self.value, self.journal.read("initial-freshness"))
 
     def switch(self, returning=False):
         stage = "return" if returning else "apply"
@@ -312,7 +369,7 @@ class Operator:
     def fixture(self, remote, bucket, prefix, access, secret):
         """Только own QA object, conditional create и exact VersionId delete, с журналом."""
         custody.require(bucket in ("kodex-backups", "kodex-restore-fixture"), "QA_BUCKET_REQUIRED")
-        expected_prefix = ("qa-1830-" if bucket == "kodex-backups" else "e2e-restore-") + self.value["run"] + "/"
+        expected_prefix = self.value["qaPrefixes"]["repository" if bucket == "kodex-backups" else "target"] + "/"
         custody.require(prefix == expected_prefix, "QA_PREFIX_REQUIRED")
         suffix = "repository" if bucket == "kodex-backups" else "target"
         path = "/" + bucket + "/" + prefix + "_static-auth-probe/" + self.value["owner"]
@@ -354,7 +411,7 @@ class Operator:
 
     def probes(self, pin, access, secret, write_fixtures):
         remote = self.loopback(self.kube, pin, self.value)
-        prefixes = ("organizations/", "session-archive/v1/", "qa-1830-" + self.value["run"] + "/", "e2e-restore-" + self.value["run"] + "/")
+        prefixes = ("organizations/", "session-archive/v1/", self.value["qaPrefixes"]["repository"] + "/", self.value["qaPrefixes"]["target"] + "/")
         for index, (bucket, prefix) in enumerate(zip(contract.BUCKETS, prefixes)):
             path = "/" + bucket
             custody.require(remote.request("HEAD", path, (), access, secret)[0] == 200, "SCOPED_BUCKET_HEAD_FAILED")
@@ -390,6 +447,7 @@ class Operator:
             self.create_secret("auth", auth)
         else:
             # Продолжение использует только сохранённую пару из exact immutable Secret.
+            validate_freshness(self.value, self.journal.read("initial-freshness"))
             access, secret = self.keypair()
             config, _old_access, _old_secret = read_baseline(self.kube, self.value)
             auth, _scoped = static_payloads(self.value, config, access, secret)
@@ -415,8 +473,11 @@ class Operator:
         # Receipt выдаётся только после двух полностью закрытых QA object lifecycles.
         for suffix in ("repository", "target"):
             custody.require(self.journal.exists("probe-put-" + suffix, "done") and self.journal.exists("probe-delete-" + suffix, "done"), "QA_PROBES_INCOMPLETE")
+        proof = self.journal.read("initial-freshness")
+        validate_freshness(self.value, proof)
         return {"schema": SCHEMA, "plan": self.value, "planSHA256": custody.digest(self.value),
                 "operatorRevision": self.revision,
+                "initialFreshness": proof,
                 "authIdentity": self.owned_secret("auth"), "scopedIdentity": self.owned_secret("scoped"),
                 "authPayloadSHA256": self.journal.read("create-auth", "intent")["payloadSHA256"],
                 "scopedPayloadSHA256": self.journal.read("create-scoped", "intent")["payloadSHA256"],
@@ -427,6 +488,8 @@ class Operator:
         """Истёкшее approval разрешает только читать matching origin, не новый effect."""
         self.kube.tls_preflight()
         self.fence()
+        if self.journal.exists("create-scoped", "intent"):
+            validate_freshness(self.value, self.journal.read("initial-freshness"))
         stages = ("create-scoped", "create-auth", "apply", "return", "delete-auth", "delete-scoped", "recover-pod")
         for stage in stages:
             if not self.journal.exists(stage, "intent") or self.journal.exists(stage, "done"):
@@ -460,7 +523,7 @@ class Operator:
                     continue
                 descriptor = self.journal.read(stage, "intent")
                 bucket = "kodex-backups" if suffix == "repository" else "kodex-restore-fixture"
-                prefix = ("qa-1830-" if suffix == "repository" else "e2e-restore-") + self.value["run"] + "/"
+                prefix = self.value["qaPrefixes"][suffix] + "/"
                 path = "/" + bucket + "/" + prefix + "_static-auth-probe/" + self.value["owner"]
                 body = ("kodex-static-probe-v1:" + self.value["owner"]).encode()
                 expected = {"bucket": bucket, "path": path, "bodySHA256": hashlib.sha256(body).hexdigest(), "owner": self.value["owner"]}
@@ -520,16 +583,16 @@ class Operator:
             custody.require(self.kube.optional("secret", self.value["authSecret"]["name"]) is None, "OWN_SECRET_NAME_REAPPEARED")
         access, secret = self.keypair()
         # Закрываем известный own QA object до отзыва ключа; unresolved outcome не повторяется.
-        for suffix, bucket, prefix in (("repository", "kodex-backups", "qa-1830-"), ("target", "kodex-restore-fixture", "e2e-restore-")):
+        for suffix, bucket in (("repository", "kodex-backups"), ("target", "kodex-restore-fixture")):
             if self.journal.exists("probe-put-" + suffix, "done") and not self.journal.exists("probe-delete-" + suffix, "intent"):
                 remote = self.loopback(self.kube, self.pin(True), self.value)
-                self.fixture(remote, bucket, prefix + self.value["run"] + "/", access, secret)
+                self.fixture(remote, bucket, self.value["qaPrefixes"][suffix] + "/", access, secret)
         self.switch(returning=True)
         pin = self.wait(False, self.journal.read("return", "intent")["previousPodUID"])
         _config, old_access, old_secret = read_baseline(self.kube, self.value)
         remote = self.loopback(self.kube, pin, self.value)
         custody.require(remote.request("HEAD", "/kodex-artifacts", (), old_access, old_secret)[0] == 200, "BASELINE_IDENTITY_UNAVAILABLE")
-        status, _headers, body = remote.request("GET", "/kodex-backups", (("prefix", "qa-1830-" + self.value["run"] + "/"), ("max-keys", "1")), access, secret)
+        status, _headers, body = remote.request("GET", "/kodex-backups", (("prefix", self.value["qaPrefixes"]["repository"] + "/"), ("max-keys", "1")), access, secret)
         custody.require(status == 403 and xml_code(body) == "InvalidAccessKeyId", "REVOCATION_NOT_PROVEN")
         if not self.journal.exists("revocation", "done"):
             self.journal.write("revocation", "done", {"state": "OLD_KEY_INVALID", "podUID": pin["uid"], "issuedAt": int(time.time())})
@@ -553,11 +616,14 @@ class Operator:
 
 def validate_static_receipt(kube, receipt, storage_secret, run, now=None, max_age=300):
     """Custody consumer не читает auth Secret data с baseline Admin credential."""
-    required = {"schema", "plan", "planSHA256", "operatorRevision", "authIdentity", "scopedIdentity", "authPayloadSHA256", "scopedPayloadSHA256",
+    required = {"schema", "plan", "planSHA256", "operatorRevision", "initialFreshness", "authIdentity", "scopedIdentity", "authPayloadSHA256", "scopedPayloadSHA256",
                 "podUID", "issuedAt", "probes", "sourceWriteProbe", "policySHA256"}
     custody.require(set(receipt) == required and receipt["schema"] == SCHEMA, "STATIC_RECEIPT_INVALID")
     value = receipt["plan"]
     contract.validate_plan(value)
+    validate_freshness(value, receipt["initialFreshness"])
+    custody.require(type(receipt["issuedAt"]) is int and receipt["initialFreshness"]["observedAt"] <= receipt["issuedAt"],
+                    "INITIAL_FRESHNESS_PROOF_INVALID")
     custody.require(re.fullmatch(r"[a-f0-9]{40}", receipt["operatorRevision"]) and
                     receipt["planSHA256"] == custody.digest(value) and receipt["policySHA256"] == value["policySHA256"] and
                     storage_secret == value["scopedSecret"]["name"] and run == value["run"] and

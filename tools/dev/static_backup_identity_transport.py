@@ -184,8 +184,8 @@ class Loopback:
         else:
             custody.require(access is not None and secret is not None, "PROBE_CREDENTIAL_REQUIRED")
             roots = {"/" + bucket for bucket in contract.BUCKETS}
-            qa_paths = {"/kodex-backups/qa-1830-" + self.value["run"] + "/_static-auth-probe/" + self.value["owner"],
-                        "/kodex-restore-fixture/e2e-restore-" + self.value["run"] + "/_static-auth-probe/" + self.value["owner"]}
+            qa_paths = {"/kodex-backups/" + self.value["qaPrefixes"]["repository"] + "/_static-auth-probe/" + self.value["owner"],
+                        "/kodex-restore-fixture/" + self.value["qaPrefixes"]["target"] + "/_static-auth-probe/" + self.value["owner"]}
             source_paths = {"/kodex-artifacts/organizations/_static-auth-absent-" + self.value["owner"],
                             "/kodex-session-archives/session-archive/v1/_static-auth-absent-" + self.value["owner"]}
             custody.require(path in roots | qa_paths | source_paths, "PROBE_EXACT_PATH_REQUIRED")
