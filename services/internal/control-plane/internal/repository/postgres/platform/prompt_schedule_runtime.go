@@ -13,9 +13,24 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryPromptScheduleMaterializeTask embeds exact organization/node replacement of the root
+// scheduled run turn content. The caller requires exactly one affected row after authorized
+// snapshot materialization; the statement does not create a new turn.
+// queryPromptScheduleMaterializeTask встраивает замену содержимого turn корневого запуска
+// расписания по точным организации и узлу. Вызывающий код требует ровно одну изменённую строку
+// после материализации проверенного снимка; запрос не создаёт новый turn.
+//
 //go:embed sql/prompt_schedule_materialize_task.sql
 var queryPromptScheduleMaterializeTask string
 
+// unwrapSchedulePromptInput requires automation metadata, supported format and exact stored
+// raw-input digest, then decodes capture values and removes promptInputsRaw. It adds captured
+// template pins when present and returns that template; mutations affect the shared input map and
+// do not establish execution authority.
+// unwrapSchedulePromptInput требует automation-метаданные, поддерживаемый формат и точный дайджест
+// сырых inputs, затем декодирует values и удаляет promptInputsRaw. При наличии добавляет версии
+// захваченного шаблона и возвращает его; изменения затрагивают общую входную карту и не
+// устанавливают полномочия исполнения.
 func unwrapSchedulePromptInput(input map[string]any) (*schedulePromptTemplate, error) {
 	automation, ok := input["automation"].(map[string]any)
 	if !ok {
@@ -38,6 +53,14 @@ func unwrapSchedulePromptInput(input map[string]any) (*schedulePromptTemplate, e
 	return capture.Template, nil
 }
 
+// materializeSchedulePromptTaskTx renders the captured schedule task and returns directly for an
+// absent template. Otherwise it updates exactly one root scheduled turn in the caller transaction;
+// zero/multiple rows or SQL failure is Conflict. Snapshot changes made by rendering can precede a
+// failed update and require caller rollback/discard.
+// materializeSchedulePromptTaskTx материализует захваченную задачу расписания и сразу возвращает
+// результат при отсутствии шаблона. Иначе обновляет ровно один turn корневого запуска в переданной
+// транзакции; иное число строк либо ошибка SQL даёт Conflict. Изменения снимка при рендеринге
+// могут предшествовать неудачной записи и требуют rollback либо отбрасывания результата.
 func (repository *Repository) materializeSchedulePromptTaskTx(ctx context.Context, tx pgx.Tx, current scope, nodeRef string, template *schedulePromptTemplate, snapshot *entity.PromptMaterializationSnapshot) (string, error) {
 	rendered, err := renderSchedulePromptTask(template, snapshot)
 	if err != nil || template == nil {
@@ -50,6 +73,16 @@ func (repository *Repository) materializeSchedulePromptTaskTx(ctx context.Contex
 	return rendered, nil
 }
 
+// renderSchedulePromptTask returns the current task unchanged when no captured template exists.
+// Otherwise it renders only the captured automation template from the original occurrence task,
+// requires completeness and a nonblank result up to65536 bytes, and retains user-template sections
+// plus referenced semantic slots. It appends rendered provenance/digest and replaces
+// task/Automation without database I/O or reinterpolating a prior rendered turn.
+// renderSchedulePromptTask возвращает текущую задачу без изменения при отсутствии захваченного
+// шаблона. Иначе материализует этот automation-шаблон из исходной задачи occurrence, требует
+// полноту и непустой результат до65536 байт и оставляет секции пользовательского шаблона и
+// использованные semantic slots. Добавляет происхождение и дайджест результата и заменяет
+// task/Automation без обращения к БД и повторной интерполяции ранее отрендеренного turn.
 func renderSchedulePromptTask(template *schedulePromptTemplate, snapshot *entity.PromptMaterializationSnapshot) (string, error) {
 	if template == nil {
 		return snapshot.Variables["task"], nil

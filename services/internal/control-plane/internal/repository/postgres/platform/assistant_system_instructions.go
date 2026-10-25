@@ -12,6 +12,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// hydrateAssistantSystemInstructions accepts only system-assistant ref/instructions parameters,
+// loads the current assistant and requires its exact ref or stable key before canonical hydration.
+// It returns a proposed operation without changing instructions or committing.
+// hydrateAssistantSystemInstructions принимает только параметры ссылки системного ассистента и
+// инструкций, загружает текущего ассистента и требует его точную ссылку либо стабильный ключ перед
+// канонической подготовкой. Возвращает предлагаемую операцию без изменения инструкций и Commit.
 func (repository *Repository) hydrateAssistantSystemInstructions(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -32,6 +38,14 @@ func (repository *Repository) hydrateAssistantSystemInstructions(
 	return hydrateAssistantSystemInstructionFields(assistant, operation)
 }
 
+// hydrateAssistantSystemInstructionFields requires string instructions up to 20000 bytes and a
+// positive assistant version, trims text and rejects unchanged instructions. It rebuilds
+// target/before/after/parameters, selects the operation and clears Input using server-supplied
+// assistant metadata; it performs no access check or write.
+// hydrateAssistantSystemInstructionFields требует строку инструкций до 20000 байт и положительную
+// версию ассистента, удаляет внешние пробелы и отклоняет неизменный текст. Пересобирает цель,
+// before/after и параметры, выбирает операцию и очищает Input по серверным данным ассистента; не
+// проверяет доступ и не записывает состояние.
 func hydrateAssistantSystemInstructionFields(
 	assistant entity.SystemAssistant,
 	operation entity.AssistantPlanOperation,
@@ -67,6 +81,14 @@ func hydrateAssistantSystemInstructionFields(
 	return operation, nil
 }
 
+// rehydrateEditedAssistantSystemInstructions locks edits to the original operation
+// key/assistant/version and closed parameter set, then rebuilds instruction fields from the saved
+// before snapshot. It rejects before drift and preserves the edited Selected flag; fresh database
+// authority is checked elsewhere.
+// rehydrateEditedAssistantSystemInstructions ограничивает правку исходными ключом операции,
+// ассистентом, версией и закрытым набором параметров, затем пересобирает инструкции из
+// сохранённого before. Отклоняет изменение before и сохраняет изменённый Selected; текущие
+// полномочия БД проверяются отдельно.
 func rehydrateEditedAssistantSystemInstructions(
 	original entity.AssistantPlanOperation,
 	edited entity.AssistantPlanOperation,
@@ -96,6 +118,13 @@ func rehydrateEditedAssistantSystemInstructions(
 	return hydrated, nil
 }
 
+// assistantSystemInstructionsSnapshotMatches reloads the current assistant and compares both
+// version pins, target identity/name and exact before data, plus parameters/after equality. Read
+// failures propagate; a match is plan freshness evidence and does not execute an instruction
+// update.
+// assistantSystemInstructionsSnapshotMatches загружает текущего ассистента и сравнивает обе
+// версии, идентичность и имя цели, точный before и равенство parameters/after. Ошибки чтения
+// передаются выше; совпадение подтверждает свежесть плана, но не выполняет обновление инструкций.
 func (repository *Repository) assistantSystemInstructionsSnapshotMatches(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -117,6 +146,14 @@ func (repository *Repository) assistantSystemInstructionsSnapshotMatches(
 		reflect.DeepEqual(operation.Before, before) && reflect.DeepEqual(operation.Parameters, operation.After), nil
 }
 
+// assistantSystemInstructionsCommand requires the exact input fields, target ref, positive
+// expected version and string instructions up to 20000 bytes. It constructs
+// UpdateAssistantInstructions with OCC metadata; it does not trim text, establish authority or
+// compare the saved snapshot itself.
+// assistantSystemInstructionsCommand требует точные входные поля, ссылку цели, положительную
+// ожидаемую версию и строку инструкций до 20000 байт. Собирает UpdateAssistantInstructions с
+// данными OCC; сам не удаляет пробелы, не устанавливает полномочия и не сравнивает сохранённый
+// снимок.
 func assistantSystemInstructionsCommand(operation entity.AssistantPlanOperation) (command.Command, error) {
 	if !onlyAssistantFields(operation.Input, "systemAssistantRef", "instructions", "expectedVersion") ||
 		!hasAssistantFields(operation.Input, "systemAssistantRef", "instructions", "expectedVersion") ||

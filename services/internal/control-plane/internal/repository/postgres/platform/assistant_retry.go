@@ -12,15 +12,44 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryAssistantRetryAuthority embeds tenant/run lookup and actor-owned active assistant
+// conversation linkage with authority-project constraints. Nonassistant runs are identified for
+// another retry path; assistant targets require the exact associated agent.
+// queryAssistantRetryAuthority встраивает поиск запуска организации и связи с активным разговором
+// ассистента владельца с ограничением проекта полномочий. Обычные запуски определяются для другого
+// пути повтора; ассистент требует точного связанного агента.
+//
 //go:embed sql/assistant_retry__authority.sql
 var queryAssistantRetryAuthority string
 
+// queryAssistantRetrySource embeds the original first USER turn, attachment set and context of an
+// actor-initiated FAILED/CANCELLED root assistant run. It reads the owner source used for a new
+// turn, not a later model message.
+// queryAssistantRetrySource встраивает чтение исходного первого USER turn, набора вложений и
+// контекста FAILED/CANCELLED корневого запуска ассистента, начатого субъектом. Читает исходные
+// данные владельца для нового turn, а не позднее сообщение модели.
+//
 //go:embed sql/assistant_retry__source.sql
 var queryAssistantRetrySource string
 
+// queryAssistantRetryRootNode embeds the first root AGENT_EXECUTION node of the exact
+// organization/root assistant run with matching conversation agent. The caller uses this locator
+// inside the specialized retry lifecycle.
+// queryAssistantRetryRootNode встраивает поиск первого корневого AGENT_EXECUTION узла точной
+// организации и корневого запуска ассистента с совпадающим агентом разговора. Вызывающий код
+// использует ссылку в специализированном жизненном цикле повтора.
+//
 //go:embed sql/assistant_retry__root_node.sql
 var queryAssistantRetryRootNode string
 
+// authorizeAssistantRetry classifies whether a typed run belongs to the assistant retry path,
+// requiring the active actor-owned conversation and current launch permission for assistant
+// targets. Invalid/missing/denied cases return handled=true with an error; nonassistant targets
+// return false,nil and do not gain retry authority here.
+// authorizeAssistantRetry определяет принадлежность типизированного запуска пути повтора
+// ассистента, требуя активный разговор владельца и текущее разрешение запуска для ассистента.
+// Неверный вход, отсутствие или отказ дают handled=true с ошибкой; обычные цели возвращают
+// false,nil без выдачи здесь права повтора.
 func (repository *Repository) authorizeAssistantRetry(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (bool, error) {
 	payload, ok := input.Payload.(command.RunCommandInput)
 	if !ok || payload.RunRef == "" {
@@ -53,6 +82,14 @@ func (repository *Repository) authorizeAssistantRetry(ctx context.Context, tx pg
 	return true, nil
 }
 
+// retryAssistantRun reloads exact source content/attachments/context and queues one new assistant
+// turn through the existing attachment policy, clearing the nested expected version. It requires
+// exactly one returned turn, reads its run graph and returns a RUN outcome without committing or
+// replaying an external provider effect.
+// retryAssistantRun заново читает точные исходные содержимое, вложения и контекст и ставит один
+// новый turn ассистента в очередь через прежнюю политику вложений, очищая вложенную ожидаемую
+// версию. Требует ровно один возвращённый turn, читает его граф и возвращает RUN результат без
+// Commit и повтора внешнего эффекта провайдера.
 func (repository *Repository) retryAssistantRun(ctx context.Context, tx pgx.Tx, current scope, input command.Command, runID string) (commandOutcome, error) {
 	var conversationRef, content, attachmentSetRef string
 	var descriptor entity.AssistantContextDescriptor

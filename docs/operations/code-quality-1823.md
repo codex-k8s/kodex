@@ -4,11 +4,59 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.423.0
+version: 1.424.0
 updated: 2026-10-25
 ---
 
 # Подготовка кода к построчному ревью
+
+## Assistant context, continuation/schedule prompt и run projections — 25.10.2026
+
+На основе `f137ba8cf8d312958fc1673b806246bb96d40139` полностью прочитаны
+18 Go-файлов(1925 исходных строк) и22 SQL(314 строк).74 прежних объявления
+описаны EN→RU, включая локальный purgedConversation. Исполняемые выражения,
+SQL, runtime guidance strings, defaults, API и fixtures не менялись.
+
+| Путь / переход | Описанные фактические ограничения |
+| --- | --- |
+| Assistant context admission | Actor-owned conversation/plan, fresh entity projection, project view и specialized allowed operations. Update/validate/apply заново разрешают saved operations и специализированные command permissions; payload не назначает authority |
+| Grant plan preflight/version carry | Только выбранные известные grant kinds и exact connection target. Snapshot error/mismatch возвращает offending operation с nil error для stale handling; conversion/authorize errors передаются выше. Перенос версии из прежнего эффекта той же owner transaction не меняет immutable source |
+| Project move | SYSTEM assistant, actor-owned ACTIVE idle projectless conversation, OCC, отсутствие pending plans, target project.view и exact context. После promote проверяются project и version+1, событие остаётся в той же transaction |
+| Retention purge | Trusted global batch1..100 с SKIP LOCKED, owner purge function и проверкой deletion tuple до PURGED event snapshots. Commit после всех строк/событий; raw pgx/storage errors не маскируются под иной доменный исход |
+| Assistant retry | Failed/cancelled actor-initiated root source, исходные USER content/attachments/context и fresh launch permission. Новый queued turn проходит прежнюю attachment policy; это не replay provider effect |
+| System instructions edit | Canonical assistant ref/stable key, bounded instructions и exact expected/target version. Edit ограничен original snapshot, fresh matching отдельно; typed command conversion не выдаёт права |
+| Workflow metadata | Public owner eligibility и exact source project, только bounded published graph metadata без private instructions/draft/input/result fields. Compact DAG не является live frontier и не даёт delegation authority |
+| Continuation preview/claim pins | Viewer/execution actor boundaries, active session, inherited workflow input, current model/runtime/package context и exact predecessor. Preview full Digest и claim DependencyDigest различаются; пустые pins сохраняют прежний путь, mismatch закрыто отклоняется |
+| Continuation task projection | Exact task/run/node/session/turn/runtime/attempt, versioned digest/byte pin и bounded PURPOSE notice. Runner должен передать исходный Task после SessionContext в той же cold/resume submission; notice не дублирует DAG/history и не создаёт authority |
+| Preview files | Исторические finalized attachment sets bounded512, exact CLEAN knowledge revisions и actor permission. NotFound может отключить file scopes с PERMISSION_REQUIRED; numeric metadata ограничена JSON-safe диапазоном. Partial snapshot mutations требуют discard, bytes/grants не выдаются |
+| Runtime workflow prompt | DB row определяет published identity отдельно от draft number в spec. Exact step/agent либо canonical coordinator continuation, service templates и compact DAG; требование capability не равно разрешению делегирования |
+| Schedule capture/decode | Legacy format0 и Revision1 envelope, captured template digest и bounded capture. Ordinary JSON decoding не становится strict schema/authority check; raw source остаётся immutable occurrence input |
+| Schedule preview | DRAFT либо exact CURRENT_REVISION/OCC/digest; исполнителя CURRENT назначает author row, launch authority проверяется отдельно от viewer. Continuation/template/variables входят в full preview hash; read-only commit не сохраняет расписание и не запускает provider |
+| Schedule runtime task | Captured template материализуется из исходной occurrence task один раз, требует complete/nonblank bounded output и сохраняет rendered provenance. Только exact root scheduled turn обновляется в caller transaction; nil template сохраняет task, retry не интерполирует прежний rendered turn повторно |
+| Assistant run pin | Canonical Run eligibility до owner-derived run/session/conversation/assistant/profile tuple. SYSTEM запрещает profile ref, PROJECT требует project/profile; readback pin не расширяет доступ и не разрешает команду |
+| Graph runs | Bounded128 distinct refs, same snapshot/project и authoritative root/parent/retry/continuation lineage. Root cursor/version не является SessionStorage version; predecessor matcher не выполняет дополнительных reads, отвергает ambiguous/cyclic root edges |
+| Session readiness | Closed storage/task shape, deterministic storage→account→earlier-execution blocker и safe error normalization. Это hints после Run eligibility, не проверка lease freshness и не право менять storage |
+
+18 полных expected-AST/directive сравнений — PASS, включая финальную проверку
+после уточнения текста task-pin comment. Полный control-plane build/unit —
+PASS LOCAL(checks424-final), GOWORK=off/GOMAXPROCS=4/-p2, inherited KODEX inputs
+исключены.17 analyzer unit,5 exact-ignore guards, gofmt и git diff --check —
+PASS. Новых runtime/library API нет; прежние pgx документация и proofs
+остаются применимыми. PostgreSQL/RLS/OCC/claim races, реальный provider,
+attachment storage, purge effects, browser/E2E/deploy/live — NOT RUN/SKIP.
+Render не повторялся: Kubernetes sources и tests предыдущего пакета неизменны;
+его30 exact matches и один известный standalone staging/control-api-gateway
+FAIL сохранены отдельно, не объявлены новым PASS текущего SHA.
+
+Detector1685 raw/886 retained occurrences/799 unresolved, registry771 неизменен.
+Один прежний fragment key assistant_system_instructions/contextual_plans
+заменился новым из-за комментария в окне; это не новый алгоритм и не исправление
+повтора. Все остальные keys прежние; новых exclusions нет, thresholds прежние.
+Inventory6691 own sources/222 exclusions. Go21489:20749 EN→RU,740 missing.
+PR294 Go-файла/2739 объявлений, missing0;324 whole changed blobs. #1823 открыт,
+#1829 Draft, QA/main f2e64eb сохранён. Env-файлы не менялись, секреты не
+переносились; GitHub wrapper использует только нужные bot credentials из
+разрешённого источника без вывода значений. Прикладные secret values не извлекались.
 
 ## Общие issuer-компоненты Kubernetes — 25.10.2026
 

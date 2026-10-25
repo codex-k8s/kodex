@@ -9,10 +9,22 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// maximumGraphRunSnapshots bounds distinct root/node/child run snapshots read for one graph to128.
+// It limits projection work, not the number of executable child runs or a caller permission scope.
+// maximumGraphRunSnapshots ограничивает число различных снимков root/node/child запусков одного
+// графа до128. Ограничивает работу проекции, а не число исполнимых дочерних запусков и не область
+// прав вызывающего субъекта.
 const maximumGraphRunSnapshots = 128
 
-// attachGraphRuns использует тот же owner snapshot, что graph и storage:
-// Run.version/root cursor не являются версией зависимого SessionStorage.
+// attachGraphRuns collects bounded valid node/child refs, sorts them and reads root plus
+// run/session readiness within the caller snapshot. It enforces exact project and
+// root/parent/retry-predecessor lineage before assigning graph.Runs. Root cursor/version is not a
+// SessionStorage version; errors do not publish a partial graph run list or commit.
+// attachGraphRuns собирает ограниченные корректные ссылки узлов и дочерних запусков, сортирует и
+// читает root и run/session readiness в снимке вызывающего кода. Проверяет точные проект и
+// root/parent/retry-predecessor связи до назначения graph.Runs. Версия и курсор root не являются
+// версией SessionStorage; ошибки не публикуют частичный список запусков графа и не завершают
+// транзакцию.
 func (repository *Repository) attachGraphRuns(ctx context.Context, tx pgx.Tx, current scope, graph *entity.RunGraph) error {
 	refs := map[string]bool{graph.RunRef: true}
 	for _, node := range graph.Nodes {
@@ -71,8 +83,15 @@ func (repository *Repository) attachGraphRuns(ctx context.Context, tx pgx.Tx, cu
 	return nil
 }
 
-// Retry/continuation lineage подтверждается owner rows и серверным graph edge.
-// Обход ограничен уже прочитанными refs: дополнительные run reads не выполняются.
+// graphRetryPredecessors validates root-to-root RETRY_OF/CONTINUES edges against already read
+// owner run rows, rejecting ambiguous predecessor links, mismatched retry/session/state and
+// cycles. Same-run CONTINUES attempt edges are ignored. It returns admitted predecessor refs
+// without extra reads or proving the entire graph execution lifecycle.
+// graphRetryPredecessors проверяет root-to-root рёбра RETRY_OF/CONTINUES по уже прочитанным
+// строкам владельца, отклоняя неоднозначных предшественников, несовпадение retry/session/state и
+// циклы. Внутренние CONTINUES рёбра попыток одного запуска пропускаются. Возвращает допустимые
+// ссылки предшественников без дополнительных чтений и без доказательства всего жизненного цикла
+// графа.
 func graphRetryPredecessors(graph *entity.RunGraph, runs map[string]entity.Run) (map[string]bool, bool) {
 	nodes := make(map[string]entity.RunNode, len(graph.Nodes))
 	for _, node := range graph.Nodes {
