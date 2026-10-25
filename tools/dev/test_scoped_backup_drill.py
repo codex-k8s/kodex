@@ -289,6 +289,44 @@ class ScopedBackupDrill(unittest.TestCase):
         fingerprint = rendered["fingerprintJob"]["spec"]["template"]["spec"]
         self.assertEqual(fingerprint["volumes"][0]["projected"]["sources"][0]["secret"]["items"], [{"key": "targets.json", "path": "targets.json"}])
 
+    def test_real_yq_preserves_protected_modes_for_all_job_renders(self):
+        """Реальный YAML→yq→JSON render сохраняет 0440, readOnly и exact refs во всех ветвях; source_document не подменяется."""
+        run, prefix = "fixture", "qa-1830-fixture"
+        cases = [("backup", drill.backup_job(run, IMAGE, prefix),
+                  {"backup-controller-credentials", "backup-controller-postgresql-ca"})]
+        for operation in ("list-verified", "inspect-backup", "verify", "inspect-restore-drill"):
+            rendered = drill.repository_job(run, IMAGE, prefix, operation, "backup-fixture", "restore-fixture", "approval-fixture", "a" * 64)
+            cases.append((operation, rendered, {"backup-controller-repository", "backup-controller-postgresql-ca"}))
+        isolated = drill.restore_resources(run, IMAGE, prefix)
+        for key in ("fingerprintJob", "preflightJob", "restoreJob", "targetInspectionJob", "cleanupJob", "cleanupReadbackJob"):
+            refs = {"backup-controller-restore-inputs", "qa-postgresql-tls"}
+            if key not in ("fingerprintJob", "preflightJob"):
+                refs.add("backup-controller-restore-approval")
+            cases.append((key, isolated[key], refs))
+        for name, rendered, expected_refs in cases:
+            with self.subTest(render=name):
+                pod = rendered["spec"]["template"]["spec"]
+                self.assertEqual(pod["containers"][0]["image"], IMAGE)
+                self.assertFalse(pod["automountServiceAccountToken"])
+                protected = []
+                refs = set()
+                for volume in pod["volumes"]:
+                    for kind in ("secret", "configMap", "projected"):
+                        if kind not in volume:
+                            continue
+                        source = volume[kind]
+                        self.assertIs(type(source["defaultMode"]), int)
+                        self.assertEqual(source["defaultMode"], 0o440)
+                        protected.append(volume["name"])
+                        if kind == "projected":
+                            refs.update(item["secret"]["name"] for item in source["sources"])
+                        else:
+                            refs.add(source["secretName" if kind == "secret" else "name"])
+                self.assertEqual(set(protected), {"credentials", "tls"} if name == "backup" else {"restore-inputs", "tls"})
+                self.assertEqual(refs, expected_refs)
+                mounts = {item["name"]: item for item in pod["containers"][0]["volumeMounts"]}
+                self.assertTrue(all(mounts[item]["readOnly"] for item in protected))
+
     def test_new_restore_password_is_created_only_for_isolated_target(self):
         rendered = drill.restore_resources("fixture", IMAGE, "qa-1830-fixture")
         result = drill.apply_restore_inputs(self.kube, self.plan, self.expected, rendered, UID, self.directory / "restore.json")

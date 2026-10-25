@@ -60,7 +60,7 @@ spec:
       volumes:
         - name: restore-inputs
           projected:
-            defaultMode: 0440
+            defaultMode: 288
             sources:
               - secret:
                   name: backup-controller-repository
@@ -74,7 +74,7 @@ spec:
         - name: tls
           configMap:
             name: backup-controller-postgresql-ca
-            defaultMode: 0440
+            defaultMode: 288
             items:
               - {key: ca.pem, path: ca.pem}
         - name: work
