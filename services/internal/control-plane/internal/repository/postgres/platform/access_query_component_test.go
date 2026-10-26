@@ -46,6 +46,26 @@ func testPublicAccessQueryScopes(t *testing.T, ctx context.Context, repository *
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Run("access list lookahead and row projections", func(t *testing.T) {
+		filter := query.Filter{Page: query.Page{Size: 1}}
+		groups, groupNext, err := repository.ListOIDCGroups(ctx, resolvedOwner, filter)
+		if err != nil || len(groups) > 1 || groupNext != "" && len(groups) != 1 {
+			t.Fatalf("group page boundary: rows=%d next=%t err=%v", len(groups), groupNext != "", err)
+		}
+		roles, roleNext, err := repository.ListAccessRoles(ctx, resolvedOwner, filter, false)
+		if err != nil || len(roles) != 1 || roleNext != roles[0].Ref {
+			t.Fatalf("role lookahead page: rows=%d next=%t err=%v", len(roles), roleNext != "", err)
+		}
+		filter.Page.Token = roleNext
+		moreRoles, _, err := repository.ListAccessRoles(ctx, resolvedOwner, filter, false)
+		if err != nil || len(moreRoles) != 1 || moreRoles[0].Ref == roles[0].Ref {
+			t.Fatalf("role continuation: rows=%d err=%v", len(moreRoles), err)
+		}
+		bindings, bindingNext, err := repository.ListAccessBindings(ctx, resolvedOwner, query.AccessBindingFilter{Page: query.Page{Size: 1}})
+		if err != nil || len(bindings) > 1 || bindingNext != "" && len(bindings) != 1 {
+			t.Fatalf("binding page boundary: rows=%d next=%t err=%v", len(bindings), bindingNext != "", err)
+		}
+	})
 	project, hidden := createProject("access-query-project"), createProject("access-query-hidden")
 	candidateInput := platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000009330", ExternalTenantID: ownerInput.ExternalTenantID, ExternalDisplayName: "Public query viewer", CallerWorkload: "control-api-gateway", Operation: ownerInput.Operation}
 	if _, err := repository.ResolveProofAuthority(ctx, candidateInput); !errors.Is(err, domainerrs.ErrForbidden) {

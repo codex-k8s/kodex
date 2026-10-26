@@ -4,11 +4,77 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.529.0
+version: 1.530.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие readers access-страниц — 26.10.2026
+
+collectRowsInto объединяет append/Next/Scan и принимает начальный slice caller.
+Access использует nil и исходную scan error; прежний collectTypedRows сохраняет
+make(capacity=limit+1) и Unavailable mapping. rows.Err и явное закрытие не
+переходят к core. readAccessRowsPage обслуживает три страницы OIDC groups,
+roles и bindings: scan failure без partial result, iteration failure до cursor,
+сырой ref последнего видимого элемента, затем один Commit с исходным context.
+Native commit error сохраняет items/cursor и исходную error. Это намеренно
+отличается от readRevisionRowsPage; похожие error policies не смешаны.
+Close и deferred rollback остаются у прежних callers. OIDC scanner сохраняет
+семь исходных columns; accessScanner стал alias прежнего общего rowScanner.
+validAccessRoleQuery объединяет UTF-8/200runе/NUL/closed aliases predicate;
+TrimSpace остаётся у обоих callers до авторизации.
+
+Три новых вызова существующего beginScopedTransaction сохраняют exact options,
+не выбирают общую более сильную isolation и не переносят разрешения в helper.
+Матрица затронутого чтения (actor во всех строках — прежний проверенный principal):
+
+| Чтение | Authority / owner | Transaction | Результат и lifecycle |
+| --- | --- | --- | --- |
+| ListAccessSubjects | resolveScope, organization access.view | прежний ReadOnly, default isolation | прежние SQL/cursor/ошибки, own Commit/rollback |
+| ListOIDCGroups | тот же organization/access.view | прежний ReadOnly | общий access page, raw-ref cursor |
+| ListAccessRoles | trimmed predicate до scope, затем access.view | прежний ReadOnly | caller выбирает includeArchived/SQL/args |
+| ListAccessRoleVersions | access.view, прежний tenant role resolve | прежний ReadOnly | прежние revision cursor/scanner/Commit |
+| ListAccessBindings | trimmed predicate до scope, затем access.view | прежний ReadOnly | subject/role/project/includeRevoked остаются caller-owned |
+| QueryEffectiveAccess | прежние subject/manage/visibility/organization-image guards | ReadOnly + RepeatableRead | payload не задаёт authority, без нового binding/grant |
+| SimulateAccess | прежние manage/visibility/subject и hypothetical input guards | ReadOnly + RepeatableRead | неперсистентная симуляция, без нового binding/grant |
+
+Create/claim/renew/complete/cancel/delete/retry/lease/terminal/event transitions
+не меняются и не добавляются: это read paths без business state/outbox effects.
+Все пять accessReadTransaction consumers сохранены. Другой consumer общего
+collector — runtime configuration version rows — сохраняет свою отдельную
+iteration/Close/commit policy. Scoped helper и canonical rowScanner file
+побайтно прежние; source inverses подтверждают неизменность внешних guards,
+SQL, tenant args, explicit Close/rollback и всех остальных веток.
+
+Три full-source inverses восстановили два production files и component helper.
+Новый unit file содержит четыре предметных tests: nil/capacity/partial scan,
+raw lookahead/backing array, UTF-8/alias limits и access commit-error contract.
+Build16.15s/unit39.78s/vet5.18s PASS LOCAL:3003PASS/70условныхSKIP/0FAIL,
+30packages. Public PostgreSQL runner проверил выбранные public access scopes,
+provider legacy fixture prerequisites и enterprise access:26PASS/0FAIL/SKIP
+до(23.88s) и после(41.28s). Новые assertions вызывают repository с уже resolved
+principal и проверяют group/binding row bounds и role lookahead/continuation.
+Это выбранные bootstrap subtests на disposable PostgreSQL, не вся suite и не E2E.
+
+Начальные fixture runs FAIL сохранены: direct reader сначала получил unresolved
+principal; выбранный enterprise test затем не имел provider observation из
+предыдущего subtest. Исправлены fixture boundary и фильтр prerequisite, без
+ослабления утверждений. Отдельная ошибка orchestrator запустила тесты после
+остановившегося edit script: helpers ещё не были применены. Эти compile FAIL
+сохранены, последовательность исправлена; результаты выше относятся к полному
+итоговому коду. Внешние данные, provider и live cluster не использовались.
+
+Четыре прежних raw окна удалены, одно новое nominal role/binding query prefix
+сохранено адресно: predicate, transaction/read/page kernels теперь общие,
+конкретные query/typed args и фильтры остаются явными. Registry1115,
+6registry mutations и17quality unit tests PASS; пять quality stages PASS LOCAL.
+6786sources/222exclusions,1418raw/1258retained/160unresolved(Go81/TypeScript79),
+Go21624/21624 EN→RU. Новый test source учтён, пороги/exclusions прежние.
+
+Context7 resolve/query /jackc/pgx PASS: проверены Rows.Next/Scan/Err/Close,
+TxOptions и Commit/Rollback ownership. Версия pgx прежняя. Полные E2E/browser,
+live/deploy/startup и QA NOT RUN; local build/unit/component не подменяют их.
 
 ## Общее чтение EMAIL recovery metadata — 26.10.2026
 

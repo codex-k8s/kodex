@@ -3,6 +3,14 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/access.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/access.go",
+      "fragmentSHA256": "2e889b269bb99891a560bed8bd555ba8f4e5d95b166d0a2b4b6f45c04958dfca",
+      "count": 1,
+      "reason": "После фактического выноса validAccessRoleQuery иполного readAccessRowsPage окно содержит только nominal ListAccessRoles/ListAccessBindings signatures,trim,вызов общего accessReadTransaction,deferred rollback ивыбор разных SQL/NamedArgs. Roles используют includeArchived иquery aliases;bindings дополнительно subject/role/project/includeRevoked filters. Validation,scope/permission,collection,lookahead иcommit kernels уже общие,но server-owned query/tenant bindings остаются явными. Универсальная query factory потребовала бы callbacks для current scope/args ради короткого composition scaffold. Сохранён лишь exact внутрефайловый hash/count1;SQL,authority,validators и остальные access fragments не исключены."
+    },
+    {
+      "format": "go",
       "firstPath": "services/external/control-api-gateway/internal/transport/http/email_effect_endpoints_test.go",
       "secondPath": "services/external/control-api-gateway/internal/transport/http/managed_draft_endpoints_test.go",
       "fragmentSHA256": "4e7ed1a073b82b4c6c3b8483ada596eba69130ce5e510834f4d9e7c4680b6bfe",

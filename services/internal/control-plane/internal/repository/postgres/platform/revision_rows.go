@@ -13,13 +13,9 @@ import (
 // Ошибка decoder отбрасывает partial items с Unavailable. rows.Err, Close и завершение transaction
 // намеренно оставляет callers, сохраняя их отдельный порядок проверки ошибок.
 func collectTypedRows[T any](rows pgx.Rows, limit int32, scan func(rowScanner) (T, error)) ([]T, error) {
-	items := make([]T, 0, limit+1)
-	for rows.Next() {
-		item, err := scan(rows)
-		if err != nil {
-			return nil, errs.ErrUnavailable
-		}
-		items = append(items, item)
+	items, err := collectRowsInto(rows, make([]T, 0, limit+1), scan)
+	if err != nil {
+		return nil, errs.ErrUnavailable
 	}
 	return items, nil
 }
@@ -46,4 +42,23 @@ func readRevisionRowsPage[T any](ctx context.Context, tx pgx.Tx, rows pgx.Rows, 
 		return nil, "", errs.ErrUnavailable
 	}
 	return items, next, nil
+}
+
+// collectRowsInto appends decoded rows in Next order to the caller's chosen initial slice.
+// It preserves nil/capacity policy and returns the original scan error with no partial result.
+// Iteration errors, explicit Close and transaction completion remain outside; pgx may still
+// auto-close its own rows on exhaustion or scan failure.
+// collectRowsInto добавляет декодированные строки в порядке Next к выбранному caller срезу.
+// Сохраняет nil/capacity policy и возвращает исходную scan error без частичного результата.
+// Iteration errors, явный Close и завершение транзакции остаются снаружи; pgx по-прежнему может
+// автоматически закрыть собственные rows при завершении либо ошибке сканирования.
+func collectRowsInto[T any](rows pgx.Rows, items []T, scan func(rowScanner) (T, error)) ([]T, error) {
+	for rows.Next() {
+		item, err := scan(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, nil
 }
