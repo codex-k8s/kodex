@@ -2,6 +2,30 @@
   "version": 1,
   "entries": [
     {
+      "format": "bash",
+      "firstPath": "deploy/k8s/base/image-supply-chain/image-admission.sh",
+      "secondPath": "tools/verify-image-supply-chain-fixtures.sh",
+      "fragmentSHA256": "9e3ab19d990b39d22a0d1988658dbbcbf33d2bb613a206f49629fc47fe67780b",
+      "count": 1,
+      "reason": "Точное окно является закрытой таблицей OCI evidence filename/mediaType:v5 producer evidence_entries и независимые expected rows evidence_entries_fixture. Fixture извлекает actual production function,исполняет её и требует точного равенства отдельному литералу до построения synthetic manifest. Общий import таблицы вместо expected rows сделал бы protocol drift самоподтверждаемым и ослабил бы oracle;алгоритм prepare_evidence_chunks уже исполняется из production source,не дублируется здесь. Сохранены только два пути/hash/count1 этой декларативной protocol таблицы,не renderer,chunking,signature или evidence validation в целом."
+    },
+    {
+      "format": "bash",
+      "firstPath": "scripts/tests/local-role-image-render-contract-test.sh",
+      "secondPath": "tools/dev/deploy-local.sh",
+      "fragmentSHA256": "4f4b9278cd321e361ff93301cfeddee7eb75d321fd3a210639129cea91988398",
+      "count": 1,
+      "reason": "Окно связывает независимый render contract oracle с live runtime-controller readback:точные policySHA256,promoted repository,node readback image иrole runtime contract revision/digest. Test дополнительно проверяет controller/authority image annotations в массиве render,production получает один Deployment через exact namespace kubectl get и сравнивает с ожидаемой policy. Общий predicate для test oracle и проверяемой materialization/readback реализации связал бы две стороны проверки и позволил бы одной ошибке пройти обе;это ожидаемые поля одного security контракта,не две application реализации преобразования. Сохранены только два пути/hash/count1,не остальные render/live проверки или scripts."
+    },
+    {
+      "format": "bash",
+      "firstPath": "scripts/tests/local-role-image-supply-chain-e2e.sh",
+      "secondPath": "tools/dev/verify-hot-reload.sh",
+      "fragmentSHA256": "429f08aef72e16032be31988b5f525aefb438f8357e5f3dacbf725566dbdd598",
+      "count": 1,
+      "reason": "Остаточное11-line окно содержит conventional Bash CLI initialization/while/case для общих context,kubeconfig,state-directory,resource-prefix flags двух разных entrypoints. Supply-chain E2E имеет disposable confirmation иbounded timeout;hot-reload verification — expected SHA идругие private-directory/readback guards. Defaults,дополнительные options и порядок validation различаются и остаются явными. Универсальная callback/config CLI grammar ради короткого parse scaffold не устранила бы самостоятельное вычислительное ядро и усложнила бы аудит отдельных authorizations. Сохранены только два точных пути/hash/count1 parsing окна;context/credential/mutation guards и другие fragments не исключены."
+    },
+    {
       "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/access.go",

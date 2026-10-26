@@ -259,12 +259,18 @@ class CredentialFiles(unittest.TestCase):
         self.run_node_case(NODE_SCRIPTS[0], mode="readback", alias=False)
 
     def test_node_source_never_passes_secret_arguments(self):
+        library = (ROOT / "tools/dev/lib/node-registry.sh").read_text()
+        # Проверяется полный фиксированный source path обоих entrypoints и общей библиотеки.
+        self.assertNotRegex(library, r"--arg(?:json)?\s+(?:username|password|existing)\b")
+        self.assertIn("--rawfile password", library)
+        self.assertIn("--slurpfile existing", library)
         for script in NODE_SCRIPTS:
-            source = script.read_text()
-            self.assertNotRegex(source, r"--arg(?:json)?\s+(?:username|password|existing)\b")
-            self.assertIn("umask 077", source)
-            self.assertIn("--rawfile password", source)
-            self.assertIn("--slurpfile existing", source)
+            with self.subTest(script=script.name):
+                source = script.read_text()
+                self.assertIn('source "${BASH_SOURCE[0]%"${BASH_SOURCE[0]##*/}"}lib/node-registry.sh"', source.splitlines())
+                self.assertIn("kodex_node_registry_read_material", source)
+                self.assertNotRegex(source, r"--arg(?:json)?\s+(?:username|password|existing)\b")
+                self.assertIn("umask 077", source)
 
     def run_case(self, case, fail=False, missing=False, component="all", readback=False):
         with tempfile.TemporaryDirectory(prefix="kodex-credentials-") as directory:

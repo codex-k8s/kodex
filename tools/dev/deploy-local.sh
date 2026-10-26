@@ -1283,23 +1283,9 @@ readback_session_archive() {
     (.spec.policyTypes | sort) == (["Egress","Ingress"] | sort) and
     ((.spec.ingress // []) | length) == 0 and ((.spec.egress // []) | length) == 0
   ' >/dev/null || fail 'session archive worker default-deny policy is invalid'
-  kubectl -n "$runtime_namespace" get networkpolicy/session-archive-worker-object-storage -o json | jq -e '
-    .spec.podSelector.matchLabels["session-archive.kodex.dev/managed"] == "true" and
-    (.spec.policyTypes | sort) == (["Egress","Ingress"] | sort) and
-    ((.spec.ingress // []) | length) == 0 and (.spec.egress | length) == 2 and
-    ([.spec.egress[] | select(
-      (.to | length) == 1 and
-      .to[0].namespaceSelector.matchLabels["kubernetes.io/metadata.name"] == "kube-system" and
-      .to[0].podSelector.matchLabels["k8s-app"] == "kube-dns" and
-      ([.ports[] | [.protocol,.port]] | sort) == ([ ["TCP",53], ["UDP",53] ] | sort)
-    )] | length) == 1 and
-    ([.spec.egress[] | select(
-      (.to | length) == 1 and
-      .to[0].namespaceSelector.matchLabels["kubernetes.io/metadata.name"] == "kodex-system" and
-      .to[0].podSelector.matchLabels["app.kubernetes.io/name"] == "seaweedfs" and
-      .to[0].podSelector.matchLabels["app.kubernetes.io/component"] == "object-storage" and
-      (.ports | length) == 1 and .ports[0].protocol == "TCP" and .ports[0].port == 8333
-    )] | length) == 1
+  kubectl -n "$runtime_namespace" get networkpolicy/session-archive-worker-object-storage -o json | jq -L "$script_directory/../lib" -e '
+  include "runtime-boundaries";
+    kodex_session_archive_storage_policy
   ' >/dev/null || fail 'session archive worker object-storage policy is invalid'
 
   kubectl auth can-i create jobs.batch -n "$runtime_namespace" \

@@ -4,11 +4,68 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.523.0
+version: 1.524.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие runtime render predicates и Go cache fragments — 26.10.2026
+
+tools/lib/runtime-boundaries.jq содержит три чистых predicate:runtime namespace/
+RBAC subset,controller Role без system Secrets и выбранный session-archive
+object-storage NetworkPolicy. Их используют четыре прежних jq programs в
+local render,release render и live readback. Caller сохраняет выбор ресурса,
+namespace/name,порядок дополнительных clauses,источник input и прежний fail.
+Module получает JSON и не читает env/API,не меняет ресурсы и не выдаёт grants.
+Порядок всех native clauses сохранён;между двумя storage bodies отличались
+только whitespace вне string literals. Недоступный module закрыто отвергается.
+
+В render-local.sh две readonly неэкспортируемые константы содержат прежние
+literal yq fragments:volume mounts в3callers иcache environment в2callers.
+Shell передаёт yq один quoted expression;пользовательский ввод не становится
+программой. Selector/init/job,resources,security context,Air env иcommand args
+остались у прежних callers. Семь actual shell yq calls дали побайтно одинаковые
+argv ивыбранные env до/после. Пять полных source inverses восстановили callers
+иtests;module body сопоставлен с native clauses.54native/current jq cases
+сравнили stdout/exit0/1/5,включая malformed input;7unsafe static source mutants
+отвергнуты. JQ compiler проверяет новый module отдельно:extension.jq не входит
+в существующий detector inventory,новые исключения/пороги не добавлялись.
+
+Исправлены два устаревших test contracts,выявленных до изменения production
+кодa. Registry source assertion теперь проверяет оба fixed entrypoint imports,
+умask иполную shared node-registry library,включая запрет secret argv иrawfile/
+slurpfile;все16dynamic credential cases сохранены. Их выполнение33.7s превышало
+старый общий30s wrapper:он ограничен90s,внутренние10/15s budgets прежние.
+Contract-test больше не требует удаление admission Job/PVC history:текущий main
+иexisting unit tests требуют пустой inventory иfail-closed запрет очистки.
+Добавлен запуск двух существующих отрицательных upgrade/policy tests,production
+admission lifecycle не менялся. Прямой Go1.26.6 выбран в PATH проверок;первый
+cache run с неправильным host binary дал GO_TOOLCHAIN_MISMATCH и сохранён как FAIL.
+
+Release suite PASS LOCAL:25.88s native/24.38s current. Cache suite PASS LOCAL:
+12.19s native/11.99s current. В local contract suite16credential и14cache tests,
+worker-grant/6selectors и2upgrade tests прошли;весь entrypoint остаётся FAIL:
+затем EMAIL validator отвергает render. Этот отказ воспроизведён на native
+renderer(84.86s) иcurrent(87.11s) с теми же fixture CLI inputs. Для private native
+copy исправлен только root anchor;оба YAML в точке отказа побайтно совпали:
+1847714bytes. Это доказательство отсутствия нового render изменения,не PASS
+EMAIL или local contract suite. Причину прежнего EMAIL refusal ещё нужно разобрать.
+Никаких apply/live/provider операций иполных E2E не выполнялось.
+
+ShellCheck -a -x с source paths:0errors ите же4SC2016info до/после. Остальные
+исторические Bash diagnostics не объявлены устранёнными. Context7 resolve/query
+/jqlang/jq и/mikefarah/yq — PASS:проверены module include/-L иquoted expression/
+strenv/in-place update. Новые зависимости CLI images не требуются:host scripts
+запускаются из полного checkout с новым tracked module.
+
+Пять raw Bash окон удалены,новых raw окон нет. Три адресных решения сохраняют
+независимую OCI evidence expected table,render contract oracle против live
+readback икороткий conventional CLI parsing разных entrypoints. Другие файлы
+не исключены. Registry1104,18registry mutations и17quality unit tests PASS;
+пять quality stages PASS LOCAL.6784sources/222generated exclusions,
+1429raw/1247retained/182unresolved(Go94/TypeScript88/Bash0),Go21614/21614 EN→RU.
+Общая release readiness,merge/deploy/startup иQA ещё не подтверждены.
 
 ## Удалён неиспользуемый standalone renderer agent-runner — 26.10.2026
 

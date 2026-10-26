@@ -584,38 +584,11 @@ fi
 if rg -n '\$\{[A-Z][A-Z0-9_]*IMAGE[A-Z0-9_]*\}' "$output" >/dev/null; then
   fail 'render contains an unresolved image variable'
 fi
-yq -o=json -I=0 '.' "$output" | jq -s -e '
+yq -o=json -I=0 '.' "$output" | jq -L "$repository_root/tools/lib" -s -e '
+  include "runtime-boundaries";
   any(.[]; .kind == "Namespace" and .metadata.name == "kodex-system") and
-  any(.[]; .kind == "Namespace" and .metadata.name == "kodex-runtime") and
-  any(.[];
-    .kind == "ServiceAccount" and .metadata.name == "agent-runner" and
-    .metadata.namespace == "kodex-runtime") and
-  any(.[];
-    .kind == "RoleBinding" and .metadata.name == "runtime-controller-workloads" and
-    .metadata.namespace == "kodex-runtime" and
-    .subjects == [{"kind":"ServiceAccount","name":"runtime-controller","namespace":"kodex-system"}]) and
-  any(.[];
-    .kind == "RoleBinding" and .metadata.name == "secret-broker-runtime-secrets" and
-    .metadata.namespace == "kodex-runtime" and
-    .subjects == [{"kind":"ServiceAccount","name":"secret-broker","namespace":"kodex-system"}]) and
-  any(.[];
-    .kind == "Role" and .metadata.name == "secret-broker-runtime-secrets" and
-    .metadata.namespace == "kodex-runtime" and .rules == [{
-      "apiGroups":[""],
-      "resources":["secrets"],
-      "verbs":["get","list","create","update","delete"]
-    }]) and
-  any(.[];
-    .kind == "Role" and .metadata.name == "runtime-controller" and
-    .metadata.namespace == "kodex-system" and .rules == [{
-      "apiGroups":["coordination.k8s.io"],
-      "resources":["leases"],
-      "verbs":["get","create","update","patch"]
-    }]) and
-  ([ .[] |
-    select(.kind == "Role" and .metadata.namespace == "kodex-system" and
-      (.metadata.name == "runtime-controller" or .metadata.name == "secret-broker")) |
-    .rules[]? | .resources[]? ] | index("secrets") == null) and
+  kodex_runtime_namespace_access and
+  kodex_controller_role_no_system_secrets and
   any(.[];
     .kind == "ValidatingAdmissionPolicyBinding" and
     .metadata.name == "runtime-execution-ticket-exact-projection" and

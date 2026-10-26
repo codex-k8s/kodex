@@ -744,6 +744,31 @@ add_development_volumes() {
   ' "$render"
 }
 
+# Неэкспортируемые константы содержат только прежние literal yq fragments.
+# Shell склеивает их с исходной программой одним quoted argument; пользовательский
+# ввод не становится выражением, selectors/security/resources и Air env остаются у callers.
+readonly kodex_dev_go_mounts_expression='        .volumeMounts = (((.volumeMounts // []) |
+          map(select(.name != "dev-source" and .name != "dev-go-mod" and .name != "dev-go-sumdb" and
+            .name != "dev-go-build" and .name != "dev-go-tools" and .name != strenv(BUILD_VOLUME)))) +
+          [
+            {"name":"dev-source","mountPath":"/workspace","readOnly":true},
+            {"name":"dev-go-mod","mountPath":"/go/pkg/mod","readOnly":true},
+            {"name":"dev-go-sumdb","mountPath":"/go/pkg/sumdb","readOnly":true},
+            {"name":strenv(BUILD_VOLUME),"mountPath":"/go/build-cache"},
+            {"name":"dev-go-tools","mountPath":"/go/tools","readOnly":true}
+          ]) |'
+readonly kodex_dev_go_environment_expression='        .env = (((.env // []) | map(select(.name != "GOMODCACHE" and .name != "GOCACHE" and
+          .name != "GOWORK" and .name != "GOTOOLCHAIN" and .name != "GOTMPDIR" and
+          .name != "HOME"))) +
+          [
+            {"name":"GOMODCACHE","value":"/go/pkg/mod"},
+            {"name":"GOCACHE","value":"/go/build-cache/cache"},
+            {"name":"GOWORK","value":"off"},
+            {"name":"GOTOOLCHAIN","value":"local"},
+            {"name":"GOTMPDIR","value":"/go/build-cache/tmp"},
+            {"name":"HOME","value":"/go/build-cache/home"}
+          ])'
+
 patch_go_container() {
   local kind=$1 workload=$2 container=$3 module=$4 package=$5
   shift 5
@@ -778,16 +803,7 @@ patch_go_container() {
         .workingDir = ("/workspace/" + strenv(MODULE)) |
         .resources = ({"requests":{"cpu":"50m","memory":"128Mi"}} * $storage_resources) |
         .securityContext.readOnlyRootFilesystem = false |
-        .volumeMounts = (((.volumeMounts // []) |
-          map(select(.name != "dev-source" and .name != "dev-go-mod" and .name != "dev-go-sumdb" and
-            .name != "dev-go-build" and .name != "dev-go-tools" and .name != strenv(BUILD_VOLUME)))) +
-          [
-            {"name":"dev-source","mountPath":"/workspace","readOnly":true},
-            {"name":"dev-go-mod","mountPath":"/go/pkg/mod","readOnly":true},
-            {"name":"dev-go-sumdb","mountPath":"/go/pkg/sumdb","readOnly":true},
-            {"name":strenv(BUILD_VOLUME),"mountPath":"/go/build-cache"},
-            {"name":"dev-go-tools","mountPath":"/go/tools","readOnly":true}
-          ]) |
+'"$kodex_dev_go_mounts_expression"'
         .env = (((.env // []) | map(select(.name != "GOMODCACHE" and .name != "GOCACHE" and
           .name != "GOWORK" and .name != "GOTOOLCHAIN" and .name != "GOTMPDIR" and .name != "HOME" and
           .name != "KODEX_DEV_AIR_VERSION" and .name != "KODEX_DEV_AIR_SHA256"))) +
@@ -838,27 +854,8 @@ patch_go_init_container() {
           "drop":["ALL"],
           "add":["SETUID","SETGID"]
         } |
-        .volumeMounts = (((.volumeMounts // []) |
-          map(select(.name != "dev-source" and .name != "dev-go-mod" and .name != "dev-go-sumdb" and
-            .name != "dev-go-build" and .name != "dev-go-tools" and .name != strenv(BUILD_VOLUME)))) +
-          [
-            {"name":"dev-source","mountPath":"/workspace","readOnly":true},
-            {"name":"dev-go-mod","mountPath":"/go/pkg/mod","readOnly":true},
-            {"name":"dev-go-sumdb","mountPath":"/go/pkg/sumdb","readOnly":true},
-            {"name":strenv(BUILD_VOLUME),"mountPath":"/go/build-cache"},
-            {"name":"dev-go-tools","mountPath":"/go/tools","readOnly":true}
-          ]) |
-        .env = (((.env // []) | map(select(.name != "GOMODCACHE" and .name != "GOCACHE" and
-          .name != "GOWORK" and .name != "GOTOOLCHAIN" and .name != "GOTMPDIR" and
-          .name != "HOME"))) +
-          [
-            {"name":"GOMODCACHE","value":"/go/pkg/mod"},
-            {"name":"GOCACHE","value":"/go/build-cache/cache"},
-            {"name":"GOWORK","value":"off"},
-            {"name":"GOTOOLCHAIN","value":"local"},
-            {"name":"GOTMPDIR","value":"/go/build-cache/tmp"},
-            {"name":"HOME","value":"/go/build-cache/home"}
-          ])
+'"$kodex_dev_go_mounts_expression"'
+'"$kodex_dev_go_environment_expression"'
       )
     )
   ' "$render"
@@ -891,27 +888,8 @@ patch_go_job() {
         .args = ([strenv(MODULE),strenv(PACKAGE)] + (strenv(COMMAND_ARGS) | from_json)) |
         .workingDir = ("/workspace/" + strenv(MODULE)) |
         .resources = {"requests":{"cpu":"50m","memory":"128Mi"}} |
-        .volumeMounts = (((.volumeMounts // []) |
-          map(select(.name != "dev-source" and .name != "dev-go-mod" and .name != "dev-go-sumdb" and
-            .name != "dev-go-build" and .name != "dev-go-tools" and .name != strenv(BUILD_VOLUME)))) +
-          [
-            {"name":"dev-source","mountPath":"/workspace","readOnly":true},
-            {"name":"dev-go-mod","mountPath":"/go/pkg/mod","readOnly":true},
-            {"name":"dev-go-sumdb","mountPath":"/go/pkg/sumdb","readOnly":true},
-            {"name":strenv(BUILD_VOLUME),"mountPath":"/go/build-cache"},
-            {"name":"dev-go-tools","mountPath":"/go/tools","readOnly":true}
-          ]) |
-        .env = (((.env // []) | map(select(.name != "GOMODCACHE" and .name != "GOCACHE" and
-          .name != "GOWORK" and .name != "GOTOOLCHAIN" and .name != "GOTMPDIR" and
-          .name != "HOME"))) +
-          [
-            {"name":"GOMODCACHE","value":"/go/pkg/mod"},
-            {"name":"GOCACHE","value":"/go/build-cache/cache"},
-            {"name":"GOWORK","value":"off"},
-            {"name":"GOTOOLCHAIN","value":"local"},
-            {"name":"GOTMPDIR","value":"/go/build-cache/tmp"},
-            {"name":"HOME","value":"/go/build-cache/home"}
-          ])
+'"$kodex_dev_go_mounts_expression"'
+'"$kodex_dev_go_environment_expression"'
       )
     )
   ' "$render"
@@ -1496,26 +1474,9 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
     }
   ] | length == 0
 ' >/dev/null || fail 'authority PostgreSQL identity render is inconsistent'
-yq -o=json -I=0 '.' "$output" | jq -s -e '
-  any(.[]; .kind == "Namespace" and .metadata.name == "kodex-runtime") and
-  any(.[];
-    .kind == "ServiceAccount" and .metadata.name == "agent-runner" and
-    .metadata.namespace == "kodex-runtime") and
-  any(.[];
-    .kind == "RoleBinding" and .metadata.name == "runtime-controller-workloads" and
-    .metadata.namespace == "kodex-runtime" and
-    .subjects == [{"kind":"ServiceAccount","name":"runtime-controller","namespace":"kodex-system"}]) and
-  any(.[];
-    .kind == "RoleBinding" and .metadata.name == "secret-broker-runtime-secrets" and
-    .metadata.namespace == "kodex-runtime" and
-    .subjects == [{"kind":"ServiceAccount","name":"secret-broker","namespace":"kodex-system"}]) and
-  any(.[];
-    .kind == "Role" and .metadata.name == "secret-broker-runtime-secrets" and
-    .metadata.namespace == "kodex-runtime" and .rules == [{
-      "apiGroups":[""],
-      "resources":["secrets"],
-      "verbs":["get","list","create","update","delete"]
-    }]) and
+yq -o=json -I=0 '.' "$output" | jq -L "$repository_root/tools/lib" -s -e '
+  include "runtime-boundaries";
+  kodex_runtime_namespace_access and
   any(.[];
     .kind == "Deployment" and .metadata.name == "runtime-controller" and
     .metadata.namespace == "kodex-system" and
@@ -1530,17 +1491,7 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
       any(.env[]?; .name == "POD_NAMESPACE" and has("valueFrom")) and
       any(.env[]?; .name == "SECRET_BROKER_RUNTIME_NAMESPACE" and
         .value == "kodex-runtime"))) and
-  any(.[];
-    .kind == "Role" and .metadata.name == "runtime-controller" and
-    .metadata.namespace == "kodex-system" and .rules == [{
-      "apiGroups":["coordination.k8s.io"],
-      "resources":["leases"],
-      "verbs":["get","create","update","patch"]
-    }]) and
-  ([ .[] |
-    select(.kind == "Role" and .metadata.namespace == "kodex-system" and
-      (.metadata.name == "runtime-controller" or .metadata.name == "secret-broker")) |
-    .rules[]? | .resources[]? ] | index("secrets") == null)
+  kodex_controller_role_no_system_secrets
 ' >/dev/null || fail 'dedicated local runtime namespace boundary is invalid'
 yq -e 'select(.kind == "Deployment" and .metadata.name == "integration-synthetic")' "$output" >/dev/null ||
   fail 'integration-synthetic development workload is absent'
@@ -1600,28 +1551,13 @@ yq -o=json -I=0 '.' "$output" | jq -s -e --arg image "$runtime_session_archive_i
      (.kind == "NetworkPolicy" and .metadata.name == "session-archive-worker-object-storage")))]
     | length) == 0
 ' >/dev/null || fail 'session-archive local controller or exact worker image is absent'
-yq -o=json -I=0 '.' "$output" | jq -s -e '
+yq -o=json -I=0 '.' "$output" | jq -L "$repository_root/tools/lib" -s -e '
+  include "runtime-boundaries";
   any(.[];
     .kind == "NetworkPolicy" and
     .metadata.name == "session-archive-worker-object-storage" and
     .metadata.namespace == "kodex-runtime" and
-    .spec.podSelector.matchLabels["session-archive.kodex.dev/managed"] == "true" and
-    (.spec.policyTypes | sort) == (["Egress","Ingress"] | sort) and
-    ((.spec.ingress // []) | length) == 0 and
-    (.spec.egress | length) == 2 and
-    ([.spec.egress[] | select(
-      (.to | length) == 1 and
-      .to[0].namespaceSelector.matchLabels["kubernetes.io/metadata.name"] == "kube-system" and
-      .to[0].podSelector.matchLabels["k8s-app"] == "kube-dns" and
-      ([.ports[] | [.protocol,.port]] | sort) == ([ ["TCP",53], ["UDP",53] ] | sort)
-    )] | length) == 1 and
-    ([.spec.egress[] | select(
-      (.to | length) == 1 and
-      .to[0].namespaceSelector.matchLabels["kubernetes.io/metadata.name"] == "kodex-system" and
-      .to[0].podSelector.matchLabels["app.kubernetes.io/name"] == "seaweedfs" and
-      .to[0].podSelector.matchLabels["app.kubernetes.io/component"] == "object-storage" and
-      (.ports | length) == 1 and .ports[0].protocol == "TCP" and .ports[0].port == 8333
-    )] | length) == 1) and
+    kodex_session_archive_storage_policy) and
   any(.[];
     .kind == "NetworkPolicy" and
     .metadata.name == "seaweedfs-session-archive-runtime-ingress" and

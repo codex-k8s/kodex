@@ -26,7 +26,8 @@ done
 [[ "$source_root" == /* && -x "$source_root/tools/dev/render-local.sh" &&
   -x "$source_root/tools/render-image-admission-job.sh" ]] ||
   fail 'source root is invalid'
-timeout 30s python3 "$source_root/scripts/tests/registry-credential-files-test.py"
+# Полный набор16synthetic cases занимает более30s;каждый subprocess по-прежнему bounded10/15s.
+timeout 90s python3 "$source_root/scripts/tests/registry-credential-files-test.py"
 timeout 30s python3 "$source_root/scripts/tests/worker-grant-rollout-test.py"
 timeout 30s python3 "$source_root/scripts/tests/local-runtime-config-selectors-test.py"
 # Общий cache не пересекается с исходниками: его writable mounts не должны
@@ -143,19 +144,26 @@ configure_calls=$(rg -c --fixed-strings 'tools/deploy/configure-keycloak.sh' "$s
 origin_argument_uses=$(rg -c --fixed-strings '"${keycloak_origin_arguments[@]}"' "$source_root/dev.sh")
 [[ "$configure_calls" == 2 && "$origin_argument_uses" == 2 ]] ||
   fail 'dev.sh Keycloak apply/readback must share one singleton origin argument set'
+# ABI upgrade сохраняет owner history: существующие Jobs/PVC блокируют переход.
 for cleanup_contract in \
-  'cleanup_local_image_admission_runs' \
+  'require_empty_local_image_admission_runs' \
   'pause_local_image_admission_controller' \
   'image_admission_controller_restore_replicas' \
   'deployment/image-admission-controller' \
   '--replicas=0' \
   '(.status.availableReplicas // 0) == 0' \
   'app.kubernetes.io/name=kodex-image-admission,kodex.dev/image-admission-orchestrated=true' \
-  '^mc-admit-[a-f0-9]{32}-(claim|scan|sign|admit|promote)$' \
-  '^mc-admit-[a-f0-9]{32}$'; do
+  'get jobs,persistentvolumeclaims'; do
   rg -F -- "$cleanup_contract" "$source_root/tools/dev/deploy-local.sh" >/dev/null ||
-    fail "local admission revision cleanup omits contract: $cleanup_contract"
+    fail "local admission upgrade omits contract: $cleanup_contract"
 done
+if rg -F 'cleanup_local_image_admission_runs() {' "$source_root/tools/dev/deploy-local.sh" >/dev/null ||
+   rg -F 'delete jobs,persistentvolumeclaims' "$source_root/tools/dev/deploy-local.sh" >/dev/null; then
+  fail 'local admission upgrade must preserve managed Job and workspace history'
+fi
+timeout 90s python3 "$source_root/tools/dev/test_deploy_local_selection.py" \
+  DeployLocalSelectionTest.test_upgrade_empty_inventory_is_non_destructive_and_fails_closed \
+  DeployLocalSelectionTest.test_immutable_policy_change_is_guarded_before_each_delete
 
 deployment_readback_filter="$source_root/tools/dev/readback-rendered-deployments.jq"
 [[ -f "$deployment_readback_filter" && ! -L "$deployment_readback_filter" ]] ||
