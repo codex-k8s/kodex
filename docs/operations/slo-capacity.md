@@ -4,8 +4,8 @@ title: SLO и управление ресурсами
 type: operations
 status: approved
 owner: sre
-version: 1.0.0
-updated: 2026-08-23
+version: 1.0.1
+updated: 2026-10-27
 ---
 
 # SLO и управление ресурсами
@@ -43,3 +43,12 @@ limits, heartbeat и controlled RuntimeRevision. Idle warm state не являе
 - event consumer обнаруживает gap, выполняет catch-up или authoritative snapshot;
 - при критическом pressure новые executions остаются в очереди, а данные без
   подтверждённого archive/retention никогда не удаляются автоматически.
+
+Перед адресной работой на локальном staging проверяются фактические kubelet
+nodefs/imagefs, их `evictionHard` и `evictionMinimumReclaim`, бюджет всех
+предстоящих параллельных записей и явный reserve. Свободное место host root
+не доказывает запас на общей файловой системе node/containerd/кэшей. PASS —
+только наблюдение, не резервирование и не обход owner gate. Переход
+DiskPressure снимается kubelet; ожидание transition period без достижения
+recovery target не считается восстановлением. Узкая read-only точка входа
+и штатная cold-cache очистка описаны в `OPS-DOC-STAGING-CAPACITY-1931`.
