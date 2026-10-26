@@ -4,11 +4,49 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.498.0
+version: 1.499.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая HTTP-01 и TCP443 проверка адреса — 26.10.2026
+
+В preflight-public-hosts два IPv4/IPv6 kernel используют локальную
+verify_local_http01_address. Caller передаёт прежний точный --resolve:
+IPv4 без скобок,IPv6 в скобках. Общая функция читает прежние host/address,
+таймаут и challenge значения;сохраняет body/challenge_verified и кэш
+checked_https_addresses. Новых local переменных нет. Allowlist до вызова,
+observed-address append,внешние probes после host и cleanup trap остаются
+на прежних местах. TCP443 по-прежнему проверяет доступность порта,не TLS.
+
+24 парных сценария,48 исполнений actual native blocks/shared helper,
+проверили обе семьи:успех сразу,конечные LF,повтор после неверного body/ошибки
+curl,исчерпание при wrong/error/interior-LF,готовый cache,TCP failure,
+два host с одним адресом и отказ HTTP при уже готовом cache. Полные curl argv,
+Python stdin/argv,status/stdout/stderr,используемые глобальные значения,
+число retry/sleep и cache effects совпали. Fake curl/python3/sleep выполняют
+только owned fixture protocol;реальные TCP/HTTP/Kubernetes/letsdebug не
+вызывались. Служебный Bash $_ нигде не читается как данные программы;
+число итераций проверяется по вызовам,не по его автоматическому значению.
+
+Один whole-source byte inverse восстановил полный прежний файл и два
+kernel;фактическое helper body отличается только --resolve "$1". Байты
+Python heredoc сохранены,включая положение PY/content. Восемь опасных
+source mutations отвергнуты. Bash syntax и ShellCheck -a -x — PASS LOCAL,
+диагностик0;контрольная SC2154 в новой функции обнаружена.
+Публичный install-contract22.42с — PASS LOCAL. Этот контракт не доказывает
+реальный public-preflight route:его runtime kernel сравнивается отдельно
+в описанных private probes. Новых тестов ради покрытия wrapper нет.
+
+Context7 curl вернул ошибку API key;официальный curl manual проверен для
+--resolve host/port/address и IPv6 brackets. Остальные curl/timeouts/socket
+API и зависимости прежние;реальная сеть не проверялась.
+Detector:6773sources/222 прежних exclusions,1467raw/1221retained/246unresolved.
+Исчезло окно d56507bd,новых нет;inventory,registry1078 и пороги прежние.
+Go21589/21589 EN→RU. Пять quality stages — PASS LOCAL. Ранее найденный FAIL
+legacy agent-runner renderer остаётся открытым;полный E2E/deploy/live и QA —
+NOT RUN. Полная готовность задачи не заявляется.
 
 ## Общая нормализация DNS-адресов preflight — 26.10.2026
 
