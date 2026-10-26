@@ -574,6 +574,30 @@ for (const { width, height, part, title } of syntheticJourneyProfiles()) {
           let invalidationCursor = 0;
           const sendSnapshot = (envelope: PlatformSnapshotEnvelope) =>
             socket.send(JSON.stringify(envelope));
+          const integrationSnapshot =
+            (): PlatformSnapshotEnvelope["snapshot"] => {
+              const snapshot: PlatformSnapshotEnvelope["snapshot"] = {
+                definitions: {
+                  definitions: integrationDefinitions.items,
+                  coreReady: integrationDefinitions.coreReady,
+                  nextActions: integrationDefinitions.nextActions,
+                  page: {},
+                },
+                connections: {
+                  connections: integrationConnections.items,
+                  nextActions: integrationConnections.nextActions,
+                  page: {
+                    nextPageToken: integrationConnections.nextPageToken,
+                  },
+                },
+              };
+              for (const read of catalogReaders.get("INTEGRATION_CONNECTION") ??
+                []) {
+                const value = read(input.projectRef);
+                if (value !== undefined) Object.assign(snapshot, value);
+              }
+              return snapshot;
+            };
           invalidateAgents = (agents, projectRef, workflows) => {
             sendSnapshot({
               type: "PLATFORM_SNAPSHOT",
@@ -628,8 +652,10 @@ for (const { width, height, part, title } of syntheticJourneyProfiles()) {
               cursor: ++invalidationCursor,
               eventName: "INTEGRATION_CONNECTION_CHANGED",
               kind: "INTEGRATION_CONNECTION",
+              projectRef: input.projectRef,
               mode: "DELTA",
               snapshot: {
+                ...integrationSnapshot(),
                 connections: { connections, nextActions: [], page: {} },
               },
             });
@@ -678,24 +704,7 @@ for (const { width, height, part, title } of syntheticJourneyProfiles()) {
             ],
           ];
           if (integrationCatalogReady)
-            snapshots.push([
-              "INTEGRATION_CONNECTION",
-              {
-                definitions: {
-                  definitions: integrationDefinitions.items,
-                  coreReady: integrationDefinitions.coreReady,
-                  nextActions: integrationDefinitions.nextActions,
-                  page: {},
-                },
-                connections: {
-                  connections: integrationConnections.items,
-                  nextActions: integrationConnections.nextActions,
-                  page: {
-                    nextPageToken: integrationConnections.nextPageToken,
-                  },
-                },
-              },
-            ]);
+            snapshots.push(["INTEGRATION_CONNECTION", integrationSnapshot()]);
           for (const [kind, readers] of catalogReaders) {
             const values = readers
               .map((read) => read(input.projectRef))
@@ -704,7 +713,9 @@ for (const { width, height, part, title } of syntheticJourneyProfiles()) {
             const existing = snapshots.find(([current]) => current === kind);
             const snapshot = Object.assign(
               {},
-              existing?.[1],
+              kind === "INTEGRATION_CONNECTION"
+                ? integrationSnapshot()
+                : existing?.[1],
               ...values,
             ) as PlatformSnapshotEnvelope["snapshot"];
             if (existing) existing[1] = snapshot;
@@ -1788,7 +1799,9 @@ for (const { width, height, part, title } of syntheticJourneyProfiles()) {
       await voice.locator("button").click();
       await expect(voice).toHaveAttribute("data-state", "recording");
       await page.waitForTimeout(350);
-      await voice.locator("button").first().click();
+      await voice
+        .getByRole("button", { name: "Завершить и распознать", exact: true })
+        .click();
       await expect(prompt).toHaveText("Диктовка");
       await prompt.press("Control+z");
       await expect(prompt).toHaveText("");

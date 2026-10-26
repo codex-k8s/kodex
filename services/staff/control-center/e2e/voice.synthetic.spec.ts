@@ -17,8 +17,7 @@ async function dictate(section: Locator): Promise<void> {
   ).toBeVisible();
   await new Promise((resolve) => setTimeout(resolve, 350));
   await section
-    .locator('.voice-input[data-state="recording"] button')
-    .first()
+    .getByRole("button", { name: "Завершить и распознать", exact: true })
     .click();
   await expect(
     section.locator('.voice-input[data-state="idle"]'),
@@ -43,7 +42,9 @@ for (const transition of [
       "recording",
     );
     await page.waitForTimeout(350);
-    await field.locator(".voice-input button").first().click();
+    await field
+      .getByRole("button", { name: "Завершить и распознать", exact: true })
+      .click();
     await expect(field.locator(".voice-input")).toHaveAttribute(
       "data-state",
       "transcribing",
@@ -380,7 +381,9 @@ for (const width of [390, 2900]) {
       field.locator('.voice-input[data-state="recording"]'),
     ).toBeVisible();
     await page.waitForTimeout(350);
-    await field.locator(".voice-input button").first().click();
+    await field
+      .getByRole("button", { name: "Завершить и распознать", exact: true })
+      .click();
     await expect(field.getByRole("alert")).toContainText(
       "Подождите минимум 30 с",
     );
@@ -414,7 +417,9 @@ test("synthetic: отмена, ошибка и единственная акти
     code.locator('.voice-input[data-state="recording"]'),
   ).toBeVisible();
   await expect(text.locator('.voice-input[data-state="idle"]')).toBeVisible();
-  await code.getByRole("button", { name: "Отмена", exact: true }).click();
+  await code
+    .getByRole("button", { name: "Отменить запись", exact: true })
+    .click();
   await expect(page.getByTestId("calls")).toHaveText("0");
 
   await page.getByLabel("Задержка", { exact: true }).check();
@@ -423,11 +428,15 @@ test("synthetic: отмена, ошибка и единственная акти
     text.locator('.voice-input[data-state="recording"]'),
   ).toBeVisible();
   await page.waitForTimeout(350);
-  await text.locator(".voice-input button").first().click();
+  await text
+    .getByRole("button", { name: "Завершить и распознать", exact: true })
+    .click();
   await expect(
     text.locator('.voice-input[data-state="transcribing"]'),
   ).toBeVisible();
-  await text.getByRole("button", { name: "Отмена", exact: true }).click();
+  await text
+    .getByRole("button", { name: "Отменить запись", exact: true })
+    .click();
   await expect(text.getByRole("textbox")).toHaveValue("Начало конец");
   await page.getByLabel("Задержка", { exact: true }).uncheck();
   await page.getByLabel("Ошибка", { exact: true }).check();
@@ -436,7 +445,9 @@ test("synthetic: отмена, ошибка и единственная акти
     text.locator('.voice-input[data-state="recording"]'),
   ).toBeVisible();
   await page.waitForTimeout(350);
-  await text.locator(".voice-input button").first().click();
+  await text
+    .getByRole("button", { name: "Завершить и распознать", exact: true })
+    .click();
   await expect(text.getByRole("alert")).toBeVisible();
   await expect(text.getByRole("textbox")).toHaveValue("Начало конец");
   await expect(page.getByTestId("calls")).toHaveText("2");
