@@ -7,10 +7,7 @@ fail() {
 }
 
 # shellcheck source=lib/user-tool-input.sh
-case ${BASH_SOURCE[0]} in
-  */*) source "${BASH_SOURCE[0]%/*}/lib/user-tool-input.sh" ;;
-  *) source "./lib/user-tool-input.sh" ;;
-esac
+source "${BASH_SOURCE[0]%"${BASH_SOURCE[0]##*/}"}lib/user-tool-input.sh"
 kodex_user_tool_parse "$@"
 set --
 for command_name in awk cmp curl find grep install jq ln mktemp python3 readlink sha256sum unzip; do
