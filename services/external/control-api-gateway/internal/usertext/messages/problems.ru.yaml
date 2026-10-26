@@ -943,3 +943,5 @@ SYSTEM_ROLE_ARTIFACT_REVISION_AUTHORITY:
   other: Добавлены полномочия на создание ревизий файлов
 REPOSITORY_BUNDLE_CHANGED:
   other: Состояние публикации набора файлов обновлено
+WORKFLOW_RESULT_ACCEPTED:
+  other: Обязательные результаты этапа проверены и приняты
