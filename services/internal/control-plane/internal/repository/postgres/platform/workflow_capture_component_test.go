@@ -186,6 +186,7 @@ func testWorkflowCaptureCompletion(t *testing.T, withArtifact bool) {
 	}
 	reject("empty-before-completion", before)
 	reject("rewind", before)
+	rejectWorkflowJournalBeforeCompletion(t, ctx, pool, nodeRef, stringMap(claimed, "leaseRef"))
 	payload := command.CompleteExecutionInput{LeaseRef: stringMap(claimed, "leaseRef"), Fence: stringMap(claimed, "fence"),
 		Generation: runtimeRevisionMapInt64(claimed, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: "Capture boundary."}
 	body := []byte("Проверенный материал capture boundary.\n")
@@ -243,6 +244,7 @@ func testWorkflowCaptureCompletion(t *testing.T, withArtifact bool) {
 	if err != nil || len(encoded) > 32768 {
 		t.Fatal("capture storage budget exceeded")
 	}
+	testWorkflowJournalStorage(t, ctx, pool, nodeRef, stringMap(claimed, "leaseRef"), after.Capture)
 	if !withArtifact {
 		// No real runtime or storage resource is created by this fixture. Its only external
 		// inventory entry may describe an absent PVC; external cleanup is not under test here.

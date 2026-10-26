@@ -60,14 +60,31 @@ type WorkflowAcceptedResult struct {
 }
 
 // WorkflowAttemptResult exposes the business verdict and immutable evidence of one completed attempt;
-// RuntimeRevisionID is retained internally and excluded from public transport projection.
+// RuntimeRevisionID and Provenance remain internal and are excluded from public transport projection.
 // WorkflowAttemptResult передаёт бизнес-решение и immutable доказательства завершённой попытки;
-// RuntimeRevisionID хранится внутри и не включается в публичную transport projection.
+// RuntimeRevisionID и Provenance хранятся внутри и не включаются в публичную transport projection.
 type WorkflowAttemptResult struct {
-	Attempt           int32                    `json:"attempt"`
-	RunRef            string                   `json:"runRef"`
-	RuntimeRevisionID string                   `json:"runtimeRevisionId"`
-	Accepted          bool                     `json:"accepted"`
-	Reason            string                   `json:"reason"`
-	Results           []WorkflowAcceptedResult `json:"results"`
+	Attempt           int32                         `json:"attempt"`
+	RunRef            string                        `json:"runRef"`
+	RuntimeRevisionID string                        `json:"runtimeRevisionId"`
+	Accepted          bool                          `json:"accepted"`
+	Reason            string                        `json:"reason"`
+	Results           []WorkflowAcceptedResult      `json:"results"`
+	Provenance        *WorkflowCompletionProvenance `json:"provenance,omitempty"`
+}
+
+// WorkflowCompletionProvenance binds a business verdict to the exact completed physical execution.
+// The database owner constructs these private pins; transport projections must never accept them
+// from a model or expose them as permissions to dispatch another step.
+// WorkflowCompletionProvenance связывает бизнес-решение с точным завершённым физическим исполнением.
+// Владелец БД строит приватные pins; transport не принимает их от модели и не выдаёт как полномочия
+// на запуск следующего шага.
+type WorkflowCompletionProvenance struct {
+	RootRunID      string `json:"rootRunId"`
+	OriginNodeID   string `json:"originNodeId"`
+	NodeID         string `json:"nodeId"`
+	LeaseID        string `json:"leaseId"`
+	Generation     int64  `json:"generation"`
+	TurnID         string `json:"turnId"`
+	RuntimeAttempt int32  `json:"runtimeAttempt"`
 }
