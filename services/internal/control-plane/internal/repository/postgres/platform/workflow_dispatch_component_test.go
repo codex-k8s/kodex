@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"reflect"
 	"slices"
@@ -20,6 +21,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -30,6 +32,45 @@ import (
 //
 //go:embed testdata/sql/workflow_dispatch_proof.sql
 var queryWorkflowDispatchProof string
+
+// workflowDispatchTrace reports only closed query names, row counts and SQLSTATE, never arguments.
+// workflowDispatchTrace сообщает только закрытые имена запросов, число строк и SQLSTATE без аргументов.
+type workflowDispatchTrace struct{ t *testing.T }
+
+// workflowDispatchTraceKey isolates the safe query label in the trace context.
+// workflowDispatchTraceKey изолирует безопасное имя запроса в контексте трассировки.
+type workflowDispatchTraceKey struct{}
+
+// TraceQueryStart selects only repository-owned workflow statements for bounded diagnostics.
+// TraceQueryStart выбирает только принадлежащие репозиторию workflow-запросы для диагностики.
+func (trace workflowDispatchTrace) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
+	for name, query := range map[string]string{
+		"capture-context": queryWorkflowCaptureContext, "capture-record": queryWorkflowCaptureRecord,
+		"completion": queryWorkflowDispatchCompletion, "result-lineage": queryWorkflowResultLineage,
+		"journal-append": queryWorkflowAttemptAppend, "anchors": queryWorkflowDispatchAnchors,
+		"materialize": queryWorkflowDispatchMaterialize,
+	} {
+		if data.SQL == query {
+			return context.WithValue(ctx, workflowDispatchTraceKey{}, name)
+		}
+	}
+	return ctx
+}
+
+// TraceQueryEnd excludes SQL text, arguments and database error details from test output.
+// TraceQueryEnd исключает SQL, аргументы и подробности ошибок БД из вывода теста.
+func (trace workflowDispatchTrace) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryEndData) {
+	name, ok := ctx.Value(workflowDispatchTraceKey{}).(string)
+	if !ok {
+		return
+	}
+	code := "none"
+	var failure *pgconn.PgError
+	if errors.As(data.Err, &failure) {
+		code = failure.Code
+	}
+	trace.t.Logf("workflow query=%s rows=%d failed=%t sqlstate=%s", name, data.CommandTag.RowsAffected(), data.Err != nil, code)
+}
 
 // workflowDispatchExecution retains owner-issued runtime coordinates for comparison with the claim.
 // workflowDispatchExecution хранит назначенные владельцем координаты для сравнения с claim.
@@ -85,7 +126,12 @@ func TestWorkflowDispatchComponent(t *testing.T) {
 func testWorkflowDispatchArtifactFanout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
+	config, err := pgxpool.ParseConfig(isolatedAssistantComponentDSN(t))
+	if err != nil {
+		t.Fatal("parse isolated workflow dispatch database")
+	}
+	config.ConnConfig.Tracer = workflowDispatchTrace{t: t}
+	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		t.Fatal("open isolated workflow dispatch database")
 	}
