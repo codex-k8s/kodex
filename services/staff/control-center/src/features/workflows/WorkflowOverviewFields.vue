@@ -20,6 +20,7 @@ const props = defineProps<{
   projectRef: string;
   timeoutSeconds: number;
   maxConcurrency: number;
+  concurrencyLimit?: number;
   completionCriteria: string;
   disabled?: boolean;
 }>();
@@ -117,7 +118,7 @@ const completionCriteriaDescription = computed(() =>
         :value="maxConcurrency"
         type="number"
         min="1"
-        max="100"
+        :max="concurrencyLimit ?? 100"
         required
         :disabled="disabled"
         @input="

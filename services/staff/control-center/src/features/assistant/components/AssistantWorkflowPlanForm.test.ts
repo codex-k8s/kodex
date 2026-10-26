@@ -12,6 +12,7 @@ import {
 } from "vue";
 import { afterEach, expect, it, vi } from "vitest";
 import { i18n } from "@/app/i18n";
+import { resolveConfirmation } from "@/shared/ui/confirmation";
 import {
   editableOperations,
   operationInputs,
@@ -115,6 +116,7 @@ function stepAt(
 }
 const disposers: Array<() => void> = [];
 afterEach(() => {
+  resolveConfirmation(false);
   disposers.splice(0).forEach((dispose) => dispose());
 });
 function mount(count = 33) {
@@ -132,6 +134,7 @@ function mount(count = 33) {
     valid: Ref<boolean>;
     validStep: (step: Record<string, unknown>, pending?: boolean) => boolean;
     changeStep: (index: number, key: string, value: unknown) => void;
+    changeMode: (event: Event) => Promise<void>;
   };
   const renderer = createRenderer<object, object>({
     insert() {},
@@ -180,6 +183,100 @@ function toggle(open: boolean): Event {
   Object.defineProperty(event, "currentTarget", { value: { open } });
   return event;
 }
+
+it("смена режима требует подтверждения и не применяется после отзыва редактирования", async () => {
+  const { props, state } = mount(2);
+  await vi.waitFor(() => expect(state.valid.value).toBe(true));
+  const change = () =>
+    state.changeMode({
+      target: { value: "SERVER_DAG_V1" },
+    } as unknown as Event);
+  const before = operationInputs([props.operation]);
+  const rejected = change();
+  resolveConfirmation(false);
+  await rejected;
+  expect(operationInputs([props.operation])).toEqual(before);
+  const stale = change();
+  props.disabled = true;
+  resolveConfirmation(true);
+  await stale;
+  expect(operationInputs([props.operation])).toEqual(before);
+  props.disabled = false;
+  const accepted = change();
+  resolveConfirmation(true);
+  await accepted;
+  expect(operationInputs([props.operation])[0]?.parameters.executionMode).toBe(
+    "SERVER_DAG_V1",
+  );
+  expect(stepAt(stepsOf(props.operation), 0)).toMatchObject({
+    key: "step-1",
+    dependsOn: [],
+    resultRequirements: [],
+  });
+  expect(state.valid.value).toBe(false);
+});
+
+it.each([null, "", "AUTOMATIC"])(
+  "не превращает недопустимый режим %s в прежний",
+  async (mode) => {
+    const { props, state } = mount(2);
+    await vi.waitFor(() => expect(state.valid.value).toBe(true));
+    updateOperationParameter(props.operation, "executionMode", mode);
+    await nextTick();
+    expect(state.valid.value).toBe(false);
+  },
+);
+
+it("план DAG сохраняет условия и TTL; изменение зависимости закрывает применение", async () => {
+  const { props, state } = mount(2);
+  updateOperationParameter(props.operation, "executionMode", "SERVER_DAG_V1");
+  updateOperationParameter(props.operation, "maxConcurrency", 2);
+  updateOperationParameter(
+    props.operation,
+    "steps",
+    stepsOf(props.operation).map((step, index) => ({
+      ...step,
+      key: index === 0 ? "code" : "review",
+      agentRef: index === 0 ? "agt_developer" : "agt_reviewer",
+      dependsOn: index === 0 ? [] : ["code"],
+      resultRequirements:
+        index === 0
+          ? [
+              {
+                key: "pr",
+                kind: "PULL_REQUEST",
+                repository: "codex-k8s/test-repo",
+              },
+            ]
+          : [{ key: "review", kind: "REVIEW", subjectStepKey: "code" }],
+      ...(index === 1
+        ? {
+            humanGate: true,
+            gateDecisions: ["APPROVE"],
+            approvalTimeoutSeconds: 90,
+          }
+        : {}),
+    })),
+  );
+  await vi.waitFor(() => expect(state.valid.value).toBe(true));
+  state.changeStep(1, "name", "Независимое ревью");
+  expect(stepAt(stepsOf(props.operation), 1)).toMatchObject({
+    dependsOn: ["code"],
+    resultRequirements: [
+      { key: "review", kind: "REVIEW", subjectStepKey: "code" },
+    ],
+    approvalTimeoutSeconds: 90,
+  });
+  state.changeStep(0, "key", "renamed");
+  await nextTick();
+  expect(state.valid.value).toBe(false);
+  expect(stepAt(stepsOf(props.operation), 1).dependsOn).toEqual(["code"]);
+  state.changeStep(0, "key", "code");
+  await nextTick();
+  expect(state.valid.value).toBe(true);
+  state.changeStep(1, "agentRef", "agt_developer");
+  await vi.waitFor(() => expect(state.valid.value).toBe(false));
+});
 
 it.each(["ru", "en"] as const)(
   "33 этапа сначала показывают только заголовки без лишних редакторов (%s)",

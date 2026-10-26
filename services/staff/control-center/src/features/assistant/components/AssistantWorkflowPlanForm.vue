@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, useId, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
+import { useI18n } from "vue-i18n";
+import { requestConfirmation } from "@/shared/ui/confirmation";
+import WorkflowResultContractEditor from "@/features/workflows/WorkflowResultContractEditor.vue";
+import {
+  newWorkflowStepKey,
+  validWorkflowDAG,
+  workflowModeSteps,
+} from "@/features/workflows/result-contract";
 
 import { loadAgentCatalogPage } from "@/features/agents/catalog/api";
 import EffectiveCapabilityCatalog from "@/features/agents/detail/EffectiveCapabilityCatalog.vue";
@@ -26,6 +34,7 @@ const props = defineProps<{
   disabled: boolean;
 }>();
 const fieldPrefix = `assistant-workflow-${useId()}`;
+const { t } = useI18n();
 const inputName = (index: number, field: string) =>
   `${fieldPrefix}-input-${String(index)}-${field}`;
 const stepName = (index: number, field: string) =>
@@ -72,6 +81,8 @@ const stepKeys = new Set([
   "gateDecisions",
   "requiredCapabilityKeys",
   "approvalTimeoutSeconds",
+  "dependsOn",
+  "resultRequirements",
 ]);
 const agentReadback = ref<Record<string, Agent | null>>({});
 const selectableAgents = new Map<string, Agent>();
@@ -105,6 +116,31 @@ const fields = computed(() =>
     : itemArray(parameter("inputFields")),
 );
 const steps = computed(() => itemArray(parameter("steps")));
+const executionMode = computed(() => {
+  const mode = parameter("executionMode");
+  return mode === undefined ? "MANAGER_DRIVEN" : mode;
+});
+const serverMode = computed(() => executionMode.value === "SERVER_DAG_V1");
+const validDAG = computed(() =>
+  validWorkflowDAG(
+    steps.value,
+    parameter("maxConcurrency") ?? 1,
+    [
+      parameter("name"),
+      parameter("purpose"),
+      parameter("instructions"),
+      parameter("completionCriteria"),
+      ...(steps.value ?? []).flatMap((step) => [
+        step.name,
+        step.purpose,
+        step.expectedResult,
+      ]),
+    ]
+      .map(text)
+      .join(""),
+    "key",
+  ),
+);
 const coordinatorRef = computed(() => text(parameter("coordinatorAgentRef")));
 const agentRefs = computed(() => [
   ...new Set(
@@ -198,8 +234,41 @@ async function loadAgents(
 }
 
 function change(key: string, value: unknown): void {
+  if (props.disabled) return;
   emit("parameter", key, value);
   emit("dirty");
+}
+let mounted = true;
+onBeforeUnmount(() => {
+  mounted = false;
+});
+function modeEditable(): boolean {
+  return mounted && !props.disabled && steps.value !== undefined;
+}
+async function changeMode(event: Event): Promise<void> {
+  const target = event.target as HTMLSelectElement;
+  const mode = target.value;
+  target.value = text(executionMode.value);
+  if (
+    !modeEditable() ||
+    (mode !== "MANAGER_DRIVEN" && mode !== "SERVER_DAG_V1") ||
+    mode === executionMode.value
+  )
+    return;
+  const identity = props.operation;
+  const project = props.projectRef;
+  const before = JSON.stringify(props.operation);
+  if (
+    !(await requestConfirmation(t("workflowResults.modeChange"))) ||
+    !modeEditable() ||
+    props.projectRef !== project ||
+    props.operation !== identity ||
+    JSON.stringify(props.operation) !== before ||
+    !steps.value
+  )
+    return;
+  change("steps", workflowModeSteps(steps.value, mode, "key", isUpdate.value));
+  change("executionMode", mode);
 }
 function changeStep(index: number, key: string, value: unknown): void {
   const current = steps.value;
@@ -280,11 +349,23 @@ function toggleCapability(index: number, key: string, enabled: boolean): void {
   );
 }
 function addStep(): void {
-  if (!steps.value || steps.value.length >= 200) return;
+  if (
+    props.disabled ||
+    !steps.value ||
+    steps.value.length >= (serverMode.value ? 12 : 200)
+  )
+    return;
   openStepIndex.value = steps.value.length;
   change("steps", [
     ...steps.value,
     {
+      ...(serverMode.value
+        ? {
+            key: newWorkflowStepKey(steps.value.map((step) => step.key)),
+            dependsOn: [],
+            resultRequirements: [],
+          }
+        : {}),
       name: "",
       purpose: "",
       agentRef: coordinatorRef.value,
@@ -368,7 +449,11 @@ function validStep(step: Item, allowPendingAgent = false): boolean {
   const capabilities = step.requiredCapabilityKeys;
   return (
     Object.keys(step).every(
-      (key) => stepKeys.has(key) && (key !== "key" || isUpdate.value),
+      (key) =>
+        stepKeys.has(key) &&
+        (key !== "key" || isUpdate.value || serverMode.value) &&
+        (!["dependsOn", "resultRequirements"].includes(key) ||
+          serverMode.value),
     ) &&
     (step.key === undefined ||
       (typeof step.key === "string" &&
@@ -422,6 +507,8 @@ function validStep(step: Item, allowPendingAgent = false): boolean {
 const valid = computed(() =>
   Boolean(
     props.projectRef &&
+    (executionMode.value === "MANAGER_DRIVEN" || serverMode.value) &&
+    (!serverMode.value || validDAG.value) &&
     (isUpdate.value
       ? text(parameter("workflowRef")) === props.operation.value.target.ref &&
         text(parameter("workflowRef")).length > 0 &&
@@ -438,7 +525,7 @@ const valid = computed(() =>
       typeof parameter("maxConcurrency") === "number") &&
     Number.isInteger(Number(parameter("maxConcurrency") ?? 1)) &&
     Number(parameter("maxConcurrency") ?? 1) >= 1 &&
-    Number(parameter("maxConcurrency") ?? 1) <= 100 &&
+    Number(parameter("maxConcurrency") ?? 1) <= (serverMode.value ? 2 : 100) &&
     (parameter("timeoutSeconds") === undefined ||
       typeof parameter("timeoutSeconds") === "number") &&
     Number.isInteger(Number(parameter("timeoutSeconds") ?? 7200)) &&
@@ -450,7 +537,7 @@ const valid = computed(() =>
     fields.value.every(validField) &&
     steps.value &&
     steps.value.length > 0 &&
-    steps.value.length <= 200 &&
+    steps.value.length <= (serverMode.value ? 12 : 200) &&
     steps.value.every((step) => validStep(step)) &&
     new TextEncoder().encode(
       text(parameter("completionCriteria")) +
@@ -487,6 +574,7 @@ watch(
       :project-ref="projectRef || ''"
       :timeout-seconds="Number(parameter('timeoutSeconds') ?? 7200)"
       :max-concurrency="Number(parameter('maxConcurrency') ?? 1)"
+      :concurrency-limit="serverMode ? 2 : 100"
       :completion-criteria="text(parameter('completionCriteria'))"
       :disabled="disabled"
       @update:name="change('name', $event)"
@@ -497,6 +585,28 @@ watch(
       @update:max-concurrency="change('maxConcurrency', $event)"
       @update:completion-criteria="change('completionCriteria', $event)"
     />
+    <label class="field">
+      <span>{{ $t("workflowResults.mode") }}</span>
+      <select
+        :id="`${fieldPrefix}-mode`"
+        :name="`${fieldPrefix}-mode`"
+        :value="executionMode"
+        :disabled="disabled"
+        @change="changeMode"
+      >
+        <option
+          v-for="mode in ['MANAGER_DRIVEN', 'SERVER_DAG_V1']"
+          :key="mode"
+          :value="mode"
+        >
+          {{ $t(`workflowResults.modes.${mode}`) }}
+        </option>
+      </select>
+    </label>
+    <p v-if="serverMode">{{ $t("workflowResults.bounds") }}</p>
+    <p v-if="serverMode && !validDAG" class="field-error" role="status">
+      {{ $t("workflowResults.invalid") }}
+    </p>
     <div v-if="isUpdate" class="field">
       <span>{{ $t("assistant.planEditor.workflowInstructions") }}</span>
       <TemplateSourceField
@@ -636,7 +746,9 @@ watch(
         ><button
           class="button"
           type="button"
-          :disabled="disabled || !steps || steps.length >= 200"
+          :disabled="
+            disabled || !steps || steps.length >= (serverMode ? 12 : 200)
+          "
           @click="addStep"
         >
           {{ $t("common.create") }}
@@ -670,6 +782,22 @@ watch(
           @toggle="toggleStep(index, $event)"
         >
           <div class="assistant-workflow-form__step-body">
+            <WorkflowResultContractEditor
+              v-if="serverMode"
+              :step-key="text(step.key)"
+              :dependencies="step.dependsOn"
+              :requirements="step.resultRequirements"
+              :predecessors="
+                (steps ?? []).slice(0, index).map((prior) => ({
+                  key: text(prior.key),
+                  name: text(prior.name),
+                }))
+              "
+              :disabled="disabled"
+              @key="changeStep(index, 'key', $event)"
+              @dependencies="changeStep(index, 'dependsOn', $event)"
+              @requirements="changeStep(index, 'resultRequirements', $event)"
+            />
             <label class="field"
               ><span>{{ $t("workflows.stepName") }}</span
               ><input

@@ -11,12 +11,14 @@ import { automationPreviewMessages } from "@/features/automations/prompt-preview
 import { vulnerabilityMessages } from "@/features/role-images/vulnerability-messages";
 import { fileRevisionMessages } from "@/features/files/revision-messages";
 import { repositoryBundleMessages } from "@/features/workboard/repository-bundle-messages";
+import { workflowResultMessages } from "@/features/workflows/result-messages";
 
 import { currentLocale } from "@/shared/locale";
 import { serverMessagesFor } from "@/shared/ui/server-message-catalog";
 import { additionalPermissionMessages } from "@/shared/ui/permission-message-catalog";
 
 const ru = {
+  workflowResults: workflowResultMessages.ru,
   repositoryBundle: repositoryBundleMessages.ru,
   fileRevision: fileRevisionMessages.ru,
   imageVulnerabilities: vulnerabilityMessages.ru,
@@ -4732,6 +4734,7 @@ const ru = {
 
 const en = {
   ...ru,
+  workflowResults: workflowResultMessages.en,
   repositoryBundle: repositoryBundleMessages.en,
   fileRevision: fileRevisionMessages.en,
   imageVulnerabilities: vulnerabilityMessages.en,
