@@ -98,6 +98,10 @@ test-interaction-gateway-render:
 test-interaction-gateway-postgres:
 	@./scripts/tests/control-plane-postgres-test.sh '^TestBootstrapComponent$$/(interaction|integration_connection_tests)'
 
+.PHONY: test-workflow-server-postgres
+test-workflow-server-postgres: check-go-toolchain
+	@timeout --kill-after=10s 240s bash scripts/tests/workflow-server-postgres-test.sh
+
 test-control-plane-postgres:
 	@./scripts/tests/control-plane-postgres-test.sh
 
