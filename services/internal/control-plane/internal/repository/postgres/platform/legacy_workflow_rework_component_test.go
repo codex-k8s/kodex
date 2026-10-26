@@ -55,17 +55,36 @@ func TestLegacyWorkflowReworkComponent(t *testing.T) {
 	for _, capability := range []string{"platform.run.delegate", runtimecontract.ArtifactCapability} {
 		agent = *execute(owner, command.ChangeAgentCapability, capability, &agent.Version, command.AgentBindingInput{AgentRef: agent.Ref, BindingRef: capability, Enabled: true}).Agent
 	}
-	draft := entity.WorkflowVersion{Name: "Доработка собственного материала", CoordinatorAgentRef: agent.Ref, Concurrency: 1, TimeoutSeconds: 180, ResultSchema: map[string]any{}, Steps: []entity.WorkflowStep{{Key: "material", Position: 1, Name: "Материал", AgentRef: agent.Ref, Instructions: "Подготовить небольшой материал для владельца.", ExpectedResult: "Проверенный материал", TimeoutSeconds: 120, HumanGateAfter: true, GateDecisions: []string{"APPROVE", "REJECT", "REQUEST_CHANGES", "CANCEL"}}}}
+	draft := entity.WorkflowVersion{Name: "Доработка собственного материала", CoordinatorAgentRef: agent.Ref, Concurrency: 1, TimeoutSeconds: 180, ResultSchema: map[string]any{}, Steps: []entity.WorkflowStep{{Key: "material", Position: 1, Name: "Материал", AgentRef: agent.Ref, Instructions: "Подготовить небольшой материал для владельца.", ExpectedResult: "Проверенный материал", TimeoutSeconds: 120, RequiredCapabilityKeys: []string{runtimecontract.ArtifactCapability}, HumanGateAfter: true, GateDecisions: []string{"APPROVE", "REJECT", "REQUEST_CHANGES", "CANCEL"}}}}
 	workflow := execute(owner, command.CreateWorkflow, "create", nil, command.WorkflowInput{ProjectRef: project.Ref, Name: draft.Name, CoordinatorAgentRef: agent.Ref, Draft: &draft}).Workflow
 	workflow = execute(owner, command.ValidateWorkflow, "validate", &workflow.Version, command.WorkflowInput{Ref: workflow.Ref}).Workflow
 	workflow = execute(owner, command.PublishWorkflow, "publish", &workflow.Version, command.WorkflowInput{Ref: workflow.Ref}).Workflow
 	root := execute(owner, command.LaunchRun, "launch", nil, command.LaunchRunInput{ProjectRef: project.Ref, Task: "Проверить исходный и доработанный материалы.", Target: entity.RunTarget{Type: "WORKFLOW", Ref: workflow.Ref}}).Run
 	claim := func(key string) []map[string]any {
+		t.Helper()
 		return execute(worker, command.ClaimExecution, key, nil, command.LeaseInput{WorkloadInstance: "legacy-owner-rework-fixture", Limit: 2}).RuntimeItems
 	}
 	complete := func(key string, lease map[string]any, summary, file string) command.Result {
+		t.Helper()
+		stage := "UNKNOWN"
+		switch key {
+		case "coordinator-wait":
+			stage = "COORDINATOR"
+		case "first-complete":
+			stage = "INITIAL_CHILD"
+		case "second-complete":
+			stage = "REWORK_CHILD"
+		case "final-parent":
+			stage = "PARENT_FINAL"
+		default:
+			t.Fatal("unsupported native completion stage")
+		}
+		t.Log("legacy_completion_stage", stage)
 		payload := command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: summary}
 		if file != "" {
+			if !contains(runtimeRevisionStringSlice(lease["capabilities"]), runtimecontract.ArtifactCapability) {
+				t.Fatal("native artifact completion lacks its published runtime capability", stage)
+			}
 			payload.Artifacts = []command.CompletedArtifact{workflowCaptureProgressArtifact(file, []byte(summary+"\n"))}
 		}
 		return execute(worker, command.CompleteExecution, key, nil, payload)
