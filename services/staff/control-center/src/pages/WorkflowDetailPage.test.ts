@@ -104,6 +104,7 @@ function mount() {
   let state!: {
     form: Required<WorkflowInput>;
     validCompletionText: Ref<boolean>;
+    validDAG: Ref<boolean>;
     dirty: Ref<boolean>;
     save: () => Promise<void>;
   };
@@ -184,12 +185,26 @@ it.each(["я", "🧭"])(
   },
 );
 
-it("связывает доступность кнопки сохранения с тем же ограничением", () => {
+it("не сохраняет серверный процесс без обязательных результатов этапа", async () => {
+  const state = mount();
+  await vi.waitFor(() =>
+    expect(state.form.completionCriteria).toBe(workflow.completionCriteria),
+  );
+  state.form.executionMode = "SERVER_DAG_V1";
+  await nextTick();
+  expect(state.validDAG.value).toBe(false);
+  const before = JSON.stringify(state.form);
+  await state.save();
+  expect(store.saveWorkflow).not.toHaveBeenCalled();
+  expect(JSON.stringify(state.form)).toBe(before);
+});
+
+it("связывает кнопку сохранения с ограничениями текста и графа", () => {
   const source = readFileSync(
     new URL("./WorkflowDetailPage.vue", import.meta.url),
     "utf8",
   );
-  expect(source).toContain(
-    ':disabled="busy || !validStepText || !validCompletionText"',
+  expect(source).toMatch(
+    /:disabled="\s*busy \|\| !validStepText \|\| !validCompletionText \|\| !validDAG\s*"/,
   );
 });

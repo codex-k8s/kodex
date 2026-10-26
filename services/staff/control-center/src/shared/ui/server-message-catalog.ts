@@ -6,6 +6,10 @@ import {
 
 // Закрытый реестр безопасных сообщений владельца состояния: ru, en.
 export const serverTokenTranslations = {
+  WORKFLOW_RESULT_ACCEPTED: [
+    "Обязательные результаты этапа проверены и приняты",
+    "Required stage results have been verified and accepted",
+  ],
   REPOSITORY_BUNDLE_CHANGED: [
     "Состояние публикации набора файлов обновлено",
     "Repository bundle publication updated",
