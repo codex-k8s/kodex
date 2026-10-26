@@ -4,11 +4,47 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.493.0
+version: 1.494.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие аргументы management bootstrap — 26.10.2026
+
+Три вызова из install.sh используют локальную bootstrap_management_surfaces:
+общий набор аргументов прежний, mode передаётся через $1. Функция не создаёт
+локальных переменных, не меняет export и не читает env-файлы. Оба apply
+остаются внутри прежнего component guard после KODEX_PUBLIC_IPV4_CIDR,
+readback — на прежнем месте после остальных компонентов. Порядок фаз
+apply-monitoring→apply-surfaces→readback, прежние context/identity/ingress/
+API адреса и порты, owner guards и обработка отказа не менялись.
+
+48 парных сценариев,96 исполнений actual native calls/actual shared function,
+проверили12 вариантов буквальных значений15 входных переменных: пробелы,
+CR/LF, UTF-8, пустые строки, знаки shell, подстановки, glob, equals и backslash.
+Owned подставная команда записывает только синтетические argv. Проверены
+успех и отказ каждой фазы: exit status, stdout/stderr и полные argv bytes
+совпали; следующие фазы после ошибки не запускаются. Реальная установка,
+.env владельца, Kubernetes, Helm и live credentials не использовались.
+
+Полное обратное побайтное преобразование восстановило install.sh и все три
+прежних вызова; семь опасных actual source mutations (mode/order/пропуск
+фазы, HTTP вместо HTTPS, CIDR, удаление guard и shadow входа) отвергнуты.
+Bash syntax — PASS LOCAL. Сопоставление ShellCheck -a -x с исходной версией
+не добавило диагностик; контрольная SC2154 в новой функции обнаружена.
+Сырой ShellCheck возвращает1 из-за двух прежних диагностик подключённого
+load-env.sh: SC2016 info и SC2163 warning. Они сопоставлены по конкретным
+исходным выражениям; класс предупреждений не отключается. Публичный offline
+install-contract22.83с — PASS LOCAL.
+
+Контракты function/source встроенной документации Bash5.3.9 проверены ранее;
+новых внешних API и зависимостей нет. Context7 остаётся недоступен по прежней
+ошибке API key; ключи не искались и не ремонтировались.
+Detector:6770sources/222generated exclusions,1473raw/1221retained/252unresolved.
+Исчезли три окна повторных вызовов, новых нет. Inventory,registry1078 и
+пороги прежние. Go21588/21588 EN→RU. Пять quality stages — PASS LOCAL.
+Полные E2E/live/deploy и независимая QA — NOT RUN; полный scope продолжается.
 
 ## Общая проверка registry DNS для ARC — 26.10.2026
 
