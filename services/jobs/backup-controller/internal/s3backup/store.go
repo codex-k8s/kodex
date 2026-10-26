@@ -45,6 +45,9 @@ var (
 	// ErrNotFound denotes an absent exact S3 object or version.
 	// RU: ErrNotFound обозначает отсутствие точного объекта S3 либо его версии.
 	ErrNotFound = errors.New("S3 object is not found")
+	// errCurrentKeyAbsent proves an exact key is absent from a completed current inventory, unlike a failed HEAD request.
+	// RU: errCurrentKeyAbsent доказывает отсутствие точного ключа в полном current inventory, в отличие от ошибки HEAD.
+	errCurrentKeyAbsent = errors.New("S3 current key is absent from inventory")
 )
 
 // api narrows the S3 operations used for versioned backup, restore and lock tests.
@@ -278,7 +281,7 @@ func (repository *Repository) deleteCurrentOperationLock(ctx context.Context, re
 	if err != nil {
 		deleteErr := mapError(err)
 		current, readErr := repository.currentReceiptForKey(ctx, receipt.Key)
-		if errors.Is(readErr, ErrNotFound) {
+		if errors.Is(readErr, errCurrentKeyAbsent) {
 			return nil
 		}
 		if readErr == nil && (current.VersionID != receipt.VersionID || current.ETag != receipt.ETag) {
@@ -287,7 +290,7 @@ func (repository *Repository) deleteCurrentOperationLock(ctx context.Context, re
 		return deleteErr
 	}
 	current, err := repository.currentReceiptForKey(ctx, receipt.Key)
-	if errors.Is(err, ErrNotFound) {
+	if errors.Is(err, errCurrentKeyAbsent) {
 		return nil
 	}
 	if err == nil && (current.VersionID != receipt.VersionID || current.ETag != receipt.ETag) {
@@ -690,8 +693,8 @@ func (repository *Repository) receiptForKey(ctx context.Context, key string) (ma
 	return manifest.Receipt{}, ErrNotFound
 }
 
-// currentReceiptForKey resolves the latest non-deleted version of one exact key.
-// RU: currentReceiptForKey извлекает последнюю неудалённую версию одного точного ключа.
+// currentReceiptForKey resolves the latest non-deleted version, distinguishing completed inventory absence from a listed version's HEAD failure.
+// RU: currentReceiptForKey извлекает последнюю неудалённую версию, отличая отсутствие в полном inventory от ошибки HEAD найденной версии.
 func (repository *Repository) currentReceiptForKey(ctx context.Context, key string) (manifest.Receipt, error) {
 	objects, err := repository.destination.currentInventory(ctx, key)
 	if err != nil {
@@ -702,7 +705,7 @@ func (repository *Repository) currentReceiptForKey(ctx context.Context, key stri
 			return object, nil
 		}
 	}
-	return manifest.Receipt{}, ErrNotFound
+	return manifest.Receipt{}, errCurrentKeyAbsent
 }
 
 // inventory rejects multiple or mutable versions per key and returns digest-checked exact receipts.
