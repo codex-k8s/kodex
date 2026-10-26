@@ -4,11 +4,63 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.518.0
+version: 1.519.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общий сборщик строгих context page views — 26.10.2026
+
+Четыре resource/history цикла skill/memory используют collectContextPageViews:
+прежний converter,проверка ref uniqueness,необязательный project predicate,
+append в исходном порядке. Caller создаёт пустой Items с JSON-формой[];
+helper возвращает накопленный префикс с false при отказе,а caller отвергает всю
+страницу с502. Формат generated page,total/next cursor,envelope bounds,typed RPC,
+request/context и input guards остаются у конкретных handlers.
+
+Закрытый constraint допускает только четыре generated wire pointer types.
+После успешного strict converter дополнительно читается его чистый GetRef;
+для root pages project predicate использует чистый GetProjectRef. Все четыре
+view converters копируют именно эти Ref/ProjectRef и не меняют их. Проверены
+шесть generated getter bodies и неизменность всего файла views;generated code
+не редактировался. Порядок convert→duplicate→project predicate сохранён,включая
+чтение project pointer после RPC. History не получает выдуманного project фильтра.
+Вычисление input slice до локального map allocation не имеет внешнего эффекта.
+Helper не выполняет RPC,не решает authority и не меняет domain state/lifecycle.
+
+Одна полная GoFmt inverse восстановила весь caller-файл,включая headers/query/
+page constructors и остальные handlers. Четыре native loops проверены как
+закрытые шаблоны;десять частных изменений converter/ref/duplicate/filter/prefix/
+status/redaction/generated getter отвергнуты. Source hashes двух файлов совпали
+с модульной проверкой и итоговой private overlay;strict views и generated
+getters сохранены побайтно.
+
+Весь gateway build6.73s/unit24.38s/vet1.92s — PASS LOCAL:
+3098PASS/0FAIL/0SKIP,11packages. В private overlay четыре полных native handler
+bodies сравниваются с четырьмя actual handlers:139PASS events/0FAIL/0SKIP за9.31s.
+Проверены пустые/одиночные/двойные страницы,duplicate/неверный элемент,
+100/101items,total/cursor bounds,nil replies,RPC failure,разные project filters
+и изменение фильтра после RPC. Совпали typed request/context,status/headers/JSON;
+исходные replies неизменны,частичные items не публикуются. Независимые правильные
+correlation IDs сравниваются прежним нормализатором. Это projection/mapping
+proof без HTTP/RPC сети,не SSO,owner authority или сквозная приёмка. Оснастка
+уточнена для отдельных nil/explicit-empty inputs и свежих replies;product code
+при этом не менялся. Публичные mirror tests для glue не добавлялись.
+
+Context7 через доступный коннектор успешно выполнил resolve/query для
+/protocolbuffers/protobuf-go. Проверены официальные proto.Clone/proto.Equal и
+protoreflect.Message docs:deep copy,nil/invalid message,попарное сравнение lists,
+mutable/empty composites. Ключи не читались и не исправлялись. Прежние записи об
+ошибке API key относятся к историческим запускам.
+
+Пять quality stages — PASS LOCAL. Удалены2raw окна,добавлены2. После реального
+выноса page алгоритма два остаточных окна разных typed handlers/page/RPC
+selectors сохранены адресно;одна отсутствующая старая запись удалена,
+остальные1082 сохранены. Registry1084,12registry mutations отвергнуты.
+Detector6785sources/222generated exclusions,1435raw/1227retained/208unresolved,
+Go21610/21610 EN→RU. Legacy renderer FAIL и прежние Bash diagnostics открыты;
+полные E2E/live/deploy/QA — NOT RUN.
 
 ## Общие типизированные результаты context RPC и ввод спецификаций — 26.10.2026
 

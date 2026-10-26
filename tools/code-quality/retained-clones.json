@@ -3,6 +3,22 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
+      "fragmentSHA256": "0081d0f8a8f72a6cc85379351153ecdb0e47228f3a59df763a15d2bb23d64590",
+      "count": 1,
+      "reason": "После выноса четырёх page loops в collectContextPageViews окно1267tokens сопоставляет последовательности разных typed skill/memory handlers:single read,Archive/Restore/Purge,Bind/Unbind,catalog/history. Общие reference/header/body guards,strict result boundaries,page envelope predicate и convert/unique/project-filter алгоритм теперь общие. Остались разные generated params/request/response/page types,специализированные RPC method identities и конкретные bundle/record/binding/converter selectors;полный generic resource/lifecycle dispatcher скрыл бы эти связи без самостоятельного вычислительного ядра. Строгие skill scan/provenance и memory retention/redaction converters остаются разными,не подменяются общей моделью. Сохранено только это точное перекрывающееся окно одного файла/hash/count1;новые fragments,scope guards и страницы целиком не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
+      "fragmentSHA256": "ac8540d2f517300f6d417b41ae5e90ecfffc4085cee641beb5cf9ba2b145ef71",
+      "count": 1,
+      "reason": "Остаточное136-token окно соединяет разные ListSkillBundles/ListSkillBundleRevisions RPC constructors,общий error mapper и общий validContextPageResponse,затем разные nominal OpenAPI page types и вызовы одного collectContextPageViews. Catalog сохраняет project/agent/search/state,history — BundleRef;корневые элементы имеют optional project filter,ревизии — отдельный strict caster без выдуманного project поля. Алгоритм conversion/duplicate/eligibility уже вынесен и используется четырьмя pages,остались явные selectors/типы и guards вызовов primitives. Универсальный page/RPC dispatcher стёр бы обязательную типовую связь ради короткого glue. Исключено лишь это точное внутрефайловое окно/hash/count1,не envelope validation или остальные страницы."
+    },
+    {
+      "format": "go",
       "firstPath": "services/external/control-api-gateway/internal/transport/http/context_resource_commands.go",
       "secondPath": "services/external/control-api-gateway/internal/transport/http/context_resource_commands.go",
       "fragmentSHA256": "e61eb0448c07e3038692d70c39109e3eb5544b78e3295a7846952497ba2d4209",
@@ -3528,14 +3544,6 @@
       "fragmentSHA256": "0526a666d8c64fa6a5df65f3e7494b233d45d2e91900d9dbce5e242bea49711a",
       "count": 1,
       "reason": "Эти два автономных HTML-макета (project-a-workboard-desktop.html и project-c-run-kanban-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
-      "secondPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
-      "fragmentSHA256": "bc5c26ecbd5c4616e0d956c2ff10b069673a44006b2cf000097dc52e35bc35b7",
-      "count": 1,
-      "reason": "В ListSkillBundles и ListSkillBundleRevisions совпадает проверка page и накопление ref, однако первый ответ сверяет project scope каждого bundle, а второй — форму отдельной revision без project override. Общие bounds уже задаёт validContextPageResponse; слияние отображения typed views могло бы пропустить различие eligibility. Сохранено лишь это точное окно."
     },
     {
       "format": "yaml",

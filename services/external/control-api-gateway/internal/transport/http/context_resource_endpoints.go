@@ -110,15 +110,13 @@ func (server *Server) ListSkillBundles(w http.ResponseWriter, r *http.Request, p
 		return
 	}
 	result := generated.SkillBundlePage{Items: []generated.SkillBundle{}, Total: response.GetTotal(), NextPageToken: response.GetPage().GetNextPageToken()}
-	seen := make(map[string]bool)
-	for _, input := range response.GetBundles() {
-		item, ok := skillBundleView(input)
-		if !ok || seen[item.Ref] || stringValue(p.ProjectRef) != "" && item.ProjectRef != stringValue(p.ProjectRef) {
-			writeLocalProblem(w, 502, "INVALID_UPSTREAM_RESPONSE", false)
-			return
-		}
-		seen[item.Ref] = true
-		result.Items = append(result.Items, item)
+	items, valid := collectContextPageViews(result.Items, response.GetBundles(), skillBundleView, func(input *controlplanev1.SkillBundle) bool {
+		return stringValue(p.ProjectRef) == "" || input.GetProjectRef() == stringValue(p.ProjectRef)
+	})
+	result.Items = items
+	if !valid {
+		writeLocalProblem(w, 502, "INVALID_UPSTREAM_RESPONSE", false)
+		return
 	}
 	writeJSON(w, 200, result)
 }
@@ -142,15 +140,11 @@ func (server *Server) ListSkillBundleRevisions(w http.ResponseWriter, r *http.Re
 		return
 	}
 	result := generated.SkillBundleRevisionPage{Items: []generated.SkillBundleRevision{}, Total: response.GetTotal(), NextPageToken: response.GetPage().GetNextPageToken()}
-	seen := make(map[string]bool)
-	for _, input := range response.GetRevisions() {
-		item, ok := skillRevisionView(input)
-		if !ok || seen[item.Ref] {
-			writeLocalProblem(w, 502, "INVALID_UPSTREAM_RESPONSE", false)
-			return
-		}
-		seen[item.Ref] = true
-		result.Items = append(result.Items, item)
+	items, valid := collectContextPageViews(result.Items, response.GetRevisions(), skillRevisionView, nil)
+	result.Items = items
+	if !valid {
+		writeLocalProblem(w, 502, "INVALID_UPSTREAM_RESPONSE", false)
+		return
 	}
 	writeJSON(w, 200, result)
 }
@@ -257,15 +251,13 @@ func (server *Server) ListMemoryRecords(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	result := generated.MemoryRecordPage{Items: []generated.KodexMemoryRecord{}, Total: response.GetTotal(), NextPageToken: response.GetPage().GetNextPageToken()}
-	seen := make(map[string]bool)
-	for _, input := range response.GetRecords() {
-		item, ok := memoryRecordView(input)
-		if !ok || seen[item.Ref] || stringValue(p.ProjectRef) != "" && item.ProjectRef != stringValue(p.ProjectRef) {
-			writeLocalProblem(w, 502, "INVALID_UPSTREAM_RESPONSE", false)
-			return
-		}
-		seen[item.Ref] = true
-		result.Items = append(result.Items, item)
+	items, valid := collectContextPageViews(result.Items, response.GetRecords(), memoryRecordView, func(input *controlplanev1.KodexMemoryRecord) bool {
+		return stringValue(p.ProjectRef) == "" || input.GetProjectRef() == stringValue(p.ProjectRef)
+	})
+	result.Items = items
+	if !valid {
+		writeLocalProblem(w, 502, "INVALID_UPSTREAM_RESPONSE", false)
+		return
 	}
 	writeJSON(w, 200, result)
 }
@@ -289,15 +281,11 @@ func (server *Server) ListMemoryRecordRevisions(w http.ResponseWriter, r *http.R
 		return
 	}
 	result := generated.MemoryRecordRevisionPage{Items: []generated.MemoryRecordRevision{}, Total: response.GetTotal(), NextPageToken: response.GetPage().GetNextPageToken()}
-	seen := make(map[string]bool)
-	for _, input := range response.GetRevisions() {
-		item, ok := memoryRevisionView(input)
-		if !ok || seen[item.Ref] {
-			writeLocalProblem(w, 502, "INVALID_UPSTREAM_RESPONSE", false)
-			return
-		}
-		seen[item.Ref] = true
-		result.Items = append(result.Items, item)
+	items, valid := collectContextPageViews(result.Items, response.GetRevisions(), memoryRevisionView, nil)
+	result.Items = items
+	if !valid {
+		writeLocalProblem(w, 502, "INVALID_UPSTREAM_RESPONSE", false)
+		return
 	}
 	writeJSON(w, 200, result)
 }
