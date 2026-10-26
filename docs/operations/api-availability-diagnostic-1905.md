@@ -4,7 +4,7 @@ title: Диагностика HTTP503 при обновлении API
 type: operations
 status: approved
 owner: developer
-version: 1.1.0
+version: 1.2.0
 updated: 2026-10-26
 ---
 
@@ -128,10 +128,10 @@ Verifier теперь сохраняет только закрытый клас�
 | Fatal snapshot / rollback | Сохраняется блокировка и её закрытая причина до restart; успех следующего HTTP fetch её не снимает |
 | Grace / cancel | Прежний срок last-known-good и прежняя отмена worker; диагностика не продлевает срок |
 
-Authority, token verification, readiness, HTTP503, число запросов, интервалы и
-TLS/DNS configuration не меняются. Решение о блокировании начальной readiness
-до первого snapshot требует отдельного согласования противоречия с
-`docs/domains/identity-access.md`; эта диагностическая правка его не принимает.
+На диагностической ревизии106728 authority, token verification, readiness,
+HTTP503, число запросов, интервалы и TLS/DNS configuration не менялись.
+Владелец26.10.2026 отдельно согласовал начальный барьер готовности ниже;
+соответствующее правило обновлено в `docs/domains/identity-access.md`.
 В логах нет issuer URL, body, ключей, токенов, сертификатов или исходных ошибок.
 Новые события, metric labels и retry отсутствуют.
 
@@ -139,3 +139,38 @@ Context7: официальная документация Go net/http Client.Do 
 Timeout и отличие транспортного отказа от неуспешного HTTP status. Регрессия
 проверяет настоящий Client.Do wrapping path, удаление native cause, сохранение
 fatal/transient policy и начальный отказ→восстановление без лишнего fetch.
+
+## Начальная готовность API
+
+Инициатор — kubelet через существующий `/readyz` technical listener; это чтение
+готовности, без пользовательских полномочий. Владелец факта инициализации —
+тот же `oidcverifier`, который проверяет bearer и browser token. После полного
+разбора и проверки первого JWKS его неизменяемый факт доступен под существующим
+mutex. API readiness worker читает его вместе с прежними проверками realtime,
+revocation и browser state. HTTP503 `/readyz` исключает новый Pod из Service
+endpoints; действующие реплики продолжают работу по штатной RollingUpdate.
+RPC, idempotency, доменных событий и новых фоновых задач в этом пути нет.
+
+| Переход | Readiness и сохранённые ограничения |
+| --- | --- |
+| Нет первого снимка, временный fetch отказ | NotReady `signing_keys_starting`; process, `/livez` и `/startupz` живы |
+| Первый полностью проверенный снимок | Ready только при успехе остальных трёх infrastructure checks |
+| Первый повреждённый снимок | NotReady до исправления причины и контролируемого restart; последующий HTTP200 не снимает fatal block |
+| Отказ после инициализации, истечение grace или fatal block | Начальный барьер остаётся пройденным; каждый token проверяется по прежней закрытой политике |
+| Отказ NATS/revocation/browser state | Прежний NotReady `direct_infrastructure_unavailable` |
+| Cancel/shutdown | Worker завершается, readiness и метрика снимаются |
+| Замена Pod | Новый verifier снова требует собственный первый проверенный снимок |
+
+Отдельного retry, изменения timeout, trust, DNS/TLS, token authorization или
+общей инфраструктуры нет. Обычный период worker может задержать включение новой
+реплики; это не разрешает ранний Ready. Внешний outage после прогрева остаётся
+отдельным сценарием с прежним last-known-good, а не обещанием нулевых503 всегда.
+Проверки проходят через настоящий probe mux и worker; библиотечные тесты
+подтверждают parse/fatal/grace без подмены token eligibility фактом инициализации.
+Context7: Kubernetes probes и RollingUpdate (`maxUnavailable`, `maxSurge`),
+официальные страницы `kubernetes.io/docs/concepts/workloads/pods/probes/` и
+`kubernetes.io/docs/tasks/run-application/update-deployment-rolling/`.
+
+Возврат на106728 возможен адресным штатным API rollback без DDL; он вернёт
+известное окно стартовых503. Окончательная live-приёмка относится только к
+новому чистому SHA и повторным rollout/restart с браузерными пробами.

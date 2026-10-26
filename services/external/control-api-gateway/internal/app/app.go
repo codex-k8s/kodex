@@ -168,7 +168,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	technicalMux.Handle("/metrics", metrics.PrometheusHandler())
 	technical := &http.Server{Addr: config.TechnicalListen, Handler: technicalMux, BaseContext: func(net.Listener) context.Context { return lifecycle }, ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 	readiness.Set(false, "dependencies_starting")
-	workers := serviceruntime.StartWorkers(lifecycle, httpWorker(public, true, config), httpWorker(technical, false, config), readinessWorker(realtime, revocations, browserState, readiness, metrics, logger, config), oidcRefreshWorker(oidc, logger, config))
+	workers := serviceruntime.StartWorkers(lifecycle, httpWorker(public, true, config), httpWorker(technical, false, config), readinessWorker(realtime, revocations, browserState, oidc, readiness, metrics, logger, config), oidcRefreshWorker(oidc, logger, config))
 	err = workers.Wait(context.WithoutCancel(lifecycle))
 	// HTTP-запросы уже завершены либо принудительно закрыты по бюджету.
 	// Отмена закрывает также контексты hijacked WebSocket до закрытия клиентов.
@@ -251,9 +251,15 @@ func httpWorker(server *http.Server, tlsEnabled bool, config Config) servicerunt
 	}
 }
 
-// readinessWorker immediately and periodically checks realtime, revocation and browser-state dependencies with one bounded context, updates readiness/metrics and logs state transitions. Exit marks both unready; it does not itself probe every provider or issue a synthetic user request.
-// readinessWorker немедленно и периодически проверяет realtime, revocation и browser-state dependencies одним ограниченным контекстом, обновляет readiness и metrics и логирует переходы. При выходе обе готовности снимаются; каждый provider не опрашивается и синтетический user request не отправляется.
-func readinessWorker(realtime *websockettransport.Server, revocations *sessionrevocation.Store, browserState *browserstate.Store, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
+// readinessWorker checks realtime, revocation and browser-state dependencies
+// under one bounded context and requires the first verified OIDC snapshot before
+// publishing readiness. Later key degradation keeps its existing token policy.
+// Exit clears readiness and metrics; probes never fetch keys or grant authority.
+// readinessWorker проверяет realtime, revocation и browser-state с одним бюджетом
+// и требует первый проверенный снимок OIDC до публикации готовности. Последующая
+// деградация ключей сохраняет прежнюю политику токенов. При выходе готовность
+// и метрики снимаются; probes не получают ключи и не выдают полномочия.
+func readinessWorker(realtime, revocations, browserState readinessDependency, keys signingKeyInitialization, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		defer func() {
 			readiness.Set(false, "shutting_down")
@@ -265,6 +271,11 @@ func readinessWorker(realtime *websockettransport.Server, revocations *sessionre
 			check, cancel := context.WithTimeout(ctx, config.RPCTimeout)
 			err := errors.Join(realtime.Check(check), revocations.Check(check), browserState.Check(check))
 			cancel()
+			reason, class := "direct_infrastructure_unavailable", "direct_infrastructure"
+			if err == nil && !keys.SigningKeysInitialized() {
+				err = errInitialSigningKeys
+				reason, class = initialSigningKeysReason, initialSigningKeysReason
+			}
 			if err == nil {
 				changed := readiness.Set(true, "ready")
 				metrics.SetReady(true)
@@ -272,10 +283,10 @@ func readinessWorker(realtime *websockettransport.Server, revocations *sessionre
 					logger.InfoContext(ctx, "control API readiness restored")
 				}
 			} else {
-				changed := readiness.Set(false, "direct_infrastructure_unavailable")
+				changed := readiness.Set(false, reason)
 				metrics.SetReady(false)
 				if changed {
-					logger.WarnContext(ctx, "control API readiness lost", "error_class", "direct_infrastructure")
+					logger.WarnContext(ctx, "control API readiness lost", "error_class", class)
 				}
 			}
 			select {
