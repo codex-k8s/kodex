@@ -42,6 +42,8 @@ var queryProjectAssistantPurgeReadback string
 //go:embed testdata/sql/project_assistant_archived_fixture.sql
 var queryProjectAssistantArchivedFixture string
 
+// TestProjectAssistantProfilesComponent verifies assistant ownership and deletion against the exact current migration graph in an isolated database.
+// TestProjectAssistantProfilesComponent проверяет владение помощниками и удаление по точному графу текущих миграций в изолированной БД.
 func TestProjectAssistantProfilesComponent(t *testing.T) {
 	dsn := isolatedAssistantComponentDSN(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
@@ -57,10 +59,10 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 		t.Fatal("read project purge graph")
 	}
 	t.Logf("project purge graph: nodes=%d digest=%s edges=%d digest=%s", graphNodes, graphNodeDigest, graphEdges, graphEdgeDigest)
-	// Точный FK-граф после immutable revisions и prepared content ledger:
-	// owner closure включает revision, ledger и его immutable plan bindings.
+	// Точный FK-граф схемы010 согласован с отдельным server-workflow postcondition:
+	// включает repository bundle и происхождение физической попытки SERVER.
 	// Подмена состава графа по-прежнему закрыто отклоняется.
-	if graphNodes != 104 || graphNodeDigest != "5cbc6bd6bb4a8508ffd75ed4b1dd6189" || graphEdges != 276 || graphEdgeDigest != "75343e68e299c44be699718099c79527" {
+	if graphNodes != 105 || graphNodeDigest != "f51a0de25bd942a250997775617eeaee" || graphEdges != 284 || graphEdgeDigest != "6bf6ad76d8c7ae66e07f75ecf719fdd6" {
 		t.Fatal("project assistant purge graph changed")
 	}
 	repository, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
