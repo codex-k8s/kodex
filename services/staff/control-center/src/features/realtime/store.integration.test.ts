@@ -1493,6 +1493,77 @@ describe("browser-session realtime multiplexer", () => {
     store.closeAll();
   });
 
+  it.each(["close-platform", "platform-heartbeat"])(
+    "возобновляет отложенный повтор при смене готовности платформы: %s",
+    async (transition) => {
+      const store = useRealtimeStore();
+      if (transition === "close-platform") store.openPlatform();
+      store.openRun("run_realtime01");
+      await flushProcessing();
+      const socket = socketAt(0);
+      socket.open();
+      if (transition === "platform-heartbeat") {
+        socket.message({
+          type: "PLATFORM_READY",
+          requestRef: requestRef(socket),
+          streamKind: "PLATFORM",
+          streamRef: "PLATFORM",
+          cursor: 0,
+          availableKinds: [],
+        });
+        socket.message(runSnapshot(socket, "run_realtime01"));
+        socket.message({
+          type: "SESSION_READY",
+          requestRef: requestRef(socket),
+          streams: [
+            { streamKind: "PLATFORM", streamRef: "PLATFORM", cursor: 0 },
+            { streamKind: "RUN", streamRef: "run_realtime01", cursor: 1 },
+          ],
+        });
+        await flushProcessing();
+        store.openPlatform();
+      }
+      socket.message(
+        runEnvelope(socket, "run_realtime01", {
+          type: "STREAM_PROBLEM",
+          code: "RUN_UNAVAILABLE",
+          title: "Недоступно",
+          retryable: true,
+        }),
+      );
+      if (transition === "close-platform")
+        socket.message({
+          type: "SESSION_READY",
+          requestRef: requestRef(socket),
+          streams: [
+            { streamKind: "PLATFORM", streamRef: "PLATFORM", cursor: 0 },
+          ],
+        });
+      await flushProcessing();
+      expect(
+        [...scheduled.values()].filter((timer) => timer.delay === 1_000),
+      ).toHaveLength(0);
+      if (transition === "close-platform") store.closePlatform();
+      else
+        socket.message({
+          type: "STREAM_HEARTBEAT",
+          requestRef: requestRef(socket),
+          streamKind: "PLATFORM",
+          streamRef: "PLATFORM",
+          cursor: 0,
+          serverTime: "2026-10-26T10:00:00Z",
+        });
+      await flushProcessing();
+      runScheduled(1_000);
+      expect(sent(socket, 1)).toMatchObject({
+        type: "SUBSCRIBE_RUN",
+        runRef: "run_realtime01",
+      });
+      expect(socket.readyState).toBe(FakeWebSocket.OPEN);
+      store.closeAll();
+    },
+  );
+
   it("успешный RUN_READY отменяет ранее назначенный повтор", async () => {
     const store = useRealtimeStore();
     store.openRun("run_realtime01");

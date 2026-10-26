@@ -762,7 +762,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
           attempt: 0,
           lastHeartbeat: envelope.serverTime,
         });
-      if (session.resumeReady) clearResumeTimer();
+      completeSessionResume();
       return true;
     }
     if (envelope.streamKind === "RUN" && !activeRuns.has(envelope.streamRef))
@@ -1139,7 +1139,6 @@ export const useRealtimeStore = defineStore("realtime", () => {
 
   function closePlatform(): void {
     platformWanted = false;
-    if (session.resumeReady) clearResumeTimer();
     Object.assign(platformState, {
       state: "offline",
       attempt: 0,
@@ -1152,7 +1151,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
       platformSnapshotReady = false;
       platformBootstrapCursor = undefined;
       disconnect("NO_SUBSCRIPTIONS");
-    }
+    } else completeSessionResume();
   }
 
   function disconnect(reason: string): void {
