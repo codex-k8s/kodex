@@ -123,3 +123,49 @@ func TestWorkflowMCPSchemaBoundsAndApprovalPolicy(t *testing.T) {
 		t.Fatal("mode-only proposal unavailable before owner validation", err)
 	}
 }
+
+// TestWorkflowMCPSchemaLegacyCreationRejectsServerFields checks each forbidden field independently
+// for both legacy mode forms while keeping legacy keys and sparse server updates editable.
+// TestWorkflowMCPSchemaLegacyCreationRejectsServerFields проверяет каждое запрещённое поле
+// для обоих прежних режимов, сохраняя изменение старых ключей и частичное изменение DAG.
+func TestWorkflowMCPSchemaLegacyCreationRejectsServerFields(t *testing.T) {
+	create := resolvedWorkflowSchema(t, workflowInputSchema(opaqueRefSchema(), opaqueRefSchema()))
+	update := resolvedWorkflowSchema(t, workflowUpdateInputSchema("wfl_fixture123"))
+	for _, mode := range []string{"", "MANAGER_DRIVEN"} {
+		for _, field := range []string{"key", "dependsOn", "resultRequirements"} {
+			t.Run(mode+"/"+field, func(t *testing.T) {
+				value := assistantWorkflowSchemaFixture(t)
+				delete(value, "executionMode")
+				if mode != "" {
+					value["executionMode"] = mode
+				}
+				step := value["steps"].([]any)[0].(map[string]any)
+				for _, other := range []string{"key", "dependsOn", "resultRequirements"} {
+					if other != field {
+						delete(step, other)
+					}
+				}
+				if err := create.Validate(value); err == nil {
+					t.Fatal("legacy create accepted server-only field", field)
+				}
+				delete(step, field)
+				if err := create.Validate(value); err != nil {
+					t.Fatal("legacy create without server fields rejected", err)
+				}
+				step["key"] = "step_existing"
+				value["workflowRef"] = "wfl_fixture123"
+				delete(value, "projectRef")
+				if err := update.Validate(value); err != nil {
+					t.Fatal("legacy update with stable key rejected", err)
+				}
+			})
+		}
+	}
+	sparse := assistantWorkflowSchemaFixture(t)
+	delete(sparse, "executionMode")
+	delete(sparse, "projectRef")
+	sparse["workflowRef"] = "wfl_fixture123"
+	if err := update.Validate(sparse); err != nil {
+		t.Fatal("server update without repeated mode rejected before owner readback", err)
+	}
+}

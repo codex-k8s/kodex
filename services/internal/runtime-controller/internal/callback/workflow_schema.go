@@ -60,3 +60,17 @@ func workflowServerBounds() []map[string]any {
 		}},
 	}}
 }
+
+// workflowCreationBounds rejects server-only step fields in legacy creation, matching the
+// owner parser. Updates retain separate rules because omitted mode can refer to an existing DAG.
+// workflowCreationBounds запрещает серверные поля шага при создании прежнего процесса,
+// как и owner parser. При изменении отсутствие режима может обозначать существующий DAG.
+func workflowCreationBounds() []map[string]any {
+	bounds := workflowServerBounds()
+	bounds[0]["else"] = map[string]any{"properties": map[string]any{
+		"steps": map[string]any{"items": map[string]any{"not": map[string]any{"anyOf": []map[string]any{
+			{"required": []string{"key"}}, {"required": []string{"dependsOn"}}, {"required": []string{"resultRequirements"}},
+		}}}},
+	}}
+	return bounds
+}

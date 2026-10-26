@@ -1116,7 +1116,7 @@ func workflowInputSchema(projectRef, agentRef map[string]any) map[string]any {
 		"maxConcurrency": map[string]any{"type": "integer", "minimum": 1, "maximum": 100},
 		"timeoutSeconds": map[string]any{"type": "integer", "minimum": 1, "maximum": 604800}, "completionCriteria": stringSchema(0, 2000),
 	})
-	schema["allOf"] = workflowServerBounds()
+	schema["allOf"] = workflowCreationBounds()
 	schema["description"] = "Omitted executionMode or MANAGER_DRIVEN retains legacy manager coordination; do not supply key, dependsOn or resultRequirements during legacy creation. SERVER_DAG_V1 requires every step to provide a stable key, explicit dependsOn and one to four typed resultRequirements. It permits at most 12 steps, 2 concurrent executions and 8 predecessors per step. Completion of a model turn alone does not satisfy a required artifact, pull request, review or release receipt. All predicates are checked by the owner before advancing."
 	return schema
 }
