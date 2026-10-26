@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/access/api.test.ts",
+      "secondPath": "services/staff/control-center/src/features/session/store.test.ts",
+      "fragmentSHA256": "d05ee38d4b3af4459a9615b0a86c5b8e5bf1b255a075ee3b121bf9bde7696b26",
+      "count": 1,
+      "reason": "Окно содержит declarations разных hoisted SDK mocks иначало разных suite-local client/mutation stubs. Access перечисляет membership/projects/access-query operations,session — SSO/session/bootstrap/secret operations;CSRF defaults иmutation behavior различаются. vi.fn/vi.hoisted/vi.mock уже являются общими primitives,а imported factory не доступна до hoisted initialization. Общий реестр string method names либо global mock installer ради списка независимых declarations скрыл бы явные зависимости отдельных suites. Сохранены лишь точная пара путей/hash/count1;тестовые сценарии,owner lifetime ипродуктовые adapters не исключены."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/role-images/vulnerability-api.test.ts",
+      "secondPath": "services/staff/control-center/src/features/role-images/vulnerability-api.test.ts",
+      "fragmentSHA256": "1908db4ccc636f5507a43af52553c57465716970017cdf096acf73f789b3427b",
+      "count": 1,
+      "reason": "Окна59–78/60–79 перекрывают один explicit decision binding snapshot в fixture receipt. Scope/organization/project/recipe/build/artifact/admission/evidence/SBOM/policy поля — разные immutable pins,не две реализации преобразования. Полный явный список служит независимым expected response для risk-decision API;spread всего report добавил бы лишние поля,а production converter в fixture сделал бы ошибку mapping самоподтверждаемой. Сохранён только один exact внутрефайловый self-overlap hash/count1,не vulnerability validators,decisions или остальные тесты."
+    },
+    {
       "format": "go",
       "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/access.go",
       "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/access.go",
@@ -2880,14 +2896,6 @@
       "fragmentSHA256": "0245fec4f289634b0450ad69e29ea73d7e9a10d1a15726a767338d5f9fa76ca8",
       "count": 1,
       "reason": "Это списки явных vi.mock bindings двух отдельных store-тестов: platform и runtime подменяют разные generated операции. Weak-режим видит одинаковую форму списка после переименования, но общий helper должен был бы принимать нетипизированный список имен SDK и скрыл бы точные зависимости каждого теста."
-    },
-    {
-      "format": "typescript",
-      "firstPath": "services/staff/control-center/src/features/platform/store.test.ts",
-      "secondPath": "services/staff/control-center/src/features/runtime/store.test.ts",
-      "fragmentSHA256": "232bee2872d0adb7d208d946977f1fc5d2807c6fa9c4354df37a1144741076e2",
-      "count": 1,
-      "reason": "Совпадение относится к последовательности mockReset в отдельных тестах platform и runtime. Каждый файл сбрасывает собственный явный набор mocked endpoints перед сценарием; объединение через общий нетипизированный реестр сделало бы тесты зависимыми от чужой поверхности API. Решение ограничено точными файлами и байтами фрагмента."
     },
     {
       "format": "typescript",

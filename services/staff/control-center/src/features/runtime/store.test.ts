@@ -181,26 +181,30 @@ describe("runtime store", () => {
 
   beforeEach(() => {
     setActivePinia(createPinia());
-    getAgentRuntimeConfigurationMock.mockReset();
-    publishAgentRuntimeConfigurationMock.mockReset();
-    createConfigOverlayDraftMock.mockReset();
-    validateConfigOverlayDraftMock.mockReset();
-    publishConfigOverlayDraftMock.mockReset();
-    rollbackConfigOverlayMock.mockReset();
-    bindAgentRuntimeEnvironmentMock.mockReset();
-    listAgentRuntimeConfigurationVersionsMock.mockReset();
-    createRuntimeEnvironmentSetMock.mockReset();
-    deleteRuntimeEnvironmentMock.mockReset();
-    getRoleImageRecipeMock.mockReset();
-    getRuntimeEnvironmentReadinessMock.mockReset();
-    listRoleImageRecipesMock.mockReset();
-    listRuntimeEnvironmentSetsMock.mockReset();
-    listRuntimeEnvironmentAgentsMock.mockReset();
-    listRuntimeEnvironmentVersionsMock.mockReset();
-    publishRuntimeEnvironmentVersionMock.mockReset();
-    rollbackRuntimeEnvironmentMock.mockReset();
-    setRuntimeEnvironmentEnabledMock.mockReset();
-    mutateMock.mockReset();
+    for (const mock of [
+      getAgentRuntimeConfigurationMock,
+      publishAgentRuntimeConfigurationMock,
+      createConfigOverlayDraftMock,
+      validateConfigOverlayDraftMock,
+      publishConfigOverlayDraftMock,
+      rollbackConfigOverlayMock,
+      bindAgentRuntimeEnvironmentMock,
+      listAgentRuntimeConfigurationVersionsMock,
+      createRuntimeEnvironmentSetMock,
+      deleteRuntimeEnvironmentMock,
+      getRoleImageRecipeMock,
+      getRuntimeEnvironmentReadinessMock,
+      listRoleImageRecipesMock,
+      listRuntimeEnvironmentSetsMock,
+      listRuntimeEnvironmentAgentsMock,
+      listRuntimeEnvironmentVersionsMock,
+      publishRuntimeEnvironmentVersionMock,
+      rollbackRuntimeEnvironmentMock,
+      setRuntimeEnvironmentEnabledMock,
+      mutateMock,
+    ]) {
+      mock.mockReset();
+    }
     mutateMock.mockImplementation(
       async (request: (headers: Record<string, string>) => Promise<unknown>) =>
         request({

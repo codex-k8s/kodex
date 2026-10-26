@@ -10,12 +10,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/dnsresolver"
 	shared "github.com/codex-k8s/kodex/libs/go/integrationegresspolicy"
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
+	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/projectionfiles"
 )
 
 // main runs the bounded projection command and exits on a closed diagnostic.
@@ -79,15 +79,7 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := os.Mkdir(*output, 0700); err != nil {
-		return errors.New("create projection output directory")
-	}
-	for name, value := range files {
-		if err := os.WriteFile(filepath.Join(*output, name), value, 0600); err != nil {
-			return errors.New("write projection artifact")
-		}
-	}
-	return nil
+	return projectionfiles.Write(*output, files)
 }
 
 // resolverAdapter maps validated DNS snapshots into the shared producer contract.

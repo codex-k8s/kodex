@@ -501,28 +501,32 @@ describe("platform store", () => {
       data: { items: [], total: 0 },
       response: new Response(null, { status: 200 }),
     });
-    searchPlatformMock.mockReset();
-    listAuditEventsMock.mockReset();
-    getRunGraphMock.mockReset();
-    listRunEventsMock.mockReset();
-    listRunsMock.mockReset();
-    commandRunMock.mockReset();
-    createRunMock.mockReset();
-    listAgentInstructionVersionsMock.mockReset();
-    downloadArtifactMock.mockReset();
-    changeArtifactBindingMock.mockReset();
-    getAgentMock.mockReset();
-    getArtifactMock.mockReset();
-    getArtifactImpactMock.mockReset();
-    deleteArtifactMock.mockReset();
-    createIntegrationConnectionMock.mockReset();
-    configureIntegrationConnectionCredentialMock.mockReset();
-    updateIntegrationConnectionMock.mockReset();
-    deleteIntegrationConnectionMock.mockReset();
-    listIntegrationDefinitionsMock.mockReset();
-    listIntegrationConnectionsMock.mockReset();
-    uploadArtifactMock.mockReset();
-    uploadOrganizationArtifactMock.mockReset();
+    for (const mock of [
+      searchPlatformMock,
+      listAuditEventsMock,
+      getRunGraphMock,
+      listRunEventsMock,
+      listRunsMock,
+      commandRunMock,
+      createRunMock,
+      listAgentInstructionVersionsMock,
+      downloadArtifactMock,
+      changeArtifactBindingMock,
+      getAgentMock,
+      getArtifactMock,
+      getArtifactImpactMock,
+      deleteArtifactMock,
+      createIntegrationConnectionMock,
+      configureIntegrationConnectionCredentialMock,
+      updateIntegrationConnectionMock,
+      deleteIntegrationConnectionMock,
+      listIntegrationDefinitionsMock,
+      listIntegrationConnectionsMock,
+      uploadArtifactMock,
+      uploadOrganizationArtifactMock,
+    ]) {
+      mock.mockReset();
+    }
     selectProjectRef(undefined);
   });
 

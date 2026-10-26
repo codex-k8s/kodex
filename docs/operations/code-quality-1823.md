@@ -4,11 +4,55 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.530.0
+version: 1.531.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая запись проекций и сброс test mocks — 26.10.2026
+
+Две команды egress-gateway integration-projection/mail-projection используют
+internal/projectionfiles.Write. Он выполняет прежние Mkdir0700 и WriteFile0600
+до umask, с теми же закрытыми ошибками и прямым обходом map. Producer выбирает
+проверенные filenames/bytes; RenderFiles и policy/DNS validation не менялись.
+Новый helper сохраняет частичный output при ошибке и не создаёт parents либо
+существующий output повторно. Cleanup остаётся у caller, atomic promotion не
+добавляется. Два full CLI inverses восстановили исходные файлы; тело writer
+точно равно обоим исходным kernels после замены имени directory parameter.
+
+Egress-gateway build/unit/vet PASS LOCAL до3.17/7.79/1.22s и после2.32/5.78/0.42s.
+До423unit PASS/0FAIL/SKIP/9packages, после431PASS/0FAIL/SKIP/10packages.
+Четыре новых tests с subcases проверяют bytes,0700/0600,пустую проекцию,
+существующие file/directory без overwrite,write failure без cleanup иMkDir
+без parents. Это локальные временные файлы;CLI network/provider/deploy не
+запускались. Версии зависимостей и generated code не менялись.
+
+В platform/store.test.ts и runtime/store.test.ts повторные mockReset calls
+стали двумя loops по исходным22и20const mocks в прежнем порядке. Global reset
+не вводится; отдельные mockResolvedValue/mockImplementation остаются до/после
+тех же сбросов. Два дополнительных full-source inverses и список const bindings
+подтверждают точный состав и порядок. Platform64unit иruntime15unit прошли
+до и после,0FAIL/SKIP. Итоговые format0.92s/lint10.79s PASS. Vite/Vitest
+использовали envDir:false и scrubbed runtime env;project .env не исполнялись.
+Production PWA build/typecheck в этом тестовом изменении не повторялись.
+
+Точное прежнее исключение232bee28 перестало существовать после устранения
+reset sequence. Проверка stale registry закрыто отказала; удалено только это
+подтверждённо отсутствующее решение,не пороги либо файлы. Повторный анализ
+выявил меньший self-overlap второго reset block — он также устранён loop.
+Два адресных решения сохраняют suite-local hoisted SDK declarations разных
+access/session tests и один explicit immutable decision binding в независимой
+fixture. Три файла этих решений побайтно прежние;орacles не заменены producer
+mapping,vi.hoisted до imports и разные mock dependencies остаются явными.
+
+Три прежних raw окна удалены,новых нет. Registry1116,12registry mutations
+и17quality unit tests PASS;пять quality stages PASS LOCAL.6788sources/
+222exclusions,1415raw/1259retained/156unresolved(Go80/TypeScript76),
+Go21629/21629 EN→RU. Два новых Go source учтены;detector thresholds/exclusions
+прежние. Context7 resolve/query /golang/go и/vitest-dev/vitest PASS:проверены
+Mkdir/WriteFile modes/partial writes иmockReset/hoisted initialization.
+Полные E2E/browser/live/deploy/startup/QA NOT RUN;build/unit не подменяют их.
 
 ## Общие readers access-страниц — 26.10.2026
 
