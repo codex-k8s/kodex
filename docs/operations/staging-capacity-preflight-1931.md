@@ -46,7 +46,10 @@ availableBytes - budgetBytes > recoveryFloor + reserveBytes
 отсутствующая карта или hard signal закрыто отклоняются. Поддерживаются
 проценты, целые bytes и положительные decimal/binary SI quantities. Иные
 формы отклоняются. Отдельный `containerfs.available` в effective hard policy
-не поддерживается этим двух-FS профилем и приводит к FAIL.
+либо relevant soft signal `nodefs.available`, `imagefs.available` или
+`containerfs.available` не поддерживается этим hard-only двух-FS профилем и
+приводит к FAIL. Soft threshold не игнорируется ради положительного прогноза;
+для другого профиля нужен отдельный доказанный расчёт, а не изменение kubelet.
 
 Budget и reserve задаются явно в bytes. Reserve не может быть меньше 5 GiB.
 Budget покрывает совокупный максимальный рост от всей одновременно разрешённой

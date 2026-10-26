@@ -161,7 +161,12 @@ def node_proof(name, uid, conditions, summary, config, budget, reserve, now):
     effective = config["kubeletconfig"]
     hard = effective.get("evictionHard")
     reclaim = effective.get("evictionMinimumReclaim")
+    soft = effective.get("evictionSoft")
     require(isinstance(hard, dict) and isinstance(reclaim, dict), "KUBELET_THRESHOLDS_UNAVAILABLE")
+    require(soft is None or isinstance(soft, dict), "KUBELET_THRESHOLDS_UNAVAILABLE")
+    require(not any(signal in (soft or {}) for signal in
+                    ("nodefs.available", "imagefs.available", "containerfs.available")),
+            "FILESYSTEM_PROFILE_UNSUPPORTED")
     require("containerfs.available" not in hard, "FILESYSTEM_PROFILE_UNSUPPORTED")
     period = transition_seconds(effective.get("evictionPressureTransitionPeriod"))
     node = summary["node"]
