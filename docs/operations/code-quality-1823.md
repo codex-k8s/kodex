@@ -4,11 +4,56 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.497.0
+version: 1.498.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая нормализация DNS-адресов preflight — 26.10.2026
+
+preflight-public-hosts и deploy-platform подключают одну прежнюю
+canonical_dns_addresses из tools/install/dns-address-normalization.sh.
+Функция и программа Python сохранены побайтно: stdin lines, strip пробельных
+символов/rstrip конечных точек, ipaddress.ip_address с пропуском ValueError,
+отбор семейства, множество str(address) и лексикографическая сортировка.
+Bash family остаётся local. Нормализатор не запрашивает DNS и не назначает
+допустимость адреса. Различающиеся allowed-address parsers и прежние
+allowlists, context guards, DNS/HTTP/socket/ACME проверки остаются у callers.
+
+184 парных сценария,368 исполнений actual native function/actual loader,
+проверили оба caller layout и absolute/basename:IPv4/IPv6,канонические
+дубликаты,сортировку,CNAME/garbage,CR/LF/Unicode whitespace,неверные адреса,
+CIDR/port strings,scoped IPv6,буквальные метасимволы и неверный family.
+Совпали status/stdout/stderr bytes;переменные,IFS,cwd/options/argv сохранены.
+Это actual Python3.14.4 со stdin fixtures;реальные dig/curl/Kubernetes не
+исполнялись. Сохранение scoped IPv6 нормализатором не разрешает их caller
+allowlist: отдельная прежняя проверка процентов не менялась.
+
+Два полных source byte inverses восстановили оба скрипта;восемь опасных
+actual source mutations отвергнуты. Source-only файл только объявляет
+функцию. Bash syntax3 — PASS LOCAL. ShellCheck -a -x двух caller contexts
+обнаружил две импортированные SC2154 контрольных копий;новых диагностик0.
+У preflight-public-hosts raw exit0,у deploy-platform прежний raw exit1:
+SC2318 warning и SC2016 info совпали по конкретным исходным выражениям.
+Классы предупреждений не отключены.
+
+Публичные offline install-contract21.47с и deploy-platform-preflight39.77с —
+PASS LOCAL. Второй использует собственные fake kubectl/dig/curl,синтетические
+render/provider inputs;проверяет dual-stack SAN/address pairs,отказ
+неразрешённого AAAA/неиспользованного allowed IP/HTTP failure и прежний
+owner-bound certificate cleanup. Живой кластер,сеть,обновлённые env и
+реальные credentials не использовались;полная ACME/live приёмка не заявляется.
+
+Context7 Python ipaddress вернул ошибку API key. Прочитаны официальные
+документы Python3.14 ip_address/IPv4/IPv6/version/str/scope ID и первичный
+код ip_address/IPv6Address.__str__ фактического Python3.14.4. Зависимости,
+внешние API и caller policies не обновлялись.
+Detector:6773sources/222 прежних exclusions,1468raw/1221retained/247unresolved.
+Исчезло одно окно43073531,новых нет;registry1078 и пороги прежние.
+Go21589/21589 EN→RU. Пять quality stages — PASS LOCAL. Прежний FAIL legacy
+agent-runner renderer из предыдущего пакета остаётся отдельным finding;
+полный E2E/deploy/live и QA — NOT RUN. Полная готовность не заявляется.
 
 ## Общая проверка Kubernetes API inputs рендереров — 26.10.2026
 

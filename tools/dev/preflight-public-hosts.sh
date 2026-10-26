@@ -78,27 +78,8 @@ print("\n".join(sorted(canonical)))
 PY
 }
 
-canonical_dns_addresses() {
-  local family=$1
-  python3 -c '
-import ipaddress
-import sys
-
-family = int(sys.argv[1])
-result = set()
-for line in sys.stdin:
-    value = line.strip().rstrip(".")
-    if not value:
-        continue
-    try:
-        address = ipaddress.ip_address(value)
-    except ValueError:
-        continue
-    if address.version == family:
-        result.add(str(address))
-print("\n".join(sorted(result)))
-' "$family"
-}
+# shellcheck source=../install/dns-address-normalization.sh
+source "${BASH_SOURCE[0]%"${BASH_SOURCE[0]##*/}"}../install/dns-address-normalization.sh"
 
 allowed_ipv4_output=$(canonical_address_list 4 "$allowed_ipv4_raw") ||
   fail 'allowed IPv4 address list is invalid'

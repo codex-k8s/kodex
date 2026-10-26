@@ -419,27 +419,8 @@ print("\n".join(sorted(canonical)))
 PY
 }
 
-canonical_dns_addresses() {
-  local family=$1
-  python3 -c '
-import ipaddress
-import sys
-
-family = int(sys.argv[1])
-result = set()
-for line in sys.stdin:
-    value = line.strip().rstrip(".")
-    if not value:
-        continue
-    try:
-        address = ipaddress.ip_address(value)
-    except ValueError:
-        continue
-    if address.version == family:
-        result.add(str(address))
-print("\n".join(sorted(result)))
-' "$family"
-}
+# shellcheck source=dns-address-normalization.sh
+source "${BASH_SOURCE[0]%"${BASH_SOURCE[0]##*/}"}dns-address-normalization.sh"
 
 public_tls_http_probe() {
   local san=$1 address=$2 timeout_seconds=$3 resolve_address=$address http_code
