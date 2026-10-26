@@ -30,7 +30,9 @@ SELECT jsonb_build_object(
     'runtimeLogins',(SELECT count(*) FROM members WHERE rolcanlogin),
     'tableOwners',(SELECT bool_and(pg_get_userbyid(relowner)='control_plane_owner') FROM targets),
     'runtimeRolesUnprivileged',NOT EXISTS (SELECT 1 FROM reachable WHERE rolsuper OR rolcreaterole OR rolcreatedb OR rolbypassrls
-        OR pg_has_role(oid,'control_plane_owner','MEMBER')),
+        OR pg_has_role(oid,'control_plane_owner','MEMBER'))
+        AND NOT EXISTS (SELECT 1 FROM pg_auth_members membership JOIN reachable actor ON actor.oid=membership.member
+            WHERE membership.admin_option),
     'runtimeRead',(SELECT bool_and(has_table_privilege(member.oid,target.oid,'SELECT')) FROM members member CROSS JOIN targets target),
     'runtimeMutationDenied',NOT EXISTS (
         SELECT 1 FROM reachable member CROSS JOIN targets target

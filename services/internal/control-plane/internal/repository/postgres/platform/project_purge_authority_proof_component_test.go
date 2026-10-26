@@ -34,6 +34,10 @@ var (
 	// queryProjectPurgeAuthorityDriftSetRole выдаёт альтернативную роль записи через SET без автоматического наследования.
 	//go:embed testdata/sql/project_purge_authority_drift_set_role.sql
 	queryProjectPurgeAuthorityDriftSetRole string
+	// queryProjectPurgeAuthorityDriftAdminRole models permission to enable SET ROLE through ADMIN OPTION.
+	// queryProjectPurgeAuthorityDriftAdminRole моделирует возможность разрешить SET ROLE через ADMIN OPTION.
+	//go:embed testdata/sql/project_purge_authority_drift_admin_role.sql
+	queryProjectPurgeAuthorityDriftAdminRole string
 	// queryProjectPurgeAuthorityCleanupSetRole removes the disposable role and its memberships before database cleanup.
 	// queryProjectPurgeAuthorityCleanupSetRole удаляет одноразовую роль и членство перед очисткой БД.
 	//go:embed testdata/sql/project_purge_authority_cleanup_set_role.sql
@@ -55,6 +59,7 @@ func TestProjectPurgeAuthorityMigrationProofComponent(t *testing.T) {
 		{name: "public-grant", mutation: queryProjectPurgeAuthorityDriftPublic, rejected: []string{"runtimeMutationDenied", "runtimeColumnMutationDenied", "publicPrivilegesRevoked"}},
 		{name: "relaxed-authorizer", mutation: queryProjectPurgeAuthorityDriftGuard, rejected: []string{"authorizationFunction"}},
 		{name: "set-without-inherit", mutation: queryProjectPurgeAuthorityDriftSetRole, cleanup: queryProjectPurgeAuthorityCleanupSetRole, rejected: []string{"runtimeMutationDenied", "runtimeColumnMutationDenied"}},
+		{name: "admin-without-set", mutation: queryProjectPurgeAuthorityDriftAdminRole, cleanup: queryProjectPurgeAuthorityCleanupSetRole, rejected: []string{"runtimeRolesUnprivileged"}},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
