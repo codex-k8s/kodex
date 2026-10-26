@@ -52,6 +52,7 @@ interface ConnectionState {
 interface ActiveRun {
   requestRef?: string;
   timer?: number;
+  recoveryPending?: boolean;
 }
 
 interface SessionConnection {
@@ -280,6 +281,8 @@ export const useRealtimeStore = defineStore("realtime", () => {
     // Бюджет ограничивает последовательные отказы, а не успешные восстановления.
     session.attempt = 0;
     clearResumeTimer();
+    for (const [runRef, active] of activeRuns)
+      if (active.recoveryPending) scheduleRunRecovery(runRef);
   }
 
   function markOffline(): void {
@@ -341,22 +344,43 @@ export const useRealtimeStore = defineStore("realtime", () => {
     });
   }
 
+  function clearRunRecovery(active: ActiveRun): void {
+    if (active.timer !== undefined) window.clearTimeout(active.timer);
+    active.timer = undefined;
+    active.recoveryPending = false;
+  }
+
+  function clearRunRecoveries(): void {
+    for (const active of activeRuns.values()) clearRunRecovery(active);
+  }
+
   function scheduleRunRecovery(runRef: string): void {
     const active = activeRuns.get(runRef);
-    if (
-      !active ||
-      !session.socket ||
-      session.socket.readyState !== WebSocket.OPEN
-    )
+    const socket = session.socket;
+    if (!active || !socket || socket.readyState !== WebSocket.OPEN) return;
+    clearRunRecovery(active);
+    // Начальный rejoin владеет requestRef до подтверждения всех потоков.
+    if (!sessionResumeConfirmed()) {
+      active.recoveryPending = true;
       return;
-    if (active.timer !== undefined) window.clearTimeout(active.timer);
+    }
+    const previousRequestRef = active.requestRef;
     const attempt = (state[runRef]?.attempt ?? 0) + 1;
     state[runRef] = { ...state[runRef], state: "recovering", attempt };
     const delay = Math.min(10_000, 500 * 2 ** Math.min(attempt, 5));
-    active.timer = window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
+      // Старый callback не меняет подписку после reconnect, ready или supersession.
+      if (
+        active.timer !== timer ||
+        activeRuns.get(runRef) !== active ||
+        active.requestRef !== previousRequestRef ||
+        !activeSocket(socket)
+      )
+        return;
       active.timer = undefined;
       subscribeRun(runRef);
     }, delay);
+    active.timer = timer;
   }
 
   function failProtocol(socket: WebSocket, reason: string): void {
@@ -686,6 +710,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
         scheduleRunRecovery(runRef);
         return true;
       }
+      clearRunRecovery(active);
       state[runRef] = { state: "live", attempt: 0 };
       return true;
     }
@@ -752,6 +777,8 @@ export const useRealtimeStore = defineStore("realtime", () => {
         )
       )
         return false;
+      const active = activeRuns.get(envelope.streamRef);
+      if (active) clearRunRecovery(active);
       state[envelope.streamRef] = {
         state: "live",
         attempt: 0,
@@ -786,6 +813,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
         problemTitle: envelope.title,
       };
       if (envelope.retryable) scheduleRunRecovery(envelope.streamRef);
+      else clearRunRecovery(active);
       return true;
     }
     if (
@@ -993,6 +1021,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
             (!platformWanted || platformState.state === "live"))
         )
           return;
+        clearRunRecoveries();
         session.socket = undefined;
         retireWebSocket(socket, "SESSION_RESUME_TIMEOUT");
         scheduleReconnect();
@@ -1026,6 +1055,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
     });
     socket.addEventListener("close", () => {
       if (session.socket !== socket) return;
+      clearRunRecoveries();
       clearHandshakeTimer();
       clearResumeTimer();
       session.socket = undefined;
@@ -1041,6 +1071,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
       session.handshakeTimer = undefined;
       if (!activeSocket(socket) || socket.readyState !== WebSocket.CONNECTING)
         return;
+      clearRunRecoveries();
       session.socket = undefined;
       retireWebSocket(socket, "HANDSHAKE_TIMEOUT");
       scheduleReconnect();
@@ -1086,7 +1117,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
     runConsumers.delete(runRef);
     const active = activeRuns.get(runRef);
     if (!active) return;
-    if (active.timer !== undefined) window.clearTimeout(active.timer);
+    clearRunRecovery(active);
     if (session.socket?.readyState === WebSocket.OPEN) {
       send({ type: "UNSUBSCRIBE_RUN", requestRef: requestRef(), runRef });
     }
@@ -1125,6 +1156,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
   }
 
   function disconnect(reason: string): void {
+    clearRunRecoveries();
     session.ticketController?.abort();
     session.ticketController = undefined;
     if (session.timer !== undefined) window.clearTimeout(session.timer);
@@ -1143,8 +1175,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
   function closeAll(): void {
     providers.clearFinancial();
     session.stopped = true;
-    for (const active of activeRuns.values())
-      if (active.timer !== undefined) window.clearTimeout(active.timer);
+    clearRunRecoveries();
     activeRuns.clear();
     runConsumers.clear();
     for (const runRef of Object.keys(state))

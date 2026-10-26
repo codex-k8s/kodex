@@ -1392,6 +1392,150 @@ describe("browser-session realtime multiplexer", () => {
     store.closeAll();
   });
 
+  it.each(["refresh", "socket-close", "document-suspend", "project-change"])(
+    "не переносит повтор чтения запуска в новое соединение: %s",
+    async (transition) => {
+      const store = useRealtimeStore();
+      store.openRun("run_realtime01");
+      await flushProcessing();
+      const first = socketAt(0);
+      first.open();
+      first.message(runSnapshot(first, "run_realtime01"));
+      first.message({
+        type: "SESSION_READY",
+        requestRef: requestRef(first),
+        streams: [
+          { streamKind: "PLATFORM", streamRef: "PLATFORM", cursor: 0 },
+          { streamKind: "RUN", streamRef: "run_realtime01", cursor: 1 },
+        ],
+      });
+      await flushProcessing();
+      first.message(
+        runEnvelope(first, "run_realtime01", {
+          type: "STREAM_PROBLEM",
+          code: "RUN_UNAVAILABLE",
+          title: "Недоступно",
+          retryable: true,
+        }),
+      );
+      await flushProcessing();
+      const previous = [...scheduled.values()].find(
+        (timer) => timer.delay === 1_000,
+      );
+      expect(previous).toBeDefined();
+
+      if (transition === "socket-close") {
+        first.close(1006, "CONNECTION_LOST");
+        runScheduled(1_000);
+      } else if (transition === "document-suspend") {
+        windowEvents.get("kodex:document-requests-suspended")?.();
+        windowEvents.get("kodex:document-requests-resumed")?.();
+      } else if (transition === "project-change") store.changeProjectScope();
+      else store.refreshSession();
+      await flushProcessing();
+      const second = socketAt(1);
+      second.open();
+      expect(
+        [...scheduled.values()].filter((timer) => timer.delay === 1_000),
+      ).toHaveLength(0);
+      // Даже уже извлечённый callback не получает новое соединение и requestRef.
+      previous?.callback();
+      expect(second.sent).toHaveLength(1);
+      second.message(runSnapshot(second, "run_realtime01", 2));
+      second.message(
+        runEnvelope(second, "run_realtime01", { type: "RUN_READY", cursor: 2 }),
+      );
+      second.message({
+        type: "SESSION_READY",
+        requestRef: requestRef(second),
+        streams: [
+          { streamKind: "PLATFORM", streamRef: "PLATFORM", cursor: 0 },
+          { streamKind: "RUN", streamRef: "run_realtime01", cursor: 2 },
+        ],
+      });
+      await flushProcessing();
+      expect(second.readyState).toBe(FakeWebSocket.OPEN);
+      expect(store.state.run_realtime01?.state).toBe("live");
+      store.closeAll();
+    },
+  );
+
+  it("откладывает повтор недоступного запуска до завершения SESSION_RESUME", async () => {
+    const store = useRealtimeStore();
+    store.openRun("run_realtime01");
+    await flushProcessing();
+    const socket = socketAt(0);
+    socket.open();
+    socket.message(
+      runEnvelope(socket, "run_realtime01", {
+        type: "STREAM_PROBLEM",
+        code: "RUN_UNAVAILABLE",
+        title: "Недоступно",
+        retryable: true,
+      }),
+    );
+    await flushProcessing();
+    expect(
+      [...scheduled.values()].filter((timer) => timer.delay === 1_000),
+    ).toHaveLength(0);
+    expect(socket.sent).toHaveLength(1);
+    socket.message({
+      type: "SESSION_READY",
+      requestRef: requestRef(socket),
+      streams: [{ streamKind: "PLATFORM", streamRef: "PLATFORM", cursor: 0 }],
+    });
+    await flushProcessing();
+    runScheduled(1_000);
+    expect(sent(socket, 1)).toMatchObject({
+      type: "SUBSCRIBE_RUN",
+      runRef: "run_realtime01",
+    });
+    store.closeAll();
+  });
+
+  it("успешный RUN_READY отменяет ранее назначенный повтор", async () => {
+    const store = useRealtimeStore();
+    store.openRun("run_realtime01");
+    await flushProcessing();
+    const socket = socketAt(0);
+    socket.open();
+    socket.message(runSnapshot(socket, "run_realtime01"));
+    socket.message({
+      type: "SESSION_READY",
+      requestRef: requestRef(socket),
+      streams: [
+        { streamKind: "PLATFORM", streamRef: "PLATFORM", cursor: 0 },
+        { streamKind: "RUN", streamRef: "run_realtime01", cursor: 1 },
+      ],
+    });
+    await flushProcessing();
+    socket.message(
+      runEnvelope(socket, "run_realtime01", {
+        type: "STREAM_PROBLEM",
+        code: "RUN_UNAVAILABLE",
+        title: "Недоступно",
+        retryable: true,
+      }),
+    );
+    await flushProcessing();
+    const previous = [...scheduled.values()].find(
+      (timer) => timer.delay === 1_000,
+    );
+    expect(previous).toBeDefined();
+    socket.message(runSnapshot(socket, "run_realtime01", 2));
+    socket.message(
+      runEnvelope(socket, "run_realtime01", { type: "RUN_READY", cursor: 2 }),
+    );
+    await flushProcessing();
+    expect(
+      [...scheduled.values()].filter((timer) => timer.delay === 1_000),
+    ).toHaveLength(0);
+    previous?.callback();
+    expect(socket.sent).toHaveLength(1);
+    expect(store.state.run_realtime01?.state).toBe("live");
+    store.closeAll();
+  });
+
   it("восстанавливает gap одного run без разрыва остальных потоков", async () => {
     const store = useRealtimeStore();
     store.openPlatform();
@@ -1400,8 +1544,25 @@ describe("browser-session realtime multiplexer", () => {
     await flushProcessing();
     const socket = socketAt(0);
     socket.open();
+    socket.message({
+      type: "PLATFORM_READY",
+      requestRef: requestRef(socket),
+      streamKind: "PLATFORM",
+      streamRef: "PLATFORM",
+      cursor: 0,
+      availableKinds: [],
+    });
     socket.message(runSnapshot(socket, "run_realtime01"));
     socket.message(runSnapshot(socket, "run_realtime02"));
+    socket.message({
+      type: "SESSION_READY",
+      requestRef: requestRef(socket),
+      streams: [
+        { streamKind: "PLATFORM", streamRef: "PLATFORM", cursor: 0 },
+        { streamKind: "RUN", streamRef: "run_realtime01", cursor: 1 },
+        { streamKind: "RUN", streamRef: "run_realtime02", cursor: 1 },
+      ],
+    });
     await flushProcessing();
     socket.message(
       runEnvelope(socket, "run_realtime01", {
