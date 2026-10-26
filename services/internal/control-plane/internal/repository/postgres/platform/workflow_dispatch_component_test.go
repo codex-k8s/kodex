@@ -354,8 +354,8 @@ func testWorkflowDispatchArtifactFanout(t *testing.T) {
 	if accepted != 3 {
 		t.Fatalf("terminal DAG public accepted histories: got=%d want=3", accepted)
 	}
-	events, _, more, err := service.ListRunEvents(ctx, owner, query.Filter{ResourceRef: run.Ref, Limit: 200})
-	if err != nil || more {
+	events, _, historyComplete, err := service.ListRunEvents(ctx, owner, query.Filter{ResourceRef: run.Ref, Limit: 200})
+	if err != nil || !historyComplete {
 		t.Fatal("read complete bounded native workflow event history")
 	}
 	acceptedEvents := map[string]bool{}
