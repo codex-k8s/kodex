@@ -16,6 +16,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 	roleimageservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/roleimage"
+	workflowservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/workflow"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
@@ -1556,8 +1557,14 @@ func validAssistantPromptTemplate(value string) bool {
 	return true
 }
 
+// assistantWorkflow parses a closed editable workflow and checks exact server predicates before
+// returning an owner command. Omitted mode retains the historical inferred graph; references
+// do not establish project or agent authority, which remains part of command admission.
+// assistantWorkflow разбирает закрытую конфигурацию и проверяет серверные условия перед командой
+// владельца. Отсутствующий режим сохраняет прежний вывод графа; полномочия проекта и сотрудников
+// по ссылкам не назначаются и остаются частью допуска команды.
 func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
-	if !onlyAssistantFields(input, "projectRef", "name", "purpose", "coordinatorAgentRef", "inputFields", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria") ||
+	if !onlyAssistantFields(input, "executionMode", "projectRef", "name", "purpose", "coordinatorAgentRef", "inputFields", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria") ||
 		!hasAssistantFields(input, "projectRef", "name", "purpose", "coordinatorAgentRef", "steps") {
 		return command.WorkflowInput{}, errs.ErrInvalid
 	}
@@ -1565,18 +1572,26 @@ func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
 	coordinator := assistantString(input, "coordinatorAgentRef")
 	concurrency, concurrencyOK := assistantInt64(input, "maxConcurrency")
 	timeout, timeoutOK := assistantInt64(input, "timeoutSeconds")
-	if !concurrencyOK {
+	if _, present := input["maxConcurrency"]; !present {
 		concurrency = 1
+	} else if !concurrencyOK || concurrency < 1 || concurrency > 100 {
+		return command.WorkflowInput{}, errs.WithAssistantPlanField(errs.ErrInvalid, "MAX_CONCURRENCY")
 	}
-	if !timeoutOK {
+	if _, present := input["timeoutSeconds"]; !present {
 		timeout = 7200
+	} else if !timeoutOK || timeout < 1 || timeout > 604800 {
+		return command.WorkflowInput{}, errs.WithAssistantPlanField(errs.ErrInvalid, "TIMEOUT_SECONDS")
+	}
+	mode, modeOK := assistantWorkflowMode(input)
+	if !modeOK {
+		return command.WorkflowInput{}, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_SHAPE")
 	}
 	rawSteps, ok := input["steps"].([]any)
 	if !ok || len(rawSteps) == 0 || len(rawSteps) > 200 {
 		return command.WorkflowInput{}, errs.ErrInvalid
 	}
 	draft := entity.WorkflowVersion{Ref: "draft", Name: name, Purpose: assistantString(input, "purpose"), CoordinatorAgentRef: coordinator,
-		VersionNumber: 1, Concurrency: int32(concurrency), TimeoutSeconds: timeout, CompletionCriteria: assistantString(input, "completionCriteria"), ResultSchema: map[string]any{}}
+		ExecutionMode: mode, VersionNumber: 1, Concurrency: int32(concurrency), TimeoutSeconds: timeout, CompletionCriteria: assistantString(input, "completionCriteria"), ResultSchema: map[string]any{}}
 	if rawFields, exists := input["inputFields"]; exists {
 		fields, ok := rawFields.([]any)
 		if !ok || len(fields) > 100 {
@@ -1605,7 +1620,7 @@ func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
 	parallelGroupLabels := map[string]int64{}
 	for index, raw := range rawSteps {
 		stepInput, ok := raw.(map[string]any)
-		if !ok || !onlyAssistantFields(stepInput, "name", "purpose", "agentRef", "parallel", "parallelGroup", "timeoutSeconds", "expectedResult", "humanGate", "gateDecisions", "requiredCapabilityKeys", "approvalTimeoutSeconds") ||
+		if !ok || !onlyAssistantFields(stepInput, "key", "dependsOn", "resultRequirements", "name", "purpose", "agentRef", "parallel", "parallelGroup", "timeoutSeconds", "expectedResult", "humanGate", "gateDecisions", "requiredCapabilityKeys", "approvalTimeoutSeconds") ||
 			!hasAssistantFields(stepInput, "name", "purpose", "agentRef", "parallel", "parallelGroup", "timeoutSeconds", "expectedResult", "humanGate", "gateDecisions", "requiredCapabilityKeys") {
 			return command.WorkflowInput{}, errs.ErrInvalid
 		}
@@ -1615,7 +1630,7 @@ func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
 		stepTimeout, timeoutOK := assistantInt64(stepInput, "timeoutSeconds")
 		gateDecisions, gateDecisionsOK := assistantStringsValue(stepInput, "gateDecisions")
 		requiredCapabilities, requiredCapabilitiesOK := assistantStringsValue(stepInput, "requiredCapabilityKeys")
-		if !parallelOK || !humanGateOK || !parallelGroupOK || !timeoutOK || !gateDecisionsOK || !requiredCapabilitiesOK {
+		if !parallelOK || !humanGateOK || !parallelGroupOK || parallelGroup < 0 || parallelGroup > 50 || !timeoutOK || stepTimeout < 1 || stepTimeout > 86400 || !gateDecisionsOK || !requiredCapabilitiesOK {
 			return command.WorkflowInput{}, errs.WithAssistantPlanField(errs.ErrInvalid, "STEP_SHAPE")
 		}
 		var approvalTimeout *int32
@@ -1642,10 +1657,27 @@ func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
 			parallelGroups = map[int32][]string{}
 			frontier = []string{key}
 		}
+		var requirements []entity.WorkflowResultRequirement
+		if mode == workflowservice.ServerDAGV1 {
+			var keyOK, dependenciesOK bool
+			key, keyOK = stepInput["key"].(string)
+			dependencies, dependenciesOK = assistantWorkflowDependencies(stepInput["dependsOn"])
+			var parseErr error
+			requirements, parseErr = assistantWorkflowRequirements(stepInput["resultRequirements"])
+			if !keyOK || !dependenciesOK || parseErr != nil {
+				return command.WorkflowInput{}, errs.WithAssistantPlanField(errs.ErrInvalid, "STEP_SHAPE")
+			}
+		} else {
+			for _, field := range []string{"key", "dependsOn", "resultRequirements"} {
+				if _, supplied := stepInput[field]; supplied {
+					return command.WorkflowInput{}, errs.WithAssistantPlanField(errs.ErrInvalid, "STEP_SHAPE")
+				}
+			}
+		}
 		draft.Steps = append(draft.Steps, entity.WorkflowStep{Key: key, Position: int32(index + 1), Name: assistantString(stepInput, "name"),
 			AgentRef: assistantString(stepInput, "agentRef"), Instructions: assistantString(stepInput, "purpose"), Parallel: parallel,
 			ParallelGroup: int32(parallelGroup), TimeoutSeconds: int32(stepTimeout), ExpectedResult: assistantString(stepInput, "expectedResult"),
-			HumanGateAfter: humanGate, DependsOn: dependencies, ApprovalTimeoutSeconds: approvalTimeout,
+			HumanGateAfter: humanGate, DependsOn: dependencies, ResultRequirements: requirements, ApprovalTimeoutSeconds: approvalTimeout,
 			GateDecisions: gateDecisions, RequiredCapabilityKeys: requiredCapabilities})
 	}
 	if projectRef == "" || !validWorkflowVersion(draft) {

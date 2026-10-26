@@ -131,6 +131,7 @@ function mount(count = 33) {
     removeStep: (index: number) => void;
     valid: Ref<boolean>;
     validStep: (step: Record<string, unknown>, pending?: boolean) => boolean;
+    changeStep: (index: number, key: string, value: unknown) => void;
   };
   const renderer = createRenderer<object, object>({
     insert() {},
@@ -250,6 +251,46 @@ it("ожидание каталога нейтрально, но неполны�
   expect(state.validStep(stepAt(steps, 0), true)).toBe(true);
   expect(state.validStep({ ...steps[1], purpose: "" }, true)).toBe(false);
 });
+
+it("сохраняет срок согласования при правках и удаляет его при отключении Human Gate", async () => {
+  const { props, state } = mount(2);
+  await vi.waitFor(() => expect(state.valid.value).toBe(true));
+  state.changeStep(0, "humanGate", true);
+  state.changeStep(0, "gateDecisions", ["APPROVE"]);
+  state.changeStep(0, "approvalTimeoutSeconds", 90);
+  state.changeStep(0, "name", "Проверка требований");
+  await nextTick();
+  expect(state.valid.value).toBe(true);
+  expect(stepAt(stepsOf(props.operation), 0).approvalTimeoutSeconds).toBe(90);
+  state.changeStep(0, "approvalTimeoutSeconds", undefined);
+  expect(stepAt(stepsOf(props.operation), 0)).not.toHaveProperty(
+    "approvalTimeoutSeconds",
+  );
+  state.changeStep(0, "approvalTimeoutSeconds", 604800);
+  state.changeStep(0, "humanGate", false);
+  expect(stepAt(stepsOf(props.operation), 0)).not.toHaveProperty(
+    "approvalTimeoutSeconds",
+  );
+  props.disabled = true;
+  state.changeStep(0, "approvalTimeoutSeconds", 5);
+  expect(stepAt(stepsOf(props.operation), 0)).not.toHaveProperty(
+    "approvalTimeoutSeconds",
+  );
+});
+
+it.each([0, -1, 604801, 1.5, "90", null])(
+  "отклоняет недопустимый срок согласования %s",
+  (timeout) => {
+    const { props, state } = mount(2);
+    const step = {
+      ...stepAt(stepsOf(props.operation), 0),
+      humanGate: true,
+      gateDecisions: ["APPROVE"],
+      approvalTimeoutSeconds: timeout,
+    };
+    expect(state.validStep(step, true)).toBe(false);
+  },
+);
 
 it.each(["я", "🧭"])(
   "проверяет критерий завершения по Unicode-символам на границе 2000/2001 (%s)",

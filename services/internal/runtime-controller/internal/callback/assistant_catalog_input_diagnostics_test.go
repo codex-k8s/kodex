@@ -393,9 +393,11 @@ func TestAssistantCatalogInputRecoveryPreservesFullConfigurationReads(t *testing
 	}
 }
 
-// TestAssistantWorkflowUpdateSchemaExplainsDependencyRetentionWithoutNewFields checks workflow-update guidance retains dependency edges, parallelism, result schema and defaults without exposing editable dependsOn/draft fields.
-// TestAssistantWorkflowUpdateSchemaExplainsDependencyRetentionWithoutNewFields проверяет сохранение в подсказке изменения процесса зависимостей, параллельности, схемы результата и значений по умолчанию без объявления редактируемых полей dependsOn или draft.
-func TestAssistantWorkflowUpdateSchemaExplainsDependencyRetentionWithoutNewFields(t *testing.T) {
+// TestAssistantWorkflowUpdateSchemaDistinguishesExecutionProfiles preserves legacy graph guidance,
+// separates explicit server predicates and retains the prohibition on caller-supplied owner drafts.
+// TestAssistantWorkflowUpdateSchemaDistinguishesExecutionProfiles сохраняет прежние инструкции
+// графа, отделяет явные серверные условия и запрещает подставлять owner draft из запроса.
+func TestAssistantWorkflowUpdateSchemaDistinguishesExecutionProfiles(t *testing.T) {
 	schema := workflowUpdateInputSchema("wfl_fixture123")
 	steps := schema["properties"].(map[string]any)["steps"].(map[string]any)
 	guidance, ok := steps["description"].(string)
@@ -404,7 +406,8 @@ func TestAssistantWorkflowUpdateSchemaExplainsDependencyRetentionWithoutNewField
 	if !ok || !strings.Contains(guidance, "count, order, keys and parallelism") || !strings.Contains(guidance, "numeric parallelGroup") || !strings.Contains(guidance, "draft.Steps[].DependsOn") ||
 		!strings.Contains(guidance, "retain ALL original edges") || !strings.Contains(guidance, "waits for ALL peers") || !strings.Contains(guidance, "After.draft") || !strings.Contains(guidance, "Omit key for new steps") ||
 		!strings.Contains(guidance, "owner must verify") || !strings.Contains(guidance, "returns plan locators") || !strings.Contains(guidance, "After Apply, read full WORKFLOW_CONFIGURATION") ||
-		!strings.Contains(guidance, "ResultSchema is retained") || !strings.Contains(guidance, "input defaults are preserved by input key") || step["additionalProperties"] != false || properties["dependsOn"] != nil || properties["draft"] != nil {
+		!strings.Contains(guidance, "ResultSchema is retained") || !strings.Contains(guidance, "input defaults are preserved by input key") || step["additionalProperties"] != false || properties["dependsOn"] == nil || properties["resultRequirements"] == nil || properties["draft"] != nil ||
+		!strings.Contains(guidance, "For SERVER_DAG_V1") || !strings.Contains(guidance, "apply only to MANAGER_DRIVEN") || !strings.Contains(guidance, "Preserve optional approvalTimeoutSeconds") {
 		t.Fatal("workflow update guidance changed editable fields or omitted dependency retention conditions")
 	}
 }

@@ -7,16 +7,24 @@ import (
 	"strings"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	workflowservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/workflow"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
 )
 
+// assistantWorkflowEditableFields is the closed plan-edit surface, excluding owner snapshots and grants.
+// assistantWorkflowEditableFields задаёт закрытую поверхность редактирования без owner snapshots и grants.
 var assistantWorkflowEditableFields = []string{
+	"executionMode",
 	"name", "purpose", "coordinatorAgentRef", "instructions", "completionCriteria",
 	"maxConcurrency", "timeoutSeconds", "inputFields", "steps",
 }
 
+// assistantWorkflowGraphFields creates editable snapshots with optional approval policy and exact
+// server predicates, while preserving the legacy field shape for older plans.
+// assistantWorkflowGraphFields создаёт редактируемые снимки со сроком согласования и точными
+// серверными условиями, сохраняя прежнюю форму полей исторических планов.
 func assistantWorkflowGraphFields(draft entity.WorkflowVersion) ([]any, []any) {
 	fields := make([]any, 0, len(draft.Inputs))
 	for _, field := range draft.Inputs {
@@ -45,11 +53,23 @@ func assistantWorkflowGraphFields(draft entity.WorkflowVersion) ([]any, []any) {
 		if step.ApprovalTimeoutSeconds != nil {
 			item["approvalTimeoutSeconds"] = float64(*step.ApprovalTimeoutSeconds)
 		}
+		if draft.ExecutionMode == workflowservice.ServerDAGV1 {
+			dependencies := make([]any, 0, len(step.DependsOn))
+			for _, dependency := range step.DependsOn {
+				dependencies = append(dependencies, dependency)
+			}
+			item["dependsOn"] = dependencies
+			item["resultRequirements"] = assistantWorkflowRequirementFields(step.ResultRequirements)
+		}
 		steps = append(steps, item)
 	}
 	return fields, steps
 }
 
+// readAssistantWorkflowSnapshot reads an eligible editable draft inside owner scope and preserves
+// its version, complete graph and execution mode without granting the assistant additional rights.
+// readAssistantWorkflowSnapshot читает доступный черновик внутри области владельца, сохраняя
+// версию, полный граф и режим без выдачи помощнику дополнительных полномочий.
 func (repository *Repository) readAssistantWorkflowSnapshot(ctx context.Context, tx pgx.Tx, actorScope scope,
 	projectRef, workflowRef string,
 ) (map[string]any, int64, error) {
@@ -79,7 +99,7 @@ func (repository *Repository) readAssistantWorkflowSnapshot(ctx context.Context,
 		return nil, 0, errs.ErrUnavailable
 	}
 	fields, steps := assistantWorkflowGraphFields(*workflow.Draft)
-	return map[string]any{
+	snapshot := map[string]any{
 		"workflowRef": workflow.Ref, "projectRef": workflow.ProjectRef,
 		"name": workflow.Draft.Name, "purpose": workflow.Draft.Purpose,
 		"coordinatorAgentRef": workflow.Draft.CoordinatorAgentRef,
@@ -87,7 +107,11 @@ func (repository *Repository) readAssistantWorkflowSnapshot(ctx context.Context,
 		"maxConcurrency": float64(workflow.Draft.Concurrency), "timeoutSeconds": float64(workflow.Draft.TimeoutSeconds),
 		"inputFields": fields, "steps": steps,
 		"draft": draft,
-	}, workflow.Version, nil
+	}
+	if workflow.Draft.ExecutionMode != "" {
+		snapshot["executionMode"] = workflow.Draft.ExecutionMode
+	}
+	return snapshot, workflow.Version, nil
 }
 
 func (repository *Repository) hydrateAssistantWorkflowOperation(ctx context.Context, tx pgx.Tx, actorScope scope,
@@ -107,11 +131,18 @@ func (repository *Repository) hydrateAssistantWorkflowOperation(ctx context.Cont
 	return hydrateAssistantWorkflowFields(before, version, operation)
 }
 
+// hydrateAssistantWorkflowFields merges allowed sparse edits with the authoritative prior snapshot,
+// then revalidates and renders the exact proposed graph. Absent historical mode remains absent.
+// hydrateAssistantWorkflowFields объединяет разрешённые частичные правки с прежним owner snapshot,
+// заново проверяет и отображает граф. Отсутствующий исторический режим остаётся отсутствующим.
 func hydrateAssistantWorkflowFields(before map[string]any, version int64,
 	operation entity.AssistantPlanOperation,
 ) (entity.AssistantPlanOperation, error) {
 	after := make(map[string]any, len(assistantWorkflowEditableFields)+2)
 	for _, key := range append([]string{"workflowRef", "projectRef"}, assistantWorkflowEditableFields...) {
+		if _, exists := before[key]; key == "executionMode" && !exists {
+			continue
+		}
 		after[key] = before[key]
 	}
 	changed := false
@@ -121,6 +152,12 @@ func hydrateAssistantWorkflowFields(before map[string]any, version int64,
 			continue
 		}
 		switch key {
+		case "executionMode":
+			mode, valid := assistantWorkflowMode(operation.Parameters)
+			if !valid {
+				return entity.AssistantPlanOperation{}, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_TEXT")
+			}
+			value = mode
 		case "maxConcurrency", "timeoutSeconds":
 			integer, valid := assistantInt64(operation.Parameters, key)
 			if !valid || integer < 1 || (key == "maxConcurrency" && integer > 100) ||
@@ -188,12 +225,16 @@ func assistantWorkflowAfterSnapshot(parameters map[string]any, draft entity.Work
 	return after, nil
 }
 
+// assistantUpdateWorkflow verifies binding and the original draft before applying editable fields;
+// optional mode changes require the entire resulting graph to satisfy the selected owner policy.
+// assistantUpdateWorkflow проверяет привязку и исходный черновик перед применением полей; смена
+// режима требует соответствия всего итогового графа выбранной политике владельца.
 func assistantUpdateWorkflow(operation entity.AssistantPlanOperation) (command.WorkflowInput, int64, error) {
 	input := operation.Input
 	if input == nil {
 		input = withAssistantExpectedVersion(operation.Parameters, valueOrZero(operation.ExpectedVersion))
 	}
-	if !onlyAssistantFields(input, "workflowRef", "projectRef", "name", "purpose", "instructions",
+	if !onlyAssistantFields(input, "executionMode", "workflowRef", "projectRef", "name", "purpose", "instructions",
 		"coordinatorAgentRef", "completionCriteria", "maxConcurrency", "timeoutSeconds", "inputFields", "steps", "expectedVersion") ||
 		!hasAssistantFields(input, "workflowRef", "projectRef", "name", "purpose", "instructions",
 			"coordinatorAgentRef", "completionCriteria", "maxConcurrency", "timeoutSeconds", "inputFields", "steps", "expectedVersion") {
@@ -221,6 +262,13 @@ func assistantUpdateWorkflow(operation entity.AssistantPlanOperation) (command.W
 	var draft entity.WorkflowVersion
 	if json.Unmarshal(raw, &draft) != nil || !validWorkflowVersion(draft) {
 		return command.WorkflowInput{}, 0, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_DRAFT")
+	}
+	if _, present := input["executionMode"]; present {
+		mode, valid := assistantWorkflowMode(input)
+		if !valid {
+			return command.WorkflowInput{}, 0, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_TEXT")
+		}
+		draft.ExecutionMode = mode
 	}
 	for _, key := range []string{"name", "purpose", "instructions", "completionCriteria"} {
 		value, ok := input[key].(string)
@@ -257,6 +305,10 @@ func assistantUpdateWorkflow(operation entity.AssistantPlanOperation) (command.W
 		Name: draft.Name, Purpose: draft.Purpose, CoordinatorAgentRef: draft.CoordinatorAgentRef, Draft: &draft}, version, nil
 }
 
+// assistantUpdateWorkflowGraph preserves input defaults and legacy inferred dependencies; server
+// mode instead retains explicit stable keys, edges and subject keys in one common namespace.
+// assistantUpdateWorkflowGraph сохраняет defaults входа и прежний вывод зависимостей; серверный
+// режим сохраняет явные ключи, рёбра и ссылки условий в одном пространстве ключей.
 func assistantUpdateWorkflowGraph(input map[string]any, draft *entity.WorkflowVersion) error {
 	fields, fieldsOK := input["inputFields"].([]any)
 	steps, stepsOK := input["steps"].([]any)
@@ -304,12 +356,19 @@ func assistantUpdateWorkflowGraph(input map[string]any, draft *entity.WorkflowVe
 	}
 	for index, raw := range steps {
 		step, ok := raw.(map[string]any)
-		if !ok || !onlyAssistantFields(step, "key", "name", "purpose", "agentRef", "parallel", "parallelGroup", "timeoutSeconds", "expectedResult", "humanGate", "gateDecisions", "requiredCapabilityKeys", "approvalTimeoutSeconds") {
+		if !ok || !onlyAssistantFields(step, "dependsOn", "resultRequirements", "key", "name", "purpose", "agentRef", "parallel", "parallelGroup", "timeoutSeconds", "expectedResult", "humanGate", "gateDecisions", "requiredCapabilityKeys", "approvalTimeoutSeconds") {
 			return errs.WithAssistantPlanField(errs.ErrInvalid, "STEP_SHAPE")
 		}
 		key := assistantString(step, "key")
+		if draft.ExecutionMode == workflowservice.ServerDAGV1 {
+			var valid bool
+			key, valid = step["key"].(string)
+			if !valid || key == "" {
+				return errs.WithAssistantPlanField(errs.ErrInvalid, "STEP_KEY")
+			}
+		}
 		if key != "" {
-			if _, known := previousSteps[key]; !known {
+			if _, known := previousSteps[key]; !known && draft.ExecutionMode != workflowservice.ServerDAGV1 {
 				return errs.WithAssistantPlanField(errs.ErrInvalid, "STEP_KEY")
 			}
 		} else {
@@ -327,7 +386,9 @@ func assistantUpdateWorkflowGraph(input map[string]any, draft *entity.WorkflowVe
 		}
 		usedSteps[key], stepKeys[index] = struct{}{}, key
 		clean := cloneAssistantFields(step)
-		delete(clean, "key")
+		if draft.ExecutionMode != workflowservice.ServerDAGV1 {
+			delete(clean, "key")
+		}
 		cleanSteps = append(cleanSteps, clean)
 	}
 	proposal := map[string]any{"projectRef": assistantString(input, "projectRef"),
@@ -336,6 +397,9 @@ func assistantUpdateWorkflowGraph(input map[string]any, draft *entity.WorkflowVe
 		"inputFields":         cleanFields, "steps": cleanSteps,
 		"maxConcurrency": input["maxConcurrency"], "timeoutSeconds": input["timeoutSeconds"],
 		"completionCriteria": assistantString(input, "completionCriteria")}
+	if draft.ExecutionMode != "" {
+		proposal["executionMode"] = draft.ExecutionMode
+	}
 	parsed, err := assistantWorkflow(proposal)
 	if err != nil || parsed.Draft == nil {
 		field := errs.AssistantPlanField(err)
@@ -364,8 +428,10 @@ func assistantUpdateWorkflowGraph(input map[string]any, draft *entity.WorkflowVe
 			step.DependsOn[dependencyIndex] = remap[dependency]
 		}
 	}
-	if err := retainAssistantWorkflowDependencies(draft.Steps, parsed.Draft.Steps); err != nil {
-		return errs.WithAssistantPlanField(err, "STEPS_GRAPH")
+	if draft.ExecutionMode != workflowservice.ServerDAGV1 {
+		if err := retainAssistantWorkflowDependencies(draft.Steps, parsed.Draft.Steps); err != nil {
+			return errs.WithAssistantPlanField(err, "STEPS_GRAPH")
+		}
 	}
 	draft.Inputs, draft.Steps = parsed.Draft.Inputs, parsed.Draft.Steps
 	return nil

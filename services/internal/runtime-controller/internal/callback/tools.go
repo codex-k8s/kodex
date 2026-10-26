@@ -929,11 +929,13 @@ func workflowUpdateInputSchema(workflowRef string) map[string]any {
 		"description": "Preserve the existing field key from the workflow readback; omit only for a new field."}
 	steps := graph["steps"].(map[string]any)
 	steps["description"] = "For UPDATE_WORKFLOW, copy the complete ordered steps array from the full WORKFLOW_CONFIGURATION readback and preserve every existing key, parallel and numeric parallelGroup value. Omit key for new steps; unknown explicit keys and dependsOn are rejected. If count, order, keys and parallelism remain unchanged, every original draft.Steps[].DependsOn is retained exactly. Structural edits retain ALL original edges of retained steps and add inferred frontier dependencies; removing or moving a prerequisite after its dependent is rejected. Contiguous parallel=true steps with the same numeric parallelGroup share the preceding frontier; the following nonparallel step waits for ALL peers. To add a fourth reviewer, insert a keyless parallel peer in the existing group before aggregation. The server-owned After.steps exposes assigned keys and After.draft exposes the complete normalized DAG before Apply. The owner must verify every original edge and all peer dependencies in After.draft.Steps[].DependsOn before Apply. propose_assistant_plan returns plan locators, not this snapshot. After Apply, read full WORKFLOW_CONFIGURATION again and verify the normalized graph before publishing. Omitted workflow fields retain their values; ResultSchema is retained and existing input defaults are preserved by input key. Capability-only edits must preserve the complete ordered steps and change only requiredCapabilityKeys."
+	steps["description"] = "For SERVER_DAG_V1, preserve explicit stable step keys, dependsOn and resultRequirements. The owner validates up to 12 steps, 2 concurrent executions, 8 predecessors and 4 results per step; the server advances only after verified required results. Preserve optional approvalTimeoutSeconds; remove it when humanGate becomes false. The remaining graph-inference instructions apply only to MANAGER_DRIVEN or an omitted legacy mode. " + steps["description"].(string)
 	step := steps["items"].(map[string]any)
 	step["properties"].(map[string]any)["key"] = map[string]any{"type": "string", "minLength": 1, "maxLength": 96,
 		"description": "Preserve the existing step key from the workflow readback; omit only for a new step."}
 	schema := objectSchema([]string{"workflowRef"}, map[string]any{
-		"workflowRef": enumSchema(workflowRef), "name": stringSchema(1, 160),
+		"executionMode": enumSchema("MANAGER_DRIVEN", "SERVER_DAG_V1"),
+		"workflowRef":   enumSchema(workflowRef), "name": stringSchema(1, 160),
 		"purpose": stringSchema(0, 2000), "coordinatorAgentRef": opaqueRefSchema(),
 		"instructions":       stringSchema(0, 65536),
 		"completionCriteria": stringSchema(0, 2000),
@@ -941,11 +943,12 @@ func workflowUpdateInputSchema(workflowRef string) map[string]any {
 		"timeoutSeconds":     map[string]any{"type": "integer", "minimum": 1, "maximum": 604800},
 		"inputFields":        fields, "steps": steps,
 	})
-	branches := make([]map[string]any, 0, 9)
-	for _, field := range []string{"name", "purpose", "coordinatorAgentRef", "instructions", "completionCriteria", "maxConcurrency", "timeoutSeconds", "inputFields", "steps"} {
+	branches := make([]map[string]any, 0, 10)
+	for _, field := range []string{"executionMode", "name", "purpose", "coordinatorAgentRef", "instructions", "completionCriteria", "maxConcurrency", "timeoutSeconds", "inputFields", "steps"} {
 		branches = append(branches, map[string]any{"required": []string{field}})
 	}
 	schema["anyOf"] = branches
+	schema["allOf"] = workflowServerBounds()
 	return schema
 }
 
@@ -1093,21 +1096,29 @@ func workflowInputSchema(projectRef, agentRef map[string]any) map[string]any {
 		"options":   map[string]any{"type": "array", "maxItems": 50, "uniqueItems": true, "items": stringSchema(1, 160)},
 	})
 	step := objectSchema([]string{"name", "purpose", "agentRef", "parallel", "parallelGroup", "timeoutSeconds", "expectedResult", "humanGate", "gateDecisions", "requiredCapabilityKeys"}, map[string]any{
-		"name": stringSchema(1, 160), "purpose": stringSchema(1, 1000), "agentRef": agentRef,
+		"key": workflowStepKeySchema(), "dependsOn": map[string]any{"type": "array", "maxItems": 8, "uniqueItems": true, "items": workflowStepKeySchema()},
+		"resultRequirements": workflowResultRequirementsSchema(),
+		"name":               stringSchema(1, 160), "purpose": stringSchema(1, 1000), "agentRef": agentRef,
 		"parallel": map[string]any{"type": "boolean"}, "parallelGroup": map[string]any{"oneOf": []map[string]any{
 			{"type": "integer", "minimum": 0, "maximum": 50}, stringSchema(1, 80),
 		}},
 		"timeoutSeconds": map[string]any{"type": "integer", "minimum": 1, "maximum": 86400}, "expectedResult": stringSchema(0, 1000),
 		"humanGate": map[string]any{"type": "boolean"}, "gateDecisions": stringArraySchema(0, 4, []string{"APPROVE", "REJECT", "REQUEST_CHANGES", "CANCEL"}),
+		"approvalTimeoutSeconds": map[string]any{"type": "integer", "minimum": 1, "maximum": 604800},
 		"requiredCapabilityKeys": map[string]any{"type": "array", "maxItems": 50, "uniqueItems": true, "items": capabilityKeySchema(), "description": "Complete stage capability ceiling, not additional requirements. Include needed platform keys and exact existing enabled integration keys of this step's agent. Empty denies all capabilities; this list never grants permissions."},
 	})
-	return objectSchema([]string{"projectRef", "name", "purpose", "coordinatorAgentRef", "steps"}, map[string]any{
-		"projectRef": projectRef, "name": stringSchema(1, 160), "purpose": stringSchema(1, 1000), "coordinatorAgentRef": agentRef,
+	step["allOf"] = []map[string]any{{"if": map[string]any{"required": []string{"approvalTimeoutSeconds"}}, "then": map[string]any{"properties": map[string]any{"humanGate": map[string]any{"const": true}}}}}
+	schema := objectSchema([]string{"projectRef", "name", "purpose", "coordinatorAgentRef", "steps"}, map[string]any{
+		"executionMode": enumSchema("MANAGER_DRIVEN", "SERVER_DAG_V1"),
+		"projectRef":    projectRef, "name": stringSchema(1, 160), "purpose": stringSchema(1, 1000), "coordinatorAgentRef": agentRef,
 		"inputFields":    map[string]any{"type": "array", "maxItems": 100, "items": inputField},
 		"steps":          map[string]any{"type": "array", "minItems": 1, "maxItems": 200, "items": step},
 		"maxConcurrency": map[string]any{"type": "integer", "minimum": 1, "maximum": 100},
 		"timeoutSeconds": map[string]any{"type": "integer", "minimum": 1, "maximum": 604800}, "completionCriteria": stringSchema(0, 2000),
 	})
+	schema["allOf"] = workflowServerBounds()
+	schema["description"] = "Omitted executionMode or MANAGER_DRIVEN retains legacy manager coordination; do not supply key, dependsOn or resultRequirements during legacy creation. SERVER_DAG_V1 requires every step to provide a stable key, explicit dependsOn and one to four typed resultRequirements. It permits at most 12 steps, 2 concurrent executions and 8 predecessors per step. Completion of a model turn alone does not satisfy a required artifact, pull request, review or release receipt. All predicates are checked by the owner before advancing."
+	return schema
 }
 
 // scheduleInputSchema describes a schedule with an explicit task, session/notification

@@ -71,6 +71,7 @@ const stepKeys = new Set([
   "humanGate",
   "gateDecisions",
   "requiredCapabilityKeys",
+  "approvalTimeoutSeconds",
 ]);
 const agentReadback = ref<Record<string, Agent | null>>({});
 const selectableAgents = new Map<string, Agent>();
@@ -202,12 +203,19 @@ function change(key: string, value: unknown): void {
 }
 function changeStep(index: number, key: string, value: unknown): void {
   const current = steps.value;
-  if (!current?.[index]) return;
+  if (props.disabled || !current?.[index]) return;
   change(
     "steps",
-    current.map((step, position) =>
-      position === index ? { ...step, [key]: value } : step,
-    ),
+    current.map((step, position) => {
+      if (position !== index) return step;
+      const changed = { ...step, [key]: value };
+      if (
+        (key === "humanGate" && value === false) ||
+        (key === "approvalTimeoutSeconds" && value === undefined)
+      )
+        delete changed.approvalTimeoutSeconds;
+      return changed;
+    }),
   );
 }
 function changeField(index: number, key: string, value: unknown): void {
@@ -387,6 +395,12 @@ function validStep(step: Item, allowPendingAgent = false): boolean {
     step.timeoutSeconds <= 86400 &&
     text(step.expectedResult).length <= 1000 &&
     typeof step.humanGate === "boolean" &&
+    (step.approvalTimeoutSeconds === undefined ||
+      (step.humanGate &&
+        typeof step.approvalTimeoutSeconds === "number" &&
+        Number.isInteger(step.approvalTimeoutSeconds) &&
+        step.approvalTimeoutSeconds >= 1 &&
+        step.approvalTimeoutSeconds <= 604800)) &&
     Array.isArray(decisions) &&
     decisions.length <= 4 &&
     decisions.every(
@@ -727,6 +741,29 @@ watch(
                 />{{ $t("workflows.humanGate") }}</label
               >
             </div>
+            <label v-if="step.humanGate === true" class="field">
+              <span>{{ $t("workflows.approvalTimeout") }}</span>
+              <input
+                :id="stepName(index, 'approval-timeout')"
+                :name="stepName(index, 'approval-timeout')"
+                type="number"
+                min="1"
+                max="604800"
+                step="1"
+                :value="step.approvalTimeoutSeconds ?? ''"
+                :disabled="disabled"
+                @input="
+                  changeStep(
+                    index,
+                    'approvalTimeoutSeconds',
+                    ($event.target as HTMLInputElement).value === ''
+                      ? undefined
+                      : Number(($event.target as HTMLInputElement).value),
+                  )
+                "
+              />
+              <span>{{ $t("workflows.approvalTimeoutHelp") }}</span>
+            </label>
             <details>
               <summary>{{ $t("common.advanced") }}</summary>
               <div class="assistant-workflow-form__advanced">
