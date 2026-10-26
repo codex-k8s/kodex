@@ -2,10 +2,60 @@ package grpc
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
+
+// TestServerWorkflowProtoRoundtrip preserves a nonsequential DAG and typed results through the
+// actual protobuf wire and both casters, retaining the pre-existing field13 owner-gate deadline.
+// TestServerWorkflowProtoRoundtrip сохраняет непоследовательный DAG и типизированные результаты
+// через настоящий protobuf и оба caster, включая прежний срок Human Gate в поле13.
+func TestServerWorkflowProtoRoundtrip(t *testing.T) {
+	ttl := int32(1200)
+	input := &controlplanev1.WorkflowVersion{ExecutionMode: "SERVER_DAG_V1", MaxConcurrency: 2, TimeoutSeconds: 3600, Steps: []*controlplanev1.WorkflowStep{
+		{Ref: "analysis", Position: 1, AgentRef: "agt_analyst01", TimeoutSeconds: 900, ResultRequirements: []*controlplanev1.WorkflowResultRequirement{{Key: "spec", Kind: "ARTIFACT", FileName: "spec.md", MediaType: "text/markdown"}}},
+		{Ref: "architecture", Position: 2, AgentRef: "agt_architect", TimeoutSeconds: 900, DependsOn: []string{"analysis"}},
+		{Ref: "review", Position: 3, AgentRef: "agt_reviewer01", TimeoutSeconds: 900, DependsOn: []string{"analysis"}, HumanGate: true, ApprovalTimeoutSeconds: &ttl, GateDecisions: []controlplanev1.OwnerGateDecision{controlplanev1.OwnerGateDecision_OWNER_GATE_DECISION_APPROVE}},
+	}}
+	raw, err := proto.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var received controlplanev1.WorkflowVersion
+	if err := proto.Unmarshal(raw, &received); err != nil {
+		t.Fatal(err)
+	}
+	domain := domainWorkflowVersion(&received)
+	output := castWorkflowVersion(domain, "DRAFT", "")
+	if output.ExecutionMode != input.ExecutionMode || !reflect.DeepEqual(domain.Steps[2].DependsOn, []string{"analysis"}) || len(output.Steps) != 3 {
+		t.Fatal("explicit DAG was replaced by position-derived dependencies")
+	}
+	for index := range input.Steps {
+		if !proto.Equal(input.Steps[index], output.Steps[index]) {
+			t.Fatal("step policy or mandatory results changed during roundtrip")
+		}
+	}
+	if received.Steps[2].ProtoReflect().Descriptor().Fields().ByName("approval_timeout_seconds").Number() != 13 || received.Steps[2].ProtoReflect().Descriptor().Fields().ByName("depends_on").Number() != 14 || received.Steps[2].ProtoReflect().Descriptor().Fields().ByName("result_requirements").Number() != 15 {
+		t.Fatal("existing gate field number was reused")
+	}
+}
+
+// TestWorkflowAttemptProjectionExcludesInternalRevision keeps owner evidence in the node wire
+// while excluding the internal RuntimeRevision row identity from the public whitelist.
+// TestWorkflowAttemptProjectionExcludesInternalRevision сохраняет доказательства в передаче узла,
+// исключая внутренний идентификатор RuntimeRevision из публичного списка полей.
+func TestWorkflowAttemptProjectionExcludesInternalRevision(t *testing.T) {
+	node := castNode(entity.RunNode{WorkflowResults: []entity.WorkflowAttemptResult{{Attempt: 1, RunRef: "run_12345678", RuntimeRevisionID: "PRIVATE_REVISION_CANARY", Accepted: true, Results: []entity.WorkflowAcceptedResult{{Key: "spec", Kind: "ARTIFACT", ArtifactRef: "art_12345678", ArtifactRevision: "arv_12345678", Digest: "sha256:abc"}}}}})
+	raw, err := protojson.Marshal(node)
+	if err != nil || strings.Contains(string(raw), "PRIVATE_REVISION_CANARY") || strings.Contains(string(raw), "runtimeRevision") || len(node.WorkflowResults) != 1 || len(node.WorkflowResults[0].Results) != 1 {
+		t.Fatal("public node evidence lost or internal revision exposed")
+	}
+}
 
 // TestDomainWorkflowVersionBuildsAuthoritativeDependencies checks workflow metadata, generated
 // step keys, sequential/parallel dependencies, capability requirements and human-gate decisions

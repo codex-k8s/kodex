@@ -15,6 +15,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	workflowservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/workflow"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
@@ -1389,8 +1390,25 @@ const (
 	workflowInvalidInvariants          = "WORKFLOW_INVARIANTS"
 )
 
-// Закрытый код не раскрывает содержимое поля или индекс этапа.
+// workflowVersionInvalidField validates the explicit execution profile before general workflow
+// semantics, returning only a closed field code without model text or stage indices.
+// workflowVersionInvalidField проверяет явный профиль исполнения до общей семантики процесса,
+// возвращая только закрытый код поля без текста модели либо индексов этапов.
 func workflowVersionInvalidField(version entity.WorkflowVersion) string {
+	if version.ExecutionMode != "" && version.ExecutionMode != "MANAGER_DRIVEN" && version.ExecutionMode != workflowservice.ServerDAGV1 {
+		return workflowInvalidInvariants
+	}
+	if version.ExecutionMode == workflowservice.ServerDAGV1 {
+		if !workflowservice.ValidServerVersion(version) {
+			return workflowInvalidInvariants
+		}
+	} else {
+		for _, step := range version.Steps {
+			if len(step.ResultRequirements) != 0 {
+				return workflowInvalidInvariants
+			}
+		}
+	}
 	if field := workflowVersionStructureInvalidField(version); field != "" {
 		return field
 	}

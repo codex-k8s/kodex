@@ -712,6 +712,9 @@ type WorkflowStep struct {
 	Position, ParallelGroup, TimeoutSeconds           int32
 	Parallel, HumanGateAfter                          bool
 	DependsOn, GateDecisions, RequiredCapabilityKeys  []string
+	// ResultRequirements pin mandatory evidence for an explicitly server-driven published step.
+	// ResultRequirements закрепляет обязательные доказательства явно серверного опубликованного этапа.
+	ResultRequirements []WorkflowResultRequirement `json:",omitempty"`
 	// ApprovalTimeoutSeconds optionally bounds owner waiting after this step completes; absence
 	// preserves indefinite gate waiting subject to the independent workflow deadline.
 	// ApprovalTimeoutSeconds ограничивает ожидание решения после завершения этапа; отсутствие
@@ -726,6 +729,9 @@ type WorkflowStep struct {
 // агентами, входом, схемой результата и настройками параллельности, времени и gate; создание значения
 // процесс не публикует и не запускает.
 type WorkflowVersion struct {
+	// ExecutionMode is an explicit immutable policy; absence retains historical manager orchestration.
+	// ExecutionMode — явная неизменяемая политика; отсутствие сохраняет прежнюю оркестрацию менеджером.
+	ExecutionMode                                                             string `json:",omitempty"`
 	Ref, Name, Purpose, CoordinatorAgentRef, Instructions, CompletionCriteria string
 	VersionNumber                                                             int32
 	Inputs                                                                    []WorkflowInputField
@@ -858,6 +864,9 @@ type Run struct {
 // материализации и ошибки и ссылками детей и артефактов; отображаемое состояние само terminal-переход
 // не фиксирует.
 type RunNode struct {
+	// WorkflowResults exposes owner-accepted business history, not declarations from model output.
+	// WorkflowResults передаёт проверенную владельцем бизнес-историю, не заявления модели.
+	WorkflowResults                                                      []WorkflowAttemptResult `json:",omitempty"`
 	Ref, RunRef, ParentNodeRef, Type, State, DisplayName, Role, AgentRef string
 	TurnRef, InputSummary, ProgressSummary, CallbackSummary              string
 	SafeErrorCode, SafeErrorMessage, MaterializationState                string

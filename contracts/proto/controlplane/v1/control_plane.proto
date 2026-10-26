@@ -962,6 +962,26 @@ message WorkflowInputField {
   repeated string options = 6;
 }
 
+// WorkflowResultRequirement выбирает обязательное доказательство; locator не предоставляет права.
+message WorkflowResultRequirement {
+  // key уникален в пределах этапа и связывает объявление с опубликованным условием.
+  string key = 1;
+  // kind принадлежит закрытому реестру ARTIFACT/PULL_REQUEST/REVIEW/QA/INTEGRATION_RECEIPT/DEPLOYMENT.
+  string kind = 2;
+  // file_name задаёт имя непосредственного файла outbox только для ARTIFACT.
+  string file_name = 3;
+  // media_type задаёт ожидаемый проверенный MIME файла только для ARTIFACT.
+  string media_type = 4;
+  // repository — точное owner/name, без URL и credentials.
+  string repository = 5;
+  // subject_step_key выбирает точный опубликованный prerequisite, не произвольный Run.
+  string subject_step_key = 6;
+  // operation задаёт закрытую интеграционную операцию проверяемой квитанции.
+  string operation = 7;
+  // target_ref закрепляет разрешённую цель DEPLOYMENT, без подключения либо секрета.
+  string target_ref = 8;
+}
+
 message WorkflowStep {
   string ref = 1;
   int32 position = 2;
@@ -976,6 +996,10 @@ message WorkflowStep {
   repeated OwnerGateDecision gate_decisions = 11;
   repeated string required_capability_keys = 12;
   optional int32 approval_timeout_seconds = 13;
+  // depends_on сохраняет авторитетные ключи предшественников без вывода из порядка UI.
+  repeated string depends_on = 14;
+  // result_requirements обязательны для явно серверного режима; предел — четыре условия.
+  repeated WorkflowResultRequirement result_requirements = 15;
 }
 
 message WorkflowVersion {
@@ -994,6 +1018,8 @@ message WorkflowVersion {
   repeated string validation_messages = 13;
   google.protobuf.Timestamp created_at = 14;
   google.protobuf.Timestamp published_at = 15;
+  // execution_mode закрепляется опубликованной версией; отсутствие сохраняет прежний режим.
+  string execution_mode = 16;
 }
 
 message Workflow {
@@ -1128,6 +1154,52 @@ message Run {
   RunSessionReadiness session_readiness = 34;
 }
 
+// WorkflowAcceptedResult — доказательство, принятое владельцем, а не заявление модели.
+message WorkflowAcceptedResult {
+  // key соответствует условию опубликованного этапа.
+  string key = 1;
+  // kind определяет закрытый вид доказательства.
+  string kind = 2;
+  // artifact_ref выбирает точный принятый артефакт.
+  string artifact_ref = 3;
+  // artifact_revision закрепляет неизменяемую ревизию артефакта, не текущий head.
+  string artifact_revision = 4;
+  // digest связывает точные байты принятого доказательства.
+  string digest = 5;
+  // receipt_ref выбирает проверенную владельцем квитанцию эффекта.
+  string receipt_ref = 6;
+  // repository содержит точное owner/name принятого GitHub результата.
+  string repository = 7;
+  // number — положительный номер принятого PR для применимого результата.
+  int64 number = 8;
+  // head_sha — полный принятый commit SHA, без веток и сокращений.
+  string head_sha = 9;
+  // verdict — проверенное заключение назначенного REVIEW/QA.
+  string verdict = 10;
+  // target_ref закрепляет разрешённую цель развёртывания, не credential.
+  string target_ref = 11;
+  // bundle_sha256 связывает принятый пакет развёртывания.
+  string bundle_sha256 = 12;
+  // image_digest связывает неизменяемый образ развёртывания.
+  string image_digest = 13;
+  // health_ok относится к точной проверенной deployment receipt.
+  bool health_ok = 14;
+}
+
+// WorkflowAttemptResult хранит один итог бизнес-попытки; технические продолжения не расходуют попытку.
+message WorkflowAttemptResult {
+  // attempt — назначенный сервером номер бизнес-попытки от1 до4.
+  int32 attempt = 1;
+  // run_ref выбирает фактический producing run итогового завершения.
+  string run_ref = 2;
+  // accepted подтверждается только owner predicate и не отменяет отдельный Human Gate.
+  bool accepted = 3;
+  // reason — закрытая диагностическая причина, без ответа провайдера и секретов.
+  string reason = 4;
+  // results содержит не более четырёх принятых доказательств данной попытки.
+  repeated WorkflowAcceptedResult results = 5;
+}
+
 message RunNode {
   string ref = 1;
   string run_ref = 2;
@@ -1154,6 +1226,8 @@ message RunNode {
   // planned=true означает, что вершина уже является частью immutable workflow
   // snapshot, но execution lease для неё ещё не материализован.
   bool planned = 23;
+  // workflow_results — append-only история до четырёх бизнес-попыток логического этапа.
+  repeated WorkflowAttemptResult workflow_results = 24;
 }
 
 message RunEdge {

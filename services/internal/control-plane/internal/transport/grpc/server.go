@@ -13,6 +13,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	roleimageservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/roleimage"
+	workflowservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/workflow"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
@@ -182,6 +183,7 @@ func domainWorkflowVersion(input *controlplanev1.WorkflowVersion) *entity.Workfl
 		Concurrency:         input.GetMaxConcurrency(),
 		TimeoutSeconds:      int64(input.GetTimeoutSeconds()),
 		CompletionCriteria:  input.GetCompletionCriteria(),
+		ExecutionMode:       input.GetExecutionMode(),
 	}
 	knownInputKeys := make(map[string]struct{}, len(input.GetInputFields()))
 	for _, item := range input.GetInputFields() {
@@ -224,12 +226,18 @@ func domainWorkflowVersion(input *controlplanev1.WorkflowVersion) *entity.Workfl
 			parallelGroupDependencies = map[int32][]string{}
 			frontier = []string{stepKey}
 		}
+		if input.GetExecutionMode() == workflowservice.ServerDAGV1 {
+			dependencies = append([]string(nil), item.GetDependsOn()...)
+		}
 		step := entity.WorkflowStep{
 			Key: stepKey, Position: item.GetPosition(), Name: item.GetName(), AgentRef: item.GetAgentRef(),
 			Instructions: item.GetPurpose(), Parallel: item.GetParallel(), ParallelGroup: item.GetParallelGroup(),
 			TimeoutSeconds: item.GetTimeoutSeconds(), ExpectedResult: item.GetExpectedResult(), HumanGateAfter: item.GetHumanGate(),
 			DependsOn: dependencies, RequiredCapabilityKeys: append([]string(nil), item.GetRequiredCapabilityKeys()...),
 			ApprovalTimeoutSeconds: item.ApprovalTimeoutSeconds,
+		}
+		for _, requirement := range item.GetResultRequirements() {
+			step.ResultRequirements = append(step.ResultRequirements, entity.WorkflowResultRequirement{Key: requirement.GetKey(), Kind: requirement.GetKind(), FileName: requirement.GetFileName(), MediaType: requirement.GetMediaType(), Repository: requirement.GetRepository(), SubjectStepKey: requirement.GetSubjectStepKey(), Operation: requirement.GetOperation(), TargetRef: requirement.GetTargetRef()})
 		}
 		for _, decision := range item.GetGateDecisions() {
 			step.GateDecisions = append(step.GateDecisions, enumSuffix(decision, "OWNER_GATE_DECISION_"))

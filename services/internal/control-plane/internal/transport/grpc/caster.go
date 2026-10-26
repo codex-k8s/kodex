@@ -604,10 +604,11 @@ func castWorkflowVersion(value *entity.WorkflowVersion, state, coordinatorAgentR
 			Parallel: step.Parallel, ParallelGroup: step.ParallelGroup, TimeoutSeconds: timeoutSeconds,
 			ExpectedResult: step.ExpectedResult, HumanGate: step.HumanGateAfter,
 			ApprovalTimeoutSeconds: step.ApprovalTimeoutSeconds,
-			GateDecisions:          gateDecisions(step.GateDecisions), RequiredCapabilityKeys: append([]string(nil), step.RequiredCapabilityKeys...),
+			DependsOn:              append([]string(nil), step.DependsOn...), ResultRequirements: castWorkflowResultRequirements(step.ResultRequirements),
+			GateDecisions: gateDecisions(step.GateDecisions), RequiredCapabilityKeys: append([]string(nil), step.RequiredCapabilityKeys...),
 		})
 	}
-	return &controlplanev1.WorkflowVersion{Ref: value.Ref, Version: int64(value.VersionNumber), Revision: value.VersionNumber, State: workflowState(state), CoordinatorAgentRef: coordinatorAgentRef, InputFields: inputs, Steps: steps, MaxConcurrency: value.Concurrency, TimeoutSeconds: int32(value.TimeoutSeconds), CompletionCriteria: value.CompletionCriteria}
+	return &controlplanev1.WorkflowVersion{ExecutionMode: value.ExecutionMode, Ref: value.Ref, Version: int64(value.VersionNumber), Revision: value.VersionNumber, State: workflowState(state), CoordinatorAgentRef: coordinatorAgentRef, InputFields: inputs, Steps: steps, MaxConcurrency: value.Concurrency, TimeoutSeconds: int32(value.TimeoutSeconds), CompletionCriteria: value.CompletionCriteria}
 }
 
 // castWorkflow projects published/draft workflow versions and optional card/readiness snapshots, preserving absent activity and authoritative readiness metadata rather than recomputing counts or eligibility.
@@ -679,7 +680,7 @@ func castRun(value entity.Run) *controlplanev1.Run {
 // castNode projects graph-node execution/turn/attempt, safe progress/errors and child/artifact refs, deriving Planned only from materialization state; it does not infer new child authority.
 // castNode отображает исполнение, ход и попытку узла графа, безопасные прогресс и ошибки и ссылки детей и файлов, выводя Planned лишь из состояния материализации; новые полномочия детей не выводит.
 func castNode(value entity.RunNode) *controlplanev1.RunNode {
-	return &controlplanev1.RunNode{Ref: value.Ref, RunRef: value.RunRef, ParentNodeRef: value.ParentNodeRef, Type: nodeType(value.Type), State: nodeState(value.State), DisplayName: value.DisplayName, Role: value.Role, AgentRef: value.AgentRef, TurnRef: value.TurnRef, Attempt: value.Attempt, InputSummary: value.InputSummary, ProgressSummary: value.ProgressSummary, IntegrationNames: value.IntegrationNames, ArtifactRefs: value.ArtifactRefs, ChildRunRefs: value.ChildRunRefs, CallbackSummary: value.CallbackSummary, SafeErrorCode: value.SafeErrorCode, SafeErrorMessage: value.SafeErrorMessage, CreatedAt: timestamp(value.CreatedAt), StartedAt: optionalTimestamp(value.StartedAt), FinishedAt: optionalTimestamp(value.FinishedAt), NextActions: nextActions(value.NextActions), Planned: value.MaterializationState == "PLANNED"}
+	return &controlplanev1.RunNode{WorkflowResults: castWorkflowAttemptResults(value.WorkflowResults), Ref: value.Ref, RunRef: value.RunRef, ParentNodeRef: value.ParentNodeRef, Type: nodeType(value.Type), State: nodeState(value.State), DisplayName: value.DisplayName, Role: value.Role, AgentRef: value.AgentRef, TurnRef: value.TurnRef, Attempt: value.Attempt, InputSummary: value.InputSummary, ProgressSummary: value.ProgressSummary, IntegrationNames: value.IntegrationNames, ArtifactRefs: value.ArtifactRefs, ChildRunRefs: value.ChildRunRefs, CallbackSummary: value.CallbackSummary, SafeErrorCode: value.SafeErrorCode, SafeErrorMessage: value.SafeErrorMessage, CreatedAt: timestamp(value.CreatedAt), StartedAt: optionalTimestamp(value.StartedAt), FinishedAt: optionalTimestamp(value.FinishedAt), NextActions: nextActions(value.NextActions), Planned: value.MaterializationState == "PLANNED"}
 }
 
 // castEdge projects stored edge/root endpoints, relation type and label; returning IDs does not authorize creation or traversal of a new relation.
