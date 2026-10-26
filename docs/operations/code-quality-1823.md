@@ -4,11 +4,45 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.495.0
+version: 1.496.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая оснастка отказов отзыва браузерной сессии — 26.10.2026
+
+Два существующих boundary-теста используют локальную revocationSessionFixture
+вместо одинаковой подготовки csrf/claims/principal. Сохранены свежий UTC now
+с точностью секунды,43 символа CSRF и SHA-256 hex, четыре UUID в прежнем
+порядке, revision7, IssuedAt−1мин/ExpiresAt+14мин и principal+1ч. Возвращаются
+те же три значения; assertions и разные revocation stores остаются в тестах.
+Отозванный точный browser-session ID по-прежнему даёт401, ошибка зависимости
+отзывов —503; оба случая не допускают handler и сверяют checked session ID.
+Остальные renewal/logout fixtures и весь production-код не менялись.
+
+Нативные два теста до выноса1.22с и после1.52с — PASS LOCAL,0 FAIL/SKIP.
+Полное обратное побайтное преобразование восстановило прежний cors_test.go
+и оба общих префикса. Фактическое тело helper содержит прежний префикс и
+только return трёх значений; семь опасных actual fixture mutations отвергнуты.
+Временные интервалы, порядок генерации значений и поля привязок сохранены.
+Новых тестов ради покрытия helper не добавлено; его комментарий EN→RU
+описывает синтетическую оснастку, не обещая реальное authentication/persistence.
+
+Gateway Go1.26.6: build2.52с/unit14.76с/vet0.72с — PASS LOCAL;
+11 tested packages/3098 PASS events,0 test FAIL/SKIP,3 packages без test files
+собраны. Gofmt — PASS. Полные unit-тесты используют общую оснастку; реальные
+SSO/NATS, браузер и живые credentials не проверялись. Source hashes связаны
+с фактическими запусками. Context7 остаётся недоступен по ошибке API key;
+локальная первичная Go1.26.6 документация time.Now/UTC/Truncate,sha256.Sum256,
+hex.EncodeToString и установленного uuid.NewString прочитана. API/dependencies
+не менялись.
+
+Detector:6771sources/222 прежних generated exclusions,
+1470raw/1221retained/249unresolved. Исчезли два окна903b3992/24dabe4f,
+новых нет; registry1078 и пороги прежние. Новое Go-объявление описано EN→RU,
+всего21589/21589. Пять quality stages — PASS LOCAL. Полный E2E/deploy/live
+и независимая QA — NOT RUN; полный scope продолжает разбираться.
 
 ## Общий загрузчик SHA-256 артефактов — 26.10.2026
 
