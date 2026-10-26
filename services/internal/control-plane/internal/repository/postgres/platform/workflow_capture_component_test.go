@@ -244,6 +244,7 @@ func testWorkflowCaptureCompletion(t *testing.T, withArtifact bool) {
 	if err != nil || len(encoded) > 32768 {
 		t.Fatal("capture storage budget exceeded")
 	}
+	testWorkflowCurrentArtifactSelection(t, ctx, pool, nodeRef, stringMap(claimed, "leaseRef"), after.Capture)
 	testWorkflowJournalStorage(t, ctx, pool, nodeRef, stringMap(claimed, "leaseRef"), after.Capture)
 	if !withArtifact {
 		// No real runtime or storage resource is created by this fixture. Its only external
