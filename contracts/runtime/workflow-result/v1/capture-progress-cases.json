@@ -1,0 +1,142 @@
+[
+  {
+    "name": "one-key",
+    "raw": "{\"schema\":\"kodex.workflow-capture-progress.v1\",\"phase\":\"CAPTURE_PROGRESS\",\"cause\":\"ARTIFACTS_FOR_CONTINUATION\",\"artifactKeys\":[\"bundle\"]}",
+    "valid": true
+  },
+  {
+    "name": "four-keys",
+    "raw": "{\"schema\":\"kodex.workflow-capture-progress.v1\",\"phase\":\"CAPTURE_PROGRESS\",\"cause\":\"ARTIFACTS_FOR_CONTINUATION\",\"artifactKeys\":[\"bundle\",\"manifest\",\"handoff\",\"analysis\"]}",
+    "valid": true
+  },
+  {
+    "name": "empty",
+    "raw": "{\"schema\":\"kodex.workflow-capture-progress.v1\",\"phase\":\"CAPTURE_PROGRESS\",\"cause\":\"ARTIFACTS_FOR_CONTINUATION\",\"artifactKeys\":[]}",
+    "valid": false
+  },
+  {
+    "name": "five",
+    "raw": "{\"schema\":\"kodex.workflow-capture-progress.v1\",\"phase\":\"CAPTURE_PROGRESS\",\"cause\":\"ARTIFACTS_FOR_CONTINUATION\",\"artifactKeys\":[\"a\",\"b\",\"c\",\"d\",\"e\"]}",
+    "valid": false
+  },
+  {
+    "name": "duplicate",
+    "raw": "{\"schema\":\"kodex.workflow-capture-progress.v1\",\"phase\":\"CAPTURE_PROGRESS\",\"cause\":\"ARTIFACTS_FOR_CONTINUATION\",\"artifactKeys\":[\"bundle\",\"bundle\"]}",
+    "valid": false
+  },
+  {
+    "name": "null",
+    "raw": "{\"schema\":\"kodex.workflow-capture-progress.v1\",\"phase\":\"CAPTURE_PROGRESS\",\"cause\":\"ARTIFACTS_FOR_CONTINUATION\",\"artifactKeys\":null}",
+    "valid": false
+  },
+  {
+    "name": "number",
+    "raw": "{\"schema\":\"kodex.workflow-capture-progress.v1\",\"phase\":\"CAPTURE_PROGRESS\",\"cause\":\"ARTIFACTS_FOR_CONTINUATION\",\"artifactKeys\":[3]}",
+    "valid": false
+  },
+  {
+    "name": "bool",
+    "raw": "{\"schema\":\"kodex.workflow-capture-progress.v1\",\"phase\":\"CAPTURE_PROGRESS\",\"cause\":\"ARTIFACTS_FOR_CONTINUATION\",\"artifactKeys\":[true]}",
+    "valid": false
+  },
+  {
+    "name": "unicode",
+    "raw": "{\"schema\":\"kodex.workflow-capture-progress.v1\",\"phase\":\"CAPTURE_PROGRESS\",\"cause\":\"ARTIFACTS_FOR_CONTINUATION\",\"artifactKeys\":[\"сводка\"]}",
+    "valid": false
+  },
+  {
+    "name": "newline",
+    "raw": "{\"schema\":\"kodex.workflow-capture-progress.v1\",\"phase\":\"CAPTURE_PROGRESS\",\"cause\":\"ARTIFACTS_FOR_CONTINUATION\",\"artifactKeys\":[\"bundle\\n\"]}",
+    "valid": false
+  },
+  {
+    "name": "oversized-key",
+    "raw": "{\"schema\":\"kodex.workflow-capture-progress.v1\",\"phase\":\"CAPTURE_PROGRESS\",\"cause\":\"ARTIFACTS_FOR_CONTINUATION\",\"artifactKeys\":[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]}",
+    "valid": false
+  },
+  {
+    "name": "wrong-phase",
+    "raw": "{\"schema\":\"kodex.workflow-capture-progress.v1\",\"phase\":\"FINAL\",\"cause\":\"ARTIFACTS_FOR_CONTINUATION\",\"artifactKeys\":[\"bundle\"]}",
+    "valid": false
+  },
+  {
+    "name": "guessed-cause",
+    "raw": "{\"schema\":\"kodex.workflow-capture-progress.v1\",\"phase\":\"CAPTURE_PROGRESS\",\"cause\":\"MISSING_PR\",\"artifactKeys\":[\"bundle\"]}",
+    "valid": false
+  },
+  {
+    "name": "business-results",
+    "raw": "{\"schema\":\"kodex.workflow-capture-progress.v1\",\"phase\":\"CAPTURE_PROGRESS\",\"cause\":\"ARTIFACTS_FOR_CONTINUATION\",\"artifactKeys\":[\"bundle\"],\"results\":[]}",
+    "valid": false
+  },
+  {
+    "name": "acceptance",
+    "raw": "{\"schema\":\"kodex.workflow-capture-progress.v1\",\"phase\":\"CAPTURE_PROGRESS\",\"cause\":\"ARTIFACTS_FOR_CONTINUATION\",\"artifactKeys\":[\"bundle\"],\"accepted\":true}",
+    "valid": false
+  },
+  {
+    "name": "authority",
+    "raw": "{\"schema\":\"kodex.workflow-capture-progress.v1\",\"phase\":\"CAPTURE_PROGRESS\",\"cause\":\"ARTIFACTS_FOR_CONTINUATION\",\"artifactKeys\":[\"bundle\"],\"rootRunID\":\"run_foreign\"}",
+    "valid": false
+  },
+  {
+    "name": "pins",
+    "raw": "{\"schema\":\"kodex.workflow-capture-progress.v1\",\"phase\":\"CAPTURE_PROGRESS\",\"cause\":\"ARTIFACTS_FOR_CONTINUATION\",\"artifactKeys\":[\"bundle\"],\"artifactRef\":\"art_12345678\"}",
+    "valid": false
+  },
+  {
+    "name": "final-schema",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"phase\":\"CAPTURE_PROGRESS\",\"cause\":\"ARTIFACTS_FOR_CONTINUATION\",\"artifactKeys\":[\"bundle\"]}",
+    "valid": false
+  },
+  {
+    "name": "missing-schema",
+    "raw": "{\"phase\":\"CAPTURE_PROGRESS\",\"cause\":\"ARTIFACTS_FOR_CONTINUATION\",\"artifactKeys\":[\"bundle\"]}",
+    "valid": false
+  },
+  {
+    "name": "missing-phase",
+    "raw": "{\"schema\":\"kodex.workflow-capture-progress.v1\",\"cause\":\"ARTIFACTS_FOR_CONTINUATION\",\"artifactKeys\":[\"bundle\"]}",
+    "valid": false
+  },
+  {
+    "name": "missing-cause",
+    "raw": "{\"schema\":\"kodex.workflow-capture-progress.v1\",\"phase\":\"CAPTURE_PROGRESS\",\"artifactKeys\":[\"bundle\"]}",
+    "valid": false
+  },
+  {
+    "name": "missing-artifactKeys",
+    "raw": "{\"schema\":\"kodex.workflow-capture-progress.v1\",\"phase\":\"CAPTURE_PROGRESS\",\"cause\":\"ARTIFACTS_FOR_CONTINUATION\"}",
+    "valid": false
+  },
+  {
+    "name": "alias-phase",
+    "raw": "{\"schema\":\"kodex.workflow-capture-progress.v1\",\"cause\":\"ARTIFACTS_FOR_CONTINUATION\",\"artifactKeys\":[\"bundle\"],\"Phase\":\"CAPTURE_PROGRESS\"}",
+    "valid": false
+  },
+  {
+    "name": "duplicate-envelope",
+    "raw": "{\"schema\":\"kodex.workflow-capture-progress.v1\",\"phase\":\"CAPTURE_PROGRESS\",\"cause\":\"ARTIFACTS_FOR_CONTINUATION\",\"artifactKeys\":[\"bundle\"],\"cause\":\"ARTIFACTS_FOR_CONTINUATION\"}",
+    "valid": false
+  },
+  {
+    "name": "escaped-duplicate",
+    "raw": "{\"schema\":\"kodex.workflow-capture-progress.v1\",\"phase\":\"CAPTURE_PROGRESS\",\"cause\":\"ARTIFACTS_FOR_CONTINUATION\",\"artifactKeys\":[\"bundle\"],\"\\u0070hase\":\"CAPTURE_PROGRESS\"}",
+    "valid": false
+  },
+  {
+    "name": "trailing-json",
+    "raw": "{\"schema\":\"kodex.workflow-capture-progress.v1\",\"phase\":\"CAPTURE_PROGRESS\",\"cause\":\"ARTIFACTS_FOR_CONTINUATION\",\"artifactKeys\":[\"bundle\"]}{}",
+    "valid": false
+  },
+  {
+    "name": "code-fence",
+    "raw": "```json\n{\"schema\":\"kodex.workflow-capture-progress.v1\",\"phase\":\"CAPTURE_PROGRESS\",\"cause\":\"ARTIFACTS_FOR_CONTINUATION\",\"artifactKeys\":[\"bundle\"]}\n```",
+    "valid": false
+  },
+  {
+    "name": "trailing-whitespace",
+    "raw": "{\"schema\":\"kodex.workflow-capture-progress.v1\",\"phase\":\"CAPTURE_PROGRESS\",\"cause\":\"ARTIFACTS_FOR_CONTINUATION\",\"artifactKeys\":[\"bundle\"]}\n",
+    "valid": true
+  }
+]

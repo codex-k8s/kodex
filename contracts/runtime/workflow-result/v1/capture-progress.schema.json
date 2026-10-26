@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Явный промежуточный capture серверного workflow",
+  "description": "Недоверенный запрос технического продолжения, не бизнес-приёмка. Каждый ключ должен принадлежать опубликованному ARTIFACT requirement. Владелец проверяет exact CURRENT_COMPLETION capture, authority, deadline, replay и бюджет отдельно.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "phase",
+    "cause",
+    "artifactKeys"
+  ],
+  "properties": {
+    "schema": {
+      "const": "kodex.workflow-capture-progress.v1"
+    },
+    "phase": {
+      "const": "CAPTURE_PROGRESS"
+    },
+    "cause": {
+      "const": "ARTIFACTS_FOR_CONTINUATION"
+    },
+    "artifactKeys": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]{1,96}(?![\\s\\S])"
+      }
+    }
+  }
+}

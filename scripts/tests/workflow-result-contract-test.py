@@ -139,5 +139,40 @@ class WorkflowResultContractTest(unittest.TestCase):
                 self.assertEqual(self.validator.is_valid(payload), case["valid"])
 
 
+class WorkflowCaptureProgressContractTest(unittest.TestCase):
+    """Отдельная закрытая фаза не принимает бизнес-результат и не назначает authority."""
+
+    def test_shared_strict_wire_corpus(self):
+        schema = json.loads(
+            (ROOT / "contracts/runtime/workflow-result/v1/capture-progress.schema.json").read_text()
+        )
+        Draft202012Validator.check_schema(schema)
+        validator = Draft202012Validator(schema)
+        cases = json.loads(
+            (ROOT / "contracts/runtime/workflow-result/v1/capture-progress-cases.json").read_text()
+        )
+
+        def unique_object(pairs):
+            """Как Go decoder, отклоняем повторные JSON keys до проверки schema."""
+            result = {}
+            for key, value in pairs:
+                if key in result:
+                    raise ValueError("duplicate object member")
+                result[key] = value
+            return result
+
+        for case in cases:
+            with self.subTest(name=case["name"]):
+                try:
+                    payload = json.loads(case["raw"], object_pairs_hook=unique_object)
+                except ValueError:
+                    valid = False
+                else:
+                    valid = validator.is_valid(payload)
+                    if valid:
+                        self.assertFalse(Draft202012Validator(SCHEMA).is_valid(payload))
+                self.assertEqual(valid, case["valid"])
+
+
 if __name__ == "__main__":
     unittest.main()

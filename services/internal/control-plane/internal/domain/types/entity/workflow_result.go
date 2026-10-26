@@ -15,6 +15,17 @@ type WorkflowResultDeclaration struct {
 	Results []WorkflowDeclaredResult `json:"results"`
 }
 
+// WorkflowCaptureProgressDeclaration requests capture and a fresh technical turn using only
+// published artifact keys. It carries no evidence, authority or business-acceptance verdict.
+// WorkflowCaptureProgressDeclaration запрашивает capture и новый технический ход только по
+// опубликованным ключам файлов. Декларация не содержит evidence, полномочий или бизнес-приёмки.
+type WorkflowCaptureProgressDeclaration struct {
+	Schema       string   `json:"schema"`
+	Phase        string   `json:"phase"`
+	Cause        string   `json:"cause"`
+	ArtifactKeys []string `json:"artifactKeys"`
+}
+
 // WorkflowDeclaredResult names candidate evidence and a verdict; the owner resolves every reference
 // inside the exact project, run, step and attempt before accepting it.
 // WorkflowDeclaredResult называет доказательство и заключение; владелец проверяет каждую ссылку
