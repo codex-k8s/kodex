@@ -741,7 +741,12 @@ export const useRealtimeStore = defineStore("realtime", () => {
       envelope.streamKind === "PLATFORM" &&
       envelope.streamRef === platformStreamRef
     ) {
-      if (cursor !== platformSequence.value) return false;
+      if (
+        !platformSnapshotReady ||
+        platformBootstrapCursor !== undefined ||
+        cursor !== platformSequence.value
+      )
+        return false;
       if (envelope.speechTranscription !== undefined) {
         if (!isRecord(envelope.speechTranscription)) return false;
         const speech = envelope.speechTranscription;
@@ -916,9 +921,15 @@ export const useRealtimeStore = defineStore("realtime", () => {
       }
       return;
     }
+    // Heartbeat не имеет requestRef: его область задают текущий socket и
+    // подтверждённый stream/cursor, а не идентификатор запроса снимка.
+    if (envelope.type === "STREAM_HEARTBEAT") {
+      if (!processHeartbeat(envelope))
+        failProtocol(socket, "INVALID_SESSION_ENVELOPE");
+      return;
+    }
     if (processPlatformEnvelope(socket, envelope)) return;
     if (await processRunEnvelope(socket, envelope)) return;
-    if (processHeartbeat(envelope)) return;
     if (processStreamProblem(envelope)) return;
     failProtocol(socket, "INVALID_SESSION_ENVELOPE");
   }

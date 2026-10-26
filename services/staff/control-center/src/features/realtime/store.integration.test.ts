@@ -881,6 +881,98 @@ describe("browser-session realtime multiplexer", () => {
     store.closeAll();
   });
 
+  it("принимает PLATFORM heartbeat без requestRef и применяет продление и отзыв речи", async () => {
+    const store = useRealtimeStore();
+    const platform = usePlatformStore();
+    const speech = vi.spyOn(platform, "applySpeechAvailability");
+    store.openPlatform();
+    await flushProcessing();
+    const socket = socketAt(0);
+    socket.open();
+    socket.message({
+      type: "PLATFORM_READY",
+      requestRef: requestRef(socket),
+      streamKind: "PLATFORM",
+      streamRef: "PLATFORM",
+      cursor: 9,
+      availableKinds: [],
+    });
+    await flushProcessing();
+    const heartbeat = {
+      type: "STREAM_HEARTBEAT",
+      streamKind: "PLATFORM",
+      streamRef: "PLATFORM",
+      cursor: 9,
+      serverTime: "2026-10-26T10:00:00Z",
+    };
+    const renewal = {
+      available: true,
+      reason: "READY",
+      validUntil: "2026-10-26T10:00:30Z",
+    };
+    socket.message({ ...heartbeat, speechTranscription: renewal });
+    await flushProcessing();
+    expect(speech).toHaveBeenLastCalledWith(renewal);
+    expect(store.platformState.lastHeartbeat).toBe(heartbeat.serverTime);
+    const denied = { available: false, reason: "STT_PERMISSION_DENIED" };
+    socket.message({ ...heartbeat, speechTranscription: denied });
+    await flushProcessing();
+    expect(speech).toHaveBeenLastCalledWith(denied);
+    expect(speech).toHaveBeenCalledTimes(2);
+    expect(socket.readyState).toBe(FakeWebSocket.OPEN);
+    store.closeAll();
+    socket.message({ ...heartbeat, speechTranscription: renewal });
+    await flushProcessing();
+    expect(speech).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ["cursor", { cursor: 8 }],
+    ["stream", { streamRef: "PLATFORM_OTHER" }],
+    ["speech", { speechTranscription: { available: "true", reason: "READY" } }],
+    ["bootstrap", {}],
+  ])(
+    "закрывает недопустимый PLATFORM heartbeat: %s",
+    async (reason, overrides) => {
+      const store = useRealtimeStore();
+      const platform = usePlatformStore();
+      const speech = vi.spyOn(platform, "applySpeechAvailability");
+      store.openPlatform();
+      await flushProcessing();
+      const socket = socketAt(0);
+      socket.open();
+      if (reason !== "bootstrap") {
+        socket.message({
+          type: "PLATFORM_READY",
+          requestRef: requestRef(socket),
+          streamKind: "PLATFORM",
+          streamRef: "PLATFORM",
+          cursor: 9,
+          availableKinds: [],
+        });
+        await flushProcessing();
+      }
+      socket.message({
+        type: "STREAM_HEARTBEAT",
+        streamKind: "PLATFORM",
+        streamRef: "PLATFORM",
+        cursor: reason === "bootstrap" ? 0 : 9,
+        serverTime: "2026-10-26T10:00:00Z",
+        speechTranscription: {
+          available: true,
+          reason: "READY",
+          validUntil: "2026-10-26T10:00:30Z",
+        },
+        ...overrides,
+      });
+      await flushProcessing();
+      expect(speech).not.toHaveBeenCalled();
+      expect(socket.closeCode).toBe(1002);
+      expect(socket.closeReason).toBe("INVALID_SESSION_ENVELOPE");
+      store.closeAll();
+    },
+  );
+
   it("после обрыва частичного bootstrap запрашивает полный snapshot", async () => {
     const store = useRealtimeStore();
     store.openPlatform();
@@ -1547,7 +1639,6 @@ describe("browser-session realtime multiplexer", () => {
       else
         socket.message({
           type: "STREAM_HEARTBEAT",
-          requestRef: requestRef(socket),
           streamKind: "PLATFORM",
           streamRef: "PLATFORM",
           cursor: 0,
