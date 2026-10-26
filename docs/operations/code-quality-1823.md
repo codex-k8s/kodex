@@ -4,11 +4,44 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.501.0
+version: 1.502.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие чтения идентичности Kubernetes-кластера — 26.10.2026
+
+dev.sh и remote-dev подключают source-only lib/cluster-identity.sh.
+Два helpers выполняют прежние UID/config/endpoint read и marker read/schema
+блоки. Они заполняют прежние caller-local переменные через динамическую
+область Bash, без новых locals,output,options,cwd или env loading. Dev
+сохраняет выбор embedded CA либо точного regular/nonlink файла;remote требует
+embedded CA. CA digest/output,dev exact marker path,root0:0:600,regular/nonlink,
+schema и сравнение с текущей идентичностью остаются на прежних границах.
+
+312 парных сценариев,624 исполнения пяти actual extracted functions,
+absolute/basename,сравнили argv/status/stdout/stderr. Fake kubectl выполняет
+только два чтения;fake sudo обслуживает только synthetic marker test/stat/cat.
+Реальные jq/base64/sha256sum работают с synthetic CA. Проверены UID/config/
+endpoint/CA failures,dev file fallback,marker metadata/schema и identity drift.
+Ни живой kubeconfig,ни root marker не читались. Это не полные CLI/E2E пробы.
+
+Две whole-source byte inverses и два actual block inverses сохраняют literal
+jq bytes;восемь source mutants отвергнуты. Source-only state snapshot совпал.
+Bash syntax4 — PASS LOCAL. ShellCheck -a -x двух production caller contexts:
+новых диагностик0,две импортированные SC2154 обнаружены. Dev raw exit0/0,
+remote1/1 с двумя прежними диагностическими выражениями,без их подавления.
+
+Первый install-contract выявил отсутствующую новую библиотеку в тестовых
+копиях repository. Обе копии теперь включают cluster-identity.sh;четыре
+адресные dependency edits полностью инвертируются в исходный тест,его проверки
+сохранены. Повторный полный install-contract24.68с — PASS LOCAL. Начальный
+FAIL не выдаётся за отсутствующую проверку. Bash source/local справка проверена;
+Context7 остаётся недоступен. Нового API или dependency нет.
+Detector:6775sources/222generated exclusions,1462raw/1221retained/241unresolved,
+Go21589/21589 EN→RU,registry1078 прежний. Два Bash окна удалены,новых нет.
+Legacy renderer FAIL остаётся открытым;full E2E/live/deploy/QA — NOT RUN.
 
 ## Общий путь страниц справочников доступа — 26.10.2026
 

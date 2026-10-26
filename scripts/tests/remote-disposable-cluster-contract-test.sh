@@ -138,8 +138,9 @@ done
 
 source_fixture="$temporary_directory/source-repository"
 source_state="$temporary_directory/source-state"
-mkdir -p "$source_fixture/tools/dev"
+mkdir -p "$source_fixture/tools/dev/lib"
 cp "$repository_root/dev.sh" "$source_fixture/dev.sh"
+cp "$repository_root/tools/dev/lib/cluster-identity.sh" "$source_fixture/tools/dev/lib/cluster-identity.sh"
 cp "$repository_root/tools/dev/resolve-local-profile.sh" "$source_fixture/tools/dev/resolve-local-profile.sh"
 for helper in configure-local-api-endpoint.sh bootstrap-cluster.sh deploy-local.sh \
   install-user-render-tools.sh install-user-material-tools.sh install-user-nss-tools.sh \
@@ -213,9 +214,10 @@ if "$source_fixture/dev.sh" status --kubeconfig "$kubeconfig" --context default 
 fi
 
 fixture_root="$temporary_directory/repository"
-mkdir -p "$fixture_root/tools/dev" "$fixture_root/tools/install" \
+mkdir -p "$fixture_root/tools/dev/lib" "$fixture_root/tools/install" \
   "$fixture_root/infra/teleport"
 cp "$repository_root/tools/dev/remote-dev.sh" "$fixture_root/tools/dev/remote-dev.sh"
+cp "$repository_root/tools/dev/lib/cluster-identity.sh" "$fixture_root/tools/dev/lib/cluster-identity.sh"
 cp "$repository_root/tools/dev/source-git-trust.mjs" "$fixture_root/tools/dev/source-git-trust.mjs"
 cp "$repository_root/tools/dev/stale-playwright-processes.mjs" \
   "$fixture_root/tools/dev/stale-playwright-processes.mjs"

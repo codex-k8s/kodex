@@ -136,17 +136,12 @@ export KUBECONFIG=$kubeconfig
 kubectl get --raw=/readyz >/dev/null || fail 'Kubernetes API is unavailable'
 [[ "$context" != *prod* && "$context" != *production* ]] || fail 'production context is forbidden'
 
+# shellcheck source=tools/dev/lib/cluster-identity.sh
+source "${BASH_SOURCE[0]%"${BASH_SOURCE[0]##*/}"}tools/dev/lib/cluster-identity.sh"
+
 capture_cluster_identity() {
   local config_json ca_data ca_file cluster_uid api_endpoint ca_sha256
-  cluster_uid=$(kubectl get namespace kube-system -o jsonpath='{.metadata.uid}') ||
-    fail 'Kubernetes cluster UID readback failed'
-  [[ "$cluster_uid" =~ ^[A-Za-z0-9-]{16,128}$ ]] || fail 'Kubernetes cluster UID is invalid'
-  config_json=$(kubectl config view --minify --raw -o json) ||
-    fail 'Kubernetes cluster configuration readback failed'
-  api_endpoint=$(jq -er '
-    .clusters | select(length == 1) | .[0].cluster.server |
-    select(type == "string" and test("^https://[^[:space:]]+$"))
-  ' <<<"$config_json") || fail 'Kubernetes API endpoint is invalid'
+  kodex_capture_cluster_metadata
   ca_data=$(jq -r '.clusters[0].cluster["certificate-authority-data"] // ""' \
     <<<"$config_json")
   if [[ -n "$ca_data" ]]; then
@@ -170,20 +165,7 @@ verify_disposable_cluster_marker() {
   local marker_stat marker_json current_json
   [[ "$cluster_marker" == /var/lib/kodex-dev/cluster-identity.json ]] ||
     fail 'disposable cluster marker path is invalid'
-  if ! sudo -n test -f "$cluster_marker" || sudo -n test -L "$cluster_marker"; then
-    fail 'disposable cluster marker is absent or unsafe'
-  fi
-  marker_stat=$(sudo -n stat -c '%u:%g:%a' -- "$cluster_marker") ||
-    fail 'disposable cluster marker metadata readback failed'
-  [[ "$marker_stat" == 0:0:600 ]] || fail 'disposable cluster marker ownership or mode is invalid'
-  marker_json=$(sudo -n cat -- "$cluster_marker") ||
-    fail 'disposable cluster marker readback failed'
-  jq -e '
-    .version == 1 and
-    (.clusterUID | type == "string" and test("^[A-Za-z0-9-]{16,128}$")) and
-    (.apiEndpoint | type == "string" and test("^https://[^[:space:]]+$")) and
-    (.caSHA256 | type == "string" and test("^[a-f0-9]{64}$"))
-  ' <<<"$marker_json" >/dev/null || fail 'disposable cluster marker is invalid'
+  kodex_read_disposable_cluster_marker
   current_json=$(capture_cluster_identity)
   jq -e --argjson current "$current_json" '
     .clusterUID == $current.clusterUID and
