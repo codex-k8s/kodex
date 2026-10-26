@@ -88,3 +88,29 @@ func TestStartupFixedStageRegistryAndUnknownFallback(t *testing.T) {
 		t.Fatal("unclassified error exposed arbitrary text")
 	}
 }
+
+// TestBootstrapStartupReporterKeepsDriverCausePrivate covers the later bootstrap phase,
+// independently of initial Ping retry, without exposing database payload in process output.
+// TestBootstrapStartupReporterKeepsDriverCausePrivate проверяет поздний bootstrap отдельно
+// от повторов initial Ping, не раскрывая database payload в process output.
+func TestBootstrapStartupReporterKeepsDriverCausePrivate(t *testing.T) {
+	for _, test := range []struct {
+		name, class string
+		cause       error
+	}{
+		{"serialization", "database", &pgconn.PgError{Code: "40001", Message: "PRIVATE_BOOTSTRAP_SQL", ConstraintName: "PRIVATE_CONSTRAINT"}},
+		{"deadlock", "database", &pgconn.PgError{Code: "40P01", Detail: "PRIVATE_BOOTSTRAP_SQL"}},
+		{"permission", "database_permission", &pgconn.PgError{Code: "42501", Message: "PRIVATE_BOOTSTRAP_PASSWORD"}},
+		{"deadline", "timeout", context.DeadlineExceeded},
+		{"cancel", "canceled", context.Canceled},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			failure := startupFailure(stageBootstrapPlatform, test.cause)
+			var output bytes.Buffer
+			ReportFailure(&output, failure)
+			if !errors.Is(failure, test.cause) || failure.Error() != "bootstrap platform" || output.String() != "control-plane failed stage=\"bootstrap platform\" error_class="+test.class+"\n" {
+				t.Fatal("bootstrap process diagnostic lost cause or disclosed private payload")
+			}
+		})
+	}
+}

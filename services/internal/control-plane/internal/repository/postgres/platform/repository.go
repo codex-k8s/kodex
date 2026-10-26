@@ -10,7 +10,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -30,7 +29,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/systemassistant"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -211,21 +209,28 @@ func (repository *Repository) Ready(ctx context.Context) error {
 	return nil
 }
 
-// Bootstrap uses one serializable transaction to initialize owner state or reconcile configured
-// credential, core prompt, environment and shipped definitions; commit and deferred rollback
-// remain caller-context operations.
-// Bootstrap использует одну serializable-транзакцию для начального owner state либо сверки
-// credential, core prompt, среды и shipped definitions; commit и deferred rollback остаются
-// операциями с caller context.
+// Bootstrap completes one owner bootstrap before readiness, retrying only proven transaction
+// aborts after cleanup within the original startup context and existing three-attempt limit.
+// Bootstrap завершает owner bootstrap до readiness, повторяя лишь доказанные transaction
+// aborts после cleanup в исходном startup context и прежнем пределе трёх попыток.
 func (repository *Repository) Bootstrap(ctx context.Context) error {
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	return retryBootstrap(ctx, repository.bootstrapOnce)
+}
+
+// bootstrapOnce owns one fresh SERIALIZABLE snapshot and all of its cleanup; private SQL causes
+// survive nested domain mappings without changing authority or any statement's effect.
+// bootstrapOnce владеет одним свежим SERIALIZABLE snapshot и cleanup; приватные SQL causes
+// переживают domain mapping без изменения authority и эффектов statements.
+func (repository *Repository) bootstrapOnce(ctx context.Context) (failure error) {
+	raw, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
-		return errors.New("begin bootstrap transaction")
+		return bootstrapFailure("begin bootstrap transaction", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	tx := &bootstrapTx{Tx: raw}
+	defer finishBootstrapAttempt(ctx, tx, &failure)
 	var bootstrappedAt *time.Time
 	if err := tx.QueryRow(ctx, queryRepositoryBootstrapSelectInstallationSingleton).Scan(&bootstrappedAt); err != nil {
-		return errors.New("lock installation bootstrap")
+		return bootstrapFailure("lock installation bootstrap", err)
 	}
 	if bootstrappedAt != nil {
 		if repository.providerCredential.SecretName != "" {
@@ -247,7 +252,10 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 		if err := repository.reconcileIntegrationDefinitions(ctx, tx); err != nil {
 			return err
 		}
-		return tx.Commit(ctx)
+		if err := tx.Commit(ctx); err != nil {
+			return bootstrapFailure(bootstrapCommitPhase, err)
+		}
+		return nil
 	}
 	organizationRef, err := newRef("org")
 	if err != nil {
@@ -255,16 +263,16 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 	}
 	var organizationID string
 	if err := tx.QueryRow(ctx, queryRepositoryBootstrapInsertOrganizationsRefName, organizationRef).Scan(&organizationID); err != nil {
-		return errors.New("create bootstrap organization")
+		return bootstrapFailure("create bootstrap organization", err)
 	}
 	if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertOwnerClaimContractsOrganizationIdStableKeyState, organizationID); err != nil {
-		return errors.New("create owner claim contract")
+		return bootstrapFailure("create owner claim contract", err)
 	}
 	systemDigest := sha256.Sum256([]byte("kodex-system-subject"))
 	var systemSubjectID string
 	if err := tx.QueryRow(ctx, queryRepositoryBootstrapInsertSubjectsRefIssuerDisplayName,
 		organizationID, hex.EncodeToString(systemDigest[:])).Scan(&systemSubjectID); err != nil {
-		return errors.New("create system subject")
+		return bootstrapFailure("create system subject", err)
 	}
 	if err := repository.bootstrapAccess(ctx, tx, organizationID, organizationRef, systemSubjectID); err != nil {
 		return err
@@ -282,15 +290,15 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 	for _, capability := range capabilities {
 		if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertPlatformCapabilitiesStableKeyNameDescription,
 			capability.key, capability.name, capability.description, capability.risk); err != nil {
-			return errors.New("seed platform capability")
+			return bootstrapFailure("seed platform capability", err)
 		}
 	}
 	limits, _ := json.Marshal(map[string]any{"cpu": "1000m", "memory": "2Gi", "maxConcurrentTurns": 1})
 	if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertRuntimeProfilesStableKeyProviderRuntimeRevision, defaultRuntimeKey, repository.defaultRuntimeProvider, repository.defaultRuntimeModel, limits); err != nil {
-		return errors.New("seed runtime profile")
+		return bootstrapFailure("seed runtime profile", err)
 	}
 	if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertProviderDefinition); err != nil {
-		return errors.New("seed provider definition")
+		return bootstrapFailure("seed provider definition", err)
 	}
 	var providerAccountID string
 	if repository.providerCredential.SecretName != "" {
@@ -300,7 +308,7 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 		}
 		if err := tx.QueryRow(ctx, queryRepositoryBootstrapInsertProviderAccount,
 			providerAccountRef, organizationID, systemSubjectID).Scan(&providerAccountID); err != nil {
-			return errors.New("seed provider account")
+			return bootstrapFailure("seed provider account", err)
 		}
 		providerCredentialRef, err := newRef("pcr")
 		if err != nil {
@@ -312,11 +320,11 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 			repository.providerCredential.SecretName, repository.providerCredential.SecretUID,
 			repository.providerCredential.SecretResourceVersion, repository.providerCredential.ContentSHA256,
 		).Scan(&providerCredentialID); err != nil {
-			return errors.New("seed provider credential revision")
+			return bootstrapFailure("seed provider credential revision", err)
 		}
 		if _, err := tx.Exec(ctx, queryRepositoryBootstrapActivateProviderCredentialRevision,
 			providerAccountID, providerCredentialID); err != nil {
-			return errors.New("activate provider credential revision")
+			return bootstrapFailure("activate provider credential revision", err)
 		}
 	}
 	roleRef, err := newRef("role")
@@ -326,7 +334,7 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 	var systemRoleID string
 	if err := tx.QueryRow(ctx, queryRepositoryBootstrapInsertRoleDefinitionsRefStableKeyName,
 		roleRef, organizationID, systemSubjectID).Scan(&systemRoleID); err != nil {
-		return errors.New("seed system assistant role definition")
+		return bootstrapFailure("seed system assistant role definition", err)
 	}
 	if err := repository.reconcileIntegrationDefinitions(ctx, tx); err != nil {
 		return err
@@ -338,14 +346,14 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 	var agentID string
 	if err := tx.QueryRow(ctx, queryRepositoryBootstrapInsertAgentsRefSystemKeyPurpose,
 		agentRef, organizationID, systemRoleID, defaultRuntimeKey).Scan(&agentID); err != nil {
-		return errors.New("create system assistant")
+		return bootstrapFailure("create system assistant", err)
 	}
 	defaultRuntime, err := resolveEnabledRuntime(ctx, tx, defaultRuntimeKey)
 	if err != nil {
-		return errors.New("resolve system assistant runtime")
+		return bootstrapFailure("resolve system assistant runtime", err)
 	}
 	if err := repository.bootstrapAgentRuntime(ctx, tx, organizationID, agentID, "", defaultRuntime, systemSubjectID); err != nil {
-		return fmt.Errorf("create system assistant runtime configuration: %w", err)
+		return bootstrapFailure("create system assistant runtime configuration", err)
 	}
 	promptRef, err := newRef("ins")
 	if err != nil {
@@ -355,7 +363,7 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 	promptDigest := sha256.Sum256([]byte(corePrompt))
 	if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertInstructionVersionsRefAgentIdState,
 		promptRef, organizationID, agentID, corePrompt, hex.EncodeToString(promptDigest[:])); err != nil {
-		return errors.New("create system assistant core prompt")
+		return bootstrapFailure("create system assistant core prompt", err)
 	}
 	if _, _, err := assignInstructionBinding(ctx, tx, organizationID, agentID, promptRef); err != nil {
 		return err
@@ -368,17 +376,20 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 		}
 		if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertSessionsRefTargetTypeState,
 			systemSessionRef, organizationID, providerAccountID, systemSubjectID); err != nil {
-			return errors.New("create system assistant warm session")
+			return bootstrapFailure("create system assistant warm session", err)
 		}
 	}
 	if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertAssistantRuntimeOrganizationIdStableKeyCorePromptRevision,
 		organizationID, agentID, promptRef, systemassistant.CorePromptRevision, systemSessionRef, limits); err != nil {
-		return errors.New("create system assistant runtime contract")
+		return bootstrapFailure("create system assistant runtime contract", err)
 	}
 	if _, err := tx.Exec(ctx, queryRepositoryBootstrapUpdateInstallationBootstrappedAt); err != nil {
-		return errors.New("complete bootstrap")
+		return bootstrapFailure("complete bootstrap", err)
 	}
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return bootstrapFailure(bootstrapCommitPhase, err)
+	}
+	return nil
 }
 
 // reconcileIntegrationDefinitions reconciles sorted shipped packages with forward version/digest
@@ -393,7 +404,7 @@ func (repository *Repository) reconcileIntegrationDefinitions(ctx context.Contex
 		var storedVersion, storedDigest string
 		err := tx.QueryRow(ctx, queryRepositoryReconcileIntegrationDefinition, definition.Metadata.Key).Scan(&storedVersion, &storedDigest)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return errors.New("read integration definition revision")
+			return bootstrapFailure("read integration definition revision", err)
 		}
 		if err == nil {
 			comparison, compareErr := compareIntegrationDefinitionVersions(storedVersion, definition.Metadata.Version)
@@ -433,16 +444,12 @@ func (repository *Repository) reconcileIntegrationDefinitions(ctx context.Contex
 			definition.Metadata.Origin, definition.Digest, definition.Spec.Adapter, credentialKey,
 			definition.Spec.AdapterOwner, definition.Spec.ExecutionRoute, definition.Spec.Readiness,
 		); err != nil {
-			var databaseError *pgconn.PgError
-			if errors.As(err, &databaseError) {
-				return fmt.Errorf("reconcile integration definition: sqlstate=%s constraint=%s", databaseError.Code, databaseError.ConstraintName)
-			}
-			return errors.New("reconcile integration definition")
+			return bootstrapFailure("reconcile integration definition", err)
 		}
 		keys = append(keys, definition.Metadata.Key)
 	}
 	if _, err := tx.Exec(ctx, queryRepositoryDisableUnshippedIntegrationDefinitions, keys); err != nil {
-		return errors.New("disable unshipped integration definitions")
+		return bootstrapFailure("disable unshipped integration definitions", err)
 	}
 	return nil
 }
@@ -536,7 +543,7 @@ func (repository *Repository) reconcileProviderCredential(ctx context.Context, t
 		&secretResourceVersion,
 		&contentSHA256,
 	); err != nil {
-		return errors.New("read current provider credential revision")
+		return bootstrapFailure("read current provider credential revision", err)
 	}
 	configured := repository.providerCredential
 	if secretName == configured.SecretName && secretUID == configured.SecretUID &&
@@ -552,7 +559,7 @@ func (repository *Repository) reconcileProviderCredential(ctx context.Context, t
 		"secret_resource_version": configured.SecretResourceVersion,
 		"content_sha256":          configured.ContentSHA256,
 	}).Scan(&historical); err != nil {
-		return errors.New("read historical provider credential bootstrap pin")
+		return bootstrapFailure("read historical provider credential bootstrap pin", err)
 	}
 	// Прежний exact pin подтверждает bootstrap, но не переключает current назад.
 	if historical {
@@ -576,7 +583,7 @@ func (repository *Repository) reconcileProviderCredential(ctx context.Context, t
 		"secret_resource_version": configured.SecretResourceVersion,
 		"content_sha256":          configured.ContentSHA256,
 	}).Scan(&nextCredentialID); err != nil {
-		return errors.New("create reconciled provider credential revision")
+		return bootstrapFailure("create reconciled provider credential revision", err)
 	}
 	tag, err := tx.Exec(ctx, queryProviderAccountActivateReconciledCredential, pgx.StrictNamedArgs{
 		"provider_account_id":            accountID,
@@ -584,11 +591,11 @@ func (repository *Repository) reconcileProviderCredential(ctx context.Context, t
 		"next_credential_revision_id":    nextCredentialID,
 	})
 	if err != nil || tag.RowsAffected() != 1 {
-		return errors.New("activate reconciled provider credential revision")
+		return bootstrapFailure("activate reconciled provider credential revision", err)
 	}
 	if err := repository.scheduleProviderCredentialCleanup(ctx, tx, organizationID, accountID,
 		currentCredentialID, time.Now().UTC().Add(providerCredentialCleanupRetention)); err != nil {
-		return errors.New("schedule reconciled provider credential cleanup")
+		return bootstrapFailure("schedule reconciled provider credential cleanup", err)
 	}
 	return nil
 }
@@ -613,7 +620,7 @@ func (repository *Repository) reconcileSystemAssistantCorePrompt(
 		&currentDigest,
 		&currentPrompt,
 	); err != nil {
-		return errors.New("read system assistant core prompt")
+		return bootstrapFailure("read system assistant core prompt", err)
 	}
 	expectedDigest := sha256.Sum256([]byte(expectedPrompt))
 	expectedDigestText := hex.EncodeToString(expectedDigest[:])
@@ -643,7 +650,7 @@ func (repository *Repository) reconcileSystemAssistantCorePrompt(
 		"content":         expectedPrompt,
 		"digest":          expectedDigestText,
 	}).Scan(&insertedRef); err != nil || insertedRef != promptRef {
-		return errors.New("create system assistant core prompt revision")
+		return bootstrapFailure("create system assistant core prompt revision", err)
 	}
 	if _, _, err := assignInstructionBinding(ctx, tx, organizationID, agentID, promptRef); err != nil {
 		return err
@@ -656,7 +663,7 @@ func (repository *Repository) reconcileSystemAssistantCorePrompt(
 		"current_revision": currentRevision,
 	})
 	if err != nil || tag.RowsAffected() != 1 {
-		return errors.New("activate system assistant core prompt revision")
+		return bootstrapFailure("activate system assistant core prompt revision", err)
 	}
 	auditRef, err := newRef("aud")
 	if err != nil {
@@ -668,7 +675,7 @@ func (repository *Repository) reconcileSystemAssistantCorePrompt(
 		"agent_id":        agentID,
 	})
 	if err != nil || tag.RowsAffected() != 1 {
-		return errors.New("audit system assistant core prompt revision")
+		return bootstrapFailure("audit system assistant core prompt revision", err)
 	}
 	return nil
 }
@@ -692,7 +699,7 @@ func (repository *Repository) reconcileSystemAssistantRuntimeEnvironment(ctx con
 		&rawResources, &rawVolumes, &rawNetwork, &rawKubernetesAccess,
 		&resourcesDigest, &volumesDigest, &networkDigest, &rbacDigest,
 	); err != nil {
-		return errors.New("read system assistant runtime environment")
+		return bootstrapFailure("read system assistant runtime environment", err)
 	}
 	// Опубликованный exact artifact является пользовательской конфигурацией.
 	// Bootstrap не перепривязывает и не переписывает такую immutable версию.
@@ -702,26 +709,26 @@ func (repository *Repository) reconcileSystemAssistantRuntimeEnvironment(ctx con
 	var values []runtimecontract.RuntimeEnvironmentValue
 	var secrets []runtimecontract.RuntimeSecretProjection
 	if err := decodeStoredRuntimeEnvironment(rawValues, rawSecrets, &values, &secrets); err != nil {
-		return errors.New("decode system assistant runtime environment")
+		return bootstrapFailure("decode system assistant runtime environment", err)
 	}
 	var tools []entity.RuntimeEnvironmentTool
 	if err := decodeStrict(rawTools, &tools); err != nil {
-		return errors.New("decode system assistant runtime tools")
+		return bootstrapFailure("decode system assistant runtime tools", err)
 	}
 	policy, err := decodeRuntimeEnvironmentPolicy(rawResources, rawVolumes, rawNetwork, rawKubernetesAccess,
 		resourcesDigest, volumesDigest, networkDigest, rbacDigest)
 	if err != nil || policy.KubernetesAccess.Kind != runtimecontract.RuntimeKubernetesAccessNone {
-		return errors.New("verify system assistant runtime policy")
+		return bootstrapFailure("verify system assistant runtime policy", err)
 	}
 	imageArtifactID, image, _, err := repository.ensureBootstrapRuntimeEnvironmentImage(
 		ctx, tx, organizationID, agentID, "", createdBy,
 	)
 	if err != nil || imageArtifactID == "" {
-		return errors.New("materialize system assistant runtime image")
+		return bootstrapFailure("materialize system assistant runtime image", err)
 	}
 	expectedCoreDigest, expectedDigest, err := runtimeEnvironmentConfigurationDigests(values, secrets, image, tools, policy)
 	if err != nil {
-		return errors.New("compute system assistant runtime environment digest")
+		return bootstrapFailure("compute system assistant runtime environment digest", err)
 	}
 	if imageArtifactID != "" && image.ArtifactRef != "" &&
 		currentCoreDigest == expectedCoreDigest && currentDigest == expectedDigest {
@@ -740,7 +747,7 @@ func (repository *Repository) reconcileSystemAssistantRuntimeEnvironment(ctx con
 		"image_artifact_id":     imageArtifactID,
 		"next_runtime_revision": nextRuntimeRevision,
 	}).Scan(&activatedVersionID); err != nil || activatedVersionID == "" {
-		return errors.New("activate system assistant runtime environment revision")
+		return bootstrapFailure("activate system assistant runtime environment revision", err)
 	}
 	auditRef, err := newRef("aud")
 	if err != nil {
@@ -751,7 +758,7 @@ func (repository *Repository) reconcileSystemAssistantRuntimeEnvironment(ctx con
 		"environment_id": environmentID,
 	})
 	if err != nil || tag.RowsAffected() != 1 {
-		return errors.New("audit system assistant runtime environment revision")
+		return bootstrapFailure("audit system assistant runtime environment revision", err)
 	}
 	return nil
 }
