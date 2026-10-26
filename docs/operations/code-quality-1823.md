@@ -4,11 +4,45 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.522.0
+version: 1.523.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Удалён неиспользуемый standalone renderer agent-runner — 26.10.2026
+
+scripts/render-agent-runner.sh удалён как оставшийся без потребителей старый
+entrypoint. ARCH-MC-010(approved,version1.3.0) назначает runtime-controller
+создание execution-scoped Pod в kodex-runtime;agent-runner не имеет Kubernetes
+API token/RoleBinding. Коммит a5c99e1d1c2f1ee317639ee682b44ba1ce5a176a
+«feat: запускать роли в изолированных runtime Pod» уже удалил оба standalone
+agent-runner overlays. Старый script продолжал обращаться к этим отсутствующим
+путям и выдавал устаревшие role-runtime policies для kodex-system.
+
+Точных ссылок на этот entrypoint в Makefile,.github,scripts,tools,deploy,
+architecture/product/guides/governance/decisions нет. Исторические OPS и
+baseline inventory сохранены как история. Новые workload,policy,permissions,
+ключи,параметры среды или совместимый dispatcher не добавлялись. Удаление не
+восстанавливает старый handoff protocol и не подменяет его текущим CLI с
+другим набором аргументов. Если external automation использовала старое имя,
+его вызов нужно пересмотреть по текущему runtime-controller контракту;сам
+старый вызов уже не работал из-за отсутствующих overlays.
+
+До удаления native old renderer воспроизвёл FAIL/exit1/stdout0 для staging
+и production именно на missing standalone overlays. Эти результаты остаются
+FAIL исторической реализации;они не переименованы в PASS. Текущий публичный
+scripts/render-runtime-controller.sh прошёл локальный render обоих окружений
+до и после удаления:по30ресурсов,точные fixture controller/init images,
+без standalone agent-runner Deployment. YAML каждого окружения побайтно
+одинаков до/после;canonical renderer не менялся. Это local fixture render
+без apply или обращения к кластеру,не готовность живого runtime/deploy/QA.
+Полная release readiness по-прежнему требует общей итоговой проверки.
+
+Context7 resolve/query /kubernetes-sigs/kustomize — PASS:проверены official
+local base/overlay build и вывод YAML отдельно от apply. Новых тестов для
+удалённого script не добавлялось. Пять quality stages PASS LOCAL;остальные
+Bash diagnostics и190неразобранных clone groups не закрываются этой правкой.
 
 ## Общие preflight и преобразование сохранённого содержимого плана — 26.10.2026
 
