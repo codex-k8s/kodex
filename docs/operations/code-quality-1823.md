@@ -4,11 +4,54 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.489.0
+version: 1.490.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая проекция detail образа — 26.10.2026
+
+Проектный GetRoleImageRecipe и организационный GetSystemRoleImageRecipe
+используют writeRoleImageRecipeDetail. Private getter interface связывает
+только общую форму двух generated replies;root ownership guards и разные
+RPC остаются в handlers. Общий путь сохраняет lineage/source→builds→active
+artifact→promotion candidate→ETag→проверенный admission-failure writer.
+Правила build/artifact передаются каждым caller:организационный owner guard
+для build выполняется прежде common source/revision check,а project path
+не получает новых проверок. Optional artifact presence проверяется до rule;
+project rule validImageRiskHistory иorg rule validOrganizationRoleImageArtifact
+сохраняют свои прежние условия. Нет выдачи полномочий или promotion.
+
+Существующий searchUpstreamProblemCode переименован в общий
+invalidUpstreamResponseCode:search иdetail writers используют то же значение
+INVALID_UPSTREAM_RESPONSE. Нового диагностического значения нет;остальные
+search body иerror projection прежние.
+
+40 private overlay scenarios сравнили native методы с текущими до переноса
+8.94с и после8.79с — PASS LOCAL. Проверены project/org,empty/ordered builds,
+active/candidate,source/lineage/owner failures иadmission failure после ETag.
+Status/headers/RPC requests иуспешные body bytes совпадают;уerror body
+сравниваются все шесть полей,кроме значения нового случайного correlationId:
+оно отдельно проверяется как непустой UUID. Все остальные поля сохраняются
+побайтно. Read не изменяет owner protobuf. Сравнение доказывает совместимость,
+а не расширяет допустимость прежних fixtures или бизнес-полномочия.
+Первый baseline без учёта случайного correlationId давал ложные несовпадения;
+оснастка уточнена до изменения production-кода.
+
+Три whole-source byte inverses восстановили обе прежние функции полностью,
+узкий admission writer иsearch file. Shared body реально развернут с точными
+caller rules;8 unsafe source mutations отвергнуты. Source hashes4 файлов
+связаны с checks/proof. Gofmt4 иgateway Go1.26.6 build6.33с/unit22.93с/
+vet1.82с — PASS LOCAL:11 tested packages,3098 PASS events,0 test FAIL/SKIP,
+3 packages без test files собраны. Существующие public source/scope/admission
+HTTP tests проходят через общий writer;нового теста ради покрытия нет.
+
+Detector:6768sources/222 прежних generated exclusions,1480raw/1217retained/
+263unresolved. Окно0de737 исчезло,новых нет;registry1074 побайтно прежний.
+Все21588 Go-объявлений EN→RU,включая getter interface иего методы.
+Contracts/generated/dependencies/migrations прежние. Browser/full E2E,
+live/deploy и независимая QA — NOT RUN. Полная готовность не заявляется.
 
 ## Общая проверка filtered HTTP page — 26.10.2026
 

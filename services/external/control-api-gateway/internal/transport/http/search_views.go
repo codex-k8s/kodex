@@ -10,11 +10,11 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
-// searchUpstreamProblemCode is the stable public problem code for malformed owner search pages,
-// shared across all search projection rejection paths.
-// searchUpstreamProblemCode задаёт устойчивый публичный код ошибки неверной страницы поиска
-// владельца для всех путей отказа проекции поиска.
-const searchUpstreamProblemCode = "INVALID_UPSTREAM_RESPONSE"
+// invalidUpstreamResponseCode is the stable public problem code for malformed owner readback.
+// Search and role-image detail writers share it without disclosing the rejected upstream data.
+// invalidUpstreamResponseCode задаёт устойчивый публичный код неверного ответа владельца.
+// Writers поиска и деталей образа используют его без раскрытия отклонённых внешних данных.
+const invalidUpstreamResponseCode = "INVALID_UPSTREAM_RESPONSE"
 
 // rejectSearchPage logs the supplied fixed search-validation reason and emits a nonretryable HTTP
 // 502 problem. Callers provide safe categories without item contents or upstream errors.
@@ -23,7 +23,7 @@ const searchUpstreamProblemCode = "INVALID_UPSTREAM_RESPONSE"
 // upstream ошибок.
 func rejectSearchPage(w http.ResponseWriter, reason string) {
 	slog.Error("Invalid search response", "reason", reason)
-	writeLocalProblem(w, http.StatusBadGateway, searchUpstreamProblemCode, false)
+	writeLocalProblem(w, http.StatusBadGateway, invalidUpstreamResponseCode, false)
 }
 
 // validSearchQuery requires valid UTF-8 with at least two nonpadding runes, at most 200 original

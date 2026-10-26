@@ -119,39 +119,14 @@ func (server *Server) GetSystemRoleImageRecipe(writer http.ResponseWriter, reque
 		writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 		return
 	}
-	if !validRoleImageLineage(response.GetRecipe().GetManagedLineage()) || !validRoleImageSource(response.GetRecipe()) {
-		writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-		return
-	}
-	result := generated.RoleImageRecipeDetail{
-		Recipe: publicRoleImageRecipe(response.GetRecipe()),
-		Builds: make([]generated.RoleImageBuild, 0, len(response.GetBuilds())),
-	}
-	for _, build := range response.GetBuilds() {
-		if build == nil || !validOrganizationRoleImageBuild(build, response.GetRecipe()) || !validRoleImageBuildSource(build) || build.GetConfigurationRevisionRef() != "" && !effectiveCapabilityRef(build.GetConfigurationRevisionRef()) {
-			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-			return
-		}
-		result.Builds = append(result.Builds, publicRoleImageBuild(build))
-	}
-	if response.GetActiveArtifact() != nil {
-		if !validOrganizationRoleImageArtifact(response.GetActiveArtifact(), response.GetRecipe()) {
-			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-			return
-		}
-		artifact := publicRoleImageArtifact(response.GetActiveArtifact())
-		result.ActiveArtifact = &artifact
-	}
-	if response.GetPromotionCandidate() != nil {
-		if !validOrganizationRoleImageArtifact(response.GetPromotionCandidate(), response.GetRecipe()) {
-			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-			return
-		}
-		artifact := publicRoleImageArtifact(response.GetPromotionCandidate())
-		result.PromotionCandidate = &artifact
-	}
-	setVersionETag(writer, response.GetRecipe().GetVersion())
-	writeRoleImageDetail(writer, result, response.GetAdmissionFailure(), response.GetRecipe(), response.GetBuilds())
+	writeRoleImageRecipeDetail(writer, response,
+		func(build *controlplanev1.ImageBuild) bool {
+			return validOrganizationRoleImageBuild(build, response.GetRecipe())
+		},
+		func(artifact *controlplanev1.ImageArtifact) bool {
+			return validOrganizationRoleImageArtifact(artifact, response.GetRecipe())
+		},
+	)
 }
 
 // CreateSystemRoleImageRecipe sends name/environment and create idempotency to the dedicated organization CREATE, validates scoped receipt and emits HTTP201 without assigning organization identity from the body.
