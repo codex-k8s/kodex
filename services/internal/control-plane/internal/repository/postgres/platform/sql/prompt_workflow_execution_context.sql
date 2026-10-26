@@ -40,6 +40,12 @@ SELECT root.ref, run.ref, node.ref, session.ref, turn.ref, agent.ref,
              ON current_step.organization_id = node.organization_id
             AND current_step.root_run_id = root.id
             AND current_step.workflow_step_key = step.value->>'Key'
+            AND (COALESCE(version.spec->>'ExecutionMode','')<>'SERVER_DAG_V1' OR NOT EXISTS (
+                SELECT 1 FROM control_plane.run_nodes newer
+                WHERE newer.organization_id=current_step.organization_id AND newer.root_run_id=current_step.root_run_id
+                  AND COALESCE(newer.workflow_step_origin_node_id,newer.id)=COALESCE(current_step.workflow_step_origin_node_id,current_step.id)
+                  AND (newer.workflow_business_attempt,newer.attempt)>(current_step.workflow_business_attempt,current_step.attempt)
+            ))
            LEFT JOIN LATERAL (
                SELECT gate.ref, gate.state, gate.decision
                FROM control_plane.owner_gates gate
@@ -51,7 +57,9 @@ SELECT root.ref, run.ref, node.ref, session.ref, turn.ref, agent.ref,
                  AND gate.integration_invocation_id IS NULL
                ORDER BY gate.created_at DESC, gate.ref DESC LIMIT 1
            ) result_gate ON true
-       ), '[]'::jsonb)
+       ), '[]'::jsonb),
+       CASE WHEN version.spec->>'ExecutionMode'='SERVER_DAG_V1' THEN 'SERVER_DAG_V1' ELSE '' END,
+       root.id::text
 FROM control_plane.run_nodes node
 JOIN control_plane.runs run ON run.id = node.run_id AND run.organization_id = node.organization_id
 JOIN control_plane.runs root ON root.id = node.root_run_id AND run.root_run_id = root.id

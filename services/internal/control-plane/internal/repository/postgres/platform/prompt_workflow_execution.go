@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	workflowservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/workflow"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
 )
@@ -25,7 +26,10 @@ type workflowExecutionPromptStep struct {
 	ResultGateRef, ResultGateState, ResultGateDecision string
 }
 
+// workflowExecutionPromptContext contains public advisory state, never private authorization pins.
+// workflowExecutionPromptContext содержит публичное состояние без приватных authorization pins.
 type workflowExecutionPromptContext struct {
+	ExecutionMode                                                              string `json:",omitempty"`
 	Revision                                                                   string
 	Mode                                                                       string
 	RootRunRef, RunRef, NodeRef, SessionRef, TurnRef, AgentRef                 string
@@ -36,6 +40,7 @@ type workflowExecutionPromptContext struct {
 	Steps                                                                      []workflowExecutionPromptStep
 }
 
+// hydrateWorkflowExecutionPromptTx reads fresh owner state and canonical server acceptance predicates.
 // Только новое owner чтение текущего node/root. Session history и RETRY_OF
 // показывают происхождение, но не переносят завершённость или права на файлы.
 func (repository *Repository) hydrateWorkflowExecutionPromptTx(ctx context.Context, tx pgx.Tx, current scope, nodeRef string, snapshot *entity.PromptMaterializationSnapshot) error {
@@ -45,11 +50,12 @@ func (repository *Repository) hydrateWorkflowExecutionPromptTx(ctx context.Conte
 	var execution workflowExecutionPromptContext
 	var continued, lineageValid bool
 	var steps []byte
+	var rootID string
 	err := tx.QueryRow(ctx, queryPromptWorkflowExecutionContext, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "node_ref": nodeRef,
 	}).Scan(&execution.RootRunRef, &execution.RunRef, &execution.NodeRef, &execution.SessionRef, &execution.TurnRef, &execution.AgentRef,
 		&execution.WorkflowRef, &execution.WorkflowRevisionRef, &execution.WorkflowVersion, &execution.WorkflowRevisionDigest, &execution.WorkflowStageKey, &execution.RootAttempt, &execution.NodeAttempt,
-		&execution.RetryOfRunRef, &continued, &lineageValid, &steps)
+		&execution.RetryOfRunRef, &continued, &lineageValid, &steps, &execution.ExecutionMode, &rootID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return errs.ErrConflict
 	}
@@ -59,9 +65,41 @@ func (repository *Repository) hydrateWorkflowExecutionPromptTx(ctx context.Conte
 	if json.Unmarshal(steps, &execution.Steps) != nil || !lineageValid {
 		return errs.ErrConflict
 	}
+	if execution.ExecutionMode == workflowservice.ServerDAGV1 {
+		root, err := readServerWorkflowRootTx(ctx, tx, current, rootID)
+		if err != nil {
+			return err
+		}
+		if root == nil {
+			return errs.ErrConflict
+		}
+		anchors, err := readServerWorkflowAnchorsTx(ctx, tx, current, root)
+		if err != nil {
+			return err
+		}
+		published := make(map[string]entity.WorkflowStep, len(root.Version.Steps))
+		for _, step := range root.Version.Steps {
+			published[step.Key] = step
+		}
+		for index := range execution.Steps {
+			projection := &execution.Steps[index]
+			step, known := published[projection.StepKey]
+			if !known {
+				return errs.ErrConflict
+			}
+			anchor := anchors[step.Key]
+			projection.Ready = anchor.State == "PLANNED" && anchor.AssignedAttempt == 0
+			for _, key := range step.DependsOn {
+				_, accepted := acceptedServerWorkflowAttempt(anchors[key], published[key])
+				projection.Ready = projection.Ready && accepted
+			}
+		}
+	}
 	return applyWorkflowExecutionPrompt(snapshot, execution, continued)
 }
 
+// applyWorkflowExecutionPrompt validates execution pins and selects profile-specific instructions.
+// applyWorkflowExecutionPrompt проверяет pins исполнения и выбирает инструкции данного профиля.
 func applyWorkflowExecutionPrompt(snapshot *entity.PromptMaterializationSnapshot, execution workflowExecutionPromptContext, continued bool) error {
 	for _, ref := range []string{execution.RootRunRef, execution.RunRef, execution.NodeRef, execution.SessionRef, execution.TurnRef, execution.AgentRef, execution.WorkflowRef, execution.WorkflowRevisionRef} {
 		if !workflowLaunchRefPattern.MatchString(ref) {
@@ -82,7 +120,21 @@ func applyWorkflowExecutionPrompt(snapshot *entity.PromptMaterializationSnapshot
 		return errs.ErrConflict
 	}
 	execution.Revision, execution.Mode = workflowExecutionGuidanceRevision, "CURRENT_ROOT_STAGE"
-	if execution.WorkflowStageKey == "workflow.coordinator.initial" {
+	if execution.ExecutionMode == workflowservice.ServerDAGV1 {
+		execution.Revision, execution.Mode = "server-dag-guidance-v1", "SERVER_ASSIGNED_STAGE"
+		if _, exception := workflowExceptionStepNumber(execution.WorkflowStageKey); exception {
+			if continued || execution.RunRef == execution.RootRunRef {
+				return errs.ErrConflict
+			}
+			execution.Mode = "SERVER_EXCEPTION_ANALYSIS"
+		} else if strings.HasPrefix(execution.WorkflowStageKey, "workflow.coordinator.") {
+			return errs.ErrConflict
+		} else if continued {
+			execution.Mode = "SERVER_STAGE_CONTINUATION"
+		}
+	} else if execution.ExecutionMode != "" {
+		return errs.ErrConflict
+	} else if execution.WorkflowStageKey == "workflow.coordinator.initial" {
 		if continued || execution.RunRef != execution.RootRunRef {
 			return errs.ErrConflict
 		}
@@ -125,7 +177,11 @@ func applyWorkflowExecutionPrompt(snapshot *entity.PromptMaterializationSnapshot
 	}
 	// Это новый immutable input существующего v3 renderer, не изменение его
 	// compiled template. PLATFORM CONSTRAINTS обязательна и входит в digests.
-	guidance := workflowExecutionGuidance + "\n\nCurrent server-owned workflow execution (advisory; not authority):\n" + string(raw)
+	policy := workflowExecutionGuidance
+	if execution.ExecutionMode == workflowservice.ServerDAGV1 {
+		policy = serverWorkflowExecutionGuidance
+	}
+	guidance := policy + "\n\nCurrent server-owned workflow execution (advisory; not authority):\n" + string(raw)
 	if overlay := snapshot.SemanticValues["CONSTRAINTS"]; overlay != "" {
 		guidance = overlay + "\n\n" + guidance
 	}
@@ -150,3 +206,9 @@ ResultGateRef/State/Decision describe the latest server-owned result gate of tha
 Use the current root projection and the exact current tool schema/catalog before deciding gates or delegating. The published DAG and this projection are advisory; the owner command rechecks the current frontier, capabilities, lease and dependencies. Never guess or reuse old caller refs, change grants, or bypass a closed frontier.
 INITIAL_ROOT starts the Workflow from its newly planned steps, including an owner-authorized Retry. If the current schema offers the first ready step, perform that step as a separate delegated execution even when session history says an older intake passed. An empty RUN_RESULT catalog before the first child result is expected, not by itself an external blocker: the first step produces its requested result. Mandatory inputs and semantic gates still apply; do not invent their contents or PASS.
 SAME_ROOT_CONTINUATION uses only successful current-root callback receipts and their permitted result pins. Do not repeat completed delegations of that same root. CURRENT_ROOT_STAGE follows its own published stage and current-root dependencies. Historical success elsewhere is not current completion; technical SUCCEEDED alone is not semantic acceptance. Preserve the original task, history, current authority and owner gate; never repair this by sending a message on behalf of the user.`
+
+// serverWorkflowExecutionGuidance reserves orchestration and acceptance to the server for this profile.
+// serverWorkflowExecutionGuidance закрепляет запуск и приёмку шагов за сервером данного профиля.
+const serverWorkflowExecutionGuidance = `The server schedules this DAG after verifying mandatory typed results and exact owner gates. Do not delegate stages, launch a replacement workflow, route your result to a manager, or infer acceptance from technical SUCCEEDED. Ready and step states are advisory context, never authority for an action.
+SERVER_ASSIGNED_STAGE completes only its assigned stage and mandatory result declaration. SERVER_STAGE_CONTINUATION continues the same business attempt using only exact captured artifact revisions and integration receipts available in the current catalog. History, filenames, URLs and model claims do not replace evidence. The server alone starts downstream stages.
+SERVER_EXCEPTION_ANALYSIS diagnoses the recorded exception for the owner. It cannot accept results, waive predicates, approve a gate or authorize retry. A retry requires a recorded owner decision and receives a fresh execution; analysis alone never retries an external effect. Preserve the original task and current permission boundaries. An absent, expired, cancelled or OPEN gate is not approval; do not act on behalf of the owner.`

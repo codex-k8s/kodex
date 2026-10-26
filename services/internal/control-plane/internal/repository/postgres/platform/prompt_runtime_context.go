@@ -7,8 +7,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
+	workflowservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/workflow"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
 )
@@ -16,6 +18,14 @@ import (
 //go:embed sql/prompt_runtime_context.sql
 var queryPromptRuntimeContext string
 
+// queryPromptWorkflowException proves an active owner-created exception manager before prompt binding.
+// queryPromptWorkflowException подтверждает активный узел менеджера до привязки контекста.
+//
+//go:embed sql/prompt_workflow_exception_context.sql
+var queryPromptWorkflowException string
+
+// hydrateRuntimePromptContext pins the published stage and validates private exception ownership.
+// hydrateRuntimePromptContext закрепляет опубликованный шаг и проверяет принадлежность исключения.
 func (repository *Repository) hydrateRuntimePromptContext(ctx context.Context, tx pgx.Tx, current scope, nodeRef string, snapshot *entity.PromptMaterializationSnapshot) error {
 	var workflowRef, revisionRef string
 	var revision int64
@@ -46,6 +56,15 @@ func (repository *Repository) hydrateRuntimePromptContext(ctx context.Context, t
 	if !ok || step.AgentRef != snapshot.Variables["agent.ref"] {
 		return errs.ErrConflict
 	}
+	if episode, exception := workflowExceptionStepNumber(step.Key); exception {
+		var eligible bool
+		if tx.QueryRow(ctx, queryPromptWorkflowException, pgx.StrictNamedArgs{"organization_id": current.organizationID, "node_ref": nodeRef, "episode": episode}).Scan(&eligible) != nil {
+			return errs.ErrUnavailable
+		}
+		if !eligible {
+			return errs.ErrConflict
+		}
+	}
 	applyWorkflowPromptContext(snapshot, workflowRef, revision, version, step)
 	if err := repository.hydrateWorkflowPromptTemplateTx(ctx, tx, current, snapshot); err != nil {
 		return err
@@ -53,11 +72,30 @@ func (repository *Repository) hydrateRuntimePromptContext(ctx context.Context, t
 	return repository.hydrateWorkflowExecutionPromptTx(ctx, tx, current, nodeRef, snapshot)
 }
 
+// workflowExceptionStepNumber parses only canonical bounded server exception keys; it grants no authority.
+// workflowExceptionStepNumber разбирает только канонические ограниченные ключи, не выдавая полномочий.
+func workflowExceptionStepNumber(key string) (int64, bool) {
+	value := strings.TrimPrefix(key, "workflow.coordinator.exception.")
+	number, err := strconv.ParseInt(value, 10, 64)
+	return number, value != key && err == nil && number > 0 && number <= workflowExceptionEpisodeLimit && strconv.FormatInt(number, 10) == value
+}
+
+// promptWorkflowStep keeps legacy coordination separate from server-owned exception analysis.
+// promptWorkflowStep отделяет прежнюю координацию от принадлежащего серверу разбора исключения.
 func promptWorkflowStep(version entity.WorkflowVersion, key string) (entity.WorkflowStep, bool) {
 	for _, step := range version.Steps {
 		if step.Key == key {
 			return step, true
 		}
+	}
+	if version.ExecutionMode == workflowservice.ServerDAGV1 {
+		if _, exception := workflowExceptionStepNumber(key); exception {
+			return entity.WorkflowStep{Key: key, Name: "Разбор исключения процесса", AgentRef: version.CoordinatorAgentRef,
+				Instructions:           "Разобрать причину остановки назначенного шага и подготовить заключение для владельца. Не запускать шаги и не принимать решения владельца.",
+				ExpectedResult:         "Диагностика исключения без изменения обязательных результатов или решения Human Gate.",
+				RequiredCapabilityKeys: []string{runtimecontract.ArtifactCapability}}, true
+		}
+		return entity.WorkflowStep{}, false
 	}
 	continuation := strings.TrimPrefix(key, "workflow.coordinator.continue.")
 	attempt, parseErr := strconv.ParseInt(continuation, 10, 32)
