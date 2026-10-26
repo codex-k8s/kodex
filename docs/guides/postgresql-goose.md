@@ -4,8 +4,8 @@ title: PostgreSQL, именованные SQL-запросы и goose
 type: guide
 status: approved
 owner: developer
-version: 1.2.8
-updated: 2026-10-26
+version: 1.2.9
+updated: 2026-10-27
 ---
 
 # PostgreSQL, именованные SQL-запросы и goose
@@ -175,6 +175,17 @@ commit может смешать version `N` основной записи с ve
 rollback и закрытие получают контекст вызывающего lifecycle; обязательный
 rollback после отмены request выполняется через отдельный bounded shutdown
 контекст, переданный composition root, без скрытого `context.Background()`.
+
+В selector точного immutable artifact сначала материализуются допустимые
+producer/revision/content pins и замкнутая lineage с прежней проверкой уникальности
+имени до eligibility. Mutable HEAD блокируется `FOR SHARE ... NOWAIT` внутри этой
+границы; выбранная историческая ревизия не обязана совпадать с current revision HEAD. Затем
+canonical effective CLEAN и scalar eligibility точных catalog targets вычисляются
+для выбранных pins. Соединение независимых полных RUN/AGENT каталогов не должно
+повторять AV/ACL для их декартова произведения. Это не кеш полномочий: все проверки
+остаются в том же statement/snapshot под HEAD lock; NULL/unknown, неверный frozen
+catalog и недоступная ревизия закрыто отклоняются. Regression использует плотную
+одноразовую native history, прежний request budget и конфликтующую HEAD-блокировку.
 
 Подготовка типизированного плана не загружает полную UI-проекцию подключения
 со всеми дочерними grants, если потребителю нужны только ref, version и

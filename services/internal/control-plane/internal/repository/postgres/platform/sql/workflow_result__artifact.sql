@@ -56,64 +56,83 @@ WITH RECURSIVE final AS MATERIALIZED (
        OR (@source_kind='CAPTURED_ARTIFACT' AND lineage.id<>final.id
            AND pin.value->>'ref'=@artifact_ref AND pin.value->'revision'=to_jsonb(@artifact_revision::bigint)
            AND pin.value->>'digest'=@artifact_digest)
-)
-SELECT history.ref,history.revision_ref,substring(history.digest FROM 8),history.revision
-FROM candidates CROSS JOIN final
-JOIN control_plane.artifact_heads head ON head.organization_id=final.organization_id AND head.project_id=final.project_id
-    AND head.ref=candidates.pin->>'ref' AND head.lifecycle_state='ACTIVE'
-JOIN control_plane.artifact_history history ON history.id=head.id AND history.organization_id=final.organization_id
-    AND history.project_id=final.project_id AND history.run_id=final.run_id AND history.node_id=candidates.producer_id
-    AND history.revision_ref=candidates.pin->>'revisionRef' AND to_jsonb(history.revision)=candidates.pin->'revision'
-    AND history.digest=candidates.pin->>'digest' AND to_jsonb(history.size_bytes)=candidates.pin->'sizeBytes'
-    AND history.file_name=candidates.pin->>'fileName' AND history.media_type=candidates.pin->>'mediaType'
-    AND history.source='AGENT_RESULT' AND history.scan_state='CLEAN' AND history.lifecycle_state='ACTIVE'
-JOIN control_plane.artifact_revision_content content ON content.revision_id=history.revision_id
-    AND content.digest=history.digest AND content.size_bytes=history.size_bytes
-JOIN control_plane.catalog_access_targets target ON target.organization_id=final.organization_id AND target.kind='ARTIFACT' AND target.id=head.id
-JOIN control_plane.catalog_access_targets project ON project.organization_id=final.organization_id AND project.kind='PROJECT' AND project.id=final.project_id
-JOIN control_plane.catalog_access_targets agent ON agent.organization_id=final.organization_id AND agent.kind='AGENT'
-    AND agent.id=final.agent_id AND agent.project_id=final.project_id
-JOIN control_plane.catalog_access_targets execution ON execution.organization_id=final.organization_id AND execution.kind='RUN'
-    AND execution.id=final.run_id AND execution.project_id=final.project_id
-WHERE history.file_name=@file_name AND history.media_type=@media_type
-    AND 1=(SELECT count(*) FROM candidates named WHERE named.pin->>'fileName'=@file_name)
-    AND NOT EXISTS (SELECT 1 FROM lineage WHERE cycle OR depth>64)
-    AND NOT EXISTS (
-        SELECT 1 FROM lineage current
-        WHERE (SELECT count(*) FROM control_plane.run_edges incoming
-            WHERE incoming.organization_id=final.organization_id AND incoming.root_run_id=final.root_run_id
-                AND incoming.type='CONTINUES' AND incoming.target_node_id=current.id)>1
-        OR EXISTS (
-            SELECT 1 FROM control_plane.run_edges incoming
-            WHERE incoming.organization_id=final.organization_id AND incoming.root_run_id=final.root_run_id
-                AND incoming.type='CONTINUES' AND incoming.target_node_id=current.id
-                AND NOT EXISTS (SELECT 1 FROM lineage previous
-                    WHERE previous.id=incoming.source_node_id AND previous.depth=current.depth+1)
+), pinned AS MATERIALIZED (
+    SELECT history.ref,history.revision_ref,history.digest,history.revision,history.revision_id,
+        head.id AS artifact_id,final.organization_id,final.actor_id,final.project_id,final.agent_id,final.run_id
+    FROM candidates CROSS JOIN final
+    JOIN control_plane.artifact_heads head ON head.organization_id=final.organization_id AND head.project_id=final.project_id
+        AND head.ref=candidates.pin->>'ref' AND head.lifecycle_state='ACTIVE'
+    JOIN control_plane.artifact_history history ON history.id=head.id AND history.organization_id=final.organization_id
+        AND history.project_id=final.project_id AND history.run_id=final.run_id AND history.node_id=candidates.producer_id
+        AND history.revision_ref=candidates.pin->>'revisionRef' AND to_jsonb(history.revision)=candidates.pin->'revision'
+        AND history.digest=candidates.pin->>'digest' AND to_jsonb(history.size_bytes)=candidates.pin->'sizeBytes'
+        AND history.file_name=candidates.pin->>'fileName' AND history.media_type=candidates.pin->>'mediaType'
+        AND history.source='AGENT_RESULT' AND history.lifecycle_state='ACTIVE'
+    JOIN control_plane.artifact_revision_content content ON content.revision_id=history.revision_id
+        AND content.digest=history.digest AND content.size_bytes=history.size_bytes
+    WHERE history.file_name=@file_name AND history.media_type=@media_type
+        AND 1=(SELECT count(*) FROM candidates named WHERE named.pin->>'fileName'=@file_name)
+        AND NOT EXISTS (SELECT 1 FROM lineage WHERE cycle OR depth>64)
+        AND NOT EXISTS (
+            SELECT 1 FROM lineage current
+            WHERE (SELECT count(*) FROM control_plane.run_edges incoming
+                WHERE incoming.organization_id=final.organization_id AND incoming.root_run_id=final.root_run_id
+                    AND incoming.type='CONTINUES' AND incoming.target_node_id=current.id)>1
+            OR EXISTS (
+                SELECT 1 FROM control_plane.run_edges incoming
+                WHERE incoming.organization_id=final.organization_id AND incoming.root_run_id=final.root_run_id
+                    AND incoming.type='CONTINUES' AND incoming.target_node_id=current.id
+                    AND NOT EXISTS (SELECT 1 FROM lineage previous
+                        WHERE previous.id=incoming.source_node_id AND previous.depth=current.depth+1)
+            )
         )
-    )
-    AND control_plane.catalog_resource_visible(final.organization_id,final.actor_id,'project.view','PROJECT',project.id,project.project_id,project.owner_id,project.related_ids,statement_timestamp(),false)
-    AND control_plane.catalog_resource_visible(final.organization_id,final.actor_id,'agent.view','AGENT',agent.id,agent.project_id,agent.owner_id,agent.related_ids,statement_timestamp(),false)
-    AND control_plane.catalog_resource_visible(final.organization_id,final.actor_id,'run.view','RUN',execution.id,execution.project_id,execution.owner_id,execution.related_ids,statement_timestamp(),false)
-    AND control_plane.catalog_resource_visible(final.organization_id,final.actor_id,'artifact.view','ARTIFACT',target.id,target.project_id,target.owner_id,target.related_ids,statement_timestamp(),false)
-    AND control_plane.catalog_resource_visible(final.organization_id,final.actor_id,'artifact.download','ARTIFACT',target.id,target.project_id,target.owner_id,target.related_ids,statement_timestamp(),false)
-    AND (@source_kind='CURRENT_COMPLETION' OR EXISTS (
-        SELECT 1 FROM control_plane.runtime_file_catalogs catalog
-        JOIN control_plane.runtime_file_catalog_entries entry ON entry.catalog_id=catalog.id
-        WHERE catalog.runtime_revision_ref=final.revision_ref AND catalog.frozen
-            AND catalog.organization_id=final.organization_id AND catalog.project_id=final.project_id
-            AND catalog.actor_id=final.actor_id AND catalog.agent_id=final.agent_id
-            AND catalog.node_id=final.id AND catalog.run_id=final.run_id AND catalog.session_id=final.session_id
-            AND catalog.turn_id=final.turn_id AND catalog.generation=final.generation
-            AND catalog.ref=final.safe_snapshot #>> '{fileCatalog,ref}'
-            AND catalog.digest=final.safe_snapshot #>> '{fileCatalog,digest}'
-            AND to_jsonb(catalog.total)=final.safe_snapshot #> '{fileCatalog,total}'
-            AND to_jsonb(catalog.purposes)=final.safe_snapshot #> '{fileCatalog,purposes}'
-            AND 'RUN_RESULT'=ANY(catalog.purposes) AND entry.purpose='RUN_RESULT'
-            AND entry.artifact_id=history.id AND entry.artifact_ref=history.ref AND entry.artifact_revision=history.revision
-            AND entry.artifact_digest=history.digest AND entry.file_name=history.file_name
-            AND entry.media_type=history.media_type AND entry.size_bytes=history.size_bytes AND entry.source=history.source
-            AND entry.entry_digest=control_plane.runtime_file_entry_digest(entry)
-    ))
-ORDER BY history.ref,history.revision
-LIMIT 2
-FOR SHARE OF head NOWAIT;
+        AND (@source_kind='CURRENT_COMPLETION' OR EXISTS (
+            SELECT 1 FROM control_plane.runtime_file_catalogs catalog
+            JOIN control_plane.runtime_file_catalog_entries entry ON entry.catalog_id=catalog.id
+            WHERE catalog.runtime_revision_ref=final.revision_ref AND catalog.frozen
+                AND catalog.organization_id=final.organization_id AND catalog.project_id=final.project_id
+                AND catalog.actor_id=final.actor_id AND catalog.agent_id=final.agent_id
+                AND catalog.node_id=final.id AND catalog.run_id=final.run_id AND catalog.session_id=final.session_id
+                AND catalog.turn_id=final.turn_id AND catalog.generation=final.generation
+                AND catalog.ref=final.safe_snapshot #>> '{fileCatalog,ref}'
+                AND catalog.digest=final.safe_snapshot #>> '{fileCatalog,digest}'
+                AND to_jsonb(catalog.total)=final.safe_snapshot #> '{fileCatalog,total}'
+                AND to_jsonb(catalog.purposes)=final.safe_snapshot #> '{fileCatalog,purposes}'
+                AND 'RUN_RESULT'=ANY(catalog.purposes) AND entry.purpose='RUN_RESULT'
+                AND entry.artifact_id=history.id AND entry.artifact_ref=history.ref AND entry.artifact_revision=history.revision
+                AND entry.artifact_digest=history.digest AND entry.file_name=history.file_name
+                AND entry.media_type=history.media_type AND entry.size_bytes=history.size_bytes AND entry.source=history.source
+                AND entry.entry_digest=control_plane.runtime_file_entry_digest(entry)
+        ))
+    FOR SHARE OF head NOWAIT
+), clean AS MATERIALIZED (
+    SELECT pinned.ref,pinned.revision_ref,pinned.digest,pinned.revision,pinned.artifact_id,
+        pinned.organization_id,pinned.actor_id,pinned.project_id,pinned.agent_id,pinned.run_id
+    FROM pinned
+    WHERE control_plane.artifact_effective_scan(pinned.revision_id)='CLEAN'
+), checked AS MATERIALIZED (
+    SELECT clean.ref,clean.revision_ref,clean.digest,clean.revision,
+        (SELECT control_plane.catalog_resource_visible(clean.organization_id,clean.actor_id,'project.view','PROJECT',
+            target.id,target.project_id,target.owner_id,target.related_ids,statement_timestamp(),false)
+            FROM control_plane.catalog_access_targets target
+            WHERE target.organization_id=clean.organization_id AND target.kind='PROJECT' AND target.id=clean.project_id)
+        AND (SELECT control_plane.catalog_resource_visible(clean.organization_id,clean.actor_id,'agent.view','AGENT',
+            target.id,target.project_id,target.owner_id,target.related_ids,statement_timestamp(),false)
+            FROM control_plane.catalog_access_targets target
+            WHERE target.organization_id=clean.organization_id AND target.kind='AGENT' AND target.id=clean.agent_id AND target.project_id=clean.project_id)
+        AND (SELECT control_plane.catalog_resource_visible(clean.organization_id,clean.actor_id,'run.view','RUN',
+            target.id,target.project_id,target.owner_id,target.related_ids,statement_timestamp(),false)
+            FROM control_plane.catalog_access_targets target
+            WHERE target.organization_id=clean.organization_id AND target.kind='RUN' AND target.id=clean.run_id AND target.project_id=clean.project_id)
+        AND (SELECT control_plane.catalog_resource_visible(clean.organization_id,clean.actor_id,'artifact.view','ARTIFACT',
+            target.id,target.project_id,target.owner_id,target.related_ids,statement_timestamp(),false)
+            AND control_plane.catalog_resource_visible(clean.organization_id,clean.actor_id,'artifact.download','ARTIFACT',
+            target.id,target.project_id,target.owner_id,target.related_ids,statement_timestamp(),false)
+            FROM control_plane.catalog_access_targets target
+            WHERE target.organization_id=clean.organization_id AND target.kind='ARTIFACT' AND target.id=clean.artifact_id) AS eligible
+    FROM clean
+)
+SELECT ref,revision_ref,substring(digest FROM 8),revision
+FROM checked WHERE eligible
+ORDER BY ref,revision
+LIMIT 2;
