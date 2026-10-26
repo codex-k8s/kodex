@@ -4,11 +4,39 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.505.0
+version: 1.506.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Адресное решение по SQL adapters каталогов — 26.10.2026
+
+Одно окно f371956a(152tokens) пересекает normal-list callbacks и начало revision
+wrappers memory/skill. Сохраняются конкретные entity/SQL/kinds,typed row/ref
+mapping,явные5s и server-selected RepeatableRead/ReadOnly. Общие scope,cursor,
+scan,page,args и Begin алгоритмы уже вынесены в helpers. Это повторяемая
+структура operation adapters с видимой политикой по GO-DOC-002;разные SQL/
+resource eligibility/cleanup остаются у операций. Решение привязано только к
+двум точным файлам,fragment SHA и count1,без file/service/test исключений.
+
+Текущие полные исходники и helpers повторно проверены двумя whole-file AST
+inverses и десятью source mutants пакета505. Предыдущие1078 entries сохранены
+без изменения,добавлен один точный entry. Assessor отверг10 registry/report
+mutations:изменённые hash/count/path/format,duplicate entry/occurrence,короткую
+причину,relative/absolute/wildcard path. Новый другой hash в тех же файлах
+остаётся unresolved;перестановка пары и сдвиг строк за фрагментом сохраняют
+только исходное решение. Публичные17 quality unit-тестов — PASS LOCAL,
+FAIL/SKIP0. Первичная обвязка ожидала TAP от default reporter;повтор выполнен
+с явным TAP,сам test runner не менялся.
+
+Исполняемый Go/TS/Bash код,зависимости,тесты и scanner thresholds не менялись.
+Runtime-проверки505 относятся к e47f5ac и здесь не запускались заново;
+совпадение исходников проверено. Пять quality stages — PASS LOCAL.
+Detector6778sources/222generated exclusions,1457raw/1222retained/235unresolved,
+registry1079;raw clone set прежний. Go21595/21595 EN→RU. Это одно обоснованное
+решение о сохранении,не удаление нового runtime-повтора. Legacy renderer FAIL
+и прежние Bash diagnostics остаются открытыми;full E2E/live/deploy/QA — NOT RUN.
 
 ## Общий технический read path каталогов — 26.10.2026
 

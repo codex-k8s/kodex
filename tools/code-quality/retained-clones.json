@@ -8624,6 +8624,14 @@
       "fragmentSHA256": "7a79b7f0ca25b78dd63dbefdb55e55a2f084a28c3ec6c985a7e0af83f450ab8f",
       "count": 1,
       "reason": "Окно двух закрытых маршрутизаторов changeAssistant/changeExecution:14 против11 конкретных command kinds направляются разным специализированным repository methods. Полные функции проверены AST:единственный switch input.Kind,только константные command labels и direct return с прежними ctx,tx,scope,input;неизвестный kind закрыто возвращает commandOutcome{},errs.ErrInvalid. Это разные allowlist declarations,а не повторяющийся алгоритм исполнения;общий dynamic dispatcher добавил бы косвенную таблицу вместо явной связи kind/handler и усложнил бы проверку полномочий. Конец окна пересекает только сигнатуры следующих createAssistantConversation/proposeAssistantMetadata;AST подтверждает отсутствие их исполняемых statements в окне. Exact решение ограничено этой парой/hash/count=1;не распространяется на тела специализированных handlers или следующие функции."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/memory_catalog.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/skill_catalog.go",
+      "fragmentSHA256": "f371956a987168014e10d7be55b06fd57084cf72b009b3f2020132a8e8cde3ae",
+      "count": 1,
+      "reason": "Окно пересекает конец ListMemoryRecords/ListSkillBundles и начало соответствующих revision wrappers: типизированные row/position callbacks, разные SQL constants, entity и catalog kinds, явные 5s и серверные RepeatableRead/ReadOnly. Общие scope/cursor/scan/lookahead/args/Begin алгоритмы уже обслуживают readScopedContextCatalogPage, beginContextCatalogRevision и cursor/args helpers. Сохраняем явные operation-bound SQL adapters и настройки native wrappers по GO-DOC-002; разные resource eligibility и cleanup остаются у своих операций. Граница проверена whole-file AST inverses, точными callback/kind/TxOptions bindings, source mutants и native/current PostgreSQL cases. Решение относится только к этой паре, fragment SHA и одному occurrence."
     }
   ]
 }
