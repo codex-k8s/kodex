@@ -68,7 +68,12 @@ make test-workflow-server-postgres
 PostgreSQL-оснастку, с общим пределом 240 секунд и десятью секундами на остановку.
 На Linux-хосте с закрытым Docker DNAT поддерживается
 `KODEX_TEST_POSTGRES_NETWORK=host`: БД слушает только loopback.
-Прежний набор `test-control-plane-postgres` сохраняется без изменений.
+Общий `test-control-plane-postgres` сохраняет прежние сценарии и добавляет
+изоляцию счётчиков обзора и проверку текущей схемы010. Исторические release
+verifiers002 не расширяются: новый профиль отдельно проверяет workflow,
+права purge и локальные ограничения repository bundle. Native schema fixtures
+проверяют также отказ при отключении guards, удалении CHECK/FK/index и выдаче
+PUBLIC права EXECUTE; изменения происходят только в отдельных копиях БД.
 
 Проверяются захват и изоляция файлов, промежуточный `CAPTURE_PROGRESS`,
 передача принятого результата двум следующим сотрудникам, история графа и
