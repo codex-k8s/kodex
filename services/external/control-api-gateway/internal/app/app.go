@@ -66,6 +66,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
+	recordInitialOIDCRefresh(startup, logger, oidc)
 	sessions, err := session.New(session.Config{CurrentKeyFile: config.SessionCurrentKeyFile, PreviousKeyFile: config.SessionPreviousKeyFile, TTL: config.SessionTTL})
 	if err != nil {
 		return err
@@ -179,11 +180,11 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 
 // oidcRefreshWorker periodically refreshes OIDC signing keys under the RPC timeout, logs only transitions into/out of degraded state and returns context cancellation. It does not log token contents, refresh browser sessions or change readiness directly.
 // oidcRefreshWorker периодически обновляет OIDC signing keys с RPC timeout, пишет лишь переходы в degraded state и обратно и возвращает отмену контекста. Содержимое токенов не логируется, browser sessions не обновляются и readiness напрямую не меняется.
-func oidcRefreshWorker(verifier *oidcauth.Verifier, logger *slog.Logger, config Config) serviceruntime.Worker {
+func oidcRefreshWorker(verifier signingKeyRefresher, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.ReadinessInterval)
 		defer ticker.Stop()
-		degraded := false
+		degraded := verifier.SigningKeyFailureClass() != ""
 		for {
 			select {
 			case <-ctx.Done():
@@ -194,10 +195,10 @@ func oidcRefreshWorker(verifier *oidcauth.Verifier, logger *slog.Logger, config 
 				cancel()
 				if err != nil && !degraded {
 					degraded = true
-					logger.WarnContext(ctx, "OIDC signing-key refresh degraded", "error_class", "identity_provider")
+					logger.WarnContext(ctx, oidcRefreshDegradedMessage, oidcRefreshClassKey, verifier.SigningKeyFailureClass())
 				} else if err == nil && degraded {
 					degraded = false
-					logger.InfoContext(ctx, "OIDC signing-key refresh restored")
+					logger.InfoContext(ctx, oidcRefreshRestoredMessage)
 				}
 			}
 		}

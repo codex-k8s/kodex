@@ -4,7 +4,7 @@ title: Диагностика HTTP503 при обновлении API
 type: operations
 status: approved
 owner: developer
-version: 1.0.0
+version: 1.1.0
 updated: 2026-10-26
 ---
 
@@ -13,7 +13,7 @@ updated: 2026-10-26
 Задача [#1905](https://github.com/codex-k8s/kodex/issues/1905), приёмка
 [#1223](https://github.com/codex-k8s/kodex/issues/1223), QA
 [#1830](https://github.com/codex-k8s/kodex/issues/1830).
-Причина наблюдавшихся на a304 HTTP503 пока UNKNOWN. Эта диагностика позволяет
+Причина наблюдавшихся на a304 HTTP503 сначала была UNKNOWN. Эта диагностика позволяет
 выделить отказавшую границу; само наличие логов не исправляет доступность.
 
 ## Карта запроса и полномочий
@@ -101,3 +101,41 @@ Pod UID/source/image до и после; неизвестная смена UID �
 
 Через Context7 проверены NATS Go Client `jetstream/stream.go` и
 `jetstream/README.md`; реализация сверена с закреплённым nats.go v1.52.0.
+
+## Первое получение OIDC ключей
+
+На c91c7c74 пять ответов503 при адресном rollout связаны по correlation с
+`auth_oidc_verify / signing_keys_unavailable` новых API Pod. Это доказывает
+отсутствие пригодного снимка ключей, но не причину первоначального отказа fetch.
+Прежний constructor скрывал эту причину, а worker сообщал только общий
+`identity_provider` при отказе последующего refresh.
+
+Verifier теперь сохраняет только закрытый класс последнего отказа. Публичные
+тексты ошибок остаются прежними; исходный transport error не сохраняется и не
+доступен через Unwrap. TLS-классификация использует общий
+`observability/errorclass.TLS`. Классы: `canceled`, `deadline`,
+`tls_verification`, `dns`, `timeout`, `network`, `transport_unknown`,
+`request_invalid`, `throttled`, `server`, `client`, `http_other`, `body_read`,
+`size_invalid`, `snapshot_invalid`, `canonicalization`, `rollback_or_conflict`,
+`unavailable`, `unknown`. Пустой класс означает успешный refresh, а не допуск
+конкретного токена.
+
+| Переход | Диагностика и неизменные ограничения |
+| --- | --- |
+| Первое получение в constructor | Прежний один GET; API однократно пишет закрытый класс уже полученной ошибки |
+| Повторный отказ | Прежний период и timeout; повтор той же деградации не добавляет лог |
+| Восстановление | Класс очищается, worker пишет один переход restored |
+| Fatal snapshot / rollback | Сохраняется блокировка и её закрытая причина до restart; успех следующего HTTP fetch её не снимает |
+| Grace / cancel | Прежний срок last-known-good и прежняя отмена worker; диагностика не продлевает срок |
+
+Authority, token verification, readiness, HTTP503, число запросов, интервалы и
+TLS/DNS configuration не меняются. Решение о блокировании начальной readiness
+до первого snapshot требует отдельного согласования противоречия с
+`docs/domains/identity-access.md`; эта диагностическая правка его не принимает.
+В логах нет issuer URL, body, ключей, токенов, сертификатов или исходных ошибок.
+Новые события, metric labels и retry отсутствуют.
+
+Context7: официальная документация Go net/http Client.Do — typed url.Error,
+Timeout и отличие транспортного отказа от неуспешного HTTP status. Регрессия
+проверяет настоящий Client.Do wrapping path, удаление native cause, сохранение
+fatal/transient policy и начальный отказ→восстановление без лишнего fetch.
