@@ -2,6 +2,30 @@
   "version": 1,
   "entries": [
     {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/email_effect_endpoints_test.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/managed_draft_endpoints_test.go",
+      "fragmentSHA256": "4e7ed1a073b82b4c6c3b8483ada596eba69130ce5e510834f4d9e7c4680b6bfe",
+      "count": 1,
+      "reason": "Окно связывает независимые negative HTTP cases EMAIL reconciliation иmanaged draft schemas. managedTestRequest уже общий иназначает baseline headers;остаток применяет разные table-driven overrides,разные handler/recorder types иотдельно требует HTTP400 без downstream RPC. Здесь нет двух parser/authority implementations:проверяемые payloads,paths иформы recorder различаются. Общий test runner потребовал бы callbacks для typed handlers/recorders ради короткого arrange/assert scaffold искрыл бы локальный fail-closed oracle. Сохранены только точная пара путей/hash/count1;продуктовые validators,JSON decoding и другие fixtures не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/interaction-gateway/internal/app/app.go",
+      "secondPath": "services/jobs/automation-scheduler/internal/app/app.go",
+      "fragmentSHA256": "0429669705ba5ce85f35cbbcf074ade02079a2251869878c3bfc984efa3f4818",
+      "count": 1,
+      "reason": "Окно — nominal composition binding двух разных процессов к уже общему controlplaneclient.Dial. CallerWorkload/serviceName,InteractionGatewayOperations против AutomationSchedulerOperations,RequestTimeout против RPCDeadline,сертификатные paths иstartup context выбирают собственные config roots. Readiness иClose также уже общие runtime APIs;transport/TLS/application-grant алгоритм не скопирован в этих app files. Новый универсальный initializer скрывал бы явные authority/operation/deadline bindings без устранения второго transport kernel. Сохранены только два точных пути/hash/count1,не config validation,worker lifecycle или другие app blocks."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/access/entity-pickers.ts",
+      "secondPath": "services/staff/control-center/src/features/access/entity-pickers.ts",
+      "fragmentSHA256": "f70c335a5938195cec27a5cc96256cb9cf5e2ea40b45fc7842c9fc575fb44bde",
+      "count": 1,
+      "reason": "Остаточное перекрывающееся окно содержит typed access Project/Agent/Workflow picker wrappers. Реальный fetch/unwrap/capture/map/cursor kernel уже общий loadPickerOptions,query normalization — pickerPageQuery,signal — requestSignal. Различаются generated endpoints,обязательный projectRef иотображаемый description:roleDescription агента против purpose проекта/процесса. Empty project guard относится только к scoped endpoints. Универсальный строковый SDK dispatcher или field-name mapper скрыл бы typed endpoint/DTO связь без нового вычислительного ядра. Сохранён только точный внутрефайловый hash/count1;loaders,политики scope и остальные fragments не исключены."
+    },
+    {
       "format": "typescript",
       "firstPath": "services/staff/control-center/e2e/web-only.spec.ts",
       "secondPath": "services/staff/control-center/e2e/web-only.spec.ts",

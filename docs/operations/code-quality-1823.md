@@ -4,11 +4,56 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.528.0
+version: 1.529.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общее чтение EMAIL recovery metadata — 26.10.2026
+
+Feature-owned email-recovery-storage.ts объединяет getItem, JSON.parse и
+проверку массива для reconciliation attempts и mailbox credential recovery.
+Один прежний предел20 используется чтением и обоими writer guards. Отсутствие
+или пустой Storage value возвращает null sentinel, и исходный caller сразу
+возвращает пустой список; сохранённый JSON null по-прежнему отклоняется.
+Helper возвращает тот же массив как unknown[] без копии. Закрытые поля,
+версии, digest/UUID/kind, duplicate refs, replay/mismatch и весь write/remove
+порядок остаются в исходных владельцах схемы. JSON/getItem errors проходят
+без перехвата. Повторяющийся invalid-message текст стал локальными константами;
+значения английских diagnostics прежние. Клиентские metadata не назначают
+серверные полномочия, новых authority или retry paths нет.
+
+Два полных caller inverses восстановили исходные файлы; новый helper проверен
+по точному literal source. Private Node probe исполняет native/current modules:
+44сравнения/88reader calls,10accepted и32rejected raw cases плюс2getItem failure
+pairs. Проверены null/empty/JSON syntax, non-array/rows,20/21limit, duplicate,
+extra fields, versions/ref/key/kind; результаты и error names/messages равны,
+getItem вызывается один раз, записи отсутствуют. getItem error identity прежняя.
+Пять существующих unit tests replay/secret-free metadata/mismatch/forget прошли
+до и после, без новых mock suites или подмены полного QA.
+
+Первый lint отказал на возврате any[], которым Array.isArray сужает unknown.
+Исправлено явной unknown[] binding с тем же массивом, без casts/копирования.
+Исходный FAIL сохранён отдельно. Итоговые format0.37s,lint8.84s,typecheck49.30s
+и production build10.11s PASS LOCAL. Vite/Vitest envDir:false и scrubbed runtime
+env; project .env не читались/не исполнялись. API/generated/dependencies прежние.
+
+Три адресных решения сохраняют остаточный HTTP negative-test scaffold поверх
+managedTestRequest, service-specific bindings к общему controlplaneclient.Dial
+и typed picker wrappers поверх loadPickerOptions/pickerPageQuery/requestSignal.
+Разные handlers/recorders, workload operations/deadlines и endpoint/DTO fields
+остаются явными. Пять соответствующих файлов побайтно прежние; validators,
+authority/lifecycle и другие fragments не исключены. Одно raw окно удалено,
+новых нет. Registry1114,18registry mutations и17quality unit tests PASS;
+пять quality stages PASS LOCAL.6785sources/222exclusions,
+1421raw/1257retained/164unresolved(Go85/TypeScript79),Go21616/21616 EN→RU.
+Новый собственный TypeScript source учтён; пороги и exclusions прежние.
+
+Context7 resolve/query /microsoft/typescript-website PASS: проверены unknown
+и type narrowing; сигнатура Array.isArray дополнительно сверена с установленным
+TypeScript5.9.3 lib.es5.d.ts. Версии зависимостей не менялись. Go modules в этом
+пакете не менялись. Полный E2E/browser/live/deploy/startup/QA NOT RUN.
 
 ## Общие Promise и статический fallback тестовой оснастки — 26.10.2026
 
