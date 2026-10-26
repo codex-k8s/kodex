@@ -652,8 +652,7 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
     .kind == "ValidatingAdmissionPolicyBinding" and
     .metadata.name == "runtime-role-pod-exact-secret-projection" and
     .spec.matchResources.namespaceSelector.matchLabels["kubernetes.io/metadata.name"] == "kodex-runtime") and
-  all(.[];
-    select(.kind == "ServiceAccount" and .metadata.name == "agent-runner");
+  all(.[] | select(.kind == "ServiceAccount" and .metadata.name == "agent-runner");
     .metadata.namespace == "kodex-runtime")
 ' >/dev/null || fail 'release runtime namespace boundary is invalid'
 yq -o=json -I=0 '.' "$output" | jq -s -e '
