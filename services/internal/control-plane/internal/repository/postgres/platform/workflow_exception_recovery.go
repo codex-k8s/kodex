@@ -160,6 +160,18 @@ func (repository *Repository) resolveWorkflowExceptionGateTx(ctx context.Context
 	if step.Key == "" {
 		return true, errs.ErrConflict
 	}
+	feedback, err := readWorkflowRecoveryFeedbackTx(ctx, tx, current, root, episode)
+	if err != nil {
+		return true, err
+	}
+	task, err := workflowStageTask(root, step, episode.Inputs)
+	if err != nil {
+		return true, err
+	}
+	task, err = workflowRecoveryTask(task, feedback)
+	if err != nil {
+		return true, err
+	}
 	var newNodeID string
 	blocked, err := workflowConfigurationAttemptTx(ctx, tx, func(child pgx.Tx) error {
 		anchors, err := readServerWorkflowAnchorsTx(ctx, child, current, root)
@@ -174,7 +186,7 @@ func (repository *Repository) resolveWorkflowExceptionGateTx(ctx context.Context
 			if anchor.AssignedAttempt != 0 {
 				return errs.ErrConflict
 			}
-			if err := repository.materializeServerWorkflowFirstAttemptTx(ctx, child, current, root, step, anchor, episode.Inputs); err != nil {
+			if err := repository.materializeServerWorkflowFirstAttemptTaskTx(ctx, child, current, root, step, anchor, episode.Inputs, task); err != nil {
 				return err
 			}
 			newNodeID = anchor.ID
@@ -182,10 +194,6 @@ func (repository *Repository) resolveWorkflowExceptionGateTx(ctx context.Context
 		}
 		if len(anchor.Receipts) != int(episode.Attempt) || anchor.LatestAttempt != episode.Attempt {
 			return errs.ErrConflict
-		}
-		task, err := workflowStageTask(root, step, episode.Inputs)
-		if err != nil {
-			return err
 		}
 		stage, err := repository.createWorkflowAgentRunTx(ctx, child, current, root, step.AgentRef, step.Name, task)
 		if err != nil {

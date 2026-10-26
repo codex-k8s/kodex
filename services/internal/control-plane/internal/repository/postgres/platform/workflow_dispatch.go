@@ -224,6 +224,14 @@ func (repository *Repository) materializeServerWorkflowFirstAttemptTx(ctx contex
 	if err != nil {
 		return err
 	}
+	return repository.materializeServerWorkflowFirstAttemptTaskTx(ctx, tx, current, root, step, anchor, inputs, task)
+}
+
+// materializeServerWorkflowFirstAttemptTaskTx assigns the ordinary first attempt using an owner-built
+// immutable task; recovery callers add feedback without changing session, grant or claim semantics.
+// materializeServerWorkflowFirstAttemptTaskTx назначает обычную первую попытку с owner-built
+// immutable task; восстановление добавляет пояснения без смены правил session, grant или claim.
+func (repository *Repository) materializeServerWorkflowFirstAttemptTaskTx(ctx context.Context, tx pgx.Tx, current scope, root *serverWorkflowRoot, step entity.WorkflowStep, anchor serverWorkflowAnchor, inputs []workflowInputReceipt, task string) error {
 	stage, err := repository.createWorkflowAgentRunTx(ctx, tx, current, root, step.AgentRef, step.Name, task)
 	if err != nil {
 		return err

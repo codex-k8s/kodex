@@ -93,10 +93,14 @@ func TestWorkflowExceptionRecoveryComponent(t *testing.T) {
 	declaration := `{"schema":"kodex.workflow-result.v1","results":[{"key":"report","source":{"kind":"CURRENT_COMPLETION"}}]}`
 	var anchorID, anchorRun string
 	seenRun, seenNode := map[string]bool{}, map[string]bool{}
+	var expectedFeedback workflowRecoveryFeedback
 	for attempt := 1; attempt <= 4; attempt++ {
 		step := claim(fmt.Sprintf("step-%d", attempt))
 		if stringMap(step, "agentRef") != workerAgent.Ref || seenRun[stringMap(step, "runRef")] || seenNode[stringMap(step, "nodeRef")] {
 			t.Fatal("business retry reused a physical run/node or selected the manager")
+		}
+		if attempt > 1 {
+			assertWorkflowRecoveryFeedbackTask(t, stringMap(step, "task"), expectedFeedback)
 		}
 		seenRun[stringMap(step, "runRef")], seenNode[stringMap(step, "nodeRef")] = true, true
 		complete(fmt.Sprintf("fail-%d", attempt), step, declaration)
@@ -183,8 +187,19 @@ func TestWorkflowExceptionRecoveryComponent(t *testing.T) {
 			if !slices.Contains(gate.AllowedDecisions, "APPROVE") {
 				t.Fatal("recoverable attempt omitted owner approval")
 			}
-			execute(command.ResolveOwnerGate, fmt.Sprintf("approve-%d", attempt), &gate.Version, command.GateResolutionInput{GateRef: gate.Ref, Decision: "APPROVE", Comment: "Повторить с обязательным файлом."})
+			approval := command.GateResolutionInput{GateRef: gate.Ref, Decision: "APPROVE", Comment: fmt.Sprintf("Повторить попытку %d с обязательным файлом.\nТочная обратная связь владельца.", attempt+1)}
+			execute(command.ResolveOwnerGate, fmt.Sprintf("approve-%d", attempt), &gate.Version, approval)
+			storedGate, err := service.GetOwnerGate(ctx, owner, gate.Ref)
+			if err != nil || storedGate.State != "APPROVED" || storedGate.Version != gate.Version+1 {
+				t.Fatal("stored approval feedback unavailable")
+			}
+			expectedFeedback = workflowRecoveryFeedback{Schema: "kodex.workflow-recovery-feedback.v1", Episode: episode.Episode, EpisodeVersion: episode.Version, StepKey: episode.StepKey, PreviousAttempt: episode.Attempt, NextAttempt: episode.Attempt + 1, Reason: episode.Reason, OwnerDecision: integrationContinuationDecision{GateRef: storedGate.Ref, GateVersion: storedGate.Version, Decision: storedGate.Decision, Comment: storedGate.DecisionComment}, ManagerAnalysis: "The required file is missing. Owner approval may authorize a fresh attempt; this analysis cannot waive its predicate."}
 			_, history, _, _, _ := read()
+			execute(command.ResolveOwnerGate, fmt.Sprintf("approve-%d", attempt), &gate.Version, approval)
+			_, replayApproval, replayManagers, _, _ := read()
+			if !reflect.DeepEqual(history, replayApproval) || replayManagers != managers {
+				t.Fatal("approval replay duplicated recovery")
+			}
 			if history[attempt-1].State != "RECOVERED" || history[attempt-1].RecoveryNodeID == episode.FinalNodeID {
 				t.Fatal("owner approval did not create a fresh physical business attempt")
 			}
