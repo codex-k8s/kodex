@@ -381,7 +381,7 @@ func (server *Server) ValidatePromptTemplate(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	context, valid := promptContextInput(body.Context)
-	if !valid || !promptText(body.Template, 256<<10) || !validPromptSelection(promptOptional(body.TargetKind), stringValue(body.TargetRef), stringValue(body.ExpectedContextDigest), context) {
+	if !valid || !validPromptTemplateInput(body.Template, promptOptional(body.TargetKind), stringValue(body.TargetRef), stringValue(body.ExpectedContextDigest), context) {
 		writeLocalProblem(w, 400, "INVALID_REQUEST", false)
 		return
 	}
@@ -406,7 +406,7 @@ func (server *Server) PreviewPromptTemplate(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	context, valid := promptContextInput(body.Context)
-	if !valid || !promptText(body.Template, 256<<10) || !validPromptSelection(promptOptional(body.TargetKind), stringValue(body.TargetRef), stringValue(body.ExpectedContextDigest), context) {
+	if !valid || !validPromptTemplateInput(body.Template, promptOptional(body.TargetKind), stringValue(body.TargetRef), stringValue(body.ExpectedContextDigest), context) {
 		writeLocalProblem(w, 400, "INVALID_REQUEST", false)
 		return
 	}

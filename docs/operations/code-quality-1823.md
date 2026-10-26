@@ -4,11 +4,42 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.520.0
+version: 1.521.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общий predicate ввода prompt template — 26.10.2026
+
+ValidatePromptTemplate и PreviewPromptTemplate используют validPromptTemplateInput:
+прежний promptText с256KiB,UTF-8,NUL,затем validPromptSelection с прежними
+kind/ref/digest/context. Сначала у callers выполняется promptContextInput;
+его false замыкает guard до вызова predicate. Простые nil/string преобразования
+decoded local selectors теперь вычисляются до template bound;они не имеют
+внешних эффектов и не меняют данные. Пустой текст,boolean порядок и все
+особые target combinations сохранены. Helper не материализует prompt,не решает
+authority и не меняет контекст. Разные RPC,error mappers,full materialization
+и response context/session pins остались в исходных handlers.
+
+Две полные GoFmt inverses восстановили оба исходника;проверены literal boolean
+predicate,два вызова,short-circuit и чистые string helpers. Generated model
+и общий server file побайтно совпадают с предыдущим HEAD. Hashes двух source
+совпадают с полным gateway build6.48s/unit23.23s/vet1.82s — PASS LOCAL:
+3098PASS/0FAIL/0SKIP,11packages. Дополнительные mirror tests для этого простого
+predicate не добавлялись;использованы существующие prompt и gateway suites.
+
+Одно179-token raw окно заменилось169-token nominal typed glue после реального
+выноса predicate. Оно адресно сохранено вместе с четырьмя отдельно прочитанными
+окнами независимых Unicode test tables,typed provider captures,identity/secret
+recorder plumbing и разных draft/effect/replay metadata mutation tables.
+Это не исключения файлов или тестов:exact paths/hash/count сохраняют контроль
+над остальными fixtures и assertions. Registry1092,30registry mutations и
+17public quality tests PASS. Пять quality stages PASS LOCAL;
+6785sources/222generated exclusions,1435raw/1235retained/200unresolved,
+Go21612/21612 EN→RU. Context7 protobuf docs проверены519;внешние API не менялись.
+Legacy renderer FAIL и прежние Bash diagnostics открыты;полные E2E/live/deploy/
+QA — NOT RUN.
 
 ## Общая проверка необязательной пары environment ref/version — 26.10.2026
 

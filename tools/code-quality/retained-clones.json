@@ -3,6 +3,46 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/mvp_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/mvp_endpoints.go",
+      "fragmentSHA256": "15fd11d465009430e182a877d28a2658cabc47612ccfabaa548ac8b4c87d21d9",
+      "count": 1,
+      "reason": "После фактического выноса validPromptTemplateInput окно169tokens сопоставляет typed ValidatePromptTemplate/PreviewPromptTemplate inputs,общий decode/converter/guard и разные request/RPC constructors. Прежний template byte/UTF8/NUL и target/context/digest predicate теперь единый,а promptContextInput уже общий. Preview отдельно задаёт IncludeFullMaterialization,использует writePromptProblem,строгий preview caster и continuation session runtime-diff pin;Validate имеет иной response caster и writeRPCProblem. Объединение полных методов скрыло бы эти разные query/error/result контракты без самостоятельного нового алгоритма. Сохранены только точное окно одного файла/hash/count1,не validators или остальные prompt сценарии."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/runtimecontract/execution_test.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/workflow_unicode_bounds_test.go",
+      "fragmentSHA256": "c225ffe7b4e9af826b0eba13e79b2c9a28768e8c378dd18aab609070280bc1d4",
+      "count": 1,
+      "reason": "Точное окно содержит независимые таблицы Unicode граничных примеров:ASCII/Cyrillic/emoji на limit,overflow и invalidUTF8. RunnerInput проверяет encoder/decoder,обновляет bindings и дополнительно проверяет NUL;WorkflowVersion проверяет свои entity fields через validWorkflowVersion и иной field.set. Это тестовые ожидаемые данные разных модулей и контрактов,не две реализации production валидации. Общая экспортируемая test-only библиотека ради короткого литерала связала бы независимые oracle и не устранила бы алгоритм. Сохранены лишь два точных пути/hash/count1;прочие тестовые loops,fixtures и runtime validators не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/identity_environment_endpoints_test.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/secret_impact_endpoints_test.go",
+      "fragmentSHA256": "b772f67cdb2a5c50b3e0b314768d602d6b7a56b9b6ccbf7fd8d1e532925c99fc",
+      "count": 1,
+      "reason": "Окно связывает хвосты разных typed recorder switches,optional corrupt hook,proto.Merge и короткие router factories identity/environment и secret impact. Они возвращают разные generated responses:RebindRuntimeEnvironment binding против RebindRuntimeSecret environments/descriptors/bindings;намеренные corruption hooks относятся к конкретным typed receipts. Generated clients/router и proto.Merge уже общие библиотечные primitives;собственные factories явно связывают разные recorders с transport,не дублируют business validator. Универсальный fake RPC dispatcher потребовал бы скрыть отдельные method/response identities. Сохранены только два пути/hash/count1,не test файлы и не mutation assertions."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/provider_endpoints_test.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/provider_endpoints_test.go",
+      "fragmentSHA256": "62ed9c7e24dfa823e01e7373bb115853cec8c2e9436ed683ccbc22e8903a91ac",
+      "count": 1,
+      "reason": "Перекрывающееся точное окно содержит nominal implementations generated providerCommandStub methods VerifyProviderAccountDeviceAuthorization,ReauthorizeProviderAccountDeviceCode и DeleteProviderAccount. Каждый сохраняет свой строго типизированный request в отдельном capture field и возвращает собственный response type с уже общей fixture stub.replyAccount. Ни один stub не инициирует provider operation;раздельные captures нужны тесту exact RPC mapping и разных HTTP statuses. Общий dispatcher/reflection заменил бы compile-time method signatures без удаления самостоятельного алгоритма. Сохранено только окно одного файла/hash/count1,не остальные provider mappings или тестовые assertions."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/runtime_resource_scope_test.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/runtime_resource_scope_test.go",
+      "fragmentSHA256": "5830cae7b7ccb1971c9d6c646a4c5cb5c67780603ec7c3fd29a0c2d28a683df3",
+      "count": 1,
+      "reason": "Окно пересекает конец draft validation test и таблицы пяти negative scope/organization mutations для разных generated broker RuntimeSecretDraftMetadata и RuntimeSecretMetadata. Матрица missing/unknown/foreign/cross-scope намеренно повторяется как независимый oracle для validate receipt и publication effect/terminal replay. Реальные execution paths различны:validate ждёт3calls,publication effect3,replay1 и проверяет иной redacted ref;общие recorder/router/request helpers уже используются. Generic mutation adapter потребовал бы setters/reflection для разных metadata и скрыл бы конкретный повреждаемый receipt. Сохранены только внутрефайловое окно/hash/count1,не lifecycle assertions или код проверок owner scope."
+    },
+    {
+      "format": "go",
       "firstPath": "services/external/control-api-gateway/internal/transport/http/environment_draft_endpoints.go",
       "secondPath": "services/external/control-api-gateway/internal/transport/http/environment_draft_endpoints.go",
       "fragmentSHA256": "82f6ad8d3915aa97b215b1cc705b732ee9c59c7304cb029f58c8d09a434614eb",
