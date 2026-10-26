@@ -4,11 +4,38 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.490.0
+version: 1.491.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Закрытые allowlists команд — 26.10.2026
+
+Четыре окна changeAssistant/changeExecution сохранены адресно как разные
+декларации закрытых маршрутов команд. Полностью прочитаны оба switch:
+14 assistant и11 execution labels явно связаны со специализированными
+repository methods. Нет общего алгоритма исполнения;контекст,транзакция,
+scope иinput передаются в том же порядке. Неизвестный kind возвращает
+commandOutcome{},errs.ErrInvalid без универсального fallback.
+
+Go AST проверил8 сторон:весь body содержит только switch input.Kind,
+case labels относятся к command constants,нет повторяющихся labels,
+единственный statement каждого case — direct return указанного method
+с ctx,tx,scope,input;default закрытый и единственный. В двух хвостах
+окна захватывают только сигнатуры следующих createAssistantConversation и
+proposeAssistantMetadata;их первые statements лежат строго после окна.
+Тела этих функций решениями не покрываются.8 actual source mutations
+с side effects,перестановкой scope/context,динамическим case label,
+инициализатором switch иотсутствующим/изменённым default отвергнуты.
+Оба source hashes прежние;production/test код не меняется.
+
+1074 прежних entries сохранены;4 exact pair/hash/count=1 решения дают
+registry1078. Raw1480 иsource inventory6768/222 прежние,retained1221,
+unresolved259. Go21588/21588 EN→RU. Count/hash mutants каждого нового
+решения отвергнуты assessor;quality-tool units ипять quality stages
+PASS LOCAL. Это проверки реестра,не новый запуск app/component suites.
+Полная готовность,deploy/live/browser/full E2E и независимая QA не заявляются.
 
 ## Общая проекция detail образа — 26.10.2026
 

@@ -8592,6 +8592,38 @@
       "fragmentSHA256": "fa7982fbd3a3f5f8ba76c5468e7f82f4a8cd3df97355e40fbc8292a55b31db89",
       "count": 1,
       "reason": "Типизированное чтение role-image и runtime-secret-draft impact уже использует общий validFilteredHTTPPage,page и writeRPCProblem. В окне сохраняются разные resource refs(8..128 против opaque<=96),query RPC/request/view и upstream bounds(текущий page size/UTF8 cursor против fixed100/byte cursor). Secret no-store headers остаются до проверки input. Общий dispatcher не должен скрывать эти намеренные security/contract различия. Решение ограничено данной парой/hash/count=1;не распространяется на item loops,selection или response payload вне окна."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/configuration.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/configuration.go",
+      "fragmentSHA256": "07d17d2b9955dfb2a18c1b669737e791ae9722efd5a19eacdef9d656a61cd214",
+      "count": 1,
+      "reason": "Самопересечение соседних case в закрытом changeAssistant:каждый command.Kind явно направлен своему специализированному repository method. Полные функции проверены AST:единственный switch input.Kind,только константные command labels и direct return с прежними ctx,tx,scope,input;неизвестный kind закрыто возвращает commandOutcome{},errs.ErrInvalid. Это разные allowlist declarations,а не повторяющийся алгоритм исполнения;общий dynamic dispatcher добавил бы косвенную таблицу вместо явной связи kind/handler и усложнил бы проверку полномочий. Exact решение ограничено этой парой/hash/count=1;не распространяется на тела специализированных handlers или следующие функции."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/configuration.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime.go",
+      "fragmentSHA256": "c748fd8876ad979c229b447fd4fb0f532fc47465e1405ee94f1912733983c564",
+      "count": 1,
+      "reason": "Окно двух закрытых маршрутизаторов changeAssistant/changeExecution:14 против11 конкретных command kinds направляются разным специализированным repository methods. Полные функции проверены AST:единственный switch input.Kind,только константные command labels и direct return с прежними ctx,tx,scope,input;неизвестный kind закрыто возвращает commandOutcome{},errs.ErrInvalid. Это разные allowlist declarations,а не повторяющийся алгоритм исполнения;общий dynamic dispatcher добавил бы косвенную таблицу вместо явной связи kind/handler и усложнил бы проверку полномочий. Exact решение ограничено этой парой/hash/count=1;не распространяется на тела специализированных handlers или следующие функции."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/configuration.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime.go",
+      "fragmentSHA256": "cec554770601d9b3d98e92b5336c9cfaff6905ce33338e4aa6e4312a791c8845",
+      "count": 1,
+      "reason": "Окно двух закрытых маршрутизаторов changeAssistant/changeExecution:14 против11 конкретных command kinds направляются разным специализированным repository methods. Полные функции проверены AST:единственный switch input.Kind,только константные command labels и direct return с прежними ctx,tx,scope,input;неизвестный kind закрыто возвращает commandOutcome{},errs.ErrInvalid. Это разные allowlist declarations,а не повторяющийся алгоритм исполнения;общий dynamic dispatcher добавил бы косвенную таблицу вместо явной связи kind/handler и усложнил бы проверку полномочий. Exact решение ограничено этой парой/hash/count=1;не распространяется на тела специализированных handlers или следующие функции."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/configuration.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime.go",
+      "fragmentSHA256": "7a79b7f0ca25b78dd63dbefdb55e55a2f084a28c3ec6c985a7e0af83f450ab8f",
+      "count": 1,
+      "reason": "Окно двух закрытых маршрутизаторов changeAssistant/changeExecution:14 против11 конкретных command kinds направляются разным специализированным repository methods. Полные функции проверены AST:единственный switch input.Kind,только константные command labels и direct return с прежними ctx,tx,scope,input;неизвестный kind закрыто возвращает commandOutcome{},errs.ErrInvalid. Это разные allowlist declarations,а не повторяющийся алгоритм исполнения;общий dynamic dispatcher добавил бы косвенную таблицу вместо явной связи kind/handler и усложнил бы проверку полномочий. Конец окна пересекает только сигнатуры следующих createAssistantConversation/proposeAssistantMetadata;AST подтверждает отсутствие их исполняемых statements в окне. Exact решение ограничено этой парой/hash/count=1;не распространяется на тела специализированных handlers или следующие функции."
     }
   ]
 }
