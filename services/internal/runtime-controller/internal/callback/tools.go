@@ -949,6 +949,7 @@ func workflowUpdateInputSchema(workflowRef string) map[string]any {
 	}
 	schema["anyOf"] = branches
 	schema["allOf"] = workflowServerBounds()
+	schema["description"] = workflowServerTextBudgetGuidance
 	return schema
 }
 
@@ -1082,6 +1083,10 @@ func assistantOperationSchema(kind string, parameters map[string]any) map[string
 	return objectSchema(required, properties)
 }
 
+// workflowServerTextBudgetGuidance discloses the owner-enforced cross-field byte constraint that JSON Schema maxLength cannot express; it never supplies execution authority.
+// workflowServerTextBudgetGuidance раскрывает проверяемое владельцем межполевое ограничение байтов, невыразимое через JSON Schema maxLength, и не выдаёт полномочия исполнения.
+const workflowServerTextBudgetGuidance = "For SERVER_DAG_V1, the total text budget is 8192 UTF-8 bytes (not Unicode characters), summed over decoded strings: name + purpose + instructions + completionCriteria + sum(steps[].name + steps[].purpose + steps[].expectedResult). Step purpose maps to draft.Steps[].Instructions. CREATE has no root instructions field, so it is empty; UPDATE counts the full resulting draft, including retained fields. JSON escaping/framing, keys, input metadata and result predicates are not counted. Individual field limits still apply. MANAGER_DRIVEN retains its existing limits. Overflow returns WORKFLOW_TEXT_BUDGET; shorten text without removing required predicates or authority checks."
+
 // workflowInputSchema describes bounded creation fields, ordered steps, parallel-group
 // forms, human-gate choices and a complete capability ceiling. It does not infer dependency
 // edges, grant stage capabilities or launch work; supplied project/agent schemas are reused.
@@ -1117,7 +1122,7 @@ func workflowInputSchema(projectRef, agentRef map[string]any) map[string]any {
 		"timeoutSeconds": map[string]any{"type": "integer", "minimum": 1, "maximum": 604800}, "completionCriteria": stringSchema(0, 2000),
 	})
 	schema["allOf"] = workflowCreationBounds()
-	schema["description"] = "Omitted executionMode or MANAGER_DRIVEN retains legacy manager coordination; do not supply key, dependsOn or resultRequirements during legacy creation. SERVER_DAG_V1 requires every step to provide a stable key, explicit dependsOn and one to four typed resultRequirements. It permits at most 12 steps, 2 concurrent executions and 8 predecessors per step. Completion of a model turn alone does not satisfy a required artifact, pull request, review or release receipt. All predicates are checked by the owner before advancing."
+	schema["description"] = workflowServerTextBudgetGuidance + " Omitted executionMode or MANAGER_DRIVEN retains legacy manager coordination; do not supply key, dependsOn or resultRequirements during legacy creation. SERVER_DAG_V1 requires every step to provide a stable key, explicit dependsOn and one to four typed resultRequirements. It permits at most 12 steps, 2 concurrent executions and 8 predecessors per step. Completion of a model turn alone does not satisfy a required artifact, pull request, review or release receipt. All predicates are checked by the owner before advancing."
 	return schema
 }
 

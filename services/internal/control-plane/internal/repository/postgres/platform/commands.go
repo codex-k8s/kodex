@@ -1388,6 +1388,7 @@ const (
 	workflowInvalidStepsInstructions   = "STEPS_INSTRUCTIONS"
 	workflowInvalidStepsExpectedResult = "STEPS_EXPECTED_RESULT"
 	workflowInvalidInvariants          = "WORKFLOW_INVARIANTS"
+	workflowInvalidTextBudget          = "WORKFLOW_TEXT_BUDGET"
 )
 
 // workflowVersionInvalidField validates the explicit execution profile before general workflow
@@ -1400,6 +1401,9 @@ func workflowVersionInvalidField(version entity.WorkflowVersion) string {
 	}
 	if version.ExecutionMode == workflowservice.ServerDAGV1 {
 		if !workflowservice.ValidServerVersion(version) {
+			if workflowservice.ServerTextBytes(version) > workflowservice.MaximumServerTextBytes {
+				return workflowInvalidTextBudget
+			}
 			return workflowInvalidInvariants
 		}
 	} else {

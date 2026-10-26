@@ -17,15 +17,15 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// TestAssistantPlanInvalidDetailsAreClosed checks all five stages and seventeen
+// TestAssistantPlanInvalidDetailsAreClosed checks all five stages and eighteen
 // registered fields, rejecting noncanonical indices, unknown metadata, duplicate/foreign/
 // unknown-proto details and matching raw error text as diagnostic provenance.
-// TestAssistantPlanInvalidDetailsAreClosed проверяет пять stages/семнадцать registered
+// TestAssistantPlanInvalidDetailsAreClosed проверяет пять stages/восемнадцать registered
 // fields и отказ noncanonical indices,unknown metadata,duplicate/foreign/unknown-proto
 // details и matching raw error text как diagnostic provenance.
 func TestAssistantPlanInvalidDetailsAreClosed(t *testing.T) {
 	for _, stage := range []string{"HYDRATE", "NORMALIZE", "COMMAND", "BIND", "AUTHORIZE"} {
-		for _, field := range []string{"WORKFLOW_SHAPE", "WORKFLOW_REF", "WORKFLOW_VERSION", "WORKFLOW_BINDING", "MAX_CONCURRENCY", "TIMEOUT_SECONDS", "WORKFLOW_TEXT", "INPUT_FIELDS", "STEPS", "INPUT_FIELD_KEY", "STEP_SHAPE", "STEP_KEY", "STEPS_GRAPH", "WORKFLOW_DRAFT", "STEPS_INSTRUCTIONS", "STEPS_EXPECTED_RESULT", "WORKFLOW_INVARIANTS"} {
+		for _, field := range []string{"WORKFLOW_SHAPE", "WORKFLOW_REF", "WORKFLOW_VERSION", "WORKFLOW_BINDING", "MAX_CONCURRENCY", "TIMEOUT_SECONDS", "WORKFLOW_TEXT", "INPUT_FIELDS", "STEPS", "INPUT_FIELD_KEY", "STEP_SHAPE", "STEP_KEY", "STEPS_GRAPH", "WORKFLOW_DRAFT", "STEPS_INSTRUCTIONS", "STEPS_EXPECTED_RESULT", "WORKFLOW_INVARIANTS", "WORKFLOW_TEXT_BUDGET"} {
 			err := planDiagnosticError(codes.InvalidArgument, "ASSISTANT_PLAN_"+stage, map[string]string{"category": "INVALID", "operation_index": "32", "field": field})
 			diagnostic, ok := assistantPlanInvalidDetails(err)
 			if !ok || diagnostic.stage != strings.ToLower(stage) || diagnostic.field != field || diagnostic.index != 32 || controlFailureClass(err) != "assistant_plan_"+strings.ToLower(stage)+"_invalid" {
@@ -67,40 +67,42 @@ func TestAssistantPlanInvalidDetailsAreClosed(t *testing.T) {
 // stage/field labels в logs и отсутствие prompt/ref/credential canaries. Bare
 // InvalidArgument не создаёт field и не меняет result другого tool.
 func TestAssistantPlanInvalidDiagnosticKeepsFailedReceiptAndGuidance(t *testing.T) {
-	input, _, _ := assistantOwnCurrentFixture(runtimecontract.AssistantScopeSystem)
-	arguments := map[string]any{"summary": "PRIVATE_SUMMARY", "operations": []any{map[string]any{"type": "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", "parameters": map[string]any{"systemAssistantRef": input.AgentRef, "instructions": "PRIVATE_CONTENT"}}}}
-	for _, stage := range []string{"HYDRATE", "NORMALIZE", "COMMAND"} {
-		t.Run(stage, func(t *testing.T) {
-			client := &assistantPlanDiagnosticClient{assistantFreshCatalogMCPClient: &assistantFreshCatalogMCPClient{}, failure: planDiagnosticError(codes.InvalidArgument, "ASSISTANT_PLAN_"+stage, map[string]string{"category": "INVALID", "operation_index": "1", "field": "STEPS_INSTRUCTIONS"})}
-			var logs bytes.Buffer
-			server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}, logger: slog.New(slog.NewJSONHandler(&logs, nil))}
-			params, _ := json.Marshal(map[string]any{"name": "propose_configuration_plan", "arguments": arguments})
-			recorder := httptest.NewRecorder()
-			server.callTool(recorder, httptest.NewRequest("POST", "/mcp", nil), mcpRequest{ID: json.RawMessage(`"invalid-diagnostic"`), Params: params}, input)
-			var wire struct {
-				Result struct {
-					IsError           bool           `json:"isError"`
-					StructuredContent map[string]any `json:"structuredContent"`
-				} `json:"result"`
-			}
-			if json.Unmarshal(recorder.Body.Bytes(), &wire) != nil || !wire.Result.IsError || wire.Result.StructuredContent["error_code"] != "PLAN_INPUT_INVALID" || wire.Result.StructuredContent["retryable"] != true || wire.Result.StructuredContent["failure_stage"] != strings.ToLower(stage) || wire.Result.StructuredContent["failure_field"] != "STEPS_INSTRUCTIONS" || client.projection.GetSafeResult() != "PLAN_INPUT_INVALID" || client.projection.GetState() != controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_FAILED {
-				t.Fatal("invalid diagnostic changed failed activity or corrective guidance")
-			}
-			if !strings.Contains(logs.String(), `"failure_field":"STEPS_INSTRUCTIONS"`) || !strings.Contains(logs.String(), `"failure_class":"assistant_plan_`+strings.ToLower(stage)+`_invalid"`) {
-				t.Fatal("closed stage and field were not logged")
-			}
-			for _, line := range strings.Split(strings.TrimSpace(logs.String()), "\n") {
-				var item map[string]any
-				if json.Unmarshal([]byte(line), &item) != nil || item["failure_class"] != "assistant_plan_"+strings.ToLower(stage)+"_invalid" || item["failure_field"] != "STEPS_INSTRUCTIONS" {
-					t.Fatal("outer tool boundary lost the verified diagnostic")
+	for _, field := range []string{"STEPS_INSTRUCTIONS", "WORKFLOW_TEXT_BUDGET"} {
+		input, _, _ := assistantOwnCurrentFixture(runtimecontract.AssistantScopeSystem)
+		arguments := map[string]any{"summary": "PRIVATE_SUMMARY", "operations": []any{map[string]any{"type": "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", "parameters": map[string]any{"systemAssistantRef": input.AgentRef, "instructions": "PRIVATE_CONTENT"}}}}
+		for _, stage := range []string{"HYDRATE", "NORMALIZE", "COMMAND"} {
+			t.Run(field+"/"+stage, func(t *testing.T) {
+				client := &assistantPlanDiagnosticClient{assistantFreshCatalogMCPClient: &assistantFreshCatalogMCPClient{}, failure: planDiagnosticError(codes.InvalidArgument, "ASSISTANT_PLAN_"+stage, map[string]string{"category": "INVALID", "operation_index": "1", "field": field})}
+				var logs bytes.Buffer
+				server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}, logger: slog.New(slog.NewJSONHandler(&logs, nil))}
+				params, _ := json.Marshal(map[string]any{"name": "propose_configuration_plan", "arguments": arguments})
+				recorder := httptest.NewRecorder()
+				server.callTool(recorder, httptest.NewRequest("POST", "/mcp", nil), mcpRequest{ID: json.RawMessage(`"invalid-diagnostic"`), Params: params}, input)
+				var wire struct {
+					Result struct {
+						IsError           bool           `json:"isError"`
+						StructuredContent map[string]any `json:"structuredContent"`
+					} `json:"result"`
 				}
-			}
-			for _, private := range []string{"PRIVATE_PAYLOAD", "PRIVATE_SUMMARY", "PRIVATE_CONTENT", input.LeaseFence, input.AgentRef} {
-				if private != "" && (strings.Contains(logs.String(), private) || strings.Contains(recorder.Body.String(), private) || strings.Contains(client.projection.GetSafeResult(), private)) {
-					t.Fatal("invalid diagnostic disclosed payload, ref or credential")
+				if json.Unmarshal(recorder.Body.Bytes(), &wire) != nil || !wire.Result.IsError || wire.Result.StructuredContent["error_code"] != "PLAN_INPUT_INVALID" || wire.Result.StructuredContent["retryable"] != true || wire.Result.StructuredContent["failure_stage"] != strings.ToLower(stage) || wire.Result.StructuredContent["failure_field"] != field || client.projection.GetSafeResult() != "PLAN_INPUT_INVALID" || client.projection.GetState() != controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_FAILED {
+					t.Fatal("invalid diagnostic changed failed activity or corrective guidance")
 				}
-			}
-		})
+				if !strings.Contains(logs.String(), `"failure_field":"`+field+`"`) || !strings.Contains(logs.String(), `"failure_class":"assistant_plan_`+strings.ToLower(stage)+`_invalid"`) {
+					t.Fatal("closed stage and field were not logged")
+				}
+				for _, line := range strings.Split(strings.TrimSpace(logs.String()), "\n") {
+					var item map[string]any
+					if json.Unmarshal([]byte(line), &item) != nil || item["failure_class"] != "assistant_plan_"+strings.ToLower(stage)+"_invalid" || item["failure_field"] != field {
+						t.Fatal("outer tool boundary lost the verified diagnostic")
+					}
+				}
+				for _, private := range []string{"PRIVATE_PAYLOAD", "PRIVATE_SUMMARY", "PRIVATE_CONTENT", input.LeaseFence, input.AgentRef} {
+					if private != "" && (strings.Contains(logs.String(), private) || strings.Contains(recorder.Body.String(), private) || strings.Contains(client.projection.GetSafeResult(), private)) {
+						t.Fatal("invalid diagnostic disclosed payload, ref or credential")
+					}
+				}
+			})
+		}
 	}
 	bare := assistantPlanControlError(status.Error(codes.InvalidArgument, "PRIVATE_PAYLOAD"))
 	if _, ok := assistantPlanInvalidDetails(bare); ok || safeToolCallResult("propose_configuration_plan", nil, bare) != "PLAN_INPUT_INVALID" || safeToolCallResult("read_file", nil, bare) != "TOOL_UNAVAILABLE" {
