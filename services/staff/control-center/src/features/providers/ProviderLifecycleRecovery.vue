@@ -14,7 +14,6 @@ import { asProblem, type AppProblem } from "@/shared/api/problem";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 const props = defineProps<{
   account: ProviderAccount;
-  problem?: unknown;
   commandPending?: boolean;
 }>();
 const emit = defineEmits<{
@@ -71,8 +70,13 @@ async function retry(): Promise<void> {
   }
 }
 watch(
-  [() => props.account.ref, () => props.problem, () => props.commandPending],
-  read,
+  [() => props.account.ref, () => props.commandPending],
+  ([accountRef], [previousAccountRef]) => {
+    // Фоновое чтение аккаунта тоже меняет внешнюю занятость. Собственный retry
+    // владеет своим завершением; смена ресурса по-прежнему отменяет старый запрос.
+    if (accountRef === previousAccountRef && busy.value) return;
+    read();
+  },
   { immediate: true },
 );
 onBeforeUnmount(() => controller.abort());

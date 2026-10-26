@@ -86,11 +86,11 @@ function storage(): Storage {
     },
   };
 }
-function mount(problem?: unknown, commandPending = false) {
+function mount(commandPending = false) {
   const data = storage();
   rememberProviderLifecycleAttempt(original, data);
   vi.stubGlobal("window", { sessionStorage: data });
-  const props = reactive({ account: account(), problem, commandPending });
+  const props = reactive({ account: account(), commandPending });
   const pending = vi.fn();
   const recovered = vi.fn();
   let state!: State;
@@ -145,7 +145,7 @@ afterEach(async () => {
 
 describe("ProviderLifecycleRecovery", () => {
   it("перечитывает журнал после локальной команды, открывшей диалог во время исполнения", async () => {
-    const { props, state, data, pending } = mount(undefined, true);
+    const { props, state, data, pending } = mount(true);
     expect(state.attempt.value).toBeUndefined();
     await state.retry();
     expect(api.retryProviderLifecycle).not.toHaveBeenCalled();
@@ -160,7 +160,7 @@ describe("ProviderLifecycleRecovery", () => {
   });
 
   it("после UNKNOWN оставляет точный intent и не запускает автоматический retry", async () => {
-    const { props, state, data, pending } = mount(undefined, true);
+    const { props, state, data, pending } = mount(true);
     props.commandPending = false;
     await nextTick();
     expect(state.attempt.value).toEqual(original);
@@ -172,7 +172,7 @@ describe("ProviderLifecycleRecovery", () => {
   });
 
   it("позднее завершение локальной команды не удаляет новый intent текущего аккаунта", async () => {
-    const { props, state, data, pending } = mount(undefined, true);
+    const { props, state, data, pending } = mount(true);
     const next = { ...original, accountRef: "pacc_new_fixture", version: 12 };
     rememberProviderLifecycleAttempt(next, data);
     props.account = {
@@ -189,7 +189,7 @@ describe("ProviderLifecycleRecovery", () => {
     expect(pending).toHaveBeenLastCalledWith(true);
     expect(api.retryProviderLifecycle).not.toHaveBeenCalled();
   });
-  it("сохраняет ожидающий retry при замене account с прежними ref и problem", async () => {
+  it("сохраняет ожидающий retry при замене account с прежним ref", async () => {
     const request = deferred();
     api.retryProviderLifecycle.mockReturnValueOnce(request.promise);
     const { props, state, data, pending, recovered, signal } = mount();
@@ -220,70 +220,82 @@ describe("ProviderLifecycleRecovery", () => {
     expect(recovered).toHaveBeenCalledOnce();
   });
 
-  it.each(["account", "problem"] as const)(
-    "изменение %s отменяет запрос и принимает только новый явный retry",
-    async (identity) => {
-      const request = deferred();
-      api.retryProviderLifecycle.mockReturnValueOnce(request.promise);
-      const { props, state, data, pending, recovered, signal } = mount();
-      const retry = state.retry();
-      const activeSignal = signal();
-      const nextAttempt = { ...original, accountRef: "pacc_next_fixture" };
-      if (identity === "account") {
-        rememberProviderLifecycleAttempt(nextAttempt, data);
-        props.account = { ...props.account, ref: nextAttempt.accountRef };
-      } else props.problem = new Error("Changed recovery context");
+  it("фоновая занятость аккаунта не прерывает уже запущенный явный retry", async () => {
+    const request = deferred();
+    api.retryProviderLifecycle.mockReturnValueOnce(request.promise);
+    const { props, state, data, pending, recovered, signal } = mount();
+    const retry = state.retry();
+    const activeSignal = signal();
+    for (const commandPending of [true, false]) {
+      props.commandPending = commandPending;
       await nextTick();
-      expect(activeSignal.aborted).toBe(true);
-      expect(state.busy.value).toBe(false);
-      const currentAttempt = identity === "account" ? nextAttempt : original;
-      expect(state.attempt.value).toEqual(currentAttempt);
-      expect(pending.mock.calls).toEqual([[true], [true]]);
-      expect(api.retryProviderLifecycle).toHaveBeenCalledOnce();
-      const nextRequest = deferred();
-      api.retryProviderLifecycle.mockReturnValueOnce(nextRequest.promise);
-      const nextRetry = state.retry();
-      const currentSignal = signal();
-      expect(currentSignal).not.toBe(activeSignal);
-      request.resolve(result);
-      await retry;
-      expect(recovered).not.toHaveBeenCalled();
+      expect(activeSignal.aborted).toBe(false);
       expect(state.busy.value).toBe(true);
-      expect(state.attempt.value).toEqual(currentAttempt);
-      const nextResult = {
-        account: { ...result.account, ref: currentAttempt.accountRef },
-      };
-      nextRequest.resolve(nextResult);
-      await nextRetry;
-      expect(recovered).toHaveBeenCalledExactlyOnceWith(nextResult);
-      expect(pending.mock.calls).toEqual([[true], [true], [false]]);
-    },
-  );
-
-  it.each(["account", "problem"] as const)(
-    "изменение %s игнорирует позднюю ошибку старого retry",
-    async (identity) => {
-      const request = deferred();
-      api.retryProviderLifecycle.mockReturnValueOnce(request.promise);
-      const { props, state, data, pending, recovered, signal } = mount();
-      const retry = state.retry();
-      const activeSignal = signal();
-      if (identity === "account")
-        props.account = { ...props.account, ref: "pacc_next_fixture" };
-      else props.problem = new Error("Changed recovery context");
-      await nextTick();
-      expect(activeSignal.aborted).toBe(true);
-      request.reject(new Error("Stale recovery failure"));
-      await retry;
-      expect(state.recoveryProblem.value).toBeUndefined();
-      expect(state.busy.value).toBe(false);
-      expect(recovered).not.toHaveBeenCalled();
-      expect(pending.mock.calls).toEqual([[true], [identity === "problem"]]);
+      expect(state.attempt.value).toEqual(original);
       expect(readProviderLifecycleAttempt(original.accountRef, data)).toEqual(
         original,
       );
-    },
-  );
+    }
+    expect(pending).toHaveBeenCalledExactlyOnceWith(true);
+    request.resolve(result);
+    await retry;
+    expect(recovered).toHaveBeenCalledExactlyOnceWith(result);
+    expect(pending.mock.calls).toEqual([[true], [false]]);
+    expect(api.retryProviderLifecycle).toHaveBeenCalledOnce();
+  });
+
+  it("смена аккаунта отменяет запрос и принимает только новый явный retry", async () => {
+    const request = deferred();
+    api.retryProviderLifecycle.mockReturnValueOnce(request.promise);
+    const { props, state, data, pending, recovered, signal } = mount();
+    const retry = state.retry();
+    const activeSignal = signal();
+    const nextAttempt = { ...original, accountRef: "pacc_next_fixture" };
+    rememberProviderLifecycleAttempt(nextAttempt, data);
+    props.account = { ...props.account, ref: nextAttempt.accountRef };
+    await nextTick();
+    expect(activeSignal.aborted).toBe(true);
+    expect(state.busy.value).toBe(false);
+    expect(state.attempt.value).toEqual(nextAttempt);
+    expect(pending.mock.calls).toEqual([[true], [true]]);
+    expect(api.retryProviderLifecycle).toHaveBeenCalledOnce();
+    const nextRequest = deferred();
+    api.retryProviderLifecycle.mockReturnValueOnce(nextRequest.promise);
+    const nextRetry = state.retry();
+    expect(signal()).not.toBe(activeSignal);
+    request.resolve(result);
+    await retry;
+    expect(recovered).not.toHaveBeenCalled();
+    expect(state.busy.value).toBe(true);
+    expect(state.attempt.value).toEqual(nextAttempt);
+    const nextResult = {
+      account: { ...result.account, ref: nextAttempt.accountRef },
+    };
+    nextRequest.resolve(nextResult);
+    await nextRetry;
+    expect(recovered).toHaveBeenCalledExactlyOnceWith(nextResult);
+    expect(pending.mock.calls).toEqual([[true], [true], [false]]);
+  });
+
+  it("смена аккаунта игнорирует позднюю ошибку старого retry", async () => {
+    const request = deferred();
+    api.retryProviderLifecycle.mockReturnValueOnce(request.promise);
+    const { props, state, data, pending, recovered, signal } = mount();
+    const retry = state.retry();
+    const activeSignal = signal();
+    props.account = { ...props.account, ref: "pacc_next_fixture" };
+    await nextTick();
+    expect(activeSignal.aborted).toBe(true);
+    request.reject(new Error("Stale recovery failure"));
+    await retry;
+    expect(state.recoveryProblem.value).toBeUndefined();
+    expect(state.busy.value).toBe(false);
+    expect(recovered).not.toHaveBeenCalled();
+    expect(pending.mock.calls).toEqual([[true], [false]]);
+    expect(readProviderLifecycleAttempt(original.accountRef, data)).toEqual(
+      original,
+    );
+  });
 
   it("сохраняет UNKNOWN intent и ошибку при замене account и повторяет прежний key только явно", async () => {
     const request = deferred();
