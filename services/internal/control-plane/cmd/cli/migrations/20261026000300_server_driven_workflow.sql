@@ -144,7 +144,9 @@ BEGIN
     IF NEW.type<>'AGENT_EXECUTION' OR NEW.materialization_state<>'MATERIALIZED'
        OR NEW.turn_id IS NULL OR NEW.agent_id IS NULL OR NOT EXISTS (
         SELECT 1 FROM control_plane.runs root
-        JOIN control_plane.workflow_versions version ON version.id=root.workflow_version_id
+        JOIN control_plane.workflow_versions version ON version.id=root.workflow_version_id AND version.organization_id=root.organization_id
+        JOIN control_plane.workflows workflow ON workflow.id=version.workflow_id AND workflow.organization_id=root.organization_id
+            AND workflow.project_id=root.project_id
         JOIN control_plane.runs physical ON physical.id=NEW.run_id AND physical.organization_id=root.organization_id
             AND physical.root_run_id=root.id AND physical.project_id IS NOT DISTINCT FROM root.project_id
         JOIN control_plane.session_turns turn ON turn.id=NEW.turn_id AND turn.run_id=physical.id
