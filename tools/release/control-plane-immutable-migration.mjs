@@ -11,6 +11,7 @@ import { activeDeploymentPods, isProvenStoppedPod } from './stable-archive-trans
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'server-workflow': {version:'20261026001000',file:'20261026001000_workflow_effect_execution_rejoin.sql',annotation:'kodex.dev/cp-server-workflow-migration-plan',previousVersion:20261026000200,emptyField:'serverWorkflowAbsent',preconditionFile:'server-workflow-migration-precondition.sql',postconditionFile:'server-workflow-migration-postcondition.sql',requiredMigrations:Object.freeze(["20261026000300_server_driven_workflow.sql", "20261026000400_workflow_attempt_journal.sql", "20261026000500_workflow_artifact_visibility_retention.sql", "20261026000600_workflow_exception_episodes.sql", "20261026000700_workflow_input_guard_binding.sql", "20261026000800_workflow_exception_terminal_decision.sql", "20261026000900_workflow_effect_rejoin.sql", "20261026001000_workflow_effect_execution_rejoin.sql"])},
   'project-purge-authority': {version:'20261026000200',file:'20261026000200_project_purge_authority_acl.sql',annotation:'kodex.dev/cp-project-purge-authority-migration-plan',previousVersion:20261026000100,emptyField:'purgeAuthoritySafeToMigrate',preconditionFile:'project-purge-authority-migration-precondition.sql',postconditionFile:'project-purge-authority-migration-postcondition.sql'},
   'owner-gate-expiry': {version:'20261026000100',file:'20261026000100_owner_gate_expiry.sql',annotation:'kodex.dev/cp-owner-gate-expiry-migration-plan',previousVersion:20261025000200,emptyField:'expiryAbsent',preconditionFile:'owner-gate-expiry-migration-precondition.sql',postconditionFile:'owner-gate-expiry-migration-postcondition.sql'},
   'outbox-index': {version:'20261025000100',file:'20261025000100_outbox_unpublished_predecessor_index.sql',annotation:'kodex.dev/cp-outbox-index-migration-plan',previousVersion:20261020000200,emptyField:'indexAbsent',preconditionFile:'control-plane-migration-precondition.sql'},
@@ -215,6 +216,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     const directory = `${source.path}/services/internal/control-plane/cmd/cli/migrations`;
     const names = readdirSync(directory).filter(name => /^\d{14}_.+\.sql$/.test(name)).sort();
     ensure(names.at(-1) === migrationFile, 'MIGRATION_NOT_SOURCE_HEAD');
+    ensure((configuration.requiredMigrations??[]).every(name=>names.includes(name)),'MIGRATION_SOURCE_CHAIN_INVALID');
     return createHash('sha256').update(readFileSync(`${directory}/${migrationFile}`)).digest('hex');
   };
   const imageScope = (evidence, nsUID) => {
@@ -592,16 +594,33 @@ export function validOwnerGateExpiryMigrationPostcondition(proof, expectedVersio
 // Проверка включает effective grants всех runtime members и column-level privileges;
 // отсутствие прямого table grant само по себе не доказывает закрытую запись.
 export function validProjectPurgeAuthorityMigrationPostcondition(proof) {
-  return proof?.readOnly==='on' && proof.database==='control_plane' && proof.gooseVersion===20261026000200 &&
+  return validPurgeAuthoritySnapshot(proof,20261026000200);
+}
+
+// Общие effective ACL проверяются одинаково; версия назначается только закрытым профилем.
+function validPurgeAuthoritySnapshot(proof,expectedVersion) {
+  return proof?.readOnly==='on' && proof.database==='control_plane' && proof.gooseVersion===expectedVersion &&
     proof.tables===2 && Number.isSafeInteger(proof.runtimeRoles) && proof.runtimeRoles>=2 &&
     Number.isSafeInteger(proof.runtimeLogins) && proof.runtimeLogins>=1 && proof.runtimeLogins<proof.runtimeRoles &&
     ['tableOwners','runtimeRolesUnprivileged','runtimeRead','runtimeMutationDenied','runtimeColumnMutationDenied',
       'runtimeGrantOptionDenied','publicPrivilegesRevoked','ownerWrite','authorizationFunction','contextsEmpty'].every(key=>proof[key]===true);
 }
 
+// Новый профиль не расширяет принятие прежних версий и проверяет всю назначенную owner schema.
+export function validServerWorkflowMigrationPostcondition(proof) {
+  return validPurgeAuthoritySnapshot(proof,20261026001000) && proof.serverWorkflowProfile==='SERVER_DAG_V1' &&
+    ['schemaOwner','columns','constraints','indexes','triggers','functionSources','functionMetadata','functionACL',
+      'visibilitySource','retentionSource','runtimeColumnAccess','purgeGraphGuard'].every(key=>proof[key]===true) &&
+    proof.workflowColumns===9 && proof.workflowConstraints===6 && proof.workflowGuards===6 && proof.workflowHelpers===4 &&
+    proof.purgeNodes===105 && proof.purgeEdges===284 && proof.purgeBaselineEdges===283 &&
+    proof.purgeNodeFingerprint==='f51a0de25bd942a250997775617eeaee' &&
+    proof.purgeBaselineEdgeFingerprint==='be6e23d9e894687a69a19e9b5777ab09' && proof.purgeEdgeFingerprint==='6bf6ad76d8c7ae66e07f75ecf719fdd6';
+}
+
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {
+    case 'server-workflow': return validServerWorkflowMigrationPostcondition(proof);
     case 'project-purge-authority': return validProjectPurgeAuthorityMigrationPostcondition(proof);
     case 'owner-gate-expiry': return validOwnerGateExpiryMigrationPostcondition(proof);
     case 'repository-bundle': return validRepositoryBundleMigrationPostcondition(proof);

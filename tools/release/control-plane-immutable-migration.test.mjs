@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { planControlPlaneMigration, migrationReadback } from './control-plane-migration.mjs';
 import { fingerprint } from './scoped-release.mjs';
 import { validateStableReceipt } from './stable-image-publication.mjs';
-import { waitMigrationMaintenance, immutableMigrationProfile, validImmutableMigrationPostcondition, validProjectPurgeAuthorityMigrationPostcondition, validOwnerGateExpiryMigrationPostcondition, validRepositoryBundleMigrationPostcondition } from './control-plane-immutable-migration.mjs';
+import { waitMigrationMaintenance, immutableMigrationProfile, validImmutableMigrationPostcondition, validProjectPurgeAuthorityMigrationPostcondition, validOwnerGateExpiryMigrationPostcondition, validRepositoryBundleMigrationPostcondition, validServerWorkflowMigrationPostcondition } from './control-plane-immutable-migration.mjs';
 
 const revision = 'a'.repeat(40), digest = `sha256:${'b'.repeat(64)}`;
 const source = {path:'/fixture/source',revision};
@@ -111,13 +111,26 @@ function readableSourceFixture(directory) {
   }
 }
 
+
+// Fixture — metadata-only ответ fake PostgreSQL; native proof отдельно исполняет настоящий SQL.
+function serverWorkflowProof() {
+ return {readOnly:'on',database:'control_plane',gooseVersion:20261026001000,tables:2,runtimeRoles:2,runtimeLogins:1,
+ tableOwners:true,runtimeRolesUnprivileged:true,runtimeRead:true,runtimeMutationDenied:true,runtimeColumnMutationDenied:true,
+ runtimeGrantOptionDenied:true,publicPrivilegesRevoked:true,ownerWrite:true,authorizationFunction:true,contextsEmpty:true,
+ serverWorkflowProfile:'SERVER_DAG_V1',schemaOwner:true,columns:true,constraints:true,indexes:true,triggers:true,
+ functionSources:true,functionMetadata:true,functionACL:true,visibilitySource:true,retentionSource:true,runtimeColumnAccess:true,purgeGraphGuard:true,
+ workflowColumns:9,workflowConstraints:6,workflowGuards:6,workflowHelpers:4,purgeNodes:105,purgeEdges:284,purgeBaselineEdges:283,
+ purgeNodeFingerprint:'f51a0de25bd942a250997775617eeaee',purgeBaselineEdgeFingerprint:'be6e23d9e894687a69a19e9b5777ab09',purgeEdgeFingerprint:'6bf6ad76d8c7ae66e07f75ecf719fdd6'};
+}
+
 // Настоящий CLI с отдельным kubectl subprocess доказывает порядок intent/CAS/create и запрет повторов.
-function cli(t, profile = 'outbox-index') {
+function cli(t, profile = 'outbox-index', sourceCase = '') {
   const config=immutableMigrationProfile(profile),version=config.version,sqlFile=config.file,annotation=config.annotation;
   const dir=mkdtempSync('/tmp/cp-immutable-migration-');chmodSync(dir,0o700);t.after(()=>rmSync(dir,{recursive:true,force:true}));
   const repo=join(dir,'source'), migrations=join(repo,'services/internal/control-plane/cmd/cli/migrations');
   mkdirSync(migrations,{recursive:true,mode:0o755});chmodSync(repo,0o755);
-  writeFileSync(join(migrations,sqlFile),'-- Синтетический source-only migration fixture\n',{mode:0o644});
+  for(const name of config.requiredMigrations??[sqlFile]) if(sourceCase!=='missing-chain'||name!==config.requiredMigrations[0]) writeFileSync(join(migrations,name),'-- Синтетический source-only migration fixture\n',{mode:0o644});
+  if(sourceCase==='future') writeFileSync(join(migrations,'20261026001100_future_workflow.sql'),'-- Будущий неподтверждённый профиль\n',{mode:0o644});
   const bundleDirectory=join(repo,'deploy/k8s/base/platform-state');mkdirSync(bundleDirectory,{recursive:true,mode:0o755});
   writeFileSync(join(bundleDirectory,'ca-bundles.yaml'),readFileSync(new URL('../../deploy/k8s/base/platform-state/ca-bundles.yaml',import.meta.url)),{mode:0o644});
   const release=join(repo,'tools/release');mkdirSync(release,{recursive:true,mode:0o755});
@@ -166,7 +179,7 @@ if(a.includes('patch')){
  save();if(a.includes('kube-system'))process.stdout.write(JSON.stringify({metadata:{uid:'cluster'}}));else process.stdout.write(s.namespaceUID);
 }else if(a.includes('bundles.trust.cert-manager.io')){save();process.stdout.write('bundle-uid|1|'+JSON.stringify(s.bundleSpec??{sources:[{secret:{name:'kodex-installation-ca',key:'tls.crt'}}],target:{namespaceSelector:{matchLabels:{'kubernetes.io/metadata.name':'kodex-system'}},configMap:{key:'ca.pem'}}}));
 }else if(a.includes('configmap')){save();process.stdout.write('ca-uid|'+s.dependencyVersion+'|'+(s.caLabel??'control-plane-postgresql-ca')+'|'+JSON.stringify([{apiVersion:'trust.cert-manager.io/v1alpha1',kind:'Bundle',name:'control-plane-postgresql-ca',controller:true,uid:s.caOwner??'bundle-uid'}]));
-}else if(a.includes('exec')){const sql=fs.readFileSync(0,'utf8');if(!sql.includes('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;')||!sql.includes('ROLLBACK;'))fail();if(sql.includes('runtimeColumnMutationDenied')){out({readOnly:'on',database:'control_plane',gooseVersion:20261026000200,tables:2,runtimeRoles:2,runtimeLogins:1,tableOwners:true,runtimeRolesUnprivileged:true,runtimeRead:true,runtimeMutationDenied:true,runtimeColumnMutationDenied:true,runtimeGrantOptionDenied:true,publicPrivilegesRevoked:true,ownerWrite:true,authorizationFunction:true,contextsEmpty:true,...s.postcondition});}else if(sql.includes('expiryColumn')){out({readOnly:'on',database:'control_plane',gooseVersion:20261026000100,tableOwner:'control_plane_owner',expiryColumn:true,stateConstraint:true,resolutionConstraint:true,expiryConstraint:true,dueIndex:true,immutableGuard:true,runtimeExecute:true,publicExecuteRevoked:true,...s.postcondition});}else if(sql.includes('noBodyColumns')){out({readOnly:'on',database:'control_plane',gooseVersion:20261025000200,tableOwner:'control_plane_owner',noBodyColumns:true,foreignKeys:13,deferredForeignKeys:13,guardEnabled:true,retentionConsumer:true,purgeGraphGuard:true,purgeNodes:105,purgeEdges:283,purgeNodeFingerprint:'f51a0de25bd942a250997775617eeaee',purgeEdgeFingerprint:'be6e23d9e894687a69a19e9b5777ab09',...s.postcondition});}else out({readOnly:'on',database:'control_plane',gooseVersion:${config.previousVersion},${config.emptyField}:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,claimedRuntimeLeases:0,openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeArchiveTasks:0,activeModelCatalogTasks:0,activeRenewalTasks:0,...s.precondition});
+}else if(a.includes('exec')){const sql=fs.readFileSync(0,'utf8');if(!sql.includes('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;')||!sql.includes('ROLLBACK;'))fail();if(sql.includes('serverWorkflowProfile')){out({...${JSON.stringify(serverWorkflowProof())},...s.postcondition});}else if(sql.includes('runtimeColumnMutationDenied')&&!sql.includes('activeRuntimeRuns')){out({readOnly:'on',database:'control_plane',gooseVersion:20261026000200,tables:2,runtimeRoles:2,runtimeLogins:1,tableOwners:true,runtimeRolesUnprivileged:true,runtimeRead:true,runtimeMutationDenied:true,runtimeColumnMutationDenied:true,runtimeGrantOptionDenied:true,publicPrivilegesRevoked:true,ownerWrite:true,authorizationFunction:true,contextsEmpty:true,...s.postcondition});}else if(sql.includes('expiryColumn')){out({readOnly:'on',database:'control_plane',gooseVersion:20261026000100,tableOwner:'control_plane_owner',expiryColumn:true,stateConstraint:true,resolutionConstraint:true,expiryConstraint:true,dueIndex:true,immutableGuard:true,runtimeExecute:true,publicExecuteRevoked:true,...s.postcondition});}else if(sql.includes('noBodyColumns')){out({readOnly:'on',database:'control_plane',gooseVersion:20261025000200,tableOwner:'control_plane_owner',noBodyColumns:true,foreignKeys:13,deferredForeignKeys:13,guardEnabled:true,retentionConsumer:true,purgeGraphGuard:true,purgeNodes:105,purgeEdges:283,purgeNodeFingerprint:'f51a0de25bd942a250997775617eeaee',purgeEdgeFingerprint:'be6e23d9e894687a69a19e9b5777ab09',...s.postcondition});}else out({readOnly:'on',database:'control_plane',gooseVersion:${config.previousVersion},${config.emptyField}:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,claimedRuntimeLeases:0,openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeArchiveTasks:0,activeModelCatalogTasks:0,activeRenewalTasks:0,...s.precondition});
 }else if(a.includes('kodex-postgresql-0')){save();process.stdout.write((s.pgUID??'pg-uid')+'|StatefulSet|kodex-postgresql|sts-uid|kodex-postgresql|Running|');
 }else if(a.some(x=>x.startsWith('jsonpath='))){save();process.stdout.write('dependency-'+a[a.indexOf('get')+1]+'|'+s.dependencyVersion+'|'+(s.applicationOwner??'kodex'));
 }else if(a.includes('deployment'))out(s.deployment);
@@ -551,4 +564,52 @@ test('expiry schema verification accepts only explicit approved successor versio
  assert.equal(validOwnerGateExpiryMigrationPostcondition(proof,20261026000200),true);
  assert.equal(validOwnerGateExpiryMigrationPostcondition({...proof,gooseVersion:20261026000300},20261026000300),false);
  assert.equal(validOwnerGateExpiryMigrationPostcondition({...proof,immutableGuard:false},20261026000200),false);
+});
+
+// Проверяются реальные public planner/readback и неизменная credential boundary, а не новая копия Job.
+test('server workflow profile pins complete source range and retains canonical maintenance jobs',()=>{
+ const config=immutableMigrationProfile('server-workflow');
+ const plan=planControlPlaneMigration(base(),source,()=>({revision}),'workflow-fixture','server-workflow',publication());
+ assert.equal(config.previousVersion,20261026000200);assert.equal(config.requiredMigrations.length,8);
+ assert.throws(()=>config.requiredMigrations.push('foreign.sql'));
+ assert.equal(plan.migrationVersion,'20261026001000');
+ assert.equal(plan.job.metadata.name,'control-plane-migrate-20261026001000');
+ assert.equal(plan.checkJob.metadata.name,'control-plane-migration-check-20261026001000');
+ assert.deepEqual(plan.job.spec.template.spec,makePlan().job.spec.template.spec);
+ const {job,pod}=execution(plan);job.metadata.annotations={[config.annotation]:fingerprint(plan)};
+ assert.equal(migrationReadback(job,plan,'goose: current version: 20261026001000',[pod]).status,'PASS');
+ assert.equal(migrationReadback(job,plan,'goose: current version: 20261026000200',[pod]).status,'READBACK_UNCONFIRMED');
+});
+test('server workflow proof requires schema authority every guard and exact purge graph; old profiles remain closed',()=>{
+ const proof=serverWorkflowProof();assert.equal(validServerWorkflowMigrationPostcondition(proof),true);
+ assert.equal(validImmutableMigrationPostcondition('server-workflow',proof),true);
+ assert.equal(validProjectPurgeAuthorityMigrationPostcondition(proof),false);
+ assert.equal(validRepositoryBundleMigrationPostcondition(proof,20261026001000),false);
+ assert.equal(validOwnerGateExpiryMigrationPostcondition(proof,20261026001000),false);
+ for(const key of Object.keys(proof)){
+  const missing={...proof};delete missing[key];assert.equal(validServerWorkflowMigrationPostcondition(missing),false,key);
+  assert.equal(validServerWorkflowMigrationPostcondition({...proof,[key]:false}),false,key);
+ }
+ for(const [key,value] of Object.entries({gooseVersion:20261026001100,workflowColumns:8,workflowGuards:4,workflowConstraints:4,
+  workflowHelpers:3,purgeEdges:283,purgeBaselineEdges:284,purgeEdgeFingerprint:'a'.repeat(32),runtimeLogins:2})){
+  assert.equal(validServerWorkflowMigrationPostcondition({...proof,[key]:value}),false,key);
+ }
+});
+test('server workflow CLI stops checks restores exact CP and never replays DDL after a failed schema proof',t=>{
+ const f=cli(t,'server-workflow');pass(f,'plan','PLANNED');pass(f,'check');pass(f,'stop','STOPPED');
+ f.edit(s=>s.postcondition={functionSources:false});const bad=f.run('apply');
+ assert.notEqual(bad.status,0);assert.match(bad.stderr,/POSTCONDITION_FAILED/);
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,2);
+ f.edit(s=>delete s.postcondition);pass(f,'inspect');pass(f,'resume','RESUMED');
+ assert.equal(f.read().deployment.spec.replicas,2);
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,2);
+});
+test('server workflow CLI rejects partial applied schema and unbounded future or missing source before effects',t=>{
+ const f=cli(t,'server-workflow');f.edit(s=>s.precondition={serverWorkflowAbsent:false});
+ assert.notEqual(f.run('plan').status,0);assert.equal(f.read().calls.filter(a=>a.includes('create')||a.includes('patch')).length,0);
+ for(const sourceCase of ['future','missing-chain']){
+  const candidate=cli(t,'server-workflow',sourceCase);const result=candidate.run('plan');
+  assert.notEqual(result.status,0);assert.match(result.stderr,sourceCase==='future'?/MIGRATION_NOT_SOURCE_HEAD/:/MIGRATION_SOURCE_CHAIN_INVALID/);
+  assert.equal(candidate.read().calls.filter(a=>a.includes('create')||a.includes('patch')).length,0);
+ }
 });

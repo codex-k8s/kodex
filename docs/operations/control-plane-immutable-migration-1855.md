@@ -4,7 +4,7 @@ title: Адресная immutable-миграция outbox Control Plane
 type: operation-plan
 status: approved
 owner: manager
-version: 1.2.0
+version: 1.3.0
 updated: 2026-10-26
 ---
 
@@ -14,7 +14,7 @@ updated: 2026-10-26
 Это закрытый профиль `outbox-index` существующего
 `tools/release/control-plane-migration.mjs`, только для `k3d-kodex`,
 `kodex-system`, migration version `20261025000100`. Остальные migration profiles
-сохраняют свой прежний hot-reload контракт. Новые ключи, роли, NetworkPolicy,
+не получают права этого профиля; отдельный `server-workflow` описан ниже. Новые ключи, роли, NetworkPolicy,
 host mounts, доступ моделей и универсальный deploy framework не создаются.
 
 ## Диагностика подключения CLI
@@ -342,3 +342,55 @@ check/init identity/expiry и known-failed attempt2 с неизменяемым�
 [Kubernetes Job](https://kubernetes.io/docs/concepts/workloads/controllers/job/)
 и [object identity](https://kubernetes.io/docs/concepts/overview/working-with-objects/).
 Проверен также официальный [NetworkPolicy Pod lifecycle](https://kubernetes.io/docs/concepts/services-networking/network-policies/#pod-lifecycle).
+
+
+## SERVER_DAG_V1: закрытый переход 002 → 010 — #1836
+
+Профиль `server-workflow` использует тот же immutable оператор и порядок
+`plan → check → stop → apply → inspect → resume`, тот же staging context,
+namespace, migrator identity и неизменные mounts. Он принимает только прежнюю
+Goose `20261026000200` и полный последовательный source003…010 с последней
+миграцией `20261026001000_workflow_effect_execution_rejoin.sql`. Source SHA, clean tree,
+канонический render, build receipt и publication должны совпадать точно.
+Более поздний source head, пропущенный файл, частично применённая schema или
+прежний профиль `project-purge-authority` не дают обхода этого ограничения.
+Миграции003…009 и их уже применённые bytes не переписываются.
+
+Для всех команд раздела «Команды оператора» выбирается
+`--profile server-workflow`; остальные аргументы, приватные plan/evidence,
+свежий check не старше5минут, явный confirm и журнал UNKNOWN остаются прежними.
+Precondition и postcondition назначаются инструментом:
+`server-workflow-migration-precondition.sql` и
+`server-workflow-migration-postcondition.sql`; их bytes входят в plan.
+Клиент не передаёт SQL или ожидаемую Goose версию из payload.
+
+| Граница | Обязательная проверка | Закрытый исход |
+| --- | --- | --- |
+| До plan/check/stop | Goose002, отсутствие9новых колонок,6guards/constraints и4helpers; прежние reader/retention и purge authority ACL; нулевые active work counters | Частичная schema, другой owner/ACL или активная работа не дают STOP/apply |
+| После stop | Exact CP Deployment/ReplicaSet/Pod lineage завершён; те же owner counters нулевые, старых claim sessions нет | Новая работа или неизвестный результат остановки требуют inspect, не CREATE |
+| После единственной up Job | Goose010;9колонок,6constraints,2indexes,6trigger guards и4helpers; exact bodies/metadata, INVOKER, runtime EXECUTE и PUBLIC revoke | Exit0/лог Goose без schema proof не дают PASS |
+| VFS/retention/purge | Сохранены canonical reader и1859retention с узким SERVER дополнением;105relations/284FK, прежние283FK неизменны и добавлен только exact physical-origin FK; guard fingerprint соответствует всему графу | Изменение старых ACL/CLEAN/UNKNOWN или purge edge закрывает PASS |
+| После terminal | Прежний CP возвращается тем же CAS/resume; новый CP доставляется отдельным release | Migration PASS не доказывает dispatcher, runtime или browser acceptance |
+
+Окно недоступности CP обязательно: нельзя запускать migration одновременно с
+его workers или активным workflow/run/model turn. Оно не требует изменения
+API/PWA, брокера, общих credentials, runner admission policy или иных приложений.
+Перед остановкой оператор прекращает запуск новой работы штатным порядком
+текущего QA-профиля; инструмент сам не отменяет пользовательские runs/gates.
+Ненулевой счётчик закрывает план вместо автоматической отмены. После успешного
+resume оператор читает exact version/Pod imageID, затем отдельным новым plan
+доставляет совместимый CP и выполняет приёмку SERVER_DAG_V1.
+
+DDL forward-only: этот профиль не выполняет `down`, ручной DELETE history или
+очистку новых журналов. До первой активации SERVER_DAG_V1 прежний exact CP
+можно вернуть существующим resume после terminal мигратора; это восстановление
+процесса, а не доказательство бизнес-совместимости любого старого образа. После
+записи SERVER roots, capture/attempt/input/exception/effect journals приложение
+восстанавливается только совместимым roll-forward/forward-compatible образом.
+Обычный старый CP не объявляется безопасным rollback для активного SERVER графа.
+
+Node-тесты используют настоящие planner/CLI/readback с изолированным fake
+Kubernetes transport и canonical Job render. Они доказывают operator protocol,
+но не исполняют DDL и не подтверждают PostgreSQL schema. До отдельной проверки
+этих SQL на disposable PostgreSQL18 их native исход остаётся `NOT RUN`;
+staging migration и реальный workflow имеют отдельные receipts и приёмку.
