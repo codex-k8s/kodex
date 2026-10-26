@@ -1912,18 +1912,7 @@ func (repository *Repository) recoverAssistant(ctx context.Context, tx pgx.Tx, s
 // и heartbeat моложе45 секунд. Ошибки resource-limit JSON игнорируются; system/nondeletable flags
 // и role-based action hints не доказывают provider либо environment readiness.
 func (repository *Repository) getAssistantTx(ctx context.Context, tx pgx.Tx, scope scope) (entity.SystemAssistant, error) {
-	var item entity.SystemAssistant
-	var limits []byte
-	err := tx.QueryRow(ctx, queryConfigurationGetassistanttxSelectAssistantRuntimeOrganizationId, scope.organizationID).Scan(&item.Ref, &item.StableKey, &item.Name, &item.Purpose, &item.CorePromptRevision, &item.OwnerInstructions, &item.RuntimeState, &item.RuntimeRevision, &item.DesiredRuntimeRevision, &item.WarmSessionRef, &limits, &item.LastHeartbeatAt, &item.Version, &item.UpdatedAt)
-	if err != nil {
-		return entity.SystemAssistant{}, errs.ErrUnavailable
-	}
-	_ = json.Unmarshal(limits, &item.ResourceLimits)
-	item.Ready = contains([]string{"READY", "BUSY"}, item.RuntimeState) && item.LastHeartbeatAt != nil && time.Since(*item.LastHeartbeatAt) < 45*time.Second
-	item.System = true
-	item.Deletable = false
-	item.NextActions = assistantActions(scope.role, item.Ready)
-	return item, nil
+	return scanSystemAssistant(tx.QueryRow(ctx, queryConfigurationGetassistanttxSelectAssistantRuntimeOrganizationId, scope.organizationID), scope.role)
 }
 
 // applyScheduleContentDefaults trims explicit automation text, falls back to the unchanged legacy

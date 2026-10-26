@@ -2821,18 +2821,7 @@ func (repository *Repository) GetIntegrationConnection(ctx context.Context, prin
 // system/nondeletable и действия роли; это чтение не доказывает готовность исполнения у
 // провайдера.
 func (repository *Repository) getAssistant(ctx context.Context, scope scope) (entity.SystemAssistant, error) {
-	var item entity.SystemAssistant
-	var limits []byte
-	err := repository.pool.QueryRow(ctx, queryQueriesGetassistantSelectAssistantRuntimeOrganizationId, scope.organizationID).Scan(&item.Ref, &item.StableKey, &item.Name, &item.Purpose, &item.CorePromptRevision, &item.OwnerInstructions, &item.RuntimeState, &item.RuntimeRevision, &item.DesiredRuntimeRevision, &item.WarmSessionRef, &limits, &item.LastHeartbeatAt, &item.Version, &item.UpdatedAt)
-	if err != nil {
-		return entity.SystemAssistant{}, errs.ErrUnavailable
-	}
-	_ = json.Unmarshal(limits, &item.ResourceLimits)
-	item.Ready = contains([]string{"READY", "BUSY"}, item.RuntimeState) && item.LastHeartbeatAt != nil && time.Since(*item.LastHeartbeatAt) < 45*time.Second
-	item.System = true
-	item.Deletable = false
-	item.NextActions = assistantActions(scope.role, item.Ready)
-	return item, nil
+	return scanSystemAssistant(repository.pool.QueryRow(ctx, queryQueriesGetassistantSelectAssistantRuntimeOrganizationId, scope.organizationID), scope.role)
 }
 
 // GetSystemAssistant resolves the actor organization and delegates system-assistant

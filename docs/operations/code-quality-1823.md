@@ -4,11 +4,50 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.514.0
+version: 1.515.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общее сканирование системного ассистента — 26.10.2026
+
+Приватный scanSystemAssistant объединяет чтение четырнадцати колонок и прежнюю
+UI-проекцию getAssistant/getAssistantTx. Pool и транзакция, конкретные SQL,
+контекст и organizationID остаются у callers. Helper принимает pgx.Row и
+скопированную строку роли, не разрешает authority, не выполняет запрос и не
+меняет данные. NextActions и Ready остаются подсказками интерфейса, а не
+разрешением исполнения или доказательством доступности провайдера.
+
+Сохранены нулевой результат/ErrUnavailable при Scan error, прежнее игнорирование
+JSON errors/null/несовместимой формы лимитов и условие READY/BUSY с heartbeat
+моложе45s. Будущий heartbeat, как прежде, проходит time.Since<45s. Обработка
+повреждённого JSON этим выносом не исправлена. Чтение неизменяемой строки роли
+до Scan и создание локальных нулевых значений после QueryRow — ограниченная
+перестановка без внешнего эффекта; scope передаётся по значению.
+
+Две полные GoFmt inverses восстанавливают исходники из actual helper; совпали
+тела, imports/comments/directives, SQL selectors, context и owner scope.
+Десять частных изменений порядка Scan/error/JSON/state/heartbeat/role/SQL/
+scope/transaction/context отвергнуты. Приватная overlay-проверка вызывает
+actual helper:180 комбинаций state/heartbeat/role/JSON и два scan-error
+сценария, вместе с parent183PASS/0FAIL/0SKIP за22.93s. Часы не подменялись:
+это проверка устойчивых интервалов, не runtime-доказательство ровно45s.
+Публичные зеркальные тесты простого glue не добавлялись.
+
+Весь control-plane build15.75s/unit38.32s/vet4.88s — PASS LOCAL:
+2949PASS/70условных SKIP/0FAIL,30packages. Четыре выбранных suites на настоящем
+disposable PostgreSQL после изменения:46.18s,25PASS events/0FAIL/0SKIP,
+оснастка удалена. Baseline — уже выполненный запуск на неизменённом production
+коде d84d6a7:46.43s,те же25PASS events; повторный запуск «до» не заявляется.
+Source hashes actual helper и callers совпали во всех проверках.
+
+Пять quality stages — PASS LOCAL. Удалено одно raw окно393c6573,новых нет;
+registry1081 прежний. Detector6782sources/222generated exclusions,
+1442raw/1224retained/218unresolved,Go21599/21599 EN→RU. Context7 ранее отклонил
+API key;использована официальная документация pgx/Go,версии не менялись.
+Legacy renderer FAIL и прежние Bash diagnostics остаются открытыми;
+полные E2E/live/deploy/QA — NOT RUN.
 
 ## Переиспользование изолированного пула в Go-оснастках — 26.10.2026
 
