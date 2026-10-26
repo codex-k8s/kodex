@@ -4,8 +4,8 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 2.2.21
-updated: 2026-10-26
+version: 2.2.22
+updated: 2026-10-27
 ---
 
 # Кодификация документов и задач
@@ -20,6 +20,7 @@ updated: 2026-10-26
 - `OPS-DOC-WORKFLOW-DRAFT-1870` — [Создание и чтение черновика процесса без этапов](../operations/workflow-metadata-draft-1870.md).
 - `OPS-DOC-TERMINAL-GATE-1873` — [Окончательный отказ закрытого Gate после deadline](../operations/terminal-gate-deadline-1873.md).
 
+- `OPS-DOC-GATE-CONSEQUENCES-1928` — [Последствия решения Human Gate](../operations/owner-gate-consequences-1928.md).
 - `OPS-DOC-WORKFLOW-GATE-1872` — [Точные решения Gate опубликованного этапа](../operations/workflow-gate-decisions-1872.md).
 - `OPS-DOC-COMPLETION-RECEIPT-1881` — [Согласованное чтение receipt при завершении с артефактами](../operations/completion-receipt-preflight-1881.md).
 - `OPS-DOC-NATS-STARTUP-1895` — [Закрытая диагностика подключения API к NATS](../operations/nats-startup-diagnostic-1895.md).

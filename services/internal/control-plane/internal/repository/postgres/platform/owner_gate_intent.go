@@ -123,6 +123,12 @@ func (repository *Repository) projectGateIntent(ctx context.Context, runner quer
 		gate.IntegrationIntent = intent
 	}
 	if len(gate.DecisionConsequences) == 0 {
+		if gate.State == "OPEN" {
+			completesRun, err = openOwnerGateCompletesRun(ctx, runner, current, gate.Ref, integration, delivery, completesRun)
+			if err != nil {
+				return err
+			}
+		}
 		gate.DecisionConsequences = gateConsequences(gate.AllowedDecisions, integration, delivery, completesRun)
 	}
 	if len(gate.DecisionConsequences) != len(gate.AllowedDecisions) {

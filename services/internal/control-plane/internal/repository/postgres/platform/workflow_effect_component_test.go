@@ -274,6 +274,7 @@ func runWorkflowEffectRejoinScenario(t *testing.T, mode string) {
 	if err != nil {
 		t.Fatal("read exact effect Gate")
 	}
+	assertOwnerGateApprovalConsequence(t, gate, false, true)
 	f.execute(command.ResolveOwnerGate, "effect-approve", &gate.Version, command.GateResolutionInput{GateRef: gate.Ref, Decision: "APPROVE"})
 	gateway := resolvedTestPrincipal(t, ctx, repository, port.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "integration-gateway", Operation: "platform.runtime.integrations.claim"}, "integration-gateway")
 	work, err := service.ClaimIntegrationInvocations(ctx, gateway, "effect-gateway", 1)

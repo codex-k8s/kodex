@@ -99,8 +99,10 @@ func readServerWorkflowRootTx(ctx context.Context, tx pgx.Tx, current scope, roo
 }
 
 // readServerWorkflowAnchorsTx rejects duplicate or missing logical identity instead of selecting latest.
+// Its read-only interface is shared with gate consequence projection inside the same owner snapshot.
 // readServerWorkflowAnchorsTx отвергает дубли и отсутствие логической identity вместо выбора latest.
-func readServerWorkflowAnchorsTx(ctx context.Context, tx pgx.Tx, current scope, root *serverWorkflowRoot) (map[string]serverWorkflowAnchor, error) {
+// Read-only интерфейс используется также Gate-проекцией внутри того же owner snapshot.
+func readServerWorkflowAnchorsTx(ctx context.Context, tx queryRunner, current scope, root *serverWorkflowRoot) (map[string]serverWorkflowAnchor, error) {
 	rows, err := tx.Query(ctx, queryWorkflowDispatchAnchors, pgx.StrictNamedArgs{"organization_id": current.organizationID, "root_run_id": root.ID})
 	if err != nil {
 		return nil, errs.ErrUnavailable
