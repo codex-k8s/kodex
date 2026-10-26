@@ -4,11 +4,39 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.508.0
+version: 1.509.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Адресные решения по TypeScript-декларациям — 26.10.2026
+
+Сохранены два точных self-pair/hash/count1 окна. `AgentDetailCopy`0b2ddcbb
+содержит только type-only string-поля разных UI-разделов;нормализация имён
+сближает самостоятельные ключи переводов,общего алгоритма нет. Окно
+`operations`08e583e6 относится к закрытой const таблице четырёх configuration
+kinds и шести SDK references каждого;явные специализированные bindings
+сохраняются. Calls/callbacks/control flow в таблице отсутствуют;dispatch и
+invocation вне объявления этими решениями не покрываются.
+
+Полные исходники разобраны установленным TypeScript5.9.3,parseDiagnostics0.
+Проверены containment четырёх окон,восемь interface sections,точные24 bindings
+и const/as const. Шесть source mutants syntax/initializer/call/foreign SDK/
+mutable map/spread отвергнуты. Предыдущие1079 entries сохранены,добавлены2;
+assessor отверг20 registry/report mutations. Другой hash в тех же файлах
+остаётся unresolved;file/service/test исключений и изменений detector нет.
+
+Публичные17 quality unit tests — PASS LOCAL,FAIL/SKIP0. Пять quality stages —
+PASS LOCAL. TypeScript/Go/Bash источники,тесты и зависимости не менялись;
+runtime результаты508 относятся к fc623b8 и здесь не запускались повторно.
+Context7 resolve-library-id снова отклонил API key;проверен официальный
+TypeScript Compiler API guide microsoft/TypeScript wiki,версии не менялись.
+
+Detector6778sources/222generated exclusions,1451raw/1224retained/227unresolved,
+registry1081,Go21598/21598 EN→RU. Raw clone set прежний:это адресное сохранение
+деклараций,не удаление новых runtime-повторов. Legacy renderer FAIL и прежние
+Bash diagnostics остаются открытыми;полные E2E/live/deploy/QA — NOT RUN.
 
 ## Общие pool и principals компонентных сценариев — 26.10.2026
 

@@ -8632,6 +8632,22 @@
       "fragmentSHA256": "f371956a987168014e10d7be55b06fd57084cf72b009b3f2020132a8e8cde3ae",
       "count": 1,
       "reason": "Окно пересекает конец ListMemoryRecords/ListSkillBundles и начало соответствующих revision wrappers: типизированные row/position callbacks, разные SQL constants, entity и catalog kinds, явные 5s и серверные RepeatableRead/ReadOnly. Общие scope/cursor/scan/lookahead/args/Begin алгоритмы уже обслуживают readScopedContextCatalogPage, beginContextCatalogRevision и cursor/args helpers. Сохраняем явные operation-bound SQL adapters и настройки native wrappers по GO-DOC-002; разные resource eligibility и cleanup остаются у своих операций. Граница проверена whole-file AST inverses, точными callback/kind/TxOptions bindings, source mutants и native/current PostgreSQL cases. Решение относится только к этой паре, fragment SHA и одному occurrence."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/agents/detail/copy.ts",
+      "secondPath": "services/staff/control-center/src/features/agents/detail/copy.ts",
+      "fragmentSHA256": "0b2ddcbb0e140b0c5edfd89732cbd37a3a4c5039f59b72d0c05aff661f986aef",
+      "count": 1,
+      "reason": "Окна целиком находятся внутри type-only интерфейса AgentDetailCopy: разные именованные runtime, instructions и environment разделы задают ключи UI-переводов, а не исполняемые операции. TypeScript AST полного исходника подтверждает отсутствие initializer/call/control-flow внутри интерфейса; сходство возникло при нормализации имён string-полей. Общий набор переименованных полей скрыл бы самостоятельные контракты разделов и не вынес бы алгоритм. Сохранено только точное self-pair/hash/count=1; остальные типы, реализации и новые совпадения этого файла не исключаются."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/managed-configurations/api.ts",
+      "secondPath": "services/staff/control-center/src/features/managed-configurations/api.ts",
+      "fragmentSHA256": "08e583e6f973e052b677d6fd428bee6827986522a59bbd2a4639cb4b4ac0eed3",
+      "count": 1,
+      "reason": "Окна относятся к закрытой const operations таблице: четыре явных configuration kind независимо связывают create/save/discard/validate/publish/rebind с разными generated SDK function references. AST полного объявления подтверждает только object/property assignments и sdk.property access без вызовов, callbacks, циклов или преобразований данных; точные24 SDK bindings сохранены. Таблица поддерживает видимый специализированный маршрут каждого kind; фабрика имён или приведение общих функций скрыло бы конкретные операции без удаления алгоритма. Exact self-pair/hash/count=1 не покрывает invocation, dispatch и другие фрагменты файла."
     }
   ]
 }
