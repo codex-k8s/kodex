@@ -4,11 +4,55 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.499.0
+version: 1.500.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие предохранители локальных identity fixtures — 26.10.2026
+
+prepare-e2e-oidc-group и prepare-local-access-identities подключают
+source-only lib/identity-fixture.sh с двумя прежними блоками. Scope сохраняет
+nonempty context,existing absolute state path с прежними root/HOME/symlink
+исключениями,точное операторское подтверждение и case-insensitive prod guard.
+Target сохраняет current-context stdout,rollout300s и namespace labels
+part-of=kodex/local-profile=hot-reload. Разные CLI/defaults/resource lists,
+openssl у access,own usage/fail,locks/secret reads/KCADM/container/reconciliation
+остаются у callers. Подключение на месте scope блока;target вызывается после
+прежних разных tool checks и до первой блокировки.
+
+160 парных сценариев,320 исполнений actual full CLI/preflight prefixes
+до первого exec9,проверили absolute/basename,help/unknown/missing values,
+state path/root/HOME/file/symlink,confirmation/prod/resource rejects,
+current-context/rollout/namespace failures,JSON/labels и разные group flags.
+Используются только fake kubectl с тремя точными read operations и реальный
+jq;argv/status/stdout/stderr совпали. Пробы заканчиваются до locks/temp/Secret
+read/Keycloak mutations. HOME не подменялся,живой kubeconfig не читался.
+
+Baseline уточнил важную границу:исходный current-context guard сравнивает
+stdout,поэтому совпадающая строка с ненулевым exit status принимается;
+пустой/несовпадающий вывод отклоняется. Этот исходный edge сохранён и явно
+проверен,а не объявлен закрытым отказом по exit status. Первая оснастка
+ожидала иное и была исправлена до изменения кода. Полномочия или новая
+security policy этим рефакторингом не вводятся.
+
+Два whole-source byte inverses восстановили оба скрипта;два actual shared
+blocks и literal jq program совпали с native. Восемь опасных source mutations
+отвергнуты;source-only подключение не меняет variables/IFS/cwd/options/argv.
+Bash syntax3 — PASS LOCAL. ShellCheck -a -x двух caller contexts обнаружил
+две импортированные SC2154 контрольных копий;новых диагностик0. Прежние
+SC2016 info:одна у group и две у access;raw exit1 в обоих сохранён,
+конкретные выражения сопоставлены без отключения класса.
+
+Публичный install-contract24.58с — PASS LOCAL. Это source/CLI проверка,
+не реальный запуск OIDC fixtures. Context7 остаётся недоступен по ошибке API
+key;Bash function/source contracts встроенной документации проверены ранее.
+Новых Kubernetes/jq API,dependencies или caller policies нет.
+Detector:6774sources/222 прежних exclusions,1465raw/1221retained/244unresolved.
+Исчезли два окна602d2848/3eba96c8,новых нет;registry1078 и пороги прежние.
+Go21589/21589 EN→RU. Пять quality stages — PASS LOCAL. Legacy agent-runner
+FAIL остаётся открытым;полный E2E/deploy/live и QA — NOT RUN.
 
 ## Общая HTTP-01 и TCP443 проверка адреса — 26.10.2026
 
