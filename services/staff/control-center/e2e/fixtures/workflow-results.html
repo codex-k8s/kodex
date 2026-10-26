@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Редактор условий процесса</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp } from "vue";
+      import { i18n } from "../../src/app/i18n/index";
+      import "../../src/app/styles/base.css";
+      import Fixture from "./WorkflowResultsFixture.vue";
+      i18n.global.locale.value = "ru";
+      createApp(Fixture).use(i18n).mount("#app");
+    </script>
+  </body>
+</html>
