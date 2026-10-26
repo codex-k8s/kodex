@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import type { SyntheticSnapshotInstaller } from "./runs-catalog";
+import { syntheticProviderFinancialOverview } from "./provider-financial";
 import type {
   ProviderAccount,
   ProviderDefinition,
@@ -26,6 +27,7 @@ export async function installProviderFixture(
   const accounts: ProviderAccount[] = [];
   installSnapshot?.("PROVIDER_ACCOUNT", () => ({
     catalog: {
+      financialSummary: syntheticProviderFinancialOverview(accounts),
       accounts: structuredClone(
         accounts.filter((item) => item.state !== "DELETED"),
       ),

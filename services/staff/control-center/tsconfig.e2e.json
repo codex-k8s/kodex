@@ -3,6 +3,7 @@
   "compilerOptions": {
     "lib": ["ES2023", "DOM"],
     "noEmit": true,
+    "paths": { "@/*": ["./src/*"] },
     "types": ["node", "@playwright/test"]
   },
   "include": [
