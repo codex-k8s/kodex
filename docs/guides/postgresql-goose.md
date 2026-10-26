@@ -4,7 +4,7 @@ title: PostgreSQL, именованные SQL-запросы и goose
 type: guide
 status: approved
 owner: developer
-version: 1.2.7
+version: 1.2.8
 updated: 2026-10-26
 ---
 
@@ -109,6 +109,17 @@ SQL не собирается конкатенацией пользовател�
 - Частичный результат при ошибке не возвращается как успешный.
 - Retry serialization/deadlock выполняется ограниченно и только для доказанно
   идемпотентной операции.
+
+Startup bootstrap с несколькими репликами также получает SERIALIZABLE snapshot до
+ожидания owner-row lock. Блокировка неизменённой строки не обновляет snapshot:
+последующий reconcile изменённой строки может завершиться 40001. Типизированная
+SQL/context cause сохраняется приватно сквозь domain mapping; безопасный Error и
+process reporter не форматируют payload драйвера. Повтор целого bootstrap допустим
+только для доказанного 40001/40P01 после подтверждённого rollback либо известного
+server abort. Неизвестный COMMIT/cleanup не повторяется; прежний startup deadline,
+cancel и ограниченное число попыток сохраняются. Детерминированная проверка
+использует завершённый QueryEnd и actual server Lock wait, а не TraceQueryStart
+как доказательство snapshot. Матрица: [#1919](../operations/control-plane-bootstrap-1919.md).
 
 Row lock адресует реальный owner aggregate, а не compatibility view: `FOR SHARE`
 на view разворачивается на все её underlying relations, включая nullable side

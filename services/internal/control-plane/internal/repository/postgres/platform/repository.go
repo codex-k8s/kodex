@@ -209,18 +209,25 @@ func (repository *Repository) Ready(ctx context.Context) error {
 	return nil
 }
 
-// Bootstrap uses one serializable transaction to initialize owner state or reconcile configured
-// credential, core prompt, environment and shipped definitions; commit and deferred rollback
-// remain caller-context operations.
-// Bootstrap использует одну serializable-транзакцию для начального owner state либо сверки
-// credential, core prompt, среды и shipped definitions; commit и deferred rollback остаются
-// операциями с caller context.
+// Bootstrap completes one owner bootstrap before readiness, retrying only proven transaction
+// aborts after cleanup within the original startup context and existing three-attempt limit.
+// Bootstrap завершает owner bootstrap до readiness, повторяя лишь доказанные transaction
+// aborts после cleanup в исходном startup context и прежнем пределе трёх попыток.
 func (repository *Repository) Bootstrap(ctx context.Context) error {
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	return retryBootstrap(ctx, repository.bootstrapOnce)
+}
+
+// bootstrapOnce owns one fresh SERIALIZABLE snapshot and all of its cleanup; private SQL causes
+// survive nested domain mappings without changing authority or any statement's effect.
+// bootstrapOnce владеет одним свежим SERIALIZABLE snapshot и cleanup; приватные SQL causes
+// переживают domain mapping без изменения authority и эффектов statements.
+func (repository *Repository) bootstrapOnce(ctx context.Context) (failure error) {
+	raw, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
 		return bootstrapFailure("begin bootstrap transaction", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	tx := &bootstrapTx{Tx: raw}
+	defer finishBootstrapAttempt(ctx, tx, &failure)
 	var bootstrappedAt *time.Time
 	if err := tx.QueryRow(ctx, queryRepositoryBootstrapSelectInstallationSingleton).Scan(&bootstrappedAt); err != nil {
 		return bootstrapFailure("lock installation bootstrap", err)
