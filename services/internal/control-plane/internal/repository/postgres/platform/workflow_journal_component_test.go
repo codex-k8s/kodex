@@ -71,56 +71,40 @@ func rejectWorkflowJournalBeforeCompletion(t *testing.T, ctx context.Context, po
 	}
 }
 
-// testWorkflowJournalStorage checks owner-built provenance, one append, immutable prefixes and sealed
-// empty inputs using real completed capture rows. The fixture supplies an evaluated result directly;
-// it proves storage constraints only, not result evaluation, dispatch or a complete PDLC.
-// testWorkflowJournalStorage проверяет owner provenance, одно добавление, неизменяемый префикс и пустые
-// входы по настоящим completed capture rows. Оснастка передаёт проверенный исход напрямую: это проверка
-// хранения, а не evaluator, планировщика или полного PDLC.
-func testWorkflowJournalStorage(t *testing.T, ctx context.Context, pool *pgxpool.Pool, nodeRef, leaseRef string, capture map[string]any) {
+// testWorkflowJournalStorage verifies the committed RESULT_INVALID entry created by real completion,
+// duplicate-append denial and immutable history. The plain summary is deliberately not a business
+// declaration: a stored capture must not become acceptance. Initial-append field fault probes are
+// excluded here because completion has already sealed the first entry; prefix denial would mask them.
+// testWorkflowJournalStorage проверяет RESULT_INVALID, записанный настоящим completion, отказ
+// повторного append и неизменяемость истории. Plain summary намеренно не является бизнес-декларацией:
+// сохранённый capture не превращается в приёмку. Проверки полей первого append здесь исключены:
+// completion уже закрепил запись, и отказ менять префикс скрыл бы причину такого probe.
+func testWorkflowJournalStorage(t *testing.T, ctx context.Context, pool *pgxpool.Pool, nodeRef, leaseRef, runRef string, capture map[string]any) {
 	t.Helper()
-	current, lease, history := workflowJournalFixture(t, ctx, pool, nodeRef, leaseRef)
-	if len(history) != 0 {
-		t.Fatal("journal unexpectedly exists before owner append")
+	current, lease, baseline := workflowJournalFixture(t, ctx, pool, nodeRef, leaseRef)
+	if len(baseline) != 1 {
+		t.Fatal("completion did not append exactly one workflow outcome")
 	}
-	accepted, reason := false, "MISSING_RESULT"
-	results := []entity.WorkflowAcceptedResult{}
-	entries := capture["artifacts"].([]any)
-	if len(entries) == 1 {
-		entry := entries[0].(map[string]any)
-		accepted, reason = true, ""
-		results = append(results, entity.WorkflowAcceptedResult{Key: "report", Kind: "ARTIFACT",
-			ArtifactRef: entry["ref"].(string), ArtifactRevision: entry["revisionRef"].(string), Digest: entry["digest"].(string)[7:]})
+	stored := baseline[0]
+	if stored.Provenance == nil || stored.Attempt != 1 || stored.RunRef != runRef ||
+		stored.Provenance.NodeID != lease["nodeID"] || stored.Provenance.OriginNodeID != lease["nodeID"] ||
+		stored.Provenance.RootRunID != lease["rootRunID"] || stored.Provenance.LeaseID != lease["leaseID"] ||
+		stored.RuntimeRevisionID != lease["runtimeRevisionID"] ||
+		stored.Provenance.TurnID != capture["turnId"] ||
+		stored.Provenance.Generation != int64(capture["generation"].(float64)) ||
+		stored.Provenance.RuntimeAttempt != int32(capture["runtimeAttempt"].(float64)) ||
+		stored.Accepted || stored.Reason != workflowDeclarationInvalid || len(stored.Results) != 0 {
+		t.Fatal("completion journal lost exact provenance or accepted a plain summary")
 	}
 	tx, err := pool.Begin(ctx)
 	if err != nil {
-		t.Fatal("begin isolated workflow journal append")
+		t.Fatal("begin duplicate workflow journal append")
 	}
-	stored, appendErr := appendWorkflowAttemptTx(ctx, tx, current, lease, accepted, reason, results)
-	if appendErr != nil {
-		rollbackWorkflowJournalProbe(t, ctx, tx)
-		t.Fatal("append evaluated workflow outcome", completionOutcomeClass(appendErr))
-	}
+	_, appendErr := appendWorkflowAttemptTx(ctx, tx, current, lease, stored.Accepted, stored.Reason, stored.Results)
 	rollbackWorkflowJournalProbe(t, ctx, tx)
-	rejectWorkflowJournalFirstAppend(t, ctx, pool, nodeRef, leaseRef, stored)
-	tx, err = pool.Begin(ctx)
-	if err != nil {
-		t.Fatal("begin committed workflow journal append")
-	}
-	stored, appendErr = appendWorkflowAttemptTx(ctx, tx, current, lease, accepted, reason, results)
-	if appendErr != nil {
-		rollbackWorkflowJournalProbe(t, ctx, tx)
-		t.Fatal("append after rollback-only journal probes", completionOutcomeClass(appendErr))
-	}
-	if err := tx.Commit(ctx); err != nil {
-		t.Fatal("commit isolated workflow journal append")
-	}
-	_, _, baseline := workflowJournalFixture(t, ctx, pool, nodeRef, leaseRef)
-	if len(baseline) != 1 || !reflect.DeepEqual(baseline[0], stored) || stored.Provenance == nil || stored.Attempt != 1 ||
-		stored.Provenance.NodeID != lease["nodeID"] || stored.Provenance.OriginNodeID != lease["nodeID"] ||
-		stored.Provenance.RootRunID != lease["rootRunID"] || stored.Provenance.LeaseID != lease["leaseID"] ||
-		stored.RuntimeRevisionID != lease["runtimeRevisionID"] || stored.Accepted != accepted {
-		t.Fatal("workflow journal lost exact completed provenance")
+	_, _, afterDuplicate := workflowJournalFixture(t, ctx, pool, nodeRef, leaseRef)
+	if !errors.Is(appendErr, errs.ErrConflict) || !reflect.DeepEqual(afterDuplicate, baseline) {
+		t.Fatal("duplicate workflow outcome was not rejected without changing history")
 	}
 	encoded, err := json.Marshal(baseline)
 	if err != nil {
@@ -137,7 +121,7 @@ func testWorkflowJournalStorage(t *testing.T, ctx context.Context, pool *pgxpool
 			case "clear":
 				altered = []map[string]any{}
 			case "replace-verdict":
-				altered[0]["accepted"] = !accepted
+				altered[0]["accepted"] = !stored.Accepted
 			case "replace-lease":
 				altered[0]["provenance"].(map[string]any)["leaseId"] = "00000000-0000-4000-8000-000000000001"
 			case "duplicate":
@@ -164,59 +148,6 @@ func testWorkflowJournalStorage(t *testing.T, ctx context.Context, pool *pgxpool
 			_, _, after := workflowJournalFixture(t, ctx, pool, nodeRef, leaseRef)
 			if !closed || !reflect.DeepEqual(after, baseline) {
 				t.Fatal("workflow journal mutation was not rejected atomically")
-			}
-		})
-	}
-}
-
-// rejectWorkflowJournalFirstAppend probes forged initial provenance before an immutable prefix can
-// mask a missing exact-pin check. Each case starts from empty committed history and rolls back.
-// rejectWorkflowJournalFirstAppend проверяет подмену первого происхождения до того, как защита
-// префикса сможет скрыть отсутствие exact-pin проверки. Каждый случай начинается с пустой истории.
-func rejectWorkflowJournalFirstAppend(t *testing.T, ctx context.Context, pool *pgxpool.Pool, nodeRef, leaseRef string, candidate entity.WorkflowAttemptResult) {
-	t.Helper()
-	encoded, err := json.Marshal(candidate)
-	if err != nil {
-		t.Fatal("encode candidate workflow journal receipt")
-	}
-	for _, field := range []string{"rootRunId", "originNodeId", "nodeId", "leaseId", "turnId", "generation", "runtimeAttempt", "runtimeRevisionId", "runRef", "attempt", "reason", "unknown"} {
-		t.Run("first-journal-"+field, func(t *testing.T) {
-			var altered map[string]any
-			if json.Unmarshal(encoded, &altered) != nil {
-				t.Fatal("decode independent first journal mutation")
-			}
-			proof := altered["provenance"].(map[string]any)
-			switch field {
-			case "generation", "runtimeAttempt":
-				proof[field] = proof[field].(float64) + 1
-			case "runtimeRevisionId", "runRef":
-				altered[field] = "00000000-0000-4000-8000-000000000001"
-			case "attempt":
-				altered[field] = 2
-			case "reason":
-				if candidate.Accepted {
-					altered[field] = "MISSING_RESULT"
-				} else {
-					altered[field] = ""
-				}
-			case "unknown":
-				altered["authority"] = "OWNER"
-			default:
-				proof[field] = "00000000-0000-4000-8000-000000000001"
-			}
-			tx, err := pool.Begin(ctx)
-			if err != nil {
-				t.Fatal("begin first journal provenance probe")
-			}
-			_, mutationErr := tx.Exec(ctx, queryWorkflowJournalMutate, pgx.StrictNamedArgs{
-				"node_ref": nodeRef, "attempts": []any{altered}, "inputs": []any{},
-			})
-			var failure *pgconn.PgError
-			closed := errors.As(mutationErr, &failure) && failure.Code == "23514"
-			rollbackWorkflowJournalProbe(t, ctx, tx)
-			_, _, after := workflowJournalFixture(t, ctx, pool, nodeRef, leaseRef)
-			if !closed || len(after) != 0 {
-				t.Fatal("forged first journal provenance was not rejected atomically")
 			}
 		})
 	}

@@ -187,6 +187,10 @@ func testWorkflowCaptureCompletion(t *testing.T, withArtifact bool) {
 	reject("empty-before-completion", before)
 	reject("rewind", before)
 	rejectWorkflowJournalBeforeCompletion(t, ctx, pool, nodeRef, stringMap(claimed, "leaseRef"))
+	// The plain summary intentionally fails the final result contract, even when capture has a file.
+	// Completion must persist RESULT_INVALID itself; this fixture never supplies a business verdict.
+	// Plain summary намеренно не проходит финальный контракт даже при наличии файла в capture.
+	// Completion сам сохраняет RESULT_INVALID; оснастка не назначает бизнес-исход.
 	payload := command.CompleteExecutionInput{LeaseRef: stringMap(claimed, "leaseRef"), Fence: stringMap(claimed, "fence"),
 		Generation: runtimeRevisionMapInt64(claimed, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: "Capture boundary."}
 	body := []byte("Проверенный материал capture boundary.\n")
@@ -236,9 +240,12 @@ func testWorkflowCaptureCompletion(t *testing.T, withArtifact bool) {
 	for _, mutation := range []string{"clear", "runtime-attempt", "business-attempt", "rewind", "delete"} {
 		reject(mutation, after)
 	}
+	_, _, journalBeforeReplay := workflowJournalFixture(t, ctx, pool, nodeRef, stringMap(claimed, "leaseRef"))
 	replayed := execute(command.CompleteExecution, "complete", nil, freshPayload())
-	if !reflect.DeepEqual(completed.CreatedRefs, replayed.CreatedRefs) || !reflect.DeepEqual(after, proof()) {
-		t.Fatal("capture receipt replay changed durable provenance")
+	_, _, journalAfterReplay := workflowJournalFixture(t, ctx, pool, nodeRef, stringMap(claimed, "leaseRef"))
+	if !reflect.DeepEqual(completed.CreatedRefs, replayed.CreatedRefs) || !reflect.DeepEqual(after, proof()) ||
+		!reflect.DeepEqual(journalBeforeReplay, journalAfterReplay) {
+		t.Fatal("capture receipt replay changed durable provenance or workflow history")
 	}
 	encoded, err := json.Marshal(after.Capture)
 	if err != nil || len(encoded) > 32768 {
@@ -246,7 +253,7 @@ func testWorkflowCaptureCompletion(t *testing.T, withArtifact bool) {
 	}
 	testWorkflowCurrentArtifactSelection(t, ctx, pool, nodeRef, stringMap(claimed, "leaseRef"), after.Capture)
 	testWorkflowCaptureVisibility(t, ctx, pool, nodeRef, int(after.ArtifactCount))
-	testWorkflowJournalStorage(t, ctx, pool, nodeRef, stringMap(claimed, "leaseRef"), after.Capture)
+	testWorkflowJournalStorage(t, ctx, pool, nodeRef, stringMap(claimed, "leaseRef"), run.Ref, after.Capture)
 	if !withArtifact {
 		// No real runtime or storage resource is created by this fixture. Its only external
 		// inventory entry may describe an absent PVC; external cleanup is not under test here.
