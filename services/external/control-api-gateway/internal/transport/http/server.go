@@ -602,6 +602,12 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 	if descriptor.FullName() == "controlplane.v1.ProviderFinancialOverview" && isProto64BitInteger(field.Kind()) {
 		return float64(0), true
 	}
+	if descriptor.FullName() == "controlplane.v1.Overview" && field.Kind() == protoreflect.Int32Kind {
+		switch field.JSONName() {
+		case "projectCount", "agentCount", "activeRunCount", "pendingGateCount":
+			return float64(0), true
+		}
+	}
 	if descriptor.FullName() == "controlplane.v1.ListRunEventsResponse" {
 		if field.Kind() == protoreflect.BoolKind && field.JSONName() == "complete" {
 			return false, true
