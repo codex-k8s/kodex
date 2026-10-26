@@ -273,17 +273,7 @@ func TestPreparedContentBindingComponent(t *testing.T) {
 		if _, err := pool.Exec(ctx, `INSERT INTO control_plane.assistant_plan_revisions(ref,organization_id,plan_id,revision,summary,operations,content_digest,created_by_kind,created_by_ref) VALUES ('prev_cleanup_component',$1,$2,1,'Synthetic',$3,repeat('a',64),'USER','actor_binding_component')`, orgID, pendingPlanID, pendingOperations); err != nil {
 			t.Fatal(err)
 		}
-		link, err := pool.Begin(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := repository.linkPreparedContentTx(ctx, link, current, pending.LedgerID, pendingPlanID, 1, binding.OperationKey); err != nil {
-			link.Rollback(ctx)
-			t.Fatal(err)
-		}
-		if err := link.Commit(ctx); err != nil {
-			t.Fatal(err)
-		}
+		linkPreparedContentComponentPlan(t, ctx, repository, pool, current, pending.LedgerID, pendingPlanID, binding.OperationKey)
 		if _, err := pool.Exec(ctx, `UPDATE control_plane.prepared_content SET available_until=clock_timestamp()-interval '1 minute',writer_deadline=clock_timestamp()-interval '1 minute' WHERE id=$1`, pending.LedgerID); err != nil {
 			t.Fatal(err)
 		}
@@ -370,17 +360,7 @@ func TestPreparedContentBindingComponent(t *testing.T) {
 		if _, err := pool.Exec(ctx, `INSERT INTO control_plane.assistant_plan_revisions(ref,organization_id,plan_id,revision,summary,operations,content_digest,created_by_kind,created_by_ref) VALUES ('prev_terminal_component',$1,$2,1,'Synthetic',$3,repeat('a',64),'USER','actor_binding_component')`, orgID, terminalPlanID, terminalOperations); err != nil {
 			t.Fatal(err)
 		}
-		link, err := pool.Begin(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := repository.linkPreparedContentTx(ctx, link, current, terminal.LedgerID, terminalPlanID, 1, binding.OperationKey); err != nil {
-			link.Rollback(ctx)
-			t.Fatal(err)
-		}
-		if err := link.Commit(ctx); err != nil {
-			t.Fatal(err)
-		}
+		linkPreparedContentComponentPlan(t, ctx, repository, pool, current, terminal.LedgerID, terminalPlanID, binding.OperationKey)
 		if _, err := pool.Exec(ctx, `UPDATE control_plane.prepared_content SET available_until=clock_timestamp()-interval '1 minute',writer_deadline=clock_timestamp()-interval '1 minute' WHERE id=$1`, terminal.LedgerID); err != nil {
 			t.Fatal(err)
 		}

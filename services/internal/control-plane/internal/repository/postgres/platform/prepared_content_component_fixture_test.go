@@ -9,6 +9,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // newPreparedContentComponentService resolves the fixed conversation-create owner, constructs the
@@ -55,6 +56,29 @@ func insertPreparedContentComponentReceipt(t *testing.T, ctx context.Context, tx
 		t.Fatal(err)
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO control_plane.artifact_content(artifact_id,object_key,object_version,object_etag,digest,size_bytes,antivirus_report) VALUES ($1,$2,$3,$4,$5,3,$6)`, artifactID, prepared.ObjectKey, prepared.ObjectVersion, prepared.ObjectETag, prepared.Digest, scanJSON); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// linkPreparedContentComponentPlan binds an already staged ledger to revision one of the caller's
+// synthetic plan using the exact supplied scope and operation key. It begins and commits only the
+// fixture link transaction, rolls back a failed link and terminates the test on each error. The
+// caller retains its pool, context deadline, plan/revision inserts and lifecycle assertions.
+// linkPreparedContentComponentPlan связывает уже подготовленный ledger с первой ревизией
+// синтетического плана, используя точные scope и ключ операции вызывающего. Открывает и фиксирует
+// только транзакцию привязки оснастки, откатывает неудачную привязку и завершает тест при каждой
+// ошибке. Пул, срок контекста, INSERT плана/ревизии и проверки жизненного цикла остаются у теста.
+func linkPreparedContentComponentPlan(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool, current scope, ledgerID, planID, operationKey string) {
+	t.Helper()
+	link, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.linkPreparedContentTx(ctx, link, current, ledgerID, planID, 1, operationKey); err != nil {
+		link.Rollback(ctx)
+		t.Fatal(err)
+	}
+	if err := link.Commit(ctx); err != nil {
 		t.Fatal(err)
 	}
 }

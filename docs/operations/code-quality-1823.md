@@ -4,11 +4,34 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.506.0
+version: 1.507.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая тестовая привязка подготовленного содержимого — 26.10.2026
+
+В двух сценариях `TestPreparedContentBindingComponent` повтор Begin/link/rollback/
+commit вынесен в `linkPreparedContentComponentPlan`. Helper получает исходные
+pool, context, scope, ledger, plan и operation key, связывает ревизию1 и сохраняет
+фатальные ошибки. Разные INSERT плана/ревизии,90s budget,stage,expiry,claim,
+cleanup/purge и все assertions остаются у сценариев. Production-код и SQL не
+менялись;подстановка helper восстанавливает оба полных исходных файла побайтно,
+кроме намеренного `t.Helper`/нового объявления/import. Шесть частных изменений
+scope,revision,commit/rollback,ledger и native plan state отвергнуты проверкой.
+
+Публичный disposable PostgreSQL `TestPreparedContentBindingComponent`:до21.83s,
+после42.27s,оба exit0/4PASS/0FAIL/0SKIP;обе оснастки удалены. После изменения
+полные build/unit/vet control-plane — PASS LOCAL:build6.03s,unit37.56s,
+vet4.58s;2949PASS/70условных SKIP/0FAIL,30packages. Это не полный PostgreSQL
+контур. Пять quality stages — PASS LOCAL. Context7 отклонил API key;проверены
+официальные `pgxpool.Pool.Begin` и `pgx.Tx` на pkg.go.dev,версии не менялись.
+
+Удалено одно raw окно c80d72a5(200tokens),новых нет;реестр1079 решений прежний.
+Detector6778sources/222generated exclusions,1456raw/1222retained/234unresolved,
+Go21596/21596 EN→RU. Legacy renderer FAIL и прежние Bash diagnostics остаются
+открытыми;полные E2E/live/deploy/QA — NOT RUN.
 
 ## Адресное решение по SQL adapters каталогов — 26.10.2026
 
