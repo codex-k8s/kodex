@@ -4,11 +4,54 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.494.0
+version: 1.495.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общий загрузчик SHA-256 артефактов — 26.10.2026
+
+Два установщика install-user-material-tools и prepare-host подключают
+source-only tools/install/artifact-download.sh вместо одинаковой
+функции download_artifact. Тело функции сохранено побайтно: два jq -er
+чтения URL/SHA-256 по имени из прежнего lock_file, прежние curl HTTPS/TLS,
+retry/delay/connect-timeout и --output, затем sha256sum/awk и прежний fail.
+Промежуточные переменные остаются local. Подключение выполняется на месте
+прежнего определения: у host после успешного выхода preflight; привилегии,
+установка, распаковка и разные fail callers остаются на прежних границах.
+Отдельный SHA-512 download_integrity_artifact не менялся.
+
+66 парных сценариев,132 исполнения actual native function/shared function,
+проверили33 случая каждого caller: отсутствующие/неверные/дублированные lock
+entries, поля URL/hash, несовпадение и регистр SHA, пустой/binary payload,
+ошибки curl22/23/28/35, буквальные имена/URL/пути с пробелами, UTF-8, CR/LF
+и метасимволами. Подставной curl проверяет полный прежний argv и пишет только
+синтетические байты. Совпали status/stdout/stderr, argv и выходные bytes;
+локальные переменные сохраняют прежний scope. Это проверка совместимости,
+не имитация сетевой политики curl и не реальная загрузка.
+
+Два полных source byte inverses восстановили прежние скрипты; фактическое
+общее тело совпало с native, восемь опасных source mutations отвергнуты.
+Подключение только объявляет функцию. Bash syntax3 — PASS LOCAL.
+ShellCheck -a -x проверил оба caller contexts; две контрольных SC2154
+в подключаемой копии обнаружены, новых диагностик0. Сырые запуски возвращают1:
+у material installer прежняя SC2016 info, у prepare-host десять прежних
+SC2034 warning. Сопоставлены конкретные исходные выражения; классы не отключены.
+Публичные offline install-contract22.01с, host-hardening0.92с и
+remote-disposable-contract7.69с — PASS LOCAL. Установка, сеть, kubeconfig,
+обновлённые env владельца и live credentials не использовались.
+
+Context7 curl снова вернул ошибку API key. Проверено официальное руководство
+curl: --proto '=https', --tlsv1.2 как минимальная версия, --retry-all-errors
+с --retry/--fail и выходным файлом, а не redirect. Параметры не менялись;
+Bash function/source contracts и jq manual проверены ранее. Зависимости,
+lock и TLS/authority policy не обновлялись.
+
+Detector:6771sources/222 прежних exclusions,1472raw/1221retained/251unresolved.
+Исчезло одно общее окно c2908b8f, новых нет; registry1078 и пороги прежние.
+Go21588/21588 EN→RU. Пять quality stages — PASS LOCAL. Полные E2E,
+реальный deploy/startup и независимая QA — NOT RUN; полный scope продолжается.
 
 ## Общие аргументы management bootstrap — 26.10.2026
 

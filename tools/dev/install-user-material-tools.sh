@@ -33,16 +33,8 @@ cleanup_installation() {
 }
 trap cleanup_installation EXIT
 
-download_artifact() {
-  local name=$1 output=$2 url expected_sha actual_sha
-  url=$(jq -er --arg name "$name" '.artifacts[] | select(.name == $name) | .url' "$lock_file")
-  expected_sha=$(jq -er --arg name "$name" '.artifacts[] | select(.name == $name) | .sha256' "$lock_file")
-  curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
-    --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 15 \
-    "$url" --output "$output"
-  actual_sha=$(sha256sum "$output" | awk '{print $1}')
-  [[ "$actual_sha" == "$expected_sha" ]] || fail "artifact digest mismatch: $name"
-}
+# shellcheck source=../install/artifact-download.sh
+source "$script_directory/../install/artifact-download.sh"
 
 if [[ "$mode" == apply ]]; then
   install -d -m 0700 "$tool_bin" "$material_root"
