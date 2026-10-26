@@ -46,13 +46,16 @@ func TestServerWorkflowProtoRoundtrip(t *testing.T) {
 }
 
 // TestWorkflowAttemptProjectionExcludesInternalRevision keeps owner evidence in the node wire
-// while excluding the internal RuntimeRevision row identity from the public whitelist.
+// while excluding internal RuntimeRevision and completed physical provenance from the public whitelist.
 // TestWorkflowAttemptProjectionExcludesInternalRevision сохраняет доказательства в передаче узла,
-// исключая внутренний идентификатор RuntimeRevision из публичного списка полей.
+// исключая внутренние RuntimeRevision и происхождение physical execution из публичного списка полей.
 func TestWorkflowAttemptProjectionExcludesInternalRevision(t *testing.T) {
-	node := castNode(entity.RunNode{WorkflowResults: []entity.WorkflowAttemptResult{{Attempt: 1, RunRef: "run_12345678", RuntimeRevisionID: "PRIVATE_REVISION_CANARY", Accepted: true, Results: []entity.WorkflowAcceptedResult{{Key: "spec", Kind: "ARTIFACT", ArtifactRef: "art_12345678", ArtifactRevision: "arv_12345678", Digest: "sha256:abc"}}}}})
+	node := castNode(entity.RunNode{WorkflowResults: []entity.WorkflowAttemptResult{{Attempt: 1, RunRef: "run_12345678", RuntimeRevisionID: "PRIVATE_REVISION_CANARY", Accepted: true,
+		Provenance: &entity.WorkflowCompletionProvenance{RootRunID: "PRIVATE_ROOT_CANARY", OriginNodeID: "PRIVATE_ORIGIN_CANARY",
+			NodeID: "PRIVATE_NODE_CANARY", LeaseID: "PRIVATE_LEASE_CANARY", TurnID: "PRIVATE_TURN_CANARY", Generation: 991, RuntimeAttempt: 992},
+		Results: []entity.WorkflowAcceptedResult{{Key: "spec", Kind: "ARTIFACT", ArtifactRef: "art_12345678", ArtifactRevision: "arv_12345678", Digest: "sha256:abc"}}}}})
 	raw, err := protojson.Marshal(node)
-	if err != nil || strings.Contains(string(raw), "PRIVATE_REVISION_CANARY") || strings.Contains(string(raw), "runtimeRevision") || len(node.WorkflowResults) != 1 || len(node.WorkflowResults[0].Results) != 1 {
+	if err != nil || strings.Contains(string(raw), "PRIVATE_") || strings.Contains(string(raw), "runtimeRevision") || strings.Contains(string(raw), "provenance") || len(node.WorkflowResults) != 1 || len(node.WorkflowResults[0].Results) != 1 {
 		t.Fatal("public node evidence lost or internal revision exposed")
 	}
 }
