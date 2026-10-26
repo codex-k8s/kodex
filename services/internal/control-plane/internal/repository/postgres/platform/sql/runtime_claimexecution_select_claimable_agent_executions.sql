@@ -729,7 +729,24 @@ WHERE n.organization_id = $1::uuid
   AND n.type = 'AGENT_EXECUTION'
   AND n.state = 'QUEUED'
   AND r.state IN ('RUNNING', 'QUEUED')
-  AND root.state IN ('RUNNING', 'QUEUED')
+  AND (root.state IN ('RUNNING', 'QUEUED') OR (
+      root.state='WAITING_HUMAN' AND workflow_version.spec->>'ExecutionMode'='SERVER_DAG_V1'
+      AND workflow_version.organization_id=root.organization_id AND r.workflow_version_id=root.workflow_version_id
+      AND n.organization_id=root.organization_id AND n.root_run_id=root.id
+      AND a.project_id=root.project_id AND n.materialization_state='MATERIALIZED'
+      AND EXISTS (SELECT 1 FROM control_plane.workflows pinned_workflow
+          WHERE pinned_workflow.id=workflow_version.workflow_id AND pinned_workflow.organization_id=root.organization_id
+              AND pinned_workflow.project_id=root.project_id)
+      AND ((n.workflow_business_attempt BETWEEN 1 AND 4 AND EXISTS (
+          SELECT 1 FROM jsonb_array_elements(workflow_version.spec->'Steps') assigned_step(value)
+          WHERE assigned_step.value->>'Key'=n.workflow_step_key AND assigned_step.value->>'AgentRef'=a.ref
+      )) OR (
+          n.workflow_business_attempt=0 AND root.workflow_exception->>'state'='MANAGER_QUEUED'
+          AND n.id::text=root.workflow_exception->>'managerNodeId' AND n.ref=root.workflow_exception->>'managerNodeRef'
+          AND n.workflow_step_key='workflow.coordinator.exception.'||(root.workflow_exception->>'episode')
+          AND a.ref=workflow_version.spec->>'CoordinatorAgentRef'
+      ))
+  ))
   AND (
       r.target_type <> 'SYSTEM_ASSISTANT'
       OR (

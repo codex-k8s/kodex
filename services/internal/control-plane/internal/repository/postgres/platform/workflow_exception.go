@@ -23,6 +23,28 @@ const workflowExceptionEpisodeLimit = 48
 //go:embed sql/workflow_exception__history.sql
 var workflowExceptionHistory string
 
+// workflowExceptionOutstanding selects the first unresolved final rejection under the root lock.
+// workflowExceptionOutstanding выбирает первый неразобранный final rejection под root lock.
+//
+//go:embed sql/workflow_exception__outstanding.sql
+var workflowExceptionOutstanding string
+
+// resumeOutstandingWorkflowExceptionTx serializes sibling rejection episodes without replacing the
+// active one or interpreting an older verdict as the result of an in-flight newer business attempt.
+// resumeOutstandingWorkflowExceptionTx последовательно создаёт episodes отказов соседних ветвей,
+// не заменяя активный episode и не принимая старый исход за результат новой выполняющейся попытки.
+func (repository *Repository) resumeOutstandingWorkflowExceptionTx(ctx context.Context, tx pgx.Tx, current scope, root *serverWorkflowRoot) (bool, error) {
+	var cause serverWorkflowException
+	err := tx.QueryRow(ctx, workflowExceptionOutstanding, pgx.StrictNamedArgs{"organization_id": current.organizationID, "root_run_id": root.ID}).Scan(&cause.StepKey, &cause.Attempt, &cause.Reason, &cause.OriginNodeID, &cause.FinalNodeID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, errs.ErrUnavailable
+	}
+	return true, repository.ensureWorkflowExceptionTx(ctx, tx, current, root, cause)
+}
+
 // workflowExceptionSave preserves prior episodes and pins the active last version atomically.
 // workflowExceptionSave сохраняет прежние episodes и атомарно закрепляет активную последнюю версию.
 //

@@ -164,6 +164,9 @@ func (repository *Repository) dispatchServerWorkflowTx(ctx context.Context, tx p
 	} else if expired {
 		return nil
 	}
+	if found, err := repository.resumeOutstandingWorkflowExceptionTx(ctx, tx, current, root); err != nil || found {
+		return err
+	}
 	anchors, err := readServerWorkflowAnchorsTx(ctx, tx, current, root)
 	if err != nil {
 		return err
