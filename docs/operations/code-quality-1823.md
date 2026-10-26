@@ -4,11 +4,53 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.525.0
+version: 1.526.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая подготовка namespaced RoleImage fixtures — 26.10.2026
+
+Четыре component tests admission failure/risk, fresh build correlation и
+organization images используют newNamespacedRoleImageComponentRepository:
+New с фиксированными openai-codex/gpt-5 и свежим objectstoragetest, затем прежние
+namespacedRoleImageComponentConfig иBootstrap с точным caller context. Helper
+не добавляет provider credential; похожие provider-bearing fixtures остаются
+отдельными. Ошибки Fatal прежние. Caller по-прежнему владеет deadline, pool,
+Close, principals, командами и lifecycle assertions.
+
+В organization images/environment общий newTracedOrganizationComponentPool
+сохраняет isolatedAssistantComponentDSN, ParseConfig, прежний
+organizationImageQueryTracer иNewWithConfig с caller context. Точные parse
+иconnection ошибки сохранены. Close остаётся до allocator database cleanup;
+helper не выбирает модель, конфигурацию repository или права. Это локальные
+fixture helpers своего package,не новый production runtime primitive.
+
+Шесть полных source inverses восстанавливают исходные файлы;оба helper bodies
+равны исходным kernels с добавленными t.Helper иreturn. Изменения production
+Go,SQL,контрактов,ключей иресурсов развёртывания отсутствуют. Build6.28s,
+unit18.62s(2949PASS/70условныхSKIP/0FAIL,30packages) иvet4.68s control-plane
+прошли. До изменения4selected PostgreSQL scenarios:16PASS events,0FAIL/SKIP,
+54.58s. На итоговом коде5selected scenarios,включая organization environment:
+26PASS events,0FAIL/SKIP,57.18s. Разница числа событий обусловлена добавленной
+suite,не выдаётся за одинаковый объём before/after. Disposable PostgreSQL
+удалён публичным runner;живой cluster/provider не использовался.
+
+Два точных self-overlap окна runtime.go/workers.go сохранены адресно:они
+перекрывают один INSERT arguments list иодин Scan destinations list,не две
+реализации. Разные ref/version/digest поля связаны с порядком одного SQL;
+обобщение positional mapping не удалило бы повторное вычисление. Исходные
+production файлы побайтно прежние. Новых raw окон нет,пять удалены. Registry1106,
+12registry mutations и17quality unit tests PASS;пять quality stages PASS LOCAL.
+6784sources/222exclusions,1424raw/1249retained/175unresolved(Go87/TypeScript88),
+Go21616/21616 EN→RU. Остальные175групп ещё требуют разбора.
+
+Context7 через доступный коннектор resolve/query /jackc/pgx PASS:проверены
+Pool.Close иNewWithConfig,владение pool иcontext. Отдельный прямой MCP endpoint
+вернул Invalid API key;значения ключей не читались,не переносились и не менялись.
+Полный E2E/browser/live/deploy/startup/QA этого пакета NOT RUN;предыдущий полный
+local render PASS относится к3cd994c,здесь изменены только Go fixture helpers.
 
 ## Проверка EMAIL учитывает Kustomize components — 26.10.2026
 

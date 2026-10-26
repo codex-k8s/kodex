@@ -17,7 +17,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // queryOrganizationEnvironmentReparent moves one environment set to a project
@@ -45,15 +44,7 @@ var queryOrganizationEnvironmentBindingReparent string
 func TestOrganizationRuntimeEnvironmentComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
-	config, err := pgxpool.ParseConfig(isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal("parse isolated fixture configuration")
-	}
-	config.ConnConfig.Tracer = organizationImageQueryTracer{t: t}
-	pool, err := pgxpool.NewWithConfig(ctx, config)
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newTracedOrganizationComponentPool(t, ctx)
 	defer pool.Close()
 	repository := newConfiguredAssistantComponentRepository(t, pool, "gpt-6.1-sol")
 	if err := repository.Bootstrap(ctx); err != nil {

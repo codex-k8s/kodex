@@ -112,3 +112,50 @@ func resolveRunLaunchComponentPrincipals(t *testing.T, ctx context.Context, r *R
 	worker := resolvedTestPrincipal(t, ctx, r, port.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim"}, "runtime-controller")
 	return owner, worker
 }
+
+// newNamespacedRoleImageComponentRepository creates the fixed synthetic openai-codex/gpt-5
+// adapter with fresh in-memory object storage, applies only the namespaced role-image policy,
+// then bootstraps with the exact caller context. It preserves the three original Fatal error
+// paths and does not configure a provider credential. Pool ownership, tracer, deadline,
+// principals and scenario assertions stay with the caller; no provider or cluster is contacted.
+// newNamespacedRoleImageComponentRepository создаёт фиксированный тестовый adapter
+// openai-codex/gpt-5 с новым in-memory object storage, применяет только namespaced role-image
+// policy и выполняет Bootstrap с точным context вызывающего. Сохраняет три исходных Fatal
+// error paths и не настраивает provider credential. Pool, tracer, deadline, principals и
+// проверки сценария остаются у вызывающего; обращения к provider или кластеру отсутствуют.
+func newNamespacedRoleImageComponentRepository(t *testing.T, ctx context.Context, pool *pgxpool.Pool) *Repository {
+	t.Helper()
+	repository, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.ConfigureRoleImages(namespacedRoleImageComponentConfig()); err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.Bootstrap(ctx); err != nil {
+		t.Fatal(err)
+	}
+	return repository
+}
+
+// newTracedOrganizationComponentPool opens an isolated pool with the existing organization
+// query tracer and the exact caller context. Parsing and connection errors keep their original
+// Fatal messages. The caller closes the returned pool before registered database cleanup;
+// deadline, repository configuration and assertions are not selected here.
+// newTracedOrganizationComponentPool открывает изолированный pool с прежним organization
+// query tracer и точным context вызывающего. Ошибки разбора и подключения сохраняют исходные
+// Fatal messages. Вызывающий закрывает pool до зарегистрированной очистки БД; helper не
+// выбирает deadline, конфигурацию repository и проверки сценария.
+func newTracedOrganizationComponentPool(t *testing.T, ctx context.Context) *pgxpool.Pool {
+	t.Helper()
+	config, err := pgxpool.ParseConfig(isolatedAssistantComponentDSN(t))
+	if err != nil {
+		t.Fatal("parse isolated fixture configuration")
+	}
+	config.ConnConfig.Tracer = organizationImageQueryTracer{t: t}
+	pool, err := pgxpool.NewWithConfig(ctx, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return pool
+}

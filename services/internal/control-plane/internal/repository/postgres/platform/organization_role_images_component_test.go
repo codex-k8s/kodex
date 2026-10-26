@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	roleimagerepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/roleimage"
@@ -19,7 +18,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // queryOrganizationImageComponentOwner changes only the exact fixture organization/subject
@@ -79,26 +77,9 @@ var queryOrganizationImageComponentTerminalExpiry string
 func TestOrganizationRoleImagesComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
-	config, err := pgxpool.ParseConfig(isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal("parse isolated fixture configuration")
-	}
-	config.ConnConfig.Tracer = organizationImageQueryTracer{t: t}
-	pool, err := pgxpool.NewWithConfig(ctx, config)
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newTracedOrganizationComponentPool(t, ctx)
 	defer pool.Close()
-	repository, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := repository.ConfigureRoleImages(namespacedRoleImageComponentConfig()); err != nil {
-		t.Fatal(err)
-	}
-	if err := repository.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
+	repository := newNamespacedRoleImageComponentRepository(t, ctx, pool)
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
 		CallerWorkload: "control-api-gateway", Operation: "platform.organization.role-images.recipes.manage",

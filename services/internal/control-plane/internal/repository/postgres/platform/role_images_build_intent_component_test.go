@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	roleimagerepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/roleimage"
 	roleimageservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/roleimage"
@@ -30,16 +29,7 @@ func TestRoleImageBuildFreshCorrelationComponent(t *testing.T) {
 	pool := newIsolatedAssistantComponentPool(t, ctx)
 	var err error
 	defer pool.Close()
-	repository, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := repository.ConfigureRoleImages(namespacedRoleImageComponentConfig()); err != nil {
-		t.Fatal(err)
-	}
-	if err := repository.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
+	repository := newNamespacedRoleImageComponentRepository(t, ctx, pool)
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
 		CallerWorkload: "control-api-gateway", Operation: "platform.organization.role-images.recipes.manage",

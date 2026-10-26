@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime.go",
+      "fragmentSHA256": "87e97f1338f5f0cafb69b1c709ef367776d08675209d9a6ca3423b92ed47b3a3",
+      "count": 1,
+      "reason": "Два окна1074–1087/1074–1088 перекрывают один и тот же QueryRow INSERT immutable RuntimeRevision, а не две реализации. Повторяемый рисунок positional arguments образован разными provider/configuration/environment ref/version/digest полями одного owner snapshot;порядок связан с одним embedded SQL. Выделение общего dispatcher либо перестановка значений не удалит второго вычисления и скроет видимую связь с колонками. Сохранён только один точный self-overlap hash/count1 файла runtime.go;eligibility,marshalling,digest checks и другие запросы не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/workers.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/workers.go",
+      "fragmentSHA256": "9d64c2bab5b94bbb13cc939c841b688ff10fb901f38bf344c3c4ccf02727645a",
+      "count": 1,
+      "reason": "Окна123–137/124–137 перекрывают один Scan единственного queryWorkersReconcilewarmruntimeSelectAssistantRuntimeOrganizationId. Сходный token pattern относится к разным destinations runtime config/provider/overlay/environment/image иих версиям иdigest,не к двум самостоятельным scan kernels. Этот positional row mapping должен сохранять порядок конкретного SQL иадреса typed outputs;универсальный циклический setter сделал бы связь менее проверяемой без устранения копии. Сохранён лишь точный self-overlap hash/count1 workers.go;сама reconcile lifecycle и другие scanner fragments не исключены."
+    },
+    {
       "format": "bash",
       "firstPath": "deploy/k8s/base/image-supply-chain/image-admission.sh",
       "secondPath": "tools/verify-image-supply-chain-fixtures.sh",
