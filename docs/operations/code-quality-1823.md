@@ -4,11 +4,44 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.509.0
+version: 1.510.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая проекция versioned mutation headers PWA — 26.10.2026
+
+`versionedMutationHeaders` заменяет16 трёхключевых header objects в assistant,
+projects и attachment-set API adapters. Копирует только Idempotency-Key,
+X-CSRF-Token и If-Match с прежним nullish fallback пустой строки. Не читает
+cookie/credentials,не создаёт key/etag,не выбирает version,не делает retry.
+Исходные typed SDK functions,path,body,version,mutate/retry,requestSignal и
+receipt guards остаются у операций. Двухключевые create/addTurn headers не
+менялись. Type-only import MutationHeaders не добавляет runtime dependency
+на mocked mutation module. Порядок ключей map может стать каноническим;
+сохраняются точные имена/значения,не заявляется byte-equal HTTP serialization.
+
+Три whole-module inverses восстанавливают прежние файлы после штатного
+Prettier formatting,включая исходный порядок полей header objects. Actual
+helper и16 native expressions проверены на384 парах/768 executions:missing,
+null,empty и разные If-Match,два idempotency/CSRF значения,лишний synthetic
+header. Вход не меняется,возвращается новый object ровно с тремя ключами.
+Шесть mutations fallback/key/spread/caller input/receipt guard/SDK operation
+отвергнуты. Публичные mirror-тесты для этого glue не добавлялись.
+
+Полные PWA unit:413files/4114tests58.98s,FAIL/SKIP0. Format/check0.47s,
+lint8.99s,typecheck49.32s,production build8.59s — PASS LOCAL. Vite config
+использовал envDir:false;runtime app env не загружался. Это unit/static/build,
+не browser E2E или deployed acceptance. Прежнее предупреждение Vite о chunk
+больше500kB сохраняется;это не zero-warning build. Context7 ранее отклонил API key;
+проверена официальная TypeScript Compiler API документация,версии не менялись.
+
+Пять quality stages — PASS LOCAL. Удалены3raw окна961daf0f/b47995b0/c3e0b6db,
+появились2 composition окна,оба остаются unresolved. Registry1081 прежний.
+Detector6779sources/222generated exclusions,1450raw/1224retained/226unresolved,
+Go21598/21598 EN→RU. Legacy renderer FAIL и прежние Bash diagnostics остаются
+открытыми;полные E2E/live/deploy/QA — NOT RUN.
 
 ## Адресные решения по TypeScript-декларациям — 26.10.2026
 

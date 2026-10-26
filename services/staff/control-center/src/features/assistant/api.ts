@@ -1,3 +1,4 @@
+import { versionedMutationHeaders } from "@/shared/api/versioned-mutation-headers";
 import { requestSignal } from "@/shared/api/client";
 import {
   addAssistantTurn,
@@ -158,11 +159,7 @@ export async function archiveConversation(
       (headers) =>
         archiveAssistantConversation({
           path: { conversationRef: conversation.ref },
-          headers: {
-            "If-Match": headers["If-Match"] ?? "",
-            "Idempotency-Key": headers["Idempotency-Key"],
-            "X-CSRF-Token": headers["X-CSRF-Token"],
-          },
+          headers: versionedMutationHeaders(headers),
           signal: requestSignal(),
         }),
       conversation.version,
@@ -186,11 +183,7 @@ export async function restoreConversation(
       (headers) =>
         restoreAssistantConversation({
           path: { conversationRef: conversation.ref },
-          headers: {
-            "If-Match": headers["If-Match"] ?? "",
-            "Idempotency-Key": headers["Idempotency-Key"],
-            "X-CSRF-Token": headers["X-CSRF-Token"],
-          },
+          headers: versionedMutationHeaders(headers),
           signal: requestSignal(),
         }),
       conversation.version,
@@ -213,11 +206,7 @@ export async function purgeConversation(
     (headers) =>
       purgeAssistantConversation({
         path: { conversationRef: conversation.ref },
-        headers: {
-          "If-Match": headers["If-Match"] ?? "",
-          "Idempotency-Key": headers["Idempotency-Key"],
-          "X-CSRF-Token": headers["X-CSRF-Token"],
-        },
+        headers: versionedMutationHeaders(headers),
         signal: requestSignal(),
       }),
     conversation.version,
@@ -234,11 +223,7 @@ export async function moveConversationToProject(
         moveAssistantConversationToProject({
           path: { conversationRef: conversation.ref },
           body: { projectRef },
-          headers: {
-            "If-Match": headers["If-Match"] ?? "",
-            "Idempotency-Key": headers["Idempotency-Key"],
-            "X-CSRF-Token": headers["X-CSRF-Token"],
-          },
+          headers: versionedMutationHeaders(headers),
           signal: requestSignal(),
         }),
       conversation.version,
@@ -286,11 +271,7 @@ export async function renameConversation(
         updateAssistantConversationTitle({
           path: { conversationRef: conversation.ref },
           body: { title },
-          headers: {
-            "Idempotency-Key": headers["Idempotency-Key"],
-            "X-CSRF-Token": headers["X-CSRF-Token"],
-            "If-Match": headers["If-Match"] ?? "",
-          },
+          headers: versionedMutationHeaders(headers),
           signal: requestSignal(),
         }),
       conversation.version,
@@ -332,11 +313,7 @@ export async function cancelAssistantTurn(
     (headers) =>
       cancelAssistantTurnRequest({
         path: { conversationRef: conversation.ref },
-        headers: {
-          "If-Match": headers["If-Match"] ?? "",
-          "Idempotency-Key": headers["Idempotency-Key"],
-          "X-CSRF-Token": headers["X-CSRF-Token"],
-        },
+        headers: versionedMutationHeaders(headers),
         signal: requestSignal(),
       }),
     conversation.version,
@@ -357,11 +334,7 @@ export async function savePlanDraft(
         updateAssistantPlanDraft({
           path: { planRef: plan.ref },
           body: { summary, operations },
-          headers: {
-            "Idempotency-Key": headers["Idempotency-Key"],
-            "X-CSRF-Token": headers["X-CSRF-Token"],
-            "If-Match": headers["If-Match"] ?? "",
-          },
+          headers: versionedMutationHeaders(headers),
           signal: requestSignal(),
         }),
       plan.version,
@@ -378,11 +351,7 @@ export async function validatePlanDraft(
         validateAssistantPlan({
           path: { planRef: plan.ref },
           body: { revision: plan.revision },
-          headers: {
-            "Idempotency-Key": headers["Idempotency-Key"],
-            "X-CSRF-Token": headers["X-CSRF-Token"],
-            "If-Match": headers["If-Match"] ?? "",
-          },
+          headers: versionedMutationHeaders(headers),
           signal: requestSignal(),
         }),
       plan.version,
@@ -399,11 +368,7 @@ export async function applyPlanDraft(
         applyAssistantPlan({
           path: { planRef: plan.ref },
           body: { revision: plan.revision },
-          headers: {
-            "Idempotency-Key": headers["Idempotency-Key"],
-            "X-CSRF-Token": headers["X-CSRF-Token"],
-            "If-Match": headers["If-Match"] ?? "",
-          },
+          headers: versionedMutationHeaders(headers),
           signal: requestSignal(),
         }),
       plan.version,
@@ -420,11 +385,7 @@ export async function rejectPlanDraft(
         rejectAssistantPlan({
           path: { planRef: plan.ref },
           body: { revision: plan.revision },
-          headers: {
-            "Idempotency-Key": headers["Idempotency-Key"],
-            "X-CSRF-Token": headers["X-CSRF-Token"],
-            "If-Match": headers["If-Match"] ?? "",
-          },
+          headers: versionedMutationHeaders(headers),
           signal: requestSignal(),
         }),
       plan.version,

@@ -1,3 +1,4 @@
+import { versionedMutationHeaders } from "@/shared/api/versioned-mutation-headers";
 import {
   getProject,
   listProjects,
@@ -55,11 +56,7 @@ export async function moveProjectToTrash(project: Project): Promise<Project> {
     (headers) =>
       trashProject({
         path: { projectRef: project.ref },
-        headers: {
-          "Idempotency-Key": headers["Idempotency-Key"],
-          "X-CSRF-Token": headers["X-CSRF-Token"],
-          "If-Match": headers["If-Match"] ?? "",
-        },
+        headers: versionedMutationHeaders(headers),
         signal: requestSignal(),
       }),
     project.version,
@@ -74,11 +71,7 @@ export async function restoreProjectFromTrash(
     (headers) =>
       restoreProject({
         path: { projectRef: project.ref },
-        headers: {
-          "Idempotency-Key": headers["Idempotency-Key"],
-          "X-CSRF-Token": headers["X-CSRF-Token"],
-          "If-Match": headers["If-Match"] ?? "",
-        },
+        headers: versionedMutationHeaders(headers),
         signal: requestSignal(),
       }),
     project.version,
@@ -93,11 +86,7 @@ export async function purgeProjectFromTrash(
     (headers) =>
       purgeProject({
         path: { projectRef: project.ref },
-        headers: {
-          "Idempotency-Key": headers["Idempotency-Key"],
-          "X-CSRF-Token": headers["X-CSRF-Token"],
-          "If-Match": headers["If-Match"] ?? "",
-        },
+        headers: versionedMutationHeaders(headers),
         signal: requestSignal(),
       }),
     project.version,

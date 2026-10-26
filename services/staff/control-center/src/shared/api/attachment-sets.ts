@@ -1,3 +1,4 @@
+import { versionedMutationHeaders } from "@/shared/api/versioned-mutation-headers";
 import { requestSignal } from "@/shared/api/client";
 import {
   addAttachmentSetItems,
@@ -219,11 +220,7 @@ export async function addAttachmentItems(
         addAttachmentSetItems({
           path: { attachmentSetRef: draft.ref },
           body: { artifactRefs, insertAfterPosition },
-          headers: {
-            "Idempotency-Key": headers["Idempotency-Key"],
-            "X-CSRF-Token": headers["X-CSRF-Token"],
-            "If-Match": headers["If-Match"] ?? "",
-          },
+          headers: versionedMutationHeaders(headers),
           signal: requestSignal(signal),
         }),
       draft.version,
@@ -242,11 +239,7 @@ export async function removeAttachmentItems(
         removeAttachmentSetItems({
           path: { attachmentSetRef: draft.ref },
           body: { artifactRefs },
-          headers: {
-            "Idempotency-Key": headers["Idempotency-Key"],
-            "X-CSRF-Token": headers["X-CSRF-Token"],
-            "If-Match": headers["If-Match"] ?? "",
-          },
+          headers: versionedMutationHeaders(headers),
           signal: requestSignal(signal),
         }),
       draft.version,
@@ -263,11 +256,7 @@ export async function finalizeAttachmentDraft(
       (headers) =>
         finalizeAttachmentSet({
           path: { attachmentSetRef: draft.ref },
-          headers: {
-            "Idempotency-Key": headers["Idempotency-Key"],
-            "X-CSRF-Token": headers["X-CSRF-Token"],
-            "If-Match": headers["If-Match"] ?? "",
-          },
+          headers: versionedMutationHeaders(headers),
           signal: requestSignal(signal),
         }),
       draft.version,
