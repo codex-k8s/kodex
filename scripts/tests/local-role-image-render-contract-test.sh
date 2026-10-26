@@ -439,7 +439,7 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
       (.verbs | sort) == (["create","delete","get","list"] | sort)) and
     any(.rules[];
       .apiGroups == [""] and .resources == ["persistentvolumeclaims"] and
-      (.verbs | sort) == (["create","delete","get","list"] | sort)))
+      (.verbs | sort) == (["create","delete","get","list","update"] | sort)))
 ' >/dev/null || fail 'image admission controller cannot clean terminal jobs and workspaces'
 yq -o=json -I=0 '.' "$render" | jq -s -e '
   any(.[];

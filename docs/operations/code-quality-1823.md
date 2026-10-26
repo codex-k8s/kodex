@@ -4,11 +4,49 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.524.0
+version: 1.525.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Проверка EMAIL учитывает Kustomize components — 26.10.2026
+
+Прежний EMAIL verifier сравнивал итоговый NetworkPolicy с сырыми YAML баз,
+поэтому не учитывал шесть точных egress rules общего authority component.
+Теперь expected policies строятся через kubectl kustomize трёх канонических
+баз EMAIL: runtime, data и migration. Ожидание независимо от проверяемого
+render. Проверка требует единственный ресурс exact namespace/name и полный
+spec; дополнительные destinations/ports не допускаются. Ошибка или пустой
+набор любой обязательной базы закрыто отклоняется, включая первую и среднюю
+базу pipeline. Runtime resources, permissions и deployment inputs не менялись.
+
+К прежним39negative cases добавлены7проверок component policy: отсутствие,
+удаление egress, расширение, чужой port, namespace, destination и duplicate
+identity. Ещё6cases проверяют отказ/пустой вывод каждой из3expected баз.
+Первоначальный duplicate fixture был исправлен: повторная ссылка yq на тот же
+source node не создавала второго YAML document. Этот первый запуск остаётся
+FAIL, а итоговый fixture действительно содержит два ресурса. Полный local
+RoleImage suite также выявил устаревший exact PVC verbs oracle: controller
+уже использует Update при recovery, и канонический Role это разрешает.
+Добавлен именно update в expected verbs; runtime RBAC не расширялся.
+
+Итоговый публичный scripts/tests/local-role-image-render-contract-test.sh:
+PASS LOCAL,243.29s. Включены16credential tests,14cache tests,2upgrade tests,
+worker-grant/selectors, EMAIL positive и52negative cases, итоговые admission
+phases/provenance/cache boundaries. Bash syntax иShellCheck трёх изменённых
+shell scripts PASS,0diagnostics. Пять quality stages PASS LOCAL:6784sources,
+222generated exclusions,1429raw/1247retained/182unresolved,Go21614/21614 EN→RU.
+Контрактный render проверяет synthetic fixtures;apply/live/browser/E2E иQA
+не запускались. Утверждение о прежнем EMAIL FAIL ниже является историческим,
+актуальный локальный отказ устранён и полный entrypoint прошёл.
+
+Системный инвариант expected policies из полного kustomization, exact
+namespaced cardinality иfail-closed source stream закреплён в GUIDE-DOC-003
+v1.7.32. Context7 resolve/query /kubernetes-sigs/kustomize PASS:проверены
+официальные Components ипорядок применения base/components/transformers.
+Новые зависимости или изменения ключей не требуются;значения секретов в diff
+не добавлены. Общий объём дедубликации ещё не завершён:182группы в разборе.
 
 ## Общие runtime render predicates и Go cache fragments — 26.10.2026
 

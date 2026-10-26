@@ -47,6 +47,12 @@ for mutation in \
   '(select(.kind == "ConfigMap" and .data."mail-policy.json" != null) | .data."mail-policy.json") = "{}"' \
   '(select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-publisher-target-registry") | .data."key-delivery-targets.yaml") |= (from_yaml | .targets |= map(select(.workload_id != "email-bridge")) | to_yaml)' \
   '(select(.kind == "NetworkPolicy" and .metadata.name == "email-bridge") | .spec.egress) = [{}]' \
+  'select(.kind != "NetworkPolicy" or .metadata.name != "email-bridge-internal-rpc-authority-exact-paths")' \
+  '(select(.kind == "NetworkPolicy" and .metadata.name == "email-bridge-internal-rpc-authority-exact-paths") | .spec.egress) = []' \
+  '(select(.kind == "NetworkPolicy" and .metadata.name == "email-bridge-internal-rpc-authority-exact-paths") | .spec.egress) += [{}]' \
+  '(select(.kind == "NetworkPolicy" and .metadata.name == "email-bridge-internal-rpc-authority-exact-paths") | .spec.egress[1].ports[0].port) = 5433' \
+  '(select(.kind == "NetworkPolicy" and .metadata.name == "email-bridge-internal-rpc-authority-exact-paths") | .metadata.namespace) = "foreign"' \
+  '(select(.kind == "NetworkPolicy" and .metadata.name == "email-bridge-internal-rpc-authority-exact-paths") | .spec.egress[1].to[0].namespaceSelector.matchLabels."kubernetes.io/metadata.name") = "foreign"' \
   '(select(.kind == "Ingress") | .spec.rules[].http.paths[].backend.service.name) = "email-bridge"'; do
   yq "$mutation" "$render" >"$temporary_directory/negative.yaml"
   if "$verifier" "$temporary_directory/negative.yaml" >/dev/null 2>&1; then
@@ -54,5 +60,41 @@ for mutation in \
     exit 1
   fi
   count=$((count + 1))
+done
+# Два отдельных YAML documents: yq объединяет повторные ссылки на один source node.
+{
+  cat -- "$render"
+  printf '\n---\n'
+  yq 'select(.kind == "NetworkPolicy" and .metadata.name == "email-bridge-internal-rpc-authority-exact-paths")' "$render"
+} >"$temporary_directory/negative.yaml"
+if "$verifier" "$temporary_directory/negative.yaml" >/dev/null 2>&1; then
+  printf 'Local EMAIL verifier accepted duplicate policy identity\n' >&2
+  exit 1
+fi
+count=$((count + 1))
+# Даже частично полученный expected stream не разрешает пропустить ошибку следующей базы.
+real_kubectl=$(command -v kubectl)
+install -d "$temporary_directory/bin"
+cat >"$temporary_directory/bin/kubectl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "$#" -eq 2 && "$1" == kustomize ]] || exit 64
+if [[ "${2##*/}" == "$KODEX_TEST_FAILED_BASE" ]]; then
+  [[ "$KODEX_TEST_SOURCE_OUTCOME" != empty ]] || exit 0
+  exit 42
+fi
+exec "$KODEX_TEST_REAL_KUBECTL" "$@"
+EOF
+chmod 0555 "$temporary_directory/bin/kubectl"
+for source_outcome in fail empty; do
+  for failed_base in email-bridge email-bridge-data email-bridge-migration; do
+    if PATH="$temporary_directory/bin:$PATH" KODEX_TEST_FAILED_BASE="$failed_base" \
+      KODEX_TEST_SOURCE_OUTCOME="$source_outcome" \
+      KODEX_TEST_REAL_KUBECTL="$real_kubectl" "$verifier" "$render" >/dev/null 2>&1; then
+      printf 'Local EMAIL verifier ignored an invalid expected-policy source\n' >&2
+      exit 1
+    fi
+    count=$((count + 1))
+  done
 done
 printf 'Local EMAIL render contract passed: positive and %s negative cases\n' "$count"
