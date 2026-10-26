@@ -4,11 +4,93 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.521.0
+version: 1.522.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие preflight и преобразование сохранённого содержимого плана — 26.10.2026
+
+stageAssistantPlanProposal и stageAssistantPlanDraft используют два private helper.
+assistantPlanStagingReplayTx сначала вызывает прежний authorizeCommand,затем
+читает тот же receipt по organization/actor/operation/idempotency key с тем же
+context,tx,current и input pointer. Совпадение IntentDigest возвращает replay,
+несовпадение — прежний ErrIdempotencyReuse,прочие ошибки Scan — ErrUnavailable.
+Прямое сравнение с pgx.ErrNoRows сохранено. BeginTx ReadCommitted,defer Rollback,
+полная typed preparation,Commit и внешнее staging остаются у callers.
+
+assistantPreparedFileOperation получает именно file.operation для proposal и
+именно draft.operations[index] для draft. Он поверхностно копирует Parameters,
+удаляет content,назначает locator/digest/size,сохраняет прежний UTF8 default,
+очищает Input и формирует прежний After для revision/прочих операций. Вложенные
+ссылки остаются общими. Места записи payload и ledger не перемещены:proposal
+записывает PreparedContent после замены operation внутри matching loop,draft —
+до inner loop. Helper не проверяет grants,не пишет объекты и не назначает scope.
+
+Матрица изменённой границы сохраняет прежние переходы:
+
+| Сценарий | Прежний и текущий результат |
+| --- | --- |
+| BeginTx failure | ErrUnavailable,никаких storage writes |
+| Authorization failure | Точная ошибка до чтения receipt,отложенный Rollback |
+| Receipt с тем же intent | nil до preparation/Commit/Put,затем прежний Rollback |
+| Receipt с другим intent | ErrIdempotencyReuse без внешней записи |
+| Receipt отсутствует | Только pgx.ErrNoRows допускает прежнюю typed preparation |
+| Другая ошибка Scan | ErrUnavailable без внешней записи |
+| Preparation/binding/inspection failure | Прежняя ошибка и Rollback до Commit/Put |
+| Commit failure | ErrConflict без внешнего staging |
+| Частичный staging failure | Прежние уже созданные objects могут сохраниться;нового retry/cleanup нет |
+| Успешное staging или reuse | Прежние operation baseline,metadata,ledger и итоговый payload |
+
+Эти helpers не добавляют commands,claim/renew/complete/cancel/delete/retry,
+expiry,dead-letter,WAITING_OWNER или CHANGES_REQUESTED transitions. Их grants,
+terminal writes,audit/outbox и atomic adoption принадлежат прежним owner paths;
+эта правка не является новым доказательством всего execution lifecycle.
+
+Полная GoFmt inverse восстановила весь исходник,включая транзакции,QueryRow
+inputs,guards,Commit,storage loops и ledger assignments. Два native preflight
+и два native rewrite тела сопоставлены с helpers;10source mutations отвергнуты.
+Три файла исходных map/revision/storage primitives заморожены побайтно.
+Private overlay сравнила54actual/native operation cases:revision/прочие types,
+nil/empty/maps,разный encoding,пустые/заданные receipts,Input,top-level map
+independence и прежние nested aliases.55PASS events/0FAIL/0SKIP за25.59s,
+без DB/storage. Публичные mirror tests не добавлялись.
+После этих запусков уточнён только новый EN→RU comment:прежний string accessor
+считает нестроковой encoding пустым и также назначает UTF8. Два точных comment
+блока сопоставлены с сохранённым tested source;Go statements и directives
+не менялись. Модульные/component/private тесты из-за comment-only уточнения
+не повторялись;финальные quality stages относятся к текущему исходнику.
+
+Полный control-plane build17.32s/unit40.84s/vet5.28s — PASS LOCAL:
+2949PASS/0FAIL/70SKIP,30packages.70SKIP не выдаются за PASS. Отдельно публичная
+scripts/tests/control-plane-postgres-test.sh выполнила на disposable PostgreSQL
+TestProjectAssistantProfilesComponent,TestPreparedContentBindingComponent и
+TestPreparedContentLedgerComponent:25PASS events/0FAIL/0SKIP как до правки
+(57.62s),так и после(83.92s). В project suite достигнут nested file revision
+lifecycle с propose/owner draft edit/validate/apply;объектное хранилище synthetic.
+Это локальные компоненты,не внешний provider,кластер или полный E2E.
+
+Context7 resolve/query для /jackc/pgx — PASS;проверены официальные QueryRow/Scan/
+ErrNoRows и Tx deferred Rollback/Commit docs. Версия pgx проекта v5.10.0 не менялась.
+Ключи не читались и не переносились.
+
+Два raw окна удалены,одно106-token nominal Tx/preparation glue добавлено и
+сохранено адресно после фактического выноса обоих алгоритмов. Ещё восемь
+прочитанных точных окон transport сохранены:Access role/binding и workflow
+executeResponse wrappers,source/interaction claim boundaries,source completion
+против credential projection,writeback effect против role-image methods,
+context binding wrappers,mailbox/skill commands и email receipt/artifact read.
+Общие execute/principal/error/caster primitives уже используются;разные typed
+request/result,FullMethodName и command identities остаются явными. Эти решения
+не исключают файлы,loops,validators или lifecycle.12transport source файлов
+остались побайтно равны предыдущему HEAD.
+
+Registry1101,54registry mutations и17quality unit tests PASS. Пять quality
+stages PASS LOCAL;6785sources/222generated exclusions,
+1434raw/1244retained/190unresolved,Go21614/21614 EN→RU.
+Legacy renderer FAIL и прежние Bash diagnostics открыты;полные E2E/live/deploy/
+QA — NOT RUN.
 
 ## Общий predicate ввода prompt template — 26.10.2026
 

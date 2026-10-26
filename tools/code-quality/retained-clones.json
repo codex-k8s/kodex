@@ -3,6 +3,78 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "fragmentSHA256": "795856b2ff1be4201ba05bba0e559eb651b56fdc17439ffb7c2bf06ac092976d",
+      "count": 1,
+      "reason": "Перекрывающееся окно сопоставляет CreateAccessRoleVersion/ArchiveAccessRole/CreateAccessBinding и ChangeAccessBinding/RevokeAccessBinding с nominal generated signatures и response constructors. Общий executeResponse уже обслуживает authenticated principal,mutation,ошибки и callback;accessRoleInput/domainAccessScope/domainAccessConditions/casters тоже общие. Сохраняются разные full RPC method identities,command kinds и payload:role contents/RoleRef против subject/RoleVersionRef/BindingRef/scope/conditions. Универсальный access lifecycle dispatcher заменил бы явную типовую связь без нового вычислительного ядра. Сохранены только точное внутрефайловое окно/hash/count1,не role/binding policy или остальные converters."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/access.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "5dba592c59900ce3c6ab72b07f66c27d89c36bca66a94767d8d5e69c76e179a3",
+      "count": 1,
+      "reason": "Окно сравнивает Change/RevokeAccessBinding с Update/Validate/PublishWorkflowDraft:generated signatures,вызовы уже общего executeResponse и typed result constructors. AccessBindingInput/role scope/conditions не являются WorkflowInput/draft;точные RPC method names,command kinds и castAccessBinding/castWorkflow сохраняют разные owner contracts. Здесь нет второй реализации authentication/mutation/error алгоритма:он уже executeResponse/execute. Generic command dispatcher ради nominal wrappers скрыл бы регистрацию разных authority methods. Сохранены только два пути/hash/count1,не workflow/access handlers целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/configuration_source.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/interaction.go",
+      "fragmentSHA256": "bc5fe97658027b237b6afaea0e6220065adb128fe7f962455960283842403bd1",
+      "count": 1,
+      "reason": "Окно связывает sourceLease converter и начало ClaimManagedConfigurationSourceWork с хвостом interaction query и началом ClaimInteractionDeliveries. Общие principal и transportError уже переиспользуются,а callers выбирают разные exact FullMethodName,ClaimConfigurationSourceWork/ClaimInteractionDeliveries и typed responses. Дальнейшие work projections различны:source configuration проходит structpb.NewStruct с ошибкой,interaction проверяет exact credential descriptor и переносит delivery/template/gate metadata. Универсальный claim dispatcher смешал бы эти разные consumer/result формы без самостоятельного общего ядра. Сохранены только два точных пути/hash/count1;сами lease/credential converters и дальнейшие loops не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/configuration_source.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_secrets.go",
+      "fragmentSHA256": "7295e9f6e640708075049318a8854f09938d02efa0a519f96a9b859d06de8610",
+      "count": 1,
+      "reason": "Перекрывающееся окно сравнивает хвост Renew/начало CompleteManagedConfigurationSourceWork с хвостом ValidateRuntimeCredentialProjection/началом ResolveTranscriptionCredentialProjection. Оно содержит общий error return и principal exact-method scaffold,затем разные typed constructors. SourceCompletion включает lease/commit/content/ancestry,а transcription projection — проверенный authority/provider generation/config revision/digest. Principal и transportError уже общие;generic worker-operation dispatcher скрыл бы разные authority/lifecycle contracts. Сохранены лишь два пути/hash/count1,не completion,credential projection или другие fragments."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/configuration_writeback.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/organization_role_images.go",
+      "fragmentSHA256": "4e0e062abec6e021e29d61efbdfccb44df7dc08aa00bc88299242bce9024b718",
+      "count": 1,
+      "reason": "Окно сопоставляет хвост Renew/начало BeginManagedConfigurationGitWriteBackEffect с хвостом RequestOrganizationRoleImagePromotion/началом ListOrganizationRoleImageRecipeRevisions. Различаются Server/RoleImageServer,principal/roleImagePrincipal exact methods,writeBackLease/effect candidate commitments,PromotionRequestInput и typed revision page. Общие error mapper,mutation/page/casters уже функции;сходство состоит в nominal call/return scaffold разных owner paths. Общий lifecycle dispatcher не удалил бы самостоятельный алгоритм и скрыл бы соответствие exact permissions и service methods. Сохранены только два пути/hash/count1;promotion/admission/effect lifecycle не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/context_bindings.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/context_bindings.go",
+      "fragmentSHA256": "6e23ecfee1a0b11db16f93e02b299aca581c952a85cf88df9e1c08390280fa59",
+      "count": 1,
+      "reason": "Окно пересекает castContextBinding и BindAgentSkillBundle/UnbindAgentSkillBundle signatures с их typed execute/result scaffolding. Authentication/mutation/error уже execute;binding identity/version guard уже castContextBindingResult,а полевая проекция — castContextBinding. Resource/agent/revision/ExpectedBindingVersion остаются явными в отдельных generated request→command mappings и закрытых Bind/Unbind FullMethodName. Generic lifecycle callback wrapper ради nominal request/response типов скрыл бы эту регистрацию без нового алгоритма. Сохранены только точное внутрефайловое окно/hash/count1,не binding authority,strict caster или другие methods."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/email_mailbox_commands.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/skill.go",
+      "fragmentSHA256": "ced5a55e72f6e0aacc655a7c95565b598abed2c3c00302fc01773ec06058d37e",
+      "count": 1,
+      "reason": "Точное окно сопоставляет хвост Discard/начало BindEmailMailboxConfiguration с Create/SaveSkillBundleDraft:разные generated request/response constructors вокруг уже общих mailboxCommand и executeSkillBundle. Mailbox привязывает ConnectionRef/ExpectedConnectionVersion и managed configuration/revision,skill — project/bundle/revision/specification. Domain-specific result guards уже принадлежат соответствующим typed helpers,а RPC method/command identities остаются явными. Универсальный resource-kind dispatcher ухудшил бы эту связь без удаления нового вычисления. Сохранены только два пути/hash/count1,не mailbox/skill validators или остальные commands."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/email_receipts.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime.go",
+      "fragmentSHA256": "8109f72c7c77720a2e6708e0b17ab39bab91493574b42355bacfb1557ed75020",
+      "count": 1,
+      "reason": "Окно связывает хвост ReconcileEmailEffect и начало ResolveEmailReconciliation с хвостом ClaimExecution и началом ReadExecutionArtifact. Email resolution передаёт receipt/decision/external receipt digest и проецирует решение;artifact read передаёт lease/fence/generation/artifact,затем отдельно закрывает reader и проверяет bounded bytes. Сходны лишь nominal result constructors,principal exact-method/error scaffold;execute/principal/transportError/casters уже общие. Новый общий RPC dispatcher не устранил бы алгоритм,но скрыл бы разные authority и result lifetimes. Сохранены только два точных пути/hash/count1;сам bounded artifact I/O и receipt guards не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/assistant_content_staging.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/assistant_content_staging.go",
+      "fragmentSHA256": "1c1a7b75718ae480e5e057aa004dd338ddf375b2c29a2e5e0b755b52022cbf87",
+      "count": 1,
+      "reason": "После фактического выноса authorization/receipt preflight и content parameter rewrite остаточное106-token окно содержит BeginTx ReadCommitted,defer Rollback,вызов одного assistantPlanStagingReplayTx и разные prepareAssistantPlanProposalTx/prepareAssistantPlanDraftTx. Tx lifecycle и обе разные typed preparations намеренно остаются у callers:proposal гидратирует новое предложение,draft копирует owner edited payload и разрешает прежние ledger bindings. Совпавшие authorization/idempotency и rewrite алгоритмы теперь общие;helper не совершает Commit,Put,grant или lease transition. Общий callback transaction dispatcher ради оставшихся нескольких строк скрыл бы границу preflight→Commit→external staging и разные typed inputs. Сохранено только точное окно одного файла/hash/count1,не SQL,authority,staging loops или lifecycle assertions."
+    },
+    {
+      "format": "go",
       "firstPath": "services/external/control-api-gateway/internal/transport/http/mvp_endpoints.go",
       "secondPath": "services/external/control-api-gateway/internal/transport/http/mvp_endpoints.go",
       "fragmentSHA256": "15fd11d465009430e182a877d28a2658cabc47612ccfabaa548ac8b4c87d21d9",

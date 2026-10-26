@@ -45,20 +45,9 @@ func (repository *Repository) stageAssistantPlanProposal(ctx context.Context, cu
 		return errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if err := repository.authorizeCommand(ctx, tx, current, *input); err != nil {
+	replayed, err := repository.assistantPlanStagingReplayTx(ctx, tx, current, input)
+	if err != nil || replayed {
 		return err
-	}
-	var oldDigest string
-	err = tx.QueryRow(ctx, queryCommandsExecuteSelectIdempotencyReceiptsOrganizationIdActorIdOperation,
-		current.organizationID, current.actorID, input.Mutation.Operation, input.Mutation.IdempotencyKey).Scan(&oldDigest, new([]byte))
-	if err == nil {
-		if oldDigest != input.Mutation.IntentDigest {
-			return errs.ErrIdempotencyReuse
-		}
-		return nil
-	}
-	if err != pgx.ErrNoRows {
-		return errs.ErrUnavailable
 	}
 	proposal, err := repository.prepareAssistantPlanProposalTx(ctx, tx, current, *input)
 	if err != nil {
@@ -135,26 +124,69 @@ func (repository *Repository) stageAssistantPlanProposal(ctx context.Context, cu
 			if operation.Key != file.operation.Key {
 				continue
 			}
-			operation = file.operation
-			parameters := cloneAssistantFields(operation.Parameters)
-			delete(parameters, "content")
-			parameters["contentRef"], parameters["digest"], parameters["sizeBytes"] = staged.ContentRef, staged.Prepared.Digest, staged.Prepared.SizeBytes
-			if assistantString(parameters, "contentEncoding") == "" {
-				parameters["contentEncoding"] = "UTF8"
-			}
-			operation.Parameters = parameters
-			operation.Input = nil
-			if operation.Type == createProjectFileRevision {
-				operation.After = assistantRevisionAfter(operation)
-			} else {
-				operation.After = cloneAssistantFields(parameters)
-			}
+			operation = assistantPreparedFileOperation(file.operation, staged)
 			payload.Operations[index] = operation
 			payload.PreparedContent[operation.Key] = staged.LedgerID
 		}
 	}
 	input.Payload = payload
 	return nil
+}
+
+// assistantPlanStagingReplayTx authorizes the exact command in the caller transaction before
+// reading its organization/actor/operation/key receipt. Matching intent returns replay=true;
+// mismatched intent and driver failures retain their original errors, while ErrNoRows permits
+// preparation. It neither commits nor writes objects, receipts, leases or grants.
+// assistantPlanStagingReplayTx проверяет полномочия точной команды в транзакции caller до чтения
+// квитанции по organization/actor/operation/key. Совпадение intent даёт replay=true; другой intent
+// и ошибки драйвера сохраняют прежние ошибки, а ErrNoRows разрешает подготовку. Helper не
+// завершает транзакцию и не записывает объекты, квитанции, leases или grants.
+func (repository *Repository) assistantPlanStagingReplayTx(ctx context.Context, tx pgx.Tx, current scope, input *command.Command) (bool, error) {
+	if err := repository.authorizeCommand(ctx, tx, current, *input); err != nil {
+		return false, err
+	}
+	var oldDigest string
+	err := tx.QueryRow(ctx, queryCommandsExecuteSelectIdempotencyReceiptsOrganizationIdActorIdOperation,
+		current.organizationID, current.actorID, input.Mutation.Operation, input.Mutation.IdempotencyKey).Scan(&oldDigest, new([]byte))
+	if err == nil {
+		if oldDigest != input.Mutation.IntentDigest {
+			return false, errs.ErrIdempotencyReuse
+		}
+		return true, nil
+	}
+	if err != pgx.ErrNoRows {
+		return false, errs.ErrUnavailable
+	}
+	return false, nil
+}
+
+// assistantPreparedFileOperation replaces inline content in a shallow-copied parameter map with
+// the accepted locator/digest/size, defaults encoding to UTF8 whenever the existing string
+// accessor reports empty (also for absent or non-string values) and clears Input. Revision
+// operations keep their protected before pins in After; other operations copy
+// the resulting parameters. It performs no storage call or ledger update and preserves nested
+// aliases, leaving the caller to select the exact operation and record its receipt.
+// assistantPreparedFileOperation заменяет inline content в поверхностной копии parameters
+// принятыми locator/digest/size, назначает UTF8, когда прежний строковый accessor возвращает
+// пустую строку (также для отсутствующего либо нестрокового значения), и очищает Input.
+// After ревизии сохраняет защищённые before pins, а прочие операции копируют
+// итоговые параметры. Helper не обращается к хранилищу и не обновляет ledger, сохраняет вложенные
+// ссылки; точную operation и запись квитанции выбирает caller.
+func assistantPreparedFileOperation(operation entity.AssistantPlanOperation, staged preparedContent) entity.AssistantPlanOperation {
+	parameters := cloneAssistantFields(operation.Parameters)
+	delete(parameters, "content")
+	parameters["contentRef"], parameters["digest"], parameters["sizeBytes"] = staged.ContentRef, staged.Prepared.Digest, staged.Prepared.SizeBytes
+	if assistantString(parameters, "contentEncoding") == "" {
+		parameters["contentEncoding"] = "UTF8"
+	}
+	operation.Parameters = parameters
+	operation.Input = nil
+	if operation.Type == createProjectFileRevision {
+		operation.After = assistantRevisionAfter(operation)
+	} else {
+		operation.After = cloneAssistantFields(parameters)
+	}
+	return operation
 }
 
 // filePreparedDigest returns the operation digest with one leading sha256: prefix removed. It does
@@ -182,20 +214,9 @@ func (repository *Repository) stageAssistantPlanDraft(ctx context.Context, curre
 		return errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if err := repository.authorizeCommand(ctx, tx, current, *input); err != nil {
+	replayed, err := repository.assistantPlanStagingReplayTx(ctx, tx, current, input)
+	if err != nil || replayed {
 		return err
-	}
-	var oldDigest string
-	err = tx.QueryRow(ctx, queryCommandsExecuteSelectIdempotencyReceiptsOrganizationIdActorIdOperation,
-		current.organizationID, current.actorID, input.Mutation.Operation, input.Mutation.IdempotencyKey).Scan(&oldDigest, new([]byte))
-	if err == nil {
-		if oldDigest != input.Mutation.IntentDigest {
-			return errs.ErrIdempotencyReuse
-		}
-		return nil
-	}
-	if err != pgx.ErrNoRows {
-		return errs.ErrUnavailable
 	}
 	originalPayload, ok := input.Payload.(command.AssistantPlanDraftInput)
 	if !ok {
@@ -285,20 +306,7 @@ func (repository *Repository) stageAssistantPlanDraft(ctx context.Context, curre
 			if operation.Key != file.key {
 				continue
 			}
-			operation = draft.operations[index]
-			parameters := cloneAssistantFields(operation.Parameters)
-			delete(parameters, "content")
-			parameters["contentRef"], parameters["digest"], parameters["sizeBytes"] = staged.ContentRef, staged.Prepared.Digest, staged.Prepared.SizeBytes
-			if assistantString(parameters, "contentEncoding") == "" {
-				parameters["contentEncoding"] = "UTF8"
-			}
-			operation.Parameters = parameters
-			operation.Input = nil
-			if operation.Type == createProjectFileRevision {
-				operation.After = assistantRevisionAfter(operation)
-			} else {
-				operation.After = cloneAssistantFields(parameters)
-			}
+			operation = assistantPreparedFileOperation(draft.operations[index], staged)
 			payload.Operations[index] = operation
 		}
 	}
