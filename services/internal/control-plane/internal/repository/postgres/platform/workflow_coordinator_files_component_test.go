@@ -23,7 +23,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // runtimeFileCatalogFailureTx injects a configured QueryRow failure into file-catalog capture
@@ -111,10 +110,8 @@ func TestWorkflowRetryLargeRussianNoticeComponent(t *testing.T) {
 func testWorkflowCoordinatorFilesComponent(t *testing.T, freshRetry bool) {
 	ctx, stop := context.WithTimeout(t.Context(), 90*time.Second)
 	defer stop()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
+	var err error
 	defer pool.Close()
 	// DDL faults разрешены только loopback administrator нового isolated fixture.
 	adminConfig, err := pgx.ParseConfig(os.Getenv("KODEX_CONTROL_PLANE_TEST_ADMIN_DSN"))

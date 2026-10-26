@@ -4,11 +4,44 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.513.0
+version: 1.514.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Переиспользование изолированного пула в Go-оснастках — 26.10.2026
+
+В17 точных блоках13 component-файлов используется существующий
+newIsolatedAssistantComponentPool. Helper и allocator не менялись:те же
+pgxpool.New(ctx,isolatedAssistantComponentDSN(t)),Fatal и возврат pool. Caller
+сохраняет deadline/cancel и defer Close до зарегистрированной очистки БД.
+Повторно используемые внешние pool/err bindings,другие diagnostics и комментарии
+внутри блока не преобразовывались. builtin error и имя helper не затенены.
+
+В15 случаях прежняя error binding ещё используется:явная var err error
+сохраняет её nil interface и область видимости,включая последующие :=/=/closures.
+Вдвух случаях вне удалённого guard ссылок нет,ненужная binding не создаётся.
+AST-проверка подтвердила прежнее число связанных references,закрытую форму новых
+вызовов/деклараций и cleanup. Удалены10 ставших ненужными imports pgxpool;
+оставшиеся pool types сохранены. Все13 файлов восстанавливаются после GoFmt
+полностью,включая comments/directives,SQL,permissions и самостоятельные assertions.
+Helper body совпал с каждым native call/error guard,весь allocator заморожен
+побайтно. Десять частных изменений context/error/cleanup/deadline/allocator/
+SQL/permission/import отвергнуты. Production-код,SQL и миграции не менялись.
+
+Публичный disposable PostgreSQL с четырьмя выбранными suites:до30.38s/
+после46.43s,оба25PASS events/0FAIL/0SKIP,оснастки удалены. Это не все17 PG
+сценариев и не полный component/E2E контур. Весь control-plane build6.03s/
+unit37.23s/vet4.63s — PASS LOCAL;2949PASS/70условных SKIP/0FAIL,30packages.
+Source hashes совпали с доказательством,ни одна проверка не подменяет live QA.
+Официальные pgxpool/Go docs проверены ранее;Context7 отклонил API key.
+
+Пять quality stages — PASS LOCAL. Удалены6raw окон,добавлены4 сдвинутых окна;
+все новые остаются unresolved,registry1081 прежний. Detector6781sources/
+222generated exclusions,1443raw/1224retained/219unresolved,
+Go21598/21598 EN→RU. Legacy renderer FAIL и прежние Bash diagnostics остаются
+открытыми;полные E2E/live/deploy/QA — NOT RUN.
 
 ## Общие синтетические policy и email-оснастки — 26.10.2026
 
@@ -16,7 +49,8 @@ updated: 2026-10-26
 сохраняет ссылку на ресурсы вызывающего и четыре самостоятельных digest;создаёт
 свежие volumes/network/egress/webAccess/kubernetesAccess. DNS TCP/UDP53,
 PROVIDER_PROXY TCP8084,RUNTIME_CALLBACK TCP8444,NONE и namespace прежние.
-Ожидаемая policy не выводится из production default implementation. Native
+Фиксированные network/kubernetes поля сама оснастка не выводит из production
+default implementation;выбор ресурсов остаётся у callers. Native
 resource expressions и четыре чистых local digest либо literal repeat64
 сохранены;произвольные side-effectful expressions не переставлялись.
 

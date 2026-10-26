@@ -15,7 +15,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // TestRuntimeActivityMessagesAndToolLifecycleComponent checks exact runtime message provenance,
@@ -27,10 +26,8 @@ import (
 func TestRuntimeActivityMessagesAndToolLifecycleComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
+	var err error
 	defer pool.Close()
 	r := newSyntheticRuntimeComponentRepository(t, ctx, pool)
 	seedObservedCatalogFixture(t, ctx, r)

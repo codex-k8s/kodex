@@ -13,7 +13,6 @@ import (
 	roleimageservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/roleimage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // TestRoleImageBuildFreshCorrelationComponent runs complete/fail build scenarios in an isolated
@@ -28,10 +27,8 @@ import (
 func TestRoleImageBuildFreshCorrelationComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
+	var err error
 	defer pool.Close()
 	repository, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
 	if err != nil {

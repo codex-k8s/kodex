@@ -57,10 +57,7 @@ func prepareAssistantSessionResumeRepository(t *testing.T, ctx context.Context, 
 func TestAssistantSessionResumeComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
 	defer pool.Close()
 	r, service, owner, worker, warm := prepareAssistantSessionResumeRepository(t, ctx, pool)
 	invoke := func(kind command.Kind, actor value.Principal, key string, payload any) command.Result {
@@ -286,10 +283,7 @@ func TestAssistantSessionResumeComponent(t *testing.T) {
 func TestAssistantFailedRolloutStorageComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
 	defer pool.Close()
 	r, service, owner, worker, _ := prepareAssistantSessionResumeRepository(t, ctx, pool)
 	claimPrincipal := sessionArchivePrincipal(t, ctx, r, "platform.session-archive.tasks.claim")

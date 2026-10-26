@@ -12,7 +12,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // queryAssistantRunScopeEffects reads fixture organization Run/receipt/audit/turn counts and
@@ -33,10 +32,8 @@ var queryAssistantRunScopeEffects string
 func TestAssistantSystemRunProjectScopeComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
+	var err error
 	defer pool.Close()
 	r, service, owner, assistant := newWarmTurnComponentFixture(t, ctx, pool, namespacedRoleImageComponentConfig)
 	execute := func(kind command.Kind, key string, payload any) command.Result {

@@ -14,7 +14,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // TestAssistantTurnInputBoundsComponent checks SYSTEM and PROJECT input bounds and exact USER text
@@ -25,10 +24,8 @@ import (
 func TestAssistantTurnInputBoundsComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
+	var err error
 	defer pool.Close()
 	r, service, owner, _ := newWarmTurnComponentFixture(t, ctx, pool, syntheticRoleImageComponentConfig)
 	execute := func(kind command.Kind, key string, payload any) (command.Result, error) {

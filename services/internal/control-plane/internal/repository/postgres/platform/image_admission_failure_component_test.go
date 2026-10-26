@@ -13,7 +13,6 @@ import (
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	roleimagerepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/roleimage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // queryImageAdmissionFailureExpiry expires only the claimed artifact selected by exact
@@ -51,10 +50,8 @@ var queryImageAdmissionFailureEventCount string
 func TestImageAdmissionFailureComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
+	var err error
 	defer pool.Close()
 	repository, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
 	if err != nil {

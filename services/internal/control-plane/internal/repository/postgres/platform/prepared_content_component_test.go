@@ -36,10 +36,8 @@ type preparedObjectsFixture struct {
 func TestPreparedContentBindingComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
+	var err error
 	defer pool.Close()
 	var graph string
 	if err := pool.QueryRow(ctx, `SELECT substring(pg_get_functiondef('control_plane.purge_project_database(uuid,uuid,text)'::regprocedure) FROM 'IF v_nodes <> [0-9]+ OR v_node_fingerprint <> ''[a-f0-9]{32}'' THEN') || E'\n' || substring(pg_get_functiondef('control_plane.purge_project_database(uuid,uuid,text)'::regprocedure) FROM 'IF v_edges <> [0-9]+ OR v_edge_fingerprint <> ''[a-f0-9]{32}'' THEN')`).Scan(&graph); err != nil {
@@ -441,10 +439,8 @@ func (store *preparedObjectsFixture) Put(ctx context.Context, input objectstorag
 func TestPreparedContentLedgerComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
+	var err error
 	defer pool.Close()
 	var org, actor, project string
 	for _, item := range []struct {

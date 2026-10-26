@@ -16,7 +16,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // queryAgentBootstrapEnvironmentReadback fingerprints exact environment/revision/binding rows and
@@ -37,10 +36,8 @@ var queryAgentBootstrapEnvironmentReadback string
 func TestAgentBootstrapPreservesPublishedProjectEnvironmentComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
+	var err error
 	defer pool.Close()
 	r, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
 	if err != nil {

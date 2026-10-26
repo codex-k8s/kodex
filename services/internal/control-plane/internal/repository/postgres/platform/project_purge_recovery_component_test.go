@@ -29,10 +29,8 @@ import (
 func TestProjectPurgeRecoveryComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
+	var err error
 	defer pool.Close()
 	objects := &preparedObjectsFixture{Store: objectstoragetest.New(), fail: true}
 	r := newPurgeRecoveryComponentRepository(t, ctx, pool, objects)
@@ -331,10 +329,8 @@ func TestProjectPurgeRecoveryComponent(t *testing.T) {
 func TestProjectPurgeRecoveryAdoptedComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
+	var err error
 	defer pool.Close()
 	objects := &preparedObjectsFixture{Store: objectstoragetest.New()}
 	r := newPurgeRecoveryComponentRepository(t, ctx, pool, objects)
@@ -458,10 +454,8 @@ func TestProjectPurgeRecoveryAdoptedComponent(t *testing.T) {
 func TestProjectPurgeRecoveryFairnessComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
+	var err error
 	defer pool.Close()
 	objects := &preparedObjectsFixture{Store: objectstoragetest.New(), fail: true}
 	r := newPurgeRecoveryComponentRepository(t, ctx, pool, objects)

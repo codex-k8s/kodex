@@ -21,7 +21,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // queryWorkflowLaunchProof reads required-workflow origin pins and live child lease and turn
@@ -97,10 +96,8 @@ var queryRuntimeDelegateFrontierProof string
 func TestWorkflowLaunchComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
+	var err error
 	defer pool.Close()
 	r, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
 	if err != nil {
