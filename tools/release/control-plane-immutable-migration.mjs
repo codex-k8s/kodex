@@ -11,6 +11,7 @@ import { activeDeploymentPods, isProvenStoppedPod } from './stable-archive-trans
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'project-purge-authority': {version:'20261026000200',file:'20261026000200_project_purge_authority_acl.sql',annotation:'kodex.dev/cp-project-purge-authority-migration-plan',previousVersion:20261026000100,emptyField:'purgeAuthoritySafeToMigrate',preconditionFile:'project-purge-authority-migration-precondition.sql',postconditionFile:'project-purge-authority-migration-postcondition.sql'},
   'owner-gate-expiry': {version:'20261026000100',file:'20261026000100_owner_gate_expiry.sql',annotation:'kodex.dev/cp-owner-gate-expiry-migration-plan',previousVersion:20261025000200,emptyField:'expiryAbsent',preconditionFile:'owner-gate-expiry-migration-precondition.sql',postconditionFile:'owner-gate-expiry-migration-postcondition.sql'},
   'outbox-index': {version:'20261025000100',file:'20261025000100_outbox_unpublished_predecessor_index.sql',annotation:'kodex.dev/cp-outbox-index-migration-plan',previousVersion:20261020000200,emptyField:'indexAbsent',preconditionFile:'control-plane-migration-precondition.sql'},
   'repository-bundle': {version:'20261025000200',file:'20261025000200_repository_bundle_publications.sql',annotation:'kodex.dev/cp-repository-bundle-migration-plan',previousVersion:20261025000100,emptyField:'publicationAbsent',preconditionFile:'repository-bundle-migration-precondition.sql',postconditionFile:'repository-bundle-migration-postcondition.sql'},
@@ -272,23 +273,38 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       (parent.attempt ?? 1) === 1 && !parent.predecessor && parent.migrationVersion === migrationVersion &&
       parent.clusterUID === clusterUID && parent.context === context && parent.namespaceUID === namespaceUID() &&
       parent.anchor.uid === anchor.metadata.uid && [0,2].includes(anchor.spec.replicas) &&
-      parent.anchor.specSHA256 === fingerprint({...anchor.spec,replicas:2}) &&
-      [hash,...(currentMarker ? [currentMarker] : [])].includes(anchor.metadata.annotations?.[annotation]), 'MIGRATION_PREDECESSOR_SCOPE_CHANGED');
+      parent.anchor.specSHA256 === fingerprint({...anchor.spec,replicas:2}), 'MIGRATION_PREDECESSOR_SCOPE_CHANGED');
     immutableMigrationImage(parent.source,parent.imageEvidence);
     const previous = privateJournal(paths.evidencePath,{version:1,kind:'CONTROL_PLANE_MIGRATION',planSHA256:hash},{readOnly:true});
     let uid;
     try {
-      const receipts = previous.events.filter(e => ['CREATE_ACK','READBACK','TERMINAL_READBACK'].includes(e.type) && e.jobUID);
+      // Failed check ещё не даёт полномочий на STOP или DDL. Его отдельная attempt2
+      // требует доказанного отсутствия этих эффектов и сохраняет прежнюю Job.
+      const checkOnly = !previous.events.some(e => e.type === 'CREATE_INTENT');
+      const stage = checkOnly ? 'CHECK' : 'MIGRATION';
+      const expectedJob = checkOnly ? parent.checkJob : parent.job;
+      const intent = checkOnly ? 'CHECK_CREATE_INTENT' : 'CREATE_INTENT';
+      const readback = checkOnly ? 'CHECK_READBACK' : 'READBACK';
+      const receiptTypes = checkOnly ? ['CHECK_CREATE_ACK','CHECK_READBACK'] : ['CREATE_ACK','READBACK','TERMINAL_READBACK'];
+      ensure(!checkOnly || (parent.version === 2 && expectedJob &&
+        !previous.events.some(e => ['STOP_INTENT','STOP_ACK','RESUME_INTENT','RESUME_ACK'].includes(e.type)) &&
+        !optionalJob(parent.job.metadata.name)), 'MIGRATION_PREDECESSOR_CHECK_EFFECTS_PRESENT');
+      const marker = checkOnly ? undefined : hash;
+      ensure([marker,...(currentMarker ? [currentMarker] : [])].includes(anchor.metadata.annotations?.[annotation]),
+        'MIGRATION_PREDECESSOR_SCOPE_CHANGED');
+      const receipts = previous.events.filter(e => receiptTypes.includes(e.type) && e.jobUID);
       uid = receipts[0]?.jobUID;
-      ensure(uid && receipts.every(e => e.jobUID === uid) && previous.events.filter(e => e.type === 'CREATE_INTENT').length === 1 &&
-        previous.events.some(e => e.type === 'READBACK' && e.status === 'FAIL') && previous.events.some(e => e.type === 'RESUME_ACK'),
+      ensure(uid && receipts.every(e => e.jobUID === uid) && previous.events.filter(e => e.type === intent).length === 1 &&
+        previous.events.some(e => e.type === readback && e.status === 'FAIL') &&
+        (checkOnly || previous.events.some(e => e.type === 'RESUME_ACK')),
       'MIGRATION_PREDECESSOR_RECEIPT_INVALID');
-      if (expected) ensure(expected.planSHA256 === hash && expected.evidenceSHA256 === previous.bytesSHA256 && expected.jobUID === uid,
+      if (expected) ensure(expected.planSHA256 === hash && expected.evidenceSHA256 === previous.bytesSHA256 && expected.jobUID === uid &&
+        (expected.stage ?? 'MIGRATION') === stage,
         'MIGRATION_PREDECESSOR_CHANGED');
-      const actual = optionalJob(parent.job.metadata.name);
-      terminalJob(actual,parent.job,hash,uid);
+      const actual = optionalJob(expectedJob.metadata.name);
+      terminalJob(actual,expectedJob,hash,uid);
       ensure(actual.status.conditions.some(c => c.type === 'Failed' && c.status === 'True'), 'MIGRATION_PREDECESSOR_NOT_FAILED');
-      return {...paths,planSHA256:hash,evidenceSHA256:previous.bytesSHA256,jobUID:uid,jobName:parent.job.metadata.name};
+      return {...paths,stage,planSHA256:hash,evidenceSHA256:previous.bytesSHA256,jobUID:uid,jobName:expectedJob.metadata.name};
     } finally { previous.close(); }
   };
   if (phase === 'plan') {
@@ -344,7 +360,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     };
     const observeCP = () => {
       const actual = deployment(), marker = actual.metadata.annotations?.[annotation], hash = fingerprint(actual.spec);
-      const previousMarker = plan.predecessor?.planSHA256;
+      const previousMarker = plan.predecessor?.stage === 'CHECK' ? undefined : plan.predecessor?.planSHA256;
       ensure(actual.metadata.uid === plan.anchor.uid && (marker === previousMarker || marker === planSHA256), 'MIGRATION_ANCHOR_CHANGED');
       const resumed = journal.events.some(e => e.type === 'RESUME_INTENT');
       let stage;
@@ -391,7 +407,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
         ensure(fingerprint(postgresIdentity())===fingerprint(plan.postgres),'MIGRATION_POSTGRES_IDENTITY_CHANGED');
         const proof=JSON.parse(kube(['-n',namespace,'exec','-i','kodex-postgresql-0','--','psql','-XqAt','-U','postgres','-d','control_plane','-v','ON_ERROR_STOP=1'],sql));
         ensure(fingerprint(postgresIdentity())===fingerprint(plan.postgres),'MIGRATION_POSTGRES_IDENTITY_CHANGED');
-        ensure((profile==='owner-gate-expiry' ? validOwnerGateExpiryMigrationPostcondition(proof) : validRepositoryBundleMigrationPostcondition(proof)),'MIGRATION_POSTCONDITION_FAILED');
+        ensure(validImmutableMigrationPostcondition(profile,proof),'MIGRATION_POSTCONDITION_FAILED');
         result.schemaPostcondition='PASS';
         if(revalidation) result.revalidation={...revalidation,proof,postgres:plan.postgres,
           execution:pods.map(p=>({podUID:p.metadata.uid,imageID:p.status.containerStatuses.find(c=>c.name==='migrate').imageID}))};
@@ -559,7 +575,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
 
 // Проверяет только metadata точной новой schema; Goose log сам не доказывает безопасный owner/retention/purge профиль.
 export function validRepositoryBundleMigrationPostcondition(proof, expectedVersion = 20261025000200) {
-  return [20261025000200,20261026000100].includes(expectedVersion) && proof?.readOnly==='on' && proof.database==='control_plane' && proof.gooseVersion===expectedVersion &&
+  return [20261025000200,20261026000100,20261026000200].includes(expectedVersion) && proof?.readOnly==='on' && proof.database==='control_plane' && proof.gooseVersion===expectedVersion &&
     proof.tableOwner==='control_plane_owner' && proof.noBodyColumns===true && proof.foreignKeys===13 &&
     proof.deferredForeignKeys===13 && proof.guardEnabled===true && proof.retentionConsumer===true && proof.purgeGraphGuard===true &&
     proof.purgeNodes===105 && proof.purgeEdges===283 && proof.purgeNodeFingerprint==='f51a0de25bd942a250997775617eeaee' &&
@@ -567,8 +583,28 @@ export function validRepositoryBundleMigrationPostcondition(proof, expectedVersi
 }
 
 // Проверяет nullable schema, точные CHECK-условия и неизменяемый срок без чтения бизнес-payload.
-export function validOwnerGateExpiryMigrationPostcondition(proof) {
-  return proof?.readOnly==='on' && proof.database==='control_plane' && proof.gooseVersion===20261026000100 &&
+export function validOwnerGateExpiryMigrationPostcondition(proof, expectedVersion = 20261026000100) {
+  return [20261026000100,20261026000200].includes(expectedVersion) && proof?.readOnly==='on' && proof.database==='control_plane' && proof.gooseVersion===expectedVersion &&
     proof.tableOwner==='control_plane_owner' && ['expiryColumn','stateConstraint','resolutionConstraint',
       'expiryConstraint','dueIndex','immutableGuard','runtimeExecute','publicExecuteRevoked'].every(key=>proof[key]===true);
+}
+
+// Проверка включает effective grants всех runtime members и column-level privileges;
+// отсутствие прямого table grant само по себе не доказывает закрытую запись.
+export function validProjectPurgeAuthorityMigrationPostcondition(proof) {
+  return proof?.readOnly==='on' && proof.database==='control_plane' && proof.gooseVersion===20261026000200 &&
+    proof.tables===2 && Number.isSafeInteger(proof.runtimeRoles) && proof.runtimeRoles>=2 &&
+    Number.isSafeInteger(proof.runtimeLogins) && proof.runtimeLogins>=1 && proof.runtimeLogins<proof.runtimeRoles &&
+    ['tableOwners','runtimeRolesUnprivileged','runtimeRead','runtimeMutationDenied','runtimeColumnMutationDenied',
+      'runtimeGrantOptionDenied','publicPrivilegesRevoked','ownerWrite','authorizationFunction','contextsEmpty'].every(key=>proof[key]===true);
+}
+
+// Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
+export function validImmutableMigrationPostcondition(profile, proof) {
+  switch (profile) {
+    case 'project-purge-authority': return validProjectPurgeAuthorityMigrationPostcondition(proof);
+    case 'owner-gate-expiry': return validOwnerGateExpiryMigrationPostcondition(proof);
+    case 'repository-bundle': return validRepositoryBundleMigrationPostcondition(proof);
+    default: return false;
+  }
 }
