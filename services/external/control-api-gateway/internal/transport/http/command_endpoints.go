@@ -393,6 +393,9 @@ func (server *Server) CommandAgentInstructions(w http.ResponseWriter, r *http.Re
 // workflowDraft преобразует необязательные вход и шаги в новый protobuf-черновик, копируя input options, но сохраняя ссылки slice RequiredCapabilityKeys. Числовые casts и многие семантические ограничения здесь не проверяются; версия не публикуется.
 func workflowDraft(body generated.WorkflowInput) *controlplanev1.WorkflowVersion {
 	draft := &controlplanev1.WorkflowVersion{Name: body.Name, Purpose: body.Purpose, CoordinatorAgentRef: body.CoordinatorAgentRef}
+	if body.ExecutionMode != nil {
+		draft.ExecutionMode = string(*body.ExecutionMode)
+	}
 	if body.InputFields != nil {
 		for _, field := range *body.InputFields {
 			draft.InputFields = append(draft.InputFields, &controlplanev1.WorkflowInputField{Key: stringValue(field.Key), Label: field.Label, Description: field.Description, ValueType: string(field.ValueType), Required: field.Required, Options: append([]string(nil), field.Options...)})
@@ -410,6 +413,13 @@ func workflowDraft(body generated.WorkflowInput) *controlplanev1.WorkflowVersion
 	if body.Steps != nil {
 		for _, step := range *body.Steps {
 			current := &controlplanev1.WorkflowStep{Position: int32(step.Position), Name: step.Name, Purpose: step.Purpose, AgentRef: step.AgentRef, Parallel: step.Parallel, ParallelGroup: int32(step.ParallelGroup), TimeoutSeconds: int32(step.TimeoutSeconds), ExpectedResult: step.ExpectedResult, HumanGate: step.HumanGate, RequiredCapabilityKeys: step.RequiredCapabilityKeys}
+			current.Ref = stringValue(step.Ref)
+			if step.DependsOn != nil {
+				current.DependsOn = append([]string(nil), (*step.DependsOn)...)
+			}
+			if step.ResultRequirements != nil {
+				current.ResultRequirements = workflowResultRequirements(*step.ResultRequirements)
+			}
 			if step.ApprovalTimeoutSeconds != nil {
 				ttl := int32(*step.ApprovalTimeoutSeconds)
 				current.ApprovalTimeoutSeconds = &ttl

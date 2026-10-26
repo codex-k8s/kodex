@@ -144,6 +144,7 @@ const gateDecisionOptions = [
   "CANCEL",
 ] as const;
 const form = reactive({
+  executionMode: "MANAGER_DRIVEN" as "MANAGER_DRIVEN" | "SERVER_DAG_V1",
   name: "",
   purpose: "",
   coordinatorAgentRef: "",

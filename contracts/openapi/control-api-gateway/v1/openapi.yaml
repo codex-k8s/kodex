@@ -14954,6 +14954,41 @@ components:
             maxItems: 50,
             items: { type: string, minLength: 1, maxLength: 160 },
           }
+    WorkflowStepKey:
+      type: string
+      minLength: 1
+      maxLength: 96
+      pattern: '^[A-Za-z0-9_\-]+$'
+      description: Логический ключ шага внутри одной версии процесса; не является ссылкой на ресурс или источником полномочий.
+    WorkflowResultRequirement:
+      type: object
+      additionalProperties: false
+      required: [key, kind]
+      properties:
+        key: { type: string, pattern: "^[A-Za-z0-9_-]{1,96}$" }
+        kind:
+          {
+            type: string,
+            enum:
+              [
+                ARTIFACT,
+                PULL_REQUEST,
+                REVIEW,
+                QA,
+                INTEGRATION_RECEIPT,
+                DEPLOYMENT,
+              ],
+          }
+        fileName: { type: string, maxLength: 160 }
+        mediaType: { type: string, maxLength: 160 }
+        repository: { type: string, maxLength: 200 }
+        subjectStepKey: { $ref: "#/components/schemas/WorkflowStepKey" }
+        operation:
+          {
+            type: string,
+            enum: [github.pull_request.merge, ssh.compose.deploy],
+          }
+        targetRef: { type: string, maxLength: 96 }
     WorkflowStep:
       type: object
       additionalProperties: false
@@ -14972,7 +15007,20 @@ components:
           requiredCapabilityKeys,
         ]
       properties:
-        ref: { $ref: "#/components/schemas/OpaqueRef" }
+        dependsOn:
+          {
+            type: array,
+            maxItems: 200,
+            uniqueItems: true,
+            items: { $ref: "#/components/schemas/WorkflowStepKey" },
+          }
+        resultRequirements:
+          {
+            type: array,
+            maxItems: 4,
+            items: { $ref: "#/components/schemas/WorkflowResultRequirement" },
+          }
+        ref: { $ref: "#/components/schemas/WorkflowStepKey" }
         position: { type: integer, minimum: 1, maximum: 200 }
         name: { type: string, maxLength: 160 }
         purpose: { type: string, maxLength: 1000 }
@@ -15017,6 +15065,20 @@ components:
           requiredCapabilityKeys,
         ]
       properties:
+        ref: { $ref: "#/components/schemas/WorkflowStepKey" }
+        dependsOn:
+          {
+            type: array,
+            maxItems: 200,
+            uniqueItems: true,
+            items: { $ref: "#/components/schemas/WorkflowStepKey" },
+          }
+        resultRequirements:
+          {
+            type: array,
+            maxItems: 4,
+            items: { $ref: "#/components/schemas/WorkflowResultRequirement" },
+          }
         position: { type: integer, minimum: 1, maximum: 200 }
         name: { type: string, minLength: 1, maxLength: 160 }
         purpose: { type: string, minLength: 1, maxLength: 1000 }
@@ -15064,6 +15126,7 @@ components:
           cardSummary,
         ]
       properties:
+        executionMode: { type: string, enum: [MANAGER_DRIVEN, SERVER_DAG_V1] }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
         projectRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -15173,6 +15236,7 @@ components:
       required:
         [ref, version, revision, state, inputFields, steps, validationMessages]
       properties:
+        executionMode: { type: string, enum: [MANAGER_DRIVEN, SERVER_DAG_V1] }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version:
           {
@@ -15210,6 +15274,7 @@ components:
       additionalProperties: false
       required: [name, purpose, coordinatorAgentRef]
       properties:
+        executionMode: { type: string, enum: [MANAGER_DRIVEN, SERVER_DAG_V1] }
         name: { type: string, minLength: 1, maxLength: 160 }
         purpose: { type: string, minLength: 1, maxLength: 1000 }
         coordinatorAgentRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -15425,6 +15490,52 @@ components:
           not: { required: [profileRef] }
         - required: [projectRef, profileRef]
           properties: { scope: { type: string, enum: [PROJECT] } }
+    WorkflowAcceptedResult:
+      type: object
+      additionalProperties: false
+      required: [key, kind, digest]
+      properties:
+        targetRef: { type: string, maxLength: 96 }
+        bundleSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        imageDigest: { type: string, pattern: "^sha256:[a-f0-9]{64}$" }
+        healthOk: { type: boolean }
+        key: { type: string, maxLength: 96 }
+        kind:
+          {
+            type: string,
+            enum:
+              [
+                ARTIFACT,
+                PULL_REQUEST,
+                REVIEW,
+                QA,
+                INTEGRATION_RECEIPT,
+                DEPLOYMENT,
+              ],
+          }
+        artifactRef: { $ref: "#/components/schemas/OpaqueRef" }
+        artifactRevision: { type: string, maxLength: 96 }
+        digest: { type: string, pattern: "^[a-f0-9]{64}$" }
+        receiptRef: { $ref: "#/components/schemas/OpaqueRef" }
+        repository: { type: string, maxLength: 200 }
+        number: { type: integer, minimum: 0, maximum: 9007199254740991 }
+        headSha: { type: string, maxLength: 64 }
+        verdict: { type: string, enum: [PASS] }
+    WorkflowAttemptResult:
+      type: object
+      additionalProperties: false
+      required: [attempt, runRef, accepted, reason, results]
+      properties:
+        attempt: { type: integer, minimum: 1, maximum: 4 }
+        runRef: { $ref: "#/components/schemas/OpaqueRef" }
+        accepted: { type: boolean }
+        reason: { type: string, maxLength: 96 }
+        results:
+          {
+            type: array,
+            maxItems: 4,
+            items: { $ref: "#/components/schemas/WorkflowAcceptedResult" },
+          }
     RunNode:
       type: object
       additionalProperties: false
@@ -15442,6 +15553,12 @@ components:
           nextActions,
         ]
       properties:
+        workflowResults:
+          {
+            type: array,
+            maxItems: 4,
+            items: { $ref: "#/components/schemas/WorkflowAttemptResult" },
+          }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         runRef: { $ref: "#/components/schemas/OpaqueRef" }
         parentNodeRef: { $ref: "#/components/schemas/OpaqueRef" }

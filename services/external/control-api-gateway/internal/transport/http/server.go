@@ -603,6 +603,14 @@ func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.Messa
 // requiredProtoScalarDefault supplies zero/empty defaults only for explicit message-and-field pairs required by the public contract. Other omitted scalars retain absence; financial optional fields deliberately remain omitted rather than inventing data.
 // requiredProtoScalarDefault задаёт нулевые и пустые defaults только для явных пар message/field публичного контракта. Остальные пропущенные scalar сохраняют отсутствие; необязательные финансовые поля намеренно не заполняются выдуманными данными.
 func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field protoreflect.FieldDescriptor) (any, bool) {
+	if descriptor.FullName() == "controlplane.v1.WorkflowAttemptResult" {
+		switch field.JSONName() {
+		case "accepted":
+			return false, true
+		case "reason":
+			return "", true
+		}
+	}
 	if descriptor.FullName() == "controlplane.v1.TokenUsage" && field.JSONName() == "completeness" {
 		return "UNKNOWN", true
 	}
@@ -1251,7 +1259,7 @@ func flattenWorkflow(value map[string]any) {
 	}
 	if draft, ok := value["draftVersion"].(map[string]any); ok {
 		snapshot := map[string]any{}
-		for _, key := range []string{"ref", "version", "revision", "state", "coordinatorAgentRef", "inputFields", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria", "validationMessages"} {
+		for _, key := range []string{"ref", "version", "revision", "state", "coordinatorAgentRef", "inputFields", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria", "executionMode", "validationMessages"} {
 			if item, exists := draft[key]; exists {
 				snapshot[key] = item
 			}
@@ -1265,7 +1273,7 @@ func flattenWorkflow(value map[string]any) {
 	if version != nil {
 		value["revisionRef"] = version["ref"]
 	}
-	for _, key := range []string{"revision", "coordinatorAgentRef", "inputFields", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria", "validationMessages"} {
+	for _, key := range []string{"revision", "coordinatorAgentRef", "inputFields", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria", "executionMode", "validationMessages"} {
 		if item, exists := version[key]; exists {
 			value[key] = item
 		}

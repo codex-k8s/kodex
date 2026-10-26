@@ -8566,6 +8566,24 @@ func (e VFSNodeSelectionReason) Valid() bool {
 	}
 }
 
+// Defines values for WorkflowExecutionMode.
+const (
+	WorkflowExecutionModeMANAGERDRIVEN WorkflowExecutionMode = "MANAGER_DRIVEN"
+	WorkflowExecutionModeSERVERDAGV1   WorkflowExecutionMode = "SERVER_DAG_V1"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowExecutionMode enum.
+func (e WorkflowExecutionMode) Valid() bool {
+	switch e {
+	case WorkflowExecutionModeMANAGERDRIVEN:
+		return true
+	case WorkflowExecutionModeSERVERDAGV1:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WorkflowState.
 const (
 	WorkflowStateARCHIVED  WorkflowState = "ARCHIVED"
@@ -8584,6 +8602,51 @@ func (e WorkflowState) Valid() bool {
 	case WorkflowStatePUBLISHED:
 		return true
 	case WorkflowStateVALID:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowAcceptedResultKind.
+const (
+	WorkflowAcceptedResultKindARTIFACT           WorkflowAcceptedResultKind = "ARTIFACT"
+	WorkflowAcceptedResultKindDEPLOYMENT         WorkflowAcceptedResultKind = "DEPLOYMENT"
+	WorkflowAcceptedResultKindINTEGRATIONRECEIPT WorkflowAcceptedResultKind = "INTEGRATION_RECEIPT"
+	WorkflowAcceptedResultKindPULLREQUEST        WorkflowAcceptedResultKind = "PULL_REQUEST"
+	WorkflowAcceptedResultKindQA                 WorkflowAcceptedResultKind = "QA"
+	WorkflowAcceptedResultKindREVIEW             WorkflowAcceptedResultKind = "REVIEW"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowAcceptedResultKind enum.
+func (e WorkflowAcceptedResultKind) Valid() bool {
+	switch e {
+	case WorkflowAcceptedResultKindARTIFACT:
+		return true
+	case WorkflowAcceptedResultKindDEPLOYMENT:
+		return true
+	case WorkflowAcceptedResultKindINTEGRATIONRECEIPT:
+		return true
+	case WorkflowAcceptedResultKindPULLREQUEST:
+		return true
+	case WorkflowAcceptedResultKindQA:
+		return true
+	case WorkflowAcceptedResultKindREVIEW:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowAcceptedResultVerdict.
+const (
+	PASS WorkflowAcceptedResultVerdict = "PASS"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowAcceptedResultVerdict enum.
+func (e WorkflowAcceptedResultVerdict) Valid() bool {
+	switch e {
+	case PASS:
 		return true
 	default:
 		return false
@@ -8611,6 +8674,24 @@ func (e WorkflowCommandAction) Valid() bool {
 	}
 }
 
+// Defines values for WorkflowDraftSnapshotExecutionMode.
+const (
+	WorkflowDraftSnapshotExecutionModeMANAGERDRIVEN WorkflowDraftSnapshotExecutionMode = "MANAGER_DRIVEN"
+	WorkflowDraftSnapshotExecutionModeSERVERDAGV1   WorkflowDraftSnapshotExecutionMode = "SERVER_DAG_V1"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowDraftSnapshotExecutionMode enum.
+func (e WorkflowDraftSnapshotExecutionMode) Valid() bool {
+	switch e {
+	case WorkflowDraftSnapshotExecutionModeMANAGERDRIVEN:
+		return true
+	case WorkflowDraftSnapshotExecutionModeSERVERDAGV1:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WorkflowDraftSnapshotState.
 const (
 	WorkflowDraftSnapshotStateARCHIVED  WorkflowDraftSnapshotState = "ARCHIVED"
@@ -8629,6 +8710,24 @@ func (e WorkflowDraftSnapshotState) Valid() bool {
 	case WorkflowDraftSnapshotStatePUBLISHED:
 		return true
 	case WorkflowDraftSnapshotStateVALID:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowInputExecutionMode.
+const (
+	MANAGERDRIVEN WorkflowInputExecutionMode = "MANAGER_DRIVEN"
+	SERVERDAGV1   WorkflowInputExecutionMode = "SERVER_DAG_V1"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowInputExecutionMode enum.
+func (e WorkflowInputExecutionMode) Valid() bool {
+	switch e {
+	case MANAGERDRIVEN:
+		return true
+	case SERVERDAGV1:
 		return true
 	default:
 		return false
@@ -8734,6 +8833,54 @@ func (e WorkflowLaunchReadinessReason) Valid() bool {
 	case WorkflowLaunchReadinessReasonREADY:
 		return true
 	case WorkflowLaunchReadinessReasonUNPUBLISHED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowResultRequirementKind.
+const (
+	WorkflowResultRequirementKindARTIFACT           WorkflowResultRequirementKind = "ARTIFACT"
+	WorkflowResultRequirementKindDEPLOYMENT         WorkflowResultRequirementKind = "DEPLOYMENT"
+	WorkflowResultRequirementKindINTEGRATIONRECEIPT WorkflowResultRequirementKind = "INTEGRATION_RECEIPT"
+	WorkflowResultRequirementKindPULLREQUEST        WorkflowResultRequirementKind = "PULL_REQUEST"
+	WorkflowResultRequirementKindQA                 WorkflowResultRequirementKind = "QA"
+	WorkflowResultRequirementKindREVIEW             WorkflowResultRequirementKind = "REVIEW"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowResultRequirementKind enum.
+func (e WorkflowResultRequirementKind) Valid() bool {
+	switch e {
+	case WorkflowResultRequirementKindARTIFACT:
+		return true
+	case WorkflowResultRequirementKindDEPLOYMENT:
+		return true
+	case WorkflowResultRequirementKindINTEGRATIONRECEIPT:
+		return true
+	case WorkflowResultRequirementKindPULLREQUEST:
+		return true
+	case WorkflowResultRequirementKindQA:
+		return true
+	case WorkflowResultRequirementKindREVIEW:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowResultRequirementOperation.
+const (
+	GithubPullRequestMerge WorkflowResultRequirementOperation = "github.pull_request.merge"
+	SshComposeDeploy       WorkflowResultRequirementOperation = "ssh.compose.deploy"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowResultRequirementOperation enum.
+func (e WorkflowResultRequirementOperation) Valid() bool {
+	switch e {
+	case GithubPullRequestMerge:
+		return true
+	case SshComposeDeploy:
 		return true
 	default:
 		return false
@@ -14168,29 +14315,30 @@ type RunMessagePhase string
 
 // RunNode defines model for RunNode.
 type RunNode struct {
-	AgentRef         *OpaqueRef   `json:"agentRef,omitempty"`
-	ArtifactRefs     []OpaqueRef  `json:"artifactRefs"`
-	Attempt          int          `json:"attempt"`
-	CallbackSummary  *string      `json:"callbackSummary,omitempty"`
-	ChildRunRefs     []OpaqueRef  `json:"childRunRefs"`
-	CreatedAt        Timestamp    `json:"createdAt"`
-	DisplayName      string       `json:"displayName"`
-	FinishedAt       *Timestamp   `json:"finishedAt,omitempty"`
-	InputSummary     *string      `json:"inputSummary,omitempty"`
-	IntegrationNames *[]string    `json:"integrationNames,omitempty"`
-	NextActions      []NextAction `json:"nextActions"`
-	ParentNodeRef    *OpaqueRef   `json:"parentNodeRef,omitempty"`
-	Planned          *bool        `json:"planned,omitempty"`
-	ProgressSummary  *string      `json:"progressSummary,omitempty"`
-	Ref              OpaqueRef    `json:"ref"`
-	Role             *string      `json:"role,omitempty"`
-	RunRef           OpaqueRef    `json:"runRef"`
-	SafeErrorCode    *string      `json:"safeErrorCode,omitempty"`
-	SafeErrorMessage *string      `json:"safeErrorMessage,omitempty"`
-	StartedAt        *Timestamp   `json:"startedAt,omitempty"`
-	State            RunNodeState `json:"state"`
-	TurnRef          *OpaqueRef   `json:"turnRef,omitempty"`
-	Type             RunNodeType  `json:"type"`
+	AgentRef         *OpaqueRef               `json:"agentRef,omitempty"`
+	ArtifactRefs     []OpaqueRef              `json:"artifactRefs"`
+	Attempt          int                      `json:"attempt"`
+	CallbackSummary  *string                  `json:"callbackSummary,omitempty"`
+	ChildRunRefs     []OpaqueRef              `json:"childRunRefs"`
+	CreatedAt        Timestamp                `json:"createdAt"`
+	DisplayName      string                   `json:"displayName"`
+	FinishedAt       *Timestamp               `json:"finishedAt,omitempty"`
+	InputSummary     *string                  `json:"inputSummary,omitempty"`
+	IntegrationNames *[]string                `json:"integrationNames,omitempty"`
+	NextActions      []NextAction             `json:"nextActions"`
+	ParentNodeRef    *OpaqueRef               `json:"parentNodeRef,omitempty"`
+	Planned          *bool                    `json:"planned,omitempty"`
+	ProgressSummary  *string                  `json:"progressSummary,omitempty"`
+	Ref              OpaqueRef                `json:"ref"`
+	Role             *string                  `json:"role,omitempty"`
+	RunRef           OpaqueRef                `json:"runRef"`
+	SafeErrorCode    *string                  `json:"safeErrorCode,omitempty"`
+	SafeErrorMessage *string                  `json:"safeErrorMessage,omitempty"`
+	StartedAt        *Timestamp               `json:"startedAt,omitempty"`
+	State            RunNodeState             `json:"state"`
+	TurnRef          *OpaqueRef               `json:"turnRef,omitempty"`
+	Type             RunNodeType              `json:"type"`
+	WorkflowResults  *[]WorkflowAttemptResult `json:"workflowResults,omitempty"`
 }
 
 // RunNodeState defines model for RunNode.State.
@@ -15642,6 +15790,7 @@ type Workflow struct {
 
 	// DraftRevisionRef Точная сохранённая draft revision владельца; отсутствует без draft.
 	DraftRevisionRef *OpaqueRef              `json:"draftRevisionRef,omitempty"`
+	ExecutionMode    *WorkflowExecutionMode  `json:"executionMode,omitempty"`
 	InputFields      []WorkflowInputField    `json:"inputFields"`
 	LaunchReadiness  WorkflowLaunchReadiness `json:"launchReadiness"`
 	MaxConcurrency   *int                    `json:"maxConcurrency,omitempty"`
@@ -15665,8 +15814,44 @@ type Workflow struct {
 	Version            int64          `json:"version"`
 }
 
+// WorkflowExecutionMode defines model for Workflow.ExecutionMode.
+type WorkflowExecutionMode string
+
 // WorkflowState defines model for Workflow.State.
 type WorkflowState string
+
+// WorkflowAcceptedResult defines model for WorkflowAcceptedResult.
+type WorkflowAcceptedResult struct {
+	ArtifactRef      *OpaqueRef                     `json:"artifactRef,omitempty"`
+	ArtifactRevision *string                        `json:"artifactRevision,omitempty"`
+	BundleSha256     *string                        `json:"bundleSha256,omitempty"`
+	Digest           string                         `json:"digest"`
+	HeadSha          *string                        `json:"headSha,omitempty"`
+	HealthOk         *bool                          `json:"healthOk,omitempty"`
+	ImageDigest      *string                        `json:"imageDigest,omitempty"`
+	Key              string                         `json:"key"`
+	Kind             WorkflowAcceptedResultKind     `json:"kind"`
+	Number           *int                           `json:"number,omitempty"`
+	ReceiptRef       *OpaqueRef                     `json:"receiptRef,omitempty"`
+	Repository       *string                        `json:"repository,omitempty"`
+	TargetRef        *string                        `json:"targetRef,omitempty"`
+	Verdict          *WorkflowAcceptedResultVerdict `json:"verdict,omitempty"`
+}
+
+// WorkflowAcceptedResultKind defines model for WorkflowAcceptedResult.Kind.
+type WorkflowAcceptedResultKind string
+
+// WorkflowAcceptedResultVerdict defines model for WorkflowAcceptedResult.Verdict.
+type WorkflowAcceptedResultVerdict string
+
+// WorkflowAttemptResult defines model for WorkflowAttemptResult.
+type WorkflowAttemptResult struct {
+	Accepted bool                     `json:"accepted"`
+	Attempt  int                      `json:"attempt"`
+	Reason   string                   `json:"reason"`
+	Results  []WorkflowAcceptedResult `json:"results"`
+	RunRef   OpaqueRef                `json:"runRef"`
+}
 
 // WorkflowCardSummary Единая owner projection для get/list/project/global и командного readback. Использует опубликованную revision, иначе draft; HTTP и PWA не пересчитывают значения из steps или частичной страницы.
 type WorkflowCardSummary struct {
@@ -15691,33 +15876,41 @@ type WorkflowCommandAction string
 
 // WorkflowDraftSnapshot Сохранённый draft для редактора; все поля и ref происходят из одной owner revision. Не подменяет опубликованный основной вид Workflow.
 type WorkflowDraftSnapshot struct {
-	CompletionCriteria  *string                    `json:"completionCriteria,omitempty"`
-	CoordinatorAgentRef *OpaqueRef                 `json:"coordinatorAgentRef,omitempty"`
-	InputFields         []WorkflowInputField       `json:"inputFields"`
-	MaxConcurrency      *int                       `json:"maxConcurrency,omitempty"`
-	Ref                 OpaqueRef                  `json:"ref"`
-	Revision            int                        `json:"revision"`
-	State               WorkflowDraftSnapshotState `json:"state"`
-	Steps               []WorkflowStep             `json:"steps"`
-	TimeoutSeconds      *int                       `json:"timeoutSeconds,omitempty"`
-	ValidationMessages  []string                   `json:"validationMessages"`
-	Version             int64                      `json:"version"`
+	CompletionCriteria  *string                             `json:"completionCriteria,omitempty"`
+	CoordinatorAgentRef *OpaqueRef                          `json:"coordinatorAgentRef,omitempty"`
+	ExecutionMode       *WorkflowDraftSnapshotExecutionMode `json:"executionMode,omitempty"`
+	InputFields         []WorkflowInputField                `json:"inputFields"`
+	MaxConcurrency      *int                                `json:"maxConcurrency,omitempty"`
+	Ref                 OpaqueRef                           `json:"ref"`
+	Revision            int                                 `json:"revision"`
+	State               WorkflowDraftSnapshotState          `json:"state"`
+	Steps               []WorkflowStep                      `json:"steps"`
+	TimeoutSeconds      *int                                `json:"timeoutSeconds,omitempty"`
+	ValidationMessages  []string                            `json:"validationMessages"`
+	Version             int64                               `json:"version"`
 }
+
+// WorkflowDraftSnapshotExecutionMode defines model for WorkflowDraftSnapshot.ExecutionMode.
+type WorkflowDraftSnapshotExecutionMode string
 
 // WorkflowDraftSnapshotState defines model for WorkflowDraftSnapshot.State.
 type WorkflowDraftSnapshotState string
 
 // WorkflowInput defines model for WorkflowInput.
 type WorkflowInput struct {
-	CompletionCriteria  *string                    `json:"completionCriteria,omitempty"`
-	CoordinatorAgentRef OpaqueRef                  `json:"coordinatorAgentRef"`
-	InputFields         *[]WorkflowInputFieldInput `json:"inputFields,omitempty"`
-	MaxConcurrency      *int                       `json:"maxConcurrency,omitempty"`
-	Name                string                     `json:"name"`
-	Purpose             string                     `json:"purpose"`
-	Steps               *[]WorkflowStepInput       `json:"steps,omitempty"`
-	TimeoutSeconds      *int                       `json:"timeoutSeconds,omitempty"`
+	CompletionCriteria  *string                     `json:"completionCriteria,omitempty"`
+	CoordinatorAgentRef OpaqueRef                   `json:"coordinatorAgentRef"`
+	ExecutionMode       *WorkflowInputExecutionMode `json:"executionMode,omitempty"`
+	InputFields         *[]WorkflowInputFieldInput  `json:"inputFields,omitempty"`
+	MaxConcurrency      *int                        `json:"maxConcurrency,omitempty"`
+	Name                string                      `json:"name"`
+	Purpose             string                      `json:"purpose"`
+	Steps               *[]WorkflowStepInput        `json:"steps,omitempty"`
+	TimeoutSeconds      *int                        `json:"timeoutSeconds,omitempty"`
 }
+
+// WorkflowInputExecutionMode defines model for WorkflowInput.ExecutionMode.
+type WorkflowInputExecutionMode string
 
 // WorkflowInputField defines model for WorkflowInputField.
 type WorkflowInputField struct {
@@ -15767,12 +15960,33 @@ type WorkflowPage struct {
 	NextPageToken *string    `json:"nextPageToken,omitempty"`
 }
 
+// WorkflowResultRequirement defines model for WorkflowResultRequirement.
+type WorkflowResultRequirement struct {
+	FileName   *string                             `json:"fileName,omitempty"`
+	Key        string                              `json:"key"`
+	Kind       WorkflowResultRequirementKind       `json:"kind"`
+	MediaType  *string                             `json:"mediaType,omitempty"`
+	Operation  *WorkflowResultRequirementOperation `json:"operation,omitempty"`
+	Repository *string                             `json:"repository,omitempty"`
+
+	// SubjectStepKey Логический ключ шага внутри одной версии процесса; не является ссылкой на ресурс или источником полномочий.
+	SubjectStepKey *WorkflowStepKey `json:"subjectStepKey,omitempty"`
+	TargetRef      *string          `json:"targetRef,omitempty"`
+}
+
+// WorkflowResultRequirementKind defines model for WorkflowResultRequirement.Kind.
+type WorkflowResultRequirementKind string
+
+// WorkflowResultRequirementOperation defines model for WorkflowResultRequirement.Operation.
+type WorkflowResultRequirementOperation string
+
 // WorkflowStep defines model for WorkflowStep.
 type WorkflowStep struct {
 	AgentRef *OpaqueRef `json:"agentRef,omitempty"`
 
 	// ApprovalTimeoutSeconds Срок ожидания решения после завершения этапа. При отсутствии отдельного срока согласования нет; общий срок процесса действует независимо.
 	ApprovalTimeoutSeconds *int                        `json:"approvalTimeoutSeconds,omitempty"`
+	DependsOn              *[]WorkflowStepKey          `json:"dependsOn,omitempty"`
 	ExpectedResult         string                      `json:"expectedResult"`
 	GateDecisions          []WorkflowStepGateDecisions `json:"gateDecisions"`
 	HumanGate              bool                        `json:"humanGate"`
@@ -15781,9 +15995,12 @@ type WorkflowStep struct {
 	ParallelGroup          int                         `json:"parallelGroup"`
 	Position               int                         `json:"position"`
 	Purpose                string                      `json:"purpose"`
-	Ref                    OpaqueRef                   `json:"ref"`
-	RequiredCapabilityKeys []string                    `json:"requiredCapabilityKeys"`
-	TimeoutSeconds         int                         `json:"timeoutSeconds"`
+
+	// Ref Логический ключ шага внутри одной версии процесса; не является ссылкой на ресурс или источником полномочий.
+	Ref                    WorkflowStepKey              `json:"ref"`
+	RequiredCapabilityKeys []string                     `json:"requiredCapabilityKeys"`
+	ResultRequirements     *[]WorkflowResultRequirement `json:"resultRequirements,omitempty"`
+	TimeoutSeconds         int                          `json:"timeoutSeconds"`
 }
 
 // WorkflowStepGateDecisions defines model for WorkflowStep.GateDecisions.
@@ -15795,6 +16012,7 @@ type WorkflowStepInput struct {
 
 	// ApprovalTimeoutSeconds Необязательный срок согласования в секундах, допустимый только при humanGate=true. Отсчёт начинается при открытии согласования сервером.
 	ApprovalTimeoutSeconds *int                             `json:"approvalTimeoutSeconds,omitempty"`
+	DependsOn              *[]WorkflowStepKey               `json:"dependsOn,omitempty"`
 	ExpectedResult         string                           `json:"expectedResult"`
 	GateDecisions          []WorkflowStepInputGateDecisions `json:"gateDecisions"`
 	HumanGate              bool                             `json:"humanGate"`
@@ -15803,12 +16021,19 @@ type WorkflowStepInput struct {
 	ParallelGroup          int                              `json:"parallelGroup"`
 	Position               int                              `json:"position"`
 	Purpose                string                           `json:"purpose"`
-	RequiredCapabilityKeys []string                         `json:"requiredCapabilityKeys"`
-	TimeoutSeconds         int                              `json:"timeoutSeconds"`
+
+	// Ref Логический ключ шага внутри одной версии процесса; не является ссылкой на ресурс или источником полномочий.
+	Ref                    *WorkflowStepKey             `json:"ref,omitempty"`
+	RequiredCapabilityKeys []string                     `json:"requiredCapabilityKeys"`
+	ResultRequirements     *[]WorkflowResultRequirement `json:"resultRequirements,omitempty"`
+	TimeoutSeconds         int                          `json:"timeoutSeconds"`
 }
 
 // WorkflowStepInputGateDecisions defines model for WorkflowStepInput.GateDecisions.
 type WorkflowStepInputGateDecisions string
+
+// WorkflowStepKey Логический ключ шага внутри одной версии процесса; не является ссылкой на ресурс или источником полномочий.
+type WorkflowStepKey = string
 
 // AccessBindingRef defines model for AccessBindingRef.
 type AccessBindingRef = OpaqueRef

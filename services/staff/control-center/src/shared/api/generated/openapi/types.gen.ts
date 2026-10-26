@@ -2969,8 +2969,26 @@ export type WorkflowInputFieldInput = {
     options: Array<string>;
 };
 
+/**
+ * Логический ключ шага внутри одной версии процесса; не является ссылкой на ресурс или источником полномочий.
+ */
+export type WorkflowStepKey = string;
+
+export type WorkflowResultRequirement = {
+    key: string;
+    kind: 'ARTIFACT' | 'PULL_REQUEST' | 'REVIEW' | 'QA' | 'INTEGRATION_RECEIPT' | 'DEPLOYMENT';
+    fileName?: string;
+    mediaType?: string;
+    repository?: string;
+    subjectStepKey?: WorkflowStepKey;
+    operation?: 'github.pull_request.merge' | 'ssh.compose.deploy';
+    targetRef?: string;
+};
+
 export type WorkflowStep = {
-    ref: OpaqueRef;
+    dependsOn?: Array<WorkflowStepKey>;
+    resultRequirements?: Array<WorkflowResultRequirement>;
+    ref: WorkflowStepKey;
     position: number;
     name: string;
     purpose: string;
@@ -2989,6 +3007,9 @@ export type WorkflowStep = {
 };
 
 export type WorkflowStepInput = {
+    ref?: WorkflowStepKey;
+    dependsOn?: Array<WorkflowStepKey>;
+    resultRequirements?: Array<WorkflowResultRequirement>;
     position: number;
     name: string;
     purpose: string;
@@ -3007,6 +3028,7 @@ export type WorkflowStepInput = {
 };
 
 export type Workflow = {
+    executionMode?: 'MANAGER_DRIVEN' | 'SERVER_DAG_V1';
     ref: OpaqueRef;
     version: number;
     projectRef: OpaqueRef;
@@ -3069,6 +3091,7 @@ export type WorkflowLaunchReadiness = {
  * Сохранённый draft для редактора; все поля и ref происходят из одной owner revision. Не подменяет опубликованный основной вид Workflow.
  */
 export type WorkflowDraftSnapshot = {
+    executionMode?: 'MANAGER_DRIVEN' | 'SERVER_DAG_V1';
     ref: OpaqueRef;
     version: number;
     revision: number;
@@ -3083,6 +3106,7 @@ export type WorkflowDraftSnapshot = {
 };
 
 export type WorkflowInput = {
+    executionMode?: 'MANAGER_DRIVEN' | 'SERVER_DAG_V1';
     name: string;
     purpose: string;
     coordinatorAgentRef: OpaqueRef;
@@ -3181,7 +3205,33 @@ export type AssistantRunPin = ({
     profileRef?: OpaqueRef;
 };
 
+export type WorkflowAcceptedResult = {
+    targetRef?: string;
+    bundleSha256?: string;
+    imageDigest?: string;
+    healthOk?: boolean;
+    key: string;
+    kind: 'ARTIFACT' | 'PULL_REQUEST' | 'REVIEW' | 'QA' | 'INTEGRATION_RECEIPT' | 'DEPLOYMENT';
+    artifactRef?: OpaqueRef;
+    artifactRevision?: string;
+    digest: string;
+    receiptRef?: OpaqueRef;
+    repository?: string;
+    number?: number;
+    headSha?: string;
+    verdict?: 'PASS';
+};
+
+export type WorkflowAttemptResult = {
+    attempt: number;
+    runRef: OpaqueRef;
+    accepted: boolean;
+    reason: string;
+    results: Array<WorkflowAcceptedResult>;
+};
+
 export type RunNode = {
+    workflowResults?: Array<WorkflowAttemptResult>;
     ref: OpaqueRef;
     runRef: OpaqueRef;
     parentNodeRef?: OpaqueRef;

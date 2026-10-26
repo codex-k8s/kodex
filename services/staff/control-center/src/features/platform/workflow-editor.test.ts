@@ -160,3 +160,49 @@ it("published-only preview использует только exact displayed rev
   ).toBeUndefined();
   expect(workflowStagePromptTarget(workflow, 9)).toBeUndefined();
 });
+
+it("сохраняет DAG-поля отдельного черновика без изменения опубликованной версии", () => {
+  const server = structuredClone(workflow);
+  server.executionMode = "MANAGER_DRIVEN";
+  const draft = server.draft;
+  if (!draft) throw new Error("Черновик оснастки отсутствует");
+  draft.executionMode = "SERVER_DAG_V1";
+  const stage = draft.steps[0];
+  if (!stage) throw new Error("Этап оснастки отсутствует");
+  stage.ref = "sre";
+  stage.dependsOn = ["merge", "qa"];
+  stage.humanGate = true;
+  stage.approvalTimeoutSeconds = 300;
+  stage.resultRequirements = [
+    {
+      key: "deployment",
+      kind: "DEPLOYMENT",
+      operation: "ssh.compose.deploy",
+      subjectStepKey: "merge",
+      repository: "codex-k8s/test-repo",
+      targetRef: "ssh_fixture",
+    },
+    {
+      key: "runbook",
+      kind: "ARTIFACT",
+      fileName: "runbook.md",
+      mediaType: "text/markdown",
+    },
+  ];
+  const input = workflowEditorInput(server);
+  expect(input.executionMode).toBe("SERVER_DAG_V1");
+  expect(input.steps[0]?.ref).toBe("sre");
+  expect(input.steps[0]?.dependsOn).toEqual(["merge", "qa"]);
+  expect(input.steps[0]?.approvalTimeoutSeconds).toBe(300);
+  expect(input.steps[0]?.resultRequirements).toEqual(stage.resultRequirements);
+  expect(server.executionMode).toBe("MANAGER_DRIVEN");
+  const dependencies = input.steps[0]?.dependsOn;
+  const result = input.steps[0]?.resultRequirements?.[0];
+  if (!dependencies || !result)
+    throw new Error("Поля графа потеряны в редакторе");
+  dependencies.push("other");
+  result.targetRef = "ssh_changed";
+  expect(stage.dependsOn).toEqual(["merge", "qa"]);
+  expect(stage.resultRequirements[0]?.targetRef).toBe("ssh_fixture");
+  expect(workflowEditorInput(workflow).executionMode).toBe("MANAGER_DRIVEN");
+});

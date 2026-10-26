@@ -9,6 +9,7 @@ export function workflowEditorInput(
 ): Required<WorkflowInput> {
   const body = workflow.draft ?? workflow;
   return {
+    executionMode: body.executionMode ?? "MANAGER_DRIVEN",
     name: workflow.name,
     purpose: workflow.purpose,
     coordinatorAgentRef: body.coordinatorAgentRef ?? "",
@@ -24,6 +25,11 @@ export function workflowEditorInput(
       options: [...field.options],
     })),
     steps: body.steps.map((step) => ({
+      ref: step.ref,
+      dependsOn: [...(step.dependsOn ?? [])],
+      resultRequirements: (step.resultRequirements ?? []).map((item) => ({
+        ...item,
+      })),
       position: step.position,
       name: step.name,
       purpose: step.purpose,
