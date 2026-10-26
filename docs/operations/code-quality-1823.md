@@ -4,11 +4,62 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.517.0
+version: 1.518.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие типизированные результаты context RPC и ввод спецификаций — 26.10.2026
+
+17 обработчиков используют три узких private result helper:8 skill replies,
+5 memory replies и4 agent-context bindings. Сначала проверяется RPC error,
+потом однократно вызывается getter и прежний специальный writer. Сохранены
+точные success status/ref и agent/resource/revision pins,строгие view/ETag/
+redaction checks. Helpers принимают уже завершённый ответ:RPC choice,команда,
+authority,grant,повтор и owner lifecycle не выбираются. Дополнительные response guards
+project/agent/draft у трёх create/save callers выполняются перед прежними writers.
+
+SaveSkillBundleDraft и ReviseMemoryRecord используют decodeContextSpecification
+с прежним typed converter. Проверка refs остаётся до decode,headers — после
+convert. Decoder failure не вызывает converter;его собственный отказ сохраняет
+полученный результат и один local400,но caller не передаёт результат дальше.
+Частичный decoded Input при false не превращается в спецификацию. Прежние
+decoder limits/поведение JSON и типы RPC inputs не менялись.
+
+Три полных GoFmt inverses восстановили исходники,включая самостоятельные guards,
+request constructors,RPC и comments/directives. Три reference файла строгих
+views/SQL layouts заморожены побайтно.13 частных изменений error/getter/response
+pins/status/decision/redaction/digest/version/input/converter отвергнуты.
+Чтение строк binding tuple теперь происходит до helper error guard:это локальные
+строки и поле возвращённого по значению body,без escape/переданных указателей,
+внешних эффектов или новой проверки полномочий.
+
+Полный gateway build6.33s/unit22.74s/vet1.97s — PASS LOCAL:
+3098PASS/0FAIL/0SKIP,11packages. Частная overlay вызывает actual helpers:
+85PASS events/0FAIL/0SKIP за8.86s. Проверены valid/nil/foreign/version views,
+typed-nil generated replies,все16non-OK gRPC codes для трёх reply kinds,
+decode/convert failures,unknown fields,trailing JSON и null. Error replies
+не вызывают getters,success — ровно один вызов;decode error пропускает converter.
+Сопоставлены status/headers/ETag/JSON с исходными writers,включая независимые
+корректные correlation IDs;input snapshots не менялись. Сетевых HTTP/RPC нет.
+Публичные mirror tests простого glue не добавлялись. Hashes4 исходников совпали
+с proof,полным модульным запуском и итоговой overlay.
+
+AST отдельно подтвердил ложное совпадение Scan:21колонка inboxRow против
+23колонок RunNode с разными полями и failure contracts. Оно адресно сохранено.
+После реального выноса общих guards/results сохранены ещё шесть точных окон
+разных typed context RPC constructors/boundaries. Крупное окно1328tokens между
+skill/memory endpoints остаётся unresolved:в нём есть повтор page/item/unique
+validation,который ещё требует разбора. Нельзя считать весь файл исключённым.
+
+Пять quality stages — PASS LOCAL. Удалены8raw окон,добавлены7;три отсутствующие
+старые registry entries удалены,остальные1076 сохранены;7точных решений
+проверены42registry mutations. Registry1083,detector6784sources/222generated
+exclusions,1435raw/1226retained/209unresolved,Go21607/21607 EN→RU.
+Context7 ранее отклонил API key;официальные Go docs проверены ранее,внешние
+API/generated code не менялись. Legacy renderer FAIL и прежние Bash diagnostics
+остаются открытыми;полные E2E/live/deploy/QA — NOT RUN.
 
 ## Общие типизированные имена runtime-политик — 26.10.2026
 

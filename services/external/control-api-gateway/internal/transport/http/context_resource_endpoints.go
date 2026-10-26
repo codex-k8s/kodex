@@ -18,11 +18,7 @@ func (server *Server) GetSkillBundle(w http.ResponseWriter, r *http.Request, bun
 		return
 	}
 	response, err := server.control.Query.GetSkillBundle(r.Context(), &controlplanev1.GetSkillBundleRequest{BundleRef: bundleRef})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeSkillBundle(w, response.GetBundle(), bundleRef, 200)
+	writeSkillBundleRPCResult(w, response, err, bundleRef, 200)
 }
 
 // ArchiveSkillBundle checks reference and versioned headers before the specialized
@@ -35,11 +31,7 @@ func (server *Server) ArchiveSkillBundle(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	response, err := server.control.Command.ArchiveSkillBundle(r.Context(), &controlplanev1.ArchiveSkillBundleRequest{Mutation: mutation, BundleRef: bundleRef})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeSkillBundle(w, response.GetBundle(), bundleRef, 200)
+	writeSkillBundleRPCResult(w, response, err, bundleRef, 200)
 }
 
 // RestoreSkillBundle forwards an exact validated mutation to the restore command
@@ -52,11 +44,7 @@ func (server *Server) RestoreSkillBundle(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	response, err := server.control.Command.RestoreSkillBundle(r.Context(), &controlplanev1.RestoreSkillBundleRequest{Mutation: mutation, BundleRef: bundleRef})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeSkillBundle(w, response.GetBundle(), bundleRef, 200)
+	writeSkillBundleRPCResult(w, response, err, bundleRef, 200)
 }
 
 // PurgeSkillBundle delegates the exact versioned purge request to its owner and
@@ -69,11 +57,7 @@ func (server *Server) PurgeSkillBundle(w http.ResponseWriter, r *http.Request, b
 		return
 	}
 	response, err := server.control.Command.PurgeSkillBundle(r.Context(), &controlplanev1.PurgeSkillBundleRequest{Mutation: mutation, BundleRef: bundleRef})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeSkillBundle(w, response.GetBundle(), bundleRef, 200)
+	writeSkillBundleRPCResult(w, response, err, bundleRef, 200)
 }
 
 // BindAgentSkillBundle validates body, three references and both version inputs
@@ -86,11 +70,7 @@ func (server *Server) BindAgentSkillBundle(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	response, err := server.control.Command.BindAgentSkillBundle(r.Context(), &controlplanev1.BindAgentSkillBundleRequest{Mutation: mutation, AgentRef: agentRef, BundleRef: bundleRef, RevisionRef: body.RevisionRef, ExpectedBindingVersion: body.ExpectedBindingVersion})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeAgentContextBinding(w, response.GetBinding(), agentRef, bundleRef, body.RevisionRef)
+	writeAgentContextBindingRPCResult(w, response, err, agentRef, bundleRef, body.RevisionRef)
 }
 
 // UnbindAgentSkillBundle keeps the same strict binding input checks as bind but
@@ -103,11 +83,7 @@ func (server *Server) UnbindAgentSkillBundle(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	response, err := server.control.Command.UnbindAgentSkillBundle(r.Context(), &controlplanev1.UnbindAgentSkillBundleRequest{Mutation: mutation, AgentRef: agentRef, BundleRef: bundleRef, RevisionRef: body.RevisionRef, ExpectedBindingVersion: body.ExpectedBindingVersion})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeAgentContextBinding(w, response.GetBinding(), agentRef, bundleRef, body.RevisionRef)
+	writeAgentContextBindingRPCResult(w, response, err, agentRef, bundleRef, body.RevisionRef)
 }
 
 // ListSkillBundles checks filters and page bounds, then validates every returned
@@ -189,11 +165,7 @@ func (server *Server) GetMemoryRecord(w http.ResponseWriter, r *http.Request, re
 		return
 	}
 	response, err := server.control.Query.GetMemoryRecord(r.Context(), &controlplanev1.GetMemoryRecordRequest{RecordRef: recordRef})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMemoryRecord(w, response.GetRecord(), recordRef, 200)
+	writeMemoryRecordRPCResult(w, response, err, recordRef, 200)
 }
 
 // ArchiveMemoryRecord checks the exact resource and versioned mutation headers,
@@ -206,11 +178,7 @@ func (server *Server) ArchiveMemoryRecord(w http.ResponseWriter, r *http.Request
 		return
 	}
 	response, err := server.control.Command.ArchiveMemoryRecord(r.Context(), &controlplanev1.ArchiveMemoryRecordRequest{Mutation: mutation, RecordRef: recordRef})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMemoryRecord(w, response.GetRecord(), recordRef, 200)
+	writeMemoryRecordRPCResult(w, response, err, recordRef, 200)
 }
 
 // RestoreMemoryRecord calls the specialized restore command only after the shared
@@ -223,11 +191,7 @@ func (server *Server) RestoreMemoryRecord(w http.ResponseWriter, r *http.Request
 		return
 	}
 	response, err := server.control.Command.RestoreMemoryRecord(r.Context(), &controlplanev1.RestoreMemoryRecordRequest{Mutation: mutation, RecordRef: recordRef})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMemoryRecord(w, response.GetRecord(), recordRef, 200)
+	writeMemoryRecordRPCResult(w, response, err, recordRef, 200)
 }
 
 // PurgeMemoryRecord forwards the exact versioned purge command and validates its
@@ -240,11 +204,7 @@ func (server *Server) PurgeMemoryRecord(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	response, err := server.control.Command.PurgeMemoryRecord(r.Context(), &controlplanev1.PurgeMemoryRecordRequest{Mutation: mutation, RecordRef: recordRef})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMemoryRecord(w, response.GetRecord(), recordRef, 200)
+	writeMemoryRecordRPCResult(w, response, err, recordRef, 200)
 }
 
 // BindAgentMemoryRecord checks binding body and mutation headers before the typed
@@ -257,11 +217,7 @@ func (server *Server) BindAgentMemoryRecord(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	response, err := server.control.Command.BindAgentMemoryRecord(r.Context(), &controlplanev1.BindAgentMemoryRecordRequest{Mutation: mutation, AgentRef: agentRef, RecordRef: recordRef, RevisionRef: body.RevisionRef, ExpectedBindingVersion: body.ExpectedBindingVersion})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeAgentContextBinding(w, response.GetBinding(), agentRef, recordRef, body.RevisionRef)
+	writeAgentContextBindingRPCResult(w, response, err, agentRef, recordRef, body.RevisionRef)
 }
 
 // UnbindAgentMemoryRecord validates the same binding tuple before the separate
@@ -274,11 +230,7 @@ func (server *Server) UnbindAgentMemoryRecord(w http.ResponseWriter, r *http.Req
 		return
 	}
 	response, err := server.control.Command.UnbindAgentMemoryRecord(r.Context(), &controlplanev1.UnbindAgentMemoryRecordRequest{Mutation: mutation, AgentRef: agentRef, RecordRef: recordRef, RevisionRef: body.RevisionRef, ExpectedBindingVersion: body.ExpectedBindingVersion})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeAgentContextBinding(w, response.GetBinding(), agentRef, recordRef, body.RevisionRef)
+	writeAgentContextBindingRPCResult(w, response, err, agentRef, recordRef, body.RevisionRef)
 }
 
 // ListMemoryRecords validates query/page/state inputs and each memory view,

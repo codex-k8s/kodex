@@ -52,3 +52,24 @@ func requireSkillRevisionDigestMutation(w http.ResponseWriter, r *http.Request, 
 	mutation, ok := requireVersionedMutation(w, key, etag)
 	return body, mutation, ok
 }
+
+// decodeContextSpecification runs the existing JSON decoder before the selected typed
+// specification converter. Decode failure skips conversion; conversion failure keeps the
+// returned value and writes the same local400 once. Callers retain reference/header order,
+// request type, converter and RPC; a converted value does not establish resource authority.
+// decodeContextSpecification вызывает прежний JSON decoder до выбранного типизированного
+// преобразователя спецификации. Ошибка декодирования пропускает преобразование; его отказ
+// сохраняет возвращённое значение и единожды пишет прежний local400. Порядок ссылок/headers,
+// тип входа, преобразователь и RPC остаются у callers; значение полномочий не назначает.
+func decodeContextSpecification[Input, Output any](w http.ResponseWriter, r *http.Request, convert func(Input) (Output, bool)) (Output, bool) {
+	input, ok := decodeJSON[Input](w, r)
+	if !ok {
+		var zero Output
+		return zero, false
+	}
+	result, ok := convert(input)
+	if !ok {
+		writeLocalProblem(w, 400, "INVALID_REQUEST", false)
+	}
+	return result, ok
+}

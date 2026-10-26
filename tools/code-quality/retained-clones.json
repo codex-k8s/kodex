@@ -2,6 +2,62 @@
   "version": 1,
   "entries": [
     {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/context_resource_commands.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/context_resource_commands.go",
+      "fragmentSHA256": "e61eb0448c07e3038692d70c39109e3eb5544b78e3295a7846952497ba2d4209",
+      "count": 1,
+      "reason": "Окно159tokens пересекает хвост memory handler и разные Validate/Publish/следующие skill-команды. Общие resource/revision/digest/body/header guards уже requireSkillRevisionDigestMutation, а error-before-getter/strict view/ETag result обработан новым writeSkillBundleRPCResult в8callers. Остаются nominal generated params/request types и явные specialized Validate/Publish RPC с точными fields. Callback dispatcher полного handler скрывал бы разные command identities без нового вычислительного ядра. Сохранено лишь это точное внутрефайловое окно/hash/count1 после фактического выноса общих алгоритмов; другая input validation и другие fragments не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/context_resource_commands.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
+      "fragmentSHA256": "1109318f7a0b4ced603cac6e16feba7c3394f2c64b52909717f21c42dbd33dd0",
+      "count": 1,
+      "reason": "Остаточное109-token окно сравнивает хвост memory response и начало ValidateSkillBundleDraft с хвостом Bind и началом UnbindAgentSkillBundle. Validate использует общий resource/revision/digest guard и explicit Validate RPC; Unbind — общий binding/body/version guard и отдельный Unbind RPC с agent/resource/revision/ExpectedBindingVersion. Их response boundaries теперь также общие,но сохраняют разные typed bundle/binding writers. Здесь остались вызовы уже вынесенных primitives и nominal request signatures,а не одинаковый validator. Сохранены только точные пути/hash/count1; команды,authority и другие участки файлов не исключаются."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/context_resource_commands.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/context_resource_commands.go",
+      "fragmentSHA256": "25a722e33305686b3bd7ec2c07e23234c4f6a7a03b30380c7642d1d8573cf0f2",
+      "count": 1,
+      "reason": "Окно123tokens пересекает Review/Publish/Discard boundaries. Review сохраняет explicit decision/comment,а Publish/Discard — общий digest mutation input и отдельные generated RPC. Error/getter/view/ETag хвост уже writeSkillBundleRPCResult,используемый8callers;общая input последовательность уже requireSkillRevisionDigestMutation. Generic lifecycle dispatcher ради оставшихся typed constructors скрыл бы регистрацию отдельных owner commands. Решение ограничено данным точным внутрефайловым окном/hash/count1; проверка решения Review и другие hashes не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/context_resource_commands.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
+      "fragmentSHA256": "4c332ae98098272cd27a7620cd696e259c82af82ba2c3a53ce1f564ac4b6c5bf",
+      "count": 1,
+      "reason": "Окно111tokens соединяет прежний result хвост с началом PublishSkillBundleDraft и сопоставляет его с Purge/Bind boundary. Общий digest guard и binding guard намеренно различны:ExpectedDigest и bundle/revision не равны agent/resource/revision/ExpectedBindingVersion. Их result обработан отдельными typed helpers с прежними строгими writers. В оставшемся glue явно видны разные RPC identity и request fields; объединение полного handler потребовало бы выбора lifecycle операции или callbacks без общего нового алгоритма. Сохранены только эти два пути/fragment/count1,не файл и не owner checks."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
+      "fragmentSHA256": "a23d4108820cd6eea20a2167f8465b167a2026f02d4aa2e79128668ec9c19bee",
+      "count": 1,
+      "reason": "После выноса обработки RPC-ответа окно239tokens пересекает явные Archive/Restore/Purge skill handlers. Их reference/idempotency/If-Match guard уже requireVersionedReferenceMutation,а error-before-getter и строгий writer уже writeSkillBundleRPCResult. Исполняемый остаток — вызов разных specialized owner methods с разными generated request types и их явными BundleRef/Mutation. Универсальный lifecycle dispatcher спрятал бы закрытые command identities ради нескольких typed glue строк; новое вычислительное ядро для него отсутствует. Сохранено только это точное перекрывающееся окно одного пути/hash/count1,без исключения других lifecycle handlers либо схем."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
+      "fragmentSHA256": "8f95e977b97358c9795a0b9a2f4bbb97badb5f1c56224bedf0883176991344b9",
+      "count": 1,
+      "reason": "Окно143tokens сопоставляет соседние Bind/Unbind skill handlers после общего body/reference/version guard requireContextBindingMutation и общего result boundary writeAgentContextBindingRPCResult. Сохраняются разные nominal generated params/request/RPC и точные agent/bundle/revision/ExpectedBindingVersion. Новый helper не выбирает команду и не выдаёт binding grants; generic bind-kind dispatcher ухудшил бы проверяемость этой связи без удаления нового алгоритма. Исключено только данное перекрывающееся окно/hash/count1,а не проверки binding или файл целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/eventing/postgresinbox/repository.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/commands.go",
+      "fragmentSHA256": "de28274b1db68961089a4b2cf258f5de31387f259ccef155273a8e1babcf98f7",
+      "count": 1,
+      "reason": "Нормализованное112-token окно совпадает по форме адресов полей, но сравнивает разные SQL layouts:scanInboxRow читает21колонку inboxRow, readRunGraphTx —23колонки entity.RunNode. Первый возвращает driver error вместе с inbox row; второй закрывает Rows и возвращает нулевые Run/Graph с безопасным Unavailable, затем отдельно проверяет iteration error. Поля event digest/ordering/lease/repair не являются ref/root/type/agent/turn/progress/artifact/child refs графа. AST подтвердил разные arity, target types и порядок полей. Общий scanner или reflection-проекция смешали бы разные схемы и failure contracts,не устраняя копию одного алгоритма. Сохранены только два пути/hash/count1; SQL adapters, Scan и другие layouts не исключаются."
+    },
+    {
       "format": "docker",
       "firstPath": "services/external/control-api-gateway/Dockerfile",
       "secondPath": "services/internal/runtime-controller/Dockerfile",
@@ -3472,14 +3528,6 @@
       "fragmentSHA256": "0526a666d8c64fa6a5df65f3e7494b233d45d2e91900d9dbce5e242bea49711a",
       "count": 1,
       "reason": "Эти два автономных HTML-макета (project-a-workboard-desktop.html и project-c-run-kanban-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
-      "secondPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
-      "fragmentSHA256": "7a7f706cc680e219fcedb90ab25a2db1dda82069507a4441edacc22452649df1",
-      "count": 1,
-      "reason": "BindAgentSkillBundle и UnbindAgentSkillBundle используют одну уже вынесенную проверку binding tuple, но вызывают разные owner-команды с самостоятельными условиями создания и снятия привязки. Совпадение transport-каркаса не разрешает общий write-метод; ответ каждого RPC проверяется на точный agent/resource/revision. Оставлено только данное окно."
     },
     {
       "format": "go",
@@ -8440,22 +8488,6 @@
       "fragmentSHA256": "6d3b031e8da6f28a6dd459f3ae7b521b7117212f2095159b4d312b2610b6f3f3",
       "count": 1,
       "reason": "Окно PurgeAssistantConversation/CancelAssistantTurn заканчивается на проверке conversationRef ответа. Входной validator и RPC problem уже общие; purge выдаёт bodyless204 после exact receipt, cancel дополнительно проверяет согласованность cancelled/run-ref и выдаёт200. Эти подтверждения разных owner transitions остаются явными. Обёртка ради нескольких вызовов не выносит новый общий алгоритм. Только exact self-path/hash/count1, не обработчики и response guards целиком."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
-      "secondPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
-      "fragmentSHA256": "eb8cd044d0a2d371ad6b03c8b40c12ed43f1c2674c38f9c0b0d6d3cacd692ea7",
-      "count": 1,
-      "reason": "Большое окно отдельных SkillBundle и MemoryRecord API изменилось только именем общего reference validator: обратная замена имени полностью восстанавливает прежний fragment8217addb3fa9. Каждый handler сохраняет свой типизированный owner RPC и проекцию; память отдельно проверяет redaction, bundle — revision. Общие reference/mutation/binding/page primitives уже вынесены. Универсальный CRUD-dispatch смешал бы разные eligibility и lifecycle. Только точный путь/hash/count1, не целые API или файл."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
-      "secondPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
-      "fragmentSHA256": "1f54bfb3f421a5459c0a5bdc25bb4ac85507557a326d12f499f360ec6315082c",
-      "count": 1,
-      "reason": "Окно соседних Archive/Restore/Purge SkillBundle отличается от прежнего110e578d3eda только именем общего validator; raw fragment восстановлен точной обратной заменой. Три отдельные команды владельца имеют разные terminal effects, а вход уже requireVersionedReferenceMutation. Универсальный handler скрыл бы явный RPC перехода без нового общего алгоритма. Сохранено только точное пересечение одного пути/hash/count1; другие обработчики и validator не исключены."
     },
     {
       "format": "go",
