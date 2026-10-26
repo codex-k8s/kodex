@@ -1,7 +1,12 @@
 -- name: runtime_files_capture_entries :exec
 WITH catalog AS MATERIALIZED (
     SELECT id,organization_id,project_id,actor_id,agent_id,node_id,purposes,
-        control_plane.runtime_file_coordinator(organization_id,actor_id,project_id,agent_id,node_id) AS is_coordinator
+        control_plane.runtime_file_coordinator(organization_id,actor_id,project_id,agent_id,node_id) AS is_coordinator,
+        EXISTS (SELECT 1 FROM control_plane.run_nodes execution
+            JOIN control_plane.runs root ON root.id=execution.root_run_id AND root.organization_id=execution.organization_id
+            JOIN control_plane.workflow_versions version ON version.id=root.workflow_version_id AND version.organization_id=root.organization_id
+            WHERE execution.id=runtime_file_catalogs.node_id AND execution.organization_id=runtime_file_catalogs.organization_id
+                AND version.spec->>'ExecutionMode'='SERVER_DAG_V1') AS is_server
     FROM control_plane.runtime_file_catalogs
     WHERE id=@catalog_id::uuid
 -- Материализация не позволяет planner повторять дорогую проверку видимости
@@ -19,7 +24,17 @@ WITH catalog AS MATERIALIZED (
     FROM control_plane.artifacts artifact
     JOIN catalog ON artifact.organization_id=catalog.organization_id AND artifact.project_id=catalog.project_id
     WHERE artifact.source IN ('AGENT_RESULT','INTEGRATION_RESULT') AND 'RUN_RESULT'=ANY(catalog.purposes)
-      AND NOT catalog.is_coordinator
+      AND NOT catalog.is_coordinator AND NOT catalog.is_server
+    UNION ALL
+    -- SERVER pins включают историческую ревизию accepted dependency и EARLY own capture;
+    -- current HEAD candidates выше остаются только для legacy.
+    SELECT artifact.id,artifact.ref,artifact.revision,artifact.version,artifact.digest,artifact.file_name,
+        artifact.media_type,artifact.size_bytes,'RUN_RESULT',artifact.source,artifact.ref,''
+    FROM catalog
+    CROSS JOIN LATERAL control_plane.workflow_runtime_artifact_pins(catalog.organization_id,catalog.node_id) pin
+    JOIN control_plane.artifact_history artifact ON artifact.id=pin.artifact_id AND artifact.revision_id=pin.revision_id
+      AND artifact.organization_id=catalog.organization_id AND artifact.project_id=catalog.project_id
+    WHERE 'RUN_RESULT'=ANY(catalog.purposes) AND catalog.is_server
     UNION ALL
     SELECT artifact.id,artifact.ref,artifact.revision,(pin->>'version')::bigint,artifact.digest,artifact.file_name,
         artifact.media_type,artifact.size_bytes,'RUN_RESULT',artifact.source,artifact.ref,''
@@ -30,7 +45,7 @@ WITH catalog AS MATERIALIZED (
       AND to_jsonb(artifact.revision)=pin->'revision' AND artifact.digest=pin->>'digest'
       AND to_jsonb(artifact.size_bytes)=pin->'sizeBytes' AND artifact.file_name=pin->>'fileName'
       AND artifact.media_type=pin->>'mediaType' AND artifact.source=pin->>'source'
-    WHERE 'RUN_RESULT'=ANY(catalog.purposes) AND catalog.is_coordinator
+    WHERE 'RUN_RESULT'=ANY(catalog.purposes) AND catalog.is_coordinator AND NOT catalog.is_server
     UNION ALL
     SELECT artifact.id,artifact.ref,artifact.revision,(item->>'version')::bigint,artifact.digest,artifact.file_name,
         artifact.media_type,artifact.size_bytes,'WORKSPACE_INPUT',artifact.source,artifact.ref,''
