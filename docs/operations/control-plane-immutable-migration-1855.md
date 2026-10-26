@@ -4,8 +4,8 @@ title: Адресная immutable-миграция outbox Control Plane
 type: operation-plan
 status: approved
 owner: manager
-version: 1.1.0
-updated: 2026-10-25
+version: 1.2.0
+updated: 2026-10-26
 ---
 
 # Миграция outbox — #1855
@@ -293,6 +293,38 @@ exact lock, PID и отсутствие работающего writer; толь�
 продвижение прежнего outbox ordering key и browser realtime delta/resync.
 Индекс остаётся forward-only; возврат старого приложения его не удаляет.
 Полная приёмка восстановления realtime этим operator unit не объявляется.
+
+## Явная attempt2 после failed connection-check
+
+[#1918](https://github.com/codex-k8s/kodex/issues/1918) закрывает отдельный путь:
+предварительная Job может завершиться Failed до STOP и до любого DDL,
+например, при недоступном node DNS. Удалять такую Job и повторять create
+с прежним именем нельзя. Оператор выполняет inspect прежнего плана, устраняет
+причину и создаёт attempt2 с теми же `--predecessor-plan` и
+`--predecessor-evidence`, что показаны выше. Новый source/image допустим только
+после обычной проверки чистого SHA и immutable publication; версия миграции
+и профиль должны совпадать с предшественником.
+
+План отмечает предшественника как `stage=CHECK`. Его UID относится к check Job,
+а не к DDL Job. Прежний CP ещё не получил marker остановки, поэтому начальное
+состояние требует отсутствия profile annotation. После нового STOP marker
+принадлежит уже child plan. Это не ослабляет прежний путь `stage=MIGRATION`,
+который требует failed DDL, RESUME_ACK и marker parent plan.
+
+| Состояние предшественника | Допустимое действие и доказательство |
+| --- | --- |
+| Check RUNNING или UNKNOWN | Только наблюдение прежнего plan/Job; нет новой попытки |
+| Check Failed до эффектов | CHECK_READBACK FAIL, одна CHECK_CREATE_INTENT, единый UID, точные spec/marker и отсутствие живых Pod разрешают один новый plan |
+| Есть STOP/RESUME intent либо DDL Job/intent | Путь CHECK запрещён; нельзя переименовать неопределённый эффект в безвредную предварительную проверку |
+| Нет Job, чужой UID, изменённый spec или активный Pod | Закрытый отказ, без create и удаления старых ресурсов |
+| Parent journal изменился после plan2 | Новые check/stop/apply запрещены; хеш журнала привязан к child plan |
+| Attempt2 завершилась неудачей | Attempt3 запрещена; диагностика и независимые проверки продолжаются отдельно |
+
+Child повторяет owner precondition и connection-check, затем обычные
+stop/join → DDL → readback → resume. Сохраняются все старые Jobs и квитанции.
+До child STOP CP остаётся на прежних двух репликах; миграция создаётся только
+после нового положительного check. Безотносительно причины отказа check
+никакой успех миграции или доступность immutable-релиза не предполагаются.
 
 ## Локальная проверка
 

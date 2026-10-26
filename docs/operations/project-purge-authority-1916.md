@@ -4,7 +4,7 @@ title: Защита служебного контекста удаления п�
 type: operations
 status: approved
 owner: developer
-version: 1.0.0
+version: 1.1.0
 updated: 2026-10-26
 ---
 
@@ -84,6 +84,12 @@ grants другим ролям не удаляются автоматическ�
 Проверить Console и относящиеся к сценарию Network, затем повторить чтение
 после адресного рестарта. Live-проверка и сборка immutable-образа фиксируются
 отдельно с точным SHA; этот документ сам по себе не является их доказательством.
+
+Если предварительная check Job завершилась Failed до STOP/DDL, применяется
+одна явная attempt2 по [процедуре #1918](control-plane-immutable-migration-1855.md#явная-attempt2-после-failed-connection-check).
+Новый план связывает точную failed Job и неизменённый parent journal;
+отсутствие STOP/RESUME/DDL intent и самой DDL Job проверяется повторно.
+Старая Job сохраняется, новые имена заканчиваются `-attempt2`.
 
 ## Возврат
 

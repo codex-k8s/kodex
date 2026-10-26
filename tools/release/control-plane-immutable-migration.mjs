@@ -273,23 +273,38 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       (parent.attempt ?? 1) === 1 && !parent.predecessor && parent.migrationVersion === migrationVersion &&
       parent.clusterUID === clusterUID && parent.context === context && parent.namespaceUID === namespaceUID() &&
       parent.anchor.uid === anchor.metadata.uid && [0,2].includes(anchor.spec.replicas) &&
-      parent.anchor.specSHA256 === fingerprint({...anchor.spec,replicas:2}) &&
-      [hash,...(currentMarker ? [currentMarker] : [])].includes(anchor.metadata.annotations?.[annotation]), 'MIGRATION_PREDECESSOR_SCOPE_CHANGED');
+      parent.anchor.specSHA256 === fingerprint({...anchor.spec,replicas:2}), 'MIGRATION_PREDECESSOR_SCOPE_CHANGED');
     immutableMigrationImage(parent.source,parent.imageEvidence);
     const previous = privateJournal(paths.evidencePath,{version:1,kind:'CONTROL_PLANE_MIGRATION',planSHA256:hash},{readOnly:true});
     let uid;
     try {
-      const receipts = previous.events.filter(e => ['CREATE_ACK','READBACK','TERMINAL_READBACK'].includes(e.type) && e.jobUID);
+      // Failed check ещё не даёт полномочий на STOP или DDL. Его отдельная attempt2
+      // требует доказанного отсутствия этих эффектов и сохраняет прежнюю Job.
+      const checkOnly = !previous.events.some(e => e.type === 'CREATE_INTENT');
+      const stage = checkOnly ? 'CHECK' : 'MIGRATION';
+      const expectedJob = checkOnly ? parent.checkJob : parent.job;
+      const intent = checkOnly ? 'CHECK_CREATE_INTENT' : 'CREATE_INTENT';
+      const readback = checkOnly ? 'CHECK_READBACK' : 'READBACK';
+      const receiptTypes = checkOnly ? ['CHECK_CREATE_ACK','CHECK_READBACK'] : ['CREATE_ACK','READBACK','TERMINAL_READBACK'];
+      ensure(!checkOnly || (parent.version === 2 && expectedJob &&
+        !previous.events.some(e => ['STOP_INTENT','STOP_ACK','RESUME_INTENT','RESUME_ACK'].includes(e.type)) &&
+        !optionalJob(parent.job.metadata.name)), 'MIGRATION_PREDECESSOR_CHECK_EFFECTS_PRESENT');
+      const marker = checkOnly ? undefined : hash;
+      ensure([marker,...(currentMarker ? [currentMarker] : [])].includes(anchor.metadata.annotations?.[annotation]),
+        'MIGRATION_PREDECESSOR_SCOPE_CHANGED');
+      const receipts = previous.events.filter(e => receiptTypes.includes(e.type) && e.jobUID);
       uid = receipts[0]?.jobUID;
-      ensure(uid && receipts.every(e => e.jobUID === uid) && previous.events.filter(e => e.type === 'CREATE_INTENT').length === 1 &&
-        previous.events.some(e => e.type === 'READBACK' && e.status === 'FAIL') && previous.events.some(e => e.type === 'RESUME_ACK'),
+      ensure(uid && receipts.every(e => e.jobUID === uid) && previous.events.filter(e => e.type === intent).length === 1 &&
+        previous.events.some(e => e.type === readback && e.status === 'FAIL') &&
+        (checkOnly || previous.events.some(e => e.type === 'RESUME_ACK')),
       'MIGRATION_PREDECESSOR_RECEIPT_INVALID');
-      if (expected) ensure(expected.planSHA256 === hash && expected.evidenceSHA256 === previous.bytesSHA256 && expected.jobUID === uid,
+      if (expected) ensure(expected.planSHA256 === hash && expected.evidenceSHA256 === previous.bytesSHA256 && expected.jobUID === uid &&
+        (expected.stage ?? 'MIGRATION') === stage,
         'MIGRATION_PREDECESSOR_CHANGED');
-      const actual = optionalJob(parent.job.metadata.name);
-      terminalJob(actual,parent.job,hash,uid);
+      const actual = optionalJob(expectedJob.metadata.name);
+      terminalJob(actual,expectedJob,hash,uid);
       ensure(actual.status.conditions.some(c => c.type === 'Failed' && c.status === 'True'), 'MIGRATION_PREDECESSOR_NOT_FAILED');
-      return {...paths,planSHA256:hash,evidenceSHA256:previous.bytesSHA256,jobUID:uid,jobName:parent.job.metadata.name};
+      return {...paths,stage,planSHA256:hash,evidenceSHA256:previous.bytesSHA256,jobUID:uid,jobName:expectedJob.metadata.name};
     } finally { previous.close(); }
   };
   if (phase === 'plan') {
@@ -345,7 +360,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     };
     const observeCP = () => {
       const actual = deployment(), marker = actual.metadata.annotations?.[annotation], hash = fingerprint(actual.spec);
-      const previousMarker = plan.predecessor?.planSHA256;
+      const previousMarker = plan.predecessor?.stage === 'CHECK' ? undefined : plan.predecessor?.planSHA256;
       ensure(actual.metadata.uid === plan.anchor.uid && (marker === previousMarker || marker === planSHA256), 'MIGRATION_ANCHOR_CHANGED');
       const resumed = journal.events.some(e => e.type === 'RESUME_INTENT');
       let stage;

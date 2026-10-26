@@ -177,11 +177,11 @@ else if(a.includes('replicasets,pods')){
  out({items});
 }
 else if(a.includes('pods')){const selector=a[a.indexOf('-l')+1],name=selector.split('=')[1];
- const pod=name===s.checkJob?.metadata.name?s.checkPod:name===s.previousJob?.metadata.name?s.previousPod:s.pod;out({items:pod?[pod]:[]});}
+ const pod=name===s.checkJob?.metadata.name?s.checkPod:name===s.previousCheckJob?.metadata.name?s.previousCheckPod:name===s.previousJob?.metadata.name?s.previousPod:s.pod;out({items:pod?[pod]:[]});}
 else if(a.includes('jobs'))out({items:[s.checkJob,s.previousCheckJob,s.previousJob,s.job,...(s.otherJobs??[])].filter(Boolean)});
 else if(a.includes('logs')){save();const check=a.some(x=>x.startsWith('job/control-plane-migration-check-'));process.stdout.write(check?(s.checkLog??'PostgreSQL connection check completed')+'\\n':'goose: current version: '+(s.logVersion??'${version}')+'\\n');}
 else if(a.includes('job')){const name=a[a.indexOf('job')+1];
- const job=name===s.checkJob?.metadata.name?s.checkJob:name===s.previousJob?.metadata.name?s.previousJob:name===s.job?.metadata.name?s.job:undefined;
+ const job=name===s.checkJob?.metadata.name?s.checkJob:name===s.previousCheckJob?.metadata.name?s.previousCheckJob:name===s.previousJob?.metadata.name?s.previousJob:name===s.job?.metadata.name?s.job:undefined;
  if(job)out(job);else{save();if(!a.includes('--ignore-not-found=true'))process.exit(1);}}
 else{save();process.exit(1);}
 `,{mode:0o700});
@@ -189,7 +189,7 @@ else{save();process.exit(1);}
     '--context','k3d-kodex','--profile',profile,'--plan',plan,...(phase==='plan'?['--source',repo,'--revision',revision,'--base-render',render,
       '--publication-plan',publicationPlan,'--publication-evidence',publicationEvidence]:['--evidence',evidence]),
     ...(['apply','stop','resume','check'].includes(phase)?['--confirm','APPLY-STAGING-CP-MIGRATION']:[]),...extra],{encoding:'utf8',timeout:15000,env:{...process.env,PATH:`${dir}:${process.env.PATH}`}});
-  return {run,get plan(){return plan;},get evidence(){return evidence;},retry(){const previous={plan,evidence};plan=join(dir,'retry-plan.json');evidence=join(dir,'retry-evidence.jsonl');const value=read(state);value.retry=true;value.previousJob=value.job;value.previousPod=value.pod;value.previousCheckJob=value.checkJob;delete value.job;delete value.pod;delete value.checkJob;delete value.checkPod;write(state,value);return ['--predecessor-plan',previous.plan,'--predecessor-evidence',previous.evidence];},publicationPlan,publicationEvidence,repo,read:()=>read(state),edit:fn=>{const value=read(state);fn(value);write(state,value);}};
+  return {run,get plan(){return plan;},get evidence(){return evidence;},retry(){const previous={plan,evidence};plan=join(dir,'retry-plan.json');evidence=join(dir,'retry-evidence.jsonl');const value=read(state);value.retry=true;value.previousJob=value.job;value.previousPod=value.pod;value.previousCheckJob=value.checkJob;value.previousCheckPod=value.checkPod;delete value.job;delete value.pod;delete value.checkJob;delete value.checkPod;write(state,value);return ['--predecessor-plan',previous.plan,'--predecessor-evidence',previous.evidence];},publicationPlan,publicationEvidence,repo,read:()=>read(state),edit:fn=>{const value=read(state);fn(value);write(state,value);}};
 }
 const pass = (f,phase,status='PASS') => {const result=f.run(phase);assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).status,status);return result;};
 const failed = (f,phase) => {const result=f.run(phase);assert.notEqual(result.status,0);assert.equal(JSON.parse(result.stdout).status,'FAIL');return result;};
@@ -357,6 +357,48 @@ test('attempt2 rejects foreign, missing, active or unjoined predecessor and chan
   assert.notEqual(f.run('check').status,0);assert.equal(f.read().checkJob,undefined);
 });
 function oldJournalWithNote(raw) {return raw+JSON.stringify({type:'INSPECT',at:new Date().toISOString()})+'\n';}
+test('failed check permits only one explicit successor before any STOP or DDL effect',t=>{
+  for(const profile of ['outbox-index','project-purge-authority']) {
+    const f=cli(t,profile);pass(f,'plan','PLANNED');f.edit(s=>s.mode='check-fail');failed(f,'check');
+    assert.equal(f.read().deployment.spec.replicas,2);assert.equal(f.read().job,undefined);
+    const oldPlan=read(f.plan),oldJournal=readFileSync(f.evidence,'utf8');f.edit(s=>s.mode='');const previous=f.retry();
+    const planned=f.run('plan',previous);assert.equal(planned.status,0,planned.stderr);
+    const plan=read(f.plan);assert.equal(plan.attempt,2);assert.equal(plan.predecessor.stage,'CHECK');
+    assert.equal(plan.predecessor.jobUID,'check-created');assert.equal(plan.predecessor.planSHA256,fingerprint(oldPlan));
+    pass(f,'check');pass(f,'stop','STOPPED');pass(f,'apply');pass(f,'resume','RESUMED');
+    assert.equal(f.read().previousCheckJob.metadata.uid,'check-created');assert.equal(f.read().previousCheckJob.status.failed,1);
+    assert.equal(readFileSync(previous[3],'utf8'),oldJournal);assert.equal(f.read().calls.filter(a=>a.includes('create')).length,3);
+    assert.equal(f.read().calls.some(a=>a.includes('delete')),false);
+    assert.notEqual(f.run('plan',f.retry()).status,0);
+  }
+});
+test('failed check successor rejects UID, spec, marker, active processes and unexpected DDL',t=>{
+  const f=cli(t);pass(f,'plan','PLANNED');f.edit(s=>s.mode='check-fail');failed(f,'check');f.edit(s=>s.mode='');
+  const previous=f.retry(),baseline=f.read();
+  for(const mutate of [s=>s.previousCheckJob.metadata.uid='foreign',s=>{delete s.previousCheckJob;},
+    s=>s.previousCheckJob.status={active:1},s=>s.previousCheckJob.spec.template.spec.containers[0].args=['up'],
+    s=>s.previousCheckPod.status.containerStatuses[0].state={running:{}},
+    s=>s.previousCheckPod.metadata.ownerReferences[0].uid='foreign',
+    s=>s.deployment.metadata.annotations={[immutableMigrationProfile('outbox-index').annotation]:'foreign'},
+    s=>s.job={metadata:{name:read(previous[1]).job.metadata.name,uid:'unexpected-ddl'}}]) {
+    f.edit(s=>{for(const key of Object.keys(s))delete s[key];Object.assign(s,structuredClone(baseline));mutate(s);});
+    assert.notEqual(f.run('plan',previous).status,0);
+  }
+});
+test('failed check with STOP intent cannot be reclassified as a harmless connection probe',t=>{
+  const f=cli(t);pass(f,'plan','PLANNED');f.edit(s=>s.mode='check-fail');failed(f,'check');
+  writeFileSync(f.evidence,readFileSync(f.evidence,'utf8')+JSON.stringify({type:'STOP_INTENT'})+'\n');
+  assert.notEqual(f.run('plan',f.retry()).status,0);
+});
+test('failed check successor pins parent journal and rejects an unconfirmed failure',t=>{
+  const f=cli(t);pass(f,'plan','PLANNED');f.edit(s=>s.mode='check-fail');failed(f,'check');f.edit(s=>s.mode='');
+  const old=readFileSync(f.evidence,'utf8'),previous=f.retry();
+  writeFileSync(previous[3],old.split('\n').filter(line=>!line.includes('CHECK_READBACK')).join('\n'));
+  assert.notEqual(f.run('plan',previous).status,0);writeFileSync(previous[3],old);
+  const planned=f.run('plan',previous);assert.equal(planned.status,0,planned.stderr);
+  writeFileSync(previous[3],oldJournalWithNote(old));assert.notEqual(f.run('check').status,0);
+  assert.equal(f.read().checkJob,undefined);
+});
 test('new readback supports historical v1 attempt without weakening the native init check of v2',()=>{
   const plan=makePlan();plan.version=1;delete plan.attempt;delete plan.checkJob;delete plan.job.spec.template.spec.initContainers;
   const {job,pod}=execution(plan);delete pod.spec.initContainers;pod.status.initContainerStatuses=[];
