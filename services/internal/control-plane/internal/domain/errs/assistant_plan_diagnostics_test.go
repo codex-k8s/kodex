@@ -43,10 +43,10 @@ func TestAssistantPlanDiagnosticsPreserveClosedClassAndIndex(t *testing.T) {
 	}
 }
 
-// TestAssistantPlanInvalidFieldsAreClosedAndPreserveCause checks five allowed field labels through nested stage/field wrappers, cause preservation and sanitized messages. Four unknown or injected labels and a forbidden-error example must not acquire field-diagnostic authority.
-// TestAssistantPlanInvalidFieldsAreClosedAndPreserveCause проверяет пять допустимых меток полей через вложенные обёртки этапа и поля, сохранение причины и очищенные сообщения. Четыре неизвестные либо дополненные текстом метки и пример ошибки запрета не должны получать полномочие диагностики поля.
+// TestAssistantPlanInvalidFieldsAreClosedAndPreserveCause checks six allowed field labels through nested stage/field wrappers, cause preservation and sanitized messages. Four unknown or injected labels and a forbidden-error example must not acquire field-diagnostic authority.
+// TestAssistantPlanInvalidFieldsAreClosedAndPreserveCause проверяет шесть допустимых меток полей через вложенные обёртки этапа и поля, сохранение причины и очищенные сообщения. Четыре неизвестные либо дополненные текстом метки и пример ошибки запрета не должны получать полномочие диагностики поля.
 func TestAssistantPlanInvalidFieldsAreClosedAndPreserveCause(t *testing.T) {
-	for _, field := range []string{"STEPS_INSTRUCTIONS", "STEPS_EXPECTED_RESULT", "WORKFLOW_INVARIANTS", "MAX_CONCURRENCY", "STEP_KEY"} {
+	for _, field := range []string{"STEPS_INSTRUCTIONS", "STEPS_EXPECTED_RESULT", "WORKFLOW_INVARIANTS", "WORKFLOW_TEXT_BUDGET", "MAX_CONCURRENCY", "STEP_KEY"} {
 		failure := WithAssistantPlanStage(WithAssistantPlanField(errors.Join(ErrInvalid, errors.New("PRIVATE_PAYLOAD")), field), AssistantPlanHydrate, 1)
 		stage, category, index, ok := AssistantPlanDiagnostic(failure)
 		if !ok || stage != AssistantPlanHydrate || category != "INVALID" || index != 1 || AssistantPlanField(failure) != field || !errors.Is(failure, ErrInvalid) || strings.Contains(failure.Error(), "PRIVATE_PAYLOAD") {

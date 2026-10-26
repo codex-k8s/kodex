@@ -7,6 +7,20 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// MaximumServerTextBytes is the existing aggregate UTF-8 text budget of the server profile, independent of individual Unicode field limits.
+// MaximumServerTextBytes — прежний суммарный UTF-8 бюджет текста серверного профиля, независимый от отдельных Unicode-ограничений полей.
+const MaximumServerTextBytes = 8192
+
+// ServerTextBytes counts decoded workflow name, purpose, instructions and completion criteria plus each step's name, instructions and expected result. Keys, input metadata and result predicates are excluded; the count grants no authority and does not validate a workflow.
+// ServerTextBytes считает байты декодированных имени, цели, инструкций и критерия завершения процесса плюс имени, инструкций и ожидаемого результата каждого шага. Ключи, метаданные входов и условия результатов исключены; подсчёт не выдаёт полномочия и не валидирует процесс.
+func ServerTextBytes(version entity.WorkflowVersion) int {
+	total := len(version.Name) + len(version.Purpose) + len(version.Instructions) + len(version.CompletionCriteria)
+	for _, step := range version.Steps {
+		total += len(step.Name) + len(step.Instructions) + len(step.ExpectedResult)
+	}
+	return total
+}
+
 // ValidServerVersion validates the bounded server profile and independent REVIEW assignments.
 // Existing generic workflow shape checks and fresh database admission remain mandatory; this
 // predicate neither grants capabilities nor proves the absence of required child bindings.
@@ -21,7 +35,6 @@ func ValidServerVersion(version entity.WorkflowVersion) bool {
 	if err != nil || len(raw) > 1<<20 {
 		return false
 	}
-	textBytes := len(version.Name) + len(version.Purpose) + len(version.Instructions) + len(version.CompletionCriteria)
 	agents := map[string]string{}
 	for _, step := range version.Steps {
 		if !resultKey.MatchString(step.Key) || agents[step.Key] != "" || step.AgentRef == "" || len(step.DependsOn) > 8 || slices.Contains(step.RequiredCapabilityKeys, "platform.run.delegate") || slices.Contains(step.RequiredCapabilityKeys, "platform.run.launch") || !ValidRequirements(step.ResultRequirements, step.DependsOn) {
@@ -35,9 +48,8 @@ func ValidServerVersion(version entity.WorkflowVersion) bool {
 			seen[dependency] = true
 		}
 		agents[step.Key] = step.AgentRef
-		textBytes += len(step.Name) + len(step.Instructions) + len(step.ExpectedResult)
 	}
-	if textBytes > 8192 {
+	if ServerTextBytes(version) > MaximumServerTextBytes {
 		return false
 	}
 	reviewers := map[string]string{}
