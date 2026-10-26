@@ -10,6 +10,10 @@ WITH RECURSIVE runtime_members(oid) AS (
 ), members AS (
     SELECT role.oid,role.rolcanlogin,role.rolsuper,role.rolcreaterole,role.rolcreatedb,role.rolbypassrls
     FROM pg_roles role JOIN runtime_members USING (oid)
+), reachable AS (
+    -- INHERIT FALSE не запрещает SET ROLE; проверяется и эта цепочка полномочий.
+    SELECT role.oid,role.rolsuper,role.rolcreaterole,role.rolcreatedb,role.rolbypassrls FROM pg_roles role
+    WHERE EXISTS (SELECT 1 FROM members member WHERE pg_has_role(member.oid,role.oid,'SET'))
 ), targets AS (
     SELECT oid,relowner,relacl FROM pg_class
     WHERE oid IN ('control_plane.project_purge_context'::regclass,'control_plane.project_purge_targets'::regclass)
@@ -25,18 +29,18 @@ SELECT jsonb_build_object(
     'runtimeRoles',(SELECT count(*) FROM members),
     'runtimeLogins',(SELECT count(*) FROM members WHERE rolcanlogin),
     'tableOwners',(SELECT bool_and(pg_get_userbyid(relowner)='control_plane_owner') FROM targets),
-    'runtimeRolesUnprivileged',NOT EXISTS (SELECT 1 FROM members WHERE rolsuper OR rolcreaterole OR rolcreatedb OR rolbypassrls
+    'runtimeRolesUnprivileged',NOT EXISTS (SELECT 1 FROM reachable WHERE rolsuper OR rolcreaterole OR rolcreatedb OR rolbypassrls
         OR pg_has_role(oid,'control_plane_owner','MEMBER')),
     'runtimeRead',(SELECT bool_and(has_table_privilege(member.oid,target.oid,'SELECT')) FROM members member CROSS JOIN targets target),
     'runtimeMutationDenied',NOT EXISTS (
-        SELECT 1 FROM members member CROSS JOIN targets target
+        SELECT 1 FROM reachable member CROSS JOIN targets target
         CROSS JOIN unnest(ARRAY['INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER','MAINTAIN']) privilege
         WHERE has_table_privilege(member.oid,target.oid,privilege)),
     'runtimeColumnMutationDenied',NOT EXISTS (
-        SELECT 1 FROM members member CROSS JOIN targets target
+        SELECT 1 FROM reachable member CROSS JOIN targets target
         CROSS JOIN unnest(ARRAY['INSERT','UPDATE','REFERENCES']) privilege
         WHERE has_any_column_privilege(member.oid,target.oid,privilege)),
-    'runtimeGrantOptionDenied',NOT EXISTS (SELECT 1 FROM members member CROSS JOIN targets target
+    'runtimeGrantOptionDenied',NOT EXISTS (SELECT 1 FROM reachable member CROSS JOIN targets target
         WHERE has_table_privilege(member.oid,target.oid,'SELECT WITH GRANT OPTION')),
     'publicPrivilegesRevoked',NOT EXISTS (
         SELECT 1 FROM targets target CROSS JOIN LATERAL aclexplode(coalesce(target.relacl,acldefault('r',target.relowner))) acl

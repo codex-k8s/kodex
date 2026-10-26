@@ -30,6 +30,14 @@ var (
 	// queryProjectPurgeAuthorityDriftGuard сохраняет сигнатуру функции, но убирает проверку authority.
 	//go:embed testdata/sql/project_purge_authority_drift_guard.sql
 	queryProjectPurgeAuthorityDriftGuard string
+	// queryProjectPurgeAuthorityDriftSetRole grants an alternate writer through SET without automatic inheritance.
+	// queryProjectPurgeAuthorityDriftSetRole выдаёт альтернативную роль записи через SET без автоматического наследования.
+	//go:embed testdata/sql/project_purge_authority_drift_set_role.sql
+	queryProjectPurgeAuthorityDriftSetRole string
+	// queryProjectPurgeAuthorityCleanupSetRole removes the disposable role and its memberships before database cleanup.
+	// queryProjectPurgeAuthorityCleanupSetRole удаляет одноразовую роль и членство перед очисткой БД.
+	//go:embed testdata/sql/project_purge_authority_cleanup_set_role.sql
+	queryProjectPurgeAuthorityCleanupSetRole string
 )
 
 // TestProjectPurgeAuthorityMigrationProofComponent runs the shipped read-only release SQL against
@@ -38,14 +46,15 @@ var (
 // правильной и намеренно небезопасных одноразовых схемах, проверяя detector, а не только форму JSON.
 func TestProjectPurgeAuthorityMigrationProofComponent(t *testing.T) {
 	for _, fixture := range []struct {
-		name, mutation string
-		rejected       []string
+		name, mutation, cleanup string
+		rejected                []string
 	}{
 		{name: "canonical"},
 		{name: "table-grant", mutation: queryProjectPurgeAuthorityDriftTable, rejected: []string{"runtimeMutationDenied", "runtimeColumnMutationDenied"}},
 		{name: "column-grant", mutation: queryProjectPurgeAuthorityDriftColumn, rejected: []string{"runtimeColumnMutationDenied"}},
 		{name: "public-grant", mutation: queryProjectPurgeAuthorityDriftPublic, rejected: []string{"runtimeMutationDenied", "runtimeColumnMutationDenied", "publicPrivilegesRevoked"}},
 		{name: "relaxed-authorizer", mutation: queryProjectPurgeAuthorityDriftGuard, rejected: []string{"authorizationFunction"}},
+		{name: "set-without-inherit", mutation: queryProjectPurgeAuthorityDriftSetRole, cleanup: queryProjectPurgeAuthorityCleanupSetRole, rejected: []string{"runtimeMutationDenied", "runtimeColumnMutationDenied"}},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
@@ -69,6 +78,15 @@ func TestProjectPurgeAuthorityMigrationProofComponent(t *testing.T) {
 				_ = conn.Close(cleanup)
 			}()
 			if fixture.mutation != "" {
+				if fixture.cleanup != "" {
+					defer func() {
+						cleanup, stop := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+						defer stop()
+						if _, err := conn.Exec(cleanup, fixture.cleanup); err != nil {
+							t.Error("clean disposable purge authority role")
+						}
+					}()
+				}
 				if _, err := conn.Exec(ctx, fixture.mutation); err != nil {
 					t.Fatal("apply disposable purge authority drift")
 				}
