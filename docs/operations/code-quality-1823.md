@@ -4,11 +4,44 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.502.0
+version: 1.503.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая оснастка terminal/expiry admission — 26.10.2026
+
+Две оснастки PostgreSQL используют newRoleImageAdmissionComponentFixture:
+New с synthetic object storage/model defaults,ConfigureRoleImages,Bootstrap,
+фиксированный gateway-bound recipe owner proof,ResolvePrincipal и service.New
+в прежнем порядке. Caller сохраняет90s context,cancel,isolated database и
+уже зарегистрированный defer pool.Close. B1/B2 commands,claims,controller
+recovery,terminal/expiry callbacks,pins,revocation,audit/replay и все отдельные
+assertions не перенесены. Production,SQL,schema и contracts не менялись.
+
+Публичный control-plane-postgres-test.sh с точным фильтром двух suites
+до24.11с/после41.27с дал35 PASS events,FAIL/SKIP0. Каждый запуск использовал
+новый pinned PostgreSQL container с loopback-only listener,пустую migrated
+template и отдельные БД;удаление точного контейнера подтверждено. Первый
+observer слишком рано проверил asynchronous --rm cleanup после успешных35
+тестов;последующее чтение подтвердило удаление. Обвязка исправлена bounded
+проверкой того же контейнера;baseline повторён до изменения исходников.
+
+Две whole-source AST inverses восстановили исходные файлы,imports,comments/
+directives,порядок proof inputs,config и cleanup. Точная signature/body и
+return/call bindings проверены;восемь source mutations отвергнуты. Новый
+helper подробно описан EN→RU. Context7 отклонил ключ;проверены официальные
+pgxpool New/Close docs,зависимостьpgx5.10.0 не менялась.
+
+Весь control-plane:build5.83с,hermetic unit18.51с,vet9.69с — exit0.
+Unit:2949 PASS,FAIL0,70 SKIP при отсутствии conditional fixtures;это не полный
+PostgreSQL PASS. Две изменённые suites отдельно выполнены на disposable PG,
+как указано выше. Форматирование и пять quality stages — PASS LOCAL.
+Detector:6776sources/222generated exclusions,1461raw/1221retained/240unresolved,
+registry1078 прежний;исчезло одно окноdaff9853,новых нет. Go21590/21590 EN→RU.
+Legacy renderer FAIL и прежние Bash diagnostics не закрыты;full E2E/live/
+deploy/startup/QA — NOT RUN.
 
 ## Общие чтения идентичности Kubernetes-кластера — 26.10.2026
 

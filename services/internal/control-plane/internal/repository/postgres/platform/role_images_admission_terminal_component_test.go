@@ -8,11 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	roleimagerepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/roleimage"
-	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
@@ -40,26 +38,7 @@ func TestRoleImageAdmissionTerminalComponent(t *testing.T) {
 		t.Fatal("open isolated admission terminal fixture")
 	}
 	defer pool.Close()
-	r, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = r.ConfigureRoleImages(syntheticRoleImageComponentConfig()); err != nil {
-		t.Fatal(err)
-	}
-	if err = r.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
-	owner := resolvedTestPrincipal(t, ctx, r, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001",
-		ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.role-images.recipes.manage"}, "control-api-gateway")
-	resolved, err := r.ResolvePrincipal(ctx, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s, err := platformservice.New(r)
-	if err != nil {
-		t.Fatal(err)
-	}
+	r, s, owner, resolved := newRoleImageAdmissionComponentFixture(t, ctx, pool)
 	project, err := s.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "terminal-proof-project"},
 		Payload: command.ProjectInput{Name: "Exact terminal proof", Language: "en"}})
 	if err != nil || project.Project == nil {
