@@ -190,6 +190,14 @@ func TestIntegrationGateFeedbackComponent(t *testing.T) {
 			if snapshot.InvocationRef != stringMap(invocation, "invocationRef") || snapshot.OwnerDecision != (integrationContinuationDecision{GateRef: gate.Ref, GateVersion: resolved.Gate.Version, Decision: actualDecision, Comment: comment}) {
 				t.Fatal("claimed immutable task lost authoritative feedback pins")
 			}
+			if decision == "APPROVE" {
+				readback, err := service.GetIntegrationInvocation(ctx, worker, snapshot.InvocationRef)
+				if err != nil || !strings.HasPrefix(snapshot.ReceiptRef, "erc_") || snapshot.ReceiptRef != stringMap(readback, "effectReceiptRef") {
+					t.Fatal("claimed continuation lost the exact successful effect receipt")
+				}
+			} else if snapshot.ReceiptRef != "" {
+				t.Fatal("unsuccessful invocation acquired an effect receipt")
+			}
 			var persistedTask, digest string
 			if err := pool.QueryRow(ctx, integrationGateFeedbackSnapshotQuery, stringMap(lease, "runtimeRevisionRef"), stringMap(lease, "nodeRef"), run.Ref, stringMap(lease, "sessionRef")).Scan(&persistedTask, &digest); err != nil {
 				t.Fatal("read exact persisted revision", err)
