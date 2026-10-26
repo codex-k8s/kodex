@@ -4,11 +4,56 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.496.0
+version: 1.497.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая проверка Kubernetes API inputs рендереров — 26.10.2026
+
+render-agent-runner и render-runtime-controller подключают source-only
+scripts/lib/kubernetes-api-input.sh с прежними CIDR/port проверками.
+Сохранены размеры массивов, прежняя regex-форма /32 и /128, десятичное
+выражение диапазона портов и точное наличие443. Семантический разбор IP
+не добавляется: допустимость прежних строк формы CIDR не расширяется и
+не выдаётся за проверку чисел адреса. Глобальные cidr/port/has_service_port
+по-прежнему принадлежат caller; исходное false остаётся до проверки CIDR.
+У agent provider validation остаётся между API CIDRs и ports. CLI/help,
+key/image checks и разные emit_policy/selectors/ports прежние.
+
+124 парных validation сценария сохранили status/stdout/stderr, глобальные
+переменные, порядок ошибок, cardinality bounds,443/6443/leading-zero/invalid
+ports, IPv6, прежние shape-only CIDRs и provider-before-port/API-before-provider
+отказы. Четыре полных runtime-controller рендера (staging/production,
+absolute/basename) совпали побайтно. Ещё два полных legacy agent-runner
+запуска дали тот же FAIL до/после: staging/production overlays agent-runner
+отсутствуют в исходном дереве. Это существующее ограничение CLI; его полный
+рендер не объявляется успешным. Всего130 пар/260 исполнений; пробы используют
+только синтетический публичный ключ, digests и owned пустой kubeconfig,
+локальный kubectl kustomize без кластерного API.
+
+Два whole-source byte inverses восстановили оба скрипта, включая native
+перенос строки перед fail; фактические два shared blocks совпали с native.
+Восемь опасных source mutations отвергнуты. Source-only подключение сохраняет
+переменные, массивы, IFS, cwd/options/argv. Bash syntax3 — PASS LOCAL.
+ShellCheck -a -x двух caller contexts обнаружил две импортированные SC2154
+контрольных копий; новых диагностик0. Прежняя SC2015 info переместилась
+в библиотеку с тем же выражением; сырые запуски по-прежнему возвращают1.
+Класс предупреждений не отключается.
+
+Публичная runtime-controller-artifact-transfer проверка97.29с — PASS LOCAL:
+существующий race subset callback, оба web-profile renders и два release
+runtime-controller renders с проверкой image/spool ownership. Это локальный
+контракт, не deploy/live. Context7 Bash вернул ошибку API key, GNU web manual
+был недоступен; прочитаны первичные встроенные help function/source/for/set
+фактического Bash. Внешние API, зависимости и шаблоны NetworkPolicy прежние.
+
+Detector:6772sources/222 прежних exclusions,1469raw/1221retained/248unresolved.
+Исчезло одно окно e6041941, новых нет; registry1078 и пороги прежние.
+Go21589/21589 EN→RU. Пять quality stages — PASS LOCAL. Legacy agent full-render
+FAIL остаётся явно указанным ограничением; полный E2E/deploy/live и QA —
+NOT RUN. Полная готовность задачи не заявляется.
 
 ## Общая оснастка отказов отзыва браузерной сессии — 26.10.2026
 
