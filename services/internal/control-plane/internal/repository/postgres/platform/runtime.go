@@ -2439,14 +2439,14 @@ func (repository *Repository) scheduleIntegrationContinuation(ctx context.Contex
 		return false, errs.ErrUnavailable
 	}
 	var parentNodeID, runID, rootRunID, agentID, displayName, role, sessionID, agentRef, workflowVersionID string
-	var invocationRef, invocationState, resultSummary, safeErrorCode string
+	var invocationRef, invocationState, resultSummary, safeErrorCode, receiptRef string
 	var decision integrationContinuationDecision
 	var attempt int32
 	err := tx.QueryRow(ctx, queryRuntimeIntegrationResolveContinuation, pgx.StrictNamedArgs{
 		"invocation_id": invocationID, "organization_id": current.organizationID,
 	}).Scan(&parentNodeID, &runID, &rootRunID, &agentID, &attempt, &displayName, &role, &sessionID,
 		&agentRef, &workflowVersionID, &invocationRef, &invocationState, &resultSummary, &safeErrorCode,
-		&decision.GateRef, &decision.GateVersion, &decision.Decision, &decision.Comment)
+		&decision.GateRef, &decision.GateVersion, &decision.Decision, &decision.Comment, &receiptRef)
 	if errors.Is(err, pgx.ErrNoRows) {
 		var publicationRef, nodeID string
 		originErr := tx.QueryRow(ctx, queryRepositoryBundleInvocationOrigin, pgx.StrictNamedArgs{"organization_id": current.organizationID, "invocation_id": invocationID}).Scan(&publicationRef, &nodeID)
@@ -2470,7 +2470,7 @@ func (repository *Repository) scheduleIntegrationContinuation(ctx context.Contex
 	}
 	task, err := integrationContinuationTask(integrationContinuationSnapshot{
 		InvocationRef: invocationRef, State: invocationState, ResultSummary: truncate(resultSummary, 4000),
-		SafeErrorCode: safeErrorCode, OwnerDecision: decision,
+		SafeErrorCode: safeErrorCode, OwnerDecision: decision, ReceiptRef: receiptRef,
 	})
 	if err != nil {
 		return false, err

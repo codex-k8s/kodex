@@ -16,13 +16,17 @@ SELECT node.id::text,
        gate.ref,
        gate.version,
        COALESCE(gate.decision,''),
-       gate.decision_comment
+       gate.decision_comment,
+       COALESCE(receipt.ref,'')
 FROM control_plane.integration_invocations invocation
 JOIN control_plane.run_nodes node ON node.id=invocation.node_id
 JOIN control_plane.runs run ON run.id=node.run_id
 JOIN control_plane.runs root ON root.id=node.root_run_id
 JOIN control_plane.agents agent ON agent.id=node.agent_id
 JOIN control_plane.owner_gates gate ON gate.integration_invocation_id=invocation.id
+LEFT JOIN control_plane.integration_effect_receipts receipt ON receipt.id=invocation.effect_receipt_id
+  AND receipt.invocation_id=invocation.id AND receipt.organization_id=invocation.organization_id
+  AND receipt.effect_key=invocation.effect_key AND receipt.input_digest=invocation.input_digest
 WHERE invocation.id=@invocation_id::uuid
   AND invocation.organization_id=@organization_id::uuid
   AND invocation.run_id=run.id

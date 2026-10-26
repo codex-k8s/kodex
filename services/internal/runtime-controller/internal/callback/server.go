@@ -837,7 +837,7 @@ func tools(input runtimecontract.RunnerInput) []map[string]any {
 // к закреплённой grant-схеме, не выполняя интеграцию.
 func integrationTool() map[string]any {
 	return map[string]any{
-		"name": "invoke_integration", "description": "Invoke one exact grant from this RuntimeRevision. First read the compact get_integration_catalog index, then select its grant_ref to read the input schema. Copy that same grant_ref here with an input matching that schema. The server resolves and revalidates the pinned connection, capability, versions and authority.",
+		"name": "invoke_integration", "description": "Invoke one exact grant from this RuntimeRevision. First read the compact get_integration_catalog index, then select its grant_ref to read the input schema. Copy that same grant_ref here with an input matching that schema. The server resolves and revalidates the pinned connection, capability, versions and authority. A successful result may include receiptRef, the owner-issued immutable effect receipt locator for a workflow result declaration; invocationRef is a different locator. Neither grants authority and neither may be invented.",
 		"inputSchema": objectSchema([]string{"grant_ref", "input"}, map[string]any{
 			"grant_ref": opaqueRefSchema(),
 			"input":     map[string]any{"type": "object"},
@@ -2481,18 +2481,25 @@ type integrationToolResult struct {
 	ErrorCode             string `json:"error_code,omitempty"`
 	OwnerDecisionRequired bool   `json:"owner_decision_required,omitempty"`
 	InvocationRef         string `json:"invocationRef"`
+	ReceiptRef            string `json:"receiptRef,omitempty"`
 	state                 string
 	inputSHA256           string
 }
 
 // MarshalJSON emits result on OK or error_code otherwise, plus invocationRef
-// and optional owner-decision flag. Private state/input digest remain absent;
-// serialization itself does not validate or authorize an invocation.
+// and optional owner receipt/decision fields. Private state/input digest remain absent;
+// receipt shape is checked without authorizing an invocation.
 // MarshalJSON выдаёт result при OK либо error_code, invocationRef и необязательный
-// owner-decision flag. Private state/input digest не выводятся;
-// сериализация не проверяет и не авторизует invocation.
+// поля owner receipt/decision. Private state/input digest не выводятся;
+// receipt shape проверяется без предоставления invocation authority.
 func (r integrationToolResult) MarshalJSON() ([]byte, error) {
 	value := map[string]any{"ok": r.OK, "invocationRef": r.InvocationRef}
+	if r.ReceiptRef != "" {
+		if !r.OK || !safeEffectReceiptRef(r.ReceiptRef) {
+			return nil, errIntegrationReceiptReferenceInvalid
+		}
+		value["receiptRef"] = r.ReceiptRef
+	}
 	if r.OK {
 		value["result"] = r.Result
 	} else {
@@ -2502,6 +2509,16 @@ func (r integrationToolResult) MarshalJSON() ([]byte, error) {
 		value["owner_decision_required"] = true
 	}
 	return json.Marshal(value)
+}
+
+// errIntegrationReceiptReferenceInvalid reports malformed owner metadata without reflecting its bytes.
+// errIntegrationReceiptReferenceInvalid сообщает о повреждённых owner metadata без отражения их bytes.
+var errIntegrationReceiptReferenceInvalid = errors.New("integration receipt reference is invalid")
+
+// safeEffectReceiptRef matches the existing workflow erc_ locator shape without granting evidence access.
+// safeEffectReceiptRef проверяет existing workflow erc_ shape, не выдавая доступа к доказательствам.
+func safeEffectReceiptRef(value string) bool {
+	return len(value) >= 12 && len(value) <= 96 && strings.HasPrefix(value, "erc_") && safeInvocationRef(value[4:])
 }
 
 // safeInvocationRef recognizes an eight-to-128-byte ASCII alphanumeric,
@@ -2698,7 +2715,11 @@ func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerIn
 		}
 		switch state.GetState() {
 		case "SUCCEEDED":
-			return integrationToolResult{OK: true, Result: state.GetResultSummary(), InvocationRef: resolved.GetInvocationRef(), state: state.GetState(), inputSHA256: hex.EncodeToString(inputDigest[:])}, nil
+			receiptRef := state.GetEffectReceiptRef()
+			if receiptRef != "" && !safeEffectReceiptRef(receiptRef) {
+				return nil, errIntegrationReceiptReferenceInvalid
+			}
+			return integrationToolResult{OK: true, Result: state.GetResultSummary(), InvocationRef: resolved.GetInvocationRef(), ReceiptRef: receiptRef, state: state.GetState(), inputSHA256: hex.EncodeToString(inputDigest[:])}, nil
 		case "FAILED", "REJECTED", "CANCELLED":
 			return integrationToolResult{ErrorCode: state.GetSafeErrorCode(), InvocationRef: resolved.GetInvocationRef(), state: state.GetState(), inputSHA256: hex.EncodeToString(inputDigest[:])}, nil
 		case "WAITING_APPROVAL":
