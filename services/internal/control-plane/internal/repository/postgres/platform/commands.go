@@ -1613,7 +1613,16 @@ func validBoundedRunInput(input map[string]any) bool {
 	return err == nil && len(raw) <= 64<<10
 }
 
+// workflowRequiresDelegation preserves coordinator delegation for manager-driven workflows.
+// Server DAG transitions belong to the owner scheduler and must not require granting the manager
+// a capability that would bypass that scheduler's result checks.
+// workflowRequiresDelegation сохраняет делегирование координатором в manager-driven процессах.
+// Переходами серверного DAG владеет планировщик; для них не нужно выдавать менеджеру возможность
+// обходить проверку обязательных результатов этим планировщиком.
 func workflowRequiresDelegation(version entity.WorkflowVersion) bool {
+	if version.ExecutionMode == workflowservice.ServerDAGV1 {
+		return false
+	}
 	for _, step := range version.Steps {
 		if step.AgentRef != version.CoordinatorAgentRef {
 			return true

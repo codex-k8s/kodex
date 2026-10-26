@@ -1734,6 +1734,7 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		}
 	}
 	artifactRefs := []string{}
+	artifactIDs := make([]string, 0, len(payload.Artifacts))
 	var artifactBytes int64
 	for _, artifact := range payload.Artifacts {
 		projectID := stringMap(lease, "projectID")
@@ -1774,6 +1775,10 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 			return commandOutcome{}, err
 		}
 		artifactRefs = append(artifactRefs, prepared.Ref)
+		artifactIDs = append(artifactIDs, artifactID)
+	}
+	if err := captureWorkflowCompletionTx(ctx, tx, scope, lease, artifactIDs); err != nil {
+		return commandOutcome{}, err
 	}
 	usage, err := json.Marshal(payload.Usage)
 	if err != nil {
