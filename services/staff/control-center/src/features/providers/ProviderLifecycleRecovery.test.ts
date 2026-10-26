@@ -14,6 +14,7 @@ import type { ProviderAccount } from "./model";
 import type { ProviderLifecycleResult } from "./lifecycle";
 import {
   readProviderLifecycleAttempt,
+  forgetProviderLifecycleAttempt,
   rememberProviderLifecycleAttempt,
   type ProviderLifecycleAttempt,
 } from "./lifecycle-attempt";
@@ -85,11 +86,11 @@ function storage(): Storage {
     },
   };
 }
-function mount(problem?: unknown) {
+function mount(problem?: unknown, commandPending = false) {
   const data = storage();
   rememberProviderLifecycleAttempt(original, data);
   vi.stubGlobal("window", { sessionStorage: data });
-  const props = reactive({ account: account(), problem });
+  const props = reactive({ account: account(), problem, commandPending });
   const pending = vi.fn();
   const recovered = vi.fn();
   let state!: State;
@@ -143,6 +144,51 @@ afterEach(async () => {
 });
 
 describe("ProviderLifecycleRecovery", () => {
+  it("перечитывает журнал после локальной команды, открывшей диалог во время исполнения", async () => {
+    const { props, state, data, pending } = mount(undefined, true);
+    expect(state.attempt.value).toBeUndefined();
+    await state.retry();
+    expect(api.retryProviderLifecycle).not.toHaveBeenCalled();
+    forgetProviderLifecycleAttempt(original.accountRef, data);
+    props.commandPending = false;
+    await nextTick();
+    expect(state.attempt.value).toBeUndefined();
+    expect(pending).toHaveBeenLastCalledWith(false);
+    expect(
+      readProviderLifecycleAttempt(original.accountRef, data),
+    ).toBeUndefined();
+  });
+
+  it("после UNKNOWN оставляет точный intent и не запускает автоматический retry", async () => {
+    const { props, state, data, pending } = mount(undefined, true);
+    props.commandPending = false;
+    await nextTick();
+    expect(state.attempt.value).toEqual(original);
+    expect(readProviderLifecycleAttempt(original.accountRef, data)).toEqual(
+      original,
+    );
+    expect(pending).toHaveBeenLastCalledWith(true);
+    expect(api.retryProviderLifecycle).not.toHaveBeenCalled();
+  });
+
+  it("позднее завершение локальной команды не удаляет новый intent текущего аккаунта", async () => {
+    const { props, state, data, pending } = mount(undefined, true);
+    const next = { ...original, accountRef: "pacc_new_fixture", version: 12 };
+    rememberProviderLifecycleAttempt(next, data);
+    props.account = {
+      ...account(),
+      ref: next.accountRef,
+      version: next.version,
+    };
+    await nextTick();
+    forgetProviderLifecycleAttempt(original.accountRef, data);
+    props.commandPending = false;
+    await nextTick();
+    expect(state.attempt.value).toEqual(next);
+    expect(readProviderLifecycleAttempt(next.accountRef, data)).toEqual(next);
+    expect(pending).toHaveBeenLastCalledWith(true);
+    expect(api.retryProviderLifecycle).not.toHaveBeenCalled();
+  });
   it("сохраняет ожидающий retry при замене account с прежними ref и problem", async () => {
     const request = deferred();
     api.retryProviderLifecycle.mockReturnValueOnce(request.promise);

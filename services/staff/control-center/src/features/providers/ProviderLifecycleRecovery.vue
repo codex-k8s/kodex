@@ -12,7 +12,11 @@ import {
 } from "./lifecycle";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
-const props = defineProps<{ account: ProviderAccount; problem?: unknown }>();
+const props = defineProps<{
+  account: ProviderAccount;
+  problem?: unknown;
+  commandPending?: boolean;
+}>();
 const emit = defineEmits<{
   recovered: [result: ProviderLifecycleResult];
   pending: [value: boolean];
@@ -28,6 +32,12 @@ function read(): void {
   attempt.value = undefined;
   recoveryProblem.value = undefined;
   busy.value = false;
+  // Intent исполняемой локальной команды ещё не означает UNKNOWN. После её
+  // завершения перечитываем журнал; только command receipt вправе удалить intent.
+  if (props.commandPending) {
+    emit("pending", false);
+    return;
+  }
   try {
     attempt.value = readProviderLifecycleAttempt(
       props.account.ref,
@@ -40,7 +50,7 @@ function read(): void {
 }
 async function retry(): Promise<void> {
   const original = attempt.value;
-  if (!original || busy.value) return;
+  if (!original || busy.value || props.commandPending) return;
   const signal = controller.signal;
   busy.value = true;
   recoveryProblem.value = undefined;
@@ -60,9 +70,11 @@ async function retry(): Promise<void> {
     if (!signal.aborted) busy.value = false;
   }
 }
-watch([() => props.account.ref, () => props.problem], read, {
-  immediate: true,
-});
+watch(
+  [() => props.account.ref, () => props.problem, () => props.commandPending],
+  read,
+  { immediate: true },
+);
 onBeforeUnmount(() => controller.abort());
 </script>
 <template>

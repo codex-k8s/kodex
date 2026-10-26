@@ -306,6 +306,7 @@ onBeforeUnmount(() => {
       <ProviderLifecycleRecovery
         :account="currentAccount"
         :problem="problem"
+        :command-pending="busy"
         @pending="recoveryPending = $event"
         @recovered="recovered"
       />
