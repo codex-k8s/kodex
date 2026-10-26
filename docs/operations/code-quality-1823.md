@@ -4,11 +4,43 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.519.0
+version: 1.520.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая проверка необязательной пары environment ref/version — 26.10.2026
+
+CreateSystemRuntimeEnvironmentDraft и CreateRuntimeEnvironmentDraft используют
+один чистый environmentDraftVersionInput:сначала читается значение version,
+затем проверяются совместное наличие pointers,непустая ссылка,положительная
+версия существующей среды и верхний предел maximumSafeJSONInteger. nil/nil
+сохраняет0;при отказе helper возвращает прочитанное значение и false,а caller
+пишет прежний400. Ссылка не нормализуется:пробелы и произвольный непустой текст
+на этом примитиве принимаются как прежде,проверка домена остаётся у владельца.
+Helper не выполняет RPC и не назначает authority или lifecycle.
+
+Одна полная GoFmt inverse восстановила исходный файл;проверены два native
+блока и сохранность project routing,specification/mutation guards,отдельных
+organization/project RPC и response pins. Десять частных source mutations
+отвергнуты. Private overlay проверила60 сочетаний nil/empty/space/обычной и
+Unicode ссылки с nil/MinInt64/отрицательной/нулевой/положительной/граничной и
+MaxInt64 версиями:61PASS events/0FAIL/0SKIP за8.84s,inputs неизменны.
+Публичные mirror tests простого glue не добавлялись.
+
+Полный gateway build6.73s/unit23.67s/vet1.92s — PASS LOCAL:
+3098PASS/0FAIL/0SKIP,11packages. Пять quality stages — PASS LOCAL;
+Go21611/21611 EN→RU. Detector6785sources/222generated exclusions,
+1435raw/1230retained/205unresolved,registry1087. Одно raw окно184tokens
+заменилось126-token nominal create glue после реального выноса validator.
+Оно и два отдельно прочитанных точных окна mailbox/secret preparation и VFS
+list/search сохранены адресно:общие validators/writers там уже используются,
+а разные typed RPC constructors и reply pins остаются явными. Другие окна
+и файлы не исключаются.18registry mutations отвергнуты,17public quality tests
+прошли. Context7 proto.Clone/Equal/reflection docs проверены в предыдущем пакете;
+внешние API/generated code не менялись. Legacy renderer FAIL и прежние Bash
+предупреждения открыты;полные E2E/live/deploy/QA — NOT RUN.
 
 ## Общий сборщик строгих context page views — 26.10.2026
 

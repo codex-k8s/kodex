@@ -3,6 +3,30 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/environment_draft_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/environment_draft_endpoints.go",
+      "fragmentSHA256": "82f6ad8d3915aa97b215b1cc705b732ee9c59c7304cb029f58c8d09a434614eb",
+      "count": 1,
+      "reason": "После фактического выноса environmentDraftVersionInput окно126tokens содержит общий decode/specification/requireMutation glue и разные typed CreateOrganizationRuntimeEnvironmentDraft/CreateRuntimeEnvironmentDraft constructors. Проверка presence/ref/version теперь единая в двух callers; specification и mutation primitives также общие. Organization и project команды сохраняют отдельные RPC,project routing и scope/environment/version guards ответа. Универсальный create dispatcher скрыл бы эти связи без самостоятельного нового алгоритма. Решение ограничено точным hash,одним файлом,count1; другие guards и fragments не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/email_mailbox_commands.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/runtime_secret_draft_impact.go",
+      "fragmentSHA256": "7b3a4e1d5c0fbbe8143e93caf60945292d8e345f776283536893d05a05e9ee30",
+      "count": 1,
+      "reason": "Точное120-token окно пересекает хвост BindEmailMailboxConfiguration/начало UnbindEmailMailboxConfiguration и начало PrepareRuntimeSecretDraftImpact. Общие setRuntimeSecretHeaders,requireMutation и writeRPCProblem уже переиспользуются. Остаток связывает разные generated params/request/RPC identities:ConnectionRef unbind против DraftRef impact preparation. Далее unbind проверяет отсутствие configuration revision и connection version для ETag/200,а preparation проверяет draft ref/version и возвращает201; эти разные owner effects не имеют общего result алгоритма. Новый command dispatcher ухудшил бы явность специализированных команд. Сохранены только два пути/hash/count1,не секретные операции или файлы целиком."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/vfs_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/vfs_endpoints.go",
+      "fragmentSHA256": "e7837d31d212c1e566431134d96f929d2e6cb42b27a0cfe2ff3f0d08876066ba",
+      "count": 1,
+      "reason": "ListVFSNodes и SearchVFS уже используют общие vfsRequest,vfsProjectPage и writeVFSPage. Остаточное120-token окно связывает разные typed query constructors с одинаковыми вызовами этих primitives и проверкой конкретного pointer reply на nil. List имеет default path /projects,Search требует минимум две непустые руны запроса и иной optional path contract; курсор2048UTF8 принадлежит VFS. Generic RPC dispatcher или interface reply wrapper ради короткого glue скрывал бы отдельные запросы и typed-nil отказ,не устраняя самостоятельное ядро. Сохранено только точное окно одного файла/hash/count1; page validators и другие окна остаются под detector."
+    },
+    {
+      "format": "go",
       "firstPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
       "secondPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
       "fragmentSHA256": "0081d0f8a8f72a6cc85379351153ecdb0e47228f3a59df763a15d2bb23d64590",

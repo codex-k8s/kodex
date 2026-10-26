@@ -38,11 +38,8 @@ func (server *Server) CreateSystemRuntimeEnvironmentDraft(w http.ResponseWriter,
 	if !ok {
 		return
 	}
-	expected := int64(0)
-	if body.ExpectedEnvironmentVersion != nil {
-		expected = *body.ExpectedEnvironmentVersion
-	}
-	if (body.EnvironmentRef == nil) != (body.ExpectedEnvironmentVersion == nil) || expected < 0 || expected > maximumSafeJSONInteger || body.EnvironmentRef != nil && (stringValue(body.EnvironmentRef) == "" || expected < 1) {
+	expected, valid := environmentDraftVersionInput(body.EnvironmentRef, body.ExpectedEnvironmentVersion)
+	if !valid {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
@@ -83,12 +80,8 @@ func (server *Server) CreateRuntimeEnvironmentDraft(w http.ResponseWriter, r *ht
 	if !ok {
 		return
 	}
-	expected := int64(0)
-	if body.ExpectedEnvironmentVersion != nil {
-		expected = *body.ExpectedEnvironmentVersion
-	}
-	if (body.EnvironmentRef == nil) != (body.ExpectedEnvironmentVersion == nil) || expected < 0 || expected > maximumSafeJSONInteger ||
-		body.EnvironmentRef != nil && (stringValue(body.EnvironmentRef) == "" || expected < 1) {
+	expected, valid := environmentDraftVersionInput(body.EnvironmentRef, body.ExpectedEnvironmentVersion)
+	if !valid {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
@@ -233,6 +226,25 @@ func (server *Server) DiscardRuntimeEnvironmentDraft(w http.ResponseWriter, r *h
 		return
 	}
 	writeEnvironmentDraft(w, http.StatusOK, response.GetDraft(), ref, "")
+}
+
+// environmentDraftVersionInput checks only optional reference/version presence, zero and safe
+// JSON-integer bounds. It reads the version value first, keeps nil/nil as zero and requires
+// a nonempty present reference with a positive present version. Text is not normalized or
+// syntax-validated here, and the returned locator/version neither assigns nor proves authority.
+// environmentDraftVersionInput проверяет только наличие пары reference/version, ноль и предел
+// безопасного JSON-числа. Сначала читается версия; nil/nil остаётся нулём, а заданная пара требует
+// непустой reference и положительной версии. Текст здесь не нормализуется и не проверяется по
+// синтаксису; возвращённые locator/version не назначают и не доказывают полномочий.
+func environmentDraftVersionInput(ref *string, version *int64) (int64, bool) {
+	expected := int64(0)
+	if version != nil {
+		expected = *version
+	}
+	if (ref == nil) != (version == nil) || expected < 0 || expected > maximumSafeJSONInteger || ref != nil && (stringValue(ref) == "" || expected < 1) {
+		return expected, false
+	}
+	return expected, true
 }
 
 // environmentDraftSpecificationInput bounds serialized input and values/tools/secret-binding
