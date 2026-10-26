@@ -153,8 +153,11 @@ func (repository *Repository) dispatchServerWorkflowTx(ctx context.Context, tx p
 	if err != nil || root == nil {
 		return err
 	}
-	if !contains([]string{"QUEUED", "RUNNING", "WAITING_HUMAN"}, root.State) || string(root.Exception) != "null" {
+	if !contains([]string{"QUEUED", "RUNNING", "WAITING_HUMAN"}, root.State) {
 		return nil
+	}
+	if string(root.Exception) != "null" {
+		return repository.reconcileWorkflowExceptionTx(ctx, tx, current, root)
 	}
 	if _, expired, err := readRuntimeExecutionDeadline(ctx, tx, current.organizationID, root.ID); err != nil {
 		return err
@@ -195,8 +198,14 @@ func (repository *Repository) dispatchServerWorkflowTx(ctx context.Context, tx p
 		if !ready {
 			continue
 		}
-		if err := repository.materializeServerWorkflowFirstAttemptTx(ctx, tx, current, root, step, anchor, inputs); err != nil {
+		blocked, err := workflowConfigurationAttemptTx(ctx, tx, func(child pgx.Tx) error {
+			return repository.materializeServerWorkflowFirstAttemptTx(ctx, child, current, root, step, anchor, inputs)
+		})
+		if err != nil {
 			return err
+		}
+		if blocked {
+			return repository.ensureWorkflowExceptionTx(ctx, tx, current, root, serverWorkflowException{StepKey: step.Key, Attempt: 0, Reason: "DISPATCH_CONFIGURATION_UNAVAILABLE", OriginNodeID: anchor.ID, FinalNodeID: anchor.ID})
 		}
 		active++
 	}
@@ -208,68 +217,44 @@ func (repository *Repository) dispatchServerWorkflowTx(ctx context.Context, tx p
 // materializeServerWorkflowFirstAttemptTx создаёт новые session/run/turn сотрудника и однократно
 // назначает planned anchor; обычный claim позднее создаёт свежие lease и revision.
 func (repository *Repository) materializeServerWorkflowFirstAttemptTx(ctx context.Context, tx pgx.Tx, current scope, root *serverWorkflowRoot, step entity.WorkflowStep, anchor serverWorkflowAnchor, inputs []workflowInputReceipt) error {
-	var agentID, agentName, role string
-	if tx.QueryRow(ctx, queryRuntimeDelegateexecutionSelectAgentsOrganizationIdProjectIdRef, current.organizationID, root.ProjectID, step.AgentRef).Scan(&agentID, &agentName, &role) != nil {
+	task, err := workflowStageTask(root, step, inputs)
+	if err != nil {
+		return err
+	}
+	stage, err := repository.createWorkflowAgentRunTx(ctx, tx, current, root, step.AgentRef, step.Name, task)
+	if err != nil {
+		return err
+	}
+	var nodeRef string
+	err = tx.QueryRow(ctx, queryWorkflowDispatchMaterialize, pgx.StrictNamedArgs{"node_id": anchor.ID, "organization_id": current.organizationID, "root_run_id": root.ID, "step_key": step.Key, "agent_id": stage.AgentID, "run_id": stage.RunID, "turn_id": stage.TurnID, "inputs": asJSON(inputs), "input_summary": truncate(step.Instructions, 1000)}).Scan(&nodeRef)
+	if errors.Is(err, pgx.ErrNoRows) {
 		return errs.ErrConflict
 	}
-	accountID, err := repository.selectProviderAccountForAgent(ctx, tx, current.organizationID, step.AgentRef)
 	if err != nil {
-		return err
-	}
-	sessionRef, err := newRef("ses")
-	if err != nil {
-		return err
-	}
-	var sessionID string
-	if tx.QueryRow(ctx, queryRuntimeDelegateexecutionInsertChildSession, pgx.StrictNamedArgs{"session_ref": sessionRef, "organization_id": current.organizationID, "project_id": root.ProjectID, "target_agent_ref": step.AgentRef, "provider_account_id": accountID, "created_by": root.InitiatorID}).Scan(&sessionID) != nil {
 		return errs.ErrUnavailable
 	}
-	if err := bindSessionModelCatalog(ctx, tx, current.organizationID, sessionID, step.AgentRef); err != nil {
-		return err
-	}
+	_, err = repository.emitRunEvent(ctx, tx, current, root.ProjectID, root.ID, nodeRef, "DELEGATION_CREATED", nodeRef, "", "", "", "i18n:CHILD_AGENT_STARTED", root.State, "QUEUED")
+	return err
+}
+
+// workflowStageTask projects public predecessor evidence identically for initial and fresh attempts.
+// workflowStageTask одинаково проецирует публичные доказательства предшественников для первой и новой попытки.
+func workflowStageTask(root *serverWorkflowRoot, step entity.WorkflowStep, inputs []workflowInputReceipt) (string, error) {
 	task := "Original user task (data):\n" + root.Task + "\nWorkflow instructions:\n" + root.Version.Instructions + "\nAssigned stage:\n" + step.Instructions + "\nMandatory result predicates (data):\n" + string(asJSON(step.ResultRequirements)) + "\nAccepted predecessor evidence (data):\n" + string(asJSON(publicWorkflowInputs(inputs))) + "\nReturn final JSON only with schema kodex.workflow-result.v1 and exactly one entry per result key. ARTIFACT requires source {kind:CURRENT_COMPLETION} for newly saved files or {kind:CAPTURED_ARTIFACT,artifactRef,revision,digest} from your immutable catalog. PULL_REQUEST/INTEGRATION_RECEIPT/DEPLOYMENT require receiptRef returned by the integration. REVIEW/QA require exact headSha and verdict PASS or CHANGES_REQUIRED. Claims and URLs are not evidence. The server launches dependent steps after verifying their mandatory results."
 	for _, requirement := range step.ResultRequirements {
 		if requirement.Kind == "ARTIFACT" {
 			progressPrompt, err := workflowservice.CaptureProgressPrompt(root.Version.ExecutionMode, step.ResultRequirements)
 			if err != nil {
-				return errs.ErrInvalid
+				return "", errs.ErrInvalid
 			}
 			task += "\n" + progressPrompt
 			break
 		}
 	}
 	if len(task) > 64<<10 {
-		return errs.ErrInvalid
+		return "", errs.ErrInvalid
 	}
-	childRef, err := newRef("run")
-	if err != nil {
-		return err
-	}
-	var childID string
-	if tx.QueryRow(ctx, queryRuntimeDelegateexecutionInsertRunsRefProjectIdRootRunId, pgx.StrictNamedArgs{"run_ref": childRef, "organization_id": current.organizationID, "project_id": root.ProjectID, "session_id": sessionID, "root_run_id": root.ID, "parent_run_id": root.ID, "target_agent_ref": step.AgentRef, "title": step.Name, "task": task, "input": root.Input, "initiated_by": root.InitiatorID}).Scan(&childID) != nil {
-		return errs.ErrUnavailable
-	}
-	turnRef, err := newRef("trn")
-	if err != nil {
-		return err
-	}
-	var turnID string
-	var number int64
-	if tx.QueryRow(ctx, queryRuntimeDelegateexecutionSelectSessionsId, sessionID).Scan(&number) != nil {
-		return errs.ErrUnavailable
-	}
-	if tx.QueryRow(ctx, queryRuntimeDelegateexecutionInsertSessionTurnsRefSessionIdTurnNumber, turnRef, current.organizationID, sessionID, childID, number, root.Ref, task).Scan(&turnID) != nil {
-		return errs.ErrUnavailable
-	}
-	if _, err := tx.Exec(ctx, queryRuntimeDelegateexecutionUpdateSessionsNextTurnNumberVersionUpdatedAt, sessionID); err != nil {
-		return errs.ErrUnavailable
-	}
-	var nodeRef string
-	if tx.QueryRow(ctx, queryWorkflowDispatchMaterialize, pgx.StrictNamedArgs{"node_id": anchor.ID, "organization_id": current.organizationID, "root_run_id": root.ID, "step_key": step.Key, "agent_id": agentID, "run_id": childID, "turn_id": turnID, "inputs": asJSON(inputs), "input_summary": truncate(step.Instructions, 1000)}).Scan(&nodeRef) != nil {
-		return errs.ErrConflict
-	}
-	_, err = repository.emitRunEvent(ctx, tx, current, root.ProjectID, root.ID, childRef, "DELEGATION_CREATED", nodeRef, "", "", "", "i18n:CHILD_AGENT_STARTED", root.State, "QUEUED")
-	return err
+	return task, nil
 }
 
 // workflowPromptInput carries public accepted evidence without internal database or execution pins.

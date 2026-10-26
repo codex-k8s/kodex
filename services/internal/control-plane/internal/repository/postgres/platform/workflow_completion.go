@@ -56,7 +56,11 @@ func (repository *Repository) completeServerWorkflowTx(ctx context.Context, tx p
 	if err != nil || root == nil {
 		return commandOutcome{}, false, err
 	}
-	if contains([]string{"RUNNING", "WAITING_HUMAN"}, root.State) {
+	managerHandled, err := repository.completeWorkflowExceptionManagerTx(ctx, tx, current, root, lease, payload)
+	if err != nil {
+		return commandOutcome{}, true, err
+	}
+	if !managerHandled && contains([]string{"RUNNING", "WAITING_HUMAN"}, root.State) {
 		var key, originID string
 		var attempt int32
 		if tx.QueryRow(ctx, queryWorkflowDispatchCompletion, pgx.StrictNamedArgs{"organization_id": current.organizationID, "root_run_id": root.ID, "node_id": stringMap(lease, "nodeID"), "runtime_revision_id": stringMap(lease, "runtimeRevisionID"), "lease_id": stringMap(lease, "leaseID")}).Scan(&key, &attempt, &originID) != nil {
@@ -66,32 +70,43 @@ func (repository *Repository) completeServerWorkflowTx(ctx context.Context, tx p
 		if err != nil {
 			return commandOutcome{}, true, err
 		}
+		captureBlocked := false
 		if !pending {
 			if payload.Success {
 				for _, step := range root.Version.Steps {
 					if step.Key != key {
 						continue
 					}
-					continued, err := repository.continueWorkflowCaptureTx(ctx, tx, current, root, lease, step, payload.ResultSummary)
+					continued := false
+					blocked, err := workflowConfigurationAttemptTx(ctx, tx, func(child pgx.Tx) error {
+						var cause error
+						continued, cause = repository.continueWorkflowCaptureTx(ctx, child, current, root, lease, step, payload.ResultSummary)
+						return cause
+					})
 					if err != nil {
 						return commandOutcome{}, true, err
 					}
-					pending = continued
+					captureBlocked, pending = blocked, continued && !blocked
 				}
 			}
 		}
 		if !pending {
-			results, reason, err := repository.evaluateWorkflowStepResultTx(ctx, tx, current, lease, payload)
-			if err != nil {
-				return commandOutcome{}, true, err
+			var results []entity.WorkflowAcceptedResult
+			reason := "CAPTURE_CONTINUATION_UNAVAILABLE"
+			if !captureBlocked {
+				var cause error
+				results, reason, cause = repository.evaluateWorkflowStepResultTx(ctx, tx, current, lease, payload)
+				if cause != nil {
+					return commandOutcome{}, true, cause
+				}
 			}
 			if _, err := appendWorkflowAttemptTx(ctx, tx, current, lease, reason == "", reason, results); err != nil {
 				return commandOutcome{}, true, err
 			}
 			if reason != "" {
 				exception := serverWorkflowException{StepKey: key, Attempt: attempt, Reason: reason, OriginNodeID: originID, FinalNodeID: stringMap(lease, "nodeID")}
-				if _, err := tx.Exec(ctx, queryWorkflowDispatchException, pgx.StrictNamedArgs{"organization_id": current.organizationID, "root_run_id": root.ID, "exception": asJSON(exception)}); err != nil {
-					return commandOutcome{}, true, errs.ErrUnavailable
+				if err := repository.ensureWorkflowExceptionTx(ctx, tx, current, root, exception); err != nil {
+					return commandOutcome{}, true, err
 				}
 			} else {
 				for _, step := range root.Version.Steps {

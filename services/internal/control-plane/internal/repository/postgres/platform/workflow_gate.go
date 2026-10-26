@@ -22,6 +22,9 @@ func (repository *Repository) resolveServerWorkflowResultGateTx(ctx context.Cont
 	if !ok {
 		return commandOutcome{}, true, errs.ErrInvalid
 	}
+	if _, err := repository.resolveWorkflowExceptionGateTx(ctx, tx, current, root, payload); err != nil {
+		return commandOutcome{}, true, err
+	}
 	if integrationID == "" {
 		switch payload.Decision {
 		case "REJECT", "CANCEL":
@@ -66,8 +69,8 @@ func (repository *Repository) resolveServerWorkflowResultGateTx(ctx context.Cont
 				}
 				found = true
 				exception := serverWorkflowException{StepKey: anchor.Key, Attempt: anchor.LatestAttempt, Reason: "OWNER_CHANGES_REQUESTED", OriginNodeID: anchor.ID, FinalNodeID: predecessorID}
-				if _, err := tx.Exec(ctx, queryWorkflowDispatchException, pgx.StrictNamedArgs{"organization_id": current.organizationID, "root_run_id": root.ID, "exception": asJSON(exception)}); err != nil {
-					return commandOutcome{}, true, errs.ErrUnavailable
+				if err := repository.ensureWorkflowExceptionTx(ctx, tx, current, root, exception); err != nil {
+					return commandOutcome{}, true, err
 				}
 			}
 			if !found {

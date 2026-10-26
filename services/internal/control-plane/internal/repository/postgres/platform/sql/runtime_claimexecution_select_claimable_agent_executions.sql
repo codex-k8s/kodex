@@ -69,6 +69,9 @@ SELECT n.id::text,
            LIMIT 1
        ), '{}'::text[]),
        CASE
+           WHEN workflow_version.spec->>'ExecutionMode'='SERVER_DAG_V1'
+            AND n.workflow_step_key LIKE 'workflow.coordinator.exception.%'
+               THEN ARRAY['platform.artifact.manage']::text[]
            WHEN workflow_version.id IS NOT NULL
             AND n.workflow_step_key LIKE 'workflow.coordinator.%'
                THEN ARRAY['platform.run.delegate']::text[]
@@ -438,6 +441,8 @@ SELECT n.id::text,
              AND connection.state = 'CONNECTED'
            ), '[]'::jsonb),
            CASE
+               WHEN workflow_version.spec->>'ExecutionMode'='SERVER_DAG_V1'
+                AND n.workflow_step_key LIKE 'workflow.coordinator.exception.%' THEN '[]'::jsonb
                WHEN a.system_key IS DISTINCT FROM 'system-assistant'
                 AND 'platform.run.delegate' <> ALL(a.capabilities)
                 AND NOT (root.workflow_version_id IS NOT NULL
