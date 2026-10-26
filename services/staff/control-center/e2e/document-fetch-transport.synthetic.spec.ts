@@ -1,13 +1,46 @@
-import { createServer } from "node:http";
+import { createServer, type ServerResponse } from "node:http";
 import { readFile } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { extname, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
+import { createDeferred } from "../src/test-utils/create-deferred";
 import {
   installSyntheticAbortObserver,
   syntheticFetchIDHeader,
   type SyntheticFetchEvent,
 } from "./synthetic-abort-observer";
+
+// Отдаёт прежний статический fallback двух synthetic HTTP handlers. Корень и
+// pathname выбирает caller; прежние containment guard, MIME и 404 сохраняются.
+// Функция не открывает listener и не меняет stream/abort ветки сценариев.
+function serveSyntheticStaticFile(
+  staticRoot: string,
+  pathname: string,
+  response: ServerResponse,
+): void {
+  const relative = pathname.replace(/^\/+/, "") || "index.html";
+  const file = resolve(staticRoot, relative);
+  if (!file.startsWith(`${staticRoot}/`)) {
+    response.writeHead(404).end();
+    return;
+  }
+  const contentType: Record<string, string> = {
+    ".css": "text/css",
+    ".html": "text/html; charset=utf-8",
+    ".js": "text/javascript",
+    ".woff2": "font/woff2",
+  };
+  readFile(file, (error, contents) => {
+    if (error) {
+      response.writeHead(404).end();
+      return;
+    }
+    response.writeHead(200, {
+      "Content-Type": contentType[extname(file)] ?? "application/octet-stream",
+    });
+    response.end(contents);
+  });
+}
 
 async function settlesWithin(promise: Promise<void>): Promise<boolean> {
   return Promise.race([
@@ -32,38 +65,19 @@ test("synthetic: documentFetch сохраняет native transport до заве
     if (successfulPaths.has(path)) completed.push(path);
   });
 
-  let receive!: (value: {
+  const { promise: received, resolve: receive } = createDeferred<{
     method?: string;
     header?: string;
     body: string;
-  }) => void;
-  const received = new Promise<{
-    method?: string;
-    header?: string;
-    body: string;
-  }>((resolve) => {
-    receive = resolve;
-  });
-  let confirmClose!: () => void;
-  const closed = new Promise<void>((resolve) => {
-    confirmClose = resolve;
-  });
-  let confirmBodyStarted!: () => void;
-  const bodyStarted = new Promise<void>((resolve) => {
-    confirmBodyStarted = resolve;
-  });
-  let confirmBodyClose!: () => void;
-  const bodyClosed = new Promise<void>((resolve) => {
-    confirmBodyClose = resolve;
-  });
-  let confirmCancelClose!: () => void;
-  const cancelClosed = new Promise<void>((resolve) => {
-    confirmCancelClose = resolve;
-  });
-  let confirmUnreadClose!: () => void;
-  const unreadClosed = new Promise<void>((resolve) => {
-    confirmUnreadClose = resolve;
-  });
+  }>();
+  const { promise: closed, resolve: confirmClose } = createDeferred();
+  const { promise: bodyStarted, resolve: confirmBodyStarted } =
+    createDeferred();
+  const { promise: bodyClosed, resolve: confirmBodyClose } = createDeferred();
+  const { promise: cancelClosed, resolve: confirmCancelClose } =
+    createDeferred();
+  const { promise: unreadClosed, resolve: confirmUnreadClose } =
+    createDeferred();
   const server = createServer((request, response) => {
     const address = new URL(request.url ?? "/", "http://127.0.0.1");
     if (address.pathname === "/pending") {
@@ -127,29 +141,7 @@ test("synthetic: documentFetch сохраняет native transport до заве
       });
       return;
     }
-    const relative = address.pathname.replace(/^\/+/, "") || "index.html";
-    const file = resolve(staticRoot, relative);
-    if (!file.startsWith(`${staticRoot}/`)) {
-      response.writeHead(404).end();
-      return;
-    }
-    const contentType: Record<string, string> = {
-      ".css": "text/css",
-      ".html": "text/html; charset=utf-8",
-      ".js": "text/javascript",
-      ".woff2": "font/woff2",
-    };
-    readFile(file, (error, contents) => {
-      if (error) {
-        response.writeHead(404).end();
-        return;
-      }
-      response.writeHead(200, {
-        "Content-Type":
-          contentType[extname(file)] ?? "application/octet-stream",
-      });
-      response.end(contents);
-    });
+    serveSyntheticStaticFile(staticRoot, address.pathname, response);
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = (server.address() as AddressInfo).port;
@@ -326,29 +318,7 @@ test("synthetic: handled stream abort не создаёт browser console error"
       response.write("partial");
       return;
     }
-    const relative = address.pathname.replace(/^\/+/, "") || "index.html";
-    const file = resolve(staticRoot, relative);
-    if (!file.startsWith(`${staticRoot}/`)) {
-      response.writeHead(404).end();
-      return;
-    }
-    const contentType: Record<string, string> = {
-      ".css": "text/css",
-      ".html": "text/html; charset=utf-8",
-      ".js": "text/javascript",
-      ".woff2": "font/woff2",
-    };
-    readFile(file, (error, contents) => {
-      if (error) {
-        response.writeHead(404).end();
-        return;
-      }
-      response.writeHead(200, {
-        "Content-Type":
-          contentType[extname(file)] ?? "application/octet-stream",
-      });
-      response.end(contents);
-    });
+    serveSyntheticStaticFile(staticRoot, address.pathname, response);
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = (server.address() as AddressInfo).port;

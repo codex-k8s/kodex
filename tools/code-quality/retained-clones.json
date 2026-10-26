@@ -3,6 +3,38 @@
   "entries": [
     {
       "format": "typescript",
+      "firstPath": "services/staff/control-center/e2e/web-only.spec.ts",
+      "secondPath": "services/staff/control-center/e2e/web-only.spec.ts",
+      "fragmentSHA256": "fe8e0541c15d1a6cea7ee1273be86e2b1b5b2e1a8d5573816dc0764a794f95a9",
+      "count": 1,
+      "reason": "Окна66–82/67–83 перекрывают один список инициализации разных E2E discovery refs из единственного loadDiscoveryRefs:project,agent,workflow,run,instruction,environment иartifact identities. Это явные отдельные let bindings с одинаковым nullish default,не две реализации загрузчика или алгоритма поиска. Сам load/save уже общий. Универсальный реестр динамических setters ради одного positional списка скрыл бы типовую связь конкретного ref иего сценария. Сохранён только exact внутрефайловый self-overlap hash/count1,не E2E workflow или persistence helpers."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/e2e/web-only.spec.ts",
+      "secondPath": "services/staff/control-center/e2e/web-only.spec.ts",
+      "fragmentSHA256": "538f29dcea572154e27c91b600d65ec00231a630cdb994d382c6f7713d7c9cdf",
+      "count": 1,
+      "reason": "Окна3840–3859/3842–3860 перекрывают один requireRefs reload mapping. Разные persisted identities присваиваются соответствующим локальным refs;null/undefined сохраняют прежнее значение,в отличие от начального default empty string. loadDiscoveryRefs иcurrentRefs уже общие,а проверка обязательных refs выполняется отдельно. Динамический setter dispatcher ради декларативного списка не уберёт второго вычислительного ядра иусложнит видимую связь identity/сценария. Сохранён лишь точный self-overlap hash/count1 web-only.spec.ts;проверки completeness,caller gates и остальные fragments не исключены."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/assistant/components/AssistantPlanEditor.vue",
+      "secondPath": "services/staff/control-center/src/features/assistant/components/AssistantPlanEditor.vue",
+      "fragmentSHA256": "df70943d65cd8333ac1c48f0c8d3acbaf19405fbd5209c7038494c1f140bad96",
+      "count": 1,
+      "reason": "Перекрывающиеся окна354–367/356–369 содержат один блок declarations независимых Vue refs. Connection inputs имеют вложенные string maps,остальные named form validity maps иtouched flags принадлежат разным editor operations. Общее создание ref уже делает Vue;validation handlers иoperation-kind eligibility используют отдельные значения. Новая обёртка нескольких ref allocations без общего validation/lifecycle алгоритма заменила бы явные поля схемой конфигурации. Сохранён только один точный self-overlap hash/count1 AssistantPlanEditor.vue,не reset/eligibility/event handlers."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/assistant/components/AssistantPlanEditor.vue",
+      "secondPath": "services/staff/control-center/src/features/assistant/components/AssistantPlanEditor.vue",
+      "fragmentSHA256": "a89d2d0be73944a3a521c25d1867ba1dbc7a0b71a8b1e2c647156d8c90aa95e0",
+      "count": 1,
+      "reason": "Окна355–365/370–380 объявляют разные independent refs формы:connection/run/workflow/environment против profile/binding/schedule/capability/grant. Это не общая validation реализация:часть полей — boolean touched,часть — per-operation validity илиexpanded map;grant context использует отдельный useId. Vue ref уже является общим runtime primitive. Factory пары validity/touched не покрыла бы все эти declarations иввела бы скрытую схему без общего алгоритма. Сохранён лишь exact внутрефайловый hash/count1,а обработчики,reset ибизнесовые conditions не исключены."
+    },
+    {
+      "format": "typescript",
       "firstPath": "services/staff/control-center/src/features/integrations/grant-candidates.ts",
       "secondPath": "services/staff/control-center/src/features/integrations/grant-candidates.ts",
       "fragmentSHA256": "4affe469fb1c07a64cae0fb468cf3994960f55ab5275d5ecb7ffa2c6d6ab55f5",

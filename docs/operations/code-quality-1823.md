@@ -4,11 +4,53 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.527.0
+version: 1.528.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие Promise и статический fallback тестовой оснастки — 26.10.2026
+
+В document-fetch-transport.synthetic.spec.ts шесть независимых pending
+Promise используют существующий createDeferred из test-utils. Сохранены
+имена promise/resolve, тип полученного запроса и пять void latches. Helper
+не менялся: callback захватывается синхронно, таймеры и общее состояние не
+появились. Все stream, body, abort, ticket и console assertions остаются
+прежними. Две одинаковые ветки выдачи статических файлов вынесены в локальный
+serveSyntheticStaticFile. Caller сохраняет выбор корня и pathname, listener
+и специальные маршруты. Прежние containment guard, MIME map, readFile callback,
+404 и Buffer response перенесены без изменения.
+
+Один whole-source inverse после штатного форматирования восстановил полный
+исходный spec; тело helper совпало с двумя исходными kernels. Private Node
+probe исполняет извлечённые TypeScript functions и существующий createDeferred:
+2варианта по2независимых экземпляра с6latches сохранили порядок и результаты
+resolve, повторный resolve и отсутствие синхронного завершения. Два native
+file kernels и текущий helper дали30одинаковых ответов для10путей: index,
+MIME extensions, binary/default, missing, parent escape и sibling prefix.
+Это реальные локальные file reads с response recorder, не HTTP/browser E2E.
+Temporary files удалены; live network и реальные данные не использовались.
+
+Format0.42s, lint5.03s и публичный tsc --noEmit -p tsconfig.e2e.json8.24s
+PASS LOCAL. Полный browser E2E не запускался по поручению владельца. Прежние
+PWA production build/unit и Go проверки не выдаются за новые запуски этого
+тестового изменения. Generated, API contracts и зависимости не менялись.
+
+Четыре адресных решения сохраняют декларации: два self-overlap списка
+инициализации/reload discovery refs и два блока независимых Vue form refs.
+load/save discovery и Vue ref уже общие; разные identity bindings и отдельные
+validity/touched/expanded maps остаются явными. Reset, validators, eligibility
+и обработчики не исключены. Оба файла этих решений побайтно прежние.
+Два raw окна удалены, новых нет. Registry1111,24registry mutations и17quality
+unit tests PASS; пять quality stages PASS LOCAL.6784sources/222exclusions,
+1422raw/1254retained/168unresolved(Go87/TypeScript81),Go21616/21616 EN→RU.
+Остальные168групп ещё требуют разбора; пороги/exclusions detector прежние.
+
+Context7 resolve/query /nodejs/node PASS: проверены fs.readFile callback/Buffer
+и path.resolve. Существующие API и Node version не менялись. E2E/browser,
+live/deploy/startup и QA NOT RUN; статическая проверка spec и local probe
+не подменяют отдельную сквозную приёмку.
 
 ## Общая отправка запросов integration-grant candidates — 26.10.2026
 
