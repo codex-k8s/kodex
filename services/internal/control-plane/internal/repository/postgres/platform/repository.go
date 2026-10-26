@@ -253,7 +253,7 @@ func (repository *Repository) bootstrapOnce(ctx context.Context) (failure error)
 			return err
 		}
 		if err := tx.Commit(ctx); err != nil {
-			return bootstrapFailure("commit bootstrap transaction", err)
+			return bootstrapFailure(bootstrapCommitPhase, err)
 		}
 		return nil
 	}
@@ -387,7 +387,7 @@ func (repository *Repository) bootstrapOnce(ctx context.Context) (failure error)
 		return bootstrapFailure("complete bootstrap", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return bootstrapFailure("commit bootstrap transaction", err)
+		return bootstrapFailure(bootstrapCommitPhase, err)
 	}
 	return nil
 }

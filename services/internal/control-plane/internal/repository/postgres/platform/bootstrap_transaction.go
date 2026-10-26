@@ -154,7 +154,7 @@ func finishBootstrapAttempt(ctx context.Context, tx *bootstrapTx, failure *error
 	defer cancel()
 	rollback := tx.Rollback(cleanup)
 	if *failure == nil && rollback != nil && !errors.Is(rollback, pgx.ErrTxClosed) {
-		*failure = bootstrapFailure("rollback bootstrap transaction", rollback)
+		*failure = bootstrapFailure(bootstrapRollbackPhase, rollback)
 	}
 	if *failure == nil {
 		return
@@ -162,7 +162,7 @@ func finishBootstrapAttempt(ctx context.Context, tx *bootstrapTx, failure *error
 	cause := errors.Join(*failure, tx.cause)
 	clean := rollback == nil || errors.Is(rollback, pgx.ErrTxClosed) && tx.commitStarted && serializableTransactionConflict(tx.commitError)
 	if rollback != nil && !errors.Is(rollback, pgx.ErrTxClosed) {
-		cause = errors.Join(cause, bootstrapFailure("rollback bootstrap transaction", rollback))
+		cause = errors.Join(cause, bootstrapFailure(bootstrapRollbackPhase, rollback))
 	}
 	retry := clean && ctx.Err() == nil && serializableTransactionConflict(tx.cause) && (!tx.commitStarted || serializableTransactionConflict(tx.commitError))
 	*failure = &bootstrapAttemptFailure{cause: cause, retry: retry}

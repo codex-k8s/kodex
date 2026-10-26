@@ -1,5 +1,13 @@
 package platform
 
+// bootstrapCommitPhase is shared by initial and already-initialized transaction commits.
+// bootstrapCommitPhase используется при commit начального и повторного bootstrap.
+const bootstrapCommitPhase = "commit bootstrap transaction"
+
+// bootstrapRollbackPhase identifies failed cleanup without rendering private driver details.
+// bootstrapRollbackPhase обозначает отказ cleanup без вывода приватных driver details.
+const bootstrapRollbackPhase = "rollback bootstrap transaction"
+
 // bootstrapError keeps the exact startup phase safe for Error formatting while retaining
 // the original dependency cause only for private errors.Is/As inspection.
 // bootstrapError оставляет Error безопасным фиксированным этапом, сохраняя исходную
