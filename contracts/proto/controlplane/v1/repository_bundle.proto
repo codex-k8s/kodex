@@ -90,6 +90,41 @@ message RepositoryBundlePublication {
 
 message PrepareRepositoryBundlePublicationResponse {
   RepositoryBundlePublication proposal = 1;
+  // Присутствует только для owner-proven read-only чтения прежнего успеха.
+  // Отсутствие сохраняет прежнюю строгую семантику fresh proposal.
+  RepositoryBundlePublicationRejoin rejoin = 2;
+}
+
+// Владелец связывает immutable исходный proposal с текущим execution.
+// Это доказательство чтения ledger, не разрешение нового Git WRITE.
+message RepositoryBundlePublicationRejoin {
+  // Только kodex.repository-bundle-rejoin.v1.
+  string schema = 1;
+  // Только READ_ONLY_REJOIN; pending/unknown outcome здесь запрещены.
+  string mode = 2;
+  // Точные текущие public execution pins из owner lease/RR, не payload-флаг.
+  string current_run_ref = 3;
+  string current_node_ref = 4;
+  string current_runtime_revision_ref = 5;
+  string current_lease_ref = 6;
+  int64 current_generation = 7;
+  int32 current_runtime_attempt = 8;
+  // Owner-assigned attempt1..4; текущий RR закрепляет этот business attempt.
+  int32 business_attempt = 9;
+  string current_session_ref = 10;
+  string current_turn_ref = 11;
+  // Должна совпасть с текущим immutable grant snapshot.
+  int64 connection_version = 12;
+  // Полный lowercase SHA256 owner-verified semantic input.
+  string semantic_digest = 13;
+  // Исходный native receipt и SHA256 его точного result summary.
+  string receipt_ref = 14;
+  string receipt_digest = 15;
+  // Свежие exact source pins; исходные pins остаются в proposal.
+  RepositoryBundleArtifactPin current_archive = 16;
+  RepositoryBundleArtifactPin current_manifest = 17;
+  // Однозначный опубликованный slot; authority назначает только owner.
+  string result_key = 18;
 }
 
 message CompleteRepositoryBundlePublicationResponse {

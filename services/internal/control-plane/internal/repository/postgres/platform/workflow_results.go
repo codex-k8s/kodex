@@ -201,7 +201,7 @@ func workflowResultPins(current scope, lease map[string]any) pgx.StrictNamedArgs
 func readWorkflowIntegrationResultTx(ctx context.Context, tx pgx.Tx, current scope, lease map[string]any, ref string) (workflowIntegrationResult, string, error) {
 	pins := workflowResultPins(current, lease)
 	pins["receipt_ref"] = ref
-	rows, err := tx.Query(ctx, queryWorkflowResultIntegration, pins)
+	rows, err := tx.Query(ctx, queryWorkflowEffectResult, pins)
 	if err != nil {
 		return workflowIntegrationResult{}, "", errs.ErrUnavailable
 	}
@@ -219,7 +219,7 @@ func readWorkflowIntegrationResultTx(ctx context.Context, tx pgx.Tx, current sco
 	}
 	if count == 0 {
 		rows.Close()
-		rows, err = tx.Query(ctx, queryWorkflowEffectResult, pins)
+		rows, err = tx.Query(ctx, queryWorkflowResultIntegration, pins)
 		if err != nil {
 			return workflowIntegrationResult{}, "", errs.ErrUnavailable
 		}

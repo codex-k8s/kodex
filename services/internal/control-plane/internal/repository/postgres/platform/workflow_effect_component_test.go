@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	_ "embed"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -35,7 +36,7 @@ var queryWorkflowEffectProof string
 // leases, invocations, gates и results создаются native APIs. Synthetic gateway сообщает один эффект;
 // настоящий GitHub вызов либо live PDLC эта проверка не заявляет.
 func TestWorkflowEffectRejoinComponent(t *testing.T) {
-	for _, name := range []string{"known-success", "current-grant-revoked", "bundle-new-source-refs"} {
+	for _, name := range []string{"known-success", "current-grant-revoked", "bundle-new-source-refs", "same-node-new-generation", "same-business-continues"} {
 		t.Run(name, func(t *testing.T) { runWorkflowEffectRejoinScenario(t, name) })
 	}
 }
@@ -103,7 +104,11 @@ func runWorkflowEffectRejoinScenario(t *testing.T, mode string) {
 	workflow = f.execute(command.PublishWorkflow, "effect-publish", &workflow.Version, command.WorkflowInput{Ref: workflow.Ref}).Workflow
 	run := f.execute(command.LaunchRun, "effect-launch", nil, command.LaunchRunInput{ProjectRef: project.Ref, Task: "Создать PR и полный отчёт.", Target: entity.RunTarget{Type: "WORKFLOW", Ref: workflow.Ref}}).Run
 	f.runRef = run.Ref
-	current, err := repository.resolveScope(ctx, owner)
+	resolvedOwner, err := repository.ResolvePrincipal(ctx, owner)
+	if err != nil {
+		t.Fatal("resolve verified owner principal")
+	}
+	current, err := repository.resolveScope(ctx, resolvedOwner)
 	if err != nil {
 		t.Fatal("resolve exact owner proof scope")
 	}
@@ -204,6 +209,60 @@ func runWorkflowEffectRejoinScenario(t *testing.T, mode string) {
 		t.Fatal("known native receipt locator unavailable")
 	}
 	declaration := `{"schema":"kodex.workflow-result.v1","results":[{"key":"pr","receiptRef":"` + receipt + `"},{"key":"report","source":{"kind":"CURRENT_COMPLETION"}}]}`
+	if mode == "same-node-new-generation" {
+		var expiresAt time.Time
+		if raw, err := json.Marshal(origin["expiresAt"]); err != nil || json.Unmarshal(raw, &expiresAt) != nil || expiresAt.IsZero() {
+			t.Fatal("native lease expiry is missing")
+		}
+		wait := time.Until(expiresAt) + 150*time.Millisecond
+		if wait < 0 || wait > 35*time.Second {
+			t.Fatal("native lease expiry wait is outside its bounded fixture budget")
+		}
+		timer := time.NewTimer(wait)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			t.Fatal("native expiry wait exceeded context")
+		case <-timer.C:
+		}
+		fresh := f.claims("effect-expired-claim")
+		if len(fresh) != 1 || stringMap(fresh[0], "nodeRef") != stringMap(origin, "nodeRef") || stringMap(fresh[0], "runRef") != stringMap(origin, "runRef") || stringMap(fresh[0], "runtimeRevisionRef") == stringMap(origin, "runtimeRevisionRef") || stringMap(fresh[0], "leaseRef") == stringMap(origin, "leaseRef") || runtimeRevisionMapInt64(fresh[0], "generation") <= runtimeRevisionMapInt64(origin, "generation") {
+			t.Fatal("canonical expiry did not reclaim the same node with a fresh immutable execution")
+		}
+		retry := fresh[0]
+		before := readProof()
+		rejoined, err := resolve(retry, "effect-generation-rejoin", "github.pull_request.create", input)
+		if err != nil || stringMap(rejoined, "receiptRef") != receipt || stringMap(rejoined, "invocationRef") != stringMap(invocation, "invocationRef") {
+			t.Fatal("same-node generation did not create exact receipt bridge", completionOutcomeClass(err))
+		}
+		expected := before
+		expected[3]++
+		if readProof() != expected {
+			t.Fatal("same-node bridge allocated an external effect")
+		}
+		f.execute(command.CompleteExecution, "effect-generation-complete", nil, command.CompleteExecutionInput{LeaseRef: stringMap(retry, "leaseRef"), Fence: stringMap(retry, "fence"), Generation: runtimeRevisionMapInt64(retry, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: declaration, Artifacts: []command.CompletedArtifact{workflowCaptureProgressArtifact("report.md", []byte("Тот же Git receipt после настоящего lease expiry.\n"))}})
+		final := f.read()
+		if final.state != "SUCCEEDED" || len(final.journals["a"]) != 1 || !final.journals["a"][0].Accepted || final.journals["a"][0].Results[0].ReceiptRef != receipt {
+			t.Fatal("validated execution bridge did not precede ambiguous legacy lineage")
+		}
+		proofScope, lease, _ := workflowJournalFixture(t, ctx, pool, stringMap(retry, "nodeRef"), stringMap(retry, "leaseRef"))
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			t.Fatal("begin legacy ambiguity read-only proof")
+		}
+		pins := workflowResultPins(proofScope, lease)
+		pins["receipt_ref"] = receipt
+		var legacy workflowIntegrationResult
+		err = tx.QueryRow(ctx, queryWorkflowResultIntegration, pins).Scan(&legacy.Operation, &legacy.Input, &legacy.Scope, &legacy.Summary, &legacy.Digest, &legacy.ProviderRef, &legacy.LineageFailure)
+		rollbackWorkflowJournalProbe(t, ctx, tx)
+		if err != nil || legacy.LineageFailure != workflowReceiptLineageAmbiguous {
+			t.Fatal("legacy reader lost its no-bridge ambiguity denial")
+		}
+		if work, err := service.ClaimIntegrationInvocations(ctx, gateway, "effect-no-generation-write", 1); err != nil || len(work) != 0 {
+			t.Fatal("same-node retry issued another WRITE")
+		}
+		return
+	}
 	f.execute(command.CompleteExecution, "effect-missing-artifact", nil, command.CompleteExecutionInput{LeaseRef: stringMap(origin, "leaseRef"), Fence: stringMap(origin, "fence"), Generation: runtimeRevisionMapInt64(origin, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: declaration})
 	snapshot := f.read()
 	if len(snapshot.episodes) != 1 || snapshot.episodes[0].Reason != workflowArtifactRequired {
@@ -238,6 +297,9 @@ func runWorkflowEffectRejoinScenario(t *testing.T, mode string) {
 		rejoined, err := service.PrepareRepositoryBundle(ctx, bundleFixture.principal("runtime-controller", "platform.repository-bundles.prepare"), freshInput)
 		if err != nil || rejoined.Ref != oldPublication.Ref || rejoined.InvocationRef != oldPublication.InvocationRef || rejoined.State != "SUCCEEDED" {
 			t.Fatal("new source refs did not rejoin exact old Git fact", completionOutcomeClass(err))
+		}
+		if rejoined.Rejoin == nil || rejoined.OriginRunRef != oldPublication.OriginRunRef || rejoined.OriginRuntimeRevisionRef != oldPublication.OriginRuntimeRevisionRef || rejoined.Archive != oldPublication.Archive || rejoined.Manifest != oldPublication.Manifest || rejoined.Rejoin.RunRef != stringMap(retry, "runRef") || rejoined.Rejoin.NodeRef != stringMap(retry, "nodeRef") || rejoined.Rejoin.RuntimeRevisionRef != stringMap(retry, "runtimeRevisionRef") || rejoined.Rejoin.LeaseRef != freshInput.LeaseRef || rejoined.Rejoin.Generation != freshInput.Generation || rejoined.Rejoin.Archive != freshInput.Archive || rejoined.Rejoin.Manifest != freshInput.Manifest || rejoined.Rejoin.ReceiptRef == "" || !repositorybundle.ValidDigest(rejoined.Rejoin.ReceiptDigest) {
+			t.Fatal("typed rejoin replaced old pins or lost exact current execution/source proof")
 		}
 		expected := before
 		expected[3]++
@@ -294,6 +356,24 @@ func runWorkflowEffectRejoinScenario(t *testing.T, mode string) {
 	}
 	if work, err := service.ClaimIntegrationInvocations(ctx, gateway, "effect-gateway-no-retry", 1); err != nil || len(work) != 0 {
 		t.Fatal("rejoin admitted another provider write")
+	}
+	if mode == "same-business-continues" {
+		f.execute(command.CompleteExecution, "effect-capture-progress", nil, command.CompleteExecutionInput{LeaseRef: stringMap(retry, "leaseRef"), Fence: stringMap(retry, "fence"), Generation: runtimeRevisionMapInt64(retry, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: `{"schema":"kodex.workflow-capture-progress.v1","phase":"CAPTURE_PROGRESS","cause":"ARTIFACTS_FOR_CONTINUATION","artifactKeys":["report"]}`, Artifacts: []command.CompletedArtifact{workflowCaptureProgressArtifact("report.md", []byte("EARLY capture перед final declaration.\n"))}})
+		technical := f.claims("effect-technical-continuation")
+		if len(technical) != 1 || stringMap(technical[0], "nodeRef") == stringMap(retry, "nodeRef") || stringMap(technical[0], "runRef") != stringMap(retry, "runRef") {
+			t.Fatal("capture did not create exact same-business CONTINUES")
+		}
+		retry = technical[0]
+		before := readProof()
+		rejoined, err := resolve(retry, "effect-technical-rejoin", "github.pull_request.create", input)
+		if err != nil || stringMap(rejoined, "receiptRef") != receipt {
+			t.Fatal("technical continuation did not rejoin the same immutable receipt", completionOutcomeClass(err))
+		}
+		expected := before
+		expected[3]++
+		if readProof() != expected {
+			t.Fatal("technical receipt bridge recreated an effect")
+		}
 	}
 	f.execute(command.CompleteExecution, "effect-retry-complete", nil, command.CompleteExecutionInput{LeaseRef: stringMap(retry, "leaseRef"), Fence: stringMap(retry, "fence"), Generation: runtimeRevisionMapInt64(retry, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: declaration, Artifacts: []command.CompletedArtifact{workflowCaptureProgressArtifact("report.md", []byte("Полный обязательный отчёт.\n"))}})
 	final := f.read()

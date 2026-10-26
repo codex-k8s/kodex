@@ -92,6 +92,18 @@ type workflowEffectAdmission struct {
 	Intent                   workflowEffectIntent
 }
 
+// sameWorkflowEffectExecution compares the complete immutable execution, including generation changes that reuse a physical node.
+// sameWorkflowEffectExecution сравнивает полный immutable execution, включая новое поколение на прежнем physical node.
+func sameWorkflowEffectExecution(a, b workflowEffectIntent) bool {
+	return a.OriginNodeID == b.OriginNodeID && a.OriginRunID == b.OriginRunID && a.OriginRevisionID == b.OriginRevisionID && a.OriginLeaseID == b.OriginLeaseID && a.OriginGeneration == b.OriginGeneration && a.OriginAttempt == b.OriginAttempt && a.OriginBusiness == b.OriginBusiness
+}
+
+// sameWorkflowEffectRejoinExecution selects an existing bridge only for its exact current immutable execution, never another generation on the same node.
+// sameWorkflowEffectRejoinExecution выбирает bridge только для exact current execution, а не другого поколения того же node.
+func sameWorkflowEffectRejoinExecution(a, b workflowEffectRejoin) bool {
+	return a.RuntimeRevisionID == b.RuntimeRevisionID && a.LeaseID == b.LeaseID && a.Generation == b.Generation && a.RuntimeAttempt == b.RuntimeAttempt && a.BusinessAttempt == b.BusinessAttempt
+}
+
 // workflowEffectSemanticDigest normalizes validated JSON object ordering without discarding scalar values or numeric precision.
 // workflowEffectSemanticDigest нормализует порядок ключей проверенного JSON, сохраняя scalar values и точность чисел.
 func workflowEffectSemanticDigest(key, operation, scopeDigest string, raw []byte) (string, error) {
@@ -163,8 +175,9 @@ func admitWorkflowEffectTx(ctx context.Context, tx pgx.Tx, current scope, rootID
 	intent := workflowEffectIntent{Schema: "kodex.workflow-effect-intent.v1", Operation: operation, ConnectionRef: input["connection_ref"], GrantRef: grantRef, GrantVersion: grantVersion, DefinitionDigest: definitionDigest, ScopeDigest: scopeDigest, ApprovalPolicy: approvalPolicy}
 	var rawStep, rawInputs, rawIntents, rawRejoins []byte
 	var rejoinCount int
+	var sessionRef, turnRef string
 	err := tx.QueryRow(ctx, queryWorkflowEffectOrigin, pgx.StrictNamedArgs{"organization_id": current.organizationID, "root_run_id": rootID, "run_ref": input["run_ref"], "node_ref": input["node_ref"], "connection_ref": intent.ConnectionRef, "grant_ref": grantRef, "grant_version": grantVersion, "operation": operation, "definition_digest": definitionDigest, "approval_policy": approvalPolicy}).Scan(
-		&admission.AnchorID, &admission.NodeID, &intent.OriginRunID, &intent.OriginRevisionID, &intent.OriginLeaseID, &intent.OriginGeneration, &intent.OriginAttempt, &intent.OriginBusiness, &rawStep, &rawInputs, &rawIntents, &rawRejoins, &intent.ConnectionVersion, &rejoinCount)
+		&admission.AnchorID, &admission.NodeID, &intent.OriginRunID, &intent.OriginRevisionID, &intent.OriginLeaseID, &intent.OriginGeneration, &intent.OriginAttempt, &intent.OriginBusiness, &rawStep, &rawInputs, &rawIntents, &rawRejoins, &intent.ConnectionVersion, &sessionRef, &turnRef, &rejoinCount)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, errs.ErrForbidden
 	}
@@ -227,15 +240,16 @@ func admitWorkflowEffectTx(ctx context.Context, tx pgx.Tx, current scope, rootID
 		}
 		// Only an exact RPC replay may poll its original pending invocation; a fresh physical call cannot resume it.
 		// Только exact RPC replay может читать свой pending invocation; fresh physical call его не возобновляет.
-		exactReplay := old.OriginNodeID == intent.OriginNodeID && old.OriginRevisionID == intent.OriginRevisionID && originalKey == input["idempotency_key"]
+		sameExecution := sameWorkflowEffectExecution(old, intent)
+		exactReplay := sameExecution && originalKey == input["idempotency_key"]
 		if state != "SUCCEEDED" && !exactReplay || state == "SUCCEEDED" && (receiptRef == "" || !repositorybundle.ValidDigest(receiptDigest) || operation == repositoryBundleOperation && publicationRef == "") {
 			return nil, nil, errs.ErrConflict
 		}
-		if state == "SUCCEEDED" && old.OriginNodeID != intent.OriginNodeID {
+		if state == "SUCCEEDED" && !sameExecution {
 			rejoin := workflowEffectRejoin{Schema: "kodex.workflow-effect-rejoin.v1", ResultKey: intent.ResultKey, Operation: operation, SemanticDigest: intent.SemanticDigest, InvocationRef: invocationRef, ReceiptRef: receiptRef, ReceiptDigest: receiptDigest, RuntimeRevisionID: intent.OriginRevisionID, LeaseID: intent.OriginLeaseID, Generation: intent.OriginGeneration, RuntimeAttempt: intent.OriginAttempt, BusinessAttempt: intent.OriginBusiness}
 			found := false
 			for _, existing := range rejoins {
-				if existing.ResultKey == rejoin.ResultKey && existing.Operation == rejoin.Operation {
+				if existing.ResultKey == rejoin.ResultKey && existing.Operation == rejoin.Operation && sameWorkflowEffectRejoinExecution(existing, rejoin) {
 					if existing != rejoin {
 						return nil, nil, errs.ErrConflict
 					}
@@ -251,7 +265,8 @@ func admitWorkflowEffectTx(ctx context.Context, tx pgx.Tx, current scope, rootID
 				}
 			}
 		}
-		return nil, map[string]any{"invocationRef": invocationRef, "grantRef": grantRef, "operation": operation, "state": state, "gateRef": gateRef, "workflowRejoined": state == "SUCCEEDED", "publicationRef": publicationRef, "receiptRef": receiptRef}, nil
+		return nil, map[string]any{"invocationRef": invocationRef, "grantRef": grantRef, "operation": operation, "state": state, "gateRef": gateRef, "workflowRejoined": state == "SUCCEEDED", "publicationRef": publicationRef, "receiptRef": receiptRef,
+			"semanticDigest": intent.SemanticDigest, "receiptDigest": receiptDigest, "resultKey": intent.ResultKey, "runtimeAttempt": intent.OriginAttempt, "businessAttempt": intent.OriginBusiness, "sessionRef": sessionRef, "turnRef": turnRef, "connectionVersion": intent.ConnectionVersion}, nil
 	}
 	if len(intents) >= workflowEffectLimit {
 		return nil, nil, errs.ErrConflict

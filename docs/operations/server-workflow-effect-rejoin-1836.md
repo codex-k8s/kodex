@@ -4,8 +4,8 @@ title: Повторное чтение успешного эффекта сер�
 type: runbook
 status: approved
 owner: architect
-version: 1.0.0
-updated: 2026-10-26
+version: 1.0.1
+updated: 2026-10-27
 ---
 
 # Повторное чтение успешного эффекта серверного workflow
@@ -73,13 +73,42 @@ technical continuation не выдаёт новую квоту. Forward migratio
 неизменяемый prefix, точные native pins, unique slots и authorized deletion.
 Применённые003–008 не изменяются, новых таблиц/FK нет.
 
+Forward010 сохраняет009 и уточняет уникальность bridge по полному immutable
+execution tuple: node/run/RR/lease/generation/runtime attempt/business attempt.
+Штатный lease expiry переиспользует node, но новый RR/lease всё равно требует
+bridge. Повторные exact bridges одного immutable intent/receipt в проверенной
+CONTINUES-цепочке читаются как один факт через ближайший проверенный hop;
+mutable timestamp либо общий `latest` для этого не используются.
+
 Приёмка результата использует отдельный exact rejoin selector. Он связывает
 текущие completed final RR/lease и business attempt с исходными invocation,
 receipt и provenance, повторно проверяя актуальные grant/connection pins.
+Проверенный exact bridge читается первым; при его отсутствии действует прежний
+same-run selector, включая закрытую ambiguity при нескольких RR одного node.
 Старый same-run selector не расширяется. `latest` либо совпадение одного URL
 не являются доказательством. Ошибка SQL не превращается в отсутствие эффекта.
 Неизвестный ответ COMMIT не разрешает новый ключ или внешний retry: повтор
 читает тот же immutable logical slot в owner transaction.
+
+## Typed response и поставка
+
+У существующего `PrepareRepositoryBundlePublicationResponse` сохраняется поле1
+`proposal` с исходными origin/source/commit/branch. Optional message field2
+`rejoin` присутствует только при owner-proven terminal read-only исходе и несёт
+текущие execution/source pins отдельно от исходных. Доменное response-only
+поле исключено из JSON frozen proposal и его approval digest.
+
+RC проверяет current pins по trusted immutable RunnerInput/request и ещё раз
+читает прежний native receipt через существующий `GetIntegrationInvocation`.
+Receipt ref/digest и точные commit/tree/branch/manifest/count/bytes сверяются
+с прежним publication. Новый MCP outcome — terminal `READ_ONLY_REJOIN` с этим
+receipt/commit, без ожидания нового Gate/callback. Исходная normal branch
+сохраняет все strict equality и unknown-field проверки.
+
+Нужен новый RC consumer до допуска CP к выдаче нового envelope. У старого RC
+новое поле вызывает закрытый отказ; старый response без optional field2
+сохраняет wire bytes. До поставки обоих компонентов SERVER retry не запускается.
+Новых RPC/method permissions, MCP tools либо расширения runtime grants нет.
 
 ## Проверки
 
@@ -91,6 +120,11 @@ bootstrap — synthetic credential metadata, без credentials реальной
 с новым набором CLEAN source refs тех же bytes. Проверяются changed/unbound
 WRITE denial, отсутствие нового work/Gate/invocation, приёмка старого receipt
 текущей attempt и terminal denial. Gateway synthetic, реального GitHub POST нет.
+Дополнительно выполняются настоящий lease expiry и same-node reclaim с новым
+RR, а также repeated bridge через CAPTURE_PROGRESS и новый CONTINUES hop той же
+business attempt. Оснастка не подменяет expiry готовым SQL state или clock.
+Отдельный RC unit проходит actual MCP dispatcher, text/structured result,
+safe audit и replay, включая malformed/foreign/pending/unknown proof negatives.
 
 Native runner запускает только root после source freeze/проверки плана.
 Heavy build, staging и модельные прогоны эта локальная оснастка не выполняет.

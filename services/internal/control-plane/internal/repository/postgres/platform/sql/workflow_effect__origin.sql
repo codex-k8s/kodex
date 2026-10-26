@@ -1,7 +1,7 @@
 -- name: workflow_effect__origin :one
 SELECT anchor.id::text,node.id::text,node.run_id::text,revision.id::text,lease.id::text,
        revision.generation,node.attempt,node.workflow_business_attempt,step.value,node.workflow_inputs,
-       anchor.workflow_effect_intents,node.workflow_effect_rejoins,connection.version,
+       anchor.workflow_effect_intents,node.workflow_effect_rejoins,connection.version,current_session.ref,current_turn.ref,
        (SELECT COALESCE(sum(jsonb_array_length(sibling.workflow_effect_rejoins)),0)::integer
         FROM control_plane.run_nodes sibling WHERE sibling.organization_id=node.organization_id AND sibling.root_run_id=node.root_run_id
             AND COALESCE(sibling.workflow_step_origin_node_id,sibling.id)=anchor.id
@@ -16,6 +16,8 @@ JOIN control_plane.run_nodes anchor ON anchor.id=COALESCE(node.workflow_step_ori
     AND anchor.workflow_step_key=node.workflow_step_key AND anchor.workflow_step_origin_node_id IS NULL AND anchor.workflow_business_attempt=1
 JOIN control_plane.runs physical ON physical.id=node.run_id AND physical.organization_id=root.organization_id
     AND physical.root_run_id=root.id AND physical.project_id=root.project_id
+JOIN control_plane.sessions current_session ON current_session.id=physical.session_id AND current_session.organization_id=physical.organization_id
+JOIN control_plane.session_turns current_turn ON current_turn.id=node.turn_id AND current_turn.run_id=physical.id AND current_turn.session_id=current_session.id
 JOIN control_plane.agents agent ON agent.id=node.agent_id AND agent.organization_id=root.organization_id AND agent.project_id=root.project_id AND agent.enabled AND agent.state='READY'
 CROSS JOIN LATERAL jsonb_array_elements(version.spec->'Steps') step(value)
 JOIN control_plane.runtime_revisions revision ON revision.node_id=node.id AND revision.run_id=node.run_id AND revision.root_run_id=root.id

@@ -188,6 +188,10 @@ func (repository *Repository) prepareRepositoryBundleTx(ctx context.Context, pri
 		if row.proposal.State != "SUCCEEDED" || row.proposal.InvocationRef != stringMap(resolved, "invocationRef") {
 			return entity.RepositoryBundlePublication{}, errs.ErrConflict
 		}
+		row.proposal.Rejoin = &entity.RepositoryBundlePublicationRejoin{RunRef: origin.runRef, NodeRef: origin.nodeRef, RuntimeRevisionRef: origin.revisionRef, LeaseRef: input.LeaseRef, Generation: input.Generation,
+			RuntimeAttempt: int32(runtimeRevisionMapInt64(resolved, "runtimeAttempt")), BusinessAttempt: int32(runtimeRevisionMapInt64(resolved, "businessAttempt")),
+			SessionRef: stringMap(resolved, "sessionRef"), TurnRef: stringMap(resolved, "turnRef"), SemanticDigest: stringMap(resolved, "semanticDigest"), ReceiptRef: stringMap(resolved, "receiptRef"), ReceiptDigest: stringMap(resolved, "receiptDigest"), ResultKey: stringMap(resolved, "resultKey"),
+			ConnectionVersion: runtimeRevisionMapInt64(resolved, "connectionVersion"), Archive: input.Archive, Manifest: input.Manifest}
 		if commitErr := tx.Commit(ctx); commitErr != nil {
 			return entity.RepositoryBundlePublication{}, serializableTransactionError(commitErr, errs.ErrUnavailable)
 		}

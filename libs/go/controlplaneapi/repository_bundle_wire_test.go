@@ -10,6 +10,7 @@ import (
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -32,7 +33,7 @@ func TestRepositoryBundleRPCWireContract(t *testing.T) {
 		"ReadRepositoryBundlePublication":     cp.RepositoryBundlePublicationService_ReadRepositoryBundlePublication_FullMethodName,
 	}
 	for _, fixture := range []struct{ name, request, response string }{
-		{"PrepareRepositoryBundlePublication", "lease_ref=1:leaseRef:string:false:false|fence=2:fence:string:false:false|generation=3:generation:int64:false:false|grant_ref=4:grantRef:string:false:false|archive=5:archive:controlplane.v1.RepositoryBundleArtifactPin:false:true|manifest=6:manifest:controlplane.v1.RepositoryBundleArtifactPin:false:true|base_commit_sha=7:baseCommitSha:string:false:false|idempotency_key=8:idempotencyKey:string:false:false", "proposal=1:proposal:controlplane.v1.RepositoryBundlePublication:false:true"},
+		{"PrepareRepositoryBundlePublication", "lease_ref=1:leaseRef:string:false:false|fence=2:fence:string:false:false|generation=3:generation:int64:false:false|grant_ref=4:grantRef:string:false:false|archive=5:archive:controlplane.v1.RepositoryBundleArtifactPin:false:true|manifest=6:manifest:controlplane.v1.RepositoryBundleArtifactPin:false:true|base_commit_sha=7:baseCommitSha:string:false:false|idempotency_key=8:idempotencyKey:string:false:false", "proposal=1:proposal:controlplane.v1.RepositoryBundlePublication:false:true|rejoin=2:rejoin:controlplane.v1.RepositoryBundlePublicationRejoin:false:true"},
 		{"GetRepositoryBundlePublication", "proposal_ref=1:proposalRef:string:false:false|gate_ref=2:gateRef:string:false:false|expected_version=3:expectedVersion:int64:false:false|expected_manifest_sha256=4:expectedManifestSha256:string:false:false|offset=5:offset:int32:false:false|limit=6:limit:int32:false:false", "proposal=1:proposal:controlplane.v1.RepositoryBundlePublication:false:true|files=2:files:controlplane.v1.RepositoryBundleFile:true:false|offset=3:offset:int32:false:false|next_offset=4:nextOffset:int32:false:false|complete=5:complete:bool:false:false"},
 		{"ClaimRepositoryBundlePublications", "claimant=1:claimant:string:false:false|limit=2:limit:int32:false:false", "work=1:work:controlplane.v1.RepositoryBundlePublicationWork:true:false"},
 		{"RenewRepositoryBundlePublication", "lease=1:lease:controlplane.v1.RepositoryBundleLease:false:true", "lease=1:lease:controlplane.v1.RepositoryBundleLease:false:true"},
@@ -91,4 +92,31 @@ func repositoryBundleWireFields(message protoreflect.MessageDescriptor) string {
 		fields = append(fields, fmt.Sprintf("%s=%d:%s:%s:%t:%t", field.Name(), field.Number(), field.JSONName(), kind, field.IsList(), field.HasPresence()))
 	}
 	return strings.Join(fields, "|")
+}
+
+// TestRepositoryBundleRejoinPresenceCompatibility preserves legacy field1 bytes and makes only the additive field2 presence explicit.
+// TestRepositoryBundleRejoinPresenceCompatibility сохраняет legacy field1 bytes и явно проверяет presence только additive field2.
+func TestRepositoryBundleRejoinPresenceCompatibility(t *testing.T) {
+	proposal := &cp.RepositoryBundlePublication{Ref: "rbp_original", OriginRunRef: "run_original", OriginRuntimeRevisionRef: "rrev_original"}
+	oldPayload, err := proto.Marshal(proposal)
+	if err != nil {
+		t.Fatal("encode legacy proposal")
+	}
+	expected := protowire.AppendBytes(protowire.AppendTag(nil, 1, protowire.BytesType), oldPayload)
+	response := &cp.PrepareRepositoryBundlePublicationResponse{Proposal: proposal}
+	actual, err := proto.Marshal(response)
+	if err != nil || !bytes.Equal(actual, expected) || response.GetRejoin() != nil {
+		t.Fatal("legacy response bytes changed without optional rejoin")
+	}
+	field := response.ProtoReflect().Descriptor().Fields().ByNumber(2)
+	if field == nil || !field.HasPresence() || field.JSONName() != "rejoin" || response.ProtoReflect().Has(field) {
+		t.Fatal("rejoin does not have meaningful absent presence")
+	}
+	response.Rejoin = &cp.RepositoryBundlePublicationRejoin{}
+	if !response.ProtoReflect().Has(field) {
+		t.Fatal("explicit empty message lost presence for closed consumer validation")
+	}
+	if repositoryBundleWireFields(response.Rejoin.ProtoReflect().Descriptor()) != "schema=1:schema:string:false:false|mode=2:mode:string:false:false|current_run_ref=3:currentRunRef:string:false:false|current_node_ref=4:currentNodeRef:string:false:false|current_runtime_revision_ref=5:currentRuntimeRevisionRef:string:false:false|current_lease_ref=6:currentLeaseRef:string:false:false|current_generation=7:currentGeneration:int64:false:false|current_runtime_attempt=8:currentRuntimeAttempt:int32:false:false|business_attempt=9:businessAttempt:int32:false:false|current_session_ref=10:currentSessionRef:string:false:false|current_turn_ref=11:currentTurnRef:string:false:false|connection_version=12:connectionVersion:int64:false:false|semantic_digest=13:semanticDigest:string:false:false|receipt_ref=14:receiptRef:string:false:false|receipt_digest=15:receiptDigest:string:false:false|current_archive=16:currentArchive:controlplane.v1.RepositoryBundleArtifactPin:false:true|current_manifest=17:currentManifest:controlplane.v1.RepositoryBundleArtifactPin:false:true|result_key=18:resultKey:string:false:false" {
+		t.Fatal("typed rejoin wire contract changed")
+	}
 }

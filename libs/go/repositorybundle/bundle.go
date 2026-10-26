@@ -30,6 +30,14 @@ const (
 	MaximumPathBytes     = 512
 )
 
+// RejoinSchema identifies only an owner-proven read of a completed native publication, never a new write request.
+// RejoinSchema обозначает owner-proven чтение completed publication, а не новый WRITE request.
+const RejoinSchema = "kodex.repository-bundle-rejoin.v1"
+
+// RejoinMode separates terminal read-only outcomes from ordinary pending publication preparation.
+// RejoinMode отделяет terminal read-only outcome от обычного pending preparation.
+const RejoinMode = "READ_ONLY_REJOIN"
+
 // ErrInvalid is a fixed metadata-only diagnostic; offending archive names or content must never enter logs through this error.
 // ErrInvalid — фиксированная metadata-only диагностика; недопустимые имена и содержимое архива через неё в логи не попадают.
 var ErrInvalid = errors.New("repository bundle is invalid")

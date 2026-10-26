@@ -24,6 +24,18 @@ type RepositoryBundlePublication struct {
 	Archive, Manifest                                        RepositoryBundleArtifactPin
 	CreatedAt, ExpiresAt                                     time.Time
 	ConfirmedAt                                              *time.Time
+	Rejoin                                                   *RepositoryBundlePublicationRejoin `json:"-"`
+}
+
+// RepositoryBundlePublicationRejoin carries response-only current execution proof; it never changes the original frozen proposal or approval digest.
+// RepositoryBundlePublicationRejoin несёт response-only current execution proof, не меняя frozen proposal либо approval digest.
+type RepositoryBundlePublicationRejoin struct {
+	RunRef, NodeRef, RuntimeRevisionRef, LeaseRef string
+	SessionRef, TurnRef, SemanticDigest           string
+	ReceiptRef, ReceiptDigest, ResultKey          string
+	Generation, ConnectionVersion                 int64
+	RuntimeAttempt, BusinessAttempt               int32
+	Archive, Manifest                             RepositoryBundleArtifactPin
 }
 
 // RepositoryBundleLease is the exact durable work tuple; a proposal ref alone never authorizes content reads, Begin or completion.

@@ -49,8 +49,10 @@ WITH RECURSIVE final AS MATERIALIZED (
             WHERE incoming.organization_id=final.organization_id AND incoming.root_run_id=final.root_run_id
                 AND incoming.type='CONTINUES' AND incoming.target_node_id=lineage.id)
 )
+, bridges AS MATERIALIZED (
 SELECT invocation.operation,invocation.bounded_input,invocation.resource_scope,receipt.result_summary,
-       receipt.response_digest,receipt.provider_effect_ref,'' AS failure_reason
+       receipt.response_digest,receipt.provider_effect_ref,'' AS failure_reason,
+       anchor.id AS anchor_id,intent.value->>'resultKey' AS result_key,invocation.id AS invocation_id,receipt.id AS receipt_id,producer.depth
 FROM lineage producer CROSS JOIN final
 JOIN control_plane.run_nodes current_node ON current_node.id=producer.id AND current_node.organization_id=final.organization_id
     AND current_node.root_run_id=final.root_run_id AND current_node.run_id=final.run_id
@@ -116,5 +118,14 @@ WHERE receipt.ref=@receipt_ref AND rejoin.value->>'schema'='kodex.workflow-effec
     AND EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(current_proof.safe_snapshot->'integrationGrants','[]'::jsonb)) pin
         WHERE pin->>'ref'=grant_binding.ref AND pin->>'grantVersion'=grant_binding.version::text AND pin->>'connectionRef'=connection.ref
             AND pin->>'operation'=invocation.operation AND pin->>'definitionDigest'=invocation.definition_digest AND pin->>'approvalPolicy'=invocation.approval_policy)
-ORDER BY current_node.id LIMIT 2
-FOR SHARE OF grant_binding NOWAIT;
+FOR SHARE OF grant_binding NOWAIT
+)
+SELECT operation,bounded_input,resource_scope,result_summary,response_digest,provider_effect_ref,failure_reason
+FROM (
+    SELECT bridges.*,row_number() OVER (
+        PARTITION BY anchor_id,result_key,operation,invocation_id,receipt_id ORDER BY depth
+    ) AS exact_bridge_rank FROM bridges
+) proved
+WHERE exact_bridge_rank=1
+ORDER BY anchor_id,result_key,operation,invocation_id,receipt_id
+LIMIT 2;

@@ -40,6 +40,18 @@ func castRepositoryBundle(p entity.RepositoryBundlePublication) *cp.RepositoryBu
 	return r
 }
 
+// castRepositoryBundleRejoin preserves the current owner-proven execution without modifying the original proposal pins.
+// castRepositoryBundleRejoin сохраняет current owner-proven execution без изменения исходных proposal pins.
+func castRepositoryBundleRejoin(p *entity.RepositoryBundlePublicationRejoin) *cp.RepositoryBundlePublicationRejoin {
+	if p == nil {
+		return nil
+	}
+	return &cp.RepositoryBundlePublicationRejoin{Schema: repositorybundle.RejoinSchema, Mode: repositorybundle.RejoinMode,
+		CurrentRunRef: p.RunRef, CurrentNodeRef: p.NodeRef, CurrentRuntimeRevisionRef: p.RuntimeRevisionRef, CurrentLeaseRef: p.LeaseRef, CurrentGeneration: p.Generation,
+		CurrentRuntimeAttempt: p.RuntimeAttempt, BusinessAttempt: p.BusinessAttempt, CurrentSessionRef: p.SessionRef, CurrentTurnRef: p.TurnRef, ConnectionVersion: p.ConnectionVersion,
+		SemanticDigest: p.SemanticDigest, ReceiptRef: p.ReceiptRef, ReceiptDigest: p.ReceiptDigest, CurrentArchive: castBundlePin(p.Archive), CurrentManifest: castBundlePin(p.Manifest), ResultKey: p.ResultKey}
+}
+
 // bundleLease decodes the complete work tuple while invalid/absent expiry stays zero and is closed by owner validation.
 // bundleLease декодирует полный work tuple; неверный либо отсутствующий expiry остаётся zero и закрывается owner validation.
 func bundleLease(l *cp.RepositoryBundleLease) entity.RepositoryBundleLease {
@@ -76,7 +88,7 @@ func (server *Server) PrepareRepositoryBundlePublication(ctx context.Context, r 
 	if err != nil {
 		return nil, transportError(err)
 	}
-	return &cp.PrepareRepositoryBundlePublicationResponse{Proposal: castRepositoryBundle(result)}, nil
+	return &cp.PrepareRepositoryBundlePublicationResponse{Proposal: castRepositoryBundle(result), Rejoin: castRepositoryBundleRejoin(result.Rejoin)}, nil
 }
 
 // GetRepositoryBundlePublication returns one bounded version/digest-pinned manifest page and explicit completeness; it never truncates a full listing silently.
