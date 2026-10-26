@@ -117,6 +117,7 @@ function serverWorkflowProof() {
  return {readOnly:'on',database:'control_plane',gooseVersion:20261026001000,tables:2,runtimeRoles:2,runtimeLogins:1,
  tableOwners:true,runtimeRolesUnprivileged:true,runtimeRead:true,runtimeMutationDenied:true,runtimeColumnMutationDenied:true,
  runtimeGrantOptionDenied:true,publicPrivilegesRevoked:true,ownerWrite:true,authorizationFunction:true,contextsEmpty:true,
+ bundleTableOwner:'control_plane_owner',bundleNoBodyColumns:true,bundleForeignKeys:13,bundleDeferredForeignKeys:13,bundleGuard:true,
  serverWorkflowProfile:'SERVER_DAG_V1',schemaOwner:true,columns:true,constraints:true,indexes:true,triggers:true,
  functionSources:true,functionMetadata:true,functionACL:true,visibilitySource:true,retentionSource:true,runtimeColumnAccess:true,purgeGraphGuard:true,
  workflowColumns:9,workflowConstraints:6,workflowGuards:6,workflowHelpers:4,purgeNodes:105,purgeEdges:284,purgeBaselineEdges:283,
@@ -591,7 +592,7 @@ test('server workflow proof requires schema authority every guard and exact purg
   assert.equal(validServerWorkflowMigrationPostcondition({...proof,[key]:false}),false,key);
  }
  for(const [key,value] of Object.entries({gooseVersion:20261026001100,workflowColumns:8,workflowGuards:4,workflowConstraints:4,
-  workflowHelpers:3,purgeEdges:283,purgeBaselineEdges:284,purgeEdgeFingerprint:'a'.repeat(32),runtimeLogins:2})){
+  bundleTableOwner:'postgres',bundleForeignKeys:12,bundleDeferredForeignKeys:12,workflowHelpers:3,purgeEdges:283,purgeBaselineEdges:284,purgeEdgeFingerprint:'a'.repeat(32),runtimeLogins:2})){
   assert.equal(validServerWorkflowMigrationPostcondition({...proof,[key]:value}),false,key);
  }
 });

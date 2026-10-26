@@ -609,6 +609,8 @@ function validPurgeAuthoritySnapshot(proof,expectedVersion) {
 // Новый профиль не расширяет принятие прежних версий и проверяет всю назначенную owner schema.
 export function validServerWorkflowMigrationPostcondition(proof) {
   return validPurgeAuthoritySnapshot(proof,20261026001000) && proof.serverWorkflowProfile==='SERVER_DAG_V1' &&
+    proof.bundleTableOwner==='control_plane_owner' && proof.bundleNoBodyColumns===true && proof.bundleForeignKeys===13 &&
+    proof.bundleDeferredForeignKeys===13 && proof.bundleGuard===true &&
     ['schemaOwner','columns','constraints','indexes','triggers','functionSources','functionMetadata','functionACL',
       'visibilitySource','retentionSource','runtimeColumnAccess','purgeGraphGuard'].every(key=>proof[key]===true) &&
     proof.workflowColumns===9 && proof.workflowConstraints===6 && proof.workflowGuards===6 && proof.workflowHelpers===4 &&

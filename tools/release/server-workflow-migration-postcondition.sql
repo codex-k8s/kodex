@@ -155,6 +155,27 @@ $body$
         AND NOT EXISTS (SELECT 1 FROM control_plane.project_purge_targets)
 ,
  'serverWorkflowProfile','SERVER_DAG_V1',
+ 'bundleTableOwner',(SELECT pg_get_userbyid(relowner) FROM pg_class WHERE oid='control_plane.repository_bundle_publications'::regclass),
+ 'bundleNoBodyColumns',NOT EXISTS(SELECT 1 FROM pg_attribute
+   WHERE attrelid='control_plane.repository_bundle_publications'::regclass AND attnum>0 AND NOT attisdropped
+     AND (atttypid='bytea'::regtype OR attname IN('archive_bytes','manifest_bytes'))),
+ 'bundleForeignKeys',(SELECT count(*) FROM pg_constraint
+   WHERE conrelid='control_plane.repository_bundle_publications'::regclass AND contype='f'),
+ -- Удержание прежних13 FK включает реально действующие проверенные ограничения.
+ 'bundleDeferredForeignKeys',(SELECT count(*) FROM pg_constraint
+   WHERE conrelid='control_plane.repository_bundle_publications'::regclass AND contype='f'
+     AND condeferrable AND convalidated AND conenforced),
+ 'bundleGuard',EXISTS(SELECT 1 FROM pg_trigger guard JOIN pg_proc function_row ON function_row.oid=guard.tgfoid
+   WHERE guard.tgrelid='control_plane.repository_bundle_publications'::regclass
+     AND guard.tgname='repository_bundle_publication_guard'
+     AND guard.tgfoid=to_regprocedure('control_plane.guard_repository_bundle_publication()')
+     AND guard.tgtype=27 AND guard.tgenabled='O' AND guard.tgattr=''::int2vector
+     AND guard.tgqual IS NULL AND guard.tgnargs=0 AND NOT guard.tgisinternal AND NOT guard.tgdeferrable
+     AND pg_get_userbyid(function_row.proowner)='control_plane_owner' AND NOT function_row.prosecdef
+     AND function_row.prorettype='trigger'::regtype AND NOT function_row.proretset
+     AND function_row.prolang=(SELECT oid FROM pg_language WHERE lanname='plpgsql')
+     AND function_row.provolatile='v' AND function_row.proconfig IS NULL
+     AND md5(function_row.prosrc)='14e949376306c955058e804dfcfa0855'),
  'workflowColumns',(SELECT count(*) FROM column_rows WHERE attnum IS NOT NULL),
  'workflowConstraints',(SELECT count(*) FROM check_rows WHERE oid IS NOT NULL)+(SELECT count(*) FROM origin_fk),
  'workflowGuards',(SELECT count(*) FROM trigger_rows WHERE oid IS NOT NULL),
