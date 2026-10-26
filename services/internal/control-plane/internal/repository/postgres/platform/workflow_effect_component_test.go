@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -26,6 +27,57 @@ import (
 //
 //go:embed testdata/sql/workflow_effect_proof.sql
 var queryWorkflowEffectProof string
+
+// queryWorkflowEffectDiagnostic observes bounded state/count/barrier metadata in the disposable fixture, never payloads or raw errors.
+// queryWorkflowEffectDiagnostic читает bounded state/count/barrier metadata disposable fixture без payloads либо raw errors.
+//
+//go:embed testdata/sql/workflow_effect_diagnostic.sql
+var queryWorkflowEffectDiagnostic string
+
+// workflowEffectDiagnosticReason normalizes only server-owned failure/state enums; unknown text is never logged.
+// workflowEffectDiagnosticReason нормализует только server-owned failure/state enums; неизвестный текст не логируется.
+func workflowEffectDiagnosticReason(value string) string {
+	if value == "" {
+		return "NONE"
+	}
+	if contains([]string{"QUEUED", "RUNNING", "WAITING_HUMAN", "SUCCEEDED", "FAILED", "CANCELLED", workflowArtifactRequired, workflowDeclarationInvalid, workflowReceiptRequired, workflowReceiptLineageInvalid, workflowReceiptLineageAmbiguous, workflowReceiptScopeMismatch, workflowReceiptInvalid, workflowPullRequestRequired, "CAPTURE_CONTINUATION_UNAVAILABLE", "DISPATCH_CONFIGURATION_UNAVAILABLE", "OWNER_CHANGES_REQUESTED"}, value) {
+		return value
+	}
+	return "OTHER"
+}
+
+// workflowEffectFailureDiagnostic reads exact owner rows after a failed assertion and reports only closed reasons, counts and pending flags.
+// workflowEffectFailureDiagnostic читает exact owner rows после failed assertion и сообщает только closed reasons, counts и pending flags.
+func workflowEffectFailureDiagnostic(t *testing.T, ctx context.Context, pool *pgxpool.Pool, origin map[string]any, receiptRef string, snapshot workflowRecoverySnapshot) string {
+	t.Helper()
+	current, lease, _ := workflowJournalFixture(t, ctx, pool, stringMap(origin, "nodeRef"), stringMap(origin, "leaseRef"))
+	var rootState, physicalState, nodeState string
+	var revisions, activePublications, blocked, models, callbacks, invocations, continues int64
+	var callbackPending bool
+	err := pool.QueryRow(ctx, queryWorkflowEffectDiagnostic, pgx.StrictNamedArgs{"organization_id": current.organizationID, "root_run_id": lease["rootRunID"], "node_id": lease["nodeID"]}).Scan(&rootState, &physicalState, &nodeState, &revisions, &callbackPending, &activePublications, &blocked, &models, &callbacks, &invocations, &continues)
+	if err != nil {
+		return "diagnostic_read=" + completionOutcomeClass(err)
+	}
+	journalReason, episodeReason := "", ""
+	journal := snapshot.journals["a"]
+	if len(journal) > 0 {
+		journalReason = journal[len(journal)-1].Reason
+	}
+	if len(snapshot.episodes) > 0 {
+		episodeReason = snapshot.episodes[len(snapshot.episodes)-1].Reason
+	}
+	receiptReason, receiptRead := "", "NONE"
+	tx, err := pool.Begin(ctx)
+	if err == nil {
+		_, receiptReason, err = readWorkflowIntegrationResultTx(ctx, tx, current, lease, receiptRef)
+		rollbackWorkflowJournalProbe(t, ctx, tx)
+	}
+	if err != nil {
+		receiptRead = completionOutcomeClass(err)
+	}
+	return fmt.Sprintf("root=%s physical=%s node=%s journal_count=%d journal_reason=%s episode_count=%d episode_reason=%s receipt_reason=%s receipt_read=%s rr_count=%d bundle_callback_pending=%t active_publications=%d delivery_blocked=%d active_models=%d undelivered_callbacks=%d pending_invocations=%d continues=%d",
+		workflowEffectDiagnosticReason(rootState), workflowEffectDiagnosticReason(physicalState), workflowEffectDiagnosticReason(nodeState), len(journal), workflowEffectDiagnosticReason(journalReason), len(snapshot.episodes), workflowEffectDiagnosticReason(episodeReason), workflowEffectDiagnosticReason(receiptReason), receiptRead, revisions, callbackPending, activePublications, blocked, models, callbacks, invocations, continues)
+}
 
 // TestWorkflowEffectRejoinComponent proves a known successful native WRITE survives business rejection
 // and owner retry as a read-only receipt rejoin. Credential metadata is the existing synthetic fixture
@@ -266,7 +318,7 @@ func runWorkflowEffectRejoinScenario(t *testing.T, mode string) {
 	f.execute(command.CompleteExecution, "effect-missing-artifact", nil, command.CompleteExecutionInput{LeaseRef: stringMap(origin, "leaseRef"), Fence: stringMap(origin, "fence"), Generation: runtimeRevisionMapInt64(origin, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: declaration})
 	snapshot := f.read()
 	if len(snapshot.episodes) != 1 || snapshot.episodes[0].Reason != workflowArtifactRequired {
-		t.Fatal("known WRITE did not survive distinct artifact rejection")
+		t.Fatal("known WRITE did not survive distinct artifact rejection:", workflowEffectFailureDiagnostic(t, ctx, pool, origin, receipt, snapshot))
 	}
 	managerWork := f.claims("effect-manager")
 	if len(managerWork) != 1 || stringMap(managerWork[0], "agentRef") != manager.Ref {
