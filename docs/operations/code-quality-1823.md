@@ -4,11 +4,50 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.512.0
+version: 1.513.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие синтетические policy и email-оснастки — 26.10.2026
+
+Две независимые тестовые фабрики заменили пять блоков данных. runtimePolicyFixture
+сохраняет ссылку на ресурсы вызывающего и четыре самостоятельных digest;создаёт
+свежие volumes/network/egress/webAccess/kubernetesAccess. DNS TCP/UDP53,
+PROVIDER_PROXY TCP8084,RUNTIME_CALLBACK TCP8444,NONE и namespace прежние.
+Ожидаемая policy не выводится из production default implementation. Native
+resource expressions и четыре чистых local digest либо literal repeat64
+сохранены;произвольные side-effectful expressions не переставлялись.
+
+syntheticEmailEffectFixture сначала создаёт connection с исходными ref/version/
+name,затем прежний UNKNOWN_OUTCOME receipt с connection.ref. Сохранены literal
+полей,порядок a/b/c repeat64,новые arrays/maps и места вызовов:после прежнего
+await diagnostics в E2E либо один раз при инициализации unit-модуля. Routes,
+OIDC/actions,negative cases и самостоятельные assertions не переносились.
+Новые helpers импортируют только SDK types;production-код/credentials не менялись.
+
+Пять whole-module inverses восстанавливают исходники после Prettier formatting.
+Actual helpers и пять native profiles:170пар/340executions с разными ресурсами/
+digest и отказами resource getter/String.repeat. Совпали JSON данных,порядок
+чтения/повторов и identity ошибок. Ссылка resources сохранена,вложенные объекты
+двух вызовов независимы. Десять mutations port/destination/namespace/digest/
+receipt version/ref/shared array/caller input/assertion отвергнуты. Начальные
+сбои частной VM исправлены в её global slots и сравнении прототипов trace arrays;
+исходники продукта при этом не менялись,значения/порядок trace сравниваются полностью.
+
+Полные PWA unit:413files/4114tests59.50s,FAIL/SKIP0. Format/check0.67s,
+lint семи изменённых TS-файлов12.90s,typecheck50.76s,production build8.64s —
+PASS LOCAL с envDir:false. Прежний Vite chunk>500kB warning сохраняется.
+E2E TypeScript compile-only до8.29s/после9.06s — PASS;Playwright configs,
+браузерные сценарии и runtime env при этой проверке не исполнялись/не загружались.
+Публичные mirror tests для glue не добавлялись. Официальный TypeScript Compiler
+API guide проверен;Context7 ранее отклонил API key,версии не менялись.
+
+Пять quality stages — PASS LOCAL. Удалены3raw окнаacea0b18/e4851d21/f4aab575,
+новых нет;registry1081 прежний. Detector6781sources/222generated exclusions,
+1445raw/1224retained/221unresolved,Go21598/21598 EN→RU. Legacy renderer FAIL
+и прежние Bash diagnostics остаются открытыми;полные E2E/live/deploy/QA — NOT RUN.
 
 ## Общие параметры точной ревизии плана — 26.10.2026
 

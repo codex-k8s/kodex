@@ -1,3 +1,4 @@
+import { runtimePolicyFixture } from "@/test-utils/runtime-policy-fixture";
 import { createDeferred } from "@/test-utils/create-deferred";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -40,25 +41,15 @@ const runtimeImage = {
   digest: "f".repeat(64),
 };
 
-const runtimePolicy = {
-  resources: defaultRuntimeEnvironmentPolicy().resources,
-  volumes: [],
-  network: {
-    denyByDefault: true,
-    egress: [
-      { destination: "DNS", protocol: "TCP", port: 53 },
-      { destination: "DNS", protocol: "UDP", port: 53 },
-      { destination: "PROVIDER_PROXY", protocol: "TCP", port: 8084 },
-      { destination: "RUNTIME_CALLBACK", protocol: "TCP", port: 8444 },
-    ],
-    webAccess: { mode: "NONE", rules: [] },
+const runtimePolicy = runtimePolicyFixture(
+  defaultRuntimeEnvironmentPolicy().resources,
+  {
+    resourcesDigest: "1".repeat(64),
+    volumesDigest: "2".repeat(64),
+    networkDigest: "3".repeat(64),
+    rbacDigest: "4".repeat(64),
   },
-  kubernetesAccess: { kind: "NONE", namespace: "kodex-runtime" },
-  resourcesDigest: "1".repeat(64),
-  volumesDigest: "2".repeat(64),
-  networkDigest: "3".repeat(64),
-  rbacDigest: "4".repeat(64),
-} satisfies RuntimeEnvironmentPolicy;
+) satisfies RuntimeEnvironmentPolicy;
 
 vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   ...(await importOriginal<

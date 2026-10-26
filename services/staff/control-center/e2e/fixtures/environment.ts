@@ -1,3 +1,4 @@
+import { runtimePolicyFixture } from "../../src/test-utils/runtime-policy-fixture";
 import { expect, type Page } from "@playwright/test";
 import { verifiedInventoryFixture } from "../../src/test-utils/image-inventory-fixture";
 import {
@@ -101,25 +102,12 @@ export async function installEnvironmentFixture(
         reference: `registry.invalid/test@sha256:${digest}`,
         digest,
       },
-      policy: {
-        resources: policy.resources,
-        volumes: [],
-        network: {
-          denyByDefault: true,
-          egress: [
-            { destination: "DNS", protocol: "TCP", port: 53 },
-            { destination: "DNS", protocol: "UDP", port: 53 },
-            { destination: "PROVIDER_PROXY", protocol: "TCP", port: 8084 },
-            { destination: "RUNTIME_CALLBACK", protocol: "TCP", port: 8444 },
-          ],
-          webAccess: { mode: "NONE", rules: [] },
-        },
-        kubernetesAccess: { kind: "NONE", namespace: "kodex-runtime" },
+      policy: runtimePolicyFixture(policy.resources, {
         resourcesDigest: digest,
         volumesDigest: digest,
         networkDigest: digest,
         rbacDigest: digest,
-      },
+      }),
     },
   };
   const recipe: RoleImageRecipeDetail = {
