@@ -4,11 +4,40 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.511.0
+version: 1.512.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие параметры точной ревизии плана — 26.10.2026
+
+Приватный `planRevisionMutationOptions` объединяет три точных объекта path/body/
+headers/signal внутри прежних mutation callbacks. validateAssistantPlan,
+applyAssistantPlan и rejectAssistantPlan,разные типы readback,plan.version,
+mutate и .data остаются у adapters. Typed SDK routes validation/application/
+rejection и их body revision/200 responses не менялись;updateAssistantPlanDraft
+с другим summary/operations body не затронут. Helper не выбирает operation,
+ресурсную version,retry,authority или lifecycle. MutationHeaders import type-only.
+
+Whole-module inverse восстанавливает весь исходник после Prettier formatting;
+тело helper совпало со всеми тремя native options. Actual helper и native
+expressions:360пар/720executions,два refs,три revisions,четыре If-Match и
+отказы чтения ref/revision/header/signal. Порядок getter/signal,точные параметры,
+новые objects,неизменность входов и identity ошибок сохранены;helper не читает
+ресурсную version. Шесть mutants revision/ref/SDK/version/argument/signal
+отвергнуты. Реальных API/HTTP вызовов не было.
+
+Полные PWA unit:413files/4114tests58.13s,FAIL/SKIP0. Format/check0.37s,
+lint8.78s,typecheck48.55s,production build8.64s — PASS LOCAL с envDir:false.
+Прежний Vite chunk>500kB warning сохраняется,это не zero-warning build.
+Официальная TypeScript Compiler API документация проверена,Context7 ранее
+отклонил API key;версии не менялись,публичные mirror tests для glue не добавлялись.
+
+Пять quality stages — PASS LOCAL. Удалено raw окно6a9a0739,новых нет;
+registry1081 прежний. Detector6779sources/222generated exclusions,
+1448raw/1224retained/224unresolved,Go21598/21598 EN→RU. Legacy renderer FAIL
+и прежние Bash diagnostics остаются открытыми;полные E2E/live/deploy/QA — NOT RUN.
 
 ## Общая request-обвязка корзины проекта — 26.10.2026
 

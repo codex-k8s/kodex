@@ -32,7 +32,11 @@ import type {
   AssistantScope,
   ListAssistantConversationsResponse,
 } from "@/shared/api/generated/openapi/types.gen";
-import { mutate, mutateWithRetry } from "@/shared/api/mutation";
+import {
+  mutate,
+  mutateWithRetry,
+  type MutationHeaders,
+} from "@/shared/api/mutation";
 import { unwrap } from "@/shared/api/problem";
 import { readWithRetry } from "@/shared/api/read-retry";
 
@@ -348,12 +352,7 @@ export async function validatePlanDraft(
   return (
     await mutate(
       (headers) =>
-        validateAssistantPlan({
-          path: { planRef: plan.ref },
-          body: { revision: plan.revision },
-          headers: versionedMutationHeaders(headers),
-          signal: requestSignal(),
-        }),
+        validateAssistantPlan(planRevisionMutationOptions(plan, headers)),
       plan.version,
     )
   ).data;
@@ -365,12 +364,7 @@ export async function applyPlanDraft(
   return (
     await mutate(
       (headers) =>
-        applyAssistantPlan({
-          path: { planRef: plan.ref },
-          body: { revision: plan.revision },
-          headers: versionedMutationHeaders(headers),
-          signal: requestSignal(),
-        }),
+        applyAssistantPlan(planRevisionMutationOptions(plan, headers)),
       plan.version,
     )
   ).data;
@@ -382,13 +376,22 @@ export async function rejectPlanDraft(
   return (
     await mutate(
       (headers) =>
-        rejectAssistantPlan({
-          path: { planRef: plan.ref },
-          body: { revision: plan.revision },
-          headers: versionedMutationHeaders(headers),
-          signal: requestSignal(),
-        }),
+        rejectAssistantPlan(planRevisionMutationOptions(plan, headers)),
       plan.version,
     )
   ).data;
+}
+
+// Собирает прежние параметры точной ревизии внутри mutation callback. SDK-операция, version
+// ресурса, retry и разные типы readback остаются у исходных validate/apply/reject adapters.
+function planRevisionMutationOptions(
+  plan: AssistantPlan,
+  headers: MutationHeaders,
+) {
+  return {
+    path: { planRef: plan.ref },
+    body: { revision: plan.revision },
+    headers: versionedMutationHeaders(headers),
+    signal: requestSignal(),
+  };
 }
