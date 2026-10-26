@@ -31,11 +31,7 @@ func RunAdmissionController(lifecycle, shutdownBase context.Context, buildVersio
 	}
 	startup, cancelStartup := context.WithTimeout(lifecycle, config.RequestTimeout)
 	defer cancelStartup()
-	telemetryConfig, err := sharedobservability.RuntimeConfigFromEnv(admissionControllerServiceName, buildVersion)
-	if err != nil {
-		return err
-	}
-	telemetry, err := sharedobservability.NewRuntime(startup, telemetryConfig)
+	telemetry, err := sharedobservability.NewRuntimeFromEnv(startup, admissionControllerServiceName, buildVersion)
 	if err != nil {
 		return err
 	}

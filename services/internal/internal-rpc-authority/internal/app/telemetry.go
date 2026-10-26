@@ -43,11 +43,7 @@ func startTelemetry(
 	serviceName string,
 	buildVersion string,
 ) (*appTelemetry, *slog.Logger, error) {
-	config, err := observability.RuntimeConfigFromEnv(serviceName, buildVersion)
-	if err != nil {
-		return nil, nil, err
-	}
-	runtime, err := observability.NewRuntime(ctx, config)
+	runtime, err := observability.NewRuntimeFromEnv(ctx, serviceName, buildVersion)
 	if err != nil {
 		return nil, nil, err
 	}

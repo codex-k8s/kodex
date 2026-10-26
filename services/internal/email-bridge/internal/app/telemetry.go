@@ -11,11 +11,7 @@ import (
 // newTelemetry loads the canonical process telemetry configuration, preserving SDK disablement and exact exporter pins before runtime construction.
 // newTelemetry читает каноническую конфигурацию телеметрии процесса, сохраняя отключение SDK и точные привязки экспорта до создания runtime.
 func newTelemetry(ctx context.Context, version string) (*observability.Runtime, error) {
-	config, err := observability.RuntimeConfigFromEnv("email-bridge", version)
-	if err != nil {
-		return nil, err
-	}
-	return observability.NewRuntime(ctx, config)
+	return observability.NewRuntimeFromEnv(ctx, "email-bridge", version)
 }
 
 // telemetryShutdown narrows cleanup ownership to tracing and Sentry, allowing independent budget assertions without real exporters.

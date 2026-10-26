@@ -3,6 +3,30 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "services/external/integration-gateway/internal/app/app.go",
+      "secondPath": "services/jobs/artifact-retention/internal/app/app.go",
+      "fragmentSHA256": "231dc5de5f94fe9b3dbb5f7f8f60b163d8c2fac514db80b01ab08a8ca35f81e1",
+      "count": 1,
+      "reason": "Остаточное109-token окно соединяет локальный loadConfig, создание startup deadline/cancel и вызовы общей телеметрии/logger/metrics. Дублировавшийся алгоритм чтения environment и NewRuntime уже вынесен в NewRuntimeFromEnv и используется14 callers. Gateway затем создаёт свои businessmetrics и RPC, retention — PostgreSQL/объектное хранилище и собственные collectors. Полный generic composition wrapper скрыл бы разные config types, порядок startup и владение cleanup ради коротких вызовов существующих primitives. Сохранена только эта пара путей/hash/count1; другие startup blocks и ошибки не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/interaction-gateway/internal/app/app.go",
+      "secondPath": "services/jobs/automation-scheduler/internal/app/app.go",
+      "fragmentSHA256": "8f51713796ff43b20a03cc6c6048db8f9ab3cfcd06464986550c3ea900c2115a",
+      "count": 1,
+      "reason": "Окно191 tokens пересекает хвост imports, две issuer-константы и начала разных composition roots interaction gateway/scheduler. Чтение настроек и создание telemetry уже общие NewRuntimeFromEnv; ограниченный shutdown уже исполняется RunShutdown с двумя явными descriptors tracing/Sentry. Сервис сохраняет момент регистрации defer, independent shutdownBase, имена/сроки операций и объединение named resultErr; scheduler добавляет business collectors до RPC, interaction создаёт adapter/source workers. Обобщение полного startup/defer потребовало бы передачи локальных callbacks/config и скрыло lifecycle без нового технического алгоритма. Решение ограничено этим точным окном двух путей/hash/count1, не остальными shutdown paths или файлами."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/interaction-gateway/internal/app/app.go",
+      "secondPath": "services/jobs/role-image-builder/internal/app/admission_controller.go",
+      "fragmentSHA256": "d3678e08436f1f0b984c5e8a87adb7b2cda5484453f3ec60ceae3c6ad1880ca1",
+      "count": 1,
+      "reason": "Перекрывающееся103-token окно сравнивает начала Run interaction и RunAdmissionController после общего NewRuntimeFromEnv. Это разные loadConfig/loadAdmissionControllerConfig, StartupTimeout/RequestTimeout, serviceName/admissionControllerServiceName и разные имена tracing/Sentry cleanup. Исполняемые общие primitives уже NewRuntimeFromEnv и RunShutdown; оставлять локальные context/defer/return позволяет видеть точные budgets и порядок ошибок. Универсальный composition callback ради этих вызовов смешал бы независимые workload identities и владельцев shutdown. Исключено только данное окно/hash/count1, не lifecycle или другие совпадения."
+    },
+    {
+      "format": "go",
       "firstPath": "services/external/control-api-gateway/internal/transport/http/access_endpoints.go",
       "secondPath": "services/external/control-api-gateway/internal/transport/http/runtime_configuration_endpoints.go",
       "fragmentSHA256": "a886a0d49e62d67ff1f1646c4db93b7a02f90429888bb955d5d83af511cd96cf",
@@ -235,38 +259,6 @@
     },
     {
       "format": "go",
-      "firstPath": "services/internal/runtime-controller/internal/app/app.go",
-      "secondPath": "services/internal/secret-broker/internal/app/app.go",
-      "fragmentSHA256": "db70f9d68ba7b3ed2a6dfbf3c160c0d631bd726f75d6117127e80bb739bcd5ab",
-      "count": 1,
-      "reason": "Совпало только начало двух composition roots: загрузка независимых nominal Config, собственный startup context и уже общие RuntimeConfigFromEnv/NewRuntime/Logger. Сама telemetry runtime не копируется; дальше secret-broker задаёт иной metrics subsystem и закрытый RPC methods registry, controller — свой registry и runtime workers. Универсальная callback-обёртка над несколькими проверками ошибок не устранила бы реализации, но скрыла бы принадлежность startup/shutdown и последующей сборки. Сохранено точное 114-token окно, не Run целиком."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/external/control-api-gateway/internal/app/app.go",
-      "secondPath": "services/external/integration-gateway/internal/app/app.go",
-      "fragmentSHA256": "1ce58f2a99a287c116a9b473955f5f2c68f64be0c0a3911def0ee0134e0056bc",
-      "count": 1,
-      "reason": "Совпало начало двух composition roots: загрузка разных nominal Config, startup timeout и вызовы уже общих RuntimeConfigFromEnv/NewRuntime. HTTP worker вынесен отдельно в httpserver.Worker, а этот фрагмент не содержит новой общей runtime-реализации. Config принадлежат разным deployable и имеют разные ошибки, поля и зависимости; общий callback-конструктор скрыл бы место startup deadline и последующий порядок cleanup. Сохранено только точное окно, не Run целиком."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/external/integration-gateway/internal/app/app.go",
-      "secondPath": "services/external/interaction-gateway/internal/app/app.go",
-      "fragmentSHA256": "74f875c118fa59529ff4cba25baed3af9533ca41308a83adc669ee3582ad4735",
-      "count": 1,
-      "reason": "Окно включает локальные issuer UID/GID и последовательность загрузки разных Config, startup context и общей observability runtime. Identical Serve worker действительно вынесен в httpserver.Worker; оставшееся является явной сборкой независимых процессов, а не дублированным primitive. Interaction регистрирует deferred telemetry cleanup сразу после startup, integration выполняет его в терминальной цепочке после workers. Унификация root скроет это различие жизненного цикла; оставлено точное окно."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/external/integration-gateway/internal/app/app.go",
-      "secondPath": "services/jobs/automation-scheduler/internal/app/app.go",
-      "fragmentSHA256": "02aece9e5d50a7185bdd726ccf9d92018d9e7638b91b2a88ce8e105acd29feb2",
-      "count": 1,
-      "reason": "Совпала оболочка composition root с issuer constants, собственной типизированной конфигурацией и вызовами существующей общей telemetry runtime. Scheduler и integration имеют разные startup/worker/cleanup цепочки; scheduler также сам останавливает и join-ит HTTP Serve при отмене, тогда как integration оставляет Shutdown владельцу. Общая root-обёртка потребует callbacks для разных Config и смешает эти обязанности, не устраняя отдельной реализации. Сохранено только это окно, не lifecycle целиком."
-    },
-    {
-      "format": "go",
       "firstPath": "services/external/integration-gateway/internal/app/app.go",
       "secondPath": "services/jobs/automation-scheduler/internal/app/app.go",
       "fragmentSHA256": "05beed9ad5907c62b4ad08bdfe88bae721e4cb5f3b90c26c04e0a96b21417459",
@@ -376,14 +368,6 @@
       "fragmentSHA256": "3cc9792aae4342f36243a471e2e1072a25340e951a38a47fa854421861966005",
       "count": 1,
       "reason": "Совпала форма ingress от STT к authority attestor и restore controller на TCP 8443. Эти политики разрешают разные destination workload и самостоятельные control paths; источники одинаковы, но их доступ не должен зависеть от общей объединённой policy. Оставлено точное окно без расширения selector или изменения cluster manifests."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/external/interaction-gateway/internal/app/app.go",
-      "secondPath": "services/internal/stt-tts-service/internal/app/app.go",
-      "fragmentSHA256": "a7e29e06fc491086f03aba9f2f19c51a437f845904edfcb85dfd8229c6c66e06",
-      "count": 1,
-      "reason": "Окно охватывает композицию loadConfig, caller-owned startup context и последовательные RuntimeConfigFromEnv/NewRuntime в двух процессах. Сами telemetry primitives уже находятся в observability; общий env-reading wrapper нарушил бы GO-DOC-006, а startup timeout и cleanup принадлежат разным composition roots. Сохраняется wiring этого точного окна, а не локальная копия exporter/runtime реализации."
     },
     {
       "format": "protobuf",

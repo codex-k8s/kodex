@@ -4,11 +4,58 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.515.0
+version: 1.516.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общее создание телеметрии из environment — 26.10.2026
+
+NewRuntimeFromEnv в существующей observability объединяет последовательные
+RuntimeConfigFromEnv и NewRuntime для14 composition callers в13 deployables.
+Имена/version и startup/ctx передаются прежние. Обе функции неизменны:
+сохраняются bounded DSN read, sampler validation, exact OTLP/Sentry pins,
+SDK-disabled no-op и глобальные propagation/tracing effects. Ошибки возвращаются
+без подмены,повтора или fallback;caller сохраняет свой return tuple.
+
+Helper не создаёт контекст,deadline,worker или cleanup. Startup timeout/cancel,
+момент регистрации defer,раздельные tracing/Sentry budgets,имена операций,
+resultErr joins и порядок readiness/clients/workers остаются у callers.
+У role-image-builder ранняя config error присваивает state.telemetry nil:
+state до этого создан с nil telemetry,не передан worker и не изменён;оба
+cleanup callbacks уже защищены nil guards. Чтение ctx/name/version как локальных
+переменных/констант раньше environment не имеет внешнего эффекта.
+
+15 полных source inverses после GoFmt восстанавливают исходники,включая
+constructor/config bodies,imports/comments/directives и самостоятельный cleanup.
+Десять частных изменений error/context/identity/fallback/cancel/budget/cleanup/
+assignment отвергнуты. Частная overlay вызывает actual helper и прежний
+двухшаговый путь:7 профилей,8PASS events/0FAIL/0SKIP за1.57s. Проверены disabled,
+отменённый context при disabled,metadata/sampler/DSN failures и отсутствующий
+локальный CA;экспортёр не соединялся с сетью. Публичный mirror test не добавлялся.
+
+14 модулей:все build и vet PASS LOCAL. Полные unit13 модулей:10239PASS,
+44условных SKIP,0FAIL. Прямой host unit STT дал FAIL:ffmpeg отсутствует;
+тот же исходный код через overlay всех15 файлов повторил22 тех же fail events
+за4.59s. Этот отказ не скрыт. Правильная публичная точка
+`bash tools/code-quality/test-stt-unit.sh` прошла за56.37s:закреплённые
+Go1.26.6/ffmpeg8.0.1,read-only source mounts,network none,без runtime env.
+Все unit и build успешны,12 package PASS events с повторными focused probes,
+FAIL0. Real provider и MediaRecorder fixtures — NOT RUN,а не PASS.
+STT vet на host прошёл отдельно за1.42s. Пробная распаковка Ubuntu deb
+в частный каталог не меняла системные пакеты;она не использовалась для
+итогового PASS. Source hashes15 файлов совпали во всех итоговых проверках.
+
+Публичные17 quality unit-тестов — PASS. Пять quality stages — PASS LOCAL.
+Удалены8 raw окон,добавлены3 остаточных composition окна:для них адресно
+сохранены разные local config/startup/cleanup identities и сроки после
+фактического выноса общего алгоритма. Удалены5 отсутствующих старых записей,
+остальные1076 сохранены,registry1079. Detector6782sources/222generated exclusions,
+1437raw/1222retained/215unresolved,Go21600/21600 EN→RU. Context7 ранее отклонил
+API key;использованы официальные Go/pgx docs,зависимости продукта не менялись.
+Legacy renderer FAIL и прежние Bash diagnostics остаются открытыми;
+полные E2E/live/deploy/QA — NOT RUN.
 
 ## Общее сканирование системного ассистента — 26.10.2026
 

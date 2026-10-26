@@ -113,6 +113,24 @@ func RuntimeConfigFromEnv(serviceName, serviceVersion string) (RuntimeConfig, er
 	return config, nil
 }
 
+// NewRuntimeFromEnv loads the canonical environment configuration and constructs the runtime
+// under the caller's context, returning either error unchanged without a fallback. Successful
+// construction retains NewRuntime's process-global propagation/tracing effects; tracing and
+// Sentry shutdown, their independent budgets and all startup/worker ownership stay with the
+// caller. This function creates no root context and starts no additional worker of its own.
+// NewRuntimeFromEnv читает каноническую конфигурацию окружения и создаёт runtime в контексте
+// вызывающего; обе ошибки передаются без подмены и запасного пути. Успешное создание сохраняет
+// глобальные эффекты NewRuntime для propagation/tracing; завершение tracing/Sentry, отдельные
+// бюджеты и владение startup/workers остаются у вызывающего. Функция не создаёт корневого
+// контекста и не запускает дополнительных собственных workers.
+func NewRuntimeFromEnv(ctx context.Context, serviceName, serviceVersion string) (*Runtime, error) {
+	config, err := RuntimeConfigFromEnv(serviceName, serviceVersion)
+	if err != nil {
+		return nil, err
+	}
+	return NewRuntime(ctx, config)
+}
+
 // NewRuntime validates configuration and installs global propagation and tracing, choosing no-op mode or a TLS-pinned OTLP exporter plus isolated Sentry client with bounded cleanup on Sentry failure.
 // NewRuntime проверяет конфигурацию и устанавливает глобальные распространение и трассировку, выбирая no-op либо закреплённый TLS OTLP-exporter с отдельным Sentry-клиентом и ограниченной очисткой при отказе Sentry.
 func NewRuntime(ctx context.Context, config RuntimeConfig) (*Runtime, error) {
