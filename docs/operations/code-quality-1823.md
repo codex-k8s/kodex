@@ -4,11 +4,57 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.503.0
+version: 1.504.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие операции курсора, lookahead и SQL-аргументов каталогов — 26.10.2026
+
+Memory/skill catalogs переиспользуют decodeCatalogRevisionCursor для прежнего
+signed base10/int64 positive cursor,catalogPageWithCursor для четырёх lookahead
+страниц и contextCatalogPageArgs для двух совпадающих strict SQL argument maps.
+Пустая первая revision page даёт0;плюс/ведущие нули допускаются как прежде,
+неверная/нулевая/отрицательная/overflow позиция отклоняется. Unsigned scope digest
+не является authority. Args helper сохраняет10ключей/значений,lookahead limit+1
+и однократный UTC clock sample на прежнем шаге QueryRow arguments. Разные SQL
+и eligibility остаются у callers;helpers не обращаются к БД/сети и не решают доступ.
+
+Caller сохраняет5s timeout,resolveScope,hardcoded kind/filter,разные memory/skill
+access guards,read-only repeatable-read transaction,rollback/commit,error
+mapping и total. Проекция сохраняет backing array/capacity,nil/empty,trim до
+последней видимой строки и callback только при lookahead. Три новых helpers
+подробно описаны EN→RU,новых публичных зеркальных тестов не добавлено.
+
+164 парных сценария native fragments/current helpers,328 evaluations,используют
+private Go overlay с восемью actual source fragments и настоящим catalog
+decoder. Проверены grammar/range,tenant/actor/authority-project/kind/filter/
+resource,version/encoding/size limits,page-size exception,nil/empty/below/exact/
+excess страницы,alias/capacity,callback/last-visible cursor,SQL argument bindings
+и fresh UTC time. Исходные snippets взяты до рефакторинга;10 args cases добавлены
+при расширении пакета. Три whole-source AST inverses восстановили оба catalog
+и cursor module с comments/directives;новый args module проверен по exact
+signature/imports/return literal двух исходных queries. Восемь caller bindings
+и12 source mutations проверены,включая SQL access mode/eligibility/authority args.
+
+Исходный узкий PG filter без prerequisite дал FAIL memory до чтения истории:
+context projection run conflict. Это было до изменения кода. Добавлен прежний
+предыдущий catalog-cards subtest,подготавливающий observed model catalog.
+Воспроизводимый фильтр трёх subtests до23.96с/после42.80с — PASS LOCAL,
+4 PASS events,FAIL/SKIP0. Каждый прогон использует новый loopback-only pinned
+PostgreSQL container,миграции/пустую template;удаление подтверждено.
+Prerequisite не выдаётся за исправление runtime-дефекта.
+
+Весь control-plane:build15.11с,unit22.30с,vet — exit0. Unit2949 PASS,
+FAIL0,70 conditional SKIP;изменённый PG путь выполнен отдельно выше.
+Форматирование и пять quality stages — PASS LOCAL. Detector6777sources/
+222generated exclusions,1460raw/1221retained/239unresolved,registry1078 прежний.
+Три прежних окна сменились двумя меньшими:оставшийся общий revision SQL
+pipeline остаётся unresolved,исключений не добавлено. Go21593/21593 EN→RU.
+Context7 отклонил ключ;проверены официальные Go strconv.ParseInt и slice
+specification,Go1.26.6 и зависимости не менялись. Legacy renderer FAIL и
+прежние Bash diagnostics сохраняются;full E2E/live/deploy/startup/QA — NOT RUN.
 
 ## Общая оснастка terminal/expiry admission — 26.10.2026
 
