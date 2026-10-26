@@ -8,7 +8,7 @@ fail() {
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 container_name="kodex-control-plane-postgres-${BASHPID}"
-test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestBootstrapComponent|TestWorkerGrantInstancesComponent|TestTrustedWorkloadGenerationComponent|TestAssistantCredentialScopesComponent|TestAssistantParallelLifecycleComponent|TestProjectAssistantProfilesComponent|TestOrganizationRoleImagesComponent|TestOrganizationRuntimeEnvironmentComponent|TestOrganizationRuntimeSecretComponent|TestAssistantSystemRunProjectScopeComponent|TestRuntimeTerminalStorageComponent|TestIntegrationGateFeedbackComponent|TestWorkflowMetadataDraftComponent|TestDeletedEnvironmentSecretRetentionComponent|TestHistoricalEnvironmentSecretAdmissionComponent|TestHistoricalSecretRecoveryConcurrencyComponent|TestWorkflowGateDecisionsComponent|TestCompletionReceiptComponent|TestUsageCompletenessComponent|TestRepositoryBundlePublicationComponent|TestCommitAckArtifactComponent|TestOwnerGateExpiryComponent|TestOwnerGateExpiryMigrationProofComponent)$'}}
+test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestBootstrapComponent|TestWorkerGrantInstancesComponent|TestTrustedWorkloadGenerationComponent|TestAssistantCredentialScopesComponent|TestAssistantParallelLifecycleComponent|TestProjectAssistantProfilesComponent|TestOrganizationRoleImagesComponent|TestOrganizationRuntimeEnvironmentComponent|TestOrganizationRuntimeSecretComponent|TestAssistantSystemRunProjectScopeComponent|TestRuntimeTerminalStorageComponent|TestIntegrationGateFeedbackComponent|TestWorkflowMetadataDraftComponent|TestDeletedEnvironmentSecretRetentionComponent|TestHistoricalEnvironmentSecretAdmissionComponent|TestHistoricalSecretRecoveryConcurrencyComponent|TestWorkflowGateDecisionsComponent|TestCompletionReceiptComponent|TestUsageCompletenessComponent|TestRepositoryBundlePublicationComponent|TestCommitAckArtifactComponent|TestOwnerGateExpiryComponent|TestOwnerGateExpiryMigrationProofComponent|TestProjectPurgeAuthorityComponent|TestProjectPurgeAuthorityMigrationProofComponent)$'}}
 
 cleanup() {
   docker stop --time 5 "$container_name" >/dev/null 2>&1 || true
@@ -109,6 +109,20 @@ run_migration() {
   run_migration up
   run_migration status >/dev/null
   run_migration up
+  if [[ "$test_pattern" == *TestProjectPurgeAuthority* ]]; then
+    psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" \
+      --no-password -X -qAt -v ON_ERROR_STOP=1 \
+      --file "$repository_root/tools/release/project-purge-authority-migration-postcondition.sql" | \
+      node --input-type=module -e '
+        const {pathToFileURL} = await import("node:url");
+        const {validProjectPurgeAuthorityMigrationPostcondition} = await import(pathToFileURL(process.argv[1]));
+        let input = "";
+        for await (const chunk of process.stdin) input += chunk;
+        if (!validProjectPurgeAuthorityMigrationPostcondition(JSON.parse(input)))
+          throw new Error("Project purge authority postcondition failed");
+        process.stdout.write("Project purge authority read-only query passed\n");
+      ' "$repository_root/tools/release/control-plane-immutable-migration.mjs"
+  fi
   retention_reference_count=$(psql "$runtime_dsn" --no-password -X -qAt -v ON_ERROR_STOP=1 \
     -c "SELECT control_plane.skill_artifact_reference_count('00000000-0000-4000-8000-000000000001'::uuid,'art_component',1,'sha256:' || repeat('0',64))")
   [[ "$retention_reference_count" == "0" ]] || fail 'artifact retention trigger dependency is unavailable'
@@ -123,7 +137,7 @@ run_migration() {
         const {validRepositoryBundleMigrationPostcondition} = await import(pathToFileURL(process.argv[1]));
         let input = "";
         for await (const chunk of process.stdin) input += chunk;
-        if (!validRepositoryBundleMigrationPostcondition(JSON.parse(input), 20261026000100))
+        if (!validRepositoryBundleMigrationPostcondition(JSON.parse(input), 20261026000200))
           throw new Error("Repository bundle schema postcondition failed");
         process.stdout.write("Repository bundle schema read-only query passed\n");
       ' "$repository_root/tools/release/control-plane-immutable-migration.mjs"
@@ -137,7 +151,7 @@ run_migration() {
         const {validOwnerGateExpiryMigrationPostcondition} = await import(pathToFileURL(process.argv[1]));
         let input = "";
         for await (const chunk of process.stdin) input += chunk;
-        if (!validOwnerGateExpiryMigrationPostcondition(JSON.parse(input)))
+        if (!validOwnerGateExpiryMigrationPostcondition(JSON.parse(input), 20261026000200))
           throw new Error("Owner gate expiry schema postcondition failed");
         process.stdout.write("Owner gate expiry schema read-only query passed\n");
       ' "$repository_root/tools/release/control-plane-immutable-migration.mjs"

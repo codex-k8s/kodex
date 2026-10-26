@@ -11,6 +11,7 @@ import { activeDeploymentPods, isProvenStoppedPod } from './stable-archive-trans
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'project-purge-authority': {version:'20261026000200',file:'20261026000200_project_purge_authority_acl.sql',annotation:'kodex.dev/cp-project-purge-authority-migration-plan',previousVersion:20261026000100,emptyField:'purgeAuthoritySafeToMigrate',preconditionFile:'project-purge-authority-migration-precondition.sql',postconditionFile:'project-purge-authority-migration-postcondition.sql'},
   'owner-gate-expiry': {version:'20261026000100',file:'20261026000100_owner_gate_expiry.sql',annotation:'kodex.dev/cp-owner-gate-expiry-migration-plan',previousVersion:20261025000200,emptyField:'expiryAbsent',preconditionFile:'owner-gate-expiry-migration-precondition.sql',postconditionFile:'owner-gate-expiry-migration-postcondition.sql'},
   'outbox-index': {version:'20261025000100',file:'20261025000100_outbox_unpublished_predecessor_index.sql',annotation:'kodex.dev/cp-outbox-index-migration-plan',previousVersion:20261020000200,emptyField:'indexAbsent',preconditionFile:'control-plane-migration-precondition.sql'},
   'repository-bundle': {version:'20261025000200',file:'20261025000200_repository_bundle_publications.sql',annotation:'kodex.dev/cp-repository-bundle-migration-plan',previousVersion:20261025000100,emptyField:'publicationAbsent',preconditionFile:'repository-bundle-migration-precondition.sql',postconditionFile:'repository-bundle-migration-postcondition.sql'},
@@ -391,7 +392,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
         ensure(fingerprint(postgresIdentity())===fingerprint(plan.postgres),'MIGRATION_POSTGRES_IDENTITY_CHANGED');
         const proof=JSON.parse(kube(['-n',namespace,'exec','-i','kodex-postgresql-0','--','psql','-XqAt','-U','postgres','-d','control_plane','-v','ON_ERROR_STOP=1'],sql));
         ensure(fingerprint(postgresIdentity())===fingerprint(plan.postgres),'MIGRATION_POSTGRES_IDENTITY_CHANGED');
-        ensure((profile==='owner-gate-expiry' ? validOwnerGateExpiryMigrationPostcondition(proof) : validRepositoryBundleMigrationPostcondition(proof)),'MIGRATION_POSTCONDITION_FAILED');
+        ensure(validImmutableMigrationPostcondition(profile,proof),'MIGRATION_POSTCONDITION_FAILED');
         result.schemaPostcondition='PASS';
         if(revalidation) result.revalidation={...revalidation,proof,postgres:plan.postgres,
           execution:pods.map(p=>({podUID:p.metadata.uid,imageID:p.status.containerStatuses.find(c=>c.name==='migrate').imageID}))};
@@ -559,7 +560,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
 
 // Проверяет только metadata точной новой schema; Goose log сам не доказывает безопасный owner/retention/purge профиль.
 export function validRepositoryBundleMigrationPostcondition(proof, expectedVersion = 20261025000200) {
-  return [20261025000200,20261026000100].includes(expectedVersion) && proof?.readOnly==='on' && proof.database==='control_plane' && proof.gooseVersion===expectedVersion &&
+  return [20261025000200,20261026000100,20261026000200].includes(expectedVersion) && proof?.readOnly==='on' && proof.database==='control_plane' && proof.gooseVersion===expectedVersion &&
     proof.tableOwner==='control_plane_owner' && proof.noBodyColumns===true && proof.foreignKeys===13 &&
     proof.deferredForeignKeys===13 && proof.guardEnabled===true && proof.retentionConsumer===true && proof.purgeGraphGuard===true &&
     proof.purgeNodes===105 && proof.purgeEdges===283 && proof.purgeNodeFingerprint==='f51a0de25bd942a250997775617eeaee' &&
@@ -567,8 +568,28 @@ export function validRepositoryBundleMigrationPostcondition(proof, expectedVersi
 }
 
 // Проверяет nullable schema, точные CHECK-условия и неизменяемый срок без чтения бизнес-payload.
-export function validOwnerGateExpiryMigrationPostcondition(proof) {
-  return proof?.readOnly==='on' && proof.database==='control_plane' && proof.gooseVersion===20261026000100 &&
+export function validOwnerGateExpiryMigrationPostcondition(proof, expectedVersion = 20261026000100) {
+  return [20261026000100,20261026000200].includes(expectedVersion) && proof?.readOnly==='on' && proof.database==='control_plane' && proof.gooseVersion===expectedVersion &&
     proof.tableOwner==='control_plane_owner' && ['expiryColumn','stateConstraint','resolutionConstraint',
       'expiryConstraint','dueIndex','immutableGuard','runtimeExecute','publicExecuteRevoked'].every(key=>proof[key]===true);
+}
+
+// Проверка включает effective grants всех runtime members и column-level privileges;
+// отсутствие прямого table grant само по себе не доказывает закрытую запись.
+export function validProjectPurgeAuthorityMigrationPostcondition(proof) {
+  return proof?.readOnly==='on' && proof.database==='control_plane' && proof.gooseVersion===20261026000200 &&
+    proof.tables===2 && Number.isSafeInteger(proof.runtimeRoles) && proof.runtimeRoles>=2 &&
+    Number.isSafeInteger(proof.runtimeLogins) && proof.runtimeLogins>=1 && proof.runtimeLogins<proof.runtimeRoles &&
+    ['tableOwners','runtimeRolesUnprivileged','runtimeRead','runtimeMutationDenied','runtimeColumnMutationDenied',
+      'runtimeGrantOptionDenied','publicPrivilegesRevoked','ownerWrite','authorizationFunction','contextsEmpty'].every(key=>proof[key]===true);
+}
+
+// Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
+export function validImmutableMigrationPostcondition(profile, proof) {
+  switch (profile) {
+    case 'project-purge-authority': return validProjectPurgeAuthorityMigrationPostcondition(proof);
+    case 'owner-gate-expiry': return validOwnerGateExpiryMigrationPostcondition(proof);
+    case 'repository-bundle': return validRepositoryBundleMigrationPostcondition(proof);
+    default: return false;
+  }
 }
