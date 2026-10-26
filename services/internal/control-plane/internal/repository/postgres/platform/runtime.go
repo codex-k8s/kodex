@@ -506,6 +506,13 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		if failedRoots[candidate.rootRunID] {
 			continue
 		}
+		admitted, err := admitServerWorkflowClaimTx(ctx, tx, scope, candidate.rootRunID)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		if !admitted {
+			continue
+		}
 		// Account lock уже взят; новый statement видит renewal/rotation,
 		// завершившиеся после первоначального candidate snapshot.
 		var providerCredentialEligible bool
@@ -1802,6 +1809,9 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 			return commandOutcome{}, err
 		}
 	}
+	if outcome, handled, err := repository.completeServerWorkflowTx(ctx, tx, scope, lease, payload, artifactRefs); err != nil || handled {
+		return outcome, err
+	}
 	var requiredPending, hasRequiredOrigin bool
 	if tx.QueryRow(ctx, queryWorkflowLaunchRunPending, pgx.StrictNamedArgs{"run_id": lease["runID"], "node_id": lease["nodeID"]}).Scan(&requiredPending, &hasRequiredOrigin) != nil {
 		return commandOutcome{}, errs.ErrUnavailable
@@ -2066,6 +2076,11 @@ func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, 
 	lease, err := repository.lease(ctx, tx, scope, command.LeaseInput{LeaseRef: payload.LeaseRef, Fence: payload.Fence, Generation: payload.Generation}, true)
 	if err != nil {
 		return commandOutcome{}, err
+	}
+	if root, err := readServerWorkflowRootTx(ctx, tx, scope, stringMap(lease, "rootRunID")); err != nil {
+		return commandOutcome{}, err
+	} else if root != nil {
+		return commandOutcome{}, errs.ErrForbidden
 	}
 	var capabilityAllowed, relationshipAllowed, dependenciesReady bool
 	var workflowInstructions, workflowStepName, plannedNodeID, plannedNodeRef, plannedEdgeRef string
@@ -2337,7 +2352,11 @@ func (repository *Repository) scheduleCallbackContinuationTask(ctx context.Conte
 	if _, err := tx.Exec(ctx, queryRuntimeCallbackUpdateSession, pgx.StrictNamedArgs{"session_id": sessionID}); err != nil {
 		return false, errs.ErrUnavailable
 	}
-	if workflowVersionID != "" && requiredContinuation && !strings.HasPrefix(originStepKey, "workflow.coordinator.") {
+	serverRoot, err := readServerWorkflowRootTx(ctx, tx, scope, rootRunID)
+	if err != nil {
+		return false, err
+	}
+	if serverRoot == nil && workflowVersionID != "" && requiredContinuation && !strings.HasPrefix(originStepKey, "workflow.coordinator.") {
 		// Published step сохраняет единственный canonical node/key. Как у
 		// owner CHANGES_REQUESTED, callback создаёт новый Turn и attempt,
 		// не придумывая coordinator alias и не меняя immutable launch origin.

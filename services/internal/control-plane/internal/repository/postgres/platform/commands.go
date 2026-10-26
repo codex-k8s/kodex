@@ -1821,7 +1821,7 @@ func (repository *Repository) launchRunWithAttachmentPolicy(ctx context.Context,
 		return commandOutcome{}, fmt.Errorf("bind root run lineage: %w", errs.ErrUnavailable)
 	}
 	executionTask := payload.Task
-	if payload.Target.Type == "WORKFLOW" {
+	if payload.Target.Type == "WORKFLOW" && workflowVersion.ExecutionMode != workflowservice.ServerDAGV1 {
 		executionTask = workflowCoordinatorTask(payload.Task, workflowVersionRef, workflowVersionDigest, workflowVersion)
 	}
 	turnRef, _ := newRef("trn")
@@ -1844,6 +1844,10 @@ func (repository *Repository) launchRunWithAttachmentPolicy(ctx context.Context,
 		if _, _, err := repository.insertAgentNode(ctx, tx, scope, runID, runID, rootNodeID, payload.Target.Ref, targetName, turnID, payload.Task); err != nil {
 			return commandOutcome{}, fmt.Errorf("insert direct agent execution node: %w", err)
 		}
+	} else if workflowVersion.ExecutionMode == workflowservice.ServerDAGV1 {
+		if err := repository.insertPlannedWorkflowNodes(ctx, tx, scope, projectID, runID, rootNodeID, workflowVersion); err != nil {
+			return commandOutcome{}, err
+		}
 	} else {
 		nodeID, _, err := repository.insertAgentNode(ctx, tx, scope, runID, runID, rootNodeID, coordinatorRef, coordinatorName, turnID, executionTask)
 		if err != nil {
@@ -1861,6 +1865,11 @@ func (repository *Repository) launchRunWithAttachmentPolicy(ctx context.Context,
 	}
 	if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, runID, runRef, "RUN_CREATED", rootNodeRef, "", "", "", "i18n:RUN_CREATED", "RUNNING", "RUNNING"); err != nil {
 		return commandOutcome{}, fmt.Errorf("emit launched run event: %w", err)
+	}
+	if workflowVersion.ExecutionMode == workflowservice.ServerDAGV1 {
+		if err := repository.dispatchServerWorkflowTx(ctx, tx, scope, runID); err != nil {
+			return commandOutcome{}, err
+		}
 	}
 	run, graph, err := repository.readRunGraphTx(ctx, tx, scope, runRef)
 	if err != nil {
@@ -2845,6 +2854,9 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 	}
 	if _, err := tx.Exec(ctx, queryCommandsResolvegateUpdateRunNodesStateFinishedAtVersion, nodeID, nodeState); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if outcome, handled, err := repository.resolveServerWorkflowResultGateTx(ctx, tx, scope, input, rootRunID, gateNodeRef, predecessorNodeID, integrationInvocationID); err != nil || handled {
+		return outcome, err
 	}
 	if payload.Decision == "REQUEST_CHANGES" {
 		comment := strings.TrimSpace(payload.Comment)
