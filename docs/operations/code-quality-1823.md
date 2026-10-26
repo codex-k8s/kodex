@@ -4,11 +4,59 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.504.0
+version: 1.505.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общий технический read path каталогов — 26.10.2026
+
+readScopedContextCatalogPage объединяет resolveScope,cursor validation,bounded
+limit,один typed row fetch,scanJSONCatalog и lookahead для memory/skill lists.
+SQL/args/typed position callback остаются у callers. beginContextCatalogRevision
+объединяет только resolveScope,positive cursor и BeginTx с точными options
+caller. Каждый wrapper сохраняет собственные5s/cancel,явные RepeatableRead/
+ReadOnly,typed current-resource lookup/access guard,defer rollback,commit/error.
+Helper не выбирает permission,deadline,cleanup либо catalog kind. Прежний
+beginScopedTransaction не подставлен напрямую:cursor должен проверяться между
+scope read и BeginTx. Разные memory/skill SQL и eligibility не обобщались.
+
+Ref/page filter literal переносится перед вызовом begin helper:только копии
+неизменяемых локальных значений,без I/O/calls/authority. AST-проверка валидирует
+точную форму literal/options и возвращает его на прежнее место после scope
+при whole-source inverse. Других перестановок политики или операций нет.
+Два новых helpers подробно описаны EN→RU.
+
+Native/current private Go overlay с настоящим disposable PostgreSQL проверил
+40 technical cases:scope/cursor/cancel before fetch,Scan/JSON partial-result
+rejection,nil/empty/total/lookahead,positive revision grammar,actual readonly
+repeatable-read options,caller rollback и отсутствие acquired-connection leak.
+Плюс прежние catalog-cards/memory/skill subtests. Публичный PG entrypoint с
+точным фильтром и private overlay до43.47с/после44.82с:5 PASS events,
+FAIL/SKIP0. Каждый запуск использует fresh pinned loopback-only PG/template,
+удаление подтверждено. Это не полный Bootstrap/E2E PASS. Go wrapper добавляет
+-overlay только к platform test;миграции/другие команды идут неизменённо.
+
+При подготовке private baseline сначала исправлены syntax placeholder и
+неверный выбор Principal fixture:repository получил proof вместо четвёртого,
+уже resolved результата и верно ответил Forbidden. Исправлена только оснастка,
+продукт до успешного baseline не менялся;неудачные результаты сохранены.
+Две whole-file AST inverses восстановили оба исходных файла с comments/
+directives,SQL/callbacks/deadlines/cleanup. Сравнение AST исключает только
+positions/object-resolution bookkeeping,сохраняет семантику и комментарии;
+shared-node identity не является отличием исходного кода. Десять actual
+source mutations отвергнуты,включая SQL/kind,deadline,ReadOnly и rollback.
+
+Весь control-plane:build15.46с,unit40.23с,vet5.08с — exit0;2949 PASS,
+FAIL0,70 conditional SKIP. Изменённый PG путь выполнен отдельно выше.
+Форматирование и пять quality stages — PASS LOCAL. Detector6778sources/
+222generated exclusions,1457raw/1221retained/236unresolved,registry1078 прежний.
+Удалены четыре окна80bc82cc/7d503609/73a4eaf9/a89e04b7,добавлено одно меньшее
+окноf371956a nominal wrappers;оно остаётся unresolved. Go21595/21595 EN→RU.
+Context7 недоступен;официальные pgxpool.BeginTx/pgx.TxOptions проверены,
+версии не менялись. Legacy renderer FAIL и прежние Bash diagnostics сохраняются;
+full E2E/live/deploy/startup/QA — NOT RUN.
 
 ## Общие операции курсора, lookahead и SQL-аргументов каталогов — 26.10.2026
 

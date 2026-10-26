@@ -21,21 +21,12 @@ import (
 func (repository *Repository) ListSkillBundles(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.SkillBundle, int64, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	current, err := repository.resolveScope(ctx, principal)
-	if err != nil {
-		return nil, 0, "", err
-	}
-	cursor, err := decodeCatalogCursor(current, "SKILL_BUNDLE", filter)
-	if err != nil {
-		return nil, 0, "", err
-	}
-	limit := boundedPage(filter.Page)
-	items, total, err := scanJSONCatalog[entity.SkillBundle](repository.pool.QueryRow(ctx, querySkillBundleList, contextCatalogPageArgs(current, filter, cursor, limit)))
-	if err != nil {
-		return nil, 0, "", err
-	}
-	items, next := catalogPageWithCursor(current, "SKILL_BUNDLE", filter, items, limit, func(item entity.SkillBundle) string { return item.Ref })
-	return items, total, next, nil
+	return readScopedContextCatalogPage[entity.SkillBundle](ctx, repository, principal, "SKILL_BUNDLE", filter,
+		func(current scope, cursor string, limit int32) pgx.Row {
+			return repository.pool.QueryRow(ctx, querySkillBundleList, contextCatalogPageArgs(current, filter, cursor, limit))
+		},
+		func(item entity.SkillBundle) string { return item.Ref },
+	)
 }
 
 // ListSkillBundleRevisions authorizes the current bundle before reading revision
@@ -47,19 +38,10 @@ func (repository *Repository) ListSkillBundles(ctx context.Context, principal va
 func (repository *Repository) ListSkillBundleRevisions(ctx context.Context, principal value.Principal, ref string, page query.Page) ([]entity.SkillBundleRevision, int64, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	current, err := repository.resolveScope(ctx, principal)
-	if err != nil {
-		return nil, 0, "", err
-	}
 	filter := query.Filter{ResourceRef: ref, Page: page}
-	before, err := decodeCatalogRevisionCursor(current, "SKILL_REVISION", filter)
+	current, before, tx, err := repository.beginContextCatalogRevision(ctx, principal, "SKILL_REVISION", filter, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return nil, 0, "", err
-	}
-
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return nil, 0, "", errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	record, err := scanSkillBundle(tx.QueryRow(ctx, querySkillBundleGet, current.organizationID, ref))
