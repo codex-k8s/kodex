@@ -40,6 +40,20 @@ SELECT root.ref, run.ref, node.ref, session.ref, turn.ref, agent.ref,
              ON current_step.organization_id = node.organization_id
             AND current_step.root_run_id = root.id
             AND current_step.workflow_step_key = step.value->>'Key'
+            AND (NOT EXISTS (
+                SELECT 1 FROM control_plane.run_nodes rework
+                WHERE rework.organization_id=root.organization_id AND rework.root_run_id=root.id
+                    AND rework.workflow_step_key=step.value->>'Key' AND rework.owner_rework_gate_id IS NOT NULL
+            ) OR (current_step.owner_rework_gate_id IS NOT NULL
+                AND NOT EXISTS (SELECT 1 FROM control_plane.run_edges continuation
+                    WHERE continuation.organization_id=root.organization_id AND continuation.root_run_id=root.id
+                        AND continuation.source_node_id=current_step.id AND continuation.type='CONTINUES')
+                AND NOT EXISTS (SELECT 1 FROM control_plane.runs replacement
+                    JOIN control_plane.run_nodes fresh ON fresh.run_id=replacement.id AND fresh.organization_id=root.organization_id
+                        AND fresh.root_run_id=root.id AND fresh.owner_rework_gate_id IS NOT NULL
+                        AND fresh.owner_rework_origin_node_id IS NULL AND fresh.workflow_step_key=current_step.workflow_step_key
+                    WHERE replacement.organization_id=root.organization_id AND replacement.root_run_id=root.id
+                        AND replacement.retry_of_run_id=current_step.run_id)))
             AND (COALESCE(version.spec->>'ExecutionMode','')<>'SERVER_DAG_V1' OR NOT EXISTS (
                 SELECT 1 FROM control_plane.run_nodes newer
                 WHERE newer.organization_id=current_step.organization_id AND newer.root_run_id=current_step.root_run_id

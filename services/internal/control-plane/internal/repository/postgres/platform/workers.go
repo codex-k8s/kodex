@@ -1230,6 +1230,17 @@ func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context
 		capability.Risk != risk || !capability.AllowsApprovalPolicy(approvalPolicy) || capability.ResourceScope.Kind != resourceKind || grantVersion < 1 {
 		return nil, errs.ErrForbidden
 	}
+	legacyRework, reworkErr := isLegacyReworkNodeTx(ctx, tx, scope, nodeID)
+	if reworkErr != nil {
+		return nil, reworkErr
+	} else if legacyRework {
+		if capability.Risk != "READ" {
+			return nil, errs.ErrLegacyReworkScopeUnsupported
+		}
+		if err := repository.validateLegacyReworkNodeAuthorityTx(ctx, tx, scope, nodeID); err != nil {
+			return nil, err
+		}
+	}
 	if definitionKey == "context7" {
 		if err := requireCurrentManagedMCPHealth(ctx, tx, scope.organizationID, nodeID, input["connection_ref"]); err != nil {
 			return nil, err
@@ -1328,6 +1339,17 @@ func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context
 		approvalScopeBinding = approvalScopeID
 	}
 	var invocationID, resolvedRef, resolvedState string
+	if legacyRework && state == "WAITING_APPROVAL" {
+		// The native owner selector already holds the exact node FOR UPDATE, serializing this slot with concurrent allocations.
+		// Native owner selector уже держит точный node FOR UPDATE, сериализуя slot с конкурентными allocation.
+		var available bool
+		if tx.QueryRow(ctx, queryLegacyReworkReadSlot, pgx.StrictNamedArgs{"organization_id": scope.organizationID, "node_id": nodeID, "idempotency_key": input["idempotency_key"]}).Scan(&available) != nil {
+			return nil, errs.ErrUnavailable
+		}
+		if !available {
+			return nil, errs.ErrLegacyReworkScopeUnsupported
+		}
+	}
 	if err := tx.QueryRow(ctx, queryWorkersResolveintegrationinvocationInsertIntegrationInvocationsRefRunIdConnectionId,
 		invocationRef, scope.organizationID, runID, nodeID, connectionID, grantID, input["capability_key"],
 		capability.Operation, input["idempotency_key"], intentDigestHex, inputDigestHex, canonicalInput, state,

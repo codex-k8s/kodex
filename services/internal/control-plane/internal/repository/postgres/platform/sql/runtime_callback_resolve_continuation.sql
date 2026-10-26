@@ -95,6 +95,14 @@ WHERE parent_node.organization_id = @organization_id::uuid
   AND parent_node.id = @parent_node_id::uuid
   AND parent_node.state = 'SUCCEEDED'
   AND NOT EXISTS (
+      SELECT 1 FROM control_plane.run_edges rework_callback
+      JOIN control_plane.run_nodes rework ON rework.id=rework_callback.source_node_id
+          AND rework.organization_id=parent_node.organization_id AND rework.root_run_id=root.id
+          AND rework.owner_rework_gate_id IS NOT NULL
+      WHERE rework_callback.organization_id=parent_node.organization_id AND rework_callback.root_run_id=root.id
+          AND rework_callback.target_node_id=parent_node.id AND rework_callback.type='CALLBACK_TO'
+  )
+  AND NOT EXISTS (
       SELECT 1 FROM control_plane.required_workflow_launches launch
       WHERE launch.origin_node_id=parent_node.id AND launch.state='OPEN'
   )

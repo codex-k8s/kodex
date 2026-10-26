@@ -2865,7 +2865,60 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 	if outcome, handled, err := repository.resolveServerWorkflowResultGateTx(ctx, tx, scope, input, rootRunID, gateNodeRef, predecessorNodeID, integrationInvocationID); err != nil || handled {
 		return outcome, err
 	}
-	if payload.Decision == "REQUEST_CHANGES" {
+	var legacyRework *legacyReworkContext
+	if integrationInvocationID == "" {
+		legacyRework, err = readLegacyReworkContextTx(ctx, tx, scope, rootRunID, gateID, predecessorNodeID)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+	}
+	legacyRootClosed := false
+	if legacyRework != nil {
+		switch payload.Decision {
+		case "REQUEST_CHANGES":
+			predecessorNodeRef, err = repository.createLegacyWorkflowReworkTx(ctx, tx, scope, legacyRework, attachmentSet)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+		case "APPROVE":
+			pendingDelivery, pendingErr := legacyReworkDeliveryPendingTx(ctx, tx, scope, rootRunID)
+			if pendingErr != nil {
+				return commandOutcome{}, pendingErr
+			}
+			if legacyRework.ReworkGateID != "" || pendingDelivery {
+				if err := repository.validateLegacyReworkAuthorityTx(ctx, tx, scope, legacyRework); err != nil {
+					return commandOutcome{}, err
+				}
+				parent, err := lockLegacyReworkParentTx(ctx, tx, scope, legacyRework)
+				if err != nil {
+					return commandOutcome{}, err
+				}
+				continued, err := repository.scheduleLegacyReworkContinuationTx(ctx, tx, scope, parent.ID, projectID)
+				if err != nil {
+					return commandOutcome{}, err
+				}
+				if !continued {
+					var open, active int64
+					if tx.QueryRow(ctx, queryCommandsResolvegateCountOpenGates, pgx.StrictNamedArgs{"organization_id": scope.organizationID, "root_run_id": rootRunID}).Scan(&open) != nil || tx.QueryRow(ctx, queryCommandsResolvegateSelectActiveAgentNodes, rootRunID).Scan(&active) != nil {
+						return commandOutcome{}, errs.ErrUnavailable
+					}
+					pending, err := legacyReworkDeliveryPendingTx(ctx, tx, scope, rootRunID)
+					if err != nil {
+						return commandOutcome{}, err
+					}
+					if open == 0 && (active == 0 || pending && active == 1) {
+						return commandOutcome{}, errs.ErrLegacyReworkDeliveryBlocked
+					}
+				}
+			}
+		case "REJECT", "CANCEL":
+			if err := repository.closeLegacyReworkRootTx(ctx, tx, scope, input, legacyRework, payload.Decision == "REJECT"); err != nil {
+				return commandOutcome{}, err
+			}
+			legacyRootClosed = true
+		}
+	}
+	if payload.Decision == "REQUEST_CHANGES" && legacyRework == nil {
 		comment := strings.TrimSpace(payload.Comment)
 		if comment == "" {
 			return commandOutcome{}, errs.ErrInvalid
@@ -2914,7 +2967,7 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 			}
 		}
 	}
-	if integrationInvocationID != "" {
+	if integrationInvocationID != "" || legacyRework != nil && !legacyRootClosed {
 		var openGates int64
 		if err := tx.QueryRow(ctx, queryCommandsResolvegateCountOpenGates, pgx.StrictNamedArgs{
 			"organization_id": scope.organizationID, "root_run_id": rootRunID,
@@ -2926,14 +2979,17 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 		}
 	}
 	terminalRootNodeRef := ""
-	if runState == "SUCCEEDED" {
+	if legacyRootClosed {
+		// The canonical FAILED or CANCELLED path already closed the complete graph in this owner transaction.
+		// Канонический FAILED либо CANCELLED путь уже закрыл полный граф в этой owner-транзакции.
+	} else if runState == "SUCCEEDED" {
 		if _, err := tx.Exec(ctx, queryCommandsResolvegateCompleteRootRun, rootRunID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 	} else if _, err := tx.Exec(ctx, queryCommandsResolvegateUpdateRunsStateVersionUpdatedAt, rootRunID, runState); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	if contains([]string{"SUCCEEDED", "FAILED", "CANCELLED"}, runState) {
+	if !legacyRootClosed && contains([]string{"SUCCEEDED", "FAILED", "CANCELLED"}, runState) {
 		if err := tx.QueryRow(ctx, queryCommandsResolvegateUpdateRootNodeState, rootRunID, runState).Scan(&terminalRootNodeRef); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}

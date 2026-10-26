@@ -51,6 +51,12 @@ func writeRPCProblem(writer http.ResponseWriter, err error) {
 		if rpcErrorHasReason(err, resourceInUseReason) {
 			name = resourceInUseReason
 		}
+		for _, reason := range []string{"LEGACY_REWORK_SCOPE_UNSUPPORTED", "LEGACY_REWORK_WRITE_REQUIRES_RECONCILIATION", "LEGACY_REWORK_PARENT_BUSY", "LEGACY_REWORK_DELIVERY_BLOCKED", "LEGACY_REWORK_READ_LIMIT"} {
+			if rpcErrorHasClosedReason(err, reason) {
+				name = reason
+				break
+			}
+		}
 	case codes.ResourceExhausted:
 		statusCode, name, retryable = http.StatusTooManyRequests, "RATE_LIMITED", true
 	case codes.Canceled:
@@ -81,6 +87,22 @@ func rpcErrorHasReason(err error, reason string) bool {
 	for _, detail := range rpcStatus.Details() {
 		info, ok := detail.(*errdetails.ErrorInfo)
 		if ok && info.GetDomain() == controlPlaneErrorDomain && info.GetReason() == reason {
+			return true
+		}
+	}
+	return false
+}
+
+// rpcErrorHasClosedReason rejects metadata-bearing or foreign details for the bounded owner-rework errors; status text never selects a public code.
+// rpcErrorHasClosedReason отклоняет metadata и чужой domain в bounded owner-rework errors; текст status не выбирает публичный код.
+func rpcErrorHasClosedReason(err error, reason string) bool {
+	rpcStatus, ok := status.FromError(err)
+	if !ok {
+		return false
+	}
+	for _, detail := range rpcStatus.Details() {
+		info, ok := detail.(*errdetails.ErrorInfo)
+		if ok && info.GetDomain() == controlPlaneErrorDomain && info.GetReason() == reason && len(info.GetMetadata()) == 0 {
 			return true
 		}
 	}

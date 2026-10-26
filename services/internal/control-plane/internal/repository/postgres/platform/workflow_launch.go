@@ -86,6 +86,11 @@ func (repository *Repository) validateWorkflowLaunchAuthority(ctx context.Contex
 	if err != nil {
 		return errs.ErrUnavailable
 	}
+	if rework, err := isLegacyReworkNodeTx(ctx, tx, machine, nodeID); err != nil {
+		return err
+	} else if rework {
+		return errs.ErrLegacyReworkScopeUnsupported
+	}
 	if tx.QueryRow(ctx, queryRepositoryResolvescopeSelectMembershipsOrganizationIdSubjectIdActive, actor.actorRef, actor.organizationRef).Scan(&actor.organizationID, &actor.organizationRef, &actor.actorID, &actor.actorRef, &actor.actorName, &actor.role) != nil {
 		return errs.ErrForbidden
 	}

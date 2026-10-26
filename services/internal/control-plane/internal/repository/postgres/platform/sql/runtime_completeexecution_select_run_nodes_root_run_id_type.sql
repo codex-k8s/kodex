@@ -5,7 +5,7 @@ SELECT (
     WHERE root_run_id=$1::uuid
       AND type='AGENT_EXECUTION'
       AND state IN('QUEUED','RUNNING','WAITING')
-) + (
+) + CASE WHEN control_plane.legacy_rework_delivery_pending((SELECT organization_id FROM control_plane.runs WHERE id=$1::uuid),$1::uuid) THEN 1 ELSE 0 END + (
     SELECT count(*)
     FROM control_plane.owner_gates
     WHERE root_run_id=$1::uuid
