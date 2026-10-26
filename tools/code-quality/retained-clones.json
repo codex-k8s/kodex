@@ -2,6 +2,14 @@
   "version": 1,
   "entries": [
     {
+      "format": "docker",
+      "firstPath": "services/external/control-api-gateway/Dockerfile",
+      "secondPath": "services/internal/runtime-controller/Dockerfile",
+      "fragmentSHA256": "1577d01f87c033f554e7efadf83cea7ff7f56881dc4adab9bf20865548b53dba",
+      "count": 1,
+      "reason": "Остаточное Docker-окно сравнивает pinned Go1.26.6 builder, metadata WORKDIR/ENV/ARG и разные явные COPY локальных module closures gateway и runtime-controller. У controller добавлен реально импортируемый runtimepolicywire, gateway его не использует; состав libraries и последующие WORKDIR/cmd/artifacts различаются. Нормализация identifiers делает пути похожими, но это декларации самостоятельных воспроизводимых сборок, а не копия executable policy mapper: три enum-преобразования уже вынесены в общий runtimepolicywire. Общий stage с неявным набором исходников скрывал бы точную границу сборки каждого deployable; compiler image/digest и так закреплены. Сохранено только это точное окно двух Dockerfile/hash/count1, без исключения других stages, source files или проверок module closure."
+    },
+    {
       "format": "go",
       "firstPath": "services/external/integration-gateway/internal/app/app.go",
       "secondPath": "services/jobs/artifact-retention/internal/app/app.go",
@@ -2880,14 +2888,6 @@
       "fragmentSHA256": "204bc05c0dbbdf422783d70b90ddfa839f97b33b9976eddede9613247356cb1a",
       "count": 1,
       "reason": "Начало Dockerfile использует одинаково закреплённый Go compiler, но internal-rpc-authority копирует manifest roots и выпускает набор issuer/verifier/restore бинарей с особым runtime uid. Control API этого не делает; обобщение builder-стадии скрыло бы разные trust boundaries. После добавления точного httpserver COPY новое окно повторно сверено с полными Dockerfile обоих компонентов; сохранены прежние разные dependency/runtime inputs и exact count1."
-    },
-    {
-      "format": "docker",
-      "firstPath": "services/external/control-api-gateway/Dockerfile",
-      "secondPath": "services/internal/runtime-controller/Dockerfile",
-      "fragmentSHA256": "867da6feff2b4964f99939cd80c4f8dd36d8b902e91c64224821d64d5f2273b1",
-      "count": 1,
-      "reason": "Совпадает закреплённая Go builder-основа и последовательность COPY локальных модулей, но пара собирает независимые gateway/controller бинарники с собственными списками зависимостей и runtime. Общий Dockerfile скрыл бы точный build context и инвалидацию каждого слоя. После добавления точного httpserver COPY новое окно повторно сверено с полными Dockerfile обоих компонентов; сохранены прежние разные dependency/runtime inputs и exact count1."
     },
     {
       "format": "docker",

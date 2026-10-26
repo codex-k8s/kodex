@@ -5,6 +5,7 @@ import (
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/libs/go/runtimepolicywire"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -250,11 +251,11 @@ func domainRuntimeEnvironmentPolicy(input *controlplanev1.RuntimeEnvironmentPoli
 	}
 	volumes := make([]runtimecontract.RuntimeVolume, 0, len(input.GetVolumes()))
 	for _, volume := range input.GetVolumes() {
-		volumes = append(volumes, runtimecontract.RuntimeVolume{Name: volume.GetName(), Kind: domainRuntimeVolumeKind(volume.GetKind()), SizeMiB: volume.GetSizeMib()})
+		volumes = append(volumes, runtimecontract.RuntimeVolume{Name: volume.GetName(), Kind: runtimepolicywire.VolumeKindFromProto(volume.GetKind()), SizeMiB: volume.GetSizeMib()})
 	}
 	destinations := make([]string, 0, len(input.GetNetworkDestinations()))
 	for _, destination := range input.GetNetworkDestinations() {
-		destinations = append(destinations, domainRuntimeNetworkDestination(destination))
+		destinations = append(destinations, runtimepolicywire.NetworkDestinationFromProto(destination))
 	}
 	webAccess := runtimecontract.RuntimeWebAccess{Mode: domainRuntimeWebAccessMode(input.GetWebAccess().GetMode())}
 	for _, rule := range input.GetWebAccess().GetRules() {
@@ -270,7 +271,7 @@ func domainRuntimeEnvironmentPolicy(input *controlplanev1.RuntimeEnvironmentPoli
 			EphemeralStorageRequestMiB: resources.GetEphemeralStorageRequestMib(),
 			EphemeralStorageLimitMiB:   resources.GetEphemeralStorageLimitMib(),
 		}, Volumes: volumes, NetworkDestinations: destinations, WebAccess: webAccess,
-		KubernetesAccess: domainRuntimeKubernetesAccessKind(input.GetKubernetesAccess()),
+		KubernetesAccess: runtimepolicywire.KubernetesAccessKindFromProto(input.GetKubernetesAccess()),
 	})
 }
 
@@ -288,51 +289,6 @@ func domainRuntimeWebAccessMode(value controlplanev1.RuntimeWebAccessMode) strin
 		return runtimecontract.RuntimeWebAccessAllowlistFull
 	case controlplanev1.RuntimeWebAccessMode_RUNTIME_WEB_ACCESS_MODE_FULL_PUBLIC:
 		return runtimecontract.RuntimeWebAccessFullPublic
-	default:
-		return ""
-	}
-}
-
-// domainRuntimeVolumeKind maps only ephemeral disk/memory volume kinds and returns an empty value
-// for unsupported variants.
-// domainRuntimeVolumeKind преобразует только ephemeral disk и memory volume kinds и возвращает
-// пустое значение для неподдержанного варианта.
-func domainRuntimeVolumeKind(value controlplanev1.RuntimeVolumeKind) string {
-	switch value {
-	case controlplanev1.RuntimeVolumeKind_RUNTIME_VOLUME_KIND_EPHEMERAL_DISK:
-		return runtimecontract.RuntimeVolumeEphemeralDisk
-	case controlplanev1.RuntimeVolumeKind_RUNTIME_VOLUME_KIND_EPHEMERAL_MEMORY:
-		return runtimecontract.RuntimeVolumeEphemeralMemory
-	default:
-		return ""
-	}
-}
-
-// domainRuntimeNetworkDestination maps only DNS, runtime-callback and provider-proxy destinations
-// without accepting arbitrary destination names.
-// domainRuntimeNetworkDestination преобразует только DNS, runtime-callback и provider-proxy
-// destinations без приёма произвольных destination names.
-func domainRuntimeNetworkDestination(value controlplanev1.RuntimeNetworkDestination) string {
-	switch value {
-	case controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_DNS:
-		return runtimecontract.RuntimeEgressDNS
-	case controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_RUNTIME_CALLBACK:
-		return runtimecontract.RuntimeEgressRuntimeCallback
-	case controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY:
-		return runtimecontract.RuntimeEgressProviderProxy
-	default:
-		return ""
-	}
-}
-
-// domainRuntimeKubernetesAccessKind maps only the supported NONE Kubernetes access kind, leaving
-// every other enum empty for policy validation.
-// domainRuntimeKubernetesAccessKind преобразует только поддержанный NONE Kubernetes access kind,
-// оставляя остальные enums пустыми для policy validation.
-func domainRuntimeKubernetesAccessKind(value controlplanev1.RuntimeKubernetesAccessKind) string {
-	switch value {
-	case controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE:
-		return runtimecontract.RuntimeKubernetesAccessNone
 	default:
 		return ""
 	}

@@ -4,11 +4,59 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.516.0
+version: 1.517.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие типизированные имена runtime-политик — 26.10.2026
+
+Модуль runtimepolicywire объединяет три одинаковых преобразования enum из
+control-plane caster и runtime-controller:VolumeKindFromProto,
+NetworkDestinationFromProto,KubernetesAccessKindFromProto. Шесть прежних функций
+заменены тремя;семь мест вызова сохраняют исходные getters и порядок. Поддержаны
+только disk/memory ephemeral volumes,DNS/runtime callback/provider proxy и NONE.
+Нулевые и неизвестные int32 остаются пустыми для исходного закрытого валидатора.
+
+Runtimecontract не получил Proto-зависимость,generated controlplaneapi и schema
+не менялись. Новый узкий модуль с README имеет два независимых production
+consumers;их go.mod и Docker COPY явно включают его. Его зависимости — прежние
+controlplaneapi/runtimecontract;offline tidy не обновлял внешние версии.
+Проверка module graph обоих consumers подтвердила прежние выбранные внешние
+версии и наличие всех35 local modules в соответствующих Docker COPY closures.
+Это проверка исходников/graph,не container build:OCI build — NOT RUN.
+
+Полные policy objects не объединялись:CP сохраняет server-selected defaults,
+controller — immutable snapshot fields и сравнение четырёх digests. Различающиеся
+web access mappers и одиночный protocol mapper прежние. Authority,scope,
+контексты,транзакции,grants/claims/events и Kubernetes effects не меняются:
+новый модуль только возвращает строку,не выполняет I/O или проверку полномочий.
+
+Две полные GoFmt inverses восстанавливают оба исходника из actual shared bodies;
+два Dockerfile и два go.mod восстанавливаются удалением точной зависимости.
+Десять частных изменений enum/default/getter/validation/digest/COPY/version
+отвергнуты. Actual library сравнена с шестью native functions на196620 profiles
+и393240 comparisons за1.11s:все int32 от-32768 до32767 и четыре дальних значения
+на каждый enum. Это конечная выборка;source equality и закрытый switch отдельно
+подтверждают неизменный default для остальных значений. Сетевых действий нет,
+публичный mirror test для glue не добавлялся.
+
+Control-plane build10.20s/unit38.89s/vet5.33s — PASS LOCAL:
+2949PASS/70условных SKIP/0FAIL,30packages. Runtime-controller
+build8.29s/unit18.92s/vet2.47s — PASS LOCAL:1860PASS/3условных SKIP/0FAIL,
+5packages. Новый модуль build8.29s/vet1.47s PASS;go test завершился успешно,
+но test files отсутствуют и unit coverage ему не приписывается. Source hashes10
+файлов совпали с proof,модульными проверками и actual library probe.
+
+Пять quality stages — PASS LOCAL. Удалены2raw окна,добавлено одно остаточное
+Docker-окно разных explicit COPY closures с точным решением. Одна отсутствующая
+старая запись удалена,остальные1078 сохранены;registry1079. Шесть registry
+mutations отвергнуты. Detector6783sources/222generated exclusions,
+1436raw/1222retained/214unresolved,Go21597/21597 EN→RU. Context7 ранее отклонил
+API key;официальные Go docs проверены ранее,внешние API/schema не менялись.
+Legacy renderer FAIL и прежние Bash diagnostics остаются открытыми;
+полные E2E/live/deploy/QA — NOT RUN.
 
 ## Общее создание телеметрии из environment — 26.10.2026
 

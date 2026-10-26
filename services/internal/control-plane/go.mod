@@ -67,6 +67,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.47.1 // indirect
 	github.com/aws/smithy-go v1.28.1 // indirect
 	github.com/codex-k8s/kodex/libs/go/oidcidentity v0.0.0 // indirect
+	github.com/codex-k8s/kodex/libs/go/runtimepolicywire v0.0.0
 	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0 // indirect
 	github.com/codex-k8s/kodex/libs/go/sttapi v0.0.0
 	github.com/coreos/go-oidc/v3 v3.20.0 // indirect
@@ -186,3 +187,5 @@ replace github.com/codex-k8s/kodex/libs/go/sttapi => ../../../libs/go/sttapi
 replace github.com/codex-k8s/kodex/libs/go/httpserver => ../../../libs/go/httpserver
 
 replace github.com/codex-k8s/kodex/libs/go/kubernetesadmission => ../../../libs/go/kubernetesadmission
+
+replace github.com/codex-k8s/kodex/libs/go/runtimepolicywire => ../../../libs/go/runtimepolicywire

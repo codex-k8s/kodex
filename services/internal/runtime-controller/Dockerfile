@@ -13,6 +13,7 @@ COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
 COPY libs/go/observability/ libs/go/observability/
 COPY libs/go/providerfinancewire/ libs/go/providerfinancewire/
 COPY libs/go/runtimecontract/ libs/go/runtimecontract/
+COPY libs/go/runtimepolicywire/ libs/go/runtimepolicywire/
 COPY libs/go/secretbrokerapi/ libs/go/secretbrokerapi/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/
 COPY libs/go/securefile/ libs/go/securefile/

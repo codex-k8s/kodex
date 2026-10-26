@@ -29,6 +29,7 @@ COPY libs/go/providerfinancewire/ libs/go/providerfinancewire/
 COPY libs/go/oidcidentity/ libs/go/oidcidentity/
 COPY libs/go/oidcverifier/ libs/go/oidcverifier/
 COPY libs/go/runtimecontract/ libs/go/runtimecontract/
+COPY libs/go/runtimepolicywire/ libs/go/runtimepolicywire/
 COPY libs/go/secretbrokerapi/ libs/go/secretbrokerapi/
 COPY libs/go/runtimesecret/ libs/go/runtimesecret/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/
