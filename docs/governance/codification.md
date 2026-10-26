@@ -4,11 +4,13 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 2.2.21
-updated: 2026-10-26
+version: 2.2.22
+updated: 2026-10-27
 ---
 
 # Кодификация документов и задач
+
+- `OPS-DOC-STAGING-CAPACITY-1931` — [Проверка фактической ёмкости staging перед работой](../operations/staging-capacity-preflight-1931.md).
 
 - `OPS-DOC-1859` — [Публикация CLEAN bundle исходников одним commit](../operations/repository-bundle-publication-1859.md).
 

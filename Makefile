@@ -434,3 +434,7 @@ test-control-plane-migration:
 .PHONY: test-control-api-nats-startup
 test-control-api-nats-startup:
 	@./scripts/tests/control-api-nats-startup-test.sh
+
+.PHONY: test-staging-capacity-preflight
+test-staging-capacity-preflight:
+	@PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/dev -p test_staging_capacity_preflight.py
