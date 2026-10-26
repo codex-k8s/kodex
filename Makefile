@@ -102,6 +102,10 @@ test-interaction-gateway-postgres:
 test-workflow-server-postgres: check-go-toolchain
 	@timeout --kill-after=10s 240s bash scripts/tests/workflow-server-postgres-test.sh
 
+.PHONY: test-workflow-artifact-query-postgres
+test-workflow-artifact-query-postgres: check-go-toolchain
+	@timeout --kill-after=10s 240s bash scripts/tests/control-plane-postgres-test.sh '^TestWorkflowArtifactQueryBoundaryComponent$$'
+
 test-control-plane-postgres:
 	@./scripts/tests/control-plane-postgres-test.sh
 

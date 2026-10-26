@@ -143,7 +143,19 @@ func assertWorkflowCaptureProgressFile(t *testing.T, ctx context.Context, reposi
 // идут через native owner/worker APIs; SQL только наблюдает. Replay независимо декодирует исходные
 // completion bytes. Проверка не заявляет GitHub publication, запуск модели или полный PDLC.
 func TestWorkflowCaptureProgressComponent(t *testing.T) {
-	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
+	testWorkflowCaptureProgressComponent(t, false)
+}
+
+// testWorkflowCaptureProgressComponent keeps the ordinary lifecycle unchanged and optionally adds
+// unrelated native catalog history before the exact same capture and acceptance path.
+// testWorkflowCaptureProgressComponent сохраняет обычный lifecycle и при необходимости добавляет
+// постороннюю native history каталога перед тем же capture и acceptance path.
+func testWorkflowCaptureProgressComponent(t *testing.T, denseCatalog bool) {
+	budget := 90 * time.Second
+	if denseCatalog {
+		budget = 210 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), budget)
 	defer cancel()
 	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
 	if err != nil {
@@ -158,7 +170,13 @@ func TestWorkflowCaptureProgressComponent(t *testing.T) {
 		if kind == command.ClaimExecution || kind == command.CompleteExecution {
 			actor = worker
 		}
-		result, err := service.Execute(ctx, command.Command{Kind: kind, Principal: actor,
+		commandContext := ctx
+		if denseCatalog && kind == command.CompleteExecution {
+			var stop context.CancelFunc
+			commandContext, stop = context.WithTimeout(ctx, 5*time.Second)
+			defer stop()
+		}
+		result, err := service.Execute(commandContext, command.Command{Kind: kind, Principal: actor,
 			Mutation: value.Mutation{IdempotencyKey: "capture-progress-" + key, ExpectedVersion: version}, Payload: payload})
 		if err != nil {
 			t.Fatalf("native capture progress command: key=%s kind=%s outcome=%s", key, kind, completionOutcomeClass(err))
@@ -172,6 +190,9 @@ func TestWorkflowCaptureProgressComponent(t *testing.T) {
 		agent := createLifecycleAgent(t, ctx, service, owner, project.Ref, "progress-"+key, key)
 		agents[key] = *execute(command.ChangeAgentCapability, "artifact-"+key, &agent.Version,
 			command.AgentBindingInput{AgentRef: agent.Ref, BindingRef: runtimecontract.ArtifactCapability, Enabled: true}).Agent
+	}
+	if denseCatalog {
+		seedWorkflowArtifactBoundaryCatalog(t, ctx, pool, service, owner, project.Ref, agents["producer"].Ref, execute)
 	}
 	draft := entity.WorkflowVersion{ExecutionMode: "SERVER_DAG_V1", Name: "Capture и зависимый материал", Purpose: "Проверить EARLY capture без бизнес-приёмки.",
 		CoordinatorAgentRef: manager.Ref, Concurrency: 2, TimeoutSeconds: 240, ResultSchema: map[string]any{},
@@ -249,6 +270,9 @@ func TestWorkflowCaptureProgressComponent(t *testing.T) {
 	if !pinOK || pin["ref"] != progress.CreatedRefs[0] || pin["digest"] != "sha256:"+artifact.SHA256 || pin["fileName"] != artifact.FileName || pin["revisionRef"] == "" {
 		t.Fatal("capture progress changed immutable producing artifact pins")
 	}
+	if denseCatalog {
+		assertWorkflowArtifactBoundaryCurrent(t, ctx, pool, producer.Ref, stringMap(first, "leaseRef"), progress.CreatedRefs[0])
+	}
 	for _, node := range afterCapture.Nodes {
 		if node.StepKey == "consumer" && (node.State != "PLANNED" || node.BusinessAttempt != 0 || len(node.Executions) != 0) {
 			t.Fatal("dependent consumer started before producer business acceptance")
@@ -280,6 +304,9 @@ func TestWorkflowCaptureProgressComponent(t *testing.T) {
 	revision, err := service.GetArtifactRevision(ctx, owner, evidence.ArtifactRef, evidence.ArtifactRevision)
 	if err != nil || evidence.ArtifactRef != earlyFile.ArtifactRef || evidence.ArtifactRevision != pin["revisionRef"] || evidence.Digest != artifact.SHA256 || revision.Revision != earlyFile.Revision || revision.Digest != earlyFile.Digest || revision.ScanState != "CLEAN" {
 		t.Fatal("EARLY acceptance substituted the producing artifact revision")
+	}
+	if denseCatalog {
+		assertWorkflowArtifactBoundaryEarly(t, ctx, pool, continuation.Ref, stringMap(continued, "leaseRef"), earlyFile, artifact.SHA256)
 	}
 	consumerLease := claim("consumer", agents["consumer"].Ref)
 	consumer := assertWorkflowCaptureProgressClaim(t, read(), consumerLease)
@@ -316,5 +343,8 @@ func TestWorkflowCaptureProgressComponent(t *testing.T) {
 	}
 	if publicAccepted != 2 {
 		t.Fatal("owner graph lost accepted EARLY business results")
+	}
+	if denseCatalog {
+		assertWorkflowArtifactBoundaryDeleted(t, ctx, pool, service, owner, producer.Ref, stringMap(first, "leaseRef"), earlyFile.ArtifactRef, execute)
 	}
 }
