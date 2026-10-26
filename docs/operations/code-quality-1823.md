@@ -4,11 +4,45 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.492.0
+version: 1.493.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая проверка registry DNS для ARC — 26.10.2026
+
+bootstrap.sh и render-network-policy.sh из infra/arc подключают одну прежнюю
+valid_dns_host из source-only lib/registry-host.sh. Тело функции совпало
+с обоими исходниками побайтно: предел имени253 и метки63, точка в имени,
+строчные DNS-метки, запрет пустых меток и окончаний .svc/.svc.cluster.local.
+Числовые имена сохраняют прежнюю допустимость; новая DNS/security policy
+не вводится. Локальные host/label/labels и командный IFS остаются прежними.
+Подключение только объявляет функцию в прежней позиции; порядок guards,
+registry binding, runner authority, selectors, ports и шаблоны не менялись.
+
+82 парных случая чистого predicate и24 полных renderer запуска,212 исполнений
+до/после — PASS LOCAL: граничные253/254 и63/64, URL/порт/wildcard/uppercase,
+CR/LF/метасимволы, internal suffixes, numeric names, invalid /32 destinations.
+У renderer совпали status/stdout/stderr и выходные YAML bytes при absolute
+и basename запуске. Переменные, IFS, cwd, options и argv вызывающей стороны
+сохранились. Два полных обратных побайтных преобразования восстановили
+прежние скрипты; семь опасных изменений actual source отвергнуты.
+
+Bash syntax3 и ShellCheck -a -x двух caller contexts — PASS LOCAL, диагностик0;
+две контрольных SC2154 из подключённой копии обнаружены. Публичная offline
+arc-repository-scope проверка1.47с — PASS LOCAL. Ей выдан единственный owned
+0600 синтетический kubeconfig с fixture current-context; живой kubeconfig
+не читался. Проверка завершает bootstrap на context mismatch и выполняет
+только локальный render, без API/helm/apply или чтения credentials.
+
+Проверены прежние function/local/source contracts встроенной документации
+Bash5.3.9; jq/yq expressions и зависимости не менялись. Context7 остаётся
+недоступен по прежней ошибке API key, ремонта или поиска ключа не было.
+Detector:6770sources/222 прежних exclusions,1476raw/1221retained/255unresolved.
+Исчезло одно общее окно a82d2414, новых нет; registry1078 и пороги прежние.
+Go21588/21588 EN→RU. Пять quality stages — PASS LOCAL. Полный E2E,
+live/deploy и независимая QA — NOT RUN; вся задача остаётся в работе.
 
 ## Общие операции настройки node registry — 26.10.2026
 
