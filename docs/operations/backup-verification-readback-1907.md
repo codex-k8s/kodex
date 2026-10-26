@@ -4,7 +4,7 @@ title: Чтение состояния после неизвестного ис�
 type: operations
 status: approved
 owner: sre
-version: 1.2.0
+version: 1.3.0
 updated: 2026-10-26
 ---
 
@@ -100,3 +100,12 @@ URL, headers и credential не входят в классификацию. Че
 удалять чужую заменившую lock сохранены. Ошибка readback не создаёт нового
 разрешения повторить verify. Независимое inspect-verification остаётся
 обязательным чтением перед отдельным решением о повторе.
+
+Тот же инвариант закреплён для Exists: проверка терминальных success/failure
+меток restore не превращает HEAD404 найденного объекта в отсутствие. До правки
+это могло пропустить запрет продолжения terminally failed restore. Теперь ошибка
+inventory/HEAD останавливает RestoreDrill до EnsureRestoreIntent и работы с
+целевыми данными. Для обычного отсутствия требуется полный успешный immutable
+inventory без точного ключа. LoadJSON/LoadManifest и их публичные sentinel не
+меняются. Регрессия сохраняет success/failure marker при HEAD404/403/503 и
+проверяет, что соседний ключ с общим префиксом не считается точным совпадением.

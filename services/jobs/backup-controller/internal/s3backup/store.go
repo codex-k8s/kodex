@@ -446,17 +446,20 @@ func (repository *Repository) LoadJSON(ctx context.Context, key string, maximumB
 	return receipt, nil
 }
 
-// Exists distinguishes a present exact key from a missing key while preserving other storage failures.
-// RU: Exists отличает существующий точный ключ от отсутствующего и сохраняет прочие ошибки хранилища.
+// Exists proves exact-key absence only from a completed immutable inventory; errors reading a listed version remain failures.
+// RU: Exists доказывает отсутствие точного ключа только полным immutable inventory; ошибки чтения найденной версии остаются отказами.
 func (repository *Repository) Exists(ctx context.Context, key string) (bool, error) {
-	_, err := repository.receiptForKey(ctx, repository.key(key))
-	if err == nil {
-		return true, nil
+	key = repository.key(key)
+	objects, err := repository.destination.inventory(ctx, key)
+	if err != nil {
+		return false, err
 	}
-	if errors.Is(err, ErrNotFound) {
-		return false, nil
+	for _, object := range objects {
+		if object.Key == key {
+			return true, nil
+		}
 	}
-	return false, err
+	return false, nil
 }
 
 // CopyPlatformObjects inventories current source versions, copies exact bytes and returns receipts for completed copies.
