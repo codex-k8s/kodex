@@ -24,7 +24,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/systemassistant"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // queryPromptAssistantCoreUnknownNotice copies a fixture continuation notice with an unsupported
@@ -55,10 +54,7 @@ var queryPromptAssistantCoreForeignProject string
 func TestAssistantCoreInheritanceComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
 	defer pool.Close()
 	r := newSyntheticRuntimeComponentRepository(t, ctx, pool)
 	prepareObservedWarmFixture(t, ctx, r)

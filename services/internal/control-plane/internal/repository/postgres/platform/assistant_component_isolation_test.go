@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // isolatedAssistantComponentDSN requires matching loopback admin/application fixture DSNs and the
@@ -84,4 +85,21 @@ func isolatedAssistantComponentDSN(t *testing.T) string {
 	})
 	runtimeURL.Path = "/" + database
 	return runtimeURL.String()
+}
+
+// newIsolatedAssistantComponentPool opens a pool using the existing isolated-database allocator
+// and the caller's context, terminating the test on a pool configuration error. The allocator's
+// validation, skip and exact database cleanup are unchanged. The caller retains its deadline,
+// cancellation and deferred pool close, which runs before registered database cleanup.
+// newIsolatedAssistantComponentPool открывает пул через существующее выделение изолированной БД
+// с контекстом вызывающего и завершает тест при ошибке настройки пула. Проверки, пропуск и точная
+// очистка БД в allocator сохраняются. Срок, отмена и отложенное закрытие пула принадлежат тесту;
+// закрытие выполняется до зарегистрированной очистки БД.
+func newIsolatedAssistantComponentPool(t *testing.T, ctx context.Context) *pgxpool.Pool {
+	t.Helper()
+	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return pool
 }

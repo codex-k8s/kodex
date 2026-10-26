@@ -97,3 +97,18 @@ func configureSyntheticRuntimeComponentRepository(t *testing.T, r *Repository) {
 		t.Fatal(err)
 	}
 }
+
+// resolveRunLaunchComponentPrincipals resolves the fixed synthetic run-launch owner followed by
+// the runtime claim worker, preserving both proof inputs and the shared repository/context. It
+// does not resolve SYSTEM-grant or assistant-turn owners, construct a service, change permissions
+// or create a lease; those operations remain explicit in each component scenario.
+// resolveRunLaunchComponentPrincipals разрешает фиксированного тестового владельца запуска, затем
+// исполнителя захвата runtime, сохраняя оба proof inputs и общие repository/context. Не подменяет
+// владельцев SYSTEM-grant или assistant-turn, не создаёт сервис, не меняет permissions и не
+// создаёт lease: эти операции остаются явными в каждом компонентном сценарии.
+func resolveRunLaunchComponentPrincipals(t *testing.T, ctx context.Context, r *Repository) (value.Principal, value.Principal) {
+	t.Helper()
+	owner := resolvedTestPrincipal(t, ctx, r, port.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.runs.launch"}, "control-api-gateway")
+	worker := resolvedTestPrincipal(t, ctx, r, port.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim"}, "runtime-controller")
+	return owner, worker
+}

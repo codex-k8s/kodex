@@ -9,13 +9,11 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/controlplaneapi"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
-	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	serviceplatform "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // workflowCatalogLaunchInput uses the same leased execution-workflow catalog as the native tool,
@@ -74,15 +72,11 @@ func workflowCatalogLaunchInput(t *testing.T, service *serviceplatform.Service, 
 func TestExecutionWorkflowCatalogComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
 	defer pool.Close()
 	r := newSyntheticRuntimeComponentRepository(t, ctx, pool)
 	prepareObservedWarmFixture(t, ctx, r)
-	owner := resolvedTestPrincipal(t, ctx, r, port.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.runs.launch"}, "control-api-gateway")
-	worker := resolvedTestPrincipal(t, ctx, r, port.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim"}, "runtime-controller")
+	owner, worker := resolveRunLaunchComponentPrincipals(t, ctx, r)
 	reader := worker
 	reader.Permission = "platform.runtime.execution.workflow.catalog"
 	service, err := serviceplatform.New(r)

@@ -4,11 +4,41 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.507.0
+version: 1.508.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие pool и principals компонентных сценариев — 26.10.2026
+
+`newIsolatedAssistantComponentPool` объединяет открытие pgxpool и Fatal на ошибке
+в шести native сценариях. Прежний allocator изолированной БД,loopback/template/
+identity guards,skip и зарегистрированная очистка не менялись. Caller сохраняет
+свои60/90s,cancel и defer Close до database cleanup. Для четырёх run-сценариев
+`resolveRunLaunchComponentPrincipals` объединяет точные прежние proof inputs:
+owner runs.launch,затем runtime execution.claim. Другие assistant-core и
+prospective owner operations остаются самостоятельными. Service construction,
+reader permission copy,commands,grants,leases и assertions остаются у сценариев.
+
+Подстановка обоих helpers восстанавливает восемь полных исходных файлов побайтно;
+намеренно добавлены только declarations/comments/import и `t.Helper`. Тела
+совпали с native блоками;девять source mutants allocator,error,close,budget,
+context,owner/worker operation и reader authority отвергнуты. Production,SQL,
+миграции,зависимости и decision registry не менялись.
+
+Публичный disposable PostgreSQL с шестью точными suites:до40.22s/после60.27s,
+оба exit0/20PASS/0FAIL/0SKIP,оснастки удалены. Промежуточный pool-only запуск
+59.52s сохранён отдельно и не выдаётся за проверку финального diff. Полные
+control-plane build5.99s/unit36.77s/vet5.08s — PASS LOCAL;2949PASS/70условных
+SKIP/0FAIL,30packages. Это выбранные component сценарии,не полный PG/E2E.
+Проверены официальные API pgxpool/pgx;Context7 ранее отклонил API key.
+
+Пять quality stages — PASS LOCAL. Удалены8raw окон,появились3 перекрывшихся
+composition окна,все новые остаются unresolved. Detector6778sources/222generated
+exclusions,1451raw/1222retained/229unresolved,registry1079 прежний,
+Go21598/21598 EN→RU. Legacy renderer FAIL и прежние Bash diagnostics остаются
+открытыми;полные E2E/live/deploy/QA — NOT RUN.
 
 ## Общая тестовая привязка подготовленного содержимого — 26.10.2026
 
