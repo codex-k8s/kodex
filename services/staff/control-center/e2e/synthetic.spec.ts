@@ -221,7 +221,7 @@ for (const { width, height, part, title } of syntheticJourneyProfiles()) {
       releaseInitialHomeCatalogs = resolve;
     });
     if (!includes("CORE_ENV")) releaseInitialHomeCatalogs();
-    if (width === 1440) await page.clock.install();
+    if (width === 1440 && includes("CORE_ENV")) await page.clock.install();
     await page.setViewportSize({ width, height });
     page.on("pageerror", (error) => failures.push(error.message));
     page.on("response", (response) => {
@@ -1770,7 +1770,7 @@ for (const { width, height, part, title } of syntheticJourneyProfiles()) {
         fixture.setInspectorFailure(undefined);
       }
     }
-    if (width === 1440) {
+    if (width === 1440 && includes("CORE_ENV")) {
       let speechAvailable = true;
       let grants = 0;
       let transcriptions = 0;

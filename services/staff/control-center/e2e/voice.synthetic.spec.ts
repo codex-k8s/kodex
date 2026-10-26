@@ -163,6 +163,10 @@ for (const width of [1440, 390]) {
       .getByRole("button", { name: "Показать конфигурацию", exact: true })
       .click();
     const fields = page.getByTestId("managed-fields");
+    await fields
+      .locator("summary")
+      .filter({ hasText: "Дополнительные настройки распознавания" })
+      .click();
     const textareas = fields.locator("textarea");
     await expect(textareas).toHaveCount(4);
     await expect(fields.locator(".voice-input button")).toHaveCount(4);

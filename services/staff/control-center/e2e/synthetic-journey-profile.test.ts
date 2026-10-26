@@ -18,13 +18,13 @@ import {
 } from "./synthetic-journey-profile";
 
 describe("bounded synthetic mobile journey", () => {
-  it("сохраняет шесть ALL journeys и покрывает каждую mobile секцию ровно один раз", () => {
+  it("сохраняет пять ALL journeys и покрывает каждую mobile секцию ровно один раз", () => {
     const profiles = syntheticJourneyProfiles();
     expect(
       profiles
         .filter((profile) => profile.part === "ALL")
         .map((profile) => profile.width),
-    ).toEqual([2900, 2560, 1920, 1440, 1280, 900]);
+    ).toEqual([2900, 2560, 1920, 1280, 900]);
     const mobile = profiles.filter((profile) => profile.width === 390);
     expect(mobile.map((profile) => profile.part)).toEqual([
       ...mobileJourneyParts,
@@ -38,6 +38,31 @@ describe("bounded synthetic mobile journey", () => {
       expect(includesJourneySection("ALL", section)).toBe(true);
     }
     expect(mobile.every((profile) => profile.height === 844)).toBe(true);
+  });
+  it("разбивает 1440 на пять секций, сохраняя speech lifecycle ровно в CORE_ENV", () => {
+    const desktop = syntheticJourneyProfiles().filter(
+      (profile) => profile.width === 1440,
+    );
+    expect(desktop.map((profile) => profile.part)).toEqual([
+      ...mobileJourneyParts,
+    ]);
+    expect(desktop.every((profile) => profile.height === 900)).toBe(true);
+    for (const section of mobileJourneyParts)
+      expect(
+        desktop.filter((profile) =>
+          includesJourneySection(profile.part, section),
+        ),
+      ).toHaveLength(1);
+    const source = readFileSync(
+      new URL("./synthetic.spec.ts", import.meta.url),
+      "utf8",
+    );
+    expect(source).toContain(
+      'if (width === 1440 && includes("CORE_ENV")) await page.clock.install()',
+    );
+    expect(source).toContain('if (width === 1440 && includes("CORE_ENV")) {');
+    expect(source).toContain('reason: "STT_PERMISSION_DENIED"');
+    expect(source).toContain("expect(grants).toBe(grantReads)");
   });
   it("разбивает 768 на пять непустых секций без изменения остальных размеров", () => {
     const profiles = syntheticJourneyProfiles();
