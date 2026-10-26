@@ -122,6 +122,19 @@ class CapacityTests(unittest.TestCase):
         with self.assertRaisesRegex(C.Failure, "FILESYSTEM_BUDGET_UNSAFE"):
             self.inspect()
 
+    def test_soft_disk_threshold_cannot_be_hidden_by_hard_only_budget(self):
+        self.args.budget_bytes = 30 * GIB
+        for summary in self.summaries.values():
+            summary["node"]["fs"]["availableBytes"] = 160 * GIB
+            summary["node"]["runtime"]["imageFs"]["availableBytes"] = 160 * GIB
+        # Hard5%+reclaim10%+reserve5GiB разрешил бы remaining130GiB,
+        # но relevant soft30% требует150GiB. Этот профиль должен закрыться.
+        for signal in ("nodefs.available", "imagefs.available", "containerfs.available"):
+            with self.subTest(signal=signal):
+                self.configs[C.NODES[0]]["kubeletconfig"]["evictionSoft"] = {signal: "30%"}
+                with self.assertRaisesRegex(C.Failure, "FILESYSTEM_PROFILE_UNSUPPORTED"):
+                    self.inspect()
+
     def test_exact_recovery_plus_reserve_boundary_is_rejected(self):
         # 5%+10%=75 GiB; budget10+reserve5 даёт строгую границу90 GiB.
         stats = self.summaries[C.NODES[0]]["node"]["fs"]
