@@ -71,17 +71,31 @@ func (repository *Repository) GetPlatformEventCursor(ctx context.Context, princi
 	return scope.organizationRef, sequence, nil
 }
 
+// GetOverview reuses actor-scoped catalogs and their full totals; active states are selected before
+// pagination. Counts use the canonical project/agent predicates, never organization-wide rows or
+// truncated lists. The existing catalog reads retain separate read-only snapshots.
+// GetOverview использует actor-scoped каталоги и полные totals; активные состояния выбираются до
+// страницы. Счётчики используют canonical project/agent predicates, а не все строки организации
+// или усечённые списки. Существующие чтения каталогов сохраняют раздельные read-only snapshots.
 func (repository *Repository) GetOverview(ctx context.Context, principal value.Principal, projectRef string) (platformrepo.Overview, error) {
-	scope, err := repository.resolveScope(ctx, principal)
+	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return platformrepo.Overview{}, err
+	}
+	projectRef = strings.TrimSpace(projectRef)
+	if projectRef != "" {
+		if _, err := repository.GetProject(ctx, principal, projectRef); err != nil {
+			return platformrepo.Overview{}, err
+		}
 	}
 	filter := query.Filter{ProjectRef: projectRef, Page: query.Page{Size: 20}}
-	runs, _, _, err := repository.ListRuns(ctx, principal, filter)
+	activeFilter := filter
+	activeFilter.States = []string{"QUEUED", "RUNNING", "WAITING_HUMAN", "CANCELLING"}
+	runs, runTotal, _, err := repository.ListRuns(ctx, principal, activeFilter)
 	if err != nil {
 		return platformrepo.Overview{}, err
 	}
-	gates, _, _, err := repository.ListOwnerGates(ctx, principal, query.Filter{ProjectRef: projectRef, State: "OPEN", Page: query.Page{Size: 20}})
+	gates, gateTotal, _, err := repository.ListOwnerGates(ctx, principal, query.Filter{ProjectRef: projectRef, State: "OPEN", Page: query.Page{Size: 20}})
 	if err != nil {
 		return platformrepo.Overview{}, err
 	}
@@ -89,20 +103,32 @@ func (repository *Repository) GetOverview(ctx context.Context, principal value.P
 	if err != nil {
 		return platformrepo.Overview{}, err
 	}
-	var result platformrepo.Overview
-	err = repository.pool.QueryRow(ctx, queryQueriesGetoverviewSelectProjectsOrganizationIdLifecycleState, scope.organizationID).Scan(
-		&result.ProjectCount, &result.AgentCount, &result.ActiveRunCount, &result.PendingGateCount)
+	var projectTotal, agentTotal int64
+	err = repository.pool.QueryRow(ctx, queryQueriesGetoverviewSelectProjectsOrganizationIdLifecycleState, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID, "actor_id": current.actorID, "authority_project_id": current.authorityProjectID, "project_ref": projectRef,
+	}).Scan(&projectTotal, &agentTotal)
 	if err != nil {
 		return platformrepo.Overview{}, errs.ErrUnavailable
 	}
-	for _, run := range runs {
-		if run.State == "QUEUED" || run.State == "RUNNING" || run.State == "WAITING_HUMAN" || run.State == "CANCELLING" {
-			result.ActiveRuns = append(result.ActiveRuns, run)
+	result, err := overviewCounters(projectTotal, agentTotal, runTotal, gateTotal)
+	if err != nil {
+		return platformrepo.Overview{}, err
+	}
+	result.ActiveRuns, result.PendingGates, result.RecentArtifacts = runs, gates, artifacts
+	return result, nil
+}
+
+// overviewCounters narrows full owner totals only after validating every signed int32 boundary;
+// malformed counts fail closed rather than wrapping, clamping or being replaced with list lengths.
+// overviewCounters сужает полные owner totals только после проверки всех границ signed int32;
+// неверные числа закрыто отклоняются без переполнения, усечения или замены длиной списков.
+func overviewCounters(projects, agents, runs, gates int64) (platformrepo.Overview, error) {
+	for _, count := range []int64{projects, agents, runs, gates} {
+		if count < 0 || count > 1<<31-1 {
+			return platformrepo.Overview{}, errs.ErrUnavailable
 		}
 	}
-	result.PendingGates = gates
-	result.RecentArtifacts = artifacts
-	return result, nil
+	return platformrepo.Overview{ProjectCount: int32(projects), AgentCount: int32(agents), ActiveRunCount: int32(runs), PendingGateCount: int32(gates)}, nil
 }
 
 func (repository *Repository) ListCapabilities(ctx context.Context, principal value.Principal) ([]entity.IntegrationCapability, error) {
