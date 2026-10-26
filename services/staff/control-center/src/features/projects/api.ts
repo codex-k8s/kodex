@@ -52,39 +52,31 @@ export async function loadProjectTrash(
 }
 
 export async function moveProjectToTrash(project: Project): Promise<Project> {
-  const response = await mutate(
-    (headers) =>
-      trashProject({
-        path: { projectRef: project.ref },
-        headers: versionedMutationHeaders(headers),
-        signal: requestSignal(),
-      }),
-    project.version,
-  );
-  return response.data;
+  return mutateProjectLifecycle(project, trashProject);
 }
 
 export async function restoreProjectFromTrash(
   project: Project,
 ): Promise<Project> {
-  const response = await mutate(
-    (headers) =>
-      restoreProject({
-        path: { projectRef: project.ref },
-        headers: versionedMutationHeaders(headers),
-        signal: requestSignal(),
-      }),
-    project.version,
-  );
-  return response.data;
+  return mutateProjectLifecycle(project, restoreProject);
 }
 
 export async function purgeProjectFromTrash(
   project: Project,
 ): Promise<Project> {
+  return mutateProjectLifecycle(project, purgeProject);
+}
+
+// Вызывает выбранную исходным adapter SDK-операцию корзины с прежними path, version, headers
+// и signal, затем возвращает её Project receipt. Сам не выбирает действие, не меняет retry
+// и не трактует 202 purge как завершение очистки: это остаётся контрактом отдельного SDK/caller.
+async function mutateProjectLifecycle(
+  project: Project,
+  request: typeof trashProject | typeof restoreProject | typeof purgeProject,
+): Promise<Project> {
   const response = await mutate(
     (headers) =>
-      purgeProject({
+      request({
         path: { projectRef: project.ref },
         headers: versionedMutationHeaders(headers),
         signal: requestSignal(),

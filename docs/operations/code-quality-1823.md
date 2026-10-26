@@ -4,11 +4,40 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.510.0
+version: 1.511.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая request-обвязка корзины проекта — 26.10.2026
+
+Приватный `mutateProjectLifecycle` объединяет path/headers/signal/version/mutate
+и возврат Project receipt. Три exported wrappers сохраняют фиксированные
+trashProject/restoreProject/purgeProject SDK identities;тип request ограничен
+их union. Generated методы/URL/status не менялись:trash DELETE200,restore
+POST200,purge POST202. Принятие purge не означает завершение фоновой очистки.
+Новых commands/permissions,owner scope,keys,retry и server events нет;actor
+проверяется прежним сервером,project.ref из payload не становится authority.
+
+Whole-module inverse восстанавливает весь исходник после Prettier formatting.
+Actual native/current модули с synthetic SDK/mutate/requestSignal проверены на
+108 парах/216 executions:три SDK choices,два refs,три versions,receipt/null/
+undefined и ошибки до callback/в SDK/после callback. Сохранены точные path,
+version,headers,signal и один SDK call либо ноль при раннем отказе,идентичность
+ошибки/receipt и неизменность Project. Шесть source mutants SDK/version/result/
+path/signal/retry отвергнуты. Реальных HTTP/API операций не было.
+
+Полные PWA unit:413files/4114tests58.68s,FAIL/SKIP0. Format/check0.32s,
+lint8.59s,typecheck48.15s,production build8.99s — PASS LOCAL с envDir:false.
+Прежний Vite chunk>500kB warning сохраняется,это не zero-warning build.
+Проверена официальная TypeScript Compiler API документация;Context7 ранее
+отклонил API key. Публичные mirror-тесты для glue не добавлялись.
+
+Пять quality stages — PASS LOCAL. Удалено raw окно209e59c5,новых нет;
+registry1081 прежний. Detector6779sources/222generated exclusions,
+1449raw/1224retained/225unresolved,Go21598/21598 EN→RU. Legacy renderer FAIL
+и прежние Bash diagnostics остаются открытыми;полные E2E/live/deploy/QA — NOT RUN.
 
 ## Общая проекция versioned mutation headers PWA — 26.10.2026
 
