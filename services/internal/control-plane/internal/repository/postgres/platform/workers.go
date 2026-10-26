@@ -1179,7 +1179,7 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 		return nil, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	result, err := repository.resolveIntegrationInvocationTx(ctx, tx, scope, input, boundedInput, false)
+	result, err := repository.resolveIntegrationInvocationTx(ctx, tx, scope, input, boundedInput, false, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1191,10 +1191,14 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 
 // resolveIntegrationInvocationTx owns the shared native invocation/gate creation in the caller's transaction. The bundle discriminator is supplied only by the specialized owner after exact artifact/origin admission; generic resolve cannot create a bundle effect.
 // resolveIntegrationInvocationTx создаёт общий native invocation/gate в транзакции caller. Bundle discriminator передаёт только специализированный owner после exact artifact/origin admission; generic resolve не создаёт bundle effect.
-func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context, tx pgx.Tx, scope scope, input map[string]string, boundedInput map[string]any, bundle bool) (map[string]any, error) {
+func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context, tx pgx.Tx, scope scope, input map[string]string, boundedInput map[string]any, bundle bool, semanticInput []byte) (map[string]any, error) {
 	encodedInput, err := json.Marshal(boundedInput)
 	if err != nil || len(encodedInput) > 512<<10 {
 		return nil, errs.ErrInvalid
+	}
+	workflowRootID, err := lockWorkflowEffectRootTx(ctx, tx, scope, input)
+	if err != nil {
+		return nil, err
 	}
 	var runID, nodeID, connectionID, grantID, grantRef, projectID, rootRunID, initiatorRef, agentID string
 	var definitionKey, definitionVersion, definitionDigest, connectionName, risk, approvalPolicy, resourceKind, resourceScopeDigest string
@@ -1251,6 +1255,19 @@ func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context
 	invocationRef, _ := newRef("inv")
 	inputDigest := sha256.Sum256(canonicalInput)
 	inputDigestHex := hex.EncodeToString(inputDigest[:])
+	var workflowAdmission *workflowEffectAdmission
+	if risk == "WRITE" {
+		var rejoined map[string]any
+		workflowAdmission, rejoined, err = admitWorkflowEffectTx(ctx, tx, scope, workflowRootID, input, capability.Operation, grantRef, grantVersion, definitionDigest, resourceScopeDigest, approvalPolicy, encodedScope, canonicalInput, semanticInput)
+		if err != nil {
+			return nil, err
+		}
+		if rejoined != nil {
+			rejoined["risk"], rejoined["resourceKind"], rejoined["resourceScope"] = risk, resourceKind, resourceScope
+			rejoined["resourceScopeDigest"], rejoined["projectID"] = resourceScopeDigest, projectID
+			return rejoined, nil
+		}
+	}
 	intentParts := []string{
 		input["node_ref"], input["idempotency_key"], input["connection_ref"], input["capability_key"],
 		inputDigestHex, definitionDigest, resourceScopeDigest, grantRef, strconv.FormatInt(grantVersion, 10), approvalPolicy,
@@ -1331,6 +1348,12 @@ func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context
 		tag, reserveErr := tx.Exec(ctx, queryWorkersResolveintegrationinvocationReserveApprovalScope, approvalScopeID)
 		if reserveErr != nil || tag.RowsAffected() != 1 {
 			return nil, serializableTransactionError(reserveErr, errs.ErrConflict)
+		}
+	}
+	if workflowAdmission != nil {
+		workflowAdmission.Intent.InvocationRef, workflowAdmission.Intent.EffectKey, workflowAdmission.Intent.InputDigest = resolvedRef, effectKey, inputDigestHex
+		if err := appendWorkflowEffectTx(ctx, tx, scope, workflowAdmission.RootID, workflowAdmission.AnchorID, "intent", workflowAdmission.Intent); err != nil {
+			return nil, err
 		}
 	}
 	gateRef := ""

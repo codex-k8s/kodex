@@ -86,6 +86,12 @@ var queryWorkflowResultLineage string
 //go:embed sql/workflow_result__integration.sql
 var queryWorkflowResultIntegration string
 
+// queryWorkflowEffectResult joins an earlier immutable native receipt through the current attempt's owner-proven read-only rejoin.
+// queryWorkflowEffectResult читает прежний native receipt через owner-proven read-only rejoin текущей attempt.
+//
+//go:embed sql/workflow_effect__result.sql
+var queryWorkflowEffectResult string
+
 // workflowResultDependency mirrors the existing immutable input receipt, not a new evidence registry.
 // workflowResultDependency отражает existing immutable input receipt, не создавая evidence registry.
 type workflowResultDependency struct {
@@ -212,7 +218,24 @@ func readWorkflowIntegrationResultTx(ctx context.Context, tx pgx.Tx, current sco
 		return workflowIntegrationResult{}, "", errs.ErrUnavailable
 	}
 	if count == 0 {
-		return workflowIntegrationResult{}, workflowReceiptRequired, nil
+		rows.Close()
+		rows, err = tx.Query(ctx, queryWorkflowEffectResult, pins)
+		if err != nil {
+			return workflowIntegrationResult{}, "", errs.ErrUnavailable
+		}
+		defer rows.Close()
+		for rows.Next() {
+			if rows.Scan(&result.Operation, &result.Input, &result.Scope, &result.Summary, &result.Digest, &result.ProviderRef, &result.LineageFailure) != nil {
+				return workflowIntegrationResult{}, "", errs.ErrUnavailable
+			}
+			count++
+		}
+		if rows.Err() != nil {
+			return workflowIntegrationResult{}, "", errs.ErrUnavailable
+		}
+		if count == 0 {
+			return workflowIntegrationResult{}, workflowReceiptRequired, nil
+		}
 	}
 	if count != 1 {
 		return workflowIntegrationResult{}, workflowReceiptLineageAmbiguous, nil

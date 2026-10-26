@@ -103,6 +103,9 @@ func (repository *Repository) prepareRepositoryBundleTx(ctx context.Context, pri
 		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("BEGIN", err, errs.ErrUnavailable)
 	}
 	defer rollbackRepositoryBundle(ctx, tx)
+	if _, err := lockWorkflowEffectRootTx(ctx, tx, current, map[string]string{"lease_ref": input.LeaseRef}); err != nil {
+		return entity.RepositoryBundlePublication{}, err
+	}
 	var origin repositoryBundleOrigin
 	err = tx.QueryRow(ctx, queryRepositoryBundleOrigin, pgx.StrictNamedArgs{"organization_id": current.organizationID, "lease_ref": input.LeaseRef,
 		"fence_digest": repositorybundle.Digest([]byte(input.Fence)), "generation": input.Generation, "grant_ref": input.GrantRef}).Scan(
@@ -172,9 +175,23 @@ func (repository *Repository) prepareRepositoryBundleTx(ctx context.Context, pri
 		return entity.RepositoryBundlePublication{}, errs.ErrForbidden
 	}
 	bounded := repositorybundle.InvocationInput(input.Archive, input.Manifest, input.BaseCommitSHA)
-	resolved, err := repository.resolveIntegrationInvocationTx(ctx, tx, current, map[string]string{"run_ref": origin.runRef, "node_ref": origin.nodeRef, "connection_ref": origin.connectionRef, "capability_key": repositoryBundleOperation, "idempotency_key": input.IdempotencyKey}, bounded, true)
+	semanticInput := asJSON([]any{"kodex.workflow-bundle-content.v1", repositoryBundleContentPolicy, input.BaseCommitSHA, manifest})
+	resolved, err := repository.resolveIntegrationInvocationTx(ctx, tx, current, map[string]string{"run_ref": origin.runRef, "node_ref": origin.nodeRef, "connection_ref": origin.connectionRef, "capability_key": repositoryBundleOperation, "idempotency_key": input.IdempotencyKey}, bounded, true, semanticInput)
 	if err != nil {
 		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("NATIVE_INTENT", err, err)
+	}
+	if rejoined, _ := resolved["workflowRejoined"].(bool); rejoined {
+		row, readErr := lockRepositoryBundle(ctx, tx, current, stringMap(resolved, "publicationRef"))
+		if readErr != nil {
+			return entity.RepositoryBundlePublication{}, readErr
+		}
+		if row.proposal.State != "SUCCEEDED" || row.proposal.InvocationRef != stringMap(resolved, "invocationRef") {
+			return entity.RepositoryBundlePublication{}, errs.ErrConflict
+		}
+		if commitErr := tx.Commit(ctx); commitErr != nil {
+			return entity.RepositoryBundlePublication{}, serializableTransactionError(commitErr, errs.ErrUnavailable)
+		}
+		return row.proposal, nil
 	}
 	ref, err := newRef("rbp")
 	if err != nil {
