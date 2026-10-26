@@ -104,11 +104,12 @@ def namespace_identity(value, name, expected):
 
 
 def node_records(value, expected):
-    require(isinstance(value, dict) and value.get("kind") == "NodeList" and value.get("apiVersion") == "v1" and
+    require(isinstance(value, dict) and value.get("kind") == "List" and value.get("apiVersion") == "v1" and
             isinstance(value.get("items"), list) and len(value["items"]) == len(NODES), "NODE_SET_CHANGED")
     records = {}
     for node in value["items"]:
-        require(isinstance(node, dict), "NODE_IDENTITY_MISMATCH")
+        require(isinstance(node, dict) and node.get("kind") == "Node" and node.get("apiVersion") == "v1",
+                "NODE_IDENTITY_MISMATCH")
         metadata = node.get("metadata")
         require(isinstance(metadata, dict), "NODE_IDENTITY_MISMATCH")
         name = metadata.get("name")

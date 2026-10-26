@@ -28,10 +28,10 @@ class CapacityTests(unittest.TestCase):
                                        budget_bytes=10 * GIB, reserve_bytes=5 * GIB)
         self.namespaces = {name: {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": name, "uid": uid}}
                            for name, uid in (("kube-system", UIDS[0]), (C.NAMESPACE, UIDS[1]))}
-        self.nodes = {"apiVersion": "v1", "kind": "NodeList", "items": []}
+        self.nodes = {"apiVersion": "v1", "kind": "List", "items": []}
         self.summaries, self.configs = {}, {}
         for name, uid in zip(C.NODES, UIDS[2:4]):
-            self.nodes["items"].append({"metadata": {"name": name, "uid": uid}, "status": {"conditions": [
+            self.nodes["items"].append({"apiVersion": "v1", "kind": "Node", "metadata": {"name": name, "uid": uid}, "status": {"conditions": [
                 {"type": "Ready", "status": "True"},
                 {"type": "DiskPressure", "status": "False", "lastTransitionTime": self.stamp}]}})
             stats = {"time": self.stamp, "capacityBytes": 500 * GIB, "availableBytes": 100 * GIB}
@@ -106,6 +106,15 @@ class CapacityTests(unittest.TestCase):
         self.assertEqual(result["scope"], "READ_ONLY_CAPACITY_OBSERVATION")
         self.assertFalse(result["reservationCreated"])
         self.assertEqual(len(self.calls), 10)
+
+    def test_kubectl_list_requires_each_item_to_be_a_core_node(self):
+        original = deepcopy(self.nodes)
+        for field, value in (("kind", "Pod"), ("apiVersion", "other/v1")):
+            with self.subTest(field=field):
+                self.nodes = deepcopy(original)
+                self.nodes["items"][0][field] = value
+                with self.assertRaisesRegex(C.Failure, "NODE_IDENTITY_MISMATCH"):
+                    self.inspect()
 
     def test_host_root_free_space_cannot_mask_imagefs_shortage(self):
         self.summaries[C.NODES[0]]["hostRootAvailableBytes"] = 400 * GIB
