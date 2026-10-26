@@ -166,14 +166,8 @@ func lockRepositoryBundle(ctx context.Context, tx pgx.Tx, current scope, ref str
 	if err != nil || len(manifest.Files) != int(frozen.FileCount) || manifest.TotalBytes != frozen.TotalBytes {
 		return row, errs.ErrUnavailable
 	}
-	if row.snapshot.SourcePolicy != repositoryBundleContentPolicy || row.snapshot.ArchiveSource.RevisionRef != archiveRevision || row.snapshot.ManifestSource.RevisionRef != manifestRevision || frozen.RepositoryRef != repositoryRef || len(row.snapshot.FileReceipts) != len(manifest.Files) {
+	if !validRepositoryBundleFileReceipts(row.snapshot.SourcePolicy, manifest.Files, row.snapshot.FileReceipts) || row.snapshot.ArchiveSource.RevisionRef != archiveRevision || row.snapshot.ManifestSource.RevisionRef != manifestRevision || frozen.RepositoryRef != repositoryRef {
 		return row, errs.ErrUnavailable
-	}
-	for index, receipt := range row.snapshot.FileReceipts {
-		entry := manifest.Files[index]
-		if receipt.Entry != entry || receipt.MediaType == "" || receipt.Scan.Infected || receipt.Scan.Digest != "sha256:"+entry.SHA256 || receipt.Scan.SizeBytes != entry.Bytes || !validArtifactAntivirus(receipt.Scan) {
-			return row, errs.ErrUnavailable
-		}
 	}
 	version, state, commit, tree, failure, confirmed := p.Version, p.State, p.CandidateCommitSHA, p.CandidateTreeSHA, p.FailureCode, p.ConfirmedAt
 	continuationState, continuationCode, continuationNode := p.ContinuationState, p.ContinuationCode, p.ContinuationNodeRef

@@ -50,14 +50,18 @@ func TestRepositoryBundleDecodedContentPolicy(t *testing.T) {
 		{name: "SQLite schema source", path: "migrations/001.sql", body: []byte("CREATE TABLE item(id INTEGER PRIMARY KEY);\n")},
 		{name: "Dockerfile source", path: "Dockerfile", body: []byte("FROM scratch\nCOPY server /server\n")},
 		{name: "native direct JavaScript text", path: "source.js", body: []byte("export const answer = 42;\n")},
-		{name: "HTML active member", path: "index.html", body: []byte("<!doctype html><p>active</p>"), rejected: true},
-		{name: "SVG active member", path: "logo.svg", body: []byte("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>"), rejected: true},
-		{name: "shebang script", path: "start.sh", body: []byte("#!/bin/sh\necho active\n"), rejected: true},
+		{name: "HTML active member", path: "index.html", body: []byte("<!doctype html><p>active</p>")},
+		{name: "SVG active member", path: "logo.svg", body: []byte("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>")},
+		{name: "shebang script", path: "start.sh", body: []byte("#!/bin/sh\necho active\n")},
 		{name: "MZ executable", path: "binary.dat", body: []byte("MZ executable"), rejected: true},
 		{name: "ELF executable", path: "server.dat", body: []byte("\x7fELF executable"), rejected: true},
 		{name: "SQLite binary database", path: "data.db", body: []byte("SQLite format 3\x00binary"), rejected: true},
 		{name: "invalid UTF8", path: "bad.go", body: []byte{0xff, 0xfe}, rejected: true},
 		{name: "decoded EICAR", path: "fixture.txt", body: []byte("EICAR-STANDARD-ANTIVIRUS-TEST-FILE"), rejected: true},
+		{name: "HTML scanner unavailable", path: "index.html", body: []byte("<html>hello</html>"), rejected: true, unavailable: true},
+		{name: "script scanner digest mismatch", path: "start.sh", body: []byte("#!/bin/sh\ntrue\n"), rejected: true, corrupt: true},
+		{name: "infected active text", path: "index.html", body: []byte("<html>EICAR-STANDARD-ANTIVIRUS-TEST-FILE</html>"), rejected: true},
+		{name: "malformed active UTF8", path: "index.html", body: []byte{0xff}, rejected: true},
 		{name: "unavailable mandatory scanner", path: "main.go", body: []byte("package main\n"), rejected: true, unavailable: true},
 		{name: "wrong scanner digest", path: "main.go", body: []byte("package main\n"), rejected: true, corrupt: true},
 	} {
@@ -86,7 +90,7 @@ func TestRepositoryBundleDecodedContentPolicy(t *testing.T) {
 		})
 	}
 	t.Run("no partial clean receipt", func(t *testing.T) {
-		files := []repositorybundle.File{{Entry: repositorybundle.Entry{Path: "a.go", Mode: "100644"}, Bytes: []byte("package main\n")}, {Entry: repositorybundle.Entry{Path: "z.html", Mode: "100644"}, Bytes: []byte("<html>active</html>")}}
+		files := []repositorybundle.File{{Entry: repositorybundle.Entry{Path: "a.go", Mode: "100644"}, Bytes: []byte("package main\n")}, {Entry: repositorybundle.Entry{Path: "z.html", Mode: "100644"}, Bytes: []byte("MZ binary")}}
 		container, manifest, err := repositorybundle.CanonicalContainer(files)
 		if err != nil {
 			t.Fatal(err)
@@ -101,4 +105,69 @@ func TestRepositoryBundleDecodedContentPolicy(t *testing.T) {
 			t.Fatal("partial set admitted", err)
 		}
 	})
+}
+
+// TestRepositoryBundlePolicyRegistryPreservesFrozenReceipts keeps old snapshots readable while
+// rejecting unknown policy, mismatched entries and missing antivirus; active media belong only
+// to the new fixed Git-source profile, without rewriting historical snapshot identities.
+// TestRepositoryBundlePolicyRegistryPreservesFrozenReceipts сохраняет чтение старых снимков,
+// отклоняет неизвестную политику, подмену файлов и отсутствие антивируса; активные форматы
+// принадлежат только новому профилю Git без переписывания идентификаторов старых снимков.
+func TestRepositoryBundlePolicyRegistryPreservesFrozenReceipts(t *testing.T) {
+	entry := repositorybundle.Entry{Path: "main.go", Mode: "100644", Bytes: 13, SHA256: repositorybundle.Digest([]byte("package main\n"))}
+	receipt := repositoryBundleFileReceipt{Entry: entry, MediaType: "text/plain", Scan: value.ArtifactScan{
+		Policy: value.ArtifactAntivirusPolicy, Engine: "ClamAV fixture", Digest: "sha256:" + entry.SHA256,
+		SizeBytes: entry.Bytes, ScannedAt: time.Now().UTC(),
+	}}
+	for _, policy := range []string{repositoryBundleLegacyContentPolicy, repositoryBundleContentPolicy} {
+		if !validRepositoryBundleFileReceipts(policy, []repositorybundle.Entry{entry}, []repositoryBundleFileReceipt{receipt}) {
+			t.Fatal("known frozen policy rejected", policy)
+		}
+	}
+	for _, policy := range []string{"", "unknown", repositoryBundleContentPolicy + "-future"} {
+		if validRepositoryBundleFileReceipts(policy, []repositorybundle.Entry{entry}, []repositoryBundleFileReceipt{receipt}) {
+			t.Fatal("unknown policy implicitly accepted")
+		}
+	}
+	for _, mutation := range []string{"missing", "entry", "infected", "digest", "size", "policy", "engine", "time"} {
+		t.Run(mutation, func(t *testing.T) {
+			bad := receipt
+			switch mutation {
+			case "entry":
+				bad.Entry.Path = "foreign.go"
+			case "infected":
+				bad.Scan.Infected = true
+			case "digest":
+				bad.Scan.Digest = "sha256:" + strings.Repeat("0", 64)
+			case "size":
+				bad.Scan.SizeBytes++
+			case "policy":
+				bad.Scan.Policy = "format-only"
+			case "engine":
+				bad.Scan.Engine = ""
+			case "time":
+				bad.Scan.ScannedAt = time.Time{}
+			}
+			receipts := []repositoryBundleFileReceipt{bad}
+			if mutation == "missing" {
+				receipts = nil
+			}
+			for _, policy := range []string{repositoryBundleLegacyContentPolicy, repositoryBundleContentPolicy} {
+				if validRepositoryBundleFileReceipts(policy, []repositorybundle.Entry{entry}, receipts) {
+					t.Fatal("invalid evidence accepted", policy)
+				}
+			}
+		})
+	}
+	for _, media := range []string{"text/html", "image/svg+xml", "application/xhtml+xml"} {
+		active := receipt
+		active.MediaType = media
+		if validRepositoryBundleFileReceipts(repositoryBundleLegacyContentPolicy, []repositorybundle.Entry{entry}, []repositoryBundleFileReceipt{active}) ||
+			!validRepositoryBundleFileReceipts(repositoryBundleContentPolicy, []repositorybundle.Entry{entry}, []repositoryBundleFileReceipt{active}) {
+			t.Fatal("active media admitted under wrong frozen profile", media)
+		}
+	}
+	if _, err := (&Repository{}).inspectRepositoryBundleFiles(t.Context(), []repositorybundle.File{{Entry: entry, Bytes: []byte("package main\n")}}); !errors.Is(err, errs.ErrUnavailable) {
+		t.Fatal("missing mandatory scanner admitted source", err)
+	}
 }

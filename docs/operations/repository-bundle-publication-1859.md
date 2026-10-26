@@ -4,8 +4,8 @@ title: Публикация CLEAN bundle исходников одним commit
 type: operations
 status: approved
 owner: developer
-version: 1.0.4
-updated: 2026-10-25
+version: 1.1.0
+updated: 2026-10-26
 ---
 
 # Контракт и границы #1859
@@ -48,9 +48,9 @@ Manifest версии1: canonical UTF-8 JSON без whitespace, поля
 `path,mode,bytes,sha256`. Все digest вычисляются по точным bytes, включая binary
 и newline. Допускается256regular files,1MiB unpacked,1MiB encoded container,128KiB manifest,
 512bytes/path. Бюджеты независимы от single-file capabilities. 108файлов/291KB укладываются в transport bounds; это не допуск форматов
-либо подтверждение CLEAN каждого decoded файла. Реальный пакет #1859 с
-обязательным HTML сейчас BLOCKED действующим native format policy; его файлы
-не удаляются/переименовываются ради прохождения.
+либо подтверждение CLEAN каждого decoded файла. Пакет с HTML допускается только по согласованному профилю
+`GIT_REPOSITORY_SOURCE_ONLY` после проверки каждого файла; размер сам по себе
+не доказывает допуск. Файлы не удаляются и не переименовываются ради прохождения.
 
 Отклоняются extra/missing entries, дубли/коллизии path, traversal, absolute
 paths, Git metadata, credential filenames, encryption, symlink/hardlink/device,
@@ -81,17 +81,43 @@ container проверяется отдельно: верхний decoded limit 
 обещает, что любой такой набор поместится в ordinary outbox.
 
 Outer JSON CLEAN не подтверждает decoded content. До создания invocation/Gate
-CP для **каждого** actual decoded member вызывает прежний
-`artifactpolicy.InspectReader` с настоящим filename и server-derived MIME,
-требует CLEAN, затем вызывает обязательный `repository.scanArtifact` для
-точных bytes/SHA256/size. Infected, недоступный/устаревший scanner, mismatch,
-quarantine и unsupported content не создают Gate. Хранятся только metadata
-формата и `clamav-instream-v1` receipt, привязанные к полному manifest и source
-pins. HTML/SVG/XHTML, shebang/MZ/ELF и неподдержанный SQLite database binary
-не проходят существующую policy. Исходники Go/SQL/обычный текст проходят
-только при действительном AV admission. 108файлов с запрещённым member
-честно BLOCKED; нельзя молча опустить, переименовать или перекодировать
-этот member ради CLEAN. Typed container не меняет global artifact policy.
+CP для **каждого** decoded member вызывает отдельный
+`artifactpolicy.InspectRepositorySourceReader` с настоящим filename, затем
+обязательный `repository.scanArtifact` для точных bytes/SHA256/size. Профиль
+`GIT_REPOSITORY_SOURCE_ONLY` назначается сервером только этой операции и не
+принимается из model input или обычной загрузки. Валидный UTF-8 без NUL,
+включая HTML/SVG/XHTML и shebang scripts, допускается как содержимое Git;
+preview и исполнение в Kodex этим не разрешаются. MZ/ELF, неверный UTF-8,
+несоответствие размера, неподдержанные двоичные файлы и архивы отклоняются.
+Прежние проверки поддерживаемых форматов, включая синтаксис JSON, сохраняются.
+
+Infected, отсутствующий/недоступный/устаревший scanner либо несовпадающий receipt
+не создают Gate и не дают частичного допуска. Каждый receipt связывает настоящий
+path/mode/size/digest, MIME и `clamav-instream-v1` evidence. Обычный upload/capture
+по-прежнему использует `InspectReader`: те же HTML и shebang остаются в карантине.
+Outer JSON CLEAN не заменяет decoded receipts. Автоматизация целевого репозитория
+может запуститься по его собственным правилам; source-only не обещает отсутствия CI.
+
+Новые immutable snapshots закрепляют `git-repository-source-only-clamav-v1`.
+Закрытый reader также понимает прежний `native-decoded-format-clamav-v1`, сохраняя
+его исторический допуск и receipts, включая UNKNOWN recovery. Неизвестные policy
+IDs закрыто отклоняются; подстановка latest и перезапись прежних снимков запрещены.
+Миграция не нужна: versioned policy уже входит в immutable snapshot digest.
+
+| Переход | Политика и результат |
+| --- | --- |
+| Prepare новых исходников | Exact grant/lease/source eligibility, format и AV каждого member; весь набор либо отказ до Gate |
+| Чтение старой proposal | Её прежняя известная policy и точные receipts; никаких новых полномочий |
+| Approve/reject/expiry/cancel | Прежняя owner-транзакция и полный manifest; source-purpose не заменяет решение |
+| Claim/read/Begin/CAS | Прежние exact pins/fence, один внешний эффект; source bytes не исполняются |
+| Lost ACK/retry/recovery | Прежний immutable receipt/read-only recovery, без нового commit или автоматической смены policy |
+| Retention/terminal | Прежние source pins и запрет cleanup при UNKNOWN; политика не ослабляет eligibility |
+
+Поставка включает CP, текст native MCP в runtime-controller и общий manifest UI
+обеих поверхностей Gate до включения grant. После появления proposal с новой policy
+возврат CP к бинарю, не понимающему этот ID, запрещён: сначала закрыть выдачу новых
+grants, сохранить совместимый reader и завершить recovery. Source-purpose не требует
+изменения внешнего API, Proto, интеграционного пакета или новой версии runner ABI.
 
 Правила: FR-042, DOM-MC-008, ARCH-MC-008 и GUIDE-DOC-003, раздел
 «Антивирусный допуск точных байтов файла». PostgreSQL хранит только manifest

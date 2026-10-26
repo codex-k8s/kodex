@@ -2370,6 +2370,16 @@ scanner закрывает весь набор, не выдаёт partial CLEAN.
 перекодирование или omission не снимают quarantine. Новый purpose-context не
 выводится из outer CLEAN и требует явного согласованного policy-контракта.
 
+Для согласованной публикации исходников Git разрешён отдельный server-owned
+`GIT_REPOSITORY_SOURCE_ONLY`: полный UTF-8 без NUL допускает HTML/SVG/XHTML и
+shebang, но только с mandatory exact-byte AV и без preview/исполнения в платформе.
+Обычный upload/capture не принимает purpose от caller и сохраняет карантин.
+Новый profile ID закрепляется в immutable snapshot; reader использует закрытый
+реестр старого и нового ID, не переименовывает старые receipts и отклоняет unknown.
+После появления новых snapshots rollback обязан сохранять совместимый reader.
+Полный manifest Gate показывает назначение исходников и предупреждение о возможной
+автоматизации целевого Git-репозитория. Это не разрешение на произвольный shell.
+
 PostgreSQL хранит metadata/pins/receipts; body остаётся в original immutable
 ArtifactRevision/S3version. Publication удерживает exact source pins до terminal,
 включая UNKNOWN после revoke/expiry/root terminal. Retention pin не даёт права

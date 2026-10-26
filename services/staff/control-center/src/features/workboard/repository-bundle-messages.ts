@@ -2,6 +2,7 @@ export const repositoryBundleMessages = {
   ru: {
     title: "Все файлы публикации",
     effect: "Один commit в новую ветку предложения. Исходная ветка не изменяется. Автоматизация репозитория может запуститься по его правилам.",
+    sourcePurpose: "Файлы публикуются как исходники Git. Каждый файл проходит проверку формата и антивируса; это не разрешение на просмотр HTML или выполнение скриптов в Kodex.",
     loading: "Проверяем полный manifest…",
     complete: "Полный набор проверен: {count} файлов, {bytes} байт.",
     repository: "Репозиторий", base: "Исходный commit", branch: "Новая ветка",
@@ -15,6 +16,7 @@ export const repositoryBundleMessages = {
   en: {
     title: "All publication files",
     effect: "One commit on a new proposal branch. The source branch stays unchanged. Repository automation may run according to its rules.",
+    sourcePurpose: "Files are published as Git source. Every file passes format and antivirus checks; this does not authorize HTML preview or script execution in Kodex.",
     loading: "Verifying the complete manifest…",
     complete: "Full set verified: {count} files, {bytes} bytes.",
     repository: "Repository", base: "Base commit", branch: "New branch",

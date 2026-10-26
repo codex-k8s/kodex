@@ -17,7 +17,13 @@ import (
 
 // repositoryBundleContentPolicy names the exact native per-decoded-file admission rule; outer container CLEAN is never substituted for these independent receipts.
 // repositoryBundleContentPolicy обозначает exact native per-decoded-file admission; outer container CLEAN не заменяет отдельные receipts.
-const repositoryBundleContentPolicy = "native-decoded-format-clamav-v1"
+const repositoryBundleContentPolicy = "git-repository-source-only-clamav-v1"
+
+// repositoryBundleLegacyContentPolicy preserves the format-only profile identity of existing
+// snapshots; those snapshots are never relabelled as a newer source-purpose admission.
+// repositoryBundleLegacyContentPolicy сохраняет идентификатор прежнего профиля форматов в
+// существующих снимках; их допуск не переименовывается в новый профиль исходников.
+const repositoryBundleLegacyContentPolicy = "native-decoded-format-clamav-v1"
 
 // queryRepositoryBundleSourcePin resolves exact immutable source revision and S3 receipt while retaining its ACTIVE head through owner commit, before any retention consumer is inserted.
 // queryRepositoryBundleSourcePin разрешает exact immutable source revision и S3 receipt, удерживая ACTIVE head до owner commit перед вставкой retention consumer.
@@ -40,13 +46,17 @@ type repositoryBundleFileReceipt struct {
 	Scan      value.ArtifactScan
 }
 
-// inspectRepositoryBundleFiles applies the existing format policy using each real filename, then scans every exact decoded byte stream. Unsupported, quarantined, infected or unscannable members stop preparation before native gate creation.
-// inspectRepositoryBundleFiles применяет прежнюю format policy с настоящим именем каждого файла, затем сканирует exact decoded bytes. Unsupported, quarantined, infected либо unscannable member останавливает preparation до native Gate creation.
+// inspectRepositoryBundleFiles applies the fixed Git source-purpose policy using each real filename,
+// then scans every exact decoded byte stream; unsupported, infected or unscannable members stop
+// preparation before gate creation. No individual member becomes a previewable platform artifact.
+// inspectRepositoryBundleFiles применяет фиксированный профиль исходников Git с настоящим именем,
+// затем сканирует точные байты каждого файла; неподдержанные, заражённые или непроверенные файлы
+// останавливают подготовку до создания Gate. Отдельный файл не получает preview в платформе.
 func (repository *Repository) inspectRepositoryBundleFiles(ctx context.Context, files []repositorybundle.File) ([]repositoryBundleFileReceipt, error) {
 	receipts := make([]repositoryBundleFileReceipt, 0, len(files))
 	for _, file := range files {
 		reader := bytes.NewReader(file.Bytes)
-		verdict, err := artifactpolicy.InspectReader(file.Entry.Path, "application/octet-stream", reader, int64(len(file.Bytes)))
+		verdict, err := artifactpolicy.InspectRepositorySourceReader(file.Entry.Path, reader, int64(len(file.Bytes)))
 		if err != nil {
 			return nil, errs.ErrUnavailable
 		}
@@ -63,6 +73,29 @@ func (repository *Repository) inspectRepositoryBundleFiles(ctx context.Context, 
 		receipts = append(receipts, repositoryBundleFileReceipt{Entry: file.Entry, MediaType: verdict.MediaType, Scan: scan})
 	}
 	return receipts, nil
+}
+
+// validRepositoryBundleFileReceipts validates the closed snapshot policy registry and exact
+// per-member antivirus evidence without changing historical receipts or consulting latest policy.
+// validRepositoryBundleFileReceipts проверяет закрытый реестр политик снимка и точные антивирусные
+// свидетельства каждого файла, не меняя историю и не подставляя текущую политику вместо прежней.
+func validRepositoryBundleFileReceipts(policy string, files []repositorybundle.Entry, receipts []repositoryBundleFileReceipt) bool {
+	if policy != repositoryBundleLegacyContentPolicy && policy != repositoryBundleContentPolicy || len(files) != len(receipts) {
+		return false
+	}
+	for index, receipt := range receipts {
+		entry := files[index]
+		if receipt.Entry != entry || receipt.MediaType == "" || receipt.Scan.Infected || receipt.Scan.Digest != "sha256:"+entry.SHA256 || receipt.Scan.SizeBytes != entry.Bytes || !validArtifactAntivirus(receipt.Scan) {
+			return false
+		}
+		if policy == repositoryBundleLegacyContentPolicy {
+			switch receipt.MediaType {
+			case "text/html", "image/svg+xml", "application/xhtml+xml":
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // resolveRepositoryBundleSource captures one exact already existing S3 receipt under owner locks; stale or foreign locators never become storage authority.

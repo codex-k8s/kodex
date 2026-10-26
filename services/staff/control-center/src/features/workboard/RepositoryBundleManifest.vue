@@ -51,6 +51,7 @@ onBeforeUnmount(() => { generation += 1; controller?.abort(); emit("verified", f
   <section class="bundle-manifest" :aria-busy="loading">
     <h3>{{ $t("repositoryBundle.title") }}</h3>
     <p>{{ $t("repositoryBundle.effect") }}</p>
+    <p>{{ $t("repositoryBundle.sourcePurpose") }}</p>
     <p v-if="loading" role="status">{{ $t("repositoryBundle.loading") }}</p>
     <template v-else-if="manifest">
 	  <p><code>{{ manifest.proposal.state }}</code><template v-if="manifest.proposal.candidateCommitSha"> · <code>{{ manifest.proposal.candidateCommitSha }}</code></template></p>
