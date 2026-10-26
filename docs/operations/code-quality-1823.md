@@ -4,11 +4,47 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.526.0
+version: 1.527.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая отправка запросов integration-grant candidates — 26.10.2026
+
+Локальный TypeScript helper fetchCandidates обслуживает четыре прежних GET:
+connection/project/recipient/capability candidates. Он копирует context,
+добавляет прежние query/pageToken/pageSize, связывает requestSignal при самом
+запросе, сохраняет cache:no-store иunwrap/data. Caller выбирает конкретный SDK
+operation через typed callback иточные Query/Page types;any/casts/строковый
+dispatcher не добавлены. Generic response берётся из Parameters<typeof
+unwrap<TPage>> без второй копии DTO. Purpose,scope иexpected pins,проверки
+checkedCandidatePage,session lifetime,abort иcursor snapshot остаются у
+прежних wrappers/loader. Запрос при создании загрузчика не запускается.
+
+Два whole-source inverses после штатного форматирования восстанавливают
+production файл ипрежний test file. Пять исходных API tests PASS до выноса.
+Итоговые17PASS/0FAIL/SKIP:прежние5и12новых cases для всех4SDK operations —
+lazy exact query/signal/pageSize/no-store,исходная network error без повторов
+иотмена ответа во время запроса. Это Vitest с synthetic mocked SDK,не live
+HTTP/browser acceptance. Format0.52s,lint8.64s,typecheck47.19s иproduction
+build8.39s PASS LOCAL. Vite/Vitest используют прежнюю конфигурацию с envDir:false,
+унаследованные runtime/credential env удалены;проектные .env не исполнялись.
+Generated SDK,dependency versions иproduction contracts не менялись.
+
+Прежнее raw окно заменилось одним меньшим nominal wrapper/type-alias окном:
+request kernel теперь действительно один. Остаток сохраняет видимую typed
+связь конкретных SDK endpoint,query/page иpurpose/pins без общего dispatcher.
+Адресно сохранён только точный внутрефайловый hash/count1,не весь adapter.
+Registry1107,6registry mutations и17quality unit tests PASS. Пять quality
+stages PASS LOCAL:6784sources/222exclusions,1424raw/1250retained/174unresolved
+(Go87/TypeScript87),Go21616/21616 EN→RU. Пороги/exclusions detector прежние;
+остальные174группы ещё требуют разбора.
+
+Context7 resolve/query /microsoft/typescript-website PASS:проверены generic
+instantiation expressions TypeScript4.7 для специализации typeof unwrap<TPage>.
+Версия проекта TypeScript5.9.3 прежняя. Полный E2E/browser/live/deploy/startup/QA
+NOT RUN;production build не выдаётся за сквозную приёмку.
 
 ## Общая подготовка namespaced RoleImage fixtures — 26.10.2026
 

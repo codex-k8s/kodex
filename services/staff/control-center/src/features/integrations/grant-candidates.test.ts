@@ -22,6 +22,8 @@ import {
   checkedCandidatePage,
   connectionCandidates,
   projectCandidates,
+  recipientCandidates,
+  capabilityCandidates,
 } from "./grant-candidates";
 const digest = "a".repeat(64);
 const page: IntegrationGrantConnectionCandidatePage = {
@@ -181,3 +183,132 @@ it("зависимый Project не меняет выбранную connection v
     load("", undefined, new AbortController().signal),
   ).rejects.toThrow("prefix changed");
 });
+
+// Один и тот же транспортный контракт проверяется для четырёх разных SDK operations.
+const candidateRequests = [
+  {
+    name: "connections",
+    sdk: sdk.connections,
+    load: () => connectionCandidates({ purpose: "GRANT" }),
+    query: { purpose: "GRANT" },
+    context: {},
+  },
+  {
+    name: "projects",
+    sdk: sdk.projects,
+    load: () => projectCandidates({ connectionRef: "connection" }),
+    query: { connectionRef: "connection" },
+    context: { connectionRef: "connection" },
+  },
+  {
+    name: "recipients",
+    sdk: sdk.recipients,
+    load: () =>
+      recipientCandidates({
+        connectionRef: "connection",
+        projectRef: "project",
+        recipientKind: "AGENT",
+      }),
+    query: {
+      connectionRef: "connection",
+      projectRef: "project",
+      recipientKind: "AGENT",
+    },
+    context: {
+      connectionRef: "connection",
+      projectRef: "project",
+      recipientKind: "AGENT",
+    },
+  },
+  {
+    name: "capabilities",
+    sdk: sdk.capabilities,
+    load: () =>
+      capabilityCandidates({
+        connectionRef: "connection",
+        projectRef: "project",
+        recipientKind: "AGENT",
+        recipientRef: "agent",
+      }),
+    query: {
+      connectionRef: "connection",
+      projectRef: "project",
+      recipientKind: "AGENT",
+      recipientRef: "agent",
+    },
+    context: {
+      connectionRef: "connection",
+      projectRef: "project",
+      recipientKind: "AGENT",
+      recipientRef: "agent",
+    },
+  },
+];
+it.each(candidateRequests)(
+  "$name: лениво вызывает только выбранный SDK с точными query/signal/no-store",
+  async (scenario) => {
+    scenario.sdk.mockResolvedValue({
+      data: {
+        context: scenario.context,
+        contextDigest: digest,
+        pins: { contextDigest: digest },
+        total: 0,
+        items: [],
+      },
+      response: new Response(null),
+    });
+    const load = scenario.load();
+    for (const request of Object.values(sdk))
+      expect(request).not.toHaveBeenCalled();
+    const signal = new AbortController().signal;
+    await expect(load("find", undefined, signal, 23)).resolves.toMatchObject({
+      total: 0,
+      items: [],
+    });
+    expect(scenario.sdk).toHaveBeenCalledExactlyOnceWith({
+      query: {
+        ...scenario.query,
+        query: "find",
+        pageToken: undefined,
+        pageSize: 23,
+      },
+      signal,
+      cache: "no-store",
+    });
+    for (const request of Object.values(sdk)) {
+      if (request !== scenario.sdk) expect(request).not.toHaveBeenCalled();
+    }
+  },
+);
+it.each(candidateRequests)(
+  "$name: возвращает исходную ошибку без повторного запроса",
+  async (scenario) => {
+    const error = new Error("synthetic candidate read failure");
+    scenario.sdk.mockRejectedValue(error);
+    await expect(
+      scenario.load()("", undefined, new AbortController().signal),
+    ).rejects.toBe(error);
+    expect(scenario.sdk).toHaveBeenCalledTimes(1);
+  },
+);
+it.each(candidateRequests)(
+  "$name: отклоняет ответ при отмене во время запроса",
+  async (scenario) => {
+    scenario.sdk.mockResolvedValue({
+      data: {
+        context: scenario.context,
+        contextDigest: digest,
+        pins: { contextDigest: digest },
+        total: 0,
+        items: [],
+      },
+      response: new Response(null),
+    });
+    const controller = new AbortController();
+    const pending = scenario.load()("", undefined, controller.signal);
+    const reason = new Error("synthetic candidate request cancelled");
+    controller.abort(reason);
+    await expect(pending).rejects.toBe(reason);
+    expect(scenario.sdk).toHaveBeenCalledTimes(1);
+  },
+);

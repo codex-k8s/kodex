@@ -2,6 +2,14 @@
   "version": 1,
   "entries": [
     {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/integrations/grant-candidates.ts",
+      "secondPath": "services/staff/control-center/src/features/integrations/grant-candidates.ts",
+      "fragmentSHA256": "4affe469fb1c07a64cae0fb468cf3994960f55ab5275d5ecb7ffa2c6d6ab55f5",
+      "count": 1,
+      "reason": "После фактического выноса fetchCandidates четыре wrappers сохраняют только nominal Query/Page types,выбор конкретного generated SDK operation иявную передачу context/purpose/expected pins в уже общий loader. Точное перекрывающееся окно связывает Project/Recipient/Capability wrappers иих Omit query aliases;самих request options/signal/no-store/unwrap kernels в callers больше нет. Общий строковый SDK dispatcher убрал бы видимую типовую связь endpoint/context/page без нового вычислительного ядра. Сохранён один точный внутрефайловый hash/count1;checkedCandidatePage,cursor/lifetime validation и другие фрагменты не исключены."
+    },
+    {
       "format": "go",
       "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime.go",
       "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime.go",
