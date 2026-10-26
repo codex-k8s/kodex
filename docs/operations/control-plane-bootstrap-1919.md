@@ -1,7 +1,7 @@
 ---
-id: OPS-BOOTSTRAP-1919
+id: OPS-DOC-BOOTSTRAP-1919
 title: Приватная причина bootstrap и ограниченное восстановление транзакции
-type: operation
+type: operations
 status: approved
 owner: developer
 version: 1.0.0
@@ -58,7 +58,7 @@ bash scripts/tests/control-plane-postgres-test.sh '^TestConcurrentBootstrapCompo
 
 Использовать канонический Go 1.26.6, GOMAXPROCS=2, GOENV=off/GOWORK=off,
 штатный loopback Docker fixture и очищенное окружение без внешних DSN/credentials.
-Fixture проверяет исходный отказ единственной попытки с40001, bounded whole-Tx retry и отмену настоящего
+Fixture проверяет исходный отказ единственной попытки с 40001, bounded whole-Tx retry и отмену настоящего
 lock wait. QueryEnd barrier и exact backendPID/pg_blocking_pids доказывают порядок;
 readback проверяет отсутствие лишних owner/effect revisions и точные изменения
 версий definitions только committed попытками. Все goroutines имеют cancel/join,
