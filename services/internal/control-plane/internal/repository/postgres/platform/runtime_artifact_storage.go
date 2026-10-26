@@ -169,6 +169,13 @@ func (repository *Repository) prepareCommandObjects(ctx context.Context, scope s
 }
 
 func (repository *Repository) requireRuntimeArtifactWrite(ctx context.Context, tx pgx.Tx, current scope, lease map[string]any) error {
+	if rework, err := isLegacyReworkNodeTx(ctx, tx, current, stringMap(lease, "nodeID")); err != nil {
+		return err
+	} else if rework {
+		if err := repository.validateLegacyReworkNodeAuthorityTx(ctx, tx, current, stringMap(lease, "nodeID")); err != nil {
+			return err
+		}
+	}
 	var allowed bool
 	var actorRef string
 	if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectAgentCapability, current.organizationID,

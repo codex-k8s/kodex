@@ -267,7 +267,11 @@ func (repository *Repository) failRuntimeGraph(ctx context.Context, tx pgx.Tx, c
 func (repository *Repository) failRuntimeGraphWithGateExpiry(ctx context.Context, tx pgx.Tx, current scope, input command.Command, candidate claimableExecution, code, summary, expiredGateID string) error {
 	ordinary := expiredGateID == "" && ((code == "RUNTIME_INPUT_INVALID" && summary == runtimeClaimEligibilityChanged) || (code == "RUNTIME_TIMEOUT" && summary == runtimeTimeoutSummary))
 	expiry := expiredGateID != "" && code == "OWNER_GATE_EXPIRED" && summary == ownerGateExpiredSummary
-	if !ordinary && !expiry {
+	ownerRejected := false
+	if decision, ok := input.Payload.(command.GateResolutionInput); ok {
+		ownerRejected = input.Kind == command.ResolveOwnerGate && decision.GateRef != "" && decision.Decision == "REJECT" && expiredGateID == "" && code == "WORKFLOW_REJECTED" && summary == "i18n:OWNER_GATE_RESOLVED"
+	}
+	if !ordinary && !expiry && !ownerRejected {
 		return errs.ErrInvalid
 	}
 	rows, err := tx.Query(ctx, queryRuntimeClaimFailGraph, pgx.StrictNamedArgs{

@@ -57,7 +57,11 @@ func (repository *Repository) attachGraphRuns(ctx context.Context, tx pgx.Tx, cu
 		values = append(values, item)
 		byRef[item.Ref] = item
 	}
-	predecessors, valid := graphRetryPredecessors(graph, byRef)
+	reworkLinks, err := readLegacyReworkGraphLinksTx(ctx, tx, current, graph, byRef)
+	if err != nil {
+		return err
+	}
+	predecessors, valid := graphRetryPredecessorsWithRework(graph, byRef, reworkLinks)
 	if !valid {
 		return errs.ErrUnavailable
 	}
@@ -74,6 +78,12 @@ func (repository *Repository) attachGraphRuns(ctx context.Context, tx pgx.Tx, cu
 // Retry/continuation lineage подтверждается owner rows и серверным graph edge.
 // Обход ограничен уже прочитанными refs: дополнительные run reads не выполняются.
 func graphRetryPredecessors(graph *entity.RunGraph, runs map[string]entity.Run) (map[string]bool, bool) {
+	return graphRetryPredecessorsWithRework(graph, runs, nil)
+}
+
+// graphRetryPredecessorsWithRework keeps the original cross-root checks and admits only private owner-proved legacy child links.
+// graphRetryPredecessorsWithRework сохраняет прежние cross-root проверки и допускает лишь private owner-proved legacy child links.
+func graphRetryPredecessorsWithRework(graph *entity.RunGraph, runs map[string]entity.Run, reworkLinks map[string]legacyReworkGraphLink) (map[string]bool, bool) {
 	nodes := make(map[string]entity.RunNode, len(graph.Nodes))
 	for _, node := range graph.Nodes {
 		nodes[node.Ref] = node
@@ -93,6 +103,13 @@ func graphRetryPredecessors(graph *entity.RunGraph, runs map[string]entity.Run) 
 		}
 		old, oldRunOK := runs[oldNode.RunRef]
 		fresh, newRunOK := runs[newNode.RunRef]
+		if proof, exists := reworkLinks[edge.Ref]; exists {
+			if !oldOK || !newOK || !oldRunOK || !newRunOK || links[fresh.Ref] != "" || !validLegacyReworkGraphLink(graph.RunRef, edge, oldNode, newNode, old, fresh, proof) {
+				return nil, false
+			}
+			links[fresh.Ref], predecessors[old.Ref] = old.Ref, true
+			continue
+		}
 		if !oldOK || !newOK || !oldRunOK || !newRunOK || !validPredecessorAnchors(edge.Type, oldNode, newNode, old, fresh) || old.RootRunRef != old.Ref || fresh.RootRunRef != fresh.Ref || edge.RunRef != fresh.Ref || old.Ref == fresh.Ref || links[fresh.Ref] != "" {
 			return nil, false
 		}

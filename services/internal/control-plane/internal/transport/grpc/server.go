@@ -311,6 +311,16 @@ func transportError(err error) error {
 		return status.Error(codes.FailedPrecondition, "required capability is not enabled")
 	case errors.Is(err, errs.ErrAlreadyResolved):
 		return status.Error(codes.FailedPrecondition, "resource is already resolved")
+	case errors.Is(err, errs.ErrLegacyReworkScopeUnsupported):
+		return statusErrorWithReason(codes.FailedPrecondition, "legacy rework operation scope is unsupported", "LEGACY_REWORK_SCOPE_UNSUPPORTED")
+	case errors.Is(err, errs.ErrLegacyReworkWrite):
+		return statusErrorWithReason(codes.FailedPrecondition, "legacy rework requires write reconciliation", "LEGACY_REWORK_WRITE_REQUIRES_RECONCILIATION")
+	case errors.Is(err, errs.ErrLegacyReworkParentBusy):
+		return statusErrorWithReason(codes.FailedPrecondition, "legacy rework coordinator is executing", "LEGACY_REWORK_PARENT_BUSY")
+	case errors.Is(err, errs.ErrLegacyReworkDeliveryBlocked):
+		return statusErrorWithReason(codes.FailedPrecondition, "legacy rework delivery is blocked", "LEGACY_REWORK_DELIVERY_BLOCKED")
+	case errors.Is(err, errs.ErrLegacyReworkReadLimit):
+		return statusErrorWithReason(codes.FailedPrecondition, "legacy rework exceeds readable input budget", "LEGACY_REWORK_READ_LIMIT")
 	case errors.Is(err, errs.ErrConflict):
 		return status.Error(codes.Aborted, "resource state changed")
 	case errors.Is(err, errs.ErrProviderCatalogTooLarge):

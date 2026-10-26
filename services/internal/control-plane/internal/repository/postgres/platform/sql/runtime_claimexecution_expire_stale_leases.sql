@@ -31,7 +31,8 @@ WITH expired AS (
         AND ((physical.state IN ('QUEUED','RUNNING') AND root.state IN ('QUEUED','RUNNING') AND NOT EXISTS (
                 SELECT 1 FROM control_plane.workflow_versions server_version
                 WHERE server_version.id=root.workflow_version_id AND server_version.spec->>'ExecutionMode'='SERVER_DAG_V1'))
-            OR (physical.state IN ('QUEUED','RUNNING','WAITING_HUMAN') AND EXISTS (SELECT 1 FROM server_nodes assigned WHERE assigned.id=n.id)))
+            OR (physical.state IN ('QUEUED','RUNNING','WAITING_HUMAN') AND EXISTS (SELECT 1 FROM server_nodes assigned WHERE assigned.id=n.id))
+            OR control_plane.legacy_rework_execution_assigned(n.organization_id,n.id))
     RETURNING n.id,n.run_id
 ), resumed AS (
     UPDATE control_plane.runs physical

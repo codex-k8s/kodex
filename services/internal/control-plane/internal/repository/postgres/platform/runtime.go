@@ -851,6 +851,18 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			instructions = materializedPrompt.Prompt
 			capabilities = materializedPrompt.EffectiveCapabilities
 			integrationGrants = filterIntegrationGrants(integrationGrants, capabilities)
+			legacyRework, err := isLegacyReworkNodeTx(ctx, tx, scope, nodeID)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			if legacyRework {
+				if err := repository.validateLegacyReworkNodeAuthorityTx(ctx, tx, scope, nodeID); err != nil {
+					return commandOutcome{}, err
+				}
+				if err := repository.validateLegacyReworkScopeTx(ctx, tx, scope, capabilities, integrationGrants); err != nil {
+					return commandOutcome{}, err
+				}
+			}
 			mcpScopeKind, mcpScopeRef := "AGENT", agentRef
 			if runtimeAssistantScope(stableKey) == runtimecontract.AssistantScopeSystem {
 				mcpScopeKind = "SYSTEM"
@@ -1812,6 +1824,17 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	if outcome, handled, err := repository.completeServerWorkflowTx(ctx, tx, scope, lease, payload, artifactRefs); err != nil || handled {
 		return outcome, err
 	}
+	legacyRework, reworkErr := isLegacyReworkNodeTx(ctx, tx, scope, stringMap(lease, "nodeID"))
+	if reworkErr != nil {
+		return commandOutcome{}, reworkErr
+	}
+	var reworkReadPending, reworkReadContinued bool
+	if payload.Success && legacyRework {
+		reworkReadPending, reworkReadContinued, err = repository.joinLegacyReworkReadTx(ctx, tx, scope, lease)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+	}
 	var requiredPending, hasRequiredOrigin bool
 	if tx.QueryRow(ctx, queryWorkflowLaunchRunPending, pgx.StrictNamedArgs{"run_id": lease["runID"], "node_id": lease["nodeID"]}).Scan(&requiredPending, &hasRequiredOrigin) != nil {
 		return commandOutcome{}, errs.ErrUnavailable
@@ -1820,12 +1843,12 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	if tx.QueryRow(ctx, queryRepositoryBundleCallbackWait, pgx.StrictNamedArgs{"organization_id": scope.organizationID, "run_id": lease["runID"]}).Scan(&bundlePending) != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	requiredPending = requiredPending || bundlePending
+	requiredPending = requiredPending || bundlePending || reworkReadPending
 	if requiredPending {
 		humanGateAfter = false
 	}
 	if payload.Success {
-		continued := false
+		continued := reworkReadContinued
 		if hasRequiredOrigin {
 			var continuationErr error
 			continued, continuationErr = repository.scheduleCallbackContinuation(ctx, tx, scope, stringMap(lease, "nodeID"), stringMap(lease, "projectID"))
@@ -1834,7 +1857,15 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 			}
 		}
 		var callbackEdgeID, callbackEdgeRef, parentNodeID, parentNodeRef, parentRunID string
-		err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectRunEdgesRootRunIdSourceNodeIdType, lease["rootRunID"], lease["nodeID"]).Scan(&callbackEdgeID, &callbackEdgeRef, &parentNodeID, &parentNodeRef, &parentRunID)
+		var err error
+		if legacyRework && !requiredPending && !continued {
+			err = tx.QueryRow(ctx, queryLegacyReworkCallbackOrigin, pgx.StrictNamedArgs{"organization_id": scope.organizationID, "child_run_id": lease["runID"], "runtime_revision_id": lease["runtimeRevisionID"]}).Scan(&callbackEdgeID, &callbackEdgeRef, &parentNodeID, &parentNodeRef, &parentRunID)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return commandOutcome{}, errs.ErrConflict
+			}
+		} else {
+			err = tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectRunEdgesRootRunIdSourceNodeIdType, lease["rootRunID"], lease["nodeID"]).Scan(&callbackEdgeID, &callbackEdgeRef, &parentNodeID, &parentNodeRef, &parentRunID)
+		}
 		if err == nil && !requiredPending && !continued {
 			if _, callbackErr := repository.recordChildCallback(ctx, tx, scope, callbackRecord{
 				childRunID: lease["runID"].(string), childRunRef: stringMap(lease, "runRef"),
@@ -1842,6 +1873,7 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 				runtimeRevisionID: stringMap(lease, "runtimeRevisionID"), artifactRefs: artifactRefs,
 				parentRunID: parentRunID, resultSummary: payload.ResultSummary, callbackEdgeID: callbackEdgeID,
 				callbackEdgeRef: callbackEdgeRef, parentNodeID: parentNodeID, parentNodeRef: parentNodeRef,
+				legacyRework: legacyRework,
 			}); callbackErr != nil {
 				return commandOutcome{}, callbackErr
 			}
@@ -2077,6 +2109,11 @@ func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, 
 	if err != nil {
 		return commandOutcome{}, err
 	}
+	if rework, err := isLegacyReworkNodeTx(ctx, tx, scope, stringMap(lease, "nodeID")); err != nil {
+		return commandOutcome{}, err
+	} else if rework {
+		return commandOutcome{}, errs.ErrLegacyReworkScopeUnsupported
+	}
 	if root, err := readServerWorkflowRootTx(ctx, tx, scope, stringMap(lease, "rootRunID")); err != nil {
 		return commandOutcome{}, err
 	} else if root != nil {
@@ -2232,6 +2269,7 @@ func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, 
 
 type callbackRecord struct {
 	repositoryBundle                                           bool
+	legacyRework                                               bool
 	childRunID, childRunRef, rootRunID, projectID, parentRunID string
 	resultSummary, callbackEdgeID, callbackEdgeRef             string
 	parentNodeID, parentNodeRef                                string
@@ -2246,6 +2284,9 @@ func (repository *Repository) recordChildCallback(ctx context.Context, tx pgx.Tx
 	receiptQuery := queryRuntimeCompleteexecutionInsertCallbackReceiptsChildRunId
 	if record.repositoryBundle {
 		receiptQuery = queryRepositoryBundleCallbackReceipt
+	}
+	if record.legacyRework {
+		receiptQuery = queryLegacyReworkCallbackReceipt
 	}
 	tag, err := tx.Exec(ctx, receiptQuery, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID, "child_run_id": record.childRunID,
@@ -2301,8 +2342,20 @@ func (repository *Repository) recordChildCallback(ctx context.Context, tx pgx.Tx
 	if _, err := repository.emitRunEvent(ctx, tx, scope, record.projectID, record.rootRunID, record.childRunRef, "CALLBACK_DELIVERED", record.parentNodeRef, record.callbackEdgeRef, "", "", "i18n:CHILD_AGENT_RESULT_DELIVERED", "RUNNING", "RUNNING"); err != nil {
 		return false, err
 	}
-	if _, err := repository.scheduleCallbackContinuation(ctx, tx, scope, record.parentNodeID, record.projectID); err != nil {
+	continued, err := repository.scheduleCallbackContinuation(ctx, tx, scope, record.parentNodeID, record.projectID)
+	if err != nil {
 		return false, err
+	}
+	if !continued {
+		pending, err := legacyReworkDeliveryPendingTx(ctx, tx, scope, record.rootRunID)
+		if err != nil {
+			return false, err
+		}
+		if pending {
+			if _, err := repository.scheduleLegacyReworkContinuationTx(ctx, tx, scope, record.parentNodeID, record.projectID); err != nil {
+				return false, err
+			}
+		}
 	}
 	return false, nil
 }
@@ -2310,11 +2363,25 @@ func (repository *Repository) recordChildCallback(ctx context.Context, tx pgx.Tx
 // scheduleCallbackContinuationTask materializes one existing callback join after all owner prerequisites; its caller owns presentation fault isolation for the new typed publication kind.
 // scheduleCallbackContinuationTask материализует один existing callback join после owner prerequisites; caller изолирует presentation faults нового typed publication kind.
 func (repository *Repository) scheduleCallbackContinuationTask(ctx context.Context, tx pgx.Tx, scope scope, parentNodeID, projectID string) (bool, error) {
+	return repository.scheduleCallbackContinuationTaskForMode(ctx, tx, scope, parentNodeID, projectID, callbackJoinNative)
+}
+
+// scheduleCallbackContinuationTaskForMode preserves native materialization while keeping each selector's authority and terminal rules independent.
+// scheduleCallbackContinuationTaskForMode сохраняет native materialization и раздельные authority/terminal правила каждого selector.
+func (repository *Repository) scheduleCallbackContinuationTaskForMode(ctx context.Context, tx pgx.Tx, scope scope, parentNodeID, projectID string, mode callbackJoinMode) (bool, error) {
+	query := queryRuntimeCallbackResolveContinuation
+	switch mode {
+	case callbackJoinNative:
+	case callbackJoinLegacyRework:
+		query = queryLegacyReworkContinuation
+	default:
+		return false, errs.ErrInvalid
+	}
 	var parentRunID, rootRunID, agentID, displayName, role, sessionID, agentRef, workflowVersionID, originStepKey, originNodeRef string
 	var originHumanGate, requiredContinuation, publicationJoin bool
 	var attempt int32
 	var callbackContext []byte
-	err := tx.QueryRow(ctx, queryRuntimeCallbackResolveContinuation, pgx.StrictNamedArgs{
+	err := tx.QueryRow(ctx, query, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID,
 		"parent_node_id":  parentNodeID,
 	}).Scan(&parentRunID, &rootRunID, &agentID, &attempt, &displayName, &role, &sessionID, &agentRef, &workflowVersionID, &originStepKey, &originHumanGate, &requiredContinuation, &originNodeRef, &callbackContext, &publicationJoin)
@@ -2356,7 +2423,14 @@ func (repository *Repository) scheduleCallbackContinuationTask(ctx context.Conte
 	if err != nil {
 		return false, err
 	}
-	if serverRoot == nil && workflowVersionID != "" && requiredContinuation && !strings.HasPrefix(originStepKey, "workflow.coordinator.") {
+	legacyRework := false
+	if serverRoot == nil && workflowVersionID != "" {
+		legacyRework, err = isLegacyReworkNodeTx(ctx, tx, scope, parentNodeID)
+		if err != nil {
+			return false, err
+		}
+	}
+	if serverRoot == nil && !legacyRework && workflowVersionID != "" && requiredContinuation && !strings.HasPrefix(originStepKey, "workflow.coordinator.") {
 		// Published step сохраняет единственный canonical node/key. Как у
 		// owner CHANGES_REQUESTED, callback создаёт новый Turn и attempt,
 		// не придумывая coordinator alias и не меняя immutable launch origin.
@@ -2408,7 +2482,7 @@ func (repository *Repository) scheduleCallbackContinuationTask(ctx context.Conte
 	}); err != nil {
 		return false, errs.ErrUnavailable
 	}
-	if publicationJoin {
+	if publicationJoin || legacyRework {
 		if _, err := tx.Exec(ctx, queryRuntimeIntegrationResumeChildRun, pgx.StrictNamedArgs{
 			"run_id": parentRunID, "organization_id": scope.organizationID,
 		}); err != nil {

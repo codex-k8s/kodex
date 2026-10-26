@@ -82,6 +82,16 @@ IDEMPOTENCY_CONFLICT:
   other: A different operation already uses this request key
 VERSION_OR_STATE_CONFLICT:
   other: The resource changed; review the latest version and try again
+LEGACY_REWORK_SCOPE_UNSUPPORTED:
+  other: Rework supports artifacts and one approval-gated read per turn. External writes, delegation and workflow launches are unsupported. Use a SERVER workflow or cancel this run.
+LEGACY_REWORK_WRITE_REQUIRES_RECONCILIATION:
+  other: This workflow already has an external write with its own receipt. Legacy rework will not repeat it. Reconcile that result and use a SERVER workflow or cancel this run.
+LEGACY_REWORK_PARENT_BUSY:
+  other: The coordinator is still executing. Wait for completion and refresh the gate, or cancel this run.
+LEGACY_REWORK_DELIVERY_BLOCKED:
+  other: The revised result cannot yet be delivered safely. Check open approvals and current access, or cancel this run. External actions are not repeated.
+LEGACY_REWORK_READ_LIMIT:
+  other: Another attempt would exceed the graph or input readability budget. Cancel this run and start a separate workflow with smaller input.
 STATE_CONFLICT:
   other: This action is not available in the current state
 RESOURCE_IN_USE:

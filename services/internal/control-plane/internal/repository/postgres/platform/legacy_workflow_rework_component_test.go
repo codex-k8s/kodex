@@ -139,6 +139,10 @@ func TestLegacyWorkflowReworkComponent(t *testing.T) {
 	if after.child != "SUCCEEDED" || after.node != "SUCCEEDED" || after.snapshot != before.snapshot || after.revisions != before.revisions || after.callbacks != 1 || after.runs != before.runs+1 {
 		t.Fatal("owner rework rewrote terminal origin instead of creating a distinct physical attempt")
 	}
+	_, graph, graphErr := service.GetRunGraphSnapshot(ctx, owner, root.Ref)
+	if graphErr != nil || len(graph.Runs) != int(after.runs) {
+		t.Fatal("owner graph rejected the fresh child retry lineage", completionOutcomeClass(graphErr))
+	}
 	second := complete("second-complete", reworked[0], "Исправленный материал готов к принятию.", "reworked.md")
 	if len(second.CreatedRefs) != 1 || second.CreatedRefs[0] == firstResult.CreatedRefs[0] {
 		t.Fatal("reworked result did not preserve distinct native artifact identity")
@@ -154,9 +158,10 @@ func TestLegacyWorkflowReworkComponent(t *testing.T) {
 	if err != nil || acceptedGate.Ref == gate.Ref || acceptedGate.State != "OPEN" {
 		t.Fatal("new physical attempt reused the first gate")
 	}
-	execute(owner, command.ResolveOwnerGate, "approve-reworked", &acceptedGate.Version, command.GateResolutionInput{GateRef: acceptedGate.Ref, Decision: "APPROVE"})
+	acceptedFeedback := "Принято с условием сохранить обе версии материала."
+	execute(owner, command.ResolveOwnerGate, "approve-reworked", &acceptedGate.Version, command.GateResolutionInput{GateRef: acceptedGate.Ref, Decision: "APPROVE", Comment: acceptedFeedback})
 	callback := claim("accepted-parent")
-	if len(callback) != 1 || stringMap(callback[0], "runRef") != root.Ref || !strings.Contains(stringMap(callback[0], "task"), second.CreatedRefs[0]) || !strings.Contains(stringMap(callback[0], "task"), "Исправленный материал") {
+	if len(callback) != 1 || stringMap(callback[0], "runRef") != root.Ref || !strings.Contains(stringMap(callback[0], "task"), second.CreatedRefs[0]) || !strings.Contains(stringMap(callback[0], "task"), "Исправленный материал") || !strings.Contains(stringMap(callback[0], "task"), feedback) || !strings.Contains(stringMap(callback[0], "task"), acceptedFeedback) || !strings.Contains(stringMap(callback[0], "task"), acceptedGate.Ref) {
 		t.Fatal("fresh coordinator did not receive the exact newly accepted callback")
 	}
 	complete("final-parent", callback[0], "Принят исправленный материал с сохранённой историей.", "")
