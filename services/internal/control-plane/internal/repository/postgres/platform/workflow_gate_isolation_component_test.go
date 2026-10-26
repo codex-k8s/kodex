@@ -137,7 +137,10 @@ func runWorkflowGateIsolationScenario(t *testing.T, f *workflowRecoveryRegressio
 	if claims := f.claims("isolation-terminal-claim"); len(claims) != 0 {
 		t.Fatal("terminal root reopened a model after gate decisions")
 	}
-	if _, err := f.service.Execute(f.ctx, command.Command{Kind: command.RenewExecution, Principal: f.worker, Mutation: value.Mutation{IdempotencyKey: "isolation-terminal-renew"}, Payload: command.LeaseInput{LeaseRef: stringMap(freshGated, "leaseRef"), Fence: stringMap(freshGated, "fence"), Generation: runtimeRevisionMapInt64(freshGated, "generation")}}); !errors.Is(err, errs.ErrConflict) {
-		t.Fatal("terminal root renewed a retired model lease")
+	if _, err := f.service.Execute(f.ctx, command.Command{Kind: command.RenewExecution, Principal: f.worker, Mutation: value.Mutation{IdempotencyKey: "isolation-terminal-renew"}, Payload: command.LeaseInput{LeaseRef: stringMap(freshGated, "leaseRef"), Fence: stringMap(freshGated, "fence"), Generation: runtimeRevisionMapInt64(freshGated, "generation")}}); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatal("terminal lease renewal did not preserve its exact denial", completionOutcomeClass(err))
+	}
+	if afterDeniedRenew := readWorkflowGateExecutionProof(t, f, freshGated); afterDeniedRenew != closed {
+		t.Fatal("denied terminal renewal changed graph, lease, counters or clock anchors")
 	}
 }
