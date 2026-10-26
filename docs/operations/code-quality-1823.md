@@ -4,11 +4,38 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.500.0
+version: 1.501.0
 updated: 2026-10-26
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общий путь страниц справочников доступа — 26.10.2026
+
+Шесть loaders access/entity-pickers используют feature-local loadPickerOptions:
+один await unwrap, capture исходного массива до map и явный nextPageToken.
+Публичные функции возвращают Promise helper напрямую; project guard возвращает
+уже выполненный пустой Promise без запроса. Отдельные SDK operations/path,
+requestSignal, subject kind, includeArchived:false, ROLE/VERSION и разные
+поля описаний сохранены. Общий query четырёх каталогов сохраняет truthy
+omission и порядок полей; специальные subject/role queries остаются у callers.
+
+111 парных сценариев,222 исполнения исходного и текущего полных модулей
+с synthetic SDK подтвердили query/path/ключи и undefined, capture/mutation/
+throw, ошибки SDK и signal, deferred completion и порядок microtasks.
+AST-инверсия восстановила весь исходный модуль после раскрытия двух helpers;
+восемь опасных изменений отвергнуты. Native async boundary перенесена в helper,
+дополнительного await у callers нет. Полный браузерный сценарий этим не доказан.
+
+Format, lint, typecheck,build и весь unit-набор413files/4114tests — PASS LOCAL;
+FAIL/SKIP0. Vite/Vitest запускаются с
+private config envDir:false и очищенным дочерним окружением, без чтения .env.
+Context7 отклонил ключ; использованы официальные TypeScript Generics и Vite
+Shared Options/envDir. Зависимости и generated SDK не изменялись.
+Detector:6774sources/222generated exclusions,1464raw/1221retained/243unresolved,
+Go21589/21589 EN→RU,registry1078 без изменений. Два прежних окна сменились
+одним меньшим окном номинальных adapters; оно остаётся unresolved.
+Legacy agent-runner render FAIL не закрыт; full E2E/live/deploy/QA — NOT RUN.
 
 ## Общие предохранители локальных identity fixtures — 26.10.2026
 
