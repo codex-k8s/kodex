@@ -73,6 +73,9 @@ func (tx *secretAdmissionTx) QueryRow(_ context.Context, sql string, args ...any
 	tx.t.Helper()
 	tx.reads++
 	want := pgx.StrictNamedArgs{"organization_id": "tenant", "project_id": "project", "scope_kind": "PROJECT", "secret_ref": tx.want.SecretRef, "revision": tx.want.Revision}
+	if sql == queryRuntimeSecretResolveBinding {
+		want["purpose"] = "APPLICATION"
+	}
 	if len(args) != 1 || !reflect.DeepEqual(args[0], want) {
 		tx.t.Fatal("secret admission lost exact owner/revision pins")
 	}

@@ -57,8 +57,8 @@ const riskOperations = [
 ];
 
 function checkRiskContract(api, policy) {
-  // Canonical policygen revision сохраняет risk authority и добавляет exact revision reads.
-  assert.equal(policy.policy_revision, 98, 'RISK_POLICY_REVISION');
+  // Canonical policygen revision сохраняет risk authority и добавляет отдельные SSH bindings.
+  assert.equal(policy.policy_revision, 99, 'RISK_POLICY_REVISION');
   for (const [permission, operation, method] of riskOperations) {
     const bindings = policy.policy.operation_bindings.filter(item => item.operation_id === permission);
     assert.equal(bindings.length, 1, 'RISK_METHOD_EXACT_CALLER');
