@@ -23,6 +23,7 @@ require (
 	github.com/codex-k8s/kodex/libs/go/runtimesecret v0.0.0
 	github.com/codex-k8s/kodex/libs/go/secretbrokerapi v0.0.0
 	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0-00010101000000-000000000000
+	github.com/codex-k8s/kodex/libs/go/sshcompose v0.0.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/pressly/goose/v3 v3.27.3
@@ -68,7 +69,7 @@ require (
 	github.com/aws/smithy-go v1.28.1 // indirect
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
 	github.com/codex-k8s/kodex/libs/go/oidcidentity v0.0.0 // indirect
-	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0 // indirect
+	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0
 	github.com/codex-k8s/kodex/libs/go/sttapi v0.0.0
 	github.com/coreos/go-oidc/v3 v3.20.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -187,3 +188,5 @@ replace github.com/codex-k8s/kodex/libs/go/sttapi => ../../../libs/go/sttapi
 replace github.com/codex-k8s/kodex/libs/go/httpserver => ../../../libs/go/httpserver
 
 replace github.com/codex-k8s/kodex/libs/go/repositorybundle => ../../../libs/go/repositorybundle
+
+replace github.com/codex-k8s/kodex/libs/go/sshcompose => ../../../libs/go/sshcompose

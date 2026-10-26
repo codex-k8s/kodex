@@ -51,6 +51,12 @@ type Owner struct {
 	recoveryCycle  recoverycursor.Cycle
 }
 
+// ResolveSSHComposeCredentialProjection reads only the owner's exact live lease descriptor.
+// ResolveSSHComposeCredentialProjection читает только owner descriptor exact live lease.
+func (owner *Owner) ResolveSSHComposeCredentialProjection(ctx context.Context, request *controlplanev1.ResolveSSHComposeCredentialProjectionRequest) (*controlplanev1.ResolveSSHComposeCredentialProjectionResponse, error) {
+	return owner.client.RuntimeSecrets.ResolveSSHComposeCredentialProjection(ctx, request)
+}
+
 // New requires a nonnil client/RuntimeSecrets route and nonempty claimant, but does not validate other
 // optional routes, claimant syntax or remote readiness.
 // New требует nonnil client/RuntimeSecrets route и непустой claimant, не проверяя остальные optional

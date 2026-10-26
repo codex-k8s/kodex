@@ -16,7 +16,9 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/libs/go/sshcompose"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/emailpolicy"
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 	scheduleservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/schedule"
@@ -1160,7 +1162,11 @@ func (repository *Repository) completeIntegrationConnectionTest(ctx context.Cont
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	return commandOutcome{result: command.Result{Connection: &item}, resourceKind: "INTEGRATION_CONNECTION", resourceRef: connectionRef, summary: "i18n:INTEGRATION_CONNECTION_TEST_COMPLETED", platformEvent: "INTEGRATION_CONNECTION_CHANGED"}, nil
+	outcome := commandOutcome{result: command.Result{Connection: &item}, resourceKind: "INTEGRATION_CONNECTION", resourceRef: connectionRef, summary: "i18n:INTEGRATION_CONNECTION_TEST_COMPLETED", platformEvent: "INTEGRATION_CONNECTION_CHANGED"}
+	if definitionKey == "ssh-compose" {
+		outcome.platformAggregateVersion, outcome.platformState = item.Version, item.State
+	}
+	return outcome, nil
 }
 
 func (repository *Repository) ResolveIntegrationInvocation(ctx context.Context, principal value.Principal, input map[string]string, boundedInput map[string]any) (map[string]any, error) {
@@ -1255,6 +1261,17 @@ func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context
 	invocationRef, _ := newRef("inv")
 	inputDigest := sha256.Sum256(canonicalInput)
 	inputDigestHex := hex.EncodeToString(inputDigest[:])
+	var sshSnapshot *sshcompose.Snapshot
+	if definitionKey == "ssh-compose" {
+		resolved, resolveErr := repository.resolveSSHComposeSnapshot(ctx, tx, initiatorScope, projectID, nodeID, connectionID, capability.Operation, boundedInput, nil)
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
+		sshSnapshot = &resolved
+		if capability.Operation == "ssh.compose.deploy" {
+			semanticInput = asJSON(map[string]string{"releaseDigest": sshComposeReleaseDigest(resolved), "admissionDigest": sshComposeAdmissionDigest(resolved)})
+		}
+	}
 	var workflowAdmission *workflowEffectAdmission
 	if risk == "WRITE" {
 		var rejoined map[string]any
@@ -1271,6 +1288,9 @@ func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context
 	intentParts := []string{
 		input["node_ref"], input["idempotency_key"], input["connection_ref"], input["capability_key"],
 		inputDigestHex, definitionDigest, resourceScopeDigest, grantRef, strconv.FormatInt(grantVersion, 10), approvalPolicy,
+	}
+	if sshSnapshot != nil {
+		intentParts = append(intentParts, sshComposeAdmissionDigest(*sshSnapshot))
 	}
 	mailboxGate := false
 	if definitionKey == "email" {
@@ -1290,6 +1310,9 @@ func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context
 	intentDigest := sha256.Sum256([]byte(strings.Join(intentParts, "\x00")))
 	intentDigestHex := hex.EncodeToString(intentDigest[:])
 	effectKey := "eff_" + intentDigestHex[:32]
+	if sshSnapshot != nil && capability.Operation == "ssh.compose.deploy" && workflowRootID == "" {
+		effectKey = "eff_" + sshcompose.Digest([]byte(strings.Join([]string{projectID, sshSnapshot.Target.Ref, sshSnapshot.MergedSHA, sshSnapshot.BundleSHA256}, "\x00")))[:32]
+	}
 	state := "READY"
 	if approvalPolicy == "HUMAN_EACH_EFFECT" || mailboxGate {
 		state = "WAITING_APPROVAL"
@@ -1343,6 +1366,18 @@ func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context
 				databaseError.Code, databaseError.ConstraintName, mapWriteError(err))
 		}
 		return nil, serializableTransactionError(err, mapWriteError(err))
+	}
+	if sshSnapshot != nil && resolvedRef == invocationRef {
+		if capability.Operation == "ssh.compose.deploy" {
+			sshSnapshot.DeploymentRef, sshSnapshot.DeploymentInputDigest, sshSnapshot.DeploymentEffectKey = invocationRef, inputDigestHex, effectKey
+		}
+		encoded, encodeErr := json.Marshal(sshSnapshot)
+		if encodeErr != nil {
+			return nil, errs.ErrUnavailable
+		}
+		if _, err := tx.Exec(ctx, querySSHComposeStoreSnapshot, pgx.StrictNamedArgs{"invocation_id": invocationID, "snapshot": encoded}); err != nil {
+			return nil, serializableTransactionError(err, errs.ErrUnavailable)
+		}
 	}
 	if approvalScopeID != "" && resolvedRef == invocationRef {
 		tag, reserveErr := tx.Exec(ctx, queryWorkersResolveintegrationinvocationReserveApprovalScope, approvalScopeID)
@@ -1413,6 +1448,21 @@ func integrationExecutionRoute(workload string) (string, error) {
 }
 
 func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, principal value.Principal, instance string, limit int32) ([]map[string]any, error) {
+	return repository.claimIntegrationInvocations(ctx, principal, instance, limit, false)
+}
+
+// ClaimSSHComposeInvocations assigns only the protected SSH lane to its exact worker.
+// ClaimSSHComposeInvocations назначает только защищённую SSH очередь точному worker.
+func (repository *Repository) ClaimSSHComposeInvocations(ctx context.Context, principal value.Principal, instance string, limit int32) ([]map[string]any, error) {
+	if principal.CallerWorkload != "integration-gateway" || principal.Permission != "platform.runtime.ssh-compose.claim" {
+		return nil, errs.ErrForbidden
+	}
+	return repository.claimIntegrationInvocations(ctx, principal, instance, limit, true)
+}
+
+// claimIntegrationInvocations keeps independent adapter lanes under the same owner lease protocol.
+// claimIntegrationInvocations сохраняет отдельные очереди adapters под единым owner lease protocol.
+func (repository *Repository) claimIntegrationInvocations(ctx context.Context, principal value.Principal, instance string, limit int32, sshLane bool) ([]map[string]any, error) {
 	route, err := integrationExecutionRoute(principal.CallerWorkload)
 	if err != nil {
 		return nil, err
@@ -1429,7 +1479,7 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 	if _, err := tx.Exec(ctx, queryWorkersClaimintegrationinvocationsExpireStaleInvocationLeases, scope.organizationID, principal.CallerWorkload); err != nil {
 		return nil, errs.ErrUnavailable
 	}
-	rows, err := tx.Query(ctx, queryWorkersClaimintegrationinvocationsSelectIntegrationInvocationsOrganizationIdState, scope.organizationID, limit, principal.CallerWorkload, route)
+	rows, err := tx.Query(ctx, queryWorkersClaimintegrationinvocationsSelectIntegrationInvocationsOrganizationIdState, scope.organizationID, limit, principal.CallerWorkload, route, sshLane)
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
@@ -1444,6 +1494,7 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 		grantVersion                                                               int64
 		generation                                                                 int64
 		configuration, boundedInput, resourceScope                                 []byte
+		sshSnapshot                                                                []byte
 		credential                                                                 entity.IntegrationCredentialRevision
 		credentialCreatedAt                                                        *time.Time
 	}
@@ -1459,7 +1510,7 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 			&item.credential.SecretUID, &item.credential.SecretResourceVersion, &item.credential.ContentSHA256,
 			&item.credentialCreatedAt, &item.initiatorRef,
 			&item.approvalScopePaths, &item.approvalScopeDigest, &item.approvalSchemaDigest,
-			&item.grantRef, &item.grantVersion, &item.nodeID, &item.runID,
+			&item.grantRef, &item.grantVersion, &item.nodeID, &item.runID, &item.sshSnapshot,
 		); err != nil {
 			rows.Close()
 			return nil, errs.ErrUnavailable
@@ -1539,6 +1590,22 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 			"resourceScopeDigest": item.resourceScopeDigest, "effectKey": item.effectKey, "inputDigest": item.inputDigest,
 			"workMode": workMode,
 			"leaseRef": leaseRef, "fence": fence, "generation": generation, "expiresAt": expiresAt,
+		}
+		if sshLane {
+			purpose := ""
+			if workMode == "RECOVER_READ_ONLY" {
+				purpose = "STATUS"
+				if _, err := tx.Exec(ctx, querySSHComposeRecovery, pgx.StrictNamedArgs{"invocation_id": item.id}); err != nil {
+					return nil, errs.ErrUnavailable
+				}
+			}
+			prepared, prepareErr := repository.issueSSHComposePermit(ctx, tx, scope, platformrepo.SSHComposeLeaseBinding{
+				WorkloadInstance: instance, InvocationRef: item.ref, LeaseRef: leaseRef, Fence: fence, Generation: generation,
+			}, purpose, false)
+			if prepareErr != nil {
+				return nil, prepareErr
+			}
+			claim["sshSnapshot"], claim["sshPermit"], claim["expiresAt"] = prepared["snapshot"], prepared["permit"], prepared["expiresAt"]
 		}
 		if definition.RequiresConnectionCredential() && item.credential.Ref != "" && item.credentialCreatedAt != nil {
 			item.credential.CreatedAt = *item.credentialCreatedAt
@@ -1638,6 +1705,9 @@ func (repository *Repository) completeIntegrationInvocationTx(ctx context.Contex
 		return commandOutcome{}, errs.ErrForbidden
 	}
 	next := "SUCCEEDED"
+	if err := repository.validateSSHComposeCompletion(ctx, tx, scope, invocationID, payload); err != nil {
+		return commandOutcome{}, err
+	}
 	if payload.UnknownOutcome {
 		next = "UNKNOWN_OUTCOME"
 	} else if !payload.Success {

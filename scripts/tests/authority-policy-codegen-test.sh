@@ -34,7 +34,7 @@ jq -e '
     "platform.provider-credentials.readiness.check"
   ];
   .v == 1 and .policy.default_decision == "DENY" and
-	.policy_revision == 98 and .policy.authority_abi_version == 2 and
+	.policy_revision == 99 and .policy.authority_abi_version == 2 and
   ([.policy.operation_bindings[] | select(.operation_id == "platform.provider-accounts.credential.renewal.work.check" or
       .operation_id == "platform.provider-accounts.credential.renewal.authorize" or .operation_id == "platform.provider-accounts.credential.renewal.validate") |
     select(.caller_workload_id == "secret-broker" and .target_workload_id == "control-plane" and
@@ -122,7 +122,18 @@ jq -e '
     .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"REQUIRED","version":"FORBIDDEN","attempt":"FORBIDDEN","idempotency":"FORBIDDEN"} and .project_required == false)] | length) == 1 and
   ([.policy.operation_bindings[] | select(.operation_id == "platform.query.config-overlays.revisions.list" or .operation_id == "platform.query.config-overlays.revisions.get") |
     select(.request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"REQUIRED","version":"FORBIDDEN","attempt":"FORBIDDEN","idempotency":"FORBIDDEN"} and .project_required == false)] | length) == 2 and
-	(.policy.authority_proof_producers | length) == 15 and
+	(.policy.authority_proof_producers | length) == 16 and
+  ([.policy.operation_bindings[] | select(.caller_workload_id == "integration-gateway" and .target_workload_id == "secret-broker") | .operation_id]) ==
+    ["platform.ssh-compose.credential.project"] and
+  ([.policy.operation_bindings[] | select(.operation_id == "platform.ssh-compose.credential.project" and
+    .full_method == "/secretbroker.v1.RuntimeCredentialProjectionService/ProjectSSHComposeCredential" and
+    .authority_proof_producer_id == "secret-broker.ssh-compose-projection" and
+    .permission == "platform.ssh-compose.credential.project" and .project_required == false and
+    .authority_sources == ["DOMAIN_STATE"])] | length) == 1 and
+  ([.policy.authority_proof_producers[] | select(.producer_id == "secret-broker.ssh-compose-projection" and
+    .caller_workload_id == "integration-gateway" and .owner_workload_id == "control-plane" and
+    .application_credential == "PLATFORM_WORKER_GRANT" and
+    .allowed_operation_ids == ["platform.ssh-compose.credential.project"])] | length) == 1 and
   ([.policy.authority_proof_producers[] | select(.caller_workload_id == "image-admission-controller")] | length) == 0 and
   ([.policy.operation_bindings[] | select(.caller_workload_id == "image-admission-controller")] | length) == 0 and
   ([.policy.operation_bindings[] | select(.caller_workload_id == "email-bridge") | .operation_id] | sort) ==

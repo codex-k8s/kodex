@@ -234,7 +234,7 @@ func (server *Server) GetRuntimeSecret(ctx context.Context, request *controlplan
 // PrepareCreateRuntimeSecret строит подготовку CREATE с метаданными проекта, типом, ожидаемым digest и квитанцией изменения, передавая identity/ошибки общему helper подготовки. Байты секрета Kubernetes не создаёт.
 func (server *Server) PrepareCreateRuntimeSecret(ctx context.Context, request *controlplanev1.PrepareCreateRuntimeSecretRequest) (*controlplanev1.PrepareCreateRuntimeSecretResponse, error) {
 	operation, err := server.prepareRuntimeSecret(ctx, controlplanev1.PlatformCommandService_PrepareCreateRuntimeSecret_FullMethodName, platformrepo.RuntimeSecretPrepareInput{
-		Kind: "CREATE", ProjectRef: request.GetProjectRef(), Name: request.GetName(), Description: request.GetDescription(),
+		Kind: "CREATE", Purpose: request.GetPurpose(), ProjectRef: request.GetProjectRef(), Name: request.GetName(), Description: request.GetDescription(),
 		ValueType: runtimeSecretValueTypeName(request.GetValueType()), ExpectedContentSHA256: request.GetExpectedContentSha256(), Mutation: mutation(request.GetMutation()),
 	})
 	if err != nil {
@@ -423,7 +423,7 @@ func castRuntimeSecret(value entity.RuntimeSecret) *controlplanev1.RuntimeSecret
 	result := &controlplanev1.RuntimeSecret{
 		ScopeKind: runtimeSecretScopeKind(value.ScopeKind), OrganizationRef: value.OrganizationRef,
 		Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, Name: value.Name,
-		Description: value.Description, ValueType: runtimeSecretValueType(value.ValueType), State: value.State,
+		Description: value.Description, Purpose: value.Purpose, ValueType: runtimeSecretValueType(value.ValueType), State: value.State,
 		CurrentRevision: value.CurrentRevision, CreatedAt: timestamp(value.CreatedAt), UpdatedAt: timestamp(value.UpdatedAt), Namespace: value.Namespace,
 		NextActions: nextActions(value.NextActions),
 	}

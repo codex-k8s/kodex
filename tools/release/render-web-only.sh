@@ -23,6 +23,7 @@ usage() {
     '  --oidc-pod-component <label-value> --oidc-target-port <port>' \
     '  [--disable-observability]' \
     '  [--profile <web-only|web-with-mattermost>]' \
+    '  [--ssh-compose-connection <public-connection.json>; repeatable]' \
     '  [--mattermost-host <dns>; required for web-with-mattermost]' >&2
 }
 
@@ -51,6 +52,7 @@ oidc_target_port=""
 disable_observability=false
 mattermost_host=""
 profile="web-only"
+ssh_compose_connections=()
 
 while (($# > 0)); do
   case "$1" in
@@ -79,6 +81,7 @@ while (($# > 0)); do
     --disable-observability) disable_observability=true; shift ;;
     --mattermost-host) mattermost_host="${2:-}"; shift 2 ;;
     --profile) profile="${2:-}"; shift 2 ;;
+    --ssh-compose-connection) ssh_compose_connections+=("${2:-}"); shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -175,6 +178,25 @@ temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 rendered="$temporary_directory/$profile.yaml"
 kubectl kustomize "$repository_root/deploy/k8s/profiles/$profile" >"$rendered"
+
+# SSH targets поступают только из явно выбранных public connection snapshots.
+# Каждый документ добавляет exact /32(/128):22; wildcard и тестовый IP отсутствуют.
+for ssh_compose_connection in "${ssh_compose_connections[@]}"; do
+  python3 "$repository_root/tools/ssh-compose/target.py" network-policy \
+    --connection "$ssh_compose_connection" --yaml-document >>"$rendered" ||
+    fail 'SSH Compose connection render rejected'
+done
+if ((${#ssh_compose_connections[@]} > 0)); then
+  yq -i '
+    with(select(.kind == "Deployment" and .metadata.name == "control-plane");
+      .spec.template.spec.volumes += [{"name":"ssh-compose-signing","secret":{"secretName":"kodex-ssh-compose-signing","defaultMode":288}}] |
+      (.spec.template.spec.containers[] | select(.name == "control-plane")) |= (
+        .env += [{"name":"CONTROL_PLANE_SSH_COMPOSE_SIGNING_KEY_FILE","value":"/var/run/secrets/kodex/ssh-compose-signing/private-key"}] |
+        .volumeMounts += [{"name":"ssh-compose-signing","mountPath":"/var/run/secrets/kodex/ssh-compose-signing","readOnly":true}]
+      )
+    )
+  ' "$rendered"
+fi
 
 while IFS=$'\t' read -r component pull_ref; do
   COMPONENT="$component" PULL_REF="$pull_ref" yq -i '

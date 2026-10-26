@@ -84,7 +84,8 @@
             "HTTPS_JSON_READ",
             "OPENAPI_MCP",
             "MATTERMOST_INTERACTION",
-            "CONTEXT7"
+            "CONTEXT7",
+            "SSH_COMPOSE"
           ]
         },
         "adapterOwner": {
@@ -176,7 +177,8 @@
             "HTTPS_PATH",
             "EMAIL",
             "HOST",
-            "IDENTIFIER"
+            "IDENTIFIER",
+            "PUBLIC_IP"
           ]
         },
         "required": {
@@ -298,7 +300,8 @@
         "tls": {
           "enum": [
             "REQUIRED",
-            "NONE"
+            "NONE",
+            "SSH_PINNED"
           ]
         }
       },
@@ -384,7 +387,8 @@
             "CONFLUENCE_SPACE",
             "EMAIL_SENDER",
             "MATTERMOST_CHANNEL",
-            "HTTPS_RESOURCE"
+            "HTTPS_RESOURCE",
+            "SSH_TARGET"
           ]
         },
         "connectionFields": {
@@ -407,7 +411,37 @@
         "maxAttempts",
         "retryBackoffMilliseconds"
       ],
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "leaseProfile"
+            ]
+          },
+          "then": {
+            "properties": {
+              "maxAttempts": {
+                "const": 1
+              },
+              "idempotency": {
+                "const": "EFFECT_KEY"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "timeoutSeconds": {
+                "type": "integer",
+                "maximum": 120
+              }
+            }
+          }
+        }
+      ],
       "properties": {
+        "leaseProfile": {
+          "const": "SSH_COMPOSE_V1"
+        },
         "idempotency": {
           "enum": [
             "READ_ONLY",
@@ -419,7 +453,7 @@
         "timeoutSeconds": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 120
+          "maximum": 600
         },
         "maxAttempts": {
           "type": "integer",

@@ -1922,6 +1922,7 @@ type RuntimeSecretMetadata struct {
 	Version         int64                     `protobuf:"varint,11,opt,name=version,proto3" json:"version,omitempty"`
 	ScopeKind       RuntimeResourceScopeKind  `protobuf:"varint,12,opt,name=scope_kind,json=scopeKind,proto3,enum=secretbroker.v1.RuntimeResourceScopeKind" json:"scope_kind,omitempty"`
 	OrganizationRef string                    `protobuf:"bytes,13,opt,name=organization_ref,json=organizationRef,proto3" json:"organization_ref,omitempty"`
+	Purpose         string                    `protobuf:"bytes,14,opt,name=purpose,proto3" json:"purpose,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -2045,6 +2046,165 @@ func (x *RuntimeSecretMetadata) GetOrganizationRef() string {
 		return x.OrganizationRef
 	}
 	return ""
+}
+
+func (x *RuntimeSecretMetadata) GetPurpose() string {
+	if x != nil {
+		return x.Purpose
+	}
+	return ""
+}
+
+type ProjectSSHComposeCredentialRequest struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	WorkloadInstance  string                 `protobuf:"bytes,1,opt,name=workload_instance,json=workloadInstance,proto3" json:"workload_instance,omitempty"`
+	InvocationRef     string                 `protobuf:"bytes,2,opt,name=invocation_ref,json=invocationRef,proto3" json:"invocation_ref,omitempty"`
+	ConnectionTestRef string                 `protobuf:"bytes,3,opt,name=connection_test_ref,json=connectionTestRef,proto3" json:"connection_test_ref,omitempty"`
+	LeaseRef          string                 `protobuf:"bytes,4,opt,name=lease_ref,json=leaseRef,proto3" json:"lease_ref,omitempty"`
+	Fence             string                 `protobuf:"bytes,5,opt,name=fence,proto3" json:"fence,omitempty"`
+	Generation        int64                  `protobuf:"varint,6,opt,name=generation,proto3" json:"generation,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *ProjectSSHComposeCredentialRequest) Reset() {
+	*x = ProjectSSHComposeCredentialRequest{}
+	mi := &file_secretbroker_v1_secret_broker_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProjectSSHComposeCredentialRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProjectSSHComposeCredentialRequest) ProtoMessage() {}
+
+func (x *ProjectSSHComposeCredentialRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_secretbroker_v1_secret_broker_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProjectSSHComposeCredentialRequest.ProtoReflect.Descriptor instead.
+func (*ProjectSSHComposeCredentialRequest) Descriptor() ([]byte, []int) {
+	return file_secretbroker_v1_secret_broker_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *ProjectSSHComposeCredentialRequest) GetWorkloadInstance() string {
+	if x != nil {
+		return x.WorkloadInstance
+	}
+	return ""
+}
+
+func (x *ProjectSSHComposeCredentialRequest) GetInvocationRef() string {
+	if x != nil {
+		return x.InvocationRef
+	}
+	return ""
+}
+
+func (x *ProjectSSHComposeCredentialRequest) GetConnectionTestRef() string {
+	if x != nil {
+		return x.ConnectionTestRef
+	}
+	return ""
+}
+
+func (x *ProjectSSHComposeCredentialRequest) GetLeaseRef() string {
+	if x != nil {
+		return x.LeaseRef
+	}
+	return ""
+}
+
+func (x *ProjectSSHComposeCredentialRequest) GetFence() string {
+	if x != nil {
+		return x.Fence
+	}
+	return ""
+}
+
+func (x *ProjectSSHComposeCredentialRequest) GetGeneration() int64 {
+	if x != nil {
+		return x.Generation
+	}
+	return 0
+}
+
+type ProjectSSHComposeCredentialResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PrivateKey    []byte                 `protobuf:"bytes,1,opt,name=private_key,json=privateKey,proto3" json:"private_key,omitempty"`
+	ExpiresAt     *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	TargetRef     string                 `protobuf:"bytes,3,opt,name=target_ref,json=targetRef,proto3" json:"target_ref,omitempty"`
+	Permit        []byte                 `protobuf:"bytes,4,opt,name=permit,proto3" json:"permit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProjectSSHComposeCredentialResponse) Reset() {
+	*x = ProjectSSHComposeCredentialResponse{}
+	mi := &file_secretbroker_v1_secret_broker_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProjectSSHComposeCredentialResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProjectSSHComposeCredentialResponse) ProtoMessage() {}
+
+func (x *ProjectSSHComposeCredentialResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_secretbroker_v1_secret_broker_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProjectSSHComposeCredentialResponse.ProtoReflect.Descriptor instead.
+func (*ProjectSSHComposeCredentialResponse) Descriptor() ([]byte, []int) {
+	return file_secretbroker_v1_secret_broker_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *ProjectSSHComposeCredentialResponse) GetPrivateKey() []byte {
+	if x != nil {
+		return x.PrivateKey
+	}
+	return nil
+}
+
+func (x *ProjectSSHComposeCredentialResponse) GetExpiresAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return nil
+}
+
+func (x *ProjectSSHComposeCredentialResponse) GetTargetRef() string {
+	if x != nil {
+		return x.TargetRef
+	}
+	return ""
+}
+
+func (x *ProjectSSHComposeCredentialResponse) GetPermit() []byte {
+	if x != nil {
+		return x.Permit
+	}
+	return nil
 }
 
 var File_secretbroker_v1_secret_broker_proto protoreflect.FileDescriptor
@@ -2181,7 +2341,7 @@ const file_secretbroker_v1_secret_broker_proto_rawDesc = "" +
 	"\x05ready\x18\x01 \x01(\bR\x05ready\"J\n" +
 	"\x18RuntimeSecretDisplayHint\x12\x16\n" +
 	"\x06prefix\x18\x01 \x01(\tR\x06prefix\x12\x16\n" +
-	"\x06suffix\x18\x02 \x01(\tR\x06suffix\"\x82\x05\n" +
+	"\x06suffix\x18\x02 \x01(\tR\x06suffix\"\x9c\x05\n" +
 	"\x15RuntimeSecretMetadata\x12\x1d\n" +
 	"\n" +
 	"secret_ref\x18\x01 \x01(\tR\tsecretRef\x12\x1f\n" +
@@ -2202,7 +2362,25 @@ const file_secretbroker_v1_secret_broker_proto_rawDesc = "" +
 	"\aversion\x18\v \x01(\x03R\aversion\x12H\n" +
 	"\n" +
 	"scope_kind\x18\f \x01(\x0e2).secretbroker.v1.RuntimeResourceScopeKindR\tscopeKind\x12)\n" +
-	"\x10organization_ref\x18\r \x01(\tR\x0forganizationRef*\x9e\x01\n" +
+	"\x10organization_ref\x18\r \x01(\tR\x0forganizationRef\x12\x18\n" +
+	"\apurpose\x18\x0e \x01(\tR\apurpose\"\xfb\x01\n" +
+	"\"ProjectSSHComposeCredentialRequest\x12+\n" +
+	"\x11workload_instance\x18\x01 \x01(\tR\x10workloadInstance\x12%\n" +
+	"\x0einvocation_ref\x18\x02 \x01(\tR\rinvocationRef\x12.\n" +
+	"\x13connection_test_ref\x18\x03 \x01(\tR\x11connectionTestRef\x12\x1b\n" +
+	"\tlease_ref\x18\x04 \x01(\tR\bleaseRef\x12\x14\n" +
+	"\x05fence\x18\x05 \x01(\tR\x05fence\x12\x1e\n" +
+	"\n" +
+	"generation\x18\x06 \x01(\x03R\n" +
+	"generation\"\xb8\x01\n" +
+	"#ProjectSSHComposeCredentialResponse\x12\x1f\n" +
+	"\vprivate_key\x18\x01 \x01(\fR\n" +
+	"privateKey\x129\n" +
+	"\n" +
+	"expires_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x12\x1d\n" +
+	"\n" +
+	"target_ref\x18\x03 \x01(\tR\ttargetRef\x12\x16\n" +
+	"\x06permit\x18\x04 \x01(\fR\x06permit*\x9e\x01\n" +
 	"\x18RuntimeResourceScopeKind\x12+\n" +
 	"'RUNTIME_RESOURCE_SCOPE_KIND_UNSPECIFIED\x10\x00\x12,\n" +
 	"(RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION\x10\x01\x12'\n" +
@@ -2236,8 +2414,9 @@ const file_secretbroker_v1_secret_broker_proto_rawDesc = "" +
 	"\x13ValidateSecretDraft\x12+.secretbroker.v1.ValidateSecretDraftRequest\x1a,.secretbroker.v1.ValidateSecretDraftResponse\x12m\n" +
 	"\x12PublishSecretDraft\x12*.secretbroker.v1.PublishSecretDraftRequest\x1a+.secretbroker.v1.PublishSecretDraftResponse\x12m\n" +
 	"\x12DiscardSecretDraft\x12*.secretbroker.v1.DiscardSecretDraftRequest\x1a+.secretbroker.v1.DiscardSecretDraftResponse\x12\x82\x01\n" +
-	"\x19CheckSecretDraftReadiness\x121.secretbroker.v1.CheckSecretDraftReadinessRequest\x1a2.secretbroker.v1.CheckSecretDraftReadinessResponse2\x93\x04\n" +
-	"\"RuntimeCredentialProjectionService\x12\x8e\x01\n" +
+	"\x19CheckSecretDraftReadiness\x121.secretbroker.v1.CheckSecretDraftReadinessRequest\x1a2.secretbroker.v1.CheckSecretDraftReadinessResponse2\x9e\x05\n" +
+	"\"RuntimeCredentialProjectionService\x12\x88\x01\n" +
+	"\x1bProjectSSHComposeCredential\x123.secretbroker.v1.ProjectSSHComposeCredentialRequest\x1a4.secretbroker.v1.ProjectSSHComposeCredentialResponse\x12\x8e\x01\n" +
 	"\x1dMaterializeRuntimeCredentials\x125.secretbroker.v1.MaterializeRuntimeCredentialsRequest\x1a6.secretbroker.v1.MaterializeRuntimeCredentialsResponse\x12\xa6\x01\n" +
 	"%MaterializeSystemAssistantCredentials\x12=.secretbroker.v1.MaterializeSystemAssistantCredentialsRequest\x1a>.secretbroker.v1.MaterializeSystemAssistantCredentialsResponse\x12\xb2\x01\n" +
 	")CheckRuntimeCredentialProjectionReadiness\x12A.secretbroker.v1.CheckRuntimeCredentialProjectionReadinessRequest\x1aB.secretbroker.v1.CheckRuntimeCredentialProjectionReadinessResponseBWZUgithub.com/codex-k8s/kodex/libs/go/secretbrokerapi/gen/secretbroker/v1;secretbrokerv1b\x06proto3"
@@ -2255,7 +2434,7 @@ func file_secretbroker_v1_secret_broker_proto_rawDescGZIP() []byte {
 }
 
 var file_secretbroker_v1_secret_broker_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_secretbroker_v1_secret_broker_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
+var file_secretbroker_v1_secret_broker_proto_msgTypes = make([]protoimpl.MessageInfo, 33)
 var file_secretbroker_v1_secret_broker_proto_goTypes = []any{
 	(RuntimeResourceScopeKind)(0),                             // 0: secretbroker.v1.RuntimeResourceScopeKind
 	(RuntimeSecretDraftState)(0),                              // 1: secretbroker.v1.RuntimeSecretDraftState
@@ -2292,7 +2471,9 @@ var file_secretbroker_v1_secret_broker_proto_goTypes = []any{
 	(*CheckReadinessResponse)(nil),                            // 32: secretbroker.v1.CheckReadinessResponse
 	(*RuntimeSecretDisplayHint)(nil),                          // 33: secretbroker.v1.RuntimeSecretDisplayHint
 	(*RuntimeSecretMetadata)(nil),                             // 34: secretbroker.v1.RuntimeSecretMetadata
-	(*timestamppb.Timestamp)(nil),                             // 35: google.protobuf.Timestamp
+	(*ProjectSSHComposeCredentialRequest)(nil),                // 35: secretbroker.v1.ProjectSSHComposeCredentialRequest
+	(*ProjectSSHComposeCredentialResponse)(nil),               // 36: secretbroker.v1.ProjectSSHComposeCredentialResponse
+	(*timestamppb.Timestamp)(nil),                             // 37: google.protobuf.Timestamp
 }
 var file_secretbroker_v1_secret_broker_proto_depIdxs = []int32{
 	14, // 0: secretbroker.v1.SaveSecretDraftResponse.draft:type_name -> secretbroker.v1.RuntimeSecretDraftMetadata
@@ -2302,14 +2483,14 @@ var file_secretbroker_v1_secret_broker_proto_depIdxs = []int32{
 	14, // 4: secretbroker.v1.DiscardSecretDraftResponse.draft:type_name -> secretbroker.v1.RuntimeSecretDraftMetadata
 	2,  // 5: secretbroker.v1.RuntimeSecretDraftMetadata.value_type:type_name -> secretbroker.v1.RuntimeSecretValueType
 	1,  // 6: secretbroker.v1.RuntimeSecretDraftMetadata.state:type_name -> secretbroker.v1.RuntimeSecretDraftState
-	35, // 7: secretbroker.v1.RuntimeSecretDraftMetadata.created_at:type_name -> google.protobuf.Timestamp
-	35, // 8: secretbroker.v1.RuntimeSecretDraftMetadata.updated_at:type_name -> google.protobuf.Timestamp
-	35, // 9: secretbroker.v1.RuntimeSecretDraftMetadata.expires_at:type_name -> google.protobuf.Timestamp
+	37, // 7: secretbroker.v1.RuntimeSecretDraftMetadata.created_at:type_name -> google.protobuf.Timestamp
+	37, // 8: secretbroker.v1.RuntimeSecretDraftMetadata.updated_at:type_name -> google.protobuf.Timestamp
+	37, // 9: secretbroker.v1.RuntimeSecretDraftMetadata.expires_at:type_name -> google.protobuf.Timestamp
 	0,  // 10: secretbroker.v1.RuntimeSecretDraftMetadata.scope_kind:type_name -> secretbroker.v1.RuntimeResourceScopeKind
 	15, // 11: secretbroker.v1.MaterializeSystemAssistantCredentialsRequest.execution:type_name -> secretbroker.v1.MaterializeRuntimeCredentialsRequest
 	18, // 12: secretbroker.v1.MaterializeSystemAssistantCredentialsResponse.projection:type_name -> secretbroker.v1.RuntimeCredentialProjectionDescriptor
 	19, // 13: secretbroker.v1.RuntimeCredentialProjectionDescriptor.runtime_secret_keys:type_name -> secretbroker.v1.RuntimeCredentialProjectionKey
-	35, // 14: secretbroker.v1.RuntimeCredentialProjectionDescriptor.expires_at:type_name -> google.protobuf.Timestamp
+	37, // 14: secretbroker.v1.RuntimeCredentialProjectionDescriptor.expires_at:type_name -> google.protobuf.Timestamp
 	18, // 15: secretbroker.v1.MaterializeRuntimeCredentialsResponse.projection:type_name -> secretbroker.v1.RuntimeCredentialProjectionDescriptor
 	34, // 16: secretbroker.v1.CreateSecretResponse.secret:type_name -> secretbroker.v1.RuntimeSecretMetadata
 	34, // 17: secretbroker.v1.RotateSecretResponse.secret:type_name -> secretbroker.v1.RuntimeSecretMetadata
@@ -2318,40 +2499,43 @@ var file_secretbroker_v1_secret_broker_proto_depIdxs = []int32{
 	2,  // 20: secretbroker.v1.RuntimeSecretMetadata.value_type:type_name -> secretbroker.v1.RuntimeSecretValueType
 	3,  // 21: secretbroker.v1.RuntimeSecretMetadata.status:type_name -> secretbroker.v1.RuntimeSecretStatus
 	33, // 22: secretbroker.v1.RuntimeSecretMetadata.display_hint:type_name -> secretbroker.v1.RuntimeSecretDisplayHint
-	35, // 23: secretbroker.v1.RuntimeSecretMetadata.created_at:type_name -> google.protobuf.Timestamp
-	35, // 24: secretbroker.v1.RuntimeSecretMetadata.updated_at:type_name -> google.protobuf.Timestamp
+	37, // 23: secretbroker.v1.RuntimeSecretMetadata.created_at:type_name -> google.protobuf.Timestamp
+	37, // 24: secretbroker.v1.RuntimeSecretMetadata.updated_at:type_name -> google.protobuf.Timestamp
 	0,  // 25: secretbroker.v1.RuntimeSecretMetadata.scope_kind:type_name -> secretbroker.v1.RuntimeResourceScopeKind
-	23, // 26: secretbroker.v1.SecretBrokerService.CreateSecret:input_type -> secretbroker.v1.CreateSecretRequest
-	24, // 27: secretbroker.v1.SecretBrokerService.RotateSecret:input_type -> secretbroker.v1.RotateSecretRequest
-	25, // 28: secretbroker.v1.SecretBrokerService.RevealSecret:input_type -> secretbroker.v1.RevealSecretRequest
-	26, // 29: secretbroker.v1.SecretBrokerService.RevokeSecret:input_type -> secretbroker.v1.RevokeSecretRequest
-	31, // 30: secretbroker.v1.SecretBrokerService.CheckReadiness:input_type -> secretbroker.v1.CheckReadinessRequest
-	4,  // 31: secretbroker.v1.SecretBrokerService.SaveSecretDraft:input_type -> secretbroker.v1.SaveSecretDraftRequest
-	5,  // 32: secretbroker.v1.SecretBrokerService.ValidateSecretDraft:input_type -> secretbroker.v1.ValidateSecretDraftRequest
-	6,  // 33: secretbroker.v1.SecretBrokerService.PublishSecretDraft:input_type -> secretbroker.v1.PublishSecretDraftRequest
-	7,  // 34: secretbroker.v1.SecretBrokerService.DiscardSecretDraft:input_type -> secretbroker.v1.DiscardSecretDraftRequest
-	12, // 35: secretbroker.v1.SecretBrokerService.CheckSecretDraftReadiness:input_type -> secretbroker.v1.CheckSecretDraftReadinessRequest
-	15, // 36: secretbroker.v1.RuntimeCredentialProjectionService.MaterializeRuntimeCredentials:input_type -> secretbroker.v1.MaterializeRuntimeCredentialsRequest
-	16, // 37: secretbroker.v1.RuntimeCredentialProjectionService.MaterializeSystemAssistantCredentials:input_type -> secretbroker.v1.MaterializeSystemAssistantCredentialsRequest
-	21, // 38: secretbroker.v1.RuntimeCredentialProjectionService.CheckRuntimeCredentialProjectionReadiness:input_type -> secretbroker.v1.CheckRuntimeCredentialProjectionReadinessRequest
-	27, // 39: secretbroker.v1.SecretBrokerService.CreateSecret:output_type -> secretbroker.v1.CreateSecretResponse
-	28, // 40: secretbroker.v1.SecretBrokerService.RotateSecret:output_type -> secretbroker.v1.RotateSecretResponse
-	29, // 41: secretbroker.v1.SecretBrokerService.RevealSecret:output_type -> secretbroker.v1.RevealSecretResponse
-	30, // 42: secretbroker.v1.SecretBrokerService.RevokeSecret:output_type -> secretbroker.v1.RevokeSecretResponse
-	32, // 43: secretbroker.v1.SecretBrokerService.CheckReadiness:output_type -> secretbroker.v1.CheckReadinessResponse
-	8,  // 44: secretbroker.v1.SecretBrokerService.SaveSecretDraft:output_type -> secretbroker.v1.SaveSecretDraftResponse
-	9,  // 45: secretbroker.v1.SecretBrokerService.ValidateSecretDraft:output_type -> secretbroker.v1.ValidateSecretDraftResponse
-	10, // 46: secretbroker.v1.SecretBrokerService.PublishSecretDraft:output_type -> secretbroker.v1.PublishSecretDraftResponse
-	11, // 47: secretbroker.v1.SecretBrokerService.DiscardSecretDraft:output_type -> secretbroker.v1.DiscardSecretDraftResponse
-	13, // 48: secretbroker.v1.SecretBrokerService.CheckSecretDraftReadiness:output_type -> secretbroker.v1.CheckSecretDraftReadinessResponse
-	20, // 49: secretbroker.v1.RuntimeCredentialProjectionService.MaterializeRuntimeCredentials:output_type -> secretbroker.v1.MaterializeRuntimeCredentialsResponse
-	17, // 50: secretbroker.v1.RuntimeCredentialProjectionService.MaterializeSystemAssistantCredentials:output_type -> secretbroker.v1.MaterializeSystemAssistantCredentialsResponse
-	22, // 51: secretbroker.v1.RuntimeCredentialProjectionService.CheckRuntimeCredentialProjectionReadiness:output_type -> secretbroker.v1.CheckRuntimeCredentialProjectionReadinessResponse
-	39, // [39:52] is the sub-list for method output_type
-	26, // [26:39] is the sub-list for method input_type
-	26, // [26:26] is the sub-list for extension type_name
-	26, // [26:26] is the sub-list for extension extendee
-	0,  // [0:26] is the sub-list for field type_name
+	37, // 26: secretbroker.v1.ProjectSSHComposeCredentialResponse.expires_at:type_name -> google.protobuf.Timestamp
+	23, // 27: secretbroker.v1.SecretBrokerService.CreateSecret:input_type -> secretbroker.v1.CreateSecretRequest
+	24, // 28: secretbroker.v1.SecretBrokerService.RotateSecret:input_type -> secretbroker.v1.RotateSecretRequest
+	25, // 29: secretbroker.v1.SecretBrokerService.RevealSecret:input_type -> secretbroker.v1.RevealSecretRequest
+	26, // 30: secretbroker.v1.SecretBrokerService.RevokeSecret:input_type -> secretbroker.v1.RevokeSecretRequest
+	31, // 31: secretbroker.v1.SecretBrokerService.CheckReadiness:input_type -> secretbroker.v1.CheckReadinessRequest
+	4,  // 32: secretbroker.v1.SecretBrokerService.SaveSecretDraft:input_type -> secretbroker.v1.SaveSecretDraftRequest
+	5,  // 33: secretbroker.v1.SecretBrokerService.ValidateSecretDraft:input_type -> secretbroker.v1.ValidateSecretDraftRequest
+	6,  // 34: secretbroker.v1.SecretBrokerService.PublishSecretDraft:input_type -> secretbroker.v1.PublishSecretDraftRequest
+	7,  // 35: secretbroker.v1.SecretBrokerService.DiscardSecretDraft:input_type -> secretbroker.v1.DiscardSecretDraftRequest
+	12, // 36: secretbroker.v1.SecretBrokerService.CheckSecretDraftReadiness:input_type -> secretbroker.v1.CheckSecretDraftReadinessRequest
+	35, // 37: secretbroker.v1.RuntimeCredentialProjectionService.ProjectSSHComposeCredential:input_type -> secretbroker.v1.ProjectSSHComposeCredentialRequest
+	15, // 38: secretbroker.v1.RuntimeCredentialProjectionService.MaterializeRuntimeCredentials:input_type -> secretbroker.v1.MaterializeRuntimeCredentialsRequest
+	16, // 39: secretbroker.v1.RuntimeCredentialProjectionService.MaterializeSystemAssistantCredentials:input_type -> secretbroker.v1.MaterializeSystemAssistantCredentialsRequest
+	21, // 40: secretbroker.v1.RuntimeCredentialProjectionService.CheckRuntimeCredentialProjectionReadiness:input_type -> secretbroker.v1.CheckRuntimeCredentialProjectionReadinessRequest
+	27, // 41: secretbroker.v1.SecretBrokerService.CreateSecret:output_type -> secretbroker.v1.CreateSecretResponse
+	28, // 42: secretbroker.v1.SecretBrokerService.RotateSecret:output_type -> secretbroker.v1.RotateSecretResponse
+	29, // 43: secretbroker.v1.SecretBrokerService.RevealSecret:output_type -> secretbroker.v1.RevealSecretResponse
+	30, // 44: secretbroker.v1.SecretBrokerService.RevokeSecret:output_type -> secretbroker.v1.RevokeSecretResponse
+	32, // 45: secretbroker.v1.SecretBrokerService.CheckReadiness:output_type -> secretbroker.v1.CheckReadinessResponse
+	8,  // 46: secretbroker.v1.SecretBrokerService.SaveSecretDraft:output_type -> secretbroker.v1.SaveSecretDraftResponse
+	9,  // 47: secretbroker.v1.SecretBrokerService.ValidateSecretDraft:output_type -> secretbroker.v1.ValidateSecretDraftResponse
+	10, // 48: secretbroker.v1.SecretBrokerService.PublishSecretDraft:output_type -> secretbroker.v1.PublishSecretDraftResponse
+	11, // 49: secretbroker.v1.SecretBrokerService.DiscardSecretDraft:output_type -> secretbroker.v1.DiscardSecretDraftResponse
+	13, // 50: secretbroker.v1.SecretBrokerService.CheckSecretDraftReadiness:output_type -> secretbroker.v1.CheckSecretDraftReadinessResponse
+	36, // 51: secretbroker.v1.RuntimeCredentialProjectionService.ProjectSSHComposeCredential:output_type -> secretbroker.v1.ProjectSSHComposeCredentialResponse
+	20, // 52: secretbroker.v1.RuntimeCredentialProjectionService.MaterializeRuntimeCredentials:output_type -> secretbroker.v1.MaterializeRuntimeCredentialsResponse
+	17, // 53: secretbroker.v1.RuntimeCredentialProjectionService.MaterializeSystemAssistantCredentials:output_type -> secretbroker.v1.MaterializeSystemAssistantCredentialsResponse
+	22, // 54: secretbroker.v1.RuntimeCredentialProjectionService.CheckRuntimeCredentialProjectionReadiness:output_type -> secretbroker.v1.CheckRuntimeCredentialProjectionReadinessResponse
+	41, // [41:55] is the sub-list for method output_type
+	27, // [27:41] is the sub-list for method input_type
+	27, // [27:27] is the sub-list for extension type_name
+	27, // [27:27] is the sub-list for extension extendee
+	0,  // [0:27] is the sub-list for field type_name
 }
 
 func init() { file_secretbroker_v1_secret_broker_proto_init() }
@@ -2365,7 +2549,7 @@ func file_secretbroker_v1_secret_broker_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_secretbroker_v1_secret_broker_proto_rawDesc), len(file_secretbroker_v1_secret_broker_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   31,
+			NumMessages:   33,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

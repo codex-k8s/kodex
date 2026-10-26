@@ -50,8 +50,8 @@ func TestLoadShippedDefinitions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(definitions) != 10 {
-		t.Fatalf("LoadShipped() returned %d definitions; want 10", len(definitions))
+	if len(definitions) != 11 {
+		t.Fatalf("LoadShipped() returned %d definitions; want 11", len(definitions))
 	}
 	github := definitions["github"]
 	if github.Digest == "" || github.Metadata.Version != "6.1.0" || github.Spec.Credential.SecretKey != "token" {
@@ -74,6 +74,12 @@ func TestLoadShippedDefinitions(t *testing.T) {
 	}
 	for key, definition := range definitions {
 		executable := definition.ExecutableBy(OwnerIntegrationGateway, RouteManagedMCP)
+		if key == "ssh-compose" {
+			if !executable || definition.Spec.Readiness != string(ReadinessReady) {
+				t.Fatal("implemented SSH consumer is not executable")
+			}
+			continue
+		}
 		if key == "openapi-mcp" {
 			if executable || definition.Spec.Readiness != string(ReadinessReady) {
 				t.Fatalf("unbound OpenAPI template became executable: %#v", definition.Spec)

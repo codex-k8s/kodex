@@ -145,6 +145,9 @@ func runtimeSecretActions(item entity.RuntimeSecret, allowed func(string) bool) 
 		{"REVEAL", "secret.reveal"},
 		{"REVOKE", "secret.revoke"},
 	} {
+		if operation.action == "REVEAL" && item.Purpose == "SSH_COMPOSE" {
+			continue
+		}
 		if allowed(operation.permission) {
 			actions = append(actions, operation.action)
 		}
@@ -355,6 +358,16 @@ func (repository *Repository) prepareRuntimeSecretTarget(ctx context.Context, tx
 	var secret lockedRuntimeSecret
 	var err error
 	if input.Kind == "CREATE" {
+		if input.Purpose == "" {
+			input.Purpose = "APPLICATION"
+		}
+		if input.Purpose != "APPLICATION" && input.Purpose != "SSH_COMPOSE" || input.Purpose == "SSH_COMPOSE" && input.ScopeKind != "PROJECT" {
+			return secret, errs.ErrInvalid
+		}
+	} else if input.Purpose != "" {
+		return secret, errs.ErrInvalid
+	}
+	if input.Kind == "CREATE" {
 		if input.ScopeKind == "ORGANIZATION" {
 			return repository.prepareOrganizationRuntimeSecretTarget(ctx, tx, current, input)
 		}
@@ -386,6 +399,7 @@ func (repository *Repository) prepareRuntimeSecretTarget(ctx context.Context, tx
 				"namespace": secret.namespace, "name": secret.name, "description": secret.description,
 				"scope_kind": secret.scopeKind,
 				"value_type": secret.valueType, "actor_id": current.actorID,
+				"purpose": input.Purpose,
 			}).Scan(&secret.id, &secret.version, &secret.currentRevision, &secret.createdAt, &secret.updatedAt); err != nil {
 				return lockedRuntimeSecret{}, mapWriteError(err)
 			}
@@ -394,12 +408,28 @@ func (repository *Repository) prepareRuntimeSecretTarget(ctx context.Context, tx
 		if err != nil {
 			return lockedRuntimeSecret{}, err
 		}
+		var existingPurpose string
+		if tx.QueryRow(ctx, querySSHComposeSecretPurpose, pgx.StrictNamedArgs{"secret_id": secret.id}).Scan(&existingPurpose) != nil {
+			return secret, errs.ErrUnavailable
+		}
+		if existingPurpose != input.Purpose {
+			return secret, errs.ErrConflict
+		}
 		return secret, nil
 	}
 
 	secret, err = repository.lockRuntimeSecret(ctx, tx, current.organizationID, input.SecretRef)
 	if err != nil || principal.ProjectRef != "" && principal.ProjectRef != secret.projectID {
 		return lockedRuntimeSecret{}, errs.ErrNotFound
+	}
+	if input.Kind == "REVEAL" {
+		var purpose string
+		if tx.QueryRow(ctx, querySSHComposeSecretPurpose, pgx.StrictNamedArgs{"secret_id": secret.id}).Scan(&purpose) != nil {
+			return lockedRuntimeSecret{}, errs.ErrUnavailable
+		}
+		if purpose == "SSH_COMPOSE" {
+			return lockedRuntimeSecret{}, errs.ErrForbidden
+		}
 	}
 	permission := map[string]string{"ROTATE": "secret.rotate", "REVEAL": "secret.reveal", "REVOKE": "secret.revoke"}[input.Kind]
 	if secret.scopeKind == "ORGANIZATION" {
@@ -796,6 +826,9 @@ func (repository *Repository) completeLockedRuntimeSecretOperation(ctx context.C
 		return entity.RuntimeSecret{}, errs.ErrConflict
 	}
 	secret := locked.runtimeSecret()
+	if tx.QueryRow(ctx, querySSHComposeSecretPurpose, pgx.StrictNamedArgs{"secret_id": locked.secretID}).Scan(&secret.Purpose) != nil {
+		return entity.RuntimeSecret{}, errs.ErrUnavailable
+	}
 	switch locked.kind {
 	case "CREATE", "ROTATE":
 		if !validRuntimeSecretMaterialization(materialization) || !repository.materializationMatchesOperation(locked, materialization) {
@@ -814,7 +847,7 @@ func (repository *Repository) completeLockedRuntimeSecretOperation(ctx context.C
 			return entity.RuntimeSecret{}, mapWriteError(err)
 		}
 		hintPrefix, hintSuffix := "", ""
-		if materialization.DisplayHint != nil {
+		if materialization.DisplayHint != nil && secret.Purpose != "SSH_COMPOSE" {
 			hintPrefix, hintSuffix = materialization.DisplayHint.Prefix, materialization.DisplayHint.Suffix
 			secret.DisplayHint = &entity.RuntimeSecretDisplayHint{Prefix: hintPrefix, Suffix: hintSuffix}
 		}
@@ -868,6 +901,11 @@ func (repository *Repository) completeLockedRuntimeSecretOperation(ctx context.C
 		secret.CurrentRevisionDescriptor = &descriptor
 	default:
 		return entity.RuntimeSecret{}, errs.ErrInvalid
+	}
+	if secret.Purpose == "SSH_COMPOSE" && (locked.kind == "ROTATE" || locked.kind == "REVOKE") {
+		if err := repository.invalidateSSHComposeDependencies(ctx, tx, organizationID, locked.actorID, locked.correlationRef, "", locked.secretRef, ""); err != nil {
+			return entity.RuntimeSecret{}, err
+		}
 	}
 	snapshot, err := json.Marshal(secret)
 	if err != nil {
@@ -1130,12 +1168,12 @@ func scanRuntimeSecret(scanner rowScanner) (entity.RuntimeSecret, error) {
 		&item.ValueType, &item.State, &item.CurrentRevision, &prefix, &suffix,
 		&item.CreatedAt, &item.UpdatedAt, &item.Namespace, &descriptor.Revision, &descriptor.Namespace,
 		&descriptor.SecretName, &descriptor.SecretKey, &descriptor.SecretUID,
-		&descriptor.SecretResourceVersion, &descriptor.ContentSHA256, &item.ScopeKind, &item.OrganizationRef); errors.Is(err, pgx.ErrNoRows) {
+		&descriptor.SecretResourceVersion, &descriptor.ContentSHA256, &item.ScopeKind, &item.OrganizationRef, &item.Purpose); errors.Is(err, pgx.ErrNoRows) {
 		return entity.RuntimeSecret{}, errs.ErrNotFound
 	} else if err != nil {
 		return entity.RuntimeSecret{}, errs.ErrUnavailable
 	}
-	if prefix != "" || suffix != "" {
+	if item.Purpose != "SSH_COMPOSE" && (prefix != "" || suffix != "") {
 		item.DisplayHint = &entity.RuntimeSecretDisplayHint{Prefix: prefix, Suffix: suffix}
 	}
 	if descriptor.Revision > 0 {

@@ -177,9 +177,17 @@ func (repository *Repository) evaluateWorkflowStepResultTx(ctx context.Context, 
 			}
 			result = entity.WorkflowAcceptedResult{Key: requirement.Key, Kind: requirement.Kind, Repository: subject.Repository, Number: subject.Number, HeadSHA: subject.HeadSHA, Verdict: "PASS", Digest: workflowResultSHA(asJSON(declaration))}
 		case "DEPLOYMENT":
-			// The existing profile has no admitted SSH compose receipt path; a schema enum is not proof.
-			// В existing profile нет admitted SSH compose receipt path; schema enum не является proof.
-			return nil, workflowDeploymentUnsupported, nil
+			proof, reason, lookupErr := readWorkflowIntegrationResultTx(ctx, tx, current, lease, declaration.ReceiptRef)
+			if lookupErr != nil {
+				return nil, "", lookupErr
+			}
+			if reason != "" {
+				return nil, reason, nil
+			}
+			result, reason = acceptWorkflowDeploymentResult(requirement, declaration, proof, inputs)
+			if reason != "" {
+				return nil, reason, nil
+			}
 		default:
 			return nil, workflowDeclarationInvalid, nil
 		}

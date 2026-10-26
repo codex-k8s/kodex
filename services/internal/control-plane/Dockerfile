@@ -33,6 +33,7 @@ COPY libs/go/secretbrokerapi/ libs/go/secretbrokerapi/
 COPY libs/go/runtimesecret/ libs/go/runtimesecret/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/
 COPY libs/go/securefile/ libs/go/securefile/
+COPY libs/go/sshcompose/ libs/go/sshcompose/
 COPY libs/go/sttapi/ libs/go/sttapi/
 COPY services/internal/control-plane/ services/internal/control-plane/
 

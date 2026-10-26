@@ -120,6 +120,9 @@ func (repository *Repository) projectGateIntent(ctx context.Context, runner quer
 				intent.EffectPreview["approvalScope"] = scopePreview
 			}
 		}
+		if intent.Operation == "ssh.compose.deploy" {
+			if err := projectSSHComposeGatePreview(ctx, runner, current, gate.Ref, intent); err != nil { return err }
+		}
 		gate.IntegrationIntent = intent
 	}
 	if len(gate.DecisionConsequences) == 0 {

@@ -97,6 +97,7 @@ func requireRuntimeEnvironmentSecretDescriptors(ctx context.Context, tx pgx.Tx, 
 		if revision != expected.Revision {
 			return errs.ErrUnavailable
 		}
+		pins["purpose"] = "APPLICATION"
 		actual := entity.RuntimeSecretDescriptor{Name: expected.Name}
 		if err := tx.QueryRow(ctx, queryRuntimeSecretResolveBinding, pins).Scan(&actual.SecretRef, &actual.Namespace, &actual.Revision,
 			&actual.SecretName, &actual.SecretKey, &actual.SecretUID, &actual.SecretResourceVersion, &actual.ContentSHA256); errors.Is(err, pgx.ErrNoRows) {

@@ -14,6 +14,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/libs/go/httpserver"
 	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
+	secretbrokerv1 "github.com/codex-k8s/kodex/libs/go/secretbrokerapi/gen/secretbroker/v1"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/codex-k8s/kodex/services/external/integration-gateway/internal/integration"
 	businessmetrics "github.com/codex-k8s/kodex/services/external/integration-gateway/internal/observability/metrics"
@@ -75,6 +76,15 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
+	broker, err := controlplaneclient.Dial(startup, controlplaneclient.Config{RPCProfile: config.RPCProfile, CallerWorkload: serviceName,
+		Target: config.SecretBrokerTarget, TLSServerName: config.SecretBrokerTLSServerName, CAFile: config.ControlPlaneCAFile,
+		ResolverTarget: config.ControlPlaneTarget, ResolverTLSServerName: config.ControlPlaneTLSServerName, ResolverCAFile: config.ControlPlaneCAFile,
+		ClientCertificateFile: config.ControlPlaneCertificateFile, ClientPrivateKeyFile: config.ControlPlanePrivateKeyFile, ApplicationGrantFile: config.ApplicationGrantFile,
+		ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID, DialTimeout: config.RequestTimeout, Operations: controlplaneclient.SSHComposeCredentialProjectionOperations()})
+	if err != nil {
+		return err
+	}
+	sshWorker := &sshComposeWorker{control: control, broker: secretbrokerv1.NewRuntimeCredentialProjectionServiceClient(broker.SSHComposeCredentialConnection()), adapter: adapter, config: config}
 	technical, err := httpserver.New(httpserver.StandardProcessConfig(config.TechnicalListen), readiness, metrics.PrometheusHandler())
 	if err != nil {
 		return err
@@ -85,7 +95,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	readiness.Set(true, "ready")
 	metrics.SetReady(true)
 	workHealth := &workCycleHealth{}
-	workers := serviceruntime.StartWorkers(lifecycle, technical.Worker(), monitorWorkPathHealth(workHealth, business, config), runIntegrationLoop(control, adapter, workHealth, business, logger, config))
+	workers := serviceruntime.StartWorkers(lifecycle, technical.Worker(), monitorWorkPathHealth(workHealth, business, config), runIntegrationLoop(control, adapter, workHealth, business, logger, config, sshWorker), sshWorker.runSSHComposeLoop(business))
 	err = workers.Wait(context.WithoutCancel(lifecycle))
 	readiness.Set(false, "stopping")
 	metrics.SetReady(false)
@@ -93,6 +103,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	shutdownErr := serviceruntime.RunShutdown(shutdownBase,
 		serviceruntime.ShutdownOperation{Name: "integration workers", Timeout: config.ShutdownTimeout / 2, Run: workers.Wait},
 		serviceruntime.ShutdownOperation{Name: "control-plane client", Timeout: config.ShutdownTimeout / 4, Run: func(context.Context) error { return control.Close() }},
+		serviceruntime.ShutdownOperation{Name: "SSH credential client", Timeout: config.ShutdownTimeout / 4, Run: func(context.Context) error { return broker.Close() }},
 		serviceruntime.ShutdownOperation{Name: "technical HTTP", Timeout: config.ShutdownTimeout / 4, Run: technical.Shutdown},
 		serviceruntime.ShutdownOperation{Name: "tracing", Timeout: 5 * time.Second, Run: telemetry.ShutdownTracing},
 		serviceruntime.ShutdownOperation{Name: "error reporting", Timeout: 5 * time.Second, Run: telemetry.FlushSentry},
@@ -123,13 +134,13 @@ func monitorWorkPathHealth(workHealth *workCycleHealth, business *businessmetric
 // RU: runIntegrationLoop выполняет ограниченные последовательные claim-циклы, учитывает здоровье и метрики, журналирует только деградацию и восстановление.
 // Productive successful cycles reset idle backoff; errors or idle cycles increase it, while cancellation interrupts the wait.
 // RU: Успешный цикл с работой сбрасывает паузу простоя; ошибка или отсутствие работы увеличивают её, а отмена прерывает ожидание.
-func runIntegrationLoop(control *controlplaneclient.Client, adapter *integration.Adapter, workHealth *workCycleHealth, metrics *businessmetrics.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
+func runIntegrationLoop(control *controlplaneclient.Client, adapter *integration.Adapter, workHealth *workCycleHealth, metrics *businessmetrics.Metrics, logger *slog.Logger, config Config, sshWorker *sshComposeWorker) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		idleBackoff := serviceruntime.NewIdleBackoff(config.PollInterval, 5*time.Second)
 		degraded := false
 		for {
 			cycle, cancel := context.WithTimeout(ctx, integrationCycleBudget(config))
-			processed, err := processIntegrationWork(cycle, control, adapter, metrics, logger, config)
+			processed, err := processIntegrationWork(cycle, control, adapter, metrics, logger, config, sshWorker)
 			cancel()
 			workHealth.record(time.Now(), err)
 			if err != nil {
@@ -162,7 +173,7 @@ func runIntegrationLoop(control *controlplaneclient.Client, adapter *integration
 // RU: Режим вызова выбирает read-only восстановление либо исполнение; нехватка остатка аренды запрещает оба обращения к провайдеру.
 // External-operation metrics are recorded before owner completion, and an unknown provider outcome remains explicit rather than retried here.
 // RU: Метрики внешней операции учитываются до owner completion; неопределённый результат сохраняется явно и здесь не повторяется.
-func processIntegrationWork(ctx context.Context, control *controlplaneclient.Client, adapter *integration.Adapter, metrics *businessmetrics.Metrics, logger *slog.Logger, config Config) (int, error) {
+func processIntegrationWork(ctx context.Context, control *controlplaneclient.Client, adapter *integration.Adapter, metrics *businessmetrics.Metrics, logger *slog.Logger, config Config, sshWorkers ...*sshComposeWorker) (int, error) {
 	tests, err := control.Runtime.ClaimIntegrationConnectionTests(ctx, &controlplanev1.ClaimIntegrationConnectionTestsRequest{WorkloadInstance: config.InstanceID, Limit: config.ClaimLimit})
 	if err != nil {
 		return 0, err
@@ -170,7 +181,17 @@ func processIntegrationWork(ctx context.Context, control *controlplaneclient.Cli
 	processed := 0
 	for _, claim := range tests.GetClaims() {
 		operation, cancel := context.WithTimeout(ctx, config.OperationTimeout)
-		result, operationErr := adapter.Test(operation, integration.RequestFromTest(claim))
+		var result string
+		var operationErr error
+		if claim.GetDefinitionKey() == "ssh-compose" {
+			if len(sshWorkers) != 1 || sshWorkers[0] == nil {
+				operationErr = errors.New("SSH worker unavailable")
+			} else {
+				result, operationErr = sshWorkers[0].test(operation, claim)
+			}
+		} else {
+			result, operationErr = adapter.Test(operation, integration.RequestFromTest(claim))
+		}
 		cancel()
 		metrics.Operation(true, operationErr == nil, false)
 		if err := completeTest(ctx, control, claim, result, operationErr); err != nil {

@@ -48,6 +48,10 @@ func (s *Server) CreateSystemRuntimeSecretDraft(w http.ResponseWriter, r *http.R
 	if !ok {
 		return
 	}
+	if purpose := runtimeSecretCreatePurpose(body); purpose != "" && purpose != "APPLICATION" {
+		invalidSecretDraft(w)
+		return
+	}
 	mutation, ok := requireMutation(w, p.IdempotencyKey, "")
 	if !ok {
 		return

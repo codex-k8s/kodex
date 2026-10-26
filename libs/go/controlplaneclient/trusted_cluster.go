@@ -62,10 +62,12 @@ func dialTrustedCluster(ctx context.Context, config Config) (*Client, error) {
 	switch strings.TrimPrefix(config.Target, "dns:///") {
 	case "control-plane.kodex-system.svc:8443", "control-plane.kodex-system.svc.cluster.local:8443":
 	case "secret-broker.kodex-system.svc:8443", "secret-broker.kodex-system.svc.cluster.local:8443":
-		if config.CallerWorkload != "control-plane" {
+		allowed := ProviderCredentialMaterializerOperations()
+		if config.CallerWorkload == "integration-gateway" {
+			allowed = SSHComposeCredentialProjectionOperations()
+		} else if config.CallerWorkload != "control-plane" {
 			return nil, errors.New("trusted materializer caller rejected")
 		}
-		allowed := ProviderCredentialMaterializerOperations()
 		for operation, method := range config.Operations {
 			if allowed[operation] != method {
 				return nil, errors.New("trusted materializer operation rejected")

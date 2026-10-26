@@ -4,8 +4,8 @@ title: Общие библиотеки Go
 type: guide
 status: approved
 owner: architect
-version: 1.0.6
-updated: 2026-10-25
+version: 1.0.7
+updated: 2026-10-27
 ---
 
 # Общие библиотеки Go
@@ -393,3 +393,34 @@ Execution probes принадлежат deployable agent-runner; shared contract
   сервиса;
 - общий SQL repository на несколько сервисных БД;
 - общий event payload, который заменяет AsyncAPI конкретного домена.
+
+## `sshcompose`
+
+Issue #1838 использует общий закрытый протокол CP→integration-gateway→remote
+forced-command helper. Модуль владеет строгим JSON, exact target/host-key pins,
+коротким подписанным permit, ограниченным полным source tree, безопасным
+Compose profile и устойчивым no-replay journal. Он не выбирает actor, grants,
+merge authority либо Kubernetes credentials. Эти решения остаются у CP и
+secret-broker. Секретный SSH key отсутствует в wire permit/source bundle и
+модельном окружении. Readiness пакета остаётся NOT_READY до сквозной приёмки.
+
+### Прерываемый stdin и join протокольного reader
+
+Наличие `io.ReadCloser` само по себе не доказывает, что `Close` прерывает
+параллельный `Read`. `io.NopCloser` не даёт такой гарантии; обычный blocking
+`os.Stdin` также нельзя считать pollable. Для протокола, где peer держит stdin
+открытым до ответа, writer ответа не должен ждать бесконечного reader join.
+Consumer явно владеет отдельным interruptible input и закрывает/join его при
+завершении либо caller cancel, включая ожидание первого frame. Исходный fd
+не усыновляется и не закрывается чужим consumer; `/dev/stdin` не переоткрывается
+вместо передачи descriptor. Для Unix duplicate fd с nonblocking/poller
+проверяется поддержка deadline, blocking fallback закрыто запрещён.
+
+Согласно [Go1.26.6 NewFile и File.Close](https://pkg.go.dev/os@go1.26.6),
+nonblocking descriptor позволяет создать pollable File, а отмена pending I/O
+через Close гарантируется для deadline-capable File. Участок проверяется
+настоящим child-process OS pipe: peer writer остаётся открытым, пока child
+не вернул ответ и не завершил reader; отдельный случай отменяет context до
+первого frame. Ни успешный `io.Pipe` mock, ни EOF, заранее отправленный fixture,
+не подменяют это доказательство. Наличие caller cancellation не означает
+самостоятельный initial idle deadline CLI: такой бюджет описывается отдельно.

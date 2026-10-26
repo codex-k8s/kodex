@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.32
-updated: 2026-10-25
+version: 1.7.33
+updated: 2026-10-27
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -2411,3 +2411,21 @@ bucket не доказывает отсутствие архива в archive bu
 Все активные writers и PVC consumers проверяются до external effects. Frozen
 PURGE_PENDING graph не допускает новых claims/materialization; точный PVC
 удаляется с UID precondition, а replacement не считается прежним ресурсом.
+
+## SSH credential и неопределённый внешний deploy
+
+Для #1838 purpose `SSH_COMPOSE` необратим и отделён от application ENV. Нельзя
+резервировать ранее опубликованный в ENV/RuntimeRevision либо раскрытый
+секрет; проверка истории и смена purpose сериализуются с binding одним owner
+lock. Старый snapshot и rejoin не обходят текущую purpose/revision eligibility.
+Rotate/revoke и смена source/target/grant закрывают зависимые leases в owner
+transaction. Короткий подписанный permit связывает exact target/host key,
+release/input/effect, root/session/turn/attempt и монотонное поколение.
+
+Worker получает SSH key только через отдельный broker method после повторной
+проверки CP. Ни prompt, ни ENV модели, ни универсальный shell его не получают.
+Утрата ACK/cancel не разрешает повторный deploy: durable remote journal и
+owner receipt сохраняют UNKNOWN_OUTCOME, recovery читает состояние без effect.
+Restart после reboot допускается только для existing exact container,
+подтверждённого durable successful receipt; reserved/unknown попытка не
+возобновляется автоматически.

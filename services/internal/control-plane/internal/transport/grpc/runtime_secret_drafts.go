@@ -125,7 +125,7 @@ func (server *Server) PrepareOrganizationRuntimeSecretDraft(ctx context.Context,
 // PrepareSaveRuntimeSecretDraft запрашивает SAVE preparation с secret и project locators и
 // expected content digest под principal точного RPC.
 func (server *Server) PrepareSaveRuntimeSecretDraft(ctx context.Context, request *cp.PrepareSaveRuntimeSecretDraftRequest) (*cp.PrepareSaveRuntimeSecretDraftResponse, error) {
-	operation, err := server.prepareSecretDraft(ctx, cp.PlatformCommandService_PrepareSaveRuntimeSecretDraft_FullMethodName, port.RuntimeSecretDraftPrepareInput{Kind: "SAVE", Mutation: mutation(request.GetMutation()), SecretRef: request.GetSecretRef(), ProjectRef: request.GetProjectRef(), Name: request.GetName(), Description: request.GetDescription(), ValueType: runtimeSecretValueTypeName(request.GetValueType()), ExpectedContentSHA256: request.GetExpectedContentSha256()})
+	operation, err := server.prepareSecretDraft(ctx, cp.PlatformCommandService_PrepareSaveRuntimeSecretDraft_FullMethodName, port.RuntimeSecretDraftPrepareInput{Purpose: request.GetPurpose(), Kind: "SAVE", Mutation: mutation(request.GetMutation()), SecretRef: request.GetSecretRef(), ProjectRef: request.GetProjectRef(), Name: request.GetName(), Description: request.GetDescription(), ValueType: runtimeSecretValueTypeName(request.GetValueType()), ExpectedContentSHA256: request.GetExpectedContentSha256()})
 	if err != nil {
 		return nil, err
 	}

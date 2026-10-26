@@ -994,6 +994,7 @@ func (repository *Repository) resolveScopedEnvironmentPayload(ctx context.Contex
 		if err := tx.QueryRow(ctx, queryRuntimeSecretResolveBinding, pgx.StrictNamedArgs{
 			"organization_id": organizationID, "project_id": projectID, "scope_kind": scopeKind, "secret_ref": binding.SecretRef,
 			"revision": binding.Revision,
+			"purpose":  "APPLICATION",
 		}).Scan(&item.SecretRef, &item.Namespace, &item.Revision, &item.SecretName, &item.SecretKey, &item.SecretUID, &item.SecretResourceVersion, &item.ContentSHA256); errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil, nil, nil, errs.ErrNotFound
 		} else if err != nil {

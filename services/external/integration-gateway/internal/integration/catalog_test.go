@@ -165,6 +165,11 @@ func TestEveryAdvertisedOperation(t *testing.T) {
 		}
 		for _, capability := range definition.Spec.Capabilities {
 			t.Run(capability.Operation, func(t *testing.T) {
+				if definition.Spec.Adapter == "SSH_COMPOSE" {
+					testSSHComposeCatalogOperation(t, definition, capability)
+					return
+				}
+
 				if capability.Operation == repositorybundle.Operation {
 					if key != "github" || definition.Spec.Adapter != "GITHUB" || capability.Key != repositorybundle.Operation || capability.Risk != "WRITE" || capability.ApprovalPolicy != "HUMAN_EACH_EFFECT" {
 						t.Fatal("repository bundle catalog route changed")

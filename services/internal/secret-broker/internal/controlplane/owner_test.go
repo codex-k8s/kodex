@@ -60,6 +60,12 @@ func (*fakeRuntimeSecretClient) ResolveTranscriptionCredentialProjection(context
 	return nil, errors.New("unexpected transcription credential projection")
 }
 
+// ResolveSSHComposeCredentialProjection rejects unrelated fixture access to deployment credentials.
+// ResolveSSHComposeCredentialProjection отклоняет посторонний fixture access к deployment credentials.
+func (*fakeRuntimeSecretClient) ResolveSSHComposeCredentialProjection(context.Context, *controlplanev1.ResolveSSHComposeCredentialProjectionRequest, ...grpc.CallOption) (*controlplanev1.ResolveSSHComposeCredentialProjectionResponse, error) {
+	return nil, errors.New("unexpected SSH credential projection")
+}
+
 // ListRuntimeSecretRecoveryWork records requests and serves two deterministic pages containing original
 // expired claimants/generations without a real owner queue.
 // ListRuntimeSecretRecoveryWork записывает requests и выдаёт две deterministic pages с original expired

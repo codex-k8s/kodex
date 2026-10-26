@@ -11,10 +11,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// TestServerWorkflowMigrationProofComponent executes the current release proof on
+// TestServerWorkflowMigrationProofComponent preserves the complete SERVER proof under the current SSH successor and executes its release proof on
 // isolated schema clones and proves that concrete DDL drift is rejected. It never
 // changes business rows or connects to a live database.
-// TestServerWorkflowMigrationProofComponent исполняет текущий release proof на
+// TestServerWorkflowMigrationProofComponent сохраняет полный SERVER proof под текущим SSH successor и исполняет его release proof на
 // отдельных копиях схемы и проверяет обнаружение конкретных изменений DDL.
 // Бизнес-строки и живая БД не изменяются.
 func TestServerWorkflowMigrationProofComponent(t *testing.T) {
@@ -29,6 +29,9 @@ func TestServerWorkflowMigrationProofComponent(t *testing.T) {
 		{name: "public-workflow-execute", rejectedField: "functionACL", expected: false},
 		{name: "disabled-bundle-guard", rejectedField: "bundleGuard", expected: false},
 		{name: "missing-bundle-fk", rejectedField: "bundleForeignKeys", expected: float64(12)},
+		{name: "disabled-ssh-snapshot-guard", rejectedField: "sshTriggers", expected: false},
+		{name: "missing-ssh-purpose-check", rejectedField: "sshConstraints", expected: false},
+		{name: "public-ssh-execute", rejectedField: "sshFunctions", expected: false},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
@@ -60,7 +63,7 @@ func TestServerWorkflowMigrationProofComponent(t *testing.T) {
 					t.Fatal("apply disposable workflow schema drift")
 				}
 			}
-			source, err := os.ReadFile("../../../../../../../tools/release/server-workflow-migration-postcondition.sql")
+			source, err := os.ReadFile("../../../../../../../tools/release/ssh-compose-migration-postcondition.sql")
 			if err != nil {
 				t.Fatal("read shipped workflow schema proof")
 			}
@@ -79,7 +82,7 @@ func TestServerWorkflowMigrationProofComponent(t *testing.T) {
 					}
 				}
 			}
-			if proof["readOnly"] != "on" || proof["database"] != runtime.Database || proof["gooseVersion"] != float64(20261026001000) || proof["serverWorkflowProfile"] != "SERVER_DAG_V1" {
+			if proof["readOnly"] != "on" || proof["database"] != runtime.Database || proof["gooseVersion"] != float64(20261027000100) || proof["serverWorkflowProfile"] != "SERVER_DAG_V1" || proof["sshComposeProfile"] != "SSH_COMPOSE_V1" {
 				t.Fatal("workflow schema proof identity mismatch")
 			}
 			if fixture.rejectedField != "" {
@@ -91,6 +94,7 @@ func TestServerWorkflowMigrationProofComponent(t *testing.T) {
 			for _, field := range []string{
 				"schemaOwner", "columns", "constraints", "indexes", "triggers", "functionSources", "functionMetadata", "functionACL",
 				"visibilitySource", "retentionSource", "runtimeColumnAccess", "purgeGraphGuard", "bundleNoBodyColumns", "bundleGuard",
+				"sshColumns", "sshConstraints", "sshFunctions", "sshTriggers", "sshRuntimeColumns",
 				"tableOwners", "runtimeRolesUnprivileged", "runtimeRead", "runtimeMutationDenied", "runtimeColumnMutationDenied",
 				"runtimeGrantOptionDenied", "publicPrivilegesRevoked", "ownerWrite", "authorizationFunction", "contextsEmpty",
 			} {

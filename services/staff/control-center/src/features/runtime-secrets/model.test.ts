@@ -25,6 +25,28 @@ const secret: RuntimeSecret = {
 };
 
 describe("runtime secret model", () => {
+  it("сохраняет SSH custody и не переносит hints либо reveal из устаревшего metadata snapshot", () => {
+    const value = normalizeSecretPage({
+      items: [
+        {
+          ...secret,
+          purpose: "SSH_COMPOSE",
+          displayHint: { prefix: "unsafe", suffix: "unsafe" },
+        },
+      ],
+    }).items[0];
+    if (!value) throw new Error("Ожидался SSH secret metadata snapshot");
+    expect(value.purpose).toBe("SSH_COMPOSE");
+    expect(value.displayHint).toBeUndefined();
+    expect(value.nextActions).not.toContain("REVEAL");
+    expect(maskedSecretHint(value)).toBe("••••••");
+    expect(
+      canRuntimeSecretAction({ ...value, nextActions: ["REVEAL"] }, "REVEAL"),
+    ).toBe(false);
+    expect(() =>
+      normalizeSecretPage({ items: [{ ...secret, purpose: "UNKNOWN" }] }),
+    ).toThrow();
+  });
   it("нормализует пустой cursor и отклоняет поврежденные страницы до публикации", () => {
     expect(normalizeSecretPage({ items: [secret] }).nextPageToken).toBe("");
     for (const page of [

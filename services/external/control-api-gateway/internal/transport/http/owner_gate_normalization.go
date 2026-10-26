@@ -4,6 +4,8 @@ import (
 	"errors"
 	"regexp"
 	"unicode/utf8"
+
+	"github.com/codex-k8s/kodex/libs/go/sshcompose"
 )
 
 // errOwnerGateShape is the fixed public-projection rejection error, avoiding inclusion of gate
@@ -105,13 +107,26 @@ func validateOwnerGateProjection(gate map[string]any) error {
 		return errOwnerGateShape
 	}
 	switch scope["kind"] {
-	case "SYNTHETIC_JOURNAL", "GITHUB_REPOSITORY", "MATTERMOST_CHANNEL", "GITLAB_PROJECT", "JIRA_PROJECT", "CONFLUENCE_SPACE", "EMAIL_SENDER", "HTTPS_RESOURCE":
+	case "SYNTHETIC_JOURNAL", "GITHUB_REPOSITORY", "MATTERMOST_CHANNEL", "GITLAB_PROJECT", "JIRA_PROJECT", "CONFLUENCE_SPACE", "EMAIL_SENDER", "HTTPS_RESOURCE", "SSH_TARGET":
 	default:
 		return errOwnerGateShape
 	}
 	values, ok := scope["values"].(map[string]any)
-	if !ok || len(values) > 8 {
+	if !ok || len(values) > 9 || scope["kind"] != "SSH_TARGET" && len(values) > 8 {
 		return errOwnerGateShape
+	}
+	if scope["kind"] == "SSH_TARGET" {
+		pins := make(map[string]string, len(values))
+		for key, value := range values {
+			text, valid := value.(string)
+			if !valid {
+				return errOwnerGateShape
+			}
+			pins[key] = text
+		}
+		if _, err := sshcompose.TargetFromResourceScope(pins); err != nil {
+			return errOwnerGateShape
+		}
 	}
 	for _, value := range values {
 		if !gateText(value, 0, 2048) {

@@ -66,12 +66,20 @@ func (r *Repository) publishSecretDraft(ctx context.Context, tx pgx.Tx, s scope,
 		return nil, mapWriteError(err)
 	}
 	result := &entity.RuntimeSecret{Ref: secret.ref, ScopeKind: secret.scopeKind, OrganizationRef: secret.organizationRef, ProjectRef: secret.projectRef, Name: secret.name, Description: secret.description, ValueType: secret.valueType, Namespace: secret.namespace, CreatedAt: secret.createdAt}
+	if tx.QueryRow(ctx, querySSHComposeSecretPurpose, pgx.StrictNamedArgs{"secret_id": secret.id}).Scan(&result.Purpose) != nil {
+		return nil, errs.ErrUnavailable
+	}
 	var prefix, suffix string
 	err = tx.QueryRow(ctx, queryRuntimeSecretActivate, pgx.StrictNamedArgs{"secret_id": secret.id, "revision": o.targetRevision, "hint_prefix": "", "hint_suffix": "", "expected_version": secret.version, "expected_current_revision": secret.currentRevision, "expected_state": secret.state}).Scan(&result.Version, &result.State, &result.CurrentRevision, &prefix, &suffix, &result.UpdatedAt)
 	if err != nil {
 		return nil, errs.ErrConflict
 	}
 	result.CurrentRevisionDescriptor = &entity.RuntimeSecretRevisionDescriptor{Revision: o.targetRevision, Namespace: materialization.Namespace, SecretName: materialization.SecretName, SecretKey: materialization.SecretKey, SecretUID: materialization.SecretUID, SecretResourceVersion: materialization.SecretResourceVersion, ContentSHA256: materialization.ContentSHA256}
+	if result.Purpose == "SSH_COMPOSE" {
+		if err := r.invalidateSSHComposeDependencies(ctx, tx, s.organizationID, s.actorID, s.correlationRef, "", secret.ref, ""); err != nil {
+			return nil, err
+		}
+	}
 	return result, nil
 }
 

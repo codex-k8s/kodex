@@ -8,6 +8,7 @@ import (
 	"errors"
 
 	"github.com/codex-k8s/kodex/libs/go/repositorybundle"
+	"github.com/codex-k8s/kodex/libs/go/sshcompose"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	workflowservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/workflow"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -152,6 +153,11 @@ func workflowEffectSlot(step entity.WorkflowStep, dependencies []workflowResultD
 			}
 			allowed = found && subject.Repository == requirement.Repository && json.Unmarshal(canonicalInput, &target) == nil && target.Number == subject.Number && target.SHA == subject.HeadSHA
 		}
+		if requirement.Kind == "DEPLOYMENT" && operation == "ssh.compose.deploy" && requirement.Operation == operation {
+			subject, found := workflowResultSubject(dependencies, requirement.SubjectStepKey)
+			allowed = found && subject.Kind == "INTEGRATION_RECEIPT" && subject.Repository == requirement.Repository &&
+				workflowservice.CommitPattern.MatchString(subject.HeadSHA) && resource["target_ref"] == requirement.TargetRef
+		}
 		if allowed {
 			if key != "" {
 				return "", errs.ErrConflict
@@ -233,6 +239,13 @@ func admitWorkflowEffectTx(ctx context.Context, tx pgx.Tx, current scope, rootID
 				return nil, nil, errs.ErrConflict
 			}
 			oldSemantic = asJSON([]any{"kodex.workflow-bundle-content.v1", sourcePolicy, original.BaseCommitSHA, json.RawMessage(oldManifest)})
+		}
+		if operation == "ssh.compose.deploy" {
+			var snapshot sshcompose.Snapshot
+			if sshcompose.Decode(oldManifest, &snapshot, 32768) != nil || sshComposeReleaseDigest(snapshot) == "" {
+				return nil, nil, errs.ErrConflict
+			}
+			oldSemantic = asJSON(map[string]string{"releaseDigest": sshComposeReleaseDigest(snapshot), "admissionDigest": sshComposeAdmissionDigest(snapshot)})
 		}
 		provenDigest, digestErr := workflowEffectSemanticDigest(intent.ResultKey, operation, scopeDigest, oldSemantic)
 		if digestErr != nil || provenDigest != old.SemanticDigest {

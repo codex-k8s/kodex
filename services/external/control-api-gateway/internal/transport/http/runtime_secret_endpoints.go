@@ -102,6 +102,7 @@ func (server *Server) CreateRuntimeSecret(writer http.ResponseWriter, request *h
 	prepared, err := server.control.Command.PrepareCreateRuntimeSecret(request.Context(), &controlplanev1.PrepareCreateRuntimeSecretRequest{
 		Mutation: mutation, ProjectRef: projectRef, Name: body.Name, Description: body.Description, ValueType: valueType,
 		ExpectedContentSha256: runtimeSecretSHA256(contentHash),
+		Purpose:               runtimeSecretCreatePurpose(body),
 	})
 	if err != nil {
 		writeRPCProblem(writer, err)
@@ -304,8 +305,13 @@ func decodeRuntimeSecretValue(writer http.ResponseWriter, valueType controlplane
 // castRuntimeSecretMetadata builds a value-free public view from broker metadata, mapping enum names, times and an optional display hint; next actions are explicitly empty. It does not validate ownership, version bounds or the timestamp before conversion.
 // castRuntimeSecretMetadata создаёт публичный вид без значения из metadata брокера, переносит enum names, время и необязательный display hint; next actions явно пусты. Владение, пределы версии и timestamp до преобразования не проверяет.
 func castRuntimeSecretMetadata(value *secretbrokerv1.RuntimeSecretMetadata) generated.RuntimeSecret {
+	purpose := generated.RuntimeSecretPurpose(value.GetPurpose())
+	if purpose == "" {
+		purpose = generated.RuntimeSecretPurpose("APPLICATION")
+	}
 	result := generated.RuntimeSecret{
-		Ref: value.GetSecretRef(), ScopeKind: runtimeResourceScopeKind(value.GetScopeKind().String()), OrganizationRef: value.GetOrganizationRef(), ProjectRef: value.GetProjectRef(), Name: value.GetName(), Description: value.GetDescription(),
+		Purpose: &purpose,
+		Ref:     value.GetSecretRef(), ScopeKind: runtimeResourceScopeKind(value.GetScopeKind().String()), OrganizationRef: value.GetOrganizationRef(), ProjectRef: value.GetProjectRef(), Name: value.GetName(), Description: value.GetDescription(),
 		ValueType: generated.RuntimeSecretValueType(runtimeSecretValueTypeName(value.GetValueType())),
 		State:     generated.RuntimeSecretState(runtimeSecretStatusName(value.GetStatus())), Version: value.GetVersion(), CurrentRevision: int64(value.GetRevision()),
 		CreatedAt: runtimeSecretTime(value.GetCreatedAt()), UpdatedAt: runtimeSecretTime(value.GetUpdatedAt()),
@@ -320,8 +326,13 @@ func castRuntimeSecretMetadata(value *secretbrokerv1.RuntimeSecretMetadata) gene
 // castControlPlaneRuntimeSecret maps owner metadata, optional display hint and ordered next-action enum names without secret bytes. Scope, safe versions and timestamps require validation by the caller; the mapper itself does not establish eligibility.
 // castControlPlaneRuntimeSecret переносит metadata владельца, необязательный display hint и порядок next-action enum names без байтов секрета. Область, safe versions и timestamps должен проверять вызывающий код; mapper сам eligibility не устанавливает.
 func castControlPlaneRuntimeSecret(value *controlplanev1.RuntimeSecret) generated.RuntimeSecret {
+	purpose := generated.RuntimeSecretPurpose(value.GetPurpose())
+	if purpose == "" {
+		purpose = generated.RuntimeSecretPurpose("APPLICATION")
+	}
 	result := generated.RuntimeSecret{
-		Ref: value.GetRef(), ScopeKind: runtimeResourceScopeKind(value.GetScopeKind().String()), OrganizationRef: value.GetOrganizationRef(), ProjectRef: value.GetProjectRef(), Name: value.GetName(), Description: value.GetDescription(),
+		Purpose: &purpose,
+		Ref:     value.GetRef(), ScopeKind: runtimeResourceScopeKind(value.GetScopeKind().String()), OrganizationRef: value.GetOrganizationRef(), ProjectRef: value.GetProjectRef(), Name: value.GetName(), Description: value.GetDescription(),
 		ValueType: generated.RuntimeSecretValueType(runtimeSecretValueTypeName(value.GetValueType())), State: generated.RuntimeSecretState(value.GetState()),
 		Version: value.GetVersion(), CurrentRevision: value.GetCurrentRevision(), CreatedAt: runtimeSecretTime(value.GetCreatedAt()), UpdatedAt: runtimeSecretTime(value.GetUpdatedAt()),
 		NextActions: make([]generated.NextAction, 0, len(value.GetNextActions())),

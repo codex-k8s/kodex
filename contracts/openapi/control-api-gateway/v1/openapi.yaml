@@ -12238,6 +12238,7 @@ components:
           nextActions,
         ]
       properties:
+        purpose: { $ref: "#/components/schemas/RuntimeSecretPurpose" }
         scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
         organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
@@ -12464,11 +12465,15 @@ components:
             items: { $ref: "#/components/schemas/RuntimeSecret" },
           }
         nextPageToken: { type: string, maxLength: 1000 }
+    RuntimeSecretPurpose:
+      type: string
+      enum: [APPLICATION, SSH_COMPOSE]
     RuntimeSecretCreateInput:
       type: object
       additionalProperties: false
       required: [name, description, valueType, value]
       properties:
+        purpose: { $ref: "#/components/schemas/RuntimeSecretPurpose" }
         name: { type: string, minLength: 1, maxLength: 120 }
         description: { type: string, maxLength: 1000 }
         valueType: { $ref: "#/components/schemas/RuntimeSecretValueType" }
@@ -17585,6 +17590,18 @@ components:
           reason,
           pins,
         ]
+      not:
+        anyOf:
+          - properties:
+              definitionKey: { enum: [ssh-compose] }
+              resourceScope:
+                not:
+                  anyOf:
+                    - { type: object, maxProperties: 0 }
+                    - { $ref: "#/components/schemas/SSHComposeResourceValues" }
+          - properties:
+              definitionKey: { not: { enum: [ssh-compose] } }
+              resourceScope: { type: object, minProperties: 9 }
       properties:
         connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
         name: { type: string, maxLength: 500 }
@@ -17596,7 +17613,7 @@ components:
           {
             type: object,
             additionalProperties: { type: string, maxLength: 349528 },
-            maxProperties: 8,
+            maxProperties: 9,
           }
         grantable: { type: boolean }
         usable: { type: boolean }
@@ -17788,6 +17805,7 @@ components:
                 CONFLUENCE_SPACE,
                 EMAIL_SENDER,
                 HTTPS_RESOURCE,
+                SSH_TARGET,
               ],
           }
         inputFields:
@@ -17939,6 +17957,16 @@ components:
       type: object
       additionalProperties: false
       required: [kind, values, digest]
+      # Две запрещённые формы: SSH с неверными pins и другой kind с девятью значениями.
+      # Такая запись сохраняет общую map-модель Go, не расширяя bound других adapters.
+      not:
+        anyOf:
+          - properties:
+              kind: { enum: [SSH_TARGET] }
+              values: { not: { $ref: "#/components/schemas/SSHComposeResourceValues" } }
+          - properties:
+              kind: { not: { enum: [SSH_TARGET] } }
+              values: { type: object, minProperties: 9 }
       properties:
         kind:
           {
@@ -17953,13 +17981,30 @@ components:
                 CONFLUENCE_SPACE,
                 EMAIL_SENDER,
                 HTTPS_RESOURCE,
+                SSH_TARGET,
               ],
           }
         values:
           type: object
-          maxProperties: 8
+          maxProperties: 9
           additionalProperties: { type: string, maxLength: 2048 }
         digest: { type: string, pattern: "^[a-f0-9]{64}$" }
+    SSHComposeResourceValues:
+      type: object
+      additionalProperties: false
+      minProperties: 9
+      maxProperties: 9
+      required: [project_ref, target_ref, owner, repository, address, user, host_key, published_port, runtime_image]
+      properties:
+        project_ref: { $ref: "#/components/schemas/OpaqueRef" }
+        target_ref: { type: string, pattern: "^ssh_[a-f0-9]{32}$" }
+        owner: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$" }
+        repository: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$" }
+        address: { type: string, minLength: 2, maxLength: 45 }
+        user: { type: string, pattern: "^[a-z_][a-z0-9_-]{0,31}$", not: { enum: [root] } }
+        host_key: { type: string, pattern: "^ssh-ed25519 [A-Za-z0-9+/]+={0,2}$", maxLength: 128 }
+        published_port: { type: string, pattern: "^[1-9][0-9]{3,4}$" }
+        runtime_image: { type: string, pattern: "^[a-z0-9][a-z0-9./:_-]{0,240}@sha256:[a-f0-9]{64}$", maxLength: 313 }
     EmailMailboxReceiveProtocol: { type: string, enum: [IMAP, POP3] }
     EmailMailboxTLSMode: { type: string, enum: [IMPLICIT, STARTTLS] }
     EmailMailboxAuthMethod: { type: string, enum: [PASSWORD, OAUTHBEARER] }

@@ -213,7 +213,7 @@ func (r *Repository) PrepareRuntimeSecretDraft(ctx context.Context, p value.Prin
 		if input.SecretRef == "" {
 			kind = "CREATE"
 		}
-		secret, err = r.prepareRuntimeSecretTarget(ctx, tx, s, p, repoport.RuntimeSecretPrepareInput{ScopeKind: input.ScopeKind, Kind: kind, ProjectRef: input.ProjectRef, SecretRef: input.SecretRef, Name: input.Name, Description: input.Description, ValueType: input.ValueType, Mutation: input.Mutation})
+		secret, err = r.prepareRuntimeSecretTarget(ctx, tx, s, p, repoport.RuntimeSecretPrepareInput{Purpose: input.Purpose, ScopeKind: input.ScopeKind, Kind: kind, ProjectRef: input.ProjectRef, SecretRef: input.SecretRef, Name: input.Name, Description: input.Description, ValueType: input.ValueType, Mutation: input.Mutation})
 		if err != nil {
 			return empty, err
 		}

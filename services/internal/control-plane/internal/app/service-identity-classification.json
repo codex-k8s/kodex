@@ -2147,6 +2147,21 @@
       "operation_id": "platform.repository-bundles.work.renew",
       "source_binding_sha256": "b050b2af3eb49d8be42e66301878601a76a3b8f04e8b93f959c1ceb625fbfe6d",
       "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.ssh-compose.claim",
+      "source_binding_sha256": "1af09248c4f902de8b94a247bae80dfc1137fa1c16c7351ab12c5c42256a7f02",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.ssh-compose.renew",
+      "source_binding_sha256": "41ee71b69afa060cfa00fd336dc143fdc354f593bad6f2cbdc75c5b2ad81b426",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.credential-projections.ssh-compose.resolve",
+      "source_binding_sha256": "2b65760cfffd688f8dfc34fa8c64b6a6e6e82e6ccff43de039fbbf260aa541a1",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
     }
   ]
 }

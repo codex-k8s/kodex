@@ -602,7 +602,7 @@ func castSecret(value *controlplanev1.RuntimeSecret) *secretbrokerv1.RuntimeSecr
 		SecretRef: value.GetRef(), ProjectRef: value.GetProjectRef(), Name: value.GetName(),
 		ValueType: castValueType(value.GetValueType()), Status: castStatus(value.GetState()), Revision: uint64(value.GetCurrentRevision()),
 		CreatedAt: cloneTimestamp(value.GetCreatedAt()), UpdatedAt: cloneTimestamp(value.GetUpdatedAt()),
-		Description: value.GetDescription(), Version: value.GetVersion(),
+		Description: value.GetDescription(), Purpose: value.GetPurpose(), Version: value.GetVersion(),
 	}
 	if hint := value.GetDisplayHint(); hint != nil {
 		result.DisplayHint = &secretbrokerv1.RuntimeSecretDisplayHint{Prefix: hint.GetPrefix(), Suffix: hint.GetSuffix()}

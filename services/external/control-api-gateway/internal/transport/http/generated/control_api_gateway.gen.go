@@ -2485,6 +2485,7 @@ const (
 	IntegrationCapabilityResourceKindHTTPSRESOURCE     IntegrationCapabilityResourceKind = "HTTPS_RESOURCE"
 	IntegrationCapabilityResourceKindJIRAPROJECT       IntegrationCapabilityResourceKind = "JIRA_PROJECT"
 	IntegrationCapabilityResourceKindMATTERMOSTCHANNEL IntegrationCapabilityResourceKind = "MATTERMOST_CHANNEL"
+	IntegrationCapabilityResourceKindSSHTARGET         IntegrationCapabilityResourceKind = "SSH_TARGET"
 	IntegrationCapabilityResourceKindSYNTHETICJOURNAL  IntegrationCapabilityResourceKind = "SYNTHETIC_JOURNAL"
 )
 
@@ -2504,6 +2505,8 @@ func (e IntegrationCapabilityResourceKind) Valid() bool {
 	case IntegrationCapabilityResourceKindJIRAPROJECT:
 		return true
 	case IntegrationCapabilityResourceKindMATTERMOSTCHANNEL:
+		return true
+	case IntegrationCapabilityResourceKindSSHTARGET:
 		return true
 	case IntegrationCapabilityResourceKindSYNTHETICJOURNAL:
 		return true
@@ -2908,6 +2911,7 @@ const (
 	IntegrationResourceScopeKindHTTPSRESOURCE     IntegrationResourceScopeKind = "HTTPS_RESOURCE"
 	IntegrationResourceScopeKindJIRAPROJECT       IntegrationResourceScopeKind = "JIRA_PROJECT"
 	IntegrationResourceScopeKindMATTERMOSTCHANNEL IntegrationResourceScopeKind = "MATTERMOST_CHANNEL"
+	IntegrationResourceScopeKindSSHTARGET         IntegrationResourceScopeKind = "SSH_TARGET"
 	IntegrationResourceScopeKindSYNTHETICJOURNAL  IntegrationResourceScopeKind = "SYNTHETIC_JOURNAL"
 )
 
@@ -2927,6 +2931,8 @@ func (e IntegrationResourceScopeKind) Valid() bool {
 	case IntegrationResourceScopeKindJIRAPROJECT:
 		return true
 	case IntegrationResourceScopeKindMATTERMOSTCHANNEL:
+		return true
+	case IntegrationResourceScopeKindSSHTARGET:
 		return true
 	case IntegrationResourceScopeKindSYNTHETICJOURNAL:
 		return true
@@ -6865,6 +6871,24 @@ func (e RuntimeSecretDraftImpactPlanState) Valid() bool {
 	case RuntimeSecretDraftImpactPlanStateEXPIRED:
 		return true
 	case RuntimeSecretDraftImpactPlanStatePREPARED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RuntimeSecretPurpose.
+const (
+	APPLICATION RuntimeSecretPurpose = "APPLICATION"
+	SSHCOMPOSE  RuntimeSecretPurpose = "SSH_COMPOSE"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeSecretPurpose enum.
+func (e RuntimeSecretPurpose) Valid() bool {
+	switch e {
+	case APPLICATION:
+		return true
+	case SSHCOMPOSE:
 		return true
 	default:
 		return false
@@ -14725,6 +14749,7 @@ type RuntimeSecret struct {
 	NextActions     []NextAction              `json:"nextActions"`
 	OrganizationRef OpaqueRef                 `json:"organizationRef"`
 	ProjectRef      string                    `json:"projectRef"`
+	Purpose         *RuntimeSecretPurpose     `json:"purpose,omitempty"`
 	Ref             OpaqueRef                 `json:"ref"`
 	ScopeKind       RuntimeResourceScopeKind  `json:"scopeKind"`
 	State           RuntimeSecretState        `json:"state"`
@@ -14749,6 +14774,7 @@ type RuntimeSecretBinding struct {
 type RuntimeSecretCreateInput struct {
 	Description string                 `json:"description"`
 	Name        string                 `json:"name"`
+	Purpose     *RuntimeSecretPurpose  `json:"purpose,omitempty"`
 	Value       string                 `json:"value"`
 	ValueType   RuntimeSecretValueType `json:"valueType"`
 }
@@ -14880,6 +14906,9 @@ type RuntimeSecretPage struct {
 	NextPageToken string          `json:"nextPageToken"`
 }
 
+// RuntimeSecretPurpose defines model for RuntimeSecretPurpose.
+type RuntimeSecretPurpose string
+
 // RuntimeSecretRebindInput defines model for RuntimeSecretRebindInput.
 type RuntimeSecretRebindInput struct {
 	// Selections Уникальные environments; суммарно не более 100 consumers.
@@ -14991,6 +15020,19 @@ type RuntimeWebAccessRuleProtocol string
 type RuntimeWorkspaceLimits struct {
 	MaxBytes int64 `json:"maxBytes"`
 	MaxFiles int64 `json:"maxFiles"`
+}
+
+// SSHComposeResourceValues defines model for SSHComposeResourceValues.
+type SSHComposeResourceValues struct {
+	Address       string    `json:"address"`
+	HostKey       string    `json:"host_key"`
+	Owner         string    `json:"owner"`
+	ProjectRef    OpaqueRef `json:"project_ref"`
+	PublishedPort string    `json:"published_port"`
+	Repository    string    `json:"repository"`
+	RuntimeImage  string    `json:"runtime_image"`
+	TargetRef     string    `json:"target_ref"`
+	User          string    `json:"user"`
 }
 
 // STTModelCatalog defines model for STTModelCatalog.

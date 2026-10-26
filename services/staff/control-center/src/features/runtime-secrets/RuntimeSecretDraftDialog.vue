@@ -21,7 +21,10 @@ import {
   rememberRuntimeSecretReauthSuggestion,
 } from "./reauth-suggestion";
 import { readRuntimeSecret } from "./api";
-import type { RuntimeResourceAddress } from "@/features/runtime/resource-scope";
+import {
+  runtimeResourceAddressScope,
+  type RuntimeResourceAddress,
+} from "@/features/runtime/resource-scope";
 import {
   createSecretDraft,
   saveSecretDraft,
@@ -284,6 +287,9 @@ onBeforeUnmount(() => {
   <RuntimeSecretValueDialog
     v-if="!draft && !restoring"
     :secret="secret"
+    :allow-ssh-compose="
+      runtimeResourceAddressScope(projectRef).kind === 'PROJECT'
+    "
     :busy="locked"
     :locked="uncertain"
     :problem="problem"

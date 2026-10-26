@@ -4,8 +4,8 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 2.2.21
-updated: 2026-10-26
+version: 2.2.22
+updated: 2026-10-27
 ---
 
 # Кодификация документов и задач
@@ -127,6 +127,8 @@ updated: 2026-07-28
 | `ARCH-MC-010`      | `docs/architecture/runtime-controller.md`                   |
 | `ARCH-MC-011`      | `docs/architecture/web-first-platform-reset.md`             |
 | `ARCH-MC-012`      | `docs/architecture/installable-applications.md`             |
+| `ARCH-SSH-COMPOSE-1838` | `docs/architecture/ssh-compose-1838.md`                   |
+| `OPS-SSH-COMPOSE-1838` | `tools/ssh-compose/README.md`                            |
 | `DOM-MC-001`       | `docs/domains/README.md`                                    |
 | `OPS-MC-001`       | `docs/operations/README.md`                                 |
 | `OPS-AUTHORITY-DATABASE-1093` | `docs/operations/authority-database-boundary-1093.md` |

@@ -115,7 +115,7 @@ func TestProjectPurgeAuthorityMigrationProofComponent(t *testing.T) {
 					}
 				}
 			}
-			if proof["readOnly"] != "on" || proof["database"] != runtime.Database || proof["gooseVersion"] != float64(20261026001000) ||
+			if proof["readOnly"] != "on" || proof["database"] != runtime.Database || proof["gooseVersion"] != float64(20261027000100) ||
 				proof["tables"] != float64(2) || proof["runtimeRoles"] != float64(2) || proof["runtimeLogins"] != float64(1) {
 				t.Fatal("purge authority proof identity mismatch")
 			}

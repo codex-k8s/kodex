@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"net"
 	"net/url"
 	"os"
@@ -40,6 +41,7 @@ const (
 // Config объединяет настройки control-plane из окружения, метаданные учётных данных, доверенные пути и бюджеты работников.
 // Разбор полей не читает указанные учётные данные и не подтверждает готовность удалённых сервисов.
 type Config struct {
+	SSHComposeSigningKeyFile        string        `env:"CONTROL_PLANE_SSH_COMPOSE_SIGNING_KEY_FILE"`
 	RPCProfile                      string        `env:"KODEX_RPC_PROFILE"`
 	SkillScannerSocket              string        `env:"CONTROL_PLANE_SKILL_SCANNER_SOCKET"`
 	SkillScannerTimeout             time.Duration `env:"CONTROL_PLANE_SKILL_SCANNER_TIMEOUT"`
@@ -238,6 +240,9 @@ func loadConfig() (Config, error) {
 // validate проверяет фиксированные границы RPC и идентичности, синтаксис путей, настройки хранилища/OIDC и бюджеты сервиса.
 // В обычном профиле RPC также проверяется каталог сокета полномочий; остальные указанные файлы и удалённые узлы не опрашиваются.
 func (config Config) validate() error {
+	if config.SSHComposeSigningKeyFile != "" && (!filepath.IsAbs(config.SSHComposeSigningKeyFile) || filepath.Clean(config.SSHComposeSigningKeyFile) != config.SSHComposeSigningKeyFile) {
+		return errors.New("SSH Compose signing key path is invalid")
+	}
 	if config.RPCProfile != "" && config.RPCProfile != "trusted-cluster" {
 		return startupFailure(stageControlPlaneRPCProfileIsInvalid, nil)
 	}

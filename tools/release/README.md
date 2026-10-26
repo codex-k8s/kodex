@@ -625,3 +625,15 @@ node tools/release/control-plane-policy-projection.mjs observe \
 node --test tools/release/authority-policy-environment.test.mjs \
   tools/release/control-plane-policy-projection.test.mjs
 ```
+
+Для SSH/Compose действует отдельный профиль `ssh-compose`: только переход
+`20261026001000 → 20261027000100`. Preflight требует exact server010 schema,
+все bundle/retention/purge/ACL-инварианты, отсутствие новых SSH columns/functions
+и нулевые штатные active counters. Прежний `server-workflow` не принимает новый
+Goose head. После штатных check/stop один immutable migrator применяет новый DDL;
+readback выполняет `ssh-compose-migration-postcondition.sql` с полным наследуемым
+SERVER proof и отдельными purpose/snapshot/enum/trigger/function/ACL checks.
+Ни значения Secret, ни DSN через эти metadata queries не читаются.
+Неизвестный исход требует inspect того же intent; повтор DDL не разрешается.
+Rollback схемы не поддерживается: дальнейшее восстановление только совместимым
+образом и forward migration, без удаления purpose, receipt или immutable pins.

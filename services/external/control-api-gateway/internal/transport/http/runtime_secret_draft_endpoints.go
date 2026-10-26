@@ -44,7 +44,7 @@ func (s *Server) CreateRuntimeSecretDraft(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
-	s.saveSecretDraft(w, r, &cp.PrepareSaveRuntimeSecretDraftRequest{Mutation: mutation, ProjectRef: ref, Name: body.Name, Description: body.Description, ValueType: runtimeSecretValueType(string(body.ValueType))}, body.Value)
+	s.saveSecretDraft(w, r, &cp.PrepareSaveRuntimeSecretDraftRequest{Purpose: runtimeSecretCreatePurpose(body), Mutation: mutation, ProjectRef: ref, Name: body.Name, Description: body.Description, ValueType: runtimeSecretValueType(string(body.ValueType))}, body.Value)
 }
 
 // SaveRuntimeSecretDraft decodes replacement value input and requires a versioned mutation for the referenced secret before preparing a new draft. It does not publish that replacement or bypass owner conflict checks.

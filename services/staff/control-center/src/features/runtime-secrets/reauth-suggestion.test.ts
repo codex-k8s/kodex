@@ -89,3 +89,32 @@ describe("runtime Secret re-auth suggestion", () => {
     ).toBeUndefined();
   });
 });
+
+it("SSH re-auth восстанавливает только project purpose без plaintext и не допускает organization", () => {
+  const target = storage();
+  const ssh = { ...suggestion, purpose: "SSH_COMPOSE" as const };
+  rememberRuntimeSecretReauthSuggestion(
+    target,
+    "project_sales",
+    ssh,
+    undefined,
+    1000,
+  );
+  expect(
+    consumeRuntimeSecretReauthSuggestion(
+      target,
+      { projectRef: "project_sales" },
+      1100,
+    ),
+  ).toEqual(ssh);
+  expect(() =>
+    rememberRuntimeSecretReauthSuggestion(
+      target,
+      { kind: "ORGANIZATION", organizationRef: "org_fixture" },
+      ssh,
+      undefined,
+      1000,
+    ),
+  ).toThrow();
+  expect(target.length).toBe(0);
+});

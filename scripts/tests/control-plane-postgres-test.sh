@@ -8,6 +8,8 @@ fail() {
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 container_name="kodex-control-plane-postgres-${BASHPID}"
+go_parallelism=${KODEX_CONTROL_PLANE_TEST_GO_PARALLELISM:-2}
+[[ "$go_parallelism" =~ ^[12]$ ]] || fail 'Go parallelism must be 1 or 2'
 test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestBootstrapComponent|TestConcurrentBootstrapComponent|TestWorkerGrantInstancesComponent|TestTrustedWorkloadGenerationComponent|TestAssistantCredentialScopesComponent|TestAssistantParallelLifecycleComponent|TestProjectAssistantProfilesComponent|TestOrganizationRoleImagesComponent|TestOrganizationRuntimeEnvironmentComponent|TestOrganizationRuntimeSecretComponent|TestAssistantSystemRunProjectScopeComponent|TestRuntimeTerminalStorageComponent|TestIntegrationGateFeedbackComponent|TestWorkflowMetadataDraftComponent|TestDeletedEnvironmentSecretRetentionComponent|TestHistoricalEnvironmentSecretAdmissionComponent|TestHistoricalSecretRecoveryConcurrencyComponent|TestWorkflowGateDecisionsComponent|TestCompletionReceiptComponent|TestUsageCompletenessComponent|TestRepositoryBundlePublicationComponent|TestCommitAckArtifactComponent|TestOwnerGateExpiryComponent|TestOwnerGateExpiryMigrationProofComponent|TestProjectPurgeAuthorityComponent|TestProjectPurgeAuthorityMigrationProofComponent|TestServerWorkflowMigrationProofComponent|TestOverviewEligibilityComponent)$'}}
 
 cleanup() {
@@ -90,7 +92,7 @@ dsn="postgresql://control_plane_migrator@127.0.0.1:${port}/control_plane?sslmode
 runtime_dsn="postgresql://control_plane_runtime_g1@127.0.0.1:${port}/control_plane?sslmode=disable"
 run_migration() {
   CONTROL_PLANE_POSTGRES_ADMIN_DSN_FILE=<(printf '%s' "$dsn") \
-    env -u GOFLAGS GOENV=off GOWORK=off go run -p 2 ./cmd/cli "$@"
+    env -u GOFLAGS GOENV=off GOWORK=off go run -p "$go_parallelism" ./cmd/cli "$@"
 }
 
 (
@@ -104,24 +106,24 @@ run_migration() {
       -c 'REVOKE CONNECT ON DATABASE control_plane_scheduler_upgrade FROM PUBLIC; GRANT CONNECT, TEMPORARY ON DATABASE control_plane_scheduler_upgrade TO control_plane_migrator; REVOKE CREATE ON SCHEMA public FROM PUBLIC; GRANT USAGE, CREATE ON SCHEMA public TO control_plane_owner, control_plane_migrator' >/dev/null
     KODEX_CONTROL_PLANE_MIGRATION_TEST_DSN="postgresql://control_plane_migrator@127.0.0.1:${port}/control_plane_scheduler_upgrade?sslmode=disable" \
       KODEX_CONTROL_PLANE_MIGRATION_TEST_DISPOSABLE=dedicated-loopback-container \
-      env -u GOFLAGS GOENV=off GOWORK=off go test -p 2 -count=1 -timeout=90s ./cmd/cli -run '^TestScheduleProtocolUpgrade$'
+      env -u GOFLAGS GOENV=off GOWORK=off go test -p "$go_parallelism" -count=1 -timeout=90s ./cmd/cli -run '^TestScheduleProtocolUpgrade$'
   fi
   run_migration up
   run_migration status >/dev/null
   run_migration up
-  # Current010 проверяется собственным закрытым release-профилем; старые
-  # verifiers002/283 не принимают новую схему и не получают обход версии.
+  # Current270001 проверяется отдельным SSH-профилем с полным server010/bundle proof.
+  # Исторические verifiers002/010 не принимают новую schema и не получают обход версии.
   psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" \
     --no-password -X -qAt -v ON_ERROR_STOP=1 \
-    --file "$repository_root/tools/release/server-workflow-migration-postcondition.sql" | \
+    --file "$repository_root/tools/release/ssh-compose-migration-postcondition.sql" | \
     node --input-type=module -e '
       const {pathToFileURL} = await import("node:url");
-      const {validServerWorkflowMigrationPostcondition} = await import(pathToFileURL(process.argv[1]));
+      const {validSSHComposeMigrationPostcondition} = await import(pathToFileURL(process.argv[1]));
       let input = "";
       for await (const chunk of process.stdin) input += chunk;
-      if (!validServerWorkflowMigrationPostcondition(JSON.parse(input)))
-        throw new Error("Server workflow schema postcondition failed");
-      process.stdout.write("Server workflow schema read-only query passed\n");
+      if (!validSSHComposeMigrationPostcondition(JSON.parse(input)))
+        throw new Error("SSH Compose schema postcondition failed");
+      process.stdout.write("SSH Compose schema read-only query passed\n");
     ' "$repository_root/tools/release/control-plane-immutable-migration.mjs"
   retention_reference_count=$(psql "$runtime_dsn" --no-password -X -qAt -v ON_ERROR_STOP=1 \
     -c "SELECT control_plane.skill_artifact_reference_count('00000000-0000-4000-8000-000000000001'::uuid,'art_component',1,'sha256:' || repeat('0',64))")
@@ -134,7 +136,7 @@ run_migration() {
   KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
     KODEX_CONTROL_PLANE_TEST_ADMIN_DSN="$admin_dsn" \
     KODEX_CONTROL_PLANE_TEST_TEMPLATE_DATABASE=control_plane_component_template \
-    env -u GOFLAGS GOENV=off GOWORK=off go test -p 2 -v -count=1 \
+    env -u GOFLAGS GOENV=off GOWORK=off go test -p "$go_parallelism" -v -count=1 \
       ./internal/repository/postgres/platform -run "$test_pattern"
   # Та же read-only диагностика, которую release использует на staging.
   psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" \
@@ -166,7 +168,7 @@ run_migration() {
     KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
       KODEX_CONTROL_PLANE_TEST_ADMIN_DSN="$admin_dsn" \
       KODEX_CONTROL_PLANE_TEST_TEMPLATE_DATABASE=control_plane_component_template \
-      env -u GOFLAGS GOENV=off GOWORK=off go test -p 2 -count=1 \
+      env -u GOFLAGS GOENV=off GOWORK=off go test -p "$go_parallelism" -count=1 \
         ./internal/repository/postgres/platform -run '^TestAvatarLifecycleComponent$'
   fi
 )

@@ -20,6 +20,7 @@ require (
 	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0
 	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0
 	github.com/codex-k8s/kodex/libs/go/sttapi v0.0.0
+	github.com/codex-k8s/kodex/libs/go/sshcompose v0.0.0
 	github.com/getkin/kin-openapi v0.149.0
 	github.com/google/uuid v1.6.0
 	github.com/nats-io/jwt/v2 v2.8.1
@@ -115,3 +116,5 @@ replace github.com/codex-k8s/kodex/libs/go/repositorybundle => ../../../libs/go/
 replace github.com/codex-k8s/kodex/libs/go/runtimecontract => ../../../libs/go/runtimecontract
 
 replace github.com/codex-k8s/kodex/libs/go/httpserver => ../../../libs/go/httpserver
+
+replace github.com/codex-k8s/kodex/libs/go/sshcompose => ../../../libs/go/sshcompose

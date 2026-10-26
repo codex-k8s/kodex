@@ -35,6 +35,7 @@ func trustedClusterAdmission(profile string) (grpc.UnaryServerInterceptor, error
 	})
 	add("runtime-controller", controlplaneclient.RuntimeCredentialProjectionOperations())
 	add("stt-tts-service", controlplaneclient.STTCredentialProjectionOperations())
+	add("integration-gateway", controlplaneclient.SSHComposeCredentialProjectionOperations())
 	authorizer, err := serviceidentity.NewTrustedCluster(profile,
 		"spiffe://kodex.local/ns/kodex-system/sa/secret-broker", bindings)
 	if err != nil {

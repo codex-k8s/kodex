@@ -34,7 +34,17 @@ test("workflow catalog preserves leased source binding in local service registry
 });
 test("control-plane policy preserves exact bindings and excludes STT continuation",() => {
   const policy=buildServicePolicy(source,classification);
-  assert.equal(policy.bindings.length,417);
+  assert.equal(policy.bindings.length,420);
+  for (const [operation, method, caller] of [
+    ["platform.runtime.ssh-compose.claim", "/controlplane.v1.RuntimeWorkService/ClaimSSHComposeInvocations", "integration-gateway"],
+    ["platform.runtime.ssh-compose.renew", "/controlplane.v1.RuntimeWorkService/RenewSSHComposeInvocation", "integration-gateway"],
+    ["platform.credential-projections.ssh-compose.resolve", "/controlplane.v1.RuntimeSecretWorkService/ResolveSSHComposeCredentialProjection", "secret-broker"],
+  ]) {
+    assert.deepEqual(policy.bindings.filter(binding=>binding.operation_id===operation), [{
+      caller_spiffe_id:"spiffe://kodex.local/ns/kodex-system/sa/"+caller,full_method:method,
+      operation_id:operation,permission:operation,actor_mode:"SERVICE_OWNER_RESOLVED",project_required:false,
+    }]);
+  }
   for (const operation of ["platform.role-images.admission.recovery-terminal.get", "platform.role-images.supply-work.get"]) {
     const bindings=policy.bindings.filter(value=>value.operation_id===operation);
     assert.equal(bindings.length,1);assert.equal(bindings[0].caller_spiffe_id,"spiffe://kodex.local/ns/kodex-system/sa/image-admission-controller");

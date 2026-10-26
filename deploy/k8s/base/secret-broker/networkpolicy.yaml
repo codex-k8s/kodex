@@ -36,6 +36,10 @@ spec:
             matchLabels:
               app.kubernetes.io/name: stt-tts-service
               app.kubernetes.io/component: internal-service
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: integration-gateway
+              app.kubernetes.io/component: integration-worker
       ports:
         - {protocol: TCP, port: 8443}
     - from:

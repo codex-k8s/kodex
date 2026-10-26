@@ -140,6 +140,7 @@ func (r *Repository) prepareOrganizationRuntimeSecretTarget(ctx context.Context,
 		"ref": secret.ref, "organization_id": s.organizationID, "project_id": "", "scope_kind": secret.scopeKind,
 		"namespace": secret.namespace, "name": secret.name, "description": secret.description,
 		"value_type": secret.valueType, "actor_id": s.actorID,
+		"purpose": "APPLICATION",
 	}).Scan(&secret.id, &secret.version, &secret.currentRevision, &secret.createdAt, &secret.updatedAt); err != nil {
 		return lockedRuntimeSecret{}, mapWriteError(err)
 	}

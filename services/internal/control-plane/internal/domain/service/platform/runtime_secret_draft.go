@@ -46,6 +46,12 @@ func (service *Service) PrepareOrganizationRuntimeSecretDraft(ctx context.Contex
 // prepareRuntimeSecretDraft resolves the principal, requires the gateway and five-minute interactive freshness, validates the closed action and mutation intent, then applies action-specific create/update/draft/publication preconditions. SAVE checks digest length rather than recomputing content; publication requires an impact-plan reference and at most one thousand selected items before owner preparation.
 // prepareRuntimeSecretDraft разрешает субъекта, требует шлюз и интерактивную аутентификацию не старше пяти минут, проверяет закрытое действие и намерение изменения, затем предусловия создания, обновления, черновика и публикации для действия. SAVE проверяет длину дайджеста без пересчёта содержимого; публикация требует ссылку плана влияния и не более тысячи выбранных элементов до подготовки владельцем.
 func (service *Service) prepareRuntimeSecretDraft(ctx context.Context, p value.Principal, input repository.RuntimeSecretDraftPrepareInput) (entity.RuntimeSecretDraftOperationReceipt, error) {
+	if input.Purpose == "APPLICATION" {
+		input.Purpose = ""
+	}
+	if input.Purpose != "" && (input.Purpose != "SSH_COMPOSE" || input.Kind != "SAVE" || input.SecretRef != "" || input.ScopeKind != "PROJECT") {
+		return entity.RuntimeSecretDraftOperationReceipt{}, errs.ErrInvalid
+	}
 	p, err := service.principal(ctx, p)
 	if err != nil {
 		return entity.RuntimeSecretDraftOperationReceipt{}, err

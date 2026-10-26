@@ -11,6 +11,7 @@ import { activeDeploymentPods, isProvenStoppedPod } from './stable-archive-trans
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'ssh-compose': {version:'20261027000100',file:'20261027000100_ssh_compose_runtime.sql',annotation:'kodex.dev/cp-ssh-compose-migration-plan',previousVersion:20261026001000,emptyField:'sshComposeAbsent',preconditionFile:'ssh-compose-migration-precondition.sql',postconditionFile:'ssh-compose-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261027000100_ssh_compose_runtime.sql'])},
   'server-workflow': {version:'20261026001000',file:'20261026001000_workflow_effect_execution_rejoin.sql',annotation:'kodex.dev/cp-server-workflow-migration-plan',previousVersion:20261026000200,emptyField:'serverWorkflowAbsent',preconditionFile:'server-workflow-migration-precondition.sql',postconditionFile:'server-workflow-migration-postcondition.sql',requiredMigrations:Object.freeze(["20261026000300_server_driven_workflow.sql", "20261026000400_workflow_attempt_journal.sql", "20261026000500_workflow_artifact_visibility_retention.sql", "20261026000600_workflow_exception_episodes.sql", "20261026000700_workflow_input_guard_binding.sql", "20261026000800_workflow_exception_terminal_decision.sql", "20261026000900_workflow_effect_rejoin.sql", "20261026001000_workflow_effect_execution_rejoin.sql"])},
   'project-purge-authority': {version:'20261026000200',file:'20261026000200_project_purge_authority_acl.sql',annotation:'kodex.dev/cp-project-purge-authority-migration-plan',previousVersion:20261026000100,emptyField:'purgeAuthoritySafeToMigrate',preconditionFile:'project-purge-authority-migration-precondition.sql',postconditionFile:'project-purge-authority-migration-postcondition.sql'},
   'owner-gate-expiry': {version:'20261026000100',file:'20261026000100_owner_gate_expiry.sql',annotation:'kodex.dev/cp-owner-gate-expiry-migration-plan',previousVersion:20261025000200,emptyField:'expiryAbsent',preconditionFile:'owner-gate-expiry-migration-precondition.sql',postconditionFile:'owner-gate-expiry-migration-postcondition.sql'},
@@ -252,6 +253,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     ensure(fingerprint(postgresIdentity()) === fingerprint(expectedPostgres), 'MIGRATION_POSTGRES_IDENTITY_CHANGED');
     const fields = ['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions',
       'pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'];
+    ensure(profile !== 'ssh-compose' || validServerWorkflowMigrationPostcondition(result), 'MIGRATION_OWNER_PRECONDITION_FAILED');
     ensure(result.readOnly === 'on' && result.database === 'control_plane' && result.gooseVersion === configuration.previousVersion &&
       result[configuration.emptyField] === true && fields.every(key => result[key] === 0) && Number.isSafeInteger(result.oldClaimSessions) &&
       result.oldClaimSessions >= 0 && (!requireStopped || result.oldClaimSessions === 0), 'MIGRATION_OWNER_PRECONDITION_FAILED');
@@ -608,7 +610,12 @@ function validPurgeAuthoritySnapshot(proof,expectedVersion) {
 
 // Новый профиль не расширяет принятие прежних версий и проверяет всю назначенную owner schema.
 export function validServerWorkflowMigrationPostcondition(proof) {
-  return validPurgeAuthoritySnapshot(proof,20261026001000) && proof.serverWorkflowProfile==='SERVER_DAG_V1' &&
+  return validServerWorkflowSnapshot(proof,20261026001000);
+}
+
+// Версия назначается закрытым профилем, исходный server010 validator остаётся exact.
+function validServerWorkflowSnapshot(proof,expectedVersion) {
+  return validPurgeAuthoritySnapshot(proof,expectedVersion) && proof.serverWorkflowProfile==='SERVER_DAG_V1' &&
     proof.bundleTableOwner==='control_plane_owner' && proof.bundleNoBodyColumns===true && proof.bundleForeignKeys===13 &&
     proof.bundleDeferredForeignKeys===13 && proof.bundleGuard===true &&
     ['schemaOwner','columns','constraints','indexes','triggers','functionSources','functionMetadata','functionACL',
@@ -619,10 +626,17 @@ export function validServerWorkflowMigrationPostcondition(proof) {
     proof.purgeBaselineEdgeFingerprint==='be6e23d9e894687a69a19e9b5777ab09' && proof.purgeEdgeFingerprint==='6bf6ad76d8c7ae66e07f75ecf719fdd6';
 }
 
+// SSH-переход сохраняет весь server010/bundle/purge proof и проверяет только своё additive расширение.
+export function validSSHComposeMigrationPostcondition(proof) {
+  return validServerWorkflowSnapshot(proof,20261027000100) && proof.sshComposeProfile==='SSH_COMPOSE_V1' &&
+    ['sshColumns','sshConstraints','sshFunctions','sshTriggers','sshRuntimeColumns'].every(key=>proof[key]===true);
+}
+
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {
     case 'server-workflow': return validServerWorkflowMigrationPostcondition(proof);
+    case 'ssh-compose': return validSSHComposeMigrationPostcondition(proof);
     case 'project-purge-authority': return validProjectPurgeAuthorityMigrationPostcondition(proof);
     case 'owner-gate-expiry': return validOwnerGateExpiryMigrationPostcondition(proof);
     case 'repository-bundle': return validRepositoryBundleMigrationPostcondition(proof);

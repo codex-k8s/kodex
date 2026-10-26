@@ -28,6 +28,7 @@ const props = defineProps<{
   problem?: AppProblem;
   secret?: RuntimeSecret;
   suggestion?: RuntimeSecretDraftSuggestion;
+  allowSshCompose?: boolean;
 }>();
 const emit = defineEmits<{
   close: [];
@@ -41,6 +42,7 @@ const { t } = useI18n();
 const fieldPrefix = `runtime-secret-${useId()}`;
 const description = ref("");
 const valueType = ref<RuntimeSecretValueType>("STRING");
+const purpose = ref<"APPLICATION" | "SSH_COMPOSE">("APPLICATION");
 const value = ref("");
 const showValue = ref(false);
 const submitted = ref(false);
@@ -84,6 +86,9 @@ function submit(): void {
     return;
   }
   emit("create", {
+    ...(purpose.value === "SSH_COMPOSE"
+      ? { purpose: "SSH_COMPOSE" as const }
+      : {}),
     name: name.value.trim(),
     description: description.value.trim(),
     valueType: valueType.value,
@@ -122,20 +127,31 @@ watch(
 );
 
 watch(
-  [() => props.secret, () => props.suggestion] as const,
-  ([secret, suggestion]) => {
+  [
+    () => props.secret,
+    () => props.suggestion,
+    () => props.allowSshCompose,
+  ] as const,
+  ([secret, suggestion, allowSshCompose]) => {
     clearPlaintext();
     submitted.value = false;
     name.value = secret?.name ?? suggestion?.name ?? "";
     description.value = secret?.description ?? suggestion?.description ?? "";
     valueType.value = secret?.valueType ?? suggestion?.valueType ?? "STRING";
+    purpose.value =
+      secret?.purpose ??
+      (allowSshCompose ? suggestion?.purpose : undefined) ??
+      "APPLICATION";
   },
   { immediate: true },
 );
 watch(
-  [name, description, valueType] as const,
-  ([nextName, nextDescription, nextValueType]) =>
+  [name, description, valueType, purpose] as const,
+  ([nextName, nextDescription, nextValueType, nextPurpose]) =>
     emit("safeDraft", {
+      ...(nextPurpose === "SSH_COMPOSE"
+        ? { purpose: "SSH_COMPOSE" as const }
+        : {}),
       name: nextName,
       description: nextDescription,
       valueType: nextValueType,
@@ -192,6 +208,25 @@ onBeforeUnmount(clearPlaintext);
           maxlength="1000"
           rows="3"
         />
+      </label>
+
+      <label v-if="!rotating && allowSshCompose" class="field">
+        <span>{{ $t("runtimeSecrets.purpose") }}</span>
+        <select
+          v-model="purpose"
+          :disabled="busy || locked"
+          :id="`${fieldPrefix}-purpose`"
+        >
+          <option value="APPLICATION">
+            {{ $t("runtimeSecrets.purposeApplication") }}
+          </option>
+          <option value="SSH_COMPOSE">
+            {{ $t("runtimeSecrets.purposeSSH") }}
+          </option>
+        </select>
+        <small v-if="purpose === 'SSH_COMPOSE'">{{
+          $t("runtimeSecrets.purposeSSHHelp")
+        }}</small>
       </label>
 
       <label v-if="!rotating" class="field">

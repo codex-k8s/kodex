@@ -1016,6 +1016,8 @@ func CastIntegrationInvocationClaim(item map[string]any) *controlplanev1.Integra
 		WorkMode: controlplanev1.IntegrationInvocationWorkMode(controlplanev1.IntegrationInvocationWorkMode_value["INTEGRATION_INVOCATION_WORK_MODE_"+mapString(item, "workMode")]),
 	}
 	claim.DefinitionPackage, _ = item["definitionPackage"].([]byte)
+	claim.SshComposeSnapshot, _ = item["sshSnapshot"].([]byte)
+	claim.SshComposePermit, _ = item["sshPermit"].([]byte)
 	if credential, ok := item["credential"].(entity.IntegrationCredentialRevision); ok {
 		claim.CredentialRevision = castIntegrationCredential(credential)
 	}

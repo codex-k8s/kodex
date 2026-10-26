@@ -1514,6 +1514,7 @@ export type RuntimeSecretDisplayHint = {
 export type RuntimeResourceScopeKind = 'ORGANIZATION' | 'PROJECT';
 
 export type RuntimeSecret = {
+    purpose?: RuntimeSecretPurpose;
     scopeKind: RuntimeResourceScopeKind;
     organizationRef: OpaqueRef;
     ref: OpaqueRef;
@@ -1600,7 +1601,10 @@ export type RuntimeSecretPage = {
     nextPageToken: string;
 };
 
+export type RuntimeSecretPurpose = 'APPLICATION' | 'SSH_COMPOSE';
+
 export type RuntimeSecretCreateInput = {
+    purpose?: RuntimeSecretPurpose;
     name: string;
     description: string;
     valueType: RuntimeSecretValueType;
@@ -4276,7 +4280,7 @@ export type IntegrationCapability = {
     operation: string;
     approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT' | 'HUMAN_SCOPED';
     allowedApprovalPolicies: Array<'NONE' | 'HUMAN_EACH_EFFECT' | 'HUMAN_SCOPED'>;
-    resourceKind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER' | 'HTTPS_RESOURCE';
+    resourceKind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER' | 'HTTPS_RESOURCE' | 'SSH_TARGET';
     inputFields: Array<IntegrationConfigurationField>;
     inputSchema?: string;
     inputSchemaSha256?: string;
@@ -4329,11 +4333,23 @@ export type IntegrationDefinition = {
 };
 
 export type IntegrationResourceScope = {
-    kind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER' | 'HTTPS_RESOURCE';
+    kind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER' | 'HTTPS_RESOURCE' | 'SSH_TARGET';
     values: {
         [key: string]: string;
     };
     digest: string;
+};
+
+export type SshComposeResourceValues = {
+    project_ref: OpaqueRef;
+    target_ref: string;
+    owner: string;
+    repository: string;
+    address: string;
+    user: string;
+    host_key: string;
+    published_port: string;
+    runtime_image: string;
 };
 
 export type EmailMailboxReceiveProtocol = 'IMAP' | 'POP3';

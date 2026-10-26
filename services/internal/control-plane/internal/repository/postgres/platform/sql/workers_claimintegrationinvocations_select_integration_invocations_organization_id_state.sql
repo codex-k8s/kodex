@@ -5,7 +5,7 @@ SELECT i.id::text,i.ref,i.generation,i.state,c.ref,c.definition_key,c.public_con
 	COALESCE(cr.ref,''),COALESCE(cr.revision,0),COALESCE(cr.secret_ref,''),COALESCE(cr.secret_uid::text,''),
 	COALESCE(cr.secret_resource_version,''),COALESCE(cr.content_sha256,''),cr.created_at,initiator.ref,
 	COALESCE(approval.scope_paths,'{}'::text[]),COALESCE(approval.scope_digest,''),
-	COALESCE(approval.input_schema_digest,''),g.ref,i.grant_version,n.id::text,r.id::text
+	COALESCE(approval.input_schema_digest,''),g.ref,i.grant_version,n.id::text,r.id::text,i.ssh_compose_snapshot
 FROM control_plane.integration_invocations i
 JOIN control_plane.integration_connections c ON c.id=i.connection_id
 JOIN control_plane.integration_definitions d ON d.stable_key=c.definition_key
@@ -18,6 +18,7 @@ JOIN control_plane.subjects initiator ON initiator.id=root.initiated_by
 LEFT JOIN control_plane.integration_credential_revisions cr ON cr.id=c.credential_revision_id
 LEFT JOIN control_plane.integration_approval_scopes approval ON approval.id=i.approval_scope_id
 WHERE i.organization_id=$1::uuid
+  AND (c.definition_key='ssh-compose')=$5::boolean
   AND (r.project_id IS NOT NULL OR control_plane.owned_organization_assistant_run(r.organization_id,r.root_run_id))
   AND root.state IN ('RUNNING','WAITING_HUMAN')
   AND control_plane.runtime_execution_before_deadline(i.organization_id,i.run_id)
@@ -33,8 +34,8 @@ WHERE i.organization_id=$1::uuid
   ))
   AND (i.state='READY' OR (
     i.state='UNKNOWN_OUTCOME'
-    AND c.definition_key='synthetic'
-    AND i.operation='synthetic.journal.write'
+    AND ((c.definition_key='synthetic' AND i.operation='synthetic.journal.write')
+      OR (c.definition_key='ssh-compose' AND i.operation='ssh.compose.deploy'))
   ))
   AND i.operation NOT IN ('mattermost.inbound','mattermost.gate_decisions','github.repository.bundle.publish')
   AND c.enabled AND c.state='CONNECTED'

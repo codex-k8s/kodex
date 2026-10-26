@@ -359,6 +359,8 @@ service RuntimeSecretWorkService {
   rpc ResolveRuntimeCredentialProjection(ResolveRuntimeCredentialProjectionRequest) returns (ResolveRuntimeCredentialProjectionResponse);
   rpc ValidateRuntimeCredentialProjection(ValidateRuntimeCredentialProjectionRequest) returns (ValidateRuntimeCredentialProjectionResponse);
   rpc ResolveTranscriptionCredentialProjection(ResolveTranscriptionCredentialProjectionRequest) returns (ResolveTranscriptionCredentialProjectionResponse);
+  // Возвращает только descriptor exact SSH key действующего owner lease.
+  rpc ResolveSSHComposeCredentialProjection(ResolveSSHComposeCredentialProjectionRequest) returns (ResolveSSHComposeCredentialProjectionResponse);
 }
 
 service SystemAssistantService {
@@ -430,6 +432,10 @@ service RuntimeWorkService {
   rpc CompleteIntegrationConnectionTest(CompleteIntegrationConnectionTestRequest) returns (CompleteIntegrationConnectionTestResponse);
   rpc ResolveIntegrationInvocation(ResolveIntegrationInvocationRequest) returns (ResolveIntegrationInvocationResponse);
   rpc ClaimIntegrationInvocations(ClaimIntegrationInvocationsRequest) returns (ClaimIntegrationInvocationsResponse);
+  // Отдельная очередь сохраняет короткий бюджет остальных adapters.
+  rpc ClaimSSHComposeInvocations(ClaimSSHComposeInvocationsRequest) returns (ClaimSSHComposeInvocationsResponse);
+  // Owner повторно проверяет source/target/grants/secret и подписывает короткий permit.
+  rpc RenewSSHComposeInvocation(RenewSSHComposeInvocationRequest) returns (RenewSSHComposeInvocationResponse);
   rpc GetIntegrationInvocation(GetIntegrationInvocationRequest) returns (GetIntegrationInvocationResponse);
   rpc CompleteIntegrationInvocation(CompleteIntegrationInvocationRequest) returns (CompleteIntegrationInvocationResponse);
 }
@@ -823,6 +829,7 @@ enum IntegrationResourceKind {
   INTEGRATION_RESOURCE_KIND_CONFLUENCE_SPACE = 6;
   INTEGRATION_RESOURCE_KIND_EMAIL_SENDER = 7;
   INTEGRATION_RESOURCE_KIND_HTTPS_RESOURCE = 8;
+  INTEGRATION_RESOURCE_KIND_SSH_TARGET = 9;
 }
 
 // IntegrationDefinitionOrigin фиксирует источник immutable definition revision.
@@ -4696,6 +4703,19 @@ message IntegrationInvocationClaim {
   IntegrationInvocationWorkMode work_mode = 19;
   string grant_ref = 20;
   int64 grant_version = 21;
+  // Без private key: immutable owner snapshot и initial signed permit.
+  bytes ssh_compose_snapshot = 22;
+  bytes ssh_compose_permit = 23;
+}
+
+// ClaimSSHComposeInvocationsRequest ограничивает отдельную SSH-очередь одним consumer slot.
+message ClaimSSHComposeInvocationsRequest {
+  string workload_instance = 1;
+  int32 limit = 2;
+}
+// ClaimSSHComposeInvocationsResponse переносит существующие owner-issued claims без нового registry.
+message ClaimSSHComposeInvocationsResponse {
+  repeated IntegrationInvocationClaim claims = 1;
 }
 message ClaimIntegrationInvocationsRequest {
   string workload_instance = 1;
@@ -5158,6 +5178,7 @@ message PrepareSaveRuntimeSecretDraftRequest {
   string description = 5;
   RuntimeSecretValueType value_type = 6;
   string expected_content_sha256 = 7;
+  string purpose = 8;
 }
 message PrepareSaveRuntimeSecretDraftResponse {
   RuntimeSecretDraftOperationReceipt operation = 1;
@@ -5337,6 +5358,7 @@ message RuntimeSecret {
   repeated NextAction next_actions = 14;
   RuntimeResourceScopeKind scope_kind = 15;
   string organization_ref = 16;
+  string purpose = 17;
 }
 
 message ListRuntimeSecretsRequest {
@@ -5383,6 +5405,7 @@ message PrepareCreateRuntimeSecretRequest {
   // SHA-256 точных bytes, которые будут переданы secret-broker; для BINARY
   // вычисляется после строгого base64 decode.
   string expected_content_sha256 = 6;
+  string purpose = 7;
 }
 message PrepareCreateRuntimeSecretResponse {
   RuntimeSecretOperationReceipt operation = 1;
@@ -9077,4 +9100,31 @@ message ProviderFinancialOverview {
   int64 unknown = 4;
   google.protobuf.Timestamp observed_at = 5;
   google.protobuf.Timestamp valid_until = 6;
+}
+
+message SSHComposeLeaseBinding {
+  string workload_instance = 1;
+  string invocation_ref = 2;
+  string connection_test_ref = 3;
+  string lease_ref = 4;
+  string fence = 5;
+  int64 generation = 6;
+}
+message RenewSSHComposeInvocationRequest {
+  SSHComposeLeaseBinding binding = 1;
+}
+message RenewSSHComposeInvocationResponse {
+  WorkLease lease = 1;
+  bytes permit = 2;
+}
+message ResolveSSHComposeCredentialProjectionRequest {
+  SSHComposeLeaseBinding binding = 1;
+}
+message ResolveSSHComposeCredentialProjectionResponse {
+  RuntimeSecretRevisionDescriptor secret_revision = 1;
+  google.protobuf.Timestamp expires_at = 2;
+  string target_ref = 3;
+  // Подписанный owner permit связывает descriptor и transport-bound lease.
+  bytes permit = 4;
+  string secret_ref = 5;
 }

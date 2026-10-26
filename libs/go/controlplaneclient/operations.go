@@ -388,6 +388,7 @@ func SecretBrokerOperations() map[string]string {
 		"platform.credential-projections.runtime.resolve":          controlplanev1.RuntimeSecretWorkService_ResolveRuntimeCredentialProjection_FullMethodName,
 		"platform.credential-projections.runtime.validate":         controlplanev1.RuntimeSecretWorkService_ValidateRuntimeCredentialProjection_FullMethodName,
 		"platform.credential-projections.stt.resolve":              controlplanev1.RuntimeSecretWorkService_ResolveTranscriptionCredentialProjection_FullMethodName,
+		"platform.credential-projections.ssh-compose.resolve":      controlplanev1.RuntimeSecretWorkService_ResolveSSHComposeCredentialProjection_FullMethodName,
 		"platform.runtime-secrets.operations.consume":              controlplanev1.RuntimeSecretWorkService_ConsumeRuntimeSecretOperation_FullMethodName,
 		"platform.runtime-secrets.operations.complete":             controlplanev1.RuntimeSecretWorkService_CompleteRuntimeSecretOperation_FullMethodName,
 		"platform.runtime-secrets.operations.fail":                 controlplanev1.RuntimeSecretWorkService_FailRuntimeSecretOperation_FullMethodName,
@@ -430,6 +431,12 @@ func STTCredentialProjectionOperations() map[string]string {
 	return map[string]string{
 		"platform.stt.credential.project": "/stt.v1.TranscriptionCredentialProjectionService/ProjectTranscriptionCredential",
 	}
+}
+
+// SSHComposeCredentialProjectionOperations registers only the fenced SSH worker projection.
+// SSHComposeCredentialProjectionOperations регистрирует только fenced SSH worker projection.
+func SSHComposeCredentialProjectionOperations() map[string]string {
+	return map[string]string{"platform.ssh-compose.credential.project": "/secretbroker.v1.RuntimeCredentialProjectionService/ProjectSSHComposeCredential"}
 }
 
 // RuntimeOperations registers exact execution, file, assistant, integration and warm-runtime RPCs for runtime work clients.
@@ -555,6 +562,8 @@ func IntegrationGatewayOperations() map[string]string {
 		"platform.runtime.integration-tests.claim":        controlplanev1.RuntimeWorkService_ClaimIntegrationConnectionTests_FullMethodName,
 		"platform.runtime.integration-tests.complete":     controlplanev1.RuntimeWorkService_CompleteIntegrationConnectionTest_FullMethodName,
 		"platform.runtime.integrations.claim":             controlplanev1.RuntimeWorkService_ClaimIntegrationInvocations_FullMethodName,
+		"platform.runtime.ssh-compose.claim":              controlplanev1.RuntimeWorkService_ClaimSSHComposeInvocations_FullMethodName,
+		"platform.runtime.ssh-compose.renew":              controlplanev1.RuntimeWorkService_RenewSSHComposeInvocation_FullMethodName,
 		"platform.runtime.integrations.complete":          controlplanev1.RuntimeWorkService_CompleteIntegrationInvocation_FullMethodName,
 	}
 }

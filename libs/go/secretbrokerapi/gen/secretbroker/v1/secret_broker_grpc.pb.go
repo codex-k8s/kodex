@@ -469,6 +469,7 @@ var SecretBrokerService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	RuntimeCredentialProjectionService_ProjectSSHComposeCredential_FullMethodName               = "/secretbroker.v1.RuntimeCredentialProjectionService/ProjectSSHComposeCredential"
 	RuntimeCredentialProjectionService_MaterializeRuntimeCredentials_FullMethodName             = "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeRuntimeCredentials"
 	RuntimeCredentialProjectionService_MaterializeSystemAssistantCredentials_FullMethodName     = "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeSystemAssistantCredentials"
 	RuntimeCredentialProjectionService_CheckRuntimeCredentialProjectionReadiness_FullMethodName = "/secretbroker.v1.RuntimeCredentialProjectionService/CheckRuntimeCredentialProjectionReadiness"
@@ -482,6 +483,8 @@ const (
 // ограниченный exact execution lease. Payload является locator; authority
 // берётся только из проверенного mTLS+bearer context.
 type RuntimeCredentialProjectionServiceClient interface {
+	// Private key выдаётся только integration-gateway при exact действующем owner lease.
+	ProjectSSHComposeCredential(ctx context.Context, in *ProjectSSHComposeCredentialRequest, opts ...grpc.CallOption) (*ProjectSSHComposeCredentialResponse, error)
 	MaterializeRuntimeCredentials(ctx context.Context, in *MaterializeRuntimeCredentialsRequest, opts ...grpc.CallOption) (*MaterializeRuntimeCredentialsResponse, error)
 	MaterializeSystemAssistantCredentials(ctx context.Context, in *MaterializeSystemAssistantCredentialsRequest, opts ...grpc.CallOption) (*MaterializeSystemAssistantCredentialsResponse, error)
 	CheckRuntimeCredentialProjectionReadiness(ctx context.Context, in *CheckRuntimeCredentialProjectionReadinessRequest, opts ...grpc.CallOption) (*CheckRuntimeCredentialProjectionReadinessResponse, error)
@@ -493,6 +496,16 @@ type runtimeCredentialProjectionServiceClient struct {
 
 func NewRuntimeCredentialProjectionServiceClient(cc grpc.ClientConnInterface) RuntimeCredentialProjectionServiceClient {
 	return &runtimeCredentialProjectionServiceClient{cc}
+}
+
+func (c *runtimeCredentialProjectionServiceClient) ProjectSSHComposeCredential(ctx context.Context, in *ProjectSSHComposeCredentialRequest, opts ...grpc.CallOption) (*ProjectSSHComposeCredentialResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ProjectSSHComposeCredentialResponse)
+	err := c.cc.Invoke(ctx, RuntimeCredentialProjectionService_ProjectSSHComposeCredential_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *runtimeCredentialProjectionServiceClient) MaterializeRuntimeCredentials(ctx context.Context, in *MaterializeRuntimeCredentialsRequest, opts ...grpc.CallOption) (*MaterializeRuntimeCredentialsResponse, error) {
@@ -533,6 +546,8 @@ func (c *runtimeCredentialProjectionServiceClient) CheckRuntimeCredentialProject
 // ограниченный exact execution lease. Payload является locator; authority
 // берётся только из проверенного mTLS+bearer context.
 type RuntimeCredentialProjectionServiceServer interface {
+	// Private key выдаётся только integration-gateway при exact действующем owner lease.
+	ProjectSSHComposeCredential(context.Context, *ProjectSSHComposeCredentialRequest) (*ProjectSSHComposeCredentialResponse, error)
 	MaterializeRuntimeCredentials(context.Context, *MaterializeRuntimeCredentialsRequest) (*MaterializeRuntimeCredentialsResponse, error)
 	MaterializeSystemAssistantCredentials(context.Context, *MaterializeSystemAssistantCredentialsRequest) (*MaterializeSystemAssistantCredentialsResponse, error)
 	CheckRuntimeCredentialProjectionReadiness(context.Context, *CheckRuntimeCredentialProjectionReadinessRequest) (*CheckRuntimeCredentialProjectionReadinessResponse, error)
@@ -546,6 +561,9 @@ type RuntimeCredentialProjectionServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedRuntimeCredentialProjectionServiceServer struct{}
 
+func (UnimplementedRuntimeCredentialProjectionServiceServer) ProjectSSHComposeCredential(context.Context, *ProjectSSHComposeCredentialRequest) (*ProjectSSHComposeCredentialResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ProjectSSHComposeCredential not implemented")
+}
 func (UnimplementedRuntimeCredentialProjectionServiceServer) MaterializeRuntimeCredentials(context.Context, *MaterializeRuntimeCredentialsRequest) (*MaterializeRuntimeCredentialsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method MaterializeRuntimeCredentials not implemented")
 }
@@ -575,6 +593,24 @@ func RegisterRuntimeCredentialProjectionServiceServer(s grpc.ServiceRegistrar, s
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&RuntimeCredentialProjectionService_ServiceDesc, srv)
+}
+
+func _RuntimeCredentialProjectionService_ProjectSSHComposeCredential_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProjectSSHComposeCredentialRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeCredentialProjectionServiceServer).ProjectSSHComposeCredential(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeCredentialProjectionService_ProjectSSHComposeCredential_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeCredentialProjectionServiceServer).ProjectSSHComposeCredential(ctx, req.(*ProjectSSHComposeCredentialRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _RuntimeCredentialProjectionService_MaterializeRuntimeCredentials_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -638,6 +674,10 @@ var RuntimeCredentialProjectionService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "secretbroker.v1.RuntimeCredentialProjectionService",
 	HandlerType: (*RuntimeCredentialProjectionServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ProjectSSHComposeCredential",
+			Handler:    _RuntimeCredentialProjectionService_ProjectSSHComposeCredential_Handler,
+		},
 		{
 			MethodName: "MaterializeRuntimeCredentials",
 			Handler:    _RuntimeCredentialProjectionService_MaterializeRuntimeCredentials_Handler,

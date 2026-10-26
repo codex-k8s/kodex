@@ -82,7 +82,7 @@ func TestOwnerGateExpiryMigrationProofComponent(t *testing.T) {
 					}
 				}
 			}
-			if proof["readOnly"] != "on" || proof["database"] != runtime.Database || proof["gooseVersion"] != float64(20261026001000) || proof["tableOwner"] != "control_plane_owner" {
+			if proof["readOnly"] != "on" || proof["database"] != runtime.Database || proof["gooseVersion"] != float64(20261027000100) || proof["tableOwner"] != "control_plane_owner" {
 				t.Fatal("expiry schema proof identity mismatch")
 			}
 			for _, field := range []string{"expiryColumn", "stateConstraint", "resolutionConstraint", "expiryConstraint", "dueIndex", "immutableGuard", "runtimeExecute", "publicExecuteRevoked"} {
