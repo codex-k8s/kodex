@@ -93,10 +93,16 @@ func TestWorkflowEffectRejoinComponent(t *testing.T) {
 	}
 }
 
+// TestWorkflowServerGateIsolationComponent proves two open effect gates do not revoke independent live models, while new own-gated claims remain closed across expiry and decisions.
+// TestWorkflowServerGateIsolationComponent доказывает изоляцию двух effect Gates от независимых моделей и закрытый own-gated claim при expiry/решениях.
+func TestWorkflowServerGateIsolationComponent(t *testing.T) {
+	runWorkflowEffectRejoinScenario(t, "parallel-open-gates")
+}
+
 // runWorkflowEffectRejoinScenario creates one isolated native graph; revocation is an owner command, never fixture SQL.
 // runWorkflowEffectRejoinScenario создаёт isolated native graph; revoke выполняется owner command, а не fixture SQL.
 func runWorkflowEffectRejoinScenario(t *testing.T, mode string) {
-	revoke, bundle := mode == "current-grant-revoked", mode == "bundle-new-source-refs"
+	revoke, bundle := mode == "current-grant-revoked", mode == "bundle-new-source-refs" || mode == "parallel-open-gates"
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Second)
 	defer cancel()
 	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
@@ -113,6 +119,12 @@ func runWorkflowEffectRejoinScenario(t *testing.T, mode string) {
 	writer := createLifecycleAgent(t, ctx, service, owner, project.Ref, "effect-writer", "Автор PR")
 	f.managerRef, f.agents["a"] = manager.Ref, writer.Ref
 	writer = *f.execute(command.ChangeAgentCapability, "effect-artifact", &writer.Version, command.AgentBindingInput{AgentRef: writer.Ref, BindingRef: runtimecontract.ArtifactCapability, Enabled: true}).Agent
+	var independent entity.Agent
+	if mode == "parallel-open-gates" {
+		independent = createLifecycleAgent(t, ctx, service, owner, project.Ref, "effect-independent", "Независимый исполнитель")
+		independent = *f.execute(command.ChangeAgentCapability, "independent-artifact", &independent.Version, command.AgentBindingInput{AgentRef: independent.Ref, BindingRef: runtimecontract.ArtifactCapability, Enabled: true}).Agent
+		f.agents["b"] = independent.Ref
+	}
 	connection := *f.execute(command.CreateConnection, "effect-connection", nil, command.ConnectionInput{DefinitionKey: "github", Name: "Rejoin fixture", PublicConfiguration: map[string]any{"owner": "fixture", "repository": "repository"}}).Connection
 	if _, err := pool.Exec(ctx, queryIntegrationGrantPolicyCredentialFixture, connection.Ref); err != nil {
 		t.Fatal("seed existing synthetic credential metadata")
@@ -151,6 +163,10 @@ func runWorkflowEffectRejoinScenario(t *testing.T, mode string) {
 	if bundle {
 		draft.Steps[0].RequiredCapabilityKeys = append(draft.Steps[0].RequiredCapabilityKeys, repositoryBundleOperation)
 	}
+	if mode == "parallel-open-gates" {
+		draft.Steps[0].Parallel, draft.Steps[0].ParallelGroup = true, 1
+		draft.Steps = append(draft.Steps, entity.WorkflowStep{Key: "b", Position: 2, Name: "Независимый материал", AgentRef: independent.Ref, Instructions: "Создать independent.md.", TimeoutSeconds: 120, Parallel: true, ParallelGroup: 1, RequiredCapabilityKeys: []string{runtimecontract.ArtifactCapability}, ResultRequirements: []entity.WorkflowResultRequirement{{Key: "report", Kind: "ARTIFACT", FileName: "independent.md", MediaType: "text/markdown"}}})
+	}
 	workflow := f.execute(command.CreateWorkflow, "effect-create", nil, command.WorkflowInput{ProjectRef: project.Ref, Name: draft.Name, Purpose: draft.Purpose, CoordinatorAgentRef: manager.Ref, Draft: &draft}).Workflow
 	workflow = f.execute(command.ValidateWorkflow, "effect-validate", &workflow.Version, command.WorkflowInput{Ref: workflow.Ref}).Workflow
 	workflow = f.execute(command.PublishWorkflow, "effect-publish", &workflow.Version, command.WorkflowInput{Ref: workflow.Ref}).Workflow
@@ -165,10 +181,18 @@ func runWorkflowEffectRejoinScenario(t *testing.T, mode string) {
 		t.Fatal("resolve exact owner proof scope")
 	}
 	claimed := f.claims("effect-origin")
-	if len(claimed) != 1 || stringMap(claimed[0], "agentRef") != writer.Ref {
-		t.Fatal("writer was not dispatched")
+	var origin, independentOrigin map[string]any
+	for _, item := range claimed {
+		if stringMap(item, "agentRef") == writer.Ref {
+			origin = item
+		}
+		if stringMap(item, "agentRef") == independent.Ref {
+			independentOrigin = item
+		}
 	}
-	origin := claimed[0]
+	if origin == nil || (mode != "parallel-open-gates" && len(claimed) != 1) || (mode == "parallel-open-gates" && (len(claimed) != 2 || independentOrigin == nil)) {
+		t.Fatal("exact published executions were not dispatched")
+	}
 	readProof := func() [6]int64 {
 		t.Helper()
 		var proof [6]int64
@@ -213,10 +237,12 @@ func runWorkflowEffectRejoinScenario(t *testing.T, mode string) {
 			t.Fatal("prepare SERVER published bundle slot", completionOutcomeClass(err))
 		}
 		bundleFixture.input, bundleFixture.proposal = oldBundleInput, oldPublication
-		bundleFixture.decide("APPROVE")
-		effect := bundleFixture.claim()
-		bundleFixture.begin(effect)
-		bundleFixture.complete(effect)
+		if mode != "parallel-open-gates" {
+			bundleFixture.decide("APPROVE")
+			effect := bundleFixture.claim()
+			bundleFixture.begin(effect)
+			bundleFixture.complete(effect)
+		}
 	}
 	input := map[string]any{"title": "One exact PR", "body": "Native owner receipt", "head": "qa-effect", "base": "main", "draft": false}
 	invocation, err := resolve(origin, "effect-first-call", "github.pull_request.create", input)
@@ -239,6 +265,10 @@ func runWorkflowEffectRejoinScenario(t *testing.T, mode string) {
 	}
 	if readProof() != before {
 		t.Fatal("rejected admission changed native ledger")
+	}
+	if mode == "parallel-open-gates" {
+		runWorkflowGateIsolationScenario(t, f, origin, independentOrigin, invocation, oldPublication, resolve, input)
+		return
 	}
 	gate, err := service.GetOwnerGate(ctx, owner, stringMap(invocation, "gateRef"))
 	if err != nil {
@@ -316,9 +346,31 @@ func runWorkflowEffectRejoinScenario(t *testing.T, mode string) {
 		return
 	}
 	f.execute(command.CompleteExecution, "effect-missing-artifact", nil, command.CompleteExecutionInput{LeaseRef: stringMap(origin, "leaseRef"), Fence: stringMap(origin, "fence"), Generation: runtimeRevisionMapInt64(origin, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: declaration})
+	completedOrigin := origin
+	if bundle {
+		deferred := f.read()
+		if len(deferred.journals["a"]) != 0 || len(deferred.episodes) != 0 {
+			t.Fatal("bundle owner ACK was bypassed by premature business finalization")
+		}
+		acknowledgements := f.claims("effect-bundle-owner-ack")
+		if len(acknowledgements) != 1 || stringMap(acknowledgements[0], "runRef") != stringMap(origin, "runRef") || stringMap(acknowledgements[0], "nodeRef") == stringMap(origin, "nodeRef") || stringMap(acknowledgements[0], "runtimeRevisionRef") == stringMap(origin, "runtimeRevisionRef") || stringMap(acknowledgements[0], "leaseRef") == stringMap(origin, "leaseRef") {
+			t.Fatal("bundle ACK did not create exact fresh same-business execution")
+		}
+		ack := acknowledgements[0]
+		bundleState, err := service.GetIntegrationInvocation(ctx, worker, oldPublication.InvocationRef)
+		if err != nil || stringMap(bundleState, "effectReceiptRef") == "" || !strings.Contains(stringMap(ack, "task"), stringMap(bundleState, "effectReceiptRef")) || !strings.Contains(stringMap(ack, "task"), strings.Repeat("b", 40)) {
+			t.Fatal("bundle ACK lost canonical immutable receipt and commit")
+		}
+		ackReceipt, err := resolve(ack, "effect-owner-ack-pr-rejoin", "github.pull_request.create", input)
+		if err != nil || stringMap(ackReceipt, "receiptRef") != receipt || stringMap(ackReceipt, "invocationRef") != stringMap(invocation, "invocationRef") {
+			t.Fatal("fresh ACK execution did not rejoin exact previous PR receipt", completionOutcomeClass(err))
+		}
+		f.execute(command.CompleteExecution, "effect-bundle-ack-missing-artifact", nil, command.CompleteExecutionInput{LeaseRef: stringMap(ack, "leaseRef"), Fence: stringMap(ack, "fence"), Generation: runtimeRevisionMapInt64(ack, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: declaration})
+		completedOrigin = ack
+	}
 	snapshot := f.read()
 	if len(snapshot.episodes) != 1 || snapshot.episodes[0].Reason != workflowArtifactRequired {
-		t.Fatal("known WRITE did not survive distinct artifact rejection:", workflowEffectFailureDiagnostic(t, ctx, pool, origin, receipt, snapshot))
+		t.Fatal("known WRITE did not survive distinct artifact rejection:", workflowEffectFailureDiagnostic(t, ctx, pool, completedOrigin, receipt, snapshot))
 	}
 	managerWork := f.claims("effect-manager")
 	if len(managerWork) != 1 || stringMap(managerWork[0], "agentRef") != manager.Ref {

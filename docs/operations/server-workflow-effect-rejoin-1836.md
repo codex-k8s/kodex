@@ -4,7 +4,7 @@ title: Повторное чтение успешного эффекта сер�
 type: runbook
 status: approved
 owner: architect
-version: 1.0.1
+version: 1.0.2
 updated: 2026-10-27
 ---
 
@@ -110,6 +110,29 @@ receipt/commit, без ожидания нового Gate/callback. Исходн
 сохраняет wire bytes. До поставки обоих компонентов SERVER retry не запускается.
 Новых RPC/method permissions, MCP tools либо расширения runtime grants нет.
 
+## Модель и Human Gate
+
+В SERVER-профиле открытие Gate переводит в `WAITING_HUMAN` только root.
+Уже назначенные physical executions остаются `RUNNING`: Gate удерживает
+внешний WRITE, но не отзывает живой model lease. Renew и завершение по-прежнему
+проходят owner deadline checks; `execution_started_at`/`execution_deadline_at`
+не сдвигаются при открытии, решении Gate или восстановлении physical state.
+
+| Переход | Закрытое правило SERVER |
+| --- | --- |
+| Lease истёк при sibling OPEN Gate | Exact опубликованный business node либо текущий exception manager ставится в `QUEUED`; root WAIT не мешает новому claim независимого шага |
+| Lease истёк при собственном OPEN Gate | Узел также `QUEUED`, но новый claim запрещён через exact `gate_node.run_id`; старый lease остаётся `EXPIRED` |
+| Один из нескольких собственных Gate закрыт | Пока другой собственный Gate OPEN, нового RR/lease нет |
+| Последний собственный Gate закрыт | Сохранённый queued node может получить fresh execution без повторного expiry; historical physical WAIT восстанавливается только по exact assigned proof |
+| Terminal root, неактивная/неизвестная lineage, чужой manager | Нового claim/resume нет; namespace/prefix не заменяет published/episode identity |
+| Legacy workflow | Прежние all-runs wait и условия expiry сохраняются |
+
+Собственный Gate определяется через его проверенный node и physical run, а не
+по общему root. Новая eligibility связывает version/org/project, опубликованный
+step/agent либо exact active manager episode; предел моделей остаётся прежним.
+Expiry сохраняет очередь даже при OPEN Gate, иначе уже EXPIRED lease невозможно
+было бы обнаружить повторно после решения владельца.
+
 ## Проверки
 
 `TestWorkflowEffectRejoinComponent` проходит native
@@ -125,6 +148,19 @@ RR, а также repeated bridge через CAPTURE_PROGRESS и новый CONT
 business attempt. Оснастка не подменяет expiry готовым SQL state или clock.
 Отдельный RC unit проходит actual MCP dispatcher, text/structured result,
 safe audit и replay, включая malformed/foreign/pending/unknown proof negatives.
+
+В bundle-сценарии original completion сначала оставляет business journal пустым:
+штатный owner ACK создаёт обязательный CONTINUES. Оснастка получает его fresh
+node/RR/lease, проверяет переданные immutable bundle receipt/commit и повторно
+читает прежний PR receipt. Только completion этого ACK с тем же полным
+declaration без обязательного файла должен дать `ARTIFACT_REQUIRED`.
+
+`TestWorkflowServerGateIsolationComponent` держит две модели и два OPEN Gate
+одного physical run. Он проверяет renew живых leases, настоящий expiry, claim
+независимого шага, сохранение queued узла с own OPEN Gate, два последовательных
+owner decisions и последующий fresh claim без второго expiry. Provider work
+до approvals отсутствует; после проверки Cancel закрывает leases/claims без
+Git WRITE. Clock anchors и absolute deadlines остаются прежними.
 
 Native runner запускает только root после source freeze/проверки плана.
 Heavy build, staging и модельные прогоны эта локальная оснастка не выполняет.

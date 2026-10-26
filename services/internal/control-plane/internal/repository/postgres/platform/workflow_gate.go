@@ -2,12 +2,19 @@ package platform
 
 import (
 	"context"
+	_ "embed"
 	"strings"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/jackc/pgx/v5"
 )
+
+// queryWorkflowGateResumePhysical resumes only exact assigned SERVER executions left waiting by a resolved gate; clocks and terminal rows stay unchanged.
+// queryWorkflowGateResumePhysical возобновляет только exact assigned SERVER executions после Gate; clocks и terminal rows неизменны.
+//
+//go:embed sql/workflow_gate__resume_physical.sql
+var queryWorkflowGateResumePhysical string
 
 // resolveServerWorkflowResultGateTx runs after the owner gate decision is persisted in this same
 // transaction. It bypasses the legacy no-active-nodes shortcut and never rewrites a physical attempt.
@@ -91,6 +98,9 @@ func (repository *Repository) resolveServerWorkflowResultGateTx(ctx context.Cont
 			state = "WAITING_HUMAN"
 		}
 		if _, err := tx.Exec(ctx, queryCommandsResolvegateUpdateRunsStateVersionUpdatedAt, root.ID, state); err != nil {
+			return commandOutcome{}, true, errs.ErrUnavailable
+		}
+		if _, err := tx.Exec(ctx, queryWorkflowGateResumePhysical, pgx.StrictNamedArgs{"organization_id": current.organizationID, "root_run_id": root.ID}); err != nil {
 			return commandOutcome{}, true, errs.ErrUnavailable
 		}
 		if err := repository.dispatchServerWorkflowTx(ctx, tx, current, root.ID); err != nil {
