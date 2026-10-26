@@ -1556,9 +1556,13 @@ func (repository *Repository) getRunGraph(ctx context.Context, principal value.P
 	return run, graph, nil
 }
 
+// scanRunNode reads the shared snapshot/event projection, including public business outcomes.
+// Both SQL producers select explicit public fields and exclude private execution provenance.
+// scanRunNode читает общую проекцию снимка и события вместе с публичными бизнес-исходами.
+// Оба SQL выбирают явные публичные поля без приватного происхождения исполнения.
 func scanRunNode(row rowScanner) (entity.RunNode, error) {
 	var node entity.RunNode
-	if err := row.Scan(&node.Ref, &node.RunRef, &node.ParentNodeRef, &node.Type, &node.State, &node.DisplayName, &node.Role, &node.AgentRef, &node.TurnRef, &node.Attempt, &node.InputSummary, &node.ProgressSummary, &node.IntegrationNames, &node.CallbackSummary, &node.SafeErrorCode, &node.SafeErrorMessage, &node.NextActions, &node.MaterializationState, &node.CreatedAt, &node.StartedAt, &node.FinishedAt, &node.ArtifactRefs, &node.ChildRunRefs); err != nil {
+	if err := row.Scan(&node.Ref, &node.RunRef, &node.ParentNodeRef, &node.Type, &node.State, &node.DisplayName, &node.Role, &node.AgentRef, &node.TurnRef, &node.Attempt, &node.InputSummary, &node.ProgressSummary, &node.IntegrationNames, &node.CallbackSummary, &node.SafeErrorCode, &node.SafeErrorMessage, &node.NextActions, &node.MaterializationState, &node.CreatedAt, &node.StartedAt, &node.FinishedAt, &node.ArtifactRefs, &node.ChildRunRefs, &node.WorkflowResults); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.RunNode{}, errs.ErrNotFound
 		}

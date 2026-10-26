@@ -344,14 +344,18 @@ func testWorkflowDispatchArtifactFanout(t *testing.T) {
 			t.Fatal("public graph contains a manager execution")
 		}
 		if len(node.WorkflowResults) != 0 {
-			if len(node.WorkflowResults) != 1 || !node.WorkflowResults[0].Accepted {
+			if len(node.WorkflowResults) != 1 || !node.WorkflowResults[0].Accepted ||
+				node.WorkflowResults[0].RuntimeRevisionID != "" || node.WorkflowResults[0].Provenance != nil {
 				t.Fatal("public graph changed the accepted business history")
 			}
 			accepted++
 		}
 	}
-	if accepted != 3 || len(claim("terminal-claim", 2)) != 0 {
-		t.Fatal("terminal DAG is missing public results or admitted another execution")
+	if accepted != 3 {
+		t.Fatalf("terminal DAG public accepted histories: got=%d want=3", accepted)
+	}
+	if len(claim("terminal-claim", 2)) != 0 {
+		t.Fatal("terminal DAG admitted another execution")
 	}
 	complete("review-b-complete", reviewClaims["review-b"], fileNames["review-b"])
 	if !reflect.DeepEqual(final, read()) {

@@ -92,7 +92,12 @@ SELECT node.ref,
                         AND (launch.origin_node_id = node.id OR launch.proxy_node_id = node.id)
                   ))
              )
-       ), '{}'::text[])
+       ), '{}'::text[]),
+       COALESCE((SELECT jsonb_agg(jsonb_build_object(
+           'attempt',entry.value->'attempt','runRef',entry.value->'runRef',
+           'accepted',entry.value->'accepted','reason',entry.value->'reason',
+           'results',entry.value->'results') ORDER BY entry.ordinality)
+           FROM jsonb_array_elements(node.workflow_attempts) WITH ORDINALITY entry(value,ordinality)), '[]'::jsonb)
 FROM control_plane.run_nodes node
 JOIN control_plane.runs run ON run.id = node.run_id
 LEFT JOIN control_plane.run_nodes parent ON parent.id = node.parent_node_id

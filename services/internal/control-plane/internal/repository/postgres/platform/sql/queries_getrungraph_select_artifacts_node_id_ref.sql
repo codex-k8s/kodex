@@ -68,5 +68,10 @@ SELECT n.ref,run.ref,COALESCE(parent.ref,''),n.type,n.state,n.display_name,n.rol
                         AND (launch.origin_node_id = n.id OR launch.proxy_node_id = n.id)
                   ))
              )
-        ), '{}'::text[])
+        ), '{}'::text[]),
+       COALESCE((SELECT jsonb_agg(jsonb_build_object(
+           'attempt',entry.value->'attempt','runRef',entry.value->'runRef',
+           'accepted',entry.value->'accepted','reason',entry.value->'reason',
+           'results',entry.value->'results') ORDER BY entry.ordinality)
+           FROM jsonb_array_elements(n.workflow_attempts) WITH ORDINALITY entry(value,ordinality)), '[]'::jsonb)
 		FROM control_plane.run_nodes n JOIN control_plane.runs root ON root.id=n.root_run_id JOIN control_plane.runs run ON run.id=n.run_id LEFT JOIN control_plane.run_nodes parent ON parent.id=n.parent_node_id LEFT JOIN control_plane.agents a ON a.id=n.agent_id LEFT JOIN control_plane.session_turns t ON t.id=n.turn_id WHERE n.organization_id=$1::uuid AND (root.ref=$2 OR EXISTS(SELECT 1 FROM control_plane.run_edges e JOIN control_plane.runs eroot ON eroot.id=e.root_run_id WHERE eroot.ref=$2 AND (e.source_node_id=n.id OR e.target_node_id=n.id))) ORDER BY n.created_at
