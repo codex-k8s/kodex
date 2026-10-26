@@ -34,7 +34,8 @@ test("workflow catalog preserves leased source binding in local service registry
 });
 test("control-plane policy preserves exact bindings and excludes STT continuation",() => {
   const policy=buildServicePolicy(source,classification);
-  assert.equal(policy.bindings.length,420);
+  assert.equal(source.policy_revision,99);
+  assert.equal(policy.bindings.length,428);
   for (const [operation, method, caller] of [
     ["platform.runtime.ssh-compose.claim", "/controlplane.v1.RuntimeWorkService/ClaimSSHComposeInvocations", "integration-gateway"],
     ["platform.runtime.ssh-compose.renew", "/controlplane.v1.RuntimeWorkService/RenewSSHComposeInvocation", "integration-gateway"],
@@ -57,7 +58,8 @@ test("control-plane policy preserves exact bindings and excludes STT continuatio
     assert.equal(bindings[0].actor_mode,"SERVICE_OWNER_RESOLVED");
     assert.equal(bindings[0].project_required,false);
   }
-  assert.equal(policy.bindings.filter(b=>b.actor_mode==="USER_CREDENTIAL_REQUIRED").length,321);
+  assert.equal(policy.bindings.filter(b=>b.actor_mode==="USER_CREDENTIAL_REQUIRED").length,322);
+  assert.equal(policy.bindings.filter(b=>b.actor_mode==="SERVICE_OWNER_RESOLVED").length,106);
   for (const operation of [
     "platform.organization.role-images.recipes.list",
     "platform.organization.role-images.recipes.get",
