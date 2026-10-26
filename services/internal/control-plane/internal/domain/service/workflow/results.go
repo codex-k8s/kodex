@@ -125,7 +125,7 @@ func DecodeDeclaration(raw string, requirements []entity.WorkflowResultRequireme
 	}
 	decoder := json.NewDecoder(strings.NewReader(raw))
 	decoder.DisallowUnknownFields()
-	var declaration entity.WorkflowResultDeclaration
+	var declaration declarationWire
 	if decoder.Decode(&declaration) != nil || decoder.Decode(new(any)) != io.EOF || declaration.Schema != "kodex.workflow-result.v1" || len(declaration.Results) != len(requirements) {
 		return nil, ErrResultInvalid
 	}
@@ -141,7 +141,11 @@ func DecodeDeclaration(raw string, requirements []entity.WorkflowResultRequireme
 		return nil, ErrResultInvalid
 	}
 	result := map[string]entity.WorkflowDeclaredResult{}
-	for index, r := range declaration.Results {
+	for index, wire := range declaration.Results {
+		r, valid := wire.declaredResult()
+		if !valid {
+			return nil, ErrResultInvalid
+		}
 		kind, ok := known[r.Key]
 		if !ok {
 			return nil, ErrResultInvalid

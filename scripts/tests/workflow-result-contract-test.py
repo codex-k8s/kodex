@@ -2,6 +2,7 @@
 """Проверка закрытой JSON Schema результата; доступ и происхождение проверяет CP."""
 
 import copy
+from decimal import Decimal
 import json
 from pathlib import Path
 import unittest
@@ -120,6 +121,22 @@ class WorkflowResultContractTest(unittest.TestCase):
         ):
             with self.subTest(payload=payload):
                 self.assertFalse(self.validator.is_valid(payload))
+
+    def test_shared_wire_corpus_with_exact_numbers(self):
+        """Не округляем JSON float до проверки: 9007199254740990.5 остаётся дробью."""
+        def exact_number(raw):
+            value = Decimal(raw)
+            if value.adjusted() <= 16 and value == value.to_integral_value():
+                return int(value)
+            return value
+
+        cases = json.loads(
+            (ROOT / "contracts/runtime/workflow-result/v1/declaration-cases.json").read_text()
+        )
+        for case in cases:
+            with self.subTest(name=case["name"]):
+                payload = json.loads(case["raw"], parse_float=exact_number)
+                self.assertEqual(self.validator.is_valid(payload), case["valid"])
 
 
 if __name__ == "__main__":

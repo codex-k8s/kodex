@@ -1,0 +1,128 @@
+[
+  {
+    "name": "integer",
+    "requirementKind": "ARTIFACT",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"analysis\",\"source\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":3,\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}]}",
+    "valid": true,
+    "revision": 3
+  },
+  {
+    "name": "decimal",
+    "requirementKind": "ARTIFACT",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"analysis\",\"source\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":3.0,\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}]}",
+    "valid": true,
+    "revision": 3
+  },
+  {
+    "name": "exponent",
+    "requirementKind": "ARTIFACT",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"analysis\",\"source\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":3e0,\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}]}",
+    "valid": true,
+    "revision": 3
+  },
+  {
+    "name": "negative exponent",
+    "requirementKind": "ARTIFACT",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"analysis\",\"source\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":300e-2,\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}]}",
+    "valid": true,
+    "revision": 3
+  },
+  {
+    "name": "positive exponent",
+    "requirementKind": "ARTIFACT",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"analysis\",\"source\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":0.03E+2,\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}]}",
+    "valid": true,
+    "revision": 3
+  },
+  {
+    "name": "max safe",
+    "requirementKind": "ARTIFACT",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"analysis\",\"source\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":9007199254740991.0,\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}]}",
+    "valid": true,
+    "revision": 9007199254740991
+  },
+  {
+    "name": "fraction",
+    "requirementKind": "ARTIFACT",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"analysis\",\"source\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":1.5,\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}]}",
+    "valid": false,
+    "revision": 0
+  },
+  {
+    "name": "rounded fraction",
+    "requirementKind": "ARTIFACT",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"analysis\",\"source\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":9007199254740990.5,\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}]}",
+    "valid": false,
+    "revision": 0
+  },
+  {
+    "name": "unsafe integer",
+    "requirementKind": "ARTIFACT",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"analysis\",\"source\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":9007199254740992,\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}]}",
+    "valid": false,
+    "revision": 0
+  },
+  {
+    "name": "huge exponent",
+    "requirementKind": "ARTIFACT",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"analysis\",\"source\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":1e999999999,\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}]}",
+    "valid": false,
+    "revision": 0
+  },
+  {
+    "name": "tiny exponent",
+    "requirementKind": "ARTIFACT",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"analysis\",\"source\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":1e-999999999,\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}]}",
+    "valid": false,
+    "revision": 0
+  },
+  {
+    "name": "quoted revision",
+    "requirementKind": "ARTIFACT",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"analysis\",\"source\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":\"3\",\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}]}",
+    "valid": false,
+    "revision": 0
+  },
+  {
+    "name": "boolean revision",
+    "requirementKind": "ARTIFACT",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"analysis\",\"source\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":true,\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}]}",
+    "valid": false,
+    "revision": 0
+  },
+  {
+    "name": "terminal LF key",
+    "requirementKind": "ARTIFACT",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"analysis\\n\",\"source\":{\"kind\":\"CURRENT_COMPLETION\"}}]}",
+    "valid": false,
+    "revision": 0
+  },
+  {
+    "name": "terminal LF artifactRef",
+    "requirementKind": "ARTIFACT",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"analysis\",\"source\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\\n\",\"revision\":3,\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}]}",
+    "valid": false,
+    "revision": 0
+  },
+  {
+    "name": "terminal LF digest",
+    "requirementKind": "ARTIFACT",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"analysis\",\"source\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":3,\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\n\"}}]}",
+    "valid": false,
+    "revision": 0
+  },
+  {
+    "name": "terminal LF receiptRef",
+    "requirementKind": "PULL_REQUEST",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"analysis\",\"receiptRef\":\"erc_12345678\\n\"}]}",
+    "valid": false,
+    "revision": 0
+  },
+  {
+    "name": "terminal LF headSha",
+    "requirementKind": "REVIEW",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"analysis\",\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\n\",\"verdict\":\"PASS\"}]}",
+    "valid": false,
+    "revision": 0
+  }
+]

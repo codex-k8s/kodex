@@ -28,7 +28,7 @@
             "properties": {
               "key": {
                 "type": "string",
-                "pattern": "^[A-Za-z0-9_-]{1,96}$"
+                "pattern": "^[A-Za-z0-9_-]{1,96}(?![\\s\\S])"
               },
               "source": {
                 "oneOf": [
@@ -59,7 +59,7 @@
                       },
                       "artifactRef": {
                         "type": "string",
-                        "pattern": "^art_[A-Za-z0-9_-]{8,92}$"
+                        "pattern": "^art_[A-Za-z0-9_-]{8,92}(?![\\s\\S])"
                       },
                       "revision": {
                         "type": "integer",
@@ -68,7 +68,7 @@
                       },
                       "digest": {
                         "type": "string",
-                        "pattern": "^sha256:[a-f0-9]{64}$"
+                        "pattern": "^sha256:[a-f0-9]{64}(?![\\s\\S])"
                       }
                     }
                   }
@@ -86,11 +86,11 @@
             "properties": {
               "key": {
                 "type": "string",
-                "pattern": "^[A-Za-z0-9_-]{1,96}$"
+                "pattern": "^[A-Za-z0-9_-]{1,96}(?![\\s\\S])"
               },
               "receiptRef": {
                 "type": "string",
-                "pattern": "^erc_[A-Za-z0-9_-]{8,92}$"
+                "pattern": "^erc_[A-Za-z0-9_-]{8,92}(?![\\s\\S])"
               }
             }
           },
@@ -105,11 +105,11 @@
             "properties": {
               "key": {
                 "type": "string",
-                "pattern": "^[A-Za-z0-9_-]{1,96}$"
+                "pattern": "^[A-Za-z0-9_-]{1,96}(?![\\s\\S])"
               },
               "headSha": {
                 "type": "string",
-                "pattern": "^[a-f0-9]{40}([a-f0-9]{24})?$"
+                "pattern": "^[a-f0-9]{40}([a-f0-9]{24})?(?![\\s\\S])"
               },
               "verdict": {
                 "enum": [

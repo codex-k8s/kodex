@@ -3,11 +3,47 @@ package workflow
 import (
 	"encoding/json"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
+
+// TestDeclarationSharedWireCorpus checks the same exact serialized instances as the JSON Schema
+// suite, including mathematically integral decimal/exponent forms and terminal newline rejection.
+// TestDeclarationSharedWireCorpus проверяет те же сериализованные данные, что и JSON Schema:
+// целые десятичные/экспоненциальные формы и запрет завершающего переноса строки.
+func TestDeclarationSharedWireCorpus(t *testing.T) {
+	raw, err := os.ReadFile("../../../../../../../contracts/runtime/workflow-result/v1/declaration-cases.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []struct {
+		Name            string `json:"name"`
+		RequirementKind string `json:"requirementKind"`
+		Raw             string `json:"raw"`
+		Valid           bool   `json:"valid"`
+		Revision        int64  `json:"revision"`
+	}
+	if err := json.Unmarshal(raw, &cases); err != nil || len(cases) == 0 {
+		t.Fatal("shared declaration corpus is unavailable")
+	}
+	for _, item := range cases {
+		t.Run(item.Name, func(t *testing.T) {
+			results, err := DecodeDeclaration(item.Raw, []entity.WorkflowResultRequirement{{Key: "analysis", Kind: item.RequirementKind}})
+			if (err == nil) != item.Valid {
+				t.Fatalf("declaration outcome mismatch: %v", err)
+			}
+			if item.Valid && (results["analysis"].Source == nil || results["analysis"].Source.Revision != item.Revision) {
+				t.Fatal("revision was rounded or lost")
+			}
+			if !item.Valid && results != nil {
+				t.Fatal("invalid declaration produced usable results")
+			}
+		})
+	}
+}
 
 // TestArtifactDeclarationSelectors verifies reachable current output selection and exact captured
 // pins without claiming that decoding alone proves artifact ownership or business completion.
