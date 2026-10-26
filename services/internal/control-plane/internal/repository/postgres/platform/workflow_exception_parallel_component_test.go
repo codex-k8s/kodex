@@ -69,6 +69,15 @@ type workflowRecoverySnapshot struct {
 // recovery wait опубликованной owner policy шага без изменения часов БД.
 func newWorkflowRecoveryRegression(t *testing.T, expiry bool) *workflowRecoveryRegression {
 	t.Helper()
+	return newWorkflowGateRegression(t, expiry, false)
+}
+
+// newWorkflowGateRegression publishes native recovery or result gates with the same exact principals.
+// No gate, journal or lease is synthesized by SQL; result gates retain published decisions.
+// newWorkflowGateRegression публикует native recovery либо result gates с теми же exact principals.
+// SQL не создаёт gate, journal или lease; result gates сохраняют опубликованные решения.
+func newWorkflowGateRegression(t *testing.T, expiry, resultGates bool) *workflowRecoveryRegression {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	t.Cleanup(cancel)
 	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
@@ -93,10 +102,12 @@ func newWorkflowRecoveryRegression(t *testing.T, expiry bool) *workflowRecoveryR
 		agent = *f.execute(command.ChangeAgentCapability, "capability-"+key, &agent.Version, command.AgentBindingInput{AgentRef: agent.Ref, BindingRef: runtimecontract.ArtifactCapability, Enabled: true}).Agent
 		f.agents[key] = agent.Ref
 		step := entity.WorkflowStep{Key: key, Position: int32(index + 1), Name: key, AgentRef: agent.Ref, Instructions: "Создать обязательный материал и точную декларацию результата.", TimeoutSeconds: 120, Parallel: true, ParallelGroup: 1, RequiredCapabilityKeys: []string{runtimecontract.ArtifactCapability}, ResultRequirements: []entity.WorkflowResultRequirement{{Key: "report", Kind: "ARTIFACT", FileName: key + ".md", MediaType: "text/markdown"}}}
-		if expiry {
-			ttl := int32(1)
+		if expiry || resultGates {
 			step.HumanGateAfter = true
 			step.GateDecisions = []string{"APPROVE", "REJECT", "CANCEL"}
+		}
+		if expiry {
+			ttl := int32(1)
 			step.ApprovalTimeoutSeconds = &ttl
 		}
 		draft.Steps = append(draft.Steps, step)
@@ -167,6 +178,7 @@ func (f *workflowRecoveryRegression) recoveryGate(snapshot workflowRecoverySnaps
 	if err != nil || gate.State != "OPEN" {
 		f.t.Fatal("exact recovery gate is not open")
 	}
+	assertOwnerGateApprovalConsequence(f.t, gate, false, false)
 	return gate
 }
 

@@ -37,9 +37,11 @@ var queryWorkflowDispatchFinishTurn string
 
 // pendingServerWorkflowTx reads a same-attempt barrier or the whole root when origin is empty.
 // It never cancels an effect to make a successful completion appear ready for acceptance.
+// The read-only runner also supports consequence projection without creating a completion transaction.
 // pendingServerWorkflowTx читает барьер одной попытки либо всего root при пустом origin.
 // Проверка не отменяет внешнее действие ради видимости готовности успешного completion к приёмке.
-func pendingServerWorkflowTx(ctx context.Context, tx pgx.Tx, current scope, rootID, originID string, attempt int32) (bool, error) {
+// Read-only runner обслуживает также прогноз последствий без создания completion-транзакции.
+func pendingServerWorkflowTx(ctx context.Context, tx queryRunner, current scope, rootID, originID string, attempt int32) (bool, error) {
 	var pending bool
 	if tx.QueryRow(ctx, queryWorkflowDispatchPending, pgx.StrictNamedArgs{"organization_id": current.organizationID, "root_run_id": rootID, "origin_node_id": originID, "business_attempt": attempt}).Scan(&pending) != nil {
 		return false, errs.ErrUnavailable
