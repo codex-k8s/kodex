@@ -35,15 +35,15 @@ type workspaceRestoreFilesystem struct {
 // workspaceRestoreFile enforces exact size, ownership, path identity and durable close before acceptance.
 // workspaceRestoreFile проверяет точный размер, владельца, path identity и durable close до принятия.
 type workspaceRestoreFile struct {
-	filesystem *workspaceRestoreFilesystem
-	file       *os.File
-	parent     int
-	name       string
-	mode       uint32
-	device     uint64
-	inode      uint64
-	size, used int64
-	closed     bool
+	filesystem       *workspaceRestoreFilesystem
+	file             *os.File
+	parent           int
+	name             string
+	mode             uint32
+	device           uint64
+	inode            uint64
+	size, used       int64
+	closed, exported bool
 }
 
 // newWorkspaceRestoreFilesystem duplicates only a writable, private-generation root with the fixed role ownership.
@@ -165,7 +165,7 @@ func (files *workspaceRestoreFilesystem) File(ctx context.Context, name string, 
 // Write acknowledges only complete bounded writes and permanently poisons this attempt on any uncertainty.
 // Write подтверждает только полные bounded writes и закрывает попытку при любой неопределённости.
 func (file *workspaceRestoreFile) Write(raw []byte) (int, error) {
-	if file == nil || file.closed || !file.filesystem.usable(file.filesystem.ctx) || int64(len(raw)) > file.size-file.used {
+	if file == nil || file.closed || file.exported || !file.filesystem.usable(file.filesystem.ctx) || int64(len(raw)) > file.size-file.used {
 		if file != nil {
 			file.filesystem.failed = true
 		}
@@ -185,6 +185,39 @@ func (file *workspaceRestoreFile) Write(raw []byte) (int, error) {
 // Close проверяет точную directory entry, возвращает исходные права и синхронизирует файл и parent.
 // Ошибка или короткая запись тоже закрывает оба descriptor; partial file не удаляется и не принимается.
 func (file *workspaceRestoreFile) Close() error {
+	return file.closeVerified(file != nil && !file.exported && file.used == file.size)
+}
+
+// exportWriter grants only this newly created write-only descriptor; local writes are forbidden after the transfer.
+// Its caller owns the authenticated peer and must request explicit completion after closing the received duplicate.
+// exportWriter выдаёт только новый write-only descriptor; после передачи local writes запрещены.
+// Caller владеет authenticated peer и запрашивает explicit completion после закрытия received duplicate.
+func (file *workspaceRestoreFile) exportWriter() (int, error) {
+	if file == nil || file.closed || file.exported || file.used != 0 || !file.filesystem.usable(file.filesystem.ctx) {
+		return -1, errWorkspaceObjectUnconfirmed
+	}
+	file.exported = true
+	return int(file.file.Fd()), nil
+}
+
+// completeExternal verifies the kernel-maintained shared write offset instead of fabricating local byte accounting.
+// Only the dedicated authenticated writer protocol invokes it after exact bounded writes and descriptor closure.
+// completeExternal проверяет kernel-maintained shared offset без подмены local byte accounting.
+// Метод вызывает только отдельный authenticated writer protocol после bounded writes и закрытия descriptor.
+func (file *workspaceRestoreFile) completeExternal() error {
+	valid := file != nil && !file.closed && file.exported
+	if valid {
+		offset, err := file.file.Seek(0, io.SeekCurrent)
+		valid = err == nil && offset == file.size
+	}
+	return file.closeVerified(valid)
+}
+
+// closeVerified applies the same inode/size/mode/durability boundary to local writes and explicitly completed external writes.
+// A plain Close of an exported descriptor aborts and preserves partial evidence even when its size happens to match.
+// closeVerified применяет общую inode/size/mode/durability boundary к local и explicit external completion.
+// Обычный Close exported descriptor прерывает операцию и сохраняет partial evidence даже при совпадении size.
+func (file *workspaceRestoreFile) closeVerified(complete bool) error {
 	if file == nil || file.closed {
 		return errWorkspaceObjectUnconfirmed
 	}
@@ -192,7 +225,7 @@ func (file *workspaceRestoreFile) Close() error {
 	files := file.filesystem
 	files.openFiles--
 	var info unix.Stat_t
-	valid := files.usable(files.ctx) && file.used == file.size &&
+	valid := complete && files.usable(files.ctx) &&
 		unix.Fstatat(file.parent, file.name, &info, unix.AT_SYMLINK_NOFOLLOW) == nil &&
 		uint64(info.Dev) == file.device && info.Ino == file.inode && info.Uid == files.identity.actor && info.Gid == files.identity.group &&
 		info.Mode&unix.S_IFMT == unix.S_IFREG && info.Nlink == 1 && info.Size == file.size &&

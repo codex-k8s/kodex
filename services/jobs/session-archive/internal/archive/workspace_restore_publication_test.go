@@ -33,10 +33,16 @@ type workspaceRestorePublicationFixture struct {
 
 // newWorkspaceRestorePublicationFixture prepares a real checkpoint and a sealed intent without impersonating the owner service.
 // newWorkspaceRestorePublicationFixture создаёт настоящий checkpoint и sealed intent без подмены owner service.
-func newWorkspaceRestorePublicationFixture(t *testing.T) workspaceRestorePublicationFixture {
+func newWorkspaceRestorePublicationFixture(t *testing.T, encoders ...workspaceSnapshotEncoder) workspaceRestorePublicationFixture {
 	t.Helper()
 	ctx := t.Context()
 	task, encode := workspaceSnapshotFixture(t)
+	if len(encoders) > 1 {
+		t.Fatal("ambiguous checkpoint encoder fixture")
+	}
+	if len(encoders) == 1 {
+		encode = encoders[0]
+	}
 	store := &workspaceObjectFixture{Store: objectstoragetest.New()}
 	result, err := snapshotWorkspace(ctx, store, task, encode)
 	if err != nil {

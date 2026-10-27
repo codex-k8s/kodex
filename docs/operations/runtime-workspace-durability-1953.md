@@ -4,7 +4,7 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.2
+version: 1.0.3
 updated: 2026-10-27
 ---
 
@@ -242,6 +242,27 @@ result и не удаляются. Специализированное прод
 ещё требует реализации; generic retry не даёт права на новый rename.
 Эти adapter-проверки не доказывают trusted initializer, отдельный writable
 provider peer, physical Pod/PVC binding или owner RESTORED/RuntimeRevision ACK.
+
+Отдельный внутренний writable peer использует `KWW1`, а snapshot wire остаётся
+read-only. До создания файлов обе стороны проверяют kernel `SO_PEERCRED`,
+canonical task digest и фактические root device/inode. Caller trusted wrapper
+назначает identity; wire не содержит UID, absolute path, descriptor number или
+credentials. Reconcile-only task не получает writer handshake digest.
+
+Команды закрыты: HELLO, DIRECTORY, FILE, SEAL, COMPLETE, FINISH. При FILE peer
+создаёт единственный exclusive provider-owned file и передаёт только
+write-only CLOEXEC FD. Main проверяет independent path inode и bounded bytes,
+синхронизирует и закрывает свою копию до COMPLETE. Provider проверяет shared
+kernel offset и actual inode/size, применяет original mode и fsync. Local byte
+counter при этом не подменяется размером. Обычный Close exported FD означает
+отказ, даже если размер совпал; другое действие при pending file запрещено.
+
+FINISH закрывает adapter и допускает публикацию только после явного peer join
+у caller. Ошибка, cancellation, лишний FD, чужой task/root или потерянный ACK
+закрывают попытку без повторной команды и сохраняют partial data. Внутренний
+Unixpacket-контур под одним текущим UID проверяет transport/stream/publication,
+но не заменяет обязательный distinct UID10001/10002 native proof и production
+worker/controller wiring. Эти последние части ещё не активированы.
 
 ## Метаданные подтверждения checkpoint
 
