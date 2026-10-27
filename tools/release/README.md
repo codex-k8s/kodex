@@ -1,5 +1,22 @@
 # Независимое обновление приложений
 
+## Read-only проверка рефакторинга runtime policy
+
+`runtime-policy-refactor-dry-run.py --output /private/new-evidence.json`
+проверяет единственный переход CEL для `runtime-role-pod-exact-secret-projection`
+в `k3d-kodex`. Исходные спецификации формируются из двух закреплённых Git
+ревизий без рабочих env-файлов; предыдущий initializer CAS воспроизводится
+для двух точных правил. Полный predecessor сверяется без нормализации CEL,
+а server-side dry-run выполняется с проверкой UID, resourceVersion и прежнего
+правила. До и после запроса проверяются binding `Deny`, immutable ConfigMap,
+параметры policy и compilation status прежнего поколения. Отчёт создаётся
+только новым файлом `0600` внутри приватного каталога `0700`.
+
+Проверка не применяет policy, не проверяет owner idle и не подтверждает
+компиляцию нового поколения, provenance образов или готовность релиза. Она не
+является допуском к apply. Изоляционные проверки: `make test-runtime-policy-refactor`
+(лимит 60 секунд).
+
 ## Переход этой серверной установки на штатный профиль
 
 По решению владельца #1810 готовится отдельный переход с hot reload на

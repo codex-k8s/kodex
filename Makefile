@@ -41,6 +41,10 @@ test-web-only-release:
 test-workspace-policy-contract: check-go-toolchain
 	@cd tools/dev/workspace-policy-contract && env -u GOFLAGS GOENV=off GOWORK=off timeout 120s go test -count=1 -timeout=60s ./...
 
+.PHONY: test-runtime-policy-refactor
+test-runtime-policy-refactor:
+	@timeout 60s python3 -m unittest tools/release/test_runtime_policy_refactor_model.py tools/release/test_runtime_policy_refactor_plan.py tools/release/test_runtime_policy_refactor_dry_run.py
+
 .PHONY: test-runtime-admission-gate
 test-runtime-admission-gate:
 	@timeout 60s sh -c 'python3 -B tools/dev/test_runtime_admission_gate.py && python3 -B tools/dev/test_transition_runtime_initializer_mounts.py'
