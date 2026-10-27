@@ -59,6 +59,7 @@ type Task struct {
 	TargetObjectKey, TargetObjectVersion                   string
 	Attempt                                                int32
 	Archive                                                *ArchiveBinding
+	Workspace                                              *WorkspaceArchiveTask `json:",omitempty"`
 }
 
 // wireTask preserves Task's JSON field layout without recursively calling its custom codec methods.
@@ -71,7 +72,13 @@ func (task Task) MarshalJSON() ([]byte, error) { return json.Marshal(wireTask(ta
 
 // UnmarshalJSON decodes the task wire layout; callers separately apply Validate before use.
 // RU: UnmarshalJSON декодирует wire-поля задания; до использования вызывающая сторона отдельно применяет Validate.
-func (task *Task) UnmarshalJSON(raw []byte) error { return json.Unmarshal(raw, (*wireTask)(task)) }
+func (task *Task) UnmarshalJSON(raw []byte) error {
+	decoded, err := decodeWorkspaceAwareTask(raw)
+	if err == nil {
+		*task = decoded
+	}
+	return err
+}
 
 // FromProto maps the closed RPC task kinds and optional archive receipt, then validates the resulting binding.
 // RU: FromProto преобразует закрытые виды RPC-заданий и необязательную квитанцию архива, затем проверяет привязку.
@@ -100,6 +107,13 @@ func FromProto(input *controlplanev1.SessionArchiveTask) (Task, error) {
 			SourceRelativePath: archive.GetSourceRelativePath(), SourceSHA256: archive.GetSourceSha256(),
 			SourceSizeBytes: archive.GetSourceSizeBytes()}
 	}
+	if workspace := input.GetWorkspace(); workspace != nil {
+		value, err := workspaceTaskFromProto(workspace)
+		if err != nil {
+			return Task{}, err
+		}
+		task.Workspace = &value
+	}
 	return task, task.Validate()
 }
 
@@ -120,6 +134,9 @@ func DecodeFile(path string) (Task, error) {
 // Validate checks required identities, size and generation bounds, canonical session path and kind-specific fields.
 // RU: Validate проверяет обязательные идентичности, размеры, поколения, канонический путь сессии и поля вида задания.
 func (task Task) Validate() error {
+	if task.Workspace != nil {
+		return task.validateWorkspace()
+	}
 	for _, required := range []string{task.TaskRef, task.Kind, task.OrganizationRef, task.SessionRef,
 		task.ProviderAccountRef, task.RuntimeRevisionRef, task.RuntimeRevisionDigest, task.CodexSessionID,
 		task.PVCName, task.InputDigest, task.SourceRelativePath, task.SourceSHA256} {

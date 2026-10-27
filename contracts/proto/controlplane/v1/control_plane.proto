@@ -4292,6 +4292,17 @@ message SessionArchiveTask {
   string target_object_key = 19;
   string target_object_version = 20;
   int32 attempt = 21;
+  SessionWorkspaceArchiveTask workspace = 22;
+}
+
+message SessionWorkspaceArchiveTask {
+  RuntimeWorkspaceStorage target = 1;
+  string checkpoint_ref = 2;
+  string quiescence = 3;
+  string pvc_uid = 4;
+  RuntimeWorkspacePolicy policy = 5;
+  bool reconcile_only = 6;
+  RuntimeWorkspaceCheckpoint checkpoint = 7;
 }
 
 message ClaimSessionArchiveTasksRequest {

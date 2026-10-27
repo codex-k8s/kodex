@@ -79,12 +79,25 @@ bytes, traversal, links, special files и несовпадение exact object 
 Восстановленный work остаётся недоверенным внутри прежнего sandbox и не
 обходит quarantine или artifact/VFS eligibility.
 
-V2 snapshot/restore consumer использует только exact work subPath и
-UID10002/GID29000: provider files с mode0600 остаются читаемыми владельцу,
-runner files0640 — через группу. Private generation parents0700 UID10001,
-provider auth и session root ему не монтируются. Legacy v1 consumer не меняет
-свою identity. Это требует отдельной проверки renderer и native permissions;
-один codec unit этого не доказывает.
+V2 snapshot consumer использует только exact read-only work subPath. Main
+UID10001 читает собственные mode0600 files, paired read-only reader UID10002
+передаёт только exact owned10002 regular-file descriptors через private Unix
+socket с kernel peer UID и повторным inode/owner check. Ни root/DAC capability,
+ни chmod исходника, ни общий cross-session FD broker не допускаются. Reader не
+получает object-storage credentials, API token, provider auth или session root;
+прежний общий CPU/RAM budget разделяется между consumers. Неизвестное владение,
+недоступный private directory или изменённый descriptor оставляют PVC в BLOCKED.
+Restore создаёт новые файлы под UID10001/GID29000 в собственной generation.
+Private generation parents0700 не монтируются snapshot consumers. Legacy v1
+consumer сохраняет UID10002. Renderer/native permissions и реальная двух-UID
+проверка обязательны; pure codec/scanner unit этого не доказывает.
+
+Private Proto task использует optional field22; legacy fields1..21 и прежние
+Task bytes без workspace binding сохраняются. V2 task имеет strict canonical
+JSON без duplicate/unknown/null/alias downgrade. Snapshot attempts после первой
+имеют только reconciliation credit: неизвестный PUT и последующий NotFound не
+разрешают повторную запись или cleanup. Точное существующее object version
+может быть подтверждено read-only; unresolved custody сохраняет PVC.
 
 V1 receipt при наличии work не разрешает удаление всей PVC. Перед activation
 нужно завершить либо отозвать старые destructive archive jobs и подтвердить
