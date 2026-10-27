@@ -267,7 +267,15 @@ func workflowExceptionArtifactWriteAuthority(t *testing.T, f *workflowRecoveryRe
 		!slices.Equal(runtimeRevisionStringSlice(claim["capabilities"]), producer.Capabilities) {
 		t.Fatal("producer configured and frozen artifact capability pins differ")
 	}
-	current, err := f.repository.resolveScope(f.ctx, f.worker)
+	// Match Service.principal: the transport proof carries UUID identities, while
+	// resolveScope accepts only the current public references resolved by the owner.
+	// Повторяем Service.principal: transport proof содержит UUID, а resolveScope
+	// принимает только текущие публичные ссылки, разрешённые владельцем состояния.
+	principal, err := f.repository.ResolvePrincipal(f.ctx, f.worker)
+	if err != nil {
+		t.Fatal("resolve artifact authority principal", completionOutcomeClass(err))
+	}
+	current, err := f.repository.resolveScope(f.ctx, principal)
 	if err != nil {
 		t.Fatal("resolve artifact authority observer", completionOutcomeClass(err))
 	}
