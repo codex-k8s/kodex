@@ -13,6 +13,10 @@ test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestBootstrapComponent|T
 
 # Оба закрытых upgrade-сценария используют одну и ту же отдельную пустую БД.
 upgrade_test='^TestWorkflowReviewQAEvidenceForwardUpgrade$'
+if [[ "$test_pattern" == --volume-predecessor ]]; then
+  upgrade_test='^TestWorkspaceVolumeMigrationPredecessor$'
+  test_pattern=--review-qa-upgrade
+fi
 if [[ "$test_pattern" == --checkpoint-predecessor ]]; then
   upgrade_test='^TestWorkspaceCheckpointMigrationPredecessor$'
   test_pattern=--review-qa-upgrade
@@ -36,6 +40,17 @@ cleanup() {
     # Новый контур никогда не очищает лишь совпавшее имя после неизвестного create.
     if [[ "$upgrade_container_id" =~ ^[a-f0-9]{64}$ ]]; then
       docker stop --time 5 "$upgrade_container_id" >/dev/null 2>&1 || true
+      # stop может вернуться до завершения AutoRemove; проверяем exact ID через
+      # успешную авторитетную выборку, а не считаем ошибку inspect отсутствием.
+      local cleanup_ids
+      for cleanup_attempt in {1..40}; do
+        cleanup_ids=$(docker ps -a --no-trunc --filter "id=$upgrade_container_id" --format '{{.ID}}') ||
+          fail 'disposable PostgreSQL cleanup readback failed'
+        [[ -n "$cleanup_ids" ]] || return 0
+        [[ "$cleanup_ids" == "$upgrade_container_id" ]] || fail 'disposable PostgreSQL cleanup identity changed'
+        sleep 0.25
+      done
+      fail 'disposable PostgreSQL cleanup absence is not confirmed'
     fi
     return
   fi

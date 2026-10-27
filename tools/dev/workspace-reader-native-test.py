@@ -98,7 +98,7 @@ def volume_ready_consumers(binary, volume, nonce, identities, temporary):
     """Проверить настоящий fixed-UID helper, read-only rejoin и отказы без модели, Kubernetes API или credentials."""
     intent = {'scope': {'organization_ref': 'org_fixture000', 'project_ref': 'prj_fixture000',
                        'session_ref': 'ses_fixture000', 'agent_ref': 'agt_fixture000'},
-              'workspace_ref': 'wks_fixture000', 'task_ref': 'sat_fixture000',
+              'workspace_ref': 'wks_fixture000', 'task_ref': 'svt_fixture000',
               'pvc_uid': '10000000-0000-4000-8000-000000000001', 'volume_generation': 1}
     inputs = []
     for name, value in [('volume.json', intent), ('changed.json', dict(intent, pvc_uid='other-pvc'))]:

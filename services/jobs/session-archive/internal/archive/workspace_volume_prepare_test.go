@@ -26,7 +26,7 @@ func workspaceVolumeFixture(t *testing.T) (string, int, securefile.OwnedRecordId
 	t.Cleanup(func() { _ = unix.Close(fd) })
 	return root, fd, securefile.OwnedRecordIdentity{UID: uint32(os.Geteuid()), GID: uint32(os.Getegid())},
 		runtimecontract.WorkspaceVolumePreparation{Scope: runtimecontract.WorkspaceStorageScope{OrganizationRef: "org_fixture000", ProjectRef: "prj_fixture000",
-			SessionRef: "ses_fixture000", AgentRef: "agt_fixture000"}, WorkspaceRef: "wks_fixture000", TaskRef: "sat_fixture000",
+			SessionRef: "ses_fixture000", AgentRef: "agt_fixture000"}, WorkspaceRef: "wks_fixture000", TaskRef: "svt_fixture000",
 			PVCUID: "10000000-0000-4000-8000-000000000001", VolumeGeneration: 1}
 }
 
@@ -135,7 +135,7 @@ func TestWorkspaceVolumeRejoinRejectsChangedPinsAndUnsealedMetadata(t *testing.T
 			case "work":
 				intent.WorkspaceRef = "wks_foreign000"
 			case "task":
-				intent.TaskRef = "sat_foreign000"
+				intent.TaskRef = "svt_foreign000"
 			case "pvc":
 				intent.PVCUID = "other-pvc"
 			case "generation":

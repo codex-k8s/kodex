@@ -4,7 +4,7 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.13
+version: 1.0.15
 updated: 2026-10-28
 ---
 
@@ -635,6 +635,74 @@ queue, новый private RPC либо runtime VolumeReady admission. Они н�
 Полный forward owner protocol и native Job/PVC/S3 проверка остаются обязательной
 частью #1953/#1964. Первая FSGroup на уже существующих private данных запрещена,
 в том числе ради восстановления повреждённого metadata record.
+
+## Очередь владельца физического тома
+
+Создание и подготовка используют отдельный закрытый
+`WorkspaceVolumeWorkService` внутри CP, с caller только `session-archive`.
+Owner хранит отдельные volume custody, logical task и durable attempt ledger;
+`svt_` не смешивается с archive `sat_` или model task. Logical input не содержит
+model RuntimeRevision, provider session ID либо lease fence. Incarnation тома
+не подменяется поколением дерева. Единственный квалифицированный physical
+profile `LOCAL_PATH_V1`: class local-path, прежний request20GiB и проверенная
+root geometry; work quotas не повышаются.
+
+| RPC/consumer | Authority и назначение owner | Запись/ошибка и readback |
+| --- | --- | --- |
+| ClaimWorkspaceVolumeTasks | Registered workload/instance → trusted organization → exact origin root/node/session/employee + свежие actor/project ACL | Owner выдаёт bounded attempt/immutable effective input/lease; отсутствие eligibility закрывает task/grants, не выдаёт model RR |
+| RenewWorkspaceVolumeTask | Точный current task/lease/fence/generation и активный origin | Продление того же grant; expiry/cancel/terminal не возобновляются |
+| CompleteWorkspaceVolumeTask | Kind берётся из persisted task; exact durable attempt input/fence; positive Create UID либо sealed ready и terminal Pod observation | Atomic storage fact/task/grants/audit/run-changed. Поздний ACK сохраняет past fact отдельно от current tuple; terminal task/run не открывается |
+| FailWorkspaceVolumeTask | Только current granted task и закрытый safe error | Grant закрыт; uncertain Create/init остаётся BLOCKED с PVC/input/Job custody. Не выдаёт повторного WRITE |
+| Runtime claim/BIND | Только accepted exact VolumeReady tuple и свежая owner-selected RR | V2 consumer делает GET pinned PVC UID, не Create/adoption; trusted initializer читает sealed volume record до BIND/private writes |
+
+| Переход | Полный owner/physical lifecycle |
+| --- | --- |
+| Create intent | Полная кандидатная authority проверяется до enqueue; EMPTY work и origin root/node назначает сервер. Intent/frozen body сохраняются до любых внешних действий |
+| CREATE claim | Единственная первая attempt имеет Create credit; известный positive API UID сохраняется отдельно от имени/phase PVC |
+| CREATE unknown/AlreadyExists | Не adoption/reissue по имени. Task/grant закрыты, custody retained/BLOCKED; поздний exact положительный факт может быть записан через ledger |
+| PREPARE intent | Только после positive persisted PVC UID; новый immutable logical input, не изменение CREATE body или RESTORE без UID |
+| PREPARE first | Только owner-confirmed EMPTY custody/no other consumers; первый FSGroup до private data; fixed helper и sealed ready |
+| Retry/lease expiry | Предыдущий grant закрывается атомарно; новый attempt/input digest/ledger entry, максимум прежних5attempts. Только RO reconciliation после positive predecessor join; missing/partial record не даёт init credit |
+| Renew | Свежие origin eligibility и exact immutable grant; task/input/incarnation не меняются |
+| Complete | Positive all-container join и exact Job/Pod/input/PVC pins предшествуют owner ACK. READY не означает пустоту поздних business data |
+| Cancel/root deadline/delete | В owner-транзакции закрываются task и все связанные active grants. Origin root/node сохраняются. Unknown external action/PVC/Job не удаляются |
+| Late ACK | Durable ledger допускает только exact прошлый storage fact. Новый lease/RR/run не создаётся; current incarnation не подменяется старым tuple |
+| Fresh origin после отмены | Новая actor/project eligibility и новый intent; существующий prepared record проверяется RO по прежнему logical preparation ref. Прежняя task остаётся terminal |
+| Отказ/DEAD_LETTER | Данные и physical evidence сохранены, execution claim не стартует. Ошибка подготовки не превращается в готовый бизнес-результат |
+| Restore | Accepted volume tuple и source checkpoint замораживаются в новом RESTORE intent; model не получает частичное дерево |
+| Purge | Отдельный owner protocol и positive physical cleanup; ledger/task/custody удаляются только через проверенный project purge graph после закрытия grants |
+
+Матрица описывает полный требуемый owner path. До завершения schema017,
+producer/consumer/RPC registry, cancel/late-ACK, runtime admission и native
+owner-команд этот профиль остаётся не включённым; отдельный codec/helper
+не считается выполненной очередью. Owner completion не принимает kind,
+actor/project authority или готовое состояние из caller payload.
+
+Проверка только миграционного контура выполняется отдельно:
+
+```bash
+make test-workspace-volume-predecessor-postgres
+```
+
+Она создаёт пустую disposable PostgreSQL18.3, применяет настоящий predecessor016
+и forward017, отклоняет подмены workspace column, checkpoint trigger и тела
+purge-функции, проверяет повтор без изменений и отказ удаления custody через
+rollback. Завершение включает подтверждение исчезновения точного container ID
+после асинхронного Docker AutoRemove. Данные staging не используются.
+
+Это проверка схемы, а не полный owner component или готовность V2. В текущем
+срезе реализованы отдельные таблицы custody/task/attempt и owner enqueue/claim;
+создание модели ждёт accepted volume record. RPC renewal/completion/failure,
+физический consumer, свежая runtime delivery, restore и protocol удаления
+должны быть подключены совместно до включения. До появления положительного
+physical cleanup proof схема закрыто отклоняет `physical_deleted=true`, включая
+обычный CRUD. Наличие `PURGED` в закрытом перечне состояний не разрешает этот
+переход. Применённые015/016 не переписываются.
+
+Новые SQL/JSON ограничения сверены с [официальной документацией PostgreSQL](https://www.postgresql.org/docs/17/functions-json.html#FUNCTIONS-SQLJSON-CHECK).
+`IS JSON OBJECT WITH UNIQUE KEYS` проверяет тип и отсутствие повторных ключей;
+канонические bytes и digest дополнительно проверяет общий Go consumer.
+Context7 отклонил настроенный API key; его значения не выводились и не менялись.
 
 ## Совместимость миграций и удаления
 

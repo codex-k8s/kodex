@@ -11,7 +11,7 @@ import (
 // workspaceVolumePreparationFixture задаёт bounded local metadata без model execution, provider credential или storage grant.
 func workspaceVolumePreparationFixture() WorkspaceVolumePreparation {
 	return WorkspaceVolumePreparation{Scope: WorkspaceStorageScope{OrganizationRef: "org_fixture000", ProjectRef: "prj_fixture000",
-		SessionRef: "ses_fixture000", AgentRef: "agt_fixture000"}, WorkspaceRef: "wks_fixture000", TaskRef: "sat_fixture000",
+		SessionRef: "ses_fixture000", AgentRef: "agt_fixture000"}, WorkspaceRef: "wks_fixture000", TaskRef: "svt_fixture000",
 		PVCUID: "10000000-0000-4000-8000-000000000001", VolumeGeneration: 1}
 }
 
@@ -43,7 +43,7 @@ func TestWorkspaceVolumePreparationRejectsMissingAndPathLikeIdentity(t *testing.
 	for name, mutate := range map[string]func(*WorkspaceVolumePreparation){
 		"scope":      func(v *WorkspaceVolumePreparation) { v.Scope.ProjectRef = "" },
 		"work":       func(v *WorkspaceVolumePreparation) { v.WorkspaceRef = "wks_fixture000/../other" },
-		"task":       func(v *WorkspaceVolumePreparation) { v.TaskRef = "sat_fixture000/other" },
+		"task":       func(v *WorkspaceVolumePreparation) { v.TaskRef = "svt_fixture000/other" },
 		"task-kind":  func(v *WorkspaceVolumePreparation) { v.TaskRef = "lea_fixture000" },
 		"pvc":        func(v *WorkspaceVolumePreparation) { v.PVCUID = "" },
 		"pvc-path":   func(v *WorkspaceVolumePreparation) { v.PVCUID = "../other" },

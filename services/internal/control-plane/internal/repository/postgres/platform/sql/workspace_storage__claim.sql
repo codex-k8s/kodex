@@ -8,6 +8,9 @@ WHERE workspace.organization_id=@organization_id::uuid AND workspace.ref=@worksp
     AND workspace.writer_lease_id IS NULL AND workspace.writer_acknowledgement IS NULL
     AND workspace.quiescence_record IS NULL AND workspace.destructive_task_id IS NULL
     AND lease.organization_id=workspace.organization_id AND lease.ref=@lease_ref
+    AND EXISTS(SELECT 1 FROM control_plane.session_workspace_volumes volume
+      WHERE volume.workspace_id=workspace.id AND volume.state='READY'
+        AND volume.ready_record::jsonb=revision.safe_snapshot #> '{workspaceStorage,volume_ready}')
     AND lease.state='CLAIMED' AND lease.expires_at>statement_timestamp()
     AND revision.organization_id=workspace.organization_id AND revision.session_id=workspace.session_id
     AND revision.project_id=workspace.project_id AND revision.agent_id=workspace.agent_id

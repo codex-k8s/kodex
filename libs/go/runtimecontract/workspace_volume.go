@@ -38,7 +38,7 @@ type WorkspaceVolumePreparation struct {
 // VolumeGeneration — монотонная owner incarnation тома, не writer lease, attempt или generation рабочего дерева.
 func (value WorkspaceVolumePreparation) Validate() error {
 	if value.Scope.Validate() != nil || !workspaceStorageRefPattern.MatchString(value.WorkspaceRef) ||
-		!workspaceArchiveTaskRefPattern.MatchString(value.TaskRef) || !workspaceUID(value.PVCUID) || value.VolumeGeneration < 1 {
+		!workspaceVolumeTaskRefPattern.MatchString(value.TaskRef) || !workspaceUID(value.PVCUID) || value.VolumeGeneration < 1 {
 		return errWorkspaceStorageInvalid
 	}
 	return nil

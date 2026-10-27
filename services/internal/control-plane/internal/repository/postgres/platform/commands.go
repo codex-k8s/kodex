@@ -80,7 +80,7 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 	var storedDigest string
 	var storedPayload []byte
 	receiptQuery := queryCommandsExecuteSelectIdempotencyReceiptsOrganizationIdActorIdOperation
-	if input.Kind == command.ObserveWorkspace {
+	if input.Kind == command.ObserveWorkspace || input.Kind == command.ClaimWorkspaceVolumeTasks {
 		receiptQuery = queryWorkspaceObservationReceipt
 	}
 	if payload, ok := input.Payload.(command.LeaseInput); input.Kind == command.ReportExecutionProgress && ok && payload.Financial != nil {
@@ -152,7 +152,7 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 	}
 	// Пустой опрос runtime является наблюдением, а не устойчивым доменным действием.
 	// Receipt и аудит для него превращали бы исправный простой в постоянную запись.
-	if input.Kind == command.ClaimExecution && len(outcome.result.RuntimeItems) == 0 && !outcome.runtimeGraphChanged && !outcome.runtimeReadinessChanged {
+	if (input.Kind == command.ClaimExecution || input.Kind == command.ClaimWorkspaceVolumeTasks) && len(outcome.result.RuntimeItems) == 0 && !outcome.runtimeGraphChanged && !outcome.runtimeReadinessChanged {
 		if err := tx.Commit(ctx); err != nil {
 			return command.Result{}, fmt.Errorf("commit empty runtime claim: %w", errs.ErrConflict)
 		}
@@ -418,6 +418,12 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		command.CompleteSessionPVCDeletion, command.CompleteSessionObjectDeletion,
 		command.FailSessionArchiveTask:
 		return repository.changeSessionArchive(ctx, tx, scope, input)
+	case command.ClaimWorkspaceVolumeTasks:
+		payload, ok := input.Payload.(command.WorkspaceVolumeClaimInput)
+		if !ok {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		return repository.claimWorkspaceVolumeTasksTx(ctx, tx, scope, payload)
 	case command.MaterializeOccurrence, command.FailScheduleOccurrence:
 		return repository.changeOccurrence(ctx, tx, scope, input)
 	case command.CompleteConnectionTest:

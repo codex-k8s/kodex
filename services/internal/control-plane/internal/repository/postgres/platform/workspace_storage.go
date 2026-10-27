@@ -74,6 +74,11 @@ func (repository *Repository) prepareSessionWorkspaceTx(ctx context.Context, tx 
 	if _, err := binding.GenerationSubPath(); err != nil {
 		return nil, false, errs.ErrConflict
 	}
+	ready, volumeReady, err := repository.prepareWorkspaceVolumeTx(ctx, tx, current, candidate, *binding)
+	if err != nil || !volumeReady {
+		return nil, false, err
+	}
+	binding.VolumeReady = ready
 	return binding, true, nil
 }
 

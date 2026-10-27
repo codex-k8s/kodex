@@ -139,6 +139,7 @@ type WorkspaceStorageBinding struct {
 	WorkspaceRef string                      `json:"workspace_ref"`
 	Generation   int64                       `json:"generation"`
 	Source       *WorkspaceCheckpointBinding `json:"source,omitempty"`
+	VolumeReady  *WorkspaceVolumeReady       `json:"volume_ready,omitempty"`
 }
 
 // ValidateForInput verifies employee identity and quota shape, not the right to acquire a writer.
@@ -152,6 +153,12 @@ func (value WorkspaceStorageBinding) ValidateForInput(input RunnerInput) error {
 		value.Scope.OrganizationRef != input.OrganizationRef || value.Scope.ProjectRef != input.ProjectRef ||
 		value.Scope.SessionRef != input.SessionRef || value.Scope.AgentRef != input.AgentRef {
 		return errWorkspaceStorageInvalid
+	}
+	if value.VolumeReady != nil {
+		if _, err := EncodeWorkspaceVolumeReady(*value.VolumeReady); err != nil ||
+			value.VolumeReady.Preparation.Scope != value.Scope || value.VolumeReady.Preparation.WorkspaceRef != value.WorkspaceRef {
+			return errWorkspaceStorageInvalid
+		}
 	}
 	if value.Source != nil && value.Source.Scope.SessionRef == value.Scope.SessionRef &&
 		value.Source.WorkspaceRef == value.WorkspaceRef && value.Source.Generation >= value.Generation {

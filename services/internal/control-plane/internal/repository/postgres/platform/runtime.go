@@ -540,18 +540,12 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		if !environmentEligible {
 			continue
 		}
-		workspaceBinding, workspaceReady, err := repository.prepareSessionWorkspaceTx(ctx, tx, scope, candidate)
-		if err != nil {
-			return commandOutcome{}, err
-		}
-		if !workspaceReady {
-			continue
-		}
 		candidateTx, err := tx.Begin(ctx)
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		eligibilityStage := "provider_profile"
+		candidateClaimed := false
 		_, candidateErr := func(tx pgx.Tx) (commandOutcome, error) {
 			var originAllowed bool
 			if err := tx.QueryRow(ctx, queryWorkflowLaunchClaimOrigin, pgx.StrictNamedArgs{"organization_id": scope.organizationID, "root_run_id": candidate.rootRunID}).Scan(&originAllowed); err != nil {
@@ -910,12 +904,20 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			if err != nil {
 				return commandOutcome{}, errs.ErrConflict
 			}
-			revisionRef, err := newRef("rrev")
+			if _, err := tx.Exec(ctx, queryRuntimeDeadlineStart, pgx.StrictNamedArgs{"organization_id": scope.organizationID, "run_id": candidate.runID, "root_run_id": candidate.rootRunID}); err != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			eligibilityStage = "workspace_volume"
+			workspaceBinding, workspaceReady, err := repository.prepareSessionWorkspaceTx(ctx, tx, scope, candidate)
 			if err != nil {
 				return commandOutcome{}, err
 			}
-			if _, err := tx.Exec(ctx, queryRuntimeDeadlineStart, pgx.StrictNamedArgs{"organization_id": scope.organizationID, "run_id": candidate.runID, "root_run_id": candidate.rootRunID}); err != nil {
-				return commandOutcome{}, errs.ErrUnavailable
+			if !workspaceReady {
+				return commandOutcome{}, nil
+			}
+			revisionRef, err := newRef("rrev")
+			if err != nil {
+				return commandOutcome{}, err
 			}
 			executionDeadline, _, err := readRuntimeExecutionDeadline(ctx, tx, scope.organizationID, candidate.runID)
 			if err != nil {
@@ -1077,6 +1079,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			snapshot["leaseRef"], snapshot["fence"], snapshot["generation"] = leaseRef, fence, generation
 			snapshot["expiresAt"], snapshot["eventRef"] = expiresAt, event.Ref
 			items = append(items, snapshot)
+			candidateClaimed = true
 			if firstRunRef == "" {
 				firstProjectID, firstProjectRef, firstRunRef = projectID, projectRef, runRef
 			}
@@ -1086,7 +1089,9 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			if err := candidateTx.Commit(ctx); err != nil {
 				return commandOutcome{}, errs.ErrUnavailable
 			}
-			claimedRoots[candidate.nodeRef] = candidate.rootRunID
+			if candidateClaimed {
+				claimedRoots[candidate.nodeRef] = candidate.rootRunID
+			}
 			continue
 		}
 		if err := candidateTx.Rollback(ctx); err != nil {

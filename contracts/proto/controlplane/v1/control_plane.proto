@@ -3845,6 +3845,35 @@ message RuntimeWorkspaceStorage {
   string workspace_ref = 3;
   int64 generation = 4;
   RuntimeWorkspaceCheckpoint source = 5;
+  // Accepted owner volume preparation закрепляет exact physical incarnation до BIND/RESTORE.
+  // Наличие record не является grant; актуальные scope/task/PVC UID проверяет owner.
+  RuntimeWorkspaceVolumeReady volume_ready = 6;
+}
+
+// Logical preparation физического тома, отдельная от model revision/lease и writable tree generation.
+message RuntimeWorkspaceVolumePreparation {
+  // Назначаемая owner область сотрудника и сессии; payload не выдаёт полномочий.
+  RuntimeWorkspaceScope scope = 1;
+  // Immutable work identity.
+  string workspace_ref = 2;
+  // Logical PREPARE task из отдельного svt_ namespace.
+  string task_ref = 3;
+  // Положительно наблюдавшийся exact PVC Create UID.
+  string pvc_uid = 4;
+  // Монотонная incarnation физического тома; не model attempt.
+  int64 volume_generation = 5;
+}
+
+// Ограниченное sealed inode observation; не доказывает пустоту поздних business data либо positive process join.
+message RuntimeWorkspaceVolumeReady {
+  // Только поддерживаемая canonical local schema.
+  string schema = 1;
+  // Immutable logical preparation; accepted tuple принадлежит owner.
+  RuntimeWorkspaceVolumePreparation preparation = 2;
+  // Kernel device точного подготовленного root.
+  uint64 device = 3;
+  // Kernel inode точного подготовленного root.
+  uint64 inode = 4;
 }
 
 enum RuntimeFilePurpose {
