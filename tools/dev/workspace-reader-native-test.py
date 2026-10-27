@@ -98,7 +98,7 @@ def main():
     binary = Path(arguments.binary)
     info = binary.lstat()
     if (not binary.is_absolute() or not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
-            or info.st_nlink != 1 or info.st_mode & 0o022 or not os.access(binary, os.X_OK)
+            or info.st_nlink != 1 or info.st_mode & 0o022 or info.st_mode & 0o555 != 0o555 or not os.access(binary, os.X_OK)
             or not re.fullmatch('[a-f0-9]{64}', arguments.sha256)
             or hashlib.sha256(binary.read_bytes()).hexdigest() != arguments.sha256):
         raise RuntimeError('NATIVE_BINARY_PIN_INVALID')
@@ -129,7 +129,8 @@ def main():
                    'test "$(stat -c %a:%u:%g /source)" = "2770:10001:29000"')
         if arguments.mode == 'restore':
             prepare = ('umask 077; mkdir -p /source/generation/.restore-tree; '
-                       'chown 10001:29000 /source /source/generation /source/generation/.restore-tree; '
+                       'chmod 770 /source/generation; '
+                       'chown 10001:29000 /source/generation/.restore-tree /source/generation /source; '
                        'chmod 2770 /source /source/generation/.restore-tree; '
                        'test "$(stat -c %a:%u:%g /source/generation/.restore-tree)" = "2770:10001:29000"; '
                        'chmod 700 /source/generation; '
