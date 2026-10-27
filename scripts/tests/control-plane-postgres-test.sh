@@ -117,6 +117,7 @@ run_migration() {
     20261026001000) schema_proof=server-workflow-migration-postcondition.sql; schema_verifier=validServerWorkflowMigrationPostcondition ;;
     20261026001100) schema_proof=legacy-workflow-rework-migration-postcondition.sql; schema_verifier=validLegacyWorkflowReworkMigrationPostcondition ;;
     20261026001200) schema_proof=workflow-exception-context-migration-postcondition.sql; schema_verifier=validWorkflowExceptionContextMigrationPostcondition ;;
+    20261026001300) schema_proof=workflow-upstream-rework-migration-postcondition.sql; schema_verifier=validWorkflowUpstreamReworkMigrationPostcondition ;;
     *) fail 'unsupported current workflow schema target' ;;
   esac
   psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" \

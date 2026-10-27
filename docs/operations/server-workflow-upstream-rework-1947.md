@@ -4,7 +4,7 @@ title: Возврат замечаний автору в серверном DAG
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.0
+version: 1.0.1
 updated: 2026-10-27
 ---
 
@@ -130,5 +130,33 @@ inverse graph: известный graph012 плюс только названн�
 capture retention005 остаётся неизменным и удерживает прежние exact revisions до terminal.
 
 Поставка требует отдельно подтверждённого predecessor012, operator pre/post proof013,
-all-consumer rollout и только затем публикации нового profile. Пока #1943/012 остановлен,
-доставка #1947 также не READY. Это не разрешение повторять остановленный native путь.
+all-consumer rollout и только затем публикации нового profile. Адресные проверки
+контекста #1943 не подтверждают готовность всего нового профиля или его поставку.
+
+## Проверка миграции013
+
+Закрытый operator profile `workflow-upstream-rework` принимает только переход
+`20261026001200` → `20261026001300`. До остановки компонентов он читает полный
+predecessor012 и отсутствие новых объектов в одном read-only REPEATABLE READ
+snapshot. Сохранённое заключение прошлого запуска не заменяет эту проверку.
+
+Postcondition проверяет прежние schema/authority/retention/purge invariants,
+точные новые тела изменённых функций и двенадцать новых функций: сигнатуры,
+владельца, ACL, язык, volatility, search_path, defaults и возвращаемый тип.
+Отдельно проверяются столбцы, DEFERRABLE FK, constraint, частичный индекс,
+триггеры и необходимые column privileges. Старые exported validators010–012
+не принимают013. Ошибка postcondition блокирует продолжение; повтор inspect
+и resume не запускает уже применённый DDL второй раз.
+
+Публичная точка входа `make test-workflow-upstream-rework-postgres` ограничена
+300 секундами плюс 10 секунд на завершение. Она проверяет upstream lifecycle,
+контекст менеджера и наследуемые schema proofs на disposable PostgreSQL.
+Негативные schema fixtures независимо меняют ACL, SECURITY DEFINER, search_path,
+тело функции, overload, FK, trigger либо constraint. Они не создают готовые
+бизнес-состояния. Наличие target не означает успешного запуска.
+
+Эта композиция не включает ещё разрабатываемую миграцию01150 по #1953.
+До её интеграции оператор013 не готов к staging: необходимо пересчитать точные
+pre/post proofs всей цепочки и повторить native-проверки на чистом общем SHA.
+Резервный порядок после появления новых durable данных — совместимый
+roll-forward; удаление журналов и downgrade схемы не используются.
