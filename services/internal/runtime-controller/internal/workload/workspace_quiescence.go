@@ -13,6 +13,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
+// workspaceObservationPageSize bounds one poll's decoded tickets without discarding continuation progress.
+// workspaceObservationPageSize ограничивает decoded tickets одного poll, сохраняя continuation progress.
+const workspaceObservationPageSize int64 = 32
+
 // WorkspaceQuiescenceObservation carries authenticated frozen input and a current owned terminal witness.
 // No field is a new execution grant; consumers commit the past fact before releasing retained resources.
 // WorkspaceQuiescenceObservation содержит authenticated frozen input и current owned terminal witness.
@@ -65,10 +69,25 @@ func (manager *Manager) stopWorkspacePod(ctx context.Context, input runtimecontr
 // PendingWorkspaceQuiescence читает retained owned Pods, не удаляя incomplete или ambiguous evidence.
 // Controller replacement использует immutable ticket/input pins; отсутствие остаётся unconfirmed.
 func (manager *Manager) PendingWorkspaceQuiescence(ctx context.Context) ([]WorkspaceQuiescenceObservation, error) {
-	tickets, err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).List(ctx, metav1.ListOptions{LabelSelector: managedLabel + "=true," + modeLabel + "=turn", Limit: 128})
-	if err != nil || tickets.Continue != "" {
+	manager.workspaceObservationMu.Lock()
+	previous := manager.workspaceObservationContinue
+	tickets, err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).List(ctx, metav1.ListOptions{
+		LabelSelector: managedLabel + "=true," + modeLabel + "=turn," + workspaceStorageProfileAnnotation + "=" + runtimecontract.WorkspaceStorageProfile,
+		Limit:         workspaceObservationPageSize, Continue: previous})
+	if err != nil {
+		if apierrors.IsResourceExpired(err) {
+			manager.workspaceObservationContinue = ""
+		}
+		manager.workspaceObservationMu.Unlock()
 		return nil, errors.New("read retained runtime workspace tickets")
 	}
+	if len(tickets.Items) > int(workspaceObservationPageSize) || len(tickets.Continue) > 8192 || tickets.Continue != "" && tickets.Continue == previous {
+		manager.workspaceObservationContinue = ""
+		manager.workspaceObservationMu.Unlock()
+		return nil, errors.New("runtime workspace ticket pagination is invalid")
+	}
+	manager.workspaceObservationContinue = tickets.Continue
+	manager.workspaceObservationMu.Unlock()
 	var result []WorkspaceQuiescenceObservation
 	for index := range tickets.Items {
 		ticket := &tickets.Items[index]

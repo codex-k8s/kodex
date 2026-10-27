@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -18,16 +19,21 @@ func workspaceStoragePodFixture(t *testing.T) (*Manager, *fake.Clientset, runtim
 	t.Helper()
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
-	input, binding, err := manager.BuildTurnInput(testExecution(false))
+	execution := testExecution(false)
+	execution.Revision.SessionRef, execution.Revision.AgentRef = "ses_workspace000", "agt_workspace000"
+	execution.Revision.RoleRuntimeContractRevision = runtimecontract.WorkspaceStorageRuntimeContractRevision
+	execution.Revision.WorkspaceStorage = &controlplanev1.RuntimeWorkspaceStorage{Profile: runtimecontract.WorkspaceStorageProfile,
+		Scope: &controlplanev1.RuntimeWorkspaceScope{OrganizationRef: execution.Revision.OrganizationRef, ProjectRef: execution.Run.ProjectRef,
+			SessionRef: execution.Revision.SessionRef, AgentRef: execution.Revision.AgentRef}, WorkspaceRef: "wks_workspace000", Generation: 1}
+	sealTestTurnExecution(execution)
+	manager.config.RoleRuntimeContractRevision = runtimecontract.WorkspaceStorageRuntimeContractRevision
+	input, binding, err := manager.BuildTurnInput(execution)
 	if err != nil {
 		t.Fatal(err)
 	}
-	input.SessionRef, input.AgentRef = "ses_workspace000", "agt_workspace000"
-	manager.config.RoleRuntimeContractRevision = runtimecontract.WorkspaceStorageRuntimeContractRevision
-	input.RoleRuntimeContractRevision = runtimecontract.WorkspaceStorageRuntimeContractRevision
-	input.WorkspaceStorage = &runtimecontract.WorkspaceStorageBinding{Profile: runtimecontract.WorkspaceStorageProfile,
-		Scope:        runtimecontract.WorkspaceStorageScope{OrganizationRef: input.OrganizationRef, ProjectRef: input.ProjectRef, SessionRef: input.SessionRef, AgentRef: input.AgentRef},
-		WorkspaceRef: "wks_workspace000", Generation: 1}
+	if _, err := runtimecontract.EncodeRunnerInput(input); err != nil {
+		t.Fatalf("V2 fixture is not a valid immutable input: %v", err)
+	}
 	credentials := testCredentialProjection(input)
 	pod := manager.runtimePod(input, binding, &credentials, ticketName(input.LeaseRef), runtimecontract.RuntimeTurnPodName(input.LeaseRef), "turn")
 	if pod == nil {

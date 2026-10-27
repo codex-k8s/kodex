@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -236,6 +237,10 @@ type Manager struct {
 	client     kubernetes.Interface
 	config     Config
 	pvcRequest resource.Quantity
+	// Workspace pagination is bounded process-local scheduling state, never storage or writer authority.
+	// Workspace pagination — bounded process-local scheduling state, не storage или writer authority.
+	workspaceObservationMu       sync.Mutex
+	workspaceObservationContinue string
 }
 
 // InCluster loads Kubernetes in-cluster credentials, limits client requests to five seconds and delegates manager configuration validation to New without creating runtime resources.
@@ -2102,6 +2107,9 @@ func (manager *Manager) ensureTicket(ctx context.Context, name, podName, mode st
 	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: manager.config.RuntimeNamespace,
 		Labels: map[string]string{managedLabel: "true", modeLabel: mode}, Annotations: annotations},
 		Immutable: &immutable, Type: corev1.SecretTypeOpaque, Data: data}
+	if input.WorkspaceStorage != nil {
+		secret.Labels[workspaceStorageProfileAnnotation] = runtimecontract.WorkspaceStorageProfile
+	}
 	_, err = manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Create(ctx, secret, metav1.CreateOptions{})
 	if apierrors.IsAlreadyExists(err) {
 		existing, getErr := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, name, metav1.GetOptions{})
@@ -2140,6 +2148,9 @@ func byteDataSize(data map[string][]byte) int {
 // runtimeTicketMatches проверяет неизменяемые метаданные, привязки провайдера, канонический вход, точное число записей и формат токена; совпадение переданного токена требуется только warm-turn, остальные режимы сохраняют свой случайный токен.
 func runtimeTicketMatches(existing *corev1.Secret, podName, mode string, input runtimecontract.RunnerInput, token string, environmentSecrets map[string][]byte, providerBinding *ProviderSecretBinding) bool {
 	expectedMetadata := metav1.ObjectMeta{Labels: map[string]string{managedLabel: "true", modeLabel: mode}, Annotations: runtimeProjectionAnnotations(input, podName)}
+	if input.WorkspaceStorage != nil {
+		expectedMetadata.Labels[workspaceStorageProfileAnnotation] = runtimecontract.WorkspaceStorageProfile
+	}
 	if existing == nil || existing.Immutable == nil || !*existing.Immutable || !managedMetadataMatches(existing.ObjectMeta, expectedMetadata) ||
 		existing.Labels[managedLabel] != "true" || existing.Labels[modeLabel] != mode ||
 		existing.Annotations[revisionAnnotation] != input.RuntimeRevisionDigest ||

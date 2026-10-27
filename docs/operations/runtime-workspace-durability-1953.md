@@ -151,6 +151,13 @@ restore или новое выполнение. Semantic replay этих storage
 
 RC сохраняет ticket и сеть до owner ACK, сначала снимает только собственный
 finalizer по UID/resourceVersion CAS, затем подтверждает исчезновение Pod.
+Обход retained tickets выбирает только V2 по отдельной метке и обрабатывает
+не более32 tickets за poll. Opaque continuation сохраняется между polls,
+включая страницы с некорректными tickets; последняя страница завершает цикл.
+Истёкший cursor очищается, следующий poll начинает новый обход. Cursor имеет
+только значение планирования: рестарт RC начинает обход заново и не создаёт
+новых storage outcomes или полномочий. Legacy tickets не заполняют V2 pages;
+annotation, immutable input и owner tuple проверяются независимо от метки.
 Клиент модели не может прислать positive QUIESCENT через обычный callback:
 этот факт устанавливает RC по terminal statuses и sealed provider join record.
 Отдельный init-only случай требует failed deleting Pod, явного завершения

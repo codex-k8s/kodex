@@ -39,6 +39,10 @@ func configureWorkspaceStoragePod(pod *corev1.Pod, input runtimecontract.RunnerI
 		return false
 	}
 	pod.Finalizers = append(pod.Finalizers, workspaceWriterFinalizer)
+	if pod.Labels == nil {
+		pod.Labels = make(map[string]string)
+	}
+	pod.Labels[workspaceStorageProfileAnnotation] = runtimecontract.WorkspaceStorageProfile
 	metadata := strings.TrimSuffix(tree, "/tree")
 	work := corev1.VolumeMount{Name: "session", MountPath: runtimecontract.RuntimeWorkspaceWorkingRoot, SubPath: tree}
 	proof := corev1.VolumeMount{Name: "session", MountPath: runtimecontract.WorkspaceMountProofPath, SubPath: metadata + "/mount.json", ReadOnly: true}
