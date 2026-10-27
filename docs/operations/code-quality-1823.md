@@ -4,11 +4,25 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.544.0
+version: 1.545.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая подготовка warm reporter из worker — 27.10.2026
+
+Два component-сценария используют общий fixture чтения системного помощника
+и отчёта READY точной ревизии. В отличие от предыдущего fixture, reporter здесь
+получается копированием переданного worker с прежним конкретным permission;
+полученный principal возвращается вызывающему. Порядок операций и оставшиеся
+сценарии неизменны; два обратных сопоставления восстановили исходные тесты.
+
+На disposable PostgreSQL выбранные resume и terminal storage сценарии: 8 PASS
+events до и после, без FAIL/SKIP. Control-plane build и vet PASS; unit 3010 PASS,
+70 прежних условных SKIP. Одна raw-группа удалена без новых; 1394 raw / 1270
+retained / 124 unresolved, Go 21651/21651. Это synthetic evidence, не live
+readiness. E2E/browser/live/deploy/startup/QA не выполнялись.
 
 ## Общая подготовка warm evidence для двух тестов — 27.10.2026
 

@@ -44,15 +44,7 @@ func TestRuntimeTerminalStorageComponent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assistant, err := service.GetSystemAssistant(ctx, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	warm := worker
-	warm.Permission = "platform.runtime.warm.report"
-	if _, err := service.ReportWarmRuntime(ctx, warm, command.WarmRuntimeInput{WorkloadInstance: "catalog-observed-warm-fixture", RuntimeRevision: assistant.DesiredRuntimeRevision, State: "READY"}); err != nil {
-		t.Fatal(err)
-	}
+	reportReadyUsingWorkerFixture(t, ctx, service, owner, worker)
 	execute := func(kind command.Kind, actor value.Principal, key string, payload any) command.Result {
 		t.Helper()
 		result, err := service.Execute(ctx, command.Command{Kind: kind, Principal: actor, Mutation: value.Mutation{IdempotencyKey: "terminal-storage-" + key}, Payload: payload})

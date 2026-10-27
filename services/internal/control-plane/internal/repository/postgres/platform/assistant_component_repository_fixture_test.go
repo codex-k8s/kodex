@@ -95,3 +95,21 @@ func reportReadySystemAssistantFixture(t *testing.T, ctx context.Context, reposi
 	}
 	return system
 }
+
+// reportReadyUsingWorkerFixture derives the synthetic warm reporter from the supplied worker,
+// reports the current assistant revision and returns that same derived principal to the caller.
+// reportReadyUsingWorkerFixture получает synthetic warm reporter из переданного worker,
+// сообщает текущую ревизию помощника и возвращает того же производного principal вызывающему.
+func reportReadyUsingWorkerFixture(t *testing.T, ctx context.Context, service *platformservice.Service, owner, worker value.Principal) value.Principal {
+	t.Helper()
+	assistant, err := service.GetSystemAssistant(ctx, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	warm := worker
+	warm.Permission = "platform.runtime.warm.report"
+	if _, err := service.ReportWarmRuntime(ctx, warm, command.WarmRuntimeInput{WorkloadInstance: "catalog-observed-warm-fixture", RuntimeRevision: assistant.DesiredRuntimeRevision, State: "READY"}); err != nil {
+		t.Fatal(err)
+	}
+	return warm
+}

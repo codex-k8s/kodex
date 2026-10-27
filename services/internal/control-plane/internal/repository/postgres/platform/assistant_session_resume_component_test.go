@@ -40,15 +40,7 @@ func prepareAssistantSessionResumeRepository(t *testing.T, ctx context.Context, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	assistant, err := service.GetSystemAssistant(ctx, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	warm := worker
-	warm.Permission = "platform.runtime.warm.report"
-	if _, err := service.ReportWarmRuntime(ctx, warm, command.WarmRuntimeInput{WorkloadInstance: "catalog-observed-warm-fixture", RuntimeRevision: assistant.DesiredRuntimeRevision, State: "READY"}); err != nil {
-		t.Fatal(err)
-	}
+	warm := reportReadyUsingWorkerFixture(t, ctx, service, owner, worker)
 	return r, service, owner, worker, warm
 }
 
