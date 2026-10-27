@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { downloadBlob } from "@/shared/ui/download-blob";
 import { Download, RefreshCw } from "@lucide/vue";
 import { onBeforeUnmount, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -39,15 +40,7 @@ function date(value: string) {
 async function download(value: ArtifactRevision) {
   const body = await history.download(value);
   if (!body) return;
-  const url = URL.createObjectURL(body);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = value.fileName;
-  anchor.hidden = true;
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
+  downloadBlob(body, value.fileName);
 }
 </script>
 

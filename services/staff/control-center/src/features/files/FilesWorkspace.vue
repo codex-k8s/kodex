@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { downloadBlob } from "@/shared/ui/download-blob";
 import {
   Download,
   Eye,
@@ -1114,15 +1115,7 @@ async function download(artifact: Artifact): Promise<void> {
       artifact.ref,
       "DOWNLOAD",
     );
-    const url = URL.createObjectURL(body);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = artifact.fileName;
-    anchor.hidden = true;
-    document.body.append(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
+    downloadBlob(body, artifact.fileName);
   } catch (error) {
     operationProblem.value = asProblem(error);
   } finally {

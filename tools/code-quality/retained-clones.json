@@ -9168,6 +9168,38 @@
       "fragmentSHA256": "b74772cd5675cd7f17751694e96f2b04cd6a5a44cf46d58572ef28573d2b1adc",
       "count": 1,
       "reason": "После выноса заголовков совпадает ограниченное окно объявлений двух Vitest-модулей: отдельные hoisted SDK mocks, identity requestSignal и подключения разных вариантов синтетической mutation. Один тест проверяет create/update черновика с необязательной версией, второй — impact/publish с обязательным If-Match. Оставшиеся vi.mock декларации задают независимую область изоляции и закрытые наборы SDK методов; общая фикстура уже разделяет варианты заголовков. Дополнительная фабрика ради декларации перешла бы через hoisting boundary и скрыла различие мокируемых контрактов. Сохранена только точная пара путей, hash и count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/contextual_plans.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/contextual_plans.go",
+      "fragmentSHA256": "cc6f6ecf6ac6600d3534ded79515d4e4d20ad3b3d554638551e0416eec5b0409",
+      "count": 1,
+      "reason": "В одном цикле проверки плана сравниваются закрытые dispatch-ветви для разных видов операций: ревизии файла, подготовки соединения, рецепта role image и project grant. Каждая ветвь вызывает соответствующий snapshot matcher с собственными ресурсами, возвращает общую диагностическую строку и выполняет continue. Общая строка ошибки уже является константой; универсальная таблица callback ради обвязки скрыла бы связь конкретного operation type с matcher и порядок отбрасывания плана. Сохранён только точный внутрефайловый fragment, hash и count1; snapshot, owner и проверки других операций не исключены."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/assistant/components/AssistantProjectIntegrationGrantPlanForm.test.ts",
+      "secondPath": "services/staff/control-center/src/features/assistant/components/AssistantSystemIntegrationGrantPlanForm.test.ts",
+      "fragmentSHA256": "af51d080a8ea3aaf01a2732bf4608cae1ffcdf69e55b4a3685b68654e72ff118",
+      "count": 1,
+      "reason": "Две позитивные проверки относятся к SYSTEM и PROJECT grant-формам и отдельно подтверждают ownerValid, failed, valid, candidate и точный Agent readback. У них разные assistant refs, owner scope и PROJECT Profile readback; общий helper преобразования полей уже используется формами. Сведение проверок в универсальное утверждение скрыло бы проверяемые сценарии и их раздельные authority pins при минимальном уменьшении кода. Сохранена лишь точная пара тестовых фрагментов, hash и count1; позитивные и негативные сценарии остаются исполняемыми."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/assistant/components/AssistantProjectIntegrationGrantPlanForm.test.ts",
+      "secondPath": "services/staff/control-center/src/features/assistant/components/AssistantSystemIntegrationGrantPlanForm.test.ts",
+      "fragmentSHA256": "2272361937cfdc8039683132246894c3c08f129221b6a6598e65c3d98ec5a8a4",
+      "count": 1,
+      "reason": "Параметризованные негативные тесты SYSTEM и PROJECT независимо подменяют собственные SDK readback и проверяют fail-closed состояние при изменении version, organization, connection, digest и cursor; PROJECT дополнительно проверяет profile и project pins. Общая тестовая функция с параметрами разнородных API скрыла бы явную привязку каждого набора pins к соответствующему owner. Сохранена только точная пара путей, hash и count1; assertions, authority и прочие тестовые группы не исключены."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/integrations/ui/IntegrationGrantsPanel.clear.test.ts",
+      "secondPath": "services/staff/control-center/src/features/integrations/ui/IntegrationGrantsPanel.clear.test.ts",
+      "fragmentSHA256": "53adb13cec0d04ac9db0c5b09f924f0e53afee5c873fad131627bc3756062acd",
+      "count": 1,
+      "reason": "Две самостоятельные проверки в одном тестовом файле подтверждают каскадный сброс разных уровней выбора: новая версия project отзывает recipient и capability, а новая версия recipient отзывает capability и её страницы. Разные loaders, version pins, context keys и ожидаемые сохраняемые значения составляют предмет проверки. Универсализация через параметры стерла бы явно видимый порядок разных переходов и повышала риск непроверенного reset. Сохранён только точный внутрефайловый hash и count1; сами assertions и иные тесты не исключены."
     }
   ]
 }
