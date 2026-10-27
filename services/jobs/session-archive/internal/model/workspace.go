@@ -4,26 +4,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"regexp"
 	"strings"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
-// WorkspaceArchiveTask pins work-only archival separately from the legacy rollout receipt.
-// Target.Source is absent: a restore source is a separately pinned Checkpoint, never writable shared data.
-// WorkspaceArchiveTask закрепляет work-only archive отдельно от legacy rollout receipt.
-// Target.Source отсутствует: restore source — отдельный Checkpoint, не shared writable data.
-type WorkspaceArchiveTask struct {
-	Target        runtimecontract.WorkspaceStorageBinding     `json:"target"`
-	CheckpointRef string                                      `json:"checkpoint_ref"`
-	Quiescence    string                                      `json:"quiescence,omitempty"`
-	PVCUID        string                                      `json:"pvc_uid,omitempty"`
-	Policy        runtimecontract.RuntimeWorkspacePolicy      `json:"policy"`
-	ReconcileOnly bool                                        `json:"reconcile_only"`
-	Checkpoint    *runtimecontract.WorkspaceCheckpointBinding `json:"checkpoint,omitempty"`
-}
+// WorkspaceArchiveTask preserves the existing task JSON while sharing exact V2 metadata with its owner.
+// WorkspaceArchiveTask сохраняет существующий task JSON и общий exact V2 metadata с владельцем.
+type WorkspaceArchiveTask = runtimecontract.WorkspaceArchiveTask
 
 // errWorkspaceTaskInvalid is a fixed failure without task bytes, source paths or private scope metadata.
 // errWorkspaceTaskInvalid — фиксированный отказ без task bytes, source paths и private scope metadata.
@@ -49,10 +38,6 @@ func (result Result) WorkspaceCheckpoint(task Task) (runtimecontract.WorkspaceCh
 	}
 	return value, nil
 }
-
-// workspaceArchiveTaskRefPattern matches the existing owner-assigned task namespace without accepting paths.
-// workspaceArchiveTaskRefPattern соответствует existing owner-assigned task namespace, не принимая paths.
-var workspaceArchiveTaskRefPattern = regexp.MustCompile(`^sat_[A-Za-z0-9_-]{8,89}$`)
 
 // decodeWorkspaceAwareTask preserves legacy decoding while requiring canonical strict V2 task bytes.
 // Null, alias-case, unknown or duplicate Workspace keys cannot downgrade a new-profile task to legacy.
@@ -81,78 +66,23 @@ func decodeWorkspaceAwareTask(raw []byte) (Task, error) {
 	return Task(decoded), nil
 }
 
-// SnapshotIdentity derives the only permitted root-manifest identity from an exact positive writer record.
-// It is not owner authorization: the controller must separately bind the owned Pod/PVC and frozen task.
-// SnapshotIdentity выводит root-manifest identity только из exact positive writer record.
-// Это не owner authorization: controller отдельно связывает owned Pod/PVC и frozen task.
-func (value WorkspaceArchiveTask) SnapshotIdentity() (runtimecontract.WorkspaceArchiveManifest, error) {
-	joined, err := runtimecontract.DecodeWorkspaceQuiescence([]byte(value.Quiescence))
-	if err != nil || joined.Scope != value.Target.Scope || joined.WorkspaceRef != value.Target.WorkspaceRef ||
-		joined.Generation != value.Target.Generation || joined.Writer.PVCUID != value.PVCUID {
-		return runtimecontract.WorkspaceArchiveManifest{}, errWorkspaceTaskInvalid
-	}
-	writer, err := joined.Commitment()
-	identity := runtimecontract.WorkspaceArchiveManifest{Schema: runtimecontract.WorkspaceArchiveSchema,
-		Scope: joined.Scope, WorkspaceRef: joined.WorkspaceRef, Generation: joined.Generation,
-		CheckpointRef: value.CheckpointRef, Writer: writer}
-	if err != nil || identity.ValidateIdentity() != nil {
-		return runtimecontract.WorkspaceArchiveManifest{}, errWorkspaceTaskInvalid
-	}
-	return identity, nil
-}
-
-// validateWorkspace enforces the closed V2 task union without inventing Codex identity or fresh execution authority.
-// Repeated SNAPSHOT attempts have read-only reconciliation credit; missing objects remain unresolved.
-// validateWorkspace проверяет closed V2 task union без выдумывания Codex identity/fresh execution authority.
-// Повторные SNAPSHOT attempts имеют только read-only reconciliation; missing objects остаются unresolved.
+// validateWorkspace maps the actual worker task into the same closed contract used by its owner.
+// Legacy-only fields stay forbidden even when the shared work envelope is valid.
+// validateWorkspace переводит actual worker task в тот же закрытый контракт, что использует owner.
+// Legacy-only поля запрещены даже при валидном общем work envelope.
 func (task Task) validateWorkspace() error {
-	value := task.Workspace
-	if value == nil || !workspaceArchiveTaskRefPattern.MatchString(task.TaskRef) || task.Attempt < 1 || task.Attempt > 5 || task.ContentGeneration < 1 ||
-		!workspaceHexDigest(task.InputDigest) || value.Target.Profile != runtimecontract.WorkspaceStorageProfile || value.Target.Source != nil ||
-		value.Target.Scope.Validate() != nil || value.Target.Scope.OrganizationRef != task.OrganizationRef || value.Target.Scope.ProjectRef != task.ProjectRef ||
-		value.Target.Scope.SessionRef != task.SessionRef || value.Policy.Validate() != nil ||
-		value.Policy.MaximumWritableBytes > runtimecontract.RuntimeWorkspaceWritableBytes || value.Policy.MaximumFileCount > runtimecontract.RuntimeWorkspaceMaximumFiles ||
-		task.CodexSessionID != "" || task.SourceRelativePath != "" || task.SourceSHA256 != "" || task.SourceSizeBytes != 0 || task.Archive != nil {
+	if task.CodexSessionID != "" || task.SourceRelativePath != "" || task.SourceSHA256 != "" ||
+		task.SourceSizeBytes != 0 || task.Archive != nil {
 		return errWorkspaceTaskInvalid
 	}
-	if _, err := value.Target.GenerationSubPath(); err != nil {
-		return errWorkspaceTaskInvalid
+	work := runtimecontract.WorkspaceArchiveWork{
+		TaskRef: task.TaskRef, Kind: task.Kind, OrganizationRef: task.OrganizationRef, ProjectRef: task.ProjectRef, SessionRef: task.SessionRef,
+		RuntimeRevisionRef: task.RuntimeRevisionRef, RuntimeRevisionVersion: task.RuntimeRevisionVersion,
+		RuntimeRevisionDigest: task.RuntimeRevisionDigest, ContentGeneration: task.ContentGeneration,
+		PVCName: task.PVCName, InputDigest: task.InputDigest, TargetObjectKey: task.TargetObjectKey,
+		TargetObjectVersion: task.TargetObjectVersion, Attempt: task.Attempt, Workspace: task.Workspace,
 	}
-	pvc, err := runtimecontract.SessionPVCName(task.SessionRef)
-	if err != nil || task.PVCName != pvc {
-		return errWorkspaceTaskInvalid
-	}
-	switch task.Kind {
-	case "SNAPSHOT":
-		identity, err := value.SnapshotIdentity()
-		if err != nil || value.Checkpoint != nil || value.ReconcileOnly != (task.Attempt > 1) ||
-			task.TargetObjectKey != identity.ObjectPrefix()+"manifest.json" || task.TargetObjectVersion != "" ||
-			task.RuntimeRevisionRef != identity.Writer.RuntimeRevisionRef || task.RuntimeRevisionVersion != identity.Writer.RuntimeRevisionVersion ||
-			task.RuntimeRevisionDigest != identity.Writer.RuntimeRevisionDigest {
-			return errWorkspaceTaskInvalid
-		}
-	case "RESTORE", "DELETE_PVC", "DELETE_OBJECT":
-		if value.Checkpoint == nil || value.Checkpoint.Validate() != nil || value.CheckpointRef != value.Checkpoint.CheckpointRef || value.Quiescence != "" ||
-			value.Checkpoint.Scope.OrganizationRef != task.OrganizationRef || value.Checkpoint.Scope.ProjectRef != task.ProjectRef ||
-			value.Checkpoint.Scope.AgentRef != value.Target.Scope.AgentRef {
-			return errWorkspaceTaskInvalid
-		}
-		if task.Kind == "DELETE_OBJECT" && (task.TargetObjectKey != value.Checkpoint.Manifest.Key || task.TargetObjectVersion != value.Checkpoint.Manifest.Version) {
-			return errWorkspaceTaskInvalid
-		}
-		if task.Kind == "DELETE_PVC" && (value.PVCUID == "" || value.Checkpoint.Scope != value.Target.Scope ||
-			value.Checkpoint.WorkspaceRef != value.Target.WorkspaceRef || value.Checkpoint.Generation != value.Target.Generation) {
-			return errWorkspaceTaskInvalid
-		}
-		if task.Kind == "DELETE_OBJECT" && (value.Checkpoint.Scope != value.Target.Scope || value.Checkpoint.WorkspaceRef != value.Target.WorkspaceRef ||
-			value.Checkpoint.Generation != value.Target.Generation) {
-			return errWorkspaceTaskInvalid
-		}
-		if task.Kind == "RESTORE" && (value.ReconcileOnly != (task.Attempt > 1) || value.Checkpoint.Scope.SessionRef == task.SessionRef &&
-			value.Checkpoint.WorkspaceRef == value.Target.WorkspaceRef && value.Checkpoint.Generation >= value.Target.Generation) {
-			return errWorkspaceTaskInvalid
-		}
-	default:
+	if work.Validate() != nil {
 		return errWorkspaceTaskInvalid
 	}
 	return nil

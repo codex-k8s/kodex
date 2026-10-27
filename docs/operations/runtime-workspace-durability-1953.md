@@ -199,6 +199,22 @@ Context7 использован для проверки FSGroup semantics. Nativ
 
 ## Метаданные подтверждения checkpoint
 
+Owner выдаёт новую задачу как typed `WorkspaceArchiveWork`; transport переносит
+её в существующий Proto field22. Отсутствующий legacy discriminator сохраняет
+прежнюю проекцию. Явный workspace discriminator с nil/неверным типом либо
+невалидными metadata закрывает весь claim response с прежним безопасным
+Unavailable; задача не понижается до legacy. Lease остаётся отдельным
+назначенным owner transport field. CP и worker используют один общий union
+validator из runtimecontract; storage authority и lifecycle ему не принадлежат.
+
+`make test-session-workspace-archive-wire` передаёт exact Proto bytes настоящего
+CP caster независимому worker module через private bounded fixture. Проверяются
+четыре вида и snapshot/restore reconciliation; неизвестный enum, чужой scope
+и удалённый field22 отклоняются. Источник требований и actor — owner task
+contract; внешний endpoint не добавляется. Это proof доставки metadata;
+сохранённый coordinator, owner format2 completion и физические consumers
+проверяются отдельно до activation.
+
 | Граница | Привязка и поведение |
 | --- | --- |
 | Worker → termination result | Format2 добавляет digest canonical stream и число записей; exact root receipt остаётся ограниченным. Это не CLEAN-артефакт |

@@ -47,12 +47,7 @@ func castRuntimeWorkspace(result *cp.RuntimeRevisionSnapshot, values map[string]
 	}
 	result.WorkspaceStorage = &cp.RuntimeWorkspaceStorage{Profile: binding.Profile, Scope: castWorkspaceScope(binding.Scope),
 		WorkspaceRef: binding.WorkspaceRef, Generation: binding.Generation}
-	if source := binding.Source; source != nil {
-		result.WorkspaceStorage.Source = &cp.RuntimeWorkspaceCheckpoint{Scope: castWorkspaceScope(source.Scope), WorkspaceRef: source.WorkspaceRef,
-			Generation: source.Generation, CheckpointRef: source.CheckpointRef, TreeSha256: source.TreeSHA256, Bytes: source.Bytes, Entries: source.Entries,
-			Manifest: &cp.RuntimeWorkspaceObject{Key: source.Manifest.Key, Version: source.Manifest.Version, Etag: source.Manifest.ETag,
-				Digest: source.Manifest.Digest, SizeBytes: source.Manifest.SizeBytes}}
-	}
+	result.WorkspaceStorage.Source = castWorkspaceCheckpoint(binding.Source)
 	return true
 }
 
@@ -61,4 +56,16 @@ func castRuntimeWorkspace(result *cp.RuntimeRevisionSnapshot, values map[string]
 func castWorkspaceScope(value runtimecontract.WorkspaceStorageScope) *cp.RuntimeWorkspaceScope {
 	return &cp.RuntimeWorkspaceScope{OrganizationRef: value.OrganizationRef, ProjectRef: value.ProjectRef,
 		SessionRef: value.SessionRef, AgentRef: value.AgentRef}
+}
+
+// castWorkspaceCheckpoint projects a previously validated immutable checkpoint without changing its source scope.
+// castWorkspaceCheckpoint переносит проверенный immutable checkpoint, не меняя его source scope.
+func castWorkspaceCheckpoint(source *runtimecontract.WorkspaceCheckpointBinding) *cp.RuntimeWorkspaceCheckpoint {
+	if source == nil {
+		return nil
+	}
+	return &cp.RuntimeWorkspaceCheckpoint{Scope: castWorkspaceScope(source.Scope), WorkspaceRef: source.WorkspaceRef,
+		Generation: source.Generation, CheckpointRef: source.CheckpointRef, TreeSha256: source.TreeSHA256, Bytes: source.Bytes, Entries: source.Entries,
+		Manifest: &cp.RuntimeWorkspaceObject{Key: source.Manifest.Key, Version: source.Manifest.Version, Etag: source.Manifest.ETag,
+			Digest: source.Manifest.Digest, SizeBytes: source.Manifest.SizeBytes}}
 }

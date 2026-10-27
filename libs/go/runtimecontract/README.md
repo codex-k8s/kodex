@@ -13,6 +13,14 @@ updated: 2026-10-22
 tenant eligibility, PostgreSQL lifecycle и issuer credentials ему не принадлежат.
 Он не выполняет RPC, сетевые запросы, сканирование, подпись или изменение данных.
 
+`WorkspaceArchiveWork` и `WorkspaceArchiveTask` задают один закрытый V2 task
+для control-plane producer и session-archive consumer: exact scope/generation,
+writer quiescence, immutable checkpoint, лимиты и reconciliation-only attempts.
+Проверка не выдаёт lease, writer, CLEAN либо права на restore/delete. Owner
+сопоставляет metadata со своим сохранённым состоянием и полномочиями; worker
+отдельно проверяет PVC/Pod, файлы и exact object versions. Прежний task JSON
+сохраняет поля и отсутствие optional workspace; alias не меняет его tags.
+
 `ValidDNSLabel` задаёт общий лексический разбор одиночной метки имени ресурса:
 1..63 ASCII-байта, строчные буквы, цифры и внутренние дефисы без нормализации.
 DNS-запрос, существование объекта и его owner eligibility не проверяются.
