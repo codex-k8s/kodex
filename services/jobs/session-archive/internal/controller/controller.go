@@ -401,6 +401,10 @@ func (controller *Controller) deletePVC(ctx context.Context, task model.Task) (m
 // job builds one non-retrying restricted worker with task/storage mounts and restore-specific preparation.
 // RU: job создаёт один ограниченный worker без повторов с томами задания и хранилища и отдельной подготовкой восстановления.
 func (controller *Controller) job(name string, task model.Task, sourcePVCUID types.UID) *batchv1.Job {
+	if task.Workspace != nil && (task.Validate() != nil || task.Workspace.PVCUID == "" ||
+		string(sourcePVCUID) != task.Workspace.PVCUID || task.Kind != "SNAPSHOT" && task.Kind != "RESTORE") {
+		return nil
+	}
 	zero, deadline, ttl := int32(0), int64(controller.config.WorkerTimeout/time.Second), int32(300)
 	falseValue := false
 	volumes := []corev1.Volume{
@@ -438,7 +442,7 @@ func (controller *Controller) job(name string, task model.Task, sourcePVCUID typ
 				RestartPolicy: corev1.RestartPolicyNever, EnableServiceLinks: &falseValue, Containers: []corev1.Container{container}, Volumes: volumes,
 				SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: boolPtr(true), FSGroup: int64Ptr(29000), SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
 			}}}}
-	if task.Kind == "RESTORE" {
+	if task.Kind == "RESTORE" && task.Workspace == nil {
 		job.Spec.Template.Spec.InitContainers = []corev1.Container{{
 			Name: "restore-prepare", Image: controller.config.WorkerImage, ImagePullPolicy: corev1.PullIfNotPresent,
 			Args: []string{"prepare-restore"}, SecurityContext: restricted(10001),
@@ -453,7 +457,11 @@ func (controller *Controller) job(name string, task model.Task, sourcePVCUID typ
 		}}
 	}
 	if task.Workspace != nil {
-		controller.configureWorkspaceSnapshot(job, task)
+		if task.Kind == "SNAPSHOT" {
+			controller.configureWorkspaceSnapshot(job, task)
+		} else {
+			controller.configureWorkspaceRestore(job, task)
+		}
 	}
 	return job
 }

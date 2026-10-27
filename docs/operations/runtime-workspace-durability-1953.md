@@ -4,8 +4,8 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.8
-updated: 2026-10-27
+version: 1.0.9
+updated: 2026-10-28
 ---
 
 # Граница профиля
@@ -310,6 +310,24 @@ cancel сохраняются. Binary включён в штатный Dockerfil
 ещё не собран и не принят этим изменением. Worker dispatch поддерживает V2
 RESTORE с pinned PVC UID; controller admission остаётся закрытым до полного
 owner lifecycle и проверки production Job geometry.
+
+Renderer Job различает три закрытых режима. Наличие render не разрешает
+Execute: до owner restore admission все V2 RESTORE отклоняются до renew и
+обращения к Kubernetes. Worker input/grant не назначается renderer.
+
+| Режим | Data/metadata mounts и исполнители | Завершение/ошибка и авторитетный read path |
+| --- | --- | --- |
+| Fresh RESTORE | Trusted UID10001 initializer: frozen task и полный exact PVC только до запуска consumers. Отдельный UID10001 prepare видит только IPC tmp. Main UID10001: exact `.restore-tree`, generation parent, S3 credentials; provider UID10002: только stage, IPC, task. Primary GID29000, capabilities отсутствуют; FSGroup не назначается | FINISH ACK+EOF закрывает data FD. Controller дополнительно требует Pod Succeeded и ровно все expected main/helper/init status с successful terminal, без restart/duplicate/foreign. Source metadata совпадают с frozen checkpoint. Job/input сохраняются до owner ACK |
+| Reconciliation RESTORE | Один main UID10001; published `tree` и generation parent read-only. PVC volume также read-only; initializer/helper/socket отсутствуют. Fresh attempt/input digest не выдают новых data writes | Exact source и published tuple перепроверяются; любое mismatch закрыто отклоняется. Positive terminal main требуется до owner ACK. Нет нового event у renderer: API Pod/Job и immutable result |
+| SNAPSHOT | Прежние два read-only consumer и IPC prepare; общий main identity/resource setup совпадает с RESTORE | Result metadata остаются snapshot-specific. Positive terminal требуется для каждого physical container, включая init; Job counter или только reader exit недостаточны |
+
+Общий лимит fresh main/helper остаётся1CPU/256MiB; reconcile использует только
+main900m/224MiB. Generation initializer ограничен прежними200m/128MiB,
+IPC prepare100m/32MiB; init выполняются последовательно. Helper не получает
+S3 Secret, service-account token, provider auth либо generation parent. Main
+не получает альтернативный полный PVC mount. Любой drift фактического Pod
+от exact renderer закрывает result path. Это проверяется fake Kubernetes API
+и требует отдельного native Job/PVC acceptance перед включением admission.
 
 ## Метаданные подтверждения checkpoint
 

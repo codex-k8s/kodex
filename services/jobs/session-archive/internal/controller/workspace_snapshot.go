@@ -28,7 +28,14 @@ type RetainedAttempt struct {
 // validWorkspaceWorkerPod checks the actual consumer geometry against the configured producer, allowing API defaults only outside authority fields.
 // validWorkspaceWorkerPod сверяет actual consumer geometry с configured producer; API defaults допустимы только вне authority fields.
 func (controller *Controller) validWorkspaceWorkerPod(task model.Task, job *batchv1.Job, pod *corev1.Pod) bool {
-	expected := controller.job(job.Name, task, types.UID(task.Workspace.PVCUID)).Spec.Template.Spec
+	if task.Workspace == nil || job == nil || pod == nil {
+		return false
+	}
+	configured := controller.job(job.Name, task, types.UID(task.Workspace.PVCUID))
+	if configured == nil {
+		return false
+	}
+	expected := configured.Spec.Template.Spec
 	actual := pod.Spec
 	if actual.SecurityContext == nil || actual.SecurityContext.FSGroup != nil ||
 		!reflect.DeepEqual(actual.SecurityContext.SupplementalGroups, expected.SecurityContext.SupplementalGroups) ||
@@ -168,22 +175,13 @@ func (controller *Controller) configureWorkspaceSnapshot(job *batchv1.Job, task 
 	if err != nil || task.Kind != "SNAPSHOT" {
 		return
 	}
-	job.Spec.TTLSecondsAfterFinished = nil
-	pod := &job.Spec.Template.Spec
-	pod.SecurityContext.FSGroup = nil
-	pod.SecurityContext.SupplementalGroups = []int64{29000}
+	pod := configureWorkspaceArchiveMain(job)
 	for index := range pod.Volumes {
 		if pod.Volumes[index].Name == "session" {
 			pod.Volumes[index].PersistentVolumeClaim.ReadOnly = true
 		}
 	}
 	main := &pod.Containers[0]
-	main.SecurityContext = restricted(10001)
-	main.SecurityContext.RunAsGroup = int64Ptr(29000)
-	main.Resources = corev1.ResourceRequirements{
-		Requests: corev1.ResourceList{corev1.ResourceCPU: *quantity("90m"), corev1.ResourceMemory: *quantity("64Mi")},
-		Limits:   corev1.ResourceList{corev1.ResourceCPU: *quantity("900m"), corev1.ResourceMemory: *quantity("224Mi")},
-	}
 	workMount := corev1.VolumeMount{Name: "session", MountPath: archive.WorkspaceSnapshotRoot, SubPath: subpath, ReadOnly: true}
 	socketMount := corev1.VolumeMount{Name: "tmp", MountPath: archive.WorkspaceReaderSocketDirectory, SubPath: "workspace-reader"}
 	for index := range main.VolumeMounts {

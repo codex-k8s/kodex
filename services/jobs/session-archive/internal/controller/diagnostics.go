@@ -260,14 +260,7 @@ func (controller *Controller) readResult(ctx context.Context, task model.Task, j
 			return model.Result{}, errors.New("session archive worker status conflicts")
 		}
 		if task.Workspace != nil && result.Success {
-			_, checkpointErr := result.WorkspaceCheckpoint(task)
-			readerJoined := false
-			for _, peer := range pod.Status.ContainerStatuses {
-				if peer.Name == "workspace-reader" && peer.State.Terminated != nil && peer.State.Terminated.ExitCode == 0 {
-					readerJoined = true
-				}
-			}
-			if !readerJoined || termination.ExitCode != 0 || checkpointErr != nil {
+			if !confirmedWorkspaceWorkerResult(task, pod, result) {
 				return model.Result{}, errors.New("session workspace worker result is unconfirmed")
 			}
 		}

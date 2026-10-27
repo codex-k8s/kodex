@@ -39,6 +39,18 @@ func (result Result) WorkspaceCheckpoint(task Task) (runtimecontract.WorkspaceCh
 	return value, nil
 }
 
+// MatchesWorkspaceRestore accepts only the exact frozen source metadata, without granting owner acceptance or execution authority.
+// MatchesWorkspaceRestore принимает только exact frozen source metadata, не выдавая owner acceptance либо execution authority.
+func (result Result) MatchesWorkspaceRestore(task Task) bool {
+	if task.Workspace == nil || task.Kind != "RESTORE" || task.Validate() != nil || task.Workspace.PVCUID == "" {
+		return false
+	}
+	source := task.Workspace.Checkpoint
+	return result == (Result{Success: true, FormatVersion: 2, ObjectKey: source.Manifest.Key, ObjectVersion: source.Manifest.Version,
+		ObjectETag: source.Manifest.ETag, ObjectDigest: source.Manifest.Digest, ObjectSizeBytes: source.Manifest.SizeBytes,
+		SourceSHA256: source.TreeSHA256, SourceSizeBytes: source.Bytes, SourceEntryCount: source.Entries})
+}
+
 // decodeWorkspaceAwareTask preserves legacy decoding while requiring canonical strict V2 task bytes.
 // Null, alias-case, unknown or duplicate Workspace keys cannot downgrade a new-profile task to legacy.
 // decodeWorkspaceAwareTask сохраняет legacy decoding и требует canonical strict V2 task bytes.
