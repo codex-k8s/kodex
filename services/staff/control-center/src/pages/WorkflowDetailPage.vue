@@ -210,11 +210,23 @@ async function changeMode(event: Event): Promise<void> {
   form.executionMode = mode;
   if (mode !== "SERVER_DAG_V1") form.reworkPolicy = "";
 }
-async function changeReworkPolicy(value: "" | "OWNER_APPROVED_UPSTREAM_V1"): Promise<void> {
-  if (!modeEditable() || !serverMode.value || value === form.reworkPolicy) return;
-  const before = JSON.stringify(form), generation = loadGeneration;
+async function changeReworkPolicy(
+  value: "" | "OWNER_APPROVED_UPSTREAM_V1",
+): Promise<void> {
+  if (!modeEditable() || !serverMode.value || value === form.reworkPolicy)
+    return;
+  const before = JSON.stringify(form),
+    generation = loadGeneration;
   const context = `${projectRef.value}/${workflowRef.value}`;
-  if (!(await requestConfirmation(t("workflowResults.reworkChange"))) || !modeEditable() || !serverMode.value || loadGeneration !== generation || context !== `${projectRef.value}/${workflowRef.value}` || JSON.stringify(form) !== before) return;
+  if (
+    !(await requestConfirmation(t("workflowResults.reworkChange"))) ||
+    !modeEditable() ||
+    !serverMode.value ||
+    loadGeneration !== generation ||
+    context !== `${projectRef.value}/${workflowRef.value}` ||
+    JSON.stringify(form) !== before
+  )
+    return;
   form.reworkPolicy = value;
 }
 function changeResultStep(
@@ -433,7 +445,11 @@ async function save() {
   busy.value = true;
   problem.value = undefined;
   try {
-    await platform.saveWorkflow(projectRef.value, { ...form, reworkPolicy: form.reworkPolicy || undefined }, workflow.value);
+    await platform.saveWorkflow(
+      projectRef.value,
+      { ...form, reworkPolicy: form.reworkPolicy || undefined },
+      workflow.value,
+    );
     if (current === loadGeneration) await load();
   } catch (error) {
     problem.value = asProblem(error);
@@ -554,7 +570,12 @@ onBeforeUnmount(() => {
           >
             <legend class="sr-only">{{ $t("workflows.steps") }}</legend>
             <div class="form-grid">
-              <WorkflowReworkPolicyControl v-if="serverMode" :value="form.reworkPolicy" :disabled="!canEdit || busy" @change="changeReworkPolicy" />
+              <WorkflowReworkPolicyControl
+                v-if="serverMode"
+                :value="form.reworkPolicy"
+                :disabled="!canEdit || busy"
+                @change="changeReworkPolicy"
+              />
               <WorkflowOverviewFields
                 v-model:name="form.name"
                 v-model:purpose="form.purpose"
@@ -730,7 +751,9 @@ onBeforeUnmount(() => {
                     form.steps.slice(0, index).map((prior) => ({
                       key: prior.ref ?? '',
                       name: prior.name,
-                      artifactKeys: (prior.resultRequirements ?? []).filter((item) => item.kind === 'ARTIFACT').map((item) => item.key),
+                      artifactKeys: (prior.resultRequirements ?? [])
+                        .filter((item) => item.kind === 'ARTIFACT')
+                        .map((item) => item.key),
                     }))
                   "
                   :disabled="!canEdit || busy"

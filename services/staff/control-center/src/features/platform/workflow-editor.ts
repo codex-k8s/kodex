@@ -4,11 +4,12 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import type { PromptTarget } from "@/features/agents/detail/prompt-context";
 
-export type WorkflowEditorState = Omit<Required<WorkflowInput>, "reworkPolicy"> & { reworkPolicy: "" | "OWNER_APPROVED_UPSTREAM_V1" };
+export type WorkflowEditorState = Omit<
+  Required<WorkflowInput>,
+  "reworkPolicy"
+> & { reworkPolicy: "" | "OWNER_APPROVED_UPSTREAM_V1" };
 
-export function workflowEditorInput(
-  workflow: Workflow,
-): WorkflowEditorState {
+export function workflowEditorInput(workflow: Workflow): WorkflowEditorState {
   const body = workflow.draft ?? workflow;
   return {
     executionMode: body.executionMode ?? "MANAGER_DRIVEN",
