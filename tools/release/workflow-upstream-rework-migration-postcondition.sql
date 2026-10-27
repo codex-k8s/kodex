@@ -381,7 +381,11 @@ SELECT (base_proof.proof || jsonb_build_object(
  'upstreamConstraint',EXISTS(SELECT 1 FROM pg_constraint c WHERE c.conrelid='control_plane.owner_gates'::regclass
    AND c.conname='owner_gate_closure_kind' AND c.contype='c' AND c.convalidated AND c.conenforced AND NOT c.connoinherit
    AND regexp_replace(replace(pg_get_constraintdef(c.oid),'::text',''),'[[:space:]]','','g')=
-     $expected$CHECK(((closure_kind='')OR((closure_kind='SUPERSEDED')AND(state='CANCELLED')AND(decisionISNULL))))$expected$),
+     $expected$CHECK(((closure_kind='')OR((closure_kind='SUPERSEDED')AND(state='CANCELLED')AND(decisionISNULL))))$expected$)
+ AND EXISTS(SELECT 1 FROM pg_constraint c WHERE c.conrelid='control_plane.owner_gates'::regclass
+   AND c.conname='owner_gates_resolution_check' AND c.contype='c' AND c.convalidated AND c.conenforced AND NOT c.connoinherit
+   AND regexp_replace(replace(pg_get_constraintdef(c.oid),'::text',''),'[[:space:]]','','g')=
+     $expected$CHECK((((closure_kind='')AND(((state='OPEN')AND(decisionISNULL)AND(resolved_byISNULL)AND(resolved_atISNULL))OR((state='EXPIRED')AND(decisionISNULL)AND(resolved_byISNULL)AND(resolved_atISNOTNULL)AND(expires_atISNOTNULL)AND(integration_invocation_idISNULL))OR((state=ANY(ARRAY['APPROVED','REJECTED','CHANGES_REQUESTED','CANCELLED']))AND(decisionISNOTNULL)AND(resolved_byISNOTNULL)AND(resolved_atISNOTNULL))))OR((closure_kind='SUPERSEDED')AND(state='CANCELLED')AND(decisionISNULL)AND(resolved_byISNOTNULL)AND(resolved_atISNOTNULL)AND(integration_invocation_idISNULL))))$expected$),
  'upstreamIndex',EXISTS(SELECT 1 FROM pg_index i JOIN pg_class relation ON relation.oid=i.indexrelid
    JOIN pg_am am ON am.oid=relation.relam
    WHERE i.indexrelid=to_regclass('control_plane.workflow_rework_gate_pin') AND i.indrelid='control_plane.run_nodes'::regclass

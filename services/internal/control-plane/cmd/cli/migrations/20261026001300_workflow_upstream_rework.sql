@@ -18,6 +18,29 @@ ALTER TABLE control_plane.owner_gates ADD COLUMN closure_kind text NOT NULL DEFA
 ALTER TABLE control_plane.owner_gates ADD CONSTRAINT owner_gate_closure_kind CHECK (
     closure_kind='' OR (closure_kind='SUPERSEDED' AND state='CANCELLED' AND decision IS NULL));
 
+-- Системное закрытие устаревшего Gate не выдумывает решение человека.
+-- Прежние ветви сохраняются дословно и доступны только без нового discriminator.
+-- +goose StatementBegin
+DO $resolution$
+BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='control_plane.owner_gates'::regclass
+    AND conname='owner_gates_resolution_check' AND contype='c' AND convalidated AND conenforced AND NOT connoinherit
+    AND regexp_replace(replace(pg_get_constraintdef(oid),'::text',''),'[[:space:]]','','g')=
+    $expected$CHECK((((state='OPEN')AND(decisionISNULL)AND(resolved_byISNULL)AND(resolved_atISNULL))OR((state='EXPIRED')AND(decisionISNULL)AND(resolved_byISNULL)AND(resolved_atISNOTNULL)AND(expires_atISNOTNULL)AND(integration_invocation_idISNULL))OR((state=ANY(ARRAY['APPROVED','REJECTED','CHANGES_REQUESTED','CANCELLED']))AND(decisionISNOTNULL)AND(resolved_byISNOTNULL)AND(resolved_atISNOTNULL))))$expected$) THEN
+    RAISE EXCEPTION 'workflow upstream gate resolution preimage changed'; END IF;
+ ALTER TABLE control_plane.owner_gates DROP CONSTRAINT owner_gates_resolution_check;
+ ALTER TABLE control_plane.owner_gates ADD CONSTRAINT owner_gates_resolution_check CHECK (
+    (closure_kind='' AND (
+        (state='OPEN' AND decision IS NULL AND resolved_by IS NULL AND resolved_at IS NULL) OR
+        (state='EXPIRED' AND decision IS NULL AND resolved_by IS NULL AND resolved_at IS NOT NULL
+         AND expires_at IS NOT NULL AND integration_invocation_id IS NULL) OR
+        (state IN ('APPROVED','REJECTED','CHANGES_REQUESTED','CANCELLED')
+         AND decision IS NOT NULL AND resolved_by IS NOT NULL AND resolved_at IS NOT NULL))) OR
+    (closure_kind='SUPERSEDED' AND state='CANCELLED' AND decision IS NULL AND resolved_by IS NOT NULL
+        AND resolved_at IS NOT NULL AND integration_invocation_id IS NULL));
+END $resolution$;
+-- +goose StatementEnd
+
 -- Новый private FK допускается только как одно названное ребро поверх exact011.
 -- Fingerprint вычисляется из actual catalog; старое canonical тело подтверждает inverse proof.
 -- +goose StatementBegin

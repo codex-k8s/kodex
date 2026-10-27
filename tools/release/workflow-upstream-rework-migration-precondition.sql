@@ -336,6 +336,9 @@ SELECT (base_proof.proof || jsonb_build_object(
 , 'workflowUpstreamReworkAbsent',NOT EXISTS(SELECT 1 FROM pg_proc WHERE pronamespace='control_plane'::regnamespace AND proname IN ('workflow_rework_floors','workflow_effective_receipts','workflow_effective_inputs','workflow_rework_author','workflow_irreversible_effect_exists','workflow_upstream_plan_valid','guard_workflow_rework_node','guard_workflow_superseded_gate','workflow_reviewed_artifact_pins','workflow_input_artifact_pins','workflow_rework_artifact_pins','workflow_public_attempt_results'))
  AND NOT EXISTS(SELECT 1 FROM pg_attribute WHERE attnum>0 AND NOT attisdropped AND ((attrelid='control_plane.run_nodes'::regclass AND attname='workflow_rework_gate_id') OR (attrelid='control_plane.owner_gates'::regclass AND attname='closure_kind')))
  AND to_regclass('control_plane.workflow_rework_gate_pin') IS NULL
+ AND EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='control_plane.owner_gates'::regclass AND conname='owner_gates_resolution_check'
+   AND contype='c' AND convalidated AND conenforced AND NOT connoinherit
+   AND regexp_replace(replace(pg_get_constraintdef(oid),'::text',''),'[[:space:]]','','g')=$expected$CHECK((((state='OPEN')AND(decisionISNULL)AND(resolved_byISNULL)AND(resolved_atISNULL))OR((state='EXPIRED')AND(decisionISNULL)AND(resolved_byISNULL)AND(resolved_atISNOTNULL)AND(expires_atISNOTNULL)AND(integration_invocation_idISNULL))OR((state=ANY(ARRAY['APPROVED','REJECTED','CHANGES_REQUESTED','CANCELLED']))AND(decisionISNOTNULL)AND(resolved_byISNOTNULL)AND(resolved_atISNOTNULL))))$expected$)
  AND NOT EXISTS(SELECT 1 FROM pg_constraint WHERE connamespace='control_plane'::regnamespace AND conname IN ('workflow_rework_gate_fk','owner_gate_closure_kind'))
  AND NOT EXISTS(SELECT 1 FROM pg_trigger WHERE (tgrelid='control_plane.run_nodes'::regclass AND tgname='workflow_rework_node_guard') OR (tgrelid='control_plane.owner_gates'::regclass AND tgname='workflow_superseded_gate_guard'))
 ,

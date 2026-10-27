@@ -19,6 +19,7 @@ func TestWorkflowUpstreamReworkMigrationProofComponent(t *testing.T) {
 		{"search_path", "upstreamFunctions"}, {"changed_source", "upstreamFunctions"},
 		{"extra_overload", "upstreamExactFunctions"}, {"immediate_fk", "upstreamForeignKey"},
 		{"disabled_trigger", "upstreamTriggers"}, {"missing_constraint", "upstreamConstraint"},
+		{"legacy_resolution", "upstreamConstraint"},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
