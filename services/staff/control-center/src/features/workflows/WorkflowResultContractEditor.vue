@@ -56,7 +56,8 @@ function change(index: number, key: string, value: string): void {
         next.repository = "";
       if (["REVIEW", "QA", "INTEGRATION_RECEIPT", "DEPLOYMENT"].includes(value))
         next.subjectStepKey = "";
-      if (value === "QA" && props.evidenceProfile === "GITHUB_REVIEW_QA_V1") next.evidenceKey = "";
+      if (value === "QA" && props.evidenceProfile === "GITHUB_REVIEW_QA_V1")
+        next.evidenceKey = "";
       if (value === "INTEGRATION_RECEIPT")
         next.operation = "github.pull_request.merge";
       if (value === "DEPLOYMENT")
@@ -239,11 +240,35 @@ function selectDependencies(event: Event): void {
             )
           "
       /></label>
-      <label v-if="item.kind === 'QA' && evidenceProfile === 'GITHUB_REVIEW_QA_V1'" class="field">
+      <label
+        v-if="item.kind === 'QA' && evidenceProfile === 'GITHUB_REVIEW_QA_V1'"
+        class="field"
+      >
         <span>{{ $t("workflowResults.evidenceKey") }}</span>
-        <select :id="control(index, 'evidenceKey')" :name="control(index, 'evidenceKey')" :value="text(item.evidenceKey)" @change="change(index, 'evidenceKey', ($event.target as HTMLSelectElement).value)">
+        <select
+          :id="control(index, 'evidenceKey')"
+          :name="control(index, 'evidenceKey')"
+          :value="text(item.evidenceKey)"
+          @change="
+            change(
+              index,
+              'evidenceKey',
+              ($event.target as HTMLSelectElement).value,
+            )
+          "
+        >
           <option value="">{{ $t("workflowResults.missing") }}</option>
-          <option v-for="report in items?.filter((value) => value.kind === 'ARTIFACT' && value.mediaType === 'application/json')" :key="text(report.key)" :value="text(report.key)">{{ text(report.key) }}</option>
+          <option
+            v-for="report in items?.filter(
+              (value) =>
+                value.kind === 'ARTIFACT' &&
+                value.mediaType === 'application/json',
+            )"
+            :key="text(report.key)"
+            :value="text(report.key)"
+          >
+            {{ text(report.key) }}
+          </option>
         </select>
       </label>
       <button class="button" type="button" @click="remove(index)">

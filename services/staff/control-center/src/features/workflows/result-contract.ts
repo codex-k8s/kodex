@@ -92,7 +92,8 @@ export function validWorkflowRequirements(
       default:
         return false;
     }
-    if (item.kind === "QA" && profile === "GITHUB_REVIEW_QA_V1") keys.push("evidenceKey");
+    if (item.kind === "QA" && profile === "GITHUB_REVIEW_QA_V1")
+      keys.push("evidenceKey");
     if (
       Object.keys(item).some((key) => !keys.includes(key)) ||
       keys.some((key) => typeof item[key] !== "string" || item[key] === "")
@@ -117,7 +118,17 @@ export function validWorkflowRequirements(
       if (value.filter((item) => item.kind === kind).length > 1) return false;
     }
     for (const item of value) {
-      if (item.kind === "QA" && (!validWorkflowKey(item.evidenceKey) || !value.some((report) => report.key === item.evidenceKey && report.kind === "ARTIFACT" && report.mediaType === "application/json"))) return false;
+      if (
+        item.kind === "QA" &&
+        (!validWorkflowKey(item.evidenceKey) ||
+          !value.some(
+            (report) =>
+              report.key === item.evidenceKey &&
+              report.kind === "ARTIFACT" &&
+              report.mediaType === "application/json",
+          ))
+      )
+        return false;
     }
   }
   return true;
@@ -172,10 +183,19 @@ export function validWorkflowDAG(
       return false;
     if (profile === "GITHUB_REVIEW_QA_V1") {
       for (const requirement of step.resultRequirements) {
-        if ((requirement.kind === "REVIEW" || requirement.kind === "QA") && pullRequests.get(requirement.subjectStepKey ?? "") !== 1) return false;
+        if (
+          (requirement.kind === "REVIEW" || requirement.kind === "QA") &&
+          pullRequests.get(requirement.subjectStepKey ?? "") !== 1
+        )
+          return false;
       }
     }
-    pullRequests.set(key, step.resultRequirements.filter((requirement) => requirement.kind === "PULL_REQUEST").length);
+    pullRequests.set(
+      key,
+      step.resultRequirements.filter(
+        (requirement) => requirement.kind === "PULL_REQUEST",
+      ).length,
+    );
     for (const requirement of step.resultRequirements) {
       if (requirement.kind !== "REVIEW") continue;
       const subject = requirement.subjectStepKey ?? "";
@@ -229,16 +249,20 @@ export function workflowModeSteps<T extends object>(
 }
 
 // Выбор profile меняет только редактируемые QA selectors; published snapshots и evidence не меняются.
-export function workflowEvidenceProfileSteps<T extends object>(steps: T[], profile: unknown): T[] {
+export function workflowEvidenceProfileSteps<T extends object>(
+  steps: T[],
+  profile: unknown,
+): T[] {
   return steps.map((step) => {
     const next = { ...step } as Item;
-    if (Array.isArray(next.resultRequirements)) next.resultRequirements = next.resultRequirements.map((item: unknown) => {
-      if (!workflowItem(item)) return item;
-      const requirement = { ...item };
-      if (profile !== "GITHUB_REVIEW_QA_V1") delete requirement.evidenceKey;
-      else if (requirement.kind === "QA") requirement.evidenceKey ??= "";
-      return requirement;
-    });
+    if (Array.isArray(next.resultRequirements))
+      next.resultRequirements = next.resultRequirements.map((item: unknown) => {
+        if (!workflowItem(item)) return item;
+        const requirement = { ...item };
+        if (profile !== "GITHUB_REVIEW_QA_V1") delete requirement.evidenceKey;
+        else if (requirement.kind === "QA") requirement.evidenceKey ??= "";
+        return requirement;
+      });
     return next as T;
   });
 }

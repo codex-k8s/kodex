@@ -212,7 +212,9 @@ it("сохраняет явный evidence profile при clone и удаляе�
   native.executionMode = "SERVER_DAG_V1";
   native.resultEvidenceProfile = "GITHUB_REVIEW_QA_V1";
   delete native.draft;
-  expect(workflowEditorInput(native).resultEvidenceProfile).toBe("GITHUB_REVIEW_QA_V1");
+  expect(workflowEditorInput(native).resultEvidenceProfile).toBe(
+    "GITHUB_REVIEW_QA_V1",
+  );
   const stale = workflowEditorInput(native);
   Object.assign(stale, workflowEditorInput(workflow));
   expect(stale.resultEvidenceProfile).toBeUndefined();

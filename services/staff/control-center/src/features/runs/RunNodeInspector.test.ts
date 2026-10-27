@@ -124,7 +124,28 @@ describe("контекст исторического узла без сводк
 });
 
 it("показывает отрицательное native evidence отдельно от принятых результатов", async () => {
-  const html = await renderNode({...node, workflowResults: [{attempt:1,runRef:node.runRef,accepted:false,reason:"CHANGES_REQUIRED",results:[],evidence:[{key:"review",kind:"REVIEW",digest:"a".repeat(64),headSha:"b".repeat(40),receiptRef:"erc_12345678",verdict:"CHANGES_REQUIRED"}]}]});
+  const html = await renderNode({
+    ...node,
+    workflowResults: [
+      {
+        attempt: 1,
+        runRef: node.runRef,
+        accepted: false,
+        reason: "CHANGES_REQUIRED",
+        results: [],
+        evidence: [
+          {
+            key: "review",
+            kind: "REVIEW",
+            digest: "a".repeat(64),
+            headSha: "b".repeat(40),
+            receiptRef: "erc_12345678",
+            verdict: "CHANGES_REQUIRED",
+          },
+        ],
+      },
+    ],
+  });
   expect(html).toContain("Обязательные результаты не приняты");
   expect(html).toContain("доказательства отклонённой попытки");
   expect(html).toContain("erc_12345678");

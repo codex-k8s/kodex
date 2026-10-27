@@ -67,7 +67,8 @@ export function validateRunSnapshot(
   for (const node of graph.nodes) {
     if (!refPattern.test(node.ref) || nodes.has(node.ref))
       throw new Error("Invalid graph node identity");
-    if (!validWorkflowAttemptEvidence(node)) throw new Error("Invalid workflow attempt evidence");
+    if (!validWorkflowAttemptEvidence(node))
+      throw new Error("Invalid workflow attempt evidence");
     nodes.add(node.ref);
   }
   for (const edge of graph.edges) {

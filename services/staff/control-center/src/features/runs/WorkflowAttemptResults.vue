@@ -20,9 +20,16 @@ defineProps<{ attempts: WorkflowAttemptResult[] }>();
           )
         }}
       </p>
-      <p v-if="!attempt.accepted && attempt.evidence?.length">{{ $t("workflowResults.negativeEvidence") }}</p>
+      <p v-if="!attempt.accepted && attempt.evidence?.length">
+        {{ $t("workflowResults.negativeEvidence") }}
+      </p>
       <ul v-if="attempt.results.length || attempt.evidence?.length">
-        <li v-for="result in (attempt.accepted ? attempt.results : attempt.evidence ?? [])" :key="result.key">
+        <li
+          v-for="result in attempt.accepted
+            ? attempt.results
+            : (attempt.evidence ?? [])"
+          :key="result.key"
+        >
           {{ $t(`workflowResults.kinds.${result.kind}`) }}
           <span v-if="result.repository">
             · {{ result.repository
