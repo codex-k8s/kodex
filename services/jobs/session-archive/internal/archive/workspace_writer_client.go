@@ -93,6 +93,20 @@ func (writer *workspaceFDWriter) fail() error {
 	return errWorkspaceObjectUnconfirmed
 }
 
+// abort closes an uncommitted connection without sending a successful FINISH and releases all owned resources.
+// abort закрывает uncommitted connection без successful FINISH и освобождает owned resources.
+func (writer *workspaceFDWriter) abort() {
+	if writer == nil {
+		return
+	}
+	writer.mu.Lock()
+	if !writer.closed {
+		_ = writer.fail()
+	}
+	writer.mu.Unlock()
+	_ = writer.Close()
+}
+
 // command sends one sequential descriptor-free operation and requires its exact acknowledgement under request cancellation.
 // Its caller holds the mutex and separately checks whether a file completion is currently permitted.
 // command отправляет sequential descriptor-free operation и требует exact ACK с учётом request cancellation.

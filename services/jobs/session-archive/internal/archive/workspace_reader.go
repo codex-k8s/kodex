@@ -4,12 +4,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
-	"errors"
 	"io"
 	"net"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
 	"golang.org/x/sys/unix"
@@ -121,44 +119,11 @@ func NewWorkspaceFDReader(ctx context.Context, task model.Task, rootFD int) (*Wo
 // dialWorkspaceReader принимает только task-private socket fixed provider UID/work group.
 // Unknown permissions/peer drift закрываются сразу; только absent/startup ожидание повторяется до отмены.
 func dialWorkspaceReader(ctx context.Context) (*net.UnixConn, error) {
-	deadline, bounded := ctx.Deadline()
-	if !bounded {
+	connection, err := dialWorkspacePeer(ctx, WorkspaceReaderSocketDirectory, false, workspaceReaderRoleUID, workspaceReaderProviderUID, workspaceReaderGroup)
+	if err != nil {
 		return nil, errWorkspaceReaderInvalid
 	}
-	for ctx.Err() == nil {
-		var before unix.Stat_t
-		statErr := unix.Lstat(WorkspaceReaderSocketPath, &before)
-		if statErr == nil {
-			if before.Mode&unix.S_IFMT != unix.S_IFSOCK || before.Uid != workspaceReaderProviderUID || before.Gid != workspaceReaderGroup || before.Mode&0o7777 != 0o660 || before.Nlink != 1 {
-				return nil, errWorkspaceReaderInvalid
-			}
-			connection, err := (&net.Dialer{}).DialContext(ctx, "unixpacket", WorkspaceReaderSocketPath)
-			if err == nil {
-				peer, ok := connection.(*net.UnixConn)
-				var after unix.Stat_t
-				if !ok || unix.Lstat(WorkspaceReaderSocketPath, &after) != nil || before.Dev != after.Dev || before.Ino != after.Ino ||
-					after.Uid != before.Uid || after.Gid != before.Gid || after.Mode != before.Mode || after.Nlink != before.Nlink || peer.SetDeadline(deadline) != nil {
-					_ = connection.Close()
-					return nil, errWorkspaceReaderInvalid
-				}
-				return peer, nil
-			}
-			if !errors.Is(err, unix.ENOENT) && !errors.Is(err, unix.ECONNREFUSED) {
-				return nil, errWorkspaceReaderInvalid
-			}
-		} else if !errors.Is(statErr, unix.ENOENT) {
-			return nil, errWorkspaceReaderInvalid
-		}
-		timer := time.NewTimer(100 * time.Millisecond)
-		select {
-		case <-ctx.Done():
-			if !timer.Stop() {
-				<-timer.C
-			}
-		case <-timer.C:
-		}
-	}
-	return nil, errWorkspaceReaderInvalid
+	return connection, nil
 }
 
 // Open returns only one provider-owned regular-file FD equal to the independently observed tree entry.

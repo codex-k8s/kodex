@@ -5,17 +5,14 @@ import (
 	"context"
 	"errors"
 	"io"
-	"net"
 	"os"
 	"os/exec"
-	"path"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
-	"github.com/codex-k8s/kodex/libs/go/securefile"
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
 	"golang.org/x/sys/unix"
 )
@@ -23,10 +20,10 @@ import (
 const (
 	// workspaceWriterNativeTree is a disposable subpath mount of the exact unpublished generation, never a host worktree.
 	// workspaceWriterNativeTree — disposable subpath mount точного unpublished generation, не host worktree.
-	workspaceWriterNativeTree = "/workspace/restore-tree"
+	workspaceWriterNativeTree = WorkspaceRestoreRoot
 	// workspaceWriterNativeSocket is confined to the separate disposable shared IPC mount.
 	// workspaceWriterNativeSocket ограничен отдельным disposable shared IPC mount.
-	workspaceWriterNativeSocket = "/var/run/kodex/work-writer/writer.sock"
+	workspaceWriterNativeSocket = WorkspaceWriterSocketDirectory + "/writer.sock"
 )
 
 // workspaceWriterNativeCheckpoint reproduces identical immutable test work in both independently started UID consumers.
@@ -88,6 +85,24 @@ func TestWorkspaceWriterTwoUIDNative(t *testing.T) {
 		t.Fatal("open actual native restore tree")
 	}
 	defer unix.Close(root)
+	if mode == "reconcile" {
+		task, store := workspaceWriterNativeCheckpoint(t)
+		task.Attempt, task.Workspace.ReconcileOnly, task.InputDigest = 2, true, strings.Repeat("e", 64)
+		var before, after unix.Stat_t
+		if os.Geteuid() != 10001 || unix.Fstatat(root, "role.txt", &before, unix.AT_SYMLINK_NOFOLLOW) != nil {
+			t.Fatal("prepare readonly native reconciliation")
+		}
+		result, err := RestoreWorkspace(ctx, store, task)
+		if err != nil || !result.Success || result.SourceSizeBytes != 9 || result.SourceEntryCount != 3 ||
+			unix.Fstatat(root, "role.txt", &after, unix.AT_SYMLINK_NOFOLLOW) != nil || !workspaceTreeIdentityEqual(before, after) ||
+			store.puts != 2 || store.deletes != 0 {
+			t.Fatal("readonly native rejoin changed files or could not verify published data")
+		}
+		if _, err := os.Lstat(workspaceWriterNativeSocket); !errors.Is(err, os.ErrNotExist) {
+			t.Fatal("readonly native rejoin unexpectedly depended on a provider socket")
+		}
+		return
+	}
 	if mode == "verify" {
 		if os.Geteuid() != 10002 {
 			t.Fatal("native provider verifier identity changed")
@@ -109,23 +124,8 @@ func TestWorkspaceWriterTwoUIDNative(t *testing.T) {
 		return
 	}
 	task, store := workspaceWriterNativeCheckpoint(t)
-	identity := workspaceRestoreIdentity{actor: uint32(os.Geteuid()), role: 10001, provider: 10002, group: 29000}
 	if mode == "provider" {
-		if os.Geteuid() != 10002 {
-			t.Fatal("native writer provider identity changed")
-		}
-		listener, err := net.ListenUnix("unixpacket", &net.UnixAddr{Name: workspaceWriterNativeSocket, Net: "unixpacket"})
-		if err != nil {
-			t.Fatal("listen for native writable peer")
-		}
-		defer listener.Close()
-		if os.Chmod(workspaceWriterNativeSocket, 0o660) != nil {
-			t.Fatal("seal native writable socket permissions")
-		}
-		stop := watchWorkspaceReaderCancel(ctx, listener)
-		connection, err := listener.AcceptUnix()
-		stop()
-		if err != nil || serveWorkspaceWriterPeer(ctx, connection, root, task, identity) != nil {
+		if os.Geteuid() != 10002 || ServeWorkspaceWriter(ctx, task) != nil {
 			t.Fatal("fixed UID provider writable peer failed")
 		}
 		return
@@ -133,66 +133,23 @@ func TestWorkspaceWriterTwoUIDNative(t *testing.T) {
 	if mode != "main" || os.Geteuid() != 10001 {
 		t.Fatal("native main writer identity changed")
 	}
-	workspaceWriterNativeMain(t, ctx, root, task, store, identity)
+	workspaceWriterNativeMain(t, ctx, root, task, store)
 }
 
 // workspaceWriterNativeMain restores through the real writable peer and waits for its coordinator-confirmed process exit before publishing.
 // workspaceWriterNativeMain восстанавливает через actual writable peer и ждёт coordinator-confirmed process exit до publication.
-func workspaceWriterNativeMain(t *testing.T, ctx context.Context, root int, task model.Task, store *workspaceObjectFixture, identity workspaceRestoreIdentity) {
+func workspaceWriterNativeMain(t *testing.T, ctx context.Context, root int, task model.Task, store *workspaceObjectFixture) {
 	t.Helper()
-	subpath, err := task.Workspace.Target.GenerationSubPath()
-	if err != nil {
-		t.Fatal("resolve native selected generation")
-	}
-	parent, err := unix.Open("/restore/"+path.Dir(subpath), unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
-	if err != nil {
-		t.Fatal("open private native generation")
-	}
-	defer unix.Close(parent)
-	owner := securefile.OwnedRecordIdentity{UID: 10001, GID: 29000}
-	publication, err := newWorkspaceRestorePublication(ctx, parent, task, "pvc-fixture", owner)
-	if err != nil {
-		t.Fatal("open native publisher")
-	}
-	defer publication.Close()
-	var connection *net.UnixConn
-	for ctx.Err() == nil {
-		connection, err = net.DialUnix("unixpacket", nil, &net.UnixAddr{Name: workspaceWriterNativeSocket, Net: "unixpacket"})
-		if err == nil {
-			break
-		}
-		select {
-		case <-ctx.Done():
-		case <-time.After(10 * time.Millisecond):
-		}
-	}
-	if err != nil || connection == nil {
-		t.Fatal("connect native writer provider")
-	}
-	writer, err := newWorkspaceFDWriterPeer(ctx, connection, root, task, identity)
-	if err != nil {
-		t.Fatal("native authenticated writer handshake failed")
-	}
-	defer writer.Close()
-	files, err := newWorkspaceRestoreFilesystem(ctx, root, task.Workspace.Policy, identity)
-	if err != nil {
-		t.Fatal("open role-owned native writer")
-	}
-	defer files.Close()
 	joined := os.NewFile(3, "native-provider-process-join")
 	defer joined.Close()
-	result, err := restoreWorkspaceStream(ctx, store, task, workspaceRestoreDestination{role: files, provider: writer,
-		commit: func(ctx context.Context) error {
-			if writer.Close() != nil || files.Close() != nil {
-				return errWorkspaceObjectUnconfirmed
-			}
-			var result [1]byte
-			if _, err := io.ReadFull(joined, result[:]); err != nil || result[0] != 1 {
-				return errWorkspaceObjectUnconfirmed
-			}
-			return publication.Commit(ctx, root)
-		}})
-	if err != nil || !result.Success || publication.Rejoin(ctx) != nil || store.puts != 2 || store.deletes != 0 {
+	result, err := restoreWorkspace(ctx, store, task, func(ctx context.Context) error {
+		var result [1]byte
+		if _, err := io.ReadFull(joined, result[:]); err != nil || result[0] != 1 || ctx.Err() != nil {
+			return errWorkspaceObjectUnconfirmed
+		}
+		return nil
+	})
+	if err != nil || !result.Success || store.puts != 2 || store.deletes != 0 {
 		t.Fatal("native stream did not publish after provider process join")
 	}
 	var file unix.Stat_t

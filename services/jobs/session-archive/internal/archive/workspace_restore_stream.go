@@ -139,7 +139,5 @@ func restoreWorkspaceStream(ctx context.Context, store objectstorage.Store, task
 	if ctx.Err() != nil || target.commit(ctx) != nil {
 		return model.Result{}, errWorkspaceObjectUnconfirmed
 	}
-	return model.Result{Success: true, FormatVersion: 2, ObjectKey: checkpoint.Manifest.Key, ObjectVersion: checkpoint.Manifest.Version,
-		ObjectETag: checkpoint.Manifest.ETag, ObjectDigest: checkpoint.Manifest.Digest, ObjectSizeBytes: checkpoint.Manifest.SizeBytes,
-		SourceSHA256: canonical, SourceSizeBytes: size, SourceEntryCount: entries}, nil
+	return workspaceRestoreResult(*checkpoint), nil
 }

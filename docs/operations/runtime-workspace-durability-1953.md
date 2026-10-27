@@ -4,7 +4,7 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.6
+version: 1.0.7
 updated: 2026-10-27
 ---
 
@@ -217,7 +217,7 @@ mode в глобальном обратном порядке. В памяти о
 нет PUT/DELETE-компенсации и нет положительного restore result. Reconcile-only
 задача не получает write credit этого consumer. Отдельные source.json,
 atomic publication, peer authentication и owner ACK остаются обязательны.
-Пока writable peer, generation publisher и owner coordinator не подключены,
+До подключения полного controller и owner coordinator
 controller по-прежнему закрыто отклоняет V2 RESTORE до запуска effects.
 Наличие stream/filesystem adapter не является готовым восстановлением.
 
@@ -293,6 +293,23 @@ controller доказывает отдельно. Ошибка Close сохра�
 Unixpacket-контур под одним текущим UID проверяет transport/stream/publication,
 но не заменяет обязательный distinct UID10001/10002 native proof и production
 worker/controller wiring. Эти последние части ещё не активированы.
+
+Штатный `RestoreWorkspace` открывает fixed data/metadata mounts, проверяет
+соответствие их device/inode initialized stage и sealed intent, затем связывает
+source verification, ROLE/PROVIDER writers, mandatory FINISH/EOF и publication.
+При отказе peer прерывается без successful FINISH; data и metadata сохраняются.
+Reconcile-only использует только read-only published tree/metadata mounts,
+повторно проверяет exact source checkpoint и published tuple. Он не запускает
+initializer, не подключает writer socket и не получает права извлечения.
+
+`workspace-writer` имеет только closed modes `generation`, `prepare`, `write`.
+Первый вызывает trusted UID10001 initializer, второй готовит собственный IPC
+directory, третий запускает UID10002 peer. Helper читает только frozen task и
+прежний bounded timeout, без S3/API credentials; более ранний caller deadline и
+cancel сохраняются. Binary включён в штатный Dockerfile, но immutable image
+ещё не собран и не принят этим изменением. Worker dispatch поддерживает V2
+RESTORE с pinned PVC UID; controller admission остаётся закрытым до полного
+owner lifecycle и проверки production Job geometry.
 
 ## Метаданные подтверждения checkpoint
 

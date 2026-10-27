@@ -157,12 +157,22 @@ def main():
         else:
             test_name = 'TestWorkspaceWriterTwoUIDNative'
             consumer_arguments += [
-                '--mount', 'type=volume,source='+volume+',target=/restore',
-                '--mount', 'type=volume,source='+volume+',target=/workspace/restore-tree,volume-subpath='+RESTORE_FIXTURE_PARENT+'/.restore-tree',
+                '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/workspace-restore-generation,volume-subpath='+RESTORE_FIXTURE_PARENT,
+                '--mount', 'type=volume,source='+volume+',target=/workspace/work,volume-subpath='+RESTORE_FIXTURE_PARENT+'/.restore-tree',
                 '--tmpfs', '/var/run/kodex/work-writer:rw,nosuid,nodev,noexec,size=1m,uid=10001,gid=29000,mode=2770',
                 '--env', 'KODEX_WORKSPACE_WRITER_NATIVE=coordinator']
         outcomes.append(run_container(volume+'-consume', nonce, consumer_arguments,
             ['-test.run=^'+test_name+'$', '-test.timeout=30s', '-test.v'], identities))
+        if arguments.mode == 'restore':
+            outcomes.append(run_container(volume+'-reconcile', nonce,
+                ['--entrypoint=/qa-test',
+                 '--mount', 'type=bind,source='+str(binary)+',target=/qa-test,readonly',
+                 '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/workspace-restore-generation,volume-subpath='+RESTORE_FIXTURE_PARENT+',readonly',
+                 '--mount', 'type=volume,source='+volume+',target=/workspace/work,volume-subpath='+RESTORE_FIXTURE_PARENT+'/tree,readonly',
+                 '--tmpfs', '/tmp:rw,nosuid,nodev,noexec,size=4m,mode=1777',
+                 '--env', 'KODEX_WORKSPACE_WRITER_NATIVE=reconcile', '--env', 'GOMAXPROCS=1'],
+                ['-test.run=^'+test_name+'$', '-test.timeout=30s', '-test.v'],
+                identities, user='10001:29000'))
         result['status'] = 'PASS'
     except (RuntimeError, subprocess.TimeoutExpired) as error:
         result['reason'] = str(error) if isinstance(error, RuntimeError) else 'DOCKER_TIMEOUT'

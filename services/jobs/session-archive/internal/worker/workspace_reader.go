@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"time"
 
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/archive"
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
@@ -20,23 +19,15 @@ var errWorkspaceReaderWorker = errors.New("session workspace reader failed")
 // ReadWorkspace запускает только fixed-UID read-only descriptor peer без чтения storage credentials.
 // Deadline соответствует прежнему бюджету archive worker; root context принадлежит executable.
 func ReadWorkspace(lifecycle context.Context) error {
-	timeout := 8 * time.Minute
-	if raw := os.Getenv("SESSION_ARCHIVE_WORKER_TIMEOUT"); raw != "" {
-		value, err := time.ParseDuration(raw)
-		if err != nil || value < time.Minute || value > 15*time.Minute {
-			return errWorkspaceReaderWorker
-		}
-		timeout = value
-	}
-	if lifecycle == nil || lifecycle.Err() != nil || os.Geteuid() != 10002 {
+	ctx, cancel, err := workspaceHelperContext(lifecycle, 10002)
+	if err != nil {
 		return errWorkspaceReaderWorker
 	}
+	defer cancel()
 	task, err := model.DecodeFile("/var/run/config/kodex/session-archive/task.json")
 	if err != nil || task.Workspace == nil || task.Kind != "SNAPSHOT" {
 		return errWorkspaceReaderWorker
 	}
-	ctx, cancel := context.WithTimeout(lifecycle, timeout)
-	defer cancel()
 	if archive.ServeWorkspaceReader(ctx, task) != nil {
 		return errWorkspaceReaderWorker
 	}
@@ -48,6 +39,12 @@ func ReadWorkspace(lifecycle context.Context) error {
 // PrepareWorkspaceReader создаёт только новый task-private socket directory в bounded temporary volume.
 // Source mount отсутствует; существующий entry или чужая группа отклоняются без chmod чужих данных.
 func PrepareWorkspaceReader(ctx context.Context) error {
+	return prepareWorkspaceSocketDirectory(ctx, false)
+}
+
+// prepareWorkspaceSocketDirectory creates one closed protocol's own shared IPC directory and never repairs an existing entry.
+// prepareWorkspaceSocketDirectory создаёт shared IPC directory закрытого protocol и не исправляет existing entry.
+func prepareWorkspaceSocketDirectory(ctx context.Context, writable bool) error {
 	if ctx == nil || ctx.Err() != nil || os.Geteuid() != 10001 || os.Getegid() != 29000 {
 		return errWorkspaceReaderWorker
 	}
@@ -56,10 +53,14 @@ func PrepareWorkspaceReader(ctx context.Context) error {
 		return errWorkspaceReaderWorker
 	}
 	defer unix.Close(parent)
-	if unix.Mkdirat(parent, "workspace-reader", 0o770) != nil {
+	name := "workspace-reader"
+	if writable {
+		name = "workspace-writer"
+	}
+	if unix.Mkdirat(parent, name, 0o770) != nil {
 		return errWorkspaceReaderWorker
 	}
-	child, err := unix.Openat2(parent, "workspace-reader", &unix.OpenHow{Flags: unix.O_RDONLY | unix.O_DIRECTORY | unix.O_CLOEXEC,
+	child, err := unix.Openat2(parent, name, &unix.OpenHow{Flags: unix.O_RDONLY | unix.O_DIRECTORY | unix.O_CLOEXEC,
 		Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_SYMLINKS | unix.RESOLVE_NO_XDEV})
 	if err != nil {
 		return errWorkspaceReaderWorker
