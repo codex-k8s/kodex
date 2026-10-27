@@ -1,12 +1,8 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-import type {
-  Agent,
-  AgentPage,
-  Project,
-  ProjectPage,
-  PromptTemplatePreview,
-} from "../src/shared/api/generated/openapi/types.gen";
+import type { PromptTemplatePreview } from "../src/shared/api/generated/openapi/types.gen";
+import { exactAgent } from "./fixtures/exact-agent";
+import { exactProject } from "./fixtures/exact-project";
 import { authenticateOwner } from "./auth-flow";
 import { loadE2EAuthEnvironment } from "./environment";
 import { gotoWithRetry } from "./helpers";
@@ -47,8 +43,13 @@ test("Материализованный preview показывает pin и б�
     },
     { mode: "local" },
   );
-  const project = await exactProject(page);
-  const agent = await exactAgent(page, project.ref);
+  const project = await exactProject(page, projectName);
+  const agent = await exactAgent(
+    page,
+    project.ref,
+    agentName,
+    "Prompt preview agent fixture is not unique",
+  );
   await gotoWithRetry(
     page,
     `/projects/${encodeURIComponent(project.ref)}/agents/${encodeURIComponent(agent.ref)}`,
@@ -206,8 +207,13 @@ test("MVP-UI-35 не дублирует пользовательский slot и
     },
     { mode: "local" },
   );
-  const project = await exactProject(page);
-  const agent = await exactAgent(page, project.ref);
+  const project = await exactProject(page, projectName);
+  const agent = await exactAgent(
+    page,
+    project.ref,
+    agentName,
+    "Prompt preview agent fixture is not unique",
+  );
   await gotoWithRetry(
     page,
     `/projects/${encodeURIComponent(project.ref)}/agents/${encodeURIComponent(agent.ref)}`,
@@ -296,42 +302,5 @@ function isPromptPreviewResponse(response: {
   return (
     response.request().method() === "POST" &&
     new URL(response.url()).pathname === "/api/v1/prompt-templates/preview"
-  );
-}
-
-async function exactProject(page: Page): Promise<Project> {
-  return await page.evaluate(async (name) => {
-    const response = await fetch(
-      `/api/v1/projects?query=${encodeURIComponent(name)}&pageSize=30`,
-    );
-    if (!response.ok) throw new Error("Acceptance project read failed");
-    const result = (await response.json()) as ProjectPage;
-    const matches = result.items.filter((item) => item.name === name);
-    if (matches.length !== 1)
-      throw new Error("Acceptance project is not unique");
-    return matches[0] as Project;
-  }, projectName);
-}
-
-async function exactAgent(page: Page, projectRef: string): Promise<Agent> {
-  return await page.evaluate(
-    async ({ name, project }) => {
-      const query = new URLSearchParams({
-        projectRef: project,
-        query: name,
-        pageSize: "40",
-      });
-      const response = await fetch(`/api/v1/agents?${query}`);
-      if (!response.ok) throw new Error("Agent catalog read failed");
-      const result = (await response.json()) as AgentPage;
-      const matches = result.items.filter(
-        (item) =>
-          item.projectRef === project && !item.system && item.name === name,
-      );
-      if (matches.length !== 1)
-        throw new Error("Prompt preview agent fixture is not unique");
-      return matches[0] as Agent;
-    },
-    { name: agentName, project: projectRef },
   );
 }

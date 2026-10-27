@@ -3,11 +3,10 @@ import { fileURLToPath } from "node:url";
 
 import type {
   Agent,
-  AgentPage,
   Problem,
-  Project,
-  ProjectPage,
 } from "../src/shared/api/generated/openapi/types.gen";
+import { exactAgent } from "./fixtures/exact-agent";
+import { exactProject } from "./fixtures/exact-project";
 import { authenticateOwner } from "./auth-flow";
 import { loadE2EAuthEnvironment } from "./environment";
 import { gotoWithRetry } from "./helpers";
@@ -41,8 +40,13 @@ test("Avatar отклоняет тип, загружается, заменяет
     },
     { mode: "local" },
   );
-  const project = await exactProject(page);
-  let agent = await exactAgent(page, project.ref);
+  const project = await exactProject(page, projectName);
+  let agent = await exactAgent(
+    page,
+    project.ref,
+    agentName,
+    "Avatar agent fixture is not unique",
+  );
   await gotoWithRetry(
     page,
     `/projects/${encodeURIComponent(project.ref)}/agents/${encodeURIComponent(agent.ref)}`,
@@ -120,43 +124,6 @@ test("Avatar отклоняет тип, загружается, заменяет
     page.getByText("Используются инициалы", { exact: true }),
   ).toBeVisible();
 });
-
-async function exactProject(page: Page): Promise<Project> {
-  return await page.evaluate(async (name) => {
-    const response = await fetch(
-      `/api/v1/projects?query=${encodeURIComponent(name)}&pageSize=30`,
-    );
-    if (!response.ok) throw new Error("Acceptance project read failed");
-    const result = (await response.json()) as ProjectPage;
-    const matches = result.items.filter((item) => item.name === name);
-    if (matches.length !== 1)
-      throw new Error("Acceptance project is not unique");
-    return matches[0] as Project;
-  }, projectName);
-}
-
-async function exactAgent(page: Page, projectRef: string): Promise<Agent> {
-  return await page.evaluate(
-    async ({ name, project }) => {
-      const query = new URLSearchParams({
-        projectRef: project,
-        query: name,
-        pageSize: "40",
-      });
-      const response = await fetch(`/api/v1/agents?${query}`);
-      if (!response.ok) throw new Error("Agent catalog read failed");
-      const result = (await response.json()) as AgentPage;
-      const matches = result.items.filter(
-        (item) =>
-          item.projectRef === project && !item.system && item.name === name,
-      );
-      if (matches.length !== 1)
-        throw new Error("Avatar agent fixture is not unique");
-      return matches[0] as Agent;
-    },
-    { name: agentName, project: projectRef },
-  );
-}
 
 async function uploadAvatar(
   page: Page,

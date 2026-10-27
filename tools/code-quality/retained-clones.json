@@ -9040,6 +9040,14 @@
       "fragmentSHA256": "8bf991de04a6c997f342480a319fbc51cd0014aa5cfdf9895671570282161391",
       "count": 1,
       "reason": "После общего lockVersionedPlatformMembership остаются специализированные ChangePlatformMembership и RemovePlatformMembership с различными правилами self/owner, входами protectLastOwner, update/deactivate SQL и VersionMismatch/Conflict при отсутствии строки. Объединение ветвей скроет эти политики и переходы. Решение ограничено точной парой и hash, не исключает helper, транзакцию или другие команды."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/e2e/fixtures/exact-agent.ts",
+      "secondPath": "services/staff/control-center/e2e/local-skill-lifecycle.ts",
+      "fragmentSHA256": "c4c0136dc79d3e9286cd03603ef1b28938e2f190673de342175eb4250a2e7010",
+      "count": 1,
+      "reason": "Общий exactAgent требует ровно одного несистемного сотрудника и отклоняет отсутствие; локальный Skill допускает отсутствие, затем отдельно создаёт сотрудника и проверяет его readback, но отклоняет дубликаты. Эти сценарии имеют разные правила отсутствия, сообщения и побочные действия; общий fetch с переключаемой политикой скрыл бы условия создания. Решение относится только к точной паре и hash, не исключает другие проверки или создание."
     }
   ]
 }
