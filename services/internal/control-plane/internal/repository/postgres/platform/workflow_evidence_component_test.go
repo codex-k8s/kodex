@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"reflect"
 	"strings"
 	"testing"
@@ -53,9 +54,17 @@ func (fixture *workflowEvidenceNativeFixture) key(prefix string) string {
 // claim требует exact published employee и fresh actual execution, не fixture row.
 func (fixture *workflowEvidenceNativeFixture) claim(agent string) map[string]any {
 	fixture.f.t.Helper()
+	previous := slog.Default()
+	trace := &workflowEvidenceClaimDiagnostics{}
+	slog.SetDefault(slog.New(trace))
+	defer slog.SetDefault(previous)
 	items := fixture.f.claims(fixture.key("claim"))
 	if len(items) != 1 || stringMap(items[0], "agentRef") != agent {
-		fixture.f.t.Fatal("exact evidence employee was not claimable")
+		actual := "NONE"
+		if len(items) > 0 && workflowLaunchRefPattern.MatchString(stringMap(items[0], "agentRef")) {
+			actual = stringMap(items[0], "agentRef")
+		}
+		fixture.f.t.Fatalf("exact evidence employee was not claimable: count=%d expected=%s actual=%s diagnostic=%s", len(items), agent, actual, trace.summary())
 	}
 	return items[0]
 }
@@ -150,7 +159,7 @@ func (fixture *workflowEvidenceNativeFixture) stopPendingReview(mode string, lea
 		work = fixture.claimEffect(invocation)
 	}
 	fixture.complete(lease, "Native COMMENT outcome is unresolved; do not fabricate a receipt.")
-	if len(f.read().journals["check"]) != 0 {
+	if len(fixture.history(lease)) != 0 {
 		f.t.Fatal("pending outcome produced business acceptance")
 	}
 	if mode == "review-unknown" {
@@ -266,10 +275,10 @@ func runWorkflowEvidenceNative(t *testing.T, mode string) {
 	isQA := strings.HasPrefix(mode, "qa-")
 	modelFirst := strings.Contains(mode, "model-first")
 	retention := strings.Contains(mode, "retention")
-	issue := strings.Contains(mode, "issue")
+	issue := strings.HasPrefix(mode, "qa-issue-")
 	check := entity.WorkflowStep{Key: "check", Position: 2, Name: "Проверка", Instructions: "Проверить exact PR/head; сохранить фактические результаты.", ExpectedResult: "Проверяемые доказательства", AgentRef: reviewer.Ref, TimeoutSeconds: 180, DependsOn: []string{"author"}, RequiredCapabilityKeys: []string{runtimecontract.ArtifactCapability, "github.pull_request.review.create", "github.issue.create"}, ResultRequirements: []entity.WorkflowResultRequirement{{Key: "review", Kind: "REVIEW", SubjectStepKey: "author"}}}
 	if isQA {
-		check.ResultRequirements = []entity.WorkflowResultRequirement{{Key: "log", Kind: "ARTIFACT", FileName: "test-output.txt", MediaType: "text/markdown"}, {Key: "report", Kind: "ARTIFACT", FileName: "qa-report.json", MediaType: "application/json"}, {Key: "qa", Kind: "QA", SubjectStepKey: "author", EvidenceKey: "report"}}
+		check.ResultRequirements = workflowEvidenceQARequirements(retention)
 	}
 	draft := entity.WorkflowVersion{ExecutionMode: "SERVER_DAG_V1", ResultEvidenceProfile: workflowservice.GitHubReviewQAV1, Name: "Native evidence", Purpose: "Проверить owner pins, не external delivery.", CoordinatorAgentRef: manager.Ref, Concurrency: 2, TimeoutSeconds: 240, ResultSchema: map[string]any{}, Steps: []entity.WorkflowStep{{Key: "author", Position: 1, Name: "PR", Instructions: "Создать точный PR.", AgentRef: author.Ref, TimeoutSeconds: 120, RequiredCapabilityKeys: []string{"github.pull_request.create"}, ResultRequirements: []entity.WorkflowResultRequirement{{Key: "pr", Kind: "PULL_REQUEST", Repository: "fixture/repository"}}}, check}}
 	if mixed {
@@ -280,9 +289,6 @@ func runWorkflowEvidenceNative(t *testing.T, mode string) {
 	}
 	if strings.HasSuffix(mode, "unknown-expiry") {
 		draft.TimeoutSeconds, draft.Steps[0].TimeoutSeconds, draft.Steps[1].TimeoutSeconds = 45, 40, 40
-	}
-	if retention {
-		draft.Steps[1].ResultRequirements = append(draft.Steps[1].ResultRequirements, entity.WorkflowResultRequirement{Key: "unrelated", Kind: "ARTIFACT", FileName: "unrelated-output.txt", MediaType: "text/markdown"})
 	}
 	workflow := f.execute(command.CreateWorkflow, "evidence-create", nil, command.WorkflowInput{ProjectRef: project.Ref, Name: draft.Name, Purpose: draft.Purpose, CoordinatorAgentRef: manager.Ref, Draft: &draft}).Workflow
 	workflow = f.execute(command.ValidateWorkflow, "evidence-validate", &workflow.Version, command.WorkflowInput{Ref: workflow.Ref}).Workflow
@@ -338,7 +344,7 @@ func runWorkflowEvidenceNative(t *testing.T, mode string) {
 		}
 		if modelFirst {
 			fixture.complete(lease, "The COMMENT is still pending; this is not a final evidence claim.")
-			if len(f.read().journals["check"]) != 0 {
+			if len(fixture.history(lease)) != 0 {
 				t.Fatal("pending COMMENT accepted early")
 			}
 		}
@@ -367,10 +373,9 @@ func runWorkflowEvidenceNative(t *testing.T, mode string) {
 		}
 	} else {
 		logProgress := `{"schema":"kodex.workflow-capture-progress.v1","phase":"CAPTURE_PROGRESS","cause":"ARTIFACTS_FOR_CONTINUATION","artifactKeys":["log"]}`
-		logFiles := []command.CompletedArtifact{workflowCaptureProgressArtifact("test-output.txt", []byte("Fixture-reported command output; no real business tests are claimed.\n"))}
+		logFiles := workflowEvidenceQALogFiles(retention)
 		if retention {
 			logProgress = `{"schema":"kodex.workflow-capture-progress.v1","phase":"CAPTURE_PROGRESS","cause":"ARTIFACTS_FOR_CONTINUATION","artifactKeys":["log","unrelated"]}`
-			logFiles = append(logFiles, workflowCaptureProgressArtifact("unrelated-output.txt", []byte("Captured by the same employee, absent from the QA report log selectors.")))
 		}
 		logResult := fixture.complete(lease, logProgress, logFiles...)
 		var log, unrelated entity.Artifact
@@ -396,6 +401,12 @@ func runWorkflowEvidenceNative(t *testing.T, mode string) {
 			}
 		} else {
 			log = fixture.captured(logResult)
+		}
+		if log.FileName != "test-output.txt" || log.MediaType != "text/plain" {
+			t.Fatal("captured QA log differs from the published canonical MIME")
+		}
+		if history := fixture.history(lease); len(history) != 0 {
+			t.Fatalf("capture progress unexpectedly appended business history: count=%d accepted=%t", len(history), history[len(history)-1].Accepted)
 		}
 		lease = fixture.claim(reviewer.Ref)
 		report := workflowservice.QAReport{Schema: "kodex.workflow-qa-report.v1", Repository: "fixture/repository", Number: 7, HeadSHA: sha, Verdict: "PASS", Tests: []workflowservice.QATest{{Name: "Native report fixture", Command: "fixture-output-only", ExitCode: 0, Log: evidenceCapturedSource(log)}}, Findings: []workflowservice.QAFinding{}}
@@ -430,7 +441,7 @@ func runWorkflowEvidenceNative(t *testing.T, mode string) {
 			}
 			if modelFirst {
 				fixture.complete(lease, "The Issue is still pending; no fabricated receipt.")
-				if len(f.read().journals["check"]) != 0 {
+				if len(fixture.history(lease)) != 0 {
 					t.Fatal("pending Issue accepted early")
 				}
 			}
