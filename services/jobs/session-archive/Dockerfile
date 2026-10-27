@@ -36,8 +36,11 @@ RUN test "$(go env GOVERSION)" = "go1.26.6"
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -ldflags="-s -w -X main.version=${VERSION}" \
     -o /out/session-archive ./cmd/session-archive
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
+    -ldflags="-s -w" -o /out/workspace-reader ./cmd/workspace-reader
 
 FROM gcr.io/distroless/static-debian12:nonroot@sha256:f5b485ea962d9bd1186b2f6b3a061191539b905b82ec395de78cbfae51f20e35 AS runtime
 COPY --from=build --chmod=0555 /out/session-archive /usr/local/bin/session-archive
+COPY --from=build --chmod=0555 /out/workspace-reader /usr/local/bin/workspace-reader
 USER 10001:10001
 ENTRYPOINT ["/usr/local/bin/session-archive"]

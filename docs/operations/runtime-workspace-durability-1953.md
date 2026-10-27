@@ -85,7 +85,11 @@ UID10001 читает собственные mode0600 files, paired read-only re
 socket с kernel peer UID и повторным inode/owner check. Ни root/DAC capability,
 ни chmod исходника, ни общий cross-session FD broker не допускаются. Reader не
 получает object-storage credentials, API token, provider auth или session root;
-прежний общий CPU/RAM budget разделяется между consumers. Неизвестное владение,
+прежний общий CPU/RAM budget разделяется между consumers: основной архиватор
+224MiB/900m, минимальный `workspace-reader`32MiB/100m. Reader executable
+не импортирует Kubernetes controller. Подготовка socket directory выполняется
+UID10001 с primary GID29000 и проверкой mode2770, без CAP_FSETID; reader
+работает UID10002 без capabilities. Неизвестное владение,
 недоступный private directory или изменённый descriptor оставляют PVC в BLOCKED.
 Canonical stream сохраняет закрытый logical owner ROLE/PROVIDER в Uname,
 а числовые UID/GID обнуляет. Restore сопоставляет ROLE с UID10001, PROVIDER
@@ -189,3 +193,23 @@ crash между полным mount.json и отсутствующим writer.js
 дописать ACK только при неизменном protected proof и пустом либо точно
 восстановленном tree. Частичные/чужие records и изменённое дерево сохраняются
 в закрытом отказе; существующие bytes не удаляются ради повторной попытки.
+
+## Локальная проверка двух UID
+
+`tools/dev/workspace-reader-native-test.py --binary <absolute-test-binary> --sha256 <sha256>`
+принимает зафиксированный статический test binary пакета `internal/archive`,
+собранный через `CGO_ENABLED=0 go test -c`. Проверка требует локального Linux
+Docker и уже загруженного pinned image; загрузки образа и внешней сети нет.
+Контейнер подготовки создаёт только private fixture, после чего отдельный
+контейнер монтирует source volume read-only. Настоящие consumer UID10001/10002
+теряют все capabilities; проверяются private mode0600, EROFS, отказ прямого
+чтения provider bytes, точный stream и завершение peer. Контейнеры удаляются
+по сохранённым exact IDs после остановки; volume — только после readback
+отсутствия контейнеров и проверки собственной метки. Секреты и рабочее дерево
+репозитория не монтируются. Это proof файлового механизма, а не rollout,
+полный owner lifecycle или приёмка сотрудником платформы.
+
+При `chmod` SGID может молча сбрасываться, если процесс не входит в группу
+каталога и не имеет CAP_FSETID. Подготовка использует требуемую группу и
+проверяет фактический режим, не расширяя capabilities:
+[Linux chmod(2)](https://man7.org/linux/man-pages/man2/chmod.2.html).
