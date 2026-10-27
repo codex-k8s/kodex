@@ -9152,6 +9152,22 @@
       "fragmentSHA256": "1fdc525e067ae788360b4b39627de69dbd530cec42f4e6ec2c5ecad6f5789a91",
       "count": 1,
       "reason": "Два watch в одной форме независимо загружают agent и runtime environment по собственным refs с отдельными AbortController и состояниями ошибки. Environment дополнительно проверяет точные organization, project и ref readback; agent имеет отдельный SDK endpoint и участвует в другой части eligibility. Объединение в универсальный callback watcher ради сходной инфраструктуры создало бы конфигурацию двух типов, скрыло бы несовпадающую проверку identity и усложнило бы независимую отмену запросов. Сохранена только точная пара внутри файла, hash и count1; другие lifecycle и authority проверки не исключены."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/managed-configurations/RoleImageImpactSelection.test.ts",
+      "secondPath": "services/staff/control-center/src/features/runtime/PublicationImpactSelection.test.ts",
+      "fragmentSHA256": "0187ef9e2919a5a701bc05b97147deb2106a88c2f59286be72f13bc0c93c4a82",
+      "count": 1,
+      "reason": "Окно сравнивает отдельные Vitest hoisted stubs и подмену onBeforeUnmount двух тестов: влияние role-image и влияние публикации runtime revision. Каждый тест владеет своей очередью cleanup и мокирует собственный reader и тип плана; далее проверяются разные поля и привязки. Общая обычная переменная недоступна в hoisted vi.mock, а глобальное разделяемое хранилище cleanup могло бы связать независимые suites. Сохранены точные пути, hash и count1; тесты и проверки lifecycle или owner не исключены."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/runtime-secrets/draft-api.test.ts",
+      "secondPath": "services/staff/control-center/src/features/runtime-secrets/draft-impact.test.ts",
+      "fragmentSHA256": "b74772cd5675cd7f17751694e96f2b04cd6a5a44cf46d58572ef28573d2b1adc",
+      "count": 1,
+      "reason": "После выноса заголовков совпадает ограниченное окно объявлений двух Vitest-модулей: отдельные hoisted SDK mocks, identity requestSignal и подключения разных вариантов синтетической mutation. Один тест проверяет create/update черновика с необязательной версией, второй — impact/publish с обязательным If-Match. Оставшиеся vi.mock декларации задают независимую область изоляции и закрытые наборы SDK методов; общая фикстура уже разделяет варианты заголовков. Дополнительная фабрика ради декларации перешла бы через hoisting boundary и скрыла различие мокируемых контрактов. Сохранена только точная пара путей, hash и count1."
     }
   ]
 }

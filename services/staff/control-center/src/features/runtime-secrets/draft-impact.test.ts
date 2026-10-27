@@ -14,17 +14,9 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", () => sdk);
 vi.mock("@/shared/api/client", () => ({
   requestSignal: (signal?: AbortSignal) => signal,
 }));
-vi.mock("@/shared/api/mutation", () => ({
-  mutate: async (
-    request: (headers: Record<string, string>) => Promise<unknown>,
-    version: number,
-    key: string,
-  ) =>
-    request({
-      "If-Match": `"${String(version)}"`,
-      "Idempotency-Key": key,
-      "X-CSRF-Token": "csrf",
-    }),
+vi.mock("@/shared/api/mutation", async () => ({
+  mutate: (await import("@/test-utils/synthetic-mutation"))
+    .requiredSecretMutation,
 }));
 import {
   checkedPlan,
