@@ -131,8 +131,8 @@ func validPredecessorInput(current model.Task, attempt int32, input *corev1.Conf
 	if err != nil || previous.Attempt != attempt || current.Validate() != nil {
 		return false
 	}
-	// CP заново назначает input digest каждой attempt; SNAPSHOT получает
-	// отдельный object key. Все остальные immutable owner pins должны совпасть.
+	// CP заново назначает input digest каждой attempt; только legacy SNAPSHOT
+	// получает отдельный object key. V2 сохраняет исходный custody key.
 	previous.Attempt, previous.InputDigest = current.Attempt, current.InputDigest
 	if current.Workspace != nil && previous.Workspace != nil {
 		previous.Workspace.ReconcileOnly = current.Workspace.ReconcileOnly

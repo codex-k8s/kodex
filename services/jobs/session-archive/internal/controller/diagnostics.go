@@ -155,6 +155,9 @@ func workerDiagnosticAnnotations(task model.Task, uid types.UID) map[string]stri
 // validWorkerJob binds observed Job metadata to the already-authorized task and exact source PVC UID.
 // RU: validWorkerJob связывает наблюдаемые метаданные Job с уже авторизованным заданием и точным UID исходного PVC.
 func validWorkerJob(task model.Task, job *batchv1.Job, uid types.UID) bool {
+	if task.Workspace != nil && string(uid) != task.Workspace.PVCUID {
+		return false
+	}
 	if (task.Kind == "SNAPSHOT" || task.Kind == "RESTORE") && uid == "" {
 		return false
 	}

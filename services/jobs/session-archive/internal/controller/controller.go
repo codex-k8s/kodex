@@ -159,9 +159,10 @@ func (controller *Controller) execute(ctx context.Context, task model.Task, rene
 	}
 	var createdJob *batchv1.Job
 	jobCreateAttempted := false
+	jobCreateConfirmed := false
 	defer func() {
 		if task.Workspace != nil {
-			if retained != nil && (!jobCreateAttempted || createdJob != nil) {
+			if retained != nil && (!jobCreateAttempted || jobCreateConfirmed) {
 				retained.controller, retained.input, retained.job = controller, createdInput, createdJob
 			}
 			return
@@ -191,6 +192,10 @@ func (controller *Controller) execute(ctx context.Context, task model.Task, rene
 	if err != nil {
 		controller.observeAPIFailure(ctx, task, archiveAPICreateJob, err)
 		return model.Result{}, errors.New("create session archive worker job")
+	}
+	jobCreateConfirmed = createdJob != nil && createdJob.UID != "" && createdJob.ResourceVersion != ""
+	if task.Workspace != nil && !jobCreateConfirmed {
+		return model.Result{}, errors.New("session workspace worker create identity is missing")
 	}
 	ticker := time.NewTicker(controller.poll)
 	renewTicker := time.NewTicker(30 * time.Second)
