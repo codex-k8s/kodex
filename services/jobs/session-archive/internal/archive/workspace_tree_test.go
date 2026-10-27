@@ -37,6 +37,7 @@ func TestWorkspaceTreeScannerPreservesPrivateExecutableAndWireOrder(t *testing.T
 	root, fd := workspaceTreeFixture(t)
 	if os.Mkdir(filepath.Join(root, "a"), 0o750) != nil || unix.Chmod(filepath.Join(root, "a"), 0o2750) != nil ||
 		os.WriteFile(filepath.Join(root, "a", "start.sh"), []byte("#!/bin/sh\n"), 0o755) != nil ||
+		os.Chmod(filepath.Join(root, "a", "start.sh"), 0o755) != nil ||
 		os.WriteFile(filepath.Join(root, "a.txt"), []byte("private"), 0o600) != nil {
 		t.Fatal("create isolated tree")
 	}
