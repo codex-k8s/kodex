@@ -26,6 +26,38 @@ describe("Closed server message keys", () => {
       i18n.global.locale.value = "ru";
     },
   );
+  it.each(["ru", "en"] as const)(
+    "различает отказ входных файлов и неизвестную init-причину в %s",
+    async (locale) => {
+      i18n.global.locale.value = locale;
+      try {
+        const app = createSSRApp({
+          render: () =>
+            h("main", [
+              h(SafeSummary, {
+                content: "i18n:RUNTIME_INIT_ARTIFACT_TRANSFER_AUTHORITY_REJECTED",
+              }),
+              h(SafeMarkdown, { content: "i18n:RUNTIME_INIT_UNKNOWN_UNKNOWN" }),
+            ]),
+        });
+        app.use(i18n);
+        const html = await renderToString(app);
+        expect(html).toContain(
+          locale === "ru"
+            ? "Доступ к источнику отклонён."
+            : "Source access was denied.",
+        );
+        expect(html).toContain(
+          locale === "ru" ? "Причина неизвестна." : "The cause is unknown.",
+        );
+        expect(html).not.toContain("i18n:");
+        expect(html).not.toContain("RUNTIME_INIT_");
+        expect(html).not.toContain("serverMessages.unsupported");
+      } finally {
+        i18n.global.locale.value = "ru";
+      }
+    },
+  );
   it("сохраняет literal intent без перевода токенов, статусов и скрытия похожих refs", async () => {
     const app = createSSRApp({
       render: () =>

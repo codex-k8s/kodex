@@ -1136,6 +1136,7 @@ func TestTurnPodStateClassifiesColdRuntimeContainers(t *testing.T) {
 			if phase == "" {
 				phase = corev1.PodRunning
 			}
+			pod.UID = "10000000-0000-4000-8000-000000001941"
 			pod.Status = corev1.PodStatus{Phase: phase, InitContainerStatuses: test.init, ContainerStatuses: test.statuses, Conditions: test.conditions}
 			if _, err := client.CoreV1().Pods("kodex-runtime").Create(context.Background(), pod, metav1.CreateOptions{}); err != nil {
 				t.Fatalf("Create(cold runtime Pod) error = %v", err)

@@ -945,3 +945,78 @@ REPOSITORY_BUNDLE_CHANGED:
   other: Repository bundle publication updated
 WORKFLOW_RESULT_ACCEPTED:
   other: Required stage results have been verified and accepted
+
+RUNTIME_INITIALIZATION_FAILED:
+  other: Agent workspace initialization failed.
+RUNTIME_INIT_UNKNOWN_UNKNOWN:
+  other: Workspace initialization failed. The cause is unknown.
+RUNTIME_INIT_INPUT_DECODE_INPUT_INVALID:
+  other: Initialization input validation failed. The input is invalid.
+RUNTIME_INIT_EGRESS_TRUST_UNKNOWN:
+  other: Trusted certificate preparation failed. The cause is unknown.
+RUNTIME_INIT_EGRESS_TRUST_FILESYSTEM_IO_FAILED:
+  other: Trusted certificate preparation failed. A workspace file operation failed.
+RUNTIME_INIT_CONTEXT_SNAPSHOT_INPUT_INVALID:
+  other: Pinned execution context validation failed. The input is invalid.
+RUNTIME_INIT_CALLBACK_SETUP_UNKNOWN:
+  other: Protected input file channel setup failed. The cause is unknown.
+RUNTIME_INIT_WORKSPACE_LAYOUT_UNKNOWN:
+  other: Workspace directory preparation failed. The cause is unknown.
+RUNTIME_INIT_WORKSPACE_LAYOUT_CONTEXT_CANCELLED:
+  other: Workspace directory preparation failed. Initialization was cancelled.
+RUNTIME_INIT_WORKSPACE_LAYOUT_DEADLINE_EXCEEDED:
+  other: Workspace directory preparation failed. The initialization deadline expired.
+RUNTIME_INIT_WORKSPACE_LAYOUT_READ_ONLY:
+  other: Workspace directory preparation failed. The workspace is read-only.
+RUNTIME_INIT_WORKSPACE_LAYOUT_QUOTA_EXCEEDED:
+  other: Workspace directory preparation failed. Insufficient permitted space is available for writing.
+RUNTIME_INIT_WORKSPACE_LAYOUT_FILESYSTEM_IO_FAILED:
+  other: Workspace directory preparation failed. A workspace file operation failed.
+RUNTIME_INIT_INPUT_MANIFEST_INPUT_INVALID:
+  other: Input file manifest validation failed. The input is invalid.
+RUNTIME_INIT_ARTIFACT_TRANSFER_UNKNOWN:
+  other: Verified input file download failed. The cause is unknown.
+RUNTIME_INIT_ARTIFACT_TRANSFER_AUTHENTICATION_REJECTED:
+  other: Verified input file download failed. Request authentication was rejected.
+RUNTIME_INIT_ARTIFACT_TRANSFER_AUTHORITY_REJECTED:
+  other: Verified input file download failed. Source access was denied.
+RUNTIME_INIT_ARTIFACT_TRANSFER_SOURCE_UNAVAILABLE:
+  other: Verified input file download failed. The pinned source is unavailable.
+RUNTIME_INIT_ARTIFACT_TRANSFER_UPSTREAM_UNAVAILABLE:
+  other: Verified input file download failed. The source is temporarily unavailable.
+RUNTIME_INIT_ARTIFACT_TRANSFER_TRANSPORT_UNAVAILABLE:
+  other: Verified input file download failed. The protected source could not be reached.
+RUNTIME_INIT_ARTIFACT_TRANSFER_PIN_MISMATCH:
+  other: Verified input file download failed. File metadata does not match its pins.
+RUNTIME_INIT_ARTIFACT_TRANSFER_CONTENT_DIGEST_MISMATCH:
+  other: Verified input file download failed. The downloaded file digest does not match.
+RUNTIME_INIT_ARTIFACT_TRANSFER_CONTEXT_CANCELLED:
+  other: Verified input file download failed. Initialization was cancelled.
+RUNTIME_INIT_ARTIFACT_TRANSFER_DEADLINE_EXCEEDED:
+  other: Verified input file download failed. The initialization deadline expired.
+RUNTIME_INIT_ARTIFACT_TRANSFER_READ_ONLY:
+  other: Verified input file download failed. The workspace is read-only.
+RUNTIME_INIT_ARTIFACT_TRANSFER_QUOTA_EXCEEDED:
+  other: Verified input file download failed. Insufficient permitted space is available for writing.
+RUNTIME_INIT_ARTIFACT_TRANSFER_FILESYSTEM_IO_FAILED:
+  other: Verified input file download failed. A workspace file operation failed.
+RUNTIME_INIT_INPUT_PROTECTION_UNKNOWN:
+  other: Prepared input file protection failed. The cause is unknown.
+RUNTIME_INIT_INPUT_PROTECTION_READ_ONLY:
+  other: Prepared input file protection failed. The workspace is read-only.
+RUNTIME_INIT_INPUT_PROTECTION_QUOTA_EXCEEDED:
+  other: Prepared input file protection failed. Insufficient permitted space is available for writing.
+RUNTIME_INIT_INPUT_PROTECTION_FILESYSTEM_IO_FAILED:
+  other: Prepared input file protection failed. A workspace file operation failed.
+RUNTIME_INIT_CONTEXT_FILES_UNKNOWN:
+  other: Execution skill and memory preparation failed. The cause is unknown.
+RUNTIME_INIT_CONTEXT_FILES_CONTEXT_CANCELLED:
+  other: Execution skill and memory preparation failed. Initialization was cancelled.
+RUNTIME_INIT_CONTEXT_FILES_DEADLINE_EXCEEDED:
+  other: Execution skill and memory preparation failed. The initialization deadline expired.
+RUNTIME_INIT_CONTEXT_FILES_READ_ONLY:
+  other: Execution skill and memory preparation failed. The workspace is read-only.
+RUNTIME_INIT_CONTEXT_FILES_QUOTA_EXCEEDED:
+  other: Execution skill and memory preparation failed. Insufficient permitted space is available for writing.
+RUNTIME_INIT_CONTEXT_FILES_FILESYSTEM_IO_FAILED:
+  other: Execution skill and memory preparation failed. A workspace file operation failed.

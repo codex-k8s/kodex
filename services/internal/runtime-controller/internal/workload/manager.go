@@ -1773,6 +1773,7 @@ func (manager *Manager) deleteExecutionPolicyByHash(ctx context.Context, executi
 type TurnPodObservation struct {
 	State          string
 	DiagnosticCode string
+	Initialization *InitializationObservation
 }
 
 // TurnPodMemoryDiagnostic identifies a current OOMKilled termination of a known runtime container, rather than inferring memory failure from exit code 137 alone.
@@ -1805,7 +1806,16 @@ func (manager *Manager) ObserveTurnPod(ctx context.Context, input runtimecontrac
 	case corev1.PodSucceeded:
 		return TurnPodObservation{State: "SUCCEEDED", DiagnosticCode: "POD_SUCCEEDED_WITHOUT_CALLBACK"}, nil
 	case corev1.PodFailed:
-		return TurnPodObservation{State: "FAILED", DiagnosticCode: terminalContainerDiagnostic(pod)}, nil
+		diagnostic := terminalContainerDiagnostic(pod)
+		observation := TurnPodObservation{State: "FAILED", DiagnosticCode: diagnostic}
+		if !warmExecution && diagnostic == "WORKSPACE_INIT_EXITED_NONZERO" {
+			initialized, valid := manager.observeInitializationFailure(input, pod)
+			if !valid {
+				return TurnPodObservation{State: "CONFLICT", DiagnosticCode: "RUNTIME_EXECUTION_CONFLICT"}, nil
+			}
+			observation.Initialization = initialized
+		}
+		return observation, nil
 	case corev1.PodRunning:
 		if !warmExecution && runtimePodTerminal(pod, "role-runtime", "provider-runtime", "provider-credential-relay") {
 			return TurnPodObservation{State: "FAILED", DiagnosticCode: terminalContainerDiagnostic(pod)}, nil
@@ -2451,7 +2461,7 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 			SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: boolPointer(true), FSGroup: int64Pointer(29000), FSGroupChangePolicy: fsGroupChangePolicyPointer(corev1.FSGroupChangeOnRootMismatch), SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
 			InitContainers: []corev1.Container{
 				{Name: "workspace-prepare", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-prepare-workspace"}, SecurityContext: restrictedSecurityContext(10001), VolumeMounts: []corev1.VolumeMount{{Name: "workspace", MountPath: "/workspace"}}, Resources: smallResources()},
-				{Name: "workspace-init", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-init-workspace"}, SecurityContext: restrictedSecurityContext(10001), VolumeMounts: initMounts, Resources: smallResources()},
+				{Name: "workspace-init", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, TerminationMessagePath: "/dev/termination-log", TerminationMessagePolicy: corev1.TerminationMessageReadFile, Args: []string{"runtime-init-workspace"}, SecurityContext: restrictedSecurityContext(10001), VolumeMounts: initMounts, Resources: smallResources()},
 			},
 			Containers: []corev1.Container{role, provider, relay}, Volumes: volumes}}
 	if manager.config.RPCProfile == runtimecontract.CallbackProfileTrustedCluster {

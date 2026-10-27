@@ -345,3 +345,12 @@ read/repair и запрет ручного изменения состояния
 Используемые версии закрепляются в `libs/go/observability/go.mod`.
 
 Связанные документы: `GO-DOC-001`, `GUIDE-DOC-003`, `INFRA-DOC-001`.
+
+Отказ init до запуска модели имеет отдельную закрытую stage/reason, а не
+предполагаемую provider cause. Bounded termination record проверяется по текущему
+owned Pod и immutable execution tuple; stale/malformed/missing запись даёт
+UNKNOWN, без parsing raw stderr. Причина сохраняется existing owner failure
+summary до normal cleanup, а private UID/tuple остаются safe log metadata после
+owner ACK. Локальный record и лог не подменяют durable owner commit. Смена Pod
+не наследует grace прежнего UID; диагностика не расширяет lease/retry либо
+полномочия. Пример: [#1941](../operations/runtime-initialization-failure.md).
