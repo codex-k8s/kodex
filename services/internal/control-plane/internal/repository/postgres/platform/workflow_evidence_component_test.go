@@ -439,6 +439,9 @@ func runWorkflowEvidenceNative(t *testing.T, mode string) {
 			if err != nil {
 				t.Fatal("admit captured finding Issue", completionOutcomeClass(err))
 			}
+			if mode == "qa-issue-effect-first" && (stringMap(invocation, "state") != "WAITING_APPROVAL" || stringMap(invocation, "receiptRef") != "") {
+				t.Fatal("effect-first race did not begin with the actual owner-decision ACK")
+			}
 			if modelFirst {
 				fixture.complete(lease, "The Issue is still pending; no fabricated receipt.")
 				if len(fixture.history(lease)) != 0 {
@@ -446,7 +449,15 @@ func runWorkflowEvidenceNative(t *testing.T, mode string) {
 				}
 			}
 			receipt := fixture.finishEffect(invocation, "github-issue:17", `{"number":17,"title":"Native fixture finding","state":"open"}`)
-			if modelFirst {
+			if mode == "qa-issue-effect-first" {
+				// The model received WAITING_APPROVAL before the owner and worker settled the effect.
+				// Модель получила WAITING_APPROVAL до завершения эффекта владельцем и worker.
+				fixture.complete(lease, "The Issue is awaiting the owner decision; no receipt was returned to this turn.")
+				if len(fixture.history(lease)) != 0 {
+					t.Fatal("settled owner-decision ACK reached business evaluation before outcome delivery")
+				}
+			}
+			if modelFirst || mode == "qa-issue-effect-first" {
 				lease = fixture.claim(reviewer.Ref)
 				rejoined, err := fixture.resolve(lease, "evidence-issue-rejoin", "github.issue.create", input)
 				if err != nil || stringMap(rejoined, "invocationRef") != stringMap(invocation, "invocationRef") || stringMap(rejoined, "receiptRef") != receipt {
