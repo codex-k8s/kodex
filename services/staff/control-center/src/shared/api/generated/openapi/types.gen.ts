@@ -2982,6 +2982,10 @@ export type WorkflowResultRequirement = {
     repository?: string;
     subjectStepKey?: WorkflowStepKey;
     subjectResultKey?: WorkflowStepKey;
+    /**
+     * Только QA выбранного профиля; ключ ARTIFACT application/json того же шага.
+     */
+    evidenceKey?: string;
     operation?: 'github.pull_request.merge' | 'ssh.compose.deploy';
     targetRef?: string;
 };
@@ -3034,6 +3038,10 @@ export type Workflow = {
      * Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
      */
     reworkPolicy?: 'OWNER_APPROVED_UPSTREAM_V1';
+    /**
+     * Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
+     */
+    resultEvidenceProfile?: 'GITHUB_REVIEW_QA_V1';
     ref: OpaqueRef;
     version: number;
     projectRef: OpaqueRef;
@@ -3101,6 +3109,10 @@ export type WorkflowDraftSnapshot = {
      * Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
      */
     reworkPolicy?: 'OWNER_APPROVED_UPSTREAM_V1';
+    /**
+     * Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
+     */
+    resultEvidenceProfile?: 'GITHUB_REVIEW_QA_V1';
     ref: OpaqueRef;
     version: number;
     revision: number;
@@ -3120,6 +3132,10 @@ export type WorkflowInput = {
      * Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
      */
     reworkPolicy?: 'OWNER_APPROVED_UPSTREAM_V1';
+    /**
+     * Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия. Пустое значение снимает draft opt-in; весь итоговый граф заново проверяется.
+     */
+    resultEvidenceProfile?: '' | 'GITHUB_REVIEW_QA_V1';
     name: string;
     purpose: string;
     coordinatorAgentRef: OpaqueRef;
@@ -3232,9 +3248,12 @@ export type WorkflowAcceptedResult = {
     repository?: string;
     number?: number;
     headSha?: string;
-    verdict?: 'PASS';
+    verdict?: 'PASS' | 'CHANGES_REQUIRED';
 };
 
+/**
+ * Закрытый typed snapshot. Отношения accepted/results/evidence проверяются общим API validator и каждым PWA graph/event ingress; evidence разрешено только при accepted=false, reason=CHANGES_REQUIRED, results=[] и наличии отрицательного ARTIFACT_REVIEW/REVIEW/QA.
+ */
 export type WorkflowAttemptResult = {
     effectiveState?: 'CURRENT' | 'HISTORICAL' | 'STALE_DEPENDENCY' | 'REWORK_PENDING' | 'WAITING_OWNER' | 'BLOCKED';
     attempt: number;
@@ -3242,6 +3261,10 @@ export type WorkflowAttemptResult = {
     accepted: boolean;
     reason: string;
     results: Array<WorkflowAcceptedResult>;
+    /**
+     * Проверенные факты отклонённого ARTIFACT_REVIEW/REVIEW/QA; accepted=false, reason=CHANGES_REQUIRED, results остаётся пустым.
+     */
+    evidence?: Array<WorkflowAcceptedResult>;
 };
 
 export type RunNode = {

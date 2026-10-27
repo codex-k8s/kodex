@@ -8599,6 +8599,21 @@ func (e WorkflowExecutionMode) Valid() bool {
 	}
 }
 
+// Defines values for WorkflowResultEvidenceProfile.
+const (
+	WorkflowResultEvidenceProfileGITHUBREVIEWQAV1 WorkflowResultEvidenceProfile = "GITHUB_REVIEW_QA_V1"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowResultEvidenceProfile enum.
+func (e WorkflowResultEvidenceProfile) Valid() bool {
+	switch e {
+	case WorkflowResultEvidenceProfileGITHUBREVIEWQAV1:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WorkflowReworkPolicy.
 const (
 	WorkflowReworkPolicyOWNERAPPROVEDUPSTREAMV1 WorkflowReworkPolicy = "OWNER_APPROVED_UPSTREAM_V1"
@@ -8673,12 +8688,15 @@ func (e WorkflowAcceptedResultKind) Valid() bool {
 
 // Defines values for WorkflowAcceptedResultVerdict.
 const (
-	PASS WorkflowAcceptedResultVerdict = "PASS"
+	CHANGESREQUIRED WorkflowAcceptedResultVerdict = "CHANGES_REQUIRED"
+	PASS            WorkflowAcceptedResultVerdict = "PASS"
 )
 
 // Valid indicates whether the value is a known member of the WorkflowAcceptedResultVerdict enum.
 func (e WorkflowAcceptedResultVerdict) Valid() bool {
 	switch e {
+	case CHANGESREQUIRED:
+		return true
 	case PASS:
 		return true
 	default:
@@ -8755,6 +8773,21 @@ func (e WorkflowDraftSnapshotExecutionMode) Valid() bool {
 	}
 }
 
+// Defines values for WorkflowDraftSnapshotResultEvidenceProfile.
+const (
+	WorkflowDraftSnapshotResultEvidenceProfileGITHUBREVIEWQAV1 WorkflowDraftSnapshotResultEvidenceProfile = "GITHUB_REVIEW_QA_V1"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowDraftSnapshotResultEvidenceProfile enum.
+func (e WorkflowDraftSnapshotResultEvidenceProfile) Valid() bool {
+	switch e {
+	case WorkflowDraftSnapshotResultEvidenceProfileGITHUBREVIEWQAV1:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WorkflowDraftSnapshotReworkPolicy.
 const (
 	WorkflowDraftSnapshotReworkPolicyOWNERAPPROVEDUPSTREAMV1 WorkflowDraftSnapshotReworkPolicy = "OWNER_APPROVED_UPSTREAM_V1"
@@ -8806,6 +8839,24 @@ func (e WorkflowInputExecutionMode) Valid() bool {
 	case MANAGERDRIVEN:
 		return true
 	case SERVERDAGV1:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowInputResultEvidenceProfile.
+const (
+	Empty            WorkflowInputResultEvidenceProfile = ""
+	GITHUBREVIEWQAV1 WorkflowInputResultEvidenceProfile = "GITHUB_REVIEW_QA_V1"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowInputResultEvidenceProfile enum.
+func (e WorkflowInputResultEvidenceProfile) Valid() bool {
+	switch e {
+	case Empty:
+		return true
+	case GITHUBREVIEWQAV1:
 		return true
 	default:
 		return false
@@ -15939,7 +15990,10 @@ type Workflow struct {
 	PublishedRevisionRef *OpaqueRef `json:"publishedRevisionRef,omitempty"`
 	Purpose              string     `json:"purpose"`
 	Ref                  OpaqueRef  `json:"ref"`
-	Revision             *int       `json:"revision,omitempty"`
+
+	// ResultEvidenceProfile Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
+	ResultEvidenceProfile *WorkflowResultEvidenceProfile `json:"resultEvidenceProfile,omitempty"`
+	Revision              *int                           `json:"revision,omitempty"`
 
 	// RevisionRef Точная owner revision отображаемых steps/inputFields; опубликованная, иначе сохранённый draft. Отсутствует без обеих revisions.
 	RevisionRef *OpaqueRef `json:"revisionRef,omitempty"`
@@ -15956,6 +16010,9 @@ type Workflow struct {
 
 // WorkflowExecutionMode defines model for Workflow.ExecutionMode.
 type WorkflowExecutionMode string
+
+// WorkflowResultEvidenceProfile Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
+type WorkflowResultEvidenceProfile string
 
 // WorkflowReworkPolicy Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
 type WorkflowReworkPolicy string
@@ -15987,14 +16044,17 @@ type WorkflowAcceptedResultKind string
 // WorkflowAcceptedResultVerdict defines model for WorkflowAcceptedResult.Verdict.
 type WorkflowAcceptedResultVerdict string
 
-// WorkflowAttemptResult defines model for WorkflowAttemptResult.
+// WorkflowAttemptResult Закрытый typed snapshot. Отношения accepted/results/evidence проверяются общим API validator и каждым PWA graph/event ingress; evidence разрешено только при accepted=false, reason=CHANGES_REQUIRED, results=[] и наличии отрицательного ARTIFACT_REVIEW/REVIEW/QA.
 type WorkflowAttemptResult struct {
 	Accepted       bool                                 `json:"accepted"`
 	Attempt        int                                  `json:"attempt"`
 	EffectiveState *WorkflowAttemptResultEffectiveState `json:"effectiveState,omitempty"`
-	Reason         string                               `json:"reason"`
-	Results        []WorkflowAcceptedResult             `json:"results"`
-	RunRef         OpaqueRef                            `json:"runRef"`
+
+	// Evidence Проверенные факты отклонённого ARTIFACT_REVIEW/REVIEW/QA; accepted=false, reason=CHANGES_REQUIRED, results остаётся пустым.
+	Evidence *[]WorkflowAcceptedResult `json:"evidence,omitempty"`
+	Reason   string                    `json:"reason"`
+	Results  []WorkflowAcceptedResult  `json:"results"`
+	RunRef   OpaqueRef                 `json:"runRef"`
 }
 
 // WorkflowAttemptResultEffectiveState defines model for WorkflowAttemptResult.EffectiveState.
@@ -16029,7 +16089,10 @@ type WorkflowDraftSnapshot struct {
 	InputFields         []WorkflowInputField                `json:"inputFields"`
 	MaxConcurrency      *int                                `json:"maxConcurrency,omitempty"`
 	Ref                 OpaqueRef                           `json:"ref"`
-	Revision            int                                 `json:"revision"`
+
+	// ResultEvidenceProfile Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
+	ResultEvidenceProfile *WorkflowDraftSnapshotResultEvidenceProfile `json:"resultEvidenceProfile,omitempty"`
+	Revision              int                                         `json:"revision"`
 
 	// ReworkPolicy Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
 	ReworkPolicy       *WorkflowDraftSnapshotReworkPolicy `json:"reworkPolicy,omitempty"`
@@ -16042,6 +16105,9 @@ type WorkflowDraftSnapshot struct {
 
 // WorkflowDraftSnapshotExecutionMode defines model for WorkflowDraftSnapshot.ExecutionMode.
 type WorkflowDraftSnapshotExecutionMode string
+
+// WorkflowDraftSnapshotResultEvidenceProfile Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
+type WorkflowDraftSnapshotResultEvidenceProfile string
 
 // WorkflowDraftSnapshotReworkPolicy Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
 type WorkflowDraftSnapshotReworkPolicy string
@@ -16059,6 +16125,9 @@ type WorkflowInput struct {
 	Name                string                      `json:"name"`
 	Purpose             string                      `json:"purpose"`
 
+	// ResultEvidenceProfile Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия. Пустое значение снимает draft opt-in; весь итоговый граф заново проверяется.
+	ResultEvidenceProfile *WorkflowInputResultEvidenceProfile `json:"resultEvidenceProfile,omitempty"`
+
 	// ReworkPolicy Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
 	ReworkPolicy   *WorkflowInputReworkPolicy `json:"reworkPolicy,omitempty"`
 	Steps          *[]WorkflowStepInput       `json:"steps,omitempty"`
@@ -16067,6 +16136,9 @@ type WorkflowInput struct {
 
 // WorkflowInputExecutionMode defines model for WorkflowInput.ExecutionMode.
 type WorkflowInputExecutionMode string
+
+// WorkflowInputResultEvidenceProfile Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия. Пустое значение снимает draft opt-in; весь итоговый граф заново проверяется.
+type WorkflowInputResultEvidenceProfile string
 
 // WorkflowInputReworkPolicy Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
 type WorkflowInputReworkPolicy string
@@ -16121,12 +16193,14 @@ type WorkflowPage struct {
 
 // WorkflowResultRequirement defines model for WorkflowResultRequirement.
 type WorkflowResultRequirement struct {
-	FileName   *string                             `json:"fileName,omitempty"`
-	Key        string                              `json:"key"`
-	Kind       WorkflowResultRequirementKind       `json:"kind"`
-	MediaType  *string                             `json:"mediaType,omitempty"`
-	Operation  *WorkflowResultRequirementOperation `json:"operation,omitempty"`
-	Repository *string                             `json:"repository,omitempty"`
+	// EvidenceKey Только QA выбранного профиля; ключ ARTIFACT application/json того же шага.
+	EvidenceKey *string                             `json:"evidenceKey,omitempty"`
+	FileName    *string                             `json:"fileName,omitempty"`
+	Key         string                              `json:"key"`
+	Kind        WorkflowResultRequirementKind       `json:"kind"`
+	MediaType   *string                             `json:"mediaType,omitempty"`
+	Operation   *WorkflowResultRequirementOperation `json:"operation,omitempty"`
+	Repository  *string                             `json:"repository,omitempty"`
 
 	// SubjectResultKey Логический ключ шага внутри одной версии процесса; не является ссылкой на ресурс или источником полномочий.
 	SubjectResultKey *WorkflowStepKey `json:"subjectResultKey,omitempty"`
