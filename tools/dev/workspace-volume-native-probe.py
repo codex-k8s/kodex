@@ -131,6 +131,8 @@ def main():
         owned = create(context, {'apiVersion': 'v1', 'kind': 'Namespace',
             'metadata': {'name': namespace, 'labels': {LABEL: nonce,
                 'pod-security.kubernetes.io/enforce': 'restricted'}}})
+        result['namespaceUID'] = owned['metadata']['uid']
+        print(json.dumps({'createdNamespace': namespace, 'uid': owned['metadata']['uid']}), flush=True)
         create(context, {'apiVersion': 'networking.k8s.io/v1', 'kind': 'NetworkPolicy',
             'metadata': {'name': 'deny-all', 'namespace': namespace, 'labels': {LABEL: nonce}},
             'spec': {'podSelector': {}, 'policyTypes': ['Ingress', 'Egress'], 'ingress': [], 'egress': []}})
