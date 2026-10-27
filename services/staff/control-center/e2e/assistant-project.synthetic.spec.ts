@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { syntheticAssistantRuntimeConfig } from "./fixtures/assistant-runtime-config";
 
 for (const width of [1440, 390]) {
   for (const locale of ["ru", "en"]) {
@@ -89,20 +90,7 @@ async function installFixture(
     const url = new URL(route.request().url());
     if (url.pathname === "/config/runtime-config.json") {
       await route.fulfill({
-        json: {
-          revision: "0".repeat(64),
-          environment: "synthetic",
-          apiBaseUrl: "/",
-          realtimeUrl: "/api/v1",
-          requestTimeoutMs: 10000,
-          oidc: {
-            authority: "https://identity.kodex.test/realms/kodex",
-            clientId: "kodex-test",
-            redirectUri: "https://kodex.test/auth/callback",
-            postLogoutRedirectUri: "https://kodex.test/",
-            scope: "openid profile email",
-          },
-        },
+        json: syntheticAssistantRuntimeConfig(),
       });
     } else if (url.pathname === "/api/v1/projects/project_fixture/assistant") {
       calls.push(url.pathname);
