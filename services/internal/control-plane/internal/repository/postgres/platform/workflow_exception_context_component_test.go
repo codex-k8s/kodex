@@ -148,6 +148,14 @@ func testWorkflowExceptionContext(t *testing.T, mode string) {
 	}
 	execution := runtimeFilesTestContext(t, lease, runtimecontract.FilePurposeRunResult)
 	manifestActor := runtimeFilesTestPrincipal(t, ctx, repository, "manifest")
+	if catalog := lease["fileCatalog"].(runtimecontract.RuntimeFileCatalog); !slices.Equal(catalog.Purposes, []string{runtimecontract.FilePurposeRunResult}) {
+		t.Fatal("exception manager catalog widened the declared file purposes")
+	}
+	projectFiles := execution
+	projectFiles.Purpose = runtimecontract.FilePurposeProject
+	if _, err := service.GetExecutionFileManifest(ctx, manifestActor, projectFiles, query.Page{Size: 100}); !errors.Is(err, errs.ErrNotFound) {
+		t.Fatal("exception manager acquired undeclared project file access", completionOutcomeClass(err))
+	}
 	page, err := service.GetExecutionFileManifest(ctx, manifestActor, execution, query.Page{Size: 100})
 	if err != nil || page.Total != 2 || len(page.Items) != 2 || page.Next != "" {
 		t.Fatal("manager catalog does not contain exactly source and dependency files", completionOutcomeClass(err))
