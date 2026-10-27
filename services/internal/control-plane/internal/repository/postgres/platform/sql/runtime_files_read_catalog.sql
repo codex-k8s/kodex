@@ -22,6 +22,7 @@ WHERE lease.organization_id=@organization_id::uuid AND catalog.organization_id=l
   AND run.state NOT IN ('SUCCEEDED','FAILED','CANCELLED','CANCELED')
   AND root.state NOT IN ('SUCCEEDED','FAILED','CANCELLED','CANCELED')
   AND (@purpose<>'RUN_RESULT' OR node.workflow_step_key NOT LIKE 'workflow.coordinator.%'
+    OR EXISTS (SELECT 1 FROM control_plane.workflow_exception_context_node(catalog.organization_id,catalog.node_id))
     OR control_plane.runtime_file_coordinator(
         catalog.organization_id,catalog.actor_id,catalog.project_id,catalog.agent_id,catalog.node_id))
   AND control_plane.catalog_resource_visible(catalog.organization_id,catalog.actor_id,'project.view','PROJECT',
