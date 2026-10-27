@@ -339,5 +339,13 @@ Operator rollout, retention/restore, backup и реальный запуск с�
 ещё требуют завершения всего unit. Domain event от миграции не создаётся:
 авторитетный read path — Goose ledger и системный каталог.
 
+Отдельная точка `make test-runtime-workspace-owner-postgres` проверяет настоящие
+owner commands в disposable БД: опубликованный ABI4 и V2 claim, BIND, отказ
+чужому workspace, terminal BIND replay, BLOCKED без положительного join,
+поздний matching QUIESCENT и RELEASED. Historical receipt остаётся immutable,
+текущая storage tuple читается отдельно, отменённый run не открывается снова.
+Физические Pod/PVC facts задаются controller fixture; эта проверка не
+подменяет обязательный реальный Kubernetes/сотрудник прогон.
+
 Context7: PostgreSQL18 pg_constraint, pg_trigger и ALTER TABLE;
 convalidated/conenforced не заменяют проверку включённых FK triggers.

@@ -466,3 +466,7 @@ test-runtime-workspace-predecessor-postgres: check-go-toolchain
 .PHONY: test-session-workspace-archive-wire
 test-session-workspace-archive-wire: check-go-toolchain
 	@timeout --kill-after=10s 250s bash scripts/tests/session-workspace-archive-wire-test.sh
+
+.PHONY: test-runtime-workspace-owner-postgres
+test-runtime-workspace-owner-postgres: check-go-toolchain
+	@timeout --kill-after=10s 240s bash scripts/tests/control-plane-postgres-test.sh '^TestWorkspaceWriterOwnerComponent$$'
