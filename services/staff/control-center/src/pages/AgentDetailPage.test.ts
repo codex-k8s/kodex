@@ -1,3 +1,4 @@
+import { memoryStorage } from "@/test-utils/memory-storage";
 import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import {
   defineComponent,
@@ -284,21 +285,7 @@ it("не меняет новый редактор поздним ответом 
 it.each(["recover", "retry", "stored"] as const)(
   "instruction %s передаёт trusted organization impact anchor",
   async (operation) => {
-    const values = new Map<string, string>();
-    const storage: Storage = {
-      get length() {
-        return values.size;
-      },
-      key: (index) => [...values.keys()][index] ?? null,
-      getItem: (key) => values.get(key) ?? null,
-      setItem: (key, value) => {
-        values.set(key, value);
-      },
-      removeItem: (key) => {
-        values.delete(key);
-      },
-      clear: () => values.clear(),
-    };
+    const storage = memoryStorage();
     vi.stubGlobal("window", { sessionStorage: storage });
     const agent = {
       ...agentSnapshot(),

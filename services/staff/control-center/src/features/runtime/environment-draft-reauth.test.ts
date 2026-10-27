@@ -1,3 +1,4 @@
+import { memoryStorage as storage } from "@/test-utils/memory-storage";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   consumeEnvironmentDraftReference,
@@ -5,23 +6,6 @@ import {
   rememberEnvironmentDraft,
 } from "./environment-draft-reauth";
 import type { RuntimeEnvironmentDraft } from "@/shared/api/generated/openapi/types.gen";
-function storage(): Storage {
-  const map = new Map<string, string>();
-  return {
-    get length() {
-      return map.size;
-    },
-    key: (index) => [...map.keys()][index] ?? null,
-    getItem: (key) => map.get(key) ?? null,
-    setItem: (key, value) => {
-      map.set(key, value);
-    },
-    removeItem: (key) => {
-      map.delete(key);
-    },
-    clear: () => map.clear(),
-  };
-}
 const draft: RuntimeEnvironmentDraft = {
   scopeKind: "PROJECT",
   organizationRef: "org_synthetic",

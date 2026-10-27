@@ -1,3 +1,4 @@
+import { memoryStorage } from "@/test-utils/memory-storage";
 import { expect, it } from "vitest";
 import {
   publicationRefusalClearsIntent,
@@ -16,23 +17,6 @@ it.each([400, 401, 403, 404, 409, 412, 422, 500, 503, 504])(
     );
   },
 );
-function memoryStorage(): Storage {
-  const values = new Map<string, string>();
-  return {
-    get length() {
-      return values.size;
-    },
-    clear: () => values.clear(),
-    getItem: (key) => values.get(key) ?? null,
-    key: (index) => [...values.keys()][index] ?? null,
-    removeItem: (key) => {
-      values.delete(key);
-    },
-    setItem: (key, value) => {
-      values.set(key, value);
-    },
-  };
-}
 const attempt: PublicationAttempt = {
   kind: "RUNTIME_ENVIRONMENT",
   ownerRef: "draft",

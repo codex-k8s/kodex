@@ -9120,6 +9120,22 @@
       "fragmentSHA256": "53d8316ada183bda71af467f192e0737711009f5801b9704f7aead29f4e1809d",
       "count": 1,
       "reason": "После выноса защищённого HTTP transport совпадает техническая последовательность os.ReadFile CA, проверки PEM и передачи roots для двух разных Kubernetes ресурсов. Полные constructors проверены: rollout привязан к фиксированным deployments, restore coordination — к собственному HTTPS адресу и ConfigMap; авторизация и переходы различаются. Универсальное файловое чтение в общей библиотеке добавило бы скрытый I/O без передаваемого lifecycle context и изменило бы контракты чтения и диагностик остальных четырёх constructors; существующий exactkubernetessecret имеет иные file limits. Сохранена только точная пара путей/hash/count1; validation, CA, TLS и resource authority не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/catalog_cards.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/catalog_cards.go",
+      "fragmentSHA256": "293e24f06415d7e83bf6adeeb2a6dfe61a29b5b218382818377fe1323e9d8061",
+      "count": 1,
+      "reason": "Окно сравнивает начало двух разных PostgreSQL-проекций карточек PROJECT и WORKFLOW. Общие сбор ref и привязка scope уже вынесены в catalogCardRefs и cardArgs. Дальше отличаются SQL-запросы, конкретные типы и порядок Scan: проект обновляет счётчики и eligibility CREATE_PROJECT_ASSISTANT, workflow — собственную сводку. Общий callback-итератор ради сходной обвязки скрыл бы типизированный Scan и предметные привязки без объединения проекции. Сохранена только точная пара внутри файла, hash и count1; остальные фрагменты и проверки результата не исключены."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/assistant/components/AssistantCreatedProjectFileCard.vue",
+      "secondPath": "services/staff/control-center/src/features/assistant/components/AssistantProjectFileRevisionCard.vue",
+      "fragmentSHA256": "cf5584b716909acdabfcb8513eebefd286c0498b57b884f15d29efb75ba668fe",
+      "count": 1,
+      "reason": "Окно охватывает только объявление состояния и начало двух разных карточек результата: созданный artifact и применённая revision. Их целевые типы, API и проверки readback различаются; revision дополнительно связывает запрос с owner signal, закрывает состояние при abort и запрещает параллельное обновление, а artifact проверяет ref и projectRef без этого owner lifecycle. Общий параметризованный watcher ради сходных ref и начала сброса скрыл бы различие отмены и authority. Сохранена только точная пара путей, hash и count1; проверки чтения и остальные совпадения не исключены."
     }
   ]
 }
