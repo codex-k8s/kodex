@@ -5,6 +5,7 @@ import type {
   RevisionImpactPublicationInput,
 } from "@/shared/api/generated/openapi/types.gen";
 import { requestSignal } from "@/shared/api/client";
+import { hasInvalidImpactPageEnvelope } from "@/shared/api/impact-page-validation";
 import { unwrap } from "@/shared/api/problem";
 import { readWithRetry } from "@/shared/api/read-retry";
 import {
@@ -66,13 +67,12 @@ export function checkedPublicationPage(
   requireRuntimeOrganizationRef(organizationRef);
   checkedPublicationPlan(page.plan);
   if (
-    publicationPlanIdentity(page.plan) !== publicationPlanIdentity(expected) ||
-    (cursor && page.plan.state !== expected.state) ||
-    !Number.isSafeInteger(page.total) ||
-    page.total < page.items.length ||
-    page.total > page.plan.total ||
-    (cursor && page.nextPageToken === cursor) ||
-    new Set(page.items.map((item) => item.ref)).size !== page.items.length ||
+    hasInvalidImpactPageEnvelope(
+      page,
+      expected,
+      publicationPlanIdentity,
+      cursor,
+    ) ||
     page.items.some(
       (item) =>
         !item.ref ||
