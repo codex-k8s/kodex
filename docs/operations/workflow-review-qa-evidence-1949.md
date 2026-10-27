@@ -153,10 +153,20 @@ verifier намеренно отвергает014. Ни source-derived hashes, �
 - `make test-workflow-result-contract`:30s, JSON Schema portion общего serialized
   corpus. Go decoder использует тот же corpus в domain unit suite; contextual
   kind/authority проверяет owner decoder, schema доказывает только форму.
-- `make test-workflow-review-qa-evidence-postgres`:300s, отдельные disposable clones,
+- `make test-workflow-review-qa-evidence-postgres`:360s, отдельные disposable clones,
   20 owner lifecycle graphs и14 canonical/drift schema cases: вместе с двумя
   parent suites ожидается36PASS/0FAIL/0SKIP. Без готовой
   согласованной012/013 composition этот target должен закрыто завершиться до suites.
+
+Предел 360s относится только к полному фиксированному профилю1949; его внешний
+wrapper ограничивается 380s с завершением и проверкой очистки своих ресурсов.
+В измеренном запуске на `c3e167b80` все 20 бизнес-сценариев прошли за 275.68s,
+включая 50.10s на ожидание настоящего deadline в expiry-case; прежние 300s истекли
+во время проверки схемы. Отдельная ранее завершённая проверка схемы занимала 8.16s;
+сверх этого требуется время bootstrap и миграций. Поэтому 300s не оставляли запаса
+на весь профиль. Timeout остаётся FAIL всего target, даже если часть cases получила
+PASS. Все 20 графов, 14 вариантов схемы и guards сохраняются; runtime deadlines,
+CPU2, resource envelope 1GiB с резервом 5GiB и отдельный upgrade-target 300s не меняются.
 
 Нативные сценарии включают COMMENT effect-first/model-first, UNKNOWN без повторного
 POST, отмену claimed WRITE, отзыв current grant, QA PASS, QA CHANGES_REQUIRED без
