@@ -7,7 +7,6 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"io"
 	"strconv"
 
