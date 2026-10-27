@@ -42,6 +42,63 @@ func generationPrepareFixture(t *testing.T) (int, string, runtimecontract.Runner
 	return fd, root, input, ack, generationFileOwner{uid: uint32(os.Geteuid()), gid: uint32(os.Getegid())}
 }
 
+// TestWorkspaceProviderStateIsSeparateAndRetained prepares the exact history sibling after BIND and preserves existing private history on rejoin.
+// TestWorkspaceProviderStateIsSeparateAndRetained готовит exact history sibling после BIND и сохраняет private history при rejoin.
+func TestWorkspaceProviderStateIsSeparateAndRetained(t *testing.T) {
+	fd, root, input, ack, owner := generationPrepareFixture(t)
+	if err := prepareBoundGenerationAt(t.Context(), fd, input, ack, owner); err != nil {
+		t.Fatal(err)
+	}
+	name := filepath.Join(root, runtimecontract.WorkspaceProviderStateSubPath)
+	var before, after unix.Stat_t
+	if unix.Lstat(name, &before) != nil || before.Mode&0o7777 != 0o2770 || before.Uid != owner.uid || before.Gid != owner.gid {
+		t.Fatal("provider state did not receive its confined shared root")
+	}
+	file := filepath.Join(name, "history")
+	if os.WriteFile(file, []byte("private-history"), 0o600) != nil || prepareBoundGenerationAt(t.Context(), fd, input, ack, owner) != nil ||
+		unix.Lstat(name, &after) != nil || before.Ino != after.Ino || before.Dev != after.Dev || before.Mode != after.Mode {
+		t.Fatal("provider history root was replaced during rejoin")
+	}
+	raw, err := os.ReadFile(file)
+	if err != nil || string(raw) != "private-history" || unix.Lstat(file, &after) != nil || after.Mode&0o7777 != 0o600 {
+		t.Fatal("rejoin changed private provider history")
+	}
+	if _, err := os.Lstat(filepath.Join(name, "workspaces")); !os.IsNotExist(err) {
+		t.Fatal("private generations became descendants of provider history")
+	}
+}
+
+// TestWorkspaceProviderStateRejectsUnknownExistingEntry never normalizes a foreign link, file or incompatible directory before generation writes.
+// TestWorkspaceProviderStateRejectsUnknownExistingEntry не исправляет unknown link/file/incompatible directory до generation writes.
+func TestWorkspaceProviderStateRejectsUnknownExistingEntry(t *testing.T) {
+	for _, kind := range []string{"symlink", "file", "wrong directory mode"} {
+		t.Run(kind, func(t *testing.T) {
+			fd, root, input, ack, owner := generationPrepareFixture(t)
+			name := filepath.Join(root, runtimecontract.WorkspaceProviderStateSubPath)
+			var err error
+			switch kind {
+			case "symlink":
+				err = os.Symlink(t.TempDir(), name)
+			case "file":
+				err = os.WriteFile(name, []byte("retained"), 0o600)
+			default:
+				err = os.Mkdir(name, 0o700)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			var before, after unix.Stat_t
+			if unix.Lstat(name, &before) != nil || prepareBoundGenerationAt(t.Context(), fd, input, ack, owner) == nil ||
+				unix.Lstat(name, &after) != nil || before.Ino != after.Ino || before.Mode != after.Mode || before.Ctim != after.Ctim {
+				t.Fatal("unknown provider-state entry was admitted or repaired")
+			}
+			if _, err := os.Lstat(filepath.Join(root, "workspaces")); !os.IsNotExist(err) {
+				t.Fatal("unknown provider state allowed generation writes")
+			}
+		})
+	}
+}
+
 // TestWorkspaceGenerationRecoversCompleteProofBeforeAcknowledgement models the exact crash publication boundary.
 // A fresh owner BIND may finish a missing ACK only when the protected mount proof and empty tree still match.
 // TestWorkspaceGenerationRecoversCompleteProofBeforeAcknowledgement моделирует exact crash publication boundary.

@@ -550,7 +550,7 @@ spec:
                  !has(mount.subPath) && (!has(mount.readOnly) || !mount.readOnly)) ||
                 (container.name in ['role-runtime', 'provider-runtime', 'workspace-init'] &&
                  ((mount.mountPath == '/workspace/.kodex/state' &&
-                   !has(mount.subPath) && (!has(mount.readOnly) || !mount.readOnly)) ||
+                   mount.subPath == 'provider-state' && (!has(mount.readOnly) || !mount.readOnly)) ||
                   (mount.mountPath == '/workspace/work' &&
                    mount.subPath == variables.workspaceStoragePrefix + '/tree' &&
                    (!has(mount.readOnly) || !mount.readOnly)) ||

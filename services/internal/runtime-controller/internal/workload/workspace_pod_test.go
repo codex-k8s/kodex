@@ -60,7 +60,9 @@ func TestWorkspacePodMountsRequireBindBeforePrivateGenerationAccess(t *testing.T
 	for _, container := range pod.Spec.Containers {
 		for _, mount := range container.VolumeMounts {
 			if mount.MountPath == runtimecontract.WorkspaceStorageRootMount || mount.MountPath == runtimecontract.WorkspaceMountProofPath && !mount.ReadOnly ||
-				container.Name == "provider-credential-relay" && mount.Name == "session" {
+				container.Name == "provider-credential-relay" && mount.Name == "session" ||
+				mount.Name == "session" && mount.SubPath == "" ||
+				mount.MountPath == "/workspace/.kodex/state" && mount.SubPath != runtimecontract.WorkspaceProviderStateSubPath {
 				t.Fatal("private or writable metadata leaked to a runtime consumer")
 			}
 		}
@@ -72,6 +74,25 @@ func TestWorkspacePodMountsRequireBindBeforePrivateGenerationAccess(t *testing.T
 func TestWorkspacePodRejectsStorageDrift(t *testing.T) {
 	manager, _, input, pod := workspaceStoragePodFixture(t)
 	for name, mutate := range map[string]func(*corev1.Pod){
+		"full PVC through provider state": func(value *corev1.Pod) {
+			for index := range value.Spec.Containers[1].VolumeMounts {
+				if value.Spec.Containers[1].VolumeMounts[index].MountPath == "/workspace/.kodex/state" {
+					value.Spec.Containers[1].VolumeMounts[index].SubPath = ""
+				}
+			}
+		},
+		"history points at private generations": func(value *corev1.Pod) {
+			for index := range value.Spec.Containers[0].VolumeMounts {
+				if value.Spec.Containers[0].VolumeMounts[index].MountPath == "/workspace/.kodex/state" {
+					value.Spec.Containers[0].VolumeMounts[index].SubPath = "workspaces"
+				}
+			}
+		},
+		"missing pod security": func(value *corev1.Pod) { value.Spec.SecurityContext = nil },
+		"recursive group change": func(value *corev1.Pod) {
+			value.Spec.SecurityContext.FSGroupChangePolicy = fsGroupChangePolicyPointer(corev1.FSGroupChangeAlways)
+		},
+		"wrong pod group": func(value *corev1.Pod) { value.Spec.SecurityContext.FSGroup = int64Pointer(0) },
 		"foreign generation": func(value *corev1.Pod) {
 			value.Spec.Containers[0].VolumeMounts = append(value.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{Name: "session", MountPath: "/foreign", SubPath: "workspaces/wks_foreign000/g1/tree"})
 		},

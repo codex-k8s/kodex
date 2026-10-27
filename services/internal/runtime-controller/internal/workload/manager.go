@@ -2505,7 +2505,7 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		Labels:      labels,
 		Annotations: annotations},
 		Spec: corev1.PodSpec{ServiceAccountName: serviceAccountName, AutomountServiceAccountToken: boolPointer(false), EnableServiceLinks: boolPointer(false), RestartPolicy: corev1.RestartPolicyNever, TerminationGracePeriodSeconds: int64Pointer(150),
-			SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: boolPointer(true), FSGroup: int64Pointer(29000), FSGroupChangePolicy: fsGroupChangePolicyPointer(corev1.FSGroupChangeOnRootMismatch), SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
+			SecurityContext: runtimeWorkloadPodSecurityContext(),
 			InitContainers: []corev1.Container{
 				{Name: "workspace-prepare", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-prepare-workspace"}, SecurityContext: restrictedSecurityContext(10001), VolumeMounts: []corev1.VolumeMount{{Name: "workspace", MountPath: "/workspace"}}, Resources: smallResources()},
 				{Name: "workspace-init", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, TerminationMessagePath: "/dev/termination-log", TerminationMessagePolicy: corev1.TerminationMessageReadFile, Args: []string{"runtime-init-workspace"}, SecurityContext: restrictedSecurityContext(10001), VolumeMounts: initMounts, Resources: smallResources()},

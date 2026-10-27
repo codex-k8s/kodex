@@ -64,6 +64,16 @@ func configureWorkspaceStoragePod(pod *corev1.Pod, input runtimecontract.RunnerI
 		}
 	}
 	pod.Spec.InitContainers[1].VolumeMounts = append(pod.Spec.InitContainers[1].VolumeMounts, work, proof, ack)
+	for _, group := range [][]corev1.Container{pod.Spec.InitContainers[1:], pod.Spec.Containers} {
+		for index := range group {
+			for mountIndex := range group[index].VolumeMounts {
+				mount := &group[index].VolumeMounts[mountIndex]
+				if mount.Name == "session" && mount.MountPath == "/workspace/.kodex/state" {
+					mount.SubPath = runtimecontract.WorkspaceProviderStateSubPath
+				}
+			}
+		}
+	}
 	for index := range pod.Spec.Containers {
 		container := &pod.Spec.Containers[index]
 		switch container.Name {
@@ -76,4 +86,14 @@ func configureWorkspaceStoragePod(pod *corev1.Pod, input runtimecontract.RunnerI
 		}
 	}
 	return true
+}
+
+// runtimeWorkloadPodSecurityContext keeps producer and ownership observer on the same exact group and non-recursive-on-match policy.
+// PVC roots must be prepared under separate owner custody before private data is admitted; this context cannot repair an uncertain volume.
+// runtimeWorkloadPodSecurityContext сохраняет одинаковые exact group и non-recursive-on-match policy у producer/ownership observer.
+// PVC roots подготавливаются отдельной owner custody до private data; этот context не исправляет uncertain volume.
+func runtimeWorkloadPodSecurityContext() *corev1.PodSecurityContext {
+	return &corev1.PodSecurityContext{RunAsNonRoot: boolPointer(true), FSGroup: int64Pointer(29000),
+		FSGroupChangePolicy: fsGroupChangePolicyPointer(corev1.FSGroupChangeOnRootMismatch),
+		SeccompProfile:      &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}}
 }

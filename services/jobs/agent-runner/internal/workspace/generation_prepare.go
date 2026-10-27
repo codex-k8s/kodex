@@ -69,6 +69,14 @@ func prepareBoundGenerationAt(ctx context.Context, root int, input runtimecontra
 	if err != nil {
 		return denied
 	}
+	state, _, err := securefile.OpenOwnedDirectoryAt(ctx, root, runtimecontract.WorkspaceProviderStateSubPath, 0o2770,
+		securefile.OwnedRecordIdentity{UID: owner.uid, GID: owner.gid}, true)
+	if err != nil {
+		return denied
+	}
+	if unix.Close(state) != nil {
+		return denied
+	}
 	parts := strings.Split(subpath, "/")
 	current, err := unix.Openat(root, ".", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
 	if err != nil {

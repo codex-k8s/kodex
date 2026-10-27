@@ -63,7 +63,7 @@ def delete_exact(context, kind, value, namespace=None):
     raise RuntimeError('CLEANUP_ABSENCE_UNCONFIRMED')
 
 
-def observe_pod(context, namespace, nonce, node, image, name, uid, fs_group, script):
+def observe_pod(context, namespace, nonce, node, image, name, uid, fs_group, script, pvc_name='probe'):
     """Запустить только свой ограниченный probe, прочитать закрытые observations и удалить exact terminal Pod."""
     security = {'runAsNonRoot': True, 'runAsUser': uid, 'runAsGroup': 29000,
                 'seccompProfile': {'type': 'RuntimeDefault'}}
@@ -81,7 +81,7 @@ def observe_pod(context, namespace, nonce, node, image, name, uid, fs_group, scr
                 'resources': {'requests': {'cpu': '10m', 'memory': '16Mi'},
                               'limits': {'cpu': '100m', 'memory': '64Mi'}},
                 'volumeMounts': [{'name': 'probe', 'mountPath': '/probe'}]}],
-            'volumes': [{'name': 'probe', 'persistentVolumeClaim': {'claimName': 'probe'}}]}}
+            'volumes': [{'name': 'probe', 'persistentVolumeClaim': {'claimName': pvc_name}}]}}
     pod = create(context, value)
     deadline = time.monotonic() + 55
     while time.monotonic() < deadline:
@@ -98,7 +98,8 @@ def observe_pod(context, namespace, nonce, node, image, name, uid, fs_group, scr
             if not lines or any(not re.fullmatch(r'(?:root|directory|file)=[0-7]{3,4}:\d+:\d+|file=INACCESSIBLE|role_can_read=(?:true|false)', s) for s in lines):
                 raise RuntimeError('PROBE_OUTPUT_INVALID')
             delete_exact(context, 'pods', observed, namespace)
-            return {'uid': uid, 'fsGroup': fs_group, 'podUID': pod['metadata']['uid'], 'observations': lines}
+            return {'uid': uid, 'fsGroup': fs_group, 'podUID': pod['metadata']['uid'],
+                    'imageID': statuses[0].get('imageID'), 'observations': lines}
         time.sleep(0.5)
     raise RuntimeError('PROBE_POD_TIMEOUT')
 
@@ -150,19 +151,49 @@ def main():
             if current['metadata']['uid'] != pvc['metadata']['uid']:
                 raise RuntimeError('PROBE_PVC_REPLACED')
             result['observations'].append(observe_pod(context, namespace, nonce, arguments.node, arguments.image, name, uid, group, script))
+        prepared = create(context, {'apiVersion': 'v1', 'kind': 'PersistentVolumeClaim',
+            'metadata': {'name': 'prepared', 'namespace': namespace, 'labels': {LABEL: nonce}},
+            'spec': {'accessModes': ['ReadWriteOnce'], 'storageClassName': 'local-path',
+                     'resources': {'requests': {'storage': '16Mi'}}}})
+        result['preparedPVCUID'] = prepared['metadata']['uid']
+        result['preparedObservations'] = []
+        for name, uid, group, script in [
+            ('prepare-empty-root', 10001, True, 'test ! -e /probe/private; stat -c "root=%a:%u:%g" /probe'),
+            ('prepared-provider', 10002, False, 'umask 077; mkdir /probe/private; printf qa-state > /probe/private/state; stat -c "directory=%a:%u:%g" /probe/private; stat -c "file=%a:%u:%g" /probe/private/state'),
+            ('prepared-role', 10001, True, 'stat -c "root=%a:%u:%g" /probe; stat -c "directory=%a:%u:%g" /probe/private; if test -r /probe/private/state; then echo role_can_read=true; else echo role_can_read=false; fi'),
+            ('prepared-readback', 10002, False, 'stat -c "directory=%a:%u:%g" /probe/private; stat -c "file=%a:%u:%g" /probe/private/state')]:
+            current = read(context, 'persistentvolumeclaims', 'prepared', namespace)
+            if current['metadata']['uid'] != prepared['metadata']['uid']:
+                raise RuntimeError('PREPARED_PROBE_PVC_REPLACED')
+            result['preparedObservations'].append(observe_pod(context, namespace, nonce, arguments.node,
+                arguments.image, name, uid, group, script, pvc_name='prepared'))
+        result['preparedRootPreservedPrivacy'] = (
+            'root=2777:0:29000' in result['preparedObservations'][0]['observations']
+            and 'role_can_read=false' in result['preparedObservations'][2]['observations']
+            and result['preparedObservations'][3]['observations'] == ['directory=700:10002:29000', 'file=600:10002:29000'])
         result['status'] = 'OBSERVED'
     except (RuntimeError, subprocess.TimeoutExpired) as error:
         result['reason'] = str(error) if isinstance(error, RuntimeError) else 'KUBERNETES_REQUEST_TIMEOUT'
     finally:
         result['namespaceAbsent'] = False
+        result['volumesAbsent'] = False
         if owned is not None:
             try:
                 delete_exact(context, 'namespaces', owned)
                 result['namespaceAbsent'] = True
+                expected = {result.get('pvcUID'), result.get('preparedPVCUID')} - {None}
+                deadline = time.monotonic() + 35
+                while time.monotonic() < deadline:
+                    volumes = json.loads(request(context, ['get', 'persistentvolumes', '-o', 'json']).stdout)
+                    retained = [v for v in volumes['items'] if v.get('spec', {}).get('claimRef', {}).get('uid') in expected]
+                    if not retained:
+                        result['volumesAbsent'] = True
+                        break
+                    time.sleep(0.5)
             except (RuntimeError, subprocess.TimeoutExpired):
                 result['cleanup'] = 'UNCONFIRMED_RETAINED'
         print(json.dumps(result))
-    return 0 if result['status'] == 'OBSERVED' and result['namespaceAbsent'] else 1
+    return 0 if result['status'] == 'OBSERVED' and result['namespaceAbsent'] and result['volumesAbsent'] else 1
 
 
 if __name__ == '__main__':

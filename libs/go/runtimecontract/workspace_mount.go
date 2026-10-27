@@ -10,6 +10,9 @@ const (
 	// WorkspaceStorageRootMount is reserved for the trusted first initializer, never the model container.
 	// WorkspaceStorageRootMount предназначен trusted first initializer, не model container.
 	WorkspaceStorageRootMount = "/var/run/config/kodex/session-workspace"
+	// WorkspaceProviderStateSubPath confines provider history to a sibling of private work generations, never the whole session PVC.
+	// WorkspaceProviderStateSubPath ограничивает provider history соседним каталогом private work generations, не всем session PVC.
+	WorkspaceProviderStateSubPath = "provider-state"
 	// WorkspaceMountProofSchema identifies local inode evidence produced only after owner BIND.
 	// WorkspaceMountProofSchema обозначает local inode evidence, создаваемое лишь после owner BIND.
 	WorkspaceMountProofSchema = "kodex.runtime-workspace-mount.v1"

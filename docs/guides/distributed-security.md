@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.32
-updated: 2026-10-25
+version: 1.7.33
+updated: 2026-10-28
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -1949,6 +1949,32 @@ gate — `make test-runtime-admission-gate`, предел процесса 60 с
 активного пользователя не считается мусором.
 
 ## Полнота deployable
+
+Разделение writable generations должно сохраняться во всех mounts, включая
+служебную историю провайдера. Общий session PVC нельзя повторно открыть через
+`.kodex/state`: private generations и history получают разные exact subPath,
+а весь root доступен только доверенному initializer с owner-issued authority.
+Payload/annotation и успешный mount не доказывают это полномочие.
+`FSGroupChangePolicy=OnRootMismatch` не гарантирует сохранение private modes
+при неподготовленном корне. Его первая нормализация допускается только в
+отдельной owner-fenced подготовке нового пустого exact PVC до private data;
+известный корень затем сохраняет нужные gid/permissions. Неизвестный root либо
+неподтверждённая custody блокируют data consumer без recursive repair.
+Проверка привязывается к реальному storage class и фактическим правам после
+повторного Pod: Pod Ready или декларации securityContext недостаточно.
+
+Передача regular-file, directory FD и inode metadata использует разные
+закрытые read-only операции. Расширение одного вида не меняет validator
+другого: regular-file операция не принимает directory/O_PATH/writable FD.
+Kernel peer, exact root/task, inode/type/owner/group, actual access flags,
+CLOEXEC, отсутствие extra rights и неизменность before/after обязательны;
+directory дополнительно проверяет начальный cursor. Metadata frame ограничен
+полями и размером, не передаёт FD и не назначает actor/grant. Все unexpected
+SCM_RIGHTS закрываются, включая отказ и усечение frame. Это не основание
+добавить DAC capabilities либо исправлять чужие permissions.
+
+Граница и воспроизводимые native probes:
+[OPS-DOC-RUNTIME-WORKSPACE-1953](../operations/runtime-workspace-durability-1953.md).
 
 Объявленный том runtime-окружения материализуется также в filesystem profile
 провайдера по exact canonical mount path и закреплённому volumes digest.

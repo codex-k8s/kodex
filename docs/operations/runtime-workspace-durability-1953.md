@@ -4,7 +4,7 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.10
+version: 1.0.11
 updated: 2026-10-28
 ---
 
@@ -18,7 +18,11 @@ work не принимает бизнес-результат и не выдаё�
 Выбранный профиль `SESSION_WORKSPACE_V2` повторно использует существующий
 session PVC20GiB. Только exact writable generation монтируется как
 `/workspace/work`; private parent, другая generation и другие сессии не доступны
-через альтернативный путь `.kodex/state`. Кэши и временные результаты сборки
+через альтернативный путь `.kodex/state`. Последний получает только sibling
+`provider-state` через exact subPath; private `workspaces` остаётся вне этого
+mount. Trusted first initializer создаёт shared history directory UID10001/
+group29000/mode2770 после BIND через общий nofollow/exclusive directory helper;
+существующий неизвестный entry не исправляется. Кэши и временные результаты сборки
 отделены от сохраняемого дерева. Прежние квоты work, количества файлов,
 памяти, выполнения и archive tasks не увеличиваются.
 
@@ -81,7 +85,7 @@ bytes, traversal, links, special files и несовпадение exact object 
 
 V2 snapshot consumer использует только exact read-only work subPath. Main
 UID10001 читает собственные mode0600 files, paired read-only reader UID10002
-передаёт только exact owned10002 regular-file descriptors через private Unix
+передаёт exact owned10002 regular-file descriptors через отдельный `KWR1` private Unix
 socket с kernel peer UID и повторным inode/owner check. Ни root/DAC capability,
 ни chmod исходника, ни общий cross-session FD broker не допускаются. Reader не
 получает object-storage credentials, API token, provider auth или session root;
@@ -522,6 +526,44 @@ read-only metadata и published tree, без helper/socket и повторной
 Task и IPC fixture не монтируются в read-only reconciliation. Этот режим
 проверяет executable и filesystem protocol; он не заменяет проверку Job,
 owner-issued grant, реального storage либо штатного immutable image.
+
+`--roundtrip` добавляет после reconciliation новый read-only snapshot
+опубликованного `gN/tree` силами настоящих UID10001/10002. Восстановленный
+provider-owned каталог0700 с файлом0600 и role-owned файл0600 должны дать
+те же3entries/9bytes и exact canonical digest исходного checkpoint. Права и
+владельцы сохраняются, direct read private provider bytes у UID10001 остаётся
+EACCES. Это data roundtrip, не принятие owner RESTORED.
+
+### Нативные права local-path PVC
+
+`tools/dev/workspace-volume-native-probe.py` требует exact context, cluster/
+staging/node UID и уже доступный pinned runner image. Он создаёт только свой
+одноразовый namespace с restricted Pod Security и deny-all NetworkPolicy,
+два PVC по16MiB и последовательные non-root Pods без capabilities, API token
+или внешней сети. Существующие workloads, namespaces и volumes не меняются.
+Проверка удаляет exact Pod/namespace через UID/RV preconditions и отдельно
+ждёт отсутствия связанных PV. Ошибка cleanup не считается отсутствием.
+
+Первый сценарий намеренно воспроизводит неправильный порядок: UID10002 создаёт
+private0700/0600 на новом root777:0:0; первый Pod с FSGroup29000/
+OnRootMismatch превращает их в2770/0660 и открывает чтение UID10001.
+Это подтверждённый failure сохранения privacy, не PASS платформы.
+Второй сценарий сначала готовит пустой root, затем создаёт private data и
+повторяет Pod с OnRootMismatch: требуются прежние0700/0600 и отказ чужого UID.
+Результат probe — OBSERVED с отдельными observations и cleanup status.
+Безопасная последовательность должна быть реализована в owner provision
+lifecycle до включения V2; сам probe её не материализует в продукте.
+
+Runtime Pod сохраняет FSGroup для прежних Secret/ConfigMap/emptyDir delivery;
+owner-bound volume preparation до data обязательна. Снимать FSGroup со всего
+Pod ради обхода изменения PVC, ломая delivery credentials, запрещено.
+Archive snapshot/restore consumers по-прежнему используют no-FSGroup profile.
+Точный Pod securityContext проверяет и producer, и BIND observer; подмена группы
+или `Always` закрыто отклоняется. Default legacy mounts не меняются.
+
+Проверена официальная
+[документация Kubernetes по volume ownership](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/).
+Context7 текущую авторизацию отклонил; значения ключей не читались и не менялись.
 
 Параметры subpath/read-only сверяются с
 [Docker volumes](https://docs.docker.com/engine/storage/volumes/).

@@ -86,6 +86,9 @@ func (manager *Manager) workspaceStoragePodMatches(input runtimecontract.RunnerI
 		pod.Spec.ShareProcessNamespace != nil && *pod.Spec.ShareProcessNamespace {
 		return false
 	}
+	if !apiequality.Semantic.DeepEqual(pod.Spec.SecurityContext, runtimeWorkloadPodSecurityContext()) {
+		return false
+	}
 	expected := metav1.ObjectMeta{Labels: map[string]string{managedLabel: "true", modeLabel: "turn", "app.kubernetes.io/name": "agent-runner", "app.kubernetes.io/component": "role-runtime", "kodex.dev/environment": manager.config.Environment, executionHashLabel: shortHash(input.LeaseRef)}, Annotations: runtimeProjectionAnnotations(input, pod.Name)}
 	expected.Annotations[leaseAnnotation] = input.LeaseRef
 	expected.Labels[workspaceStorageProfileAnnotation] = runtimecontract.WorkspaceStorageProfile
