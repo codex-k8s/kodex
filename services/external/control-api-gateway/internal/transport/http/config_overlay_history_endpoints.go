@@ -22,18 +22,19 @@ func validCountedCatalogPage(total int64, count int, paging *cp.PageInfo) bool {
 }
 
 // validPublishedOverlay requires a cov_ revision in PUBLISHED/SUPERSEDED state, matching
-// version/revision, coherent creation/publication timestamps and bounded UTF-8 content whose exact
-// SHA-256 matches the digest.
+// version/revision, valid creation/publication timestamps and bounded UTF-8 content whose exact
+// SHA-256 matches the digest. The owner records the timestamps separately within one insert;
+// their relative order does not determine publication or authority.
 // validPublishedOverlay требует cov_ revision в PUBLISHED/SUPERSEDED, совпадения version/revision,
-// согласованных времён создания/публикации и ограниченного UTF-8 содержимого с точным SHA-256
-// digest.
+// корректных времён создания/публикации и ограниченного UTF-8 содержимого с точным SHA-256
+// digest. Владелец записывает метки времени отдельно в одной вставке; их взаимный порядок
+// не определяет публикацию или полномочия.
 func validPublishedOverlay(item *cp.ConfigOverlayVersion) bool {
 	if item == nil || !opaqueHTTPReference.MatchString(item.GetRef()) || !strings.HasPrefix(item.GetRef(), "cov_") ||
 		!validManagedVersion(item.GetRevision()) || item.GetVersion() != item.GetRevision() ||
 		item.GetState() != "PUBLISHED" && item.GetState() != "SUPERSEDED" ||
 		item.GetCreatedAt() == nil || item.GetCreatedAt().CheckValid() != nil ||
 		item.GetPublishedAt() == nil || item.GetPublishedAt().CheckValid() != nil ||
-		item.GetPublishedAt().AsTime().Before(item.GetCreatedAt().AsTime()) ||
 		len(item.GetContent()) > 65536 || !utf8.ValidString(item.GetContent()) || strings.ContainsRune(item.GetContent(), '\x00') {
 		return false
 	}
