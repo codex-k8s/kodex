@@ -709,13 +709,24 @@ export function validWorkflowReviewQAEvidenceMigrationPostcondition(proof) {
 
 // Отдельная015 проверяет полный actual graph и точный каталог; вложенная014
 // обозначает только inverse projection, а не версию реально обслуживаемой БД.
-export function validSessionWorkspaceMigrationPostcondition(proof) {
-  return proof?.profile==='SESSION_WORKSPACE_V2' && proof.readOnly==='on' &&
-    proof.gooseVersion===20261026001500 && proof.workspaceCatalog===true &&
-    proof.workspacePurgeGuard===true && proof.purgeNodes===106 && proof.purgeEdges===294 &&
+function validWorkspaceStorageSchema(proof, profile, version, edges) {
+  return proof?.profile===profile && proof.readOnly==='on' &&
+    proof.gooseVersion===version && proof.workspaceCatalog===true &&
+    proof.workspacePurgeGuard===true && proof.purgeNodes===106 && proof.purgeEdges===edges &&
     typeof proof.purgeNodeFingerprint==='string' && /^[a-f0-9]{32}$/.test(proof.purgeNodeFingerprint) &&
     typeof proof.purgeEdgeFingerprint==='string' && /^[a-f0-9]{32}$/.test(proof.purgeEdgeFingerprint) &&
     validWorkflowReviewQAEvidenceMigrationPostcondition(proof.predecessorProjection);
+}
+
+// Историческая015 принимает только собственную фактическую версию и граф294.
+export function validSessionWorkspaceMigrationPostcondition(proof) {
+  return validWorkspaceStorageSchema(proof,'SESSION_WORKSPACE_V2',20261026001500,294);
+}
+
+// Отдельная016 требует весь каталог архивов/задач и прежнюю полную inverse014.
+export function validWorkspaceCheckpointMigrationPostcondition(proof) {
+  return validWorkspaceStorageSchema(proof,'WORKSPACE_CHECKPOINT_V2',20261026001600,296) &&
+    proof.checkpointCatalog===true;
 }
 
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.

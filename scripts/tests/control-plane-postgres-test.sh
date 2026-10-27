@@ -154,6 +154,7 @@ fi
   schema_version=$(psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" --no-password -X -qAt -v ON_ERROR_STOP=1 \
     -c 'SELECT max(version_id) FILTER (WHERE is_applied) FROM public.goose_db_version')
   case "$schema_version" in
+    20261026001600) schema_proof=workspace-checkpoint-migration-postcondition.sql; schema_verifier=validWorkspaceCheckpointMigrationPostcondition ;;
     20261026001500) schema_proof=session-workspace-migration-postcondition.sql; schema_verifier=validSessionWorkspaceMigrationPostcondition ;;
     20261026001000) schema_proof=server-workflow-migration-postcondition.sql; schema_verifier=validServerWorkflowMigrationPostcondition ;;
     20261026001400) schema_proof=workflow-review-qa-evidence-migration-postcondition.sql; schema_verifier=validWorkflowReviewQAEvidenceMigrationPostcondition ;;

@@ -251,7 +251,7 @@ contract; внешний endpoint не добавляется. Это proof до
 | Controller → CompleteSessionSnapshot | Existing workload identity/permission и task/lease/fence/generation сохраняются; новые Proto fields13/14 несут только digest/entries |
 | Transport → SessionArchiveTaskInput | Поля явно отображаются в snapshot metadata; они не назначают scope, writer, generation или authority |
 | Legacy owner | Непустые новые поля отклоняются. Отсутствующие поля исключены из JSON, поэтому прежние idempotency bytes сохраняются |
-| V2 owner | Формат2 пока закрыто отклоняется прежним owner; coordinator, точная блокировка task/workspace и атомарный checkpoint transition реализуются в этом же unit до activation |
+| V2 owner | Stored V2 discriminator выбирает coordinator с exact task/workspace locks; format2 ACK атомарно создаёт receipt и CHECKPOINT_READY, закрывает task без DELETE_PVC; activation требует полного016 proof |
 
 Task/result validation связывает root key, scope, generation, checkpoint ref,
 полный digest и прежние byte/file limits до отправки owner command. Частичный
