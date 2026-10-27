@@ -9098,22 +9098,6 @@
       "reason": "После выноса общего чтения и блокировки с проверкой версии совпадает только форма ветвления create/update. Создание памяти и набора навыков использует разные typed payload, SQL и идентификаторы; при обновлении проверяются разные состояния PURGED и ACTIVE. Общий lockOwnerVersionState уже сохраняет tenant scope, порядок lock → OCC и отображение ошибок. Универсальная фабрика SQL или callback ради оставшихся веток скрыла бы разные предметные команды и их lifecycle. Сохранена только одна точная пара путей/hash/count1; проверки доступа и остальные участки не исключены."
     },
     {
-      "format": "docker",
-      "firstPath": "services/external/control-api-gateway/Dockerfile",
-      "secondPath": "services/internal/internal-rpc-authority/Dockerfile",
-      "fragmentSHA256": "fdd9ee5bb24b87b53289167801b9bb907454027fb1da5090a704c62b7b67b693",
-      "count": 1,
-      "reason": "Окно после добавления COPY нового модуля сравнивает начало двух Dockerfile: одинаковые закреплённые frontend/compiler, GOTOOLCHAIN и WORKDIR, но разные явные зависимости и deployable. Gateway собирает один HTTP binary и запускается как 10001; authority дополнительно копирует policy и trust roots, собирает отдельные verifier/restore binaries и запускается как 65532. Общий builder с объединённым COPY расширил бы build context и скрыл раздельные dependency/trust boundaries. Сохранена только точная пара путей, hash и count1; код Dockerfile и security-проверки не исключены."
-    },
-    {
-      "format": "docker",
-      "firstPath": "services/internal/internal-rpc-authority/Dockerfile",
-      "secondPath": "services/internal/stt-tts-service/Dockerfile",
-      "fragmentSHA256": "80f5f9653878faf23d11ee6a668439c1f195bf11d5d03601a0d83840488b8b68",
-      "count": 1,
-      "reason": "Окно сравнивает декларативные COPY общих Go-модулей двух самостоятельных образов. Authority добавляет exact Kubernetes Secret и Kubernetes transport, policy и несколько verifier/restore binaries; STT использует sttapi и отдельный runtime с ffmpeg. Общий COPY всех зависимостей расширил бы каждый build context и не устранил разные binaries, зависимости и runtime. Сохранена только точная пара путей, hash и count1; остальные части Dockerfile и проверка зависимостей не исключены."
-    },
-    {
       "format": "go",
       "firstPath": "services/internal/internal-rpc-authority/internal/repository/kubernetes/credentialrollout/rollout.go",
       "secondPath": "services/internal/internal-rpc-authority/internal/repository/kubernetes/restore/store.go",
@@ -9352,6 +9336,30 @@
       "fragmentSHA256": "bc4099b72a612f93486080b8bbf99cc7c224f64d5be5ac9f6c2ffffe412240ad",
       "count": 1,
       "reason": "Два фрагмента component-теста проверяют разные health boundaries: свежая квитанция после изменения grant и исторический terminal без claimed generation. Первый открывает отдельную транзакцию на каждый вызов readProof и закрывает её до последующих изменений grant/configuration; второй удерживает свою транзакцию до завершения subtest и проверяет отказ исторического proof с отдельными synthetic grants. Совпадает явное BeginTx/rollback и поиск organization, но перенос в общий lifecycle helper изменил бы точный момент rollback либо скрыл его от проверок. Сохранён только внутрефайловый hash и count1; transaction scope, grants и assertions не исключены."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/control-api-gateway/Dockerfile",
+      "secondPath": "services/internal/internal-rpc-authority/Dockerfile",
+      "fragmentSHA256": "1c102af4cd84481169e6e40edd4eb9134b505a747aae06e50f89d53e6ea8fc5b",
+      "count": 1,
+      "reason": "Общее окно builder и COPY связывает gateway и authority. Gateway собирает HTTP бинарь с отдельными зависимостями, authority включает policy, trust roots и собственные verifier и restore binaries. Общий контекст скрыл бы разные границы доверия и зависимости; сохраняется только точная пара и количество."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/control-api-gateway/Dockerfile",
+      "secondPath": "services/jobs/backup-controller/Dockerfile",
+      "fragmentSHA256": "204bc05c0dbbdf422783d70b90ddfa839f97b33b9976eddede9613247356cb1a",
+      "count": 1,
+      "reason": "Совпадает начало сборки gateway и backup job с закреплённым Go и несколькими локальными модулями. Наборы зависимостей и бинарные entrypoint различаются; объединение COPY расширило бы контексты самостоятельных deployable. Сохраняется только эта точная пара и количество."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/jobs/artifact-retention/Dockerfile",
+      "secondPath": "services/jobs/backup-controller/Dockerfile",
+      "fragmentSHA256": "106cee345edf8314d2e89277df76dc7ef871b2e83b31c77a6828e2e4625fa9d1",
+      "count": 1,
+      "reason": "Совпадает окно COPY модулей и сборки двух самостоятельных jobs. Artifact retention и backup controller имеют отдельные исполняемые файлы, свои зависимости и порядок загрузки модулей; общий Dockerfile расширил бы контексты и связал независимые релизы. Сохраняется только данная точная пара и количество."
     }
   ]
 }

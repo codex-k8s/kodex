@@ -10,6 +10,7 @@ WORKDIR /workspace
 
 COPY libs/go/exactkubernetessecret/ libs/go/exactkubernetessecret/
 COPY libs/go/grpcserver/ libs/go/grpcserver/
+COPY libs/go/httpserver/ libs/go/httpserver/
 COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
 COPY libs/go/kubernetestransport/ libs/go/kubernetestransport/
 COPY libs/go/observability/ libs/go/observability/
