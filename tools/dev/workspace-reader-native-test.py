@@ -34,7 +34,10 @@ def docker(arguments, timeout=30, check=True):
     result = subprocess.run(['docker', *arguments], capture_output=True, text=True,
                             timeout=timeout, stdin=subprocess.DEVNULL)
     if check and result.returncode:
-        raise RuntimeError('DOCKER_OPERATION_FAILED')
+        operation = {'create': 'CREATE', 'start': 'START', 'inspect': 'INSPECT', 'stop': 'STOP', 'rm': 'REMOVE',
+                     'volume': 'VOLUME', 'image': 'IMAGE', 'context': 'CONTEXT', 'info': 'INFO', 'logs': 'LOGS',
+                     'container': 'CONTAINER'}.get(arguments[0], 'OPERATION')
+        raise RuntimeError('DOCKER_'+operation+'_FAILED')
     return result
 
 
@@ -110,7 +113,7 @@ def volume_ready_consumers(binary, volume, nonce, identities, temporary):
     def helper(phase, mode, readonly, input_path, denied=False):
         """Запустить exact binary с отдельным tmpfs для termination outcome, без writable host bind."""
         arguments = ['--entrypoint=/qa-helper',
-            '--tmpfs', '/dev:rw,nodev,nosuid,noexec,size=1048576,mode=1777',
+            '--tmpfs', '/dev:rw,nosuid,noexec,size=1048576,mode=1777',
             '--env', 'SESSION_ARCHIVE_WORKER_TIMEOUT=1m', '--env', 'GOMAXPROCS=1',
             '--env', 'GOMEMLIMIT=16MiB',
             '--mount', 'type=bind,source='+str(binary)+',target=/qa-helper,readonly',
@@ -120,6 +123,7 @@ def volume_ready_consumers(binary, volume, nonce, identities, temporary):
             outcome = run_container(volume+'-'+phase, nonce, arguments, [mode], identities, user='10001:29000')
         except NativeConsumerFailure as error:
             outcome = error.outcome
+            outcome['phase'] = phase
             if (not denied or outcome['exitCode'] != 1 or outcome['oomKilled']
                     or outcome['logSHA256'] != hashlib.sha256(b'session workspace writer failed\n').hexdigest()):
                 raise
