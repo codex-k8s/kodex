@@ -1,4 +1,10 @@
-import { expect, test, type Page } from "@playwright/test";
+import {
+  expect,
+  test,
+  type Locator,
+  type Page,
+  type Response,
+} from "@playwright/test";
 
 import type { PromptTemplatePreview } from "../src/shared/api/generated/openapi/types.gen";
 import { exactAgent } from "./fixtures/exact-agent";
@@ -32,11 +38,7 @@ test("Материализованный preview показывает pin и б�
     await openInstructionEditor(page);
   await expect(editor).not.toHaveText("");
 
-  const successfulPreview = page.waitForResponse(isPromptPreviewResponse);
-  await panel
-    .getByRole("button", { name: "Проверка подстановки", exact: true })
-    .click();
-  const successfulResponse = await successfulPreview;
+  const successfulResponse = await previewInstructions(page, panel);
   expect(successfulResponse.status()).toBe(200);
   const preview = (await successfulResponse.json()) as PromptTemplatePreview;
   expect(preview.complete).toBe(true);
@@ -62,11 +64,7 @@ test("Материализованный preview показывает pin и б�
 
   await panel.getByRole("button", { name: "Редактор", exact: true }).click();
   await editor.fill("{{.unknown.value}}");
-  const invalidPreview = page.waitForResponse(isPromptPreviewResponse);
-  await panel
-    .getByRole("button", { name: "Проверка подстановки", exact: true })
-    .click();
-  const invalidResponse = await invalidPreview;
+  const invalidResponse = await previewInstructions(page, panel);
   expect(invalidResponse.status()).toBeGreaterThanOrEqual(400);
   expect(invalidResponse.status()).toBeLessThan(500);
   const problem = (await invalidResponse.json()) as PromptProblem;
@@ -87,11 +85,7 @@ test("Материализованный preview показывает pin и б�
 
   await panel.getByRole("button", { name: "Редактор", exact: true }).click();
   await editor.fill("{{range .agent.name}}value{{end}}");
-  const wrongTypePreview = page.waitForResponse(isPromptPreviewResponse);
-  await panel
-    .getByRole("button", { name: "Проверка подстановки", exact: true })
-    .click();
-  const wrongTypeResponse = await wrongTypePreview;
+  const wrongTypeResponse = await previewInstructions(page, panel);
   expect(wrongTypeResponse.status()).toBe(400);
   const wrongTypeProblem = (await wrongTypeResponse.json()) as PromptProblem;
   expect(wrongTypeProblem).toMatchObject({
@@ -112,11 +106,7 @@ test("Материализованный preview показывает pin и б�
 
   await panel.getByRole("button", { name: "Редактор", exact: true }).click();
   await editor.fill("Простой текст без переменных.");
-  const simplePreview = page.waitForResponse(isPromptPreviewResponse);
-  await panel
-    .getByRole("button", { name: "Проверка подстановки", exact: true })
-    .click();
-  const simpleResponse = await simplePreview;
+  const simpleResponse = await previewInstructions(page, panel);
   const simpleBody = (await simpleResponse.json()) as PromptTemplatePreview;
   expect(simpleResponse.status()).toBe(200);
   expect(simpleBody.complete).toBe(true);
@@ -132,11 +122,7 @@ test("Материализованный preview показывает pin и б�
   await editor.fill(
     "{{range .input.files}}{{.name}}{{end}} {{range .runtime.environment.tools}}{{.name}}{{end}}",
   );
-  const unavailableRangePreview = page.waitForResponse(isPromptPreviewResponse);
-  await panel
-    .getByRole("button", { name: "Проверка подстановки", exact: true })
-    .click();
-  const unavailableRangeResponse = await unavailableRangePreview;
+  const unavailableRangeResponse = await previewInstructions(page, panel);
   expect(unavailableRangeResponse.status()).toBe(400);
   const unavailableRangeProblem =
     (await unavailableRangeResponse.json()) as PromptProblem;
@@ -165,11 +151,7 @@ test("MVP-UI-35 не дублирует пользовательский slot и
   const { serverFailures, panel, editor } = await openInstructionEditor(page);
   await editor.fill('Пользовательская часть\n{{slot "PURPOSE"}}');
 
-  const previewResponse = page.waitForResponse(isPromptPreviewResponse);
-  await panel
-    .getByRole("button", { name: "Проверка подстановки", exact: true })
-    .click();
-  const response = await previewResponse;
+  const response = await previewInstructions(page, panel);
   expect(response.status()).toBe(200);
   const preview = (await response.json()) as PromptTemplatePreview;
   expect(preview.complete).toBe(true);
@@ -236,6 +218,18 @@ test("MVP-UI-35 не дублирует пользовательский slot и
 
 // openInstructionEditor готовит общий локальный путь к редактору и собирает ошибки сервера.
 // Сценарии самостоятельно задают содержимое и проверяют ответы preview.
+// previewInstructions ожидает ответ проверки и запускает её после регистрации ожидания.
+async function previewInstructions(
+  page: Page,
+  panel: Locator,
+): Promise<Response> {
+  const response = page.waitForResponse(isPromptPreviewResponse);
+  await panel
+    .getByRole("button", { name: "Проверка подстановки", exact: true })
+    .click();
+  return response;
+}
+
 async function openInstructionEditor(page: Page) {
   const serverFailures: string[] = [];
   page.on("response", (response) => {
