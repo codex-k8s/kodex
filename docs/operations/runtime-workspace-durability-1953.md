@@ -91,6 +91,12 @@ socket с kernel peer UID и повторным inode/owner check. Ни root/DAC
 UID10001 с primary GID29000 и проверкой mode2770, без CAP_FSETID; reader
 работает UID10002 без capabilities. Неизвестное владение,
 недоступный private directory или изменённый descriptor оставляют PVC в BLOCKED.
+Read-only checkpoint verifier проверяет exact root receipt, scope/generation,
+все последовательно прочитанные part versions и их digest/размеры. Canonical TAR
+повторно кодируется в hash sink: неизвестные владельцы, links, traversal,
+метаданные PAX, timestamps, права и лишние bytes отклоняются независимо от
+корректности object hashes. Он не создаёт файлов и не даёт restore authority.
+
 Canonical stream сохраняет закрытый logical owner ROLE/PROVIDER в Uname,
 а числовые UID/GID обнуляет. Restore сопоставляет ROLE с UID10001, PROVIDER
 с UID10002 при общем GID29000 и создаёт файлы только в новой собственной
