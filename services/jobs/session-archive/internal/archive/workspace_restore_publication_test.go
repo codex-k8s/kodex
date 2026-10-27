@@ -49,11 +49,25 @@ func newWorkspaceRestorePublicationFixture(t *testing.T, encoders ...workspaceSn
 		t.Fatal("prepare checkpoint fixture")
 	}
 	task = restoreTaskFromSnapshotFixture(t, task, result)
-	root := t.TempDir()
-	if unix.Chmod(root, 0o700) != nil || unix.Mkdir(filepath.Join(root, workspaceRestoreStagingTree), 0o2770) != nil ||
-		unix.Chmod(filepath.Join(root, workspaceRestoreStagingTree), 0o2770) != nil {
-		t.Fatal("prepare private generation fixture")
+	task.Workspace.PVCUID = "pvc-fixture"
+	volume := t.TempDir()
+	if unix.Chmod(volume, 0o700) != nil {
+		t.Fatal("prepare private volume fixture")
 	}
+	volumeFD, err := unix.Open(volume, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+	if err != nil {
+		t.Fatal("open volume fixture")
+	}
+	t.Cleanup(func() { _ = unix.Close(volumeFD) })
+	owner := securefile.OwnedRecordIdentity{UID: uint32(os.Geteuid()), GID: uint32(os.Getegid())}
+	if prepareWorkspaceRestoreGenerationAt(ctx, volumeFD, task, "pvc-fixture", owner) != nil {
+		t.Fatal("prepare actual private generation")
+	}
+	subpath, err := task.Workspace.Target.GenerationSubPath()
+	if err != nil {
+		t.Fatal("resolve fixture generation")
+	}
+	root := filepath.Join(volume, filepath.Dir(subpath))
 	parent, err := unix.Open(root, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
 	if err != nil {
 		t.Fatal("open generation fixture")
@@ -64,12 +78,6 @@ func newWorkspaceRestorePublicationFixture(t *testing.T, encoders ...workspaceSn
 		t.Fatal("open unpublished tree fixture")
 	}
 	t.Cleanup(func() { _ = unix.Close(tree) })
-	owner := securefile.OwnedRecordIdentity{UID: uint32(os.Geteuid()), GID: uint32(os.Getegid())}
-	intent, err := workspaceRestoreIntentBytes(task, "pvc-fixture")
-	if err != nil || securefile.WriteOwnedRecordAt(ctx, parent, workspaceRestoreIntentFile, intent,
-		runtimecontract.MaximumWorkspaceManifestBytes, owner) != nil {
-		t.Fatal("seal logical restore fixture")
-	}
 	publication, err := newWorkspaceRestorePublication(ctx, parent, task, "pvc-fixture", owner)
 	if err != nil {
 		t.Fatal("open actual generation publisher")

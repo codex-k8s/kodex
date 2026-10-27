@@ -8,13 +8,13 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
-	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/libs/go/securefile"
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
 	"golang.org/x/sys/unix"
@@ -50,7 +50,9 @@ func workspaceWriterNativeCheckpoint(t *testing.T) (model.Task, *workspaceObject
 	if err != nil {
 		t.Fatal("prepare deterministic native checkpoint")
 	}
-	return restoreTaskFromSnapshotFixture(t, task, result), store
+	task = restoreTaskFromSnapshotFixture(t, task, result)
+	task.Workspace.PVCUID = "pvc-fixture"
+	return task, store
 }
 
 // TestWorkspaceWriterTwoUIDNative runs only in the explicit disposable container and checks real UID ownership and process joining.
@@ -73,6 +75,13 @@ func TestWorkspaceWriterTwoUIDNative(t *testing.T) {
 	if unix.Capget(&header, &capabilities[0]) != nil || capabilities[0].Effective != 0 || capabilities[1].Effective != 0 ||
 		capabilities[0].Permitted != 0 || capabilities[1].Permitted != 0 {
 		t.Fatal("writable native consumer retained capabilities")
+	}
+	if mode == "prepare" {
+		task, _ := workspaceWriterNativeCheckpoint(t)
+		if os.Geteuid() != 10001 || PrepareWorkspaceRestore(ctx, task) != nil {
+			t.Fatal("fixed UID native generation initializer failed")
+		}
+		return
 	}
 	root, err := unix.Open(workspaceWriterNativeTree, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if err != nil {
@@ -131,16 +140,16 @@ func TestWorkspaceWriterTwoUIDNative(t *testing.T) {
 // workspaceWriterNativeMain восстанавливает через actual writable peer и ждёт coordinator-confirmed process exit до publication.
 func workspaceWriterNativeMain(t *testing.T, ctx context.Context, root int, task model.Task, store *workspaceObjectFixture, identity workspaceRestoreIdentity) {
 	t.Helper()
-	parent, err := unix.Open("/restore/generation", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	subpath, err := task.Workspace.Target.GenerationSubPath()
+	if err != nil {
+		t.Fatal("resolve native selected generation")
+	}
+	parent, err := unix.Open("/restore/"+path.Dir(subpath), unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if err != nil {
 		t.Fatal("open private native generation")
 	}
 	defer unix.Close(parent)
 	owner := securefile.OwnedRecordIdentity{UID: 10001, GID: 29000}
-	intent, err := workspaceRestoreIntentBytes(task, "pvc-fixture")
-	if err != nil || securefile.WriteOwnedRecordAt(ctx, parent, workspaceRestoreIntentFile, intent, runtimecontract.MaximumWorkspaceManifestBytes, owner) != nil {
-		t.Fatal("seal native logical intent")
-	}
 	publication, err := newWorkspaceRestorePublication(ctx, parent, task, "pvc-fixture", owner)
 	if err != nil {
 		t.Fatal("open native publisher")

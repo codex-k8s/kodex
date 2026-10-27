@@ -76,48 +76,20 @@ func prepareBoundGenerationAt(ctx context.Context, root int, input runtimecontra
 	}
 	defer func() { _ = unix.Close(current) }()
 	for _, component := range parts[:len(parts)-1] {
-		if ctx.Err() != nil {
-			return denied
-		}
-		createErr := unix.Mkdirat(current, component, 0o700)
-		if createErr != nil && !errors.Is(createErr, unix.EEXIST) {
-			return denied
-		}
-		created := createErr == nil
-		next, err := unix.Openat2(current, component, &unix.OpenHow{Flags: unix.O_RDONLY | unix.O_DIRECTORY | unix.O_CLOEXEC,
-			Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_SYMLINKS | unix.RESOLVE_NO_XDEV})
+		next, _, err := securefile.OpenOwnedDirectoryAt(ctx, current, component, 0o700,
+			securefile.OwnedRecordIdentity{UID: owner.uid, GID: owner.gid}, true)
 		if err != nil {
-			return denied
-		}
-		var info unix.Stat_t
-		if created && unix.Fchmod(next, 0o700) != nil || unix.Fstat(next, &info) != nil || info.Uid != owner.uid || info.Mode&0o7777 != 0o700 {
-			unix.Close(next)
-			return denied
-		}
-		if created && (unix.Fsync(next) != nil || unix.Fsync(current) != nil) {
-			unix.Close(next)
 			return denied
 		}
 		unix.Close(current)
 		current = next
 	}
-	createErr := unix.Mkdirat(current, "tree", 0o2770)
-	if createErr != nil && !errors.Is(createErr, unix.EEXIST) {
-		return denied
-	}
-	created := createErr == nil
-	tree, err := unix.Openat2(current, "tree", &unix.OpenHow{Flags: unix.O_RDONLY | unix.O_DIRECTORY | unix.O_CLOEXEC,
-		Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_SYMLINKS | unix.RESOLVE_NO_XDEV})
+	tree, created, err := securefile.OpenOwnedDirectoryAt(ctx, current, "tree", 0o2770,
+		securefile.OwnedRecordIdentity{UID: owner.uid, GID: owner.gid}, true)
 	if err != nil {
 		return denied
 	}
 	defer unix.Close(tree)
-	if created && (unix.Fchown(tree, -1, int(owner.gid)) != nil || unix.Fchmod(tree, 0o2770) != nil) {
-		return denied
-	}
-	if created && (unix.Fsync(tree) != nil || unix.Fsync(current) != nil) {
-		return denied
-	}
 	var info unix.Stat_t
 	if unix.Fstat(tree, &info) != nil || info.Uid != owner.uid || info.Gid != owner.gid || info.Mode&0o7777 != 0o2770 {
 		return denied

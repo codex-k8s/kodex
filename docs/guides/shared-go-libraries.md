@@ -4,8 +4,8 @@ title: Общие библиотеки Go
 type: guide
 status: approved
 owner: architect
-version: 1.0.6
-updated: 2026-10-25
+version: 1.0.7
+updated: 2026-10-27
 ---
 
 # Общие библиотеки Go
@@ -285,6 +285,17 @@ Pod `fsGroup`, как принадлежащий non-root UID/GID процесс
 Библиотека не определяет формат credential и не делает `0444` безопасным вне
 изолированного read-only container mount. Эта граница доказывается итоговым
 Kubernetes render по `GUIDE-DOC-003`.
+
+Owned metadata и directories используют отдельные descriptor-relative API,
+не меняющие projected credential contract. Caller заранее доказывает exact
+parent mount/PVC, task grant и lifecycle barrier; имя и filesystem owner не
+являются authority. Record создаётся write-once0440 с exact UID/GID и durable
+readback. Directory допускает только private0700/shared2770 и закрыто
+отклоняет symlink/mount crossing; существующие entry/mode/owner никогда не
+исправляются автоматически. Partial/unknown bytes сохраняются. Lease retry
+не разрешает overwrite или новый effect без специализированного owner-перехода.
+Grant/JSON-schema/generation semantics остаются у runner/archive, а общий
+syscall/mode/ownership boundary проверяется одной библиотекой.
 
 ### `postgrescredential`
 

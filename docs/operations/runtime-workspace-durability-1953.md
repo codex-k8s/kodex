@@ -4,7 +4,7 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.4
+version: 1.0.5
 updated: 2026-10-27
 ---
 
@@ -243,6 +243,31 @@ result и не удаляются. Специализированное прод
 Эти adapter-проверки не доказывают trusted initializer, отдельный writable
 provider peer, physical Pod/PVC binding или owner RESTORED/RuntimeRevision ACK.
 
+`PrepareWorkspaceRestore` запускается только под UID10001/GID29000 и открывает
+fixed full-PVC mount, назначенный initializer. Controller обязан до запуска
+доказать текущий owner grant, exact observed PVC UID и join всех прежних
+writers/consumer workloads. Непустой PVC UID в immutable task обязателен,
+но сам по себе не доказывает физическое владение томом.
+
+Initializer создаёт только private0700 `workspaces/<workspace>/gN`, sealed
+logical intent и empty shared2770 `.restore-tree`. Общий `securefile`
+обслуживает exact directory ownership/mode/no-link/no-mount-crossing и
+durability; runner использует тот же примитив. Parent root остаётся у caller,
+готовый `tree`, source/prepared records и writer ACK initializer не создаёт.
+
+| Состояние подготовки | Допуск и результат | Событие/read path |
+| --- | --- | --- |
+| Fresh generation, нет intent и entries | Только новый разрешённый target; sealed intent перед созданием empty stage | Domain event нет; exact protected intent/stage readback |
+| Restart init, matching intent и empty stage | Те же logical input/PVC; без перезаписи intent или смены inode | Domain event нет; те же records и directory metadata |
+| Matching intent, stage ещё отсутствует | Завершить только подготовку до начала data writers | Domain event нет; empty stage и durable parent |
+| Reconcile-only, missing/wrong PVC, cancel | Отказ до создания ancestors | Domain event нет; исходный owner task и filesystem readback |
+| Partial/nonempty stage, unknown entry, foreign intent/mode/link или served tree | Закрытый отказ, данные и metadata сохраняются | Domain event нет; отдельный owner repair/recovery ещё требуется |
+
+Native restore начинает с отдельного capability-free UID10001 initializer и
+только затем монтирует созданный exact subpath. Это проверка исполняемой
+файловой подготовки; production controller/worker registration, owner CAS и
+post-restore continuation пока остаются незавершёнными частями unit.
+
 Отдельный внутренний writable peer использует `KWW1`, а snapshot wire остаётся
 read-only. До создания файлов обе стороны проверяют kernel `SO_PEERCRED`,
 canonical task digest и фактические root device/inode. Caller trusted wrapper
@@ -410,7 +435,10 @@ UID10002 проверяют отсутствие effective/permitted capabilitie
 provider verifier сверяет bytes/owner/mode после завершения main.
 
 Generation parent0700 и точное `.restore-tree` монтируются из одной disposable
-volume, для tree используется штатный `volume-subpath`. Это проверка реальных
+volume, для tree используется штатный `volume-subpath`. Root fixture готовит
+только корень volume, а private ancestors/intent/stage создаёт отдельный
+UID10001 initializer без capabilities через настоящий PrepareWorkspaceRestore.
+Это проверка реальных
 файловых механизмов и SCM_RIGHTS между UID, не production Kubernetes render,
 S3 custody, owner RESTORED или full backup/restore. Default snapshot mode и его
 read-only mount остаются прежними. Отсутствие opt-in в обычном go test даёт

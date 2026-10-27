@@ -27,25 +27,34 @@ type OwnedRecordIdentity struct{ UID, GID uint32 }
 func ownedRecordParent(ctx context.Context, parent int, name string, maximum int64, owner OwnedRecordIdentity) (syscall.Stat_t, error) {
 	var info syscall.Stat_t
 	if ctx == nil || ctx.Err() != nil || parent < 0 || maximum < 1 || maximum > maximumOwnedRecordBytes ||
-		len(name) < 1 || len(name) > 255 || name == "." || name == ".." || strings.ContainsAny(name, "/\\\x00") {
+		!ownedEntryName(name) {
 		return info, errInvalidBoundary
-	}
-	for _, character := range []byte(name) {
-		if character < 'a' || character > 'z' {
-			if character < 'A' || character > 'Z' {
-				if character < '0' || character > '9' {
-					if character != '.' && character != '_' && character != '-' {
-						return info, errInvalidBoundary
-					}
-				}
-			}
-		}
 	}
 	if syscall.Fstat(parent, &info) != nil || info.Mode&syscall.S_IFMT != syscall.S_IFDIR ||
 		info.Mode&0o7777 != 0o700 || info.Uid != owner.UID {
 		return info, errUnsafe
 	}
 	return info, nil
+}
+
+// ownedEntryName accepts one bounded ASCII component shared by private directory and record operations.
+// ownedEntryName принимает один bounded ASCII component для private directory и record operations.
+func ownedEntryName(name string) bool {
+	if len(name) < 1 || len(name) > 255 || name == "." || name == ".." || strings.ContainsAny(name, "/\\\x00") {
+		return false
+	}
+	for _, character := range []byte(name) {
+		if character < 'a' || character > 'z' {
+			if character < 'A' || character > 'Z' {
+				if character < '0' || character > '9' {
+					if character != '.' && character != '_' && character != '-' {
+						return false
+					}
+				}
+			}
+		}
+	}
+	return true
 }
 
 // validOwnedRecord requires one nonempty read-only0440 regular inode on the same filesystem as the private parent.

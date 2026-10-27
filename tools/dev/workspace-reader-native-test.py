@@ -16,6 +16,8 @@ import uuid
 IMAGE = ('docker.io/library/postgres:18.3-alpine3.23@sha256:'
          '54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7')
 LABEL = 'kodex.dev/workspace-reader-native'
+# Exact path из закрытой workspaceWriterNativeCheckpoint; изменение fixture требует нового pinned binary.
+RESTORE_FIXTURE_PARENT = 'workspaces/wks_fixture000/g3'
 
 
 class NativeConsumerFailure(RuntimeError):
@@ -51,13 +53,13 @@ def inspect_container(identity):
     return None
 
 
-def run_container(name, nonce, arguments, command, identities):
+def run_container(name, nonce, arguments, command, identities, user='0:29000'):
     """Создать один pinned контейнер, сохранить его ID до запуска и проверить terminal outcome."""
     created = docker(['create', '--name', name, '--label', LABEL+'='+nonce,
                       '--pull=never', '--network=none', '--read-only', '--pids-limit=64',
                       '--cpus=1', '--memory=256m', '--memory-swap=256m',
                       '--security-opt=no-new-privileges', '--cap-drop=ALL',
-                      '--user=0:29000', *arguments, IMAGE, *command])
+                      '--user='+user, *arguments, IMAGE, *command])
     identity = created.stdout.strip()
     if not re.fullmatch('[a-f0-9]{64}', identity):
         raise RuntimeError('CONTAINER_CREATE_UNCONFIRMED')
@@ -128,16 +130,20 @@ def main():
                    'chown 10001:29000 /source; chmod 2770 /source; '
                    'test "$(stat -c %a:%u:%g /source)" = "2770:10001:29000"')
         if arguments.mode == 'restore':
-            prepare = ('umask 077; mkdir -p /source/generation/.restore-tree; '
-                       'chmod 770 /source/generation; '
-                       'chown 10001:29000 /source/generation/.restore-tree /source/generation /source; '
-                       'chmod 2770 /source /source/generation/.restore-tree; '
-                       'test "$(stat -c %a:%u:%g /source/generation/.restore-tree)" = "2770:10001:29000"; '
-                       'chmod 700 /source/generation; '
-                       'test "$(stat -c %a:%u:%g /source/generation)" = "700:10001:29000"')
+            prepare = ('umask 077; chown 0:29000 /source; chmod 2770 /source; '
+                       'test "$(stat -c %a:%u:%g /source)" = "2770:0:29000"')
         outcomes.append(run_container(volume+'-prepare', nonce,
             ['--cap-add=CHOWN', '--cap-add=FOWNER', '--entrypoint=/bin/sh',
              '--mount', 'type=volume,source='+volume+',target=/source'], ['-ec', prepare], identities))
+        if arguments.mode == 'restore':
+            outcomes.append(run_container(volume+'-initialize', nonce,
+                ['--entrypoint=/qa-test',
+                 '--mount', 'type=bind,source='+str(binary)+',target=/qa-test,readonly',
+                 '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/session-workspace',
+                 '--tmpfs', '/tmp:rw,nosuid,nodev,noexec,size=4m,mode=1777',
+                 '--env', 'KODEX_WORKSPACE_WRITER_NATIVE=prepare', '--env', 'GOMAXPROCS=1'],
+                ['-test.run=^TestWorkspaceWriterTwoUIDNative$', '-test.timeout=30s', '-test.v'],
+                identities, user='10001:29000'))
         # Private fixtures only: no source tree, credentials, daemon socket or host network is mounted.
         consumer_arguments = ['--cap-add=SETUID', '--cap-add=SETGID', '--entrypoint=/qa-test',
              '--mount', 'type=bind,source='+str(binary)+',target=/qa-test,readonly',
@@ -152,7 +158,7 @@ def main():
             test_name = 'TestWorkspaceWriterTwoUIDNative'
             consumer_arguments += [
                 '--mount', 'type=volume,source='+volume+',target=/restore',
-                '--mount', 'type=volume,source='+volume+',target=/workspace/restore-tree,volume-subpath=generation/.restore-tree',
+                '--mount', 'type=volume,source='+volume+',target=/workspace/restore-tree,volume-subpath='+RESTORE_FIXTURE_PARENT+'/.restore-tree',
                 '--tmpfs', '/var/run/kodex/work-writer:rw,nosuid,nodev,noexec,size=1m,uid=10001,gid=29000,mode=2770',
                 '--env', 'KODEX_WORKSPACE_WRITER_NATIVE=coordinator']
         outcomes.append(run_container(volume+'-consume', nonce, consumer_arguments,

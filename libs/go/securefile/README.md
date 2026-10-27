@@ -1,10 +1,10 @@
 ---
 id: GO-LIB-SECUREFILE-001
-title: Безопасные projected files и owned records
+title: Безопасные projected files и owned entries
 type: component
 status: approved
 owner: architect
-version: 1.1.0
+version: 1.2.0
 updated: 2026-10-27
 ---
 
@@ -46,3 +46,20 @@ Read не доказывает предшествующий durable commit. Call
 background context, не хранит state и не логирует private values/paths.
 Прежние API чтения projected credentials сохраняют свои symlink/mode contracts;
 новый owned-record API не является fallback для service-account token.
+
+## Owned directories на Linux
+
+`OpenOwnedDirectoryAt` открывает либо явно создаёт один component под уже
+разрешённым parent descriptor. Допустимы только private0700 и shared2770;
+UID назначает trusted process policy, shared directory требует exact GID.
+Private group не даёт доступа и может отличаться. Parent mount/custody и его
+access policy доказывает caller до вызова; helper сам не выдаёт authority.
+
+`openat2` запрещает symlink и любой mount crossing, включая bind mount на том
+же device. Новое создание использует mkdir, actual owner/mode readback и
+fsync(child/parent); существующие entries не chmod/chown и не очищаются.
+Read-only open отсутствующего directory возвращает ENOENT без create.
+Returned FD имеет CLOEXEC и принадлежит caller; parent остаётся открыт.
+При ошибке helper закрывает только свой FD, сохраняя даже partial directory.
+Живой context обязателен. Linux syscall adapter использует уже закреплённый
+сервисами `golang.org/x/sys v0.47.0`; внешний API библиотека не вызывает.
