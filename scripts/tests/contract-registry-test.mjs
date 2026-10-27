@@ -114,8 +114,8 @@ test('image risk contract has exact human-only methods and full safe report page
 
 test('image risk contract rejects delegated caller, project authority, missing pins and hidden severity', () => {
   for (const mutate of [
-    (api, policy) => { policy.policy_revision = 97; },
-    (api, policy) => { policy.policy_revision = 99; },
+    (api, policy) => { policy.policy_revision = 98; },
+    (api, policy) => { policy.policy_revision = 100; },
     (api, policy) => { policy.policy.operation_bindings.find(value => value.operation_id === riskOperations[0][0]).caller_workload_id = 'agent-runner'; },
     (api, policy) => { policy.policy.operation_bindings.find(value => value.operation_id === riskOperations[2][0]).project_required = true; },
     (api) => { api.components.schemas.ImageVulnerabilitySeverity.enum.pop(); },
