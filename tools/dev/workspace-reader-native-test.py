@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import stat
 import subprocess
+import tempfile
 import time
 import uuid
 
@@ -90,12 +91,74 @@ def run_container(name, nonce, arguments, command, identities, user='0:29000'):
     raise RuntimeError('NATIVE_CONSUMER_TIMEOUT')
 
 
+def volume_ready_consumers(binary, volume, nonce, identities, temporary):
+    """Проверить настоящий fixed-UID helper, read-only rejoin и отказы без модели, Kubernetes API или credentials."""
+    intent = {'scope': {'organization_ref': 'org_fixture000', 'project_ref': 'prj_fixture000',
+                       'session_ref': 'ses_fixture000', 'agent_ref': 'agt_fixture000'},
+              'workspace_ref': 'wks_fixture000', 'task_ref': 'sat_fixture000',
+              'pvc_uid': '10000000-0000-4000-8000-000000000001', 'volume_generation': 1}
+    inputs = []
+    for name, value in [('volume.json', intent), ('changed.json', dict(intent, pvc_uid='other-pvc'))]:
+        path = temporary / name
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o400)
+        with os.fdopen(descriptor, 'w') as output:
+            output.write(json.dumps(value, separators=(',', ':')))
+        path.chmod(0o444)
+        inputs.append(path)
+    outcomes = []
+
+    def helper(phase, mode, readonly, input_path, denied=False):
+        """Запустить exact binary с отдельным tmpfs для termination outcome, без writable host bind."""
+        arguments = ['--entrypoint=/qa-helper',
+            '--tmpfs', '/dev:rw,nodev,nosuid,noexec,size=1048576,mode=1777',
+            '--env', 'SESSION_ARCHIVE_WORKER_TIMEOUT=1m', '--env', 'GOMAXPROCS=1',
+            '--env', 'GOMEMLIMIT=16MiB',
+            '--mount', 'type=bind,source='+str(binary)+',target=/qa-helper,readonly',
+            '--mount', 'type=bind,source='+str(input_path)+',target=/var/run/config/kodex/session-archive/volume.json,readonly',
+            '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/session-workspace'+(',readonly' if readonly else '')]
+        try:
+            outcome = run_container(volume+'-'+phase, nonce, arguments, [mode], identities, user='10001:29000')
+        except NativeConsumerFailure as error:
+            outcome = error.outcome
+            if (not denied or outcome['exitCode'] != 1 or outcome['oomKilled']
+                    or outcome['logSHA256'] != hashlib.sha256(b'session workspace writer failed\n').hexdigest()):
+                raise
+            outcome['expectedDenial'] = True
+        else:
+            if denied:
+                raise RuntimeError('UNSAFE_VOLUME_PREPARATION_ACCEPTED')
+        outcomes.append(dict(outcome, phase=phase))
+
+    helper('ready', 'volume', False, inputs[0])
+    private = ('umask 077; mkdir /source/private; chmod 700 /source/private; chmod g-s /source/private; '
+               'printf retained-work > /source/private/draft; '
+               'test "$(stat -c %a:%u:%g /source/private)" = "700:10002:29000"; '
+               'test "$(stat -c %a:%u:%g /source/private/draft)" = "600:10002:29000"; '
+               'if cat /source/volume-meta/ready.json >/dev/null 2>&1; then exit 1; fi')
+    outcomes.append(run_container(volume+'-private', nonce,
+        ['--entrypoint=/bin/sh', '--mount', 'type=volume,source='+volume+',target=/source'],
+        ['-ec', private], identities, user='10002:29000'))
+    helper('rejoin', 'volume-readback', True, inputs[0])
+    helper('changed-intent', 'volume-readback', True, inputs[1], denied=True)
+    helper('nonempty-root', 'volume', False, inputs[0], denied=True)
+    helper('writable-rejoin', 'volume-readback', False, inputs[0], denied=True)
+    helper('rejoin-again', 'volume-readback', True, inputs[0])
+    readback = ('test "$(stat -c %a:%u:%g /source)" = "2777:0:29000"; '
+                'test "$(stat -c %a:%u:%g /source/private)" = "700:10002:29000"; '
+                'test "$(stat -c %a:%u:%g /source/private/draft)" = "600:10002:29000"; '
+                'test "$(cat /source/private/draft)" = retained-work')
+    outcomes.append(run_container(volume+'-private-readback', nonce,
+        ['--entrypoint=/bin/sh', '--mount', 'type=volume,source='+volume+',target=/source,readonly'],
+        ['-ec', readback], identities, user='10002:29000'))
+    return outcomes
+
+
 def main():
     """Проверить binary pin, выполнить две изолированные фазы и удалить только свои exact resources."""
     parser = argparse.ArgumentParser()
     parser.add_argument('--binary', required=True)
     parser.add_argument('--sha256', required=True)
-    parser.add_argument('--mode', choices=['snapshot', 'restore'], default='snapshot')
+    parser.add_argument('--mode', choices=['snapshot', 'restore', 'volume'], default='snapshot')
     parser.add_argument('--writer-binary')
     parser.add_argument('--writer-sha256')
     parser.add_argument('--roundtrip', action='store_true')
@@ -128,11 +191,13 @@ def main():
     nonce = uuid.uuid4().hex
     volume = 'kodex-workspace-'+arguments.mode+'-'+nonce
     identities, outcomes = [], []
+    temporary_inputs = None
     volume_created = False
     result = {'status': 'FAIL', 'binarySHA256': arguments.sha256, 'image': image,
               'productionChanged': False, 'mode': arguments.mode,
-              'scope': ('DISPOSABLE_LOCAL_TWO_UID_READ_ONLY' if arguments.mode == 'snapshot'
-                        else 'DISPOSABLE_LOCAL_TWO_UID_WRITABLE_RESTORE')}
+              'scope': {'snapshot': 'DISPOSABLE_LOCAL_TWO_UID_READ_ONLY',
+                        'restore': 'DISPOSABLE_LOCAL_TWO_UID_WRITABLE_RESTORE',
+                        'volume': 'DISPOSABLE_LOCAL_VOLUME_READY_HELPER'}[arguments.mode]}
     if writer is not None:
         result['writerBinarySHA256'] = arguments.writer_sha256
     try:
@@ -150,88 +215,97 @@ def main():
         if arguments.mode == 'restore':
             prepare = ('umask 077; chown 0:29000 /source; chmod 2770 /source; '
                        'test "$(stat -c %a:%u:%g /source)" = "2770:0:29000"')
+        if arguments.mode == 'volume':
+            prepare = ('umask 077; chown 0:29000 /source; chmod 2777 /source; '
+                       'test "$(stat -c %a:%u:%g /source)" = "2777:0:29000"')
         outcomes.append(run_container(volume+'-prepare', nonce,
             ['--cap-add=CHOWN', '--cap-add=FOWNER', '--entrypoint=/bin/sh',
              '--mount', 'type=volume,source='+volume+',target=/source'], ['-ec', prepare], identities))
-        if arguments.mode == 'restore':
-            if writer is not None:
-                outcomes.append(run_container(volume+'-task', nonce,
-                    ['--entrypoint=/qa-test',
+        if arguments.mode == 'volume':
+            temporary_inputs = Path(tempfile.mkdtemp(prefix='kodex-volume-ready-'))
+            temporary_identity = temporary_inputs.stat()
+            outcomes.extend(volume_ready_consumers(binary, volume, nonce, identities, temporary_inputs))
+            result['volumeReadyHelper'] = 'PASS'
+        else:
+            if arguments.mode == 'restore':
+                if writer is not None:
+                    outcomes.append(run_container(volume+'-task', nonce,
+                        ['--entrypoint=/qa-test',
+                         '--mount', 'type=bind,source='+str(binary)+',target=/qa-test,readonly',
+                         '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/session-workspace',
+                         '--tmpfs', '/tmp:rw,nosuid,nodev,noexec,size=4m,mode=1777',
+                         '--env', 'KODEX_WORKSPACE_WRITER_NATIVE=task', '--env', 'GOMAXPROCS=1'],
+                        ['-test.run=^TestWorkspaceWriterTwoUIDNative$', '-test.timeout=30s', '-test.v'],
+                        identities, user='10001:29000'))
+                    # The helper receives only the fixture's fixed task input, never host credentials.
+                    outcomes.append(run_container(volume+'-socket', nonce,
+                        ['--entrypoint=/qa-writer',
+                         '--mount', 'type=bind,source='+str(writer)+',target=/qa-writer,readonly',
+                         '--mount', 'type=volume,source='+volume+',target=/tmp,volume-subpath=fixture-ipc'],
+                        ['prepare'], identities, user='10001:29000'))
+                initializer = ['--entrypoint=/qa-test',
                      '--mount', 'type=bind,source='+str(binary)+',target=/qa-test,readonly',
                      '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/session-workspace',
                      '--tmpfs', '/tmp:rw,nosuid,nodev,noexec,size=4m,mode=1777',
-                     '--env', 'KODEX_WORKSPACE_WRITER_NATIVE=task', '--env', 'GOMAXPROCS=1'],
-                    ['-test.run=^TestWorkspaceWriterTwoUIDNative$', '-test.timeout=30s', '-test.v'],
+                     '--env', 'KODEX_WORKSPACE_WRITER_NATIVE=prepare', '--env', 'GOMAXPROCS=1']
+                initialize_command = ['-test.run=^TestWorkspaceWriterTwoUIDNative$', '-test.timeout=30s', '-test.v']
+                if writer is not None:
+                    initializer = ['--entrypoint=/qa-writer',
+                        '--mount', 'type=bind,source='+str(writer)+',target=/qa-writer,readonly',
+                        '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/session-workspace',
+                        '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/session-archive,volume-subpath=fixture-task,readonly',
+                        '--env', 'SESSION_ARCHIVE_WORKER_TIMEOUT=1m', '--env', 'GOMAXPROCS=1']
+                    initialize_command = ['generation']
+                outcomes.append(run_container(volume+'-initialize', nonce,
+                    initializer, initialize_command,
                     identities, user='10001:29000'))
-                # The helper receives only the fixture's fixed task input, never host credentials.
-                outcomes.append(run_container(volume+'-socket', nonce,
-                    ['--entrypoint=/qa-writer',
-                     '--mount', 'type=bind,source='+str(writer)+',target=/qa-writer,readonly',
-                     '--mount', 'type=volume,source='+volume+',target=/tmp,volume-subpath=fixture-ipc'],
-                    ['prepare'], identities, user='10001:29000'))
-            initializer = ['--entrypoint=/qa-test',
+            # Private fixtures only: no source tree, credentials, daemon socket or host network is mounted.
+            consumer_arguments = ['--cap-add=SETUID', '--cap-add=SETGID', '--entrypoint=/qa-test',
                  '--mount', 'type=bind,source='+str(binary)+',target=/qa-test,readonly',
-                 '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/session-workspace',
-                 '--tmpfs', '/tmp:rw,nosuid,nodev,noexec,size=4m,mode=1777',
-                 '--env', 'KODEX_WORKSPACE_WRITER_NATIVE=prepare', '--env', 'GOMAXPROCS=1']
-            initialize_command = ['-test.run=^TestWorkspaceWriterTwoUIDNative$', '-test.timeout=30s', '-test.v']
-            if writer is not None:
-                initializer = ['--entrypoint=/qa-writer',
-                    '--mount', 'type=bind,source='+str(writer)+',target=/qa-writer,readonly',
-                    '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/session-workspace',
-                    '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/session-archive,volume-subpath=fixture-task,readonly',
-                    '--env', 'SESSION_ARCHIVE_WORKER_TIMEOUT=1m', '--env', 'GOMAXPROCS=1']
-                initialize_command = ['generation']
-            outcomes.append(run_container(volume+'-initialize', nonce,
-                initializer, initialize_command,
-                identities, user='10001:29000'))
-        # Private fixtures only: no source tree, credentials, daemon socket or host network is mounted.
-        consumer_arguments = ['--cap-add=SETUID', '--cap-add=SETGID', '--entrypoint=/qa-test',
-             '--mount', 'type=bind,source='+str(binary)+',target=/qa-test,readonly',
-             '--tmpfs', '/tmp:rw,nosuid,nodev,noexec,size=4m,mode=1777', '--env', 'GOMAXPROCS=1']
-        test_name = 'TestWorkspaceReaderTwoUIDNative'
-        if arguments.mode == 'snapshot':
-            consumer_arguments += [
-                '--mount', 'type=volume,source='+volume+',target=/workspace/work,readonly',
-                '--tmpfs', '/var/run/kodex/work-reader:rw,nosuid,nodev,noexec,size=1m,uid=10001,gid=29000,mode=2770',
-                '--env', 'KODEX_WORKSPACE_READER_NATIVE=coordinator']
-        else:
-            test_name = 'TestWorkspaceWriterTwoUIDNative'
-            consumer_arguments += [
-                '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/workspace-restore-generation,volume-subpath='+RESTORE_FIXTURE_PARENT,
-                '--mount', 'type=volume,source='+volume+',target=/workspace/work,volume-subpath='+RESTORE_FIXTURE_PARENT+'/.restore-tree',
-                '--env', 'KODEX_WORKSPACE_WRITER_NATIVE=coordinator']
-            if writer is None:
-                consumer_arguments += ['--tmpfs', '/var/run/kodex/work-writer:rw,nosuid,nodev,noexec,size=1m,uid=10001,gid=29000,mode=2770']
-            else:
+                 '--tmpfs', '/tmp:rw,nosuid,nodev,noexec,size=4m,mode=1777', '--env', 'GOMAXPROCS=1']
+            test_name = 'TestWorkspaceReaderTwoUIDNative'
+            if arguments.mode == 'snapshot':
                 consumer_arguments += [
-                    '--mount', 'type=bind,source='+str(writer)+',target=/qa-writer,readonly',
-                    '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/session-archive,volume-subpath=fixture-task,readonly',
-                    '--mount', 'type=volume,source='+volume+',target=/var/run/kodex/work-writer,volume-subpath=fixture-ipc/workspace-writer',
-                    '--env', 'KODEX_WORKSPACE_WRITER_EXECUTABLE=/qa-writer']
-        outcomes.append(run_container(volume+'-consume', nonce, consumer_arguments,
-            ['-test.run=^'+test_name+'$', '-test.timeout=30s', '-test.v'], identities))
-        if arguments.mode == 'restore':
-            outcomes.append(run_container(volume+'-reconcile', nonce,
-                ['--entrypoint=/qa-test',
-                 '--mount', 'type=bind,source='+str(binary)+',target=/qa-test,readonly',
-                 '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/workspace-restore-generation,volume-subpath='+RESTORE_FIXTURE_PARENT+',readonly',
-                 '--mount', 'type=volume,source='+volume+',target=/workspace/work,volume-subpath='+RESTORE_FIXTURE_PARENT+'/tree,readonly',
-                 '--tmpfs', '/tmp:rw,nosuid,nodev,noexec,size=4m,mode=1777',
-                 '--env', 'KODEX_WORKSPACE_WRITER_NATIVE=reconcile', '--env', 'GOMAXPROCS=1'],
-                ['-test.run=^'+test_name+'$', '-test.timeout=30s', '-test.v'],
-                identities, user='10001:29000'))
-            if arguments.roundtrip:
-                outcomes.append(run_container(volume+'-roundtrip', nonce,
-                    ['--cap-add=SETUID', '--cap-add=SETGID', '--entrypoint=/qa-test',
+                    '--mount', 'type=volume,source='+volume+',target=/workspace/work,readonly',
+                    '--tmpfs', '/var/run/kodex/work-reader:rw,nosuid,nodev,noexec,size=1m,uid=10001,gid=29000,mode=2770',
+                    '--env', 'KODEX_WORKSPACE_READER_NATIVE=coordinator']
+            else:
+                test_name = 'TestWorkspaceWriterTwoUIDNative'
+                consumer_arguments += [
+                    '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/workspace-restore-generation,volume-subpath='+RESTORE_FIXTURE_PARENT,
+                    '--mount', 'type=volume,source='+volume+',target=/workspace/work,volume-subpath='+RESTORE_FIXTURE_PARENT+'/.restore-tree',
+                    '--env', 'KODEX_WORKSPACE_WRITER_NATIVE=coordinator']
+                if writer is None:
+                    consumer_arguments += ['--tmpfs', '/var/run/kodex/work-writer:rw,nosuid,nodev,noexec,size=1m,uid=10001,gid=29000,mode=2770']
+                else:
+                    consumer_arguments += [
+                        '--mount', 'type=bind,source='+str(writer)+',target=/qa-writer,readonly',
+                        '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/session-archive,volume-subpath=fixture-task,readonly',
+                        '--mount', 'type=volume,source='+volume+',target=/var/run/kodex/work-writer,volume-subpath=fixture-ipc/workspace-writer',
+                        '--env', 'KODEX_WORKSPACE_WRITER_EXECUTABLE=/qa-writer']
+            outcomes.append(run_container(volume+'-consume', nonce, consumer_arguments,
+                ['-test.run=^'+test_name+'$', '-test.timeout=30s', '-test.v'], identities))
+            if arguments.mode == 'restore':
+                outcomes.append(run_container(volume+'-reconcile', nonce,
+                    ['--entrypoint=/qa-test',
                      '--mount', 'type=bind,source='+str(binary)+',target=/qa-test,readonly',
+                     '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/workspace-restore-generation,volume-subpath='+RESTORE_FIXTURE_PARENT+',readonly',
                      '--mount', 'type=volume,source='+volume+',target=/workspace/work,volume-subpath='+RESTORE_FIXTURE_PARENT+'/tree,readonly',
-                     '--tmpfs', '/var/run/kodex/work-reader:rw,nosuid,nodev,noexec,size=1m,uid=10001,gid=29000,mode=2770',
                      '--tmpfs', '/tmp:rw,nosuid,nodev,noexec,size=4m,mode=1777',
-                     '--env', 'KODEX_WORKSPACE_READER_NATIVE=coordinator',
-                     '--env', 'KODEX_WORKSPACE_READER_NATIVE_TREE=restored', '--env', 'GOMAXPROCS=1'],
-                    ['-test.run=^TestWorkspaceReaderTwoUIDNative$', '-test.timeout=30s', '-test.v'], identities))
-                result['privateDirectoryRoundtrip'] = 'PASS'
+                     '--env', 'KODEX_WORKSPACE_WRITER_NATIVE=reconcile', '--env', 'GOMAXPROCS=1'],
+                    ['-test.run=^'+test_name+'$', '-test.timeout=30s', '-test.v'],
+                    identities, user='10001:29000'))
+                if arguments.roundtrip:
+                    outcomes.append(run_container(volume+'-roundtrip', nonce,
+                        ['--cap-add=SETUID', '--cap-add=SETGID', '--entrypoint=/qa-test',
+                         '--mount', 'type=bind,source='+str(binary)+',target=/qa-test,readonly',
+                         '--mount', 'type=volume,source='+volume+',target=/workspace/work,volume-subpath='+RESTORE_FIXTURE_PARENT+'/tree,readonly',
+                         '--tmpfs', '/var/run/kodex/work-reader:rw,nosuid,nodev,noexec,size=1m,uid=10001,gid=29000,mode=2770',
+                         '--tmpfs', '/tmp:rw,nosuid,nodev,noexec,size=4m,mode=1777',
+                         '--env', 'KODEX_WORKSPACE_READER_NATIVE=coordinator',
+                         '--env', 'KODEX_WORKSPACE_READER_NATIVE_TREE=restored', '--env', 'GOMAXPROCS=1'],
+                        ['-test.run=^TestWorkspaceReaderTwoUIDNative$', '-test.timeout=30s', '-test.v'], identities))
+                    result['privateDirectoryRoundtrip'] = 'PASS'
         result['status'] = 'PASS'
     except (RuntimeError, subprocess.TimeoutExpired) as error:
         result['reason'] = str(error) if isinstance(error, RuntimeError) else 'DOCKER_TIMEOUT'
@@ -262,6 +336,24 @@ def main():
             result['volumeAbsent'] = not remaining.stdout.strip()
         else:
             result['volumeAbsent'] = False
+        if temporary_inputs is not None:
+            current = temporary_inputs.lstat()
+            if ((current.st_dev, current.st_ino) != (temporary_identity.st_dev, temporary_identity.st_ino)
+                    or not stat.S_ISDIR(current.st_mode) or current.st_uid != os.getuid()
+                    or stat.S_IMODE(current.st_mode) != 0o700):
+                raise RuntimeError('TEMPORARY_INPUT_OWNERSHIP_CHANGED')
+            if result['allContainersAbsent']:
+                for name in ['volume.json', 'changed.json']:
+                    path = temporary_inputs / name
+                    try:
+                        value = path.lstat()
+                    except FileNotFoundError:
+                        continue
+                    if not stat.S_ISREG(value.st_mode) or value.st_uid != os.getuid() or value.st_nlink != 1:
+                        raise RuntimeError('TEMPORARY_INPUT_FILE_CHANGED')
+                    path.unlink()
+                temporary_inputs.rmdir()
+            result['temporaryInputsAbsent'] = not temporary_inputs.exists()
         result['outcomes'] = outcomes
         print(json.dumps(result))
     return 0 if result['status'] == 'PASS' and result['allContainersAbsent'] and result['volumeAbsent'] else 1

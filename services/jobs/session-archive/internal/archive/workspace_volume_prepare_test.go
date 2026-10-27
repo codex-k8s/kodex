@@ -120,7 +120,7 @@ func TestWorkspaceVolumePreparationNeverAdoptsUnknownEmptyOrPartialState(t *test
 // TestWorkspaceVolumeRejoinRejectsChangedPinsAndUnsealedMetadata keeps unrelated volume incarnations, task identities and damaged records untrusted.
 // TestWorkspaceVolumeRejoinRejectsChangedPinsAndUnsealedMetadata сохраняет недоверие к unrelated volume incarnations/task identities/damaged records.
 func TestWorkspaceVolumeRejoinRejectsChangedPinsAndUnsealedMetadata(t *testing.T) {
-	for _, fault := range []string{"scope", "work", "task", "pvc", "generation", "marker-mode", "marker-partial", "marker-hardlink", "metadata-mode", "root-owner"} {
+	for _, fault := range []string{"scope", "work", "task", "pvc", "generation", "marker-mode", "marker-partial", "marker-hardlink", "metadata-mode", "metadata-extra", "root-owner"} {
 		t.Run(fault, func(t *testing.T) {
 			root, fd, owner, intent := workspaceVolumeFixture(t)
 			if _, err := prepareWorkspaceVolumeAt(t.Context(), fd, intent, owner, owner.UID, false); err != nil {
@@ -155,6 +155,10 @@ func TestWorkspaceVolumeRejoinRejectsChangedPinsAndUnsealedMetadata(t *testing.T
 			case "metadata-mode":
 				if unix.Chmod(metadata, 0o770) != nil {
 					t.Fatal("prepare unsealed metadata mode")
+				}
+			case "metadata-extra":
+				if os.WriteFile(filepath.Join(metadata, "unknown"), []byte("retain"), 0o600) != nil {
+					t.Fatal("prepare unrelated retained metadata")
 				}
 			case "root-owner":
 				rootOwner++

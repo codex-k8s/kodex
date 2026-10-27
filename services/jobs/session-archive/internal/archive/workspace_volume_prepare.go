@@ -92,6 +92,10 @@ func prepareWorkspaceVolumeAt(ctx context.Context, root int, preparation runtime
 			return ready, errWorkspaceObjectUnconfirmed
 		}
 	}
+	names, err := restoreDirectoryNames(ctx, metadata, 2)
+	if err != nil || len(names) != 1 || names[0] != runtimecontract.WorkspaceVolumeReadyFile {
+		return ready, errWorkspaceObjectUnconfirmed
+	}
 	raw, err := securefile.ReadOwnedRecordAt(ctx, metadata, runtimecontract.WorkspaceVolumeReadyFile,
 		runtimecontract.MaximumWorkspaceVolumeReadyBytes, owner)
 	if err != nil || !bytes.Equal(raw, wanted) {

@@ -611,6 +611,22 @@ credit. Повторный `volume-readback` требует read-only volume mou
 | Runtime BIND/RESTORE | Проверить accepted volume tuple до private write/mount | Fresh owner-selected RR/restore input pin actual PVC UID и accepted preparation; unknown custody закрыта |
 | Purge | Helper не удаляет данные | Отдельный owner destructive protocol с paired history/work custody и exact physical readback |
 
+Публичная native точка входа для actual helper:
+
+```bash
+python3 tools/dev/workspace-reader-native-test.py --mode volume \
+  --binary /абсолютный/путь/workspace-writer --sha256 <проверенный-sha256>
+```
+
+Она использует только cached pinned Docker image, отдельный новый named volume,
+capability-free UID10001/10002 и read-only binary/input binds. Только fixture
+подготовки нового пустого volume получает CHOWN/FOWNER; helper их не получает.
+Termination output находится в отдельном1MiB tmpfs. Проверяются first prepare,
+private700/600, read-only rejoin, отказы changed intent/nonempty root/writable
+rejoin и повторная сохранность данных. Точные container IDs, volume label и
+удаление временных inputs проверяются при cleanup. Это local filesystem proof,
+а не Kubernetes FSGroup, owner grant, реальный Job либо S3 restore.
+
 Эти local codec/helper entry points ещё не регистрируют production owner
 queue, новый private RPC либо runtime VolumeReady admission. Они не включают V2.
 Полный forward owner protocol и native Job/PVC/S3 проверка остаются обязательной
