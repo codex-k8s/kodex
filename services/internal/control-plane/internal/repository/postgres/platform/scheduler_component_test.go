@@ -318,7 +318,31 @@ func testAutomationScheduler(t *testing.T, ctx context.Context, repository *Repo
 		!strings.Contains(stringMap(coordinator, "task"), "Workflow coordination contract") {
 		t.Fatal("automation task did not reach coordinator context")
 	}
-	completeClaimedExecution(t, ctx, service, runtimeWorker, coordinator, "scheduler-process", false)
+	delegated := execute(command.DelegateExecution, runtimeWorker, "process-delegate", command.DelegateInput{
+		LeaseRef: stringMap(coordinator, "leaseRef"), Fence: stringMap(coordinator, "fence"),
+		Generation: coordinator["generation"].(int64), TargetAgentRef: agent.Ref,
+		WorkflowStepKey: "report", Task: "Prepare the report.",
+	}, nil).Run
+	if delegated == nil {
+		t.Fatal("scheduled process did not materialize its required step")
+	}
+	child := execute(command.ClaimExecution, runtimeWorker, "process-step-claim", command.LeaseInput{WorkloadInstance: "scheduler-runtime", Limit: 1}, nil)
+	if len(child.RuntimeItems) != 1 || stringMap(child.RuntimeItems[0], "runRef") != delegated.Ref {
+		t.Fatal("scheduled process claimed the wrong step")
+	}
+	initial := completeClaimedExecution(t, ctx, service, runtimeWorker, coordinator, "scheduler-process", false)
+	if initial.Run == nil || initial.Run.State != "RUNNING" {
+		t.Fatal("scheduled process completed before its required step")
+	}
+	completeClaimedExecution(t, ctx, service, runtimeWorker, child.RuntimeItems[0], "scheduler-process-step", false)
+	continuation := execute(command.ClaimExecution, runtimeWorker, "process-continuation-claim", command.LeaseInput{WorkloadInstance: "scheduler-runtime", Limit: 1}, nil)
+	if len(continuation.RuntimeItems) != 1 || stringMap(continuation.RuntimeItems[0], "runRef") != process.Ref {
+		t.Fatal("scheduled process continuation was not claimable")
+	}
+	finished := completeClaimedExecution(t, ctx, service, runtimeWorker, continuation.RuntimeItems[0], "scheduler-process-continuation", false)
+	if finished.Run == nil || finished.Run.Ref != process.Ref || finished.Run.State != "SUCCEEDED" {
+		t.Fatal("scheduled process did not finish successfully")
+	}
 	testScheduleMaterializedPreview(t, ctx, repository, service, owner, processSchedule, true)
 	disable(processSchedule, "disable-process")
 }
