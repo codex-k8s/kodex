@@ -27,6 +27,7 @@ type runtimePolicy struct {
 		FailurePolicy string `json:"failurePolicy"`
 		Validations   []struct {
 			Expression string `json:"expression"`
+			Message    string `json:"message"`
 		} `json:"validations"`
 		MatchConditions []struct {
 			Expression string `json:"expression"`
@@ -65,6 +66,25 @@ func readRuntimePolicy(t *testing.T, name string) runtimePolicy {
 	}
 	t.Fatal("runtime policy is absent")
 	return runtimePolicy{}
+}
+
+// runtimeValidationExpression selects exactly one named rule so inserting independent validations cannot silently change the tested boundary.
+// runtimeValidationExpression выбирает ровно одно именованное правило, чтобы вставка независимой validation не подменяла проверяемую границу.
+func runtimeValidationExpression(t *testing.T, policy runtimePolicy, message string) string {
+	t.Helper()
+	var result string
+	for _, validation := range policy.Spec.Validations {
+		if validation.Message == message {
+			if result != "" {
+				t.Fatal("runtime validation message is ambiguous")
+			}
+			result = validation.Expression
+		}
+	}
+	if result == "" {
+		t.Fatal("named runtime validation is absent")
+	}
+	return result
 }
 
 // runtimeObjectSchema wraps exact properties as a typed Kubernetes object schema.
@@ -331,8 +351,9 @@ func runtimePodContainer(input map[string]any, name string) map[string]any {
 func TestRuntimePodMixedContainerKubernetes135TypeCheckingAndEvaluation(t *testing.T) {
 	policy := readRuntimePolicy(t, "runtime-role-pod-exact-secret-projection")
 	environment := runtimeTypedEnvironment(t, runtimePodSchema(), "Pod", true)
-	for _, index := range []int{6, 9} {
-		expression := policy.Spec.Validations[index].Expression
+	for _, message := range []string{"managed role Pod image or process contract is invalid", "managed runtime support container resources are invalid"} {
+		imageContract := message == "managed role Pod image or process contract is invalid"
+		expression := runtimeValidationExpression(t, policy, message)
 		program := runtimeCompile(t, environment, expression)
 		previous := strings.ReplaceAll(expression, "dyn(object.spec.initContainers[1])", "object.spec.initContainers[1]")
 		if previous == expression {
@@ -352,12 +373,12 @@ func TestRuntimePodMixedContainerKubernetes135TypeCheckingAndEvaluation(t *testi
 				t.Fatal("valid pinned runtime container contract was rejected")
 			}
 			names := []string{"roleContainers", "providerContainers", "relayContainers", "workspace-init"}
-			if index == 9 {
+			if !imageContract {
 				names = []string{"roleContainers", "relayContainers", "workspace-init"}
 			}
 			for _, name := range names {
 				cases := map[string]func(map[string]any){}
-				if index == 6 {
+				if imageContract {
 					cases["mutable-image"] = func(c map[string]any) { c["image"] = "example.invalid/runtime:latest" }
 					cases["foreign-digest"] = func(c map[string]any) { c["image"] = "example.invalid/foreign@sha256:" + strings.Repeat("c", 64) }
 					cases["pull-always"] = func(c map[string]any) { c["imagePullPolicy"] = "Always" }
