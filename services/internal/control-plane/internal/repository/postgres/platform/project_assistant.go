@@ -271,24 +271,17 @@ func (repository *Repository) expandAssistantContext(ctx context.Context, tx pgx
 	if allowed && !contains(descriptor.AllowedOperations, "CREATE_PROJECT_ASSISTANT") {
 		descriptor.AllowedOperations = append(descriptor.AllowedOperations, "CREATE_PROJECT_ASSISTANT")
 	}
-	var grantOperations []string
-	if err := tx.QueryRow(ctx, querySystemAssistantIntegrationGrantOperations, pgx.StrictNamedArgs{
-		"organization_id": current.organizationID, "actor_id": current.actorID,
-		"assistant_agent_id": assistant.ID, "assistant_scope": assistant.Scope,
-		"authority_project": current.authorityProjectID,
-	}).Scan(&grantOperations); err != nil {
-		return errs.ErrUnavailable
+	for _, query := range []string{querySystemAssistantIntegrationGrantOperations, queryProjectAssistantConnectionOperations} {
+		var operations []string
+		if err := tx.QueryRow(ctx, query, pgx.StrictNamedArgs{
+			"organization_id": current.organizationID, "actor_id": current.actorID,
+			"assistant_agent_id": assistant.ID, "assistant_scope": assistant.Scope,
+			"authority_project": current.authorityProjectID,
+		}).Scan(&operations); err != nil {
+			return errs.ErrUnavailable
+		}
+		appendAssistantContextOperations(descriptor, operations)
 	}
-	appendAssistantContextOperations(descriptor, grantOperations)
-	var connectionOperations []string
-	if err := tx.QueryRow(ctx, queryProjectAssistantConnectionOperations, pgx.StrictNamedArgs{
-		"organization_id": current.organizationID, "actor_id": current.actorID,
-		"assistant_agent_id": assistant.ID, "assistant_scope": assistant.Scope,
-		"authority_project": current.authorityProjectID,
-	}).Scan(&connectionOperations); err != nil {
-		return errs.ErrUnavailable
-	}
-	appendAssistantContextOperations(descriptor, connectionOperations)
 	var fileOperations []string
 	if err := tx.QueryRow(ctx, queryAssistantFileRevisionOperations, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "actor_id": current.actorID, "authority_project": current.authorityProjectID,
