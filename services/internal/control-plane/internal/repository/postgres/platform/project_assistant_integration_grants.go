@@ -41,18 +41,7 @@ type projectAssistantIntegrationGrantTarget struct {
 	ref, name, projectID, projectRef, profileRef string
 	version, profileVersion                      int64
 	ready                                        bool
-	connection                                   projectAssistantGrantConnectionHeader
-}
-
-// projectAssistantGrantConnectionHeader contains exact connection ref/name/version and definition
-// key/version/digest from the owner query. It deliberately omits credentials and full connection
-// projection; header validity alone does not establish package execution eligibility.
-// projectAssistantGrantConnectionHeader содержит exact connection ref/name/version и definition
-// key/version/digest owner query. Не включает credentials и full connection projection; header
-// validity сама не устанавливает package execution eligibility.
-type projectAssistantGrantConnectionHeader struct {
-	ref, name, definitionKey, definitionVersion, definitionDigest string
-	version                                                       int64
+	connection                                   assistantGrantConnectionHeader
 }
 
 // projectAssistantIntegrationGrantOwner reads the exact assistant/connection purpose within
@@ -78,21 +67,10 @@ func (repository *Repository) projectAssistantIntegrationGrantOwner(ctx context.
 		return target, errs.ErrUnavailable
 	}
 	if target.ref != assistantRef || target.projectRef == "" || target.profileRef == "" || target.version < 1 || target.profileVersion < 1 ||
-		!validProjectAssistantGrantConnectionHeader(target.connection, connectionRef) {
+		!validAssistantGrantConnectionHeader(target.connection, connectionRef) {
 		return target, errs.ErrUnavailable
 	}
 	return target, nil
-}
-
-// validProjectAssistantGrantConnectionHeader requires exact nonempty connection ref, name,
-// positive version and nonempty package key/version with valid digest syntax. It is a local shape
-// check without access, readiness or current package lookup.
-// validProjectAssistantGrantConnectionHeader требует exact nonempty connection ref, name, positive
-// version и nonempty package key/version с valid digest syntax. Это local shape check без access,
-// readiness либо current package lookup.
-func validProjectAssistantGrantConnectionHeader(header projectAssistantGrantConnectionHeader, connectionRef string) bool {
-	return connectionRef != "" && header.ref == connectionRef && header.name != "" && header.version > 0 &&
-		header.definitionKey != "" && header.definitionVersion != "" && validAssistantDefinitionDigest(header.definitionDigest)
 }
 
 // projectAssistantIntegrationGrantInput validates the typed specialized payload, resolves current

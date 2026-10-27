@@ -5,14 +5,14 @@ import (
 	"testing"
 )
 
-// TestProjectAssistantGrantConnectionHeaderClosed accepts an exact nonempty connection header and
+// TestAssistantGrantConnectionHeaderClosed accepts an exact nonempty connection header and
 // rejects foreign identity, missing metadata, invalid version/digest or an unbound reference.
-// TestProjectAssistantGrantConnectionHeaderClosed принимает точный непустой заголовок соединения и
+// TestAssistantGrantConnectionHeaderClosed принимает точный непустой заголовок соединения и
 // отклоняет чужую идентичность, отсутствующие метаданные, неверную версию или дайджест и
 // несвязанный ref.
-func TestProjectAssistantGrantConnectionHeaderClosed(t *testing.T) {
-	valid := projectAssistantGrantConnectionHeader{ref: "int_owned", name: "Owned connection", version: 1, definitionKey: "github", definitionVersion: "6.0.0", definitionDigest: strings.Repeat("a", 64)}
-	if !validProjectAssistantGrantConnectionHeader(valid, valid.ref) {
+func TestAssistantGrantConnectionHeaderClosed(t *testing.T) {
+	valid := assistantGrantConnectionHeader{ref: "int_owned", name: "Owned connection", version: 1, definitionKey: "github", definitionVersion: "6.0.0", definitionDigest: strings.Repeat("a", 64)}
+	if !validAssistantGrantConnectionHeader(valid, valid.ref) {
 		t.Fatal("exact header rejected")
 	}
 	for _, field := range []string{"ref", "name", "version", "key", "revision", "digest"} {
@@ -32,12 +32,12 @@ func TestProjectAssistantGrantConnectionHeaderClosed(t *testing.T) {
 			case "digest":
 				value.definitionDigest = "PRIVATE_SENTINEL"
 			}
-			if validProjectAssistantGrantConnectionHeader(value, valid.ref) {
+			if validAssistantGrantConnectionHeader(value, valid.ref) {
 				t.Fatal("invalid header accepted")
 			}
 		})
 	}
-	if validProjectAssistantGrantConnectionHeader(valid, "") {
+	if validAssistantGrantConnectionHeader(valid, "") {
 		t.Fatal("unbound header accepted")
 	}
 }

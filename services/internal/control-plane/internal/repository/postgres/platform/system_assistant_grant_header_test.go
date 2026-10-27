@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -18,46 +17,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-// TestSystemAssistantGrantHeaderClosed checks the exact synthetic header and rejects mismatched
-// ref, missing name/version/definition key/revision, malformed digest and an unbound requested
-// ref. It tests the lexical/header predicate only, not database eligibility or live package
-// provenance.
-// TestSystemAssistantGrantHeaderClosed проверяет точный synthetic header и отклоняет несовпадающий
-// ref, отсутствие name/version/definition key/revision, malformed digest и несвязанный requested
-// ref. Проверяет только lexical/header predicate, а не database eligibility или live package
-// provenance.
-func TestSystemAssistantGrantHeaderClosed(t *testing.T) {
-	header := systemAssistantGrantConnectionHeader{ref: "int_owned", name: "Owned", version: 1, definitionKey: "github", definitionVersion: "6.0.0", definitionDigest: strings.Repeat("a", 64)}
-	if !validSystemAssistantGrantConnectionHeader(header, header.ref) {
-		t.Fatal("exact header rejected")
-	}
-	for _, field := range []string{"ref", "name", "version", "key", "revision", "digest"} {
-		t.Run(field, func(t *testing.T) {
-			bad := header
-			switch field {
-			case "ref":
-				bad.ref = "int_foreign"
-			case "name":
-				bad.name = ""
-			case "version":
-				bad.version = 0
-			case "key":
-				bad.definitionKey = ""
-			case "revision":
-				bad.definitionVersion = ""
-			case "digest":
-				bad.definitionDigest = "PRIVATE_SENTINEL"
-			}
-			if validSystemAssistantGrantConnectionHeader(bad, header.ref) {
-				t.Fatal("invalid header accepted")
-			}
-		})
-	}
-	if validSystemAssistantGrantConnectionHeader(header, "") {
-		t.Fatal("unbound header accepted")
-	}
-}
 
 // TestSystemAssistantGrantHeaderBatchComponent proposes and atomically applies 21 SYSTEM READ
 // grants while the tracer requires zero full connection projections during proposal. It preserves

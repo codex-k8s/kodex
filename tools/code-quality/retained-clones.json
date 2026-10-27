@@ -9064,6 +9064,46 @@
       "fragmentSHA256": "eae394b9e52fc07581ec2e99069aac07b3095cef03f33afa35c6b96a15e797d0",
       "count": 1,
       "reason": "attachInstructionsFrom и attachAgentGrantsFrom выполняют разные SQL и изменяют разные части модели: инструкции выбирают binding, первую published/draft и список версий, игнорируют JSON decode error и по особому правилу проверяют rows.Err; grants только добавляют ссылки и возвращают исходную ошибку итерации. Общим оказался лишь цикл Next/обратный вызов, пробный вынос которого не устранил основное совпадение и усложнил порядок ошибок и частичных изменений. Решение ограничено точной парой и hash, не исключает SQL, сканирование или другие функции."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/configuration_source_accept.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/configuration_writeback_effects.go",
+      "fragmentSHA256": "3825679ddc4cac69e45bc2e36d8aac3644878775815ea4305f693691e54b030f",
+      "count": 1,
+      "reason": "Source COMPLETE возвращает receipt до проверки lease, проверяет generation и ancestry/content, при необходимости публикует revision и сохраняет состояние source. Write-back COMPLETE проверяет fenced начатый внешний effect, candidate/content pins и отдельно подтверждает branch либо PR; read-only recovery записывает результат без повторной отправки. Общий scoped transaction уже вынесен; общий completion скрывал бы разные receipt keys, валидаторы и порядок eligibility. Решение ограничено точной парой путей и hash, не исключает другие lifecycle transitions."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/configuration_source_completion.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/configuration_writeback_work.go",
+      "fragmentSHA256": "5658898f2bd6a304b69e87724cc5f0eac0f901351002b0270b82e9790496d65c",
+      "count": 1,
+      "reason": "Source FAIL повторяет найденную receipt вместе с её ошибкой, ограничивает retry source generation и root eligibility и фиксирует source state. Write-back FAIL повторяет LAST_FAIL только при совпадающем digest, использует время БД и переводит начатый внешний эффект в UNKNOWN_OUTCOME вместо повторной отправки. Общий scoped transaction уже вынесен; объединение веток replay/retry изменило бы границу отказа и состояние внешнего эффекта. Решение ограничено точной парой путей и hash."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/configuration_source_work.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/configuration_writeback_work.go",
+      "fragmentSHA256": "53c7b39ad185ecab1b6d1fcef1eb4e736a7c7784a577ae06f5402ba7383e2fe0",
+      "count": 1,
+      "reason": "Source RENEW использует локальное время с точностью до микросекунды, проверяет root eligibility, не сокращает срок и не создаёт отдельное событие. Write-back RENEW использует время БД, по особому правилу допускает UNKNOWN_OUTCOME recovery, сохраняет новую версию и audit/event и возвращает исходную ошибку commit вместе с lease. Общий scoped transaction уже вынесен; единый renew изменил бы expiry или lifecycle recovery. Решение ограничено точной парой путей и hash."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/platform/store.ts",
+      "secondPath": "services/staff/control-center/src/features/platform/store.ts",
+      "fragmentSHA256": "396e822bab7abf3d24e550ae04a13d4b05c9630048c19351ca7ce5f93a78d6bf",
+      "count": 2,
+      "reason": "Три typed операции saveAgent, saveWorkflow и saveSchedule уже используют общий saveVersionedResource для create/update и общие mutation/versioned headers. Оставшиеся callbacks привязывают разные generated SDK methods и поля agentRef, workflowRef, scheduleRef к соответствующим моделям и отдельным stores. Универсальный dynamic endpoint adapter скрыл бы типы и resource bindings без общего поведения после существующего helper. Решение относится только к двум совпадениям этой точной пары путей и hash, без исключения других операций."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/platform/store.ts",
+      "secondPath": "services/staff/control-center/src/features/platform/store.ts",
+      "fragmentSHA256": "4be38595777954cd86f6391a1160953ce6444de042f2376abd704f6e5728b1e2",
+      "count": 1,
+      "reason": "Окна содержат typed saveWorkflow/changeWorkflow и saveSchedule/changeSchedule. Общие create/update и versioned mutation уже выполняют saveVersionedResource и mutate; оставшийся код выбирает разные generated SDK methods, typed action, resource ref и store. Динамический общий dispatcher скрыл бы проверяемые resource bindings и версионные параметры. Решение относится только к этой точной паре путей и hash; остальные операции, проверки и тесты остаются в анализе."
     }
   ]
 }

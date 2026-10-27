@@ -4,11 +4,26 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.563.0
+version: 1.564.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие проверки заголовка и транзакции, точные решения — 27.10.2026
+
+PROJECT и SYSTEM используют общий тип и лексическую проверку заголовка соединения;
+отдельные owner SQL и проверки доступа сохранены. Сопоставление подтвердило совпадение
+обоих исходных предикатов с общим. Открытие write-back transaction передано общему
+scoped helper с прежним Serializable и порядком ошибок, подтверждена эквивалентность
+исходного тела. Разные lifecycle source/write-back и typed PWA SDK bindings оставлены
+пятью точными решениями для шести совпадений; 30 мутаций решений отвергнуты.
+
+Control-plane build/vet PASS, 3036 unit PASS / 70 условных SKIP. На disposable
+PostgreSQL 9 component PASS events до и после изменения transaction helper и 26 до
+и после объединения заголовка, FAIL/SKIP 0. Unit инструментов качества: 17 PASS.
+Анализ: 1374 raw / 1282 retained / 92 unresolved, Go-комментарии 21673/21673.
+Браузер, E2E, live/deploy/startup и QA не выполнялись.
 
 ## Обработка действий авторизации провайдера — 27.10.2026
 

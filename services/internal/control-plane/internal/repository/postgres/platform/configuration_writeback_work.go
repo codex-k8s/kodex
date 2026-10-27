@@ -226,13 +226,5 @@ func (repository *Repository) FailConfigurationWriteBackWork(ctx context.Context
 // failure в Unavailable; callers сохраняют блокировки, порядок replay/authority, rollback и commit.
 // Не запускает эффекты, не выдаёт полномочия и не назначает новый context budget.
 func (repository *Repository) beginWriteBackWorkTransaction(ctx context.Context, p value.Principal) (scope, pgx.Tx, error) {
-	current, err := repository.resolveScope(ctx, p)
-	if err != nil {
-		return scope{}, nil, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
-	if err != nil {
-		return scope{}, nil, errs.ErrUnavailable
-	}
-	return current, tx, nil
+	return repository.beginScopedTransaction(ctx, p, pgx.TxOptions{IsoLevel: pgx.Serializable})
 }
