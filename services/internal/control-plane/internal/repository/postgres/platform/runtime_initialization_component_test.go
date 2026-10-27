@@ -67,8 +67,8 @@ func TestRuntimeInitializationCompletionComponent(t *testing.T) {
 			}
 			payload := command.CompleteExecutionInput{LeaseRef: stringMap(claim, "leaseRef"), Fence: stringMap(claim, "fence"), Generation: runtimeRevisionMapInt64(claim, "generation"), ResultSummary: summary, SafeErrorCode: runtimecontract.InitializationFailureCode}
 			completed := execute(command.CompleteExecution, worker, "init-complete", payload)
-			if completed.Run == nil || completed.Run.State != "FAILED" {
-				t.Fatal("owner initialization failure not committed")
+			if completed.Run == nil || completed.Run.Ref != launched.Ref || completed.Run.State != "FAILED" || completed.Run.Version < 1 || completed.Run.ResultSummary != summary || completed.Run.SafeErrorCode != runtimecontract.InitializationFailureCode || completed.Event == nil {
+				t.Fatal("exact owner initialization failure not committed")
 			}
 			if err := os.Remove(recordFile); err != nil {
 				t.Fatal("caller cleanup failed")
@@ -86,8 +86,10 @@ func TestRuntimeInitializationCompletionComponent(t *testing.T) {
 			}
 			assertStored()
 			replay := execute(command.CompleteExecution, worker, "init-complete", payload)
-			if !replay.Duplicate {
-				t.Fatal("exact failure replay was not recognized")
+			// CompleteExecution returns the stored outcome; Duplicate is not part of its replay contract.
+			// CompleteExecution возвращает сохранённый outcome; Duplicate не входит в его replay contract.
+			if replay.Run == nil || replay.Run.Ref != completed.Run.Ref || replay.Run.Version != completed.Run.Version || replay.Run.State != completed.Run.State || replay.Run.ResultSummary != summary || replay.Run.SafeErrorCode != runtimecontract.InitializationFailureCode || replay.Run.GraphRevision != completed.Run.GraphRevision || replay.Run.EventSequence != completed.Run.EventSequence || replay.Event == nil || replay.Event.Ref != completed.Event.Ref {
+				t.Fatal("exact failure replay changed the committed owner outcome")
 			}
 			assertStored()
 			bad := payload
@@ -96,9 +98,9 @@ func TestRuntimeInitializationCompletionComponent(t *testing.T) {
 				t.Fatal("malformed init summary accepted")
 			}
 			assertStored()
-			_, graph, err := service.GetRunGraph(ctx, owner, launched.Ref)
-			if err != nil {
-				t.Fatal("protected initialization graph read failed")
+			read, graph, err := service.GetRunGraph(ctx, owner, launched.Ref)
+			if err != nil || read.Ref != completed.Run.Ref || read.Version != completed.Run.Version || read.State != "FAILED" || read.ResultSummary != summary || read.SafeErrorCode != runtimecontract.InitializationFailureCode {
+				t.Fatal("protected owner read changed after exact failure replay")
 			}
 			found := false
 			for _, node := range graph.Nodes {
