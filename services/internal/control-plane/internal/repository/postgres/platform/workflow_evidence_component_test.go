@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"reflect"
 	"strings"
 	"testing"
@@ -53,9 +54,17 @@ func (fixture *workflowEvidenceNativeFixture) key(prefix string) string {
 // claim требует exact published employee и fresh actual execution, не fixture row.
 func (fixture *workflowEvidenceNativeFixture) claim(agent string) map[string]any {
 	fixture.f.t.Helper()
+	previous := slog.Default()
+	trace := &workflowEvidenceClaimDiagnostics{}
+	slog.SetDefault(slog.New(trace))
+	defer slog.SetDefault(previous)
 	items := fixture.f.claims(fixture.key("claim"))
 	if len(items) != 1 || stringMap(items[0], "agentRef") != agent {
-		fixture.f.t.Fatal("exact evidence employee was not claimable")
+		actual := "NONE"
+		if len(items) > 0 && workflowLaunchRefPattern.MatchString(stringMap(items[0], "agentRef")) {
+			actual = stringMap(items[0], "agentRef")
+		}
+		fixture.f.t.Fatalf("exact evidence employee was not claimable: count=%d expected=%s actual=%s diagnostic=%s", len(items), agent, actual, trace.summary())
 	}
 	return items[0]
 }
@@ -396,6 +405,9 @@ func runWorkflowEvidenceNative(t *testing.T, mode string) {
 			}
 		} else {
 			log = fixture.captured(logResult)
+		}
+		if history := f.read().journals["check"]; len(history) != 0 {
+			t.Fatalf("capture progress unexpectedly appended business history: count=%d accepted=%t", len(history), history[len(history)-1].Accepted)
 		}
 		lease = fixture.claim(reviewer.Ref)
 		report := workflowservice.QAReport{Schema: "kodex.workflow-qa-report.v1", Repository: "fixture/repository", Number: 7, HeadSHA: sha, Verdict: "PASS", Tests: []workflowservice.QATest{{Name: "Native report fixture", Command: "fixture-output-only", ExitCode: 0, Log: evidenceCapturedSource(log)}}, Findings: []workflowservice.QAFinding{}}
