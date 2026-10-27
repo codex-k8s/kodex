@@ -334,19 +334,9 @@ func sameDelegatedAuthorityLocator(locator *sttv1.DelegatedAuthorityLocator, ver
 	return locator.GetRootActorId() == authority.GetActor().GetId() && locator.GetTenantId() == authority.GetTenant().GetId() &&
 		locator.GetProjectId() == authority.GetProject().GetId() && locator.GetSourceRevision() == verified.GetSourceRevision() &&
 		locator.GetSourceDigestSha256() == verified.GetSourceDigestSha256() &&
-		sameProjectionProvenance(locator.GetActor(), authority.GetActor().GetProvenance()) &&
-		sameProjectionProvenance(locator.GetTenant(), authority.GetTenant().GetProvenance()) &&
-		((authority.GetProject() == nil && locator.GetProject() == nil) || sameProjectionProvenance(locator.GetProject(), authority.GetProject().GetProvenance()))
-}
-
-// sameProjectionProvenance requires both values and exact source/reference/revision/digest equality
-// without resolving or refreshing either source.
-// sameProjectionProvenance требует оба значения и exact source/reference/revision/digest equality без
-// разрешения и обновления sources.
-func sameProjectionProvenance(locator *sttv1.AuthorityIdentityProvenance, verified *internalrpcauthorityv1.AuthorityProvenance) bool {
-	return locator != nil && verified != nil && locator.GetSource() == int32(verified.GetSource()) &&
-		locator.GetReference() == verified.GetReference() && locator.GetRevision() == verified.GetRevision() &&
-		locator.GetDigestSha256() == verified.GetDigestSha256()
+		authorityclient.MatchesProvenance(locator.GetActor(), authority.GetActor().GetProvenance()) &&
+		authorityclient.MatchesProvenance(locator.GetTenant(), authority.GetTenant().GetProvenance()) &&
+		((authority.GetProject() == nil && locator.GetProject() == nil) || authorityclient.MatchesProvenance(locator.GetProject(), authority.GetProject().GetProvenance()))
 }
 
 // validCorrelation accepts one to 128 ASCII letters/digits or dot/underscore/colon/hyphen, not arbitrary

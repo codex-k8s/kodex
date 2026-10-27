@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/role_images_risk.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_artifact_transfer.go",
+      "fragmentSHA256": "8cbe8e294ca86dac9ce3c32f77026270b8332fa80b2005c9c5893eb1182b9c64",
+      "count": 1,
+      "reason": "Окно сравнивает разные закрытые field-equality policies: ImageVulnerabilityReport→ImageArtifact связывает artifact/manifest/evidence/SBOM/owner/recipe/build/policy pins, а sameTransferArtifact сравнивает две entity.Artifact по ref/project/run/session/content/revision/version/source. AST подтвердил разные типы аргументов и явные пары полей. Это не два экземпляра одного wire comparator: report поля специально отображаются на иные поля artifact, а stream comparator не сравнивает весь объект. Generic reflection/full-record equality либо конфигурируемые списки field names изменили бы предметную границу вместо устранения общего алгоритма. Сохранены только два пути/один hash/count1; report eligibility, data reads и transfer body не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/runtime_artifact_transfer.go",
+      "secondPath": "services/jobs/agent-runner/internal/codex/workspace_access.go",
+      "fragmentSHA256": "8f8b4f85c578a0ff4fb33ec7d35ac4eb8166b8dd8f80dbbd822c62eeaed9f65f",
+      "count": 1,
+      "reason": "Окно содержит два независимых typed equality predicates: entity.Artifact transfer identity/content/version/source и unix.Stat_t device/inode/uid/gid/mode/nlink/size/mtime/ctime. AST подтвердил закрытые разные наборы полей и отсутствие вызовов/ветвлений помимо &&/==. Workspace намеренно не сравнивает atime и не считает predicate блокировкой; stream binding использует собственные owner/revision metadata. Общий reflection comparator или один список полей скрыл бы разные security policies и мог включить atime либо потерять owner/content pins. Сохранён только exact path pair/hash/count1; sandbox traversal/openat2, streaming integrity и остальные фрагменты остаются в анализе."
+    },
+    {
       "format": "typescript",
       "firstPath": "services/staff/control-center/src/features/new-run/api.test.ts",
       "secondPath": "services/staff/control-center/src/shared/api/execution-target-picker.test.ts",

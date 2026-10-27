@@ -4,11 +4,63 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.535.0
+version: 1.536.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общий типизированный comparator provenance — 27.10.2026
+
+internalrpcauth/authorityclient.MatchesProvenance использует ProvenancePointer[T]:
+конкретный *T с четырьмя getters source/reference/revision/digest. Это позволяет
+проверить typed nil как указатель без reflection и нового module dependency.
+Удалены transcriptionProvenanceMatches и sameProjectionProvenance; шесть direct
+calls в control-plane/secret-broker используют общий предикат с выведенными
+типами существующих STT protobuf. Nil guards и всё тело сравнения буквально
+совпали с двумя native kernels после удаления различий whitespace. Getters
+читаются в прежнем порядке с остановкой на первом несовпадении. Пустые/default
+значения и unknown source numbers сохраняют прежнее равенство: helper не
+заменяет shape/signature/identity/permission/expiry/grant validation.
+
+| Путь | Сохранённая authority и owner read | Результат / lifecycle |
+| --- | --- | --- |
+| CP ResolveTranscriptionPolicy | прежний transport principal,exact method/caller SPIFFE/operation/verified context; trusted branch прежняя; actor/tenant/project/source/expiry pins, затем GetSystemSTTConfiguration | прежний policy response/cloned locator либо PermissionDenied/FailedPrecondition; без state/event/task |
+| Broker ProjectTranscriptionCredential | прежние audience/target/caller/full method/operation/shape/live expiry; точный locator; CP ResolveTranscriptionCredentialProjection, account/generation/config/descriptor pins | прежнее чтение exact secret descriptor и independent byte copy; raw/key cleanup прежний, без новой проекции/lease/event |
+
+Create/claim/renew/complete/cancel/delete/retry/lease-expiry/dead-letter/owner-gate
+переходы не добавляются и не переносятся в helper. Каждое повторное RPC проходит
+прежнюю проверку; comparator не кешируется и не продлевает locator/grant expiry.
+Два full-source inverses восстановили оба transport files. Двенадцать boundary
+files (go.mod/sum, Docker COPY closures, caller tests, trusted path и README)
+побайтно прежние. Новых зависимостей sttapi↔internalrpcauth нет; existing module
+и Docker COPY уже доставляют новый Go source. Матрица составлена до правок.
+
+Новые library tests защищают каждый mismatch, typed nil без вызова getters,
+точный порядок и short-circuit, default/unknown-source compatibility.64native/
+current профиля дали192вызова двух исходных функций и реального shared helper,
+без сети. Первый scalar-вариант оставлял одинаковые typed wrappers: он заменён
+pointer-constrained общей функцией, промежуточные PASS сохранены отдельно.
+Финальные module checks повторены после замены; это не результаты первого tree.
+
+| Модуль | Unit до / после | Build / unit / vet после, секунды |
+| --- | --- | --- |
+| control-plane | 3003PASS/70SKIP → 3003PASS/70SKIP,0FAIL | 10.84 / 40.23 / 6.13 |
+| secret-broker | 658PASS/1SKIP → 658PASS/1SKIP,0FAIL | 6.28 / 14.51 / 2.12 |
+| internalrpcauth | 128PASS/0SKIP → 140PASS/0SKIP,0FAIL | 0.47 / 2.17 / 0.42 |
+
+Это PASS LOCAL трёх полных модулей, не deployment или реальная credential
+проекция. PostgreSQL не повторялся: SQL/domain mutations не менялись.
+Три существующих сравниваемых формы другого назначения (report/artifact transfer/
+workspace Stat_t) проверены AST:35явных field pairs и разные concrete types.
+Два exact hash/path/count1 окна сохранены с причиной; ни reflection comparator,
+ни полное сравнение объектов не подменяют разные security field policies.
+12registry mutations отвергнуты,17quality unit PASS. Исчезла одна raw-группа,
+новых нет; registry1126,6791sources/222exclusions,1408raw/1269retained/
+139unresolved(Go69/TypeScript70),Go21645/21645 EN→RU. Новые два Go source учтены,
+thresholds/exclusions прежние. Context7 /golang/go и/protocolbuffers/protobuf-go:
+pointer constraints/type inference,nil-safe generated getters иproto.Clone
+проверены. Полные E2E/browser/live/deploy/startup/QA NOT RUN.
 
 ## Общая фабрика успешного SDK-ответа в тестах — 27.10.2026
 

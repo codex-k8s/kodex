@@ -109,16 +109,7 @@ func transcriptionLocatorMatches(locator *sttv1.DelegatedAuthorityLocator, verif
 		locator.GetSourceRevision() != verified.GetSourceRevision() || locator.GetSourceDigestSha256() != verified.GetSourceDigestSha256() {
 		return false
 	}
-	return transcriptionProvenanceMatches(locator.GetActor(), authority.GetActor().GetProvenance()) &&
-		transcriptionProvenanceMatches(locator.GetTenant(), authority.GetTenant().GetProvenance()) &&
-		((authority.GetProject() == nil && locator.GetProject() == nil) || transcriptionProvenanceMatches(locator.GetProject(), authority.GetProject().GetProvenance()))
-}
-
-// transcriptionProvenanceMatches requires both provenance records and exact source, reference,
-// revision and digest equality.
-// transcriptionProvenanceMatches требует обе записи происхождения и точное равенство source,
-// reference, revision и digest.
-func transcriptionProvenanceMatches(locator *sttv1.AuthorityIdentityProvenance, verified *authorityv1.AuthorityProvenance) bool {
-	return locator != nil && verified != nil && locator.GetSource() == int32(verified.GetSource()) &&
-		locator.GetReference() == verified.GetReference() && locator.GetRevision() == verified.GetRevision() && locator.GetDigestSha256() == verified.GetDigestSha256()
+	return authorityclient.MatchesProvenance(locator.GetActor(), authority.GetActor().GetProvenance()) &&
+		authorityclient.MatchesProvenance(locator.GetTenant(), authority.GetTenant().GetProvenance()) &&
+		((authority.GetProject() == nil && locator.GetProject() == nil) || authorityclient.MatchesProvenance(locator.GetProject(), authority.GetProject().GetProvenance()))
 }
