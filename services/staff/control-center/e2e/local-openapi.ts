@@ -484,20 +484,7 @@ test("локальный OpenAPI импорт, первая привязка и 
     ),
   );
 
-  const validated = await mutate<ConfigurationResult>(
-    page,
-    `/api/v1/integration-definition-configurations/${draft.configuration.ref}/revisions/${draft.revision.ref}/validation`,
-    undefined,
-    draft.configuration.version,
-  );
-  expect(validated.revision.state).toBe("VALID");
-  const published = await mutate<ConfigurationResult>(
-    page,
-    `/api/v1/integration-definition-configurations/${draft.configuration.ref}/revisions/${draft.revision.ref}/publication`,
-    undefined,
-    validated.configuration.version,
-  );
-  expect(published.revision.state).toBe("PUBLISHED");
+  const published = await validateAndPublishDefinition(page, draft);
 
   const connectionName = `Локальный OpenAPI ${randomUUID().slice(0, 8)}`;
   const connection = await mutate<Connection>(
@@ -694,20 +681,7 @@ test("помощник ведёт к credential-форме OpenAPI без уте
       `/configurations/INTEGRATION_DEFINITION/${draft.configuration.ref}$`,
     ),
   );
-  const validated = await mutate<ConfigurationResult>(
-    page,
-    `/api/v1/integration-definition-configurations/${draft.configuration.ref}/revisions/${draft.revision.ref}/validation`,
-    undefined,
-    draft.configuration.version,
-  );
-  expect(validated.revision.state).toBe("VALID");
-  const published = await mutate<ConfigurationResult>(
-    page,
-    `/api/v1/integration-definition-configurations/${draft.configuration.ref}/revisions/${draft.revision.ref}/publication`,
-    undefined,
-    validated.configuration.version,
-  );
-  expect(published.revision.state).toBe("PUBLISHED");
+  const published = await validateAndPublishDefinition(page, draft);
   const executable = JSON.parse(published.revision.content) as {
     spec: {
       credential?: { secretKey: string };
@@ -1078,6 +1052,29 @@ async function openGrantsTab(page: Page): Promise<void> {
   });
   await expect(page).toHaveURL(/\/integrations(?:[?#]|$)/);
   await selectGrantsTab(page);
+}
+
+// validateAndPublishDefinition проверяет validation и публикует точную ревизию
+// с версией, возвращённой предыдущим ответом. Окружение выбирает вызывающий тест.
+async function validateAndPublishDefinition(
+  page: Page,
+  draft: ConfigurationResult,
+): Promise<ConfigurationResult> {
+  const validated = await mutate<ConfigurationResult>(
+    page,
+    `/api/v1/integration-definition-configurations/${draft.configuration.ref}/revisions/${draft.revision.ref}/validation`,
+    undefined,
+    draft.configuration.version,
+  );
+  expect(validated.revision.state).toBe("VALID");
+  const published = await mutate<ConfigurationResult>(
+    page,
+    `/api/v1/integration-definition-configurations/${draft.configuration.ref}/revisions/${draft.revision.ref}/publication`,
+    undefined,
+    validated.configuration.version,
+  );
+  expect(published.revision.state).toBe("PUBLISHED");
+  return published;
 }
 
 // chooseGrantOption открывает заданный выбор, ищет текст и выбирает совпадающий вариант.
