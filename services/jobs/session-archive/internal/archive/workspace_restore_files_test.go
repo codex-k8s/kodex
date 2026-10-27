@@ -92,3 +92,25 @@ func TestWorkspaceRestoreFilesystemFencesEntries(t *testing.T) {
 		})
 	}
 }
+
+// TestWorkspaceRestoreFilesystemCloseFailureRemainsFailure preserves failed completion semantics across repeated resource cleanup.
+// TestWorkspaceRestoreFilesystemCloseFailureRemainsFailure сохраняет failed completion semantics при повторной очистке resources.
+func TestWorkspaceRestoreFilesystemCloseFailureRemainsFailure(t *testing.T) {
+	root, files, _ := workspaceRestoreFilesystemFixture(t, t.Context())
+	file, err := files.File(t.Context(), "partial", 0o755, 2)
+	if err != nil {
+		t.Fatal("prepare pending destination")
+	}
+	if _, err := file.Write([]byte("o")); err != nil {
+		_ = file.Close()
+		t.Fatal("write partial destination")
+	}
+	if files.Close() == nil || files.Close() == nil || file.Close() == nil || files.Close() == nil {
+		t.Fatal("repeated cleanup erased an unconfirmed file or adapter result")
+	}
+	raw, err := os.ReadFile(filepath.Join(root, "partial"))
+	info, statErr := os.Stat(filepath.Join(root, "partial"))
+	if err != nil || string(raw) != "o" || statErr != nil || info.Mode().Perm() != 0o600 {
+		t.Fatal("failed cleanup removed or sealed partial evidence")
+	}
+}

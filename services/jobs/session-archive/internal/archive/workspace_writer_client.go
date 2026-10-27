@@ -208,9 +208,13 @@ func (writer *workspaceFDWriter) Close() error {
 	writer.mu.Lock()
 	defer writer.mu.Unlock()
 	if writer.closed {
+		if writer.failed {
+			return errWorkspaceObjectUnconfirmed
+		}
 		return nil
 	}
-	valid := writer.usable(writer.ctx) && writer.pending == nil && writer.command(writer.ctx, workspaceWriterFinish, "", 0, 0) == nil
+	valid := writer.usable(writer.ctx) && writer.pending == nil && writer.command(writer.ctx, workspaceWriterFinish, "", 0, 0) == nil &&
+		receiveWorkspaceWriterJoin(writer.connection) == nil && writer.usable(writer.ctx)
 	writer.closed = true
 	if writer.pending != nil && !writer.pending.closed {
 		writer.pending.closed = true
@@ -220,6 +224,7 @@ func (writer *workspaceFDWriter) Close() error {
 	rootErr := unix.Close(writer.root)
 	writer.stop()
 	if !valid || connectionErr != nil || rootErr != nil {
+		writer.failed = true
 		return errWorkspaceObjectUnconfirmed
 	}
 	return nil

@@ -3,6 +3,8 @@ package archive
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
+	"io"
 	"net"
 	"os"
 
@@ -178,4 +180,25 @@ func receiveWorkspaceWriterFile(connection *net.UnixConn, rootFD int, name strin
 	}
 	accepted = true
 	return os.NewFile(uintptr(fd), "workspace-restore-writer"), nil
+}
+
+// receiveWorkspaceWriterJoin accepts only clean EOF after FINISH, never a trailing frame or an additional descriptor grant.
+// The trusted server closes its connection only after joining its watcher and closing all data adapters.
+// receiveWorkspaceWriterJoin принимает только clean EOF после FINISH, без trailing frame или additional descriptor grant.
+// Trusted server закрывает connection только после завершения watcher и закрытия data adapters.
+func receiveWorkspaceWriterJoin(connection *net.UnixConn) error {
+	if connection == nil {
+		return errWorkspaceObjectUnconfirmed
+	}
+	var payload [1]byte
+	control := make([]byte, unix.CmsgSpace(4))
+	n, controlBytes, flags, _, err := connection.ReadMsgUnix(payload[:], control)
+	descriptors, count, valid := workspaceReaderDescriptors(control[:controlBytes])
+	for _, fd := range descriptors {
+		_ = unix.Close(fd)
+	}
+	if !errors.Is(err, io.EOF) || n != 0 || !valid || count != 0 || len(descriptors) != 0 || flags&(unix.MSG_TRUNC|unix.MSG_CTRUNC) != 0 {
+		return errWorkspaceObjectUnconfirmed
+	}
+	return nil
 }

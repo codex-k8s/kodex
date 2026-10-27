@@ -163,6 +163,9 @@ func TestWorkspaceWriterPartialFilesNeverFinish(t *testing.T) {
 			if failure != "pending-close" && file.Close() == nil || writer.Close() == nil || join() == nil {
 				t.Fatal("partial or disconnected transfer completed successfully")
 			}
+			if writer.Close() == nil {
+				t.Fatal("repeated close erased an unconfirmed provider result")
+			}
 			info, err := os.Stat(filepath.Join(fixture.root, workspaceRestoreStagingTree, "partial"))
 			if err != nil || info.Mode().Perm() != 0o600 || fixture.publication.Rejoin(t.Context()) == nil {
 				t.Fatal("partial evidence disappeared, was sealed or became executable work")
@@ -325,6 +328,38 @@ func TestWorkspaceWriterTaskModeRejectsReadOnlyWork(t *testing.T) {
 			}
 			if _, err := workspaceWriterTaskDigest(task); err == nil {
 				t.Fatal("read-only task acquired writable protocol binding")
+			}
+		})
+	}
+}
+
+// TestWorkspaceWriterJoinRequiresCleanEOF rejects post-FINISH data and unexpected capabilities before publication may proceed.
+// TestWorkspaceWriterJoinRequiresCleanEOF отклоняет post-FINISH data и unexpected capabilities до разрешения publication.
+func TestWorkspaceWriterJoinRequiresCleanEOF(t *testing.T) {
+	for _, boundary := range []string{"eof", "trailing", "rights", "closed"} {
+		t.Run(boundary, func(t *testing.T) {
+			client, server := workspaceReaderConnections(t)
+			switch boundary {
+			case "trailing":
+				if _, _, err := server.WriteMsgUnix([]byte{2}, nil, nil); err != nil {
+					t.Fatal("send unexpected trailing frame")
+				}
+			case "rights":
+				file, err := os.CreateTemp(t.TempDir(), "unexpected-capability")
+				if err != nil {
+					t.Fatal("prepare unexpected descriptor")
+				}
+				defer file.Close()
+				if _, _, err := server.WriteMsgUnix([]byte{1}, unix.UnixRights(int(file.Fd())), nil); err != nil {
+					t.Fatal("send unexpected descriptor")
+				}
+			case "closed":
+				if client.Close() != nil {
+					t.Fatal("close receiver before peer join")
+				}
+			}
+			if server.Close() != nil || (receiveWorkspaceWriterJoin(client) == nil) != (boundary == "eof") {
+				t.Fatal("join confused a data frame, capability or local closure with clean EOF")
 			}
 		})
 	}

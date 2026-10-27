@@ -4,7 +4,7 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.5
+version: 1.0.6
 updated: 2026-10-27
 ---
 
@@ -283,7 +283,12 @@ counter при этом не подменяется размером. Обычн
 отказ, даже если размер совпал; другое действие при pending file запрещено.
 
 FINISH закрывает adapter и допускает публикацию только после явного peer join
-у caller. Ошибка, cancellation, лишний FD, чужой task/root или потерянный ACK
+у caller. После FINISH ACK клиент требует clean EOF без trailing frame/FD:
+server закрывает connection после завершения watcher и закрытия data adapters.
+Это закрытие data capabilities; terminal всего physical Pod перед owner ACK
+controller доказывает отдельно. Ошибка Close сохраняется и при повторном Close,
+чтобы повтор resource cleanup не превращался в положительный результат.
+Ошибка, cancellation, лишний FD, чужой task/root или потерянный ACK
 закрывают попытку без повторной команды и сохраняют partial data. Внутренний
 Unixpacket-контур под одним текущим UID проверяет transport/stream/publication,
 но не заменяет обязательный distinct UID10001/10002 native proof и production

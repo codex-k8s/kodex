@@ -276,12 +276,19 @@ func (files *workspaceRestoreFilesystem) SealDirectory(ctx context.Context, name
 // Close releases only this adapter's duplicate descriptor and reports pending or failed writes.
 // Close освобождает только копию descriptor этого adapter и сообщает о незавершённых либо ошибочных записях.
 func (files *workspaceRestoreFilesystem) Close() error {
-	if files == nil || files.closed {
+	if files == nil {
+		return nil
+	}
+	if files.closed {
+		if files.failed || files.openFiles != 0 {
+			return errWorkspaceObjectUnconfirmed
+		}
 		return nil
 	}
 	files.closed = true
 	err := unix.Close(files.root)
 	if err != nil || files.openFiles != 0 || files.failed {
+		files.failed = true
 		return errors.Join(errWorkspaceObjectUnconfirmed, err)
 	}
 	return nil
