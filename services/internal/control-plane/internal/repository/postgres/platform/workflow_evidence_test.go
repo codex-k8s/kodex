@@ -15,7 +15,7 @@ import (
 // workflowEvidenceSubjectFixture задаёт pinned accepted input для pure boundary tests;
 // она не заменяет native fixture создания этого owner input.
 func workflowEvidenceSubjectFixture() []workflowResultDependency {
-	return []workflowResultDependency{{StepKey: "author", Receipt: entity.WorkflowAttemptResult{Accepted: true, Results: []entity.WorkflowAcceptedResult{{Key: "pr", Kind: "PULL_REQUEST", Repository: "owner/repo", Number: 42, HeadSHA: strings.Repeat("a", 40)}}}}}
+	return []workflowResultDependency{{StepKey: "author", SourceNodeID: "owner-source-node", Receipt: entity.WorkflowAttemptResult{Attempt: 1, Accepted: true, Results: []entity.WorkflowAcceptedResult{{Key: "pr", Kind: "PULL_REQUEST", Repository: "owner/repo", Number: 42, HeadSHA: strings.Repeat("a", 40)}}}}}
 }
 
 // TestWorkflowEvidenceSlots rejects global writes, self-approval and subject drift before
@@ -45,6 +45,31 @@ func TestWorkflowEvidenceSlots(t *testing.T) {
 	}
 	if _, err := workflowEffectSlotForProfile(workflowservice.GitHubReviewQAV1, step, inputs, "github.pull_request.review.create", []byte(`{"owner":"foreign","repository":"repo"}`), []byte(input)); err == nil {
 		t.Fatal("foreign repository admitted")
+	}
+}
+
+// TestWorkflowEvidenceSubjectPins keeps the canonical accepted dependency requirements visible;
+// incomplete, rejected or ambiguous input receipts cannot authorize either the slot or verdict.
+// TestWorkflowEvidenceSubjectPins сохраняет canonical accepted dependency requirements:
+// неполные, отклонённые либо неоднозначные input receipts не разрешают slot либо verdict.
+func TestWorkflowEvidenceSubjectPins(t *testing.T) {
+	for name, mutate := range map[string]func([]workflowResultDependency){
+		"missing owner source": func(v []workflowResultDependency) { v[0].SourceNodeID = "" },
+		"attempt zero":         func(v []workflowResultDependency) { v[0].Receipt.Attempt = 0 },
+		"attempt above four":   func(v []workflowResultDependency) { v[0].Receipt.Attempt = 5 },
+		"rejected dependency":  func(v []workflowResultDependency) { v[0].Receipt.Accepted = false },
+	} {
+		t.Run(name, func(t *testing.T) {
+			inputs := workflowEvidenceSubjectFixture()
+			mutate(inputs)
+			if _, valid := workflowResultSubject(inputs, "author"); valid {
+				t.Fatal("incomplete owner receipt became an evidence subject")
+			}
+		})
+	}
+	inputs := workflowEvidenceSubjectFixture()
+	if _, valid := workflowResultSubject(append(inputs, inputs[0]), "author"); valid {
+		t.Fatal("ambiguous owner receipt became an evidence subject")
 	}
 }
 
