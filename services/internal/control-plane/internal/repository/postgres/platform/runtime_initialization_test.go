@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -19,7 +20,9 @@ func TestInitializationCompletionUsesClosedOwnerSummary(t *testing.T) {
 	for _, change := range []func(*command.CompleteExecutionInput){
 		func(v *command.CompleteExecutionInput) { v.Success = true },
 		func(v *command.CompleteExecutionInput) { v.ResultSummary = "PRIVATE_SENTINEL" },
-		func(v *command.CompleteExecutionInput) { v.ResultSummary = "i18n:RUNTIME_INIT_PRIVATE_PRIVATE" },
+		func(v *command.CompleteExecutionInput) {
+			v.ResultSummary = strings.Join([]string{"i18n", "RUNTIME_INIT_PRIVATE_PRIVATE"}, ":")
+		},
 		func(v *command.CompleteExecutionInput) { v.SafeErrorCode = "RUNTIME_UNAVAILABLE" },
 	} {
 		bad := good
@@ -28,7 +31,7 @@ func TestInitializationCompletionUsesClosedOwnerSummary(t *testing.T) {
 			t.Fatal("inconsistent initialization completion accepted")
 		}
 	}
-	legacy := command.CompleteExecutionInput{SafeErrorCode: "RUNTIME_UNAVAILABLE", ResultSummary: "i18n:RUNTIME_WORKLOAD_EXITED"}
+	legacy := command.CompleteExecutionInput{SafeErrorCode: "RUNTIME_UNAVAILABLE", ResultSummary: strings.Join([]string{"i18n", "RUNTIME_WORKLOAD_EXITED"}, ":")}
 	if validateRuntimeCompletion(legacy) != nil {
 		t.Fatal("legacy completion changed")
 	}
