@@ -139,7 +139,7 @@ func TestWorkspaceManifestBoundsPartsAndExistingBudgets(t *testing.T) {
 // Source shape не является owner authority; authoritative retry selection проверяется repository.
 func TestWorkspaceGenerationNeverSelectsAnAlternateParent(t *testing.T) {
 	manifest := workspaceArchiveFixture()
-	input := RunnerInput{Mode: RunnerModeTurn, OrganizationRef: manifest.Scope.OrganizationRef, ProjectRef: manifest.Scope.ProjectRef,
+	input := RunnerInput{Mode: RunnerModeTurn, AssistantScope: AssistantScopeNone, OrganizationRef: manifest.Scope.OrganizationRef, ProjectRef: manifest.Scope.ProjectRef,
 		SessionRef: manifest.Scope.SessionRef, AgentRef: manifest.Scope.AgentRef, WorkspacePolicy: RuntimeWorkspacePolicyV1()}
 	value := WorkspaceStorageBinding{Profile: WorkspaceStorageProfile, Scope: manifest.Scope, WorkspaceRef: manifest.WorkspaceRef, Generation: 2}
 	path, err := value.GenerationSubPath()
@@ -173,5 +173,39 @@ func TestWorkspaceGenerationNeverSelectsAnAlternateParent(t *testing.T) {
 	checkpoint.Manifest.Key = checkpoint.ObjectPrefix() + "manifest.json"
 	if value.ValidateForInput(input) == nil {
 		t.Fatal("foreign project checkpoint metadata accepted")
+	}
+}
+
+// TestWorkspaceStorageIsOptionalAndDigestBound preserves legacy omission and binds fresh work inputs.
+// It never treats a matching digest as permission to restore or acquire a writer.
+// TestWorkspaceStorageIsOptionalAndDigestBound сохраняет legacy omission и связывает fresh work inputs.
+// Совпадающий digest не считается правом restore или получения writer.
+func TestWorkspaceStorageIsOptionalAndDigestBound(t *testing.T) {
+	_, input, binding := workspaceQuiescenceFixture()
+	input.WorkloadInstance = "runtime-controller-fixture"
+	before, err := json.Marshal(input)
+	if err != nil || bytes.Contains(before, []byte(`"workspace_storage"`)) {
+		t.Fatal("absent legacy storage policy materialized on the wire")
+	}
+	credential := RuntimeRevisionCredentialSource{SecretName: "synthetic-provider", SecretUID: "synthetic-uid", SecretResourceVersion: "1"}
+	legacyDigest, err := RuntimeRevisionDigest(input, credential)
+	if err != nil {
+		t.Fatal("synthetic revision cannot be hashed")
+	}
+	input.WorkspaceStorage = &binding
+	durableDigest, err := RuntimeRevisionDigest(input, credential)
+	if err != nil || durableDigest == legacyDigest {
+		t.Fatal("owner-selected work generation disappeared from the revision digest")
+	}
+	binding.Generation++
+	freshDigest, err := RuntimeRevisionDigest(input, credential)
+	if err != nil || freshDigest == durableDigest {
+		t.Fatal("fresh generation reused the previous revision digest")
+	}
+	for _, scope := range []AssistantScope{AssistantScopeSystem, AssistantScopeProject} {
+		input.AssistantScope = scope
+		if binding.ValidateForInput(input) == nil {
+			t.Fatal("employee persistence policy widened into an assistant profile")
+		}
 	}
 }

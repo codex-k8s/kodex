@@ -241,11 +241,16 @@
     "provider_auth_file": {"$ref": "#/$defs/secret_file"},
     "provider_auth_sha256_file": {"$ref": "#/$defs/secret_file"},
     "workspace_policy": {"$ref": "#/$defs/workspace_policy"},
+    "workspace_storage": {"$ref": "#/$defs/workspace_storage"},
     "workspace_root": {"const": "/workspace"},
     "outbox_root": {"const": "/workspace/.kodex/outbox"},
     "codex_home": {"const": "/workspace/.kodex/state/codex-home"}
   },
   "allOf": [
+    {
+      "if": {"required": ["workspace_storage"]},
+      "then": {"properties": {"mode": {"const": "TURN"}, "assistant_scope": {"const": "NONE"}}, "required": ["assistant_scope"]}
+    },
     {"if": {"required": ["execution_deadline"]}, "then": {"properties": {"mode": {"const": "TURN"}, "assistant_scope": {"const": "NONE"}}}},
     {
       "if": {"properties": {"callback_tls": {"required": ["profile"], "properties": {"profile": {"const": "trusted-cluster"}}}}},
@@ -348,6 +353,52 @@
     }
   ],
   "$defs": {
+    "workspace_storage_scope": {
+      "type": "object", "additionalProperties": false,
+      "required": ["organization_ref", "project_ref", "session_ref", "agent_ref"],
+      "properties": {
+        "organization_ref": {"type": "string", "pattern": "^org_[A-Za-z0-9_-]{8,84}$"},
+        "project_ref": {"type": "string", "pattern": "^prj_[A-Za-z0-9_-]{8,84}$"},
+        "session_ref": {"type": "string", "pattern": "^ses_[A-Za-z0-9_-]{8,84}$"},
+        "agent_ref": {"type": "string", "pattern": "^agt_[A-Za-z0-9_-]{8,84}$"}
+      }
+    },
+    "workspace_manifest_object": {
+      "type": "object", "additionalProperties": false,
+      "required": ["key", "version", "etag", "digest", "size_bytes"],
+      "properties": {
+        "key": {"type": "string", "minLength": 1, "maxLength": 1024},
+        "version": {"type": "string", "minLength": 1, "maxLength": 1024},
+        "etag": {"type": "string", "minLength": 1, "maxLength": 256},
+        "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 65536}
+      }
+    },
+    "workspace_checkpoint": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scope", "workspace_ref", "generation", "checkpoint_ref", "manifest", "tree_sha256", "bytes", "entries"],
+      "properties": {
+        "scope": {"$ref": "#/$defs/workspace_storage_scope"},
+        "workspace_ref": {"type": "string", "pattern": "^wks_[A-Za-z0-9_-]{8,89}$"},
+        "generation": {"type": "integer", "minimum": 1, "maximum": 9223372036854775807},
+        "checkpoint_ref": {"type": "string", "pattern": "^wcp_[A-Za-z0-9_-]{8,89}$"},
+        "manifest": {"$ref": "#/$defs/workspace_manifest_object"},
+        "tree_sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"type": "integer", "minimum": 0, "maximum": 1073741824},
+        "entries": {"type": "integer", "minimum": 0, "maximum": 100000}
+      }
+    },
+    "workspace_storage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["profile", "scope", "workspace_ref", "generation"],
+      "properties": {
+        "profile": {"const": "SESSION_WORKSPACE_V2"},
+        "scope": {"$ref": "#/$defs/workspace_storage_scope"},
+        "workspace_ref": {"type": "string", "pattern": "^wks_[A-Za-z0-9_-]{8,89}$"},
+        "generation": {"type": "integer", "minimum": 1, "maximum": 9223372036854775807},
+        "source": {"$ref": "#/$defs/workspace_checkpoint"}
+      }
+    },
     "runtime_profile_key": {"type": "string", "minLength": 8, "maxLength": 128, "pattern": "^[A-Za-z0-9_-]{8,128}$"},
     "file_catalog": {
       "type": "object", "additionalProperties": false,

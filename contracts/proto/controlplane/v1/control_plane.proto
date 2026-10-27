@@ -3791,6 +3791,42 @@ message RuntimeRevisionSnapshot {
   string assistant_profile_ref = 77;
   repeated ManagedMCPProfile managed_mcp_profiles = 78;
   RuntimeExecutionDeadline execution_deadline = 79;
+  // Owner-selected private work generation; старый input сохраняет отсутствие поля.
+  RuntimeWorkspaceStorage workspace_storage = 80;
+}
+
+message RuntimeWorkspaceScope {
+  string organization_ref = 1;
+  string project_ref = 2;
+  string session_ref = 3;
+  string agent_ref = 4;
+}
+
+message RuntimeWorkspaceObject {
+  string key = 1;
+  string version = 2;
+  string etag = 3;
+  string digest = 4;
+  int64 size_bytes = 5;
+}
+
+message RuntimeWorkspaceCheckpoint {
+  RuntimeWorkspaceScope scope = 1;
+  string workspace_ref = 2;
+  int64 generation = 3;
+  string checkpoint_ref = 4;
+  RuntimeWorkspaceObject manifest = 5;
+  string tree_sha256 = 6;
+  int64 bytes = 7;
+  int64 entries = 8;
+}
+
+message RuntimeWorkspaceStorage {
+  string profile = 1;
+  RuntimeWorkspaceScope scope = 2;
+  string workspace_ref = 3;
+  int64 generation = 4;
+  RuntimeWorkspaceCheckpoint source = 5;
 }
 
 enum RuntimeFilePurpose {

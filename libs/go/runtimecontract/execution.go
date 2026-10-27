@@ -279,6 +279,7 @@ type RunnerInput struct {
 	SecretProjections                 []RuntimeSecretProjection `json:"secret_projections,omitempty"`
 	EnvironmentPolicy                 RuntimeEnvironmentPolicy  `json:"environment_policy"`
 	WorkspacePolicy                   RuntimeWorkspacePolicy    `json:"workspace_policy"`
+	WorkspaceStorage                  *WorkspaceStorageBinding  `json:"workspace_storage,omitempty"`
 	ExecutionDeadline                 *RuntimeExecutionDeadline `json:"execution_deadline,omitempty"`
 	EffectiveKubernetesAccess         RuntimeKubernetesAccess   `json:"effective_kubernetes_access"`
 	CodexSandbox                      string                    `json:"codex_sandbox"`
@@ -409,6 +410,9 @@ func (input RunnerInput) Validate() error {
 	}
 	if input.FileCatalog != nil && (input.FileCatalog.Validate() != nil || input.Mode != RunnerModeTurn || input.ProjectRef == "") {
 		return errors.New("runner file catalog binding is invalid")
+	}
+	if input.WorkspaceStorage != nil && input.WorkspaceStorage.ValidateForInput(input) != nil {
+		return errWorkspaceStorageInvalid
 	}
 	environmentDigest, err := RuntimeEnvironmentDigest(input.EnvironmentValues, input.SecretProjections, input.EnvironmentImage, input.EnvironmentTools, normalizedPolicy)
 	if err != nil || environmentDigest != input.RuntimeEnvironmentDigest {

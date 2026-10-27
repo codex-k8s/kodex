@@ -143,9 +143,13 @@ type WorkspaceStorageBinding struct {
 // Выбор source и current-writer CAS остаются ответственностью owner-транзакции.
 func (value WorkspaceStorageBinding) ValidateForInput(input RunnerInput) error {
 	if value.Profile != WorkspaceStorageProfile || value.Scope.Validate() != nil || value.Generation < 1 ||
-		!workspaceStorageRefPattern.MatchString(value.WorkspaceRef) || input.Mode != RunnerModeTurn ||
+		!workspaceStorageRefPattern.MatchString(value.WorkspaceRef) || input.Mode != RunnerModeTurn || input.AssistantScope != AssistantScopeNone ||
 		value.Scope.OrganizationRef != input.OrganizationRef || value.Scope.ProjectRef != input.ProjectRef ||
 		value.Scope.SessionRef != input.SessionRef || value.Scope.AgentRef != input.AgentRef {
+		return errWorkspaceStorageInvalid
+	}
+	if value.Source != nil && value.Source.Scope.SessionRef == value.Scope.SessionRef &&
+		value.Source.WorkspaceRef == value.WorkspaceRef && value.Source.Generation >= value.Generation {
 		return errWorkspaceStorageInvalid
 	}
 	if value.Source != nil && (value.Source.Validate() != nil ||

@@ -4,7 +4,7 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.0
+version: 1.0.1
 updated: 2026-10-27
 ---
 
@@ -42,6 +42,27 @@ session PVC20GiB. Только exact writable generation монтируется 
 | Archive/restore | Проверка всех exact-version parts и digest до owner ACK; model не запускается по частично восстановленному дереву |
 | Delete/purge | Durable destructive intent исключает новый writer; exact UID/versions, отсутствие consumers и authoritative readback. Unknown блокирует удаление |
 
+Для нового профиля порядок обязателен уже в первом `workspace-prepare`:
+read-only decode/validation входа и создание callback transport → exact owned
+Pod/PVC readback и owner writer CAS (`BIND`) → любые prepare/reset/copy/write,
+включая trusted init, egress trust, справочник и quota canary. Read-only inode
+proof из отдельного file subPath разрешает только переход в exact `work`
+mount; наличие этого файла не заменяет BIND и не является authority.
+Вложенные mounts и альтернативный доступ через `.kodex/state/workspaces`
+закрыты; старый профиль не получает нового callback-метода.
+
+`QUIESCENT` после terminal сохраняет только past fact уже известного exact
+writer. Storage-only ACK не создаёт lease, grant, RuntimeRevision, новую
+generation и не меняет исход business run. Неизвестный либо force-deleted
+writer остаётся BLOCKED с сохранённой PVC.
+
+Persistent preparation сохраняет draft и уже изменённые INPUT copies.
+Текущие read-only originals всё равно проверяются по metadata и digest;
+изменённая копия не входит в proof текущего INPUT. Новый finalized attachment
+set получает собственный существующий namespace. Квота заранее учитывает
+оставшиеся bytes, все writable directories, новые INPUT parents и временный
+справочник; отказ не удаляет сохранённые данные.
+
 ## Архив и ограничение ресурсов
 
 Legacy archive v1 сохраняет прежние bytes и reader. Закрытый v2 work manifest
@@ -57,6 +78,13 @@ Canonical stream ограничен прежними work byte/file quotas. Ча
 bytes, traversal, links, special files и несовпадение exact object commitments.
 Восстановленный work остаётся недоверенным внутри прежнего sandbox и не
 обходит quarantine или artifact/VFS eligibility.
+
+V2 snapshot/restore consumer использует только exact work subPath и
+UID10002/GID29000: provider files с mode0600 остаются читаемыми владельцу,
+runner files0640 — через группу. Private generation parents0700 UID10001,
+provider auth и session root ему не монтируются. Legacy v1 consumer не меняет
+свою identity. Это требует отдельной проверки renderer и native permissions;
+один codec unit этого не доказывает.
 
 V1 receipt при наличии work не разрешает удаление всей PVC. Перед activation
 нужно завершить либо отозвать старые destructive archive jobs и подтвердить

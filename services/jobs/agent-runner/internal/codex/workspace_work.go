@@ -104,7 +104,11 @@ Workspace изолирован и временный: перед следующ�
 // materializedWorkspaceGuide добавляет выданные writable budgets и фиксированный artifact size limit
 // к справочнику без проверки или изменения immutable runtime policy.
 func materializedWorkspaceGuide(input model.Input) string {
-	return workspaceGuide + fmt.Sprintf(`
+	guide := workspaceGuide
+	if input.WorkspaceStorage != nil {
+		guide = strings.Replace(guide, "Workspace изолирован и временный: перед следующим исполнением рабочие файлы\nсбрасываются.", "Рабочая область сохраняется платформой в закреплённом поколении. Восстановленные\nчерновики и изменённые копии не являются опубликованными артефактами и не дают\nполномочий на повтор внешнего действия. При недоказанной остановке прежнего writer\nвосстановление блокируется; наличие локального файла не подтверждает checkpoint.", 1)
+	}
+	return guide + fmt.Sprintf(`
 ## Выданные ограничения файловой системы
 
 Текущий общий бюджет writable workspace: %d байт и %d записей
@@ -174,7 +178,12 @@ func prepareWorkingDirectoryOwned(ctx context.Context, input model.Input, source
 		return errWorkingDirectory
 	}
 	defer lock.Close()
-	fd, err := unix.Openat(int(lock.Fd()), "work", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	var fd int
+	if input.WorkspaceStorage != nil {
+		fd, err = workspacepolicy.OpenBoundWorkDirectory(int(lock.Fd()), input)
+	} else {
+		fd, err = unix.Openat(int(lock.Fd()), "work", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	}
 	if err != nil {
 		return errWorkingDirectory
 	}
@@ -213,6 +222,9 @@ func prepareWorkingTree(ctx context.Context, input model.Input, directory *os.Fi
 	openedInfo, openedErr := directory.Stat()
 	if rootErr != nil || openedErr != nil || !os.SameFile(rootInfo, openedInfo) {
 		return errWorkingDirectory
+	}
+	if input.WorkspaceStorage != nil {
+		return preparePersistentWorkingTree(ctx, input, root, directory, sourceUID)
 	}
 	entries, err := directory.ReadDir(-1)
 	if err != nil {
