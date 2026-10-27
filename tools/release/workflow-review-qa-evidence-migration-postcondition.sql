@@ -414,7 +414,7 @@ SELECT (base_proof.proof || jsonb_build_object(
  ('control_plane.guard_workflow_effect_records()','7010547e11bc8d1e8f67ac56feaba030','plpgsql','v','trigger'),
  ('control_plane.guard_workflow_attempt_journal()','7f8dc9469eb755a7b7760e8d4d7fc2cd','plpgsql','v','trigger'),
  ('control_plane.workflow_public_attempt_results(uuid,uuid)','80b6457cc872824d87164494cd44dc1a','plpgsql','s','jsonb'),
- ('control_plane.workflow_evidence_intent_valid(uuid,uuid,uuid,uuid,jsonb,jsonb)','d37208f0d56739185b01fa5bc8fa6cbe','sql','s','boolean'),
+ ('control_plane.workflow_evidence_intent_valid(uuid,uuid,uuid,uuid,jsonb,jsonb)','9f92d166abb3267d2c3f1dc1a8e9ad1c','sql','s','boolean'),
  ('control_plane.workflow_evidence_outcome_valid(uuid,uuid,jsonb,jsonb)','c873f7e8247b0f54f0c0cf424ac7ba18','plpgsql','s','boolean'),
  ('control_plane.workflow_evidence_execution_assigned(uuid,uuid,uuid)','1fb462b1ccbdce5a35e6dcb497be0d40','sql','s','boolean'),
  ('control_plane.artifact_has_retained_revisions(uuid)','29166a148eef617208fc527afaf907d1','sql','s','boolean'),

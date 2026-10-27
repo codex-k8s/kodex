@@ -4,7 +4,7 @@ title: Native COMMENT и сохранённый QA-отчёт серверног
 type: runbook
 status: approved
 owner: architect
-version: 1.3.0
+version: 1.3.1
 updated: 2026-10-27
 ---
 
@@ -240,3 +240,15 @@ revision/digest ни negative evidence, ни reworkSubjects не принима�
 новой композиции, включая новые negative schema cases, до фактического исполнения
 имеют статус NOT RUN. Будущая01150 потребует новой явной композиции metadata;
 проверенные013 fingerprints не объявляют её применённой.
+
+
+Составные JSON expressions с удалением ключей группируются явно:
+`(record->'member') - ARRAY[...]`. Binary `-` имеет более высокий приоритет,
+чем JSON `->`; без скобок PostgreSQL пытается преобразовать имя member в JSON.
+Это проверяется реальным Goose013→014 upgrade, а не mock boolean. После такого
+исправления меняется exact function source pin и заново формируется полный014
+postcondition; прежняя неуспешная миграция не объявляется PASS. Правило одинаково
+для intent/report/log guards и других JSON arithmetic expressions.
+Официальные источники PostgreSQL18 проверены root через Context7:
+[operator precedence §4.1.6](https://www.postgresql.org/docs/18/sql-syntax-lexical.html#SQL-PRECEDENCE),
+[JSON operators](https://www.postgresql.org/docs/18/functions-json.html).
