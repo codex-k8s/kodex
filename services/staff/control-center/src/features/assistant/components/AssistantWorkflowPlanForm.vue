@@ -293,7 +293,10 @@ async function changeMode(event: Event): Promise<void> {
   change("executionMode", mode);
   if (mode !== "SERVER_DAG_V1" && parameter("reworkPolicy") !== undefined)
     change("reworkPolicy", "");
-  if (mode !== "SERVER_DAG_V1" && parameter("resultEvidenceProfile") !== undefined)
+  if (
+    mode !== "SERVER_DAG_V1" &&
+    parameter("resultEvidenceProfile") !== undefined
+  )
     change("resultEvidenceProfile", isUpdate.value ? "" : undefined);
 }
 // Повторный вызов после await читает актуальные режим и разрешение редактирования.

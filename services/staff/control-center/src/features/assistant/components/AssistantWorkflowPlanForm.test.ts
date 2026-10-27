@@ -483,7 +483,6 @@ it.each(["mode", "permission"])(
   },
 );
 
-
 function evidenceProfileEvent(value: string): Event {
   class FixtureSelect {
     constructor(public value: string) {}
@@ -506,9 +505,16 @@ it.each(["CREATE_WORKFLOW", "UPDATE_WORKFLOW"] as const)(
       updateOperationParameter(props.operation, "workflowRef", "wf_fixture");
     }
     updateOperationParameter(props.operation, "executionMode", "SERVER_DAG_V1");
-    updateOperationParameter(props.operation, "resultEvidenceProfile", "GITHUB_REVIEW_QA_V1");
+    updateOperationParameter(
+      props.operation,
+      "resultEvidenceProfile",
+      "GITHUB_REVIEW_QA_V1",
+    );
     await nextTick();
-    const change = () => state.changeMode({ target: { value: "MANAGER_DRIVEN" } } as unknown as Event);
+    const change = () =>
+      state.changeMode({
+        target: { value: "MANAGER_DRIVEN" },
+      } as unknown as Event);
     const before = operationInputs([props.operation]);
     const rejected = change();
     resolveConfirmation(false);
@@ -525,7 +531,8 @@ it.each(["CREATE_WORKFLOW", "UPDATE_WORKFLOW"] as const)(
     await accepted;
     const parameters = operationInputs([props.operation])[0]?.parameters;
     expect(parameters?.executionMode).toBe("MANAGER_DRIVEN");
-    if (kind === "UPDATE_WORKFLOW") expect(parameters?.resultEvidenceProfile).toBe("");
+    if (kind === "UPDATE_WORKFLOW")
+      expect(parameters?.resultEvidenceProfile).toBe("");
     else expect(parameters).not.toHaveProperty("resultEvidenceProfile");
   },
 );
@@ -537,20 +544,37 @@ it("UPDATE clear сохраняет явное пустое mutation field, но
   props.operation.value.target.ref = "wf_fixture";
   updateOperationParameter(props.operation, "workflowRef", "wf_fixture");
   updateOperationParameter(props.operation, "executionMode", "SERVER_DAG_V1");
-  updateOperationParameter(props.operation, "steps", stepsOf(props.operation).map((step, index) => ({
-    ...step,
-    key: index === 0 ? "code" : "review",
-    agentRef: index === 0 ? "agt_developer" : "agt_reviewer",
-    dependsOn: index === 0 ? [] : ["code"],
-    resultRequirements: index === 0
-      ? [{ key: "pr", kind: "PULL_REQUEST", repository: "codex-k8s/test-repo" }]
-      : [{ key: "review", kind: "REVIEW", subjectStepKey: "code" }],
-  })));
-  updateOperationParameter(props.operation, "resultEvidenceProfile", "GITHUB_REVIEW_QA_V1");
+  updateOperationParameter(
+    props.operation,
+    "steps",
+    stepsOf(props.operation).map((step, index) => ({
+      ...step,
+      key: index === 0 ? "code" : "review",
+      agentRef: index === 0 ? "agt_developer" : "agt_reviewer",
+      dependsOn: index === 0 ? [] : ["code"],
+      resultRequirements:
+        index === 0
+          ? [
+              {
+                key: "pr",
+                kind: "PULL_REQUEST",
+                repository: "codex-k8s/test-repo",
+              },
+            ]
+          : [{ key: "review", kind: "REVIEW", subjectStepKey: "code" }],
+    })),
+  );
+  updateOperationParameter(
+    props.operation,
+    "resultEvidenceProfile",
+    "GITHUB_REVIEW_QA_V1",
+  );
   await vi.waitFor(() => expect(state.valid.value).toBe(true));
   state.changeEvidenceProfile(evidenceProfileEvent(""));
   await nextTick();
-  expect(operationInputs([props.operation])[0]?.parameters.resultEvidenceProfile).toBe("");
+  expect(
+    operationInputs([props.operation])[0]?.parameters.resultEvidenceProfile,
+  ).toBe("");
   expect(state.valid.value).toBe(true);
   for (const invalid of [null, "UNKNOWN_PROFILE"]) {
     updateOperationParameter(props.operation, "resultEvidenceProfile", invalid);
