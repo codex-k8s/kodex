@@ -55,7 +55,7 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog,
     CROSS JOIN LATERAL jsonb_array_elements(dependency.value #> '{receipt,results}') result(value)
     WHERE dependency.value->>'stepKey'=p_requirement->>'SubjectStepKey'
         AND dependency.value #>> '{receipt,accepted}'='true' AND result.value->>'kind'='PULL_REQUEST'
-        
+
  )
  SELECT count(*)=1 FROM execution CROSS JOIN subjects
  WHERE (SELECT count(*) FROM subjects)=1
