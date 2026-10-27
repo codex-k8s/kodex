@@ -9112,6 +9112,14 @@
       "fragmentSHA256": "8b936f72acda21c918664ec24b9c5d9a1c71eaeababb66f7028edc2a6e7a595a",
       "count": 1,
       "reason": "readMailboxBindingEffects читает и блокирует effects с observation version и возвращает nil при пустом наборе; readPromptImpactConsumers читает ограниченных потребителей с tenant/configuration pins, назначает каждому PENDING и возвращает непустой по форме empty slice. Общее окно содержит только цикл rows с типизированным Scan и обработкой ошибки; generic callback усложнил бы разные поля, инициализацию и контракт пустого результата. Решение ограничено одной парой путей и hash, не исключает SQL, tenant или публикацию."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/memory_record.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/skill_bundle.go",
+      "fragmentSHA256": "68f866bbbbad64f43a389e7487e289ef140bad1dd9f4212b5ef9c4b91c269445",
+      "count": 1,
+      "reason": "После выноса общего чтения и блокировки с проверкой версии совпадает только форма ветвления create/update. Создание памяти и набора навыков использует разные typed payload, SQL и идентификаторы; при обновлении проверяются разные состояния PURGED и ACTIVE. Общий lockOwnerVersionState уже сохраняет tenant scope, порядок lock → OCC и отображение ошибок. Универсальная фабрика SQL или callback ради оставшихся веток скрыла бы разные предметные команды и их lifecycle. Сохранена только одна точная пара путей/hash/count1; проверки доступа и остальные участки не исключены."
     }
   ]
 }

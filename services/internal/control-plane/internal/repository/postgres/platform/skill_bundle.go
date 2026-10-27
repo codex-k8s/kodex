@@ -92,16 +92,8 @@ func (repository *Repository) refreshSkillReceipt(ctx context.Context, tx pgx.Tx
 // ошибке строка может быть частично заполнена; чтение не подразумевает проверку доступа.
 func scanSkillBundle(row rowScanner) (skillBundleRow, error) {
 	var result skillBundleRow
-	var raw []byte
-	if err := row.Scan(&result.id, &result.projectID, &result.currentRevisionID, &result.draftRevisionID, &raw); errors.Is(err, pgx.ErrNoRows) {
-		return result, errs.ErrNotFound
-	} else if err != nil {
-		return result, errs.ErrUnavailable
-	}
-	if json.Unmarshal(raw, &result.SkillBundle) != nil {
-		return result, errs.ErrUnavailable
-	}
-	return result, nil
+	err := scanOwnerProjection(row, &result.SkillBundle, &result.id, &result.projectID, &result.currentRevisionID, &result.draftRevisionID)
+	return result, err
 }
 
 // GetSkillBundle reads the tenant-scoped bundle in a five-second repeatable-read, read-only
@@ -214,7 +206,6 @@ func (repository *Repository) saveSkillDraft(ctx context.Context, tx pgx.Tx, cur
 	}
 	create := input.Kind == command.CreateSkillBundleDraft && payload.BundleRef == ""
 	var id, ref, state string
-	var version int64
 	if create {
 		ref, _ = newRef("sklb")
 		if err := tx.QueryRow(ctx, querySkillBundleInsert, current.organizationID, ref, payload.ProjectRef, current.actorID).Scan(&id); errors.Is(err, pgx.ErrNoRows) {
@@ -224,13 +215,10 @@ func (repository *Repository) saveSkillDraft(ctx context.Context, tx pgx.Tx, cur
 		}
 	} else {
 		ref = payload.BundleRef
-		if err := tx.QueryRow(ctx, querySkillBundleLock, current.organizationID, ref).Scan(&id, &version, &state); errors.Is(err, pgx.ErrNoRows) {
-			return commandOutcome{}, errs.ErrNotFound
-		} else if err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
-		}
-		if input.Mutation.ExpectedVersion == nil || *input.Mutation.ExpectedVersion != version {
-			return commandOutcome{}, errs.ErrVersionMismatch
+		var lockErr error
+		id, _, state, lockErr = lockOwnerVersionState(ctx, tx, querySkillBundleLock, current.organizationID, ref, input.Mutation.ExpectedVersion)
+		if lockErr != nil {
+			return commandOutcome{}, lockErr
 		}
 		if state != "ACTIVE" {
 			return commandOutcome{}, errs.ErrConflict

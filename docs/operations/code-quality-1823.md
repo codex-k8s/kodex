@@ -4,11 +4,28 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.570.0
+version: 1.571.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общее чтение и блокировка памяти и навыков — 27.10.2026
+
+Чтение JSON-проекций и tenant-scoped блокировка с проверкой ожидаемой версии
+используют общие helpers. Порядок lock → OCC и отображение ошибок сохранены;
+проверка доступа и разные правила состояний остаются у соответствующих команд.
+Разные insert SQL и lifecycle не объединялись; оставшееся совпадение формы
+ветвления зафиксировано одним точным решением. Шесть мутаций решения отвергнуты.
+
+Control-plane build/vet PASS, 3071 unit PASS / 70 условных SKIP. Выбранные
+component-сценарии на disposable PostgreSQL: 4 PASS events до и после, FAIL/SKIP 0;
+для воспроизводимости требуется подготовительный catalog_owner_probe. Unit
+инструментов качества: 17 PASS. Сценарий schedule continuation остаётся FAIL и
+воспроизводится на чистом main: в синтетической сессии есть FAILED workflow run,
+а SUCCEEDED predecessor отсутствует; причина завершения workflow неизвестна.
+Анализ: 1354 raw / 1284 retained / 70 unresolved, Go-комментарии 21708/21708.
+Браузер, E2E, live/deploy/startup и QA не выполнялись.
 
 ## Общие транзакции interaction и чтение инцидентов — 27.10.2026
 

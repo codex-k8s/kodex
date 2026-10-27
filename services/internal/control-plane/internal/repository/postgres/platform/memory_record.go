@@ -95,16 +95,8 @@ func (repository *Repository) refreshMemoryReceipt(ctx context.Context, tx pgx.T
 // при ошибке строка может быть частично заполнена.
 func scanMemoryRecord(row rowScanner) (memoryRecordRow, error) {
 	var result memoryRecordRow
-	var raw []byte
-	if err := row.Scan(&result.id, &result.projectID, &result.agentID, &result.currentRevisionID, &raw); errors.Is(err, pgx.ErrNoRows) {
-		return result, errs.ErrNotFound
-	} else if err != nil {
-		return result, errs.ErrUnavailable
-	}
-	if json.Unmarshal(raw, &result.KodexMemoryRecord) != nil {
-		return result, errs.ErrUnavailable
-	}
-	return result, nil
+	err := scanOwnerProjection(row, &result.KodexMemoryRecord, &result.id, &result.projectID, &result.agentID, &result.currentRevisionID)
+	return result, err
 }
 
 // memoryRecordAccess enforces the authority-project boundary and project view/manage permission,
@@ -180,7 +172,6 @@ func (repository *Repository) changeMemoryRecord(ctx context.Context, tx pgx.Tx,
 	}
 	create := input.Kind == command.CreateMemoryRecord
 	var id, ref, state string
-	var version int64
 	if create {
 		ref, _ = newRef("memr")
 		if err := tx.QueryRow(ctx, queryMemoryRecordInsert, current.organizationID, ref, payload.ProjectRef, payload.AgentRef, current.actorID).Scan(&id); errors.Is(err, pgx.ErrNoRows) {
@@ -190,13 +181,10 @@ func (repository *Repository) changeMemoryRecord(ctx context.Context, tx pgx.Tx,
 		}
 	} else {
 		ref = payload.RecordRef
-		if err := tx.QueryRow(ctx, queryMemoryRecordLock, current.organizationID, ref).Scan(&id, &version, &state); errors.Is(err, pgx.ErrNoRows) {
-			return commandOutcome{}, errs.ErrNotFound
-		} else if err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
-		}
-		if input.Mutation.ExpectedVersion == nil || version != *input.Mutation.ExpectedVersion {
-			return commandOutcome{}, errs.ErrVersionMismatch
+		var lockErr error
+		id, _, state, lockErr = lockOwnerVersionState(ctx, tx, queryMemoryRecordLock, current.organizationID, ref, input.Mutation.ExpectedVersion)
+		if lockErr != nil {
+			return commandOutcome{}, lockErr
 		}
 		if state == "PURGED" {
 			return commandOutcome{}, errs.ErrConflict
