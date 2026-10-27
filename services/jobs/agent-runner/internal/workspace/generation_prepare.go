@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/libs/go/securefile"
 	"golang.org/x/sys/unix"
 )
 
@@ -125,9 +126,9 @@ func prepareBoundGenerationAt(ctx context.Context, root int, input runtimecontra
 	if err != nil {
 		return denied
 	}
-	previous, err := readGenerationRecord(current, generationWriterFile, runtimecontract.MaximumWorkspaceQuiescenceBytes, owner)
+	previous, err := readGenerationRecord(ctx, current, generationWriterFile, runtimecontract.MaximumWorkspaceQuiescenceBytes, owner)
 	if err == nil {
-		proofRaw, proofErr := readGenerationRecord(current, generationMountFile, runtimecontract.MaximumWorkspaceMountProofBytes, owner)
+		proofRaw, proofErr := readGenerationRecord(ctx, current, generationMountFile, runtimecontract.MaximumWorkspaceMountProofBytes, owner)
 		proof, decodeErr := runtimecontract.DecodeWorkspaceMountProof(proofRaw)
 		if !bytes.Equal(previous, expectedAck) || proofErr != nil || decodeErr != nil || !proof.Matches(input, uint64(info.Dev), info.Ino) {
 			return denied
@@ -139,7 +140,7 @@ func prepareBoundGenerationAt(ctx context.Context, root int, input runtimecontra
 	}
 	if source := input.WorkspaceStorage.Source; source != nil {
 		expected, err := json.Marshal(source)
-		actual, readErr := readGenerationRecord(current, generationSourceFile, runtimecontract.MaximumWorkspaceManifestBytes, owner)
+		actual, readErr := readGenerationRecord(ctx, current, generationSourceFile, runtimecontract.MaximumWorkspaceManifestBytes, owner)
 		if created || err != nil || readErr != nil || !bytes.Equal(expected, actual) {
 			return denied
 		}
@@ -163,15 +164,15 @@ func prepareBoundGenerationAt(ctx context.Context, root int, input runtimecontra
 	if err != nil {
 		return denied
 	}
-	previousProof, readErr := readGenerationRecord(current, generationMountFile, runtimecontract.MaximumWorkspaceMountProofBytes, owner)
+	previousProof, readErr := readGenerationRecord(ctx, current, generationMountFile, runtimecontract.MaximumWorkspaceMountProofBytes, owner)
 	if readErr == nil {
 		if !bytes.Equal(previousProof, proofRaw) {
 			return denied
 		}
-	} else if !errors.Is(readErr, unix.ENOENT) || writeGenerationRecord(current, generationMountFile, proofRaw, owner) != nil {
+	} else if !errors.Is(readErr, unix.ENOENT) || writeGenerationRecord(ctx, current, generationMountFile, proofRaw, owner) != nil {
 		return denied
 	}
-	if writeGenerationRecord(current, generationWriterFile, expectedAck, owner) != nil || unix.Fsync(current) != nil || ctx.Err() != nil {
+	if writeGenerationRecord(ctx, current, generationWriterFile, expectedAck, owner) != nil || unix.Fsync(current) != nil || ctx.Err() != nil {
 		return denied
 	}
 	return nil
@@ -181,21 +182,13 @@ func prepareBoundGenerationAt(ctx context.Context, root int, input runtimecontra
 // It follows no link and retains no raw operating-system error in the public failure path.
 // readGenerationRecord принимает owned private regular file и отдельно возвращает ENOENT.
 // Ссылки не прослеживаются; raw OS error не попадает в public failure path.
-func readGenerationRecord(parent int, name string, maximum int64, owner generationFileOwner) ([]byte, error) {
-	fd, err := unix.Openat(parent, name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+func readGenerationRecord(ctx context.Context, parent int, name string, maximum int64, owner generationFileOwner) ([]byte, error) {
+	raw, err := securefile.ReadOwnedRecordAt(ctx, parent, name, maximum, securefile.OwnedRecordIdentity{UID: owner.uid, GID: owner.gid})
+	if errors.Is(err, unix.ENOENT) {
+		return nil, unix.ENOENT
+	}
 	if err != nil {
-		return nil, err
-	}
-	file := os.NewFile(uintptr(fd), "bound-work-record")
-	defer file.Close()
-	var info unix.Stat_t
-	if unix.Fstat(fd, &info) != nil || info.Mode&unix.S_IFMT != unix.S_IFREG || info.Uid != owner.uid || info.Gid != owner.gid ||
-		info.Nlink != 1 || info.Mode&0o7777 != 0o440 || info.Size < 1 || info.Size > maximum {
 		return nil, &Denial{Reason: runtimecontract.RuntimeWorkspacePathOutsideWorkspace}
-	}
-	raw, err := io.ReadAll(io.LimitReader(file, maximum+1))
-	if err != nil || int64(len(raw)) != info.Size {
-		return nil, &Denial{Reason: runtimecontract.RuntimeWorkspaceIOError}
 	}
 	return raw, nil
 }
@@ -204,13 +197,8 @@ func readGenerationRecord(parent int, name string, maximum int64, owner generati
 // Its callers already hold the authenticated BIND; failed partial records are preserved, not erased.
 // writeGenerationRecord создаёт synced immutable local record без замены прежних bytes.
 // Caller уже имеет authenticated BIND; partial records сохраняются, а не удаляются.
-func writeGenerationRecord(parent int, name string, raw []byte, owner generationFileOwner) error {
-	fd, err := unix.Openat(parent, name, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o600)
-	if err != nil {
-		return err
-	}
-	defer unix.Close(fd)
-	if writeFull(fd, raw) != nil || unix.Fchown(fd, -1, int(owner.gid)) != nil || unix.Fchmod(fd, 0o440) != nil || unix.Fsync(fd) != nil {
+func writeGenerationRecord(ctx context.Context, parent int, name string, raw []byte, owner generationFileOwner) error {
+	if err := securefile.WriteOwnedRecordAt(ctx, parent, name, raw, int64(len(raw)), securefile.OwnedRecordIdentity{UID: owner.uid, GID: owner.gid}); err != nil {
 		return &Denial{Reason: runtimecontract.RuntimeWorkspaceIOError}
 	}
 	return nil
