@@ -11,6 +11,7 @@ import { activeDeploymentPods, isProvenStoppedPod } from './stable-archive-trans
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'workflow-upstream-rework': {version:'20261026001300',file:'20261026001300_workflow_upstream_rework.sql',annotation:'kodex.dev/cp-workflow-upstream-rework-migration-plan',previousVersion:20261026001200,emptyField:'workflowUpstreamReworkAbsent',preconditionFile:'workflow-upstream-rework-migration-precondition.sql',postconditionFile:'workflow-upstream-rework-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261026000300_server_driven_workflow.sql','20261026000400_workflow_attempt_journal.sql','20261026000500_workflow_artifact_visibility_retention.sql','20261026000600_workflow_exception_episodes.sql','20261026000700_workflow_input_guard_binding.sql','20261026000800_workflow_exception_terminal_decision.sql','20261026000900_workflow_effect_rejoin.sql','20261026001000_workflow_effect_execution_rejoin.sql','20261026001100_legacy_workflow_rework.sql','20261026001200_workflow_exception_context.sql','20261026001300_workflow_upstream_rework.sql'])},
   'workflow-exception-context': {version:'20261026001200',file:'20261026001200_workflow_exception_context.sql',annotation:'kodex.dev/cp-workflow-exception-context-migration-plan',previousVersion:20261026001100,emptyField:'workflowExceptionContextAbsent',preconditionFile:'workflow-exception-context-migration-precondition.sql',postconditionFile:'workflow-exception-context-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261026000300_server_driven_workflow.sql','20261026000400_workflow_attempt_journal.sql','20261026000500_workflow_artifact_visibility_retention.sql','20261026000600_workflow_exception_episodes.sql','20261026000700_workflow_input_guard_binding.sql','20261026000800_workflow_exception_terminal_decision.sql','20261026000900_workflow_effect_rejoin.sql','20261026001000_workflow_effect_execution_rejoin.sql','20261026001100_legacy_workflow_rework.sql','20261026001200_workflow_exception_context.sql'])},
   'legacy-workflow-rework': {version:'20261026001100',file:'20261026001100_legacy_workflow_rework.sql',annotation:'kodex.dev/cp-legacy-workflow-rework-migration-plan',previousVersion:20261026001000,emptyField:'legacyReworkAbsent',preconditionFile:'legacy-workflow-rework-migration-precondition.sql',postconditionFile:'legacy-workflow-rework-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261026000300_server_driven_workflow.sql', '20261026000400_workflow_attempt_journal.sql', '20261026000500_workflow_artifact_visibility_retention.sql', '20261026000600_workflow_exception_episodes.sql', '20261026000700_workflow_input_guard_binding.sql', '20261026000800_workflow_exception_terminal_decision.sql', '20261026000900_workflow_effect_rejoin.sql', '20261026001000_workflow_effect_execution_rejoin.sql', '20261026001100_legacy_workflow_rework.sql'])},
   'server-workflow': {version:'20261026001000',file:'20261026001000_workflow_effect_execution_rejoin.sql',annotation:'kodex.dev/cp-server-workflow-migration-plan',previousVersion:20261026000200,emptyField:'serverWorkflowAbsent',preconditionFile:'server-workflow-migration-precondition.sql',postconditionFile:'server-workflow-migration-postcondition.sql',requiredMigrations:Object.freeze(["20261026000300_server_driven_workflow.sql", "20261026000400_workflow_attempt_journal.sql", "20261026000500_workflow_artifact_visibility_retention.sql", "20261026000600_workflow_exception_episodes.sql", "20261026000700_workflow_input_guard_binding.sql", "20261026000800_workflow_exception_terminal_decision.sql", "20261026000900_workflow_effect_rejoin.sql", "20261026001000_workflow_effect_execution_rejoin.sql"])},
@@ -264,6 +265,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     if (profile === 'legacy-workflow-rework') ensure(validServerWorkflowMigrationPostcondition(result) && result.legacyPurgeSource===true, 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'workflow-exception-context')
       ensure(validWorkflowExceptionContextMigrationPrecondition(result), 'MIGRATION_OWNER_PRECONDITION_FAILED');
+    if (profile === 'workflow-upstream-rework')
+      ensure(validWorkflowUpstreamReworkMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     return result;
   };
   const terminalJob = (actual, expected, expectedHash, expectedUID) => {
@@ -633,8 +636,8 @@ export function validLegacyWorkflowReworkMigrationPostcondition(proof) {
   return validWorkflowExceptionSchema(proof,20261026001100);
 }
 
-// Общая schema-проверка принимает версию только от закрытых011/012 exported profiles.
-function validWorkflowExceptionSchema(proof, version) {
+// Версия и число рёбер задаются только закрытыми профилями; payload их не выбирает.
+function validWorkflowExceptionSchema(proof, version, edges = 286) {
   return validPurgeAuthoritySnapshot(proof,version) && proof.serverWorkflowProfile==='SERVER_DAG_V1' &&
     proof.legacyReworkProfile==='LEGACY_OWNER_REWORK_V1' &&
     proof.bundleTableOwner==='control_plane_owner' && proof.bundleNoBodyColumns===true && proof.bundleForeignKeys===13 &&
@@ -643,7 +646,7 @@ function validWorkflowExceptionSchema(proof, version) {
       'visibilitySource','retentionSource','runtimeColumnAccess','purgeGraphGuard','legacyColumns','legacyForeignKeys',
       'legacyConstraint','legacyIndexes','legacyTriggers','legacyFunctions','legacyColumnAccess','legacyPurgeSource'].every(key=>proof[key]===true) &&
     proof.workflowColumns===9 && proof.workflowConstraints===6 && proof.workflowGuards===6 && proof.workflowHelpers===4 &&
-    proof.purgeNodes===105 && proof.purgeEdges===286 && proof.purgeBaselineEdges===283 &&
+    proof.purgeNodes===105 && proof.purgeEdges===edges && proof.purgeBaselineEdges===283 &&
     proof.purgeNodeFingerprint==='f51a0de25bd942a250997775617eeaee' &&
     proof.purgeBaselineEdgeFingerprint==='be6e23d9e894687a69a19e9b5777ab09' &&
     proof.serverPurgeEdges===284 && proof.serverPurgeFingerprint==='6bf6ad76d8c7ae66e07f75ecf719fdd6' &&
@@ -662,9 +665,26 @@ export function validWorkflowExceptionContextMigrationPostcondition(proof) {
     proof.workflowContextFunctions===true && proof.workflowContextExactFunctions===true;
 }
 
+// Перед013 проверяется полная текущая012 в том же snapshot и отсутствие всех новых объектов.
+export function validWorkflowUpstreamReworkMigrationPrecondition(proof) {
+  return validWorkflowExceptionContextMigrationPostcondition(proof) && proof.workflowUpstreamReworkAbsent===true;
+}
+
+// Новый013 проверяет весь предшествующий профиль с точными новыми телами и одним FK.
+// Старые exported validators сохраняют прежние версии и число рёбер.
+export function validWorkflowUpstreamReworkMigrationPostcondition(proof) {
+  return validWorkflowExceptionSchema(proof,20261026001300,287) &&
+    proof.workflowExceptionContextProfile==='SERVER_EXCEPTION_CONTEXT_V1' &&
+    proof.workflowContextFunctions===true && proof.workflowContextExactFunctions===true &&
+    proof.workflowUpstreamReworkProfile==='OWNER_APPROVED_UPSTREAM_V1' &&
+    ['upstreamFunctions','upstreamExactFunctions','upstreamColumns','upstreamForeignKey','upstreamConstraint',
+      'upstreamIndex','upstreamTriggers','upstreamColumnAccess'].every(key=>proof[key]===true);
+}
+
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {
+    case 'workflow-upstream-rework': return validWorkflowUpstreamReworkMigrationPostcondition(proof);
     case 'workflow-exception-context': return validWorkflowExceptionContextMigrationPostcondition(proof);
     case 'server-workflow': return validServerWorkflowMigrationPostcondition(proof);
     case 'legacy-workflow-rework': return validLegacyWorkflowReworkMigrationPostcondition(proof);
