@@ -9344,6 +9344,14 @@
       "fragmentSHA256": "f365a8948802f9ae0649848e8fa5b5e8efc7fe510212cac7cfeae3650a81daf3",
       "count": 1,
       "reason": "Два локальных loader читают разные типы истории одного расписания: revisions и run occurrences имеют отдельные cursors, page sizes, loading/error refs и разные функции merge. При reset оба намеренно взаимодействуют с общим historyController, а смена selectedRef отменяет прежний запрос; условия late-response и finally видимы на местах. Универсальный параметризованный loader потребовал бы передавать изменяемые refs, разные merge и общую отмену через callback и скрыл бы отдельный request lifecycle. Сохранён только точный внутрефайловый hash и count1; остальные вызовы, отмена и ограничения страниц не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/integration_health_snapshot_component_test.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/integration_health_snapshot_component_test.go",
+      "fragmentSHA256": "bc4099b72a612f93486080b8bbf99cc7c224f64d5be5ac9f6c2ffffe412240ad",
+      "count": 1,
+      "reason": "Два фрагмента component-теста проверяют разные health boundaries: свежая квитанция после изменения grant и исторический terminal без claimed generation. Первый открывает отдельную транзакцию на каждый вызов readProof и закрывает её до последующих изменений grant/configuration; второй удерживает свою транзакцию до завершения subtest и проверяет отказ исторического proof с отдельными synthetic grants. Совпадает явное BeginTx/rollback и поиск organization, но перенос в общий lifecycle helper изменил бы точный момент rollback либо скрыл его от проверок. Сохранён только внутрефайловый hash и count1; transaction scope, grants и assertions не исключены."
     }
   ]
 }

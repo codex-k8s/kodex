@@ -32,10 +32,7 @@ func TestProjectPurgeRecoveryComponent(t *testing.T) {
 	pool := newIsolatedAssistantComponentPool(t, ctx)
 	var err error
 	defer pool.Close()
-	objects := &preparedObjectsFixture{Store: objectstoragetest.New(), fail: true}
-	r := newPurgeRecoveryComponentRepository(t, ctx, pool, objects)
-	owner := resolvedTestPrincipal(t, ctx, r, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.query.projects.purge-recovery.get"}, "control-api-gateway")
-	service, err := platformservice.New(r)
+	r, service, owner, objects, err := newPurgeRecoveryComponentFixture(t, ctx, pool)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -457,10 +454,7 @@ func TestProjectPurgeRecoveryFairnessComponent(t *testing.T) {
 	pool := newIsolatedAssistantComponentPool(t, ctx)
 	var err error
 	defer pool.Close()
-	objects := &preparedObjectsFixture{Store: objectstoragetest.New(), fail: true}
-	r := newPurgeRecoveryComponentRepository(t, ctx, pool, objects)
-	owner := resolvedTestPrincipal(t, ctx, r, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.query.projects.purge-recovery.get"}, "control-api-gateway")
-	service, err := platformservice.New(r)
+	r, service, owner, _, err := newPurgeRecoveryComponentFixture(t, ctx, pool)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -566,6 +560,19 @@ func TestProjectPurgeRecoveryFairnessComponent(t *testing.T) {
 	if newCount != 1 {
 		t.Fatal("older observing project starved newer overdue cleanup")
 	}
+}
+
+// newPurgeRecoveryComponentFixture constructs the original failing object fixture, repository,
+// exact recovery owner and service in order. The caller owns pool, timeout and assertions.
+// newPurgeRecoveryComponentFixture создаёт исходную фикстуру отказа хранилища, repository,
+// точного recovery owner и service по порядку. Caller владеет pool, сроком и проверками.
+func newPurgeRecoveryComponentFixture(t *testing.T, ctx context.Context, pool *pgxpool.Pool) (*Repository, *platformservice.Service, value.Principal, *preparedObjectsFixture, error) {
+	t.Helper()
+	objects := &preparedObjectsFixture{Store: objectstoragetest.New(), fail: true}
+	r := newPurgeRecoveryComponentRepository(t, ctx, pool, objects)
+	owner := resolvedTestPrincipal(t, ctx, r, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.query.projects.purge-recovery.get"}, "control-api-gateway")
+	service, err := platformservice.New(r)
+	return r, service, owner, objects, err
 }
 
 // newPurgeRecoveryComponentRepository creates the fixed purge-recovery repository with the

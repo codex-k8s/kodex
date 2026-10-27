@@ -4,11 +4,29 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.598.0
+version: 1.599.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Завершение разбора точных совпадений — 27.10.2026
+
+Два security component-теста используют общую opt-in подготовку PostgreSQL
+с прежним 30-секундным сроком; вызывающие по-прежнему закрывают pool и отменяют
+контекст. Два purge recovery теста используют общую фикстуру repository,
+синтетического отказа object storage и точного owner. Обратное сравнение трёх
+целых тестовых файлов PASS.
+
+Четыре изолированных PostgreSQL-сценария до и после: 15 событий PASS, FAIL/SKIP 0.
+Control-plane build/unit/vet PASS: 3094 тестовых события PASS, 70 условных SKIP.
+Последняя пара разных health-транзакций сохранена адресно из-за различного
+времени rollback и readback; 6 мутаций привязки отклонены, 17 тестов инструментов
+качества PASS. Context7: [pgx pool](https://github.com/jackc/pgx/blob/v5.10.0/_autodocs/api-reference/connection-pool.md).
+Анализ: 1313 raw / 1313 retained / 0 unresolved, Go-комментарии 21752/21752.
+Это учёт detector, а не доказательство готовности к слиянию: общие проверки,
+review и проверка развёртывания ещё необходимы. Браузер, E2E, live/deploy/startup
+и QA не выполнялись.
 
 ## Общий выбор цели и workflow-ввод двух форм — 27.10.2026
 
