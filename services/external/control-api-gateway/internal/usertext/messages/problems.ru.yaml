@@ -955,3 +955,7 @@ REPOSITORY_BUNDLE_CHANGED:
   other: Состояние публикации набора файлов обновлено
 WORKFLOW_RESULT_ACCEPTED:
   other: Обязательные результаты этапа проверены и приняты
+WORKFLOW_REWORK_QUEUED:
+  other: Назначены новые попытки доработки и зависимых проверок
+WORKFLOW_GATE_SUPERSEDED:
+  other: Прежнее согласование утратило актуальность после одобренной доработки

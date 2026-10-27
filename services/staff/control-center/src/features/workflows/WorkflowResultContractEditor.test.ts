@@ -39,3 +39,12 @@ it.each(["ru", "en"] as const)(
     }
   },
 );
+
+
+it("сохраняет exact ARTIFACT_REVIEW subject и показывает потерянный published result без подмены", async () => {
+  const props = { stepKey: "review", dependencies: ["author"], requirements: [{ key: "verdict", kind: "ARTIFACT_REVIEW", subjectStepKey: "author", subjectResultKey: "removed-output" }], predecessors: [{ key: "author", name: "Автор", artifactKeys: ["current-output"] }], disabled: true };
+  const before = structuredClone(props);
+  const html = await renderToString(createSSRApp(Editor, props).use(i18n));
+  expect(html).toContain("removed-output"); expect(html).toContain("current-output"); expect(html).toContain("ARTIFACT_REVIEW");
+  expect(html).not.toContain("workflowResults."); expect(props).toEqual(before);
+});

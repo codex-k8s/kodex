@@ -117,75 +117,8 @@ type workflowIntegrationResult struct {
 // владеет root locks, pending-work barriers, capture, journal append и dispatch в той же Tx.
 // Reason отклоняет весь результат; SQL failure возвращает ошибку без partial acceptance.
 func (repository *Repository) evaluateWorkflowStepResultTx(ctx context.Context, tx pgx.Tx, current scope, lease map[string]any, payload command.CompleteExecutionInput) ([]entity.WorkflowAcceptedResult, string, error) {
-	var step entity.WorkflowStep
-	var inputs []workflowResultDependency
-	var rawStep, rawInputs []byte
-	var projectID, state string
-	err := tx.QueryRow(ctx, queryWorkflowResultLineage, workflowResultPins(current, lease)).Scan(&rawStep, &rawInputs, &projectID, &state)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, "", errs.ErrConflict
-	}
-	if err != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	if decodeStrict(rawStep, &step) != nil || decodeStrict(rawInputs, &inputs) != nil || len(inputs) > 8 || !workflowservice.ValidRequirements(step.ResultRequirements, step.DependsOn) {
-		return nil, "", errs.ErrConflict
-	}
-	if payload.Success != (state == "SUCCEEDED") {
-		return nil, "", errs.ErrConflict
-	}
-	if !payload.Success {
-		return nil, workflowExecutionFailed, nil
-	}
-	declared, err := workflowservice.DecodeDeclaration(payload.ResultSummary, step.ResultRequirements)
-	if err != nil {
-		return nil, workflowDeclarationInvalid, nil
-	}
-	results := make([]entity.WorkflowAcceptedResult, 0, len(step.ResultRequirements))
-	for _, requirement := range step.ResultRequirements {
-		declaration := declared[requirement.Key]
-		var result entity.WorkflowAcceptedResult
-		switch requirement.Kind {
-		case "ARTIFACT":
-			var found bool
-			result, found, err = resolveWorkflowArtifactTx(ctx, tx, current, lease, requirement, declaration)
-			if err != nil {
-				return nil, "", err
-			}
-			if !found {
-				return nil, workflowArtifactRequired, nil
-			}
-		case "PULL_REQUEST", "INTEGRATION_RECEIPT":
-			proof, reason, lookupErr := readWorkflowIntegrationResultTx(ctx, tx, current, lease, declaration.ReceiptRef)
-			if lookupErr != nil {
-				return nil, "", lookupErr
-			}
-			if reason != "" {
-				return nil, reason, nil
-			}
-			result, reason = acceptWorkflowIntegrationResult(requirement, declaration, proof, inputs)
-			if reason != "" {
-				return nil, reason, nil
-			}
-		case "REVIEW", "QA":
-			subject, found := workflowResultSubject(inputs, requirement.SubjectStepKey)
-			if !found || declaration.HeadSHA != subject.HeadSHA {
-				return nil, workflowReviewSubjectMismatch, nil
-			}
-			if declaration.Verdict != "PASS" {
-				return nil, workflowChangesRequired, nil
-			}
-			result = entity.WorkflowAcceptedResult{Key: requirement.Key, Kind: requirement.Kind, Repository: subject.Repository, Number: subject.Number, HeadSHA: subject.HeadSHA, Verdict: "PASS", Digest: workflowResultSHA(asJSON(declaration))}
-		case "DEPLOYMENT":
-			// The existing profile has no admitted SSH compose receipt path; a schema enum is not proof.
-			// В existing profile нет admitted SSH compose receipt path; schema enum не является proof.
-			return nil, workflowDeploymentUnsupported, nil
-		default:
-			return nil, workflowDeclarationInvalid, nil
-		}
-		results = append(results, result)
-	}
-	return results, "", nil
+	evaluation, err := repository.evaluateWorkflowStepResultDetailedTx(ctx, tx, current, lease, payload, false)
+	return evaluation.Results, evaluation.Reason, err
 }
 
 // workflowResultPins copies only server-owned coordinates needed by the completed-owner queries.

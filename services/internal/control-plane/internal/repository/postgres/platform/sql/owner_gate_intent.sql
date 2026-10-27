@@ -16,7 +16,11 @@ SELECT COALESCE(source.ref,''),
        COALESCE(invocation.bounded_input,'{}'::jsonb),COALESCE(invocation.input_digest,''),
        COALESCE(invocation.risk,''),COALESCE(invocation.approval_policy,''),
        COALESCE(invocation.definition_version,''),COALESCE(invocation.definition_digest,''),
-       COALESCE(invocation.approval_scope_paths,'{}'::text[])
+       COALESCE(invocation.approval_scope_paths,'{}'::text[]),gate.closure_kind,
+       (SELECT history.value->'reworkPlan' FROM jsonb_array_elements(root.workflow_exception_history) history(value)
+        WHERE history.value->>'gateId'=gate.id::text AND history.value->>'gateRef'=gate.ref
+            AND history.value->>'kind'='UPSTREAM_REWORK'
+            AND history.value->'reworkPlan'->>'schema'='kodex.workflow-upstream-rework.v1')
 FROM control_plane.owner_gates gate
 JOIN control_plane.runs root ON root.id=gate.root_run_id AND root.organization_id=gate.organization_id
 JOIN control_plane.run_nodes node ON node.id=gate.node_id AND node.organization_id=gate.organization_id

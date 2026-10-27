@@ -38,6 +38,19 @@ WHERE root.organization_id=@organization_id::uuid AND root.id=@root_run_id::uuid
     AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(root.workflow_exception_history) previous(value)
         WHERE previous.value->>'originNodeId'=anchor.id::text AND previous.value->'attempt'=receipt.value->'attempt'
             AND previous.value->>'finalNodeId'=physical.id::text)
+    AND NOT EXISTS (SELECT 1
+        FROM jsonb_array_elements(root.workflow_exception_history) covered(value)
+        JOIN control_plane.owner_gates approval ON approval.id::text=covered.value->>'gateId'
+            AND approval.ref=covered.value->>'gateRef' AND approval.organization_id=root.organization_id
+            AND approval.root_run_id=root.id AND approval.project_id=root.project_id
+            AND approval.integration_invocation_id IS NULL AND approval.state='APPROVED' AND approval.decision='APPROVE'
+        CROSS JOIN LATERAL jsonb_array_elements((covered.value->'reworkPlan'->'targets')||(covered.value->'reworkPlan'->'rechecks')) member(value)
+        WHERE version.spec->>'ReworkPolicy'='OWNER_APPROVED_UPSTREAM_V1'
+            AND covered.value->>'kind'='UPSTREAM_REWORK' AND covered.value->>'state'='RECOVERED'
+            AND covered.value->'reworkPlan'->>'schema'='kodex.workflow-upstream-rework.v1'
+            AND COALESCE(covered.value->'reworkPlan'->>'blockReason','')=''
+            AND member.value->>'stepKey'=anchor.workflow_step_key AND member.value->>'originNodeId'=anchor.id::text
+            AND member.value->'previousAttempt'=receipt.value->'attempt')
 ORDER BY published.position,anchor.id
 LIMIT 1
 FOR UPDATE OF anchor;

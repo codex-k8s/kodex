@@ -73,6 +73,7 @@ import type {
 import { AppProblem, asProblem } from "@/shared/api/problem";
 import { runPath } from "@/shared/routes";
 import AsyncState from "@/shared/ui/AsyncState.vue";
+import WorkflowReworkPreviewPanel from "@/features/workflows/WorkflowReworkPreviewPanel.vue";
 import RepositoryBundleManifest from "@/features/workboard/RepositoryBundleManifest.vue";
 import AttachmentComposer from "@/shared/ui/AttachmentComposer.vue";
 import type {
@@ -1147,7 +1148,8 @@ onBeforeUnmount(() => {
                 <h3>{{ $t("decisions.consequences") }}</h3>
                 <SafeMarkdown :content="gate.consequencesSummary" />
               </div>
-              <RepositoryBundleManifest
+              <WorkflowReworkPreviewPanel :gate="selectedGate" />
+          <RepositoryBundleManifest
                 v-if="requiresBundleManifest(gate)"
                 :key="`${gate.ref}:${gate.version}`"
                 :gate-ref="gate.ref"

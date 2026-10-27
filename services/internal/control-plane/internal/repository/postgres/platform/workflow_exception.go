@@ -163,6 +163,9 @@ func saveWorkflowExceptionEpisodeTx(ctx context.Context, tx pgx.Tx, current scop
 // ensureWorkflowExceptionTx сохраняет первую незавершённую причину, не заменяя прежний episode.
 // Параллельный sibling может дополнить свой журнал, но не перезаписать причину восстановления.
 func (repository *Repository) ensureWorkflowExceptionTx(ctx context.Context, tx pgx.Tx, current scope, root *serverWorkflowRoot, cause serverWorkflowException) error {
+	if err := enrichWorkflowReworkCauseTx(ctx, tx, current, root, &cause); err != nil {
+		return err
+	}
 	history, err := readWorkflowExceptionHistoryTx(ctx, tx, current, root)
 	if err != nil {
 		return err
@@ -181,8 +184,9 @@ func (repository *Repository) ensureWorkflowExceptionTx(ctx context.Context, tx 
 			for _, step := range root.Version.Steps {
 				steps[step.Key] = step
 			}
+			effective := effectiveServerWorkflowResults(root, anchors)
 			for _, key := range steps[cause.StepKey].DependsOn {
-				receipt, accepted := acceptedServerWorkflowAttempt(anchors[key], steps[key])
+				receipt, accepted := effective[key]
 				if !accepted {
 					return errs.ErrConflict
 				}
@@ -367,7 +371,7 @@ func (repository *Repository) createWorkflowAgentRunTx(ctx context.Context, tx p
 // decodeWorkflowEpisode принимает только сохранённую owner shape, не recovery proposal вызывающего.
 func decodeWorkflowEpisode(raw json.RawMessage) (workflowExceptionEpisode, error) {
 	var episode workflowExceptionEpisode
-	if json.Unmarshal(raw, &episode) != nil || episode.Episode < 1 || episode.Episode > workflowExceptionEpisodeLimit || episode.Version < 1 {
+	if json.Unmarshal(raw, &episode) != nil || episode.Episode < 1 || episode.Episode > workflowExceptionEpisodeLimit || episode.Version < 1 || (episode.Kind != "" && (episode.Kind != workflowUpstreamReworkKind || !validWorkflowReworkPlan(episode.ReworkPlan))) || (episode.Kind == "" && episode.ReworkPlan != nil) {
 		return episode, errs.ErrConflict
 	}
 	return episode, nil

@@ -603,6 +603,9 @@ func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.Messa
 // requiredProtoScalarDefault supplies zero/empty defaults only for explicit message-and-field pairs required by the public contract. Other omitted scalars retain absence; financial optional fields deliberately remain omitted rather than inventing data.
 // requiredProtoScalarDefault задаёт нулевые и пустые defaults только для явных пар message/field публичного контракта. Остальные пропущенные scalar сохраняют отсутствие; необязательные финансовые поля намеренно не заполняются выдуманными данными.
 func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field protoreflect.FieldDescriptor) (any, bool) {
+	if descriptor.FullName() == "controlplane.v1.WorkflowReworkStepPreview" && (field.JSONName() == "previousAttempt" || field.JSONName() == "nextAttempt") {
+		return float64(0), true
+	}
 	if descriptor.FullName() == "controlplane.v1.WorkflowAttemptResult" {
 		switch field.JSONName() {
 		case "accepted":

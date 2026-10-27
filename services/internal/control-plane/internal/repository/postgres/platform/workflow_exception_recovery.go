@@ -45,7 +45,7 @@ func (repository *Repository) openWorkflowRecoveryGateTx(ctx context.Context, tx
 		return err
 	}
 	decisions := []string{"REJECT", "CANCEL"}
-	if episode.Attempt < 4 && episode.Episode < workflowExceptionEpisodeLimit {
+	if episode.Attempt < 4 && episode.Episode < workflowExceptionEpisodeLimit && (episode.Kind == "" || validWorkflowReworkPlan(episode.ReworkPlan) && episode.ReworkPlan.BlockReason == "") {
 		decisions = append([]string{"APPROVE"}, decisions...)
 	}
 	var timeout *int32
@@ -150,6 +150,9 @@ func (repository *Repository) resolveWorkflowExceptionGateTx(ctx context.Context
 	}
 	if len(history) == 0 || history[len(history)-1].Version != episode.Version {
 		return true, errs.ErrConflict
+	}
+	if episode.Kind == workflowUpstreamReworkKind {
+		return repository.resolveWorkflowUpstreamGateTx(ctx, tx, current, root, episode, history)
 	}
 	var step entity.WorkflowStep
 	for _, candidate := range root.Version.Steps {

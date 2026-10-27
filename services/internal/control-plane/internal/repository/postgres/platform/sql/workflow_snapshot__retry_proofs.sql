@@ -39,7 +39,7 @@ JOIN control_plane.owner_gates gate ON gate.id::text=episode.value->>'gateId'
 JOIN control_plane.run_nodes gate_node ON gate_node.id=gate.node_id
     AND gate_node.organization_id=root.organization_id AND gate_node.root_run_id=root.id
     AND gate_node.type='HUMAN_GATE'
-    AND gate_node.parent_node_id::text=COALESCE(NULLIF(episode.value->>'managerNodeId',''),previous.id::text)
+    AND gate_node.parent_node_id::text=COALESCE(NULLIF(episode.value->>'managerNodeId',''),episode.value->>'finalNodeId')
 JOIN control_plane.runtime_revisions revision ON revision.id::text=receipt.value->>'runtimeRevisionId'
     AND revision.organization_id=root.organization_id AND revision.root_run_id=root.id
     AND revision.project_id=root.project_id AND revision.session_id=old_run.session_id
@@ -99,11 +99,19 @@ JOIN LATERAL (
                         AND prior_gate.state='APPROVED' AND prior_gate.decision='APPROVE' AND prior_gate.integration_invocation_id IS NULL
                     JOIN control_plane.run_edges prior_retry ON prior_retry.organization_id=root.organization_id
                         AND prior_retry.root_run_id=root.id AND prior_retry.type='RETRY_OF'
-                        AND prior_retry.target_node_id=first.id AND prior_retry.source_node_id::text=prior_episode.value->>'finalNodeId'
-                    WHERE prior_episode.value->>'state'='RECOVERED' AND prior_episode.value->>'originNodeId'=origin.id::text
-                        AND prior_episode.value->>'recoveryNodeId'=first.id::text AND prior_episode.value->>'stepKey'=origin.workflow_step_key
-                        AND prior_episode.value->'attempt'=to_jsonb(previous.workflow_business_attempt-1)
-                        AND prior_episode.value->'inputs'=previous.workflow_inputs
+                        AND prior_retry.target_node_id=first.id
+                        AND prior_retry.source_node_id::text=origin.workflow_attempts->(previous.workflow_business_attempt-2)->'provenance'->>'nodeId'
+                    WHERE prior_episode.value->>'state'='RECOVERED' AND (
+                        (prior_episode.value->>'originNodeId'=origin.id::text
+                         AND prior_episode.value->>'recoveryNodeId'=first.id::text AND prior_episode.value->>'stepKey'=origin.workflow_step_key
+                         AND prior_episode.value->'attempt'=to_jsonb(previous.workflow_business_attempt-1)
+                         AND prior_episode.value->'inputs'=previous.workflow_inputs)
+                        OR (version.spec->>'ReworkPolicy'='OWNER_APPROVED_UPSTREAM_V1'
+                         AND first.workflow_rework_gate_id=prior_gate.id AND prior_episode.value->>'kind'='UPSTREAM_REWORK'
+                         AND EXISTS(SELECT 1 FROM jsonb_array_elements((prior_episode.value->'reworkPlan'->'targets')||(prior_episode.value->'reworkPlan'->'rechecks')) member(value)
+                            WHERE member.value->>'stepKey'=origin.workflow_step_key AND member.value->>'originNodeId'=origin.id::text
+                                AND member.value->'nextAttempt'=to_jsonb(previous.workflow_business_attempt)
+                                AND member.value->'previousAttempt'=to_jsonb(previous.workflow_business_attempt-1))))
                 ))))
       AND NOT EXISTS (SELECT 1 FROM lineage member
         WHERE (SELECT count(*) FROM control_plane.run_edges incoming
@@ -124,7 +132,8 @@ WHERE root.organization_id=@organization_id::uuid AND root.ref=@root_run_ref
     AND previous.workflow_business_attempt BETWEEN 1 AND 3
     AND fresh.workflow_business_attempt=previous.workflow_business_attempt+1
     AND fresh.workflow_business_attempt BETWEEN 2 AND 4
-    AND previous.workflow_inputs=fresh.workflow_inputs AND previous.workflow_inputs=episode.value->'inputs'
+    AND ((COALESCE(episode.value->>'kind','')='' AND previous.workflow_inputs=fresh.workflow_inputs AND previous.workflow_inputs=episode.value->'inputs')
+        OR (episode.value->>'kind'='UPSTREAM_REWORK' AND version.spec->>'ReworkPolicy'='OWNER_APPROVED_UPSTREAM_V1' AND fresh.workflow_rework_gate_id=gate.id))
     AND old_run.id<>new_run.id AND old_run.id<>root.id AND new_run.id<>root.id
     AND old_run.source='AGENT_DELEGATION' AND new_run.source='AGENT_DELEGATION'
     AND old_run.target_type='AGENT' AND new_run.target_type='AGENT'
@@ -147,7 +156,8 @@ WHERE root.organization_id=@organization_id::uuid AND root.ref=@root_run_ref
     AND previous.workflow_captured_artifacts->'runtimeAttempt'=to_jsonb(previous.attempt)
     AND previous.workflow_captured_artifacts->'businessAttempt'=to_jsonb(previous.workflow_business_attempt)
     AND episode.value->>'state'='RECOVERED'
-    AND episode.value->>'originNodeId'=origin.id::text AND episode.value->>'finalNodeId'=previous.id::text
+    AND ((COALESCE(episode.value->>'kind','')=''
+        AND episode.value->>'originNodeId'=origin.id::text AND episode.value->>'finalNodeId'=previous.id::text
     AND episode.value->>'recoveryNodeId'=fresh.id::text AND episode.value->>'stepKey'=origin.workflow_step_key
     AND episode.value->'attempt'=to_jsonb(previous.workflow_business_attempt)
     AND (receipt.value->'accepted'='false'::jsonb OR (
@@ -160,4 +170,12 @@ WHERE root.organization_id=@organization_id::uuid AND root.ref=@root_run_ref
                 AND result_gate.project_id=root.project_id AND result_gate.integration_invocation_id IS NULL
                 AND result_gate.state='CHANGES_REQUESTED' AND result_gate.decision='REQUEST_CHANGES'
         )))
+)
+      OR (version.spec->>'ReworkPolicy'='OWNER_APPROVED_UPSTREAM_V1' AND episode.value->>'kind'='UPSTREAM_REWORK'
+        AND fresh.workflow_rework_gate_id=gate.id AND episode.value->'reworkPlan'->>'schema'='kodex.workflow-upstream-rework.v1'
+        AND COALESCE(episode.value->'reworkPlan'->>'blockReason','')=''
+        AND EXISTS(SELECT 1 FROM jsonb_array_elements((episode.value->'reworkPlan'->'targets')||(episode.value->'reworkPlan'->'rechecks')) member(value)
+            WHERE member.value->>'stepKey'=origin.workflow_step_key AND member.value->>'originNodeId'=origin.id::text
+                AND member.value->'previousAttempt'=to_jsonb(previous.workflow_business_attempt)
+                AND member.value->'nextAttempt'=to_jsonb(fresh.workflow_business_attempt))))
 ORDER BY edge.ref;

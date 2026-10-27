@@ -66,9 +66,11 @@ func openOwnerGateCompletesRun(ctx context.Context, runner queryRunner, current 
 				matched++
 			}
 		}
-		if _, accepted := acceptedServerWorkflowAttempt(anchor, step); !accepted {
-			return false, nil
-		}
+		anchors[step.Key] = anchor
+	}
+	effective := effectiveServerWorkflowResults(root, anchors)
+	if len(effective) != len(version.Steps) {
+		return false, nil
 	}
 	if matched != 1 {
 		return false, nil

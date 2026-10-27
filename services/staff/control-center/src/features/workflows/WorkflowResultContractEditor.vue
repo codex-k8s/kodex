@@ -10,7 +10,7 @@ const props = defineProps<{
   stepKey: string;
   dependencies: unknown;
   requirements: unknown;
-  predecessors: { key: string; name: string }[];
+  predecessors: { key: string; name: string; artifactKeys?: string[] }[];
   disabled: boolean;
 }>();
 const emit = defineEmits<{
@@ -53,8 +53,9 @@ function change(index: number, key: string, value: string): void {
         Object.assign(next, { fileName: "", mediaType: "text/markdown" });
       if (["PULL_REQUEST", "INTEGRATION_RECEIPT", "DEPLOYMENT"].includes(value))
         next.repository = "";
-      if (["REVIEW", "QA", "INTEGRATION_RECEIPT", "DEPLOYMENT"].includes(value))
+      if (["ARTIFACT_REVIEW", "REVIEW", "QA", "INTEGRATION_RECEIPT", "DEPLOYMENT"].includes(value))
         next.subjectStepKey = "";
+      if (value === "ARTIFACT_REVIEW") next.subjectResultKey = "";
       if (value === "INTEGRATION_RECEIPT")
         next.operation = "github.pull_request.merge";
       if (value === "DEPLOYMENT")
@@ -198,7 +199,7 @@ function selectDependencies(event: Event): void {
       /></label>
       <label
         v-if="
-          ['REVIEW', 'QA', 'INTEGRATION_RECEIPT', 'DEPLOYMENT'].includes(
+          ['ARTIFACT_REVIEW', 'REVIEW', 'QA', 'INTEGRATION_RECEIPT', 'DEPLOYMENT'].includes(
             text(item.kind),
           )
         "
@@ -222,6 +223,14 @@ function selectDependencies(event: Event): void {
           </option>
         </select></label
       >
+      <label v-if="item.kind === 'ARTIFACT_REVIEW'" class="field">
+        <span>{{ $t("workflowResults.subjectResult") }}</span>
+        <select :id="control(index, 'subject-result')" :name="control(index, 'subject-result')" :disabled="disabled" :value="text(item.subjectResultKey)" @change="change(index, 'subjectResultKey', ($event.target as HTMLSelectElement).value)">
+          <option value="">{{ $t("workflowResults.missing") }}</option>
+          <option v-for="key in predecessors.find((prior) => prior.key === item.subjectStepKey)?.artifactKeys ?? []" :key="key" :value="key">{{ key }}</option>
+          <option v-if="text(item.subjectResultKey) && !predecessors.find((prior) => prior.key === item.subjectStepKey)?.artifactKeys?.includes(text(item.subjectResultKey))" :value="text(item.subjectResultKey)" disabled>{{ $t("workflowResults.unknownDependency") }} · {{ text(item.subjectResultKey) }}</option>
+        </select>
+      </label>
       <label v-if="item.kind === 'DEPLOYMENT'" class="field"
         ><span>{{ $t("workflowResults.target") }}</span
         ><input

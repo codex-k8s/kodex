@@ -28,7 +28,7 @@ func workflowResultRequirements(values []generated.WorkflowResultRequirement) []
 		result = append(result, &controlplanev1.WorkflowResultRequirement{
 			Key: value.Key, Kind: string(value.Kind), FileName: stringValue(value.FileName),
 			MediaType: stringValue(value.MediaType), Repository: stringValue(value.Repository),
-			SubjectStepKey: stringValue(value.SubjectStepKey), Operation: operation, TargetRef: stringValue(value.TargetRef),
+			SubjectStepKey: stringValue(value.SubjectStepKey), SubjectResultKey: stringValue(value.SubjectResultKey), Operation: operation, TargetRef: stringValue(value.TargetRef),
 		})
 	}
 	return result
@@ -43,7 +43,7 @@ func workflowResultRequirements(values []generated.WorkflowResultRequirement) []
 func validWorkflowPublicMessage(message proto.Message) bool {
 	switch value := message.(type) {
 	case *controlplanev1.WorkflowVersion:
-		return value != nil && (value.ExecutionMode == "" || value.ExecutionMode == "MANAGER_DRIVEN" || value.ExecutionMode == "SERVER_DAG_V1")
+		return value != nil && (value.ExecutionMode == "" || value.ExecutionMode == "MANAGER_DRIVEN" || value.ExecutionMode == "SERVER_DAG_V1") && (value.ReworkPolicy == "" || value.ExecutionMode == "SERVER_DAG_V1" && value.ReworkPolicy == "OWNER_APPROVED_UPSTREAM_V1")
 	case *controlplanev1.WorkflowStep:
 		if value == nil || len(value.ResultRequirements) > 4 || len(value.DependsOn) > 200 {
 			return false
@@ -58,12 +58,12 @@ func validWorkflowPublicMessage(message proto.Message) bool {
 	case *controlplanev1.WorkflowResultRequirement:
 		return value != nil && workflowPredicateKey.MatchString(value.Key) && workflowPublicResultKind(value.Kind) &&
 			workflowPublicText(value.FileName, 160) && workflowPublicText(value.MediaType, 160) &&
-			workflowPublicText(value.Repository, 200) && (value.SubjectStepKey == "" || workflowPredicateKey.MatchString(value.SubjectStepKey)) && workflowPublicText(value.TargetRef, 96) &&
+			workflowPublicText(value.Repository, 200) && (value.SubjectStepKey == "" || workflowPredicateKey.MatchString(value.SubjectStepKey)) && workflowPublicText(value.TargetRef, 96) && (value.SubjectResultKey == "" || value.Kind == "ARTIFACT_REVIEW" && workflowPredicateKey.MatchString(value.SubjectResultKey)) &&
 			(value.Operation == "" || value.Operation == "github.pull_request.merge" || value.Operation == "ssh.compose.deploy")
 	case *controlplanev1.RunNode:
 		return value != nil && len(value.WorkflowResults) <= 4
 	case *controlplanev1.WorkflowAttemptResult:
-		return value != nil && value.Attempt >= 1 && value.Attempt <= 4 && fileTargetRef(value.RunRef) && workflowPublicText(value.Reason, 96) && len(value.Results) <= 4
+		return value != nil && value.Attempt >= 1 && value.Attempt <= 4 && fileTargetRef(value.RunRef) && workflowPublicText(value.Reason, 96) && len(value.Results) <= 4 && workflowPublicEffectiveState(value.EffectiveState)
 	case *controlplanev1.WorkflowAcceptedResult:
 		return value != nil && workflowPredicateKey.MatchString(value.Key) && workflowPublicResultKind(value.Kind) && validManagedDigest(value.Digest) &&
 			(value.ArtifactRef == "" || fileTargetRef(value.ArtifactRef)) && (value.ReceiptRef == "" || fileTargetRef(value.ReceiptRef)) &&
@@ -81,7 +81,7 @@ func validWorkflowPublicMessage(message proto.Message) bool {
 // провайдера и без признания самого вида доказательством существования результата.
 func workflowPublicResultKind(kind string) bool {
 	switch kind {
-	case "ARTIFACT", "PULL_REQUEST", "REVIEW", "QA", "INTEGRATION_RECEIPT", "DEPLOYMENT":
+	case "ARTIFACT", "ARTIFACT_REVIEW", "PULL_REQUEST", "REVIEW", "QA", "INTEGRATION_RECEIPT", "DEPLOYMENT":
 		return true
 	default:
 		return false
@@ -92,4 +92,15 @@ func workflowPublicResultKind(kind string) bool {
 // workflowPublicText применяет предел OpenAPI в символах к корректному UTF-8 без изменения текста.
 func workflowPublicText(value string, maximum int) bool {
 	return utf8.ValidString(value) && utf8.RuneCountInString(value) <= maximum
+}
+
+// workflowPublicEffectiveState accepts the additive owner freshness vocabulary; empty is legacy.
+// workflowPublicEffectiveState принимает additive owner freshness; пустое значение означает legacy.
+func workflowPublicEffectiveState(value string) bool {
+	switch value {
+	case "", "CURRENT", "HISTORICAL", "STALE_DEPENDENCY", "REWORK_PENDING", "WAITING_OWNER", "BLOCKED":
+		return true
+	default:
+		return false
+	}
 }

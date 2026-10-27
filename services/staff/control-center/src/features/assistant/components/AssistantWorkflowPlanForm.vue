@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { requestConfirmation } from "@/shared/ui/confirmation";
+import WorkflowReworkPolicyControl from "@/features/workflows/WorkflowReworkPolicyControl.vue";
 import WorkflowResultContractEditor from "@/features/workflows/WorkflowResultContractEditor.vue";
 import {
   newWorkflowStepKey,
@@ -139,6 +140,7 @@ const validDAG = computed(() =>
       .map(text)
       .join(""),
     "key",
+    parameter("reworkPolicy"),
   ),
 );
 const coordinatorRef = computed(() => text(parameter("coordinatorAgentRef")));
@@ -269,6 +271,13 @@ async function changeMode(event: Event): Promise<void> {
     return;
   change("steps", workflowModeSteps(steps.value, mode, "key", isUpdate.value));
   change("executionMode", mode);
+  if (mode !== "SERVER_DAG_V1" && parameter("reworkPolicy") !== undefined) change("reworkPolicy", "");
+}
+async function changeReworkPolicy(value: "" | "OWNER_APPROVED_UPSTREAM_V1"): Promise<void> {
+  if (!modeEditable() || !serverMode.value || value === text(parameter("reworkPolicy"))) return;
+  const identity = props.operation, project = props.projectRef, before = JSON.stringify(props.operation);
+  if (!(await requestConfirmation(t("workflowResults.reworkChange"))) || !modeEditable() || !serverMode.value || props.projectRef !== project || props.operation !== identity || JSON.stringify(props.operation) !== before) return;
+  change("reworkPolicy", value);
 }
 function changeStep(index: number, key: string, value: unknown): void {
   const current = steps.value;
@@ -507,6 +516,7 @@ function validStep(step: Item, allowPendingAgent = false): boolean {
 const valid = computed(() =>
   Boolean(
     props.projectRef &&
+    (parameter("reworkPolicy") === undefined || parameter("reworkPolicy") === "" || serverMode.value && parameter("reworkPolicy") === "OWNER_APPROVED_UPSTREAM_V1") &&
     (executionMode.value === "MANAGER_DRIVEN" || serverMode.value) &&
     (!serverMode.value || validDAG.value) &&
     (isUpdate.value
@@ -565,6 +575,7 @@ watch(
     <p v-if="isUpdate" class="assistant-plan-friendly__hint">
       {{ $t("assistant.planEditor.workflowUpdateBoundary") }}
     </p>
+    <WorkflowReworkPolicyControl v-if="serverMode" :value="text(parameter('reworkPolicy'))" :disabled="disabled" @change="changeReworkPolicy" />
     <WorkflowOverviewFields
       :name="text(parameter('name'))"
       :purpose="text(parameter('purpose'))"
@@ -791,6 +802,7 @@ watch(
                 (steps ?? []).slice(0, index).map((prior) => ({
                   key: text(prior.key),
                   name: text(prior.name),
+                  artifactKeys: (itemArray(prior.resultRequirements) ?? []).filter((item) => item.kind === "ARTIFACT").map((item) => text(item.key)),
                 }))
               "
               :disabled="disabled"

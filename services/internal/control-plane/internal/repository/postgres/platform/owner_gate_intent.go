@@ -30,7 +30,7 @@ func (repository *Repository) projectGateIntent(ctx context.Context, runner quer
 		return err
 	}
 	var integration, delivery, completesRun bool
-	var scopeJSON, input []byte
+	var scopeJSON, input, reworkJSON []byte
 	var inputDigest, risk, approval, definitionVersion, definitionDigest string
 	var approvalScopePaths []string
 	intent := &entity.IntegrationIntent{}
@@ -42,13 +42,16 @@ func (repository *Repository) projectGateIntent(ctx context.Context, runner quer
 		&gate.SourceAttachmentSetRef, &integration, &delivery, &completesRun,
 		&intent.ConnectionRef, &intent.ConnectionName, &intent.DefinitionKey, &intent.CapabilityKey, &intent.Operation,
 		&intent.EffectKey, &intent.ResourceKind, &scopeJSON, &intent.ResourceScopeDigest, &input, &inputDigest, &risk, &approval,
-		&definitionVersion, &definitionDigest, &approvalScopePaths,
+		&definitionVersion, &definitionDigest, &approvalScopePaths, &gate.ResolutionKind, &reworkJSON,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return errs.ErrNotFound
 	}
 	if err != nil {
 		return errs.ErrUnavailable
+	}
+	if err := projectWorkflowReworkPreview(gate, reworkJSON); err != nil {
+		return err
 	}
 	if actorScoped && gate.SourceAttachmentSetRef != "" {
 		tx, ok := runner.(pgx.Tx)

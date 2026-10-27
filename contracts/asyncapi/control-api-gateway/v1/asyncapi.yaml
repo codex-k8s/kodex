@@ -938,6 +938,7 @@ components:
             enum:
               [
                 ARTIFACT,
+                ARTIFACT_REVIEW,
                 PULL_REQUEST,
                 REVIEW,
                 QA,
@@ -958,6 +959,7 @@ components:
       additionalProperties: false
       required: [attempt, runRef, accepted, reason, results]
       properties:
+        effectiveState: { type: string, enum: [CURRENT, HISTORICAL, STALE_DEPENDENCY, REWORK_PENDING, WAITING_OWNER, BLOCKED] }
         attempt: { type: integer, minimum: 1, maximum: 4 }
         runRef: { $ref: "#/components/schemas/OpaqueRef" }
         accepted: { type: boolean }
@@ -1356,6 +1358,8 @@ components:
           nextActions,
         ]
       properties:
+        resolutionKind: { type: string, enum: [SUPERSEDED] }
+        reworkPlan: { $ref: "#/components/schemas/WorkflowReworkPreview" }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
         scopeKind: { type: string, enum: [ORGANIZATION, PROJECT] }
@@ -1390,6 +1394,25 @@ components:
           maxItems: 12
           uniqueItems: true
           items: { $ref: "#/components/schemas/NextAction" }
+    WorkflowReworkStepPreview:
+      type: object
+      additionalProperties: false
+      required: [stepKey, previousAttempt, nextAttempt]
+      properties:
+        stepKey: { type: string, pattern: "^[A-Za-z0-9_-]{1,96}$" }
+        previousAttempt: { type: integer, minimum: 0, maximum: 4 }
+        nextAttempt: { type: integer, minimum: 0, maximum: 4 }
+    WorkflowReworkPreview:
+      type: object
+      additionalProperties: false
+      required: [schema, sourceStepKey, sourceAttempt, authors, rechecks]
+      properties:
+        schema: { type: string, enum: [kodex.workflow-upstream-rework-preview.v1] }
+        sourceStepKey: { type: string, pattern: "^[A-Za-z0-9_-]{1,96}$" }
+        sourceAttempt: { type: integer, minimum: 1, maximum: 4 }
+        authors: { type: array, minItems: 1, maxItems: 4, items: { $ref: "#/components/schemas/WorkflowReworkStepPreview" } }
+        rechecks: { type: array, maxItems: 12, items: { $ref: "#/components/schemas/WorkflowReworkStepPreview" } }
+        blockReason: { type: string, enum: [WORKFLOW_ATTEMPTS_EXHAUSTED, WORKFLOW_IRREVERSIBLE_EFFECT_REPAIR_REQUIRED] }
     OwnerGateDecisionConsequence:
       type: object
       additionalProperties: false

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"github.com/google/jsonschema-go/jsonschema"
 	"reflect"
 	"strings"
 	"unicode/utf8"
@@ -38,6 +39,7 @@ func assistantWorkflowConfigurationAvailable(input runtimecontract.RunnerInput) 
 // defaults,ordered dependencies,capability ceilings и result schema. Это не executable
 // grant и не замена owner workflow entity.
 type assistantWorkflowDraft struct {
+	ExecutionMode, ReworkPolicy                                               string
 	Ref, Name, Purpose, CoordinatorAgentRef, Instructions, CompletionCriteria string
 	VersionNumber                                                             int32
 	Inputs                                                                    []assistantWorkflowDraftInput
@@ -66,6 +68,8 @@ type assistantWorkflowDraftInput struct {
 // parallelism,gates и capability ceiling; это описание configuration,
 // не авторизация дочернего execution.
 type assistantWorkflowDraftStep struct {
+	ApprovalTimeoutSeconds                            *int32
+	ResultRequirements                                []assistantWorkflowReadRequirement
 	Key, Name, AgentRef, Instructions, ExpectedResult string
 	Position, ParallelGroup, TimeoutSeconds           int32
 	Parallel, HumanGateAfter                          bool
@@ -79,6 +83,7 @@ type assistantWorkflowDraftStep struct {
 // исходным draft для semantic consistency проверки перед owner-reviewed update;
 // это не running immutable workflow revision.
 type assistantWorkflowReadSnapshot struct {
+	ExecutionMode, ReworkPolicy                                                                   string
 	WorkflowRef, ProjectRef, Name, Purpose, CoordinatorAgentRef, Instructions, CompletionCriteria string
 	MaxConcurrency                                                                                int32
 	TimeoutSeconds                                                                                int64
@@ -102,6 +107,9 @@ type assistantWorkflowReadInput struct {
 // assistantWorkflowReadStep содержит editable ordered step metadata,gates
 // и capability keys; dependency edges находятся в paired full draft, не этой projection.
 type assistantWorkflowReadStep struct {
+	ApprovalTimeoutSeconds                       *int32
+	DependsOn                                    []string
+	ResultRequirements                           []assistantWorkflowReadRequirement
 	Key, Name, Purpose, AgentRef, ExpectedResult string
 	Parallel, HumanGate                          bool
 	ParallelGroup, TimeoutSeconds                int32
@@ -134,7 +142,7 @@ func castAssistantWorkflowConfiguration(input runtimecontract.RunnerInput, reque
 		return nil, invalid
 	}
 	var snapshot map[string]any
-	if json.Unmarshal(raw, &snapshot) != nil || len(snapshot) != 12 || !onlyKeys(snapshot, "workflowRef", "projectRef", "name", "purpose", "coordinatorAgentRef", "instructions", "completionCriteria", "maxConcurrency", "timeoutSeconds", "inputFields", "steps", "draft") || !closedAssistantWorkflowSnapshot(snapshot) {
+	if json.Unmarshal(raw, &snapshot) != nil || len(snapshot) < 12 || len(snapshot) > 14 || !onlyKeys(snapshot, "executionMode", "reworkPolicy", "workflowRef", "projectRef", "name", "purpose", "coordinatorAgentRef", "instructions", "completionCriteria", "maxConcurrency", "timeoutSeconds", "inputFields", "steps", "draft") || !closedAssistantWorkflowSnapshot(snapshot) {
 		return nil, invalid
 	}
 	canonical, err := json.Marshal(snapshot)
@@ -154,7 +162,7 @@ func castAssistantWorkflowConfiguration(input runtimecontract.RunnerInput, reque
 // допускаются; обязательные cardinality и semantic equality проверяются отдельно.
 func closedAssistantWorkflowSnapshot(snapshot map[string]any) bool {
 	draft, ok := snapshot["draft"].(map[string]any)
-	if !ok || !onlyKeys(draft, "Ref", "Name", "Purpose", "CoordinatorAgentRef", "Instructions", "CompletionCriteria", "VersionNumber", "Inputs", "Steps", "AgentRefs", "Concurrency", "TimeoutSeconds", "GateDecisions", "ResultSchema") {
+	if !ok || !onlyKeys(draft, "ExecutionMode", "ReworkPolicy", "Ref", "Name", "Purpose", "CoordinatorAgentRef", "Instructions", "CompletionCriteria", "VersionNumber", "Inputs", "Steps", "AgentRefs", "Concurrency", "TimeoutSeconds", "GateDecisions", "ResultSchema") {
 		return false
 	}
 	for _, collection := range []struct {
@@ -177,7 +185,15 @@ func closedAssistantWorkflowSnapshot(snapshot map[string]any) bool {
 		}
 		for _, rawRow := range rows {
 			row, ok := rawRow.(map[string]any)
-			if !ok || !onlyKeys(row, collection.fields...) || len(row) != len(collection.fields) {
+			optional := []string{}
+			if collection.key == "steps" {
+				optional = []string{"approvalTimeoutSeconds", "dependsOn", "resultRequirements"}
+			}
+			if collection.key == "Steps" {
+				optional = []string{"ApprovalTimeoutSeconds", "ResultRequirements"}
+			}
+			allowed := append(append([]string{}, collection.fields...), optional...)
+			if !ok || !onlyKeys(row, allowed...) || len(row) < len(collection.fields) || len(row) > len(allowed) {
 				return false
 			}
 		}
@@ -195,6 +211,12 @@ func closedAssistantWorkflowSnapshot(snapshot map[string]any) bool {
 // не выводится и effective execution permissions не разрешаются.
 func validAssistantWorkflowReadSnapshot(value assistantWorkflowReadSnapshot) bool {
 	draft := value.Draft
+	if value.ExecutionMode != draft.ExecutionMode || value.ReworkPolicy != draft.ReworkPolicy || (value.ExecutionMode != "" && value.ExecutionMode != "MANAGER_DRIVEN" && value.ExecutionMode != "SERVER_DAG_V1") || (value.ReworkPolicy != "" && (value.ExecutionMode != "SERVER_DAG_V1" || value.ReworkPolicy != "OWNER_APPROVED_UPSTREAM_V1")) {
+		return false
+	}
+	if value.ExecutionMode == "SERVER_DAG_V1" && (len(value.Steps) > 12 || value.MaxConcurrency > 2) {
+		return false
+	}
 	if strings.TrimSpace(value.Name) == "" || utf8.RuneCountInString(value.Name) > 160 || utf8.RuneCountInString(value.Purpose) > 2000 || value.Name != draft.Name || value.Purpose != draft.Purpose || value.CoordinatorAgentRef != draft.CoordinatorAgentRef || !validAssistantResourceRef(value.CoordinatorAgentRef) || value.Instructions != draft.Instructions || value.CompletionCriteria != draft.CompletionCriteria ||
 		value.MaxConcurrency != draft.Concurrency || value.MaxConcurrency < 1 || value.MaxConcurrency > 100 || value.TimeoutSeconds != draft.TimeoutSeconds || value.TimeoutSeconds < 1 || value.TimeoutSeconds > 604800 || len(value.Steps) == 0 || len(value.Steps) > 200 || len(value.Steps) != len(draft.Steps) || len(value.InputFields) > 100 || len(value.InputFields) != len(draft.Inputs) {
 		return false
@@ -210,6 +232,16 @@ func validAssistantWorkflowReadSnapshot(value assistantWorkflowReadSnapshot) boo
 		original := draft.Steps[index]
 		if step.Key == "" || len(step.Key) > 96 || seen[step.Key] || strings.TrimSpace(step.Name) == "" || utf8.RuneCountInString(step.Name) > 160 || strings.TrimSpace(step.Purpose) == "" || utf8.RuneCountInString(step.Purpose) > 1000 || utf8.RuneCountInString(step.ExpectedResult) > 1000 || step.TimeoutSeconds < 1 || step.TimeoutSeconds > 86400 || step.ParallelGroup < 0 || step.ParallelGroup > 50 || original.Position != int32(index+1) || step.Key != original.Key || step.Name != original.Name || step.Purpose != original.Instructions || step.AgentRef != original.AgentRef || !validAssistantResourceRef(step.AgentRef) || step.Parallel != original.Parallel || step.ParallelGroup != original.ParallelGroup || step.TimeoutSeconds != original.TimeoutSeconds || step.ExpectedResult != original.ExpectedResult || step.HumanGate != original.HumanGateAfter ||
 			!reflect.DeepEqual(step.GateDecisions, append([]string{}, original.GateDecisions...)) || !reflect.DeepEqual(step.RequiredCapabilityKeys, append([]string{}, original.RequiredCapabilityKeys...)) || len(step.RequiredCapabilityKeys) > 50 {
+			return false
+		}
+		if !reflect.DeepEqual(step.ApprovalTimeoutSeconds, original.ApprovalTimeoutSeconds) || original.ApprovalTimeoutSeconds != nil && (!step.HumanGate || *original.ApprovalTimeoutSeconds < 1 || *original.ApprovalTimeoutSeconds > 604800) {
+			return false
+		}
+		if value.ExecutionMode == "SERVER_DAG_V1" {
+			if !reflect.DeepEqual(step.DependsOn, append([]string{}, original.DependsOn...)) || !reflect.DeepEqual(step.ResultRequirements, original.ResultRequirements) || !validAssistantWorkflowReadRequirements(step.ResultRequirements) {
+				return false
+			}
+		} else if len(step.ResultRequirements) > 0 || len(original.ResultRequirements) > 0 || len(step.DependsOn) > 0 {
 			return false
 		}
 		for _, text := range []string{step.Key, step.Name, step.Purpose, step.ExpectedResult} {
@@ -235,4 +267,35 @@ func validAssistantWorkflowReadSnapshot(value assistantWorkflowReadSnapshot) boo
 		seen[step.Key] = true
 	}
 	return true
+}
+
+// assistantWorkflowReadRequirement mirrors editable predicates, excluding result evidence and pins.
+// assistantWorkflowReadRequirement отражает editable predicates без result evidence/pins.
+type assistantWorkflowReadRequirement struct{ Key, Kind, FileName, MediaType, Repository, SubjectStepKey, SubjectResultKey, Operation, TargetRef string }
+
+// validAssistantWorkflowReadRequirements validates actual JSON values with the shared local MCP
+// schema; resolver errors stay closed and raw validation errors never enter public responses.
+// validAssistantWorkflowReadRequirements проверяет actual JSON через shared local MCP schema;
+// resolver errors закрыты, raw validation errors не входят в public responses.
+func validAssistantWorkflowReadRequirements(requirements []assistantWorkflowReadRequirement) bool {
+	values := make([]any, 0, len(requirements))
+	for _, requirement := range requirements {
+		item := map[string]any{"key": requirement.Key, "kind": requirement.Kind}
+		for key, value := range map[string]string{"fileName": requirement.FileName, "mediaType": requirement.MediaType, "repository": requirement.Repository, "subjectStepKey": requirement.SubjectStepKey, "subjectResultKey": requirement.SubjectResultKey, "operation": requirement.Operation, "targetRef": requirement.TargetRef} {
+			if value != "" {
+				item[key] = value
+			}
+		}
+		values = append(values, item)
+	}
+	raw, err := json.Marshal(workflowResultRequirementsSchema())
+	if err != nil {
+		return false
+	}
+	var schema jsonschema.Schema
+	if json.Unmarshal(raw, &schema) != nil {
+		return false
+	}
+	resolved, err := schema.Resolve(nil)
+	return err == nil && resolved.Validate(values) == nil
 }

@@ -118,6 +118,55 @@
                 ]
               }
             }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "key",
+              "source",
+              "verdict"
+            ],
+            "properties": {
+              "key": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,96}(?![\\s\\S])"
+              },
+              "source": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "kind",
+                  "artifactRef",
+                  "revision",
+                  "digest"
+                ],
+                "properties": {
+                  "kind": {
+                    "const": "CAPTURED_ARTIFACT"
+                  },
+                  "artifactRef": {
+                    "type": "string",
+                    "pattern": "^art_[A-Za-z0-9_-]{8,92}(?![\\s\\S])"
+                  },
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "digest": {
+                    "type": "string",
+                    "pattern": "^sha256:[a-f0-9]{64}(?![\\s\\S])"
+                  }
+                }
+              },
+              "verdict": {
+                "enum": [
+                  "PASS",
+                  "CHANGES_REQUIRED"
+                ]
+              }
+            }
           }
         ]
       }

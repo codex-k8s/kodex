@@ -25,9 +25,19 @@ var queryWorkflowAttemptAppend string
 // Вызывающий сначала проверяет незавершённую работу и обязательные результаты; эта граница хранения
 // сама не принимает заявление модели и не запускает следующий шаг процесса.
 func appendWorkflowAttemptTx(ctx context.Context, tx pgx.Tx, current scope, lease map[string]any,
-	accepted bool, reason string, results []entity.WorkflowAcceptedResult,
+	accepted bool, reason string, results []entity.WorkflowAcceptedResult, rework ...[]entity.WorkflowReviewSubject,
 ) (entity.WorkflowAttemptResult, error) {
 	var result entity.WorkflowAttemptResult
+	subjects := []entity.WorkflowReviewSubject{}
+	if len(rework) > 1 {
+		return result, errs.ErrInvalid
+	}
+	if len(rework) == 1 {
+		if len(rework[0]) > 4 || len(rework[0]) > 0 && (accepted || reason != workflowChangesRequired) {
+			return result, errs.ErrInvalid
+		}
+		subjects = append(subjects, rework[0]...)
+	}
 	if results == nil {
 		results = []entity.WorkflowAcceptedResult{}
 	}
@@ -40,6 +50,7 @@ func appendWorkflowAttemptTx(ctx context.Context, tx pgx.Tx, current scope, leas
 		"accepted":            accepted,
 		"reason":              reason,
 		"results":             results,
+		"rework_subjects":     subjects,
 	}).Scan(&result)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return entity.WorkflowAttemptResult{}, errs.ErrConflict

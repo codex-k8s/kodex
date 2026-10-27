@@ -729,6 +729,9 @@ type WorkflowStep struct {
 // агентами, входом, схемой результата и настройками параллельности, времени и gate; создание значения
 // процесс не публикует и не запускает.
 type WorkflowVersion struct {
+	// ReworkPolicy explicitly enables owner-approved upstream rework; absence retains old recovery.
+	// ReworkPolicy явно включает owner-approved upstream rework; отсутствие сохраняет старый recovery.
+	ReworkPolicy string `json:",omitempty"`
 	// ExecutionMode is an explicit immutable policy; absence retains historical manager orchestration.
 	// ExecutionMode — явная неизменяемая политика; отсутствие сохраняет прежнюю оркестрацию менеджером.
 	ExecutionMode                                                             string `json:",omitempty"`
@@ -1015,6 +1018,10 @@ type RunGraph struct {
 // решениями и последствиями, происхождением вложений и необязательным намерением интеграции. Поля
 // State и Decision сами не являются серверным подтверждением.
 type OwnerGate struct {
+	// ResolutionKind separates supersession from an owner cancellation or expiry.
+	// ResolutionKind отличает supersession от owner cancellation либо expiry.
+	ResolutionKind                                                  string                 `json:",omitempty"`
+	ReworkPlan                                                      *WorkflowReworkPreview `json:",omitempty"`
 	ScopeKind, OrganizationRef                                      string
 	Ref, ProjectRef, RunRef, NodeRef, Title, Prompt, ContextSummary string
 	ResolutionAttachmentSetRef                                      string
@@ -1511,4 +1518,23 @@ type Incident struct {
 	SafeSummary, SafeNextStep                          string
 	CoreAffected                                       bool
 	CreatedAt                                          time.Time
+}
+
+// WorkflowReworkStepPreview exposes bounded step counters without private execution pins.
+// WorkflowReworkStepPreview показывает bounded step counters без private execution pins.
+type WorkflowReworkStepPreview struct {
+	StepKey         string `json:"stepKey"`
+	PreviousAttempt int32  `json:"previousAttempt"`
+	NextAttempt     int32  `json:"nextAttempt"`
+}
+
+// WorkflowReworkPreview explains an owner-issued upstream plan without granting launch authority.
+// WorkflowReworkPreview объясняет owner-issued upstream plan без выдачи launch authority.
+type WorkflowReworkPreview struct {
+	Schema        string                      `json:"schema"`
+	SourceStepKey string                      `json:"sourceStepKey"`
+	SourceAttempt int32                       `json:"sourceAttempt"`
+	Authors       []WorkflowReworkStepPreview `json:"authors"`
+	Rechecks      []WorkflowReworkStepPreview `json:"rechecks"`
+	BlockReason   string                      `json:"blockReason,omitempty"`
 }

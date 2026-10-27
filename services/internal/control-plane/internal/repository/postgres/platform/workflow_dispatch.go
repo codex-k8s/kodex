@@ -39,6 +39,9 @@ var queryWorkflowDispatchMaterialize string
 // serverWorkflowRoot retains the immutable plan and root actor selected by the owner transaction.
 // serverWorkflowRoot хранит неизменяемый план и root actor, выбранные owner-транзакцией.
 type serverWorkflowRoot struct {
+	// ReworkFloors are owner-approved monotonic attempt minima, never public authority.
+	// ReworkFloors — owner-approved монотонные минимумы attempts, не public authority.
+	ReworkFloors                                                                        map[string]int32
 	VersionNumber                                                                       int64
 	ID, Ref, State, ProjectID, ProjectRef, InitiatorID, Task, VersionRef, VersionDigest string
 	Input, Exception                                                                    json.RawMessage
@@ -61,6 +64,7 @@ type serverWorkflowAnchor struct {
 	Receipts                       []entity.WorkflowAttemptResult
 	Inputs                         []workflowInputReceipt
 	GateApproved, GateBlocked      bool
+	HasIrreversibleEffect          bool
 }
 
 // serverWorkflowException preserves the exact rejected business attempt for owner-controlled
@@ -68,11 +72,15 @@ type serverWorkflowAnchor struct {
 // serverWorkflowException сохраняет точную отклонённую попытку для восстановления владельцем.
 // Приватные DB pins не принимаются от модели и не служат разрешением запуска.
 type serverWorkflowException struct {
-	StepKey      string `json:"stepKey"`
-	Attempt      int32  `json:"attempt"`
-	Reason       string `json:"reason"`
-	OriginNodeID string `json:"originNodeId"`
-	FinalNodeID  string `json:"finalNodeId"`
+	// Kind and ReworkPlan occur only in a new explicitly published recovery profile.
+	// Kind и ReworkPlan присутствуют лишь в новом явно опубликованном recovery profile.
+	Kind         string                      `json:"kind,omitempty"`
+	ReworkPlan   *workflowUpstreamReworkPlan `json:"reworkPlan,omitempty"`
+	StepKey      string                      `json:"stepKey"`
+	Attempt      int32                       `json:"attempt"`
+	Reason       string                      `json:"reason"`
+	OriginNodeID string                      `json:"originNodeId"`
+	FinalNodeID  string                      `json:"finalNodeId"`
 }
 
 // readServerWorkflowRootTx resolves only the pinned server profile and preserves legacy dispatch.
@@ -111,7 +119,7 @@ func readServerWorkflowAnchorsTx(ctx context.Context, tx queryRunner, current sc
 	anchors := make(map[string]serverWorkflowAnchor, len(root.Version.Steps))
 	for rows.Next() {
 		var anchor serverWorkflowAnchor
-		if rows.Scan(&anchor.ID, &anchor.Ref, &anchor.Key, &anchor.State, &anchor.AssignedAttempt, &anchor.Receipts, &anchor.Inputs, &anchor.LatestAttempt, &anchor.GateApproved, &anchor.GateBlocked) != nil {
+		if rows.Scan(&anchor.ID, &anchor.Ref, &anchor.Key, &anchor.State, &anchor.AssignedAttempt, &anchor.Receipts, &anchor.Inputs, &anchor.LatestAttempt, &anchor.GateApproved, &anchor.GateBlocked, &anchor.HasIrreversibleEffect) != nil {
 			return nil, errs.ErrUnavailable
 		}
 		if _, duplicate := anchors[anchor.Key]; duplicate || len(anchors) >= len(root.Version.Steps) {
@@ -128,6 +136,12 @@ func readServerWorkflowAnchorsTx(ctx context.Context, tx queryRunner, current sc
 	for _, step := range root.Version.Steps {
 		if _, exists := anchors[step.Key]; !exists {
 			return nil, errs.ErrConflict
+		}
+	}
+	rows.Close()
+	if root.Version.ReworkPolicy == workflowservice.OwnerApprovedUpstreamV1 {
+		if err := readWorkflowReworkFloorsTx(ctx, tx, current, root); err != nil {
+			return nil, err
 		}
 	}
 	return anchors, nil
@@ -173,10 +187,10 @@ func (repository *Repository) dispatchServerWorkflowTx(ctx context.Context, tx p
 	if err != nil {
 		return err
 	}
-	steps := make(map[string]entity.WorkflowStep, len(root.Version.Steps))
-	for _, step := range root.Version.Steps {
-		steps[step.Key] = step
+	if queued, err := repository.dispatchWorkflowReworkTx(ctx, tx, current, root, anchors); err != nil || queued {
+		return err
 	}
+	effective := effectiveServerWorkflowResults(root, anchors)
 	var active, running int64
 	if tx.QueryRow(ctx, queryWorkflowDispatchActive, pgx.StrictNamedArgs{"organization_id": current.organizationID, "root_run_id": root.ID}).Scan(&active, &running) != nil {
 		return errs.ErrUnavailable
@@ -193,7 +207,7 @@ func (repository *Repository) dispatchServerWorkflowTx(ctx context.Context, tx p
 		ready := true
 		for _, key := range step.DependsOn {
 			dependency := anchors[key]
-			receipt, accepted := acceptedServerWorkflowAttempt(dependency, steps[key])
+			receipt, accepted := effective[key]
 			if !accepted {
 				ready = false
 				break

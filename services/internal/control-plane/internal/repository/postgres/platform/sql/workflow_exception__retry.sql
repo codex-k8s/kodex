@@ -1,10 +1,10 @@
 -- name: workflow_exception__retry :one
 INSERT INTO control_plane.run_nodes(ref,organization_id,root_run_id,run_id,parent_node_id,type,state,
     agent_id,turn_id,display_name,role,workflow_step_key,attempt,next_actions,
-    workflow_step_origin_node_id,workflow_business_attempt,workflow_inputs)
+    workflow_step_origin_node_id,workflow_business_attempt,workflow_inputs,workflow_rework_gate_id)
 SELECT @node_ref,anchor.organization_id,anchor.root_run_id,@run_id::uuid,anchor.parent_node_id,'AGENT_EXECUTION','QUEUED',
     anchor.agent_id,@turn_id::uuid,@display_name,@role,anchor.workflow_step_key,1,ARRAY['OPEN','CANCEL'],
-    anchor.id,@business_attempt::integer,@inputs::jsonb
+    anchor.id,@business_attempt::integer,@inputs::jsonb,previous.workflow_rework_gate_id
 FROM control_plane.run_nodes anchor
 JOIN control_plane.run_nodes previous ON previous.organization_id=anchor.organization_id AND previous.root_run_id=anchor.root_run_id
     AND COALESCE(previous.workflow_step_origin_node_id,previous.id)=anchor.id AND previous.id=@previous_node_id::uuid

@@ -1564,7 +1564,7 @@ func validAssistantPromptTemplate(value string) bool {
 // владельца. Отсутствующий режим сохраняет прежний вывод графа; полномочия проекта и сотрудников
 // по ссылкам не назначаются и остаются частью допуска команды.
 func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
-	if !onlyAssistantFields(input, "executionMode", "projectRef", "name", "purpose", "coordinatorAgentRef", "inputFields", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria") ||
+	if !onlyAssistantFields(input, "reworkPolicy", "executionMode", "projectRef", "name", "purpose", "coordinatorAgentRef", "inputFields", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria") ||
 		!hasAssistantFields(input, "projectRef", "name", "purpose", "coordinatorAgentRef", "steps") {
 		return command.WorkflowInput{}, errs.ErrInvalid
 	}
@@ -1590,8 +1590,12 @@ func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
 	if !ok || len(rawSteps) == 0 || len(rawSteps) > 200 {
 		return command.WorkflowInput{}, errs.ErrInvalid
 	}
+	rework, validRework := assistantWorkflowReworkPolicy(input)
+	if !validRework {
+		return command.WorkflowInput{}, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_INVARIANTS")
+	}
 	draft := entity.WorkflowVersion{Ref: "draft", Name: name, Purpose: assistantString(input, "purpose"), CoordinatorAgentRef: coordinator,
-		ExecutionMode: mode, VersionNumber: 1, Concurrency: int32(concurrency), TimeoutSeconds: timeout, CompletionCriteria: assistantString(input, "completionCriteria"), ResultSchema: map[string]any{}}
+		ExecutionMode: mode, ReworkPolicy: rework, VersionNumber: 1, Concurrency: int32(concurrency), TimeoutSeconds: timeout, CompletionCriteria: assistantString(input, "completionCriteria"), ResultSchema: map[string]any{}}
 	if rawFields, exists := input["inputFields"]; exists {
 		fields, ok := rawFields.([]any)
 		if !ok || len(fields) > 100 {

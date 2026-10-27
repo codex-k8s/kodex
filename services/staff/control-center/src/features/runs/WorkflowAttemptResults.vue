@@ -11,11 +11,12 @@ defineProps<{ attempts: WorkflowAttemptResult[] }>();
       :key="`${attempt.attempt}/${attempt.runRef}`"
     >
       <h4>{{ $t("runs.attempt", { attempt: attempt.attempt }) }}</h4>
+      <p v-if="attempt.effectiveState" :class="{ 'field-error': attempt.effectiveState !== 'CURRENT' }">{{ $t(`workflowResults.freshness.${attempt.effectiveState}`) }}</p>
       <p :class="{ 'field-error': !attempt.accepted }">
         {{
           $t(
             attempt.accepted
-              ? "workflowResults.accepted"
+              ? attempt.effectiveState && attempt.effectiveState !== "CURRENT" ? "workflowResults.historicalAccepted" : "workflowResults.accepted"
               : "workflowResults.rejected",
           )
         }}

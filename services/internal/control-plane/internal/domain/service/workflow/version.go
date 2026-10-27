@@ -11,6 +11,10 @@ import (
 // MaximumServerTextBytes — прежний суммарный UTF-8 бюджет текста серверного профиля, независимый от отдельных Unicode-ограничений полей.
 const MaximumServerTextBytes = 8192
 
+// OwnerApprovedUpstreamV1 is an opt-in immutable recovery policy, never a model capability.
+// OwnerApprovedUpstreamV1 — opt-in immutable recovery policy, не capability модели.
+const OwnerApprovedUpstreamV1 = "OWNER_APPROVED_UPSTREAM_V1"
+
 // ServerTextBytes counts decoded workflow name, purpose, instructions and completion criteria plus each step's name, instructions and expected result. Keys, input metadata and result predicates are excluded; the count grants no authority and does not validate a workflow.
 // ServerTextBytes считает байты декодированных имени, цели, инструкций и критерия завершения процесса плюс имени, инструкций и ожидаемого результата каждого шага. Ключи, метаданные входов и условия результатов исключены; подсчёт не выдаёт полномочия и не валидирует процесс.
 func ServerTextBytes(version entity.WorkflowVersion) int {
@@ -28,7 +32,7 @@ func ServerTextBytes(version entity.WorkflowVersion) int {
 // Прежняя проверка общей формы и свежий допуск БД остаются обязательными; предикат не выдаёт
 // возможностей и не доказывает отсутствие привязок обязательного дочернего процесса.
 func ValidServerVersion(version entity.WorkflowVersion) bool {
-	if version.ExecutionMode != ServerDAGV1 || len(version.Steps) < 1 || len(version.Steps) > MaximumSteps || version.Concurrency < 1 || version.Concurrency > 2 {
+	if version.ExecutionMode != ServerDAGV1 || (version.ReworkPolicy != "" && version.ReworkPolicy != OwnerApprovedUpstreamV1) || len(version.Steps) < 1 || len(version.Steps) > MaximumSteps || version.Concurrency < 1 || version.Concurrency > 2 {
 		return false
 	}
 	raw, err := json.Marshal(version)
@@ -55,8 +59,13 @@ func ValidServerVersion(version entity.WorkflowVersion) bool {
 	reviewers := map[string]string{}
 	for _, step := range version.Steps {
 		for _, requirement := range step.ResultRequirements {
-			if requirement.Kind != "REVIEW" {
+			if requirement.Kind != "REVIEW" && requirement.Kind != "ARTIFACT_REVIEW" {
 				continue
+			}
+			if requirement.Kind == "ARTIFACT_REVIEW" {
+				if version.ReworkPolicy != OwnerApprovedUpstreamV1 || !artifactReviewSubjectExists(version.Steps, requirement) {
+					return false
+				}
 			}
 			key := requirement.SubjectStepKey + ":" + step.AgentRef
 			if agents[requirement.SubjectStepKey] == step.AgentRef || reviewers[key] != "" && reviewers[key] != step.Key {
@@ -66,4 +75,22 @@ func ValidServerVersion(version entity.WorkflowVersion) bool {
 		}
 	}
 	return true
+}
+
+// artifactReviewSubjectExists resolves a declared output from the exact published prerequisite.
+// It does not select files, trust model references or infer an author from an agent role.
+// artifactReviewSubjectExists разрешает declared output exact published prerequisite.
+// Функция не выбирает файлы, не доверяет model refs и не выводит автора из agent role.
+func artifactReviewSubjectExists(steps []entity.WorkflowStep, requirement entity.WorkflowResultRequirement) bool {
+	for _, step := range steps {
+		if step.Key != requirement.SubjectStepKey {
+			continue
+		}
+		for _, result := range step.ResultRequirements {
+			if result.Key == requirement.SubjectResultKey && result.Kind == "ARTIFACT" {
+				return true
+			}
+		}
+	}
+	return false
 }
