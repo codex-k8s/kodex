@@ -4,7 +4,7 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.3
+version: 1.0.4
 updated: 2026-10-27
 ---
 
@@ -398,6 +398,23 @@ Docker и уже загруженного pinned image; загрузки обр�
 отсутствия контейнеров и проверки собственной метки. Секреты и рабочее дерево
 репозитория не монтируются. Это proof файлового механизма, а не rollout,
 полный owner lifecycle или приёмка сотрудником платформы.
+
+Тот же entrypoint с `--mode restore` запускает отдельный writable-контур
+`TestWorkspaceWriterTwoUIDNative`: pinned binary, без сети, 1CPU/256MiB,
+отдельный labelled volume и IPC tmpfs. Основной процесс UID10001 и provider
+UID10002 проверяют отсутствие effective/permitted capabilities. Provider
+восстанавливает private mode0700/0600, main — собственный mode0600; прямое
+чтение private данных другого UID должно получить EACCES. Coordinator fixture
+с только SETUID/SETGID ждёт exact provider process через Wait и передаёт main
+один join marker по унаследованному pipe до atomic publication. Затем отдельный
+provider verifier сверяет bytes/owner/mode после завершения main.
+
+Generation parent0700 и точное `.restore-tree` монтируются из одной disposable
+volume, для tree используется штатный `volume-subpath`. Это проверка реальных
+файловых механизмов и SCM_RIGHTS между UID, не production Kubernetes render,
+S3 custody, owner RESTORED или full backup/restore. Default snapshot mode и его
+read-only mount остаются прежними. Отсутствие opt-in в обычном go test даёт
+явный SKIP, отдельный native запуск оценивается по terminal JSON и cleanup.
 
 При `chmod` SGID может молча сбрасываться, если процесс не входит в группу
 каталога и не имеет CAP_FSETID. Подготовка использует требуемую группу и

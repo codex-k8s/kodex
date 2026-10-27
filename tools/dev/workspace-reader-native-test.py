@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Проверить чтение private workspace двумя UID в одноразовом Docker-контуре."""
+"""Проверить чтение либо восстановление workspace двумя UID в одноразовом Docker-контуре."""
 
 import argparse
 import hashlib
@@ -76,7 +76,7 @@ def run_container(name, nonce, arguments, command, identities):
             logs = docker(['logs', identity])
             output = logs.stdout+logs.stderr
             rss = re.findall(r'reader_peak_rss_kib=(\d+)', output)
-            diagnostics = re.findall(r'workspace_reader_native_test\.go:\d+: ([A-Za-z][A-Za-z0-9 _=-]{0,120})$', output, re.M)
+            diagnostics = re.findall(r'workspace_(?:reader|writer)_native_test\.go:\d+: ([A-Za-z][A-Za-z0-9 _=-]{0,120})$', output, re.M)
             outcome = {'id': identity, 'exitCode': state['ExitCode'], 'oomKilled': bool(state.get('OOMKilled')),
                     'readerPeakRSSKiB': int(rss[0]) if len(rss) == 1 else None,
                     'safeDiagnostics': diagnostics[-8:],
@@ -93,6 +93,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--binary', required=True)
     parser.add_argument('--sha256', required=True)
+    parser.add_argument('--mode', choices=['snapshot', 'restore'], default='snapshot')
     arguments = parser.parse_args()
     binary = Path(arguments.binary)
     info = binary.lstat()
@@ -107,11 +108,13 @@ def main():
         raise RuntimeError('LOCAL_LINUX_DOCKER_REQUIRED')
     image = docker(['image', 'inspect', IMAGE, '--format', '{{.Id}}']).stdout.strip()
     nonce = uuid.uuid4().hex
-    volume = 'kodex-workspace-reader-'+nonce
+    volume = 'kodex-workspace-'+arguments.mode+'-'+nonce
     identities, outcomes = [], []
     volume_created = False
     result = {'status': 'FAIL', 'binarySHA256': arguments.sha256, 'image': image,
-              'productionChanged': False, 'scope': 'DISPOSABLE_LOCAL_TWO_UID_READ_ONLY'}
+              'productionChanged': False, 'mode': arguments.mode,
+              'scope': ('DISPOSABLE_LOCAL_TWO_UID_READ_ONLY' if arguments.mode == 'snapshot'
+                        else 'DISPOSABLE_LOCAL_TWO_UID_WRITABLE_RESTORE')}
     try:
         docker(['volume', 'create', '--label', LABEL+'='+nonce, volume])
         metadata = json.loads(docker(['volume', 'inspect', volume]).stdout)[0]
@@ -124,18 +127,35 @@ def main():
                    'chmod 600 /source/provider.txt /source/role.txt; '
                    'chown 10001:29000 /source; chmod 2770 /source; '
                    'test "$(stat -c %a:%u:%g /source)" = "2770:10001:29000"')
+        if arguments.mode == 'restore':
+            prepare = ('umask 077; mkdir -p /source/generation/.restore-tree; '
+                       'chown 10001:29000 /source /source/generation /source/generation/.restore-tree; '
+                       'chmod 2770 /source /source/generation/.restore-tree; '
+                       'test "$(stat -c %a:%u:%g /source/generation/.restore-tree)" = "2770:10001:29000"; '
+                       'chmod 700 /source/generation; '
+                       'test "$(stat -c %a:%u:%g /source/generation)" = "700:10001:29000"')
         outcomes.append(run_container(volume+'-prepare', nonce,
             ['--cap-add=CHOWN', '--cap-add=FOWNER', '--entrypoint=/bin/sh',
              '--mount', 'type=volume,source='+volume+',target=/source'], ['-ec', prepare], identities))
         # Private fixtures only: no source tree, credentials, daemon socket or host network is mounted.
-        outcomes.append(run_container(volume+'-read', nonce,
-            ['--cap-add=SETUID', '--cap-add=SETGID', '--entrypoint=/qa-test',
+        consumer_arguments = ['--cap-add=SETUID', '--cap-add=SETGID', '--entrypoint=/qa-test',
              '--mount', 'type=bind,source='+str(binary)+',target=/qa-test,readonly',
-             '--mount', 'type=volume,source='+volume+',target=/workspace/work,readonly',
-             '--tmpfs', '/tmp:rw,nosuid,nodev,noexec,size=4m,mode=1777',
-             '--tmpfs', '/var/run/kodex/work-reader:rw,nosuid,nodev,noexec,size=1m,uid=10001,gid=29000,mode=2770',
-             '--env', 'KODEX_WORKSPACE_READER_NATIVE=coordinator', '--env', 'GOMAXPROCS=1'],
-            ['-test.run=^TestWorkspaceReaderTwoUIDNative$', '-test.timeout=30s', '-test.v'], identities))
+             '--tmpfs', '/tmp:rw,nosuid,nodev,noexec,size=4m,mode=1777', '--env', 'GOMAXPROCS=1']
+        test_name = 'TestWorkspaceReaderTwoUIDNative'
+        if arguments.mode == 'snapshot':
+            consumer_arguments += [
+                '--mount', 'type=volume,source='+volume+',target=/workspace/work,readonly',
+                '--tmpfs', '/var/run/kodex/work-reader:rw,nosuid,nodev,noexec,size=1m,uid=10001,gid=29000,mode=2770',
+                '--env', 'KODEX_WORKSPACE_READER_NATIVE=coordinator']
+        else:
+            test_name = 'TestWorkspaceWriterTwoUIDNative'
+            consumer_arguments += [
+                '--mount', 'type=volume,source='+volume+',target=/restore',
+                '--mount', 'type=volume,source='+volume+',target=/workspace/restore-tree,volume-subpath=generation/.restore-tree',
+                '--tmpfs', '/var/run/kodex/work-writer:rw,nosuid,nodev,noexec,size=1m,uid=10001,gid=29000,mode=2770',
+                '--env', 'KODEX_WORKSPACE_WRITER_NATIVE=coordinator']
+        outcomes.append(run_container(volume+'-consume', nonce, consumer_arguments,
+            ['-test.run=^'+test_name+'$', '-test.timeout=30s', '-test.v'], identities))
         result['status'] = 'PASS'
     except (RuntimeError, subprocess.TimeoutExpired) as error:
         result['reason'] = str(error) if isinstance(error, RuntimeError) else 'DOCKER_TIMEOUT'
