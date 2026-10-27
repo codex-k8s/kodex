@@ -126,3 +126,30 @@ func TestWorkspaceObjectUnknownOrCorruptReadbackNeverCleansUp(t *testing.T) {
 		t.Fatal("oversized checkpoint performed a write")
 	}
 }
+
+// TestWorkspaceObjectNamespaceUsesValidatedCheckpointPins checks shared part-key derivation before any I/O.
+// These synthetic scope pins prove syntax and namespace separation, never owner authorization.
+// TestWorkspaceObjectNamespaceUsesValidatedCheckpointPins проверяет shared part-key derivation до I/O.
+// Synthetic scope pins доказывают syntax/namespace separation, не owner authorization.
+func TestWorkspaceObjectNamespaceUsesValidatedCheckpointPins(t *testing.T) {
+	value := runtimecontract.WorkspaceArchiveManifest{Schema: runtimecontract.WorkspaceArchiveSchema,
+		Scope:        runtimecontract.WorkspaceStorageScope{OrganizationRef: "org_fixture000", ProjectRef: "prj_fixture000", SessionRef: "ses_fixture000", AgentRef: "agt_fixture000"},
+		WorkspaceRef: "wks_fixture000", Generation: 1, CheckpointRef: "wcp_fixture000",
+		Writer: runtimecontract.WorkspaceWriterCommitment{RunRef: "run_fixture000", NodeRef: "node_fixture000", TurnRef: "turn_fixture000",
+			RuntimeRevisionRef: "rrev_fixture000", RuntimeRevisionVersion: 1, RuntimeRevisionDigest: strings.Repeat("a", 64),
+			ExecutionBindingDigest: strings.Repeat("b", 64), InputDigest: strings.Repeat("c", 64), LeaseRef: "lease_fixture000",
+			LeaseGeneration: 1, Attempt: 1, PodUID: "pod-fixture", PVCUID: "pvc-fixture", JoinSHA256: strings.Repeat("d", 64)}}
+	key, err := value.PartObjectKey(32)
+	if err != nil || key != value.ObjectPrefix()+"parts/000032.tar" || strings.Contains(key, "../") {
+		t.Fatal("part key lost its validated checkpoint namespace")
+	}
+	for _, index := range []int32{0, 33} {
+		if _, err := value.PartObjectKey(index); err == nil {
+			t.Fatal("part cardinality escaped the closed namespace")
+		}
+	}
+	value.CheckpointRef = "../../foreign"
+	if _, err := value.PartObjectKey(1); err == nil {
+		t.Fatal("untrusted path entered the checkpoint namespace")
+	}
+}

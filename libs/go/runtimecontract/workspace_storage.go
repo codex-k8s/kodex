@@ -288,9 +288,7 @@ type WorkspaceArchiveManifest struct {
 // Validate checks all parts and aggregate limits without reading or trusting source contents.
 // Validate проверяет все parts и aggregate limits без чтения или доверия source contents.
 func (value WorkspaceArchiveManifest) Validate() error {
-	if value.Schema != WorkspaceArchiveSchema || value.Scope.Validate() != nil || value.Writer.Validate() != nil ||
-		!workspaceStorageRefPattern.MatchString(value.WorkspaceRef) || !workspaceCheckpointRefPattern.MatchString(value.CheckpointRef) ||
-		value.Generation < 1 || !sha256Pattern.MatchString(value.TreeSHA256) || value.Bytes < 0 || value.Bytes > RuntimeWorkspaceWritableBytes ||
+	if value.ValidateIdentity() != nil || !sha256Pattern.MatchString(value.TreeSHA256) || value.Bytes < 0 || value.Bytes > RuntimeWorkspaceWritableBytes ||
 		value.Entries < 0 || value.Entries > RuntimeWorkspaceMaximumFiles || len(value.Parts) < 1 || len(value.Parts) > MaximumWorkspaceArchiveParts {
 		return errWorkspaceStorageInvalid
 	}
@@ -310,6 +308,34 @@ func (value WorkspaceArchiveManifest) Validate() error {
 		return errWorkspaceStorageInvalid
 	}
 	return nil
+}
+
+// ValidateIdentity checks only immutable checkpoint and writer syntax before a stream exists.
+// It never grants read access or substitutes for the owner's exact quiescence and task fencing.
+// ValidateIdentity проверяет только immutable checkpoint/writer syntax до создания stream.
+// Это не read grant и не замена exact quiescence/task fencing у владельца.
+func (value WorkspaceArchiveManifest) ValidateIdentity() error {
+	if value.Schema != WorkspaceArchiveSchema || value.Scope.Validate() != nil || value.Writer.Validate() != nil ||
+		!workspaceStorageRefPattern.MatchString(value.WorkspaceRef) || !workspaceCheckpointRefPattern.MatchString(value.CheckpointRef) || value.Generation < 1 {
+		return errWorkspaceStorageInvalid
+	}
+	return nil
+}
+
+// ObjectPrefix reuses the checkpoint namespace; callers validate identity before any storage access.
+// ObjectPrefix повторно использует checkpoint namespace; caller валидирует identity до storage access.
+func (value WorkspaceArchiveManifest) ObjectPrefix() string {
+	return (WorkspaceCheckpointBinding{Scope: value.Scope, WorkspaceRef: value.WorkspaceRef, Generation: value.Generation, CheckpointRef: value.CheckpointRef}).ObjectPrefix()
+}
+
+// PartObjectKey derives a bounded part key without accepting an arbitrary path from a task payload.
+// PartObjectKey выводит bounded part key, не принимая произвольный path из task payload.
+func (value WorkspaceArchiveManifest) PartObjectKey(index int32) (string, error) {
+	if value.ValidateIdentity() != nil || index < 1 || index > MaximumWorkspaceArchiveParts {
+		return "", errWorkspaceStorageInvalid
+	}
+	position := strconv.FormatInt(int64(index), 10)
+	return value.ObjectPrefix() + "parts/" + strings.Repeat("0", 6-len(position)) + position + ".tar", nil
 }
 
 // MaximumWorkspaceStreamBytes derives a fixed overflow-safe ceiling from existing data/file quotas.
