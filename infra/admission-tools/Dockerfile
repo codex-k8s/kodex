@@ -26,9 +26,9 @@ ENV GRYPE_DB_CACHE_DIR=/var/lib/grype/db \
     GRYPE_CHECK_FOR_APP_UPDATE=false
 RUN apk add --no-cache \
       bash=5.2.37-r0 \
-      ca-certificates=20260909-r0 \
+      ca-certificates=20261020-r0 \
       coreutils=9.7-r1 \
-      curl=8.14.1-r3 \
+      curl=8.14.1-r4 \
       grep=3.12-r0 \
       jq=1.8.2-r0 \
       openssl=3.5.9-r0 \
