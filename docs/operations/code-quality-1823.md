@@ -4,11 +4,32 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.545.0
+version: 1.546.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая проверка integration claim — 27.10.2026
+
+Test completion и invocation completion сохраняют отдельные типы payload,
+проверку workload и выбор своего embedded SQL до общего предиката точного
+organization/ref/workload/lease/fence digest/generation. Предикат возвращает
+прежние Unavailable и Forbidden; он не разрешает lifecycle transition, не
+продлевает lease и не подтверждает внешний эффект. Обратное сопоставление
+восстановило оба исходных пути без изменения исполняемого тела.
+
+Новые unit checks защищают точный запрос, порядок параметров, отказы до SQL,
+false и scan error: 9 PASS events на исходном коде и в новом полном модуле.
+Выбранные integration component-сценарии на disposable PostgreSQL — 11 PASS
+events до и после, без FAIL/SKIP. Control-plane build/vet PASS, unit 3019 PASS /
+70 прежних условных SKIP. После тестов добавлены только пять строк комментариев
+к тестовой оснастке, что подтверждено сравнением хешей.
+
+Один общий алгоритм извлечён; остаточные конкретные обёртки сохранены по точному
+hash с описанием разных payload и SQL, шесть мутаций решения отвергнуты.
+1394 raw / 1271 retained / 123 unresolved, Go 21657/21657. E2E/browser/live/
+deploy/startup/QA не выполнялись.
 
 ## Общая подготовка warm reporter из worker — 27.10.2026
 

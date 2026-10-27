@@ -9016,6 +9016,14 @@
       "fragmentSHA256": "08e583e6f973e052b677d6fd428bee6827986522a59bbd2a4639cb4b4ac0eed3",
       "count": 1,
       "reason": "Окна относятся к закрытой const operations таблице: четыре явных configuration kind независимо связывают create/save/discard/validate/publish/rebind с разными generated SDK function references. AST полного объявления подтверждает только object/property assignments и sdk.property access без вызовов, callbacks, циклов или преобразований данных; точные24 SDK bindings сохранены. Таблица поддерживает видимый специализированный маршрут каждого kind; фабрика имён или приведение общих функций скрыло бы конкретные операции без удаления алгоритма. Exact self-pair/hash/count=1 не покрывает invocation, dispatch и другие фрагменты файла."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/integration_invocation_authority.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/integration_invocation_authority.go",
+      "fragmentSHA256": "9e7b9a1d411b9e917117fb7794823a2ae5ba7da279814fdea31b3e1631ae84e6",
+      "count": 1,
+      "reason": "Два узких пути принимают разные concrete payload: IntegrationConnectionTestInput с TestRef и IntegrationInvocationInput с InvocationRef, после проверки workload выбирают разные встроенные SQL для соответствующего владельца захвата. Общая проверка точного tuple, дайджеста fence и ошибок вынесена в authorizeIntegrationClaim; слияние типизированных обёрток скрыло бы соответствие команды и запроса. Тесты проверяют подмену типа, запрет workload до SQL и точные параметры обеих ветвей. Исключение ограничено этой парой и hash, не покрывает helper или lifecycle переходы."
     }
   ]
 }

@@ -49,16 +49,8 @@ func (repository *Repository) authorizeIntegrationTestCompletion(ctx context.Con
 	if !ok {
 		return errs.ErrInvalid
 	}
-	digest := sha256.Sum256([]byte(payload.Fence))
-	var allowed bool
-	if err := tx.QueryRow(ctx, queryIntegrationTestAuthorizeCompletion, current.organizationID, payload.TestRef, input.Principal.CallerWorkload,
-		payload.LeaseRef, hex.EncodeToString(digest[:]), payload.Generation).Scan(&allowed); err != nil {
-		return errs.ErrUnavailable
-	}
-	if !allowed {
-		return errs.ErrForbidden
-	}
-	return nil
+	return authorizeIntegrationClaim(ctx, tx, queryIntegrationTestAuthorizeCompletion, current.organizationID, payload.TestRef,
+		input.Principal.CallerWorkload, payload.LeaseRef, payload.Fence, payload.Generation)
 }
 
 // authorizeIntegrationCompletion requires a recognized execution workload and typed invocation
@@ -77,10 +69,20 @@ func (repository *Repository) authorizeIntegrationCompletion(ctx context.Context
 	if !ok {
 		return errs.ErrInvalid
 	}
-	digest := sha256.Sum256([]byte(payload.Fence))
+	return authorizeIntegrationClaim(ctx, tx, queryIntegrationInvocationAuthorizeCompletion, current.organizationID, payload.InvocationRef,
+		input.Principal.CallerWorkload, payload.LeaseRef, payload.Fence, payload.Generation)
+}
+
+// authorizeIntegrationClaim checks the exact already selected test or invocation claim tuple.
+// The caller validates workload and payload type and selects the embedded SQL before this check;
+// the helper does not authorize transitions, extend leases or validate result evidence.
+// authorizeIntegrationClaim сверяет точный tuple уже выбранного тестового или invocation claim.
+// Вызывающий проверяет workload и тип payload, выбирает встроенный SQL; helper не разрешает
+// переходы, не продлевает аренду и не проверяет подтверждение результата.
+func authorizeIntegrationClaim(ctx context.Context, tx pgx.Tx, query, organizationID, ref, workload, lease, fence string, generation int64) error {
+	digest := sha256.Sum256([]byte(fence))
 	var allowed bool
-	if err := tx.QueryRow(ctx, queryIntegrationInvocationAuthorizeCompletion, current.organizationID, payload.InvocationRef,
-		input.Principal.CallerWorkload, payload.LeaseRef, hex.EncodeToString(digest[:]), payload.Generation).Scan(&allowed); err != nil {
+	if err := tx.QueryRow(ctx, query, organizationID, ref, workload, lease, hex.EncodeToString(digest[:]), generation).Scan(&allowed); err != nil {
 		return errs.ErrUnavailable
 	}
 	if !allowed {
