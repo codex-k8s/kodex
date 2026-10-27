@@ -142,6 +142,36 @@ work subPath и отдельные read-only inode/ACK records. Другой liv
 той же PVC закрывает BIND; один RWO access mode не доказывает exclusivity.
 
 
+## Граница Job и подтверждения архива
+
+Новый snapshot worker использует точный UID PVC и закрыто отклоняет любого
+другого Pod-потребителя тома, включая terminal Pod. Owner claim и сохранённый
+positive join обязательны независимо от результата Kubernetes List. Consumer
+подключает только read-only subPath текущего поколения; UID10001 архивирует,
+UID10002 читает только свои файлы. Actual Pod повторно сверяется с producer:
+mounts, identities, image, environment, resources и отсутствие API token.
+
+Pod не назначает `fsGroup`: kubelet не должен рекурсивно менять режимы исходных
+файлов. Socket directory создаётся непривилегированным init в отдельном
+`emptyDir`, с primary GID29000 и проверкой mode2770. Применимость подтверждена
+исходниками Kubernetes: [emptyDir](https://github.com/kubernetes/kubernetes/blob/v1.32.8/pkg/volume/emptydir/empty_dir.go),
+[volume ownership](https://github.com/kubernetes/kubernetes/blob/v1.32.8/pkg/volume/volume_linux.go);
+Context7 использован для проверки FSGroup semantics. Native Job-проверка
+конкретной версии кластера остаётся обязательной перед activation.
+
+У V2 Job отсутствует TTL. Terminal worker outcome, cancel и transport failure
+не удаляют Job/input до успешного terminal RPC владельцу. Cleanup использует
+только полученные UID/resourceVersion; неизвестный Create outcome сохраняет
+ресурс. Новая owner-attempt завершает прежний workload, сохраняя его input
+до собственного ACK. Reconcile-only не меняет root object key и не разрешает
+новый PUT. Потеря ACK либо crash после owner commit пока оставляют evidence
+на месте: автоматический terminal reconciliation ещё требует реализации
+и проверки; наличие сохранённого Job не означает повтор business action.
+
+До завершения отдельных V2 restore/delete consumers эти виды закрыто
+отклоняются перед Kubernetes и storage effects, без перехода в legacy.
+Это промежуточная поставка полного unit #1953: opt-in остаётся выключенным.
+
 ## Неизменяемый outcome и текущая storage tuple
 
 V2 требует точный role runtime contract revision4; opt-in не повышает старый

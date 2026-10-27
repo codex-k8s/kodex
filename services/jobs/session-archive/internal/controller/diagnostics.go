@@ -232,6 +232,9 @@ func (controller *Controller) readResult(ctx context.Context, task model.Task, j
 	if !validWorkerPod(task, job, pod) {
 		return model.Result{}, errors.New("session archive worker pod binding is invalid")
 	}
+	if task.Workspace != nil && !controller.validWorkspaceWorkerPod(task, job, pod) {
+		return model.Result{}, errors.New("session workspace worker mounts are invalid")
+	}
 	podRef = pod.Name
 	stage = "RESULT_MISSING"
 	for _, status := range pod.Status.ContainerStatuses {
@@ -252,6 +255,17 @@ func (controller *Controller) readResult(ctx context.Context, task model.Task, j
 		stage = "RESULT_STATUS_CONFLICT"
 		if (job.Status.Succeeded > 0) != result.Success {
 			return model.Result{}, errors.New("session archive worker status conflicts")
+		}
+		if task.Workspace != nil && result.Success {
+			readerJoined := false
+			for _, peer := range pod.Status.ContainerStatuses {
+				if peer.Name == "workspace-reader" && peer.State.Terminated != nil && peer.State.Terminated.ExitCode == 0 {
+					readerJoined = true
+				}
+			}
+			if !readerJoined || termination.ExitCode != 0 || result.FormatVersion != 2 || result.ObjectKey != task.TargetObjectKey {
+				return model.Result{}, errors.New("session workspace worker result is unconfirmed")
+			}
 		}
 		stage = "WORKER_REPORTED_FAILURE"
 		if result.Success {

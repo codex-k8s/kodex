@@ -104,6 +104,15 @@ func (controller *Controller) Check(ctx context.Context) error {
 // Execute renews the claimed task, fences predecessor cleanup and tracks one worker attempt against its source PVC UID.
 // RU: Execute продлевает полученное задание, ограждает очистку предшественников и связывает попытку worker с UID исходного PVC.
 func (controller *Controller) Execute(ctx context.Context, task model.Task, renew func(context.Context) error) (result model.Result, resultErr error) {
+	return controller.execute(ctx, task, renew, nil)
+}
+
+// execute keeps V2 evidence until the caller receives an owner ACK; legacy cleanup remains unchanged.
+// execute сохраняет V2 evidence до owner ACK у caller; прежняя очистка legacy не меняется.
+func (controller *Controller) execute(ctx context.Context, task model.Task, renew func(context.Context) error, retained *RetainedAttempt) (result model.Result, resultErr error) {
+	if task.Workspace != nil && (task.Validate() != nil || task.Kind != "SNAPSHOT") {
+		return model.Result{}, errors.New("session workspace task consumer is unavailable")
+	}
 	if err := controller.cleanupPredecessors(ctx, task, renew); err != nil {
 		return model.Result{}, err
 	}
@@ -126,6 +135,11 @@ func (controller *Controller) Execute(ctx context.Context, task model.Task, rene
 		}
 		sourcePVCUID = uid
 	}
+	if task.Workspace != nil {
+		if err := controller.checkWorkspaceSource(ctx, task, sourcePVCUID, ""); err != nil {
+			return model.Result{}, err
+		}
+	}
 	name := workloadName(task.TaskRef, task.ContentGeneration, task.Attempt)
 	raw, err := json.Marshal(task)
 	if err != nil || len(raw) > model.MaximumTaskBytes {
@@ -146,6 +160,12 @@ func (controller *Controller) Execute(ctx context.Context, task model.Task, rene
 	var createdJob *batchv1.Job
 	jobCreateAttempted := false
 	defer func() {
+		if task.Workspace != nil {
+			if retained != nil && (!jobCreateAttempted || createdJob != nil) {
+				retained.controller, retained.input, retained.job = controller, createdInput, createdJob
+			}
+			return
+		}
 		// Неизвестный исход Create не даёт права удалять Job по одному имени.
 		// Следующая owner-attempt проверит immutable input и exact UID.
 		if jobCreateAttempted && createdJob == nil {
@@ -159,6 +179,11 @@ func (controller *Controller) Execute(ctx context.Context, task model.Task, rene
 	}()
 	if err := renewAuthority(ctx, renew); err != nil {
 		return model.Result{}, err
+	}
+	if task.Workspace != nil {
+		if err := controller.checkWorkspaceSource(ctx, task, sourcePVCUID, ""); err != nil {
+			return model.Result{}, err
+		}
 	}
 	job := controller.job(name, task, sourcePVCUID)
 	jobCreateAttempted = true
@@ -196,6 +221,14 @@ func (controller *Controller) Execute(ctx context.Context, task model.Task, rene
 			}
 			if job.Status.Succeeded == 0 && job.Status.Failed == 0 {
 				continue
+			}
+			if task.Workspace != nil {
+				if job.UID != createdJob.UID {
+					return model.Result{}, errors.New("session workspace worker job was replaced")
+				}
+				if err := controller.checkWorkspaceSource(ctx, task, sourcePVCUID, createdJob.UID); err != nil {
+					return model.Result{}, err
+				}
 			}
 			return controller.readResult(ctx, task, job, sourcePVCUID)
 		}
@@ -413,6 +446,9 @@ func (controller *Controller) job(name string, task model.Task, sourcePVCUID typ
 				Limits:   corev1.ResourceList{corev1.ResourceCPU: *quantity("200m"), corev1.ResourceMemory: *quantity("128Mi")},
 			},
 		}}
+	}
+	if task.Workspace != nil {
+		controller.configureWorkspaceSnapshot(job, task)
 	}
 	return job
 }

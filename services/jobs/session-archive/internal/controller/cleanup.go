@@ -88,7 +88,7 @@ func (controller *Controller) cleanupPredecessors(ctx context.Context, task mode
 				return errors.New("predecessor session archive job binding is invalid")
 			}
 		}
-		if err := controller.cleanupAttempt(cleanup, input, job, renew); err != nil {
+		if err := controller.cleanupResources(cleanup, input, job, renew, task.Workspace == nil); err != nil {
 			return err
 		}
 	}
@@ -134,7 +134,10 @@ func validPredecessorInput(current model.Task, attempt int32, input *corev1.Conf
 	// CP заново назначает input digest каждой attempt; SNAPSHOT получает
 	// отдельный object key. Все остальные immutable owner pins должны совпасть.
 	previous.Attempt, previous.InputDigest = current.Attempt, current.InputDigest
-	if current.Kind == "SNAPSHOT" {
+	if current.Workspace != nil && previous.Workspace != nil {
+		previous.Workspace.ReconcileOnly = current.Workspace.ReconcileOnly
+	}
+	if current.Kind == "SNAPSHOT" && current.Workspace == nil {
 		previous.TargetObjectKey = current.TargetObjectKey
 	}
 	return reflect.DeepEqual(previous, current)
@@ -155,6 +158,12 @@ func jobUsesInput(job *batchv1.Job, name string) bool {
 // cleanupAttempt deletes with UID/resourceVersion preconditions and joins the exact Job and owned Pods before removing input.
 // RU: cleanupAttempt удаляет с предусловиями UID/resourceVersion и дожидается точной Job и принадлежащих ей Pods до удаления входа.
 func (controller *Controller) cleanupAttempt(ctx context.Context, input *corev1.ConfigMap, job *batchv1.Job, renew func(context.Context) error) error {
+	return controller.cleanupResources(ctx, input, job, renew, true)
+}
+
+// cleanupResources joins the exact workload and optionally retains its input until a successor owner ACK.
+// cleanupResources завершает exact workload и при необходимости сохраняет input до successor owner ACK.
+func (controller *Controller) cleanupResources(ctx context.Context, input *corev1.ConfigMap, job *batchv1.Job, renew func(context.Context) error, removeInput bool) error {
 	if input == nil || input.UID == "" || input.ResourceVersion == "" {
 		return errors.New("session archive cleanup input identity is missing")
 	}
@@ -215,6 +224,9 @@ func (controller *Controller) cleanupAttempt(ctx context.Context, input *corev1.
 			case <-time.After(100 * time.Millisecond):
 			}
 		}
+	}
+	if !removeInput {
+		return nil
 	}
 	if err := check(); err != nil {
 		return err

@@ -201,7 +201,7 @@ func process(ctx context.Context, control *controlplaneclient.Client, kube *cont
 		}
 		return err
 	}
-	result, runErr := kube.Execute(work, task, renew)
+	result, retained, runErr := kube.ExecuteRetained(work, task, renew)
 	if runErr != nil {
 		result = model.Result{Success: false, SafeErrorCode: "SESSION_ARCHIVE_KUBERNETES_UNAVAILABLE"}
 	}
@@ -239,6 +239,9 @@ func process(ctx context.Context, control *controlplaneclient.Client, kube *cont
 	metrics.tasks.WithLabelValues(task.Kind, outcome).Inc()
 	if err == nil && result.ObjectSizeBytes > 0 {
 		metrics.bytes.WithLabelValues(task.Kind).Add(float64(result.ObjectSizeBytes))
+	}
+	if err == nil {
+		return retained.ReleaseAfterAcknowledgement(context.WithoutCancel(ctx))
 	}
 	return err
 }
