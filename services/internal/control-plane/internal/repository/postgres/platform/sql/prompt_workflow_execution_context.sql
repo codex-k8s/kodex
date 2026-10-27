@@ -25,6 +25,7 @@ SELECT root.ref, run.ref, node.ref, session.ref, turn.ref, agent.ref,
                'resultGateRef', COALESCE(result_gate.ref, ''),
                'resultGateState', COALESCE(result_gate.state, ''),
                'resultGateDecision', COALESCE(result_gate.decision, ''),
+               'resultGateResolutionKind', COALESCE(result_gate.closure_kind, ''),
                'ready', current_step.materialization_state = 'PLANNED'
                         AND current_step.state = 'PLANNED'
                         AND NOT EXISTS (
@@ -61,7 +62,7 @@ SELECT root.ref, run.ref, node.ref, session.ref, turn.ref, agent.ref,
                   AND (newer.workflow_business_attempt,newer.attempt)>(current_step.workflow_business_attempt,current_step.attempt)
             ))
            LEFT JOIN LATERAL (
-               SELECT gate.ref, gate.state, gate.decision
+               SELECT gate.ref, gate.state, gate.decision, gate.closure_kind
                FROM control_plane.owner_gates gate
                JOIN control_plane.run_nodes gate_node
                  ON gate_node.id = gate.node_id AND gate_node.organization_id = gate.organization_id
