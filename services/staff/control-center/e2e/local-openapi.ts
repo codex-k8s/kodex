@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Locator } from "@playwright/test";
 
 import { authenticateOwner } from "./auth-flow";
 import { loadE2EAuthEnvironment } from "./environment";
@@ -1080,6 +1080,37 @@ async function openGrantsTab(page: Page): Promise<void> {
   await selectGrantsTab(page);
 }
 
+// chooseGrantOption открывает заданный выбор, ищет текст и выбирает совпадающий вариант.
+// Права, тип получателя и итог разрешения проверяет вызывающий сценарий.
+async function chooseGrantOption(
+  page: Page,
+  panel: Locator,
+  label: string,
+  query: string,
+): Promise<void> {
+  await panel.getByRole("button", { name: label, exact: true }).click();
+  const picker = page.getByRole("dialog", { name: label, exact: true });
+  await picker.getByRole("combobox").fill(query);
+  await picker.getByRole("option", { name: new RegExp(query) }).click();
+}
+
+// submitGrantOption ожидает конкретный POST и проверяет успешный ответ выдачи.
+// Проверка сохранённого grant и дальнейших действий остаётся у сценария.
+async function submitGrantOption(
+  page: Page,
+  panel: Locator,
+  connectionRef: string,
+): Promise<void> {
+  const granted = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname ===
+        `/api/v1/integration-connections/${connectionRef}/grants`,
+  );
+  await panel.getByRole("button", { name: "Выдать разрешение" }).click();
+  expect((await granted).status()).toBe(200);
+}
+
 async function grantWorkflowOpenAPIThroughUI(
   page: Page,
   projectRef: string,
@@ -1125,25 +1156,18 @@ async function grantWorkflowOpenAPIThroughUI(
   );
   await openGrantsTab(page);
   const panel = page.locator(".grant-panel");
-  const choose = async (label: string, query: string): Promise<void> => {
-    await panel.getByRole("button", { name: label, exact: true }).click();
-    const picker = page.getByRole("dialog", { name: label, exact: true });
-    await picker.getByRole("combobox").fill(query);
-    await picker.getByRole("option", { name: new RegExp(query) }).click();
-  };
-  await choose("Подключение", connection.name);
-  await choose("Проект", `Локальная проверка MCP ${suffix}`);
-  await panel.getByLabel("Кому разрешить").selectOption("WORKFLOW");
-  await choose("Получатель разрешения", workflowName);
-  await choose("Возможность", "Проверить чтение");
-  const granted = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      new URL(response.url()).pathname ===
-        `/api/v1/integration-connections/${connectionRef}/grants`,
+
+  await chooseGrantOption(page, panel, "Подключение", connection.name);
+  await chooseGrantOption(
+    page,
+    panel,
+    "Проект",
+    `Локальная проверка MCP ${suffix}`,
   );
-  await panel.getByRole("button", { name: "Выдать разрешение" }).click();
-  expect((await granted).status()).toBe(200);
+  await panel.getByLabel("Кому разрешить").selectOption("WORKFLOW");
+  await chooseGrantOption(page, panel, "Получатель разрешения", workflowName);
+  await chooseGrantOption(page, panel, "Возможность", "Проверить чтение");
+  await submitGrantOption(page, panel, connectionRef);
   const updated = await read<
     Connection & {
       grants: Array<{
@@ -1164,8 +1188,13 @@ async function grantWorkflowOpenAPIThroughUI(
   );
   await page.reload({ waitUntil: "domcontentloaded" });
   await selectGrantsTab(page);
-  await choose("Подключение", connection.name);
-  await choose("Проект", `Локальная проверка MCP ${suffix}`);
+  await chooseGrantOption(page, panel, "Подключение", connection.name);
+  await chooseGrantOption(
+    page,
+    panel,
+    "Проект",
+    `Локальная проверка MCP ${suffix}`,
+  );
   await expect(
     panel
       .locator(".grant-list .entity-row")
@@ -1205,29 +1234,27 @@ async function grantScopedOpenAPIThroughUI(
   );
   await openGrantsTab(page);
   const panel = page.locator(".grant-panel");
-  const choose = async (label: string, query: string): Promise<void> => {
-    await panel.getByRole("button", { name: label, exact: true }).click();
-    const popover = page.getByRole("dialog", { name: label, exact: true });
-    await popover.getByRole("combobox").fill(query);
-    await popover.getByRole("option", { name: new RegExp(query) }).click();
-  };
-  await choose("Подключение", connection.name);
-  await choose("Проект", `Локальная проверка MCP ${suffix}`);
-  await choose("Получатель разрешения", `Исполнитель OpenAPI ${suffix}`);
-  await choose("Возможность", writeCapabilityName);
+
+  await chooseGrantOption(page, panel, "Подключение", connection.name);
+  await chooseGrantOption(
+    page,
+    panel,
+    "Проект",
+    `Локальная проверка MCP ${suffix}`,
+  );
+  await chooseGrantOption(
+    page,
+    panel,
+    "Получатель разрешения",
+    `Исполнитель OpenAPI ${suffix}`,
+  );
+  await chooseGrantOption(page, panel, "Возможность", writeCapabilityName);
   await panel
     .locator(".approval-scope-option")
     .filter({ hasText: approvalPath })
     .locator('input[type="checkbox"]')
     .check();
-  const created = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      new URL(response.url()).pathname ===
-        `/api/v1/integration-connections/${connectionRef}/grants`,
-  );
-  await panel.getByRole("button", { name: "Выдать разрешение" }).click();
-  expect((await created).status()).toBe(200);
+  await submitGrantOption(page, panel, connectionRef);
   const updated = await read<
     Connection & {
       grants: Array<{
@@ -1248,7 +1275,7 @@ async function grantScopedOpenAPIThroughUI(
   );
   await page.reload({ waitUntil: "domcontentloaded" });
   await selectGrantsTab(page);
-  await choose("Подключение", connection.name);
+  await chooseGrantOption(page, panel, "Подключение", connection.name);
   await expect(
     panel
       .locator(".grant-list .entity-row")
