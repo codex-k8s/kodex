@@ -219,6 +219,11 @@ lease-bound idempotency key. Event/consumer wiring нового committed checkp
 V2 требует точный role runtime contract revision4; opt-in не повышает старый
 образ revision3. Nil binding сохраняет legacy профиль. Перед назначением V2
 оператор отдельно подтверждает actual image/contract SHA и все readers.
+Owner-to-Proto adapter передаёт в workspace validator уже назначенную revision
+из того же snapshot: нулевая техническая копия поля не должна отклонять валидный
+V2. Полный adapter проверяется положительным V2 и protobuf roundtrip, отказами
+для0/3/unknown, чужого scope, assistant/null/policy и сохранением legacy без
+binding. Это проверка доставки metadata, не подтверждение готовности image.
 
 | Наблюдение RC | Условие владельца | Изменение storage | Полномочия выполнения |
 | --- | --- | --- | --- |

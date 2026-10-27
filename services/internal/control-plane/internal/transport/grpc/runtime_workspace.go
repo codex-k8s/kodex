@@ -34,8 +34,9 @@ func castRuntimeWorkspace(result *cp.RuntimeRevisionSnapshot, values map[string]
 		return false
 	}
 	input := runtimecontract.RunnerInput{Mode: runtimecontract.RunnerModeTurn,
-		AssistantScope:  runtimecontract.AssistantScope(mapString(values, "assistantScope")),
-		OrganizationRef: result.OrganizationRef, ProjectRef: mapString(values, "projectRef"), SessionRef: result.SessionRef, AgentRef: result.AgentRef,
+		RoleRuntimeContractRevision: result.RoleRuntimeContractRevision,
+		AssistantScope:              runtimecontract.AssistantScope(mapString(values, "assistantScope")),
+		OrganizationRef:             result.OrganizationRef, ProjectRef: mapString(values, "projectRef"), SessionRef: result.SessionRef, AgentRef: result.AgentRef,
 		WorkspacePolicy: runtimecontract.RuntimeWorkspacePolicy{Revision: policy.Revision, Root: policy.Root, Digest: policy.Digest,
 			MaximumWritableBytes: policy.MaximumWritableBytes, MaximumFileCount: policy.MaximumFileCount, DenialReasons: policy.DenialReasons}}
 	for _, rule := range policy.Rules {
