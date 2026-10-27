@@ -7,14 +7,16 @@ package callback
 func workflowResultRequirementsSchema() map[string]any {
 	fields := map[string]any{
 		"key": workflowStepKeySchema(), "fileName": stringSchema(1, 160), "mediaType": stringSchema(1, 160),
-		"repository": stringSchema(1, 200), "subjectStepKey": workflowStepKeySchema(), "targetRef": stringSchema(1, 96),
+		"repository": stringSchema(1, 200), "subjectStepKey": workflowStepKeySchema(), "subjectResultKey": workflowStepKeySchema(), "targetRef": stringSchema(1, 96),
 	}
 	branches := make([]map[string]any, 0, 6)
-	for _, kind := range []string{"ARTIFACT", "PULL_REQUEST", "REVIEW", "QA", "INTEGRATION_RECEIPT", "DEPLOYMENT"} {
+	for _, kind := range []string{"ARTIFACT", "ARTIFACT_REVIEW", "PULL_REQUEST", "REVIEW", "QA", "INTEGRATION_RECEIPT", "DEPLOYMENT"} {
 		keys := []string{"key", "kind"}
 		switch kind {
 		case "ARTIFACT":
 			keys = append(keys, "fileName", "mediaType")
+		case "ARTIFACT_REVIEW":
+			keys = append(keys, "subjectStepKey", "subjectResultKey")
 		case "PULL_REQUEST":
 			keys = append(keys, "repository")
 		case "REVIEW", "QA":

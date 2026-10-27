@@ -29,13 +29,13 @@ var (
 func validWorkflowPublicationMode(value WorkflowPublication) bool {
 	switch value.Version {
 	case 1:
-		return value.ExecutionMode == ""
+		return value.ExecutionMode == "" && value.ReworkPolicy == ""
 	case 2:
 		textBytes := len(value.Name) + len(value.Purpose) + len(value.Instructions) + len(value.CompletionCriteria)
 		for _, step := range value.Steps {
 			textBytes += len(step.Name) + len(step.Instructions) + len(step.ExpectedResult)
 		}
-		return value.ExecutionMode == workflowServerMode && value.Concurrency <= 2 && len(value.Steps) <= 12 && textBytes <= 8192
+		return (value.ReworkPolicy == "" || value.ReworkPolicy == "OWNER_APPROVED_UPSTREAM_V1") && value.ExecutionMode == workflowServerMode && value.Concurrency <= 2 && len(value.Steps) <= 12 && textBytes <= 8192
 	default:
 		return false
 	}
@@ -61,13 +61,17 @@ func validWorkflowPublicationServerStep(step WorkflowPublicationStep) bool {
 	}
 	seen := map[string]bool{}
 	for _, requirement := range step.ResultRequirements {
-		if !workflowResultKey.MatchString(requirement.Key) || seen[requirement.Key] || len(requirement.Repository) > 200 || requirement.Kind != "DEPLOYMENT" && requirement.TargetRef != "" {
+		if !workflowResultKey.MatchString(requirement.Key) || seen[requirement.Key] || len(requirement.Repository) > 200 || requirement.Kind != "DEPLOYMENT" && requirement.TargetRef != "" || requirement.Kind != "ARTIFACT_REVIEW" && requirement.SubjectResultKey != "" {
 			return false
 		}
 		seen[requirement.Key] = true
 		switch requirement.Kind {
 		case "ARTIFACT":
 			if requirement.FileName == "" || requirement.FileName == "." || requirement.FileName == ".." || requirement.FileName == "result.md" || requirement.FileName == "workspace-write-result.json" || len(requirement.FileName) > 160 || !utf8.ValidString(requirement.FileName) || strings.ContainsAny(requirement.FileName, "/\\\x00\r\n") || requirement.MediaType == "" || len(requirement.MediaType) > 160 || !utf8.ValidString(requirement.MediaType) || strings.ContainsAny(requirement.MediaType, "\x00\r\n") || requirement.Repository != "" || requirement.SubjectStepKey != "" || requirement.Operation != "" {
+				return false
+			}
+		case "ARTIFACT_REVIEW":
+			if !dependencies[requirement.SubjectStepKey] || !workflowResultKey.MatchString(requirement.SubjectResultKey) || requirement.FileName != "" || requirement.MediaType != "" || requirement.Repository != "" || requirement.Operation != "" {
 				return false
 			}
 		case "PULL_REQUEST":
@@ -87,6 +91,39 @@ func validWorkflowPublicationServerStep(step WorkflowPublicationStep) bool {
 				return false
 			}
 		default:
+			return false
+		}
+	}
+	return true
+}
+
+// validWorkflowPublicationReviews preserves exact published subject/result keys and independent
+// reviewer identity. It checks configuration shape only, never evidence or execution grants.
+// validWorkflowPublicationReviews сохраняет exact published subject/result keys и независимость
+// reviewer identity. Проверяется лишь configuration shape, не evidence или execution grants.
+func validWorkflowPublicationReviews(value WorkflowPublication, step WorkflowPublicationStep) bool {
+	for _, requirement := range step.ResultRequirements {
+		if requirement.Kind != "ARTIFACT_REVIEW" {
+			continue
+		}
+		if value.ReworkPolicy != "OWNER_APPROVED_UPSTREAM_V1" {
+			return false
+		}
+		found := false
+		for _, subject := range value.Steps {
+			if subject.Key != requirement.SubjectStepKey {
+				continue
+			}
+			if subject.AgentRef == step.AgentRef {
+				return false
+			}
+			for _, result := range subject.ResultRequirements {
+				if result.Key == requirement.SubjectResultKey && result.Kind == "ARTIFACT" {
+					found = true
+				}
+			}
+		}
+		if !found {
 			return false
 		}
 	}

@@ -3,9 +3,10 @@
 package generated
 
 type WorkflowAttemptResult struct {
-	Attempt  int                      `json:"attempt"`
-	RunRef   string                   `json:"runRef"`
-	Accepted bool                     `json:"accepted"`
-	Reason   string                   `json:"reason"`
-	Results  []WorkflowAcceptedResult `json:"results"`
+	EffectiveState *string                  `json:"effectiveState,omitempty"`
+	Attempt        int                      `json:"attempt"`
+	RunRef         string                   `json:"runRef"`
+	Accepted       bool                     `json:"accepted"`
+	Reason         string                   `json:"reason"`
+	Results        []WorkflowAcceptedResult `json:"results"`
 }

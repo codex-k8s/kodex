@@ -1030,3 +1030,7 @@ RUNTIME_INIT_CONTEXT_FILES_QUOTA_EXCEEDED:
   other: Execution skill and memory preparation failed. Insufficient permitted space is available for writing.
 RUNTIME_INIT_CONTEXT_FILES_FILESYSTEM_IO_FAILED:
   other: Execution skill and memory preparation failed. A workspace file operation failed.
+WORKFLOW_REWORK_QUEUED:
+  other: Fresh rework and dependent-check attempts have been scheduled
+WORKFLOW_GATE_SUPERSEDED:
+  other: Previous result approval was superseded by approved rework

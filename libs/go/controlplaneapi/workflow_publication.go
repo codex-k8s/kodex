@@ -29,6 +29,9 @@ var errWorkflowPublication = errors.New("workflow publication projection invalid
 // RU: WorkflowPublication — версионированный закрытый состав передаваемого
 // процесса; допуск и определение владельца остаются в control-plane.
 type WorkflowPublication struct {
+	// ReworkPolicy is explicit opt-in metadata, never implied by historical declarations.
+	// ReworkPolicy — explicit opt-in metadata, не выводимая из historical declarations.
+	ReworkPolicy string `json:"rework_policy,omitempty"`
 	// ExecutionMode is present only in the server-driven version-two wire profile.
 	// ExecutionMode присутствует только в серверном профиле второй версии передачи.
 	ExecutionMode       string                     `json:"execution_mode,omitempty"`
@@ -97,14 +100,17 @@ type WorkflowPublicationStep struct {
 // WorkflowPublicationRequirement задаёт ограниченное обязательное доказательство в неизменяемой
 // публикации второй версии. Control-plane отдельно проверяет область, происхождение и приёмку.
 type WorkflowPublicationRequirement struct {
-	Key            string `json:"key"`
-	Kind           string `json:"kind"`
-	FileName       string `json:"file_name,omitempty"`
-	MediaType      string `json:"media_type,omitempty"`
-	Repository     string `json:"repository,omitempty"`
-	SubjectStepKey string `json:"subject_step_key,omitempty"`
-	Operation      string `json:"operation,omitempty"`
-	TargetRef      string `json:"target_ref,omitempty"`
+	// SubjectResultKey identifies one published ARTIFACT output, not an arbitrary file selector.
+	// SubjectResultKey обозначает published ARTIFACT output, не произвольный file selector.
+	SubjectResultKey string `json:"subject_result_key,omitempty"`
+	Key              string `json:"key"`
+	Kind             string `json:"kind"`
+	FileName         string `json:"file_name,omitempty"`
+	MediaType        string `json:"media_type,omitempty"`
+	Repository       string `json:"repository,omitempty"`
+	SubjectStepKey   string `json:"subject_step_key,omitempty"`
+	Operation        string `json:"operation,omitempty"`
+	TargetRef        string `json:"target_ref,omitempty"`
 }
 
 // WorkflowPublicationSchema accepts only local structural JSON Schema
@@ -242,7 +248,7 @@ func validWorkflowPublication(v WorkflowPublication) bool {
 	}
 	seen := map[string]bool{}
 	for i, step := range v.Steps {
-		if v.Version == 1 && len(step.ResultRequirements) != 0 || v.Version == 2 && !validWorkflowPublicationServerStep(step) {
+		if v.Version == 1 && len(step.ResultRequirements) != 0 || v.Version == 2 && !validWorkflowPublicationServerStep(step) || !validWorkflowPublicationReviews(v, step) {
 			return false
 		}
 		if step.ApprovalTimeoutSeconds != nil && (!step.HumanGateAfter || *step.ApprovalTimeoutSeconds < 1 || *step.ApprovalTimeoutSeconds > 604800) {

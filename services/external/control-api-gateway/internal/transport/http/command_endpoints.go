@@ -396,6 +396,9 @@ func workflowDraft(body generated.WorkflowInput) *controlplanev1.WorkflowVersion
 	if body.ExecutionMode != nil {
 		draft.ExecutionMode = string(*body.ExecutionMode)
 	}
+	if body.ReworkPolicy != nil {
+		draft.ReworkPolicy = string(*body.ReworkPolicy)
+	}
 	if body.InputFields != nil {
 		for _, field := range *body.InputFields {
 			draft.InputFields = append(draft.InputFields, &controlplanev1.WorkflowInputField{Key: stringValue(field.Key), Label: field.Label, Description: field.Description, ValueType: string(field.ValueType), Required: field.Required, Options: append([]string(nil), field.Options...)})

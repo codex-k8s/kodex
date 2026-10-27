@@ -5,6 +5,9 @@ package entity
 // WorkflowResultRequirement задаёт ограниченное обязательное условие; ссылки выбирают проверенные
 // владельцем доказательства и не предоставляют полномочий, заявленных сотрудником.
 type WorkflowResultRequirement struct {
+	// SubjectResultKey pins one published ARTIFACT output; omission preserves historical spec bytes.
+	// SubjectResultKey закрепляет published ARTIFACT output; отсутствие сохраняет historical spec bytes.
+	SubjectResultKey                                                                 string `json:",omitempty"`
 	Key, Kind, FileName, MediaType, Repository, SubjectStepKey, Operation, TargetRef string
 }
 
@@ -70,11 +73,29 @@ type WorkflowAcceptedResult struct {
 	Verdict          string `json:"verdict,omitempty"`
 }
 
+// WorkflowReviewSubject is the closed published cause of a rejected review, not a retry command.
+// It remains private owner journal data and contains no caller-selected node/run/agent authority.
+// WorkflowReviewSubject — закрытая published cause отказа review, не retry command.
+// Это private owner journal data без caller-selected node/run/agent authority.
+type WorkflowReviewSubject struct {
+	RequirementKey   string `json:"requirementKey"`
+	SubjectStepKey   string `json:"subjectStepKey"`
+	SubjectResultKey string `json:"subjectResultKey,omitempty"`
+}
+
 // WorkflowAttemptResult exposes the business verdict and immutable evidence of one completed attempt;
 // RuntimeRevisionID and Provenance remain internal and are excluded from public transport projection.
 // WorkflowAttemptResult передаёт бизнес-решение и immutable доказательства завершённой попытки;
 // RuntimeRevisionID и Provenance хранятся внутри и не включаются в публичную transport projection.
 type WorkflowAttemptResult struct {
+	// EffectiveState describes current owner freshness without rewriting historical Accepted.
+	// EffectiveState описывает current owner freshness без переписывания historical Accepted.
+	EffectiveState string `json:"effectiveState,omitempty"`
+	// ReworkSubjects persist typed rejection before short progress summaries can lose context.
+	// They are excluded by explicit public casters and omitted for all historical receipts.
+	// ReworkSubjects сохраняют typed rejection до усечения краткого progress summary.
+	// Public casters их исключают; historical receipts не получают это поле.
+	ReworkSubjects    []WorkflowReviewSubject       `json:"reworkSubjects,omitempty"`
 	Attempt           int32                         `json:"attempt"`
 	RunRef            string                        `json:"runRef"`
 	RuntimeRevisionID string                        `json:"runtimeRevisionId"`

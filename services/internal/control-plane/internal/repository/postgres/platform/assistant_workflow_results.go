@@ -31,7 +31,7 @@ func assistantWorkflowRequirements(raw any) ([]entity.WorkflowResultRequirement,
 	result := make([]entity.WorkflowResultRequirement, 0, len(values))
 	for _, raw := range values {
 		value, ok := raw.(map[string]any)
-		if !ok || !onlyAssistantFields(value, "key", "kind", "fileName", "mediaType", "repository", "subjectStepKey", "operation", "targetRef") || !hasAssistantFields(value, "key", "kind") {
+		if !ok || !onlyAssistantFields(value, "key", "kind", "fileName", "mediaType", "repository", "subjectStepKey", "subjectResultKey", "operation", "targetRef") || !hasAssistantFields(value, "key", "kind") {
 			return nil, errs.ErrInvalid
 		}
 		fields := make(map[string]string, len(value))
@@ -42,7 +42,7 @@ func assistantWorkflowRequirements(raw any) ([]entity.WorkflowResultRequirement,
 			}
 			fields[key] = text
 		}
-		result = append(result, entity.WorkflowResultRequirement{Key: fields["key"], Kind: fields["kind"], FileName: fields["fileName"], MediaType: fields["mediaType"], Repository: fields["repository"], SubjectStepKey: fields["subjectStepKey"], Operation: fields["operation"], TargetRef: fields["targetRef"]})
+		result = append(result, entity.WorkflowResultRequirement{Key: fields["key"], Kind: fields["kind"], FileName: fields["fileName"], MediaType: fields["mediaType"], Repository: fields["repository"], SubjectStepKey: fields["subjectStepKey"], SubjectResultKey: fields["subjectResultKey"], Operation: fields["operation"], TargetRef: fields["targetRef"]})
 	}
 	return result, nil
 }
@@ -79,7 +79,7 @@ func assistantWorkflowRequirementFields(values []entity.WorkflowResultRequiremen
 	result := make([]any, 0, len(values))
 	for _, value := range values {
 		fields := map[string]any{"key": value.Key, "kind": value.Kind}
-		for key, text := range map[string]string{"fileName": value.FileName, "mediaType": value.MediaType, "repository": value.Repository, "subjectStepKey": value.SubjectStepKey, "operation": value.Operation, "targetRef": value.TargetRef} {
+		for key, text := range map[string]string{"fileName": value.FileName, "mediaType": value.MediaType, "repository": value.Repository, "subjectStepKey": value.SubjectStepKey, "subjectResultKey": value.SubjectResultKey, "operation": value.Operation, "targetRef": value.TargetRef} {
 			if text != "" {
 				fields[key] = text
 			}
@@ -87,4 +87,18 @@ func assistantWorkflowRequirementFields(values []entity.WorkflowResultRequiremen
 		result = append(result, fields)
 	}
 	return result
+}
+
+// assistantWorkflowReworkPolicy retains an omitted legacy selector and rejects null/unknown policies.
+// It grants no authority and is accepted only together with the published server profile.
+// assistantWorkflowReworkPolicy сохраняет отсутствующий legacy selector и отклоняет null/unknown policy.
+// Полномочия не выдаются; policy принимается лишь вместе с published server profile.
+func assistantWorkflowReworkPolicy(input map[string]any) (string, bool) {
+	raw, present := input["reworkPolicy"]
+	if !present {
+		return "", true
+	}
+	value, valid := raw.(string)
+	mode, modeValid := assistantWorkflowMode(input)
+	return value, valid && modeValid && (value == "" || mode == workflowservice.ServerDAGV1 && value == workflowservice.OwnerApprovedUpstreamV1)
 }

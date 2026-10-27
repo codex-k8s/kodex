@@ -32,7 +32,8 @@ WITH completed AS (
                    'generation',completed.generation,'turnId',completed.turn_id::text,
                    'runtimeAttempt',completed.attempt
                )
-           ) AS entry
+           ) || CASE WHEN jsonb_array_length(@rework_subjects::jsonb)>0
+               THEN jsonb_build_object('reworkSubjects',@rework_subjects::jsonb) ELSE '{}'::jsonb END AS entry
     FROM completed
 )
 UPDATE control_plane.run_nodes anchor

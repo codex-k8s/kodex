@@ -81,6 +81,7 @@ func (repository *Repository) hydrateWorkflowExecutionPromptTx(ctx context.Conte
 		for _, step := range root.Version.Steps {
 			published[step.Key] = step
 		}
+		effective := effectiveServerWorkflowResults(root, anchors)
 		for index := range execution.Steps {
 			projection := &execution.Steps[index]
 			step, known := published[projection.StepKey]
@@ -90,7 +91,7 @@ func (repository *Repository) hydrateWorkflowExecutionPromptTx(ctx context.Conte
 			anchor := anchors[step.Key]
 			projection.Ready = anchor.State == "PLANNED" && anchor.AssignedAttempt == 0
 			for _, key := range step.DependsOn {
-				_, accepted := acceptedServerWorkflowAttempt(anchors[key], published[key])
+				_, accepted := effective[key]
 				projection.Ready = projection.Ready && accepted
 			}
 		}

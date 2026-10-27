@@ -2976,11 +2976,12 @@ export type WorkflowStepKey = string;
 
 export type WorkflowResultRequirement = {
     key: string;
-    kind: 'ARTIFACT' | 'PULL_REQUEST' | 'REVIEW' | 'QA' | 'INTEGRATION_RECEIPT' | 'DEPLOYMENT';
+    kind: 'ARTIFACT' | 'ARTIFACT_REVIEW' | 'PULL_REQUEST' | 'REVIEW' | 'QA' | 'INTEGRATION_RECEIPT' | 'DEPLOYMENT';
     fileName?: string;
     mediaType?: string;
     repository?: string;
     subjectStepKey?: WorkflowStepKey;
+    subjectResultKey?: WorkflowStepKey;
     operation?: 'github.pull_request.merge' | 'ssh.compose.deploy';
     targetRef?: string;
 };
@@ -3029,6 +3030,10 @@ export type WorkflowStepInput = {
 
 export type Workflow = {
     executionMode?: 'MANAGER_DRIVEN' | 'SERVER_DAG_V1';
+    /**
+     * Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
+     */
+    reworkPolicy?: 'OWNER_APPROVED_UPSTREAM_V1';
     ref: OpaqueRef;
     version: number;
     projectRef: OpaqueRef;
@@ -3092,6 +3097,10 @@ export type WorkflowLaunchReadiness = {
  */
 export type WorkflowDraftSnapshot = {
     executionMode?: 'MANAGER_DRIVEN' | 'SERVER_DAG_V1';
+    /**
+     * Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
+     */
+    reworkPolicy?: 'OWNER_APPROVED_UPSTREAM_V1';
     ref: OpaqueRef;
     version: number;
     revision: number;
@@ -3107,6 +3116,10 @@ export type WorkflowDraftSnapshot = {
 
 export type WorkflowInput = {
     executionMode?: 'MANAGER_DRIVEN' | 'SERVER_DAG_V1';
+    /**
+     * Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
+     */
+    reworkPolicy?: 'OWNER_APPROVED_UPSTREAM_V1';
     name: string;
     purpose: string;
     coordinatorAgentRef: OpaqueRef;
@@ -3211,7 +3224,7 @@ export type WorkflowAcceptedResult = {
     imageDigest?: string;
     healthOk?: boolean;
     key: string;
-    kind: 'ARTIFACT' | 'PULL_REQUEST' | 'REVIEW' | 'QA' | 'INTEGRATION_RECEIPT' | 'DEPLOYMENT';
+    kind: 'ARTIFACT' | 'ARTIFACT_REVIEW' | 'PULL_REQUEST' | 'REVIEW' | 'QA' | 'INTEGRATION_RECEIPT' | 'DEPLOYMENT';
     artifactRef?: OpaqueRef;
     artifactRevision?: string;
     digest: string;
@@ -3223,6 +3236,7 @@ export type WorkflowAcceptedResult = {
 };
 
 export type WorkflowAttemptResult = {
+    effectiveState?: 'CURRENT' | 'HISTORICAL' | 'STALE_DEPENDENCY' | 'REWORK_PENDING' | 'WAITING_OWNER' | 'BLOCKED';
     attempt: number;
     runRef: OpaqueRef;
     accepted: boolean;
@@ -3587,6 +3601,8 @@ export type RepositoryBundleManifestPage = {
 };
 
 export type OwnerGate = {
+    resolutionKind?: 'SUPERSEDED';
+    reworkPlan?: WorkflowReworkPreview;
     ref: OpaqueRef;
     version: number;
     scopeKind: 'ORGANIZATION' | 'PROJECT';
@@ -3611,6 +3627,21 @@ export type OwnerGate = {
     decisionConsequences: Array<OwnerGateDecisionConsequence>;
     integrationIntent?: IntegrationIntent;
     nextActions: Array<NextAction>;
+};
+
+export type WorkflowReworkStepPreview = {
+    stepKey: string;
+    previousAttempt: number;
+    nextAttempt: number;
+};
+
+export type WorkflowReworkPreview = {
+    schema: 'kodex.workflow-upstream-rework-preview.v1';
+    sourceStepKey: string;
+    sourceAttempt: number;
+    authors: Array<WorkflowReworkStepPreview>;
+    rechecks: Array<WorkflowReworkStepPreview>;
+    blockReason?: 'WORKFLOW_ATTEMPTS_EXHAUSTED' | 'WORKFLOW_IRREVERSIBLE_EFFECT_REPAIR_REQUIRED';
 };
 
 export type OwnerGateDecisionConsequence = {

@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	workflowservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/workflow"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
@@ -93,20 +94,32 @@ func (repository *Repository) completeServerWorkflowTx(ctx context.Context, tx p
 			}
 		}
 		if !pending {
-			var results []entity.WorkflowAcceptedResult
-			reason := "CAPTURE_CONTINUATION_UNAVAILABLE"
+			evaluation := rejectedWorkflowEvaluation("CAPTURE_CONTINUATION_UNAVAILABLE")
+			reason := evaluation.Reason
 			if !captureBlocked {
 				var cause error
-				results, reason, cause = repository.evaluateWorkflowStepResultTx(ctx, tx, current, lease, payload)
+				evaluation, cause = repository.evaluateWorkflowStepResultDetailedTx(ctx, tx, current, lease, payload, root.Version.ReworkPolicy == workflowservice.OwnerApprovedUpstreamV1)
+				reason = evaluation.Reason
 				if cause != nil {
 					return commandOutcome{}, true, cause
 				}
 			}
-			if _, err := appendWorkflowAttemptTx(ctx, tx, current, lease, reason == "", reason, results); err != nil {
+			if _, err := appendWorkflowAttemptTx(ctx, tx, current, lease, reason == "", reason, evaluation.Results, evaluation.Rework); err != nil {
 				return commandOutcome{}, true, err
 			}
 			if reason != "" {
 				exception := serverWorkflowException{StepKey: key, Attempt: attempt, Reason: reason, OriginNodeID: originID, FinalNodeID: stringMap(lease, "nodeID")}
+				if len(evaluation.Rework) > 0 {
+					anchors, readErr := readServerWorkflowAnchorsTx(ctx, tx, current, root)
+					if readErr != nil {
+						return commandOutcome{}, true, readErr
+					}
+					plan, planErr := buildWorkflowUpstreamPlan(root, anchors, key, attempt, evaluation.Rework, false)
+					if planErr != nil {
+						return commandOutcome{}, true, planErr
+					}
+					exception.Kind, exception.ReworkPlan = workflowUpstreamReworkKind, plan
+				}
 				if err := repository.ensureWorkflowExceptionTx(ctx, tx, current, root, exception); err != nil {
 					return commandOutcome{}, true, err
 				}
@@ -190,8 +203,9 @@ func (repository *Repository) finishAcceptedServerWorkflowTx(ctx context.Context
 	if err != nil {
 		return err
 	}
+	effective := effectiveServerWorkflowResults(root, anchors)
 	for _, step := range root.Version.Steps {
-		if _, accepted := acceptedServerWorkflowAttempt(anchors[step.Key], step); !accepted {
+		if _, accepted := effective[step.Key]; !accepted {
 			return nil
 		}
 	}

@@ -43,6 +43,7 @@ import type {
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import { runPath } from "@/shared/routes";
 import AsyncState from "@/shared/ui/AsyncState.vue";
+import WorkflowReworkPreviewPanel from "@/features/workflows/WorkflowReworkPreviewPanel.vue";
 import RepositoryBundleManifest from "@/features/workboard/RepositoryBundleManifest.vue";
 import AttachmentComposer from "@/shared/ui/AttachmentComposer.vue";
 import type {
@@ -1000,6 +1001,7 @@ const serverMessage = useServerMessage();
             </p>
           </section>
 
+          <WorkflowReworkPreviewPanel :gate="selected.gate" />
           <RepositoryBundleManifest
             v-if="requiresBundleManifest(selected.gate)"
             :key="`${selected.gate.ref}:${selected.gate.version}`"

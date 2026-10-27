@@ -966,7 +966,7 @@ message WorkflowInputField {
 message WorkflowResultRequirement {
   // key уникален в пределах этапа и связывает объявление с опубликованным условием.
   string key = 1;
-  // kind принадлежит закрытому реестру ARTIFACT/PULL_REQUEST/REVIEW/QA/INTEGRATION_RECEIPT/DEPLOYMENT.
+  // kind принадлежит закрытому реестру ARTIFACT/ARTIFACT_REVIEW/PULL_REQUEST/REVIEW/QA/INTEGRATION_RECEIPT/DEPLOYMENT.
   string kind = 2;
   // file_name задаёт имя непосредственного файла outbox только для ARTIFACT.
   string file_name = 3;
@@ -980,6 +980,8 @@ message WorkflowResultRequirement {
   string operation = 7;
   // target_ref закрепляет разрешённую цель DEPLOYMENT, без подключения либо секрета.
   string target_ref = 8;
+  // subject_result_key выбирает exact ARTIFACT predicate published prerequisite только для ARTIFACT_REVIEW.
+  string subject_result_key = 9;
 }
 
 message WorkflowStep {
@@ -1020,6 +1022,8 @@ message WorkflowVersion {
   google.protobuf.Timestamp published_at = 15;
   // execution_mode закрепляется опубликованной версией; отсутствие сохраняет прежний режим.
   string execution_mode = 16;
+  // rework_policy включается только новой публикацией, не переосмысливает legacy Gates.
+  string rework_policy = 17;
 }
 
 message Workflow {
@@ -1198,6 +1202,8 @@ message WorkflowAttemptResult {
   string reason = 4;
   // results содержит не более четырёх принятых доказательств данной попытки.
   repeated WorkflowAcceptedResult results = 5;
+  // Текущая owner freshness не изменяет historical accepted.
+  string effective_state = 6;
 }
 
 message RunNode {
@@ -1399,6 +1405,9 @@ message OwnerGate {
   // ORGANIZATION разрешается только системному помощнику без project locator.
   RuntimeResourceScopeKind scope_kind = 24;
   string organization_ref = 25;
+  // SUPERSEDED отличается от owner CANCEL и TTL expiry.
+  string resolution_kind = 26;
+  WorkflowReworkPreview rework_plan = 27;
 }
 
 message OwnerGateDecisionConsequence {
@@ -9096,4 +9105,22 @@ message WorkflowRetryReadProof {
   int32 previous_business_attempt = 5;
   // business_attempt — новая попытка от2 до4, всегда previous_business_attempt+1.
   int32 business_attempt = 6;
+}
+
+// WorkflowReworkStepPreview содержит только публичные ключи и ограниченные счётчики.
+message WorkflowReworkStepPreview {
+ string step_key = 1;
+ int32 previous_attempt = 2;
+ // zero означает исчерпанный бюджет, но не разрешение пятой попытки.
+ int32 next_attempt = 3;
+}
+
+// WorkflowReworkPreview объясняет серверный план и не служит execution grant.
+message WorkflowReworkPreview {
+ string schema = 1;
+ string source_step_key = 2;
+ int32 source_attempt = 3;
+ repeated WorkflowReworkStepPreview authors = 4;
+ repeated WorkflowReworkStepPreview rechecks = 5;
+ string block_reason = 6;
 }

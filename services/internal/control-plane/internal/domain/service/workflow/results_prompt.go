@@ -29,6 +29,9 @@ func ResultDeclarationPrompt(requirements []entity.WorkflowResultRequirement) (s
 			result.Source = &entity.WorkflowArtifactSource{Kind: "CURRENT_COMPLETION"}
 		case "PULL_REQUEST", "INTEGRATION_RECEIPT", "DEPLOYMENT":
 			result.ReceiptRef = "<receiptRef из результата разрешённой интеграции>"
+		case "ARTIFACT_REVIEW":
+			result.Source = &entity.WorkflowArtifactSource{Kind: "CAPTURED_ARTIFACT", ArtifactRef: "<artifactRef принятого subject/result>", Revision: 1, Digest: "<точный digest принятой ревизии>"}
+			result.Verdict = "<PASS или CHANGES_REQUIRED по фактической проверке>"
 		case "REVIEW", "QA":
 			result.HeadSHA = "<точный headSha принятого результата предшественника>"
 			result.Verdict = "<PASS или CHANGES_REQUIRED по фактической проверке>"
@@ -47,6 +50,7 @@ func ResultDeclarationPrompt(requirements []entity.WorkflowResultRequirement) (s
 		"В source нового файла текущего завершения допустимо только {\"kind\":\"CURRENT_COMPLETION\"}. " +
 		"Для ранее сохранённого файла замени весь source объектом с ровно четырьмя полями: kind со значением CAPTURED_ARTIFACT, artifactRef, revision (целое число) и digest; последние три значения скопируй из свежего неизменяемого каталога RUN_RESULT. " +
 		"Не выбирай CURRENT_COMPLETION для файла только из предыдущего технического хода. " +
+		"У ARTIFACT_REVIEW разрешены только key, source и verdict; source всегда CAPTURED_ARTIFACT и совпадает с exact subjectStepKey/subjectResultKey из accepted predecessor evidence. Не выбирай файл отчёта рецензента вместо проверенного результата автора. " +
 		"У PULL_REQUEST, INTEGRATION_RECEIPT и DEPLOYMENT разрешены только key и receiptRef. У REVIEW и QA — только key, headSha и verdict; verdict равен PASS либо CHANGES_REQUIRED. " +
 		"Другие поля, повторные ключи и null запрещены. Ссылки и заявления модели не подтверждают результат: сервер отдельно проверяет capture, доступ, происхождение, сканирование и receipts. " +
 		"После принятия обязательных результатов зависимые шаги запускает сервер.", nil

@@ -16,7 +16,7 @@ import (
 // assistantWorkflowEditableFields is the closed plan-edit surface, excluding owner snapshots and grants.
 // assistantWorkflowEditableFields задаёт закрытую поверхность редактирования без owner snapshots и grants.
 var assistantWorkflowEditableFields = []string{
-	"executionMode",
+	"executionMode", "reworkPolicy",
 	"name", "purpose", "coordinatorAgentRef", "instructions", "completionCriteria",
 	"maxConcurrency", "timeoutSeconds", "inputFields", "steps",
 }
@@ -108,6 +108,9 @@ func (repository *Repository) readAssistantWorkflowSnapshot(ctx context.Context,
 		"inputFields": fields, "steps": steps,
 		"draft": draft,
 	}
+	if workflow.Draft.ReworkPolicy != "" {
+		snapshot["reworkPolicy"] = workflow.Draft.ReworkPolicy
+	}
 	if workflow.Draft.ExecutionMode != "" {
 		snapshot["executionMode"] = workflow.Draft.ExecutionMode
 	}
@@ -140,7 +143,7 @@ func hydrateAssistantWorkflowFields(before map[string]any, version int64,
 ) (entity.AssistantPlanOperation, error) {
 	after := make(map[string]any, len(assistantWorkflowEditableFields)+2)
 	for _, key := range append([]string{"workflowRef", "projectRef"}, assistantWorkflowEditableFields...) {
-		if _, exists := before[key]; key == "executionMode" && !exists {
+		if _, exists := before[key]; (key == "executionMode" || key == "reworkPolicy") && !exists {
 			continue
 		}
 		after[key] = before[key]
@@ -234,7 +237,7 @@ func assistantUpdateWorkflow(operation entity.AssistantPlanOperation) (command.W
 	if input == nil {
 		input = withAssistantExpectedVersion(operation.Parameters, valueOrZero(operation.ExpectedVersion))
 	}
-	if !onlyAssistantFields(input, "executionMode", "workflowRef", "projectRef", "name", "purpose", "instructions",
+	if !onlyAssistantFields(input, "reworkPolicy", "executionMode", "workflowRef", "projectRef", "name", "purpose", "instructions",
 		"coordinatorAgentRef", "completionCriteria", "maxConcurrency", "timeoutSeconds", "inputFields", "steps", "expectedVersion") ||
 		!hasAssistantFields(input, "workflowRef", "projectRef", "name", "purpose", "instructions",
 			"coordinatorAgentRef", "completionCriteria", "maxConcurrency", "timeoutSeconds", "inputFields", "steps", "expectedVersion") {
@@ -269,6 +272,13 @@ func assistantUpdateWorkflow(operation entity.AssistantPlanOperation) (command.W
 			return command.WorkflowInput{}, 0, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_TEXT")
 		}
 		draft.ExecutionMode = mode
+	}
+	if raw, present := input["reworkPolicy"]; present {
+		value, ok := raw.(string)
+		if !ok || value != "" && value != workflowservice.OwnerApprovedUpstreamV1 || value != "" && draft.ExecutionMode != workflowservice.ServerDAGV1 {
+			return command.WorkflowInput{}, 0, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_INVARIANTS")
+		}
+		draft.ReworkPolicy = value
 	}
 	for _, key := range []string{"name", "purpose", "instructions", "completionCriteria"} {
 		value, ok := input[key].(string)
@@ -399,6 +409,9 @@ func assistantUpdateWorkflowGraph(input map[string]any, draft *entity.WorkflowVe
 		"completionCriteria": assistantString(input, "completionCriteria")}
 	if draft.ExecutionMode != "" {
 		proposal["executionMode"] = draft.ExecutionMode
+	}
+	if draft.ReworkPolicy != "" {
+		proposal["reworkPolicy"] = draft.ReworkPolicy
 	}
 	parsed, err := assistantWorkflow(proposal)
 	if err != nil || parsed.Draft == nil {
