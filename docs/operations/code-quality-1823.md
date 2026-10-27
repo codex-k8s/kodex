@@ -4,11 +4,28 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.597.0
+version: 1.598.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общий выбор цели и workflow-ввод двух форм — 27.10.2026
+
+Формы запуска и расписания используют общую реактивную проекцию цели, loader
+страниц и синхронизацию workflow input. Их отдельные проверки окружения,
+расписания, readback и события сохранены. Проверки helper охватывают повреждённый
+ввод, отсутствие scope, актуальность refs, передачу cursor/signal и порядок
+событий; обратное сравнение двух форм и двух layout-тестов PASS.
+
+До изменения 31 тест PASS, после 36 PASS, FAIL/SKIP 0. Первые проверки выявили
+узкий тип тестовой фикстуры и unbound methods; после исправления форматирование,
+lint, typecheck и PWA build PASS. Разные loaders revisions и run occurrences
+сохранены адресно из-за независимых cursors/merge и общего контроллера отмены;
+6 мутаций привязки отклонены. 17 тестов инструментов качества PASS. Context7:
+[Vue computed](https://vuejs.org/api/reactivity-core#computed).
+Анализ: 1315 raw / 1312 retained / 3 unresolved, Go-комментарии 21750/21750.
+Браузер, E2E, live/deploy/startup и QA не выполнялись.
 
 ## Общие подготовки почтового readback и UI-тестов — 27.10.2026
 

@@ -9336,6 +9336,14 @@
       "fragmentSHA256": "97b53047633c9bf4feed8e331447a5217cec9fa07d0465b1e11461f0d8672381",
       "count": 1,
       "reason": "Окно сравнивает lifecycle двух impact dialog для environment и secret. Оба используют общий cursor composable, но у environment выбранные consumers хранятся в Set и сбрасываются через clear, а secret сбрасывает массив selections и проверяет другой revision/resource; read/apply и authority pins также различаются. Общий callback watcher ради таймера и abort скрыл бы разные типы выбора и порядок сброса чувствительного readback. Сохранены только точные пути, hash и count1; очистка и проверки owner не исключены."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/automations/AutomationsWorkspace.vue",
+      "secondPath": "services/staff/control-center/src/features/automations/AutomationsWorkspace.vue",
+      "fragmentSHA256": "f365a8948802f9ae0649848e8fa5b5e8efc7fe510212cac7cfeae3650a81daf3",
+      "count": 1,
+      "reason": "Два локальных loader читают разные типы истории одного расписания: revisions и run occurrences имеют отдельные cursors, page sizes, loading/error refs и разные функции merge. При reset оба намеренно взаимодействуют с общим historyController, а смена selectedRef отменяет прежний запрос; условия late-response и finally видимы на местах. Универсальный параметризованный loader потребовал бы передавать изменяемые refs, разные merge и общую отмену через callback и скрыл бы отдельный request lifecycle. Сохранён только точный внутрефайловый hash и count1; остальные вызовы, отмена и ограничения страниц не исключены."
     }
   ]
 }

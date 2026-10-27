@@ -13,7 +13,7 @@ const editor = readFileSync(
 describe("форма автоматизации в плане помощника", () => {
   it("показывает задание, точную цель и ближайшие запуски", () => {
     expect(source).toContain("automationText");
-    expect(source).toContain("createExecutionTargetPickerLoader");
+    expect(source).toContain("createAssistantExecutionFormActions");
     expect(source).toContain("watchAssistantExecutionTarget(");
     expect(source).toContain(
       "[() => props.projectRef, targetType, targetRef] as const",

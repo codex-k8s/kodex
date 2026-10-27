@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, useId, watch } from "vue";
 
+import type { EditablePlanOperation } from "@/features/assistant/model";
 import {
-  operationParameter,
-  type EditablePlanOperation,
-} from "@/features/assistant/model";
+  useAssistantExecutionSelection,
+  synchronizeWorkflowInput,
+  createAssistantExecutionFormActions,
+} from "@/features/assistant/execution-form-shared";
 import {
   assistantWorkflowInputDraft,
   prepareAssistantWorkflowInput,
@@ -12,12 +14,9 @@ import {
 import { watchAssistantExecutionTarget } from "@/features/assistant/execution-target-readback";
 import { environmentReadinessMessage } from "@/features/runtime/environment-readiness-message";
 import {
-  createExecutionTargetPickerLoader,
   isEligibleAgent,
   isEligibleWorkflow,
-  selectedExecutionTargetOption,
   type ExecutionTargetPickerOption,
-  type ExecutionTargetType,
 } from "@/shared/api/execution-target-picker";
 import { requestSignal } from "@/shared/api/client";
 import { getAgentRuntimeConfiguration } from "@/shared/api/generated/openapi/sdk.gen";
@@ -25,12 +24,10 @@ import type {
   Agent,
   RuntimeEnvironmentSet,
   Workflow,
-  WorkflowInputField,
 } from "@/shared/api/generated/openapi/types.gen";
 import { unwrap } from "@/shared/api/problem";
 import { useI18n } from "vue-i18n";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
-import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
 import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
 
 const props = defineProps<{
@@ -56,32 +53,14 @@ const environmentProblem = ref(false);
 const rawInput = ref<Record<string, string>>({});
 const invalidInitialInputKeys = ref<Set<string>>(new Set());
 
-function parameter(key: string): unknown {
-  try {
-    return operationParameter(props.operation, key);
-  } catch {
-    return undefined;
-  }
-}
-function stringParameter(key: string): string {
-  const value = parameter(key);
-  return typeof value === "string" ? value : "";
-}
-const targetType = computed<ExecutionTargetType | undefined>(() => {
-  const value = stringParameter("targetType");
-  return value === "AGENT" || value === "WORKFLOW" ? value : undefined;
-});
-const targetRef = computed(() => stringParameter("targetRef"));
-const workflow = computed(() =>
-  selected.value?.targetType === "WORKFLOW"
-    ? (selected.value.target as Workflow)
-    : undefined,
-);
-const selectedOption = computed(() =>
-  targetType.value && selected.value?.ref === targetRef.value
-    ? selectedExecutionTargetOption(targetType.value, selected.value.target)
-    : undefined,
-);
+const {
+  parameter,
+  stringParameter,
+  targetType,
+  targetRef,
+  workflow,
+  selectedOption,
+} = useAssistantExecutionSelection(() => props.operation, selected);
 
 watch(
   () => JSON.stringify([props.operation.value.ref, parameter("input")]),
@@ -154,20 +133,15 @@ function preparedWorkflowInput(): {
 }
 
 watch(workflow, (current) => {
-  if (!current) return;
-  const prepared = preparedWorkflowInput();
-  if (Object.keys(prepared.problems).length) return;
-  const existing = inputObject();
-  if (
-    existing &&
-    Object.keys(existing).length === Object.keys(prepared.value).length &&
-    Object.entries(prepared.value).every(
-      ([key, value]) => existing[key] === value,
-    )
-  )
-    return;
-  emit("parameter", "input", prepared.value);
-  emit("dirty");
+  synchronizeWorkflowInput(
+    current,
+    preparedWorkflowInput,
+    inputObject,
+    (value) => {
+      emit("parameter", "input", value);
+      emit("dirty");
+    },
+  );
 });
 
 const inputProblems = computed(() => preparedWorkflowInput().problems);
@@ -236,31 +210,16 @@ function selectTarget(option: ExecutionTargetPickerOption): void {
   rawInput.value = {};
   emit("dirty");
 }
-function loadPage(
-  query: string,
-  cursor: string | undefined,
-  signal: AbortSignal,
-  pageSize = 40,
-): Promise<AsyncEntityOptionPage> {
-  if (!props.projectRef || !targetType.value)
-    return Promise.resolve({ items: [] });
-  return createExecutionTargetPickerLoader(props.projectRef, targetType.value)(
-    query,
-    cursor,
-    signal,
-    pageSize,
+const { load: loadPage, change: setWorkflowInput } =
+  createAssistantExecutionFormActions(
+    () => props.projectRef,
+    targetType,
+    rawInput,
+    invalidInitialInputKeys,
+    preparedWorkflowInput,
+    (input) => emit("parameter", "input", input),
+    () => emit("dirty"),
   );
-}
-function setWorkflowInput(field: WorkflowInputField, value: string): void {
-  rawInput.value = { ...rawInput.value, [field.key]: value };
-  invalidInitialInputKeys.value = new Set(
-    [...invalidInitialInputKeys.value].filter((key) => key !== field.key),
-  );
-  const prepared = preparedWorkflowInput();
-  if (!Object.keys(prepared.problems).length)
-    emit("parameter", "input", prepared.value);
-  emit("dirty");
-}
 </script>
 
 <template>
