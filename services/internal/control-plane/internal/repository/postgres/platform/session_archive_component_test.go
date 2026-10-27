@@ -84,7 +84,9 @@ func testSessionArchiveLifecycle(t *testing.T, ctx context.Context, repository *
 		t.Fatalf("materialize session archive fixture: %v", err)
 	}
 
+	testWorkspaceArchiveAdmission(t, ctx, pool, launched.Run.SessionRef)
 	snapshot := claimSingleSessionArchiveTask(t, ctx, service, claimPrincipal, "SNAPSHOT")
+	testWorkspaceArchiveLegacyFence(t, ctx, pool, launched.Run.SessionRef, snapshot)
 	snapshotPayload := claimedSessionArchivePayload(snapshot)
 	snapshotPayload.FormatVersion = 1
 	snapshotPayload.ObjectKey = stringMap(snapshot, "objectKey")

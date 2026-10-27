@@ -117,6 +117,25 @@ V1 receipt при наличии work не разрешает удаление �
 их exact UID readback. После v2 записей восстановление требует совместимого
 forward reader; удаление metadata ради старого бинарного rollback запрещено.
 
+### Граница прежнего архиватора
+
+| Операция | Проверка owner | Переход/событие |
+| --- | --- | --- |
+| Первое создание workspace | Exact session lock и отсутствие READY/CLAIMED SNAPSHOT, RESTORE, DELETE_PVC | Snapshot тоже исключён: его completion назначает DELETE_PVC |
+| Выбор legacy task | Workspace отсутствует до LIMIT; task и session блокируются SKIP LOCKED | Lock совпадает с первым созданием workspace; busy session пропускается |
+| Legacy claim | Следующий SQL statement с fresh READ COMMITTED snapshot повторяет отсутствие workspace | Отказ не меняет task/storage, lease/grant и event не создаются |
+| Renew/complete | Existing lease/fence/generation плюс отсутствие workspace | Чужой профиль не продлевает grant и не подтверждает PVC deletion |
+| Expiry/retry/cleanup | Legacy materializer исключает любую session с workspace | Неизвестная прежняя custody сохраняется; expiry не является join proof |
+| Legacy object GC | Только format1 и session без workspace | V2 manifest/parts и ссылки не удаляются прежним consumer |
+
+Проверка использует два настоящих PostgreSQL соединения для обоих порядков
+session lock. Отдельная смешанная fixture с workspace и legacy CLAIMED task
+существует только в откатываемой disposable транзакции: положительный renew
+до workspace, отказ после, запрет completion/нового claim, сохранение CLAIMED
+после expiry и блокировка project purge. Полный прежний snapshot/restore/GC
+проходит в том же сценарии. Проверка не подтверждает физическое завершение
+старого Kubernetes Job: для activation нужен отдельный drain/readback.
+
 Private config `SESSION_WORKSPACE_STORAGE_PROFILE` по умолчанию отсутствует
 либо пуст: это прежний профиль без назначения work binding. Единственный
 opt-in — `SESSION_WORKSPACE_V2`; unknown значение закрыто останавливает startup.

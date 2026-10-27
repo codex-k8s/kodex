@@ -13,4 +13,6 @@ FROM control_plane.session_archive_tasks task
 JOIN control_plane.session_storage storage ON storage.session_id = task.session_id
 JOIN control_plane.sessions session ON session.id = task.session_id
 WHERE task.organization_id = @organization_id::uuid AND task.ref = @task_ref
-FOR UPDATE OF task, storage;
+  AND NOT EXISTS (SELECT 1 FROM control_plane.session_workspace_storage workspace
+                  WHERE workspace.session_id=task.session_id)
+FOR UPDATE OF task, storage, session;

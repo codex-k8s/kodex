@@ -7,5 +7,5 @@ JOIN control_plane.agents agent ON agent.id=@agent_id::uuid AND agent.organizati
 WHERE session.organization_id=@organization_id::uuid AND session.project_id=@project_id::uuid
     AND session.id=@session_id::uuid AND session.target_type='AGENT' AND session.state='ACTIVE'
     AND NOT EXISTS(SELECT 1 FROM control_plane.session_archive_tasks task
-        WHERE task.session_id=session.id AND task.state IN ('READY','CLAIMED') AND task.kind IN ('RESTORE','DELETE_PVC'))
+        WHERE task.session_id=session.id AND task.state IN ('READY','CLAIMED') AND task.kind IN ('SNAPSHOT','RESTORE','DELETE_PVC'))
 RETURNING ref,generation,state;

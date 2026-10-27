@@ -7,6 +7,10 @@ WITH claimed AS (
         fence_digest = @fence_digest, lease_expires_at = @lease_expires_at,
         safe_error_code = '', updated_at = clock_timestamp()
     WHERE id = @task_id::uuid AND state = 'READY'
+      -- Предыдущий statement удерживает session lock; этот fresh snapshot
+      -- не выдаёт legacy grant при workspace, появившемся после первого чтения.
+      AND NOT EXISTS (SELECT 1 FROM control_plane.session_workspace_storage workspace
+                      WHERE workspace.session_id=session_archive_tasks.session_id)
     RETURNING session_id, kind, content_generation, attempt, generation
 ), storage_updated AS (
     UPDATE control_plane.session_storage storage

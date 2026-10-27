@@ -6,6 +6,7 @@ WITH expired_locked AS MATERIALIZED (
     FROM control_plane.session_archive_tasks task
     WHERE task.state = 'CLAIMED'
       AND task.lease_expires_at <= clock_timestamp()
+      AND NOT EXISTS (SELECT 1 FROM control_plane.session_workspace_storage workspace WHERE workspace.session_id=task.session_id)
     FOR UPDATE SKIP LOCKED
 ), cleanup_prepared AS (
     SELECT gen_random_uuid() AS cleanup_task_id, expired.*
@@ -65,6 +66,7 @@ WITH expired_locked AS MATERIALIZED (
      WHERE task.session_id = storage.session_id
        AND task.kind = 'DELETE_PVC' AND task.state = 'READY'
        AND storage.state = 'DELETE_PVC_READY'
+       AND NOT EXISTS (SELECT 1 FROM control_plane.session_workspace_storage workspace WHERE workspace.session_id=task.session_id)
        AND control_plane.session_archive_pending_execution(storage.organization_id, storage.session_id)
     RETURNING storage.session_id, storage.current_archive_id
 ), cancelled_archives AS (
@@ -90,6 +92,7 @@ WITH expired_locked AS MATERIALIZED (
     JOIN control_plane.organizations organization ON organization.id = storage.organization_id
     LEFT JOIN control_plane.projects project ON project.id = storage.project_id
     WHERE storage.state = 'LIVE'
+      AND NOT EXISTS (SELECT 1 FROM control_plane.session_workspace_storage workspace WHERE workspace.session_id=storage.session_id)
       AND (storage.project_id IS NULL OR project.lifecycle <> 'PURGE_PENDING')
       AND session.state IN ('ACTIVE', 'CLOSED')
       AND (
@@ -135,6 +138,7 @@ WITH expired_locked AS MATERIALIZED (
     JOIN control_plane.session_archives archive ON archive.id = storage.current_archive_id
     LEFT JOIN control_plane.projects restore_project ON restore_project.id=storage.project_id
     WHERE storage.state = 'ARCHIVED'
+      AND NOT EXISTS (SELECT 1 FROM control_plane.session_workspace_storage workspace WHERE workspace.session_id=storage.session_id)
       AND (storage.project_id IS NULL OR restore_project.lifecycle <> 'PURGE_PENDING')
       AND archive.lifecycle_state = 'AVAILABLE'
       AND control_plane.session_archive_pending_execution(storage.organization_id, storage.session_id)
@@ -166,6 +170,8 @@ WITH expired_locked AS MATERIALIZED (
     JOIN control_plane.sessions session ON session.id = archive.session_id
     LEFT JOIN control_plane.projects gc_project ON gc_project.id=archive.project_id
     WHERE archive.retention_until <= clock_timestamp()
+      AND archive.format_version=1
+      AND NOT EXISTS (SELECT 1 FROM control_plane.session_workspace_storage workspace WHERE workspace.session_id=archive.session_id)
       AND (archive.project_id IS NULL OR gc_project.lifecycle <> 'PURGE_PENDING')
       AND archive.lifecycle_state IN ('SUPERSEDED', 'AVAILABLE')
       AND (archive.lifecycle_state = 'SUPERSEDED' OR session.state = 'CLOSED')
