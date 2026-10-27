@@ -501,6 +501,11 @@ func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.Messa
 		current, exists := value[field.JSONName()]
 		if !exists {
 			if field.IsList() {
+				// Empty optional negative evidence is absent; mandatory results and false acceptance remain explicit.
+				// Пустые optional negative evidence отсутствуют; обязательные results и false acceptance остаются явными.
+				if descriptor.FullName() == "controlplane.v1.WorkflowAttemptResult" && field.Name() == "evidence" {
+					continue
+				}
 				value[field.JSONName()] = []any{}
 			} else if field.IsMap() {
 				value[field.JSONName()] = map[string]any{}
