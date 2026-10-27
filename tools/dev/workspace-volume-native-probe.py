@@ -144,7 +144,7 @@ def main():
         result['pvcUID'] = pvc['metadata']['uid']
         result['observations'] = []
         for name, uid, group, script in [
-            ('provider', 10002, False, 'umask 077; stat -c "root=%a:%u:%g" /probe; mkdir /probe/private; chmod 700 /probe/private; printf qa-state > /probe/private/state; stat -c "directory=%a:%u:%g" /probe/private; stat -c "file=%a:%u:%g" /probe/private/state'),
+            ('provider', 10002, False, 'umask 077; stat -c "root=%a:%u:%g" /probe; mkdir /probe/private; chmod 700 /probe/private; chmod g-s /probe/private; printf qa-state > /probe/private/state; stat -c "directory=%a:%u:%g" /probe/private; stat -c "file=%a:%u:%g" /probe/private/state'),
             ('role-with-fsgroup', 10001, True, 'stat -c "root=%a:%u:%g" /probe; stat -c "directory=%a:%u:%g" /probe/private; if test -r /probe/private/state; then stat -c "file=%a:%u:%g" /probe/private/state; echo role_can_read=true; else echo file=INACCESSIBLE; echo role_can_read=false; fi'),
             ('provider-readback', 10002, False, 'stat -c "root=%a:%u:%g" /probe; stat -c "directory=%a:%u:%g" /probe/private; stat -c "file=%a:%u:%g" /probe/private/state')]:
             current = read(context, 'persistentvolumeclaims', 'probe', namespace)
@@ -159,7 +159,7 @@ def main():
         result['preparedObservations'] = []
         for name, uid, group, script in [
             ('prepare-empty-root', 10001, True, 'test ! -e /probe/private; stat -c "root=%a:%u:%g" /probe'),
-            ('prepared-provider', 10002, False, 'umask 077; mkdir /probe/private; chmod 700 /probe/private; printf qa-state > /probe/private/state; stat -c "directory=%a:%u:%g" /probe/private; stat -c "file=%a:%u:%g" /probe/private/state'),
+            ('prepared-provider', 10002, False, 'umask 077; mkdir /probe/private; chmod 700 /probe/private; chmod g-s /probe/private; printf qa-state > /probe/private/state; stat -c "directory=%a:%u:%g" /probe/private; stat -c "file=%a:%u:%g" /probe/private/state'),
             ('prepared-role', 10001, True, 'stat -c "root=%a:%u:%g" /probe; stat -c "directory=%a:%u:%g" /probe/private; if test -r /probe/private/state; then echo role_can_read=true; else echo role_can_read=false; fi'),
             ('prepared-readback', 10002, False, 'stat -c "directory=%a:%u:%g" /probe/private; stat -c "file=%a:%u:%g" /probe/private/state')]:
             current = read(context, 'persistentvolumeclaims', 'prepared', namespace)
@@ -173,7 +173,7 @@ def main():
             and result['preparedObservations'][3]['observations'] == ['directory=700:10002:29000', 'file=600:10002:29000'])
         result['legacyPrimaryGroupObservation'] = observe_pod(context, namespace, nonce, arguments.node, arguments.image,
             'legacy-primary-group', 10002, True,
-            'umask 077; mkdir /probe/legacy-primary; chmod 700 /probe/legacy-primary; printf qa-state > /probe/legacy-primary/state; stat -c "directory=%a:%u:%g" /probe/legacy-primary; stat -c "file=%a:%u:%g" /probe/legacy-primary/state',
+            'umask 077; mkdir /probe/legacy-primary; chmod 700 /probe/legacy-primary; chmod g-s /probe/legacy-primary; printf qa-state > /probe/legacy-primary/state; stat -c "directory=%a:%u:%g" /probe/legacy-primary; stat -c "file=%a:%u:%g" /probe/legacy-primary/state',
             pvc_name='prepared', gid=10002)
         result['status'] = 'OBSERVED'
     except (RuntimeError, subprocess.TimeoutExpired) as error:
