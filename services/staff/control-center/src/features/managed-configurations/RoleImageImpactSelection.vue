@@ -16,6 +16,7 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
+import { createImpactEditability } from "@/shared/ui/impact-editability";
 import { useImpactPageLoader } from "@/shared/ui/use-impact-page";
 import { roleImagePlanIdentity, readImageImpact } from "./role-image-impact";
 
@@ -78,18 +79,12 @@ const selected = ref(new Set<string>());
 const query = ref("");
 const loading = ref(false);
 const problem = ref<AppProblem>();
-const now = ref(Date.now());
-const clock = setInterval(() => {
-  now.value = Date.now();
-}, 1000);
-const editable = computed(
-  () =>
-    !props.busy &&
-    !loading.value &&
-    !problem.value &&
-    page.value?.plan.state === "PREPARED" &&
-    Date.parse(page.value.plan.expiresAt) > now.value,
-);
+const { now, editable, stop } = createImpactEditability({
+  busy: () => props.busy,
+  loading: () => loading.value,
+  problem: () => problem.value,
+  page: () => page.value,
+});
 
 function toggle(ref: string): void {
   if (
@@ -131,7 +126,7 @@ const { load } = useImpactPageLoader<RoleImageImpactPage>({
   },
 });
 onBeforeUnmount(() => {
-  clearInterval(clock);
+  stop();
 });
 useCursorInfiniteScroll({
   root: itemList,

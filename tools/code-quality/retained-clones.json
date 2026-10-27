@@ -9048,6 +9048,14 @@
       "fragmentSHA256": "c4c0136dc79d3e9286cd03603ef1b28938e2f190673de342175eb4250a2e7010",
       "count": 1,
       "reason": "Общий exactAgent требует ровно одного несистемного сотрудника и отклоняет отсутствие; локальный Skill допускает отсутствие, затем отдельно создаёт сотрудника и проверяет его readback, но отклоняет дубликаты. Эти сценарии имеют разные правила отсутствия, сообщения и побочные действия; общий fetch с переключаемой политикой скрыл бы условия создания. Решение относится только к точной паре и hash, не исключает другие проверки или создание."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/managed-configurations/RoleImageImpactSelection.vue",
+      "secondPath": "services/staff/control-center/src/features/runtime/PublicationImpactSelection.vue",
+      "fragmentSHA256": "66b0a12ca521d1c4ff0c85ce170542f3800361ed6781334ce8479c0b22418ee7",
+      "count": 1,
+      "reason": "Оба списка используют общий createImpactEditability для срока и блокировок. В RoleImage выбор только явный, а Publication автоматически выбирает PENDING и отдельно сохраняет deselected при загрузке страниц; toggle и publish имеют разные побочные действия и проверку selection. Общая функция с переключателями скрыла бы эту политику. Решение ограничено точной парой и hash и не исключает loader, identity или авторизацию."
     }
   ]
 }
