@@ -13,6 +13,10 @@ test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestBootstrapComponent|T
 
 # Оба закрытых upgrade-сценария используют одну и ту же отдельную пустую БД.
 upgrade_test='^TestWorkflowReviewQAEvidenceForwardUpgrade$'
+if [[ "$test_pattern" == --checkpoint-predecessor ]]; then
+  upgrade_test='^TestWorkspaceCheckpointMigrationPredecessor$'
+  test_pattern=--review-qa-upgrade
+fi
 if [[ "$test_pattern" == --workspace-predecessor ]]; then
   upgrade_test='^TestSessionWorkspaceMigrationPredecessor$'
   test_pattern=--review-qa-upgrade
