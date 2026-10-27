@@ -67,7 +67,7 @@ column_expected(table_name,column_name,type_name,required,default_expression) AS
  ('control_plane.workflow_runtime_artifact_pins(uuid,uuid)','592e7a1b582f361964c3df922c866e66','sql','s','pg_catalog'),
  ('control_plane.runtime_workflow_input_visible(uuid,uuid,uuid)','81167a271fc622d27d447e7110208e3f','sql','s','pg_catalog')
 ), function_rows AS (
- SELECT expected.*,p.oid,p.prosrc,p.proowner,p.prosecdef,p.proconfig,p.provolatile,p.prolang,p.prorettype,p.proretset,pg_get_function_result(p.oid) AS result_type,p.proacl
+ SELECT expected.*,p.oid,p.prosrc,p.proowner,p.prosecdef,p.proconfig,p.provolatile,p.prolang,p.prorettype,p.proretset,pg_get_function_result(p.oid) AS result_type,p.proacl,p.proargnames
  FROM function_expected expected LEFT JOIN pg_proc p ON p.oid=to_regprocedure(expected.signature)
 ), trigger_expected(table_name,trigger_name,signature,kind) AS (VALUES
  ('run_nodes','workflow_effect_records_guard','control_plane.guard_workflow_effect_records()',31),
@@ -134,7 +134,7 @@ column_expected(table_name,column_name,type_name,required,default_expression) AS
  ('control_plane.workflow_effective_receipts(uuid,uuid)','f83a1e6f43dbca02774ddf18de6bc67c','plpgsql','s','jsonb','pg_catalog,control_plane',false,0),
  ('control_plane.workflow_effective_inputs(uuid,uuid,text)','4ce13ff5d375f09417692214c052d758','plpgsql','s','jsonb','pg_catalog,control_plane',false,0),
  ('control_plane.workflow_rework_author(jsonb,text,text[])','6acd0001153d7aa5e36f6025df7b3f61','plpgsql','i','text','pg_catalog,control_plane',false,1),
- ('control_plane.workflow_irreversible_effect_exists(uuid,uuid,uuid)','1c4255b7c66f416e6e66943ee72ac508','sql','s','boolean','pg_catalog',false,0),
+ ('control_plane.workflow_irreversible_effect_exists(uuid,uuid,uuid)','cd45c720e7587f675fbb4239ab07b57a','sql','s','boolean','pg_catalog',false,0),
  ('control_plane.workflow_upstream_plan_valid(uuid,uuid,jsonb)','c40986bc595723890e2137683be0487c','plpgsql','s','boolean','pg_catalog,control_plane',false,0),
  ('control_plane.guard_workflow_rework_node()','ba0116973da3d92b6720e45cb5973c0f','plpgsql','v','trigger','pg_catalog,control_plane',false,0),
  ('control_plane.guard_workflow_superseded_gate()','f2bb455d04a66632f9d18440331d18cc','plpgsql','v','trigger','pg_catalog,control_plane',false,0),
@@ -242,6 +242,7 @@ $body$
  'functionSources',(SELECT count(*)=10 AND bool_and(oid IS NOT NULL AND md5(prosrc)=source_md5) FROM function_rows),
  'functionMetadata',(SELECT count(*)=10 AND bool_and(oid IS NOT NULL AND pg_get_userbyid(proowner)='control_plane_owner'
    AND NOT prosecdef AND provolatile::text=volatility AND prolang=(SELECT oid FROM pg_language WHERE lanname=language)
+   AND (signature<>'control_plane.workflow_runtime_artifact_pins(uuid,uuid)' OR proargnames=ARRAY['p_tenant','p_node','artifact_id','revision_id'])
    AND cardinality(proconfig)=1 AND regexp_replace(proconfig[1],'[[:space:]]','','g')='search_path='||search_path
    AND (CASE WHEN language='plpgsql' THEN prorettype='trigger'::regtype AND NOT proretset
      WHEN signature IN ('control_plane.workflow_captured_artifact_pins(uuid,uuid)','control_plane.workflow_runtime_artifact_pins(uuid,uuid)')

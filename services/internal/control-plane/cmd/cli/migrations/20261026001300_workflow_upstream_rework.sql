@@ -184,8 +184,12 @@ $$;
 CREATE FUNCTION control_plane.workflow_irreversible_effect_exists(p_tenant uuid,p_root uuid,p_origin uuid) RETURNS boolean
 LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog AS $$
  SELECT EXISTS(SELECT 1 FROM control_plane.run_nodes node
+ JOIN control_plane.runs execution ON execution.id=node.run_id AND execution.organization_id=p_tenant
+    AND execution.root_run_id=p_root AND execution.root_run_id=node.root_run_id
+ JOIN control_plane.runs root ON root.id=p_root AND root.organization_id=p_tenant AND root.id=root.root_run_id
+    AND root.project_id=execution.project_id
  JOIN control_plane.integration_invocations invocation ON invocation.node_id=node.id AND invocation.run_id=node.run_id
-    AND invocation.organization_id=p_tenant AND invocation.root_run_id=p_root AND invocation.state='SUCCEEDED'
+    AND invocation.organization_id=p_tenant AND invocation.state='SUCCEEDED'
     AND invocation.operation IN ('github.pull_request.merge','ssh.compose.deploy')
  JOIN control_plane.integration_effect_receipts receipt ON receipt.id=invocation.effect_receipt_id
     AND receipt.organization_id=p_tenant AND receipt.invocation_id=invocation.id
@@ -629,9 +633,9 @@ GRANT EXECUTE ON FUNCTION control_plane.workflow_rework_artifact_pins(uuid,uuid)
 -- OID и existing012 manager branch сохраняются; source preimage закрыто проверяется.
 -- +goose StatementBegin
 DO $migration$
-DECLARE v_source text;v_updated text;v_marker text;
+DECLARE v_source text;v_updated text;v_marker text;v_definition text;
 BEGIN
- SELECT function_row.prosrc INTO STRICT v_source FROM pg_proc function_row
+ SELECT function_row.prosrc,pg_get_functiondef(function_row.oid) INTO STRICT v_source,v_definition FROM pg_proc function_row
  WHERE function_row.oid='control_plane.workflow_runtime_artifact_pins(uuid,uuid)'::regprocedure
     AND md5(function_row.prosrc)='ef7be3e3843ea14eb9e044fded3449fe'
     AND pg_get_userbyid(function_row.proowner)='control_plane_owner' AND NOT function_row.prosecdef
@@ -642,7 +646,9 @@ BEGIN
  IF length(v_source)-length(replace(v_source,v_marker,''))<>length(v_marker) THEN
     RAISE EXCEPTION 'workflow upstream reader requires exact exception-context profile'; END IF;
  v_updated:=replace(v_source,v_marker,E' UNION SELECT * FROM control_plane.workflow_exception_artifact_pins(p_tenant,p_node)\n UNION SELECT * FROM control_plane.workflow_rework_artifact_pins(p_tenant,p_node)\n UNION SELECT pin.* FROM consumer CROSS JOIN LATERAL control_plane.workflow_input_artifact_pins(p_tenant,consumer.root_run_id,consumer.workflow_inputs) pin;');
- EXECUTE format('CREATE OR REPLACE FUNCTION control_plane.workflow_runtime_artifact_pins(uuid,uuid) RETURNS TABLE(artifact_id uuid,revision_id uuid) LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog AS %L',v_updated);
+ IF length(v_definition)-length(replace(v_definition,v_source,''))<>length(v_source) THEN
+    RAISE EXCEPTION 'workflow upstream reader definition body is ambiguous'; END IF;
+ EXECUTE replace(v_definition,v_source,v_updated);
 END $migration$;
 -- +goose StatementEnd
 
