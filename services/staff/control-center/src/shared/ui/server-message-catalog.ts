@@ -6,6 +6,10 @@ import {
 
 // Закрытый реестр безопасных сообщений владельца состояния: ru, en.
 export const serverTokenTranslations = {
+  WORKFLOW_EVIDENCE_DELIVERY_LIMIT: [
+    "Запуск остановлен: полный результат интеграций не помещается в продолжение либо исчерпан предел технических продолжений. Квитанции и файлы сохранены; внешнее действие не повторялось.",
+    "The run stopped because its complete integration outcome exceeds the continuation budget or its technical continuation limit. Receipts and files are retained; no external operation was repeated.",
+  ],
   LEGACY_REWORK_READ_LIMIT: [
     "Запуск остановлен: результат чтения не помещается во ввод продолжения. Квитанция чтения и материалы сохранены; начните отдельный процесс с меньшим вводом.",
     "The run stopped because the read result exceeds the continuation input budget. Its receipt and artifacts are retained; start a separate workflow with smaller input.",

@@ -66,6 +66,7 @@ export function validateRunSnapshot(
   for (const node of graph.nodes) {
     if (!refPattern.test(node.ref) || nodes.has(node.ref))
       throw new Error("Invalid graph node identity");
+    if (!validWorkflowAttemptEvidence(node)) throw new Error("Invalid workflow attempt evidence");
     nodes.add(node.ref);
   }
   for (const edge of graph.edges) {
@@ -457,4 +458,20 @@ function validPredecessorAnchors(
     old.attempt > 0 &&
     fresh.attempt === old.attempt + 1
   );
+}
+
+// Отрицательные факты не становятся accepted results; проверяется весь owner snapshot до cache.
+export function validWorkflowAttemptEvidence(node: RunNode): boolean {
+  return (node.workflowResults ?? []).every((attempt) => {
+    if (!attempt.accepted && attempt.results.length !== 0) return false;
+    if (attempt.results.some((result) => result.verdict !== undefined && result.verdict !== "PASS")) return false;
+    if (attempt.evidence === undefined) return true;
+    if (attempt.accepted || attempt.reason !== "CHANGES_REQUIRED" || attempt.evidence.length < 1 || attempt.evidence.length > 4) return false;
+    if (!attempt.evidence.some((result) => ["REVIEW", "QA"].includes(result.kind) && result.verdict === "CHANGES_REQUIRED")) return false;
+    return attempt.evidence.every((result) => {
+      if (result.kind === "REVIEW") return !!result.receiptRef && !!result.headSha && ["PASS", "CHANGES_REQUIRED"].includes(result.verdict ?? "");
+      if (result.kind === "QA") return !!result.artifactRef && !!result.artifactRevision && !!result.headSha && ["PASS", "CHANGES_REQUIRED"].includes(result.verdict ?? "");
+      return result.verdict === undefined || result.verdict === "PASS";
+    });
+  });
 }

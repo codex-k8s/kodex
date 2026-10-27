@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"strings"
 
 	"github.com/codex-k8s/kodex/libs/go/repositorybundle"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
@@ -45,27 +46,30 @@ var queryWorkflowEffectReceipt string
 // workflowEffectIntent indexes an existing native invocation; it neither replaces its receipt nor authorizes another write.
 // workflowEffectIntent индексирует existing invocation, не заменяя receipt и не разрешая новый WRITE.
 type workflowEffectIntent struct {
-	Schema            string `json:"schema"`
-	ResultKey         string `json:"resultKey"`
-	Operation         string `json:"operation"`
-	SemanticDigest    string `json:"semanticDigest"`
-	ConnectionRef     string `json:"connectionRef"`
-	ConnectionVersion int64  `json:"connectionVersion"`
-	GrantRef          string `json:"grantRef"`
-	GrantVersion      int64  `json:"grantVersion"`
-	DefinitionDigest  string `json:"definitionDigest"`
-	ScopeDigest       string `json:"scopeDigest"`
-	ApprovalPolicy    string `json:"approvalPolicy"`
-	OriginNodeID      string `json:"originNodeId"`
-	OriginRunID       string `json:"originRunId"`
-	OriginRevisionID  string `json:"originRevisionId"`
-	OriginLeaseID     string `json:"originLeaseId"`
-	OriginGeneration  int64  `json:"originGeneration"`
-	OriginAttempt     int64  `json:"originAttempt"`
-	OriginBusiness    int64  `json:"originBusinessAttempt"`
-	InvocationRef     string `json:"invocationRef"`
-	EffectKey         string `json:"effectKey"`
-	InputDigest       string `json:"inputDigest"`
+	// QAReport is assigned only after exact captured report and current log eligibility checks.
+	// QAReport назначает owner после exact captured report и current log eligibility checks.
+	QAReport          *workflowQAReportPin `json:"qaReport,omitempty"`
+	Schema            string               `json:"schema"`
+	ResultKey         string               `json:"resultKey"`
+	Operation         string               `json:"operation"`
+	SemanticDigest    string               `json:"semanticDigest"`
+	ConnectionRef     string               `json:"connectionRef"`
+	ConnectionVersion int64                `json:"connectionVersion"`
+	GrantRef          string               `json:"grantRef"`
+	GrantVersion      int64                `json:"grantVersion"`
+	DefinitionDigest  string               `json:"definitionDigest"`
+	ScopeDigest       string               `json:"scopeDigest"`
+	ApprovalPolicy    string               `json:"approvalPolicy"`
+	OriginNodeID      string               `json:"originNodeId"`
+	OriginRunID       string               `json:"originRunId"`
+	OriginRevisionID  string               `json:"originRevisionId"`
+	OriginLeaseID     string               `json:"originLeaseId"`
+	OriginGeneration  int64                `json:"originGeneration"`
+	OriginAttempt     int64                `json:"originAttempt"`
+	OriginBusiness    int64                `json:"originBusinessAttempt"`
+	InvocationRef     string               `json:"invocationRef"`
+	EffectKey         string               `json:"effectKey"`
+	InputDigest       string               `json:"inputDigest"`
 }
 
 // workflowEffectRejoin binds a read-only previous success to one fresh immutable execution; no worker grant is issued.
@@ -133,14 +137,22 @@ func lockWorkflowEffectRootTx(ctx context.Context, tx pgx.Tx, current scope, inp
 // workflowEffectSlot derives one published result key and target; unsupported or ambiguous writes never allocate an effect.
 // workflowEffectSlot выводит один published result key и target; unsupported/ambiguous WRITE не создаёт effect.
 func workflowEffectSlot(step entity.WorkflowStep, dependencies []workflowResultDependency, operation string, resourceScope, canonicalInput []byte) (string, error) {
+	return workflowEffectSlotForProfile("", step, dependencies, operation, resourceScope, canonicalInput)
+}
+
+// workflowEffectSlotForProfile derives new review/QA slots only from an explicitly published
+// evidence profile and accepted dependency PR; all other operations retain the previous denial.
+// workflowEffectSlotForProfile выводит новые review/QA slots только из явно опубликованного
+// evidence profile и принятого dependency PR; остальные операции сохраняют прежний отказ.
+func workflowEffectSlotForProfile(profile string, step entity.WorkflowStep, dependencies []workflowResultDependency, operation string, resourceScope, canonicalInput []byte) (string, error) {
 	var resource map[string]string
-	if json.Unmarshal(resourceScope, &resource) != nil || !workflowservice.ValidRequirements(step.ResultRequirements, step.DependsOn) {
+	if json.Unmarshal(resourceScope, &resource) != nil || !workflowservice.ValidRequirementsForProfile(profile, step.ResultRequirements, step.DependsOn) {
 		return "", errs.ErrConflict
 	}
 	repository := resource["owner"] + "/" + resource["repository"]
 	key := ""
 	for _, requirement := range step.ResultRequirements {
-		if requirement.Repository != repository {
+		if requirement.Repository != repository && !(profile == workflowservice.GitHubReviewQAV1 && (requirement.Kind == "REVIEW" || requirement.Kind == "QA")) {
 			continue
 		}
 		allowed := requirement.Kind == "PULL_REQUEST" && contains([]string{repositoryBundleOperation, "github.pull_request.create"}, operation)
@@ -151,6 +163,22 @@ func workflowEffectSlot(step entity.WorkflowStep, dependencies []workflowResultD
 				SHA    string `json:"sha"`
 			}
 			allowed = found && subject.Repository == requirement.Repository && json.Unmarshal(canonicalInput, &target) == nil && target.Number == subject.Number && target.SHA == subject.HeadSHA
+		}
+		if profile == workflowservice.GitHubReviewQAV1 && (requirement.Kind == "REVIEW" || requirement.Kind == "QA") {
+			subject, found := workflowResultSubject(dependencies, requirement.SubjectStepKey)
+			if found && subject.Repository == repository {
+				if requirement.Kind == "REVIEW" && operation == "github.pull_request.review.create" {
+					var review struct {
+						Number int64  `json:"pull_request_number"`
+						SHA    string `json:"sha"`
+						Event  string `json:"event"`
+						Body   string `json:"body"`
+					}
+					allowed = json.Unmarshal(canonicalInput, &review) == nil && review.Number == subject.Number && review.SHA == subject.HeadSHA && review.Event == "COMMENT" && strings.TrimSpace(review.Body) != ""
+				} else if requirement.Kind == "QA" && operation == "github.issue.create" {
+					allowed = true
+				}
+			}
 		}
 		if allowed {
 			if key != "" {
@@ -167,7 +195,7 @@ func workflowEffectSlot(step entity.WorkflowStep, dependencies []workflowResultD
 
 // admitWorkflowEffectTx admits only published SERVER writes and rejoins a previous known success without creating any native work.
 // admitWorkflowEffectTx допускает только published SERVER WRITE и повторно читает прежний успех без новой native работы.
-func admitWorkflowEffectTx(ctx context.Context, tx pgx.Tx, current scope, rootID string, input map[string]string, operation, grantRef string, grantVersion int64, definitionDigest, scopeDigest, approvalPolicy string, resourceScope, canonicalInput, semanticInput []byte) (*workflowEffectAdmission, map[string]any, error) {
+func (repository *Repository) admitWorkflowEffectTx(ctx context.Context, tx pgx.Tx, current scope, rootID string, input map[string]string, operation, grantRef string, grantVersion int64, definitionDigest, scopeDigest, approvalPolicy string, resourceScope, canonicalInput, semanticInput []byte) (*workflowEffectAdmission, map[string]any, error) {
 	if rootID == "" {
 		return nil, nil, nil
 	}
@@ -175,9 +203,9 @@ func admitWorkflowEffectTx(ctx context.Context, tx pgx.Tx, current scope, rootID
 	intent := workflowEffectIntent{Schema: "kodex.workflow-effect-intent.v1", Operation: operation, ConnectionRef: input["connection_ref"], GrantRef: grantRef, GrantVersion: grantVersion, DefinitionDigest: definitionDigest, ScopeDigest: scopeDigest, ApprovalPolicy: approvalPolicy}
 	var rawStep, rawInputs, rawIntents, rawRejoins []byte
 	var rejoinCount int
-	var sessionRef, turnRef string
+	var sessionRef, turnRef, evidenceProfile string
 	err := tx.QueryRow(ctx, queryWorkflowEffectOrigin, pgx.StrictNamedArgs{"organization_id": current.organizationID, "root_run_id": rootID, "run_ref": input["run_ref"], "node_ref": input["node_ref"], "connection_ref": intent.ConnectionRef, "grant_ref": grantRef, "grant_version": grantVersion, "operation": operation, "definition_digest": definitionDigest, "approval_policy": approvalPolicy}).Scan(
-		&admission.AnchorID, &admission.NodeID, &intent.OriginRunID, &intent.OriginRevisionID, &intent.OriginLeaseID, &intent.OriginGeneration, &intent.OriginAttempt, &intent.OriginBusiness, &rawStep, &rawInputs, &rawIntents, &rawRejoins, &intent.ConnectionVersion, &sessionRef, &turnRef, &rejoinCount)
+		&admission.AnchorID, &admission.NodeID, &intent.OriginRunID, &intent.OriginRevisionID, &intent.OriginLeaseID, &intent.OriginGeneration, &intent.OriginAttempt, &intent.OriginBusiness, &rawStep, &rawInputs, &rawIntents, &rawRejoins, &intent.ConnectionVersion, &sessionRef, &turnRef, &rejoinCount, &evidenceProfile)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, errs.ErrForbidden
 	}
@@ -192,9 +220,16 @@ func admitWorkflowEffectTx(ctx context.Context, tx pgx.Tx, current scope, rootID
 	if decodeStrict(rawStep, &step) != nil || decodeStrict(rawInputs, &dependencies) != nil || decodeStrict(rawIntents, &intents) != nil || decodeStrict(rawRejoins, &rejoins) != nil || len(intents) > workflowEffectLimit || rejoinCount > workflowEffectLimit {
 		return nil, nil, errs.ErrConflict
 	}
-	intent.ResultKey, err = workflowEffectSlot(step, dependencies, operation, resourceScope, canonicalInput)
+	intent.ResultKey, err = workflowEffectSlotForProfile(evidenceProfile, step, dependencies, operation, resourceScope, canonicalInput)
 	if err != nil {
 		return nil, nil, err
+	}
+	if evidenceProfile == workflowservice.GitHubReviewQAV1 && operation == "github.issue.create" {
+		intent.QAReport, err = repository.workflowIssueEvidenceTx(ctx, tx, current, admission, intent, step, dependencies, canonicalInput)
+		if err != nil {
+			return nil, nil, err
+		}
+		semanticInput = asJSON([]any{"kodex.workflow-qa-issue.v1", json.RawMessage(canonicalInput), intent.QAReport})
 	}
 	if semanticInput == nil {
 		semanticInput = canonicalInput
@@ -205,7 +240,7 @@ func admitWorkflowEffectTx(ctx context.Context, tx pgx.Tx, current scope, rootID
 	}
 	admission.Intent = intent
 	for _, old := range intents {
-		if old.ResultKey != intent.ResultKey || old.Operation != operation {
+		if old.ResultKey != intent.ResultKey || old.Operation != operation || workflowEvidenceOperation(evidenceProfile, operation) && old.OriginBusiness != intent.OriginBusiness {
 			continue
 		}
 		if old.Schema != intent.Schema || old.SemanticDigest != intent.SemanticDigest || old.ConnectionRef != intent.ConnectionRef || old.ConnectionVersion != intent.ConnectionVersion || old.GrantRef != grantRef || old.GrantVersion != grantVersion || old.DefinitionDigest != definitionDigest || old.ScopeDigest != scopeDigest || old.ApprovalPolicy != approvalPolicy {
@@ -225,6 +260,9 @@ func admitWorkflowEffectTx(ctx context.Context, tx pgx.Tx, current scope, rootID
 			return nil, nil, errs.ErrConflict
 		}
 		oldSemantic := oldInput
+		if operation == "github.issue.create" && evidenceProfile == workflowservice.GitHubReviewQAV1 {
+			oldSemantic = asJSON([]any{"kodex.workflow-qa-issue.v1", json.RawMessage(oldInput), old.QAReport})
+		}
 		if operation == repositoryBundleOperation {
 			var original struct {
 				BaseCommitSHA string `json:"base_commit_sha"`

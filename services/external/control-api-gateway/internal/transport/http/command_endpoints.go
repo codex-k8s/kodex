@@ -393,6 +393,9 @@ func (server *Server) CommandAgentInstructions(w http.ResponseWriter, r *http.Re
 // workflowDraft преобразует необязательные вход и шаги в новый protobuf-черновик, копируя input options, но сохраняя ссылки slice RequiredCapabilityKeys. Числовые casts и многие семантические ограничения здесь не проверяются; версия не публикуется.
 func workflowDraft(body generated.WorkflowInput) *controlplanev1.WorkflowVersion {
 	draft := &controlplanev1.WorkflowVersion{Name: body.Name, Purpose: body.Purpose, CoordinatorAgentRef: body.CoordinatorAgentRef}
+	if body.ResultEvidenceProfile != nil {
+		draft.ResultEvidenceProfile = string(*body.ResultEvidenceProfile)
+	}
 	if body.ExecutionMode != nil {
 		draft.ExecutionMode = string(*body.ExecutionMode)
 	}

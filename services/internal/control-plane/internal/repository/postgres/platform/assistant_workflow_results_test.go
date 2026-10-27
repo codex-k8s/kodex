@@ -113,3 +113,93 @@ func TestAssistantServerWorkflowRejectsMalformedPredicates(t *testing.T) {
 		})
 	}
 }
+
+// TestAssistantEvidenceProfilePreservation follows actual parser/hydration/update boundaries;
+// omission preserves an owner opt-in and neither null nor a caller-made report key grants evidence.
+// TestAssistantEvidenceProfilePreservation проходит actual parser/hydration/update boundaries;
+// отсутствие поля сохраняет owner opt-in, null и придуманный report key не выдают evidence.
+func TestAssistantEvidenceProfilePreservation(t *testing.T) {
+	input := assistantServerWorkflowFixture(t)
+	input["resultEvidenceProfile"] = "GITHUB_REVIEW_QA_V1"
+	step := input["steps"].([]any)[2].(map[string]any)
+	step["resultRequirements"] = []any{map[string]any{"key": "report", "kind": "ARTIFACT", "fileName": "qa.json", "mediaType": "application/json"}, map[string]any{"key": "qa", "kind": "QA", "subjectStepKey": "code", "evidenceKey": "report"}}
+	created, err := assistantWorkflow(input)
+	if err != nil || created.Draft == nil {
+		t.Fatal("profile create unavailable", err)
+	}
+	draft := *created.Draft
+	fields, steps := assistantWorkflowGraphFields(draft)
+	before := map[string]any{"workflowRef": "wfl_fixture123", "projectRef": created.ProjectRef, "executionMode": draft.ExecutionMode, "resultEvidenceProfile": draft.ResultEvidenceProfile, "name": draft.Name, "purpose": draft.Purpose, "instructions": draft.Instructions, "completionCriteria": draft.CompletionCriteria, "coordinatorAgentRef": draft.CoordinatorAgentRef, "inputFields": fields, "steps": steps, "maxConcurrency": float64(draft.Concurrency), "timeoutSeconds": float64(draft.TimeoutSeconds), "draft": draft}
+	operation, err := hydrateAssistantWorkflowFields(before, 7, entity.AssistantPlanOperation{Type: "UPDATE_WORKFLOW", Key: "profile-update", Parameters: map[string]any{"workflowRef": "wfl_fixture123", "name": "Проверка evidence"}})
+	if err != nil {
+		t.Fatal("profile hydration unavailable", err)
+	}
+	updated, _, err := assistantUpdateWorkflow(operation)
+	if err != nil || updated.Draft.ResultEvidenceProfile != draft.ResultEvidenceProfile || updated.Draft.Steps[2].ResultRequirements[1].EvidenceKey != "report" || operation.After["resultEvidenceProfile"] != draft.ResultEvidenceProfile {
+		t.Fatal("sparse update lost opt-in/report policy", err)
+	}
+	for _, value := range []any{nil, "", true, "UNKNOWN"} {
+		bad := cloneAssistantFields(input)
+		bad["resultEvidenceProfile"] = value
+		if _, err := assistantWorkflow(bad); err == nil {
+			t.Fatal("malformed profile accepted")
+		}
+	}
+	legacy := cloneAssistantFields(input)
+	delete(legacy, "resultEvidenceProfile")
+	if _, err := assistantWorkflow(legacy); err == nil {
+		t.Fatal("report selector silently enabled legacy evidence policy")
+	}
+}
+
+// TestAssistantEvidenceProfilePresence rejects null, preserves omission and clears only an
+// explicit empty UPDATE after the complete remaining graph satisfies its old predicates.
+// TestAssistantEvidenceProfilePresence отвергает null, сохраняет omission и снимает policy лишь
+// explicit empty UPDATE после проверки полного оставшегося графа по прежним условиям.
+func TestAssistantEvidenceProfilePresence(t *testing.T) {
+	for _, profile := range []string{"", "GITHUB_REVIEW_QA_V1"} {
+		input := assistantServerWorkflowFixture(t)
+		if profile != "" {
+			input["resultEvidenceProfile"] = profile
+		}
+		created, err := assistantWorkflow(input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		draft := *created.Draft
+		fields, steps := assistantWorkflowGraphFields(draft)
+		before := map[string]any{"workflowRef": "wfl_fixture123", "projectRef": created.ProjectRef, "executionMode": draft.ExecutionMode, "name": draft.Name, "purpose": draft.Purpose, "instructions": draft.Instructions, "completionCriteria": draft.CompletionCriteria, "coordinatorAgentRef": draft.CoordinatorAgentRef, "inputFields": fields, "steps": steps, "maxConcurrency": float64(draft.Concurrency), "timeoutSeconds": float64(draft.TimeoutSeconds), "draft": draft}
+		if profile != "" {
+			before["resultEvidenceProfile"] = profile
+		}
+		for _, clear := range []bool{false, true} {
+			parameters := map[string]any{"workflowRef": "wfl_fixture123", "name": "Обновлённое имя"}
+			if clear {
+				parameters["resultEvidenceProfile"] = ""
+			}
+			operation, err := hydrateAssistantWorkflowFields(before, 7, entity.AssistantPlanOperation{Type: "UPDATE_WORKFLOW", Key: "presence", Parameters: parameters})
+			if err != nil {
+				t.Fatal("presence update rejected", err)
+			}
+			result, _, err := assistantUpdateWorkflow(operation)
+			if err != nil {
+				t.Fatal(err)
+			}
+			expected := profile
+			if clear {
+				expected = ""
+			}
+			if result.Draft.ResultEvidenceProfile != expected {
+				t.Fatal("profile presence changed")
+			}
+			if profile == "" && !clear {
+				if _, exists := operation.After["resultEvidenceProfile"]; exists {
+					t.Fatal("absent profile fabricated")
+				}
+			}
+		}
+		if _, err := hydrateAssistantWorkflowFields(before, 7, entity.AssistantPlanOperation{Type: "UPDATE_WORKFLOW", Key: "null", Parameters: map[string]any{"workflowRef": "wfl_fixture123", "resultEvidenceProfile": nil}}); err == nil {
+			t.Fatal("explicit null accepted")
+		}
+	}
+}

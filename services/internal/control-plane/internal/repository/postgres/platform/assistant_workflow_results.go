@@ -31,7 +31,7 @@ func assistantWorkflowRequirements(raw any) ([]entity.WorkflowResultRequirement,
 	result := make([]entity.WorkflowResultRequirement, 0, len(values))
 	for _, raw := range values {
 		value, ok := raw.(map[string]any)
-		if !ok || !onlyAssistantFields(value, "key", "kind", "fileName", "mediaType", "repository", "subjectStepKey", "operation", "targetRef") || !hasAssistantFields(value, "key", "kind") {
+		if !ok || !onlyAssistantFields(value, "key", "kind", "fileName", "mediaType", "repository", "subjectStepKey", "operation", "targetRef", "evidenceKey") || !hasAssistantFields(value, "key", "kind") {
 			return nil, errs.ErrInvalid
 		}
 		fields := make(map[string]string, len(value))
@@ -42,7 +42,7 @@ func assistantWorkflowRequirements(raw any) ([]entity.WorkflowResultRequirement,
 			}
 			fields[key] = text
 		}
-		result = append(result, entity.WorkflowResultRequirement{Key: fields["key"], Kind: fields["kind"], FileName: fields["fileName"], MediaType: fields["mediaType"], Repository: fields["repository"], SubjectStepKey: fields["subjectStepKey"], Operation: fields["operation"], TargetRef: fields["targetRef"]})
+		result = append(result, entity.WorkflowResultRequirement{EvidenceKey: fields["evidenceKey"], Key: fields["key"], Kind: fields["kind"], FileName: fields["fileName"], MediaType: fields["mediaType"], Repository: fields["repository"], SubjectStepKey: fields["subjectStepKey"], Operation: fields["operation"], TargetRef: fields["targetRef"]})
 	}
 	return result, nil
 }
@@ -79,7 +79,7 @@ func assistantWorkflowRequirementFields(values []entity.WorkflowResultRequiremen
 	result := make([]any, 0, len(values))
 	for _, value := range values {
 		fields := map[string]any{"key": value.Key, "kind": value.Kind}
-		for key, text := range map[string]string{"fileName": value.FileName, "mediaType": value.MediaType, "repository": value.Repository, "subjectStepKey": value.SubjectStepKey, "operation": value.Operation, "targetRef": value.TargetRef} {
+		for key, text := range map[string]string{"fileName": value.FileName, "mediaType": value.MediaType, "repository": value.Repository, "subjectStepKey": value.SubjectStepKey, "operation": value.Operation, "targetRef": value.TargetRef, "evidenceKey": value.EvidenceKey} {
 			if text != "" {
 				fields[key] = text
 			}
@@ -87,4 +87,17 @@ func assistantWorkflowRequirementFields(values []entity.WorkflowResultRequiremen
 		result = append(result, fields)
 	}
 	return result
+}
+
+// assistantWorkflowEvidenceProfile retains omission and rejects nullable or unknown opt-ins;
+// only canonical owner version validation can enable the profile on a SERVER workflow.
+// assistantWorkflowEvidenceProfile сохраняет отсутствие поля и отвергает null либо неизвестный opt-in;
+// профиль SERVER включает только каноническая проверка owner version.
+func assistantWorkflowEvidenceProfile(input map[string]any, allowClear bool) (string, bool) {
+	raw, exists := input["resultEvidenceProfile"]
+	if !exists {
+		return "", true
+	}
+	value, valid := raw.(string)
+	return value, valid && (value == workflowservice.GitHubReviewQAV1 || allowClear && value == "")
 }

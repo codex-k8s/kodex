@@ -6,6 +6,7 @@ import WorkflowResultContractEditor from "@/features/workflows/WorkflowResultCon
 import {
   newWorkflowStepKey,
   validWorkflowDAG,
+  workflowEvidenceProfileSteps,
   workflowModeSteps,
 } from "@/features/workflows/result-contract";
 
@@ -139,6 +140,7 @@ const validDAG = computed(() =>
       .map(text)
       .join(""),
     "key",
+    parameter("resultEvidenceProfile"),
   ),
 );
 const coordinatorRef = computed(() => text(parameter("coordinatorAgentRef")));
@@ -242,6 +244,13 @@ let mounted = true;
 onBeforeUnmount(() => {
   mounted = false;
 });
+function changeEvidenceProfile(event: Event): void {
+  if(props.disabled || !steps.value || !(event.target instanceof HTMLSelectElement)) return;
+  const value=event.target.value;
+  if(value!=="" && value!=="GITHUB_REVIEW_QA_V1") return;
+  change("steps",workflowEvidenceProfileSteps(steps.value,value));
+  change("resultEvidenceProfile", !isUpdate.value && value === "" ? undefined : value);
+}
 function modeEditable(): boolean {
   return mounted && !props.disabled && steps.value !== undefined;
 }
@@ -603,6 +612,14 @@ watch(
         </option>
       </select>
     </label>
+    <div v-if="serverMode" class="field">
+      <span>{{ $t("workflowResults.evidenceProfile") }}</span>
+      <select :disabled="disabled" :value="text(parameter('resultEvidenceProfile'))" :aria-label="$t('workflowResults.evidenceProfile')" @change="changeEvidenceProfile">
+        <option value="">{{ $t("workflowResults.evidenceLegacy") }}</option>
+        <option value="GITHUB_REVIEW_QA_V1">{{ $t("workflowResults.evidenceNative") }}</option>
+      </select>
+      <small>{{ $t("workflowResults.evidenceHelp") }}</small>
+    </div>
     <p v-if="serverMode">{{ $t("workflowResults.bounds") }}</p>
     <p v-if="serverMode && !validDAG" class="field-error" role="status">
       {{ $t("workflowResults.invalid") }}
@@ -784,6 +801,7 @@ watch(
           <div class="assistant-workflow-form__step-body">
             <WorkflowResultContractEditor
               v-if="serverMode"
+              :evidence-profile="text(parameter('resultEvidenceProfile')) || undefined"
               :step-key="text(step.key)"
               :dependencies="step.dependsOn"
               :requirements="step.resultRequirements"

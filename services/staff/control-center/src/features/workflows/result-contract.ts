@@ -41,7 +41,9 @@ function boundedText(value: unknown, max: number): value is string {
 export function validWorkflowRequirements(
   value: unknown,
   dependencies: string[],
+  profile: unknown = undefined,
 ): value is WorkflowResultRequirement[] {
+  if (profile !== undefined && profile !== "GITHUB_REVIEW_QA_V1") return false;
   if (!Array.isArray(value) || value.length < 1 || value.length > 4)
     return false;
   const seen = new Set<string>();
@@ -90,6 +92,7 @@ export function validWorkflowRequirements(
       default:
         return false;
     }
+    if (item.kind === "QA" && profile === "GITHUB_REVIEW_QA_V1") keys.push("evidenceKey");
     if (
       Object.keys(item).some((key) => !keys.includes(key)) ||
       keys.some((key) => typeof item[key] !== "string" || item[key] === "")
@@ -109,6 +112,14 @@ export function validWorkflowRequirements(
     )
       return false;
   }
+  if (profile === "GITHUB_REVIEW_QA_V1") {
+    for (const kind of ["REVIEW", "QA"]) {
+      if (value.filter((item) => item.kind === kind).length > 1) return false;
+    }
+    for (const item of value) {
+      if (item.kind === "QA" && (!validWorkflowKey(item.evidenceKey) || !value.some((report) => report.key === item.evidenceKey && report.kind === "ARTIFACT" && report.mediaType === "application/json"))) return false;
+    }
+  }
   return true;
 }
 
@@ -117,6 +128,7 @@ export function validWorkflowDAG(
   concurrency: unknown,
   text: string,
   keyField: "ref" | "key",
+  profile: unknown = undefined,
 ): boolean {
   if (
     !Array.isArray(steps) ||
@@ -146,7 +158,7 @@ export function validWorkflowDAG(
       !deps.every(
         (dep): dep is string => typeof dep === "string" && agents.has(dep),
       ) ||
-      !validWorkflowRequirements(step.resultRequirements, deps)
+      !validWorkflowRequirements(step.resultRequirements, deps, profile)
     )
       return false;
     if (
@@ -205,6 +217,21 @@ export function workflowModeSteps<T extends object>(
         else delete next.key;
       }
     }
+    return next as T;
+  });
+}
+
+// Выбор profile меняет только редактируемые QA selectors; published snapshots и evidence не меняются.
+export function workflowEvidenceProfileSteps<T extends object>(steps: T[], profile: unknown): T[] {
+  return steps.map((step) => {
+    const next = { ...step } as Item;
+    if (Array.isArray(next.resultRequirements)) next.resultRequirements = next.resultRequirements.map((item: unknown) => {
+      if (!workflowItem(item)) return item;
+      const requirement = { ...item };
+      if (profile !== "GITHUB_REVIEW_QA_V1") delete requirement.evidenceKey;
+      else if (requirement.kind === "QA") requirement.evidenceKey ??= "";
+      return requirement;
+    });
     return next as T;
   });
 }

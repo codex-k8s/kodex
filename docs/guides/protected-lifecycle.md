@@ -4,11 +4,23 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.56
+version: 1.1.57
 updated: 2026-10-27
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Явный evidence profile не расширяет authority по наличию payload-полей. Native
+receipt должен связываться с опубликованным result key, exact dependency head,
+producing epoch и неизменяемыми source pins. Отрицательное заключение сохраняет
+проверенные facts отдельно от accepted results: они не становятся входом
+зависимого шага как успешный результат. Captured command/log bytes подтверждают
+происхождение и содержимое, а не автоматически сам факт выполнения команды.
+Если model заканчивается раньше разрешённого native effect, completed capture
+и lease не оживают: owner удерживает physical envelope до единственного join,
+создающего fresh CONTINUES/RR. Outcome overflow сохраняет native fact и закрывает
+граф устойчивым typed failure вместо усечения или повторного внешнего действия.
+Пример закрытого профиля: [native COMMENT и QA report](../operations/workflow-review-qa-evidence-1949.md).
 
 Часы всего SERVER DAG принадлежат его существующему `ROOT_PROCESS`, а не
 первому planned anchor: реальные физические исполнители могут уже находиться

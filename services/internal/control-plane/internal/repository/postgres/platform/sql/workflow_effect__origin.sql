@@ -5,7 +5,8 @@ SELECT anchor.id::text,node.id::text,node.run_id::text,revision.id::text,lease.i
        (SELECT COALESCE(sum(jsonb_array_length(sibling.workflow_effect_rejoins)),0)::integer
         FROM control_plane.run_nodes sibling WHERE sibling.organization_id=node.organization_id AND sibling.root_run_id=node.root_run_id
             AND COALESCE(sibling.workflow_step_origin_node_id,sibling.id)=anchor.id
-            AND sibling.workflow_business_attempt=node.workflow_business_attempt)
+            AND sibling.workflow_business_attempt=node.workflow_business_attempt),
+    COALESCE(version.spec->>'ResultEvidenceProfile','')
 FROM control_plane.runs root
 JOIN control_plane.workflow_versions version ON version.id=root.workflow_version_id AND version.organization_id=root.organization_id
 JOIN control_plane.workflows workflow ON workflow.id=version.workflow_id AND workflow.organization_id=root.organization_id AND workflow.project_id=root.project_id

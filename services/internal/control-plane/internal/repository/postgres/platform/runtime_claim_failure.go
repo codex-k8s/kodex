@@ -272,7 +272,8 @@ func (repository *Repository) failRuntimeGraphWithGateExpiry(ctx context.Context
 	if decision, ok := input.Payload.(command.GateResolutionInput); ok {
 		ownerRejected = input.Kind == command.ResolveOwnerGate && decision.GateRef != "" && decision.Decision == "REJECT" && expiredGateID == "" && code == "WORKFLOW_REJECTED" && summary == "i18n:OWNER_GATE_RESOLVED"
 	}
-	if !ordinary && !expiry && !ownerRejected && !ownedReadBudget {
+	evidenceBudget := expiredGateID == "" && input.Kind == command.CompleteIntegrationInvocation && code == workflowEvidenceDeliveryLimit && summary == "i18n:"+workflowEvidenceDeliveryLimit
+	if !ordinary && !expiry && !ownerRejected && !ownedReadBudget && !evidenceBudget {
 		return errs.ErrInvalid
 	}
 	rows, err := tx.Query(ctx, queryRuntimeClaimFailGraph, pgx.StrictNamedArgs{

@@ -93,3 +93,39 @@ func TestWorkflowPublicationServerRejectsIncompleteProfile(t *testing.T) {
 		})
 	}
 }
+
+// TestWorkflowPublicationEvidenceV3 requires explicit wire3 and preserves legacy field omission;
+// a v2 consumer cannot silently interpret newly configured report/receipt predicates as old policy.
+// TestWorkflowPublicationEvidenceV3 требует явную wire3 и сохраняет отсутствие новых legacy полей;
+// v2 consumer не интерпретирует report/receipt условия как прежнюю политику молча.
+func TestWorkflowPublicationEvidenceV3(t *testing.T) {
+	value := serverPublicationFixture()
+	value.Version, value.ResultEvidenceProfile = 3, "GITHUB_REVIEW_QA_V1"
+	value.Steps[1].ResultRequirements = []WorkflowPublicationRequirement{{Key: "report", Kind: "ARTIFACT", FileName: "qa.json", MediaType: "application/json"}, {Key: "qa", Kind: "QA", SubjectStepKey: "step-001", EvidenceKey: "report"}}
+	raw, digest, err := EncodeWorkflowPublication(value)
+	decoded, decodeErr := DecodeWorkflowPublication(raw, digest)
+	if err != nil || decodeErr != nil || !reflect.DeepEqual(decoded, value) {
+		t.Fatal("wire3 evidence profile lost", err, decodeErr)
+	}
+	for _, mutate := range []func(*WorkflowPublication){
+		func(v *WorkflowPublication) { v.Version = 2 },
+		func(v *WorkflowPublication) { v.ResultEvidenceProfile = "UNKNOWN" },
+		func(v *WorkflowPublication) { v.ResultEvidenceProfile = "" },
+		func(v *WorkflowPublication) { v.Steps[1].ResultRequirements[1].EvidenceKey = "missing" },
+		func(v *WorkflowPublication) { v.Steps[1].ResultRequirements[0].MediaType = "text/plain" },
+	} {
+		changed := value
+		changed.Steps = append([]WorkflowPublicationStep{}, value.Steps...)
+		changed.Steps[1].ResultRequirements = append([]WorkflowPublicationRequirement{}, value.Steps[1].ResultRequirements...)
+		mutate(&changed)
+		if _, _, err := EncodeWorkflowPublication(changed); err == nil {
+			t.Fatal("invalid evidence wire accepted")
+		}
+	}
+	for _, legacy := range []WorkflowPublication{publicationFixture(), serverPublicationFixture()} {
+		wire, _, err := EncodeWorkflowPublication(legacy)
+		if err != nil || strings.Contains(string(wire), "result_evidence_profile") || strings.Contains(string(wire), "evidence_key") {
+			t.Fatal("old publication bytes gained evidence defaults")
+		}
+	}
+}

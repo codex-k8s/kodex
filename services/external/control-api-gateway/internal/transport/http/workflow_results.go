@@ -26,7 +26,7 @@ func workflowResultRequirements(values []generated.WorkflowResultRequirement) []
 			operation = string(*value.Operation)
 		}
 		result = append(result, &controlplanev1.WorkflowResultRequirement{
-			Key: value.Key, Kind: string(value.Kind), FileName: stringValue(value.FileName),
+			EvidenceKey: stringValue(value.EvidenceKey), Key: value.Key, Kind: string(value.Kind), FileName: stringValue(value.FileName),
 			MediaType: stringValue(value.MediaType), Repository: stringValue(value.Repository),
 			SubjectStepKey: stringValue(value.SubjectStepKey), Operation: operation, TargetRef: stringValue(value.TargetRef),
 		})
@@ -43,7 +43,43 @@ func workflowResultRequirements(values []generated.WorkflowResultRequirement) []
 func validWorkflowPublicMessage(message proto.Message) bool {
 	switch value := message.(type) {
 	case *controlplanev1.WorkflowVersion:
-		return value != nil && (value.ExecutionMode == "" || value.ExecutionMode == "MANAGER_DRIVEN" || value.ExecutionMode == "SERVER_DAG_V1")
+		if value == nil || !(value.ExecutionMode == "" || value.ExecutionMode == "MANAGER_DRIVEN" || value.ExecutionMode == "SERVER_DAG_V1") || !(value.ResultEvidenceProfile == "" || value.ResultEvidenceProfile == "GITHUB_REVIEW_QA_V1" && value.ExecutionMode == "SERVER_DAG_V1") {
+			return false
+		}
+		for _, step := range value.Steps {
+			if step == nil {
+				return false
+			}
+			counts := map[string]int{}
+			for _, requirement := range step.ResultRequirements {
+				if requirement == nil {
+					return false
+				}
+				if value.ResultEvidenceProfile == "" {
+					if requirement.EvidenceKey != "" {
+						return false
+					}
+					continue
+				}
+				if requirement.Kind == "REVIEW" || requirement.Kind == "QA" {
+					counts[requirement.Kind]++
+					if counts[requirement.Kind] > 1 {
+						return false
+					}
+				}
+				if requirement.Kind != "QA" {
+					continue
+				}
+				found := false
+				for _, candidate := range step.ResultRequirements {
+					found = found || candidate != nil && candidate.Key == requirement.EvidenceKey && candidate.Kind == "ARTIFACT" && candidate.MediaType == "application/json"
+				}
+				if requirement.EvidenceKey == "" || !found {
+					return false
+				}
+			}
+		}
+		return true
 	case *controlplanev1.WorkflowStep:
 		if value == nil || len(value.ResultRequirements) > 4 || len(value.DependsOn) > 200 {
 			return false
@@ -56,20 +92,41 @@ func validWorkflowPublicMessage(message proto.Message) bool {
 			seen[dependency] = true
 		}
 	case *controlplanev1.WorkflowResultRequirement:
-		return value != nil && workflowPredicateKey.MatchString(value.Key) && workflowPublicResultKind(value.Kind) &&
+		return value != nil && workflowPredicateKey.MatchString(value.Key) && (value.EvidenceKey == "" || value.Kind == "QA" && workflowPredicateKey.MatchString(value.EvidenceKey)) && workflowPublicResultKind(value.Kind) &&
 			workflowPublicText(value.FileName, 160) && workflowPublicText(value.MediaType, 160) &&
 			workflowPublicText(value.Repository, 200) && (value.SubjectStepKey == "" || workflowPredicateKey.MatchString(value.SubjectStepKey)) && workflowPublicText(value.TargetRef, 96) &&
 			(value.Operation == "" || value.Operation == "github.pull_request.merge" || value.Operation == "ssh.compose.deploy")
 	case *controlplanev1.RunNode:
 		return value != nil && len(value.WorkflowResults) <= 4
 	case *controlplanev1.WorkflowAttemptResult:
-		return value != nil && value.Attempt >= 1 && value.Attempt <= 4 && fileTargetRef(value.RunRef) && workflowPublicText(value.Reason, 96) && len(value.Results) <= 4
+		if value == nil || value.Attempt < 1 || value.Attempt > 4 || !fileTargetRef(value.RunRef) || !workflowPublicText(value.Reason, 96) || len(value.Results) > 4 || len(value.Evidence) > 4 {
+			return false
+		}
+		if !value.Accepted && len(value.Results) != 0 {
+			return false
+		}
+		if len(value.Evidence) > 0 && (value.Accepted || value.Reason != "CHANGES_REQUIRED" || len(value.Results) != 0) {
+			return false
+		}
+		for _, result := range value.Results {
+			if result == nil || result.Verdict != "" && result.Verdict != "PASS" {
+				return false
+			}
+		}
+		negative := false
+		for _, evidence := range value.Evidence {
+			if evidence == nil || evidence.Kind == "REVIEW" && (evidence.ReceiptRef == "" || evidence.HeadSha == "") || evidence.Kind == "QA" && (evidence.ArtifactRef == "" || evidence.ArtifactRevision == "" || evidence.HeadSha == "") {
+				return false
+			}
+			negative = negative || (evidence.Kind == "REVIEW" || evidence.Kind == "QA") && evidence.Verdict == "CHANGES_REQUIRED"
+		}
+		return len(value.Evidence) == 0 || negative
 	case *controlplanev1.WorkflowAcceptedResult:
 		return value != nil && workflowPredicateKey.MatchString(value.Key) && workflowPublicResultKind(value.Kind) && validManagedDigest(value.Digest) &&
 			(value.ArtifactRef == "" || fileTargetRef(value.ArtifactRef)) && (value.ReceiptRef == "" || fileTargetRef(value.ReceiptRef)) &&
 			workflowPublicText(value.ArtifactRevision, 96) && workflowPublicText(value.Repository, 200) && workflowPublicText(value.TargetRef, 96) &&
 			workflowPublicText(value.HeadSha, 64) && value.Number >= 0 && value.Number <= maximumSafeJSONInteger &&
-			(value.Verdict == "" || value.Verdict == "PASS") && (value.BundleSha256 == "" || validManagedDigest(value.BundleSha256)) &&
+			(value.Verdict == "" || value.Verdict == "PASS" || (value.Kind == "REVIEW" || value.Kind == "QA") && value.Verdict == "CHANGES_REQUIRED") && (value.BundleSha256 == "" || validManagedDigest(value.BundleSha256)) &&
 			(value.ImageDigest == "" || strings.HasPrefix(value.ImageDigest, "sha256:") && validManagedDigest(strings.TrimPrefix(value.ImageDigest, "sha256:")))
 	}
 	return true

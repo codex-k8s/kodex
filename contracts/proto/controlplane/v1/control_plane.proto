@@ -980,6 +980,8 @@ message WorkflowResultRequirement {
   string operation = 7;
   // target_ref закрепляет разрешённую цель DEPLOYMENT, без подключения либо секрета.
   string target_ref = 8;
+  // evidence_key связывает QA с same-step JSON ARTIFACT только явного профиля.
+  string evidence_key = 10;
 }
 
 message WorkflowStep {
@@ -1020,6 +1022,8 @@ message WorkflowVersion {
   google.protobuf.Timestamp published_at = 15;
   // execution_mode закрепляется опубликованной версией; отсутствие сохраняет прежний режим.
   string execution_mode = 16;
+  // Новый profile не переинтерпретирует прежние published snapshots.
+  string result_evidence_profile = 18;
 }
 
 message Workflow {
@@ -1198,6 +1202,8 @@ message WorkflowAttemptResult {
   string reason = 4;
   // results содержит не более четырёх принятых доказательств данной попытки.
   repeated WorkflowAcceptedResult results = 5;
+  // evidence сохраняет проверенные факты отклонённой попытки и не означает принятия results.
+  repeated WorkflowAcceptedResult evidence = 7;
 }
 
 message RunNode {

@@ -1396,6 +1396,9 @@ const (
 // workflowVersionInvalidField проверяет явный профиль исполнения до общей семантики процесса,
 // возвращая только закрытый код поля без текста модели либо индексов этапов.
 func workflowVersionInvalidField(version entity.WorkflowVersion) string {
+	if version.ExecutionMode != workflowservice.ServerDAGV1 && version.ResultEvidenceProfile != "" {
+		return workflowInvalidInvariants
+	}
 	if version.ExecutionMode != "" && version.ExecutionMode != "MANAGER_DRIVEN" && version.ExecutionMode != workflowservice.ServerDAGV1 {
 		return workflowInvalidInvariants
 	}

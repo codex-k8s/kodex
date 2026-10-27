@@ -29,8 +29,11 @@ var (
 func validWorkflowPublicationMode(value WorkflowPublication) bool {
 	switch value.Version {
 	case 1:
-		return value.ExecutionMode == ""
-	case 2:
+		return value.ExecutionMode == "" && value.ResultEvidenceProfile == ""
+	case 2, 3:
+		if value.Version == 2 && value.ResultEvidenceProfile != "" || value.Version == 3 && value.ResultEvidenceProfile != "GITHUB_REVIEW_QA_V1" {
+			return false
+		}
 		textBytes := len(value.Name) + len(value.Purpose) + len(value.Instructions) + len(value.CompletionCriteria)
 		for _, step := range value.Steps {
 			textBytes += len(step.Name) + len(step.Instructions) + len(step.ExpectedResult)
@@ -46,6 +49,14 @@ func validWorkflowPublicationMode(value WorkflowPublication) bool {
 // validWorkflowPublicationServerStep проверяет ограниченный структурный контракт до канонического
 // кодирования. Точные grants, независимость сотрудников и приёмка доказательств принадлежат владельцу.
 func validWorkflowPublicationServerStep(step WorkflowPublicationStep) bool {
+	return validWorkflowPublicationServerStepForProfile(step, "")
+}
+
+// validWorkflowPublicationServerStepForProfile preserves old predicates and requires the explicit
+// profile to bind QA to one same-step JSON report; syntax never proves capture or execution.
+// validWorkflowPublicationServerStepForProfile сохраняет прежние условия и связывает QA с одним
+// JSON report того же шага только явного профиля; синтаксис не доказывает capture либо execution.
+func validWorkflowPublicationServerStepForProfile(step WorkflowPublicationStep, profile string) bool {
 	if !workflowResultKey.MatchString(step.Key) || len(step.DependsOn) > 8 || len(step.ResultRequirements) < 1 || len(step.ResultRequirements) > 4 {
 		return false
 	}
@@ -61,6 +72,9 @@ func validWorkflowPublicationServerStep(step WorkflowPublicationStep) bool {
 	}
 	seen := map[string]bool{}
 	for _, requirement := range step.ResultRequirements {
+		if requirement.EvidenceKey != "" && (profile != "GITHUB_REVIEW_QA_V1" || requirement.Kind != "QA") || profile == "GITHUB_REVIEW_QA_V1" && requirement.Kind == "QA" && !workflowResultKey.MatchString(requirement.EvidenceKey) {
+			return false
+		}
 		if !workflowResultKey.MatchString(requirement.Key) || seen[requirement.Key] || len(requirement.Repository) > 200 || requirement.Kind != "DEPLOYMENT" && requirement.TargetRef != "" {
 			return false
 		}
@@ -88,6 +102,27 @@ func validWorkflowPublicationServerStep(step WorkflowPublicationStep) bool {
 			}
 		default:
 			return false
+		}
+	}
+	if profile == "GITHUB_REVIEW_QA_V1" {
+		counts := map[string]int{}
+		for _, requirement := range step.ResultRequirements {
+			if requirement.Kind != "REVIEW" && requirement.Kind != "QA" {
+				continue
+			}
+			counts[requirement.Kind]++
+			if counts[requirement.Kind] > 1 {
+				return false
+			}
+			if requirement.Kind == "QA" {
+				found := false
+				for _, report := range step.ResultRequirements {
+					found = found || report.Key == requirement.EvidenceKey && report.Kind == "ARTIFACT" && report.MediaType == "application/json"
+				}
+				if !found {
+					return false
+				}
+			}
 		}
 	}
 	return true

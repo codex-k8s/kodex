@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   validWorkflowDAG,
+  workflowEvidenceProfileSteps,
   validWorkflowRequirements,
   validWorkflowKey,
   workflowModeSteps,
@@ -212,4 +213,25 @@ describe("условия автоматического процесса", () =>
     ).not.toHaveProperty("key");
     expect(newWorkflowStepKey(["step-1", "step-3"])).toBe("step-2");
   });
+});
+
+it("связывает QA с JSON ARTIFACT только явно выбранного профиля", () => {
+  const requirements = [
+    { key: "report", kind: "ARTIFACT", fileName: "qa.json", mediaType: "application/json" },
+    { key: "qa", kind: "QA", subjectStepKey: "author", evidenceKey: "report" },
+  ];
+  expect(validWorkflowRequirements(requirements, ["author"], "GITHUB_REVIEW_QA_V1")).toBe(true);
+  expect(validWorkflowRequirements(requirements, ["author"])).toBe(false);
+  expect(validWorkflowRequirements(requirements, ["author"], "UNKNOWN")).toBe(false);
+  expect(validWorkflowRequirements([{...requirements[0], mediaType: "text/plain"}, requirements[1]], ["author"], "GITHUB_REVIEW_QA_V1")).toBe(false);
+  expect(validWorkflowRequirements([requirements[0], {...requirements[1], evidenceKey: "foreign"}], ["author"], "GITHUB_REVIEW_QA_V1")).toBe(false);
+});
+
+it("explicit profile clear удаляет только editable evidenceKey без alias исходных requirements", () => {
+ const original=[{key:"qa",dependsOn:["author"],resultRequirements:[{key:"report",kind:"ARTIFACT",fileName:"qa.json",mediaType:"application/json"},{key:"qa",kind:"QA",subjectStepKey:"author",evidenceKey:"report"}]}];
+ const before=structuredClone(original);
+ const cleared=workflowEvidenceProfileSteps(original,undefined);
+ expect(cleared[0]?.resultRequirements?.[1]).not.toHaveProperty("evidenceKey");
+ expect(original).toEqual(before);
+ expect(cleared[0]?.dependsOn).toEqual(["author"]);
 });

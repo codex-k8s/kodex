@@ -21,7 +21,7 @@ WHERE i.organization_id=$1::uuid
   AND (r.project_id IS NOT NULL OR control_plane.owned_organization_assistant_run(r.organization_id,r.root_run_id))
   AND root.state IN ('RUNNING','WAITING_HUMAN')
   AND control_plane.runtime_execution_before_deadline(i.organization_id,i.run_id)
-  AND (n.state='RUNNING' OR (
+  AND (n.state='RUNNING' OR control_plane.workflow_evidence_execution_assigned(i.organization_id,n.id,i.id) OR (
     n.state='SUCCEEDED' AND root.state='WAITING_HUMAN' AND EXISTS (
       SELECT 1 FROM control_plane.owner_gates approved_gate
       WHERE approved_gate.integration_invocation_id=i.id

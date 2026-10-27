@@ -28,7 +28,7 @@ func ServerTextBytes(version entity.WorkflowVersion) int {
 // Прежняя проверка общей формы и свежий допуск БД остаются обязательными; предикат не выдаёт
 // возможностей и не доказывает отсутствие привязок обязательного дочернего процесса.
 func ValidServerVersion(version entity.WorkflowVersion) bool {
-	if version.ExecutionMode != ServerDAGV1 || len(version.Steps) < 1 || len(version.Steps) > MaximumSteps || version.Concurrency < 1 || version.Concurrency > 2 {
+	if version.ExecutionMode != ServerDAGV1 || (version.ResultEvidenceProfile != "" && version.ResultEvidenceProfile != GitHubReviewQAV1) || len(version.Steps) < 1 || len(version.Steps) > MaximumSteps || version.Concurrency < 1 || version.Concurrency > 2 {
 		return false
 	}
 	raw, err := json.Marshal(version)
@@ -37,7 +37,7 @@ func ValidServerVersion(version entity.WorkflowVersion) bool {
 	}
 	agents := map[string]string{}
 	for _, step := range version.Steps {
-		if !resultKey.MatchString(step.Key) || agents[step.Key] != "" || step.AgentRef == "" || len(step.DependsOn) > 8 || slices.Contains(step.RequiredCapabilityKeys, "platform.run.delegate") || slices.Contains(step.RequiredCapabilityKeys, "platform.run.launch") || !ValidRequirements(step.ResultRequirements, step.DependsOn) {
+		if !resultKey.MatchString(step.Key) || agents[step.Key] != "" || step.AgentRef == "" || len(step.DependsOn) > 8 || slices.Contains(step.RequiredCapabilityKeys, "platform.run.delegate") || slices.Contains(step.RequiredCapabilityKeys, "platform.run.launch") || !ValidRequirementsForProfile(version.ResultEvidenceProfile, step.ResultRequirements, step.DependsOn) {
 			return false
 		}
 		seen := map[string]bool{}

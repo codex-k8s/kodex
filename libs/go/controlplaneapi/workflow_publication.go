@@ -29,6 +29,9 @@ var errWorkflowPublication = errors.New("workflow publication projection invalid
 // RU: WorkflowPublication — версионированный закрытый состав передаваемого
 // процесса; допуск и определение владельца остаются в control-plane.
 type WorkflowPublication struct {
+	// ResultEvidenceProfile is emitted only by the explicit third-version evidence contract.
+	// ResultEvidenceProfile передаётся только явным evidence контрактом третьей версии.
+	ResultEvidenceProfile string `json:"result_evidence_profile,omitempty"`
 	// ExecutionMode is present only in the server-driven version-two wire profile.
 	// ExecutionMode присутствует только в серверном профиле второй версии передачи.
 	ExecutionMode       string                     `json:"execution_mode,omitempty"`
@@ -97,6 +100,9 @@ type WorkflowPublicationStep struct {
 // WorkflowPublicationRequirement задаёт ограниченное обязательное доказательство в неизменяемой
 // публикации второй версии. Control-plane отдельно проверяет область, происхождение и приёмку.
 type WorkflowPublicationRequirement struct {
+	// EvidenceKey is a published same-step report selector, not artifact authority.
+	// EvidenceKey — опубликованный selector report того же шага, не artifact authority.
+	EvidenceKey    string `json:"evidence_key,omitempty"`
 	Key            string `json:"key"`
 	Kind           string `json:"kind"`
 	FileName       string `json:"file_name,omitempty"`
@@ -242,7 +248,7 @@ func validWorkflowPublication(v WorkflowPublication) bool {
 	}
 	seen := map[string]bool{}
 	for i, step := range v.Steps {
-		if v.Version == 1 && len(step.ResultRequirements) != 0 || v.Version == 2 && !validWorkflowPublicationServerStep(step) {
+		if v.Version == 1 && len(step.ResultRequirements) != 0 || v.Version >= 2 && !validWorkflowPublicationServerStepForProfile(step, v.ResultEvidenceProfile) {
 			return false
 		}
 		if step.ApprovalTimeoutSeconds != nil && (!step.HumanGateAfter || *step.ApprovalTimeoutSeconds < 1 || *step.ApprovalTimeoutSeconds > 604800) {
@@ -292,7 +298,7 @@ func workflowPublicationText(v WorkflowPublication) bool {
 		texts = append(texts, s.DependsOn...)
 		texts = append(texts, s.RequiredCapabilityKeys...)
 		for _, r := range s.ResultRequirements {
-			texts = append(texts, r.Key, r.Kind, r.FileName, r.MediaType, r.Repository, r.SubjectStepKey, r.Operation, r.TargetRef)
+			texts = append(texts, r.Key, r.Kind, r.FileName, r.MediaType, r.Repository, r.SubjectStepKey, r.Operation, r.TargetRef, r.EvidenceKey)
 		}
 	}
 	for _, s := range texts {

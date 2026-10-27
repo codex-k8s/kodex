@@ -253,7 +253,7 @@ func (repository *Repository) materializeServerWorkflowFirstAttemptTaskTx(ctx co
 // workflowStageTask projects public predecessor evidence identically for initial and fresh attempts.
 // workflowStageTask одинаково проецирует публичные доказательства предшественников для первой и новой попытки.
 func workflowStageTask(root *serverWorkflowRoot, step entity.WorkflowStep, inputs []workflowInputReceipt) (string, error) {
-	resultPrompt, err := workflowservice.ResultDeclarationPrompt(step.ResultRequirements)
+	resultPrompt, err := workflowservice.ResultDeclarationPromptForProfile(step.ResultRequirements, root.Version.ResultEvidenceProfile)
 	if err != nil {
 		return "", errs.ErrInvalid
 	}

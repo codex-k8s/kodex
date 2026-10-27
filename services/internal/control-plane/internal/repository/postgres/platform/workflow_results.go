@@ -117,6 +117,14 @@ type workflowIntegrationResult struct {
 // владеет root locks, pending-work barriers, capture, journal append и dispatch в той же Tx.
 // Reason отклоняет весь результат; SQL failure возвращает ошибку без partial acceptance.
 func (repository *Repository) evaluateWorkflowStepResultTx(ctx context.Context, tx pgx.Tx, current scope, lease map[string]any, payload command.CompleteExecutionInput) ([]entity.WorkflowAcceptedResult, string, error) {
+	return repository.evaluateWorkflowStepEvidenceTx(ctx, tx, current, lease, payload, "")
+}
+
+// evaluateWorkflowStepEvidenceTx receives the profile from the already locked owner root; no
+// declaration can enable it. Rejected evidence is returned separately by reason, never as acceptance.
+// evaluateWorkflowStepEvidenceTx получает profile из уже locked owner root; декларация не включает
+// его. Rejected evidence возвращается с reason и никогда не означает приёмку.
+func (repository *Repository) evaluateWorkflowStepEvidenceTx(ctx context.Context, tx pgx.Tx, current scope, lease map[string]any, payload command.CompleteExecutionInput, profile string) ([]entity.WorkflowAcceptedResult, string, error) {
 	var step entity.WorkflowStep
 	var inputs []workflowResultDependency
 	var rawStep, rawInputs []byte
@@ -128,7 +136,7 @@ func (repository *Repository) evaluateWorkflowStepResultTx(ctx context.Context, 
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
 	}
-	if decodeStrict(rawStep, &step) != nil || decodeStrict(rawInputs, &inputs) != nil || len(inputs) > 8 || !workflowservice.ValidRequirements(step.ResultRequirements, step.DependsOn) {
+	if decodeStrict(rawStep, &step) != nil || decodeStrict(rawInputs, &inputs) != nil || len(inputs) > 8 || !workflowservice.ValidRequirementsForProfile(profile, step.ResultRequirements, step.DependsOn) {
 		return nil, "", errs.ErrConflict
 	}
 	if payload.Success != (state == "SUCCEEDED") {
@@ -137,11 +145,12 @@ func (repository *Repository) evaluateWorkflowStepResultTx(ctx context.Context, 
 	if !payload.Success {
 		return nil, workflowExecutionFailed, nil
 	}
-	declared, err := workflowservice.DecodeDeclaration(payload.ResultSummary, step.ResultRequirements)
+	declared, err := workflowservice.DecodeDeclarationForProfile(payload.ResultSummary, step.ResultRequirements, profile)
 	if err != nil {
 		return nil, workflowDeclarationInvalid, nil
 	}
 	results := make([]entity.WorkflowAcceptedResult, 0, len(step.ResultRequirements))
+	rejection := ""
 	for _, requirement := range step.ResultRequirements {
 		declaration := declared[requirement.Key]
 		var result entity.WorkflowAcceptedResult
@@ -168,6 +177,29 @@ func (repository *Repository) evaluateWorkflowStepResultTx(ctx context.Context, 
 				return nil, reason, nil
 			}
 		case "REVIEW", "QA":
+			if profile == workflowservice.GitHubReviewQAV1 {
+				var reason string
+				if requirement.Kind == "REVIEW" {
+					proof, why, err := readWorkflowIntegrationResultTx(ctx, tx, current, lease, declaration.ReceiptRef)
+					if err != nil || why != "" {
+						return nil, why, err
+					}
+					result, reason = acceptWorkflowCommentResult(requirement, declaration, proof, inputs)
+				} else {
+					var err error
+					result, reason, err = repository.evaluateWorkflowQAResultTx(ctx, tx, current, lease, projectID, step, requirement, declaration, declared, inputs)
+					if err != nil {
+						return nil, "", err
+					}
+				}
+				if reason != "" {
+					return nil, reason, nil
+				}
+				if declaration.Verdict == "CHANGES_REQUIRED" {
+					rejection = workflowChangesRequired
+				}
+				break
+			}
 			subject, found := workflowResultSubject(inputs, requirement.SubjectStepKey)
 			if !found || declaration.HeadSHA != subject.HeadSHA {
 				return nil, workflowReviewSubjectMismatch, nil
@@ -185,7 +217,7 @@ func (repository *Repository) evaluateWorkflowStepResultTx(ctx context.Context, 
 		}
 		results = append(results, result)
 	}
-	return results, "", nil
+	return results, rejection, nil
 }
 
 // workflowResultPins copies only server-owned coordinates needed by the completed-owner queries.

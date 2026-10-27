@@ -5,6 +5,9 @@ package entity
 // WorkflowResultRequirement задаёт ограниченное обязательное условие; ссылки выбирают проверенные
 // владельцем доказательства и не предоставляют полномочий, заявленных сотрудником.
 type WorkflowResultRequirement struct {
+	// EvidenceKey selects a same-step published ARTIFACT predicate, never a caller-supplied file identity.
+	// EvidenceKey выбирает опубликованное ARTIFACT условие того же шага, не назначая identity файла из payload.
+	EvidenceKey                                                                      string `json:",omitempty"`
 	Key, Kind, FileName, MediaType, Repository, SubjectStepKey, Operation, TargetRef string
 }
 
@@ -75,6 +78,9 @@ type WorkflowAcceptedResult struct {
 // WorkflowAttemptResult передаёт бизнес-решение и immutable доказательства завершённой попытки;
 // RuntimeRevisionID и Provenance хранятся внутри и не включаются в публичную transport projection.
 type WorkflowAttemptResult struct {
+	// ReviewEvidence retains verified negative-review facts separately from accepted results.
+	// ReviewEvidence сохраняет проверенные факты отрицательного review отдельно от принятых results.
+	ReviewEvidence    []WorkflowAcceptedResult      `json:"evidence,omitempty"`
 	Attempt           int32                         `json:"attempt"`
 	RunRef            string                        `json:"runRef"`
 	RuntimeRevisionID string                        `json:"runtimeRevisionId"`

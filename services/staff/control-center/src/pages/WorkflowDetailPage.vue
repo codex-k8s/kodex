@@ -17,6 +17,7 @@ import WorkflowResultContractEditor from "@/features/workflows/WorkflowResultCon
 import {
   newWorkflowStepKey,
   validWorkflowDAG,
+  workflowEvidenceProfileSteps,
   workflowModeSteps,
 } from "@/features/workflows/result-contract";
 import type {
@@ -153,6 +154,7 @@ const gateDecisionOptions = [
 ] as const;
 const form = reactive({
   executionMode: "MANAGER_DRIVEN" as "MANAGER_DRIVEN" | "SERVER_DAG_V1",
+  resultEvidenceProfile: undefined as "GITHUB_REVIEW_QA_V1" | undefined,
   name: "",
   purpose: "",
   coordinatorAgentRef: "",
@@ -177,8 +179,16 @@ const validDAG = computed(
           .map((step) => step.name + step.purpose + step.expectedResult)
           .join(""),
       "ref",
+      form.resultEvidenceProfile,
     ),
 );
+function changeEvidenceProfile(event: Event): void {
+  if (!canEdit.value || busy.value || !(event.target instanceof HTMLSelectElement)) return;
+  const value=event.target.value;
+  if(value!=="" && value!=="GITHUB_REVIEW_QA_V1") return;
+  form.resultEvidenceProfile=value || undefined;
+  form.steps=workflowEvidenceProfileSteps(form.steps,form.resultEvidenceProfile);
+}
 function modeEditable(): boolean {
   return canEdit.value === true && !busy.value;
 }
@@ -205,6 +215,7 @@ async function changeMode(event: Event): Promise<void> {
     return;
   form.steps = workflowModeSteps(form.steps, mode, "ref", true);
   form.executionMode = mode;
+ if(mode!=="SERVER_DAG_V1") form.resultEvidenceProfile=undefined;
 }
 function changeResultStep(
   step: WorkflowStepInput,
@@ -576,6 +587,14 @@ onBeforeUnmount(() => {
                   </option>
                 </select>
               </label>
+              <label v-if="serverMode" class="field">
+                <span>{{ $t("workflowResults.evidenceProfile") }}</span>
+                <select :value="form.resultEvidenceProfile ?? ''" @change="changeEvidenceProfile" :disabled="busy || !canEdit" :aria-label="$t('workflowResults.evidenceProfile')">
+                  <option value="">{{ $t("workflowResults.evidenceLegacy") }}</option>
+                  <option value="GITHUB_REVIEW_QA_V1">{{ $t("workflowResults.evidenceNative") }}</option>
+                </select>
+                <small>{{ $t("workflowResults.evidenceHelp") }}</small>
+              </label>
               <p v-if="serverMode">{{ $t("workflowResults.bounds") }}</p>
               <p v-if="!validDAG" class="field-error" role="status">
                 {{ $t("workflowResults.invalid") }}
@@ -711,6 +730,7 @@ onBeforeUnmount(() => {
               >
                 <WorkflowResultContractEditor
                   v-if="serverMode"
+                  :evidence-profile="form.resultEvidenceProfile"
                   :step-key="step.ref ?? ''"
                   :dependencies="step.dependsOn"
                   :requirements="step.resultRequirements"

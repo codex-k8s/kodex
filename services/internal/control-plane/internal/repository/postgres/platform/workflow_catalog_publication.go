@@ -102,6 +102,9 @@ func executionWorkflowPublication(item entity.Workflow, digest string) ([]byte, 
 	value := controlplaneapi.WorkflowPublication{Version: 1, WorkflowRef: item.Ref, ProjectRef: item.ProjectRef, PublishedRef: source.Ref, SpecDigest: digest, WorkflowVersion: item.Version, PublishedVersion: source.VersionNumber, Name: source.Name, Purpose: source.Purpose, CoordinatorAgentRef: source.CoordinatorAgentRef, Instructions: source.Instructions, CompletionCriteria: source.CompletionCriteria, Concurrency: source.Concurrency, TimeoutSeconds: source.TimeoutSeconds, GateDecisions: source.GateDecisions, ResultSchema: schema, InputFields: []controlplaneapi.WorkflowPublicationInput{}, Steps: []controlplaneapi.WorkflowPublicationStep{}}
 	if source.ExecutionMode == workflowservice.ServerDAGV1 {
 		value.Version, value.ExecutionMode = 2, source.ExecutionMode
+		if source.ResultEvidenceProfile != "" {
+			value.Version, value.ResultEvidenceProfile = 3, source.ResultEvidenceProfile
+		}
 	}
 	for _, f := range source.Inputs {
 		value.InputFields = append(value.InputFields, controlplaneapi.WorkflowPublicationInput{Key: f.Key, Label: f.Label, ValueType: f.Type, Description: f.Help, DefaultValue: f.DefaultValue, Required: f.Required, Options: f.Options})
@@ -110,7 +113,7 @@ func executionWorkflowPublication(item entity.Workflow, digest string) ([]byte, 
 		value.Steps = append(value.Steps, controlplaneapi.WorkflowPublicationStep{Key: s.Key, Name: s.Name, AgentRef: s.AgentRef, Instructions: s.Instructions, ExpectedResult: s.ExpectedResult, Position: s.Position, ParallelGroup: s.ParallelGroup, TimeoutSeconds: s.TimeoutSeconds, Parallel: s.Parallel, HumanGateAfter: s.HumanGateAfter, ApprovalTimeoutSeconds: s.ApprovalTimeoutSeconds, DependsOn: s.DependsOn, GateDecisions: s.GateDecisions, RequiredCapabilityKeys: s.RequiredCapabilityKeys})
 		for _, r := range s.ResultRequirements {
 			index := len(value.Steps) - 1
-			value.Steps[index].ResultRequirements = append(value.Steps[index].ResultRequirements, controlplaneapi.WorkflowPublicationRequirement{Key: r.Key, Kind: r.Kind, FileName: r.FileName, MediaType: r.MediaType, Repository: r.Repository, SubjectStepKey: r.SubjectStepKey, Operation: r.Operation, TargetRef: r.TargetRef})
+			value.Steps[index].ResultRequirements = append(value.Steps[index].ResultRequirements, controlplaneapi.WorkflowPublicationRequirement{EvidenceKey: r.EvidenceKey, Key: r.Key, Kind: r.Kind, FileName: r.FileName, MediaType: r.MediaType, Repository: r.Repository, SubjectStepKey: r.SubjectStepKey, Operation: r.Operation, TargetRef: r.TargetRef})
 		}
 	}
 	raw, sha, err := controlplaneapi.EncodeWorkflowPublication(value)

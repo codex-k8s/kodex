@@ -14983,6 +14983,10 @@ components:
         mediaType: { type: string, maxLength: 160 }
         repository: { type: string, maxLength: 200 }
         subjectStepKey: { $ref: "#/components/schemas/WorkflowStepKey" }
+        evidenceKey:
+          type: string
+          pattern: "^[A-Za-z0-9_-]{1,96}$"
+          description: Только QA выбранного профиля; ключ ARTIFACT application/json того же шага.
         operation:
           {
             type: string,
@@ -15127,6 +15131,10 @@ components:
         ]
       properties:
         executionMode: { type: string, enum: [MANAGER_DRIVEN, SERVER_DAG_V1] }
+        resultEvidenceProfile:
+          type: string
+          enum: [GITHUB_REVIEW_QA_V1]
+          description: Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
         projectRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -15237,6 +15245,10 @@ components:
         [ref, version, revision, state, inputFields, steps, validationMessages]
       properties:
         executionMode: { type: string, enum: [MANAGER_DRIVEN, SERVER_DAG_V1] }
+        resultEvidenceProfile:
+          type: string
+          enum: [GITHUB_REVIEW_QA_V1]
+          description: Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version:
           {
@@ -15275,6 +15287,10 @@ components:
       required: [name, purpose, coordinatorAgentRef]
       properties:
         executionMode: { type: string, enum: [MANAGER_DRIVEN, SERVER_DAG_V1] }
+        resultEvidenceProfile:
+          type: string
+          enum: ["", GITHUB_REVIEW_QA_V1]
+          description: Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия. Пустое значение снимает draft opt-in; весь итоговый граф заново проверяется.
         name: { type: string, minLength: 1, maxLength: 160 }
         purpose: { type: string, minLength: 1, maxLength: 1000 }
         coordinatorAgentRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -15520,10 +15536,27 @@ components:
         repository: { type: string, maxLength: 200 }
         number: { type: integer, minimum: 0, maximum: 9007199254740991 }
         headSha: { type: string, maxLength: 64 }
-        verdict: { type: string, enum: [PASS] }
+        verdict: { type: string, enum: [PASS, CHANGES_REQUIRED] }
     WorkflowAttemptResult:
       type: object
       additionalProperties: false
+      allOf:
+        - anyOf:
+            - properties: { accepted: { enum: [true] } }
+            - properties: { results: { maxItems: 0 } }
+        - anyOf:
+            - not: { required: [evidence] }
+            - properties:
+                accepted: { enum: [false] }
+                reason: { enum: [CHANGES_REQUIRED] }
+                results: { maxItems: 0 }
+        - anyOf:
+            - properties: { accepted: { enum: [false] } }
+            - properties:
+                results:
+                  items:
+                    properties:
+                      verdict: { enum: [PASS] }
       required: [attempt, runRef, accepted, reason, results]
       properties:
         attempt: { type: integer, minimum: 1, maximum: 4 }
@@ -15536,6 +15569,12 @@ components:
             maxItems: 4,
             items: { $ref: "#/components/schemas/WorkflowAcceptedResult" },
           }
+        evidence:
+          type: array
+          minItems: 1
+          maxItems: 4
+          description: Проверенные факты отклонённого REVIEW/QA; accepted=false, reason=CHANGES_REQUIRED, results остаётся пустым.
+          items: { $ref: "#/components/schemas/WorkflowAcceptedResult" }
     RunNode:
       type: object
       additionalProperties: false

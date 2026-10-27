@@ -57,11 +57,26 @@ var (
 // ValidRequirements checks a closed bounded predicate registry and exact predecessor references.
 // ValidRequirements проверяет закрытый ограниченный реестр и точные ссылки на предшественников.
 func ValidRequirements(requirements []entity.WorkflowResultRequirement, dependencies []string) bool {
+	return ValidRequirementsForProfile("", requirements, dependencies)
+}
+
+// ValidRequirementsForProfile validates explicit evidence selectors while retaining the historical
+// predicate vocabulary when the profile is absent. It never authorizes a file or external effect.
+// ValidRequirementsForProfile проверяет явные evidence selectors, сохраняя прежний словарь без
+// профиля. Функция не разрешает доступ к файлу либо внешний effect.
+func ValidRequirementsForProfile(profile string, requirements []entity.WorkflowResultRequirement, dependencies []string) bool {
+	if profile != "" && profile != GitHubReviewQAV1 {
+		return false
+	}
 	if len(requirements) < 1 || len(requirements) > 4 {
 		return false
 	}
 	seen := map[string]bool{}
 	for _, r := range requirements {
+		if (r.EvidenceKey != "" && (profile != GitHubReviewQAV1 || r.Kind != "QA")) ||
+			(profile == GitHubReviewQAV1 && r.Kind == "QA" && !resultKey.MatchString(r.EvidenceKey)) {
+			return false
+		}
 		if len(r.Repository) > 200 || !resultKey.MatchString(r.Key) || seen[r.Key] || (r.Kind != "DEPLOYMENT" && r.TargetRef != "") {
 			return false
 		}
@@ -106,7 +121,7 @@ func ValidRequirements(requirements []entity.WorkflowResultRequirement, dependen
 			return false
 		}
 	}
-	return true
+	return validEvidenceRequirementRefs(profile, requirements)
 }
 
 // DecodeDeclaration requires one unique result for every predicate and rejects unknown fields,
@@ -114,6 +129,17 @@ func ValidRequirements(requirements []entity.WorkflowResultRequirement, dependen
 // DecodeDeclaration требует по результату на каждое условие и отклоняет неизвестные поля,
 // лишний JSON и повторные ключи до семантического использования.
 func DecodeDeclaration(raw string, requirements []entity.WorkflowResultRequirement) (map[string]entity.WorkflowDeclaredResult, error) {
+	return DecodeDeclarationForProfile(raw, requirements, "")
+}
+
+// DecodeDeclarationForProfile requires native receipt selectors only for the explicit new profile;
+// historical declarations retain their exact closed shape and are never upgraded implicitly.
+// DecodeDeclarationForProfile требует native receipt selectors только для нового явного профиля;
+// прежние декларации сохраняют точную закрытую форму и не повышаются неявно.
+func DecodeDeclarationForProfile(raw string, requirements []entity.WorkflowResultRequirement, profile string) (map[string]entity.WorkflowDeclaredResult, error) {
+	if profile != "" && profile != GitHubReviewQAV1 {
+		return nil, ErrResultInvalid
+	}
 	if len(requirements) < 1 || len(requirements) > 4 || len(raw) > MaximumResultBytes || !utf8.ValidString(raw) || !uniqueJSON([]byte(raw)) {
 		return nil, ErrResultInvalid
 	}
@@ -167,7 +193,16 @@ func DecodeDeclaration(raw string, requirements []entity.WorkflowResultRequireme
 				return nil, ErrResultInvalid
 			}
 		case "REVIEW", "QA":
-			if !exactFields(resultFields, "key", "headSha", "verdict") || !CommitPattern.MatchString(r.HeadSHA) || (r.Verdict != "PASS" && r.Verdict != "CHANGES_REQUIRED") {
+			shape := exactFields(resultFields, "key", "headSha", "verdict")
+			if profile == GitHubReviewQAV1 {
+				withReceipt := exactFields(resultFields, "key", "headSha", "verdict", "receiptRef") && receiptRefPattern.MatchString(r.ReceiptRef)
+				if kind == "REVIEW" {
+					shape = withReceipt
+				} else {
+					shape = shape || (r.Verdict == "CHANGES_REQUIRED" && withReceipt)
+				}
+			}
+			if !shape || !CommitPattern.MatchString(r.HeadSHA) || (r.Verdict != "PASS" && r.Verdict != "CHANGES_REQUIRED") {
 				return nil, ErrResultInvalid
 			}
 		default:

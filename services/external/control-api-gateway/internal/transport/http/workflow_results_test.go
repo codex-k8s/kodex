@@ -149,3 +149,33 @@ func TestWorkflowPublicProjectionRejectsUnknownEvidence(t *testing.T) {
 		}
 	}
 }
+
+// TestWorkflowNegativeEvidenceProjection exercises the shared actual HTTP/WS message writer:
+// verified negative facts survive, but accepted results and private owner coordinates do not.
+// TestWorkflowNegativeEvidenceProjection проверяет actual общий HTTP/WS message writer:
+// negative facts сохраняются, accepted results и private owner coordinates не выдаются.
+func TestWorkflowNegativeEvidenceProjection(t *testing.T) {
+	attempt := &cp.WorkflowAttemptResult{Attempt: 1, RunRef: "run_fixture1", Accepted: false, Reason: "CHANGES_REQUIRED", Evidence: []*cp.WorkflowAcceptedResult{{Key: "review", Kind: "REVIEW", Digest: strings.Repeat("a", 64), ReceiptRef: "erc_12345678", Repository: "owner/repo", Number: 42, HeadSha: strings.Repeat("b", 40), Verdict: "CHANGES_REQUIRED"}}}
+	node := &cp.RunNode{Ref: "nod_fixture1", RunRef: "run_fixture1", WorkflowResults: []*cp.WorkflowAttemptResult{attempt}}
+	view, err := messageMap(node)
+	if err != nil {
+		t.Fatal("negative evidence unavailable", err)
+	}
+	row := view["workflowResults"].([]any)[0].(map[string]any)
+	if row["accepted"] != false || len(row["results"].([]any)) != 0 || len(row["evidence"].([]any)) != 1 {
+		t.Fatal("negative evidence became acceptance")
+	}
+	for _, change := range []func(*cp.WorkflowAttemptResult){
+		func(v *cp.WorkflowAttemptResult) { v.Accepted = true },
+		func(v *cp.WorkflowAttemptResult) { v.Reason = "RESULT_INVALID" },
+		func(v *cp.WorkflowAttemptResult) { v.Results = v.Evidence },
+		func(v *cp.WorkflowAttemptResult) { v.Evidence[0].ReceiptRef = "" },
+		func(v *cp.WorkflowAttemptResult) { v.Evidence[0].Verdict = "PASS" },
+	} {
+		changed := proto.Clone(node).(*cp.RunNode)
+		change(changed.WorkflowResults[0])
+		if _, err := messageMap(changed); err == nil {
+			t.Fatal("invalid negative envelope projected")
+		}
+	}
+}

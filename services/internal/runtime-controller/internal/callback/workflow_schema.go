@@ -7,7 +7,7 @@ package callback
 func workflowResultRequirementsSchema() map[string]any {
 	fields := map[string]any{
 		"key": workflowStepKeySchema(), "fileName": stringSchema(1, 160), "mediaType": stringSchema(1, 160),
-		"repository": stringSchema(1, 200), "subjectStepKey": workflowStepKeySchema(), "targetRef": stringSchema(1, 96),
+		"evidenceKey": workflowStepKeySchema(), "repository": stringSchema(1, 200), "subjectStepKey": workflowStepKeySchema(), "targetRef": stringSchema(1, 96),
 	}
 	branches := make([]map[string]any, 0, 6)
 	for _, kind := range []string{"ARTIFACT", "PULL_REQUEST", "REVIEW", "QA", "INTEGRATION_RECEIPT", "DEPLOYMENT"} {
@@ -28,6 +28,9 @@ func workflowResultRequirementsSchema() map[string]any {
 		properties := make(map[string]any, len(keys))
 		for _, key := range keys {
 			properties[key] = fields[key]
+		}
+		if kind == "QA" {
+			properties["evidenceKey"] = fields["evidenceKey"]
 		}
 		properties["kind"] = enumSchema(kind)
 		if kind == "INTEGRATION_RECEIPT" {
@@ -58,6 +61,14 @@ func workflowServerBounds() []map[string]any {
 			"maxConcurrency": map[string]any{"maximum": 2},
 			"steps":          map[string]any{"maxItems": 12, "items": map[string]any{"required": []string{"key", "dependsOn", "resultRequirements"}, "properties": map[string]any{"key": workflowStepKeySchema()}}},
 		}},
+	}, {
+		"if": map[string]any{"required": []string{"resultEvidenceProfile"}, "properties": map[string]any{"resultEvidenceProfile": enumSchema("GITHUB_REVIEW_QA_V1")}},
+		"then": map[string]any{"properties": map[string]any{
+			"executionMode": enumSchema("SERVER_DAG_V1"),
+			"steps": map[string]any{"items": map[string]any{"properties": map[string]any{
+				"resultRequirements": map[string]any{"items": map[string]any{"if": map[string]any{"required": []string{"kind"}, "properties": map[string]any{"kind": enumSchema("QA")}}, "then": map[string]any{"required": []string{"evidenceKey"}}}},
+			}}},
+		}},
 	}}
 }
 
@@ -72,5 +83,15 @@ func workflowCreationBounds() []map[string]any {
 			{"required": []string{"key"}}, {"required": []string{"dependsOn"}}, {"required": []string{"resultRequirements"}},
 		}}}},
 	}}
+	bounds = append(bounds, map[string]any{
+		"if":   map[string]any{"required": []string{"resultEvidenceProfile"}},
+		"then": map[string]any{"required": []string{"executionMode"}, "properties": map[string]any{"executionMode": enumSchema("SERVER_DAG_V1")}},
+	})
+	bounds = append(bounds, map[string]any{
+		"if": map[string]any{"not": map[string]any{"required": []string{"resultEvidenceProfile"}}},
+		"then": map[string]any{"properties": map[string]any{"steps": map[string]any{"items": map[string]any{"properties": map[string]any{
+			"resultRequirements": map[string]any{"items": map[string]any{"not": map[string]any{"required": []string{"evidenceKey"}}}},
+		}}}}},
+	})
 	return bounds
 }

@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	workflowservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/workflow"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
@@ -97,12 +98,16 @@ func (repository *Repository) completeServerWorkflowTx(ctx context.Context, tx p
 			reason := "CAPTURE_CONTINUATION_UNAVAILABLE"
 			if !captureBlocked {
 				var cause error
-				results, reason, cause = repository.evaluateWorkflowStepResultTx(ctx, tx, current, lease, payload)
+				results, reason, cause = repository.evaluateWorkflowStepEvidenceTx(ctx, tx, current, lease, payload, root.Version.ResultEvidenceProfile)
 				if cause != nil {
 					return commandOutcome{}, true, cause
 				}
 			}
-			if _, err := appendWorkflowAttemptTx(ctx, tx, current, lease, reason == "", reason, results); err != nil {
+			var evidence []entity.WorkflowAcceptedResult
+			if root.Version.ResultEvidenceProfile == workflowservice.GitHubReviewQAV1 && reason == workflowChangesRequired {
+				evidence, results = results, nil
+			}
+			if _, err := appendWorkflowAttemptEvidenceTx(ctx, tx, current, lease, reason == "", reason, results, evidence); err != nil {
 				return commandOutcome{}, true, err
 			}
 			if reason != "" {

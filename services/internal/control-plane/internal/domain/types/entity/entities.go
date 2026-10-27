@@ -729,6 +729,9 @@ type WorkflowStep struct {
 // агентами, входом, схемой результата и настройками параллельности, времени и gate; создание значения
 // процесс не публикует и не запускает.
 type WorkflowVersion struct {
+	// ResultEvidenceProfile explicitly opts a published SERVER version into owner-verified review/QA evidence.
+	// ResultEvidenceProfile явно включает owner-verified review/QA evidence для опубликованной SERVER версии.
+	ResultEvidenceProfile string `json:",omitempty"`
 	// ExecutionMode is an explicit immutable policy; absence retains historical manager orchestration.
 	// ExecutionMode — явная неизменяемая политика; отсутствие сохраняет прежнюю оркестрацию менеджером.
 	ExecutionMode                                                             string `json:",omitempty"`

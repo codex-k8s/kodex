@@ -1,0 +1,198 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "repository",
+    "pullRequestNumber",
+    "headSha",
+    "verdict",
+    "tests",
+    "findings"
+  ],
+  "properties": {
+    "schema": {
+      "const": "kodex.workflow-qa-report.v1"
+    },
+    "repository": {
+      "type": "string",
+      "maxLength": 200,
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?![\\s\\S])"
+    },
+    "pullRequestNumber": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "headSha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}([a-f0-9]{24})?(?![\\s\\S])"
+    },
+    "verdict": {
+      "enum": [
+        "PASS",
+        "CHANGES_REQUIRED"
+      ]
+    },
+    "tests": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "command",
+          "exitCode",
+          "log"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160,
+            "pattern": "^(?=[\\s\\S]*[^\\s])[^\\u0000]+(?![\\s\\S])"
+          },
+          "command": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048,
+            "pattern": "^(?=[\\s\\S]*[^\\s])[^\\u0000]+(?![\\s\\S])"
+          },
+          "exitCode": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "log": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "artifactRef",
+              "revision",
+              "digest"
+            ],
+            "properties": {
+              "kind": {
+                "const": "CAPTURED_ARTIFACT"
+              },
+              "artifactRef": {
+                "type": "string",
+                "pattern": "^art_[A-Za-z0-9_-]{8,92}(?![\\s\\S])"
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "digest": {
+                "type": "string",
+                "pattern": "^sha256:[a-f0-9]{64}(?![\\s\\S])"
+              }
+            }
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "summary"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,96}(?![\\s\\S])"
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "pattern": "^(?=[\\s\\S]*[^\\s])[^\\u0000]+(?![\\s\\S])"
+          }
+        }
+      }
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "body"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^(?=[\\s\\S]*[^\\s])[^\\u0000]+(?![\\s\\S])"
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192,
+          "pattern": "^(?=[\\s\\S]*[^\\s])[^\\u0000]+(?![\\s\\S])"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "verdict": {
+            "const": "PASS"
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "required": [
+            "issue"
+          ]
+        },
+        "properties": {
+          "findings": {
+            "maxItems": 0
+          },
+          "tests": {
+            "items": {
+              "properties": {
+                "exitCode": {
+                  "const": 0
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "issue"
+        ]
+      },
+      "then": {
+        "properties": {
+          "verdict": {
+            "const": "CHANGES_REQUIRED"
+          },
+          "findings": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Captured QA report с immutable log pins",
+  "description": "Не более32768UTF8bytes. Только данные сотрудника: command не исполняется owner и не является аттестацией запуска. Владелец отдельно проверяет exact accepted repository/PR/head, producing RR/lease/capture, каждый log pin, fresh ACL и effective CLEAN. Findings.key уникален. Issue разрешён только для реального дефекта; отсутствие Issue не выдумывает ошибку."
+}

@@ -175,15 +175,16 @@ func domainWorkflowVersion(input *controlplanev1.WorkflowVersion) *entity.Workfl
 		return nil
 	}
 	result := &entity.WorkflowVersion{
-		Ref:                 input.GetRef(),
-		Name:                input.GetName(),
-		Purpose:             input.GetPurpose(),
-		CoordinatorAgentRef: input.GetCoordinatorAgentRef(),
-		VersionNumber:       input.GetRevision(),
-		Concurrency:         input.GetMaxConcurrency(),
-		TimeoutSeconds:      int64(input.GetTimeoutSeconds()),
-		CompletionCriteria:  input.GetCompletionCriteria(),
-		ExecutionMode:       input.GetExecutionMode(),
+		Ref:                   input.GetRef(),
+		Name:                  input.GetName(),
+		Purpose:               input.GetPurpose(),
+		CoordinatorAgentRef:   input.GetCoordinatorAgentRef(),
+		VersionNumber:         input.GetRevision(),
+		Concurrency:           input.GetMaxConcurrency(),
+		TimeoutSeconds:        int64(input.GetTimeoutSeconds()),
+		CompletionCriteria:    input.GetCompletionCriteria(),
+		ExecutionMode:         input.GetExecutionMode(),
+		ResultEvidenceProfile: input.GetResultEvidenceProfile(),
 	}
 	knownInputKeys := make(map[string]struct{}, len(input.GetInputFields()))
 	for _, item := range input.GetInputFields() {
@@ -237,7 +238,7 @@ func domainWorkflowVersion(input *controlplanev1.WorkflowVersion) *entity.Workfl
 			ApprovalTimeoutSeconds: item.ApprovalTimeoutSeconds,
 		}
 		for _, requirement := range item.GetResultRequirements() {
-			step.ResultRequirements = append(step.ResultRequirements, entity.WorkflowResultRequirement{Key: requirement.GetKey(), Kind: requirement.GetKind(), FileName: requirement.GetFileName(), MediaType: requirement.GetMediaType(), Repository: requirement.GetRepository(), SubjectStepKey: requirement.GetSubjectStepKey(), Operation: requirement.GetOperation(), TargetRef: requirement.GetTargetRef()})
+			step.ResultRequirements = append(step.ResultRequirements, entity.WorkflowResultRequirement{EvidenceKey: requirement.GetEvidenceKey(), Key: requirement.GetKey(), Kind: requirement.GetKind(), FileName: requirement.GetFileName(), MediaType: requirement.GetMediaType(), Repository: requirement.GetRepository(), SubjectStepKey: requirement.GetSubjectStepKey(), Operation: requirement.GetOperation(), TargetRef: requirement.GetTargetRef()})
 		}
 		for _, decision := range item.GetGateDecisions() {
 			step.GateDecisions = append(step.GateDecisions, enumSuffix(decision, "OWNER_GATE_DECISION_"))
