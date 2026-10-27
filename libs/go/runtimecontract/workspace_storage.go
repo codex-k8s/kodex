@@ -223,7 +223,15 @@ func validateWorkspaceWriter(value WorkspaceWriterCommitment, requireJoin bool) 
 // Matches compares every current execution commitment while leaving Pod observation to the controller.
 // Matches сравнивает все current execution commitments, оставляя Pod observation controller.
 func (value WorkspaceWriterCommitment) Matches(input RunnerInput) bool {
-	return value.Validate() == nil && input.Mode == RunnerModeTurn && value.RunRef == input.RunRef &&
+	return value.Validate() == nil && workspaceWriterTupleMatches(value, input)
+}
+
+// workspaceWriterTupleMatches compares identity only; callers separately require pre- or post-join shape.
+// This helper never validates a record, observes a process or grants permission to write.
+// workspaceWriterTupleMatches сравнивает только identity; caller отдельно требует pre-/post-join shape.
+// Helper не валидирует record, не наблюдает процесс и не разрешает запись.
+func workspaceWriterTupleMatches(value WorkspaceWriterCommitment, input RunnerInput) bool {
+	return input.Mode == RunnerModeTurn && value.RunRef == input.RunRef &&
 		value.NodeRef == input.NodeRef && value.TurnRef == input.TurnRef && value.RuntimeRevisionRef == input.RuntimeRevisionRef &&
 		value.RuntimeRevisionVersion == input.RuntimeRevisionVersion && value.RuntimeRevisionDigest == input.RuntimeRevisionDigest &&
 		value.ExecutionBindingDigest == input.ExecutionBindingDigest && value.InputDigest == input.InputDigest &&

@@ -80,7 +80,7 @@ func (value WorkspaceWriterAcknowledgement) Matches(input RunnerInput) bool {
 	return input.WorkspaceStorage != nil && input.WorkspaceStorage.ValidateForInput(input) == nil &&
 		value.Schema == WorkspaceWriterAcknowledgementSchema && value.Scope == input.WorkspaceStorage.Scope &&
 		value.WorkspaceRef == input.WorkspaceStorage.WorkspaceRef && value.Generation == input.WorkspaceStorage.Generation &&
-		validateWorkspaceWriter(value.Writer, false) == nil && value.Writer.Matches(input)
+		validateWorkspaceWriter(value.Writer, false) == nil && workspaceWriterTupleMatches(value.Writer, input)
 }
 
 // EncodeWorkspaceWriterAcknowledgement publishes bounded canonical metadata without secret fences.

@@ -58,6 +58,23 @@ func TestWorkspaceOwnerAcknowledgementIsClosedAndSecretFree(t *testing.T) {
 	if err != nil || !decoded.Matches(input) {
 		t.Fatal("current immutable owner ACK did not match its input")
 	}
+	if decoded.Writer.Matches(input) {
+		t.Fatal("initial owner ACK was promoted into a positive joined-writer proof")
+	}
+	for _, change := range []func(*WorkspaceWriterAcknowledgement){
+		func(value *WorkspaceWriterAcknowledgement) { value.Writer.LeaseGeneration++ },
+		func(value *WorkspaceWriterAcknowledgement) { value.Writer.Attempt++ },
+		func(value *WorkspaceWriterAcknowledgement) { value.Writer.InputDigest = strings.Repeat("0", 64) },
+		func(value *WorkspaceWriterAcknowledgement) { value.Writer.RuntimeRevisionRef = "rrv_foreign000" },
+		func(value *WorkspaceWriterAcknowledgement) { value.Generation++ },
+		func(value *WorkspaceWriterAcknowledgement) { value.Scope.ProjectRef = "prj_foreign000" },
+	} {
+		invalid := ack
+		change(&invalid)
+		if invalid.Matches(input) {
+			t.Fatal("initial owner ACK accepted another execution tuple or generation")
+		}
+	}
 	ack.Writer.JoinSHA256 = strings.Repeat("0", 64)
 	if _, err := EncodeWorkspaceWriterAcknowledgement(ack); err == nil {
 		t.Fatal("writer ACK fabricated a positive join")
