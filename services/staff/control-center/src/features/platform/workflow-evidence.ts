@@ -21,7 +21,7 @@ function object(value: unknown): value is RecordValue {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function text(value: unknown, maximum: number): value is string {
-  return typeof value === "string" && [...value].length <= maximum;
+  return typeof value === "string" && Array.from(value).length <= maximum;
 }
 function validResult(value: unknown): value is RecordValue {
   if (

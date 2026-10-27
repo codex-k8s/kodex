@@ -271,7 +271,7 @@ it("explicit profile clear удаляет только editable evidenceKey бе
   ];
   const before = structuredClone(original);
   const cleared = workflowEvidenceProfileSteps(original, undefined);
-  expect(cleared[0]?.resultRequirements?.[1]).not.toHaveProperty("evidenceKey");
+  expect(cleared[0]?.resultRequirements[1]).not.toHaveProperty("evidenceKey");
   expect(original).toEqual(before);
   expect(cleared[0]?.dependsOn).toEqual(["author"]);
 });

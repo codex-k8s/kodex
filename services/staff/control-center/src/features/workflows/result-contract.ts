@@ -41,12 +41,13 @@ function boundedText(value: unknown, max: number): value is string {
 export function validWorkflowRequirements(
   value: unknown,
   dependencies: string[],
-  profile: unknown = undefined,
+  profile?: unknown,
 ): value is WorkflowResultRequirement[] {
   if (profile !== undefined && profile !== "GITHUB_REVIEW_QA_V1") return false;
   if (!Array.isArray(value) || value.length < 1 || value.length > 4)
     return false;
   const seen = new Set<string>();
+  const verified: Item[] = [];
   for (const item of value) {
     if (
       !workflowItem(item) ||
@@ -112,16 +113,17 @@ export function validWorkflowRequirements(
         !dependencies.includes(item.subjectStepKey))
     )
       return false;
+    verified.push(item);
   }
   if (profile === "GITHUB_REVIEW_QA_V1") {
     for (const kind of ["REVIEW", "QA"]) {
-      if (value.filter((item) => item.kind === kind).length > 1) return false;
+      if (verified.filter((item) => item.kind === kind).length > 1) return false;
     }
-    for (const item of value) {
+    for (const item of verified) {
       if (
         item.kind === "QA" &&
         (!validWorkflowKey(item.evidenceKey) ||
-          !value.some(
+          !verified.some(
             (report) =>
               report.key === item.evidenceKey &&
               report.kind === "ARTIFACT" &&
@@ -139,7 +141,7 @@ export function validWorkflowDAG(
   concurrency: unknown,
   text: string,
   keyField: "ref" | "key",
-  profile: unknown = undefined,
+  profile?: unknown,
 ): boolean {
   if (
     !Array.isArray(steps) ||
