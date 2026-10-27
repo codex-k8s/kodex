@@ -9200,6 +9200,22 @@
       "fragmentSHA256": "53adb13cec0d04ac9db0c5b09f924f0e53afee5c873fad131627bc3756062acd",
       "count": 1,
       "reason": "Две самостоятельные проверки в одном тестовом файле подтверждают каскадный сброс разных уровней выбора: новая версия project отзывает recipient и capability, а новая версия recipient отзывает capability и её страницы. Разные loaders, version pins, context keys и ожидаемые сохраняемые значения составляют предмет проверки. Универсализация через параметры стерла бы явно видимый порядок разных переходов и повышала риск непроверенного reset. Сохранён только точный внутрефайловый hash и count1; сами assertions и иные тесты не исключены."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/assistant/components/AssistantProjectIntegrationGrantPlanForm.vue",
+      "secondPath": "services/staff/control-center/src/features/assistant/components/AssistantSystemIntegrationGrantPlanForm.vue",
+      "fragmentSHA256": "f5f3f9603065d66a66ad054cf8241c37c3f7bfcc0e289cf4ca6c45cbe0785b20",
+      "count": 1,
+      "reason": "Два watcher начинают независимые SYSTEM и PROJECT readback, сбрасывают собственное состояние и привязывают AbortController к своему onCleanup. PROJECT проверяет project owner и читает выбранный scoped bundle с возможным общим контекстом; SYSTEM проверяет system owner и выполняет отдельные connection/assistant/owner reads с ограниченной пагинацией. Общие проекция и owner-reset уже вынесены. Универсальный watcher с callback и переключаемым owner скрыл бы разные зависимости, отмену и проверки pin для этих границ. Сохранена только точная пара путей, hash и count1; прочие lifecycle и authority проверки не исключены."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/assistant/components/AssistantProjectIntegrationGrantPlanForm.vue",
+      "secondPath": "services/staff/control-center/src/features/assistant/components/AssistantSystemIntegrationGrantPlanForm.vue",
+      "fragmentSHA256": "bad1d75d5d285ace36023b0823f1ffd9c4d2db9ad691e5775894079291df24b2",
+      "count": 1,
+      "reason": "После вынесения общего owner-reset в двух формах осталось окно завершения разных async readback с локальными catch/finally, событиями parameter/dirty и явным подключением общего reset. PROJECT читает scoped bundle, SYSTEM выполняет собственные SDK reads и проверку pagination; каждый watcher владеет своим abort signal и состоянием ошибки. Общий callback ради одинаковых финальных строк скрыл бы отдельные жизненные циклы и порядок событий, тогда как общая реактивная проекция и owner-reset уже переиспользуются. Сохранены только точные пути, hash и count1; сетевые и owner проверки не исключены."
     }
   ]
 }

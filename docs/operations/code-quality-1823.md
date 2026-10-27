@@ -4,11 +4,26 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.592.0
+version: 1.593.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общий owner-reset форм grant — 27.10.2026
+
+Формы SYSTEM и PROJECT используют общий синхронный сброс readback при abort
+owner и удаление обработчика при unmount. Независимые сетевые watcher, их
+отмена, owner-проверки и события остаются у форм. Обратное сравнение двух
+форм и прежнего helper PASS; отдельные тесты проверяют abort и unmount.
+
+Два точных окна начала и завершения разных readback оставлены с обоснованием
+разных owner и network lifecycle; 12 мутаций привязок отклонены. До изменения
+85 тестов PASS, после 87 PASS, FAIL/SKIP 0. Первый lint выявил лишнюю optional
+chain в новом тесте; после исправления lint, typecheck, форматирование и PWA
+build PASS. 17 тестов инструментов качества PASS. Context7: [Vue lifecycle](https://vuejs.org/api/composition-api-lifecycle).
+Анализ: 1328 raw / 1296 retained / 32 unresolved, Go-комментарии 21732/21732.
+Браузер, E2E, live/deploy/startup и QA не выполнялись.
 
 ## Общий download Blob и адресные проверки сценариев — 27.10.2026
 

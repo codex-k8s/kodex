@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, useId, watch } from "vue";
+import { ref, useId, watch } from "vue";
 import { usePlatformStore } from "@/features/platform/store";
 import type { EditablePlanOperation } from "../model";
 import {
@@ -22,7 +22,10 @@ import type {
 import { requestSignal } from "@/shared/api/client";
 import { ownerRequestSignal } from "@/shared/api/owner-lifetime";
 import { unwrap } from "@/shared/api/problem";
-import { useIntegrationGrantPlanDraft } from "../use-integration-grant-plan-draft";
+import {
+  useIntegrationGrantPlanDraft,
+  useIntegrationGrantOwnerReset,
+} from "../use-integration-grant-plan-draft";
 import AssistantIntegrationGrantPolicyFields from "./AssistantIntegrationGrantPolicyFields.vue";
 
 const props = defineProps<{
@@ -168,14 +171,13 @@ function changed(key: string, selected: string | boolean | string[]): void {
   emit("parameter", key, selected);
   emit("dirty");
 }
-function ownerReset(): void {
-  connection.value = undefined;
-  candidate.value = undefined;
-  loading.value = false;
-  emit("valid", false);
-}
-ownerLifetime.addEventListener("abort", ownerReset, { once: true });
-onBeforeUnmount(() => ownerLifetime.removeEventListener("abort", ownerReset));
+useIntegrationGrantOwnerReset(
+  ownerLifetime,
+  connection,
+  candidate,
+  loading,
+  () => emit("valid", false),
+);
 </script>
 <template>
   <div class="system-grant-plan">

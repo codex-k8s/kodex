@@ -1,12 +1,5 @@
 <script setup lang="ts">
-import {
-  computed,
-  onBeforeUnmount,
-  onScopeDispose,
-  ref,
-  useId,
-  watch,
-} from "vue";
+import { computed, onScopeDispose, ref, useId, watch } from "vue";
 import { usePlatformStore } from "@/features/platform/store";
 import { ChevronDown } from "@lucide/vue";
 import type { EditablePlanOperation } from "../model";
@@ -28,7 +21,10 @@ import type {
   SystemAssistantIntegrationGrantCandidate,
 } from "@/shared/api/generated/openapi/types.gen";
 import { ownerRequestSignal } from "@/shared/api/owner-lifetime";
-import { useIntegrationGrantPlanDraft } from "../use-integration-grant-plan-draft";
+import {
+  useIntegrationGrantPlanDraft,
+  useIntegrationGrantOwnerReset,
+} from "../use-integration-grant-plan-draft";
 import AssistantIntegrationGrantPolicyFields from "./AssistantIntegrationGrantPolicyFields.vue";
 
 const props = defineProps<{
@@ -164,14 +160,13 @@ function changed(key: string, selected: string | boolean | string[]): void {
   emit("parameter", key, selected);
   emit("dirty");
 }
-function ownerReset(): void {
-  connection.value = undefined;
-  candidate.value = undefined;
-  loading.value = false;
-  emit("valid", false);
-}
-ownerLifetime.addEventListener("abort", ownerReset, { once: true });
-onBeforeUnmount(() => ownerLifetime.removeEventListener("abort", ownerReset));
+useIntegrationGrantOwnerReset(
+  ownerLifetime,
+  connection,
+  candidate,
+  loading,
+  () => emit("valid", false),
+);
 </script>
 <template>
   <div class="project-grant-plan">

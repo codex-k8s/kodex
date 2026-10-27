@@ -1,6 +1,7 @@
-import { computed, type Ref } from "vue";
+import { computed, onBeforeUnmount, type Ref } from "vue";
 import type {
   AssistantPlanOperationInput,
+  IntegrationConnection,
   SystemAssistantIntegrationGrantCandidate,
 } from "@/shared/api/generated/openapi/types.gen";
 import {
@@ -60,4 +61,23 @@ export function useIntegrationGrantPlanDraft(
     changePolicy,
     togglePath,
   };
+}
+
+// Закрывает локальный readback при отмене owner и снимает обработчик при unmount.
+// Вызывающая форма по-прежнему владеет network cleanup и событием valid.
+export function useIntegrationGrantOwnerReset(
+  ownerLifetime: AbortSignal,
+  connection: Ref<IntegrationConnection | undefined>,
+  candidate: Ref<SystemAssistantIntegrationGrantCandidate | undefined>,
+  loading: Ref<boolean>,
+  invalidate: () => void,
+): void {
+  function ownerReset(): void {
+    connection.value = undefined;
+    candidate.value = undefined;
+    loading.value = false;
+    invalidate();
+  }
+  ownerLifetime.addEventListener("abort", ownerReset, { once: true });
+  onBeforeUnmount(() => ownerLifetime.removeEventListener("abort", ownerReset));
 }
