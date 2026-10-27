@@ -113,14 +113,7 @@ func TestRuntimeAssistantRecordToolCallPhaseComponent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	execute := func(kind command.Kind, actor value.Principal, key string, version *int64, payload any) command.Result {
-		t.Helper()
-		result, err := service.Execute(ctx, command.Command{Kind: kind, Principal: actor, Mutation: value.Mutation{IdempotencyKey: "tool-phase-" + key, ExpectedVersion: version}, Payload: payload})
-		if err != nil {
-			t.Fatalf("%s %s: %v", kind, key, err)
-		}
-		return result
-	}
+	execute := newComponentCommandExecutor(t, ctx, service, "tool-phase-")
 	project := execute(command.CreateProject, owner, "project", nil, command.ProjectInput{Name: "Tool phase project", Language: "en"}).Project
 	profile := execute(command.CreateProjectAssistant, owner, "profile", nil, command.ProjectAssistantInput{ProjectRef: project.Ref, Name: "Own helper", Purpose: "Synthetic tool phase", Instructions: "Use only approved project operations."}).ProjectAssistant
 	conversation := execute(command.CreateAssistantConversation, owner, "conversation", nil, command.AssistantConversationInput{AssistantScope: "PROJECT", ProjectRef: project.Ref}).Conversation

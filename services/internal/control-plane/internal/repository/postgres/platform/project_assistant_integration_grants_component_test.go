@@ -49,14 +49,7 @@ func TestProjectAssistantIntegrationGrantsComponent(t *testing.T) {
 	}
 	defer pool.Close()
 	r, service, owner, worker := newProjectAssistantComponentFixture(t, ctx, pool)
-	execute := func(kind command.Kind, actor value.Principal, key string, version *int64, payload any) command.Result {
-		t.Helper()
-		result, err := service.Execute(ctx, command.Command{Kind: kind, Principal: actor, Mutation: value.Mutation{IdempotencyKey: "project-self-grant-" + key, ExpectedVersion: version}, Payload: payload})
-		if err != nil {
-			t.Fatalf("%s %s: %v", kind, key, err)
-		}
-		return result
-	}
+	execute := newComponentCommandExecutor(t, ctx, service, "project-self-grant-")
 	project := execute(command.CreateProject, owner, "project", nil, command.ProjectInput{Name: "Connection purpose", Language: "en"}).Project
 	profile := execute(command.CreateProjectAssistant, owner, "profile", nil, command.ProjectAssistantInput{ProjectRef: project.Ref, Name: "Own helper", Purpose: "Synthetic integration setup", Instructions: "Configure approved project resources after confirmation."}).ProjectAssistant
 	foreignProject := execute(command.CreateProject, owner, "foreign-project", nil, command.ProjectInput{Name: "Other purpose", Language: "en"}).Project

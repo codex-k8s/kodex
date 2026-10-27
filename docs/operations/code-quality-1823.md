@@ -4,11 +4,21 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.576.0
+version: 1.577.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общий исполнитель тестовых команд assistant — 27.10.2026
+
+Три компонентных сценария используют общий тестовый исполнитель с прежними
+префиксами идемпотентности, expected version, actor, payload и форматом ошибок.
+Проверки сценариев и production-код не менялись. Control-plane build/vet PASS,
+3072 unit PASS / 70 условных SKIP. Выбранные компонентные сценарии на disposable
+PostgreSQL — 43 PASS events до и после, FAIL/SKIP 0. Анализ: 1348 raw / 1282
+retained / 66 unresolved, Go-комментарии 21716/21716. Браузер, E2E,
+live/deploy/startup и QA не выполнялись.
 
 ## Компонентная проверка названия assistant — 27.10.2026
 
