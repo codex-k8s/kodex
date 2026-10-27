@@ -124,5 +124,6 @@ def confirm_dry_run(before, binding_before, config_before, parameters_before,
                   "POLICY_SPEC_DRIFT")
     return {"status": "PASS_DRY_RUN_ONLY", "baseRevision": BASE_REVISION, "targetRevision": TARGET_REVISION,
             "beforeSHA256": BEFORE_SHA256, "afterSHA256": AFTER_SHA256,
-            "policy": original_id, "binding": binding_state(binding_before), "parameters": parameter_snapshot,
+            "policy": {**original_id, "metadataSHA256": model.fingerprint(guarded_metadata(before))},
+            "binding": binding_state(binding_before), "parameters": parameter_snapshot,
             "candidateSpecSHA256": model.fingerprint(candidate["spec"]), "ownerReadiness": "NOT_CHECKED", "apply": "NOT_RUN"}
