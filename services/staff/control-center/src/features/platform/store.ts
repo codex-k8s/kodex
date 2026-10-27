@@ -171,6 +171,7 @@ import {
 } from "@/features/platform/run-reducer";
 import { instructionCommandInput } from "@/features/platform/instruction-command";
 import { runBoundedPlatformReload } from "@/features/platform/platform-reload";
+import { assertWorkflowGraphEvidence } from "./workflow-evidence";
 import { validateRunSnapshot } from "@/features/platform/run-snapshot";
 import {
   assertAssistantRetryIdentity,
@@ -846,6 +847,7 @@ export const usePlatformStore = defineStore("platform", () => {
       );
       if (!active()) return;
       const workspace = graphReadback.data;
+      assertWorkflowGraphEvidence(workspace.graph);
       assertOwnerRequest(ownerSignal);
       if (
         requireRuntimeOrganizationRef(bootstrap.value?.organizationRef) !==
@@ -1879,6 +1881,7 @@ export const usePlatformStore = defineStore("platform", () => {
         signal: requestSignal(),
       }),
     );
+    assertWorkflowGraphEvidence(result.data.graph);
     runs[result.data.run.ref] = result.data.run;
     graphs[result.data.graph.runRef] = result.data.graph;
     return result.data.run;
@@ -1916,6 +1919,7 @@ export const usePlatformStore = defineStore("platform", () => {
       !sameAssistantRunPin(run, result.data.run)
     )
       throw new Error("Run mutation owner identity mismatch");
+    assertWorkflowGraphEvidence(result.data.graph);
     runs[result.data.run.ref] = result.data.run;
     graphs[result.data.graph.runRef] = result.data.graph;
     return result.data.run;
@@ -1933,6 +1937,7 @@ export const usePlatformStore = defineStore("platform", () => {
         signal: requestSignal(),
       }),
     );
+    assertWorkflowGraphEvidence(result.data.graph);
     runs[result.data.run.ref] = result.data.run;
     graphs[result.data.graph.runRef] = result.data.graph;
     return result.data.run;
@@ -1962,6 +1967,7 @@ export const usePlatformStore = defineStore("platform", () => {
     )
       throw new Error("Owner gate resolution scope changed");
     gates[result.data.gate.ref] = result.data.gate;
+    assertWorkflowGraphEvidence(result.data.graph);
     runs[result.data.run.ref] = result.data.run;
     graphs[result.data.graph.runRef] = result.data.graph;
     if (gate.state === "OPEN" && result.data.gate.state !== "OPEN") {

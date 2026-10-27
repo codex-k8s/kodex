@@ -15540,23 +15540,7 @@ components:
     WorkflowAttemptResult:
       type: object
       additionalProperties: false
-      allOf:
-        - anyOf:
-            - properties: { accepted: { enum: [true] } }
-            - properties: { results: { maxItems: 0 } }
-        - anyOf:
-            - not: { required: [evidence] }
-            - properties:
-                accepted: { enum: [false] }
-                reason: { enum: [CHANGES_REQUIRED] }
-                results: { maxItems: 0 }
-        - anyOf:
-            - properties: { accepted: { enum: [false] } }
-            - properties:
-                results:
-                  items:
-                    properties:
-                      verdict: { enum: [PASS] }
+      description: Закрытый typed snapshot. Отношения accepted/results/evidence проверяются общим API validator и каждым PWA graph/event ingress; evidence разрешено только при accepted=false, reason=CHANGES_REQUIRED, results=[] и наличии отрицательного REVIEW/QA.
       required: [attempt, runRef, accepted, reason, results]
       properties:
         attempt: { type: integer, minimum: 1, maximum: 4 }

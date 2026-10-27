@@ -8584,6 +8584,21 @@ func (e WorkflowExecutionMode) Valid() bool {
 	}
 }
 
+// Defines values for WorkflowResultEvidenceProfile.
+const (
+	WorkflowResultEvidenceProfileGITHUBREVIEWQAV1 WorkflowResultEvidenceProfile = "GITHUB_REVIEW_QA_V1"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowResultEvidenceProfile enum.
+func (e WorkflowResultEvidenceProfile) Valid() bool {
+	switch e {
+	case WorkflowResultEvidenceProfileGITHUBREVIEWQAV1:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WorkflowState.
 const (
 	WorkflowStateARCHIVED  WorkflowState = "ARCHIVED"
@@ -8640,12 +8655,15 @@ func (e WorkflowAcceptedResultKind) Valid() bool {
 
 // Defines values for WorkflowAcceptedResultVerdict.
 const (
-	PASS WorkflowAcceptedResultVerdict = "PASS"
+	CHANGESREQUIRED WorkflowAcceptedResultVerdict = "CHANGES_REQUIRED"
+	PASS            WorkflowAcceptedResultVerdict = "PASS"
 )
 
 // Valid indicates whether the value is a known member of the WorkflowAcceptedResultVerdict enum.
 func (e WorkflowAcceptedResultVerdict) Valid() bool {
 	switch e {
+	case CHANGESREQUIRED:
+		return true
 	case PASS:
 		return true
 	default:
@@ -8692,6 +8710,21 @@ func (e WorkflowDraftSnapshotExecutionMode) Valid() bool {
 	}
 }
 
+// Defines values for WorkflowDraftSnapshotResultEvidenceProfile.
+const (
+	WorkflowDraftSnapshotResultEvidenceProfileGITHUBREVIEWQAV1 WorkflowDraftSnapshotResultEvidenceProfile = "GITHUB_REVIEW_QA_V1"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowDraftSnapshotResultEvidenceProfile enum.
+func (e WorkflowDraftSnapshotResultEvidenceProfile) Valid() bool {
+	switch e {
+	case WorkflowDraftSnapshotResultEvidenceProfileGITHUBREVIEWQAV1:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WorkflowDraftSnapshotState.
 const (
 	WorkflowDraftSnapshotStateARCHIVED  WorkflowDraftSnapshotState = "ARCHIVED"
@@ -8728,6 +8761,24 @@ func (e WorkflowInputExecutionMode) Valid() bool {
 	case MANAGERDRIVEN:
 		return true
 	case SERVERDAGV1:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowInputResultEvidenceProfile.
+const (
+	Empty            WorkflowInputResultEvidenceProfile = ""
+	GITHUBREVIEWQAV1 WorkflowInputResultEvidenceProfile = "GITHUB_REVIEW_QA_V1"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowInputResultEvidenceProfile enum.
+func (e WorkflowInputResultEvidenceProfile) Valid() bool {
+	switch e {
+	case Empty:
+		return true
+	case GITHUBREVIEWQAV1:
 		return true
 	default:
 		return false
@@ -15805,7 +15856,10 @@ type Workflow struct {
 	PublishedRevisionRef *OpaqueRef `json:"publishedRevisionRef,omitempty"`
 	Purpose              string     `json:"purpose"`
 	Ref                  OpaqueRef  `json:"ref"`
-	Revision             *int       `json:"revision,omitempty"`
+
+	// ResultEvidenceProfile Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
+	ResultEvidenceProfile *WorkflowResultEvidenceProfile `json:"resultEvidenceProfile,omitempty"`
+	Revision              *int                           `json:"revision,omitempty"`
 
 	// RevisionRef Точная owner revision отображаемых steps/inputFields; опубликованная, иначе сохранённый draft. Отсутствует без обеих revisions.
 	RevisionRef        *OpaqueRef     `json:"revisionRef,omitempty"`
@@ -15819,6 +15873,9 @@ type Workflow struct {
 
 // WorkflowExecutionMode defines model for Workflow.ExecutionMode.
 type WorkflowExecutionMode string
+
+// WorkflowResultEvidenceProfile Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
+type WorkflowResultEvidenceProfile string
 
 // WorkflowState defines model for Workflow.State.
 type WorkflowState string
@@ -15848,13 +15905,7 @@ type WorkflowAcceptedResultKind string
 type WorkflowAcceptedResultVerdict string
 
 // WorkflowAttemptResult defines model for WorkflowAttemptResult.
-type WorkflowAttemptResult struct {
-	Accepted bool                     `json:"accepted"`
-	Attempt  int                      `json:"attempt"`
-	Reason   string                   `json:"reason"`
-	Results  []WorkflowAcceptedResult `json:"results"`
-	RunRef   OpaqueRef                `json:"runRef"`
-}
+type WorkflowAttemptResult = interface{}
 
 // WorkflowCardSummary Единая owner projection для get/list/project/global и командного readback. Использует опубликованную revision, иначе draft; HTTP и PWA не пересчитывают значения из steps или частичной страницы.
 type WorkflowCardSummary struct {
@@ -15885,16 +15936,22 @@ type WorkflowDraftSnapshot struct {
 	InputFields         []WorkflowInputField                `json:"inputFields"`
 	MaxConcurrency      *int                                `json:"maxConcurrency,omitempty"`
 	Ref                 OpaqueRef                           `json:"ref"`
-	Revision            int                                 `json:"revision"`
-	State               WorkflowDraftSnapshotState          `json:"state"`
-	Steps               []WorkflowStep                      `json:"steps"`
-	TimeoutSeconds      *int                                `json:"timeoutSeconds,omitempty"`
-	ValidationMessages  []string                            `json:"validationMessages"`
-	Version             int64                               `json:"version"`
+
+	// ResultEvidenceProfile Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
+	ResultEvidenceProfile *WorkflowDraftSnapshotResultEvidenceProfile `json:"resultEvidenceProfile,omitempty"`
+	Revision              int                                         `json:"revision"`
+	State                 WorkflowDraftSnapshotState                  `json:"state"`
+	Steps                 []WorkflowStep                              `json:"steps"`
+	TimeoutSeconds        *int                                        `json:"timeoutSeconds,omitempty"`
+	ValidationMessages    []string                                    `json:"validationMessages"`
+	Version               int64                                       `json:"version"`
 }
 
 // WorkflowDraftSnapshotExecutionMode defines model for WorkflowDraftSnapshot.ExecutionMode.
 type WorkflowDraftSnapshotExecutionMode string
+
+// WorkflowDraftSnapshotResultEvidenceProfile Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
+type WorkflowDraftSnapshotResultEvidenceProfile string
 
 // WorkflowDraftSnapshotState defines model for WorkflowDraftSnapshot.State.
 type WorkflowDraftSnapshotState string
@@ -15908,12 +15965,18 @@ type WorkflowInput struct {
 	MaxConcurrency      *int                        `json:"maxConcurrency,omitempty"`
 	Name                string                      `json:"name"`
 	Purpose             string                      `json:"purpose"`
-	Steps               *[]WorkflowStepInput        `json:"steps,omitempty"`
-	TimeoutSeconds      *int                        `json:"timeoutSeconds,omitempty"`
+
+	// ResultEvidenceProfile Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия. Пустое значение снимает draft opt-in; весь итоговый граф заново проверяется.
+	ResultEvidenceProfile *WorkflowInputResultEvidenceProfile `json:"resultEvidenceProfile,omitempty"`
+	Steps                 *[]WorkflowStepInput                `json:"steps,omitempty"`
+	TimeoutSeconds        *int                                `json:"timeoutSeconds,omitempty"`
 }
 
 // WorkflowInputExecutionMode defines model for WorkflowInput.ExecutionMode.
 type WorkflowInputExecutionMode string
+
+// WorkflowInputResultEvidenceProfile Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия. Пустое значение снимает draft opt-in; весь итоговый граф заново проверяется.
+type WorkflowInputResultEvidenceProfile string
 
 // WorkflowInputField defines model for WorkflowInputField.
 type WorkflowInputField struct {
@@ -15965,12 +16028,14 @@ type WorkflowPage struct {
 
 // WorkflowResultRequirement defines model for WorkflowResultRequirement.
 type WorkflowResultRequirement struct {
-	FileName   *string                             `json:"fileName,omitempty"`
-	Key        string                              `json:"key"`
-	Kind       WorkflowResultRequirementKind       `json:"kind"`
-	MediaType  *string                             `json:"mediaType,omitempty"`
-	Operation  *WorkflowResultRequirementOperation `json:"operation,omitempty"`
-	Repository *string                             `json:"repository,omitempty"`
+	// EvidenceKey Только QA выбранного профиля; ключ ARTIFACT application/json того же шага.
+	EvidenceKey *string                             `json:"evidenceKey,omitempty"`
+	FileName    *string                             `json:"fileName,omitempty"`
+	Key         string                              `json:"key"`
+	Kind        WorkflowResultRequirementKind       `json:"kind"`
+	MediaType   *string                             `json:"mediaType,omitempty"`
+	Operation   *WorkflowResultRequirementOperation `json:"operation,omitempty"`
+	Repository  *string                             `json:"repository,omitempty"`
 
 	// SubjectStepKey Логический ключ шага внутри одной версии процесса; не является ссылкой на ресурс или источником полномочий.
 	SubjectStepKey *WorkflowStepKey `json:"subjectStepKey,omitempty"`

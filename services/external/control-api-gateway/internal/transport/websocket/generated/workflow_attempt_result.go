@@ -8,4 +8,5 @@ type WorkflowAttemptResult struct {
 	Accepted bool                     `json:"accepted"`
 	Reason   string                   `json:"reason"`
 	Results  []WorkflowAcceptedResult `json:"results"`
+	Evidence []WorkflowAcceptedResult `json:"evidence,omitzero"`
 }

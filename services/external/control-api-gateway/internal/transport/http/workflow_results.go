@@ -115,6 +115,9 @@ func validWorkflowPublicMessage(message proto.Message) bool {
 		}
 		negative := false
 		for _, evidence := range value.Evidence {
+			if evidence != nil && (evidence.Kind == "REVIEW" || evidence.Kind == "QA") && (!workflowPublicRepository.MatchString(evidence.Repository) || evidence.Number < 1 || !workflowPublicHead.MatchString(evidence.HeadSha)) {
+				return false
+			}
 			if evidence == nil || evidence.Kind == "REVIEW" && (evidence.ReceiptRef == "" || evidence.HeadSha == "") || evidence.Kind == "QA" && (evidence.ArtifactRef == "" || evidence.ArtifactRevision == "" || evidence.HeadSha == "") {
 				return false
 			}
@@ -150,3 +153,11 @@ func workflowPublicResultKind(kind string) bool {
 func workflowPublicText(value string, maximum int) bool {
 	return utf8.ValidString(value) && utf8.RuneCountInString(value) <= maximum
 }
+
+// workflowPublicRepository validates only a public repository locator, never its authorization.
+// workflowPublicRepository проверяет только public repository locator, не его authorization.
+var workflowPublicRepository = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
+
+// workflowPublicHead rejects branch names and abbreviated hashes in new negative evidence.
+// workflowPublicHead отвергает branch names и сокращённые hashes в новом negative evidence.
+var workflowPublicHead = regexp.MustCompile(`^[a-f0-9]{40}([a-f0-9]{24})?$`)

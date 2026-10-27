@@ -179,3 +179,19 @@ func TestWorkflowNegativeEvidenceProjection(t *testing.T) {
 		}
 	}
 }
+
+// TestWorkflowPublicGeneratedHistoryRemainsTyped detects successful codegen that accidentally
+// replaces a closed history DTO with interface{} through partial schema compositions.
+// TestWorkflowPublicGeneratedHistoryRemainsTyped ловит успешный codegen, который случайно
+// заменил закрытый DTO истории на interface{} из-за частичных schema compositions.
+func TestWorkflowPublicGeneratedHistoryRemainsTyped(t *testing.T) {
+	wire := reflect.TypeFor[generated.WorkflowAttemptResult]()
+	if wire.Kind() != reflect.Struct {
+		t.Fatal("workflow history DTO lost its closed typed object")
+	}
+	for _, field := range []string{"Attempt", "RunRef", "Accepted", "Reason", "Results", "Evidence"} {
+		if _, exists := wire.FieldByName(field); !exists {
+			t.Fatal("generated workflow history lost required typed field", field)
+		}
+	}
+}

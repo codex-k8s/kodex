@@ -2981,6 +2981,10 @@ export type WorkflowResultRequirement = {
     mediaType?: string;
     repository?: string;
     subjectStepKey?: WorkflowStepKey;
+    /**
+     * Только QA выбранного профиля; ключ ARTIFACT application/json того же шага.
+     */
+    evidenceKey?: string;
     operation?: 'github.pull_request.merge' | 'ssh.compose.deploy';
     targetRef?: string;
 };
@@ -3029,6 +3033,10 @@ export type WorkflowStepInput = {
 
 export type Workflow = {
     executionMode?: 'MANAGER_DRIVEN' | 'SERVER_DAG_V1';
+    /**
+     * Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
+     */
+    resultEvidenceProfile?: 'GITHUB_REVIEW_QA_V1';
     ref: OpaqueRef;
     version: number;
     projectRef: OpaqueRef;
@@ -3092,6 +3100,10 @@ export type WorkflowLaunchReadiness = {
  */
 export type WorkflowDraftSnapshot = {
     executionMode?: 'MANAGER_DRIVEN' | 'SERVER_DAG_V1';
+    /**
+     * Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
+     */
+    resultEvidenceProfile?: 'GITHUB_REVIEW_QA_V1';
     ref: OpaqueRef;
     version: number;
     revision: number;
@@ -3107,6 +3119,10 @@ export type WorkflowDraftSnapshot = {
 
 export type WorkflowInput = {
     executionMode?: 'MANAGER_DRIVEN' | 'SERVER_DAG_V1';
+    /**
+     * Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия. Пустое значение снимает draft opt-in; весь итоговый граф заново проверяется.
+     */
+    resultEvidenceProfile?: '' | 'GITHUB_REVIEW_QA_V1';
     name: string;
     purpose: string;
     coordinatorAgentRef: OpaqueRef;
@@ -3219,15 +3235,31 @@ export type WorkflowAcceptedResult = {
     repository?: string;
     number?: number;
     headSha?: string;
-    verdict?: 'PASS';
+    verdict?: 'PASS' | 'CHANGES_REQUIRED';
 };
 
-export type WorkflowAttemptResult = {
+export type WorkflowAttemptResult = ({
+    accepted?: true;
+} | {
+    results?: unknown;
+}) & (unknown | {
+    accepted?: false;
+    reason?: 'CHANGES_REQUIRED';
+    results?: unknown;
+}) & ({
+    accepted?: false;
+} | {
+    results?: unknown;
+}) & {
     attempt: number;
     runRef: OpaqueRef;
     accepted: boolean;
     reason: string;
     results: Array<WorkflowAcceptedResult>;
+    /**
+     * Проверенные факты отклонённого REVIEW/QA; accepted=false, reason=CHANGES_REQUIRED, results остаётся пустым.
+     */
+    evidence?: Array<WorkflowAcceptedResult>;
 };
 
 export type RunNode = {

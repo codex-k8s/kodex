@@ -78,3 +78,34 @@ func TestWorkflowHistorySurvivesSnapshotAndEvent(t *testing.T) {
 		})
 	}
 }
+
+// TestWorkflowNegativeEvidenceEveryRealtimeProjection shares the actual HTTP validator across
+// snapshot and event paths; malformed negative facts never enter a generated realtime model.
+// TestWorkflowNegativeEvidenceEveryRealtimeProjection использует actual общий HTTP validator
+// в snapshot/event paths; неверные negative facts не попадают в generated realtime model.
+func TestWorkflowNegativeEvidenceEveryRealtimeProjection(t *testing.T) {
+	for _, invalid := range []bool{false, true} {
+		fixture := completeRunSnapshotFixture()
+		node := fixture.Graph.Nodes[0]
+		node.WorkflowResults = []*cp.WorkflowAttemptResult{{Attempt: 1, RunRef: node.RunRef, Reason: "CHANGES_REQUIRED", Evidence: []*cp.WorkflowAcceptedResult{{Key: "review", Kind: "REVIEW", ReceiptRef: "erc_12345678", Repository: "owner/repo", Number: 7, HeadSha: strings.Repeat("a", 40), Digest: strings.Repeat("b", 64), Verdict: "CHANGES_REQUIRED"}}}}
+		if invalid {
+			node.WorkflowResults[0].Accepted = true
+		}
+		snapshot, err := projectCompleteRunSnapshot(fixture, &runSubscription{rootRef: fixture.Run.Ref, cursor: 7}, nil)
+		if (err != nil) != invalid {
+			t.Fatal("negative snapshot relation changed")
+		}
+		event, eventErr := projectRunEvent(&cp.RunEvent{Ref: "evt_fixture1", RunRef: fixture.Run.Ref, Sequence: 8, Node: node}, nil)
+		if (eventErr != nil) != invalid {
+			t.Fatal("negative event relation changed")
+		}
+		if !invalid {
+			for _, value := range []any{snapshot.Snapshot.Nodes[0], event.Node} {
+				raw, err := json.Marshal(value)
+				if err != nil || !strings.Contains(string(raw), `"evidence"`) || strings.Contains(string(raw), "provenance") {
+					t.Fatal("negative realtime evidence lost or leaked private pins")
+				}
+			}
+		}
+	}
+}
