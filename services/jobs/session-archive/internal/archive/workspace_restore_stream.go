@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
-	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
 )
 
