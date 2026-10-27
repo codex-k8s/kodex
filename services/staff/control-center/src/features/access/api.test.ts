@@ -52,7 +52,11 @@ describe("access decision API", () => {
   });
 
   it("применяет один запрос справочника с точным scope и лимитом", async () => {
-    for (const request of [sdk.listProjects, sdk.listAgents, sdk.listWorkflows]) {
+    for (const request of [
+      sdk.listProjects,
+      sdk.listAgents,
+      sdk.listWorkflows,
+    ]) {
       request.mockResolvedValue({
         data: { items: [] },
         response: new Response(null, { status: 200 }),

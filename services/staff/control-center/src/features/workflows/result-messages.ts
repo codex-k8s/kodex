@@ -4,8 +4,10 @@ export const workflowResultMessages = {
     reworkLegacy: "Повтор текущего этапа после решения владельца",
     reworkUpstream: "Возврат авторам и повтор зависимых проверок",
     reworkUnknown: "Неизвестная политика — сохранение недоступно",
-    reworkHelp: "Только явное решение владельца возвращает опубликованных авторов. Старые результаты остаются в истории; новые проверки используют свежие результаты. Лимиты попыток и правила внешних действий сохраняются.",
-    reworkChange: "Изменить политику доработки в черновике? Это повлияет только на будущую опубликованную версию. Сохранение и публикация выполняются отдельно.",
+    reworkHelp:
+      "Только явное решение владельца возвращает опубликованных авторов. Старые результаты остаются в истории; новые проверки используют свежие результаты. Лимиты попыток и правила внешних действий сохраняются.",
+    reworkChange:
+      "Изменить политику доработки в черновике? Это повлияет только на будущую опубликованную версию. Сохранение и публикация выполняются отдельно.",
     subjectResult: "Проверяемый результат-файл",
     reworkPlan: "План доработки после одобрения",
     reworkApprovedPlan: "Одобренный план доработки",
@@ -14,10 +16,23 @@ export const workflowResultMessages = {
     reworkChecks: "Повторить зависимые этапы",
     reworkAttempt: "Попытка {previous} → {next}",
     reworkExhausted: "Бюджет попыток исчерпан",
-    reworkBoundary: "Одобрение разрешает только указанные новые попытки. Оно не принимает прежние результаты и не разрешает повтор внешнего действия с неизвестным исходом.",
-    superseded: "Это согласование утратило актуальность после одобренной доработки. Владелец не отменял процесс; новые результаты потребуют собственного согласования.",
-    blockers: { WORKFLOW_ATTEMPTS_EXHAUSTED: "Новая попытка недоступна: лимит исчерпан", WORKFLOW_IRREVERSIBLE_EFFECT_REPAIR_REQUIRED: "Нужно отдельное решение по уже выполненному слиянию или развёртыванию" },
-    freshness: { CURRENT: "Актуальный результат попытки", HISTORICAL: "Исторический результат", STALE_DEPENDENCY: "Результат относится к прежним входам", REWORK_PENDING: "Ожидается результат одобренной доработки", WAITING_OWNER: "Ожидается согласование результата", BLOCKED: "Результат не допускает продолжение процесса" },
+    reworkBoundary:
+      "Одобрение разрешает только указанные новые попытки. Оно не принимает прежние результаты и не разрешает повтор внешнего действия с неизвестным исходом.",
+    superseded:
+      "Это согласование утратило актуальность после одобренной доработки. Владелец не отменял процесс; новые результаты потребуют собственного согласования.",
+    blockers: {
+      WORKFLOW_ATTEMPTS_EXHAUSTED: "Новая попытка недоступна: лимит исчерпан",
+      WORKFLOW_IRREVERSIBLE_EFFECT_REPAIR_REQUIRED:
+        "Нужно отдельное решение по уже выполненному слиянию или развёртыванию",
+    },
+    freshness: {
+      CURRENT: "Актуальный результат попытки",
+      HISTORICAL: "Исторический результат",
+      STALE_DEPENDENCY: "Результат относится к прежним входам",
+      REWORK_PENDING: "Ожидается результат одобренной доработки",
+      WAITING_OWNER: "Ожидается согласование результата",
+      BLOCKED: "Результат не допускает продолжение процесса",
+    },
     evidenceProfile: "Доказательства ревью и QA",
     evidenceLegacy: "Прежний профиль",
     evidenceNative: "GitHub COMMENT и сохранённый QA-отчёт",
@@ -29,7 +44,8 @@ export const workflowResultMessages = {
       "Сохранённые доказательства отклонённой попытки; обязательные результаты не приняты.",
     attempts: "Результаты этапа",
     accepted: "Обязательные результаты приняты",
-    historicalAccepted: "Условия были пройдены в этой попытке; актуальный допуск указан отдельно",
+    historicalAccepted:
+      "Условия были пройдены в этой попытке; актуальный допуск указан отдельно",
     rejected: "Обязательные результаты не приняты",
     reason: "Причина остановки",
     healthy: "Проверка состояния пройдена",
@@ -75,8 +91,10 @@ export const workflowResultMessages = {
     reworkLegacy: "Retry the current stage after owner decision",
     reworkUpstream: "Return to authors and repeat dependent checks",
     reworkUnknown: "Unknown policy — saving is unavailable",
-    reworkHelp: "Only an explicit owner decision returns published authors to work. Prior results stay in history; new checks use fresh results. Attempt limits and external-effect rules remain mandatory.",
-    reworkChange: "Change the draft rework policy? It affects only a future published version. Saving and publication are separate actions.",
+    reworkHelp:
+      "Only an explicit owner decision returns published authors to work. Prior results stay in history; new checks use fresh results. Attempt limits and external-effect rules remain mandatory.",
+    reworkChange:
+      "Change the draft rework policy? It affects only a future published version. Saving and publication are separate actions.",
     subjectResult: "Artifact result to review",
     reworkPlan: "Rework plan after approval",
     reworkApprovedPlan: "Approved rework plan",
@@ -85,10 +103,23 @@ export const workflowResultMessages = {
     reworkChecks: "Repeat dependent stages",
     reworkAttempt: "Attempt {previous} → {next}",
     reworkExhausted: "Attempt budget exhausted",
-    reworkBoundary: "Approval authorizes only the listed fresh attempts. It neither accepts old results nor authorizes repeating an external effect with an unknown outcome.",
-    superseded: "This approval became obsolete after approved rework. The owner did not cancel the workflow; new results need their own approval.",
-    blockers: { WORKFLOW_ATTEMPTS_EXHAUSTED: "No fresh attempt: budget exhausted", WORKFLOW_IRREVERSIBLE_EFFECT_REPAIR_REQUIRED: "A completed merge or deployment requires a separate owner decision" },
-    freshness: { CURRENT: "Current attempt result", HISTORICAL: "Historical result", STALE_DEPENDENCY: "Result belongs to previous inputs", REWORK_PENDING: "Waiting for approved rework results", WAITING_OWNER: "Waiting for result approval", BLOCKED: "Result cannot advance the workflow" },
+    reworkBoundary:
+      "Approval authorizes only the listed fresh attempts. It neither accepts old results nor authorizes repeating an external effect with an unknown outcome.",
+    superseded:
+      "This approval became obsolete after approved rework. The owner did not cancel the workflow; new results need their own approval.",
+    blockers: {
+      WORKFLOW_ATTEMPTS_EXHAUSTED: "No fresh attempt: budget exhausted",
+      WORKFLOW_IRREVERSIBLE_EFFECT_REPAIR_REQUIRED:
+        "A completed merge or deployment requires a separate owner decision",
+    },
+    freshness: {
+      CURRENT: "Current attempt result",
+      HISTORICAL: "Historical result",
+      STALE_DEPENDENCY: "Result belongs to previous inputs",
+      REWORK_PENDING: "Waiting for approved rework results",
+      WAITING_OWNER: "Waiting for result approval",
+      BLOCKED: "Result cannot advance the workflow",
+    },
     evidenceProfile: "Review and QA evidence",
     evidenceLegacy: "Previous profile",
     evidenceNative: "GitHub COMMENT and captured QA report",
@@ -100,7 +131,8 @@ export const workflowResultMessages = {
       "Retained facts from the rejected attempt; required results are not accepted.",
     attempts: "Stage results",
     accepted: "Required results accepted",
-    historicalAccepted: "Predicates passed in this attempt; current eligibility is shown separately",
+    historicalAccepted:
+      "Predicates passed in this attempt; current eligibility is shown separately",
     rejected: "Required results not accepted",
     reason: "Stop reason",
     healthy: "Health check passed",

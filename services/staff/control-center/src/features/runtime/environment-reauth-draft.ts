@@ -151,9 +151,7 @@ function parsePolicy(
     value.kubernetesAccess !== "NONE" ||
     !Array.isArray(value.networkDestinations) ||
     !value.networkDestinations.every((item) =>
-      ["DNS", "RUNTIME_CALLBACK", "PROVIDER_PROXY"].includes(
-        String(item),
-      ),
+      ["DNS", "RUNTIME_CALLBACK", "PROVIDER_PROXY"].includes(String(item)),
     ) ||
     !isRecord(value.resources) ||
     !isRecord(value.webAccess) ||

@@ -161,7 +161,12 @@ export function validWorkflowDAG(
     byteLength(text) > 8192
   )
     return false;
-  if (reworkPolicy !== undefined && reworkPolicy !== "" && reworkPolicy !== "OWNER_APPROVED_UPSTREAM_V1") return false;
+  if (
+    reworkPolicy !== undefined &&
+    reworkPolicy !== "" &&
+    reworkPolicy !== "OWNER_APPROVED_UPSTREAM_V1"
+  )
+    return false;
   const published = new Map<string, WorkflowResultRequirement[]>();
   const agents = new Map<string, string>();
   const reviewers = new Map<string, string>();
@@ -208,8 +213,23 @@ export function validWorkflowDAG(
       ).length,
     );
     for (const requirement of step.resultRequirements) {
-      if (requirement.kind === "ARTIFACT_REVIEW" && (reworkPolicy !== "OWNER_APPROVED_UPSTREAM_V1" || !published.get(requirement.subjectStepKey ?? "")?.some((result) => result.kind === "ARTIFACT" && result.key === requirement.subjectResultKey))) return false;
-      if (requirement.kind !== "REVIEW" && requirement.kind !== "ARTIFACT_REVIEW") continue;
+      if (
+        requirement.kind === "ARTIFACT_REVIEW" &&
+        (reworkPolicy !== "OWNER_APPROVED_UPSTREAM_V1" ||
+          !published
+            .get(requirement.subjectStepKey ?? "")
+            ?.some(
+              (result) =>
+                result.kind === "ARTIFACT" &&
+                result.key === requirement.subjectResultKey,
+            ))
+      )
+        return false;
+      if (
+        requirement.kind !== "REVIEW" &&
+        requirement.kind !== "ARTIFACT_REVIEW"
+      )
+        continue;
       const subject = requirement.subjectStepKey ?? "";
       const reviewer = `${subject}:${step.agentRef}`;
       if (

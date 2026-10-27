@@ -80,7 +80,10 @@ function versionedHeaders(headers: MutationHeaders): {
   return { ...mutationHeaders(headers), "If-Match": headers["If-Match"] };
 }
 
-function accessPickerQuery(query: string): { query?: string; pageSize: number } {
+function accessPickerQuery(query: string): {
+  query?: string;
+  pageSize: number;
+} {
   return { ...(query ? { query } : {}), pageSize: 100 };
 }
 

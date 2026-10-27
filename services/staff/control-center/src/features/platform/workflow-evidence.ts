@@ -153,7 +153,18 @@ export function validWorkflowAttemptEvidence(node: RunNode): boolean {
       )
     )
       return false;
-    if (attempt.effectiveState !== undefined && !["CURRENT", "HISTORICAL", "STALE_DEPENDENCY", "REWORK_PENDING", "WAITING_OWNER", "BLOCKED"].includes(String(attempt.effectiveState))) return false;
+    if (
+      attempt.effectiveState !== undefined &&
+      ![
+        "CURRENT",
+        "HISTORICAL",
+        "STALE_DEPENDENCY",
+        "REWORK_PENDING",
+        "WAITING_OWNER",
+        "BLOCKED",
+      ].includes(String(attempt.effectiveState))
+    )
+      return false;
     if (attempt.evidence === undefined) return true;
     if (
       !Array.isArray(attempt.evidence) ||
@@ -175,7 +186,12 @@ export function validWorkflowAttemptEvidence(node: RunNode): boolean {
     )
       return false;
     return facts.every((result) => {
-      if (result.kind === "ARTIFACT_REVIEW") return !!result.artifactRef && !!result.artifactRevision && ["PASS", "CHANGES_REQUIRED"].includes(String(result.verdict));
+      if (result.kind === "ARTIFACT_REVIEW")
+        return (
+          !!result.artifactRef &&
+          !!result.artifactRevision &&
+          ["PASS", "CHANGES_REQUIRED"].includes(String(result.verdict))
+        );
       if (result.kind !== "REVIEW" && result.kind !== "QA")
         return result.verdict === undefined || result.verdict === "PASS";
       if (

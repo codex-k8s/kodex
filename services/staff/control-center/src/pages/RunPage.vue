@@ -87,10 +87,15 @@ import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 const verifiedBundleManifests = ref<Record<string, number>>({});
 function requiresBundleManifest(gate: OwnerGate): boolean {
-  return gate.integrationIntent?.operation === "github.repository.bundle.publish";
+  return (
+    gate.integrationIntent?.operation === "github.repository.bundle.publish"
+  );
 }
 function bundleManifestReady(gate: OwnerGate): boolean {
-  return !requiresBundleManifest(gate) || verifiedBundleManifests.value[gate.ref] === gate.version;
+  return (
+    !requiresBundleManifest(gate) ||
+    verifiedBundleManifests.value[gate.ref] === gate.version
+  );
 }
 function setBundleVerified(gate: OwnerGate, verified: boolean): void {
   if (verified) verifiedBundleManifests.value[gate.ref] = gate.version;
@@ -1149,7 +1154,7 @@ onBeforeUnmount(() => {
                 <SafeMarkdown :content="gate.consequencesSummary" />
               </div>
               <WorkflowReworkPreviewPanel :gate="gate" />
-          <RepositoryBundleManifest
+              <RepositoryBundleManifest
                 v-if="requiresBundleManifest(gate)"
                 :key="`${gate.ref}:${gate.version}`"
                 :gate-ref="gate.ref"
@@ -1184,7 +1189,11 @@ onBeforeUnmount(() => {
                     "
                     class="button button--primary"
                     type="button"
-                    :disabled="busy || !gateAttachmentsReady(gate.ref) || !bundleManifestReady(gate)"
+                    :disabled="
+                      busy ||
+                      !gateAttachmentsReady(gate.ref) ||
+                      !bundleManifestReady(gate)
+                    "
                     @click="decide(gate, 'APPROVE')"
                   >
                     {{ $t("common.approve") }}</button

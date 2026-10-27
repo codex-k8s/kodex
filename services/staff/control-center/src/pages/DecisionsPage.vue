@@ -58,10 +58,15 @@ import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 
 const verifiedBundleManifests = ref<Record<string, number>>({});
 function requiresBundleManifest(gate: OwnerGate): boolean {
-  return gate.integrationIntent?.operation === "github.repository.bundle.publish";
+  return (
+    gate.integrationIntent?.operation === "github.repository.bundle.publish"
+  );
 }
 function bundleManifestReady(gate: OwnerGate): boolean {
-  return !requiresBundleManifest(gate) || verifiedBundleManifests.value[gate.ref] === gate.version;
+  return (
+    !requiresBundleManifest(gate) ||
+    verifiedBundleManifests.value[gate.ref] === gate.version
+  );
 }
 function setBundleVerified(gate: OwnerGate, verified: boolean): void {
   if (verified) verifiedBundleManifests.value[gate.ref] = gate.version;
@@ -1140,7 +1145,8 @@ const serverMessage = useServerMessage();
                 :disabled="
                   busyRef === selected.gate.ref ||
                   !attachmentsReady(selected.gate.ref) ||
-                  (selectedDecision === 'APPROVE' && !bundleManifestReady(selected.gate))
+                  (selectedDecision === 'APPROVE' &&
+                    !bundleManifestReady(selected.gate))
                 "
                 :aria-busy="busyRef === selected.gate.ref"
                 @click="decide(selected.gate)"

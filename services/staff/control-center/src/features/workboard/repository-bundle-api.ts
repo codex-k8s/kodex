@@ -11,7 +11,14 @@ export async function readRepositoryBundlePage(
   page: BundlePageRequest,
   signal: AbortSignal,
 ): Promise<RepositoryBundleManifestPage> {
-  return (await unwrap(getOwnerGateRepositoryBundle({
-    path: { gateRef }, query: { ...page, limit: 16 }, signal: requestSignal(signal), cache: "no-store",
-  }))).data;
+  return (
+    await unwrap(
+      getOwnerGateRepositoryBundle({
+        path: { gateRef },
+        query: { ...page, limit: 16 },
+        signal: requestSignal(signal),
+        cache: "no-store",
+      }),
+    )
+  ).data;
 }
