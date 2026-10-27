@@ -531,7 +531,9 @@ spec:
       message: runtime workspace storage first bind mount boundary is invalid
     - expression: >-
         !variables.workspaceStorageV2 ||
-        (variables.allContainers.all(container,
+        (object.spec.initContainers[0].securityContext.runAsUser == 10001 &&
+         object.spec.initContainers[0].securityContext.runAsGroup == 29000 &&
+         variables.allContainers.all(container,
            !has(container.volumeMounts) || container.volumeMounts.all(mount,
              !mount.mountPath.startsWith('/workspace/work/') &&
              !mount.mountPath.startsWith('/workspace/.kodex/state/workspaces') &&
@@ -690,15 +692,15 @@ spec:
           size(container.securityContext.capabilities.drop) == 1 &&
           container.securityContext.capabilities.drop[0] == 'ALL') &&
         variables.roleContainers[0].securityContext.runAsUser == 10001 &&
-        variables.roleContainers[0].securityContext.runAsGroup == 10001 &&
+        variables.roleContainers[0].securityContext.runAsGroup == (variables.workspaceStorageV2 ? 29000 : 10001) &&
         variables.roleContainers[0].securityContext.seccompProfile.type ==
           'RuntimeDefault' &&
         object.spec.initContainers[1].securityContext.runAsUser == 10001 &&
-        object.spec.initContainers[1].securityContext.runAsGroup == 10001 &&
+        object.spec.initContainers[1].securityContext.runAsGroup == (variables.workspaceStorageV2 ? 29000 : 10001) &&
         object.spec.initContainers[1].securityContext.seccompProfile.type ==
           'RuntimeDefault' &&
         variables.providerContainers[0].securityContext.runAsUser == 10002 &&
-        variables.providerContainers[0].securityContext.runAsGroup == 10002 &&
+        variables.providerContainers[0].securityContext.runAsGroup == (variables.workspaceStorageV2 ? 29000 : 10002) &&
         variables.providerContainers[0].securityContext.seccompProfile.type ==
           'Unconfined' &&
         (params.data['providerAppArmorProfile'] == '' ?

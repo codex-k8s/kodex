@@ -64,8 +64,11 @@ func configureWorkspaceStoragePod(pod *corev1.Pod, input runtimecontract.RunnerI
 		}
 	}
 	pod.Spec.InitContainers[1].VolumeMounts = append(pod.Spec.InitContainers[1].VolumeMounts, work, proof, ack)
-	for _, group := range [][]corev1.Container{pod.Spec.InitContainers[1:], pod.Spec.Containers} {
+	for _, group := range [][]corev1.Container{pod.Spec.InitContainers, pod.Spec.Containers} {
 		for index := range group {
+			if group[index].SecurityContext != nil && group[index].Name != "provider-credential-relay" {
+				group[index].SecurityContext.RunAsGroup = int64Pointer(29000)
+			}
 			for mountIndex := range group[index].VolumeMounts {
 				mount := &group[index].VolumeMounts[mountIndex]
 				if mount.Name == "session" && mount.MountPath == "/workspace/.kodex/state" {

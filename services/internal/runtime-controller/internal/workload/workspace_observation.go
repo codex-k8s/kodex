@@ -113,9 +113,11 @@ func (manager *Manager) workspaceStoragePodMatches(input runtimecontract.RunnerI
 	if !configureWorkspaceStoragePod(template, input) {
 		return false
 	}
+	expectedInitSecurity := restrictedSecurityContext(10001)
+	expectedInitSecurity.RunAsGroup = int64Pointer(29000)
 	for index, container := range pod.Spec.InitContainers {
 		if container.Name != template.Spec.InitContainers[index].Name || container.Image != input.ImageReference ||
-			!apiequality.Semantic.DeepEqual(container.SecurityContext, restrictedSecurityContext(10001)) || len(container.Args) != 1 ||
+			!apiequality.Semantic.DeepEqual(container.SecurityContext, expectedInitSecurity) || len(container.Args) != 1 ||
 			(index == 0 && container.Args[0] != "runtime-bind-workspace") || (index == 1 && container.Args[0] != "runtime-init-workspace") ||
 			!workspaceStorageMountsMatch(container.VolumeMounts, template.Spec.InitContainers[index].VolumeMounts) {
 			return false
@@ -131,6 +133,9 @@ func (manager *Manager) workspaceStoragePodMatches(input runtimecontract.RunnerI
 			expectedSecurity = providerSandboxSecurityContext(10002, manager.config.ProviderAppArmorProfile)
 		} else if container.Name == "provider-credential-relay" {
 			expectedSecurity = restrictedSecurityContext(10003)
+		}
+		if container.Name != "provider-credential-relay" {
+			expectedSecurity.RunAsGroup = int64Pointer(29000)
 		}
 		if !apiequality.Semantic.DeepEqual(container.SecurityContext, expectedSecurity) {
 			return false

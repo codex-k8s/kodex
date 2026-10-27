@@ -63,9 +63,9 @@ def delete_exact(context, kind, value, namespace=None):
     raise RuntimeError('CLEANUP_ABSENCE_UNCONFIRMED')
 
 
-def observe_pod(context, namespace, nonce, node, image, name, uid, fs_group, script, pvc_name='probe'):
+def observe_pod(context, namespace, nonce, node, image, name, uid, fs_group, script, pvc_name='probe', gid=29000):
     """Запустить только свой ограниченный probe, прочитать закрытые observations и удалить exact terminal Pod."""
-    security = {'runAsNonRoot': True, 'runAsUser': uid, 'runAsGroup': 29000,
+    security = {'runAsNonRoot': True, 'runAsUser': uid, 'runAsGroup': gid,
                 'seccompProfile': {'type': 'RuntimeDefault'}}
     if fs_group:
         security.update({'fsGroup': 29000, 'fsGroupChangePolicy': 'OnRootMismatch'})
@@ -98,7 +98,7 @@ def observe_pod(context, namespace, nonce, node, image, name, uid, fs_group, scr
             if not lines or any(not re.fullmatch(r'(?:root|directory|file)=[0-7]{3,4}:\d+:\d+|file=INACCESSIBLE|role_can_read=(?:true|false)', s) for s in lines):
                 raise RuntimeError('PROBE_OUTPUT_INVALID')
             delete_exact(context, 'pods', observed, namespace)
-            return {'uid': uid, 'fsGroup': fs_group, 'podUID': pod['metadata']['uid'],
+            return {'uid': uid, 'gid': gid, 'fsGroup': fs_group, 'podUID': pod['metadata']['uid'],
                     'imageID': statuses[0].get('imageID'), 'observations': lines}
         time.sleep(0.5)
     raise RuntimeError('PROBE_POD_TIMEOUT')
@@ -144,7 +144,7 @@ def main():
         result['pvcUID'] = pvc['metadata']['uid']
         result['observations'] = []
         for name, uid, group, script in [
-            ('provider', 10002, False, 'umask 077; stat -c "root=%a:%u:%g" /probe; mkdir /probe/private; printf qa-state > /probe/private/state; stat -c "directory=%a:%u:%g" /probe/private; stat -c "file=%a:%u:%g" /probe/private/state'),
+            ('provider', 10002, False, 'umask 077; stat -c "root=%a:%u:%g" /probe; mkdir /probe/private; chmod 700 /probe/private; printf qa-state > /probe/private/state; stat -c "directory=%a:%u:%g" /probe/private; stat -c "file=%a:%u:%g" /probe/private/state'),
             ('role-with-fsgroup', 10001, True, 'stat -c "root=%a:%u:%g" /probe; stat -c "directory=%a:%u:%g" /probe/private; if test -r /probe/private/state; then stat -c "file=%a:%u:%g" /probe/private/state; echo role_can_read=true; else echo file=INACCESSIBLE; echo role_can_read=false; fi'),
             ('provider-readback', 10002, False, 'stat -c "root=%a:%u:%g" /probe; stat -c "directory=%a:%u:%g" /probe/private; stat -c "file=%a:%u:%g" /probe/private/state')]:
             current = read(context, 'persistentvolumeclaims', 'probe', namespace)
@@ -159,7 +159,7 @@ def main():
         result['preparedObservations'] = []
         for name, uid, group, script in [
             ('prepare-empty-root', 10001, True, 'test ! -e /probe/private; stat -c "root=%a:%u:%g" /probe'),
-            ('prepared-provider', 10002, False, 'umask 077; mkdir /probe/private; printf qa-state > /probe/private/state; stat -c "directory=%a:%u:%g" /probe/private; stat -c "file=%a:%u:%g" /probe/private/state'),
+            ('prepared-provider', 10002, False, 'umask 077; mkdir /probe/private; chmod 700 /probe/private; printf qa-state > /probe/private/state; stat -c "directory=%a:%u:%g" /probe/private; stat -c "file=%a:%u:%g" /probe/private/state'),
             ('prepared-role', 10001, True, 'stat -c "root=%a:%u:%g" /probe; stat -c "directory=%a:%u:%g" /probe/private; if test -r /probe/private/state; then echo role_can_read=true; else echo role_can_read=false; fi'),
             ('prepared-readback', 10002, False, 'stat -c "directory=%a:%u:%g" /probe/private; stat -c "file=%a:%u:%g" /probe/private/state')]:
             current = read(context, 'persistentvolumeclaims', 'prepared', namespace)
@@ -171,6 +171,10 @@ def main():
             'root=2777:0:29000' in result['preparedObservations'][0]['observations']
             and 'role_can_read=false' in result['preparedObservations'][2]['observations']
             and result['preparedObservations'][3]['observations'] == ['directory=700:10002:29000', 'file=600:10002:29000'])
+        result['legacyPrimaryGroupObservation'] = observe_pod(context, namespace, nonce, arguments.node, arguments.image,
+            'legacy-primary-group', 10002, True,
+            'umask 077; mkdir /probe/legacy-primary; chmod 700 /probe/legacy-primary; printf qa-state > /probe/legacy-primary/state; stat -c "directory=%a:%u:%g" /probe/legacy-primary; stat -c "file=%a:%u:%g" /probe/legacy-primary/state',
+            pvc_name='prepared', gid=10002)
         result['status'] = 'OBSERVED'
     except (RuntimeError, subprocess.TimeoutExpired) as error:
         result['reason'] = str(error) if isinstance(error, RuntimeError) else 'KUBERNETES_REQUEST_TIMEOUT'

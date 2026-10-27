@@ -69,11 +69,30 @@ func TestWorkspacePodMountsRequireBindBeforePrivateGenerationAccess(t *testing.T
 	}
 }
 
+// TestWorkspaceStorageWritersKeepPrimaryGroupAfterPrivateDirectoryRestore prevents new files below mode0700 from drifting to the provider's UID group.
+// TestWorkspaceStorageWritersKeepPrimaryGroupAfterPrivateDirectoryRestore предотвращает смену group новых файлов под mode0700 на UID group провайдера.
+func TestWorkspaceStorageWritersKeepPrimaryGroupAfterPrivateDirectoryRestore(t *testing.T) {
+	_, _, _, pod := workspaceStoragePodFixture(t)
+	for _, group := range [][]corev1.Container{pod.Spec.InitContainers, pod.Spec.Containers} {
+		for _, container := range group {
+			want := int64(29000)
+			if container.Name == "provider-credential-relay" {
+				want = 10003
+			}
+			if container.SecurityContext == nil || container.SecurityContext.RunAsGroup == nil || *container.SecurityContext.RunAsGroup != want {
+				t.Fatal("V2 writer primary group does not preserve restored private directory ownership")
+			}
+		}
+	}
+}
+
 // TestWorkspacePodRejectsStorageDrift proves exact subPath, UID, mode and nested mount violations fail closed.
 // TestWorkspacePodRejectsStorageDrift доказывает closed отказ при изменении subPath, UID, mode и nested mount.
 func TestWorkspacePodRejectsStorageDrift(t *testing.T) {
 	manager, _, input, pod := workspaceStoragePodFixture(t)
 	for name, mutate := range map[string]func(*corev1.Pod){
+		"old provider primary group":    func(value *corev1.Pod) { value.Spec.Containers[1].SecurityContext.RunAsGroup = int64Pointer(10002) },
+		"old initializer primary group": func(value *corev1.Pod) { value.Spec.InitContainers[0].SecurityContext.RunAsGroup = int64Pointer(10001) },
 		"full PVC through provider state": func(value *corev1.Pod) {
 			for index := range value.Spec.Containers[1].VolumeMounts {
 				if value.Spec.Containers[1].VolumeMounts[index].MountPath == "/workspace/.kodex/state" {

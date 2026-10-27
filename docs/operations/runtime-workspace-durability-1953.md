@@ -4,7 +4,7 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.11
+version: 1.0.12
 updated: 2026-10-28
 ---
 
@@ -560,6 +560,15 @@ Pod ради обхода изменения PVC, ломая delivery credential
 Archive snapshot/restore consumers по-прежнему используют no-FSGroup profile.
 Точный Pod securityContext проверяет и producer, и BIND observer; подмена группы
 или `Always` закрыто отклоняется. Default legacy mounts не меняются.
+
+Все V2 storage writers — trusted initializers, role и provider — используют
+primary GID29000 при прежних UID10001/10002. Supplemental FSGroup недостаточен:
+в восстановленном private directory0700 без SGID новый файл иначе получает
+primary group10002 и перестаёт соответствовать archive scanner. Legacy profile
+сохраняет прежние primary groups; credential relay остаётся UID/GID10003.
+Native probe отдельно воспроизводит legacy-primary запись под directory0700;
+новый V2 profile должен создавать mode0600 с group29000 и сохранять отказ
+чужому UID после повторного mount.
 
 Проверена официальная
 [документация Kubernetes по volume ownership](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/).

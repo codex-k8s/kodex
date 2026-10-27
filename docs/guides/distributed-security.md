@@ -1962,6 +1962,10 @@ Payload/annotation и успешный mount не доказывают это п
 неподтверждённая custody блокируют data consumer без recursive repair.
 Проверка привязывается к реальному storage class и фактическим правам после
 повторного Pod: Pod Ready или декларации securityContext недостаточно.
+Если профиль требует единую shared group новых файлов под восстановленными
+private directories, одной supplemental group недостаточно: отсутствие SGID
+на mode0700 возвращает primary group writer. Профиль закрепляет primary GID
+и проверяет фактический owner/group новой записи без расширения private modes.
 
 Передача regular-file, directory FD и inode metadata использует разные
 закрытые read-only операции. Расширение одного вида не меняет validator
