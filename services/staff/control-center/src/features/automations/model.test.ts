@@ -163,6 +163,44 @@ describe("automations model", () => {
     ).toBe(4);
   });
 
+  it("отклоняет расхождения общей политики и содержимого в расписании и ревизии", () => {
+    const original = schedule();
+    const submitted = scheduleInput(original);
+    const changes: Array<Partial<Schedule>> = [
+      { timezone: "UTC" },
+      { sessionPolicy: "CONTINUE_ONE" },
+      { notificationPolicy: "CONTROL_CENTER_AND_OPTIONAL_CHANNELS" },
+      { misfirePolicy: "SKIP" },
+      { overlapPolicy: "ALLOW" },
+      { automationText: "Другая задача" },
+      { promptInputs: { report: "different" } },
+      { input: { task: "Другая задача" } },
+    ];
+    for (const change of changes) {
+      expect(() =>
+        verifyScheduleReadback(submitted, original, schedule(change)),
+      ).toThrow(AppProblem);
+      expect(() =>
+        verifyScheduleReadback(
+          submitted,
+          original,
+          schedule({
+            currentRevision: { ...original.currentRevision, ...change },
+          }),
+        ),
+      ).toThrow(AppProblem);
+    }
+    expect(
+      verifyScheduleReadback(
+        submitted,
+        original,
+        schedule({
+          input: { retained: { exact: true }, task: "Собрать сводку" },
+        }),
+      ),
+    ).toEqual(original);
+  });
+
   it("проверяет authoritative readback команды, включая архивацию", () => {
     const mutation = schedule({ state: "PAUSED", version: 4 });
     expect(
