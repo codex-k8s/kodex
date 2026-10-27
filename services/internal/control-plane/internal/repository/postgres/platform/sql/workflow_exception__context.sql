@@ -27,10 +27,10 @@ SELECT jsonb_build_object('nodeRef',node.ref,'runRef',physical.ref,'stepKey',nod
     'runtimeState',node.state,'safeErrorCode',node.safe_error_code,
     'modelResultData',left(node.progress_summary,1500),
     'capturedArtifactMetadata',COALESCE(node.workflow_captured_artifacts->'artifacts','[]'::jsonb)),
- CASE WHEN pending.episode->>'reason'='OWNER_CHANGES_REQUESTED' THEN (
-   SELECT jsonb_build_object('gateRef',ref,'gateVersion',version,'decision',decision,'comment',decision_comment)
-   FROM decisions WHERE root_id=pending.id
- ) ELSE NULL::jsonb END
+ (SELECT ref FROM decisions WHERE root_id=pending.id),
+ (SELECT version FROM decisions WHERE root_id=pending.id),
+ (SELECT decision FROM decisions WHERE root_id=pending.id),
+ (SELECT decision_comment FROM decisions WHERE root_id=pending.id)
 FROM pending
 JOIN control_plane.run_nodes node ON node.id=@node_id::uuid AND node.organization_id=pending.organization_id
   AND node.root_run_id=pending.id

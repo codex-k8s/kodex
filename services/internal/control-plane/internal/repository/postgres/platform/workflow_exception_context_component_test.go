@@ -64,7 +64,7 @@ func testWorkflowExceptionContext(t *testing.T, mode string) {
 	var fileBinding *entity.AccessBinding
 	if mode == "owner-revoke" {
 		var subject string
-		initiator, subject = previewAuthorityActor(t, ctx, repository, service, owner, "context-limited-initiator", []string{"project.view", "agent.view", "agent.launch", "workflow.view", "workflow.launch", "run.view"}, entity.AccessScope{Kind: "PROJECT", ProjectRef: project.Ref})
+		initiator, subject = previewAuthorityActor(t, ctx, repository, service, owner, "context-limited-initiator", []string{"project.view", "agent.view", "agent.launch", "workflow.view", "workflow.launch", "run.view", "artifact.upload"}, entity.AccessScope{Kind: "PROJECT", ProjectRef: project.Ref})
 		fileBinding = previewAuthorityGrant(t, ctx, service, owner, "context-files", subject, []string{"artifact.view", "artifact.download"}, entity.AccessScope{Kind: "PROJECT", ProjectRef: project.Ref})
 	}
 	launch, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: initiator, Mutation: value.Mutation{IdempotencyKey: "context-launch"}, Payload: command.LaunchRunInput{ProjectRef: project.Ref, Target: entity.RunTarget{Type: "WORKFLOW", Ref: workflow.Ref}, Task: "Подготовить и проверить документы."}})
@@ -82,9 +82,23 @@ func testWorkflowExceptionContext(t *testing.T, mode string) {
 		if mode == "invalid-manager-complete" && index == 1 {
 			payload.ResultSummary = "Not a closed result declaration; the captured file remains data."
 		}
-		f.execute(command.CompleteExecution, "context-complete-"+name, nil, payload)
+		// Replay independently decodes the same wire bytes; owner preparation may mutate its private artifact slice.
+		// Replay независимо декодирует те же wire bytes; owner preparation может менять свой private artifact slice.
+		wire, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatal("encode immutable context completion intent")
+		}
+		complete := func() {
+			t.Helper()
+			var fresh command.CompleteExecutionInput
+			if json.Unmarshal(wire, &fresh) != nil {
+				t.Fatal("decode immutable context completion intent")
+			}
+			f.execute(command.CompleteExecution, "context-complete-"+name, nil, fresh)
+		}
+		complete()
 		before := f.read()
-		f.execute(command.CompleteExecution, "context-complete-"+name, nil, payload)
+		complete()
 		if !reflect.DeepEqual(before, f.read()) {
 			t.Fatal("completion replay duplicated context lineage")
 		}

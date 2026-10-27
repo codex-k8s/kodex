@@ -11,6 +11,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // workflowExceptionContextQuery reads the exact stored source decision before manager assignment;
@@ -71,24 +72,26 @@ type workflowExceptionArtifact struct {
 // владельца. Отсутствие или неоднозначность решения закрыто отклоняется, а не передаётся модели.
 func readWorkflowExceptionContextTx(ctx context.Context, tx pgx.Tx, current scope, root *serverWorkflowRoot, episode workflowExceptionEpisode) (workflowExceptionContext, error) {
 	result := workflowExceptionContext{Schema: "kodex.workflow-exception-context.v1", Episode: episode.Episode, Version: episode.Version, StepKey: episode.StepKey, Attempt: episode.Attempt, Reason: episode.Reason, Inputs: publicWorkflowInputs(episode.Inputs)}
-	var decision []byte
+	var gateRef, decision, comment pgtype.Text
+	var gateVersion pgtype.Int8
 	err := tx.QueryRow(ctx, workflowExceptionContextQuery, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "root_run_id": root.ID,
 		"episode": episode.Episode, "episode_version": episode.Version,
 		"node_id": episode.FinalNodeID,
-	}).Scan(&result.Producer, &decision)
+	}).Scan(&result.Producer, &gateRef, &gateVersion, &decision, &comment)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return workflowExceptionContext{}, errs.ErrConflict
 	}
 	if err != nil {
 		return workflowExceptionContext{}, errs.ErrUnavailable
 	}
-	if len(decision) > 0 && string(decision) != "null" {
-		var stored integrationContinuationDecision
-		if json.Unmarshal(decision, &stored) != nil {
+	if result.Reason == "OWNER_CHANGES_REQUESTED" {
+		if !gateRef.Valid || !gateVersion.Valid || !decision.Valid || !comment.Valid {
 			return workflowExceptionContext{}, errs.ErrConflict
 		}
-		result.OwnerDecision = &stored
+		result.OwnerDecision = &integrationContinuationDecision{GateRef: gateRef.String, GateVersion: gateVersion.Int64, Decision: decision.String, Comment: comment.String}
+	} else if gateRef.Valid || gateVersion.Valid || decision.Valid || comment.Valid {
+		return workflowExceptionContext{}, errs.ErrConflict
 	}
 	return result, nil
 }
