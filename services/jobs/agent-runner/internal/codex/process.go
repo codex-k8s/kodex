@@ -897,10 +897,12 @@ func startAppServerCommand(command *exec.Cmd, readerGate <-chan struct{}) (*appS
 	}, nil
 }
 
-// appServerEnvironment constructs a fresh allowlisted environment from fixed home/path/MCP values,
+// appServerEnvironment constructs a fresh allowlisted environment from fixed home/path/MCP values and
+// the image GOROOT default (overridden only by published configuration, never ambient inheritance),
 // approved plain values, named secret projections and exact server transport. Missing secrets or
 // forbidden names reject it; unrelated parent variables are not inherited and transport cannot be overridden.
-// appServerEnvironment строит новое окружение из фиксированных home/path/MCP, разрешённых обычных
+// appServerEnvironment строит новое окружение из фиксированных home/path/MCP, default GOROOT образа
+// (меняемого только опубликованной конфигурацией, не ambient inheritance), разрешённых обычных
 // значений, именованных secret projections и точного транспорта сервера. Отсутствующий секрет или
 // запрещённое имя дают отказ; чужие parent переменные не наследуются и транспорт не подменяется.
 func appServerEnvironment(input model.Input, mcpProxyToken string) []string {
@@ -909,7 +911,8 @@ func appServerEnvironment(input model.Input, mcpProxyToken string) []string {
 		return nil
 	}
 	environment := []string{"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=" + input.CodexHome,
-		"CODEX_HOME=" + input.CodexHome, "KODEX_MCP_PROXY_TOKEN=" + mcpProxyToken}
+		"CODEX_HOME=" + input.CodexHome, "KODEX_MCP_PROXY_TOKEN=" + mcpProxyToken,
+		"GOROOT=/usr/local/go"}
 	for _, item := range input.EnvironmentValues {
 		if !runtimecontract.ValidRuntimeEnvironmentName(item.Name) {
 			return nil

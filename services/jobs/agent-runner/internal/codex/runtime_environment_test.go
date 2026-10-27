@@ -72,7 +72,8 @@ func TestAppServerEnvironmentPreservesExactTrustWithoutCredentialInheritance(t *
 			t.Fatalf("server-owned transport variable %s is missing", name)
 		}
 	}
-	if !slices.Contains(actual, "SERVICE_TOKEN=synthetic-bound-secret") || len(actual) != 4+len(runtimeTransportEnvironmentNames)+1 {
+	if !slices.Contains(actual, "SERVICE_TOKEN=synthetic-bound-secret") ||
+		!slices.Contains(actual, "GOROOT=/usr/local/go") || len(actual) != 5+len(runtimeTransportEnvironmentNames)+1 {
 		t.Fatal("child environment is not the exact approved set")
 	}
 	for _, name := range []string{"CURL_CA_BUNDLE", "NODE_EXTRA_CA_CERTS", "GIT_SSL_NO_VERIFY", "HTTP_PROXY"} {
