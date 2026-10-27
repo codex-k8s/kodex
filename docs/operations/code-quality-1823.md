@@ -4,11 +4,21 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.582.0
+version: 1.583.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая синтетическая подготовка файловых сценариев — 27.10.2026
+
+Два component-сценария используют общую настройку тестового scanner, provider
+fixture и role-image fixture с последующим bootstrap. Порядок и значения прежние;
+object store и дальнейшие проверки принадлежат вызывающим. Production-код не
+менялся. Control-plane build/vet PASS, 3078 unit PASS / 70 условных SKIP.
+Выбранные сценарии на disposable PostgreSQL — 5 PASS events до и после, FAIL/SKIP 0.
+Анализ: 1339 raw / 1282 retained / 57 unresolved, Go-комментарии 21726/21726.
+Браузер, E2E, live/deploy/startup и QA не выполнялись.
 
 ## Общее чтение закрываемых строк планировщика — 27.10.2026
 

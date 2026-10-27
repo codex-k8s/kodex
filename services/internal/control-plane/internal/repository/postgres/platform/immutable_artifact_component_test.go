@@ -119,16 +119,7 @@ func TestImmutableArtifactRevisionComponent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	configureComponentArtifactScanner(t, repository)
-	if err := repository.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
-		t.Fatal(err)
-	}
-	if err := repository.ConfigureRoleImages(syntheticRoleImageComponentConfig()); err != nil {
-		t.Fatal(err)
-	}
-	if err := repository.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
+	configureSyntheticArtifactComponent(t, ctx, repository)
 	var nodes, edges int
 	var nodeHash, edgeHash string
 	if err := pool.QueryRow(ctx, immutableGraph).Scan(&nodes, &nodeHash, &edges, &edgeHash); err != nil {

@@ -215,3 +215,23 @@ func readAssistantRunScopeEffects(t *testing.T, ctx context.Context, pool *pgxpo
 	}
 	return result
 }
+
+// configureSyntheticArtifactComponent configures the test artifact scanner, fixed synthetic
+// provider and role-image fixture, then bootstraps in that order. The caller owns the repository,
+// object store, pool, deadline and subsequent assertions; no external provider is contacted.
+// configureSyntheticArtifactComponent настраивает тестовый scanner файлов, фиксированный synthetic
+// provider и role-image fixture, затем запускает bootstrap в этом порядке. Repository, object store,
+// pool, deadline и последующие проверки принадлежат caller; внешнего provider helper не вызывает.
+func configureSyntheticArtifactComponent(t *testing.T, ctx context.Context, repository *Repository) {
+	t.Helper()
+	configureComponentArtifactScanner(t, repository)
+	if err := repository.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.ConfigureRoleImages(syntheticRoleImageComponentConfig()); err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.Bootstrap(ctx); err != nil {
+		t.Fatal(err)
+	}
+}

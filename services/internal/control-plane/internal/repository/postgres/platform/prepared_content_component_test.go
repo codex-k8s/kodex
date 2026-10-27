@@ -49,16 +49,7 @@ func TestPreparedContentBindingComponent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	configureComponentArtifactScanner(t, repository)
-	if err := repository.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
-		t.Fatal(err)
-	}
-	if err := repository.ConfigureRoleImages(syntheticRoleImageComponentConfig()); err != nil {
-		t.Fatal(err)
-	}
-	if err := repository.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
+	configureSyntheticArtifactComponent(t, ctx, repository)
 	prepareObservedWarmFixture(t, ctx, repository)
 	service, owner := newPreparedContentComponentService(t, ctx, repository)
 	projectResult, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "ledger-binding-project"}, Payload: command.ProjectInput{Name: "Ledger binding", Language: "ru"}})
