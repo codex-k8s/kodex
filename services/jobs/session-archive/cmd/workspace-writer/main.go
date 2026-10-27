@@ -23,6 +23,10 @@ func main() {
 		err = worker.PrepareWorkspaceWriter(lifecycle)
 	} else if len(os.Args) == 2 && os.Args[1] == "generation" {
 		err = worker.PrepareWorkspaceGeneration(lifecycle)
+	} else if len(os.Args) == 2 && os.Args[1] == "volume" {
+		err = worker.PrepareWorkspaceVolume(lifecycle, false)
+	} else if len(os.Args) == 2 && os.Args[1] == "volume-readback" {
+		err = worker.PrepareWorkspaceVolume(lifecycle, true)
 	} else {
 		err = fmt.Errorf("workspace writer mode is required")
 	}

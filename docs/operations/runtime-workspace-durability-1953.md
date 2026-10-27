@@ -4,7 +4,7 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.12
+version: 1.0.13
 updated: 2026-10-28
 ---
 
@@ -583,6 +583,39 @@ Context7 текущую авторизацию отклонил; значени�
 каталога и не имеет CAP_FSETID. Подготовка использует требуемую группу и
 проверяет фактический режим, не расширяя capabilities:
 [Linux chmod(2)](https://man7.org/linux/man-pages/man2/chmod.2.html).
+
+## Подготовка пустого тома до private data
+
+Credential-free `workspace-writer volume` работает только UID10001/GID29000.
+Он получает отдельный canonical `volume.json`: exact scope/work/task/PVC UID
+и монотонную incarnation тома, без выдуманной model RuntimeRevision. До Job
+controller отдельно доказывает owner grant, positive Create UID, отсутствие
+consumers и пустую custody; совпадение metadata/имени PVC этого не разрешает.
+Подготовка относится только к квалифицированному local-path root
+UID0/GID29000/mode2777 после первого FSGroup, до любых private данных.
+
+Первый helper требует пустой root. Он exclusive создаёт собственный
+`volume-meta`0700 и sealed `ready.json`0440 с точным intent/device/inode,
+подтверждает единственный metadata entry, sync и readback. Existing/partial/
+foreign entries не удаляются, не chmod/chown-ятся и не получают first-attempt
+credit. Повторный `volume-readback` требует read-only volume mount, существующий
+точный record и соответствующий inode. Он не создаёт missing metadata и не
+обходит поздние business directories; record не объявляет том снова пустым.
+
+| Путь | Локальное действие | Owner/физическое доказательство |
+| --- | --- | --- |
+| Первый PREPARE | Empty root → exclusive private metadata → sealed inode observation | Отдельный persisted task/grant, positive PVC Create UID, только первый authoritatively разрешённый Job, затем terminal всех containers |
+| Ошибка/отмена/неизвестный исход | Сохранить PVC и любой partial entry | Закрыть прежний grant в owner-транзакции; отсутствие файла не разрешает повторное создание |
+| Retry/reconcile | Только read-only matching record, без FSGroup и write/init | Fresh fenced attempt после positive predecessor join; payload refs не выдают authority |
+| Поздний ACK | Не меняет локальные файлы | Owner фиксирует только past storage fact, не возвращает run/grant/RR к жизни |
+| Runtime BIND/RESTORE | Проверить accepted volume tuple до private write/mount | Fresh owner-selected RR/restore input pin actual PVC UID и accepted preparation; unknown custody закрыта |
+| Purge | Helper не удаляет данные | Отдельный owner destructive protocol с paired history/work custody и exact physical readback |
+
+Эти local codec/helper entry points ещё не регистрируют production owner
+queue, новый private RPC либо runtime VolumeReady admission. Они не включают V2.
+Полный forward owner protocol и native Job/PVC/S3 проверка остаются обязательной
+частью #1953/#1964. Первая FSGroup на уже существующих private данных запрещена,
+в том числе ради восстановления повреждённого metadata record.
 
 ## Совместимость миграций и удаления
 
