@@ -145,11 +145,14 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog 
     SELECT origin.id AS origin_id,history.id AS artifact_id,history.revision_id
     FROM control_plane.integration_invocations invocation
     JOIN control_plane.run_nodes origin ON origin.id=invocation.node_id AND origin.organization_id=p_tenant
-        AND origin.run_id=invocation.run_id AND origin.root_run_id=invocation.root_run_id AND origin.agent_id=invocation.agent_id
+        AND origin.run_id=invocation.run_id
+    JOIN control_plane.runs physical ON physical.id=origin.run_id AND physical.organization_id=p_tenant
+        AND physical.root_run_id=origin.root_run_id
     JOIN control_plane.run_nodes anchor ON anchor.id=COALESCE(origin.workflow_step_origin_node_id,origin.id)
         AND anchor.organization_id=p_tenant AND anchor.root_run_id=origin.root_run_id
-        AND anchor.workflow_step_key=origin.workflow_step_key AND anchor.workflow_business_attempt=1
+        AND anchor.workflow_step_key=origin.workflow_step_key AND anchor.workflow_business_attempt=1 AND anchor.agent_id=origin.agent_id
     JOIN control_plane.runs root ON root.id=origin.root_run_id AND root.organization_id=p_tenant
+        AND root.project_id=physical.project_id AND root.workflow_version_id=physical.workflow_version_id
     JOIN control_plane.workflow_versions version ON version.id=root.workflow_version_id AND version.organization_id=p_tenant
         AND version.spec->>'ExecutionMode'='SERVER_DAG_V1' AND version.spec->>'ResultEvidenceProfile'='GITHUB_REVIEW_QA_V1'
     CROSS JOIN LATERAL jsonb_array_elements(anchor.workflow_effect_intents) intent

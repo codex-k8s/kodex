@@ -12,7 +12,7 @@ WITH RECURSIVE expected(signature,digest,language,volatility,result_type) AS (VA
  ('control_plane.workflow_evidence_outcome_valid(uuid,uuid,jsonb,jsonb)','4e03633b768583ef8cfd94c5243e21e0','plpgsql','s','boolean'),
  ('control_plane.workflow_evidence_execution_assigned(uuid,uuid,uuid)','1fb462b1ccbdce5a35e6dcb497be0d40','sql','s','boolean'),
  ('control_plane.artifact_has_retained_revisions(uuid)','29166a148eef617208fc527afaf907d1','sql','s','boolean'),
- ('control_plane.workflow_evidence_retains_revision(uuid,uuid,uuid)','bf04b902bc6ca9e2f513a3d192f65c25','sql','s','boolean')
+ ('control_plane.workflow_evidence_retains_revision(uuid,uuid,uuid)','c347038ad84997023ea7f23b14fc527b','sql','s','boolean')
 ), functions AS (
  SELECT e.*,p.oid,p.prosrc,p.proowner,p.prosecdef,p.provolatile,p.prolang,p.proconfig,p.prorettype,p.proretset,p.proacl
  FROM expected e LEFT JOIN pg_proc p ON p.oid=to_regprocedure(e.signature)
