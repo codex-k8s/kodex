@@ -621,7 +621,10 @@ python3 tools/dev/workspace-reader-native-test.py --mode volume \
 Она использует только cached pinned Docker image, отдельный новый named volume,
 capability-free UID10001/10002 и read-only binary/input binds. Только fixture
 подготовки нового пустого volume получает CHOWN/FOWNER; helper их не получает.
-Termination output находится в отдельном1MiB tmpfs. Проверяются first prepare,
+Каждая фаза получает единственный отдельный writable termination-файл внутри
+private0700 host fixture directory; исходники и directory не монтируются.
+Запись helper проверяется по exact bytes, schema/intent/inode и прежнему digest.
+Проверяются first prepare,
 private700/600, read-only rejoin, отказы changed intent/nonempty root/writable
 rejoin и повторная сохранность данных. Точные container IDs, volume label и
 удаление временных inputs проверяются при cleanup. Это local filesystem proof,

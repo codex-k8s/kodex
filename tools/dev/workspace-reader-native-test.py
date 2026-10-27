@@ -108,12 +108,16 @@ def volume_ready_consumers(binary, volume, nonce, identities, temporary):
             output.write(json.dumps(value, separators=(',', ':')))
         path.chmod(0o444)
         inputs.append(path)
-    outcomes = []
+    outcomes, ready_records = [], []
 
     def helper(phase, mode, readonly, input_path, denied=False):
-        """Запустить exact binary с отдельным tmpfs для termination outcome, без writable host bind."""
+        """Запустить exact binary с единственным writable outcome-файлом в private0700 fixture directory."""
+        output_path = temporary / ('out-'+phase+'.json')
+        descriptor = os.open(output_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        os.fchmod(descriptor, 0o666)
+        os.close(descriptor)
         arguments = ['--entrypoint=/qa-helper',
-            '--tmpfs', '/dev:rw,nosuid,noexec,size=1048576,mode=1777',
+            '--mount', 'type=bind,source='+str(output_path)+',target=/dev/termination-log',
             '--env', 'SESSION_ARCHIVE_WORKER_TIMEOUT=1m', '--env', 'GOMAXPROCS=1',
             '--env', 'GOMEMLIMIT=16MiB',
             '--mount', 'type=bind,source='+str(binary)+',target=/qa-helper,readonly',
@@ -131,6 +135,24 @@ def volume_ready_consumers(binary, volume, nonce, identities, temporary):
         else:
             if denied:
                 raise RuntimeError('UNSAFE_VOLUME_PREPARATION_ACCEPTED')
+        value = output_path.lstat()
+        if (not stat.S_ISREG(value.st_mode) or value.st_uid != os.getuid() or value.st_nlink != 1
+                or value.st_size > 2048):
+            raise RuntimeError('VOLUME_OUTCOME_FILE_CHANGED')
+        raw = output_path.read_bytes()
+        if denied:
+            if raw:
+                raise RuntimeError('DENIED_VOLUME_HELPER_PUBLISHED_OUTCOME')
+        else:
+            record = json.loads(raw)
+            if (set(record) != {'schema', 'preparation', 'device', 'inode'}
+                    or record['schema'] != 'kodex.workspace-volume-ready.v1' or record['preparation'] != intent
+                    or type(record['device']) is not int or type(record['inode']) is not int
+                    or record['device'] < 1 or record['inode'] < 1
+                    or ready_records and raw != ready_records[0]):
+                raise RuntimeError('VOLUME_READY_OUTCOME_MISMATCH')
+            ready_records.append(raw)
+            outcome['readyRecordSHA256'] = hashlib.sha256(raw).hexdigest()
         outcomes.append(dict(outcome, phase=phase))
 
     helper('ready', 'volume', False, inputs[0])
@@ -347,7 +369,7 @@ def main():
                     or stat.S_IMODE(current.st_mode) != 0o700):
                 raise RuntimeError('TEMPORARY_INPUT_OWNERSHIP_CHANGED')
             if result['allContainersAbsent']:
-                for name in ['volume.json', 'changed.json']:
+                for name in ['volume.json', 'changed.json', *['out-'+phase+'.json' for phase in ['ready', 'rejoin', 'changed-intent', 'nonempty-root', 'writable-rejoin', 'rejoin-again']]]:
                     path = temporary_inputs / name
                     try:
                         value = path.lstat()
