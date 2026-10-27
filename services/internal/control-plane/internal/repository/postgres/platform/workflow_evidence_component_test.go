@@ -37,7 +37,7 @@ type workflowEvidenceNativeFixture struct {
 // completion, negative history и replay. Trusted IG completion задаёт provider-shaped facts;
 // оснастка не заявляет внешний GitHub delivery либо автоматическую аттестацию QA commands.
 func TestWorkflowReviewQAEvidenceComponent(t *testing.T) {
-	for _, mode := range []string{"review-effect-first", "review-model-first", "qa-pass", "qa-issue-effect-first", "qa-issue-model-first"} {
+	for _, mode := range []string{"review-effect-first", "review-model-first", "review-unknown", "review-cancel", "review-revoked", "qa-pass", "qa-changes-no-issue", "qa-issue-effect-first", "qa-issue-model-first"} {
 		t.Run(mode, func(t *testing.T) { runWorkflowEvidenceNative(t, mode) })
 	}
 }
@@ -113,10 +113,8 @@ func (fixture *workflowEvidenceNativeFixture) finishEffect(invocation map[string
 		}
 		f.execute(command.ResolveOwnerGate, fixture.key("approve-effect"), &gate.Version, command.GateResolutionInput{GateRef: gate.Ref, Decision: "APPROVE", Comment: "Only the exact native fixture effect."})
 	}
-	work, err := f.service.ClaimIntegrationInvocations(f.ctx, fixture.gateway, "workflow-evidence-native", 1)
-	if err != nil || len(work) != 1 || stringMap(work[0], "invocationRef") != stringMap(invocation, "invocationRef") {
-		f.t.Fatal("exact evidence effect not claimable", completionOutcomeClass(err))
-	}
+	work := []map[string]any{fixture.claimEffect(invocation)}
+	var err error
 	_, err = f.service.Execute(f.ctx, command.Command{Kind: command.CompleteIntegrationInvocation, Principal: fixture.gateway, Mutation: value.Mutation{IdempotencyKey: fixture.key("native-complete")}, Payload: command.IntegrationInvocationInput{InvocationRef: stringMap(work[0], "invocationRef"), LeaseRef: stringMap(work[0], "leaseRef"), Fence: stringMap(work[0], "fence"), Generation: runtimeRevisionMapInt64(work[0], "generation"), Success: true, EffectKey: stringMap(work[0], "effectKey"), InputDigest: stringMap(work[0], "inputDigest"), ProviderEffectRef: provider, ResultSummary: summary, ResponseDigest: workflowResultSHA([]byte(summary))}})
 	if err != nil {
 		f.t.Fatal("persist native evidence receipt", completionOutcomeClass(err))
@@ -126,6 +124,78 @@ func (fixture *workflowEvidenceNativeFixture) finishEffect(invocation map[string
 		f.t.Fatal("native evidence receipt missing")
 	}
 	return stringMap(state, "effectReceiptRef")
+}
+
+// claimEffect obtains the exact actual worker lease, never synthesizing ledger state.
+// claimEffect получает exact actual worker lease без синтеза ledger state.
+func (fixture *workflowEvidenceNativeFixture) claimEffect(invocation map[string]any) map[string]any {
+	f := fixture.f
+	f.t.Helper()
+	work, err := f.service.ClaimIntegrationInvocations(f.ctx, fixture.gateway, "workflow-evidence-native", 1)
+	if err != nil || len(work) != 1 || stringMap(work[0], "invocationRef") != stringMap(invocation, "invocationRef") {
+		f.t.Fatal("exact evidence effect not claimable", completionOutcomeClass(err))
+	}
+	return work[0]
+}
+
+// stopPendingReview proves that unknown, cancellation and current grant revocation cannot
+// allocate another WRITE or revive a completed model producer; only owner cancellation closes it.
+// stopPendingReview доказывает, что UNKNOWN, отмена и отзыв current grant не создают новый WRITE
+// либо не оживляют completed model producer; завершение выполняет штатная owner cancellation.
+func (fixture *workflowEvidenceNativeFixture) stopPendingReview(mode string, lease, invocation map[string]any) {
+	f := fixture.f
+	f.t.Helper()
+	var work map[string]any
+	if mode != "review-revoked" {
+		work = fixture.claimEffect(invocation)
+	}
+	fixture.complete(lease, "Native COMMENT outcome is unresolved; do not fabricate a receipt.")
+	if len(f.read().journals["check"]) != 0 {
+		f.t.Fatal("pending outcome produced business acceptance")
+	}
+	if mode == "review-unknown" {
+		_, err := f.service.Execute(f.ctx, command.Command{Kind: command.CompleteIntegrationInvocation, Principal: fixture.gateway, Mutation: value.Mutation{IdempotencyKey: fixture.key("unknown")}, Payload: command.IntegrationInvocationInput{InvocationRef: stringMap(work, "invocationRef"), LeaseRef: stringMap(work, "leaseRef"), Fence: stringMap(work, "fence"), Generation: runtimeRevisionMapInt64(work, "generation"), UnknownOutcome: true, SafeErrorCode: "INTEGRATION_OUTCOME_UNKNOWN"}})
+		if err != nil {
+			f.t.Fatal("persist unknown evidence outcome", completionOutcomeClass(err))
+		}
+	}
+	if mode == "review-revoked" {
+		connection, err := f.service.GetIntegrationConnection(f.ctx, f.owner, fixture.connection.Ref)
+		if err != nil {
+			f.t.Fatal("read evidence connection before revoke")
+		}
+		f.execute(command.ChangeIntegrationGrant, fixture.key("revoke"), &connection.Version, command.IntegrationGrantInput{ConnectionRef: connection.Ref, AgentRef: f.agents["check"], CapabilityKey: "github.pull_request.review.create", ApprovalPolicy: "NONE", Enabled: false})
+	}
+	if mode != "review-cancel" {
+		if items, err := f.service.ClaimIntegrationInvocations(f.ctx, fixture.gateway, "evidence-denied-reclaim", 1); err != nil || len(items) != 0 {
+			f.t.Fatal("unknown or revoked evidence WRITE was reissued")
+		}
+	}
+	if items := f.claims(fixture.key("no-model-join")); len(items) != 0 {
+		f.t.Fatal("pending evidence created a fresh model turn")
+	}
+	current, err := f.service.GetRun(f.ctx, f.owner, f.runRef)
+	if err != nil {
+		f.t.Fatal("read pending evidence root")
+	}
+	f.execute(command.CancelRun, fixture.key("cancel-pending"), &current.Version, command.RunCommandInput{RunRef: current.Ref, Reason: "Close unresolved native fixture without replaying external WRITE"})
+	state, err := f.service.GetIntegrationInvocation(f.ctx, f.worker, stringMap(invocation, "invocationRef"))
+	want := "UNKNOWN_OUTCOME"
+	if mode == "review-revoked" {
+		want = "CANCELLED"
+	}
+	if err != nil || stringMap(state, "state") != want || stringMap(state, "effectReceiptRef") != "" {
+		f.t.Fatal("cancellation lost unknown outcome or fabricated a receipt")
+	}
+	if work != nil {
+		_, err = f.service.Execute(f.ctx, command.Command{Kind: command.CompleteIntegrationInvocation, Principal: fixture.gateway, Mutation: value.Mutation{IdempotencyKey: fixture.key("late-completion")}, Payload: command.IntegrationInvocationInput{InvocationRef: stringMap(work, "invocationRef"), LeaseRef: stringMap(work, "leaseRef"), Fence: stringMap(work, "fence"), Generation: runtimeRevisionMapInt64(work, "generation"), SafeErrorCode: "INTEGRATION_REQUEST_REJECTED"}})
+		if !errors.Is(err, errs.ErrForbidden) && !errors.Is(err, errs.ErrNotFound) {
+			f.t.Fatal("late evidence completion resurrected cancelled graph", completionOutcomeClass(err))
+		}
+	}
+	if items, err := f.service.ClaimIntegrationInvocations(f.ctx, fixture.gateway, "evidence-after-cancel", 1); err != nil || len(items) != 0 {
+		f.t.Fatal("cancelled evidence graph reissued WRITE")
+	}
 }
 
 // captured reads an actual owner artifact created by completion, retaining immutable revision pins.
@@ -226,6 +296,23 @@ func runWorkflowEvidenceNative(t *testing.T, mode string) {
 		if err != nil {
 			t.Fatal("admit COMMENT", completionOutcomeClass(err))
 		}
+		replay, err := fixture.resolve(lease, "evidence-review", "github.pull_request.review.create", input)
+		if err != nil || stringMap(replay, "invocationRef") != stringMap(invocation, "invocationRef") {
+			t.Fatal("exact COMMENT replay allocated another invocation")
+		}
+		for _, changed := range []map[string]any{
+			{"pull_request_number": 8, "sha": sha, "event": "COMMENT", "body": "Native independent COMMENT"},
+			{"pull_request_number": 7, "sha": strings.Repeat("b", 40), "event": "COMMENT", "body": "Native independent COMMENT"},
+			{"pull_request_number": 7, "sha": sha, "event": "COMMENT", "body": "Changed semantic COMMENT"},
+		} {
+			if _, err := fixture.resolve(lease, fixture.key("semantic-drift"), "github.pull_request.review.create", changed); err == nil {
+				t.Fatal("COMMENT semantic drift admitted")
+			}
+		}
+		if mode == "review-unknown" || mode == "review-cancel" || mode == "review-revoked" {
+			fixture.stopPendingReview(mode, lease, invocation)
+			return
+		}
 		if modelFirst {
 			fixture.complete(lease, "The COMMENT is still pending; this is not a final evidence claim.")
 			if len(f.read().journals["check"]) != 0 {
@@ -246,16 +333,19 @@ func runWorkflowEvidenceNative(t *testing.T, mode string) {
 		log := fixture.captured(logResult)
 		lease = fixture.claim(reviewer.Ref)
 		report := workflowservice.QAReport{Schema: "kodex.workflow-qa-report.v1", Repository: "fixture/repository", Number: 7, HeadSHA: sha, Verdict: "PASS", Tests: []workflowservice.QATest{{Name: "Native report fixture", Command: "fixture-output-only", ExitCode: 0, Log: evidenceCapturedSource(log)}}, Findings: []workflowservice.QAFinding{}}
-		if issue {
+		negativeQA := issue || mode == "qa-changes-no-issue"
+		if negativeQA {
 			report.Verdict = "CHANGES_REQUIRED"
 			report.Findings = []workflowservice.QAFinding{{Key: "fixture-defect", Summary: "Isolated native fixture finding; not a real external bug."}}
+		}
+		if issue {
 			report.Issue = &workflowservice.QAIssue{Title: "Native fixture finding", Body: "Isolated evidence publication, no external request."}
 		}
 		body := asJSON(report)
 		artifact := workflowCaptureProgressArtifact("qa-report.json", body)
 		artifact.MediaType = "application/json"
 		if !issue {
-			fixture.complete(lease, evidenceDeclaration(entity.WorkflowDeclaredResult{Key: "log", Source: evidenceCapturedSource(log)}, entity.WorkflowDeclaredResult{Key: "report", Source: &entity.WorkflowArtifactSource{Kind: "CURRENT_COMPLETION"}}, entity.WorkflowDeclaredResult{Key: "qa", HeadSHA: sha, Verdict: "PASS"}), artifact)
+			fixture.complete(lease, evidenceDeclaration(entity.WorkflowDeclaredResult{Key: "log", Source: evidenceCapturedSource(log)}, entity.WorkflowDeclaredResult{Key: "report", Source: &entity.WorkflowArtifactSource{Kind: "CURRENT_COMPLETION"}}, entity.WorkflowDeclaredResult{Key: "qa", HeadSHA: sha, Verdict: report.Verdict}), artifact)
 		} else {
 			if _, err := fixture.resolve(lease, "evidence-too-early-issue", "github.issue.create", map[string]any{"title": report.Issue.Title, "body": report.Issue.Body}); !errors.Is(err, errs.ErrNotFound) && !errors.Is(err, errs.ErrForbidden) {
 				t.Fatal("Issue admitted before report capture", completionOutcomeClass(err))
@@ -294,7 +384,7 @@ func runWorkflowEvidenceNative(t *testing.T, mode string) {
 		for _, attempt := range node.WorkflowResults {
 			if attempt.RunRef == stringMap(lease, "runRef") {
 				found = true
-				if issue {
+				if issue || mode == "qa-changes-no-issue" {
 					if attempt.Accepted || attempt.Reason != "CHANGES_REQUIRED" || len(attempt.Results) != 0 || len(attempt.ReviewEvidence) != 3 {
 						t.Fatal("negative report facts became acceptance or were lost")
 					}
@@ -307,7 +397,7 @@ func runWorkflowEvidenceNative(t *testing.T, mode string) {
 	if !found {
 		t.Fatal("business evidence history missing")
 	}
-	if issue {
+	if issue || mode == "qa-changes-no-issue" {
 		if current.State != "RUNNING" && current.State != "WAITING_HUMAN" {
 			t.Fatal("negative QA did not reach canonical exception")
 		}

@@ -115,6 +115,7 @@ run_migration() {
     -c 'SELECT max(version_id) FILTER (WHERE is_applied) FROM public.goose_db_version')
   case "$schema_version" in
     20261026001000) schema_proof=server-workflow-migration-postcondition.sql; schema_verifier=validServerWorkflowMigrationPostcondition ;;
+    20261026001400) schema_proof=workflow-review-qa-evidence-migration-postcondition.sql; schema_verifier=validWorkflowReviewQAEvidenceMigrationPostcondition ;;
     20261026001100) schema_proof=legacy-workflow-rework-migration-postcondition.sql; schema_verifier=validLegacyWorkflowReworkMigrationPostcondition ;;
     *) fail 'unsupported current workflow schema target' ;;
   esac

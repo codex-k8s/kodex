@@ -3,10 +3,11 @@ package platform
 import (
 	"encoding/json"
 	"errors"
-	workflowservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/workflow"
-	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"strings"
 	"testing"
+
+	workflowservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/workflow"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
 // workflowEvidenceSubjectFixture supplies a pinned accepted input for pure boundary tests;

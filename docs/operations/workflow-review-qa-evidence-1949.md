@@ -4,7 +4,7 @@ title: Native COMMENT и сохранённый QA-отчёт серверног
 type: runbook
 status: approved
 owner: architect
-version: 1.0.0
+version: 1.1.0
 updated: 2026-10-27
 ---
 
@@ -112,3 +112,39 @@ results, replay без второго effect и закрытые negative paths.
 fixtures проверяют фактические method/body/projection, disposable owner fixtures
 не называются реальным GitHub/live PDLC. Положительный local/native результат
 не заменяет независимое P/S/A и ручную проверку test-repo сотрудниками.
+
+## Закрытая проверка014
+
+`control-plane-migration.mjs --profile workflow-review-qa-evidence` использует тот же
+immutable plan/check/stop/apply/inspect/resume протокол. Каждый phase сверяется с
+одним закрытым registry. До DDL требуется clean exact source с полным рядом003..014,
+Goose013, отсутствие новых helpers014, три точных predecessor function bodies,
+INVOKER/owner/search_path/return/EXECUTE и отсутствие активных executions/tasks.
+Оператор не поставляет отсутствующие012/013 и не принимает их по имени файла.
+Отдельное одобрение и доказательство полного predecessor013 остаётся обязательной
+зависимостью поставки, а не результатом incremental verifier014.
+
+Postcondition исполняет поставляемый READ ONLY SQL: шесть exact bodies и metadata,
+два полных полных row triggers, runtime role boundary и неизменённый purge.
+Фактический граф после013 содержит105 relations/287 FK:014 не меняет его. Fingerprint
+читается из actual catalog и должен совпасть с записанным в canonical purge body;
+inverse normalization дополнительно сверяет всё прежнее тело. Отдельный011/010
+verifier намеренно отвергает014. Ни source-derived hashes, ни mock CLI не заменяют
+реальное исполнение этой проверки на disposable PostgreSQL.
+
+Публичные ограниченные точки входа:
+
+- `make test-workflow-result-contract`:30s, JSON Schema portion общего serialized
+  corpus. Go decoder использует тот же corpus в domain unit suite; contextual
+  kind/authority проверяет owner decoder, schema доказывает только форму.
+- `make test-workflow-review-qa-evidence-postgres`:300s, отдельные disposable clones,
+  девять owner lifecycle graphs и семь canonical/drift schema cases. Без готовой
+  согласованной012/013 composition этот target должен закрыто завершиться до suites.
+
+Нативные сценарии включают COMMENT effect-first/model-first, UNKNOWN без повторного
+POST, отмену claimed WRITE, отзыв current grant, QA PASS, QA CHANGES_REQUIRED без
+Issue и оба порядка Issue. Повтор completion сравнивает exact owner graph, прежний
+COMMENT input не создаёт второй invocation, другие PR/head/body отвергаются.
+Schema fault injection меняет только отдельные disposable clones: partial trigger,
+PUBLIC EXECUTE, body, SECURITY DEFINER, purge body и отсутствие helper. Fixtures
+передают provider-shaped native receipts и не заявляют настоящие GitHub writes.

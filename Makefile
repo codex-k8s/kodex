@@ -438,3 +438,11 @@ test-control-api-nats-startup:
 .PHONY: test-staging-capacity-preflight
 test-staging-capacity-preflight:
 	@PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/dev -p test_staging_capacity_preflight.py
+
+.PHONY: test-workflow-result-contract
+test-workflow-result-contract:
+	@timeout --kill-after=5s 30s python3 scripts/tests/workflow-result-contract-test.py
+
+.PHONY: test-workflow-review-qa-evidence-postgres
+test-workflow-review-qa-evidence-postgres: check-go-toolchain
+	@timeout --kill-after=10s 300s bash scripts/tests/control-plane-postgres-test.sh '^(TestWorkflowReviewQAEvidenceComponent|TestWorkflowReviewQAEvidenceMigrationProofComponent)$$'

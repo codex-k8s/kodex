@@ -2,9 +2,11 @@ package workflow
 
 import (
 	"encoding/json"
-	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
 // TestEvidenceProfileRequirements separates the opt-in report selector from legacy contracts
@@ -115,5 +117,46 @@ func TestQAReportClosedShape(t *testing.T) {
 	raw, _ := json.Marshal(value)
 	if report, err := DecodeQAReport(raw); err != nil || report.Issue == nil {
 		t.Fatal("negative report unavailable", err)
+	}
+}
+
+// TestEvidenceSharedWireCorpus binds the exact public JSON instances to the owner decoder;
+// contextual REVIEW/QA requirement checks remain stronger than the shape-only schema.
+// TestEvidenceSharedWireCorpus связывает public JSON с owner decoder; contextual проверки
+// REVIEW/QA published requirements остаются строже shape-only schema и не выдают authority.
+func TestEvidenceSharedWireCorpus(t *testing.T) {
+	for _, corpus := range []struct {
+		path   string
+		report bool
+	}{
+		{"workflow-qa-report/v1/report-cases.json", true},
+		{"workflow-review-qa-result/v1/declaration-cases.json", false},
+	} {
+		raw, err := os.ReadFile("../../../../../../../contracts/runtime/" + corpus.path)
+		if err != nil {
+			t.Fatal("read shared evidence wire corpus")
+		}
+		var cases []struct {
+			Name  string `json:"name"`
+			Kind  string `json:"kind"`
+			Raw   string `json:"raw"`
+			Valid bool   `json:"valid"`
+		}
+		if json.Unmarshal(raw, &cases) != nil || len(cases) == 0 {
+			t.Fatal("invalid shared evidence corpus")
+		}
+		for _, item := range cases {
+			t.Run(item.Name, func(t *testing.T) {
+				var err error
+				if corpus.report {
+					_, err = DecodeQAReport([]byte(item.Raw))
+				} else {
+					_, err = DecodeDeclarationForProfile(item.Raw, []entity.WorkflowResultRequirement{{Key: "checked", Kind: item.Kind}}, GitHubReviewQAV1)
+				}
+				if (err == nil) != item.Valid {
+					t.Fatal("shared evidence wire outcome mismatch")
+				}
+			})
+		}
 	}
 }

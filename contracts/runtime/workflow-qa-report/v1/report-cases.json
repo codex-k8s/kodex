@@ -1,0 +1,107 @@
+[
+  {
+    "name": "pass",
+    "raw": "{\"schema\":\"kodex.workflow-qa-report.v1\",\"repository\":\"owner/repo\",\"pullRequestNumber\":42,\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"PASS\",\"tests\":[{\"name\":\"Проверка\",\"command\":\"go test ./...\",\"exitCode\":0,\"log\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":1,\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}}],\"findings\":[]}",
+    "valid": true
+  },
+  {
+    "name": "integral-pr",
+    "raw": "{\"schema\":\"kodex.workflow-qa-report.v1\",\"repository\":\"owner/repo\",\"pullRequestNumber\":4.2e1,\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"PASS\",\"tests\":[{\"name\":\"Проверка\",\"command\":\"go test ./...\",\"exitCode\":0,\"log\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":1,\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}}],\"findings\":[]}",
+    "valid": true
+  },
+  {
+    "name": "integral-revision",
+    "raw": "{\"schema\":\"kodex.workflow-qa-report.v1\",\"repository\":\"owner/repo\",\"pullRequestNumber\":42,\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"PASS\",\"tests\":[{\"name\":\"Проверка\",\"command\":\"go test ./...\",\"exitCode\":0,\"log\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":1.0,\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}}],\"findings\":[]}",
+    "valid": true
+  },
+  {
+    "name": "integral-zero",
+    "raw": "{\"schema\":\"kodex.workflow-qa-report.v1\",\"repository\":\"owner/repo\",\"pullRequestNumber\":42,\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"PASS\",\"tests\":[{\"name\":\"Проверка\",\"command\":\"go test ./...\",\"exitCode\":-0e999999999,\"log\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":1,\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}}],\"findings\":[]}",
+    "valid": true
+  },
+  {
+    "name": "fractional-pr",
+    "raw": "{\"schema\":\"kodex.workflow-qa-report.v1\",\"repository\":\"owner/repo\",\"pullRequestNumber\":42.00000000000000001,\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"PASS\",\"tests\":[{\"name\":\"Проверка\",\"command\":\"go test ./...\",\"exitCode\":0,\"log\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":1,\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}}],\"findings\":[]}",
+    "valid": false
+  },
+  {
+    "name": "unsafe-pr",
+    "raw": "{\"schema\":\"kodex.workflow-qa-report.v1\",\"repository\":\"owner/repo\",\"pullRequestNumber\":9007199254740992,\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"PASS\",\"tests\":[{\"name\":\"Проверка\",\"command\":\"go test ./...\",\"exitCode\":0,\"log\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":1,\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}}],\"findings\":[]}",
+    "valid": false
+  },
+  {
+    "name": "huge-exponent",
+    "raw": "{\"schema\":\"kodex.workflow-qa-report.v1\",\"repository\":\"owner/repo\",\"pullRequestNumber\":1e100000000,\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"PASS\",\"tests\":[{\"name\":\"Проверка\",\"command\":\"go test ./...\",\"exitCode\":0,\"log\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":1,\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}}],\"findings\":[]}",
+    "valid": false
+  },
+  {
+    "name": "fractional-code",
+    "raw": "{\"schema\":\"kodex.workflow-qa-report.v1\",\"repository\":\"owner/repo\",\"pullRequestNumber\":42,\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"PASS\",\"tests\":[{\"name\":\"Проверка\",\"command\":\"go test ./...\",\"exitCode\":0.00000000000000001,\"log\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":1,\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}}],\"findings\":[]}",
+    "valid": false
+  },
+  {
+    "name": "nonzero-pass",
+    "raw": "{\"schema\":\"kodex.workflow-qa-report.v1\",\"repository\":\"owner/repo\",\"pullRequestNumber\":42,\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"PASS\",\"tests\":[{\"name\":\"Проверка\",\"command\":\"go test ./...\",\"exitCode\":1,\"log\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":1,\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}}],\"findings\":[]}",
+    "valid": false
+  },
+  {
+    "name": "wrong-log",
+    "raw": "{\"schema\":\"kodex.workflow-qa-report.v1\",\"repository\":\"owner/repo\",\"pullRequestNumber\":42,\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"PASS\",\"tests\":[{\"name\":\"Проверка\",\"command\":\"go test ./...\",\"exitCode\":0,\"log\":{\"kind\":\"CURRENT_COMPLETION\",\"artifactRef\":\"art_12345678\",\"revision\":1,\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}}],\"findings\":[]}",
+    "valid": false
+  },
+  {
+    "name": "unknown-field",
+    "raw": "{\"schema\":\"kodex.workflow-qa-report.v1\",\"repository\":\"owner/repo\",\"pullRequestNumber\":42,\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"PASS\",\"tests\":[{\"name\":\"Проверка\",\"command\":\"go test ./...\",\"exitCode\":0,\"log\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":1,\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}}],\"findings\":[],\"attested\":true}",
+    "valid": false
+  },
+  {
+    "name": "wrong-case",
+    "raw": "{\"Schema\":\"kodex.workflow-qa-report.v1\",\"repository\":\"owner/repo\",\"pullRequestNumber\":42,\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"PASS\",\"tests\":[{\"name\":\"Проверка\",\"command\":\"go test ./...\",\"exitCode\":0,\"log\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":1,\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}}],\"findings\":[]}",
+    "valid": false
+  },
+  {
+    "name": "duplicate",
+    "raw": "{\"schema\":\"kodex.workflow-qa-report.v1\",\"repository\":\"owner/repo\",\"pullRequestNumber\":42,\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"PASS\",\"tests\":[{\"name\":\"Проверка\",\"command\":\"go test ./...\",\"exitCode\":0,\"exitCode\":0,\"log\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":1,\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}}],\"findings\":[]}",
+    "valid": false
+  },
+  {
+    "name": "null-tests",
+    "raw": "{\"schema\":\"kodex.workflow-qa-report.v1\",\"repository\":\"owner/repo\",\"pullRequestNumber\":42,\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"PASS\",\"tests\":null,\"discard\":[{\"name\":\"Проверка\",\"command\":\"go test ./...\",\"exitCode\":0,\"log\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":1,\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}}],\"findings\":[]}",
+    "valid": false
+  },
+  {
+    "name": "null-findings",
+    "raw": "{\"schema\":\"kodex.workflow-qa-report.v1\",\"repository\":\"owner/repo\",\"pullRequestNumber\":42,\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"PASS\",\"tests\":[{\"name\":\"Проверка\",\"command\":\"go test ./...\",\"exitCode\":0,\"log\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":1,\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}}],\"findings\":null}",
+    "valid": false
+  },
+  {
+    "name": "bad-head",
+    "raw": "{\"schema\":\"kodex.workflow-qa-report.v1\",\"repository\":\"owner/repo\",\"pullRequestNumber\":42,\"headSha\":\"main\",\"verdict\":\"PASS\",\"tests\":[{\"name\":\"Проверка\",\"command\":\"go test ./...\",\"exitCode\":0,\"log\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":1,\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}}],\"findings\":[]}",
+    "valid": false
+  },
+  {
+    "name": "trailing-head",
+    "raw": "{\"schema\":\"kodex.workflow-qa-report.v1\",\"repository\":\"owner/repo\",\"pullRequestNumber\":42,\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\n\",\"verdict\":\"PASS\",\"tests\":[{\"name\":\"Проверка\",\"command\":\"go test ./...\",\"exitCode\":0,\"log\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":1,\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}}],\"findings\":[]}",
+    "valid": false
+  },
+  {
+    "name": "changes-no-issue",
+    "raw": "{\"schema\":\"kodex.workflow-qa-report.v1\",\"repository\":\"owner/repo\",\"pullRequestNumber\":42,\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"CHANGES_REQUIRED\",\"tests\":[{\"name\":\"Проверка\",\"command\":\"go test ./...\",\"exitCode\":1,\"log\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":1,\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}}],\"findings\":[{\"key\":\"bug\",\"summary\":\"Воспроизведённая ошибка\"}]}",
+    "valid": true
+  },
+  {
+    "name": "changes-with-issue",
+    "raw": "{\"schema\":\"kodex.workflow-qa-report.v1\",\"repository\":\"owner/repo\",\"pullRequestNumber\":42,\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"CHANGES_REQUIRED\",\"tests\":[{\"name\":\"Проверка\",\"command\":\"go test ./...\",\"exitCode\":1,\"log\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":1,\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}}],\"findings\":[{\"key\":\"bug\",\"summary\":\"Воспроизведённая ошибка\"}],\"issue\":{\"title\":\"Ошибка\",\"body\":\"Фактическое описание\"}}",
+    "valid": true
+  },
+  {
+    "name": "issue-without-finding",
+    "raw": "{\"schema\":\"kodex.workflow-qa-report.v1\",\"repository\":\"owner/repo\",\"pullRequestNumber\":42,\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"CHANGES_REQUIRED\",\"tests\":[{\"name\":\"Проверка\",\"command\":\"go test ./...\",\"exitCode\":1,\"log\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":1,\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}}],\"findings\":[],\"issue\":{\"title\":\"Ошибка\",\"body\":\"Фактическое описание\"}}",
+    "valid": false
+  },
+  {
+    "name": "pass-with-finding",
+    "raw": "{\"schema\":\"kodex.workflow-qa-report.v1\",\"repository\":\"owner/repo\",\"pullRequestNumber\":42,\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"PASS\",\"tests\":[{\"name\":\"Проверка\",\"command\":\"go test ./...\",\"exitCode\":0,\"log\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":1,\"digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}}],\"findings\":[{\"key\":\"bug\",\"summary\":\"Воспроизведённая ошибка\"}]}",
+    "valid": false
+  }
+]
