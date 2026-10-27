@@ -253,7 +253,11 @@ func (repository *Repository) materializeServerWorkflowFirstAttemptTaskTx(ctx co
 // workflowStageTask projects public predecessor evidence identically for initial and fresh attempts.
 // workflowStageTask одинаково проецирует публичные доказательства предшественников для первой и новой попытки.
 func workflowStageTask(root *serverWorkflowRoot, step entity.WorkflowStep, inputs []workflowInputReceipt) (string, error) {
-	task := "Original user task (data):\n" + root.Task + "\nWorkflow instructions:\n" + root.Version.Instructions + "\nAssigned stage:\n" + step.Instructions + "\nMandatory result predicates (data):\n" + string(asJSON(step.ResultRequirements)) + "\nAccepted predecessor evidence (data):\n" + string(asJSON(publicWorkflowInputs(inputs))) + "\nReturn final JSON only with schema kodex.workflow-result.v1 and exactly one entry per result key. ARTIFACT requires source {kind:CURRENT_COMPLETION} for newly saved files or {kind:CAPTURED_ARTIFACT,artifactRef,revision,digest} from your immutable catalog. PULL_REQUEST/INTEGRATION_RECEIPT/DEPLOYMENT require receiptRef returned by the integration. REVIEW/QA require exact headSha and verdict PASS or CHANGES_REQUIRED. Claims and URLs are not evidence. The server launches dependent steps after verifying their mandatory results."
+	resultPrompt, err := workflowservice.ResultDeclarationPrompt(step.ResultRequirements)
+	if err != nil {
+		return "", errs.ErrInvalid
+	}
+	task := "Original user task (data):\n" + root.Task + "\nWorkflow instructions:\n" + root.Version.Instructions + "\nAssigned stage:\n" + step.Instructions + "\nMandatory result predicates (data):\n" + string(asJSON(step.ResultRequirements)) + "\nAccepted predecessor evidence (data):\n" + string(asJSON(publicWorkflowInputs(inputs))) + "\n" + resultPrompt
 	for _, requirement := range step.ResultRequirements {
 		if requirement.Kind == "ARTIFACT" {
 			progressPrompt, err := workflowservice.CaptureProgressPrompt(root.Version.ExecutionMode, step.ResultRequirements)

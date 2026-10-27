@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	workflowservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/workflow"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
@@ -44,6 +45,41 @@ func TestServerWorkflowAcceptanceRequiresLatestEvidence(t *testing.T) {
 	base.GateApproved = false
 	if _, ok := acceptedServerWorkflowAttempt(base, step); !ok {
 		t.Fatal("ungated accepted attempt unexpectedly required a gate")
+	}
+}
+
+// TestWorkflowStageTaskSeparatesFinalAndCaptureShapes checks the actual task consumed by initial
+// and recovery attempts, preserving both distinct parsers and the bounded assembled-task limit.
+// TestWorkflowStageTaskSeparatesFinalAndCaptureShapes проверяет реальную задачу первой и повторной
+// попытки, сохраняя разные формы финального ответа и capture, а также предел размера инструкции.
+func TestWorkflowStageTaskSeparatesFinalAndCaptureShapes(t *testing.T) {
+	root := &serverWorkflowRoot{Version: entity.WorkflowVersion{ExecutionMode: workflowservice.ServerDAGV1}}
+	step := entity.WorkflowStep{ResultRequirements: []entity.WorkflowResultRequirement{{Key: "analysis_file", Kind: "ARTIFACT", FileName: "release-scope.md", MediaType: "text/markdown"}}}
+	task, err := workflowStageTask(root, step, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	finalCount, captureCount := 0, 0
+	for _, line := range strings.Split(task, "\n") {
+		if strings.HasPrefix(line, `{"schema":"kodex.workflow-result.v1"`) {
+			finalCount++
+			if _, err := workflowservice.DecodeDeclaration(line, step.ResultRequirements); err != nil {
+				t.Fatal("actual stage task contains invalid final example")
+			}
+		}
+		if strings.HasPrefix(line, `{"schema":"kodex.workflow-capture-progress.v1"`) {
+			captureCount++
+			if _, err := workflowservice.DecodeCaptureProgress(line, root.Version.ExecutionMode, step.ResultRequirements); err != nil {
+				t.Fatal("actual stage task contains invalid capture example")
+			}
+		}
+	}
+	if finalCount != 1 || captureCount != 1 {
+		t.Fatal("final and capture examples must be distinct and complete")
+	}
+	root.Task = strings.Repeat("x", 64<<10)
+	if task, err := workflowStageTask(root, step, nil); err == nil || task != "" {
+		t.Fatal("oversized assembled task accepted")
 	}
 }
 
