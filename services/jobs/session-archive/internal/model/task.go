@@ -234,15 +234,16 @@ func NormalizeFailureStage(stage FailureStage) FailureStage {
 // Result reports a closed outcome and the archive/source receipt values observed by the worker.
 // RU: Result сообщает закрытый исход и значения квитанций архива и источника, наблюдавшиеся worker.
 type Result struct {
-	Success         bool         `json:"success"`
-	SafeErrorCode   string       `json:"safe_error_code,omitempty"`
-	FailureStage    FailureStage `json:"failure_stage,omitempty"`
-	FormatVersion   uint32       `json:"format_version,omitempty"`
-	ObjectKey       string       `json:"object_key,omitempty"`
-	ObjectVersion   string       `json:"object_version,omitempty"`
-	ObjectETag      string       `json:"object_etag,omitempty"`
-	ObjectDigest    string       `json:"object_digest,omitempty"`
-	ObjectSizeBytes int64        `json:"object_size_bytes,omitempty"`
-	SourceSHA256    string       `json:"source_sha256,omitempty"`
-	SourceSizeBytes int64        `json:"source_size_bytes,omitempty"`
+	Success          bool         `json:"success"`
+	SafeErrorCode    string       `json:"safe_error_code,omitempty"`
+	FailureStage     FailureStage `json:"failure_stage,omitempty"`
+	FormatVersion    uint32       `json:"format_version,omitempty"`
+	ObjectKey        string       `json:"object_key,omitempty"`
+	ObjectVersion    string       `json:"object_version,omitempty"`
+	ObjectETag       string       `json:"object_etag,omitempty"`
+	ObjectDigest     string       `json:"object_digest,omitempty"`
+	ObjectSizeBytes  int64        `json:"object_size_bytes,omitempty"`
+	SourceSHA256     string       `json:"source_sha256,omitempty"`
+	SourceSizeBytes  int64        `json:"source_size_bytes,omitempty"`
+	SourceEntryCount int64        `json:"source_entry_count,omitempty"`
 }

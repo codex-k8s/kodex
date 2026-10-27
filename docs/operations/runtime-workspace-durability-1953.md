@@ -178,6 +178,23 @@ Context7 использован для проверки FSGroup semantics. Nativ
 отклоняются перед Kubernetes и storage effects, без перехода в legacy.
 Это промежуточная поставка полного unit #1953: opt-in остаётся выключенным.
 
+## Метаданные подтверждения checkpoint
+
+| Граница | Привязка и поведение |
+| --- | --- |
+| Worker → termination result | Format2 добавляет digest canonical stream и число записей; exact root receipt остаётся ограниченным. Это не CLEAN-артефакт |
+| Controller → CompleteSessionSnapshot | Existing workload identity/permission и task/lease/fence/generation сохраняются; новые Proto fields13/14 несут только digest/entries |
+| Transport → SessionArchiveTaskInput | Поля явно отображаются в snapshot metadata; они не назначают scope, writer, generation или authority |
+| Legacy owner | Непустые новые поля отклоняются. Отсутствующие поля исключены из JSON, поэтому прежние idempotency bytes сохраняются |
+| V2 owner | Формат2 пока закрыто отклоняется прежним owner; coordinator, точная блокировка task/workspace и атомарный checkpoint transition реализуются в этом же unit до activation |
+
+Task/result validation связывает root key, scope, generation, checkpoint ref,
+полный digest и прежние byte/file limits до отправки owner command. Частичный
+worker result, неизвестное дерево и переполнение не подтверждаются. Нет
+нового RPC или публичного endpoint; повторные команды сохраняют прежний
+lease-bound idempotency key. Event/consumer wiring нового committed checkpoint
+не объявляется существующим до реализации owner transaction.
+
 ## Неизменяемый outcome и текущая storage tuple
 
 V2 требует точный role runtime contract revision4; opt-in не повышает старый

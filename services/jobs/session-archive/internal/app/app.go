@@ -219,7 +219,11 @@ func process(ctx context.Context, control *controlplaneclient.Client, kube *cont
 		switch task.Kind {
 		case "SNAPSHOT":
 			stage = archiveRPCCompleteSnapshot
-			_, err = control.SessionArchive.CompleteSessionSnapshot(rpc, &controlplanev1.CompleteSessionSnapshotRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, FormatVersion: result.FormatVersion, ObjectKey: result.ObjectKey, ObjectVersion: result.ObjectVersion, ObjectEtag: result.ObjectETag, ObjectDigest: result.ObjectDigest, ObjectSizeBytes: result.ObjectSizeBytes, SourceSizeBytes: result.SourceSizeBytes})
+			request := &controlplanev1.CompleteSessionSnapshotRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, FormatVersion: result.FormatVersion, ObjectKey: result.ObjectKey, ObjectVersion: result.ObjectVersion, ObjectEtag: result.ObjectETag, ObjectDigest: result.ObjectDigest, ObjectSizeBytes: result.ObjectSizeBytes, SourceSizeBytes: result.SourceSizeBytes}
+			if task.Workspace != nil {
+				request.SourceSha256, request.SourceEntryCount = result.SourceSHA256, result.SourceEntryCount
+			}
+			_, err = control.SessionArchive.CompleteSessionSnapshot(rpc, request)
 		case "RESTORE":
 			stage = archiveRPCCompleteRestore
 			_, err = control.SessionArchive.CompleteSessionRestore(rpc, &controlplanev1.CompleteSessionRestoreRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, FormatVersion: result.FormatVersion, ObjectKey: result.ObjectKey, ObjectVersion: result.ObjectVersion, ObjectEtag: result.ObjectETag, ObjectDigest: result.ObjectDigest, ObjectSizeBytes: result.ObjectSizeBytes, RestoredSourceSha256: result.SourceSHA256, RestoredSourceSizeBytes: result.SourceSizeBytes})

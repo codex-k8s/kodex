@@ -1748,6 +1748,8 @@ type SessionArchiveTaskInput struct {
 	RestoredSourceSHA256, PVCName                      string
 	Generation, ObjectSizeBytes, SourceSizeBytes       int64
 	FormatVersion                                      uint32
+	SnapshotSourceSHA256                               string `json:",omitempty"`
+	SourceEntryCount                                   int64  `json:",omitempty"`
 }
 
 // WarmRuntimeInput reports the state of a workload instance for one runtime revision. The owner

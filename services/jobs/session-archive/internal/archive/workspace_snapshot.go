@@ -75,7 +75,7 @@ func snapshotWorkspace(ctx context.Context, store objectstorage.Store, task mode
 	}
 	return model.Result{Success: true, FormatVersion: 2, ObjectKey: receipt.Key, ObjectVersion: receipt.Version,
 		ObjectETag: receipt.ETag, ObjectDigest: receipt.Digest, ObjectSizeBytes: receipt.SizeBytes,
-		SourceSHA256: digest, SourceSizeBytes: size}, nil
+		SourceSHA256: digest, SourceSizeBytes: size, SourceEntryCount: entries}, nil
 }
 
 // Write splits incoming canonical bytes without retaining a second part or acknowledging an unconfirmed flush.

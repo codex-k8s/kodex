@@ -4358,6 +4358,10 @@ message CompleteSessionSnapshotRequest {
   string object_digest = 10;
   int64 object_size_bytes = 11;
   int64 source_size_bytes = 12;
+  // Digest canonical work stream для format2; exact task/lease проверяет владелец. Legacy оставляет пустым.
+  string source_sha256 = 13;
+  // Число проверенных записей format2, включая каталоги; не меняет квоту и не разрешает восстановление.
+  int64 source_entry_count = 14;
 }
 
 message CompleteSessionRestoreRequest {

@@ -48,6 +48,7 @@ func (server *Server) CompleteSessionSnapshot(ctx context.Context, request *cont
 	payload.FormatVersion, payload.ObjectKey = request.GetFormatVersion(), request.GetObjectKey()
 	payload.ObjectVersion, payload.ObjectETag, payload.ObjectDigest = request.GetObjectVersion(), request.GetObjectEtag(), request.GetObjectDigest()
 	payload.ObjectSizeBytes, payload.SourceSizeBytes = request.GetObjectSizeBytes(), request.GetSourceSizeBytes()
+	payload.SnapshotSourceSHA256, payload.SourceEntryCount = request.GetSourceSha256(), request.GetSourceEntryCount()
 	result, err := server.executeSessionArchive(ctx, controlplanev1.SessionArchiveWorkService_CompleteSessionSnapshot_FullMethodName,
 		command.CompleteSessionSnapshot, request.GetMutation(), payload)
 	if err != nil {

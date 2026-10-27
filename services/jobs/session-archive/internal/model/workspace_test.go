@@ -9,6 +9,35 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestWorkspaceResultCannotInventOrOverflowCheckpointMetadata fences terminal metadata before the application submits an owner command.
+// TestWorkspaceResultCannotInventOrOverflowCheckpointMetadata ограждает terminal metadata до отправки owner command приложением.
+func TestWorkspaceResultCannotInventOrOverflowCheckpointMetadata(t *testing.T) {
+	task := workspaceSnapshotTaskFixture(t)
+	result := Result{Success: true, FormatVersion: 2, ObjectKey: task.TargetObjectKey, ObjectVersion: "v1", ObjectETag: "etag",
+		ObjectDigest: "sha256:" + strings.Repeat("a", 64), ObjectSizeBytes: 1024, SourceSHA256: strings.Repeat("b", 64), SourceSizeBytes: 12, SourceEntryCount: 1}
+	if _, err := result.WorkspaceCheckpoint(task); err != nil {
+		t.Fatal("valid checkpoint metadata rejected")
+	}
+	for name, mutate := range map[string]func(*Result){
+		"unknown tree":     func(r *Result) { r.SourceSHA256 = "" },
+		"negative entries": func(r *Result) { r.SourceEntryCount = -1 },
+		"entries overflow": func(r *Result) { r.SourceEntryCount = task.Workspace.Policy.MaximumFileCount + 1 },
+		"source overflow":  func(r *Result) { r.SourceSizeBytes = task.Workspace.Policy.MaximumWritableBytes + 1 },
+		"root overflow":    func(r *Result) { r.ObjectSizeBytes = runtimecontract.MaximumWorkspaceManifestBytes + 1 },
+		"foreign key":      func(r *Result) { r.ObjectKey += "other" },
+		"legacy format":    func(r *Result) { r.FormatVersion = 1 },
+		"failed result":    func(r *Result) { r.Success = false },
+	} {
+		t.Run(name, func(t *testing.T) {
+			changed := result
+			mutate(&changed)
+			if _, err := changed.WorkspaceCheckpoint(task); err == nil {
+				t.Fatal("invalid checkpoint metadata accepted")
+			}
+		})
+	}
+}
+
 // workspaceSnapshotTaskFixture constructs a closed synthetic task with a positive record but no owner grant.
 // It tests private wire interpretation; these values are not an observed Pod/PVC or stored receipt.
 // workspaceSnapshotTaskFixture создаёт closed synthetic task с positive record, без owner grant.

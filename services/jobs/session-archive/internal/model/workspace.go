@@ -29,6 +29,27 @@ type WorkspaceArchiveTask struct {
 // errWorkspaceTaskInvalid — фиксированный отказ без task bytes, source paths и private scope metadata.
 var errWorkspaceTaskInvalid = errors.New("session workspace archive task is invalid")
 
+// WorkspaceCheckpoint binds a successful worker result to its exact assigned V2 snapshot before owner submission.
+// It checks bounded metadata only; actual object custody and owner acceptance remain separate proofs.
+// WorkspaceCheckpoint связывает успешный worker result с exact assigned V2 snapshot до owner submission.
+// Проверяется bounded metadata; actual object custody и owner acceptance остаются отдельными доказательствами.
+func (result Result) WorkspaceCheckpoint(task Task) (runtimecontract.WorkspaceCheckpointBinding, error) {
+	var empty runtimecontract.WorkspaceCheckpointBinding
+	if task.Workspace == nil || task.Kind != "SNAPSHOT" || task.Validate() != nil || !result.Success || result.FormatVersion != 2 ||
+		result.SafeErrorCode != "" || result.ObjectKey != task.TargetObjectKey || result.SourceSizeBytes > task.Workspace.Policy.MaximumWritableBytes ||
+		result.SourceEntryCount > task.Workspace.Policy.MaximumFileCount {
+		return empty, errWorkspaceTaskInvalid
+	}
+	value := runtimecontract.WorkspaceCheckpointBinding{Scope: task.Workspace.Target.Scope, WorkspaceRef: task.Workspace.Target.WorkspaceRef,
+		Generation: task.Workspace.Target.Generation, CheckpointRef: task.Workspace.CheckpointRef, TreeSHA256: result.SourceSHA256,
+		Bytes: result.SourceSizeBytes, Entries: result.SourceEntryCount, Manifest: runtimecontract.WorkspaceObjectCommitment{
+			Key: result.ObjectKey, Version: result.ObjectVersion, ETag: result.ObjectETag, Digest: result.ObjectDigest, SizeBytes: result.ObjectSizeBytes}}
+	if value.Validate() != nil {
+		return empty, errWorkspaceTaskInvalid
+	}
+	return value, nil
+}
+
 // workspaceArchiveTaskRefPattern matches the existing owner-assigned task namespace without accepting paths.
 // workspaceArchiveTaskRefPattern соответствует existing owner-assigned task namespace, не принимая paths.
 var workspaceArchiveTaskRefPattern = regexp.MustCompile(`^sat_[A-Za-z0-9_-]{8,89}$`)

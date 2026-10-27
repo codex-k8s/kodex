@@ -40225,8 +40225,12 @@ type CompleteSessionSnapshotRequest struct {
 	ObjectDigest    string                 `protobuf:"bytes,10,opt,name=object_digest,json=objectDigest,proto3" json:"object_digest,omitempty"`
 	ObjectSizeBytes int64                  `protobuf:"varint,11,opt,name=object_size_bytes,json=objectSizeBytes,proto3" json:"object_size_bytes,omitempty"`
 	SourceSizeBytes int64                  `protobuf:"varint,12,opt,name=source_size_bytes,json=sourceSizeBytes,proto3" json:"source_size_bytes,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Digest canonical work stream для format2; exact task/lease проверяет владелец. Legacy оставляет пустым.
+	SourceSha256 string `protobuf:"bytes,13,opt,name=source_sha256,json=sourceSha256,proto3" json:"source_sha256,omitempty"`
+	// Число проверенных записей format2, включая каталоги; не меняет квоту и не разрешает восстановление.
+	SourceEntryCount int64 `protobuf:"varint,14,opt,name=source_entry_count,json=sourceEntryCount,proto3" json:"source_entry_count,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *CompleteSessionSnapshotRequest) Reset() {
@@ -40339,6 +40343,20 @@ func (x *CompleteSessionSnapshotRequest) GetObjectSizeBytes() int64 {
 func (x *CompleteSessionSnapshotRequest) GetSourceSizeBytes() int64 {
 	if x != nil {
 		return x.SourceSizeBytes
+	}
+	return 0
+}
+
+func (x *CompleteSessionSnapshotRequest) GetSourceSha256() string {
+	if x != nil {
+		return x.SourceSha256
+	}
+	return ""
+}
+
+func (x *CompleteSessionSnapshotRequest) GetSourceEntryCount() int64 {
+	if x != nil {
+		return x.SourceEntryCount
 	}
 	return 0
 }
@@ -87625,7 +87643,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x10pvc_delete_armed\x18\x02 \x01(\bR\x0epvcDeleteArmed\x12\x17\n" +
 	"\apvc_uid\x18\x03 \x01(\tR\x06pvcUid\x121\n" +
 	"\x14workspace_generation\x18\x04 \x01(\x03R\x13workspaceGeneration\x12#\n" +
-	"\rworkspace_ref\x18\x05 \x01(\tR\fworkspaceRef\"\xd7\x03\n" +
+	"\rworkspace_ref\x18\x05 \x01(\tR\fworkspaceRef\"\xaa\x04\n" +
 	"\x1eCompleteSessionSnapshotRequest\x12<\n" +
 	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12\x19\n" +
 	"\btask_ref\x18\x02 \x01(\tR\ataskRef\x12\x1b\n" +
@@ -87643,7 +87661,9 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\robject_digest\x18\n" +
 	" \x01(\tR\fobjectDigest\x12*\n" +
 	"\x11object_size_bytes\x18\v \x01(\x03R\x0fobjectSizeBytes\x12*\n" +
-	"\x11source_size_bytes\x18\f \x01(\x03R\x0fsourceSizeBytes\"\xc7\x04\n" +
+	"\x11source_size_bytes\x18\f \x01(\x03R\x0fsourceSizeBytes\x12#\n" +
+	"\rsource_sha256\x18\r \x01(\tR\fsourceSha256\x12,\n" +
+	"\x12source_entry_count\x18\x0e \x01(\x03R\x10sourceEntryCount\"\xc7\x04\n" +
 	"\x1dCompleteSessionRestoreRequest\x12<\n" +
 	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12\x19\n" +
 	"\btask_ref\x18\x02 \x01(\tR\ataskRef\x12\x1b\n" +
