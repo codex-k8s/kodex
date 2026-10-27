@@ -11,6 +11,27 @@ import type {
 } from "../../src/shared/api/generated/openapi/types.gen";
 import type { PlatformCatalogSnapshot } from "../../src/shared/api/generated/asyncapi/PlatformCatalogSnapshot";
 
+// CatalogSearchRequest сохраняет точные значения параметров синтетического запроса.
+type CatalogSearchRequest = {
+  project: string | null;
+  query: string | null;
+  cursor: string | null;
+};
+
+// recordCatalogSearch проверяет размер страницы и записывает параметры до выбора ответа.
+function recordCatalogSearch(
+  url: URL,
+  requests: CatalogSearchRequest[],
+): CatalogSearchRequest {
+  assertSyntheticAdaptivePageSize(url.searchParams.get("pageSize"));
+  const project = url.searchParams.get("projectRef");
+  const query = url.searchParams.get("query");
+  const cursor = url.searchParams.get("pageToken");
+  const request = { project, query, cursor };
+  requests.push(request);
+  return request;
+}
+
 export async function installSyntheticMembershipProfile(
   page: Page,
   projectRef: string,
@@ -141,11 +162,7 @@ export async function checkOrganizationCatalog(
   });
   await page.route("**/api/v1/agents?**", async (route) => {
     const url = new URL(route.request().url());
-    assertSyntheticAdaptivePageSize(url.searchParams.get("pageSize"));
-    const project = url.searchParams.get("projectRef");
-    const query = url.searchParams.get("query");
-    const cursor = url.searchParams.get("pageToken");
-    requests.push({ project, query, cursor });
+    const { project, cursor } = recordCatalogSearch(url, requests);
     if (project) {
       expect(project).toBe(first.ref);
       await route.fulfill({
@@ -381,11 +398,7 @@ export async function checkOrganizationCatalog(
   });
   await page.route("**/api/v1/workflows?**", async (route) => {
     const url = new URL(route.request().url());
-    assertSyntheticAdaptivePageSize(url.searchParams.get("pageSize"));
-    const project = url.searchParams.get("projectRef");
-    const query = url.searchParams.get("query");
-    const cursor = url.searchParams.get("pageToken");
-    workflowRequests.push({ project, query, cursor });
+    const { project, cursor } = recordCatalogSearch(url, workflowRequests);
     if (project) {
       expect(project).toBe(first.ref);
       await route.fulfill({ json: { items: [workflow(0, first.ref)] } });
