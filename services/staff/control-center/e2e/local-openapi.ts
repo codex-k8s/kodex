@@ -466,16 +466,7 @@ test("локальный OpenAPI импорт, первая привязка и 
   await dialog
     .getByLabel("Название интеграции")
     .fill(`Локальная проверка OpenAPI ${randomUUID().slice(0, 8)}`);
-  const createdResponse = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      new URL(response.url()).pathname ===
-        "/api/v1/integration-definition-configurations/drafts",
-  );
-  await dialog.getByRole("button", { name: "Создать черновик" }).click();
-  const created = await createdResponse;
-  expect(created.status()).toBe(201);
-  const draft = (await created.json()) as ConfigurationResult;
+  const draft = await createImportedDefinition(page, dialog);
   expect(draft.configuration.kind).toBe("INTEGRATION_DEFINITION");
   expect(draft.revision.state).toBe("DRAFT");
   await expect(page).toHaveURL(
@@ -666,16 +657,7 @@ test("помощник ведёт к credential-форме OpenAPI без уте
   await importDialog
     .getByLabel("Название интеграции")
     .fill(`Локальная интеграция с ключом ${randomUUID().slice(0, 8)}`);
-  const createdResponse = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      new URL(response.url()).pathname ===
-        "/api/v1/integration-definition-configurations/drafts",
-  );
-  await importDialog.getByRole("button", { name: "Создать черновик" }).click();
-  const created = await createdResponse;
-  expect(created.status()).toBe(201);
-  const draft = (await created.json()) as ConfigurationResult;
+  const draft = await createImportedDefinition(page, importDialog);
   await expect(page).toHaveURL(
     new RegExp(
       `/configurations/INTEGRATION_DEFINITION/${draft.configuration.ref}$`,
@@ -1052,6 +1034,24 @@ async function openGrantsTab(page: Page): Promise<void> {
   });
   await expect(page).toHaveURL(/\/integrations(?:[?#]|$)/);
   await selectGrantsTab(page);
+}
+
+// createImportedDefinition ожидает ответ создания черновика от выбранного диалога.
+// Проверки типа и состава полученного черновика принадлежат каждому сценарию.
+async function createImportedDefinition(
+  page: Page,
+  dialog: Locator,
+): Promise<ConfigurationResult> {
+  const createdResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname ===
+        "/api/v1/integration-definition-configurations/drafts",
+  );
+  await dialog.getByRole("button", { name: "Создать черновик" }).click();
+  const created = await createdResponse;
+  expect(created.status()).toBe(201);
+  return (await created.json()) as ConfigurationResult;
 }
 
 // validateAndPublishDefinition проверяет validation и публикует точную ревизию
