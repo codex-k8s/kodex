@@ -117,6 +117,12 @@ owner-транзакции, до появления отложенного physi
 terminal history не меняются. Событие содержит действительное состояние root; клиент
 не трактует supersession как отмену root или свежего автора.
 
+Constraint решения сохраняет прежние OPEN/EXPIRED/человеческие ветви при пустом
+`closure_kind`. Для SUPERSEDED допустим только CANCELLED с пустым decision,
+сохранёнными resolved_by/resolved_at и без integration invocation. Exact trigger
+дополнительно доказывает одобренный upstream plan. Старый CHECK до замены
+проверяется дословно; возврат старого CHECK выявляется отрицательным schema test.
+
 Optional `effectiveState` публичной записи: CURRENT, HISTORICAL, STALE_DEPENDENCY,
 REWORK_PENDING, WAITING_OWNER либо BLOCKED. При отсутствии поля действует legacy
 проекция. Публичный reworkPlan содержит только schema, keys, counters и closed blocker;
