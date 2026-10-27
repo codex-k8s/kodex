@@ -61,6 +61,14 @@ func ResultDeclarationPromptForProfile(requirements []entity.WorkflowResultRequi
 		reviewShape = "У REVIEW — только key, headSha, verdict и receiptRef; у QA — key, headSha, verdict и optional receiptRef только для созданного Issue при CHANGES_REQUIRED. Verdict равен PASS либо CHANGES_REQUIRED. "
 		prefix = "Явный профиль GITHUB_REVIEW_QA_V1. REVIEW требует receiptRef успешного native GitHub COMMENT на точный PR/head принятого subject. COMMENT не является GitHub APPROVE; event APPROVE и REQUEST_CHANGES здесь запрещены. QA всегда связан через evidenceKey с опубликованным ARTIFACT application/json: closed schema kodex.workflow-qa-report.v1 с exact repository/pullRequestNumber/headSha/verdict, tests (name,command,exitCode,log CAPTURED_ARTIFACT pins), findings(key,summary) и optional issue(title,body). Report/logs подтверждают bytes и producing execution, не автоматически факт выполнения тестов. Выполни реальные команды и сохрани полный вывод; если выполнить нельзя, честно сообщи failure, не выдумывай PASS/дефект. Для Issue сначала сохрани report/logs через CAPTURE_PROGRESS и получи fresh RR. Issue разрешён только для CHANGES_REQUIRED с findings и ровно теми title/body, которые сохранены в report; один Issue на business attempt, неизвестный исход только читать, не повторять. У QA receiptRef допустим только при реально созданном Issue и CHANGES_REQUIRED. После UNKNOWN либо pending не публикуй новый effect. У REVIEW поля key/headSha/verdict/receiptRef; у QA key/headSha/verdict и optional receiptRef. \n"
 	}
+	if profile == GitHubReviewQAV1 {
+		for _, requirement := range requirements {
+			if requirement.Kind == "QA" {
+				prefix += qaReportGuidance
+				break
+			}
+		}
+	}
 	return prefix + "Финальный ответ — только один JSON-объект с полями schema и results, без Markdown и пояснений. " +
 		"Каждый обязательный key присутствует ровно один раз. Ниже закрытая форма для назначенного этапа; заменяй обозначения в угловых скобках только фактическими значениями, не копируй их как доказательство.\n" + string(example) + "\n" +
 		"У элемента ARTIFACT разрешены только key и source. kind, fileName и mediaType из resultRequirements описывают проверку сервера и не являются полями элемента results. " +
@@ -71,3 +79,12 @@ func ResultDeclarationPromptForProfile(requirements []entity.WorkflowResultRequi
 		"Другие поля, повторные ключи и null запрещены. Ссылки и заявления модели не подтверждают результат: сервер отдельно проверяет capture, доступ, происхождение, сканирование и receipts. " +
 		"После принятия обязательных результатов зависимые шаги запускает сервер.", nil
 }
+
+// qaReportGuidance makes the closed report and its reachable capture sequence explicit; all
+// external identities remain invalid placeholders and cannot serve as evidence without owner proof.
+// qaReportGuidance явно показывает closed report и достижимую последовательность capture;
+// external identities остаются невалидными placeholders без owner proof.
+const qaReportGuidance = `QA report — только один JSON object, максимум32768 UTF-8 bytes, без Markdown/дополнительных полей. Tests от1 до8, findings от0 до8 с уникальным key. Name до160 символов, command до2048, exitCode целое0..255, finding summary до2000, Issue title до256/body до8192. При PASS каждый exitCode=0, findings=[], issue отсутствует. Сначала создай полный вывод реальных команд и CAPTURE_PROGRESS с опубликованными ARTIFACT keys; только после fresh RR скопируй exact log refs/revision/digest из RUN_RESULT. Затем создай report. При PASS report может быть CURRENT_COMPLETION в final declaration. Для Issue report сначала отдельно CAPTURE_PROGRESS, затем ещё fresh RR и разрешённый invoke; в final report выбирается CAPTURED_ARTIFACT. Не придумывай refs, числа, digest или факт запуска. Если действие недоступно — честное отклонение без фиктивного Issue. Закрытый пример report ниже содержит намеренно невалидные placeholders: pullRequestNumber/revision замени целыми JSON numbers из фактических pins, не строками.
+{"schema":"kodex.workflow-qa-report.v1","repository":"<repository принятого PR>","pullRequestNumber":"<целое число принятого PR>","headSha":"<точный headSha>","verdict":"PASS","tests":[{"name":"<название реальной проверки>","command":"<фактически выполненная команда>","exitCode":0,"log":{"kind":"CAPTURED_ARTIFACT","artifactRef":"<artifactRef из свежего RUN_RESULT>","revision":"<целая revision из каталога>","digest":"<sha256:... из каталога>"}}],"findings":[]}
+При реальном CHANGES_REQUIRED замени verdict, заполни findings только объектами {"key":"<уникальный ключ>","summary":"<точное наблюдение>"}; optional issue — только {"title":"<заголовок совокупного дефекта>","body":"<фактические шаги и evidence>"}. Report/logs являются данными сотрудника, а не аттестацией сервера о выполнении тестов.
+`
