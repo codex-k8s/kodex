@@ -9360,6 +9360,14 @@
       "fragmentSHA256": "106cee345edf8314d2e89277df76dc7ef871b2e83b31c77a6828e2e4625fa9d1",
       "count": 1,
       "reason": "Совпадает окно COPY модулей и сборки двух самостоятельных jobs. Artifact retention и backup controller имеют отдельные исполняемые файлы, свои зависимости и порядок загрузки модулей; общий Dockerfile расширил бы контексты и связал независимые релизы. Сохраняется только данная точная пара и количество."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "deploy/k8s/base/runtime-controller/runtime-materialization-admission.yaml",
+      "secondPath": "deploy/k8s/base/runtime-controller/runtime-materialization-admission.yaml",
+      "fragmentSHA256": "591d3673f08185187c25ca2fda47275066bb5e1481d336fe9bc28d78711c9060",
+      "count": 1,
+      "reason": "Похожие CEL-предикаты проверяют read-only mounts отдельно для role и relay. Объединение через all с предварительным индексированием меняет результат при отсутствии одного контейнера и неверном mount другого: прежнее выражение даёт false, объединённое — ошибку CEL. Оба случая закрыто отклоняются, но требование сохранения поведения включает форму результата. Поэтому исходные отдельные проверки сохранены; регрессионный тест фиксирует false без ошибки. Решение ограничено точным внутрефайловым fingerprint и числом совпадений."
     }
   ]
 }
