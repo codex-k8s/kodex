@@ -50,7 +50,8 @@ rescan API нет. Проверки не имитируют его как обы
 
 ## Миграции, поставка и восстановление
 
-Принятый порядок: 011 legacy rework → **012 workflow exception context** → SSH270001.
+Принятый порядок: 011 legacy rework → **012 workflow exception context** →
+013 upstream rework → SSH270001 → Application270002. Этот профиль012 не принимает013.
 Новые FK/columns и purge edges не добавляются; сохраняется текущий011 graph105/286.
 012 читает Goose ledger как migrator до SET ROLE owner, требует exact011, проверяет
 прежний body hash и добавляет два SQL STABLE SECURITY INVOKER helpers. PUBLIC EXECUTE

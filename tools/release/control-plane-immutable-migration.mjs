@@ -19,9 +19,13 @@ const immutableProfiles = {
   'outbox-index': {version:'20261025000100',file:'20261025000100_outbox_unpublished_predecessor_index.sql',annotation:'kodex.dev/cp-outbox-index-migration-plan',previousVersion:20261020000200,emptyField:'indexAbsent',preconditionFile:'control-plane-migration-precondition.sql'},
   'repository-bundle': {version:'20261025000200',file:'20261025000200_repository_bundle_publications.sql',annotation:'kodex.dev/cp-repository-bundle-migration-plan',previousVersion:20261025000100,emptyField:'publicationAbsent',preconditionFile:'repository-bundle-migration-precondition.sql',postconditionFile:'repository-bundle-migration-postcondition.sql'},
 };
+// Один закрытый registry определяет и план, и CLI dispatch; caller не добавляет profile через payload.
+export function isImmutableMigrationProfile(profile) {
+  return typeof profile==='string' && Object.hasOwn(immutableProfiles,profile);
+}
 // Только известные immutable профили; caller не задаёт version/SQL/authority.
 export function immutableMigrationProfile(profile = 'outbox-index') {
-  ensure(Object.hasOwn(immutableProfiles,profile),'IMMUTABLE_MIGRATION_PROFILE_INVALID');
+  ensure(isImmutableMigrationProfile(profile),'IMMUTABLE_MIGRATION_PROFILE_INVALID');
   return Object.freeze({...immutableProfiles[profile]});
 }
 const caBundleSpec = {sources:[{secret:{name:'kodex-installation-ca',key:'tls.crt'}}],

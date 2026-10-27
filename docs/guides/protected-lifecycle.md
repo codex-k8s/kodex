@@ -19,7 +19,9 @@ accepted dependency receipts; frozen RR/catalog и свежие ACL/effective CL
 ревизии проверяются независимо. Новая ревизия не подменяет старый pin. После
 complete/cancel/expiry/revoke история сохраняется, прежний runtime read закрыт.
 Не записывать обычные step inputs в businessAttempt0 ради обхода его provenance
-инварианта. Матрица: [#1943](../operations/workflow-exception-context-1943.md).
+инварианта. Immutable планирование, CLI dispatch и readback используют один закрытый
+registry профилей владельца: копии списка известных профилей не доказывают готовность
+исполняемого пути. Матрица: [#1943](../operations/workflow-exception-context-1943.md).
 
 
 Часы всего SERVER DAG принадлежат его существующему `ROOT_PROCESS`, а не

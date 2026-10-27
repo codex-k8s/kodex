@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { planControlPlaneMigration, migrationReadback } from './control-plane-migration.mjs';
 import { fingerprint } from './scoped-release.mjs';
 import { validateStableReceipt } from './stable-image-publication.mjs';
-import { waitMigrationMaintenance, immutableMigrationProfile, validImmutableMigrationPostcondition, validProjectPurgeAuthorityMigrationPostcondition, validOwnerGateExpiryMigrationPostcondition, validRepositoryBundleMigrationPostcondition, validServerWorkflowMigrationPostcondition, validLegacyWorkflowReworkMigrationPostcondition, validWorkflowExceptionContextMigrationPrecondition, validWorkflowExceptionContextMigrationPostcondition } from './control-plane-immutable-migration.mjs';
+import { waitMigrationMaintenance, immutableMigrationProfile, isImmutableMigrationProfile, validImmutableMigrationPostcondition, validProjectPurgeAuthorityMigrationPostcondition, validOwnerGateExpiryMigrationPostcondition, validRepositoryBundleMigrationPostcondition, validServerWorkflowMigrationPostcondition, validLegacyWorkflowReworkMigrationPostcondition, validWorkflowExceptionContextMigrationPrecondition, validWorkflowExceptionContextMigrationPostcondition } from './control-plane-immutable-migration.mjs';
 
 const revision = 'a'.repeat(40), digest = `sha256:${'b'.repeat(64)}`;
 const source = {path:'/fixture/source',revision};
@@ -661,6 +661,19 @@ test('legacy rework011 refuses altered010 authority or partial011 before STOP or
  }
 });
 
+
+test('immutable registry owns CLI dispatch for every registered profile without caller coercion',()=>{
+ for(const name of ['outbox-index','repository-bundle','owner-gate-expiry','project-purge-authority','server-workflow','legacy-workflow-rework','workflow-exception-context']){
+  const profile=immutableMigrationProfile(name);
+  assert.equal(isImmutableMigrationProfile(name),true);
+  const plan=planControlPlaneMigration(base(),source,()=>({revision}),'registry-fixture',name,publication());
+  assert.equal(plan.version,2);assert.equal(plan.profile,name);assert.equal(plan.migrationVersion,profile.version);
+  assert.equal(plan.job.metadata.name,'control-plane-migrate-'+profile.version);
+ }
+ for(const invalid of ['legacy','constructor','__proto__','future-profile',null,[],['workflow-exception-context'],{}])
+  assert.equal(isImmutableMigrationProfile(invalid),false);
+ assert.throws(()=>planControlPlaneMigration(base(),source,()=>({revision}),'registry-fixture','future-profile',publication()),/MIGRATION_PROFILE_INVALID/);
+});
 
 test('012 profile pins exact011 predecessor and keeps earlier schema validators closed',()=>{
  const config=immutableMigrationProfile('workflow-exception-context');
