@@ -70,3 +70,51 @@ func TestServerWorkflowPromptGuidance(t *testing.T) {
 		})
 	}
 }
+
+// TestServerWorkflowPromptSupersededGate preserves a system closure while rejecting invented decisions and legacy use.
+// TestServerWorkflowPromptSupersededGate сохраняет системное закрытие, отвергая выдуманные решения и legacy-использование.
+func TestServerWorkflowPromptSupersededGate(t *testing.T) {
+	for _, scenario := range []string{"superseded", "human-cancel", "missing-kind", "unknown-kind", "approved-state", "fake-decision", "missing-ref", "legacy"} {
+		t.Run(scenario, func(t *testing.T) {
+			snapshot, execution := workflowExecutionFixture()
+			execution.ExecutionMode = workflowservice.ServerDAGV1
+			execution.RunRef, snapshot.RunRef = "run_assigned_child", "run_assigned_child"
+			execution.WorkflowStageKey, snapshot.ContextPin.WorkflowStageKey = "step-001", "step-001"
+			step := &execution.Steps[0]
+			step.ResultGateRef, step.ResultGateState, step.ResultGateResolutionKind = "gat_superseded_fixture", "CANCELLED", "SUPERSEDED"
+			switch scenario {
+			case "human-cancel":
+				step.ResultGateResolutionKind, step.ResultGateDecision = "", "CANCEL"
+			case "missing-kind":
+				step.ResultGateResolutionKind = ""
+			case "unknown-kind":
+				step.ResultGateResolutionKind = "UNKNOWN"
+			case "approved-state":
+				step.ResultGateState = "APPROVED"
+			case "fake-decision":
+				step.ResultGateDecision = "CANCEL"
+			case "missing-ref":
+				step.ResultGateRef = ""
+			case "legacy":
+				execution.ExecutionMode = ""
+			}
+			err := applyWorkflowExecutionPrompt(&snapshot, execution, false)
+			if scenario != "superseded" && scenario != "human-cancel" {
+				if !errors.Is(err, errs.ErrConflict) {
+					t.Fatal("ambiguous system closure entered the execution prompt")
+				}
+				return
+			}
+			guidance := snapshot.SemanticValues["CONSTRAINTS"]
+			if err != nil || !strings.Contains(guidance, `"Revision":"server-dag-guidance-v2"`) {
+				t.Fatal("valid gate outcome blocked the fresh assigned stage")
+			}
+			if scenario == "superseded" && (!strings.Contains(guidance, `"ResultGateResolutionKind":"SUPERSEDED"`) || !strings.Contains(guidance, "with no human decision")) {
+				t.Fatal("supersession was flattened into a human cancellation")
+			}
+			if scenario == "human-cancel" && strings.Contains(guidance, `"ResultGateResolutionKind":`) {
+				t.Fatal("legacy gate acquired a system closure discriminator")
+			}
+		})
+	}
+}

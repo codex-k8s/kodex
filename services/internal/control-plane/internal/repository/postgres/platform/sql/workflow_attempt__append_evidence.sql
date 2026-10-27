@@ -32,17 +32,7 @@ WITH completed AS (
                    'generation',completed.generation,'turnId',completed.turn_id::text,
                    'runtimeAttempt',completed.attempt
                )
-           ) || CASE WHEN version.spec->>'ReworkPolicy'='OWNER_APPROVED_UPSTREAM_V1'
-               THEN jsonb_build_object('reworkSubjects',(
-                   SELECT jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
-                       'requirementKey',requirement.value->>'Key','subjectStepKey',requirement.value->>'SubjectStepKey',
-                       'subjectResultKey',NULLIF(requirement.value->>'SubjectResultKey',''))))
-                   FROM jsonb_array_elements(version.spec->'Steps') step(value)
-                   CROSS JOIN LATERAL jsonb_array_elements(step.value->'ResultRequirements') requirement(value)
-                   JOIN jsonb_array_elements(@review_evidence::jsonb) fact(value) ON fact.value->>'key'=requirement.value->>'Key'
-                   WHERE step.value->>'Key'=(SELECT workflow_step_key FROM control_plane.run_nodes physical WHERE physical.id=completed.id)
-                       AND requirement.value->>'Kind' IN ('REVIEW','QA') AND fact.value->>'verdict'='CHANGES_REQUIRED'
-               )) ELSE '{}'::jsonb END AS entry
+           ) || CASE WHEN jsonb_array_length(@rework_subjects::jsonb)>0 THEN jsonb_build_object('reworkSubjects',@rework_subjects::jsonb) ELSE '{}'::jsonb END AS entry
     FROM completed
     JOIN control_plane.runs root ON root.id=completed.root_run_id AND root.organization_id=completed.organization_id
     JOIN control_plane.workflow_versions version ON version.id=root.workflow_version_id AND version.organization_id=root.organization_id

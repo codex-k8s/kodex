@@ -124,5 +124,40 @@
     "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"analysis\",\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\n\",\"verdict\":\"PASS\"}]}",
     "valid": false,
     "revision": 0
+  },
+  {
+    "name": "artifact review PASS",
+    "requirementKind": "ARTIFACT_REVIEW",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"analysis\",\"source\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":3,\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"verdict\":\"PASS\"}]}",
+    "valid": true,
+    "revision": 3
+  },
+  {
+    "name": "artifact review changes",
+    "requirementKind": "ARTIFACT_REVIEW",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"analysis\",\"source\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":3,\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"verdict\":\"CHANGES_REQUIRED\"}]}",
+    "valid": true,
+    "revision": 3
+  },
+  {
+    "name": "artifact review current forbidden",
+    "requirementKind": "ARTIFACT_REVIEW",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"analysis\",\"source\":{\"kind\":\"CURRENT_COMPLETION\"},\"verdict\":\"PASS\"}]}",
+    "valid": false,
+    "revision": 0
+  },
+  {
+    "name": "artifact review narrative forbidden",
+    "requirementKind": "ARTIFACT_REVIEW",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"analysis\",\"source\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":3,\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"verdict\":\"PASS from markdown\"}]}",
+    "valid": false,
+    "revision": 0
+  },
+  {
+    "name": "artifact review mixed head forbidden",
+    "requirementKind": "ARTIFACT_REVIEW",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"analysis\",\"source\":{\"kind\":\"CAPTURED_ARTIFACT\",\"artifactRef\":\"art_12345678\",\"revision\":3,\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"verdict\":\"PASS\",\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}]}",
+    "valid": false,
+    "revision": 0
   }
 ]

@@ -126,8 +126,8 @@ immutable plan/check/stop/apply/inspect/resume протокол. Каждый ph
 Goose013, отсутствие новых helpers014, четыре точных predecessor function bodies,
 INVOKER/SECURITY DEFINER/owner/search_path/return/EXECUTE и отсутствие активных executions/tasks.
 Оператор не поставляет отсутствующие012/013 и не принимает их по имени файла.
-Отдельное одобрение и доказательство полного predecessor013 остаётся обязательной
-зависимостью поставки, а не результатом incremental verifier014.
+Полный predecessor013 проверяется встроенным proof014 в той же read-only snapshot;
+историческая квитанция отдельного запуска013 не заменяет текущую проверку.
 
 Postcondition исполняет поставляемый READ ONLY SQL: восемь exact bodies и metadata,
 два полных row triggers, runtime role boundary и неизменённый purge.
@@ -205,7 +205,28 @@ Native source cases (пока не доказательство исполнен
 Отдельно проверяются exact unrelated capture и foreign revision ID. Schema
 clones включают повреждённый retention body и выдачу EXECUTE private helper.
 
-Полная поставка014 остаётся заблокирована до актуального полного013 predecessor
-proof в той же read-only snapshot и явной композиции01150→012→013→014. Текущие
+Полная поставка014 остаётся заблокирована до исполнения нового полного proof
+и явной композиции01150→012→013→014. Текущие
 source-derived MD5 и105/287 описывают только схему без будущей01150 и не заменяют
 её actual catalog/fingerprint или разрешение на DDL.
+
+
+Полный proof014 встраивает замороженный postcondition013 в **тот же** REPEATABLE
+READ READ ONLY snapshot. Собственные metadata-поля014 имеют префикс
+`reviewQAEvidence` и не перезаписывают `functionSources`, ACL и прочие результаты
+предшественника. До DDL проверяются все функции/ACL/constraints013 и отсутствие
+объектов014; после DDL сохраняются те же проверки с четырьмя точными новыми
+телами effect/journal/public projection/retention. Генератор
+`tools/release/generate-workflow-review-qa-proof.py --check` проверяет воспроизводимость
+обоих standalone SQL; runtime не читает внешний predecessor и не наследует старую
+квитанцию. Старый verifier013 не принимает014. Source013 не изменяется.
+
+Смешанный результат ARTIFACT_REVIEW/REVIEW проверяется одним owner evaluator.
+Отрицательный ARTIFACT_REVIEW сохраняет exact reviewed revision/digest как data-only
+`evidence` и отдельный typed маршрут upstream rework. Положительный REVIEW всё равно
+требует native COMMENT receipt exact PR/head. При отсутствии receipt либо смене
+revision/digest ни negative evidence, ни reworkSubjects не принимаются. Отсутствие
+нового профиля сохраняет прежний публичный history без поля evidence. Все проверки
+новой композиции, включая новые negative schema cases, до фактического исполнения
+имеют статус NOT RUN. Будущая01150 потребует новой явной композиции metadata;
+проверенные013 fingerprints не объявляют её применённой.

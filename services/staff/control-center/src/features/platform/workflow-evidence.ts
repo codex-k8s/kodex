@@ -10,6 +10,7 @@ const head = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u;
 const repository = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u;
 const kinds = [
   "ARTIFACT",
+  "ARTIFACT_REVIEW",
   "PULL_REQUEST",
   "REVIEW",
   "QA",
@@ -75,7 +76,7 @@ function validResult(value: unknown): value is RecordValue {
   if (
     value.verdict !== undefined &&
     value.verdict !== "PASS" &&
-    (!["REVIEW", "QA"].includes(value.kind) ||
+    (!["ARTIFACT_REVIEW", "REVIEW", "QA"].includes(value.kind) ||
       value.verdict !== "CHANGES_REQUIRED")
   )
     return false;
@@ -117,6 +118,7 @@ export function validWorkflowAttemptEvidence(node: RunNode): boolean {
             "reason",
             "results",
             "evidence",
+            "effectiveState",
           ].includes(field),
       )
     )
@@ -151,6 +153,7 @@ export function validWorkflowAttemptEvidence(node: RunNode): boolean {
       )
     )
       return false;
+    if (attempt.effectiveState !== undefined && !["CURRENT", "HISTORICAL", "STALE_DEPENDENCY", "REWORK_PENDING", "WAITING_OWNER", "BLOCKED"].includes(String(attempt.effectiveState))) return false;
     if (attempt.evidence === undefined) return true;
     if (
       !Array.isArray(attempt.evidence) ||
@@ -166,12 +169,13 @@ export function validWorkflowAttemptEvidence(node: RunNode): boolean {
     if (
       !facts.some(
         (result) =>
-          ["REVIEW", "QA"].includes(String(result.kind)) &&
+          ["ARTIFACT_REVIEW", "REVIEW", "QA"].includes(String(result.kind)) &&
           result.verdict === "CHANGES_REQUIRED",
       )
     )
       return false;
     return facts.every((result) => {
+      if (result.kind === "ARTIFACT_REVIEW") return !!result.artifactRef && !!result.artifactRevision && ["PASS", "CHANGES_REQUIRED"].includes(String(result.verdict));
       if (result.kind !== "REVIEW" && result.kind !== "QA")
         return result.verdict === undefined || result.verdict === "PASS";
       if (

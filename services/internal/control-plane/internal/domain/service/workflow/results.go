@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -77,7 +78,7 @@ func ValidRequirementsForProfile(profile string, requirements []entity.WorkflowR
 			(profile == GitHubReviewQAV1 && r.Kind == "QA" && !resultKey.MatchString(r.EvidenceKey)) {
 			return false
 		}
-		if len(r.Repository) > 200 || !resultKey.MatchString(r.Key) || seen[r.Key] || (r.Kind != "DEPLOYMENT" && r.TargetRef != "") {
+		if r.Kind != "ARTIFACT_REVIEW" && r.SubjectResultKey != "" || len(r.Repository) > 200 || !resultKey.MatchString(r.Key) || seen[r.Key] || (r.Kind != "DEPLOYMENT" && r.TargetRef != "") {
 			return false
 		}
 		seen[r.Key] = true
@@ -88,6 +89,10 @@ func ValidRequirementsForProfile(profile string, requirements []entity.WorkflowR
 			}
 		case "PULL_REQUEST":
 			if !RepositoryPattern.MatchString(r.Repository) || r.FileName != "" || r.MediaType != "" || r.SubjectStepKey != "" || r.Operation != "" {
+				return false
+			}
+		case "ARTIFACT_REVIEW":
+			if !resultKey.MatchString(r.SubjectResultKey) || !slices.Contains(dependencies, r.SubjectStepKey) || r.FileName != "" || r.MediaType != "" || r.Repository != "" || r.Operation != "" {
 				return false
 			}
 		case "REVIEW", "QA":
@@ -192,6 +197,10 @@ func DecodeDeclarationForProfile(raw string, requirements []entity.WorkflowResul
 			if !exactFields(resultFields, "key", "receiptRef") || !receiptRefPattern.MatchString(r.ReceiptRef) {
 				return nil, ErrResultInvalid
 			}
+		case "ARTIFACT_REVIEW":
+			if !exactFields(resultFields, "key", "source", "verdict") || !validArtifactSource(resultFields["source"], r.Source) || r.Source.Kind != "CAPTURED_ARTIFACT" || (r.Verdict != "PASS" && r.Verdict != "CHANGES_REQUIRED") {
+				return nil, ErrResultInvalid
+			}
 		case "REVIEW", "QA":
 			shape := exactFields(resultFields, "key", "headSha", "verdict")
 			if profile == GitHubReviewQAV1 {
@@ -247,8 +256,7 @@ func validArtifactSource(raw json.RawMessage, source *entity.WorkflowArtifactSou
 		return exactFields(fields, "kind")
 	case "CAPTURED_ARTIFACT":
 		return exactFields(fields, "kind", "artifactRef", "revision", "digest") &&
-			artifactRefPattern.MatchString(source.ArtifactRef) && source.Revision > 0 &&
-			source.Revision <= 9007199254740991 && digestPattern.MatchString(source.Digest)
+			ValidCapturedArtifactIdentity(source.ArtifactRef, source.Revision, source.Digest)
 	default:
 		return false
 	}
@@ -310,4 +318,10 @@ func uniqueJSON(raw []byte) bool {
 	}
 	_, err := d.Token()
 	return err == io.EOF
+}
+
+// ValidCapturedArtifactIdentity validates a closed locator shape, never artifact access or CLEAN.
+// ValidCapturedArtifactIdentity проверяет закрытую форму locator, не доступ к файлу либо CLEAN.
+func ValidCapturedArtifactIdentity(ref string, revision int64, digest string) bool {
+	return artifactRefPattern.MatchString(ref) && revision > 0 && revision <= 9007199254740991 && digestPattern.MatchString(digest)
 }

@@ -29,7 +29,7 @@ func workflowResultRequirements(values []generated.WorkflowResultRequirement) []
 		result = append(result, &controlplanev1.WorkflowResultRequirement{
 			EvidenceKey: stringValue(value.EvidenceKey), Key: value.Key, Kind: string(value.Kind), FileName: stringValue(value.FileName),
 			MediaType: stringValue(value.MediaType), Repository: stringValue(value.Repository),
-			SubjectStepKey: stringValue(value.SubjectStepKey), Operation: operation, TargetRef: stringValue(value.TargetRef),
+			SubjectStepKey: stringValue(value.SubjectStepKey), SubjectResultKey: stringValue(value.SubjectResultKey), Operation: operation, TargetRef: stringValue(value.TargetRef),
 		})
 	}
 	return result
@@ -44,7 +44,7 @@ func workflowResultRequirements(values []generated.WorkflowResultRequirement) []
 func validWorkflowPublicMessage(message proto.Message) bool {
 	switch value := message.(type) {
 	case *controlplanev1.WorkflowVersion:
-		if value == nil || !(value.ExecutionMode == "" || value.ExecutionMode == "MANAGER_DRIVEN" || value.ExecutionMode == "SERVER_DAG_V1") || !(value.ResultEvidenceProfile == "" || value.ResultEvidenceProfile == "GITHUB_REVIEW_QA_V1" && value.ExecutionMode == "SERVER_DAG_V1") {
+		if value == nil || !(value.ReworkPolicy == "" || value.ExecutionMode == "SERVER_DAG_V1" && value.ReworkPolicy == "OWNER_APPROVED_UPSTREAM_V1") || !(value.ExecutionMode == "" || value.ExecutionMode == "MANAGER_DRIVEN" || value.ExecutionMode == "SERVER_DAG_V1") || !(value.ResultEvidenceProfile == "" || value.ResultEvidenceProfile == "GITHUB_REVIEW_QA_V1" && value.ExecutionMode == "SERVER_DAG_V1") {
 			return false
 		}
 		for _, step := range value.Steps {
@@ -112,12 +112,12 @@ func validWorkflowPublicMessage(message proto.Message) bool {
 	case *controlplanev1.WorkflowResultRequirement:
 		return value != nil && workflowPredicateKey.MatchString(value.Key) && (value.EvidenceKey == "" || value.Kind == "QA" && workflowPredicateKey.MatchString(value.EvidenceKey)) && workflowPublicResultKind(value.Kind) &&
 			workflowPublicText(value.FileName, 160) && workflowPublicText(value.MediaType, 160) &&
-			workflowPublicText(value.Repository, 200) && (value.SubjectStepKey == "" || workflowPredicateKey.MatchString(value.SubjectStepKey)) && workflowPublicText(value.TargetRef, 96) &&
+			workflowPublicText(value.Repository, 200) && (value.SubjectStepKey == "" || workflowPredicateKey.MatchString(value.SubjectStepKey)) && workflowPublicText(value.TargetRef, 96) && (value.SubjectResultKey == "" || value.Kind == "ARTIFACT_REVIEW" && workflowPredicateKey.MatchString(value.SubjectResultKey)) &&
 			(value.Operation == "" || value.Operation == "github.pull_request.merge" || value.Operation == "ssh.compose.deploy")
 	case *controlplanev1.RunNode:
 		return value != nil && len(value.WorkflowResults) <= 4
 	case *controlplanev1.WorkflowAttemptResult:
-		if value == nil || value.Attempt < 1 || value.Attempt > 4 || !fileTargetRef(value.RunRef) || !workflowPublicText(value.Reason, 96) || len(value.Results) > 4 || len(value.Evidence) > 4 {
+		if value == nil || !workflowPublicEffectiveState(value.EffectiveState) || value.Attempt < 1 || value.Attempt > 4 || !fileTargetRef(value.RunRef) || !workflowPublicText(value.Reason, 96) || len(value.Results) > 4 || len(value.Evidence) > 4 {
 			return false
 		}
 		if !value.Accepted && len(value.Results) != 0 {
@@ -136,10 +136,10 @@ func validWorkflowPublicMessage(message proto.Message) bool {
 			if evidence != nil && (evidence.Kind == "REVIEW" || evidence.Kind == "QA") && (!workflowPublicRepository.MatchString(evidence.Repository) || evidence.Number < 1 || !workflowPublicHead.MatchString(evidence.HeadSha)) {
 				return false
 			}
-			if evidence == nil || evidence.Kind == "REVIEW" && (evidence.ReceiptRef == "" || evidence.HeadSha == "") || evidence.Kind == "QA" && (evidence.ArtifactRef == "" || evidence.ArtifactRevision == "" || evidence.HeadSha == "") {
+			if evidence == nil || evidence.Kind == "ARTIFACT_REVIEW" && (evidence.ArtifactRef == "" || evidence.ArtifactRevision == "") || evidence.Kind == "REVIEW" && (evidence.ReceiptRef == "" || evidence.HeadSha == "") || evidence.Kind == "QA" && (evidence.ArtifactRef == "" || evidence.ArtifactRevision == "" || evidence.HeadSha == "") {
 				return false
 			}
-			negative = negative || (evidence.Kind == "REVIEW" || evidence.Kind == "QA") && evidence.Verdict == "CHANGES_REQUIRED"
+			negative = negative || (evidence.Kind == "ARTIFACT_REVIEW" || evidence.Kind == "REVIEW" || evidence.Kind == "QA") && evidence.Verdict == "CHANGES_REQUIRED"
 		}
 		return len(value.Evidence) == 0 || negative
 	case *controlplanev1.WorkflowAcceptedResult:
@@ -147,7 +147,7 @@ func validWorkflowPublicMessage(message proto.Message) bool {
 			(value.ArtifactRef == "" || fileTargetRef(value.ArtifactRef)) && (value.ReceiptRef == "" || fileTargetRef(value.ReceiptRef)) &&
 			workflowPublicText(value.ArtifactRevision, 96) && workflowPublicText(value.Repository, 200) && workflowPublicText(value.TargetRef, 96) &&
 			workflowPublicText(value.HeadSha, 64) && value.Number >= 0 && value.Number <= maximumSafeJSONInteger &&
-			(value.Verdict == "" || value.Verdict == "PASS" || (value.Kind == "REVIEW" || value.Kind == "QA") && value.Verdict == "CHANGES_REQUIRED") && (value.BundleSha256 == "" || validManagedDigest(value.BundleSha256)) &&
+			(value.Verdict == "" || value.Verdict == "PASS" || (value.Kind == "ARTIFACT_REVIEW" || value.Kind == "REVIEW" || value.Kind == "QA") && value.Verdict == "CHANGES_REQUIRED") && (value.BundleSha256 == "" || validManagedDigest(value.BundleSha256)) &&
 			(value.ImageDigest == "" || strings.HasPrefix(value.ImageDigest, "sha256:") && validManagedDigest(strings.TrimPrefix(value.ImageDigest, "sha256:")))
 	}
 	return true
@@ -159,7 +159,7 @@ func validWorkflowPublicMessage(message proto.Message) bool {
 // провайдера и без признания самого вида доказательством существования результата.
 func workflowPublicResultKind(kind string) bool {
 	switch kind {
-	case "ARTIFACT", "PULL_REQUEST", "REVIEW", "QA", "INTEGRATION_RECEIPT", "DEPLOYMENT":
+	case "ARTIFACT", "ARTIFACT_REVIEW", "PULL_REQUEST", "REVIEW", "QA", "INTEGRATION_RECEIPT", "DEPLOYMENT":
 		return true
 	default:
 		return false
@@ -170,6 +170,17 @@ func workflowPublicResultKind(kind string) bool {
 // workflowPublicText применяет предел OpenAPI в символах к корректному UTF-8 без изменения текста.
 func workflowPublicText(value string, maximum int) bool {
 	return utf8.ValidString(value) && utf8.RuneCountInString(value) <= maximum
+}
+
+// workflowPublicEffectiveState accepts the additive owner freshness vocabulary; empty is legacy.
+// workflowPublicEffectiveState принимает additive owner freshness; пустое значение означает legacy.
+func workflowPublicEffectiveState(value string) bool {
+	switch value {
+	case "", "CURRENT", "HISTORICAL", "STALE_DEPENDENCY", "REWORK_PENDING", "WAITING_OWNER", "BLOCKED":
+		return true
+	default:
+		return false
+	}
 }
 
 // workflowPublicRepository validates only a public repository locator, never its authorization.

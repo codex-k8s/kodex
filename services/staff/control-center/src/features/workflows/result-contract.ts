@@ -2,6 +2,7 @@ import type { WorkflowResultRequirement } from "@/shared/api/generated/openapi/t
 
 export const workflowResultKinds = [
   "ARTIFACT",
+  "ARTIFACT_REVIEW",
   "PULL_REQUEST",
   "REVIEW",
   "QA",
@@ -69,6 +70,10 @@ export function validWorkflowRequirements(
           !boundedText(item.mediaType, 160)
         )
           return false;
+        break;
+      case "ARTIFACT_REVIEW":
+        keys.push("subjectStepKey", "subjectResultKey");
+        if (!validWorkflowKey(item.subjectResultKey)) return false;
         break;
       case "PULL_REQUEST":
         keys.push("repository");
@@ -142,6 +147,7 @@ export function validWorkflowDAG(
   concurrency: unknown,
   text: string,
   keyField: "ref" | "key",
+  reworkPolicy: unknown = "",
   profile?: unknown,
 ): boolean {
   if (
@@ -155,6 +161,8 @@ export function validWorkflowDAG(
     byteLength(text) > 8192
   )
     return false;
+  if (reworkPolicy !== undefined && reworkPolicy !== "" && reworkPolicy !== "OWNER_APPROVED_UPSTREAM_V1") return false;
+  const published = new Map<string, WorkflowResultRequirement[]>();
   const agents = new Map<string, string>();
   const reviewers = new Map<string, string>();
   const pullRequests = new Map<string, number>();
@@ -200,7 +208,8 @@ export function validWorkflowDAG(
       ).length,
     );
     for (const requirement of step.resultRequirements) {
-      if (requirement.kind !== "REVIEW") continue;
+      if (requirement.kind === "ARTIFACT_REVIEW" && (reworkPolicy !== "OWNER_APPROVED_UPSTREAM_V1" || !published.get(requirement.subjectStepKey ?? "")?.some((result) => result.kind === "ARTIFACT" && result.key === requirement.subjectResultKey))) return false;
+      if (requirement.kind !== "REVIEW" && requirement.kind !== "ARTIFACT_REVIEW") continue;
       const subject = requirement.subjectStepKey ?? "";
       const reviewer = `${subject}:${step.agentRef}`;
       if (
@@ -211,6 +220,7 @@ export function validWorkflowDAG(
       reviewers.set(reviewer, key);
     }
     agents.set(key, step.agentRef);
+    published.set(key, step.resultRequirements);
   }
   return true;
 }

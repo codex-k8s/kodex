@@ -288,14 +288,14 @@ it("новый evidence профиль требует direct predecessor с ед
     ],
   });
   expect(validWorkflowDAG(steps, 2, "", "ref")).toBe(true);
-  expect(validWorkflowDAG(steps, 2, "", "ref", "GITHUB_REVIEW_QA_V1")).toBe(
+  expect(validWorkflowDAG(steps, 2, "", "ref", "", "GITHUB_REVIEW_QA_V1")).toBe(
     false,
   );
   at(steps, 3).dependsOn = ["code"];
   at(steps, 3).resultRequirements = [
     { key: "checked", kind: "REVIEW", subjectStepKey: "code" },
   ];
-  expect(validWorkflowDAG(steps, 2, "", "ref", "GITHUB_REVIEW_QA_V1")).toBe(
+  expect(validWorkflowDAG(steps, 2, "", "ref", "", "GITHUB_REVIEW_QA_V1")).toBe(
     true,
   );
   at(steps, 1).resultRequirements = [
@@ -306,7 +306,20 @@ it("новый evidence профиль требует direct predecessor с ед
       repository: "codex-k8s/test-repo",
     },
   ];
-  expect(validWorkflowDAG(steps, 2, "", "ref", "GITHUB_REVIEW_QA_V1")).toBe(
+  expect(validWorkflowDAG(steps, 2, "", "ref", "", "GITHUB_REVIEW_QA_V1")).toBe(
     false,
   );
+});
+
+it("разрешает проверку exact опубликованного файла только с явной политикой", () => {
+  const steps = [
+    { ref: "author", agentRef: "analyst", dependsOn: [], requiredCapabilityKeys: [], resultRequirements: [{ key: "spec", kind: "ARTIFACT", fileName: "spec.md", mediaType: "text/markdown" }] },
+    { ref: "review", agentRef: "reviewer", dependsOn: ["author"], requiredCapabilityKeys: [], resultRequirements: [{ key: "verdict", kind: "ARTIFACT_REVIEW", subjectStepKey: "author", subjectResultKey: "spec" }] },
+  ];
+  expect(validWorkflowDAG(steps, 2, "", "ref", "OWNER_APPROVED_UPSTREAM_V1")).toBe(true);
+  expect(validWorkflowDAG(steps, 2, "", "ref")).toBe(false);
+  const missing = structuredClone(steps); const missingRequirement = missing.at(1)?.resultRequirements.at(0); if (!missingRequirement || !("subjectResultKey" in missingRequirement)) throw new Error("fixture requirement missing"); missingRequirement.subjectResultKey = "foreign";
+  expect(validWorkflowDAG(missing, 2, "", "ref", "OWNER_APPROVED_UPSTREAM_V1")).toBe(false);
+  const self = structuredClone(steps); const selfReviewer = self.at(1); if (!selfReviewer) throw new Error("fixture reviewer missing"); selfReviewer.agentRef = "analyst";
+  expect(validWorkflowDAG(self, 2, "", "ref", "OWNER_APPROVED_UPSTREAM_V1")).toBe(false);
 });

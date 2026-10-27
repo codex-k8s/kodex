@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { planControlPlaneMigration, migrationReadback } from './control-plane-migration.mjs';
 import { fingerprint } from './scoped-release.mjs';
 import { validateStableReceipt } from './stable-image-publication.mjs';
-import { waitMigrationMaintenance, immutableMigrationProfile, validImmutableMigrationPostcondition, validProjectPurgeAuthorityMigrationPostcondition, validOwnerGateExpiryMigrationPostcondition, validRepositoryBundleMigrationPostcondition, validServerWorkflowMigrationPostcondition, validLegacyWorkflowReworkMigrationPostcondition, validWorkflowReviewQAEvidenceMigrationPostcondition, isImmutableMigrationProfile } from './control-plane-immutable-migration.mjs';
+import { waitMigrationMaintenance, immutableMigrationProfile, isImmutableMigrationProfile, validImmutableMigrationPostcondition, validProjectPurgeAuthorityMigrationPostcondition, validOwnerGateExpiryMigrationPostcondition, validRepositoryBundleMigrationPostcondition, validServerWorkflowMigrationPostcondition, validLegacyWorkflowReworkMigrationPostcondition, validWorkflowExceptionContextMigrationPrecondition, validWorkflowExceptionContextMigrationPostcondition, validWorkflowUpstreamReworkMigrationPrecondition, validWorkflowUpstreamReworkMigrationPostcondition, validWorkflowReviewQAEvidenceMigrationPostcondition } from './control-plane-immutable-migration.mjs';
 
 const revision = 'a'.repeat(40), digest = `sha256:${'b'.repeat(64)}`;
 const source = {path:'/fixture/source',revision};
@@ -131,11 +131,25 @@ function legacyReworkProof() {
   purgeEdges:286,purgeEdgeFingerprint:'c'.repeat(32),serverPurgeEdges:284,serverPurgeFingerprint:'6bf6ad76d8c7ae66e07f75ecf719fdd6'};
 }
 
+// Отдельная012 fake проверяет CLI lifecycle; actual schema исполняется в disposable PG.
+function workflowExceptionSchemaProof(version) { return {...legacyReworkProof(),gooseVersion:version}; }
+function workflowExceptionContextProof() {
+ return {...workflowExceptionSchemaProof(20261026001200),workflowExceptionContextProfile:'SERVER_EXCEPTION_CONTEXT_V1',
+  workflowContextFunctions:true,workflowContextExactFunctions:true};
+}
+
+// Полный013 fake нужен для CLI; реальные source/ACL/graph проверяются отдельной PostgreSQL suite.
+function workflowUpstreamReworkProof() {
+ return {...workflowExceptionContextProof(),gooseVersion:20261026001300,purgeEdges:287,
+  workflowUpstreamReworkProfile:'OWNER_APPROVED_UPSTREAM_V1',upstreamFunctions:true,upstreamExactFunctions:true,
+  upstreamColumns:true,upstreamForeignKey:true,upstreamConstraint:true,upstreamIndex:true,upstreamTriggers:true,upstreamColumnAccess:true};
+}
+
 // Metadata-only fixture проверяет orchestration; реальная SQL schema проверяется native клонами.
 function reviewQAEvidenceProof() {
- return {readOnly:'on',database:'control_plane',gooseVersion:20261026001400,reviewQAEvidenceProfile:'GITHUB_REVIEW_QA_V1',
-  schemaOwner:true,functionCount:8,functionSources:true,functionMetadata:true,functionACL:true,runtimeRolesUnprivileged:true,
-  triggers:true,purgeGuard:true,purgeNodes:105,purgeEdges:287,purgeNodeFingerprint:'f51a0de25bd942a250997775617eeaee',purgeEdgeFingerprint:'d'.repeat(32)};
+ return {...workflowUpstreamReworkProof(),readOnly:'on',database:'control_plane',gooseVersion:20261026001400,reviewQAEvidenceProfile:'GITHUB_REVIEW_QA_V1',
+  reviewQAEvidenceSchemaOwner:true,reviewQAEvidenceExactFunctions:true,reviewQAEvidenceFunctionCount:8,reviewQAEvidenceFunctionSources:true,reviewQAEvidenceFunctionMetadata:true,reviewQAEvidenceFunctionACL:true,reviewQAEvidenceRuntimeRolesUnprivileged:true,
+  reviewQAEvidenceTriggers:true,reviewQAEvidencePurgeGuard:true,purgeNodes:105,purgeEdges:287,purgeNodeFingerprint:'f51a0de25bd942a250997775617eeaee',purgeEdgeFingerprint:'d'.repeat(32)};
 }
 
 // Настоящий CLI с отдельным kubectl subprocess доказывает порядок intent/CAS/create и запрет повторов.
@@ -194,7 +208,7 @@ if(a.includes('patch')){
  save();if(a.includes('kube-system'))process.stdout.write(JSON.stringify({metadata:{uid:'cluster'}}));else process.stdout.write(s.namespaceUID);
 }else if(a.includes('bundles.trust.cert-manager.io')){save();process.stdout.write('bundle-uid|1|'+JSON.stringify(s.bundleSpec??{sources:[{secret:{name:'kodex-installation-ca',key:'tls.crt'}}],target:{namespaceSelector:{matchLabels:{'kubernetes.io/metadata.name':'kodex-system'}},configMap:{key:'ca.pem'}}}));
 }else if(a.includes('configmap')){save();process.stdout.write('ca-uid|'+s.dependencyVersion+'|'+(s.caLabel??'control-plane-postgresql-ca')+'|'+JSON.stringify([{apiVersion:'trust.cert-manager.io/v1alpha1',kind:'Bundle',name:'control-plane-postgresql-ca',controller:true,uid:s.caOwner??'bundle-uid'}]));
-}else if(a.includes('exec')){const sql=fs.readFileSync(0,'utf8');if(!sql.includes('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;')||!sql.includes('ROLLBACK;'))fail();if(sql.includes("'reviewQAEvidenceAbsent'")){out({...${JSON.stringify(reviewQAEvidenceProof())},gooseVersion:20261026001300,functionCount:4,reviewQAEvidenceAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes("'reviewQAEvidenceProfile'")){out({...${JSON.stringify(reviewQAEvidenceProof())},...s.postcondition});}else if(sql.includes("'legacyReworkProfile'")){out({...${JSON.stringify(legacyReworkProof())},...s.postcondition});}else if(sql.includes("'legacyReworkAbsent'")){out({...${JSON.stringify(serverWorkflowProof())},legacyPurgeSource:true,legacyReworkAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes('serverWorkflowProfile')){out({...${JSON.stringify(serverWorkflowProof())},...s.postcondition});}else if(sql.includes('runtimeColumnMutationDenied')&&!sql.includes('activeRuntimeRuns')){out({readOnly:'on',database:'control_plane',gooseVersion:20261026000200,tables:2,runtimeRoles:2,runtimeLogins:1,tableOwners:true,runtimeRolesUnprivileged:true,runtimeRead:true,runtimeMutationDenied:true,runtimeColumnMutationDenied:true,runtimeGrantOptionDenied:true,publicPrivilegesRevoked:true,ownerWrite:true,authorizationFunction:true,contextsEmpty:true,...s.postcondition});}else if(sql.includes('expiryColumn')){out({readOnly:'on',database:'control_plane',gooseVersion:20261026000100,tableOwner:'control_plane_owner',expiryColumn:true,stateConstraint:true,resolutionConstraint:true,expiryConstraint:true,dueIndex:true,immutableGuard:true,runtimeExecute:true,publicExecuteRevoked:true,...s.postcondition});}else if(sql.includes('noBodyColumns')){out({readOnly:'on',database:'control_plane',gooseVersion:20261025000200,tableOwner:'control_plane_owner',noBodyColumns:true,foreignKeys:13,deferredForeignKeys:13,guardEnabled:true,retentionConsumer:true,purgeGraphGuard:true,purgeNodes:105,purgeEdges:283,purgeNodeFingerprint:'f51a0de25bd942a250997775617eeaee',purgeEdgeFingerprint:'be6e23d9e894687a69a19e9b5777ab09',...s.postcondition});}else out({readOnly:'on',database:'control_plane',gooseVersion:${config.previousVersion},${config.emptyField}:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,claimedRuntimeLeases:0,openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeArchiveTasks:0,activeModelCatalogTasks:0,activeRenewalTasks:0,...s.precondition});
+}else if(a.includes('exec')){const sql=fs.readFileSync(0,'utf8');if(!sql.includes('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;')||!sql.includes('ROLLBACK;'))fail();if(sql.includes("'reviewQAEvidenceAbsent'")){out({...${JSON.stringify(reviewQAEvidenceProof())},gooseVersion:20261026001300,reviewQAEvidenceFunctionCount:4,reviewQAEvidenceAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes("'reviewQAEvidenceProfile'")){out({...${JSON.stringify(reviewQAEvidenceProof())},...s.postcondition});}else if(sql.includes('workflowUpstreamReworkAbsent')){out({...${JSON.stringify(workflowExceptionContextProof())},workflowUpstreamReworkAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes('workflowUpstreamReworkProfile')){out({...${JSON.stringify(workflowUpstreamReworkProof())},...s.postcondition});}else if(sql.includes('workflowExceptionContextAbsent')){out({...${JSON.stringify(workflowExceptionSchemaProof(20261026001100))},workflowExceptionContextAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,claimedRuntimeLeases:0,openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeArchiveTasks:0,activeModelCatalogTasks:0,activeRenewalTasks:0,...s.precondition});}else if(sql.includes('workflowExceptionContextProfile')){out({...${JSON.stringify(workflowExceptionContextProof())},...s.postcondition});}else if(sql.includes("'legacyReworkProfile'")){out({...${JSON.stringify(legacyReworkProof())},...s.postcondition});}else if(sql.includes("'legacyReworkAbsent'")){out({...${JSON.stringify(serverWorkflowProof())},legacyPurgeSource:true,legacyReworkAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes('serverWorkflowProfile')){out({...${JSON.stringify(serverWorkflowProof())},...s.postcondition});}else if(sql.includes('runtimeColumnMutationDenied')&&!sql.includes('activeRuntimeRuns')){out({readOnly:'on',database:'control_plane',gooseVersion:20261026000200,tables:2,runtimeRoles:2,runtimeLogins:1,tableOwners:true,runtimeRolesUnprivileged:true,runtimeRead:true,runtimeMutationDenied:true,runtimeColumnMutationDenied:true,runtimeGrantOptionDenied:true,publicPrivilegesRevoked:true,ownerWrite:true,authorizationFunction:true,contextsEmpty:true,...s.postcondition});}else if(sql.includes('expiryColumn')){out({readOnly:'on',database:'control_plane',gooseVersion:20261026000100,tableOwner:'control_plane_owner',expiryColumn:true,stateConstraint:true,resolutionConstraint:true,expiryConstraint:true,dueIndex:true,immutableGuard:true,runtimeExecute:true,publicExecuteRevoked:true,...s.postcondition});}else if(sql.includes('noBodyColumns')){out({readOnly:'on',database:'control_plane',gooseVersion:20261025000200,tableOwner:'control_plane_owner',noBodyColumns:true,foreignKeys:13,deferredForeignKeys:13,guardEnabled:true,retentionConsumer:true,purgeGraphGuard:true,purgeNodes:105,purgeEdges:283,purgeNodeFingerprint:'f51a0de25bd942a250997775617eeaee',purgeEdgeFingerprint:'be6e23d9e894687a69a19e9b5777ab09',...s.postcondition});}else out({readOnly:'on',database:'control_plane',gooseVersion:${config.previousVersion},${config.emptyField}:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,claimedRuntimeLeases:0,openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeArchiveTasks:0,activeModelCatalogTasks:0,activeRenewalTasks:0,...s.precondition});
 }else if(a.includes('kodex-postgresql-0')){save();process.stdout.write((s.pgUID??'pg-uid')+'|StatefulSet|kodex-postgresql|sts-uid|kodex-postgresql|Running|');
 }else if(a.some(x=>x.startsWith('jsonpath='))){save();process.stdout.write('dependency-'+a[a.indexOf('get')+1]+'|'+s.dependencyVersion+'|'+(s.applicationOwner??'kodex'));
 }else if(a.includes('deployment'))out(s.deployment);
@@ -661,6 +675,100 @@ test('legacy rework011 refuses altered010 authority or partial011 before STOP or
  }
 });
 
+
+test('immutable registry owns CLI dispatch for every registered profile without caller coercion',()=>{
+ for(const name of ['outbox-index','repository-bundle','owner-gate-expiry','project-purge-authority','server-workflow','legacy-workflow-rework','workflow-exception-context','workflow-upstream-rework']){
+  const profile=immutableMigrationProfile(name);
+  assert.equal(isImmutableMigrationProfile(name),true);
+  const plan=planControlPlaneMigration(base(),source,()=>({revision}),'registry-fixture',name,publication());
+  assert.equal(plan.version,2);assert.equal(plan.profile,name);assert.equal(plan.migrationVersion,profile.version);
+  assert.equal(plan.job.metadata.name,'control-plane-migrate-'+profile.version);
+ }
+ for(const invalid of ['legacy','constructor','__proto__','future-profile',null,[],['workflow-exception-context'],{}])
+  assert.equal(isImmutableMigrationProfile(invalid),false);
+ assert.throws(()=>planControlPlaneMigration(base(),source,()=>({revision}),'registry-fixture','future-profile',publication()),/MIGRATION_PROFILE_INVALID/);
+});
+
+test('012 profile pins exact011 predecessor and keeps earlier schema validators closed',()=>{
+ const config=immutableMigrationProfile('workflow-exception-context');
+ assert.equal(config.version,'20261026001200');assert.equal(config.previousVersion,20261026001100);
+ assert.equal(config.requiredMigrations.length,10);
+ assert.equal(config.requiredMigrations.at(-2),'20261026001100_legacy_workflow_rework.sql');
+ const proof=workflowExceptionContextProof();
+ assert.equal(validWorkflowExceptionContextMigrationPostcondition(proof),true);
+ assert.equal(validImmutableMigrationPostcondition('workflow-exception-context',proof),true);
+ assert.equal(validServerWorkflowMigrationPostcondition(proof),false);
+ assert.equal(validLegacyWorkflowReworkMigrationPostcondition(proof),false);
+ assert.equal(validProjectPurgeAuthorityMigrationPostcondition(proof),false);
+ for(const key of Object.keys(proof)){
+  const missing={...proof};delete missing[key];
+  assert.equal(validWorkflowExceptionContextMigrationPostcondition(missing),false,key);
+  assert.equal(validWorkflowExceptionContextMigrationPostcondition({...proof,[key]:false}),false,key);
+ }
+ const before={...workflowExceptionSchemaProof(20261026001100),workflowExceptionContextAbsent:true};
+ assert.equal(validWorkflowExceptionContextMigrationPrecondition(before),true);
+ for(const key of Object.keys(before)){
+  const missing={...before};delete missing[key];
+  assert.equal(validWorkflowExceptionContextMigrationPrecondition(missing),false,key);
+ }
+ assert.equal(validWorkflowExceptionContextMigrationPrecondition({...before,gooseVersion:20261026001000}),false);
+ assert.equal(validWorkflowExceptionContextMigrationPrecondition({...before,gooseVersion:20261026001200}),false);
+ assert.equal(validWorkflowExceptionContextMigrationPostcondition({...proof,gooseVersion:20261026001100}),false);
+});
+
+test('012 actual immutable CLI requires full011 and exact helpers, then resumes without repeating DDL',t=>{
+ const f=cli(t,'workflow-exception-context');
+ f.edit(s=>s.precondition={legacyFunctions:false});
+ assert.notEqual(f.run('plan').status,0);
+ assert.equal(f.read().calls.filter(a=>a.includes('create')||a.includes('patch')).length,0);
+ f.edit(s=>delete s.precondition);pass(f,'plan','PLANNED');pass(f,'check');pass(f,'stop','STOPPED');
+ f.edit(s=>s.postcondition={workflowContextFunctions:false});
+ assert.notEqual(f.run('apply').status,0);
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,2);
+ f.edit(s=>delete s.postcondition);pass(f,'inspect');pass(f,'resume','RESUMED');
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,2);
+ assert.equal(f.read().deployment.spec.replicas,2);
+});
+
+
+test('013 requires full012 predecessor and exact upstream schema without reopening older validators',()=>{
+ const config=immutableMigrationProfile('workflow-upstream-rework');
+ assert.equal(config.version,'20261026001300');assert.equal(config.previousVersion,20261026001200);
+ assert.equal(config.requiredMigrations.at(-2),'20261026001200_workflow_exception_context.sql');
+ const before={...workflowExceptionContextProof(),workflowUpstreamReworkAbsent:true};
+ assert.equal(validWorkflowUpstreamReworkMigrationPrecondition(before),true);
+ for(const key of Object.keys(before)){
+  const missing={...before};delete missing[key];
+  assert.equal(validWorkflowUpstreamReworkMigrationPrecondition(missing),false,key);
+ }
+ const proof=workflowUpstreamReworkProof();
+ assert.equal(validWorkflowUpstreamReworkMigrationPostcondition(proof),true);
+ assert.equal(validImmutableMigrationPostcondition('workflow-upstream-rework',proof),true);
+ for(const verify of [validServerWorkflowMigrationPostcondition,validLegacyWorkflowReworkMigrationPostcondition,validWorkflowExceptionContextMigrationPostcondition])
+  assert.equal(verify(proof),false);
+ for(const key of Object.keys(proof)){
+  const missing={...proof};delete missing[key];
+  assert.equal(validWorkflowUpstreamReworkMigrationPostcondition(missing),false,key);
+  assert.equal(validWorkflowUpstreamReworkMigrationPostcondition({...proof,[key]:false}),false,key);
+ }
+ for(const version of [20261026001100,20261026001200,20261026001400])
+  assert.equal(validWorkflowUpstreamReworkMigrationPostcondition({...proof,gooseVersion:version}),false);
+});
+
+test('013 actual CLI rejects inherited012 drift before effects and never repeats uncertain DDL',t=>{
+ const f=cli(t,'workflow-upstream-rework');
+ f.edit(s=>s.precondition={workflowContextFunctions:false});
+ assert.notEqual(f.run('plan').status,0);
+ assert.equal(f.read().calls.filter(a=>a.includes('create')||a.includes('patch')).length,0);
+ f.edit(s=>delete s.precondition);pass(f,'plan','PLANNED');pass(f,'check');pass(f,'stop','STOPPED');
+ f.edit(s=>s.postcondition={upstreamForeignKey:false});
+ assert.notEqual(f.run('apply').status,0);
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,2);
+ f.edit(s=>delete s.postcondition);pass(f,'inspect');pass(f,'resume','RESUMED');
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,2);
+ assert.equal(f.read().deployment.spec.replicas,2);
+});
+
 // Новый registry даёт014 тот же once-only maintenance lifecycle; никакой старый verifier не расширяется.
 test('review QA014 is closed and all predecessor metadata are required before maintenance',t=>{
  const proof=reviewQAEvidenceProof();assert.equal(validWorkflowReviewQAEvidenceMigrationPostcondition(proof),true);
@@ -671,7 +779,7 @@ test('review QA014 is closed and all predecessor metadata are required before ma
   const missing={...proof};delete missing[key];assert.equal(validWorkflowReviewQAEvidenceMigrationPostcondition(missing),false,key);
   assert.equal(validWorkflowReviewQAEvidenceMigrationPostcondition({...proof,[key]:false}),false,key);
  }
- for(const [key,value] of Object.entries({gooseVersion:20261026001300,functionCount:3,purgeEdges:286,purgeEdgeFingerprint:'unknown'}))
+ for(const [key,value] of Object.entries({gooseVersion:20261026001300,reviewQAEvidenceFunctionCount:3,purgeEdges:286,purgeEdgeFingerprint:'unknown'}))
   assert.equal(validWorkflowReviewQAEvidenceMigrationPostcondition({...proof,[key]:value}),false,key);
  const config=immutableMigrationProfile('workflow-review-qa-evidence');
  assert.equal(config.previousVersion,20261026001300);assert.equal(config.requiredMigrations.length,12);
@@ -682,7 +790,7 @@ test('review QA014 is closed and all predecessor metadata are required before ma
  assert.equal(f.read().calls.filter(a=>a.includes('create')).length,2);
 });
 test('review QA014 refuses missing012013, changed013 and partial014 without mutations',t=>{
- for(const field of ['reviewQAEvidenceAbsent','functionSources','functionMetadata','functionACL','triggers','purgeGuard']) {
+ for(const field of ['reviewQAEvidenceAbsent','reviewQAEvidenceExactFunctions','reviewQAEvidenceFunctionSources','reviewQAEvidenceFunctionMetadata','reviewQAEvidenceFunctionACL','reviewQAEvidenceTriggers','reviewQAEvidencePurgeGuard',...Object.keys(workflowUpstreamReworkProof()).filter(key=>key!=='gooseVersion')]) {
   const f=cli(t,'workflow-review-qa-evidence');f.edit(s=>s.precondition={[field]:false});
   assert.notEqual(f.run('plan').status,0);assert.equal(f.read().calls.filter(a=>a.includes('create')||a.includes('patch')).length,0);
  }

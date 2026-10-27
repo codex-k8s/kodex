@@ -7,17 +7,10 @@ import { fileURLToPath } from 'node:url';
 import { fingerprint } from './scoped-release.mjs';
 import { inspectSource, planSourceChange } from './application-source.mjs';
 import { privateJournal } from '../dev/role-image-acceptance.mjs';
-import { planImmutableControlPlaneMigration, immutableMigrationExecution, runImmutableControlPlaneMigration, isImmutableMigrationProfile } from './control-plane-immutable-migration.mjs';
+import { planImmutableControlPlaneMigration, immutableMigrationExecution, runImmutableControlPlaneMigration, immutableMigrationProfile, isImmutableMigrationProfile } from './control-plane-immutable-migration.mjs';
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const profiles = {
-  'workflow-review-qa-evidence': { version:'20261026001400', file:'20261026001400_workflow_review_qa_evidence.sql', annotation:'kodex.dev/cp-workflow-review-qa-evidence-migration-plan' },
-  'server-workflow': { version:'20261026001000', file:'20261026001000_workflow_effect_execution_rejoin.sql', annotation:'kodex.dev/cp-server-workflow-migration-plan' },
-  'legacy-workflow-rework': { version:'20261026001100', file:'20261026001100_legacy_workflow_rework.sql', annotation:'kodex.dev/cp-legacy-workflow-rework-migration-plan' },
-  'project-purge-authority': { version:'20261026000200', file:'20261026000200_project_purge_authority_acl.sql', annotation:'kodex.dev/cp-project-purge-authority-migration-plan' },
-  'owner-gate-expiry': { version:'20261026000100', file:'20261026000100_owner_gate_expiry.sql', annotation:'kodex.dev/cp-owner-gate-expiry-migration-plan' },
-  'repository-bundle': { version:'20261025000200', file:'20261025000200_repository_bundle_publications.sql', annotation:'kodex.dev/cp-repository-bundle-migration-plan' },
-  'outbox-index': { version:'20261025000100', file:'20261025000100_outbox_unpublished_predecessor_index.sql', annotation:'kodex.dev/cp-outbox-index-migration-plan' },
   legacy: { version: '20260908000300', file: '20260908000300_email_legacy_package_admission.sql', annotation: 'kodex.dev/cp-migration-plan' },
   'mailbox-observation': { version: '20260908000500', file: '20260908000500_email_mailbox_observation_receipts.sql', annotation: 'kodex.dev/cp-mailbox-migration-plan' },
   'materialization-global': { version: '20260913000100', file: '20260913000100_runtime_materialization_global_identity.sql', annotation: 'kodex.dev/cp-materialization-migration-plan' },
@@ -33,7 +26,10 @@ const profiles = {
   'project-purge-audit-references': { version: '20261019000300', file: '20261019000300_project_purge_audit_references.sql', annotation: 'kodex.dev/cp-project-purge-audit-references-migration-plan' },
   'project-purge-deferred-graph': { version: '20261019000400', file: '20261019000400_project_purge_deferred_graph.sql', annotation: 'kodex.dev/cp-project-purge-deferred-graph-migration-plan' },
 };
-const profileFor = (name = 'legacy') => { ensure(Object.hasOwn(profiles,name),'MIGRATION_PROFILE_INVALID'); return profiles[name]; };
+const profileFor = (name = 'legacy') => {
+  if (isImmutableMigrationProfile(name)) return immutableMigrationProfile(name);
+  ensure(Object.hasOwn(profiles,name),'MIGRATION_PROFILE_INVALID'); return profiles[name];
+};
 const fileDigest = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');
 
 // Узкая фаза только существующего CP migrator в disposable hot-reload профиле.

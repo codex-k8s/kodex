@@ -10,6 +10,14 @@ export const serverTokenTranslations = {
     "Запуск остановлен: полный результат интеграций не помещается в продолжение либо исчерпан предел технических продолжений. Квитанции и файлы сохранены; внешнее действие не повторялось.",
     "The run stopped because its complete integration outcome exceeds the continuation budget or its technical continuation limit. Receipts and files are retained; no external operation was repeated.",
   ],
+  WORKFLOW_REWORK_QUEUED: [
+    "Назначены новые попытки доработки и зависимых проверок",
+    "Fresh rework and dependent-check attempts have been scheduled",
+  ],
+  WORKFLOW_GATE_SUPERSEDED: [
+    "Прежнее согласование утратило актуальность после одобренной доработки",
+    "Previous result approval was superseded by approved rework",
+  ],
   LEGACY_REWORK_READ_LIMIT: [
     "Запуск остановлен: результат чтения не помещается во ввод продолжения. Квитанция чтения и материалы сохранены; начните отдельный процесс с меньшим вводом.",
     "The run stopped because the read result exceeds the continuation input budget. Its receipt and artifacts are retained; start a separate workflow with smaller input.",

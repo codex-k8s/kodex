@@ -15,10 +15,14 @@ import (
 // TestWorkflowReviewQAEvidenceMigrationProofComponent исполняет поставляемую read-only014 proof на canonical и отдельно изменённых disposable clones без подготовки business rows.
 func TestWorkflowReviewQAEvidenceMigrationProofComponent(t *testing.T) {
 	for _, fixture := range []struct{ name, rejected string }{
-		{"canonical", ""}, {"partial_trigger", "triggers"}, {"public_execute", "functionACL"},
-		{"changed_function", "functionSources"}, {"definer", "functionMetadata"},
-		{"changed_purge_body", "purgeGuard"}, {"missing_function", "functionSources"},
-		{"retention_body", "functionSources"}, {"custody_execute", "functionACL"},
+		{"canonical", ""}, {"partial_trigger", "reviewQAEvidenceTriggers"}, {"public_execute", "reviewQAEvidenceFunctionACL"},
+		{"changed_function", "reviewQAEvidenceFunctionSources"}, {"definer", "reviewQAEvidenceFunctionMetadata"},
+		{"changed_purge_body", "reviewQAEvidencePurgeGuard"}, {"missing_function", "reviewQAEvidenceFunctionSources"},
+		{"retention_body", "reviewQAEvidenceFunctionSources"}, {"custody_execute", "reviewQAEvidenceFunctionACL"}, {"extra_overload", "reviewQAEvidenceExactFunctions"},
+		{"predecessor_context", "workflowContextFunctions"},
+		{"predecessor_context_acl", "workflowContextFunctions"},
+		{"predecessor_reader", "functionSources"},
+		{"predecessor_gate_grouping", "upstreamConstraint"},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
@@ -78,12 +82,17 @@ func TestWorkflowReviewQAEvidenceMigrationProofComponent(t *testing.T) {
 				}
 				return
 			}
-			for _, field := range []string{"schemaOwner", "functionSources", "functionMetadata", "functionACL", "runtimeRolesUnprivileged", "triggers", "purgeGuard"} {
+			for _, field := range []string{"schemaOwner", "columns", "constraints", "indexes", "triggers", "functionSources", "functionMetadata", "functionACL",
+				"visibilitySource", "retentionSource", "runtimeColumnAccess", "purgeGraphGuard", "bundleNoBodyColumns", "bundleGuard",
+				"tableOwners", "runtimeRolesUnprivileged", "runtimeRead", "runtimeMutationDenied", "runtimeColumnMutationDenied", "runtimeGrantOptionDenied",
+				"publicPrivilegesRevoked", "ownerWrite", "authorizationFunction", "contextsEmpty", "legacyColumns", "legacyForeignKeys", "legacyConstraint",
+				"legacyIndexes", "legacyTriggers", "legacyFunctions", "legacyColumnAccess", "legacyPurgeSource", "workflowContextFunctions", "workflowContextExactFunctions", "upstreamFunctions", "upstreamExactFunctions",
+				"upstreamColumns", "upstreamForeignKey", "upstreamConstraint", "upstreamIndex", "upstreamTriggers", "upstreamColumnAccess", "reviewQAEvidenceSchemaOwner", "reviewQAEvidenceExactFunctions", "reviewQAEvidenceFunctionSources", "reviewQAEvidenceFunctionMetadata", "reviewQAEvidenceFunctionACL", "reviewQAEvidenceRuntimeRolesUnprivileged", "reviewQAEvidenceTriggers", "reviewQAEvidencePurgeGuard"} {
 				if proof[field] != true {
 					t.Error("canonical review QA proof rejected", field)
 				}
 			}
-			if proof["functionCount"] != float64(8) || proof["purgeNodes"] != float64(105) || proof["purgeEdges"] != float64(287) {
+			if proof["reviewQAEvidenceFunctionCount"] != float64(8) || proof["purgeNodes"] != float64(105) || proof["purgeEdges"] != float64(287) {
 				t.Fatal("review QA schema composition mismatch")
 			}
 		})

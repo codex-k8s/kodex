@@ -37,7 +37,7 @@ type workflowEvidenceNativeFixture struct {
 // completion, negative history и replay. Trusted IG completion задаёт provider-shaped facts;
 // оснастка не заявляет внешний GitHub delivery либо автоматическую аттестацию QA commands.
 func TestWorkflowReviewQAEvidenceComponent(t *testing.T) {
-	for _, mode := range []string{"review-effect-first", "review-model-first", "review-unknown", "review-cancel", "review-revoked", "qa-pass", "qa-changes-no-issue", "qa-issue-effect-first", "qa-issue-model-first", "qa-issue-retention-known-cancel", "qa-issue-retention-unknown-cancel", "qa-issue-retention-unknown-model-first", "qa-issue-retention-unknown-revoke", "qa-issue-retention-unknown-expiry", "qa-issue-retention-head-deleted", "qa-issue-retention-head-lock"} {
+	for _, mode := range []string{"mixed-valid", "mixed-missing-comment", "mixed-changed-revision", "mixed-changed-digest", "review-effect-first", "review-model-first", "review-unknown", "review-cancel", "review-revoked", "qa-pass", "qa-changes-no-issue", "qa-issue-effect-first", "qa-issue-model-first", "qa-issue-retention-known-cancel", "qa-issue-retention-unknown-cancel", "qa-issue-retention-unknown-model-first", "qa-issue-retention-unknown-revoke", "qa-issue-retention-unknown-expiry", "qa-issue-retention-head-deleted", "qa-issue-retention-head-lock"} {
 		t.Run(mode, func(t *testing.T) { runWorkflowEvidenceNative(t, mode) })
 	}
 }
@@ -244,6 +244,10 @@ func runWorkflowEvidenceNative(t *testing.T, mode string) {
 	f.projectRef = project.Ref
 	manager := createLifecycleAgent(t, ctx, service, owner, project.Ref, "evidence-manager", "Менеджер")
 	author := createLifecycleAgent(t, ctx, service, owner, project.Ref, "evidence-author", "Разработчик")
+	mixed := strings.HasPrefix(mode, "mixed-")
+	if mixed {
+		author = *f.execute(command.ChangeAgentCapability, "author-artifact", &author.Version, command.AgentBindingInput{AgentRef: author.Ref, BindingRef: runtimecontract.ArtifactCapability, Enabled: true}).Agent
+	}
 	reviewer := createLifecycleAgent(t, ctx, service, owner, project.Ref, "evidence-reviewer", "Независимая проверка")
 	reviewer = *f.execute(command.ChangeAgentCapability, "evidence-artifact", &reviewer.Version, command.AgentBindingInput{AgentRef: reviewer.Ref, BindingRef: runtimecontract.ArtifactCapability, Enabled: true}).Agent
 	f.managerRef, f.agents["author"], f.agents["check"] = manager.Ref, author.Ref, reviewer.Ref
@@ -268,6 +272,12 @@ func runWorkflowEvidenceNative(t *testing.T, mode string) {
 		check.ResultRequirements = []entity.WorkflowResultRequirement{{Key: "log", Kind: "ARTIFACT", FileName: "test-output.txt", MediaType: "text/markdown"}, {Key: "report", Kind: "ARTIFACT", FileName: "qa-report.json", MediaType: "application/json"}, {Key: "qa", Kind: "QA", SubjectStepKey: "author", EvidenceKey: "report"}}
 	}
 	draft := entity.WorkflowVersion{ExecutionMode: "SERVER_DAG_V1", ResultEvidenceProfile: workflowservice.GitHubReviewQAV1, Name: "Native evidence", Purpose: "Проверить owner pins, не external delivery.", CoordinatorAgentRef: manager.Ref, Concurrency: 2, TimeoutSeconds: 240, ResultSchema: map[string]any{}, Steps: []entity.WorkflowStep{{Key: "author", Position: 1, Name: "PR", Instructions: "Создать точный PR.", AgentRef: author.Ref, TimeoutSeconds: 120, RequiredCapabilityKeys: []string{"github.pull_request.create"}, ResultRequirements: []entity.WorkflowResultRequirement{{Key: "pr", Kind: "PULL_REQUEST", Repository: "fixture/repository"}}}, check}}
+	if mixed {
+		draft.ReworkPolicy = workflowservice.OwnerApprovedUpstreamV1
+		draft.Steps[0].RequiredCapabilityKeys = append(draft.Steps[0].RequiredCapabilityKeys, runtimecontract.ArtifactCapability)
+		draft.Steps[0].ResultRequirements = append(draft.Steps[0].ResultRequirements, entity.WorkflowResultRequirement{Key: "spec", Kind: "ARTIFACT", FileName: "spec.md", MediaType: "text/markdown"})
+		draft.Steps[1].ResultRequirements = append([]entity.WorkflowResultRequirement{{Key: "design", Kind: "ARTIFACT_REVIEW", SubjectStepKey: "author", SubjectResultKey: "spec"}}, draft.Steps[1].ResultRequirements...)
+	}
 	if strings.HasSuffix(mode, "unknown-expiry") {
 		draft.TimeoutSeconds, draft.Steps[0].TimeoutSeconds, draft.Steps[1].TimeoutSeconds = 45, 40, 40
 	}
@@ -286,7 +296,13 @@ func runWorkflowEvidenceNative(t *testing.T, mode string) {
 	}
 	sha := strings.Repeat("a", 40)
 	prReceipt := fixture.finishEffect(pr, "github-pull:7", `{"number":7,"state":"open","sha":"`+sha+`","draft":false}`)
-	fixture.complete(authorLease, evidenceDeclaration(entity.WorkflowDeclaredResult{Key: "pr", ReceiptRef: prReceipt}))
+	var subjectArtifact entity.Artifact
+	if mixed {
+		completed := fixture.complete(authorLease, evidenceDeclaration(entity.WorkflowDeclaredResult{Key: "pr", ReceiptRef: prReceipt}, entity.WorkflowDeclaredResult{Key: "spec", Source: &entity.WorkflowArtifactSource{Kind: "CURRENT_COMPLETION"}}), workflowCaptureProgressArtifact("spec.md", []byte("Owner captured source requiring design changes.")))
+		subjectArtifact = fixture.captured(completed)
+	} else {
+		fixture.complete(authorLease, evidenceDeclaration(entity.WorkflowDeclaredResult{Key: "pr", ReceiptRef: prReceipt}))
+	}
 	lease := fixture.claim(reviewer.Ref)
 	if !strings.Contains(stringMap(lease, "task"), "GITHUB_REVIEW_QA_V1") {
 		t.Fatal("evidence profile guidance missing from actual task")
@@ -334,7 +350,21 @@ func runWorkflowEvidenceNative(t *testing.T, mode string) {
 				t.Fatal("fresh COMMENT continuation repeated or lost native fact", completionOutcomeClass(err))
 			}
 		}
-		fixture.complete(lease, evidenceDeclaration(entity.WorkflowDeclaredResult{Key: "review", HeadSHA: sha, Verdict: "PASS", ReceiptRef: receipt}))
+		if mixed {
+			source := evidenceCapturedSource(subjectArtifact)
+			if mode == "mixed-changed-revision" {
+				source.Revision++
+			}
+			if mode == "mixed-changed-digest" {
+				source.Digest = "sha256:" + strings.Repeat("b", 64)
+			}
+			if mode == "mixed-missing-comment" {
+				receipt = ""
+			}
+			fixture.complete(lease, evidenceDeclaration(entity.WorkflowDeclaredResult{Key: "design", Source: source, Verdict: "CHANGES_REQUIRED"}, entity.WorkflowDeclaredResult{Key: "review", HeadSHA: sha, Verdict: "PASS", ReceiptRef: receipt}))
+		} else {
+			fixture.complete(lease, evidenceDeclaration(entity.WorkflowDeclaredResult{Key: "review", HeadSHA: sha, Verdict: "PASS", ReceiptRef: receipt}))
+		}
 	} else {
 		logProgress := `{"schema":"kodex.workflow-capture-progress.v1","phase":"CAPTURE_PROGRESS","cause":"ARTIFACTS_FOR_CONTINUATION","artifactKeys":["log"]}`
 		logFiles := []command.CompletedArtifact{workflowCaptureProgressArtifact("test-output.txt", []byte("Fixture-reported command output; no real business tests are claimed.\n"))}
@@ -424,7 +454,21 @@ func runWorkflowEvidenceNative(t *testing.T, mode string) {
 		for _, attempt := range node.WorkflowResults {
 			if attempt.RunRef == stringMap(lease, "runRef") {
 				found = true
-				if issue || mode == "qa-changes-no-issue" {
+				if mixed {
+					expected := workflowChangesRequired
+					facts := 2
+					if mode == "mixed-missing-comment" {
+						expected = workflowDeclarationInvalid
+						facts = 0
+					}
+					if mode == "mixed-changed-revision" || mode == "mixed-changed-digest" {
+						expected = workflowReviewSubjectMismatch
+						facts = 0
+					}
+					if attempt.Accepted || attempt.Reason != expected || len(attempt.Results) != 0 || len(attempt.ReviewEvidence) != facts {
+						t.Fatal("mixed mandatory predicates or negative owner facts changed", attempt.Reason)
+					}
+				} else if issue || mode == "qa-changes-no-issue" {
 					if attempt.Accepted || attempt.Reason != "CHANGES_REQUIRED" || len(attempt.Results) != 0 || len(attempt.ReviewEvidence) != 3 {
 						t.Fatal("negative report facts became acceptance or were lost")
 					}
@@ -437,7 +481,7 @@ func runWorkflowEvidenceNative(t *testing.T, mode string) {
 	if !found {
 		t.Fatal("business evidence history missing")
 	}
-	if issue || mode == "qa-changes-no-issue" {
+	if mixed || issue || mode == "qa-changes-no-issue" {
 		if current.State != "RUNNING" && current.State != "WAITING_HUMAN" {
 			t.Fatal("negative QA did not reach canonical exception")
 		}

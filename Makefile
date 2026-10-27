@@ -102,6 +102,14 @@ test-interaction-gateway-postgres:
 test-workflow-server-postgres: check-go-toolchain
 	@timeout --kill-after=10s 240s bash scripts/tests/workflow-server-postgres-test.sh
 
+.PHONY: test-workflow-exception-context-postgres
+test-workflow-exception-context-postgres: check-go-toolchain
+	@timeout --kill-after=10s 300s bash scripts/tests/control-plane-postgres-test.sh '^(TestWorkflowExceptionContextComponent|TestWorkflowExceptionContextMigrationProofComponent|TestServerWorkflowMigrationProofComponent|TestLegacyWorkflowReworkMigrationProofComponent|TestWorkflowExceptionRecoveryComponent|TestServerWorkflowRetrySnapshotComponent)$$'
+
+.PHONY: test-workflow-upstream-rework-postgres
+test-workflow-upstream-rework-postgres: check-go-toolchain
+	@timeout --kill-after=10s 300s bash scripts/tests/control-plane-postgres-test.sh '^(TestWorkflowUpstreamReworkComponent|TestWorkflowUpstreamReworkMigrationProofComponent|TestWorkflowExceptionContextComponent|TestWorkflowExceptionContextMigrationProofComponent|TestServerWorkflowMigrationProofComponent|TestLegacyWorkflowReworkMigrationProofComponent)$$'
+
 .PHONY: test-workflow-artifact-query-postgres
 test-workflow-artifact-query-postgres: check-go-toolchain
 	@timeout --kill-after=10s 240s bash scripts/tests/control-plane-postgres-test.sh '^TestWorkflowArtifactQueryBoundaryComponent$$'

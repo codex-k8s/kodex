@@ -3754,6 +3754,21 @@ func (e OwnerGateDecision) Valid() bool {
 	}
 }
 
+// Defines values for OwnerGateResolutionKind.
+const (
+	SUPERSEDED OwnerGateResolutionKind = "SUPERSEDED"
+)
+
+// Valid indicates whether the value is a known member of the OwnerGateResolutionKind enum.
+func (e OwnerGateResolutionKind) Valid() bool {
+	switch e {
+	case SUPERSEDED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OwnerGateScopeKind.
 const (
 	OwnerGateScopeKindORGANIZATION OwnerGateScopeKind = "ORGANIZATION"
@@ -8584,15 +8599,15 @@ func (e WorkflowExecutionMode) Valid() bool {
 	}
 }
 
-// Defines values for WorkflowResultEvidenceProfile.
+// Defines values for WorkflowReworkPolicy.
 const (
-	WorkflowResultEvidenceProfileGITHUBREVIEWQAV1 WorkflowResultEvidenceProfile = "GITHUB_REVIEW_QA_V1"
+	WorkflowReworkPolicyOWNERAPPROVEDUPSTREAMV1 WorkflowReworkPolicy = "OWNER_APPROVED_UPSTREAM_V1"
 )
 
-// Valid indicates whether the value is a known member of the WorkflowResultEvidenceProfile enum.
-func (e WorkflowResultEvidenceProfile) Valid() bool {
+// Valid indicates whether the value is a known member of the WorkflowReworkPolicy enum.
+func (e WorkflowReworkPolicy) Valid() bool {
 	switch e {
-	case WorkflowResultEvidenceProfileGITHUBREVIEWQAV1:
+	case WorkflowReworkPolicyOWNERAPPROVEDUPSTREAMV1:
 		return true
 	default:
 		return false
@@ -8626,6 +8641,7 @@ func (e WorkflowState) Valid() bool {
 // Defines values for WorkflowAcceptedResultKind.
 const (
 	WorkflowAcceptedResultKindARTIFACT           WorkflowAcceptedResultKind = "ARTIFACT"
+	WorkflowAcceptedResultKindARTIFACTREVIEW     WorkflowAcceptedResultKind = "ARTIFACT_REVIEW"
 	WorkflowAcceptedResultKindDEPLOYMENT         WorkflowAcceptedResultKind = "DEPLOYMENT"
 	WorkflowAcceptedResultKindINTEGRATIONRECEIPT WorkflowAcceptedResultKind = "INTEGRATION_RECEIPT"
 	WorkflowAcceptedResultKindPULLREQUEST        WorkflowAcceptedResultKind = "PULL_REQUEST"
@@ -8637,6 +8653,8 @@ const (
 func (e WorkflowAcceptedResultKind) Valid() bool {
 	switch e {
 	case WorkflowAcceptedResultKindARTIFACT:
+		return true
+	case WorkflowAcceptedResultKindARTIFACTREVIEW:
 		return true
 	case WorkflowAcceptedResultKindDEPLOYMENT:
 		return true
@@ -8655,16 +8673,43 @@ func (e WorkflowAcceptedResultKind) Valid() bool {
 
 // Defines values for WorkflowAcceptedResultVerdict.
 const (
-	CHANGESREQUIRED WorkflowAcceptedResultVerdict = "CHANGES_REQUIRED"
-	PASS            WorkflowAcceptedResultVerdict = "PASS"
+	PASS WorkflowAcceptedResultVerdict = "PASS"
 )
 
 // Valid indicates whether the value is a known member of the WorkflowAcceptedResultVerdict enum.
 func (e WorkflowAcceptedResultVerdict) Valid() bool {
 	switch e {
-	case CHANGESREQUIRED:
-		return true
 	case PASS:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowAttemptResultEffectiveState.
+const (
+	BLOCKED         WorkflowAttemptResultEffectiveState = "BLOCKED"
+	CURRENT         WorkflowAttemptResultEffectiveState = "CURRENT"
+	HISTORICAL      WorkflowAttemptResultEffectiveState = "HISTORICAL"
+	REWORKPENDING   WorkflowAttemptResultEffectiveState = "REWORK_PENDING"
+	STALEDEPENDENCY WorkflowAttemptResultEffectiveState = "STALE_DEPENDENCY"
+	WAITINGOWNER    WorkflowAttemptResultEffectiveState = "WAITING_OWNER"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowAttemptResultEffectiveState enum.
+func (e WorkflowAttemptResultEffectiveState) Valid() bool {
+	switch e {
+	case BLOCKED:
+		return true
+	case CURRENT:
+		return true
+	case HISTORICAL:
+		return true
+	case REWORKPENDING:
+		return true
+	case STALEDEPENDENCY:
+		return true
+	case WAITINGOWNER:
 		return true
 	default:
 		return false
@@ -8710,15 +8755,15 @@ func (e WorkflowDraftSnapshotExecutionMode) Valid() bool {
 	}
 }
 
-// Defines values for WorkflowDraftSnapshotResultEvidenceProfile.
+// Defines values for WorkflowDraftSnapshotReworkPolicy.
 const (
-	WorkflowDraftSnapshotResultEvidenceProfileGITHUBREVIEWQAV1 WorkflowDraftSnapshotResultEvidenceProfile = "GITHUB_REVIEW_QA_V1"
+	WorkflowDraftSnapshotReworkPolicyOWNERAPPROVEDUPSTREAMV1 WorkflowDraftSnapshotReworkPolicy = "OWNER_APPROVED_UPSTREAM_V1"
 )
 
-// Valid indicates whether the value is a known member of the WorkflowDraftSnapshotResultEvidenceProfile enum.
-func (e WorkflowDraftSnapshotResultEvidenceProfile) Valid() bool {
+// Valid indicates whether the value is a known member of the WorkflowDraftSnapshotReworkPolicy enum.
+func (e WorkflowDraftSnapshotReworkPolicy) Valid() bool {
 	switch e {
-	case WorkflowDraftSnapshotResultEvidenceProfileGITHUBREVIEWQAV1:
+	case WorkflowDraftSnapshotReworkPolicyOWNERAPPROVEDUPSTREAMV1:
 		return true
 	default:
 		return false
@@ -8767,18 +8812,15 @@ func (e WorkflowInputExecutionMode) Valid() bool {
 	}
 }
 
-// Defines values for WorkflowInputResultEvidenceProfile.
+// Defines values for WorkflowInputReworkPolicy.
 const (
-	Empty            WorkflowInputResultEvidenceProfile = ""
-	GITHUBREVIEWQAV1 WorkflowInputResultEvidenceProfile = "GITHUB_REVIEW_QA_V1"
+	OWNERAPPROVEDUPSTREAMV1 WorkflowInputReworkPolicy = "OWNER_APPROVED_UPSTREAM_V1"
 )
 
-// Valid indicates whether the value is a known member of the WorkflowInputResultEvidenceProfile enum.
-func (e WorkflowInputResultEvidenceProfile) Valid() bool {
+// Valid indicates whether the value is a known member of the WorkflowInputReworkPolicy enum.
+func (e WorkflowInputReworkPolicy) Valid() bool {
 	switch e {
-	case Empty:
-		return true
-	case GITHUBREVIEWQAV1:
+	case OWNERAPPROVEDUPSTREAMV1:
 		return true
 	default:
 		return false
@@ -8893,6 +8935,7 @@ func (e WorkflowLaunchReadinessReason) Valid() bool {
 // Defines values for WorkflowResultRequirementKind.
 const (
 	WorkflowResultRequirementKindARTIFACT           WorkflowResultRequirementKind = "ARTIFACT"
+	WorkflowResultRequirementKindARTIFACTREVIEW     WorkflowResultRequirementKind = "ARTIFACT_REVIEW"
 	WorkflowResultRequirementKindDEPLOYMENT         WorkflowResultRequirementKind = "DEPLOYMENT"
 	WorkflowResultRequirementKindINTEGRATIONRECEIPT WorkflowResultRequirementKind = "INTEGRATION_RECEIPT"
 	WorkflowResultRequirementKindPULLREQUEST        WorkflowResultRequirementKind = "PULL_REQUEST"
@@ -8904,6 +8947,8 @@ const (
 func (e WorkflowResultRequirementKind) Valid() bool {
 	switch e {
 	case WorkflowResultRequirementKindARTIFACT:
+		return true
+	case WorkflowResultRequirementKindARTIFACTREVIEW:
 		return true
 	case WorkflowResultRequirementKindDEPLOYMENT:
 		return true
@@ -8932,6 +8977,39 @@ func (e WorkflowResultRequirementOperation) Valid() bool {
 	case GithubPullRequestMerge:
 		return true
 	case SshComposeDeploy:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowReworkPreviewBlockReason.
+const (
+	WORKFLOWATTEMPTSEXHAUSTED                WorkflowReworkPreviewBlockReason = "WORKFLOW_ATTEMPTS_EXHAUSTED"
+	WORKFLOWIRREVERSIBLEEFFECTREPAIRREQUIRED WorkflowReworkPreviewBlockReason = "WORKFLOW_IRREVERSIBLE_EFFECT_REPAIR_REQUIRED"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowReworkPreviewBlockReason enum.
+func (e WorkflowReworkPreviewBlockReason) Valid() bool {
+	switch e {
+	case WORKFLOWATTEMPTSEXHAUSTED:
+		return true
+	case WORKFLOWIRREVERSIBLEEFFECTREPAIRREQUIRED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowReworkPreviewSchema.
+const (
+	KodexWorkflowUpstreamReworkPreviewV1 WorkflowReworkPreviewSchema = "kodex.workflow-upstream-rework-preview.v1"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowReworkPreviewSchema enum.
+func (e WorkflowReworkPreviewSchema) Valid() bool {
+	switch e {
+	case KodexWorkflowUpstreamReworkPreviewV1:
 		return true
 	default:
 		return false
@@ -12723,6 +12801,8 @@ type OwnerGate struct {
 	Ref                        OpaqueRef                      `json:"ref"`
 	RequestedBy                UserSummary                    `json:"requestedBy"`
 	ResolutionAttachmentSetRef *OpaqueRef                     `json:"resolutionAttachmentSetRef,omitempty"`
+	ResolutionKind             *OwnerGateResolutionKind       `json:"resolutionKind,omitempty"`
+	ReworkPlan                 *WorkflowReworkPreview         `json:"reworkPlan,omitempty"`
 	RunRef                     OpaqueRef                      `json:"runRef"`
 	ScopeKind                  OwnerGateScopeKind             `json:"scopeKind"`
 	SourceAttachmentSetRef     *OpaqueRef                     `json:"sourceAttachmentSetRef,omitempty"`
@@ -12736,6 +12816,9 @@ type OwnerGateAllowedDecisions string
 
 // OwnerGateDecision defines model for OwnerGate.Decision.
 type OwnerGateDecision string
+
+// OwnerGateResolutionKind defines model for OwnerGate.ResolutionKind.
+type OwnerGateResolutionKind string
 
 // OwnerGateScopeKind defines model for OwnerGate.ScopeKind.
 type OwnerGateScopeKind string
@@ -15856,26 +15939,26 @@ type Workflow struct {
 	PublishedRevisionRef *OpaqueRef `json:"publishedRevisionRef,omitempty"`
 	Purpose              string     `json:"purpose"`
 	Ref                  OpaqueRef  `json:"ref"`
-
-	// ResultEvidenceProfile Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
-	ResultEvidenceProfile *WorkflowResultEvidenceProfile `json:"resultEvidenceProfile,omitempty"`
-	Revision              *int                           `json:"revision,omitempty"`
+	Revision             *int       `json:"revision,omitempty"`
 
 	// RevisionRef Точная owner revision отображаемых steps/inputFields; опубликованная, иначе сохранённый draft. Отсутствует без обеих revisions.
-	RevisionRef        *OpaqueRef     `json:"revisionRef,omitempty"`
-	State              WorkflowState  `json:"state"`
-	Steps              []WorkflowStep `json:"steps"`
-	TimeoutSeconds     *int           `json:"timeoutSeconds,omitempty"`
-	UpdatedAt          Timestamp      `json:"updatedAt"`
-	ValidationMessages []string       `json:"validationMessages"`
-	Version            int64          `json:"version"`
+	RevisionRef *OpaqueRef `json:"revisionRef,omitempty"`
+
+	// ReworkPolicy Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
+	ReworkPolicy       *WorkflowReworkPolicy `json:"reworkPolicy,omitempty"`
+	State              WorkflowState         `json:"state"`
+	Steps              []WorkflowStep        `json:"steps"`
+	TimeoutSeconds     *int                  `json:"timeoutSeconds,omitempty"`
+	UpdatedAt          Timestamp             `json:"updatedAt"`
+	ValidationMessages []string              `json:"validationMessages"`
+	Version            int64                 `json:"version"`
 }
 
 // WorkflowExecutionMode defines model for Workflow.ExecutionMode.
 type WorkflowExecutionMode string
 
-// WorkflowResultEvidenceProfile Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
-type WorkflowResultEvidenceProfile string
+// WorkflowReworkPolicy Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
+type WorkflowReworkPolicy string
 
 // WorkflowState defines model for Workflow.State.
 type WorkflowState string
@@ -15904,17 +15987,18 @@ type WorkflowAcceptedResultKind string
 // WorkflowAcceptedResultVerdict defines model for WorkflowAcceptedResult.Verdict.
 type WorkflowAcceptedResultVerdict string
 
-// WorkflowAttemptResult Закрытый typed snapshot. Отношения accepted/results/evidence проверяются общим API validator и каждым PWA graph/event ingress; evidence разрешено только при accepted=false, reason=CHANGES_REQUIRED, results=[] и наличии отрицательного REVIEW/QA.
+// WorkflowAttemptResult defines model for WorkflowAttemptResult.
 type WorkflowAttemptResult struct {
-	Accepted bool `json:"accepted"`
-	Attempt  int  `json:"attempt"`
-
-	// Evidence Проверенные факты отклонённого REVIEW/QA; accepted=false, reason=CHANGES_REQUIRED, results остаётся пустым.
-	Evidence *[]WorkflowAcceptedResult `json:"evidence,omitempty"`
-	Reason   string                    `json:"reason"`
-	Results  []WorkflowAcceptedResult  `json:"results"`
-	RunRef   OpaqueRef                 `json:"runRef"`
+	Accepted       bool                                 `json:"accepted"`
+	Attempt        int                                  `json:"attempt"`
+	EffectiveState *WorkflowAttemptResultEffectiveState `json:"effectiveState,omitempty"`
+	Reason         string                               `json:"reason"`
+	Results        []WorkflowAcceptedResult             `json:"results"`
+	RunRef         OpaqueRef                            `json:"runRef"`
 }
+
+// WorkflowAttemptResultEffectiveState defines model for WorkflowAttemptResult.EffectiveState.
+type WorkflowAttemptResultEffectiveState string
 
 // WorkflowCardSummary Единая owner projection для get/list/project/global и командного readback. Использует опубликованную revision, иначе draft; HTTP и PWA не пересчитывают значения из steps или частичной страницы.
 type WorkflowCardSummary struct {
@@ -15945,22 +16029,22 @@ type WorkflowDraftSnapshot struct {
 	InputFields         []WorkflowInputField                `json:"inputFields"`
 	MaxConcurrency      *int                                `json:"maxConcurrency,omitempty"`
 	Ref                 OpaqueRef                           `json:"ref"`
+	Revision            int                                 `json:"revision"`
 
-	// ResultEvidenceProfile Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
-	ResultEvidenceProfile *WorkflowDraftSnapshotResultEvidenceProfile `json:"resultEvidenceProfile,omitempty"`
-	Revision              int                                         `json:"revision"`
-	State                 WorkflowDraftSnapshotState                  `json:"state"`
-	Steps                 []WorkflowStep                              `json:"steps"`
-	TimeoutSeconds        *int                                        `json:"timeoutSeconds,omitempty"`
-	ValidationMessages    []string                                    `json:"validationMessages"`
-	Version               int64                                       `json:"version"`
+	// ReworkPolicy Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
+	ReworkPolicy       *WorkflowDraftSnapshotReworkPolicy `json:"reworkPolicy,omitempty"`
+	State              WorkflowDraftSnapshotState         `json:"state"`
+	Steps              []WorkflowStep                     `json:"steps"`
+	TimeoutSeconds     *int                               `json:"timeoutSeconds,omitempty"`
+	ValidationMessages []string                           `json:"validationMessages"`
+	Version            int64                              `json:"version"`
 }
 
 // WorkflowDraftSnapshotExecutionMode defines model for WorkflowDraftSnapshot.ExecutionMode.
 type WorkflowDraftSnapshotExecutionMode string
 
-// WorkflowDraftSnapshotResultEvidenceProfile Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
-type WorkflowDraftSnapshotResultEvidenceProfile string
+// WorkflowDraftSnapshotReworkPolicy Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
+type WorkflowDraftSnapshotReworkPolicy string
 
 // WorkflowDraftSnapshotState defines model for WorkflowDraftSnapshot.State.
 type WorkflowDraftSnapshotState string
@@ -15975,17 +16059,17 @@ type WorkflowInput struct {
 	Name                string                      `json:"name"`
 	Purpose             string                      `json:"purpose"`
 
-	// ResultEvidenceProfile Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия. Пустое значение снимает draft opt-in; весь итоговый граф заново проверяется.
-	ResultEvidenceProfile *WorkflowInputResultEvidenceProfile `json:"resultEvidenceProfile,omitempty"`
-	Steps                 *[]WorkflowStepInput                `json:"steps,omitempty"`
-	TimeoutSeconds        *int                                `json:"timeoutSeconds,omitempty"`
+	// ReworkPolicy Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
+	ReworkPolicy   *WorkflowInputReworkPolicy `json:"reworkPolicy,omitempty"`
+	Steps          *[]WorkflowStepInput       `json:"steps,omitempty"`
+	TimeoutSeconds *int                       `json:"timeoutSeconds,omitempty"`
 }
 
 // WorkflowInputExecutionMode defines model for WorkflowInput.ExecutionMode.
 type WorkflowInputExecutionMode string
 
-// WorkflowInputResultEvidenceProfile Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия. Пустое значение снимает draft opt-in; весь итоговый граф заново проверяется.
-type WorkflowInputResultEvidenceProfile string
+// WorkflowInputReworkPolicy Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
+type WorkflowInputReworkPolicy string
 
 // WorkflowInputField defines model for WorkflowInputField.
 type WorkflowInputField struct {
@@ -16037,14 +16121,15 @@ type WorkflowPage struct {
 
 // WorkflowResultRequirement defines model for WorkflowResultRequirement.
 type WorkflowResultRequirement struct {
-	// EvidenceKey Только QA выбранного профиля; ключ ARTIFACT application/json того же шага.
-	EvidenceKey *string                             `json:"evidenceKey,omitempty"`
-	FileName    *string                             `json:"fileName,omitempty"`
-	Key         string                              `json:"key"`
-	Kind        WorkflowResultRequirementKind       `json:"kind"`
-	MediaType   *string                             `json:"mediaType,omitempty"`
-	Operation   *WorkflowResultRequirementOperation `json:"operation,omitempty"`
-	Repository  *string                             `json:"repository,omitempty"`
+	FileName   *string                             `json:"fileName,omitempty"`
+	Key        string                              `json:"key"`
+	Kind       WorkflowResultRequirementKind       `json:"kind"`
+	MediaType  *string                             `json:"mediaType,omitempty"`
+	Operation  *WorkflowResultRequirementOperation `json:"operation,omitempty"`
+	Repository *string                             `json:"repository,omitempty"`
+
+	// SubjectResultKey Логический ключ шага внутри одной версии процесса; не является ссылкой на ресурс или источником полномочий.
+	SubjectResultKey *WorkflowStepKey `json:"subjectResultKey,omitempty"`
 
 	// SubjectStepKey Логический ключ шага внутри одной версии процесса; не является ссылкой на ресурс или источником полномочий.
 	SubjectStepKey *WorkflowStepKey `json:"subjectStepKey,omitempty"`
@@ -16065,6 +16150,29 @@ type WorkflowRetryReadProof struct {
 	StepKey                 string    `json:"stepKey"`
 	WorkflowVersionDigest   string    `json:"workflowVersionDigest"`
 	WorkflowVersionRef      OpaqueRef `json:"workflowVersionRef"`
+}
+
+// WorkflowReworkPreview defines model for WorkflowReworkPreview.
+type WorkflowReworkPreview struct {
+	Authors       []WorkflowReworkStepPreview       `json:"authors"`
+	BlockReason   *WorkflowReworkPreviewBlockReason `json:"blockReason,omitempty"`
+	Rechecks      []WorkflowReworkStepPreview       `json:"rechecks"`
+	Schema        WorkflowReworkPreviewSchema       `json:"schema"`
+	SourceAttempt int                               `json:"sourceAttempt"`
+	SourceStepKey string                            `json:"sourceStepKey"`
+}
+
+// WorkflowReworkPreviewBlockReason defines model for WorkflowReworkPreview.BlockReason.
+type WorkflowReworkPreviewBlockReason string
+
+// WorkflowReworkPreviewSchema defines model for WorkflowReworkPreview.Schema.
+type WorkflowReworkPreviewSchema string
+
+// WorkflowReworkStepPreview defines model for WorkflowReworkStepPreview.
+type WorkflowReworkStepPreview struct {
+	NextAttempt     int    `json:"nextAttempt"`
+	PreviousAttempt int    `json:"previousAttempt"`
+	StepKey         string `json:"stepKey"`
 }
 
 // WorkflowStep defines model for WorkflowStep.

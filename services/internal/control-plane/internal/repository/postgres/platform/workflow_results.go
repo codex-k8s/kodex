@@ -7,7 +7,6 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"io"
 	"strconv"
 
@@ -117,107 +116,8 @@ type workflowIntegrationResult struct {
 // владеет root locks, pending-work barriers, capture, journal append и dispatch в той же Tx.
 // Reason отклоняет весь результат; SQL failure возвращает ошибку без partial acceptance.
 func (repository *Repository) evaluateWorkflowStepResultTx(ctx context.Context, tx pgx.Tx, current scope, lease map[string]any, payload command.CompleteExecutionInput) ([]entity.WorkflowAcceptedResult, string, error) {
-	return repository.evaluateWorkflowStepEvidenceTx(ctx, tx, current, lease, payload, "")
-}
-
-// evaluateWorkflowStepEvidenceTx receives the profile from the already locked owner root; no
-// declaration can enable it. Rejected evidence is returned separately by reason, never as acceptance.
-// evaluateWorkflowStepEvidenceTx получает profile из уже locked owner root; декларация не включает
-// его. Rejected evidence возвращается с reason и никогда не означает приёмку.
-func (repository *Repository) evaluateWorkflowStepEvidenceTx(ctx context.Context, tx pgx.Tx, current scope, lease map[string]any, payload command.CompleteExecutionInput, profile string) ([]entity.WorkflowAcceptedResult, string, error) {
-	var step entity.WorkflowStep
-	var inputs []workflowResultDependency
-	var rawStep, rawInputs []byte
-	var projectID, state string
-	err := tx.QueryRow(ctx, queryWorkflowResultLineage, workflowResultPins(current, lease)).Scan(&rawStep, &rawInputs, &projectID, &state)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, "", errs.ErrConflict
-	}
-	if err != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	if decodeStrict(rawStep, &step) != nil || decodeStrict(rawInputs, &inputs) != nil || len(inputs) > 8 || !workflowservice.ValidRequirementsForProfile(profile, step.ResultRequirements, step.DependsOn) {
-		return nil, "", errs.ErrConflict
-	}
-	if payload.Success != (state == "SUCCEEDED") {
-		return nil, "", errs.ErrConflict
-	}
-	if !payload.Success {
-		return nil, workflowExecutionFailed, nil
-	}
-	declared, err := workflowservice.DecodeDeclarationForProfile(payload.ResultSummary, step.ResultRequirements, profile)
-	if err != nil {
-		return nil, workflowDeclarationInvalid, nil
-	}
-	results := make([]entity.WorkflowAcceptedResult, 0, len(step.ResultRequirements))
-	rejection := ""
-	for _, requirement := range step.ResultRequirements {
-		declaration := declared[requirement.Key]
-		var result entity.WorkflowAcceptedResult
-		switch requirement.Kind {
-		case "ARTIFACT":
-			var found bool
-			result, found, err = resolveWorkflowArtifactTx(ctx, tx, current, lease, requirement, declaration)
-			if err != nil {
-				return nil, "", err
-			}
-			if !found {
-				return nil, workflowArtifactRequired, nil
-			}
-		case "PULL_REQUEST", "INTEGRATION_RECEIPT":
-			proof, reason, lookupErr := readWorkflowIntegrationResultTx(ctx, tx, current, lease, declaration.ReceiptRef)
-			if lookupErr != nil {
-				return nil, "", lookupErr
-			}
-			if reason != "" {
-				return nil, reason, nil
-			}
-			result, reason = acceptWorkflowIntegrationResult(requirement, declaration, proof, inputs)
-			if reason != "" {
-				return nil, reason, nil
-			}
-		case "REVIEW", "QA":
-			if profile == workflowservice.GitHubReviewQAV1 {
-				var reason string
-				if requirement.Kind == "REVIEW" {
-					proof, why, err := readWorkflowIntegrationResultTx(ctx, tx, current, lease, declaration.ReceiptRef)
-					if err != nil || why != "" {
-						return nil, why, err
-					}
-					result, reason = acceptWorkflowCommentResult(requirement, declaration, proof, inputs)
-				} else {
-					var err error
-					result, reason, err = repository.evaluateWorkflowQAResultTx(ctx, tx, current, lease, projectID, step, requirement, declaration, declared, inputs)
-					if err != nil {
-						return nil, "", err
-					}
-				}
-				if reason != "" {
-					return nil, reason, nil
-				}
-				if declaration.Verdict == "CHANGES_REQUIRED" {
-					rejection = workflowChangesRequired
-				}
-				break
-			}
-			subject, found := workflowResultSubject(inputs, requirement.SubjectStepKey)
-			if !found || declaration.HeadSHA != subject.HeadSHA {
-				return nil, workflowReviewSubjectMismatch, nil
-			}
-			if declaration.Verdict != "PASS" {
-				return nil, workflowChangesRequired, nil
-			}
-			result = entity.WorkflowAcceptedResult{Key: requirement.Key, Kind: requirement.Kind, Repository: subject.Repository, Number: subject.Number, HeadSHA: subject.HeadSHA, Verdict: "PASS", Digest: workflowResultSHA(asJSON(declaration))}
-		case "DEPLOYMENT":
-			// The existing profile has no admitted SSH compose receipt path; a schema enum is not proof.
-			// В existing profile нет admitted SSH compose receipt path; schema enum не является proof.
-			return nil, workflowDeploymentUnsupported, nil
-		default:
-			return nil, workflowDeclarationInvalid, nil
-		}
-		results = append(results, result)
-	}
-	return results, rejection, nil
+	evaluation, err := repository.evaluateWorkflowStepResultDetailedTx(ctx, tx, current, lease, payload, false)
+	return evaluation.Results, evaluation.Reason, err
 }
 
 // workflowResultPins copies only server-owned coordinates needed by the completed-owner queries.

@@ -49,7 +49,7 @@ func TestLegacyWorkflowReworkMigrationProofComponent(t *testing.T) {
 					t.Fatal("apply disposable rework schema drift")
 				}
 			}
-			source, err := os.ReadFile("../../../../../../../tools/release/legacy-workflow-rework-migration-postcondition.sql")
+			source, err := os.ReadFile("../../../../../../../tools/release/workflow-upstream-rework-migration-postcondition.sql")
 			if err != nil {
 				t.Fatal("read shipped rework schema proof")
 			}
@@ -68,7 +68,7 @@ func TestLegacyWorkflowReworkMigrationProofComponent(t *testing.T) {
 					}
 				}
 			}
-			if proof["readOnly"] != "on" || proof["database"] != runtime.Database || proof["gooseVersion"] != float64(20261026001100) || proof["legacyReworkProfile"] != "LEGACY_OWNER_REWORK_V1" {
+			if proof["readOnly"] != "on" || proof["database"] != runtime.Database || proof["gooseVersion"] != float64(20261026001300) || proof["legacyReworkProfile"] != "LEGACY_OWNER_REWORK_V1" {
 				t.Fatal("rework schema proof identity mismatch")
 			}
 			if fixture.rejected != "" {
@@ -89,7 +89,7 @@ func TestLegacyWorkflowReworkMigrationProofComponent(t *testing.T) {
 					t.Error("canonical rework proof rejected", field)
 				}
 			}
-			if proof["purgeNodes"] != float64(105) || proof["purgeEdges"] != float64(286) || proof["serverPurgeEdges"] != float64(284) || proof["serverPurgeFingerprint"] != "6bf6ad76d8c7ae66e07f75ecf719fdd6" {
+			if proof["purgeNodes"] != float64(105) || proof["purgeEdges"] != float64(287) || proof["serverPurgeEdges"] != float64(284) || proof["serverPurgeFingerprint"] != "6bf6ad76d8c7ae66e07f75ecf719fdd6" {
 				t.Fatal("rework purge composition mismatch")
 			}
 		})

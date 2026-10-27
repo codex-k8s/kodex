@@ -51,7 +51,7 @@ func (reader *gateCompletionReader) QueryRow(_ context.Context, query string, ar
 		case query == queryOwnerGateScope:
 			*dest[0].(*string), *dest[1].(*string), *dest[2].(*string) = "PROJECT", "org_fixture", "prj_fixture"
 		case query == queryOwnerGateIntent:
-			if len(dest) != 20 {
+			if len(dest) != 22 {
 				reader.t.Fatal("existing intent projection shape changed")
 			}
 			for _, value := range dest {
@@ -132,6 +132,7 @@ func (rows *gateCompletionRows) Scan(dest ...any) error {
 	*dest[0].(*string), *dest[1].(*string), *dest[2].(*string), *dest[3].(*string) = a.ID, a.Ref, a.Key, a.State
 	*dest[4].(*int32), *dest[5].(*[]entity.WorkflowAttemptResult), *dest[6].(*[]workflowInputReceipt) = a.AssignedAttempt, a.Receipts, a.Inputs
 	*dest[7].(*int32), *dest[8].(*bool), *dest[9].(*bool) = a.LatestAttempt, a.GateApproved, a.GateBlocked
+	*dest[10].(*bool) = a.HasIrreversibleEffect
 	return nil
 }
 

@@ -3,6 +3,7 @@
 import type { WorkflowAcceptedResult } from "./WorkflowAcceptedResult";
 
 export interface WorkflowAttemptResult {
+  effectiveState?: string;
   attempt: number;
   runRef: string;
   accepted: boolean;

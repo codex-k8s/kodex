@@ -29,6 +29,9 @@ var errWorkflowPublication = errors.New("workflow publication projection invalid
 // RU: WorkflowPublication — версионированный закрытый состав передаваемого
 // процесса; допуск и определение владельца остаются в control-plane.
 type WorkflowPublication struct {
+	// ReworkPolicy is explicit opt-in metadata, never implied by historical declarations.
+	// ReworkPolicy — explicit opt-in metadata, не выводимая из historical declarations.
+	ReworkPolicy string `json:"rework_policy,omitempty"`
 	// ResultEvidenceProfile is emitted only by the explicit third-version evidence contract.
 	// ResultEvidenceProfile передаётся только явным evidence контрактом третьей версии.
 	ResultEvidenceProfile string `json:"result_evidence_profile,omitempty"`
@@ -100,6 +103,9 @@ type WorkflowPublicationStep struct {
 // WorkflowPublicationRequirement задаёт ограниченное обязательное доказательство в неизменяемой
 // публикации второй версии. Control-plane отдельно проверяет область, происхождение и приёмку.
 type WorkflowPublicationRequirement struct {
+	// SubjectResultKey identifies one published ARTIFACT output, not an arbitrary file selector.
+	// SubjectResultKey обозначает published ARTIFACT output, не произвольный file selector.
+	SubjectResultKey string `json:"subject_result_key,omitempty"`
 	// EvidenceKey is a published same-step report selector, not artifact authority.
 	// EvidenceKey — опубликованный selector report того же шага, не artifact authority.
 	EvidenceKey    string `json:"evidence_key,omitempty"`
@@ -248,7 +254,7 @@ func validWorkflowPublication(v WorkflowPublication) bool {
 	}
 	seen := map[string]bool{}
 	for i, step := range v.Steps {
-		if v.Version == 1 && len(step.ResultRequirements) != 0 || v.Version >= 2 && !validWorkflowPublicationServerStepForProfile(step, v.ResultEvidenceProfile) {
+		if v.Version == 1 && len(step.ResultRequirements) != 0 || v.Version >= 2 && !validWorkflowPublicationServerStepForProfile(step, v.ResultEvidenceProfile) || !validWorkflowPublicationReviews(v, step) {
 			return false
 		}
 		if step.ApprovalTimeoutSeconds != nil && (!step.HumanGateAfter || *step.ApprovalTimeoutSeconds < 1 || *step.ApprovalTimeoutSeconds > 604800) {

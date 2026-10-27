@@ -259,7 +259,7 @@ BEGIN
  SELECT version.spec INTO STRICT v_spec FROM control_plane.runs root JOIN control_plane.workflow_versions version
     ON version.id=root.workflow_version_id AND version.organization_id=p_tenant WHERE root.id=v_anchor.root_run_id AND root.organization_id=p_tenant;
  IF v_spec->>'ResultEvidenceProfile' IS DISTINCT FROM 'GITHUB_REVIEW_QA_V1'
-    OR NOT EXISTS(SELECT 1 FROM jsonb_array_elements(p_requirements) requirement(value) WHERE requirement.value->>'Kind' IN ('REVIEW','QA')) THEN
+    OR NOT EXISTS(SELECT 1 FROM jsonb_array_elements(p_requirements) requirement(value) WHERE requirement.value->>'Kind' IN ('ARTIFACT_REVIEW','REVIEW','QA')) THEN
     RETURN NOT p_entry ? 'reviewEvidence';
  END IF;
  IF p_entry->>'accepted'='true' THEN
@@ -279,6 +279,41 @@ BEGIN
     SELECT requirement.value INTO v_requirement FROM jsonb_array_elements(p_requirements) requirement(value)
         WHERE requirement.value->>'Key'=v_fact->>'key' AND requirement.value->>'Kind'=v_fact->>'kind';
     IF NOT FOUND THEN RETURN false; END IF;
+    IF v_requirement->>'Kind'='ARTIFACT_REVIEW' THEN
+        IF v_fact-ARRAY['key','kind','artifactRef','artifactRevision','digest','verdict']<>'{}'::jsonb
+            OR COALESCE(v_fact->>'verdict','') NOT IN ('PASS','CHANGES_REQUIRED')
+            OR p_entry->>'accepted'='true' AND v_fact->>'verdict'<>'PASS'
+            OR NOT EXISTS (
+                SELECT 1 FROM control_plane.run_nodes physical
+                JOIN control_plane.runs root ON root.id=physical.root_run_id AND root.organization_id=p_tenant
+                CROSS JOIN LATERAL jsonb_array_elements(physical.workflow_inputs) dependency(value)
+                JOIN control_plane.run_nodes source ON source.id::text=dependency.value->>'sourceNodeId'
+                    AND source.organization_id=p_tenant AND source.root_run_id=root.id AND source.workflow_step_origin_node_id IS NULL
+                    AND source.workflow_step_key=v_requirement->>'SubjectStepKey'
+                CROSS JOIN LATERAL jsonb_array_elements(source.workflow_attempts) accepted(value)
+                JOIN control_plane.run_nodes producer ON producer.id::text=accepted.value #>> '{provenance,nodeId}'
+                    AND producer.organization_id=p_tenant AND producer.root_run_id=root.id AND producer.state='SUCCEEDED'
+                    AND COALESCE(producer.workflow_step_origin_node_id,producer.id)=source.id
+                    AND producer.agent_id=source.agent_id AND producer.workflow_step_key=source.workflow_step_key
+                    AND to_jsonb(producer.workflow_business_attempt)=accepted.value->'attempt'
+                CROSS JOIN LATERAL jsonb_array_elements(accepted.value->'results') result(value)
+                CROSS JOIN LATERAL control_plane.workflow_captured_artifact_pins(p_tenant,producer.id) pin
+                JOIN control_plane.artifact_history history ON history.id=pin.artifact_id AND history.revision_id=pin.revision_id
+                    AND history.organization_id=p_tenant AND history.project_id=root.project_id
+                    AND history.ref=result.value->>'artifactRef' AND history.revision_ref=result.value->>'artifactRevision'
+                    AND history.digest='sha256:'||(result.value->>'digest') AND history.lifecycle_state='ACTIVE'
+                WHERE physical.organization_id=p_tenant AND physical.id::text=p_entry #>> '{provenance,nodeId}'
+                    AND physical.root_run_id=v_anchor.root_run_id AND physical.agent_id=v_anchor.agent_id
+                    AND COALESCE(physical.workflow_step_origin_node_id,physical.id)=p_anchor
+                    AND dependency.value->>'stepKey'=v_requirement->>'SubjectStepKey'
+                    AND dependency.value->'receipt'=accepted.value AND accepted.value->>'accepted'='true'
+                    AND result.value->>'key'=v_requirement->>'SubjectResultKey' AND result.value->>'kind'='ARTIFACT'
+                    AND v_fact->>'artifactRef'=history.ref AND v_fact->>'artifactRevision'=history.revision_ref
+                    AND v_fact->>'digest'=substring(history.digest FROM 8)
+                    AND control_plane.artifact_effective_scan(history.revision_id)='CLEAN'
+            ) THEN RETURN false; END IF;
+        CONTINUE;
+    END IF;
     IF v_requirement->>'Kind' NOT IN ('REVIEW','QA') THEN CONTINUE; END IF;
     SELECT count(*),min(result.value::text)::jsonb INTO v_count,v_subject
     FROM control_plane.run_nodes physical
@@ -328,7 +363,7 @@ BEGIN
     END IF;
  END LOOP;
  IF p_entry->>'accepted'='false' AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v_facts) fact(value)
-    WHERE fact.value->>'kind' IN ('REVIEW','QA') AND fact.value->>'verdict'='CHANGES_REQUIRED') THEN RETURN false; END IF;
+    WHERE fact.value->>'kind' IN ('ARTIFACT_REVIEW','REVIEW','QA') AND fact.value->>'verdict'='CHANGES_REQUIRED') THEN RETURN false; END IF;
  RETURN true;
 END;
 $$;

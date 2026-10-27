@@ -29,7 +29,7 @@ var (
 func validWorkflowPublicationMode(value WorkflowPublication) bool {
 	switch value.Version {
 	case 1:
-		return value.ExecutionMode == "" && value.ResultEvidenceProfile == ""
+		return value.ExecutionMode == "" && value.ReworkPolicy == "" && value.ResultEvidenceProfile == ""
 	case 2, 3:
 		if value.Version == 2 && value.ResultEvidenceProfile != "" || value.Version == 3 && value.ResultEvidenceProfile != "GITHUB_REVIEW_QA_V1" {
 			return false
@@ -38,7 +38,7 @@ func validWorkflowPublicationMode(value WorkflowPublication) bool {
 		for _, step := range value.Steps {
 			textBytes += len(step.Name) + len(step.Instructions) + len(step.ExpectedResult)
 		}
-		return value.ExecutionMode == workflowServerMode && value.Concurrency <= 2 && len(value.Steps) <= 12 && textBytes <= 8192 && validWorkflowPublicationEvidenceSubjects(value)
+		return (value.ReworkPolicy == "" || value.ReworkPolicy == "OWNER_APPROVED_UPSTREAM_V1") && value.ExecutionMode == workflowServerMode && value.Concurrency <= 2 && len(value.Steps) <= 12 && textBytes <= 8192 && validWorkflowPublicationEvidenceSubjects(value)
 	default:
 		return false
 	}
@@ -75,13 +75,17 @@ func validWorkflowPublicationServerStepForProfile(step WorkflowPublicationStep, 
 		if requirement.EvidenceKey != "" && (profile != "GITHUB_REVIEW_QA_V1" || requirement.Kind != "QA") || profile == "GITHUB_REVIEW_QA_V1" && requirement.Kind == "QA" && !workflowResultKey.MatchString(requirement.EvidenceKey) {
 			return false
 		}
-		if !workflowResultKey.MatchString(requirement.Key) || seen[requirement.Key] || len(requirement.Repository) > 200 || requirement.Kind != "DEPLOYMENT" && requirement.TargetRef != "" {
+		if requirement.Kind != "ARTIFACT_REVIEW" && requirement.SubjectResultKey != "" || !workflowResultKey.MatchString(requirement.Key) || seen[requirement.Key] || len(requirement.Repository) > 200 || requirement.Kind != "DEPLOYMENT" && requirement.TargetRef != "" {
 			return false
 		}
 		seen[requirement.Key] = true
 		switch requirement.Kind {
 		case "ARTIFACT":
 			if requirement.FileName == "" || requirement.FileName == "." || requirement.FileName == ".." || requirement.FileName == "result.md" || requirement.FileName == "workspace-write-result.json" || len(requirement.FileName) > 160 || !utf8.ValidString(requirement.FileName) || strings.ContainsAny(requirement.FileName, "/\\\x00\r\n") || requirement.MediaType == "" || len(requirement.MediaType) > 160 || !utf8.ValidString(requirement.MediaType) || strings.ContainsAny(requirement.MediaType, "\x00\r\n") || requirement.Repository != "" || requirement.SubjectStepKey != "" || requirement.Operation != "" {
+				return false
+			}
+		case "ARTIFACT_REVIEW":
+			if !dependencies[requirement.SubjectStepKey] || !workflowResultKey.MatchString(requirement.SubjectResultKey) || requirement.FileName != "" || requirement.MediaType != "" || requirement.Repository != "" || requirement.Operation != "" {
 				return false
 			}
 		case "PULL_REQUEST":
@@ -149,6 +153,39 @@ func validWorkflowPublicationEvidenceSubjects(value WorkflowPublication) bool {
 			if (requirement.Kind == "REVIEW" || requirement.Kind == "QA") && counts[requirement.SubjectStepKey] != 1 {
 				return false
 			}
+		}
+	}
+	return true
+}
+
+// validWorkflowPublicationReviews preserves exact published subject/result keys and independent
+// reviewer identity. It checks configuration shape only, never evidence or execution grants.
+// validWorkflowPublicationReviews сохраняет exact published subject/result keys и независимость
+// reviewer identity. Проверяется лишь configuration shape, не evidence или execution grants.
+func validWorkflowPublicationReviews(value WorkflowPublication, step WorkflowPublicationStep) bool {
+	for _, requirement := range step.ResultRequirements {
+		if requirement.Kind != "ARTIFACT_REVIEW" {
+			continue
+		}
+		if value.ReworkPolicy != "OWNER_APPROVED_UPSTREAM_V1" {
+			return false
+		}
+		found := false
+		for _, subject := range value.Steps {
+			if subject.Key != requirement.SubjectStepKey {
+				continue
+			}
+			if subject.AgentRef == step.AgentRef {
+				return false
+			}
+			for _, result := range subject.ResultRequirements {
+				if result.Key == requirement.SubjectResultKey && result.Kind == "ARTIFACT" {
+					found = true
+				}
+			}
+		}
+		if !found {
+			return false
 		}
 	}
 	return true

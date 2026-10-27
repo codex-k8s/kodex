@@ -260,7 +260,8 @@ func TestPrepareHomeMaterializesOnlyBoundEnvironment(t *testing.T) {
 	if config.ModelReasoningEffort != "high" || config.History.Persistence != "none" ||
 		config.ShellEnvironmentPolicy.Set["APP_MODE"] != "review" ||
 		config.ShellEnvironmentPolicy.Set["CRM_TOKEN"] != "" ||
-		len(config.ShellEnvironmentPolicy.Filters) != 4+len(runtimeTransportEnvironmentNames) ||
+		len(config.ShellEnvironmentPolicy.Filters) != 5+len(runtimeTransportEnvironmentNames) ||
+		config.ShellEnvironmentPolicy.Filters["GOROOT"] != "include" ||
 		config.ShellEnvironmentPolicy.Filters["CRM_TOKEN"] != "include" ||
 		config.ShellEnvironmentPolicy.Filters["APP_MODE"] != "include" ||
 		config.ShellEnvironmentPolicy.Filters["KODEX_MCP_PROXY_TOKEN"] != "" {
@@ -274,6 +275,62 @@ func TestPrepareHomeMaterializesOnlyBoundEnvironment(t *testing.T) {
 	if strings.Contains(string(raw), "synthetic-secret-must-not-persist") || strings.Contains(string(raw), "fixture.signature") ||
 		strings.Contains(string(raw), "include_only") {
 		t.Fatal("configuration persisted credentials or legacy environment filters")
+	}
+}
+
+// TestGoRootProjectionPreservesPublishedAuthority checks the actual child environment and generated
+// shell policy together: the image default survives, ambient overrides do not, and published plain
+// or secret overrides retain their existing semantics without persisting secret values or opening proc.
+// TestGoRootProjectionPreservesPublishedAuthority совместно проверяет окружение дочернего процесса
+// и shell policy: default образа сохраняется, ambient override не наследуется, опубликованные plain
+// и secret overrides сохраняют семантику без записи секрета в конфигурацию и открытия proc.
+func TestGoRootProjectionPreservesPublishedAuthority(t *testing.T) {
+	setRuntimeTransportFixture(t)
+	for _, mode := range []string{"default", "published plain", "published secret"} {
+		t.Run(mode, func(t *testing.T) {
+			input, auth := configurationHomeFixture(t)
+			t.Setenv("GOROOT", "/unrelated-parent-toolchain")
+			want := "/usr/local/go"
+			switch mode {
+			case "published plain":
+				want = "/published-toolchain"
+				input.EnvironmentValues = []runtimecontract.RuntimeEnvironmentValue{{Name: "GOROOT", Value: want}}
+			case "published secret":
+				want = "/synthetic-secret-toolchain"
+				t.Setenv("GOROOT", want)
+				input.SecretProjections = []runtimecontract.RuntimeSecretProjection{{Name: "GOROOT"}}
+			}
+			if err := PrepareHomeWithAuth(input, "http://127.0.0.1:12345/mcp", auth); err != nil {
+				t.Fatal(err)
+			}
+			raw, err := os.ReadFile(filepath.Join(input.CodexHome, "config.toml"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var config runtimeConfig
+			if _, err := toml.Decode(string(raw), &config); err != nil {
+				t.Fatal(err)
+			}
+			if config.ShellEnvironmentPolicy.Filters["GOROOT"] != "include" ||
+				config.Permissions[config.DefaultPermissions].Filesystem["/proc"] != "deny" {
+				t.Fatal("toolchain filter or proc boundary changed")
+			}
+			if mode != "published plain" && config.ShellEnvironmentPolicy.Set["GOROOT"] != "" {
+				t.Fatal("shell set would override the inherited toolchain or persist a secret")
+			}
+			if mode == "published plain" && config.ShellEnvironmentPolicy.Set["GOROOT"] != want {
+				t.Fatal("published toolchain override was lost")
+			}
+			if strings.Contains(string(raw), "/synthetic-secret-toolchain") || strings.Contains(string(raw), "/unrelated-parent-toolchain") {
+				t.Fatal("unpublished environment value was persisted")
+			}
+			command := exec.Command("/bin/sh", "-c", `printf '%s' "$GOROOT"`)
+			command.Env = appServerEnvironment(input, "synthetic-mcp-token")
+			output, err := command.Output()
+			if err != nil || string(output) != want {
+				t.Fatalf("child toolchain environment mismatch: command failed=%t", err != nil)
+			}
+		})
 	}
 }
 

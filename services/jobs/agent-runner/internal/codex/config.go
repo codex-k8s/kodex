@@ -202,7 +202,9 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 		historyPersistence = "save-all"
 	}
 	environmentSet := map[string]string{"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": "/tmp"}
-	environmentNames := map[string]struct{}{"PATH": {}, "HOME": {}}
+	// Штатный GOROOT передаётся из очищенного app-server environment: при закрытом /proc
+	// Go не обязан уметь определить корень через executable. Set не перетирает secret binding.
+	environmentNames := map[string]struct{}{"PATH": {}, "HOME": {}, "GOROOT": {}}
 	if _, err := runtimeTransportEnvironment(); err != nil {
 		return err
 	}

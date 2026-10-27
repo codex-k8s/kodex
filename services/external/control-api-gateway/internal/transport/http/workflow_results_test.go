@@ -252,3 +252,35 @@ func TestWorkflowPublicOptionalEvidenceAbsence(t *testing.T) {
 		}
 	}
 }
+
+// TestWorkflowMixedNegativeEvidenceWriter preserves data-only reviewed artifacts and native
+// COMMENT facts together, including the owner's historical effectiveness discriminator.
+// TestWorkflowMixedNegativeEvidenceWriter сохраняет data-only reviewed artifacts вместе с native
+// COMMENT facts и историческим discriminator эффективности, не превращая их в accepted results.
+func TestWorkflowMixedNegativeEvidenceWriter(t *testing.T) {
+	attempt := &cp.WorkflowAttemptResult{Attempt: 1, RunRef: "run_fixture1", Reason: "CHANGES_REQUIRED", EffectiveState: "REWORK_PENDING", Evidence: []*cp.WorkflowAcceptedResult{
+		{Key: "design", Kind: "ARTIFACT_REVIEW", ArtifactRef: "art_fixture1", ArtifactRevision: "arev_fixture1", Digest: strings.Repeat("a", 64), Verdict: "CHANGES_REQUIRED"},
+		{Key: "comment", Kind: "REVIEW", ReceiptRef: "erc_fixture1", Repository: "owner/repo", Number: 42, HeadSha: strings.Repeat("b", 40), Digest: strings.Repeat("c", 64), Verdict: "PASS"},
+	}}
+	node := &cp.RunNode{Ref: "nod_fixture1", RunRef: "run_fixture1", WorkflowResults: []*cp.WorkflowAttemptResult{attempt}}
+	view, err := messageMap(node)
+	if err != nil {
+		t.Fatal("mixed negative evidence unavailable", err)
+	}
+	row := view["workflowResults"].([]any)[0].(map[string]any)
+	if row["accepted"] != false || row["effectiveState"] != "REWORK_PENDING" || len(row["results"].([]any)) != 0 || len(row["evidence"].([]any)) != 2 {
+		t.Fatal("mixed negative facts changed")
+	}
+	for _, change := range []func(*cp.WorkflowAttemptResult){
+		func(v *cp.WorkflowAttemptResult) { v.Accepted = true },
+		func(v *cp.WorkflowAttemptResult) { v.Evidence[0].ArtifactRevision = "" },
+		func(v *cp.WorkflowAttemptResult) { v.Evidence[1].ReceiptRef = "" },
+		func(v *cp.WorkflowAttemptResult) { v.Evidence[0].Verdict = "PASS" },
+	} {
+		changed := proto.Clone(node).(*cp.RunNode)
+		change(changed.WorkflowResults[0])
+		if _, err := messageMap(changed); err == nil {
+			t.Fatal("invalid mixed negative projection accepted")
+		}
+	}
+}
