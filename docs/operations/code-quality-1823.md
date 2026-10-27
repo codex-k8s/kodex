@@ -4,11 +4,24 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.574.0
+version: 1.575.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общее чтение контекста assistant lease — 27.10.2026
+
+План и предложение названия используют одно чтение прежнего locking SQL после
+проверки lease. Сохранены точные organization/run, порядок 14 полей, correlation
+и Forbidden при ошибке. Дополнительное назначение authority и проверки остаются
+у вызывающего пути. Unit проверяет каждое поле, query pins и закрытые отказы.
+
+Control-plane build/vet PASS, 3072 unit PASS / 70 условных SKIP. Выбранный
+component-сценарий предложения плана на disposable PostgreSQL — 2 PASS events до
+и после, FAIL/SKIP 0. Отдельный component-сценарий предложения названия не
+запускался. Анализ: 1349 raw / 1282 retained / 67 unresolved, Go-комментарии
+21715/21715. Браузер, E2E, live/deploy/startup и QA не выполнялись.
 
 ## Общие read-only транзакции интеграций и вложений — 27.10.2026
 

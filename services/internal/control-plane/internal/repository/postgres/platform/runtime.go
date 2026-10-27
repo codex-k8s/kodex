@@ -165,24 +165,12 @@ func (repository *Repository) proposeAssistantMetadata(ctx context.Context, tx p
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	var conversationID, conversationRef, projectID, projectRef string
-	var assistantRef string
-	var contextKind, contextRef string
-	var allowedOperations []string
-	var conversationVersion int64
-	actorScope := scope{correlationRef: machineScope.correlationRef}
-	if err := tx.QueryRow(ctx, queryRuntimeProposeassistantplanSelectContext,
-		machineScope.organizationID, lease["runID"],
-	).Scan(&conversationID, &conversationRef, &conversationVersion, &projectID, &projectRef, &allowedOperations,
-		&contextKind, &contextRef, &assistantRef,
-		&actorScope.actorID, &actorScope.actorRef, &actorScope.actorName, &actorScope.role,
-		&actorScope.organizationRef); err != nil {
-		return commandOutcome{}, errs.ErrForbidden
+	locked, err := readAssistantLeaseContext(ctx, tx, machineScope, lease["runID"])
+	if err != nil {
+		return commandOutcome{}, err
 	}
-	_ = allowedOperations
-	_ = contextKind
-	_ = contextRef
-	_ = assistantRef
+	conversationID, conversationRef := locked.conversationID, locked.conversationRef
+	projectID, projectRef := locked.projectID, locked.projectRef
 	var conversation entity.AssistantConversation
 	if err := tx.QueryRow(ctx, queryRuntimeProposeassistantmetadataUpdateConversation, conversationID, title).Scan(
 		&conversation.Ref, &conversation.Title, &conversation.TitleSource, &conversation.TitleRevision,

@@ -68,19 +68,14 @@ func (repository *Repository) prepareAssistantPlanProposalTx(ctx context.Context
 	if err != nil {
 		return assistantPlanProposal{}, err
 	}
-	var conversationID, conversationRef, projectID, projectRef string
-	var assistantRef string
-	var contextKind, contextRef string
-	var allowedOperations []string
-	var conversationVersion int64
-	actorScope := scope{correlationRef: machineScope.correlationRef}
-	if err := tx.QueryRow(ctx, queryRuntimeProposeassistantplanSelectContext,
-		machineScope.organizationID, lease["runID"],
-	).Scan(&conversationID, &conversationRef, &conversationVersion, &projectID, &projectRef, &allowedOperations, &contextKind, &contextRef, &assistantRef,
-		&actorScope.actorID, &actorScope.actorRef, &actorScope.actorName, &actorScope.role,
-		&actorScope.organizationRef); err != nil {
-		return assistantPlanProposal{}, errs.ErrForbidden
+	locked, err := readAssistantLeaseContext(ctx, tx, machineScope, lease["runID"])
+	if err != nil {
+		return assistantPlanProposal{}, err
 	}
+	conversationID, conversationRef, conversationVersion := locked.conversationID, locked.conversationRef, locked.conversationVersion
+	projectID, projectRef, assistantRef := locked.projectID, locked.projectRef, locked.assistantRef
+	contextKind, contextRef, allowedOperations := locked.contextKind, locked.contextRef, locked.allowedOperations
+	actorScope := locked.actorScope
 	actorScope.organizationID = machineScope.organizationID
 	assistant, err := repository.conversationAssistantTx(ctx, tx, actorScope, conversationRef)
 	if err != nil || assistantRef != assistant.Ref {
