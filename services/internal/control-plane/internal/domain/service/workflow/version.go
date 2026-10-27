@@ -49,7 +49,7 @@ func ValidServerVersion(version entity.WorkflowVersion) bool {
 		}
 		agents[step.Key] = step.AgentRef
 	}
-	if ServerTextBytes(version) > MaximumServerTextBytes {
+	if !validEvidenceSubjects(version) || ServerTextBytes(version) > MaximumServerTextBytes {
 		return false
 	}
 	reviewers := map[string]string{}

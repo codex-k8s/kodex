@@ -160,3 +160,37 @@ func TestEvidenceSharedWireCorpus(t *testing.T) {
 		}
 	}
 }
+
+// TestEvidenceSubjectGraphContract rejects a REVIEW-only or ambiguous PR predecessor only for
+// the new profile, before publication can create a graph rejected by the owner SQL guards.
+// TestEvidenceSubjectGraphContract отклоняет REVIEW-only либо неоднозначный PR predecessor
+// только нового профиля до публикации графа, который owner SQL guards не смогут исполнить.
+func TestEvidenceSubjectGraphContract(t *testing.T) {
+	for _, kind := range []string{"REVIEW", "QA"} {
+		version := serverVersionFixture()
+		step := entity.WorkflowStep{Key: "checker", AgentRef: "agt_checker", DependsOn: []string{"reviewer"}, ResultRequirements: []entity.WorkflowResultRequirement{{Key: "check", Kind: kind, SubjectStepKey: "reviewer"}}}
+		if kind == "QA" {
+			step.ResultRequirements = append(step.ResultRequirements, entity.WorkflowResultRequirement{Key: "report", Kind: "ARTIFACT", FileName: "qa.json", MediaType: "application/json"})
+		}
+		version.Steps = append(version.Steps, step)
+		if !ValidServerVersion(version) {
+			t.Fatal("legacy reviewer subject changed")
+		}
+		version.ResultEvidenceProfile = GitHubReviewQAV1
+		if kind == "QA" {
+			version.Steps[2].ResultRequirements[0].EvidenceKey = "report"
+		}
+		if ValidServerVersion(version) {
+			t.Fatal("new evidence profile accepted REVIEW-only subject")
+		}
+		version.Steps[2].DependsOn = []string{"developer"}
+		version.Steps[2].ResultRequirements[0].SubjectStepKey = "developer"
+		if !ValidServerVersion(version) {
+			t.Fatal("exact direct PR subject rejected")
+		}
+		version.Steps[0].ResultRequirements = append(version.Steps[0].ResultRequirements, entity.WorkflowResultRequirement{Key: "other_pr", Kind: "PULL_REQUEST", Repository: "codex-k8s/test-repo"})
+		if ValidServerVersion(version) {
+			t.Fatal("ambiguous published PR subject accepted")
+		}
+	}
+}

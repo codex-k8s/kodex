@@ -129,3 +129,28 @@ func TestWorkflowPublicationEvidenceV3(t *testing.T) {
 		}
 	}
 }
+
+// TestWorkflowPublicationEvidenceSubjectRelations binds wire3 consumers to the same direct PR
+// relation as the owner, retaining the previously valid REVIEW-only legacy wire2 graph.
+// TestWorkflowPublicationEvidenceSubjectRelations связывает wire3 consumers с той же direct PR
+// relation, что owner, сохраняя прежний допустимый REVIEW-only граф wire2.
+func TestWorkflowPublicationEvidenceSubjectRelations(t *testing.T) {
+	value := serverPublicationFixture()
+	value.Steps = append(value.Steps, WorkflowPublicationStep{Key: "checker", Position: 3, AgentRef: "agt_checker123", TimeoutSeconds: 300, DependsOn: []string{"review"}, ResultRequirements: []WorkflowPublicationRequirement{{Key: "checked", Kind: "REVIEW", SubjectStepKey: "review"}}})
+	if _, _, err := EncodeWorkflowPublication(value); err != nil {
+		t.Fatal("legacy reviewer subject changed")
+	}
+	value.Version, value.ResultEvidenceProfile = 3, "GITHUB_REVIEW_QA_V1"
+	if _, _, err := EncodeWorkflowPublication(value); err == nil {
+		t.Fatal("wire3 accepted REVIEW-only subject")
+	}
+	value.Steps[2].DependsOn = []string{"step-001"}
+	value.Steps[2].ResultRequirements[0].SubjectStepKey = "step-001"
+	if _, _, err := EncodeWorkflowPublication(value); err != nil {
+		t.Fatal("wire3 direct PR subject rejected", err)
+	}
+	value.Steps[0].ResultRequirements = append(value.Steps[0].ResultRequirements, WorkflowPublicationRequirement{Key: "other_pr", Kind: "PULL_REQUEST", Repository: "codex-k8s/test-repo"})
+	if _, _, err := EncodeWorkflowPublication(value); err == nil {
+		t.Fatal("wire3 accepted ambiguous PR subject")
+	}
+}

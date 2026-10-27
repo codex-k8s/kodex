@@ -2,6 +2,7 @@ package httptransport
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -76,6 +77,23 @@ func validWorkflowPublicMessage(message proto.Message) bool {
 				}
 				if requirement.EvidenceKey == "" || !found {
 					return false
+				}
+			}
+		}
+		if value.ResultEvidenceProfile == "GITHUB_REVIEW_QA_V1" {
+			counts := map[string]int{}
+			for _, step := range value.Steps {
+				for _, requirement := range step.ResultRequirements {
+					if requirement.Kind == "PULL_REQUEST" {
+						counts[step.Ref]++
+					}
+				}
+			}
+			for _, step := range value.Steps {
+				for _, requirement := range step.ResultRequirements {
+					if (requirement.Kind == "REVIEW" || requirement.Kind == "QA") && (counts[requirement.SubjectStepKey] != 1 || !slices.Contains(step.DependsOn, requirement.SubjectStepKey)) {
+						return false
+					}
 				}
 			}
 		}

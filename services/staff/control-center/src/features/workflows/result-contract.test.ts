@@ -235,3 +235,15 @@ it("explicit profile clear удаляет только editable evidenceKey бе
  expect(original).toEqual(before);
  expect(cleared[0]?.dependsOn).toEqual(["author"]);
 });
+
+it("новый evidence профиль требует direct predecessor с единственным PULL_REQUEST", () => {
+  const steps = graph();
+  steps.push({ ref: "checker", agentRef: "checker", dependsOn: ["review"], requiredCapabilityKeys: [], resultRequirements: [{ key: "checked", kind: "REVIEW", subjectStepKey: "review" }] });
+  expect(validWorkflowDAG(steps, 2, "", "ref")).toBe(true);
+  expect(validWorkflowDAG(steps, 2, "", "ref", "GITHUB_REVIEW_QA_V1")).toBe(false);
+  at(steps, 3).dependsOn = ["code"];
+  at(steps, 3).resultRequirements = [{ key: "checked", kind: "REVIEW", subjectStepKey: "code" }];
+  expect(validWorkflowDAG(steps, 2, "", "ref", "GITHUB_REVIEW_QA_V1")).toBe(true);
+  at(steps, 1).resultRequirements.push({ key: "other_pr", kind: "PULL_REQUEST", repository: "codex-k8s/test-repo" });
+  expect(validWorkflowDAG(steps, 2, "", "ref", "GITHUB_REVIEW_QA_V1")).toBe(false);
+});

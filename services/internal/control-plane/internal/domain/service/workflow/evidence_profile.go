@@ -38,3 +38,29 @@ func validEvidenceRequirementRefs(profile string, requirements []entity.Workflow
 	}
 	return true
 }
+
+// validEvidenceSubjects requires each opted-in REVIEW/QA to name a direct predecessor with
+// exactly one published PR predicate; REVIEW-only evidence cannot silently become a PR source.
+// validEvidenceSubjects требует direct predecessor с ровно одним published PR для opt-in
+// REVIEW/QA; REVIEW-only evidence не становится источником PR неявно.
+func validEvidenceSubjects(version entity.WorkflowVersion) bool {
+	if version.ResultEvidenceProfile != GitHubReviewQAV1 {
+		return true
+	}
+	counts := map[string]int{}
+	for _, step := range version.Steps {
+		for _, requirement := range step.ResultRequirements {
+			if requirement.Kind == "PULL_REQUEST" {
+				counts[step.Key]++
+			}
+		}
+	}
+	for _, step := range version.Steps {
+		for _, requirement := range step.ResultRequirements {
+			if (requirement.Kind == "REVIEW" || requirement.Kind == "QA") && counts[requirement.SubjectStepKey] != 1 {
+				return false
+			}
+		}
+	}
+	return true
+}

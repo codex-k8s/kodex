@@ -19,6 +19,11 @@ integration grants по-прежнему разрешает владелец с�
 при UPDATE снимает draft opt-in только после повторной проверки всего графа;
 отсутствующее поле sparse update сохраняет прежнее значение, null запрещён.
 
+В новом профиле subjectStepKey REVIEW/QA указывает на direct dependency с ровно
+одним опубликованным PULL_REQUEST requirement. REVIEW/QA-only predecessor и
+несколько PR predicates отклоняются до публикации; прежний профиль не меняется.
+Owner выбирает именно этот accepted PR, не последний head из текста рецензента.
+
 REVIEW объявляет только `{key,headSha,verdict,receiptRef}`. Обязателен успешный
 native `github.pull_request.review.create`, input event `COMMENT`, точные PR/head
 принятого `subjectStepKey`, output `COMMENTED/commit_id`, полный body и native

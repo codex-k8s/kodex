@@ -195,3 +195,36 @@ func TestWorkflowPublicGeneratedHistoryRemainsTyped(t *testing.T) {
 		}
 	}
 }
+
+// TestWorkflowPublicEvidenceSubjectRelations exercises the actual shared HTTP/WS projection;
+// the public graph cannot advertise an opt-in relation rejected by canonical owner SQL.
+// TestWorkflowPublicEvidenceSubjectRelations проверяет actual общий HTTP/WS projection:
+// public graph не объявляет opt-in relation, которую canonical owner SQL отвергнет.
+func TestWorkflowPublicEvidenceSubjectRelations(t *testing.T) {
+	version := &cp.WorkflowVersion{ExecutionMode: "SERVER_DAG_V1", Steps: []*cp.WorkflowStep{
+		{Ref: "author", AgentRef: "agt_author123", ResultRequirements: []*cp.WorkflowResultRequirement{{Key: "pr", Kind: "PULL_REQUEST", Repository: "owner/repo"}}},
+		{Ref: "review", AgentRef: "agt_review123", DependsOn: []string{"author"}, ResultRequirements: []*cp.WorkflowResultRequirement{{Key: "review", Kind: "REVIEW", SubjectStepKey: "author"}}},
+		{Ref: "checker", AgentRef: "agt_checker123", DependsOn: []string{"review"}, ResultRequirements: []*cp.WorkflowResultRequirement{{Key: "checked", Kind: "REVIEW", SubjectStepKey: "review"}}},
+	}}
+	if _, err := messageMap(version); err != nil {
+		t.Fatal("legacy public relation changed", err)
+	}
+	version.ResultEvidenceProfile = "GITHUB_REVIEW_QA_V1"
+	if _, err := messageMap(version); err == nil {
+		t.Fatal("public wire admitted REVIEW-only evidence subject")
+	}
+	version.Steps[2].DependsOn = []string{"author"}
+	version.Steps[2].ResultRequirements[0].SubjectStepKey = "author"
+	if _, err := messageMap(version); err != nil {
+		t.Fatal("public direct PR subject rejected", err)
+	}
+	version.Steps[2].DependsOn = []string{"review"}
+	if _, err := messageMap(version); err == nil {
+		t.Fatal("public wire admitted a non-direct PR evidence subject")
+	}
+	version.Steps[2].DependsOn = []string{"author"}
+	version.Steps[0].ResultRequirements = append(version.Steps[0].ResultRequirements, &cp.WorkflowResultRequirement{Key: "other_pr", Kind: "PULL_REQUEST", Repository: "owner/repo"})
+	if _, err := messageMap(version); err == nil {
+		t.Fatal("public wire admitted ambiguous PR evidence subject")
+	}
+}

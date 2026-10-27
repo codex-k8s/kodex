@@ -195,7 +195,7 @@ func (repository *Repository) workflowIssueEvidenceTx(ctx context.Context, tx pg
 	if err != nil {
 		return nil, err
 	}
-	subject, found := workflowResultSubject(inputs, requirement.SubjectStepKey)
+	subject, found := workflowEvidenceSubject(inputs, requirement.SubjectStepKey)
 	if !found || report.Repository != subject.Repository || report.Number != subject.Number || report.HeadSHA != subject.HeadSHA || report.Verdict != "CHANGES_REQUIRED" || report.Issue == nil || len(report.Findings) == 0 {
 		return nil, errs.ErrForbidden
 	}
@@ -210,12 +210,40 @@ func (repository *Repository) workflowIssueEvidenceTx(ctx context.Context, tx pg
 	return &workflowQAReportPin{Ref: file.Ref, RevisionRef: file.RevisionRef, Revision: file.Revision, Digest: file.Digest}, nil
 }
 
+// workflowEvidenceSubject selects exactly one accepted PULL_REQUEST from one owner-pinned
+// dependency. Other profile/legacy subject forms never widen the new native effect boundary.
+// workflowEvidenceSubject выбирает ровно один accepted PULL_REQUEST из одной owner-pinned
+// dependency. Прочие profile/legacy subject формы не расширяют новую native effect boundary.
+func workflowEvidenceSubject(inputs []workflowResultDependency, key string) (entity.WorkflowAcceptedResult, bool) {
+	selected := make([]workflowResultDependency, 0, 1)
+	for _, input := range inputs {
+		if input.StepKey != key {
+			continue
+		}
+		if len(input.Receipt.Results) > 4 {
+			return entity.WorkflowAcceptedResult{}, false
+		}
+		results := make([]entity.WorkflowAcceptedResult, 0, 1)
+		for _, result := range input.Receipt.Results {
+			if result.Kind == "PULL_REQUEST" {
+				results = append(results, result)
+			}
+		}
+		if len(results) != 1 {
+			return entity.WorkflowAcceptedResult{}, false
+		}
+		input.Receipt.Results = results
+		selected = append(selected, input)
+	}
+	return workflowResultSubject(selected, key)
+}
+
 // acceptWorkflowCommentResult verifies the native COMMENT receipt against the exact accepted
 // subject and completed producing lineage. A model verdict never becomes GitHub APPROVED.
 // acceptWorkflowCommentResult проверяет native COMMENT receipt по exact accepted subject и
 // completed producing lineage. Verdict модели никогда не становится GitHub APPROVED.
 func acceptWorkflowCommentResult(requirement entity.WorkflowResultRequirement, declaration entity.WorkflowDeclaredResult, proof workflowIntegrationResult, inputs []workflowResultDependency) (entity.WorkflowAcceptedResult, string) {
-	subject, found := workflowResultSubject(inputs, requirement.SubjectStepKey)
+	subject, found := workflowEvidenceSubject(inputs, requirement.SubjectStepKey)
 	var scope map[string]string
 	_, validInput := workflowResultObject(proof.Input, []string{"pull_request_number", "sha", "event", "body"}, []string{"pull_request_number", "sha", "event", "body"})
 	_, validOutput := workflowResultObject([]byte(proof.Summary), []string{"id", "body", "state", "commit_id"}, []string{"id", "body", "state", "commit_id"})
@@ -270,7 +298,7 @@ func (repository *Repository) evaluateWorkflowQAResultTx(ctx context.Context, tx
 		}
 		return entity.WorkflowAcceptedResult{}, "", err
 	}
-	subject, valid := workflowResultSubject(inputs, requirement.SubjectStepKey)
+	subject, valid := workflowEvidenceSubject(inputs, requirement.SubjectStepKey)
 	if !valid || declaration.HeadSHA != subject.HeadSHA || report.HeadSHA != subject.HeadSHA || report.Repository != subject.Repository || report.Number != subject.Number || report.Verdict != declaration.Verdict {
 		return entity.WorkflowAcceptedResult{}, workflowReviewSubjectMismatch, nil
 	}

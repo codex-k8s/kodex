@@ -38,7 +38,7 @@ func validWorkflowPublicationMode(value WorkflowPublication) bool {
 		for _, step := range value.Steps {
 			textBytes += len(step.Name) + len(step.Instructions) + len(step.ExpectedResult)
 		}
-		return value.ExecutionMode == workflowServerMode && value.Concurrency <= 2 && len(value.Steps) <= 12 && textBytes <= 8192
+		return value.ExecutionMode == workflowServerMode && value.Concurrency <= 2 && len(value.Steps) <= 12 && textBytes <= 8192 && validWorkflowPublicationEvidenceSubjects(value)
 	default:
 		return false
 	}
@@ -122,6 +122,32 @@ func validWorkflowPublicationServerStepForProfile(step WorkflowPublicationStep, 
 				if !found {
 					return false
 				}
+			}
+		}
+	}
+	return true
+}
+
+// validWorkflowPublicationEvidenceSubjects mirrors owner graph relations before wire3 encoding
+// and decoding; syntax proves neither a GitHub effect nor the future accepted PR receipt.
+// validWorkflowPublicationEvidenceSubjects повторяет owner graph relations до encode/decode
+// wire3; синтаксис не доказывает GitHub effect либо будущий accepted PR receipt.
+func validWorkflowPublicationEvidenceSubjects(value WorkflowPublication) bool {
+	if value.ResultEvidenceProfile != "GITHUB_REVIEW_QA_V1" {
+		return true
+	}
+	counts := map[string]int{}
+	for _, step := range value.Steps {
+		for _, requirement := range step.ResultRequirements {
+			if requirement.Kind == "PULL_REQUEST" {
+				counts[step.Key]++
+			}
+		}
+	}
+	for _, step := range value.Steps {
+		for _, requirement := range step.ResultRequirements {
+			if (requirement.Kind == "REVIEW" || requirement.Kind == "QA") && counts[requirement.SubjectStepKey] != 1 {
+				return false
 			}
 		}
 	}

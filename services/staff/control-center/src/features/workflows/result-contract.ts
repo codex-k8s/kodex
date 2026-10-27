@@ -143,6 +143,7 @@ export function validWorkflowDAG(
     return false;
   const agents = new Map<string, string>();
   const reviewers = new Map<string, string>();
+  const pullRequests = new Map<string, number>();
   for (const step of steps) {
     if (!workflowItem(step)) return false;
     const key = step[keyField];
@@ -169,6 +170,12 @@ export function validWorkflowDAG(
       )
     )
       return false;
+    if (profile === "GITHUB_REVIEW_QA_V1") {
+      for (const requirement of step.resultRequirements) {
+        if ((requirement.kind === "REVIEW" || requirement.kind === "QA") && pullRequests.get(requirement.subjectStepKey ?? "") !== 1) return false;
+      }
+    }
+    pullRequests.set(key, step.resultRequirements.filter((requirement) => requirement.kind === "PULL_REQUEST").length);
     for (const requirement of step.resultRequirements) {
       if (requirement.kind !== "REVIEW") continue;
       const subject = requirement.subjectStepKey ?? "";

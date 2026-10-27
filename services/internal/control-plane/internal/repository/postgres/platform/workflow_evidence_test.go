@@ -154,3 +154,26 @@ func TestWorkflowEvidenceContinuationEnvelope(t *testing.T) {
 		t.Fatal("oversized evidence silently truncated")
 	}
 }
+
+// TestWorkflowEvidenceOnlyPRSubjects prevents native evidence admission from interpreting an
+// agreeing REVIEW/QA result or duplicate PR declarations as the one accepted PR identity.
+// TestWorkflowEvidenceOnlyPRSubjects не позволяет native evidence admission принять REVIEW/QA
+// result либо дублирующиеся PR declarations за единственную accepted PR identity.
+func TestWorkflowEvidenceOnlyPRSubjects(t *testing.T) {
+	for _, kind := range []string{"REVIEW", "QA"} {
+		inputs := workflowEvidenceSubjectFixture()
+		inputs[0].Receipt.Results[0].Kind = kind
+		inputs[0].Receipt.Results[0].Verdict = "PASS"
+		if _, valid := workflowResultSubject(inputs, "author"); !valid {
+			t.Fatal("legacy subject boundary changed")
+		}
+		if _, valid := workflowEvidenceSubject(inputs, "author"); valid {
+			t.Fatal("native evidence accepted non-PR subject")
+		}
+	}
+	inputs := workflowEvidenceSubjectFixture()
+	inputs[0].Receipt.Results = append(inputs[0].Receipt.Results, inputs[0].Receipt.Results[0])
+	if _, valid := workflowEvidenceSubject(inputs, "author"); valid {
+		t.Fatal("native evidence accepted multiple PR subjects")
+	}
+}

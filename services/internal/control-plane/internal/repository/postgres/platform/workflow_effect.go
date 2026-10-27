@@ -165,7 +165,7 @@ func workflowEffectSlotForProfile(profile string, step entity.WorkflowStep, depe
 			allowed = found && subject.Repository == requirement.Repository && json.Unmarshal(canonicalInput, &target) == nil && target.Number == subject.Number && target.SHA == subject.HeadSHA
 		}
 		if profile == workflowservice.GitHubReviewQAV1 && (requirement.Kind == "REVIEW" || requirement.Kind == "QA") {
-			subject, found := workflowResultSubject(dependencies, requirement.SubjectStepKey)
+			subject, found := workflowEvidenceSubject(dependencies, requirement.SubjectStepKey)
 			if found && subject.Repository == repository {
 				if requirement.Kind == "REVIEW" && operation == "github.pull_request.review.create" {
 					var review struct {
