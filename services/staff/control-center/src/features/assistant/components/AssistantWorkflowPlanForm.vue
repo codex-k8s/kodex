@@ -142,7 +142,9 @@ const validDAG = computed(() =>
       .join(""),
     "key",
     parameter("reworkPolicy"),
-    parameter("resultEvidenceProfile"),
+    parameter("resultEvidenceProfile") === ""
+      ? undefined
+      : parameter("resultEvidenceProfile"),
   ),
 );
 const coordinatorRef = computed(() => text(parameter("coordinatorAgentRef")));
@@ -249,6 +251,7 @@ onBeforeUnmount(() => {
 function changeEvidenceProfile(event: Event): void {
   if (
     props.disabled ||
+    !serverMode.value ||
     !steps.value ||
     !(event.target instanceof HTMLSelectElement)
   )
@@ -290,6 +293,8 @@ async function changeMode(event: Event): Promise<void> {
   change("executionMode", mode);
   if (mode !== "SERVER_DAG_V1" && parameter("reworkPolicy") !== undefined)
     change("reworkPolicy", "");
+  if (mode !== "SERVER_DAG_V1" && parameter("resultEvidenceProfile") !== undefined)
+    change("resultEvidenceProfile", isUpdate.value ? "" : undefined);
 }
 // Повторный вызов после await читает актуальные режим и разрешение редактирования.
 function reworkModeEditable(): boolean {
@@ -555,6 +560,10 @@ const valid = computed(() =>
       (serverMode.value &&
         parameter("reworkPolicy") === "OWNER_APPROVED_UPSTREAM_V1")) &&
     (executionMode.value === "MANAGER_DRIVEN" || serverMode.value) &&
+    (parameter("resultEvidenceProfile") === undefined ||
+      (isUpdate.value && parameter("resultEvidenceProfile") === "") ||
+      (serverMode.value &&
+        parameter("resultEvidenceProfile") === "GITHUB_REVIEW_QA_V1")) &&
     (!serverMode.value || validDAG.value) &&
     (isUpdate.value
       ? text(parameter("workflowRef")) === props.operation.value.target.ref &&
