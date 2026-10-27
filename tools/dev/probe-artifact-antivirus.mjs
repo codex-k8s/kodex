@@ -21,7 +21,9 @@ export function probe(context) {
   const execute = (args, input) => spawnSync("kubectl", ["--context", context, "-n", namespace, ...args],
     { encoding: "utf8", input, timeout: 90000, maxBuffer: 1 << 20, stdio: ["pipe", "pipe", "pipe"] });
   const get = (kind, name) => {
-    const result = execute(["get", kind, ...(name ? [name] : ["-l", "app.kubernetes.io/name=control-plane"]), "-o", "json"]);
+    // Завершённые Pod не участвуют в проверке; фильтруем их до ограниченного чтения ответа.
+    const phase = !name && kind === "pods" ? ["--field-selector", "status.phase=Running"] : [];
+    const result = execute(["get", kind, ...(name ? [name] : ["-l", "app.kubernetes.io/name=control-plane"]), ...phase, "-o", "json"]);
     fail(result.status === 0, "ANTIVIRUS_KUBERNETES_READ_FAILED");
     return JSON.parse(result.stdout);
   };
