@@ -4,11 +4,21 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.542.0
+version: 1.543.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие синтетические grant fixtures — 27.10.2026
+
+Тесты SYSTEM и PROJECT используют общий конструктор одинаковой операции и
+кандидата; конкретный тип операции, before/after и scope pins остаются у тестов.
+Объекты кандидатов создаются отдельно, ссылки before/after сохраняются. Это
+тестовая оснастка, которая не выдаёт полномочия и не запускает провайдер.
+До и после 48 выбранных unit PASS, typecheck, адресный lint и build PASS LOCAL.
+Удалена одна raw-группа без новых; 1396 raw / 1270 retained / 126 unresolved,
+Go 21649/21649. E2E/browser/live/deploy/startup/QA не выполнялись.
 
 ## Общий тестовый renderer — 27.10.2026
 
