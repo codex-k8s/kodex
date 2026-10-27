@@ -135,6 +135,7 @@ function mount(count = 33) {
     validStep: (step: Record<string, unknown>, pending?: boolean) => boolean;
     changeStep: (index: number, key: string, value: unknown) => void;
     changeMode: (event: Event) => Promise<void>;
+    changeReworkPolicy: (value: "" | "OWNER_APPROVED_UPSTREAM_V1") => Promise<void>;
   };
   const renderer = createRenderer<object, object>({
     insert() {},
@@ -445,4 +446,23 @@ it("общий свернутый шаг не монтирует slot, но по
   expect(html).toContain("Требуется решение человека");
   expect(html).toContain("Проверьте поля этапа");
   expect(html).not.toContain("Editor");
+});
+
+it.each(["mode", "permission"])("не меняет rework policy после изменения %s во время подтверждения", async (fault) => {
+  const { props, state } = mount(2);
+  updateOperationParameter(props.operation, "executionMode", "SERVER_DAG_V1");
+  await nextTick();
+  const pending = state.changeReworkPolicy("OWNER_APPROVED_UPSTREAM_V1");
+  if (fault === "mode") updateOperationParameter(props.operation, "executionMode", "MANAGER_DRIVEN");
+  else props.disabled = true;
+  resolveConfirmation(true);
+  await pending;
+  expect(operationInputs([props.operation])[0]?.parameters.reworkPolicy).toBeUndefined();
+  props.disabled = false;
+  updateOperationParameter(props.operation, "executionMode", "SERVER_DAG_V1");
+  await nextTick();
+  const accepted = state.changeReworkPolicy("OWNER_APPROVED_UPSTREAM_V1");
+  resolveConfirmation(true);
+  await accepted;
+  expect(operationInputs([props.operation])[0]?.parameters.reworkPolicy).toBe("OWNER_APPROVED_UPSTREAM_V1");
 });
