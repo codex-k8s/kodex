@@ -35,7 +35,8 @@ describe("Closed server message keys", () => {
           render: () =>
             h("main", [
               h(SafeSummary, {
-                content: "i18n:RUNTIME_INIT_ARTIFACT_TRANSFER_AUTHORITY_REJECTED",
+                content:
+                  "i18n:RUNTIME_INIT_ARTIFACT_TRANSFER_AUTHORITY_REJECTED",
               }),
               h(SafeMarkdown, { content: "i18n:RUNTIME_INIT_UNKNOWN_UNKNOWN" }),
             ]),
