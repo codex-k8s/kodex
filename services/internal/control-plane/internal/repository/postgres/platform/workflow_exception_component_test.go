@@ -103,6 +103,15 @@ func TestWorkflowExceptionRecoveryComponent(t *testing.T) {
 			assertWorkflowRecoveryFeedbackTask(t, stringMap(step, "task"), expectedFeedback)
 		}
 		seenRun[stringMap(step, "runRef")], seenNode[stringMap(step, "nodeRef")] = true, true
+		if attempt == 2 {
+			progress := command.CompleteExecutionInput{LeaseRef: stringMap(step, "leaseRef"), Fence: stringMap(step, "fence"), Generation: runtimeRevisionMapInt64(step, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: `{"schema":"kodex.workflow-capture-progress.v1","phase":"CAPTURE_PROGRESS","cause":"ARTIFACTS_FOR_CONTINUATION","artifactKeys":["report"]}`, Artifacts: []command.CompletedArtifact{workflowCaptureProgressArtifact("retry.md", []byte("Ранний материал второй business attempt.\n"))}}
+			execute(command.CompleteExecution, "snapshot-progress-two", nil, progress)
+			continued := claim("snapshot-technical-two")
+			if stringMap(continued, "runRef") != stringMap(step, "runRef") || runtimeRevisionMapInt64(continued, "attempt") != 2 {
+				t.Fatal("native business retry did not retain same-run technical continuation")
+			}
+			step = continued
+		}
 		complete(fmt.Sprintf("fail-%d", attempt), step, declaration)
 		state, history, managers, _, originRun := read()
 		if len(history) != attempt || history[attempt-1].Attempt != int32(attempt) || history[attempt-1].State != "MANAGER_QUEUED" || managers != int64(attempt) || state != "RUNNING" {
@@ -203,6 +212,7 @@ func TestWorkflowExceptionRecoveryComponent(t *testing.T) {
 			if history[attempt-1].State != "RECOVERED" || history[attempt-1].RecoveryNodeID == episode.FinalNodeID {
 				t.Fatal("owner approval did not create a fresh physical business attempt")
 			}
+			assertWorkflowRetryOwnerSnapshot(t, ctx, service, owner, run.Ref, attempt)
 		} else {
 			if !slices.Equal(gate.AllowedDecisions, []string{"REJECT", "CANCEL"}) {
 				t.Fatal("attempt five was offered by the recovery gate")
@@ -218,6 +228,7 @@ func TestWorkflowExceptionRecoveryComponent(t *testing.T) {
 	if state != "FAILED" || history[3].State != "REJECTED" || managers != 4 || leases != 0 {
 		t.Fatal("final rejection did not close the whole recovery graph")
 	}
+	assertWorkflowRetryOwnerSnapshot(t, ctx, service, owner, run.Ref, 3)
 	items := execute(command.ClaimExecution, "terminal-claim", nil, command.LeaseInput{WorkloadInstance: "workflow-exception-fixture", Limit: 2}).RuntimeItems
 	if len(items) != 0 {
 		t.Fatal("terminal recovery graph admitted another model")

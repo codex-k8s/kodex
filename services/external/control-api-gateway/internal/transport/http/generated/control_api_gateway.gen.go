@@ -14189,12 +14189,15 @@ type RunDeltaState string
 
 // RunEdge defines model for RunEdge.
 type RunEdge struct {
-	Label         string      `json:"label"`
-	Ref           OpaqueRef   `json:"ref"`
-	RunRef        OpaqueRef   `json:"runRef"`
-	SourceNodeRef OpaqueRef   `json:"sourceNodeRef"`
-	TargetNodeRef OpaqueRef   `json:"targetNodeRef"`
-	Type          RunEdgeType `json:"type"`
+	Label  string    `json:"label"`
+	Ref    OpaqueRef `json:"ref"`
+	RunRef OpaqueRef `json:"runRef"`
+
+	// ServerWorkflowRetry Историческая SERVER lineage, проверенная владельцем; не разрешает retry и не принимает результат.
+	ServerWorkflowRetry *WorkflowRetryReadProof `json:"serverWorkflowRetry,omitempty"`
+	SourceNodeRef       OpaqueRef               `json:"sourceNodeRef"`
+	TargetNodeRef       OpaqueRef               `json:"targetNodeRef"`
+	Type                RunEdgeType             `json:"type"`
 }
 
 // RunEdgeType defines model for RunEdge.Type.
@@ -15979,6 +15982,16 @@ type WorkflowResultRequirementKind string
 
 // WorkflowResultRequirementOperation defines model for WorkflowResultRequirement.Operation.
 type WorkflowResultRequirementOperation string
+
+// WorkflowRetryReadProof Историческая SERVER lineage, проверенная владельцем; не разрешает retry и не принимает результат.
+type WorkflowRetryReadProof struct {
+	BusinessAttempt         int32     `json:"businessAttempt"`
+	OriginNodeRef           OpaqueRef `json:"originNodeRef"`
+	PreviousBusinessAttempt int32     `json:"previousBusinessAttempt"`
+	StepKey                 string    `json:"stepKey"`
+	WorkflowVersionDigest   string    `json:"workflowVersionDigest"`
+	WorkflowVersionRef      OpaqueRef `json:"workflowVersionRef"`
+}
 
 // WorkflowStep defines model for WorkflowStep.
 type WorkflowStep struct {

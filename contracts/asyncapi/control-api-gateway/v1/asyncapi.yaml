@@ -1068,6 +1068,18 @@ components:
           APPLY_PLAN,
           RECOVER,
         ]
+    WorkflowRetryReadProof:
+      type: object
+      additionalProperties: false
+      description: Историческая SERVER lineage, проверенная владельцем; не разрешает retry и не принимает результат.
+      required: [workflowVersionRef, workflowVersionDigest, originNodeRef, stepKey, previousBusinessAttempt, businessAttempt]
+      properties:
+        workflowVersionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        workflowVersionDigest: { type: string, pattern: '^[a-f0-9]{64}(?![\s\S])' }
+        originNodeRef: { $ref: "#/components/schemas/OpaqueRef" }
+        stepKey: { type: string, minLength: 1, maxLength: 96, pattern: '^[A-Za-z0-9_-]+(?![\s\S])' }
+        previousBusinessAttempt: { type: integer, format: int32, minimum: 1, maximum: 3 }
+        businessAttempt: { type: integer, format: int32, minimum: 2, maximum: 4 }
     RunEdge:
       type: object
       additionalProperties: false
@@ -1079,6 +1091,7 @@ components:
         targetNodeRef: { $ref: "#/components/schemas/OpaqueRef" }
         type: { $ref: "#/components/schemas/RunEdgeType" }
         label: { type: string, maxLength: 160 }
+        serverWorkflowRetry: { $ref: "#/components/schemas/WorkflowRetryReadProof" }
     RunEdgeType:
       type: string
       enum: [DELEGATED_TO, CALLBACK_TO, RETRY_OF, CONTINUES, WAITING_FOR]

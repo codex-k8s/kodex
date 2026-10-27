@@ -1237,6 +1237,8 @@ message RunEdge {
   string target_node_ref = 4;
   RunEdgeType type = 5;
   string label = 6;
+  // server_workflow_retry присутствует только для owner-proved SERVER child-to-child RETRY_OF.
+  WorkflowRetryReadProof server_workflow_retry = 7;
 }
 
 // RunDelta содержит ограниченный безопасный снимок изменившегося корневого
@@ -9077,4 +9079,21 @@ message ProviderFinancialOverview {
   int64 unknown = 4;
   google.protobuf.Timestamp observed_at = 5;
   google.protobuf.Timestamp valid_until = 6;
+}
+
+// WorkflowRetryReadProof описывает проверенное владельцем историческое ребро SERVER business retry.
+// Это безопасное доказательство чтения, не grant, команда retry или принятие результата.
+message WorkflowRetryReadProof {
+  // workflow_version_ref закрепляет immutable опубликованную версию корня.
+  string workflow_version_ref = 1;
+  // workflow_version_digest — полный SHA256 опубликованной политики.
+  string workflow_version_digest = 2;
+  // origin_node_ref — неизменяемый anchor логического этапа в этом графе.
+  string origin_node_ref = 3;
+  // step_key принадлежит именно закреплённому опубликованному этапу.
+  string step_key = 4;
+  // previous_business_attempt — завершённая попытка от1 до3; source ребра может быть technical final.
+  int32 previous_business_attempt = 5;
+  // business_attempt — новая попытка от2 до4, всегда previous_business_attempt+1.
+  int32 business_attempt = 6;
 }

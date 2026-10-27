@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	"sort"
+	"strconv"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -80,7 +81,20 @@ func graphRetryPredecessors(graph *entity.RunGraph, runs map[string]entity.Run) 
 	}
 	links := map[string]string{}
 	predecessors := map[string]bool{}
+	serverTargets, serverSlots := map[string]bool{}, map[string]bool{}
+	serverVersion := ""
 	for _, edge := range graph.Edges {
+		if proof := edge.ServerWorkflowRetry; proof != nil {
+			version := proof.WorkflowVersionRef + ":" + proof.WorkflowVersionDigest
+			slot := proof.OriginNodeRef + ":" + strconv.FormatInt(int64(proof.BusinessAttempt), 10)
+			if !validWorkflowRetrySnapshot(graph, edge, nodes, runs) || serverTargets[edge.TargetNodeRef] || serverSlots[slot] ||
+				serverVersion != "" && serverVersion != version {
+				return nil, false
+			}
+			serverVersion = version
+			serverTargets[edge.TargetNodeRef], serverSlots[slot] = true, true
+			continue
+		}
 		if edge.Type != "RETRY_OF" && edge.Type != "CONTINUES" {
 			continue
 		}

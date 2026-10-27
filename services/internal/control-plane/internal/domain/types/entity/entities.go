@@ -880,7 +880,19 @@ type RunNode struct {
 // does not prove server-owned delegation or create a child grant.
 // RunEdge — типизированная связь источника и цели графа запуска с меткой; создание записи не
 // доказывает серверное делегирование и не создаёт дочерний grant.
-type RunEdge struct{ Ref, RunRef, SourceNodeRef, TargetNodeRef, Type, Label string }
+type RunEdge struct {
+	Ref, RunRef, SourceNodeRef, TargetNodeRef, Type, Label string
+	ServerWorkflowRetry                                    *WorkflowRetryReadProof `json:",omitempty"`
+}
+
+// WorkflowRetryReadProof exposes only owner-verified historical SERVER step lineage; it neither
+// authorizes another attempt nor carries private execution, grant or input provenance.
+// WorkflowRetryReadProof передаёт лишь проверенную владельцем историю SERVER-этапа; не разрешает
+// новую попытку и не содержит приватного происхождения execution, grant или входных данных.
+type WorkflowRetryReadProof struct {
+	WorkflowVersionRef, WorkflowVersionDigest, OriginNodeRef, StepKey string
+	PreviousBusinessAttempt, BusinessAttempt                          int32
+}
 
 // RunDelta carries a run's changed state/result/error, version/graph/event sequence, usage, references
 // and times for realtime projection; consumers still bind it to their exact run and monotonic version.

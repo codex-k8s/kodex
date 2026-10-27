@@ -60,6 +60,27 @@ func TestWorkflowAttemptProjectionExcludesInternalRevision(t *testing.T) {
 	}
 }
 
+// TestWorkflowRetryReadProofCaster keeps the optional legacy shape and all six safe owner fields
+// through the actual caster, without aliasing a subsequently changed domain read model.
+// TestWorkflowRetryReadProofCaster сохраняет optional legacy shape и все шесть безопасных owner
+// fields через настоящий caster, без alias при последующем изменении domain read model.
+func TestWorkflowRetryReadProofCaster(t *testing.T) {
+	value := entity.RunEdge{Ref: "edg_fixture1", Type: "RETRY_OF"}
+	if castEdge(value).ServerWorkflowRetry != nil {
+		t.Fatal("legacy edge gained a fabricated server retry proof")
+	}
+	value.ServerWorkflowRetry = &entity.WorkflowRetryReadProof{WorkflowVersionRef: "wfv_fixture1", WorkflowVersionDigest: strings.Repeat("a", 64), OriginNodeRef: "nod_origin01", StepKey: "work", PreviousBusinessAttempt: 3, BusinessAttempt: 4}
+	got := castEdge(value)
+	want := &controlplanev1.WorkflowRetryReadProof{WorkflowVersionRef: "wfv_fixture1", WorkflowVersionDigest: strings.Repeat("a", 64), OriginNodeRef: "nod_origin01", StepKey: "work", PreviousBusinessAttempt: 3, BusinessAttempt: 4}
+	if !proto.Equal(got.ServerWorkflowRetry, want) {
+		t.Fatal("retry proof caster lost owner fields")
+	}
+	value.ServerWorkflowRetry.StepKey = "changed_after_cast"
+	if !proto.Equal(got.ServerWorkflowRetry, want) {
+		t.Fatal("retry proof caster aliased a mutable read model")
+	}
+}
+
 // TestDomainWorkflowVersionBuildsAuthoritativeDependencies checks workflow metadata, generated
 // step keys, sequential/parallel dependencies, capability requirements and human-gate decisions
 // are materialized as expected.
