@@ -1,4 +1,4 @@
-import { createDeferred } from "@/test-utils/create-deferred";
+import { createDeferredWithCleanup } from "@/test-utils/create-deferred";
 import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import { renderToString } from "@vue/server-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -68,9 +68,7 @@ const source = RunPromptPreview as unknown as {
 const disposers: (() => void)[] = [];
 const settleRequests: (() => void)[] = [];
 function deferred() {
-  const { promise, resolve, reject } = createDeferred<PromptTemplatePreview>();
-  settleRequests.push(() => resolve(preview));
-  return { promise, resolve, reject };
+  return createDeferredWithCleanup(settleRequests, preview);
 }
 function mount() {
   const props = reactive({ run: run() });

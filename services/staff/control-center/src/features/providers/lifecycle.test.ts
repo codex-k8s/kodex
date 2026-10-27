@@ -1,3 +1,4 @@
+import { createTestStorage as storage } from "@/test-utils/storage";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   ProviderAccount,
@@ -101,23 +102,6 @@ const failedAccount: ProviderAccount = {
     ],
   },
 };
-function storage(): Storage {
-  const values = new Map<string, string>();
-  return {
-    get length() {
-      return values.size;
-    },
-    key: (index) => [...values.keys()][index] ?? null,
-    clear: () => values.clear(),
-    getItem: (key) => values.get(key) ?? null,
-    setItem: (key, value) => {
-      values.set(key, value);
-    },
-    removeItem: (key) => {
-      values.delete(key);
-    },
-  };
-}
 function page(): ProviderAccountBlockerPage {
   return {
     items: [],

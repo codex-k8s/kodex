@@ -10,3 +10,13 @@ export function createDeferred<T = void>() {
   });
   return { promise, resolve, reject };
 }
+
+// Регистрирует завершение синтетического запроса при очистке теста и возвращает его callbacks.
+export function createDeferredWithCleanup<T>(
+  cleanup: Array<() => void>,
+  value: T,
+) {
+  const { promise, resolve, reject } = createDeferred<T>();
+  cleanup.push(() => resolve(value));
+  return { promise, resolve, reject };
+}

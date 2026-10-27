@@ -1,4 +1,5 @@
-import { createDeferred } from "@/test-utils/create-deferred";
+import { createTestStorage as storage } from "@/test-utils/storage";
+import { createDeferredWithCleanup } from "@/test-utils/create-deferred";
 import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -60,27 +61,7 @@ const source = ProviderLifecycleRecovery as unknown as {
 const disposers: (() => void)[] = [];
 const settleRequests: (() => void)[] = [];
 function deferred() {
-  const { promise, resolve, reject } =
-    createDeferred<ProviderLifecycleResult>();
-  settleRequests.push(() => resolve(result));
-  return { promise, resolve, reject };
-}
-function storage(): Storage {
-  const values = new Map<string, string>();
-  return {
-    get length() {
-      return values.size;
-    },
-    key: (index) => [...values.keys()][index] ?? null,
-    clear: () => values.clear(),
-    getItem: (key) => values.get(key) ?? null,
-    setItem: (key, value) => {
-      values.set(key, value);
-    },
-    removeItem: (key) => {
-      values.delete(key);
-    },
-  };
+  return createDeferredWithCleanup(settleRequests, result);
 }
 function mount(problem?: unknown) {
   const data = storage();
