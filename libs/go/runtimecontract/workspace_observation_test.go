@@ -1,0 +1,74 @@
+package runtimecontract
+
+import (
+	"bytes"
+	"strings"
+	"testing"
+)
+
+// TestWorkspaceObservationNeverTurnsQuiescenceIntoFreshAuthority checks the closed two-phase wire.
+// No codec result alone proves owner ACK, terminal containers, PVC ownership or writer permission.
+// TestWorkspaceObservationNeverTurnsQuiescenceIntoFreshAuthority проверяет closed two-phase wire.
+// Codec не доказывает owner ACK, terminal containers, PVC ownership или writer permission.
+func TestWorkspaceObservationNeverTurnsQuiescenceIntoFreshAuthority(t *testing.T) {
+	joined, input, binding := workspaceQuiescenceFixture()
+	input.WorkspaceStorage = &binding
+	observation := RunnerWorkspaceObservation{RuntimeRevisionDigest: input.RuntimeRevisionDigest,
+		Phase: WorkspaceObserveBind, WorkspaceRef: binding.WorkspaceRef, Generation: binding.Generation}
+	if observation.ValidateForInput(input) != nil {
+		t.Fatal("exact initial BIND metadata rejected")
+	}
+	observation.Phase = WorkspaceObserveQuiescent
+	if observation.ValidateForInput(input) == nil {
+		t.Fatal("missing join became a positive observation")
+	}
+	observation.Quiescence = &joined
+	if observation.ValidateForInput(input) != nil {
+		t.Fatal("exact positive record rejected")
+	}
+	observation.Phase = WorkspaceObserveBind
+	if observation.ValidateForInput(input) == nil {
+		t.Fatal("past quiescence record was reinterpreted as a fresh BIND")
+	}
+	observation.Phase = "RENEW"
+	if observation.ValidateForInput(input) == nil {
+		t.Fatal("workspace observation widened into execution renewal")
+	}
+	observation.Phase = WorkspaceObserveQuiescent
+	joined.Writer.LeaseGeneration++
+	if observation.ValidateForInput(input) == nil {
+		t.Fatal("old record matched a different lease generation")
+	}
+}
+
+// TestWorkspaceOwnerAcknowledgementIsClosedAndSecretFree checks the actual canonical ACK codec.
+// Bad digests, recursive join hashes and unknown fields never reach filesystem materialization.
+// TestWorkspaceOwnerAcknowledgementIsClosedAndSecretFree проверяет canonical ACK codec.
+// Bad digest, recursive join hash и unknown field не допускаются к filesystem materialization.
+func TestWorkspaceOwnerAcknowledgementIsClosedAndSecretFree(t *testing.T) {
+	joined, input, binding := workspaceQuiescenceFixture()
+	input.WorkspaceStorage = &binding
+	ack := WorkspaceWriterAcknowledgement{Schema: WorkspaceWriterAcknowledgementSchema, Scope: binding.Scope,
+		WorkspaceRef: binding.WorkspaceRef, Generation: binding.Generation, Writer: joined.Writer}
+	raw, err := EncodeWorkspaceWriterAcknowledgement(ack)
+	if err != nil || bytes.Contains(raw, []byte(input.LeaseFence)) {
+		t.Fatal("bounded ACK rejected or disclosed a private fence")
+	}
+	decoded, err := DecodeWorkspaceWriterAcknowledgement(raw)
+	if err != nil || !decoded.Matches(input) {
+		t.Fatal("current immutable owner ACK did not match its input")
+	}
+	ack.Writer.JoinSHA256 = strings.Repeat("0", 64)
+	if _, err := EncodeWorkspaceWriterAcknowledgement(ack); err == nil {
+		t.Fatal("writer ACK fabricated a positive join")
+	}
+	for _, invalid := range [][]byte{
+		append(append([]byte(nil), raw...), []byte(`{}`)...),
+		append(append([]byte(nil), raw[:len(raw)-1]...), []byte(`,"secret":"forbidden"}`)...),
+		bytes.Replace(raw, []byte(`"generation":1`), []byte(`"generation":0,"generation":1`), 1),
+	} {
+		if _, err := DecodeWorkspaceWriterAcknowledgement(invalid); err == nil {
+			t.Fatal("malformed owner ACK became a valid materialization input")
+		}
+	}
+}

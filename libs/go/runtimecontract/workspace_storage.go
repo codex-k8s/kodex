@@ -30,9 +30,9 @@ const (
 	// MaximumWorkspaceArchivePathBytes bounds descriptor-relative paths without allowing traversal.
 	// MaximumWorkspaceArchivePathBytes ограничивает descriptor-relative paths без traversal.
 	MaximumWorkspaceArchivePathBytes = 4096
-	// maximumWorkspaceEntryOverhead bounds canonical PAX headers, path metadata and padding per entry.
-	// maximumWorkspaceEntryOverhead ограничивает canonical PAX headers, path metadata и padding на entry.
-	maximumWorkspaceEntryOverhead int64 = 8192
+	// WorkspaceArchiveEntryOverheadBytes bounds canonical PAX headers, path metadata and padding per entry.
+	// WorkspaceArchiveEntryOverheadBytes ограничивает canonical PAX headers, path metadata и padding на entry.
+	WorkspaceArchiveEntryOverheadBytes int64 = 8192
 )
 
 // errWorkspaceStorageInvalid hides rejected private metadata and source object commitments.
@@ -307,7 +307,7 @@ func MaximumWorkspaceStreamBytes(bytes, entries int64) (int64, error) {
 	if bytes < 0 || bytes > RuntimeWorkspaceWritableBytes || entries < 0 || entries > RuntimeWorkspaceMaximumFiles || bytes > 0 && entries == 0 {
 		return 0, errWorkspaceStorageInvalid
 	}
-	return bytes + entries*maximumWorkspaceEntryOverhead + 1024, nil
+	return bytes + entries*WorkspaceArchiveEntryOverheadBytes + 1024, nil
 }
 
 // EncodeWorkspaceArchiveManifest enforces the unchanged 64KiB boundary before object publication.

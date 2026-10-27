@@ -406,6 +406,9 @@ service RuntimeWorkService {
   rpc ReportExecutionProgress(ReportExecutionProgressRequest) returns (ReportExecutionProgressResponse);
   rpc CommitProviderCredentialRefresh(CommitProviderCredentialRefreshRequest) returns (CommitProviderCredentialRefreshResponse);
   rpc CompleteExecution(CompleteExecutionRequest) returns (CompleteExecutionResponse);
+  // Сохраняет только exact writer BIND либо past quiescence fact. Terminal ACK
+  // не создаёт grant, RuntimeRevision, run transition или новую generation.
+  rpc ObserveWorkspace(ObserveWorkspaceRequest) returns (ObserveWorkspaceResponse);
   rpc DelegateExecution(DelegateExecutionRequest) returns (DelegateExecutionResponse);
   // Запускает опубликованный Workflow из exact active execution; actor/project
   // и обязательную связь родителя назначает владелец, не caller payload.
@@ -4206,6 +4209,31 @@ message CompleteExecutionRequest {
 message CompleteExecutionResponse {
   Run run = 1;
   RunGraph graph = 2;
+}
+
+enum RuntimeWorkspaceObservationPhase {
+  RUNTIME_WORKSPACE_OBSERVATION_PHASE_UNSPECIFIED = 0;
+  RUNTIME_WORKSPACE_OBSERVATION_PHASE_BIND = 1;
+  RUNTIME_WORKSPACE_OBSERVATION_PHASE_QUIESCENT = 2;
+}
+message ObserveWorkspaceRequest {
+  MutationContext mutation = 1;
+  string lease_ref = 2;
+  string fence = 3;
+  int64 generation = 4;
+  string runtime_revision_digest = 5;
+  string workspace_ref = 6;
+  int64 workspace_generation = 7;
+  RuntimeWorkspaceObservationPhase phase = 8;
+  string pod_uid = 9;
+  string pvc_uid = 10;
+  // Canonical closed record <=2KiB; tuple сверяет owner, terminal owned Pod — RC.
+  bytes quiescence = 11;
+  string execution_binding_digest = 12;
+}
+message ObserveWorkspaceResponse {
+  // Canonical closed safe writer ACK, не capability/credential.
+  bytes writer_acknowledgement = 1;
 }
 
 enum SessionArchiveTaskKind {
