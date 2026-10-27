@@ -4,11 +4,64 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.532.0
+version: 1.533.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая подготовка PostgreSQL-сценариев — 27.10.2026
+
+Три helpers принадлежат существующему component_runtime_fixture_test.go.
+resolvedComponentScope выполняет прежние ResolvePrincipal и resolveScope
+для переданного principal с обоими Fatal в прежнем порядке. Пять callers
+сохраняют свои owner inputs, SQL, транзакции и assertions. newProjectOwnerComponentService
+обслуживает три сценария overlay history/effective capabilities/prompt preview:
+точные fixed actor/tenant/workload/project-create operation, затем тот же
+platformservice.New. Не подставляет owner другого сценария и не выдаёт новых
+полномочий. Новый service не запускает runtime. readAssistantRunScopeEffects
+читает прежний queryAssistantRunScopeEffects для двух callers, сохраняя
+organizationID, порядок пяти int counters и Fatal при Scan; момент snapshot
+и сравнение эффектов остаются у независимых тестов.
+
+| Сценарии | Общая подготовка | Сохранённая проверяемая граница |
+| --- | --- | --- |
+| Agent bootstrap environment, SYSTEM run project scope | principal/scope и read-only counters | published owner environment, signed-project denials до OCC/replay, отсутствие устойчивых эффектов |
+| SYSTEM integration grants | principal/scope | прежние policy pins, grant revocation, atomic plans и exact receipts |
+| Assistant context, environment draft | principal/scope | fresh owner read, immutable bases и выборочная публикация |
+| Overlay history, effective capabilities, prompt preview | fixed project-create owner/service | прежние history/rollback, current authority и immutable preview pins |
+
+Production commands/authority/lifecycle, SQL/migrations, pool/Close/deadlines
+и порядок assertions не менялись. Новых create/claim/renew/terminal/retry/event
+переходов нет. Девять full-source inverses восстановили все исходные файлы;
+пять scope kernels, три owner/service kernels и два counter kernels точно
+совпали после замены локальных имён. Bootstrap dispatcher, production repository,
+service constructor и SQL counters побайтно прежние.
+
+Control-plane build/unit/vet PASS LOCAL до6.48/18.77/1.82s и после6.58/37.88/4.98s:
+3003PASS/70условныхSKIP/0FAIL,30packages. Public disposable PostgreSQL runner:
+выбранные восемь bootstrap-сценариев, включая три prerequisites, дали18PASS
+до29.75s/после50.45s; три отдельных component suites дали17PASS до37.57s/
+после53.01s. Во всех четырёх запусках0FAIL/SKIP; это35PASS events до/после,
+не полная PostgreSQL/E2E suite и не live runtime.
+
+Первоначальный native bootstrap-фильтр без model-catalog/promotion prerequisites
+дал FAIL: overlay validation conflict и отсутствие promoted image для draft.
+Исходники на тот момент не менялись. После добавления существующих prerequisites
+в фильтр native PASS; исходный FAIL сохранён. Промежуточный вынос разрешения
+scope выявил меньшую группу counter reader — её также устранили. Финальные
+module/component проверки повторены после третьего helper. Ошибка первого
+локального редактора при отсутствии необязательного import устранена до тестов;
+единственная частичная правка сверена с ожидаемым diff и восстановлена перед
+полной атомарной подготовкой исходников.
+
+Устранены пять raw-групп, новых нет. Registry1120 без новых исключений;
+1409raw/1263retained/146unresolved(Go75/TypeScript71),sources6788/excluded222.
+Go21632/21632 EN→RU, пять quality stages и17quality unit tests PASS LOCAL;
+thresholds/exclusions прежние. Context7 resolve/query /golang/go PASS:
+проверены testing.T.Helper/Fatal/FailNow и исполнение в goroutine теста;
+goroutines и новые зависимости не добавлялись. Полные E2E/browser/live/deploy/
+startup/QA NOT RUN. Этот результат не подтверждает готовность всего diff.
 
 ## Общий путь runtime-команд агента — 27.10.2026
 

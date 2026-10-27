@@ -159,3 +159,59 @@ func newTracedOrganizationComponentPool(t *testing.T, ctx context.Context) *pgxp
 	}
 	return pool
 }
+
+// resolvedComponentScope resolves the caller's synthetic principal through the repository and
+// then resolves its owner scope, preserving both original fatal checks and call order. It runs
+// synchronously in the test goroutine and returns only the authoritative scope; SQL, transactions,
+// side-effect counters and lifecycle assertions remain in the caller. It grants no new permission.
+// resolvedComponentScope разрешает переданного тестового участника через репозиторий, затем его
+// область владельца, сохраняя оба исходных Fatal и порядок вызовов. Выполняется синхронно в
+// goroutine теста и возвращает только авторитетную область; SQL, транзакции, счётчики эффектов и
+// проверки жизненного цикла остаются у вызывающего. Новые полномочия не выдаются.
+func resolvedComponentScope(t *testing.T, ctx context.Context, repository *Repository, principal value.Principal) scope {
+	t.Helper()
+	resolved, err := repository.ResolvePrincipal(ctx, principal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := repository.resolveScope(ctx, resolved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return current
+}
+
+// newProjectOwnerComponentService resolves the fixed synthetic project-create owner and constructs
+// the platform service with the same repository and context, in that order. It preserves the
+// exact proof inputs and fatal constructor error. The caller retains project creation, resource
+// setup, pool lifetime, deadlines and every independent scenario assertion; no runtime is started.
+// newProjectOwnerComponentService разрешает фиксированного тестового владельца создания проекта,
+// затем создаёт платформенный сервис с теми же репозиторием и контекстом. Сохраняет точные proof
+// inputs и Fatal при ошибке конструктора. Создание проекта, подготовка ресурсов, срок, время жизни
+// пула и независимые проверки сценария остаются у вызывающего; runtime не запускается.
+func newProjectOwnerComponentService(t *testing.T, ctx context.Context, repository *Repository) (*serviceplatform.Service, value.Principal) {
+	t.Helper()
+	owner := resolvedTestPrincipal(t, ctx, repository, port.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.command.projects.create"}, "control-api-gateway")
+	service, err := serviceplatform.New(repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return service, owner
+}
+
+// readAssistantRunScopeEffects reads the original five Run/receipt/audit/turn/outbox fixture
+// counters with one query and the exact caller organization. It preserves the fixed array order
+// and fatal scan error; the caller controls when snapshots are taken and compares durable effects.
+// It does not resolve authority, mutate data, start a transaction or contact an external runtime.
+// readAssistantRunScopeEffects читает прежние пять тестовых счётчиков Run/receipt/audit/turn/outbox
+// одним запросом для точной организации вызывающего. Сохраняет порядок массива и Fatal при ошибке
+// Scan; вызывающий выбирает момент снимка и сравнивает устойчивые эффекты. Не разрешает authority,
+// не меняет данные, не открывает транзакцию и не обращается к внешнему runtime.
+func readAssistantRunScopeEffects(t *testing.T, ctx context.Context, pool *pgxpool.Pool, organizationID string) [5]int {
+	t.Helper()
+	var result [5]int
+	if err := pool.QueryRow(ctx, queryAssistantRunScopeEffects, organizationID).Scan(&result[0], &result[1], &result[2], &result[3], &result[4]); err != nil {
+		t.Fatal(err)
+	}
+	return result
+}

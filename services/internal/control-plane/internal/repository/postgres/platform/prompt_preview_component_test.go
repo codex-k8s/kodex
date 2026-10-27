@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
-	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
@@ -25,11 +24,7 @@ import (
 // контекста, затем согласованность объявленной области и каталога переменных.
 func testPromptContextPreview(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
-	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.command.projects.create"}, "control-api-gateway")
-	service, err := platformservice.New(repository)
-	if err != nil {
-		t.Fatal(err)
-	}
+	service, owner := newProjectOwnerComponentService(t, ctx, repository)
 	project, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "prompt-preview-project"}, Payload: command.ProjectInput{Name: "Preview project", Purpose: "Verify owner prompt context", Language: "en"}})
 	if err != nil {
 		t.Fatal(err)

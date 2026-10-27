@@ -8,7 +8,6 @@ import (
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
-	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
@@ -21,11 +20,7 @@ import (
 // версии или повтора квитанции; назначение агенту не должно повышать полномочия участника.
 func testEffectiveCapabilities(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
-	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.command.projects.create"}, "control-api-gateway")
-	service, err := platformservice.New(repository)
-	if err != nil {
-		t.Fatal(err)
-	}
+	service, owner := newProjectOwnerComponentService(t, ctx, repository)
 	project, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "effective-cap-project"}, Payload: command.ProjectInput{Name: "Capability scope", Purpose: "Current authority intersection", Language: "en"}})
 	if err != nil {
 		t.Fatal(err)

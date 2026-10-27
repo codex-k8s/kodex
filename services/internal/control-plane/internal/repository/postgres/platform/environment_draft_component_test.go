@@ -101,14 +101,7 @@ WHERE project.name = 'Role image promotion' AND image.promotion_state = 'PROMOTE
 		t.Fatalf("draft readback: %v", err)
 	}
 	target := published.RuntimeEnvironment
-	resolvedOwner, err := repository.ResolvePrincipal(ctx, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ownerScope, err := repository.resolveScope(ctx, resolvedOwner)
-	if err != nil {
-		t.Fatal(err)
-	}
+	ownerScope := resolvedComponentScope(t, ctx, repository, owner)
 	assistantTx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 	if err != nil {
 		t.Fatal(err)

@@ -103,21 +103,10 @@ func TestAgentBootstrapPreservesPublishedProjectEnvironmentComponent(t *testing.
 	if snapshot() != before {
 		t.Fatal("same-image CREATE_AGENT rewrote the published environment")
 	}
-	resolved, err := r.ResolvePrincipal(ctx, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ownerScope, err := r.resolveScope(ctx, resolved)
-	if err != nil {
-		t.Fatal(err)
-	}
+	ownerScope := resolvedComponentScope(t, ctx, r, owner)
 	effects := func() [5]int {
 		t.Helper()
-		var result [5]int
-		if err := pool.QueryRow(ctx, queryAssistantRunScopeEffects, ownerScope.organizationID).Scan(&result[0], &result[1], &result[2], &result[3], &result[4]); err != nil {
-			t.Fatal(err)
-		}
-		return result
+		return readAssistantRunScopeEffects(t, ctx, pool, ownerScope.organizationID)
 	}
 	// Новый default image у producer отличается от уже опубликованного owner image.
 	// Это не разрешает CREATE_AGENT менять существующий environment current.

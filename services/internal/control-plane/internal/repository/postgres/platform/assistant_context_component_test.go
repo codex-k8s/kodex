@@ -135,14 +135,7 @@ func testAssistantContextAuthority(t *testing.T, ctx context.Context, repository
 	if err != nil || connection.Connection == nil {
 		t.Fatal(err)
 	}
-	resolvedOwner, err := repository.ResolvePrincipal(ctx, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ownerScope, err := repository.resolveScope(ctx, resolvedOwner)
-	if err != nil {
-		t.Fatal(err)
-	}
+	ownerScope := resolvedComponentScope(t, ctx, repository, owner)
 	connectionTx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 	if err != nil {
 		t.Fatal(err)

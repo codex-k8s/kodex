@@ -108,21 +108,10 @@ func TestAssistantSystemRunProjectScopeComponent(t *testing.T) {
 			t.Fatalf("signed PROJECT credential read SYSTEM graph: %v", err)
 		}
 	})
-	resolved, err := r.ResolvePrincipal(ctx, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	current, err := r.resolveScope(ctx, resolved)
-	if err != nil {
-		t.Fatal(err)
-	}
+	current := resolvedComponentScope(t, ctx, r, owner)
 	effects := func() [5]int {
 		t.Helper()
-		var result [5]int
-		if err := pool.QueryRow(ctx, queryAssistantRunScopeEffects, current.organizationID).Scan(&result[0], &result[1], &result[2], &result[3], &result[4]); err != nil {
-			t.Fatal(err)
-		}
-		return result
+		return readAssistantRunScopeEffects(t, ctx, pool, current.organizationID)
 	}
 	assertRejectedCommand := func(t *testing.T, kind command.Kind, key string, version int64) {
 		t.Helper()

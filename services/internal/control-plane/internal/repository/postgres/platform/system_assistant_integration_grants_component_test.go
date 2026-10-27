@@ -83,14 +83,7 @@ func TestSystemAssistantIntegrationGrantsComponent(t *testing.T) {
 		t.Fatal("prepare synthetic credential metadata")
 	}
 	project := execute(command.CreateProject, owner, "project", nil, command.ProjectInput{Name: "Signed boundary fixture", Language: "en"}).Project
-	resolvedOwner, err := r.ResolvePrincipal(ctx, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	current, err := r.resolveScope(ctx, resolvedOwner)
-	if err != nil {
-		t.Fatal(err)
-	}
+	current := resolvedComponentScope(t, ctx, r, owner)
 	counts := func() [5]int64 {
 		t.Helper()
 		var count [5]int64
