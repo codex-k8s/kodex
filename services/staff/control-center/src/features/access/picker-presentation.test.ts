@@ -1,7 +1,16 @@
 import { createI18n } from "vue-i18n";
 import { describe, expect, it } from "vitest";
 
-import { createPickerLabels, selection } from "./picker-presentation";
+import type {
+  AccessRole,
+  AccessSubject,
+} from "@/shared/api/generated/openapi/types.gen";
+import {
+  accessRoleOption,
+  accessSubjectOption,
+  createPickerLabels,
+  selection,
+} from "./picker-presentation";
 
 describe("подписи и выбор в элементах доступа", () => {
   it("учитывает смену локали после создания функции подписей", () => {
@@ -46,5 +55,31 @@ describe("подписи и выбор в элементах доступа", ()
     expect(selection("")).toBe("");
     expect(selection(null)).toBe("");
     expect(selection(["ref"])).toBe("");
+  });
+
+  it("сохраняет различие ссылки роли и ссылки версии", () => {
+    const subject = {
+      ref: "subject",
+      displayName: "Участник",
+    } as AccessSubject;
+    const role = {
+      ref: "role",
+      currentVersion: {
+        ref: "version",
+        name: "Редактор",
+        description: "Описание",
+        revision: 3,
+      },
+    } as AccessRole;
+    expect(accessSubjectOption(subject)).toEqual({
+      ref: "subject",
+      title: "Участник",
+    });
+    const labels = { title: "Редактор", description: "Описание", meta: "v3" };
+    expect(accessRoleOption(role, "ROLE")).toEqual({ ref: "role", ...labels });
+    expect(accessRoleOption(role, "VERSION")).toEqual({
+      ref: "version",
+      ...labels,
+    });
   });
 });

@@ -3,6 +3,8 @@ import { computed, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import {
+  accessRoleOption,
+  accessSubjectOption,
   createPickerLabels,
   selection,
 } from "@/features/access/picker-presentation";
@@ -135,21 +137,11 @@ const selectedRole = computed(
 );
 const selectedSubjectOption = computed<AsyncEntityOption | undefined>(() =>
   selectedSubject.value
-    ? {
-        ref: selectedSubject.value.ref,
-        title: selectedSubject.value.displayName,
-      }
+    ? accessSubjectOption(selectedSubject.value)
     : undefined,
 );
 const selectedRoleOption = computed<AsyncEntityOption | undefined>(() =>
-  selectedRole.value
-    ? {
-        ref: selectedRole.value.ref,
-        title: selectedRole.value.currentVersion.name,
-        description: selectedRole.value.currentVersion.description,
-        meta: `v${String(selectedRole.value.currentVersion.revision)}`,
-      }
-    : undefined,
+  selectedRole.value ? accessRoleOption(selectedRole.value, "ROLE") : undefined,
 );
 const selectedPermission = computed(() =>
   props.permissions.find((permission) => permission.key === form.permissionKey),

@@ -1,3 +1,7 @@
+import {
+  accessRoleOption,
+  accessSubjectOption,
+} from "@/features/access/picker-presentation";
 import { requestSignal } from "@/shared/api/client";
 import {
   listAccessRoles,
@@ -71,10 +75,7 @@ export function accessSubjectOptions(
         },
         signal: requestSignal(signal),
       }),
-    (item) => ({
-      ref: item.ref,
-      title: item.displayName,
-    }),
+    accessSubjectOption,
     capture,
   );
 }
@@ -98,12 +99,7 @@ export function accessRoleOptions(
         },
         signal: requestSignal(signal),
       }),
-    (item) => ({
-      ref: value === "VERSION" ? item.currentVersion.ref : item.ref,
-      title: item.currentVersion.name,
-      description: item.currentVersion.description,
-      meta: `v${String(item.currentVersion.revision)}`,
-    }),
+    (item) => accessRoleOption(item, value),
     capture,
   );
 }
