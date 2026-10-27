@@ -4,11 +4,20 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.575.0
+version: 1.576.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Компонентная проверка названия assistant — 27.10.2026
+
+Компонентный сценарий дополняет проверку предложения названия для PROJECT и
+SYSTEM диалогов: точный conversation ref и title возвращаются как AGENT_PROPOSED,
+а устаревший fence отклоняется. На disposable PostgreSQL выбранный набор дал
+17 PASS events, FAIL/SKIP 0. Это не запуск внешнего provider или браузера.
+Анализ: 1349 raw / 1282 retained / 67 unresolved, Go-комментарии 21715/21715.
+Live/deploy/startup и QA не выполнялись.
 
 ## Общее чтение контекста assistant lease — 27.10.2026
 

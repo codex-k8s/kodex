@@ -133,10 +133,26 @@ func TestRuntimeAssistantRecordToolCallPhaseComponent(t *testing.T) {
 		}
 		return items[0]
 	}
+	metadataActor := principal("runtime-controller", "platform.runtime.assistant.metadata.propose", "kodex-system-subject", "kodex-installation")
+	checkMetadata := func(key, conversationRef, title string, item map[string]any) {
+		t.Helper()
+		input := command.ProposeAssistantMetadataInput{LeaseRef: stringMap(item, "leaseRef"), Fence: stringMap(item, "fence"), Generation: item["generation"].(int64), Title: title}
+		invalid := input
+		invalid.Fence = "stale-fixture"
+		if _, err := service.Execute(ctx, command.Command{Kind: command.ProposeAssistantMetadata, Principal: metadataActor,
+			Mutation: value.Mutation{IdempotencyKey: "tool-phase-metadata-stale-" + key}, Payload: invalid}); !errors.Is(err, errs.ErrForbidden) {
+			t.Fatalf("stale metadata lease accepted: %v", err)
+		}
+		result := execute(command.ProposeAssistantMetadata, metadataActor, "metadata-"+key, nil, input)
+		if result.Conversation == nil || result.Conversation.Ref != conversationRef || result.Conversation.Title != title || result.Conversation.TitleSource != "AGENT_PROPOSED" {
+			t.Fatal("assistant metadata lost its conversation or title")
+		}
+	}
 	lease := claim("project-claim")
 	if stringMap(lease, "assistantScope") != "PROJECT" || stringMap(lease, "assistantProfileRef") != profile.Ref || stringMap(lease, "agentRef") != profile.AgentRef {
 		t.Fatal("claim lost exact project assistant pins")
 	}
+	checkMetadata("project", conversation.Ref, "Synthetic project summary", lease)
 	callFor := func(item map[string]any, ref, tool, capability string) command.RunToolCallInput {
 		return command.RunToolCallInput{LeaseRef: stringMap(item, "leaseRef"), Fence: stringMap(item, "fence"), Generation: runtimeRevisionMapInt64(item, "generation"), CallRef: ref, Tool: tool, CapabilityRef: capability, SafeParameters: map[string]any{}, State: "RUNNING", Revision: 1}
 	}
@@ -212,6 +228,7 @@ func TestRuntimeAssistantRecordToolCallPhaseComponent(t *testing.T) {
 	systemConversation := execute(command.CreateAssistantConversation, owner, "system-conversation", nil, command.AssistantConversationInput{AssistantScope: "SYSTEM"}).Conversation
 	execute(command.AddAssistantTurn, owner, "system-turn", nil, command.AssistantTurnInput{ConversationRef: systemConversation.Ref, Content: "Inspect system configuration", DeliveryMode: "QUEUE"})
 	systemLease := claim("system-claim")
+	checkMetadata("system", systemConversation.Ref, "Synthetic system summary", systemLease)
 	systemCall := callFor(systemLease, "tcl_system_phase", "get_configuration_catalog", "platform.configuration.read")
 	systemEvent := execute(command.RecordRunToolCall, toolActor, "system-tool", nil, systemCall).Event
 	if systemEvent.Actor.Kind != "SYSTEM_ASSISTANT" || systemEvent.Actor.Ref != systemConversation.AssistantRef {
