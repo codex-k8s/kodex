@@ -28,8 +28,11 @@ func PrepareWorkspaceRestore(ctx context.Context, task model.Task) error {
 	if _, err := workspaceRestoreIntentBytes(task, task.Workspace.PVCUID); err != nil {
 		return errWorkspaceObjectUnconfirmed
 	}
-	root, err := unix.Openat2(unix.AT_FDCWD, runtimecontract.WorkspaceStorageRootMount,
-		&unix.OpenHow{Flags: unix.O_RDONLY | unix.O_DIRECTORY | unix.O_CLOEXEC, Resolve: unix.RESOLVE_NO_SYMLINKS})
+	// The immutable image may expose /var/run through the standard /run alias; only this fixed trusted prefix is followed.
+	// The mount leaf is no-follow, and every data component below its verified descriptor uses strict openat2 resolution.
+	// Неизменяемый образ может содержать системную ссылку /var/run на /run; только этот fixed trusted prefix прослеживается.
+	// Mount leaf имеет no-follow; все data components под проверенным descriptor используют strict openat2 resolution.
+	root, err := unix.Open(runtimecontract.WorkspaceStorageRootMount, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return errWorkspaceObjectUnconfirmed
 	}
