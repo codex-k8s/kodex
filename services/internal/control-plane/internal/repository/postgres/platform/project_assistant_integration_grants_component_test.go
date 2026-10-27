@@ -257,15 +257,7 @@ func TestProjectAssistantIntegrationGrantsComponent(t *testing.T) {
 				t.Fatal(err)
 			}
 			future.Metadata.Version = "9000.0.0"
-			for index := range future.Spec.Capabilities {
-				if future.Spec.Capabilities[index].Key == "github.pull_request.review.create" {
-					for field := range future.Spec.Capabilities[index].OutputFields {
-						if future.Spec.Capabilities[index].OutputFields[field].Key == "id" {
-							future.Spec.Capabilities[index].OutputFields[field].Maximum--
-						}
-					}
-				}
-			}
+			narrowSyntheticReviewOutput(&future)
 			future, err = integrationpackage.Parse(asJSON(future))
 			if err != nil {
 				t.Fatal(err)

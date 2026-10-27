@@ -200,15 +200,7 @@ func testAssistantRecipientIntegrationCatalog(t *testing.T, ctx context.Context,
 						}
 						// Новый adapter output contract делает существующий published
 						// managed package пригодным только для metadata read, не execution.
-						for index := range currentDefinition.Spec.Capabilities {
-							if currentDefinition.Spec.Capabilities[index].Key == "github.pull_request.review.create" {
-								for field := range currentDefinition.Spec.Capabilities[index].OutputFields {
-									if currentDefinition.Spec.Capabilities[index].OutputFields[field].Key == "id" {
-										currentDefinition.Spec.Capabilities[index].OutputFields[field].Maximum--
-									}
-								}
-							}
-						}
+						narrowSyntheticReviewOutput(&currentDefinition)
 						currentDefinition, err = integrationpackage.Parse(asJSON(currentDefinition))
 						if err != nil {
 							t.Fatal("canonical prospective adapter contract", err)

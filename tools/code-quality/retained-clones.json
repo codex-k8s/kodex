@@ -9056,6 +9056,14 @@
       "fragmentSHA256": "66b0a12ca521d1c4ff0c85ce170542f3800361ed6781334ce8479c0b22418ee7",
       "count": 1,
       "reason": "Оба списка используют общий createImpactEditability для срока и блокировок. В RoleImage выбор только явный, а Publication автоматически выбирает PENDING и отдельно сохраняет deselected при загрузке страниц; toggle и publish имеют разные побочные действия и проверку selection. Общая функция с переключателями скрыла бы эту политику. Решение ограничено точной парой и hash и не исключает loader, identity или авторизацию."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/queries.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/queries.go",
+      "fragmentSHA256": "eae394b9e52fc07581ec2e99069aac07b3095cef03f33afa35c6b96a15e797d0",
+      "count": 1,
+      "reason": "attachInstructionsFrom и attachAgentGrantsFrom выполняют разные SQL и изменяют разные части модели: инструкции выбирают binding, первую published/draft и список версий, игнорируют JSON decode error и по особому правилу проверяют rows.Err; grants только добавляют ссылки и возвращают исходную ошибку итерации. Общим оказался лишь цикл Next/обратный вызов, пробный вынос которого не устранил основное совпадение и усложнил порядок ошибок и частичных изменений. Решение ограничено точной парой и hash, не исключает SQL, сканирование или другие функции."
     }
   ]
 }

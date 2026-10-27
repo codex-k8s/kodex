@@ -4,11 +4,26 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.558.0
+version: 1.559.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая мутация synthetic integration fixture — 27.10.2026
+
+Два component-сценария используют общий helper изменения maximum одного
+synthetic output field. Копирование и проверка пакета, версия и проверки
+полномочий остаются у сценариев; отдельный unit защищает остальные поля.
+Два обратных сопоставления восстановили исходные тесты. Выбранный component
+сценарий на disposable PostgreSQL — 25 PASS events до и после, FAIL/SKIP 0.
+Control-plane build/vet PASS, 3031 unit PASS / 70 прежних условных SKIP.
+
+Отдельное точное решение сохраняет два разных row hydration пути инструкций
+и grants: scan, частичные изменения, JSON и порядок Err различаются; пробный
+общий цикл не устранил основное совпадение. Шесть мутаций решения отвергнуты.
+1379 raw / 1276 retained / 103 unresolved, Go 21662/21662. Браузер, E2E,
+live/deploy/startup/QA не выполнялись.
 
 ## Общая проверка мобильных границ — 27.10.2026
 
