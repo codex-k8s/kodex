@@ -33,8 +33,36 @@ type workflowExceptionContext struct {
 	Attempt       int32                            `json:"businessAttempt"`
 	Reason        string                           `json:"reason"`
 	OwnerDecision *integrationContinuationDecision `json:"ownerDecision,omitempty"`
-	Producer      map[string]any                   `json:"producer"`
+	Producer      workflowExceptionProducer        `json:"producer"`
 	Inputs        []workflowPromptInput            `json:"acceptedPredecessors"`
+}
+
+// workflowExceptionProducer permits only explanatory public producer coordinates in the task;
+// adding a private database field to an owner SELECT cannot accidentally serialize it to the model.
+// workflowExceptionProducer допускает в задачу только публичные поясняющие координаты producer;
+// private DB-поле, добавленное в owner SELECT, не попадёт в модель случайной сериализацией.
+type workflowExceptionProducer struct {
+	NodeRef                  string                      `json:"nodeRef"`
+	RunRef                   string                      `json:"runRef"`
+	StepKey                  string                      `json:"stepKey"`
+	RuntimeState             string                      `json:"runtimeState"`
+	SafeErrorCode            string                      `json:"safeErrorCode"`
+	ModelResultData          string                      `json:"modelResultData"`
+	CapturedArtifactMetadata []workflowExceptionArtifact `json:"capturedArtifactMetadata"`
+}
+
+// workflowExceptionArtifact carries existing immutable public file metadata without object keys,
+// storage receipts, internal IDs or permission claims. Bodies require the independent catalog reader.
+// workflowExceptionArtifact содержит прежние публичные метаданные файла без object keys,
+// storage receipts, внутренних ID или заявления прав. Содержимое требует отдельного catalog reader.
+type workflowExceptionArtifact struct {
+	Ref         string `json:"ref"`
+	RevisionRef string `json:"revisionRef"`
+	Revision    int64  `json:"revision"`
+	Digest      string `json:"digest"`
+	SizeBytes   int64  `json:"sizeBytes"`
+	FileName    string `json:"fileName"`
+	MediaType   string `json:"mediaType"`
 }
 
 // readWorkflowExceptionContextTx binds the current episode and its source Gate inside the same
@@ -70,7 +98,7 @@ func readWorkflowExceptionContextTx(ctx context.Context, tx pgx.Tx, current scop
 // workflowExceptionTask сохраняет точный комментарий владельца как недоверенные поясняющие данные;
 // он не принимает результат и не разрешает запуск, одобрение, делегирование или внешние эффекты.
 func workflowExceptionTask(original string, context workflowExceptionContext) (string, error) {
-	if context.Schema != "kodex.workflow-exception-context.v1" || context.Episode < 1 || context.Episode > workflowExceptionEpisodeLimit || context.Version < 1 || context.Attempt < 0 || context.Attempt > 4 || context.StepKey == "" || len(context.StepKey) > 96 || !workflowRecoveryReasonPattern.MatchString(context.Reason) || context.Producer == nil || len(context.Inputs) > 8 {
+	if context.Schema != "kodex.workflow-exception-context.v1" || context.Episode < 1 || context.Episode > workflowExceptionEpisodeLimit || context.Version < 1 || context.Attempt < 0 || context.Attempt > 4 || context.StepKey == "" || len(context.StepKey) > 96 || !workflowRecoveryReasonPattern.MatchString(context.Reason) || !strings.HasPrefix(context.Producer.NodeRef, "nod_") || !workflowLaunchRefPattern.MatchString(context.Producer.NodeRef) || !strings.HasPrefix(context.Producer.RunRef, "run_") || !workflowLaunchRefPattern.MatchString(context.Producer.RunRef) || context.Producer.StepKey != context.StepKey || len(context.Producer.CapturedArtifactMetadata) > 16 || len(context.Inputs) > 8 {
 		return "", errs.ErrConflict
 	}
 	if context.Reason == "OWNER_CHANGES_REQUESTED" {

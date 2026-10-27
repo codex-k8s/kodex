@@ -60,7 +60,7 @@ func TestServerWorkflowMigrationProofComponent(t *testing.T) {
 					t.Fatal("apply disposable workflow schema drift")
 				}
 			}
-			source, err := os.ReadFile("../../../../../../../tools/release/legacy-workflow-rework-migration-postcondition.sql")
+			source, err := os.ReadFile("../../../../../../../tools/release/workflow-exception-context-migration-postcondition.sql")
 			if err != nil {
 				t.Fatal("read shipped workflow schema proof")
 			}
@@ -79,7 +79,7 @@ func TestServerWorkflowMigrationProofComponent(t *testing.T) {
 					}
 				}
 			}
-			if proof["readOnly"] != "on" || proof["database"] != runtime.Database || proof["gooseVersion"] != float64(20261026001100) || proof["serverWorkflowProfile"] != "SERVER_DAG_V1" {
+			if proof["readOnly"] != "on" || proof["database"] != runtime.Database || proof["gooseVersion"] != float64(20261026001200) || proof["serverWorkflowProfile"] != "SERVER_DAG_V1" {
 				t.Fatal("workflow schema proof identity mismatch")
 			}
 			if fixture.rejectedField != "" {

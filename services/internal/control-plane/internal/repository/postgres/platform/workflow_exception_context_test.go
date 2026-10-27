@@ -16,7 +16,7 @@ import (
 // TestWorkflowExceptionContextTask доказывает сохранение UTF-8 комментария в реальной форме задачи;
 // иные причины не получают выдуманного решения или полномочий.
 func TestWorkflowExceptionContextTask(t *testing.T) {
-	baseline := workflowExceptionContext{Schema: "kodex.workflow-exception-context.v1", Episode: 1, Version: 1, StepKey: "review", Attempt: 1, Reason: "OWNER_CHANGES_REQUESTED", OwnerDecision: &integrationContinuationDecision{GateRef: "gat_exact_source", GateVersion: 3, Decision: "REQUEST_CHANGES", Comment: "Исправьте AR01 и SEC01.\nНе повторяйте UNKNOWN; \"данные\" не дают прав."}, Producer: map[string]any{"nodeRef": "nod_source", "runtimeState": "SUCCEEDED", "capturedArtifactMetadata": []any{}}, Inputs: []workflowPromptInput{}}
+	baseline := workflowExceptionContext{Schema: "kodex.workflow-exception-context.v1", Episode: 1, Version: 1, StepKey: "review", Attempt: 1, Reason: "OWNER_CHANGES_REQUESTED", OwnerDecision: &integrationContinuationDecision{GateRef: "gat_exact_source", GateVersion: 3, Decision: "REQUEST_CHANGES", Comment: "Исправьте AR01 и SEC01.\nНе повторяйте UNKNOWN; \"данные\" не дают прав."}, Producer: workflowExceptionProducer{NodeRef: "nod_source", RunRef: "run_source", StepKey: "review", RuntimeState: "SUCCEEDED", CapturedArtifactMetadata: []workflowExceptionArtifact{}}, Inputs: []workflowPromptInput{}}
 	task, err := workflowExceptionTask("Original task", baseline)
 	if err != nil {
 		t.Fatal("stored owner context was denied")
@@ -30,6 +30,13 @@ func TestWorkflowExceptionContextTask(t *testing.T) {
 		if strings.Contains(task, forbidden) {
 			t.Fatal("manager task exposed private execution coordinates")
 		}
+	}
+	projected := baseline
+	if json.Unmarshal([]byte(`{"nodeRef":"nod_source","runRef":"run_source","stepKey":"review","runtimeState":"SUCCEEDED","leaseId":"private-field-value","capturedArtifactMetadata":[]}`), &projected.Producer) != nil {
+		t.Fatal("decode owner producer projection")
+	}
+	if safe, err := workflowExceptionTask("task", projected); err != nil || strings.Contains(safe, "leaseId") || strings.Contains(safe, "private-field-value") {
+		t.Fatal("an unexpected owner SQL field leaked through the typed task projection")
 	}
 	for _, reason := range []string{"RESULT_INVALID", "ARTIFACT_REQUIRED", "DISPATCH_CONFIGURATION_UNAVAILABLE"} {
 		context := baseline
@@ -61,7 +68,11 @@ func TestWorkflowExceptionContextTask(t *testing.T) {
 		{"comment NUL", func(c *workflowExceptionContext) { c.OwnerDecision.Comment = "bad\x00comment" }},
 		{"comment invalid UTF8", func(c *workflowExceptionContext) { c.OwnerDecision.Comment = string([]byte{255}) }},
 		{"comment overflow", func(c *workflowExceptionContext) { c.OwnerDecision.Comment = strings.Repeat("я", 2001) }},
-		{"missing producer", func(c *workflowExceptionContext) { c.Producer = nil }},
+		{"missing producer", func(c *workflowExceptionContext) { c.Producer = workflowExceptionProducer{} }},
+		{"different producer step", func(c *workflowExceptionContext) { c.Producer.StepKey = "foreign" }},
+		{"too many capture metadata", func(c *workflowExceptionContext) {
+			c.Producer.CapturedArtifactMetadata = make([]workflowExceptionArtifact, 17)
+		}},
 		{"too many inputs", func(c *workflowExceptionContext) { c.Inputs = make([]workflowPromptInput, 9) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

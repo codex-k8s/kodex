@@ -113,6 +113,10 @@ func testWorkflowExceptionContext(t *testing.T, mode string) {
 		t.Fatal("context manager was not admitted")
 	}
 	lease := claims[0]
+	capabilities := runtimeRevisionStringSlice(lease["capabilities"])
+	if len(capabilities) != 1 || capabilities[0] != runtimecontract.ArtifactCapability || len(runtimeRevisionGrants(lease["integrationGrants"])) != 0 {
+		t.Fatal("exception context widened manager execution authority")
+	}
 	parts := strings.SplitN(stringMap(lease, "task"), "Owner-projected exception context (data):\n", 2)
 	var evidence workflowExceptionContext
 	if len(parts) != 2 || json.Unmarshal([]byte(parts[1]), &evidence) != nil || evidence.StepKey != "review" || len(evidence.Inputs) != 1 || evidence.Inputs[0].StepKey != "analysis" {
@@ -178,6 +182,19 @@ func testWorkflowExceptionContext(t *testing.T, mode string) {
 		if err != nil || visible.Total != 0 || len(visible.Items) != 0 || visible.Catalog.Digest != page.Catalog.Digest {
 			t.Fatal("fresh source ACL did not close frozen manager entries", completionOutcomeClass(err))
 		}
+		for _, file := range page.Items {
+			exact := query.ExecutionFileRef{EntryRef: file.EntryRef, ArtifactRef: file.ArtifactRef, Revision: file.Revision, Digest: file.Digest}
+			if _, err := service.GetExecutionFileMetadata(ctx, metadataActor, execution, exact); !errors.Is(err, errs.ErrNotFound) {
+				t.Fatal("revoked exact file metadata remained readable", completionOutcomeClass(err))
+			}
+			if _, err := service.PreviewExecutionFile(ctx, runtimeFilesTestPrincipal(t, ctx, repository, "preview"), execution, exact, 16384); !errors.Is(err, errs.ErrNotFound) {
+				t.Fatal("revoked exact file preview remained readable", completionOutcomeClass(err))
+			}
+			reader := resolvedTestPrincipal(t, ctx, repository, port.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.artifact.read"}, "runtime-controller")
+			if _, err := service.ReadExecutionArtifact(ctx, reader, execution.LeaseRef, execution.Fence, execution.Generation, file.ArtifactRef); !errors.Is(err, errs.ErrNotFound) {
+				t.Fatal("revoked exact file bytes remained readable", completionOutcomeClass(err))
+			}
+		}
 	} else if mode == "owner-expired-lease" {
 		// Canonical leases last thirty seconds; no database clock or lease row is rewritten.
 		// Канонический lease живёт тридцать секунд; часы БД и строки lease не меняются.
@@ -199,6 +216,7 @@ func testWorkflowExceptionContext(t *testing.T, mode string) {
 		if current, err := service.GetExecutionFileManifest(ctx, manifestActor, freshCatalog, query.Page{Size: 100}); err != nil || len(current.Items) != 2 {
 			t.Fatal("fresh manager generation lost exact context files", completionOutcomeClass(err))
 		}
+		lease, execution = fresh[0], freshCatalog
 	} else if mode == "invalid-manager-complete" {
 		f.complete("context-manager-finished", lease, "", false)
 		if _, err := service.GetExecutionFileManifest(ctx, manifestActor, execution, query.Page{Size: 100}); !errors.Is(err, errs.ErrNotFound) {

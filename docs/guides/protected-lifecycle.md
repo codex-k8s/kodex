@@ -4,11 +4,23 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.56
+version: 1.1.57
 updated: 2026-10-27
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+
+Менеджер исключения получает сохранённое решение точного source Gate и закреплённые
+данные разбираемого шага. Текст комментария, диагноз модели и artifactRef не являются
+полномочиями. Reader для manager не снимает общий coordinator fence: текущий owner
+episode назначает exact manager node/ref, source closed capture и опубликованные
+accepted dependency receipts; frozen RR/catalog и свежие ACL/effective CLEAN точной
+ревизии проверяются независимо. Новая ревизия не подменяет старый pin. После
+complete/cancel/expiry/revoke история сохраняется, прежний runtime read закрыт.
+Не записывать обычные step inputs в businessAttempt0 ради обхода его provenance
+инварианта. Матрица: [#1943](../operations/workflow-exception-context-1943.md).
+
 
 Часы всего SERVER DAG принадлежат его существующему `ROOT_PROCESS`, а не
 первому planned anchor: реальные физические исполнители могут уже находиться

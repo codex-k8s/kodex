@@ -4,7 +4,7 @@ WITH pending AS MATERIALIZED (
  FROM control_plane.runs root
  JOIN control_plane.workflow_versions version ON version.id=root.workflow_version_id AND version.organization_id=root.organization_id
  WHERE root.organization_id=@organization_id::uuid AND root.id=@root_run_id::uuid AND root.id=root.root_run_id
-   AND root.target_type='WORKFLOW' AND root.state IN ('RUNNING','WAITING_HUMAN')
+   AND root.target_type='WORKFLOW' AND root.state IN ('QUEUED','RUNNING','WAITING_HUMAN')
    AND version.spec->>'ExecutionMode'='SERVER_DAG_V1'
    AND root.workflow_exception=root.workflow_exception_history->-1
    AND root.workflow_exception->>'state'='PENDING_MANAGER'
