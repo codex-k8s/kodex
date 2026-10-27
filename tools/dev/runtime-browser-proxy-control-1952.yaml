@@ -102,7 +102,10 @@ spec:
             const record = (value) => fs.writeFileSync(process.argv[2], JSON.stringify(value), {mode:0o600});
             record({stage:'NODE_STARTED'});
             const checkDenied = (destination, proxy) => new Promise((resolve) => {
-              const request = http.request(proxy, {method:'GET',path:destination}, response => {
+              // Адрес proxy уже выбран явно: globalAgent с NODE_USE_ENV_PROXY
+              // иначе повторно проксирует запрос и отвергает absolute-form path.
+              const request = http.request(proxy, {method:'GET',path:destination,agent:false,
+                headers:{Host:new URL(destination).host}}, response => {
                 response.resume();
                 response.on('end', () => resolve({status:response.statusCode}));
               });
