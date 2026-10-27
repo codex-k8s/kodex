@@ -2,6 +2,7 @@ package archive
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"os"
@@ -58,7 +59,7 @@ func serveWorkspaceReaderPeer(ctx context.Context, connection *net.UnixConn, roo
 		for _, fd := range descriptors {
 			_ = unix.Close(fd)
 		}
-		if readErr == io.EOF || n == 0 && readErr == nil {
+		if errors.Is(readErr, io.EOF) || n == 0 && readErr == nil {
 			if hello && ctx.Err() == nil && valid && count == 0 && len(descriptors) == 0 && controlBytes == 0 {
 				return nil
 			}
