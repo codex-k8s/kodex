@@ -1148,7 +1148,7 @@ onBeforeUnmount(() => {
                 <h3>{{ $t("decisions.consequences") }}</h3>
                 <SafeMarkdown :content="gate.consequencesSummary" />
               </div>
-              <WorkflowReworkPreviewPanel :gate="selectedGate" />
+              <WorkflowReworkPreviewPanel :gate="gate" />
           <RepositoryBundleManifest
                 v-if="requiresBundleManifest(gate)"
                 :key="`${gate.ref}:${gate.version}`"
