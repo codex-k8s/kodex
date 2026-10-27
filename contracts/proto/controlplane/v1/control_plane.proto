@@ -4319,10 +4319,15 @@ message RenewSessionArchiveTaskRequest {
   string lease_ref = 2;
   string fence = 3;
   int64 generation = 4;
+  string observed_pvc_uid = 5;
 }
 
 message RenewSessionArchiveTaskResponse {
   WorkLease lease = 1;
+  bool pvc_delete_armed = 2;
+  string pvc_uid = 3;
+  int64 workspace_generation = 4;
+  string workspace_ref = 5;
 }
 
 message CompleteSessionSnapshotRequest {
@@ -4354,6 +4359,7 @@ message CompleteSessionRestoreRequest {
   int64 object_size_bytes = 11;
   string restored_source_sha256 = 12;
   int64 restored_source_size_bytes = 13;
+  string observed_pvc_uid = 14;
 }
 
 message CompleteSessionPVCDeletionRequest {

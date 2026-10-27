@@ -124,8 +124,16 @@ func DecodeFile(path string) (Task, error) {
 	if err != nil || len(raw) == 0 || len(raw) > MaximumTaskBytes {
 		return Task{}, errors.New("read session archive task")
 	}
-	var task Task
-	if json.Unmarshal(raw, &task) != nil || task.Validate() != nil {
+	return DecodeTask(raw)
+}
+
+// DecodeTask validates bounded task bytes while preserving legacy wire and enforcing strict V2 interpretation.
+// It proves no lease, writer or object access; callers still require the current owner-assigned task.
+// DecodeTask валидирует bounded task bytes, сохраняя legacy wire и strict V2 interpretation.
+// Это не lease/writer/object authority; caller отдельно требует current owner-assigned task.
+func DecodeTask(raw []byte) (Task, error) {
+	task, err := decodeWorkspaceAwareTask(raw)
+	if err != nil || task.Validate() != nil {
 		return Task{}, errors.New("decode session archive task")
 	}
 	return task, nil
