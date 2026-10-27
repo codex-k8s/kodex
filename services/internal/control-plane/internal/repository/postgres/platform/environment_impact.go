@@ -151,15 +151,8 @@ func (repository *Repository) rebindRuntimeEnvironmentFromPublication(ctx contex
 	if !ok || payload.VersionRef == "" || input.Mutation.ExpectedVersion == nil || len(payload.Consumers) == 0 || len(payload.Consumers) > 100 {
 		return commandOutcome{}, errs.ErrInvalid
 	}
-	var environmentID, projectID, lockedProjectRef, currentRevisionID string
-	var lockedVersion, currentRevision int64
-	err := tx.QueryRow(ctx, queryRuntimeConfigurationLockEnvironment, current.organizationID, payload.EnvironmentRef).Scan(
-		&environmentID, &projectID, &lockedProjectRef, &lockedVersion, &currentRevisionID, &currentRevision)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return commandOutcome{}, errs.ErrNotFound
-	}
-	if err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+	if _, err := lockRuntimeEnvironmentTuple(ctx, tx, current.organizationID, payload.EnvironmentRef); err != nil {
+		return commandOutcome{}, err
 	}
 	target, projectRef, err := repository.environmentImpactTarget(ctx, tx, current, payload.EnvironmentRef, payload.VersionRef)
 	if err != nil {

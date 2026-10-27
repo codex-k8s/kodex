@@ -690,16 +690,12 @@ func (repository *Repository) changeRuntimeEnvironment(ctx context.Context, tx p
 	if payload.Ref == "" || input.Mutation.ExpectedVersion == nil {
 		return commandOutcome{}, errs.ErrInvalid
 	}
-	var environmentID, projectID, projectRef, currentVersionID string
-	var environmentVersion, currentRevision int64
-	err := tx.QueryRow(ctx, queryRuntimeConfigurationLockEnvironment, scope.organizationID, payload.Ref).Scan(
-		&environmentID, &projectID, &projectRef, &environmentVersion, &currentVersionID, &currentRevision)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return commandOutcome{}, errs.ErrNotFound
-	}
+	locked, err := lockRuntimeEnvironmentTuple(ctx, tx, scope.organizationID, payload.Ref)
 	if err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+		return commandOutcome{}, err
 	}
+	environmentID, projectID, projectRef, currentVersionID := locked.environmentID, locked.projectID, locked.projectRef, locked.currentVersionID
+	environmentVersion, currentRevision := locked.environmentVersion, locked.currentRevision
 	existing, err := repository.getRuntimeEnvironmentTx(ctx, tx, scope, payload.Ref)
 	if err != nil {
 		return commandOutcome{}, err

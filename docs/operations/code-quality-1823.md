@@ -4,11 +4,24 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.565.0
+version: 1.566.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие блокировки окружения и черновика — 27.10.2026
+
+Два командных пути используют общий typed scan шести полей блокированного окружения;
+owner, OCC и дальнейшие lifecycle-проверки остались у команд. Блокировка черновика
+с общей проверкой доступа и версии сохраняет порядок lock → owner → OCC и разные
+проверки состояний у вызывающих. Unit подтверждает tenant/ref, порядок полей, ошибки
+чтения и отказ неверной owner scope до проверки версии.
+
+Control-plane build/vet PASS, 3045 unit PASS / 70 условных SKIP. Четыре выбранных
+component-сценария на disposable PostgreSQL — 5 PASS events до и после, FAIL/SKIP 0.
+Анализ: 1370 raw / 1284 retained / 86 unresolved, Go-комментарии 21687/21687.
+Браузер, E2E, live/deploy/startup и QA не выполнялись.
 
 ## Общее чтение impact и digest планов — 27.10.2026
 

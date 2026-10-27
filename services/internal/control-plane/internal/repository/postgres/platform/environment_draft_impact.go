@@ -60,15 +60,9 @@ func (r *Repository) prepareEnvironmentDraftImpact(ctx context.Context, tx pgx.T
 	if !ok || payload.PlanRef != "" || len(payload.SelectedItemRefs) != 0 {
 		return commandOutcome{}, errs.ErrInvalid
 	}
-	draft, err := scanEnvironmentDraft(tx.QueryRow(ctx, queryEnvironmentDraftLock, s.organizationID, payload.DraftRef))
+	draft, err := r.lockEnvironmentDraftForMutation(ctx, tx, s, payload.DraftRef, input.Mutation.ExpectedVersion)
 	if err != nil {
 		return commandOutcome{}, err
-	}
-	if err := r.requireRuntimeEnvironmentOwnerAccess(ctx, tx, s, draft.ScopeKind, draft.ProjectRef); err != nil {
-		return commandOutcome{}, err
-	}
-	if input.Mutation.ExpectedVersion == nil || *input.Mutation.ExpectedVersion != draft.Version {
-		return commandOutcome{}, errs.ErrVersionMismatch
 	}
 	if draft.State != "VALID" {
 		return commandOutcome{}, errs.ErrConflict

@@ -34,6 +34,24 @@ func scanEnvironmentDraft(row rowScanner) (entity.RuntimeEnvironmentDraft, error
 	return draft, nil
 }
 
+// lockEnvironmentDraftForMutation locks the exact tenant draft, checks owner access before expected
+// version and returns no authority from the draft reference alone; callers check lifecycle state.
+// lockEnvironmentDraftForMutation блокирует черновик организации, проверяет доступ владельца до
+// ожидаемой версии; ссылка сама не даёт полномочий, состояние проверяет вызывающий код.
+func (repository *Repository) lockEnvironmentDraftForMutation(ctx context.Context, tx pgx.Tx, current scope, ref string, expected *int64) (entity.RuntimeEnvironmentDraft, error) {
+	draft, err := scanEnvironmentDraft(tx.QueryRow(ctx, queryEnvironmentDraftLock, current.organizationID, ref))
+	if err != nil {
+		return draft, err
+	}
+	if err := repository.requireRuntimeEnvironmentOwnerAccess(ctx, tx, current, draft.ScopeKind, draft.ProjectRef); err != nil {
+		return draft, err
+	}
+	if expected == nil || *expected != draft.Version {
+		return draft, errs.ErrVersionMismatch
+	}
+	return draft, nil
+}
+
 // GetRuntimeEnvironmentDraft reads the tenant-scoped draft and checks environment-owner access in
 // a repeatable-read, read-only transaction using the supplied context. It returns the draft with
 // the raw commit error and retains deferred rollback; it adds no local deadline.
@@ -121,15 +139,9 @@ func (repository *Repository) changeRuntimeEnvironmentDraft(ctx context.Context,
 			return commandOutcome{}, mapWriteError(err)
 		}
 	} else {
-		draft, err = scanEnvironmentDraft(tx.QueryRow(ctx, queryEnvironmentDraftLock, current.organizationID, payload.DraftRef))
+		draft, err = repository.lockEnvironmentDraftForMutation(ctx, tx, current, payload.DraftRef, input.Mutation.ExpectedVersion)
 		if err != nil {
 			return commandOutcome{}, err
-		}
-		if err := repository.requireRuntimeEnvironmentOwnerAccess(ctx, tx, current, draft.ScopeKind, draft.ProjectRef); err != nil {
-			return commandOutcome{}, err
-		}
-		if input.Mutation.ExpectedVersion == nil || *input.Mutation.ExpectedVersion != draft.Version {
-			return commandOutcome{}, errs.ErrVersionMismatch
 		}
 		if draft.State == "PUBLISHED" || draft.State == "DISCARDED" {
 			return commandOutcome{}, errs.ErrConflict
