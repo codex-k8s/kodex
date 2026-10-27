@@ -4,11 +4,29 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.569.0
+version: 1.570.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие транзакции interaction и чтение инцидентов — 27.10.2026
+
+Три операции используют существующий scoped transaction helper с прежними
+RepeatableRead, Serializable и ReadCommitted соответственно. Чтение инцидентов
+объединено без переноса SQL, authorization, закрытия rows или последующих действий.
+Unit проверяет порядок, сохранение исходного списка, пустой результат и отбрасывание
+частичного результата при ошибке. Изоляция, порядок scope → BeginTx и отображение
+ошибок сопоставлены с исходными путями.
+
+Control-plane build/vet PASS, 3065 unit PASS / 70 условных SKIP. Два выбранных
+component-сценария на disposable PostgreSQL — 8 PASS events до и после, FAIL/SKIP 0.
+Отдельный сценарий schedule race/continuation завершился FAIL с conflict при
+предпросмотре; тот же симптом воспроизведён на чистом main f2e64eb. Причина пока
+не установлена и проверка не считается успешной. Документация Context7:
+[pgx Rows](https://github.com/jackc/pgx/blob/master/rows.go).
+Анализ: 1355 raw / 1283 retained / 72 unresolved, Go-комментарии 21699/21699.
+Браузер, E2E, live/deploy/startup и QA не выполнялись.
 
 ## Общие предварительные проверки Kubernetes-проекций — 27.10.2026
 

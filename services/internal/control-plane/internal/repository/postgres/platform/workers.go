@@ -702,13 +702,9 @@ func (repository *Repository) ReportWarmRuntime(ctx context.Context, principal v
 // передаёт вызывающий; прежние ignored reference-generation errors и отображения ошибок
 // сохраняются.
 func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal value.Principal, instance string, limit int32) ([]map[string]any, error) {
-	scope, err := repository.resolveScope(ctx, principal)
+	scope, tx, err := repository.beginScopedTransaction(ctx, principal, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
 		return nil, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
-	if err != nil {
-		return nil, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var now time.Time

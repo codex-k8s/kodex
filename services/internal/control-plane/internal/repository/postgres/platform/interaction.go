@@ -52,6 +52,27 @@ func projectInteractionIncident(incident entity.Incident, deliveryState string, 
 	return incident
 }
 
+// appendInteractionIncidents scans ordered incident rows and applies the shared delivery projection.
+// Caller owns row closing and authorization; errors discard the partial list without committing.
+// appendInteractionIncidents читает упорядоченные incident rows и применяет общую проекцию delivery.
+// Закрытие rows и authorization принадлежат caller; ошибка отбрасывает частичный список без commit.
+func appendInteractionIncidents(rows pgx.Rows, incidents []entity.Incident) ([]entity.Incident, error) {
+	for rows.Next() {
+		var incident entity.Incident
+		var deliveryState string
+		var attempt, maximumAttempts int
+		if err := rows.Scan(&incident.Ref, &incident.ProjectRef, &incident.RunRef, &deliveryState, &attempt, &maximumAttempts, &incident.CreatedAt); err != nil {
+			return nil, errs.ErrUnavailable
+		}
+		incident = projectInteractionIncident(incident, deliveryState, attempt, maximumAttempts)
+		incidents = append(incidents, incident)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errs.ErrUnavailable
+	}
+	return incidents, nil
+}
+
 // ListInteractionSources Resolves scope in RepeatableRead, scans credential metadata and
 // capabilities, closes rows before package reads, filters source capabilities and projects only
 // eligible sources. Commits before returning an allocated empty/list result; read/commit failures
@@ -61,13 +82,9 @@ func projectInteractionIncident(incident entity.Incident, deliveryState string, 
 // пригодные источники. Возвращает созданный список после commit; сбои чтения или commit дают
 // Unavailable, ошибка отложенного rollback с контекстом запроса игнорируется.
 func (repository *Repository) ListInteractionSources(ctx context.Context, principal value.Principal) ([]map[string]any, error) {
-	scope, err := repository.resolveScope(ctx, principal)
+	scope, tx, err := repository.beginScopedTransaction(ctx, principal, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
 		return nil, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
-	if err != nil {
-		return nil, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	rows, err := tx.Query(ctx, queryInteractionListSources, pgx.StrictNamedArgs{
@@ -138,13 +155,9 @@ func (repository *Repository) ListInteractionSources(ctx context.Context, princi
 // одобренную WRITE/HUMAN_EACH_EFFECT возможность пакета. Ошибка commit даёт Conflict; сообщения
 // здесь не отправляются. Limit/workload передаются без изменения, сроки и fence назначает SQL.
 func (repository *Repository) ClaimInteractionDeliveries(ctx context.Context, principal value.Principal, workloadInstance string, limit int32) ([]map[string]any, error) {
-	scope, err := repository.resolveScope(ctx, principal)
+	scope, tx, err := repository.beginScopedTransaction(ctx, principal, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
 		return nil, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
-	if err != nil {
-		return nil, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	rows, err := tx.Query(ctx, queryInteractionClaimDeliveries, pgx.StrictNamedArgs{
