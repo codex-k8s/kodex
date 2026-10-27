@@ -4,11 +4,26 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.589.0
+version: 1.590.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая проверка E2E-каталога и voice-диагностик — 27.10.2026
+
+Два сценария используют одну проверку pinned provider account по ограниченным
+страницам каталога, сохраняя свои network adapters и последующие мутации. Два
+voice-сценария используют общий сборщик событий с исходным выбором requestfailed.
+Обратное сравнение трёх целых файлов PASS; девять синтетических вариантов
+каталога и два набора событий совпали с исходными без запуска браузера.
+
+Два точных совпадения разных browser init scripts и независимых resource watchers
+сохранены с обоснованием отдельных фильтров, authority и отмены; 12 мутаций их
+привязок отклонены. TypeScript compile до и после, форматирование, lint и 17
+тестов инструментов качества PASS. Context7: [Playwright Request](https://github.com/microsoft/playwright/blob/v1.61.0/docs/src/api/class-request.md).
+Анализ: 1331 raw / 1288 retained / 43 unresolved, Go-комментарии 21732/21732.
+Браузер, E2E, live/deploy/startup и QA не выполнялись.
 
 ## Общая тестовая Storage-фикстура и адресные решения — 27.10.2026
 

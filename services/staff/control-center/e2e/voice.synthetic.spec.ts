@@ -1,5 +1,18 @@
-import { expect, test, type Locator } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { prepareSyntheticMicrophone } from "./synthetic-microphone";
+
+// Сохраняет прежние наборы событий для двух независимых voice-сценариев.
+function collectVoiceErrors(page: Page, includeRequests: boolean): string[] {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    if (["warning", "error"].includes(message.type()))
+      errors.push(message.text());
+  });
+  if (includeRequests)
+    page.on("requestfailed", (request) => errors.push(request.url()));
+  return errors;
+}
 
 test.beforeEach(async ({ page, context, browserName }, testInfo) => {
   const mode =
@@ -150,13 +163,7 @@ for (const width of [1440, 390]) {
     page,
   }, testInfo) => {
     await page.setViewportSize({ width, height: 1080 });
-    const errors: string[] = [];
-    page.on("pageerror", (error) => errors.push(error.message));
-    page.on("console", (message) => {
-      if (["warning", "error"].includes(message.type()))
-        errors.push(message.text());
-    });
-    page.on("requestfailed", (request) => errors.push(request.url()));
+    const errors = collectVoiceErrors(page, true);
     await page.goto("http://127.0.0.1:43122/e2e/fixtures/voice.html");
     await page
       .getByRole("button", { name: "Показать конфигурацию", exact: true })
@@ -213,12 +220,7 @@ for (const width of [1440, 390]) {
     page,
   }, testInfo) => {
     await page.setViewportSize({ width, height: 1080 });
-    const errors: string[] = [];
-    page.on("pageerror", (error) => errors.push(error.message));
-    page.on("console", (message) => {
-      if (["warning", "error"].includes(message.type()))
-        errors.push(message.text());
-    });
+    const errors = collectVoiceErrors(page, false);
     await page.goto("http://127.0.0.1:43122/e2e/fixtures/voice.html");
     const picker = page.getByTestId("picker");
     await picker

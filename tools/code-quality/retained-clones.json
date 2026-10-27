@@ -9136,6 +9136,22 @@
       "fragmentSHA256": "cf5584b716909acdabfcb8513eebefd286c0498b57b884f15d29efb75ba668fe",
       "count": 1,
       "reason": "Окно охватывает только объявление состояния и начало двух разных карточек результата: созданный artifact и применённая revision. Их целевые типы, API и проверки readback различаются; revision дополнительно связывает запрос с owner signal, закрывает состояние при abort и запрещает параллельное обновление, а artifact проверяет ref и projectRef без этого owner lifecycle. Общий параметризованный watcher ради сходных ref и начала сброса скрыл бы различие отмены и authority. Сохранена только точная пара путей, hash и count1; проверки чтения и остальные совпадения не исключены."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/e2e/session-bootstrap-observer.ts",
+      "secondPath": "services/staff/control-center/e2e/ui-read-network.ts",
+      "fragmentSHA256": "c9e309ece4aa15bb4f3347580dda61298cb66e547228687a02c853e8c5dfe2d9",
+      "count": 1,
+      "reason": "Окно сравнивает завершение двух сериализуемых page.addInitScript fetch-observers. Bootstrap наблюдает только GET точного bootstrap endpoint и отправляет отдельное BootstrapSignalEvent; UI-read покрывает GET/HEAD и один закрытый POST на другом множестве путей и передаёт address/method в ReadSignalEvent. Каждый инжектируется отдельно в браузерный document и использует собственный header, binding и идентификаторы. Общая функция из Node scope не доступна внутри сериализованного init script; объединение инъекций или конфигурируемый фильтр изменили бы область наблюдения и порядок установки fetch wrappers. Сохранена только точная пара путей, hash и count1; остальные события и security-проверки не исключены."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/assistant/components/AssistantAgentEnvironmentBindingForm.vue",
+      "secondPath": "services/staff/control-center/src/features/assistant/components/AssistantAgentEnvironmentBindingForm.vue",
+      "fragmentSHA256": "1fdc525e067ae788360b4b39627de69dbd530cec42f4e6ec2c5ecad6f5789a91",
+      "count": 1,
+      "reason": "Два watch в одной форме независимо загружают agent и runtime environment по собственным refs с отдельными AbortController и состояниями ошибки. Environment дополнительно проверяет точные organization, project и ref readback; agent имеет отдельный SDK endpoint и участвует в другой части eligibility. Объединение в универсальный callback watcher ради сходной инфраструктуры создало бы конфигурацию двух типов, скрыло бы несовпадающую проверку identity и усложнило бы независимую отмену запросов. Сохранена только точная пара внутри файла, hash и count1; другие lifecycle и authority проверки не исключены."
     }
   ]
 }

@@ -13,12 +13,12 @@ import { replaceAuthenticatedCookies } from "../../../../tools/dev/owner-session
 import type {
   AgentRuntimeConfigurationView,
   ModelCapabilityPage,
-  ProviderAccountCandidateInput,
   ProviderAccountBlockerPage,
   ProviderAccountDeletion,
 } from "../src/shared/api/generated/openapi";
 
 import { loadE2EEnvironment } from "./environment";
+import { selectProviderAccountCandidate } from "./fixtures/provider-account-catalog";
 import { expect, test } from "./fixtures";
 import { gotoWithRetry } from "./helpers";
 import {
@@ -971,50 +971,11 @@ async function pinAgentProviderAccount(
     page,
     runtimePath,
   );
-  const query = new URLSearchParams({
-    providerAccountRef: accountRef,
-    query: runtime.configuration.model,
-    pageSize: "100",
-  });
-  let candidate: ProviderAccountCandidateInput | undefined;
-  let catalogPin = "";
-  const cursors = new Set<string>();
-  for (let index = 0; index < 20; index += 1) {
-    const catalog = await readAPI<ModelCapabilityPage>(
-      page,
-      `/api/v1/model-capabilities?${query}`,
-    );
-    expect(catalog.catalogStatus?.state).toBe("READY");
-    expect(Date.parse(catalog.catalogStatus?.expiresAt ?? "")).toBeGreaterThan(
-      Date.now(),
-    );
-    expect(catalog.catalogRevision).toMatch(/^mcat_[a-f0-9]{64}$/);
-    expect(catalog.catalogDigest).toMatch(/^[a-f0-9]{64}$/);
-    const pin = `${catalog.catalogRevision}:${catalog.catalogDigest}`;
-    if (catalogPin) expect(pin).toBe(catalogPin);
-    catalogPin = pin;
-    const model = catalog.items.find(
-      (item) => item.id === runtime.configuration.model,
-    );
-    if (model) {
-      expect(model.available).toBe(true);
-      expect(model.eligibleProviderAccountRefs).toContain(accountRef);
-      candidate = {
-        accountRef,
-        weight: 1,
-        catalogRevision: catalog.catalogRevision,
-        catalogDigest: catalog.catalogDigest,
-        providerDefinitionKey: model.providerDefinitionKey,
-      };
-      break;
-    }
-    if (!catalog.nextPageToken) break;
-    expect(cursors.has(catalog.nextPageToken)).toBe(false);
-    cursors.add(catalog.nextPageToken);
-    query.set("pageToken", catalog.nextPageToken);
-  }
-  if (!candidate)
-    throw new Error("Selected model is absent from the exact account catalog");
+  const candidate = await selectProviderAccountCandidate(
+    accountRef,
+    runtime.configuration.model,
+    (path) => readAPI<ModelCapabilityPage>(page, path),
+  );
   const result = await page.evaluate(
     async ({ expectedAccountRef, expectedAgentRef, candidate, runtime }) => {
       const readbackResponse = await fetch(
