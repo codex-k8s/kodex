@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
-	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
@@ -50,7 +49,7 @@ func decodeWorkspaceAwareTask(raw []byte) (Task, error) {
 	}
 	if newProfile {
 		decoded = wireTask{}
-		if internalrpcauth.DecodeStrictJSON(raw, &decoded) != nil || decoded.Workspace == nil {
+		if runtimecontract.DecodeWorkspaceStorageTaskJSON(raw, &decoded) != nil || decoded.Workspace == nil {
 			return Task{}, errWorkspaceTaskInvalid
 		}
 		canonical, err := json.Marshal(decoded)
