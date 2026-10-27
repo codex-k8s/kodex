@@ -3,6 +3,14 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/role_image_risk.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_image_risk.go",
+      "fragmentSHA256": "c1e607196af88503034a3d879891b1a0038e074986ac000053b39048850f8705",
+      "count": 1,
+      "reason": "Два окна задают typed RPC bindings чтения vulnerability report: GetOrganizationImageVulnerabilityReport назначает ORGANIZATION scope, а GetImageVulnerabilityReport — PROJECT плюс project filter. Каждый вызывает roleImagePrincipal с собственным exact full method и строит свой generated response type. Реальное чтение уже общее server.service.GetVulnerabilityReport, converters Report/Findings/Page также переиспользованы. Оставшаяся часть — явные request→filter/response поля и стандартный strings.TrimPrefix для присутствующего severity; nil optional severity отличается от explicit enum zero. Новая getter-interface фабрика ради двух разных Proto messages добавила бы адаптацию presence и скрыла бы видимые method/scope bindings без второго доменного reader. Сохранён только один exact внутрефайловый hash/count1, не risk validation, principal resolution или другие RPC handlers."
+    },
+    {
+      "format": "go",
       "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/role_images_risk.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime_artifact_transfer.go",
       "fragmentSHA256": "8cbe8e294ca86dac9ce3c32f77026270b8332fa80b2005c9c5893eb1182b9c64",

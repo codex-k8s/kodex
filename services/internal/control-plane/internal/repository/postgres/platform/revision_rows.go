@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -61,4 +62,40 @@ func collectRowsInto[T any](rows pgx.Rows, items []T, scan func(rowScanner) (T, 
 		items = append(items, item)
 	}
 	return items, nil
+}
+
+// readPlatformCatalog resolves the caller before issuing the server-selected embedded catalog
+// query, then owns its deferred row Close. The two enabled global catalogs retain their own SQL
+// and typed column mappings; this helper is not a tenant-resource or mutation authorization gate.
+// Query failures become Unavailable, while readCatalogRows preserves the legacy iteration policy.
+// readPlatformCatalog разрешает вызывающего до выполнения выбранного сервером встроенного запроса
+// каталога, затем владеет отложенным Close строк. Два глобальных enabled каталога сохраняют свои
+// SQL и типизированные колонки; helper не авторизует ресурсы tenant или изменения состояния.
+// Ошибка Query даёт Unavailable, а readCatalogRows сохраняет прежнюю политику iteration errors.
+func readPlatformCatalog[T any](ctx context.Context, repository *Repository, principal value.Principal, queryText string, scan func(rowScanner) (T, error)) ([]T, error) {
+	if _, err := repository.resolveScope(ctx, principal); err != nil {
+		return nil, err
+	}
+	rows, err := repository.pool.Query(ctx, queryText)
+	if err != nil {
+		return nil, errs.ErrUnavailable
+	}
+	defer rows.Close()
+	return readCatalogRows(rows, scan)
+}
+
+// readCatalogRows starts with a nil slice and delegates decoding/appends to collectRowsInto.
+// Scan failures discard all items as Unavailable; an iteration failure instead returns the same
+// raw error with accumulated items. Err is read only after exhaustion, and this helper neither
+// closes rows nor completes a transaction; driver auto-close behavior remains unchanged.
+// readCatalogRows начинает с nil среза и передаёт decoding/append в collectRowsInto. Ошибка Scan
+// отбрасывает все элементы с Unavailable; iteration failure возвращает ту же исходную ошибку и
+// накопленные элементы. Err читается после завершения Next; helper не закрывает строки и не
+// завершает транзакцию, автоматическое закрытие драйвером остаётся прежним.
+func readCatalogRows[T any](rows pgx.Rows, scan func(rowScanner) (T, error)) ([]T, error) {
+	items, err := collectRowsInto(rows, []T(nil), scan)
+	if err != nil {
+		return nil, errs.ErrUnavailable
+	}
+	return items, rows.Err()
 }

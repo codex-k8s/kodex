@@ -31,6 +31,16 @@ func testPublicAccessQueryScopes(t *testing.T, ctx context.Context, repository *
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Run("enabled catalog row projections", func(t *testing.T) {
+		capabilities, err := service.ListCapabilities(ctx, owner)
+		if err != nil || len(capabilities) == 0 || capabilities[0].Key == "" || capabilities[0].Name == "" {
+			t.Fatal("enabled capability catalog projection is unavailable")
+		}
+		runtimes, err := service.ListRuntimes(ctx, owner)
+		if err != nil || len(runtimes) == 0 || runtimes[0].Ref == "" || runtimes[0].Provider == "" || runtimes[0].Model == "" || !runtimes[0].Ready {
+			t.Fatal("enabled runtime catalog projection is unavailable")
+		}
+	})
 	createProject := func(key string) entity.Project {
 		result, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner, Mutation: value.Mutation{IdempotencyKey: key}, Payload: command.ProjectInput{Name: key, Language: "en"}})
 		if err != nil || result.Project == nil {

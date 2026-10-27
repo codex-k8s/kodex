@@ -4,11 +4,57 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.536.0
+version: 1.537.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общий путь чтения каталогов — 27.10.2026
+
+readPlatformCatalog обслуживает ListCapabilities/ListRuntimes: прежний resolveScope
+до того же server-selected embedded SQL, прежний Query→defer Close и typed scanner.
+readCatalogRows использует существующий collectRowsInto с nil начальным срезом.
+Ошибка Scan отбрасывает все элементы с прежним Unavailable sentinel; iteration
+failure возвращает накопленные элементы и ту же raw error. Err вызывается после
+Next=false; driver auto-close и итоговый Close сохраняются. Row callbacks оставляют
+исходные4/5Scan destinations, а RuntimeSelection.Ready=true ставится только после
+успешного Scan. Это прежний catalog hint без проверки работающего provider.
+
+resolvePlatformMembershipReadScope обслуживает только два platform membership
+list/candidate reads: прежний resolveScope, затем OWNER/ADMINISTRATOR, raw scope
+error либо Forbidden до Query. SQL organization/filter/page args, row projections,
+action hints и пустой continuation остаются у callers. Другие роли в GetProject
+означают derivation permissions, GetAdministration имеет scope-only правило,
+action hints имеют собственную политику — эти пути сохраняют свои условия.
+Новых authority,tenant,grant,transaction,event или lifecycle transitions нет.
+
+Три whole-source inverses восстановили queries.go,revision_rows.go и исходный
+component helper. Два исходных auth/query/Close prefixes буквально равны общему
+body после подстановки query constant; membership gate также равен исходному.
+Scan arguments/положение Ready подтверждены точно; прежний collectRowsInto,
+resolver/service и pinned dependencies побайтно прежние.
+
+Новый component subtest читает реальные enabled catalogs и Ready projection на
+одноразовой PostgreSQL. Native production проверен с этим assertion до выноса.
+Public runner выбранных access/OIDC-membership/provider-prerequisite/enterprise
+сценариев дал28PASS/0FAIL/SKIP до43.89s/после43.74s. Это selected component tests,
+не весь PostgreSQL/E2E контур. Весь control-plane build/unit/vet PASS LOCAL:
+до5.88/37.27/4.58s3003PASS/70SKIP,после16.32/41.22/5.38s3010PASS/70SKIP,0FAIL,
+30packages. Семь новых unit events защищают empty nil,порядок,первый/partial Scan
+с отбрасыванием,early/partial iteration с raw error identity,Err order/no Close.
+Публичный SQL boundary PASS1.57s; новых SQL literals/query files нет.
+
+Удалены две raw-группы aaa2dccc/4a88938d,новых нет. Один exact c1e60719 nominal RPC
+binding сохранён после чтения обоих typed handlers: разные full method/ORG-vs-PROJECT
+filters/response types,общие domain reader иcasters,точная optional severity presence.
+Этот файл побайтно прежний; implementations/validation/principal resolution не
+исключаются.6registry mutations отвергнуты,17quality unit PASS. Registry1127,
+6792sources/222exclusions,1406raw/1270retained/136unresolved(Go66/TypeScript70),
+Go21649/21649 EN→RU. Новый test source учтён;thresholds/exclusions прежние.
+Context7 /jackc/pgx Rows.Next/Scan/Err/Close иauto-close проверены; версии
+зависимостей, contracts/generated/deploy прежние. Полные E2E/browser/live/deploy/
+startup/QA NOT RUN. Общая готовность всего diff к merge ещё не подтверждена.
 
 ## Общий типизированный comparator provenance — 27.10.2026
 

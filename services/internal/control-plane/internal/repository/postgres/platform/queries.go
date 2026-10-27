@@ -133,23 +133,11 @@ func (repository *Repository) GetOverview(ctx context.Context, principal value.P
 // описанием и риском. Ошибки запроса/сканирования отображаются в Unavailable; конечная ошибка
 // итерации возвращается без преобразования вместе с накопленными строками.
 func (repository *Repository) ListCapabilities(ctx context.Context, principal value.Principal) ([]entity.IntegrationCapability, error) {
-	if _, err := repository.resolveScope(ctx, principal); err != nil {
-		return nil, err
-	}
-	rows, err := repository.pool.Query(ctx, queryQueriesListcapabilitiesSelectPlatformCapabilitiesEnabled)
-	if err != nil {
-		return nil, errs.ErrUnavailable
-	}
-	defer rows.Close()
-	var result []entity.IntegrationCapability
-	for rows.Next() {
+	return readPlatformCatalog(ctx, repository, principal, queryQueriesListcapabilitiesSelectPlatformCapabilitiesEnabled, func(row rowScanner) (entity.IntegrationCapability, error) {
 		var item entity.IntegrationCapability
-		if err := rows.Scan(&item.Key, &item.Name, &item.Description, &item.Risk); err != nil {
-			return nil, errs.ErrUnavailable
-		}
-		result = append(result, item)
-	}
-	return result, rows.Err()
+		err := row.Scan(&item.Key, &item.Name, &item.Description, &item.Risk)
+		return item, err
+	})
 }
 
 // ListRuntimes lists enabled runtime profiles after scope resolution and marks each returned
@@ -159,24 +147,14 @@ func (repository *Repository) ListCapabilities(ctx context.Context, principal va
 // проверки провайдера. Ошибки запроса/сканирования отбрасывают результат с Unavailable; конечная
 // ошибка итерации сохраняет накопленный результат и исходную ошибку.
 func (repository *Repository) ListRuntimes(ctx context.Context, principal value.Principal) ([]entity.RuntimeSelection, error) {
-	if _, err := repository.resolveScope(ctx, principal); err != nil {
-		return nil, err
-	}
-	rows, err := repository.pool.Query(ctx, queryQueriesListruntimesSelectRuntimeProfilesEnabled)
-	if err != nil {
-		return nil, errs.ErrUnavailable
-	}
-	defer rows.Close()
-	var result []entity.RuntimeSelection
-	for rows.Next() {
+	return readPlatformCatalog(ctx, repository, principal, queryQueriesListruntimesSelectRuntimeProfilesEnabled, func(row rowScanner) (entity.RuntimeSelection, error) {
 		var item entity.RuntimeSelection
-		if err := rows.Scan(&item.Ref, &item.Name, &item.Provider, &item.Model, &item.RuntimeRevision); err != nil {
-			return nil, errs.ErrUnavailable
+		if err := row.Scan(&item.Ref, &item.Name, &item.Provider, &item.Model, &item.RuntimeRevision); err != nil {
+			return item, err
 		}
 		item.Ready = true
-		result = append(result, item)
-	}
-	return result, rows.Err()
+		return item, nil
+	})
 }
 
 // Search collects text candidates in a read-only RepeatableRead transaction, evaluates current
@@ -587,6 +565,25 @@ func projectActions(permissions []string) []string {
 	return actions
 }
 
+// resolvePlatformMembershipReadScope resolves the supplied principal once and permits only
+// OWNER or ADMINISTRATOR for platform membership list/candidate reads. Resolver errors retain
+// identity, other roles fail Forbidden, and no query or mutation follows inside this helper.
+// It is not the distinct project-permission or presentation-action policy.
+// resolvePlatformMembershipReadScope разрешает переданного участника один раз и допускает лишь
+// OWNER или ADMINISTRATOR к спискам platform membership и кандидатов. Сохраняет исходную ошибку
+// resolver, остальным ролям возвращает Forbidden; запросов или изменений данных после проверки
+// не выполняет. Не заменяет отдельные правила project permissions и presentation actions.
+func (repository *Repository) resolvePlatformMembershipReadScope(ctx context.Context, principal value.Principal) (scope, error) {
+	current, err := repository.resolveScope(ctx, principal)
+	if err != nil {
+		return scope{}, err
+	}
+	if current.role != "OWNER" && current.role != "ADMINISTRATOR" {
+		return scope{}, errs.ErrForbidden
+	}
+	return current, nil
+}
+
 // ListPlatformMemberships restricts the platform membership page to owner/admin, preserving
 // distinct subject/binding active flags and deriving edit/revoke hints. It returns an empty
 // continuation token even when the SQL page limit truncates rows; scan/iteration failures discard
@@ -595,12 +592,9 @@ func projectActions(permissions []string) []string {
 // признаки активности субъекта и membership, вычисляет edit/revoke. Возвращает пустой токен
 // продолжения даже при обрезке SQL лимитом; ошибки сканирования/итерации отбрасывают результат.
 func (repository *Repository) ListPlatformMemberships(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Membership, string, error) {
-	scope, err := repository.resolveScope(ctx, principal)
+	scope, err := repository.resolvePlatformMembershipReadScope(ctx, principal)
 	if err != nil {
 		return nil, "", err
-	}
-	if scope.role != "OWNER" && scope.role != "ADMINISTRATOR" {
-		return nil, "", errs.ErrForbidden
 	}
 	rows, err := repository.pool.Query(ctx, queryPlatformMembershipList, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID,
@@ -637,12 +631,9 @@ func (repository *Repository) ListPlatformMemberships(ctx context.Context, princ
 // организации без платформенного membership по очищенному запросу. Делегирует лишь чтение четырёх
 // колонок и не возвращает токен продолжения; статус кандидата не предоставляет право участия.
 func (repository *Repository) ListPlatformMembershipCandidates(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.User, string, error) {
-	scope, err := repository.resolveScope(ctx, principal)
+	scope, err := repository.resolvePlatformMembershipReadScope(ctx, principal)
 	if err != nil {
 		return nil, "", err
-	}
-	if scope.role != "OWNER" && scope.role != "ADMINISTRATOR" {
-		return nil, "", errs.ErrForbidden
 	}
 	rows, err := repository.pool.Query(ctx, queryPlatformMembershipListCandidates, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID,
