@@ -231,6 +231,8 @@ func (files *workspaceRestoreFilesystem) SealDirectory(ctx context.Context, name
 	var info unix.Stat_t
 	if unix.Fstat(directory, &info) != nil || info.Uid != files.identity.actor || info.Gid != files.identity.group ||
 		uint64(info.Dev) != files.device || info.Mode&0o7777 != 0o2770 || unix.Fchmod(directory, mode) != nil ||
+		unix.Fstat(directory, &info) != nil || info.Uid != files.identity.actor || info.Gid != files.identity.group ||
+		uint64(info.Dev) != files.device || info.Mode&unix.S_IFMT != unix.S_IFDIR || info.Mode&0o7777 != mode ||
 		unix.Fsync(directory) != nil || unix.Fsync(parent) != nil || !files.usable(ctx) {
 		files.failed = true
 		return errWorkspaceObjectUnconfirmed
