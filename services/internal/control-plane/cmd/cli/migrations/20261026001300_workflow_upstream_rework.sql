@@ -122,11 +122,11 @@ BEGIN
             AND COALESCE(physical.workflow_step_origin_node_id,physical.id)=v_anchor.id AND physical.workflow_business_attempt=v_max
         HAVING count(DISTINCT physical.workflow_inputs)=1;
         SELECT COALESCE(jsonb_agg(jsonb_build_object('stepKey',dependency.key,'sourceNodeId',source.id,'receipt',v_effective->dependency.key) ORDER BY dependency.position),'[]'::jsonb)
-            INTO v_expected FROM jsonb_array_elements_text(v_step->'DependsOn') WITH ORDINALITY dependency(key,position)
+            INTO v_expected FROM jsonb_array_elements_text(COALESCE(NULLIF(v_step->'DependsOn','null'::jsonb),'[]'::jsonb)) WITH ORDINALITY dependency(key,position)
             JOIN control_plane.run_nodes source ON source.organization_id=p_organization AND source.root_run_id=p_root
                 AND source.workflow_step_key=dependency.key AND source.workflow_step_origin_node_id IS NULL
             WHERE v_effective ? dependency.key;
-        IF v_inputs=v_expected AND jsonb_array_length(v_expected)=jsonb_array_length(v_step->'DependsOn') THEN
+        IF v_inputs=v_expected AND jsonb_array_length(v_expected)=jsonb_array_length(COALESCE(NULLIF(v_step->'DependsOn','null'::jsonb),'[]'::jsonb)) THEN
             v_effective:=v_effective||jsonb_build_object(v_key,v_receipt);
         END IF;
     END LOOP;
@@ -148,10 +148,10 @@ BEGIN
     IF v_step IS NULL THEN RETURN NULL; END IF;
     v_effective:=control_plane.workflow_effective_receipts(p_organization,p_root);
     SELECT COALESCE(jsonb_agg(jsonb_build_object('stepKey',dependency.key,'sourceNodeId',source.id,'receipt',v_effective->dependency.key) ORDER BY dependency.position),'[]'::jsonb)
-    INTO v_inputs FROM jsonb_array_elements_text(v_step->'DependsOn') WITH ORDINALITY dependency(key,position)
+    INTO v_inputs FROM jsonb_array_elements_text(COALESCE(NULLIF(v_step->'DependsOn','null'::jsonb),'[]'::jsonb)) WITH ORDINALITY dependency(key,position)
     JOIN control_plane.run_nodes source ON source.organization_id=p_organization AND source.root_run_id=p_root
         AND source.workflow_step_key=dependency.key AND source.workflow_step_origin_node_id IS NULL WHERE v_effective ? dependency.key;
-    IF jsonb_array_length(v_inputs)<>jsonb_array_length(v_step->'DependsOn') THEN RETURN NULL; END IF;
+    IF jsonb_array_length(v_inputs)<>jsonb_array_length(COALESCE(NULLIF(v_step->'DependsOn','null'::jsonb),'[]'::jsonb)) THEN RETURN NULL; END IF;
     RETURN v_inputs;
 END;
 $$;
@@ -254,7 +254,7 @@ BEGIN
             IF NOT v_effective ? (v_step->>'Key') AND NOT (v_manual AND v_step->>'Key'=p_episode->>'stepKey' AND v_receipt->>'accepted'='true') THEN RETURN false; END IF;
             v_affected:=v_affected||jsonb_build_object(v_step->>'Key',true);
         END IF;
-        IF EXISTS(SELECT 1 FROM jsonb_array_elements_text(v_step->'DependsOn') dependency(key) WHERE v_affected ? dependency.key) THEN
+        IF EXISTS(SELECT 1 FROM jsonb_array_elements_text(COALESCE(NULLIF(v_step->'DependsOn','null'::jsonb),'[]'::jsonb)) dependency(key) WHERE v_affected ? dependency.key) THEN
             v_affected:=v_affected||jsonb_build_object(v_step->>'Key',true);
         END IF;
         IF NOT v_affected ? (v_step->>'Key') THEN CONTINUE; END IF;

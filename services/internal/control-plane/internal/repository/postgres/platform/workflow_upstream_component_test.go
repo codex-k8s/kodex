@@ -104,6 +104,9 @@ func testWorkflowUpstreamScenario(t *testing.T, scenario string) {
 			ttl := int32(1)
 			step.ApprovalTimeoutSeconds = &ttl
 		}
+		if scenario == "sibling-gate-first" && (key == "author" || key == "independent") {
+			step.DependsOn = []string{}
+		}
 		draft.Steps = append(draft.Steps, step)
 	}
 	workflow := execute(command.CreateWorkflow, "workflow", nil, command.WorkflowInput{ProjectRef: project.Ref, Name: draft.Name, Purpose: draft.Purpose, CoordinatorAgentRef: manager.Ref, Draft: &draft}).Workflow
@@ -127,8 +130,16 @@ func testWorkflowUpstreamScenario(t *testing.T, scenario string) {
 		var episodes []workflowExceptionEpisode
 		var floors map[string]int32
 		var pins map[string]string
-		if pool.QueryRow(ctx, queryWorkflowUpstreamProof, pgx.StrictNamedArgs{"run_ref": run.Ref, "project_ref": project.Ref}).Scan(&episodes, &floors, &pins) != nil {
+		var shapes map[string]string
+		if pool.QueryRow(ctx, queryWorkflowUpstreamProof, pgx.StrictNamedArgs{"run_ref": run.Ref, "project_ref": project.Ref}).Scan(&episodes, &floors, &pins, &shapes) != nil {
 			t.Fatal("read native upstream pins")
+		}
+		expected := "null"
+		if scenario == "sibling-gate-first" {
+			expected = "array"
+		}
+		if shapes["author"] != expected || shapes["independent"] != expected {
+			t.Fatal("native nil/empty predecessor shape changed before owner evaluation")
 		}
 		return episodes, floors, pins
 	}
