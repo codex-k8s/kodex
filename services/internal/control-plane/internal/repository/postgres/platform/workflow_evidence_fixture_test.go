@@ -57,6 +57,37 @@ func (fixture *workflowEvidenceNativeFixture) history(lease map[string]any) []en
 	return items
 }
 
+// claimOutcome proves one exact CONTINUES edge and a fresh lease/revision in the same physical
+// run. It rejects early business acceptance and cannot assign a producer or create a new effect.
+// claimOutcome доказывает одно exact CONTINUES edge и fresh lease/revision того же physical run.
+// Ранняя business acceptance отклоняется; producer либо новый effect функция не назначает.
+func (fixture *workflowEvidenceNativeFixture) claimOutcome(previous map[string]any, agent string) map[string]any {
+	fixture.f.t.Helper()
+	lease := fixture.claim(agent)
+	if stringMap(lease, "runRef") != stringMap(previous, "runRef") || stringMap(lease, "nodeRef") == stringMap(previous, "nodeRef") ||
+		stringMap(lease, "leaseRef") == stringMap(previous, "leaseRef") || stringMap(lease, "runtimeRevisionRef") == stringMap(previous, "runtimeRevisionRef") ||
+		runtimeRevisionMapInt64(lease, "attempt") != runtimeRevisionMapInt64(previous, "attempt")+1 {
+		fixture.f.t.Fatal("owner outcome delivery did not create exact fresh physical continuation")
+	}
+	_, graph, err := fixture.f.service.GetRunGraph(fixture.f.ctx, fixture.f.owner, fixture.f.runRef)
+	if err != nil {
+		fixture.f.t.Fatal("read exact owner outcome edge")
+	}
+	edges := 0
+	for _, edge := range graph.Edges {
+		if edge.SourceNodeRef == stringMap(previous, "nodeRef") && edge.Type == "CONTINUES" {
+			edges++
+			if edge.TargetNodeRef != stringMap(lease, "nodeRef") {
+				fixture.f.t.Fatal("owner outcome delivery selected another producer")
+			}
+		}
+	}
+	if edges != 1 || len(fixture.history(lease)) != 0 {
+		fixture.f.t.Fatal("owner outcome delivery duplicated its edge or accepted business early")
+	}
+	return lease
+}
+
 // workflowEvidenceHistoryForRun selects by an owner-issued run reference rather than an assumed
 // step name or display name. Duplicate receipts for that business run fail the fixture closed.
 // workflowEvidenceHistoryForRun выбирает по owner-issued run reference вместо предполагаемого
