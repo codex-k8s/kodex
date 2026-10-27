@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import type { PromptTemplatePreview } from "../src/shared/api/generated/openapi/types.gen";
 import { exactAgent } from "./fixtures/exact-agent";
@@ -28,38 +28,8 @@ type PromptProblem = {
 test("Материализованный preview показывает pin и безопасную ошибку шаблона", async ({
   page,
 }) => {
-  const serverFailures: string[] = [];
-  page.on("response", (response) => {
-    if (response.status() >= 500)
-      serverFailures.push(
-        `${String(response.status())} ${new URL(response.url()).pathname}`,
-      );
-  });
-  await authenticateOwner(
-    page,
-    {
-      username: environment.ownerUsername,
-      password: environment.ownerPassword,
-    },
-    { mode: "local" },
-  );
-  const project = await exactProject(page, projectName);
-  const agent = await exactAgent(
-    page,
-    project.ref,
-    agentName,
-    "Prompt preview agent fixture is not unique",
-  );
-  await gotoWithRetry(
-    page,
-    `/projects/${encodeURIComponent(project.ref)}/agents/${encodeURIComponent(agent.ref)}`,
-  );
-  await page.getByRole("tab", { name: "Инструкции", exact: true }).click();
-  const panel = page.locator("#agent-panel-instructions");
-  const editor = panel.getByRole("textbox", {
-    name: "Инструкции",
-    exact: true,
-  });
+  const { serverFailures, panel, editor, agent } =
+    await openInstructionEditor(page);
   await expect(editor).not.toHaveText("");
 
   const successfulPreview = page.waitForResponse(isPromptPreviewResponse);
@@ -192,38 +162,7 @@ test("Материализованный preview показывает pin и б�
 test("MVP-UI-35 не дублирует пользовательский slot и показывает служебный порядок", async ({
   page,
 }) => {
-  const serverFailures: string[] = [];
-  page.on("response", (response) => {
-    if (response.status() >= 500)
-      serverFailures.push(
-        `${String(response.status())} ${new URL(response.url()).pathname}`,
-      );
-  });
-  await authenticateOwner(
-    page,
-    {
-      username: environment.ownerUsername,
-      password: environment.ownerPassword,
-    },
-    { mode: "local" },
-  );
-  const project = await exactProject(page, projectName);
-  const agent = await exactAgent(
-    page,
-    project.ref,
-    agentName,
-    "Prompt preview agent fixture is not unique",
-  );
-  await gotoWithRetry(
-    page,
-    `/projects/${encodeURIComponent(project.ref)}/agents/${encodeURIComponent(agent.ref)}`,
-  );
-  await page.getByRole("tab", { name: "Инструкции", exact: true }).click();
-  const panel = page.locator("#agent-panel-instructions");
-  const editor = panel.getByRole("textbox", {
-    name: "Инструкции",
-    exact: true,
-  });
+  const { serverFailures, panel, editor } = await openInstructionEditor(page);
   await editor.fill('Пользовательская часть\n{{slot "PURPOSE"}}');
 
   const previewResponse = page.waitForResponse(isPromptPreviewResponse);
@@ -294,6 +233,44 @@ test("MVP-UI-35 не дублирует пользовательский slot и
   await expect(orderedSections.nth(1)).toContainText("Платформа · Назначение");
   expect(serverFailures).toEqual([]);
 });
+
+// openInstructionEditor готовит общий локальный путь к редактору и собирает ошибки сервера.
+// Сценарии самостоятельно задают содержимое и проверяют ответы preview.
+async function openInstructionEditor(page: Page) {
+  const serverFailures: string[] = [];
+  page.on("response", (response) => {
+    if (response.status() >= 500)
+      serverFailures.push(
+        `${String(response.status())} ${new URL(response.url()).pathname}`,
+      );
+  });
+  await authenticateOwner(
+    page,
+    {
+      username: environment.ownerUsername,
+      password: environment.ownerPassword,
+    },
+    { mode: "local" },
+  );
+  const project = await exactProject(page, projectName);
+  const agent = await exactAgent(
+    page,
+    project.ref,
+    agentName,
+    "Prompt preview agent fixture is not unique",
+  );
+  await gotoWithRetry(
+    page,
+    `/projects/${encodeURIComponent(project.ref)}/agents/${encodeURIComponent(agent.ref)}`,
+  );
+  await page.getByRole("tab", { name: "Инструкции", exact: true }).click();
+  const panel = page.locator("#agent-panel-instructions");
+  const editor = panel.getByRole("textbox", {
+    name: "Инструкции",
+    exact: true,
+  });
+  return { serverFailures, panel, editor, agent };
+}
 
 function isPromptPreviewResponse(response: {
   request(): { method(): string };
