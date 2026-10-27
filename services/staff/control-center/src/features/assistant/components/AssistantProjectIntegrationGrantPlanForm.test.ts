@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  createRenderer,
   defineComponent,
   h,
   ssrContextKey,
@@ -8,6 +7,7 @@ import {
   type Ref,
   type SetupContext,
 } from "vue";
+import { createLifecycleTestRenderer } from "@/test-utils/lifecycle-renderer";
 import { createI18n } from "vue-i18n";
 import type { AssistantPlanOperationInput } from "@/shared/api/generated/openapi/types.gen";
 import { editableOperations } from "../model";
@@ -148,20 +148,7 @@ async function setup(
   if (!editable) throw new Error("Missing operation fixture");
   let state!: State;
   // Настоящий mounted watcher: SSR закрывает onCleanup до async readback.
-  const renderer = createRenderer<Record<string, never>, Record<string, never>>(
-    {
-      patchProp() {},
-      insert() {},
-      remove() {},
-      createElement: () => ({}),
-      createText: () => ({}),
-      createComment: () => ({}),
-      setText() {},
-      setElementText() {},
-      parentNode: () => null,
-      nextSibling: () => null,
-    },
-  );
+  const renderer = createLifecycleTestRenderer();
   const original = (
     Form as unknown as {
       setup: (props: Record<string, unknown>, context: SetupContext) => State;
