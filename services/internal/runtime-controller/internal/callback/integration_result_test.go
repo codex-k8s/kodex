@@ -167,6 +167,27 @@ func TestIntegrationTerminalWireAndOwnerProjection(t *testing.T) {
 	}
 }
 
+// integrationErrorWire models only the public error fields inspected by integration tests.
+// integrationErrorWire описывает только публичные поля ошибки, проверяемые тестами интеграции.
+type integrationErrorWire struct {
+	Result struct {
+		StructuredContent map[string]any `json:"structuredContent"`
+		IsError           bool           `json:"isError"`
+	} `json:"result"`
+}
+
+// newIntegrationErrorFixture returns a fresh synthetic owner client, callback server and exact
+// lease-bound input. Each caller supplies its own tool arguments and checks its own effects.
+// newIntegrationErrorFixture возвращает новый синтетический owner client, callback server и
+// точный lease-bound input. Каждый caller задаёт свои аргументы tool и проверяет свои effects.
+func newIntegrationErrorFixture() (*integrationResultClient, *Server, runtimecontract.RunnerInput) {
+	client := &integrationResultClient{}
+	server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}, logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	input := runtimecontract.RunnerInput{RunRef: "run_fixture", NodeRef: "node_fixture", LeaseRef: "lease_fixture", LeaseFence: "fence_fixture", LeaseGeneration: 2,
+		IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{integrationGrantFixture()}}
+	return client, server, input
+}
+
 // TestIntegrationCatalogInvalidInputReturnsRetryableMCPError checks mixed catalog
 // selectors yield closed retryable guidance and a failed safe owner projection,
 // rather than treating invalid input as a successful catalog read.
@@ -174,21 +195,13 @@ func TestIntegrationTerminalWireAndOwnerProjection(t *testing.T) {
 // guidance и failed safe owner projection смешанных catalog selectors
 // вместо признания неверного input успешным catalog read.
 func TestIntegrationCatalogInvalidInputReturnsRetryableMCPError(t *testing.T) {
-	client := &integrationResultClient{}
-	server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}, logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
-	input := runtimecontract.RunnerInput{RunRef: "run_fixture", NodeRef: "node_fixture", LeaseRef: "lease_fixture", LeaseFence: "fence_fixture", LeaseGeneration: 2,
-		IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{integrationGrantFixture()}}
+	client, server, input := newIntegrationErrorFixture()
 	params, _ := json.Marshal(map[string]any{"name": "get_integration_catalog", "arguments": map[string]any{
 		"query": "test", "connection_ref": input.IntegrationGrants[0].ConnectionRef,
 	}})
 	writer := httptest.NewRecorder()
 	server.callTool(writer, httptest.NewRequest("POST", "/", nil), mcpRequest{ID: json.RawMessage(`"call1"`), Params: params}, input)
-	var wire struct {
-		Result struct {
-			StructuredContent map[string]any `json:"structuredContent"`
-			IsError           bool           `json:"isError"`
-		} `json:"result"`
-	}
+	var wire integrationErrorWire
 	if json.Unmarshal(writer.Body.Bytes(), &wire) != nil || !wire.Result.IsError ||
 		wire.Result.StructuredContent["error_code"] != "CATALOG_INPUT_INVALID" || wire.Result.StructuredContent["retryable"] != true {
 		t.Fatalf("invalid catalog input did not return retry guidance: %s", writer.Body.String())
@@ -206,22 +219,14 @@ func TestIntegrationCatalogInvalidInputReturnsRetryableMCPError(t *testing.T) {
 // grant index и failed projection при выдуманном operation name; произвольные
 // remote operations не обнаруживаются и не выполняются.
 func TestIntegrationCatalogMissingSelectionPointsToBoundIndex(t *testing.T) {
-	client := &integrationResultClient{}
-	server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}, logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
-	grant := integrationGrantFixture()
-	input := runtimecontract.RunnerInput{RunRef: "run_fixture", NodeRef: "node_fixture", LeaseRef: "lease_fixture", LeaseFence: "fence_fixture", LeaseGeneration: 2,
-		IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{grant}}
+	client, server, input := newIntegrationErrorFixture()
+	grant := input.IntegrationGrants[0]
 	params, _ := json.Marshal(map[string]any{"name": "get_integration_catalog", "arguments": map[string]any{
 		"connection_ref": grant.ConnectionRef, "capability_key": "guessedOperationId",
 	}})
 	writer := httptest.NewRecorder()
 	server.callTool(writer, httptest.NewRequest("POST", "/", nil), mcpRequest{ID: json.RawMessage(`"call1"`), Params: params}, input)
-	var wire struct {
-		Result struct {
-			StructuredContent map[string]any `json:"structuredContent"`
-			IsError           bool           `json:"isError"`
-		} `json:"result"`
-	}
+	var wire integrationErrorWire
 	if json.Unmarshal(writer.Body.Bytes(), &wire) != nil || !wire.Result.IsError ||
 		wire.Result.StructuredContent["error_code"] != "CATALOG_INPUT_INVALID" || wire.Result.StructuredContent["retryable"] != true {
 		t.Fatal("missing integration selection did not return a retryable catalog error")
@@ -241,22 +246,13 @@ func TestIntegrationCatalogMissingSelectionPointsToBoundIndex(t *testing.T) {
 // TestIntegrationInvalidGrantReturnsBoundedRetryGuidance проверяет closed retryable
 // ошибку чужого grant без отражения private input, owner resolve и projection.
 func TestIntegrationInvalidGrantReturnsBoundedRetryGuidance(t *testing.T) {
-	client := &integrationResultClient{}
-	server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}, logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
-	grant := integrationGrantFixture()
-	input := runtimecontract.RunnerInput{RunRef: "run_fixture", NodeRef: "node_fixture", LeaseRef: "lease_fixture", LeaseFence: "fence_fixture", LeaseGeneration: 2,
-		IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{grant}}
+	client, server, input := newIntegrationErrorFixture()
 	params, _ := json.Marshal(map[string]any{"name": "invoke_integration", "arguments": map[string]any{
 		"grant_ref": "igr_foreign", "input": map[string]any{"value": "private-input"},
 	}})
 	writer := httptest.NewRecorder()
 	server.callTool(writer, httptest.NewRequest("POST", "/", nil), mcpRequest{ID: json.RawMessage(`"call1"`), Params: params}, input)
-	var wire struct {
-		Result struct {
-			StructuredContent map[string]any `json:"structuredContent"`
-			IsError           bool           `json:"isError"`
-		} `json:"result"`
-	}
+	var wire integrationErrorWire
 	if json.Unmarshal(writer.Body.Bytes(), &wire) != nil || !wire.Result.IsError ||
 		wire.Result.StructuredContent["error_code"] != "INTEGRATION_INPUT_INVALID" || wire.Result.StructuredContent["retryable"] != true {
 		t.Fatalf("invalid integration grant did not return bounded guidance: %s", writer.Body.String())

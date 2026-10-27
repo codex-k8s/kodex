@@ -4,11 +4,21 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.578.0
+version: 1.579.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая тестовая оснастка ошибок интеграций — 27.10.2026
+
+Три unit-сценария runtime-controller используют общую свежую синтетическую
+оснастку owner client, callback server, lease input и тип публичного ответа.
+Отдельные проверки retry guidance, owner projection и отсутствия утечки сохранены;
+production-код не менялся. Три выбранных теста PASS до и после, FAIL/SKIP 0.
+Runtime-controller build/vet PASS, 1860 unit PASS / 3 условных SKIP. Анализ:
+1344 raw / 1282 retained / 62 unresolved, Go-комментарии 21720/21720. Браузер,
+E2E, live/deploy/startup и QA не выполнялись.
 
 ## Общее чтение страниц membership и runtime environment — 27.10.2026
 
