@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -64,7 +66,7 @@ func testWorkflowExceptionContext(t *testing.T, mode string) {
 	var fileBinding *entity.AccessBinding
 	if mode == "owner-revoke" {
 		var subject string
-		initiator, subject = previewAuthorityActor(t, ctx, repository, service, owner, "context-limited-initiator", []string{"project.view", "agent.view", "agent.launch", "workflow.view", "workflow.launch", "run.view", "artifact.upload"}, entity.AccessScope{Kind: "PROJECT", ProjectRef: project.Ref})
+		initiator, subject = previewAuthorityActor(t, ctx, repository, service, owner, "context-limited-initiator", []string{"project.view", "agent.view", "agent.launch", "workflow.view", "workflow.launch", "run.view", "artifact.upload", "artifact.bind", "artifact.delete"}, entity.AccessScope{Kind: "PROJECT", ProjectRef: project.Ref})
 		fileBinding = previewAuthorityGrant(t, ctx, service, owner, "context-files", subject, []string{"artifact.view", "artifact.download"}, entity.AccessScope{Kind: "PROJECT", ProjectRef: project.Ref})
 	}
 	launch, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: initiator, Mutation: value.Mutation{IdempotencyKey: "context-launch"}, Payload: command.LaunchRunInput{ProjectRef: project.Ref, Target: entity.RunTarget{Type: "WORKFLOW", Ref: workflow.Ref}, Task: "Подготовить и проверить документы."}})
@@ -78,6 +80,7 @@ func testWorkflowExceptionContext(t *testing.T, mode string) {
 		if len(claims) != 1 || stringMap(claims[0], "agentRef") != producer.Ref {
 			t.Fatal("context fixture did not claim exact published producer")
 		}
+		workflowExceptionArtifactWriteAuthority(t, f, producer, claims[0])
 		payload := command.CompleteExecutionInput{LeaseRef: stringMap(claims[0], "leaseRef"), Fence: stringMap(claims[0], "fence"), Generation: runtimeRevisionMapInt64(claims[0], "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: `{"schema":"kodex.workflow-result.v1","results":[{"key":"report","source":{"kind":"CURRENT_COMPLETION"}}]}`, Artifacts: []command.CompletedArtifact{workflowCaptureProgressArtifact(name, []byte("Точные данные "+name+"\n"))}}
 		if mode == "invalid-manager-complete" && index == 1 {
 			payload.ResultSummary = "Not a closed result declaration; the captured file remains data."
@@ -128,7 +131,7 @@ func testWorkflowExceptionContext(t *testing.T, mode string) {
 	}
 	lease := claims[0]
 	capabilities := runtimeRevisionStringSlice(lease["capabilities"])
-	if len(capabilities) != 1 || capabilities[0] != runtimecontract.ArtifactCapability || len(runtimeRevisionGrants(lease["integrationGrants"])) != 0 {
+	if len(manager.Capabilities) != 0 || !slices.Equal(capabilities, manager.Capabilities) || len(runtimeRevisionGrants(lease["integrationGrants"])) != 0 {
 		t.Fatal("exception context widened manager execution authority")
 	}
 	parts := strings.SplitN(stringMap(lease, "task"), "Owner-projected exception context (data):\n", 2)
@@ -254,6 +257,41 @@ func testWorkflowExceptionContext(t *testing.T, mode string) {
 	}
 }
 
+// workflowExceptionArtifactWriteAuthority checks configured agent and frozen RR capability pins,
+// then independently checks the root initiator's exact fresh upload permission without changing state.
+// workflowExceptionArtifactWriteAuthority проверяет configured agent и frozen RR capability pins,
+// затем независимо проверяет fresh upload право root initiator, не меняя состояние.
+func workflowExceptionArtifactWriteAuthority(t *testing.T, f *workflowRecoveryRegression, producer entity.Agent, claim map[string]any) {
+	t.Helper()
+	if !slices.Equal(producer.Capabilities, []string{runtimecontract.ArtifactCapability}) ||
+		!slices.Equal(runtimeRevisionStringSlice(claim["capabilities"]), producer.Capabilities) {
+		t.Fatal("producer configured and frozen artifact capability pins differ")
+	}
+	current, err := f.repository.resolveScope(f.ctx, f.worker)
+	if err != nil {
+		t.Fatal("resolve artifact authority observer", completionOutcomeClass(err))
+	}
+	tx, err := f.pool.BeginTx(f.ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	if err != nil {
+		t.Fatal("begin artifact authority observer", completionOutcomeClass(err))
+	}
+	defer func() { _ = tx.Rollback(f.ctx) }()
+	lease, err := f.repository.lease(f.ctx, tx, current, command.LeaseInput{LeaseRef: stringMap(claim, "leaseRef"), Fence: stringMap(claim, "fence"), Generation: runtimeRevisionMapInt64(claim, "generation")}, false)
+	if err != nil {
+		t.Fatal("resolve exact artifact authority lease", completionOutcomeClass(err))
+	}
+	var allowed bool
+	var actorRef string
+	if err := tx.QueryRow(f.ctx, queryRuntimeCompleteexecutionSelectAgentCapability, current.organizationID,
+		runtimecontract.ArtifactCapability, lease["nodeID"], lease["leaseID"]).Scan(&allowed, &actorRef); err != nil || !allowed {
+		t.Fatal("configured agent and stored RR deny artifact capability", completionOutcomeClass(err))
+	}
+	current.actorRef = actorRef
+	if err := f.repository.requireArtifactUploadAccess(f.ctx, tx, current, stringMap(lease, "projectRef")); err != nil {
+		t.Fatal("fresh root initiator upload permission denied", completionOutcomeClass(err))
+	}
+}
+
 // workflowExceptionAdvanceRevision creates a distinct revision through the actual project assistant
 // proposal, owner validation and apply path. It never inserts revision/content rows or supplies a scan receipt.
 // workflowExceptionAdvanceRevision создаёт отдельную ревизию через настоящий proposal помощника,
@@ -269,7 +307,7 @@ func workflowExceptionAdvanceRevision(t *testing.T, f *workflowRecoveryRegressio
 		t.Fatal("read native revision helper")
 	}
 	f.execute(command.ChangeAgentCapability, "context-revision-capability", &agent.Version, command.AgentBindingInput{AgentRef: agent.Ref, BindingRef: runtimecontract.ArtifactCapability, Enabled: true})
-	conversation := f.execute(command.CreateAssistantConversation, "context-revision-conversation", nil, command.AssistantConversationInput{AssistantScope: "PROJECT", ProjectRef: f.projectRef, Context: entity.AssistantContextDescriptor{EntityKind: "ARTIFACT", EntityRef: file.ArtifactRef}}).Conversation
+	conversation := f.execute(command.CreateAssistantConversation, "context-revision-conversation", nil, command.AssistantConversationInput{AssistantScope: "PROJECT", ProjectRef: f.projectRef, Context: entity.AssistantContextDescriptor{EntityKind: "FILE", EntityRef: file.ArtifactRef}}).Conversation
 	f.execute(command.AddAssistantTurn, "context-revision-turn", nil, command.AssistantTurnInput{ConversationRef: conversation.Ref, Content: "Сохранить отдельную новую версию этого материала.", DeliveryMode: "QUEUE"})
 	var lease map[string]any
 	for _, candidate := range f.claims("context-revision-claim") {
