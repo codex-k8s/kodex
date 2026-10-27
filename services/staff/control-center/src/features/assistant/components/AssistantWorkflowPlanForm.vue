@@ -298,10 +298,7 @@ function reworkModeEditable(): boolean {
 async function changeReworkPolicy(
   value: "" | "OWNER_APPROVED_UPSTREAM_V1",
 ): Promise<void> {
-  if (
-    !reworkModeEditable() ||
-    value === text(parameter("reworkPolicy"))
-  )
+  if (!reworkModeEditable() || value === text(parameter("reworkPolicy")))
     return;
   const identity = props.operation,
     project = props.projectRef,

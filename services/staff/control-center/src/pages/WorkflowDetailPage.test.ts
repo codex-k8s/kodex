@@ -101,11 +101,16 @@ const store = {
   ),
 };
 const disposers: Array<() => void> = [];
-afterEach(() => { resolveConfirmation(false); disposers.splice(0).forEach((dispose) => dispose()); });
+afterEach(() => {
+  resolveConfirmation(false);
+  disposers.splice(0).forEach((dispose) => dispose());
+});
 function mount() {
   let state!: {
     form: WorkflowEditorInput;
-    changeReworkPolicy: (value: "" | "OWNER_APPROVED_UPSTREAM_V1") => Promise<void>;
+    changeReworkPolicy: (
+      value: "" | "OWNER_APPROVED_UPSTREAM_V1",
+    ) => Promise<void>;
     validCompletionText: Ref<boolean>;
     validDAG: Ref<boolean>;
     dirty: Ref<boolean>;
@@ -214,7 +219,9 @@ it("связывает кнопку сохранения с ограничени
 
 it("не применяет rework policy к изменившемуся режиму после подтверждения", async () => {
   const state = mount();
-  await vi.waitFor(() => expect(state.form.completionCriteria).toBe(workflow.completionCriteria));
+  await vi.waitFor(() =>
+    expect(state.form.completionCriteria).toBe(workflow.completionCriteria),
+  );
   state.form.executionMode = "SERVER_DAG_V1";
   await nextTick();
   const pending = state.changeReworkPolicy("OWNER_APPROVED_UPSTREAM_V1");

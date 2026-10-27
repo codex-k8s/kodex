@@ -236,8 +236,7 @@ function reworkModeEditable(): boolean {
 async function changeReworkPolicy(
   value: "" | "OWNER_APPROVED_UPSTREAM_V1",
 ): Promise<void> {
-  if (!reworkModeEditable() || value === form.reworkPolicy)
-    return;
+  if (!reworkModeEditable() || value === form.reworkPolicy) return;
   const before = JSON.stringify(form),
     generation = loadGeneration;
   const context = `${projectRef.value}/${workflowRef.value}`;
