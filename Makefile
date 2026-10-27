@@ -458,3 +458,7 @@ test-workflow-review-qa-evidence-postgres: check-go-toolchain
 .PHONY: test-workflow-review-qa-upgrade-postgres
 test-workflow-review-qa-upgrade-postgres: check-go-toolchain
 	@timeout --kill-after=10s 300s bash scripts/tests/control-plane-postgres-test.sh --review-qa-upgrade
+
+.PHONY: test-runtime-workspace-predecessor-postgres
+test-runtime-workspace-predecessor-postgres: check-go-toolchain
+	@timeout --kill-after=10s 240s bash scripts/tests/control-plane-postgres-test.sh --workspace-predecessor

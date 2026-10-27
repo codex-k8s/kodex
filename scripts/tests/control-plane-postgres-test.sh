@@ -11,6 +11,13 @@ container_name="kodex-control-plane-postgres-${BASHPID}"
 upgrade_container_id=""
 test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestBootstrapComponent|TestConcurrentBootstrapComponent|TestWorkerGrantInstancesComponent|TestTrustedWorkloadGenerationComponent|TestAssistantCredentialScopesComponent|TestAssistantParallelLifecycleComponent|TestProjectAssistantProfilesComponent|TestOrganizationRoleImagesComponent|TestOrganizationRuntimeEnvironmentComponent|TestOrganizationRuntimeSecretComponent|TestAssistantSystemRunProjectScopeComponent|TestRuntimeTerminalStorageComponent|TestIntegrationGateFeedbackComponent|TestWorkflowMetadataDraftComponent|TestDeletedEnvironmentSecretRetentionComponent|TestHistoricalEnvironmentSecretAdmissionComponent|TestHistoricalSecretRecoveryConcurrencyComponent|TestWorkflowGateDecisionsComponent|TestCompletionReceiptComponent|TestUsageCompletenessComponent|TestRepositoryBundlePublicationComponent|TestCommitAckArtifactComponent|TestOwnerGateExpiryComponent|TestOwnerGateExpiryMigrationProofComponent|TestProjectPurgeAuthorityComponent|TestProjectPurgeAuthorityMigrationProofComponent|TestServerWorkflowMigrationProofComponent|TestOverviewEligibilityComponent|TestWorkflowExceptionContextComponent|TestWorkflowExceptionContextMigrationProofComponent)$'}}
 
+# Оба закрытых upgrade-сценария используют одну и ту же отдельную пустую БД.
+upgrade_test='^TestWorkflowReviewQAEvidenceForwardUpgrade$'
+if [[ "$test_pattern" == --workspace-predecessor ]]; then
+  upgrade_test='^TestSessionWorkspaceMigrationPredecessor$'
+  test_pattern=--review-qa-upgrade
+fi
+
 # Новый upgrade-контур принимает только созданную ниже пустую disposable БД.
 if [[ "$test_pattern" == --review-qa-upgrade ]]; then
   for key in KODEX_WORKFLOW_REVIEW_QA_UPGRADE_DSN KODEX_WORKFLOW_REVIEW_QA_UPGRADE_DISPOSABLE; do
@@ -121,7 +128,7 @@ if [[ "$test_pattern" == --review-qa-upgrade ]]; then
     KODEX_WORKFLOW_REVIEW_QA_UPGRADE_DSN="$dsn" \
       KODEX_WORKFLOW_REVIEW_QA_UPGRADE_DISPOSABLE=dedicated-loopback-container \
       env -u GOFLAGS GOENV=off GOWORK=off go test -p 2 -v -count=1 -timeout=180s \
-      ./cmd/cli -run '^TestWorkflowReviewQAEvidenceForwardUpgrade$'
+      ./cmd/cli -run "$upgrade_test"
   )
   exit
 fi

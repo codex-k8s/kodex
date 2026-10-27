@@ -266,3 +266,31 @@ Docker и уже загруженного pinned image; загрузки обр�
 каталога и не имеет CAP_FSETID. Подготовка использует требуемую группу и
 проверяет фактический режим, не расширяя capabilities:
 [Linux chmod(2)](https://man7.org/linux/man-pages/man2/chmod.2.html).
+
+## Совместимость следующей миграции
+
+При native проверке композиции01150 применялась, затем01200 отклоняла новую
+последнюю Goose version. Переход012 теперь различает два закрытых predecessor:
+01100 без workspace metadata и01150 с точным каталогом PostgreSQL18.
+Unknown version, лишний/удалённый столбец, изменённый CHECK/FK/index/guard,
+отключённый внутренний FK trigger или расширенные права закрыто отклоняются.
+Проверяются и обязательные права runtime по отдельности: список privileges
+в `has_table_privilege` означает наличие любого из них, а не всех.
+
+| Сценарий | Actor и источник полномочий | Состояние и результат |
+| --- | --- | --- |
+| Прежний01100 | Штатный migrator и exact Goose ledger |012 допускается лишь при отсутствии workspace table/function |
+| Композиция01150 | Тот же migrator; source-pinned migration и read-only системный каталог | Перед DDL сверяются columns/defaults,37 constraints,4 indexes, guard/source/ACL и все32 FK triggers |
+| Schema drift/unknown predecessor | Payload не выбирает разрешённую версию | Транзакция миграции отклоняется; новая версия не фиксируется |
+| Повтор после успешного012 | Goose ledger | No-op без повторного DDL |
+
+Публичная локальная проверка: `make test-runtime-workspace-predecessor-postgres`.
+Она использует отдельную loopback PostgreSQL и прежний закрытый upgrade fixture,
+проверяет оба predecessor,12 изменений схемы с rollback, реальный forward012
+от имени migrator и повтор. Никакие business rows или live credentials не нужны.
+Проверка не заменяет оставшийся полный workspace/purge/operator proof014,
+retention/restore и реальный запуск сотрудника. Domain event не создаётся:
+авторитетный read path — Goose ledger и системный каталог отдельной БД.
+
+Context7: PostgreSQL18 `pg_constraint`, `pg_trigger` и `ALTER TABLE`;
+`convalidated`/`conenforced` не заменяют проверку включённых FK triggers.
