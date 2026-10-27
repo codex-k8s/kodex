@@ -19,8 +19,8 @@ REPORT_KEYS = {"status", "baseRevision", "targetRevision", "beforeSHA256", "afte
                "clusterUID", "namespaceUID", "patchSHA256", "schema"}
 
 
-def classify(report, intent, cluster_uid, namespace_uid, policy, binding, config, parameters):
-    """Возвращает только наблюдаемое состояние; причинность и retry не выводит."""
+def validate_report(report):
+    """Проверяет форму и exact pins read-only отчёта без вывода authority."""
     require = plan.model.require
     require(isinstance(report, dict) and set(report) == REPORT_KEYS and
             report.get("schema") == "kodex.runtime-policy-refactor-dry-run/v1" and
@@ -32,10 +32,24 @@ def classify(report, intent, cluster_uid, namespace_uid, policy, binding, config
             report["executorSHA"] != "0" * 40, "REPORT_INVALID")
     require(all(isinstance(report.get(key), str) and re.fullmatch(r"[0-9a-f]{64}", report[key])
                 for key in ("candidateSpecSHA256", "patchSHA256")), "REPORT_INVALID")
-    require(isinstance(intent, dict) and set(intent) == {"schema", "planSHA256", "policyUID", "attemptID"} and
+    require(isinstance(report.get("policy"), dict) and set(report["policy"]) == {"uid", "resourceVersion", "metadataSHA256"} and
+            isinstance(report["policy"].get("uid"), str) and re.fullmatch(UUID, report["policy"]["uid"]), "REPORT_INVALID")
+
+
+def validate_intent(report, intent):
+    """Проверяет только структурную связь intent с отчётом, не owner approval."""
+    validate_report(report)
+    plan.model.require(isinstance(intent, dict) and set(intent) == {"schema", "planSHA256", "policyUID", "attemptID"} and
             intent.get("schema") == "kodex.runtime-policy-refactor-intent/v1" and
             intent.get("planSHA256") == plan.model.fingerprint(report) and
+            intent.get("policyUID") == report["policy"]["uid"] and
             isinstance(intent.get("attemptID"), str) and re.fullmatch(UUID, intent["attemptID"]), "INTENT_INVALID")
+
+
+def classify(report, intent, cluster_uid, namespace_uid, policy, binding, config, parameters):
+    """Возвращает только наблюдаемое состояние; причинность и retry не выводит."""
+    require = plan.model.require
+    validate_intent(report, intent)
     require(isinstance(cluster_uid, str) and re.fullmatch(UUID, cluster_uid) and
             isinstance(namespace_uid, str) and re.fullmatch(UUID, namespace_uid) and
             cluster_uid == report.get("clusterUID") and namespace_uid == report.get("namespaceUID"), "NAMESPACE_IDENTITY_DRIFT")

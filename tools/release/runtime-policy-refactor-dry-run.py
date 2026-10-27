@@ -6,7 +6,6 @@ import json
 import os
 from pathlib import Path
 import re
-import stat
 import subprocess
 import sys
 import tarfile
@@ -22,6 +21,10 @@ from trusted_cluster_render import runtime_admission_profile  # noqa: E402
 _spec = importlib.util.spec_from_file_location("runtime_policy_plan", Path(__file__).with_name("runtime-policy-refactor-plan.py"))
 plan = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(plan)
+_private_spec = importlib.util.spec_from_file_location("runtime_policy_private", Path(__file__).with_name("runtime-policy-refactor-private.py"))
+private = importlib.util.module_from_spec(_private_spec)
+_private_spec.loader.exec_module(private)
+write_private = private.create_private
 CONTEXT = "k3d-kodex"
 SOURCE_PATH = "deploy/k8s/base/runtime-controller/runtime-materialization-admission.yaml"
 ENV = {"HOME": os.path.expanduser("~"), "PATH": "/usr/local/bin:/usr/bin:/bin", "LANG": "C.UTF-8"}
@@ -116,20 +119,6 @@ def prepare(before, candidate, after, patch, executor):
     return result
 
 
-def write_private(path, value):
-    target = Path(path)
-    plan.model.require(target.is_absolute() and target.parent.resolve() == target.parent, "PRIVATE_OUTPUT_REQUIRED")
-    parent = target.parent.stat()
-    plan.model.require(stat.S_ISDIR(parent.st_mode) and parent.st_uid == os.getuid() and stat.S_IMODE(parent.st_mode) == 0o700,
-                       "PRIVATE_OUTPUT_REQUIRED")
-    fd = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as stream:
-        json.dump(value, stream, sort_keys=True)
-        stream.write("\n")
-        stream.flush()
-        os.fsync(stream.fileno())
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", required=True)
@@ -149,7 +138,7 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except (plan.model.PolicyTransitionError, OSError, ValueError, KeyError, TypeError, tarfile.TarError, yaml.YAMLError) as error:
-        code = str(error) if isinstance(error, plan.model.PolicyTransitionError) and re.fullmatch(r"[A-Z_]+", str(error)) else "DRY_RUN_FAILED"
+    except (plan.model.PolicyTransitionError, private.PrivateArtifactError, OSError, ValueError, KeyError, TypeError, tarfile.TarError, yaml.YAMLError) as error:
+        code = str(error) if isinstance(error, (plan.model.PolicyTransitionError, private.PrivateArtifactError)) and re.fullmatch(r"[A-Z_]+", str(error)) else "DRY_RUN_FAILED"
         print(json.dumps({"status": "FAIL", "code": code}))
         sys.exit(1)

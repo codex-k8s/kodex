@@ -62,7 +62,7 @@ class RuntimePolicyDryRunTest(unittest.TestCase):
                 cli.write_private(str(target), {"status": "changed"})
             self.assertEqual(json.loads(target.read_text())["status"], "PASS_DRY_RUN_ONLY")
             root.chmod(0o755)
-            with self.assertRaises(cli.plan.model.PolicyTransitionError):
+            with self.assertRaises(cli.private.PrivateArtifactError):
                 cli.write_private(str(root / "other.json"), {})
             self.assertFalse((root / "other.json").exists())
 

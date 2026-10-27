@@ -43,7 +43,7 @@ test-workspace-policy-contract: check-go-toolchain
 
 .PHONY: test-runtime-policy-refactor
 test-runtime-policy-refactor:
-	@timeout 60s python3 -m unittest tools/release/test_runtime_policy_refactor_model.py tools/release/test_runtime_policy_refactor_plan.py tools/release/test_runtime_policy_refactor_dry_run.py tools/release/test_runtime_policy_refactor_inspect.py
+	@timeout 60s python3 -m unittest tools/release/test_runtime_policy_refactor_model.py tools/release/test_runtime_policy_refactor_plan.py tools/release/test_runtime_policy_refactor_dry_run.py tools/release/test_runtime_policy_refactor_inspect.py tools/release/test_runtime_policy_refactor_private.py tools/release/test_runtime_policy_refactor_intent.py
 
 .PHONY: test-runtime-admission-gate
 test-runtime-admission-gate:
