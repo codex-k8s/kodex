@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -134,7 +135,16 @@ if (process.argv[2].endsWith('Precondition')) {
 	check.Env = []string{"PATH=" + os.Getenv("PATH"), "LANG=C.UTF-8"}
 	check.Stdin = bytes.NewReader(proof)
 	if err := check.Run(); err != nil {
-		t.Fatalf("shipped review QA %s verifier rejected actual database proof", phase)
+		var fields map[string]any
+		_ = json.Unmarshal(proof, &fields)
+		var failed []string
+		for key, value := range fields {
+			if flag, boolean := value.(bool); boolean && !flag {
+				failed = append(failed, key)
+			}
+		}
+		slices.Sort(failed)
+		t.Fatalf("shipped review QA %s verifier rejected actual database proof; false predicates: %v", phase, failed)
 	}
 	t.Logf("review QA %s proof passed: sha256=%x", phase, sha256.Sum256(proof))
 	return proof
