@@ -1,3 +1,4 @@
+import { isRecord } from "../lib/exact-object";
 export interface OidcRuntimeConfig {
   authority: string;
   clientId: string;
@@ -18,10 +19,6 @@ export interface RuntimeConfig {
 let loadedConfig: Readonly<RuntimeConfig> | undefined;
 const retryableRuntimeConfigStatuses = new Set([502, 503, 504]);
 const runtimeConfigRetryDelaysMs = [150, 500] as const;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function requiredString(source: Record<string, unknown>, key: string): string {
   const value = source[key];

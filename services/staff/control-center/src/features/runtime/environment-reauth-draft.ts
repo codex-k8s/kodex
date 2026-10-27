@@ -1,3 +1,4 @@
+import { hasExactKeys, isRecord } from "@/shared/lib/exact-object";
 import { runtimeEnvironmentPolicyPath } from "@/features/session/reauth";
 import type {
   RuntimeEnvironmentInput,
@@ -41,22 +42,6 @@ export interface RuntimeEnvironmentPolicyDraft {
   readonly projectRef: string;
   readonly returnPath: string;
   readonly version: 1;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function hasExactKeys(
-  value: Record<string, unknown>,
-  expected: readonly string[],
-): boolean {
-  const actual = Object.keys(value).sort();
-  const sortedExpected = [...expected].sort();
-  return (
-    actual.length === sortedExpected.length &&
-    sortedExpected.every((key, index) => actual[index] === key)
-  );
 }
 
 function isStringRecord(
@@ -151,9 +136,7 @@ function parsePolicy(
     value.kubernetesAccess !== "NONE" ||
     !Array.isArray(value.networkDestinations) ||
     !value.networkDestinations.every((item) =>
-      ["DNS", "RUNTIME_CALLBACK", "PROVIDER_PROXY"].includes(
-        String(item),
-      ),
+      ["DNS", "RUNTIME_CALLBACK", "PROVIDER_PROXY"].includes(String(item)),
     ) ||
     !isRecord(value.resources) ||
     !isRecord(value.webAccess) ||
