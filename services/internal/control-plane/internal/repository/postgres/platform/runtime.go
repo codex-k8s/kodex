@@ -1681,6 +1681,7 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	if !ok || validateRuntimeCompletion(payload) != nil {
 		return commandOutcome{}, errs.ErrInvalid
 	}
+
 	hasArchiveBinding := payload.CodexSessionID != "" || payload.ArchiveRelativePath != "" || payload.ArchiveSHA256 != "" || payload.ArchiveSizeBytes != 0
 	lease, err := repository.lease(ctx, tx, scope, command.LeaseInput{LeaseRef: payload.LeaseRef, Fence: payload.Fence, Generation: payload.Generation}, true)
 	if err != nil {
@@ -2099,6 +2100,9 @@ func nonEmptyResult(payload command.CompleteExecutionInput) string {
 }
 
 func runtimeSafeErrorCode(code string) bool {
+	if code == runtimecontract.InitializationFailureCode {
+		return true
+	}
 	switch code {
 	case "PROVIDER_AUTH_UNAVAILABLE", "PROVIDER_AUTH_REJECTED", "PROVIDER_UNAVAILABLE", "PROVIDER_RATE_LIMITED", "PROVIDER_REQUEST_REJECTED", "PROVIDER_RESPONSE_INVALID", "PROVIDER_EMPTY_RESULT", "PROVIDER_TOOL_INVALID", "PROVIDER_TOOL_LIMIT", "RUNTIME_PROFILE_UNSUPPORTED", "RUNTIME_INPUT_INVALID", "RUNTIME_INPUT_TOO_LARGE", "RUNTIME_MCP_UNAVAILABLE", "RUNTIME_UNAVAILABLE", "RUNTIME_LIMIT_EXCEEDED", "RUNTIME_ARTIFACT_INVALID":
 		return true

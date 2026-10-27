@@ -384,7 +384,7 @@ func TestMaterializeInputArtifactsRejectsManifestMismatchBeforeWorkspaceMutation
 		},
 	}
 	input = bindAttachmentCatalog(input)
-	if err := materializeInputArtifacts(context.Background(), input, nil); err == nil || !strings.Contains(err.Error(), "manifest digest") {
+	if err := materializeInputArtifacts(context.Background(), input, nil); initializationManifestFailure(err) == false {
 		t.Fatalf("materializeInputArtifacts() error = %v", err)
 	}
 	for _, directory := range []string{"input", "session", "knowledge"} {
@@ -518,4 +518,11 @@ func TestReadinessCanaryReturnsOnlySafeSymlinkDenial(t *testing.T) {
 		strings.Contains(response.Body.String(), root) {
 		t.Fatalf("unsafe readiness response: status=%d body=%q", response.Code, response.Body.String())
 	}
+}
+
+// initializationManifestFailure recognizes the exact typed pre-mutation rejection.
+// initializationManifestFailure распознаёт точный typed отказ до изменения workspace.
+func initializationManifestFailure(err error) bool {
+	stage, reason := runtimecontract.InitializationErrorDetails(err)
+	return err != nil && stage == "INPUT_MANIFEST" && reason == "INPUT_INVALID"
 }

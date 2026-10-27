@@ -955,3 +955,78 @@ REPOSITORY_BUNDLE_CHANGED:
   other: Состояние публикации набора файлов обновлено
 WORKFLOW_RESULT_ACCEPTED:
   other: Обязательные результаты этапа проверены и приняты
+
+RUNTIME_INITIALIZATION_FAILED:
+  other: Не удалось подготовить рабочую область сотрудника.
+RUNTIME_INIT_UNKNOWN_UNKNOWN:
+  other: Подготовка рабочего каталога завершилась ошибкой. Причина неизвестна.
+RUNTIME_INIT_INPUT_DECODE_INPUT_INVALID:
+  other: Не удалось проверить входные данные подготовки. Входные данные недопустимы.
+RUNTIME_INIT_EGRESS_TRUST_UNKNOWN:
+  other: Не удалось подготовить доверенные сертификаты. Причина неизвестна.
+RUNTIME_INIT_EGRESS_TRUST_FILESYSTEM_IO_FAILED:
+  other: Не удалось подготовить доверенные сертификаты. Не удалось выполнить операцию с рабочими файлами.
+RUNTIME_INIT_CONTEXT_SNAPSHOT_INPUT_INVALID:
+  other: Не удалось проверить закреплённый контекст выполнения. Входные данные недопустимы.
+RUNTIME_INIT_CALLBACK_SETUP_UNKNOWN:
+  other: Не удалось подготовить защищённый канал входных файлов. Причина неизвестна.
+RUNTIME_INIT_WORKSPACE_LAYOUT_UNKNOWN:
+  other: Не удалось подготовить рабочие каталоги. Причина неизвестна.
+RUNTIME_INIT_WORKSPACE_LAYOUT_CONTEXT_CANCELLED:
+  other: Не удалось подготовить рабочие каталоги. Подготовка отменена.
+RUNTIME_INIT_WORKSPACE_LAYOUT_DEADLINE_EXCEEDED:
+  other: Не удалось подготовить рабочие каталоги. Истёк срок подготовки.
+RUNTIME_INIT_WORKSPACE_LAYOUT_READ_ONLY:
+  other: Не удалось подготовить рабочие каталоги. Рабочая область доступна только для чтения.
+RUNTIME_INIT_WORKSPACE_LAYOUT_QUOTA_EXCEEDED:
+  other: Не удалось подготовить рабочие каталоги. Недостаточно разрешённого места для записи.
+RUNTIME_INIT_WORKSPACE_LAYOUT_FILESYSTEM_IO_FAILED:
+  other: Не удалось подготовить рабочие каталоги. Не удалось выполнить операцию с рабочими файлами.
+RUNTIME_INIT_INPUT_MANIFEST_INPUT_INVALID:
+  other: Не удалось проверить список входных файлов. Входные данные недопустимы.
+RUNTIME_INIT_ARTIFACT_TRANSFER_UNKNOWN:
+  other: Не удалось получить проверенные входные файлы. Причина неизвестна.
+RUNTIME_INIT_ARTIFACT_TRANSFER_AUTHENTICATION_REJECTED:
+  other: Не удалось получить проверенные входные файлы. Проверка подлинности запроса отклонена.
+RUNTIME_INIT_ARTIFACT_TRANSFER_AUTHORITY_REJECTED:
+  other: Не удалось получить проверенные входные файлы. Доступ к источнику отклонён.
+RUNTIME_INIT_ARTIFACT_TRANSFER_SOURCE_UNAVAILABLE:
+  other: Не удалось получить проверенные входные файлы. Закреплённый источник недоступен.
+RUNTIME_INIT_ARTIFACT_TRANSFER_UPSTREAM_UNAVAILABLE:
+  other: Не удалось получить проверенные входные файлы. Источник временно недоступен.
+RUNTIME_INIT_ARTIFACT_TRANSFER_TRANSPORT_UNAVAILABLE:
+  other: Не удалось получить проверенные входные файлы. Не удалось связаться с защищённым источником.
+RUNTIME_INIT_ARTIFACT_TRANSFER_PIN_MISMATCH:
+  other: Не удалось получить проверенные входные файлы. Метаданные файла не совпали с закреплёнными.
+RUNTIME_INIT_ARTIFACT_TRANSFER_CONTENT_DIGEST_MISMATCH:
+  other: Не удалось получить проверенные входные файлы. Контрольная сумма полученного файла не совпала.
+RUNTIME_INIT_ARTIFACT_TRANSFER_CONTEXT_CANCELLED:
+  other: Не удалось получить проверенные входные файлы. Подготовка отменена.
+RUNTIME_INIT_ARTIFACT_TRANSFER_DEADLINE_EXCEEDED:
+  other: Не удалось получить проверенные входные файлы. Истёк срок подготовки.
+RUNTIME_INIT_ARTIFACT_TRANSFER_READ_ONLY:
+  other: Не удалось получить проверенные входные файлы. Рабочая область доступна только для чтения.
+RUNTIME_INIT_ARTIFACT_TRANSFER_QUOTA_EXCEEDED:
+  other: Не удалось получить проверенные входные файлы. Недостаточно разрешённого места для записи.
+RUNTIME_INIT_ARTIFACT_TRANSFER_FILESYSTEM_IO_FAILED:
+  other: Не удалось получить проверенные входные файлы. Не удалось выполнить операцию с рабочими файлами.
+RUNTIME_INIT_INPUT_PROTECTION_UNKNOWN:
+  other: Не удалось защитить подготовленные входные файлы. Причина неизвестна.
+RUNTIME_INIT_INPUT_PROTECTION_READ_ONLY:
+  other: Не удалось защитить подготовленные входные файлы. Рабочая область доступна только для чтения.
+RUNTIME_INIT_INPUT_PROTECTION_QUOTA_EXCEEDED:
+  other: Не удалось защитить подготовленные входные файлы. Недостаточно разрешённого места для записи.
+RUNTIME_INIT_INPUT_PROTECTION_FILESYSTEM_IO_FAILED:
+  other: Не удалось защитить подготовленные входные файлы. Не удалось выполнить операцию с рабочими файлами.
+RUNTIME_INIT_CONTEXT_FILES_UNKNOWN:
+  other: Не удалось подготовить навыки и память выполнения. Причина неизвестна.
+RUNTIME_INIT_CONTEXT_FILES_CONTEXT_CANCELLED:
+  other: Не удалось подготовить навыки и память выполнения. Подготовка отменена.
+RUNTIME_INIT_CONTEXT_FILES_DEADLINE_EXCEEDED:
+  other: Не удалось подготовить навыки и память выполнения. Истёк срок подготовки.
+RUNTIME_INIT_CONTEXT_FILES_READ_ONLY:
+  other: Не удалось подготовить навыки и память выполнения. Рабочая область доступна только для чтения.
+RUNTIME_INIT_CONTEXT_FILES_QUOTA_EXCEEDED:
+  other: Не удалось подготовить навыки и память выполнения. Недостаточно разрешённого места для записи.
+RUNTIME_INIT_CONTEXT_FILES_FILESYSTEM_IO_FAILED:
+  other: Не удалось подготовить навыки и память выполнения. Не удалось выполнить операцию с рабочими файлами.

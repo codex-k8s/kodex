@@ -240,6 +240,10 @@ func executionDeadlineReceiptError(result command.Result) error {
 }
 
 func validateRuntimeCompletion(payload command.CompleteExecutionInput) error {
+	if (payload.SafeErrorCode == runtimecontract.InitializationFailureCode && (payload.Success || !runtimecontract.ValidInitializationFailureSummary(payload.ResultSummary))) ||
+		(runtimecontract.IsInitializationFailureSummary(payload.ResultSummary) && payload.SafeErrorCode != runtimecontract.InitializationFailureCode) {
+		return errs.ErrInvalid
+	}
 	if !payload.Usage.Valid() || payload.Success && payload.SafeErrorCode != "" || !payload.Success && !runtimeSafeErrorCode(payload.SafeErrorCode) {
 		return errs.ErrInvalid
 	}
