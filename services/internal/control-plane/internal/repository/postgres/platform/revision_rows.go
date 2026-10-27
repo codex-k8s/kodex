@@ -64,6 +64,21 @@ func collectRowsInto[T any](rows pgx.Rows, items []T, scan func(rowScanner) (T, 
 	return items, nil
 }
 
+// collectClosedRows appends decoded rows to the caller's chosen slice, closes the rows before
+// checking iteration failure and discards results on either scan or iteration error as Unavailable.
+// A scan error skips Err after Close. It owns no query, transaction or authorization.
+// collectClosedRows добавляет декодированные строки к выбранному caller срезу, закрывает rows
+// до проверки iteration error и отбрасывает результат при scan или iteration error с Unavailable.
+// При scan error не вызывает Err после Close. Не владеет query, transaction или authorization.
+func collectClosedRows[T any](rows pgx.Rows, initial []T, scan func(rowScanner) (T, error)) ([]T, error) {
+	items, err := collectRowsInto(rows, initial, scan)
+	rows.Close()
+	if err != nil || rows.Err() != nil {
+		return nil, errs.ErrUnavailable
+	}
+	return items, nil
+}
+
 // readPlatformCatalog resolves the caller before issuing the server-selected embedded catalog
 // query, then owns its deferred row Close. The two enabled global catalogs retain their own SQL
 // and typed column mappings; this helper is not a tenant-resource or mutation authorization gate.

@@ -742,20 +742,15 @@ func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal v
 		scheduleVersion, generation, scheduleRevision, targetVersion                   int64
 		attempt                                                                        int32
 	}
-	expired := make([]expiredOccurrence, 0, limit)
-	for expiredRows.Next() {
+	expired, scanErr := collectClosedRows(expiredRows, make([]expiredOccurrence, 0, limit), func(row rowScanner) (expiredOccurrence, error) {
 		var item expiredOccurrence
-		if err := expiredRows.Scan(&item.id, &item.ref, &item.scheduleRef, &item.scheduledFor, &item.scheduleVersion,
+		err := row.Scan(&item.id, &item.ref, &item.scheduleRef, &item.scheduledFor, &item.scheduleVersion,
 			&item.inputDigest, &item.generation, &item.attempt, &item.scheduleRevisionRef, &item.scheduleRevision, &item.scheduleRevisionDigest,
-			&item.targetRef, &item.targetVersion, &item.targetDigest, &item.automationTextDigest, &item.promptInputsDigest); err != nil {
-			expiredRows.Close()
-			return nil, errs.ErrUnavailable
-		}
-		expired = append(expired, item)
-	}
-	expiredRows.Close()
-	if err := expiredRows.Err(); err != nil {
-		return nil, errs.ErrUnavailable
+			&item.targetRef, &item.targetVersion, &item.targetDigest, &item.automationTextDigest, &item.promptInputsDigest)
+		return item, err
+	})
+	if scanErr != nil {
+		return nil, scanErr
 	}
 	for _, item := range expired {
 		leaseRef, _ := newRef("lea")
@@ -816,22 +811,17 @@ func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal v
 		scheduledFor                                                 time.Time
 		version, currentRevision, targetVersion                      int64
 	}
-	due := make([]dueSchedule, 0, limit)
-	for rows.Next() {
+	due, scanErr := collectClosedRows(rows, make([]dueSchedule, 0, limit), func(row rowScanner) (dueSchedule, error) {
 		var item dueSchedule
-		if err := rows.Scan(&item.id, &item.ref, &item.scheduledFor, &item.version, &item.preset, &item.cron, &item.timezone,
+		err := row.Scan(&item.id, &item.ref, &item.scheduledFor, &item.version, &item.preset, &item.cron, &item.timezone,
 			&item.name, &item.targetType, &item.targetRef, &item.input, &item.currentRevisionID,
 			&item.currentRevisionRef, &item.currentRevision, &item.currentRevisionDigest,
 			&item.dstGapPolicy, &item.dstFoldPolicy, &item.misfirePolicy, &item.overlapPolicy,
-			&item.targetVersion, &item.targetDigest, &item.automationText, &item.promptInputs, &item.initiatedBy); err != nil {
-			rows.Close()
-			return nil, errs.ErrUnavailable
-		}
-		due = append(due, item)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return nil, errs.ErrUnavailable
+			&item.targetVersion, &item.targetDigest, &item.automationText, &item.promptInputs, &item.initiatedBy)
+		return item, err
+	})
+	if scanErr != nil {
+		return nil, scanErr
 	}
 	for _, item := range due {
 		occurrence, next, nextErr := scheduleservice.ResolveDue(scheduleservice.Spec{

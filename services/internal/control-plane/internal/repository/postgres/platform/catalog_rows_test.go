@@ -42,3 +42,42 @@ func TestReadCatalogRowsErrorPolicies(t *testing.T) {
 		})
 	}
 }
+
+// closingRowsFixture observes Close in the same trace as Next, Scan and Err.
+// closingRowsFixture отмечает Close в общей последовательности Next, Scan и Err.
+type closingRowsFixture struct{ *revisionRowsFixture }
+
+// Close records the caller-required cleanup before marking rows closed.
+// Close записывает обязательную очистку перед отметкой закрытых rows.
+func (rows *closingRowsFixture) Close() {
+	*rows.trace = append(*rows.trace, "close")
+	rows.revisionRowsFixture.Close()
+}
+
+// TestCollectClosedRows checks explicit cleanup, ordered rows and fail-closed partial results.
+// TestCollectClosedRows проверяет явную очистку, порядок строк и закрытый отказ partial results.
+func TestCollectClosedRows(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		values       []int64
+		fail         int
+		iterationErr error
+		want         []revisionFixtureValue
+		wantErr      error
+		trace        []string
+	}{
+		{"empty", nil, 0, nil, []revisionFixtureValue{}, nil, []string{"next", "close", "err"}},
+		{"success", []int64{4, 7}, 0, nil, []revisionFixtureValue{{4}, {7}}, nil, []string{"next", "scan", "next", "scan", "next", "close", "err"}},
+		{"scan failure", []int64{4, 7}, 2, nil, nil, errs.ErrUnavailable, []string{"next", "scan", "next", "scan", "close"}},
+		{"iteration failure", []int64{4}, 0, errors.New("synthetic iteration failure"), nil, errs.ErrUnavailable, []string{"next", "scan", "next", "close", "err"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			trace := []string{}
+			rows := &closingRowsFixture{&revisionRowsFixture{values: tc.values, fail: tc.fail, iterationErr: tc.iterationErr, trace: &trace}}
+			items, err := collectClosedRows(rows, make([]revisionFixtureValue, 0, 3), scanRevisionFixture)
+			if !errors.Is(err, tc.wantErr) || !reflect.DeepEqual(items, tc.want) || !reflect.DeepEqual(trace, tc.trace) || !rows.closed {
+				t.Fatal("closed row result, failure or operation order changed")
+			}
+		})
+	}
+}

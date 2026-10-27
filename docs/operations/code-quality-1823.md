@@ -4,11 +4,23 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.581.0
+version: 1.582.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общее чтение закрываемых строк планировщика — 27.10.2026
+
+Сбор истёкших occurrence и due schedule использует общий helper с исходной
+ёмкостью среза, порядком Scan, Close до Err и Unavailable без частичного
+результата. При ошибке Scan Err не вызывается; SQL, блокировки и последующие
+переходы остаются в планировщике. Unit проверяет точный порядок и ошибки.
+
+Control-plane build/vet PASS, 3078 unit PASS / 70 условных SKIP. Выбранные
+component-сценарии планировщика на disposable PostgreSQL — 4 PASS events до и
+после, FAIL/SKIP 0. Анализ: 1340 raw / 1282 retained / 58 unresolved,
+Go-комментарии 21725/21725. Браузер, E2E, live/deploy/startup и QA не выполнялись.
 
 ## Общая транзакция тестовых owner-сценариев — 27.10.2026
 
