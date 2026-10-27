@@ -57,7 +57,7 @@ def run_container(name, nonce, arguments, command, identities):
                       '--pull=never', '--network=none', '--read-only', '--pids-limit=64',
                       '--cpus=1', '--memory=256m', '--memory-swap=256m',
                       '--security-opt=no-new-privileges', '--cap-drop=ALL',
-                      '--user=0:0', *arguments, IMAGE, *command])
+                      '--user=0:29000', *arguments, IMAGE, *command])
     identity = created.stdout.strip()
     if not re.fullmatch('[a-f0-9]{64}', identity):
         raise RuntimeError('CONTAINER_CREATE_UNCONFIRMED')
@@ -122,7 +122,8 @@ def main():
                    'printf role-src > /source/role.txt; '
                    'chown 10002:29000 /source/provider.txt; chown 10001:29000 /source/role.txt; '
                    'chmod 600 /source/provider.txt /source/role.txt; '
-                   'chown 10001:29000 /source; chmod 2770 /source')
+                   'chown 10001:29000 /source; chmod 2770 /source; '
+                   'test "$(stat -c %a:%u:%g /source)" = "2770:10001:29000"')
         outcomes.append(run_container(volume+'-prepare', nonce,
             ['--cap-add=CHOWN', '--cap-add=FOWNER', '--entrypoint=/bin/sh',
              '--mount', 'type=volume,source='+volume+',target=/source'], ['-ec', prepare], identities))
