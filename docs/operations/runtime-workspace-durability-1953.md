@@ -4,7 +4,7 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.1
+version: 1.0.2
 updated: 2026-10-27
 ---
 
@@ -220,6 +220,28 @@ atomic publication, peer authentication и owner ACK остаются обяза
 Пока writable peer, generation publisher и owner coordinator не подключены,
 controller по-прежнему закрыто отклоняет V2 RESTORE до запуска effects.
 Наличие stream/filesystem adapter не является готовым восстановлением.
+
+Внутренний publisher получает уже открытый private generation descriptor и
+проверяет sealed `restore-intent.json`: logical task, actual PVC UID,
+RuntimeRevision, policy и точные target/source. Attempt и lease туда не входят;
+запись не является источником полномочий. Общий `securefile` создаёт записи
+исключительно один раз с exact mode0440/UID/GID, fsync(file) и fsync(parent).
+Runner использует тот же примитив для чтения generation records.
+
+После закрытия writers publisher связывает `restore-prepared.json` с digest
+intent и фактическими device/inode проверенного `.restore-tree`, сохраняет
+точный checkpoint в `source.json`, затем выполняет `renameat2(RENAME_NOREPLACE)`
+в `tree` и fsync(parent). Он повторно сверяет полную связку перед успехом.
+Существующий destination, даже пустой, никогда не заменяется.
+
+Reconcile-only открывает прежний logical intent и только читает matching
+records/inode с повторением durability barriers. Потеря ACK после rename
+допускает rejoin. Сбой до rename оставляет unpublished tree; partial record,
+чужой inode, лишний staging alias или metadata drift не получают positive
+result и не удаляются. Специализированное продолжение незавершённой подготовки
+ещё требует реализации; generic retry не даёт права на новый rename.
+Эти adapter-проверки не доказывают trusted initializer, отдельный writable
+provider peer, physical Pod/PVC binding или owner RESTORED/RuntimeRevision ACK.
 
 ## Метаданные подтверждения checkpoint
 

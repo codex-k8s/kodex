@@ -10,6 +10,7 @@ require (
 	github.com/codex-k8s/kodex/libs/go/objectstorage v0.0.0
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
 	github.com/codex-k8s/kodex/libs/go/runtimecontract v0.0.0
+	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0
 	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0
 	github.com/google/uuid v1.6.0
 	github.com/prometheus/client_golang v1.23.2
@@ -43,7 +44,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/codex-k8s/kodex/libs/go/grpcserver v0.0.0 // indirect
 	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0 // indirect
-	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
