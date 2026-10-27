@@ -1,3 +1,7 @@
+import {
+  runActivityFixture,
+  runActivityNodeFixture,
+} from "@/test-utils/run-activity-fixture";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -931,54 +935,11 @@ describe("компактное представление exact хода", () =>
   });
 });
 
-const run: Run = {
-  ref: "run_example",
-  version: 1,
-  projectRef: "prj_example",
-  sessionRef: "ses_example",
-  rootRunRef: "run_example",
-  target: {
-    type: "AGENT",
-    ref: "agt_example",
-    displayName: "Аналитик",
-    version: 1,
-  },
-  title: "Подготовить отчёт",
-  titleSource: "USER_EDITED",
+const run = runActivityFixture({
   activitySummary: "Аналитик собирает подтверждённые факты",
-  state: "RUNNING",
-  source: "CONTROL_CENTER",
-  initiator: { ref: "usr_example", displayName: "Владелец" },
-  attempt: 1,
-  graphRevision: 1,
   lastEventSequence: 2,
-  usage: {
-    totalTokens: 0,
-    inputTokens: 0,
-    cachedInputTokens: 0,
-    cacheWriteInputTokens: 0,
-    outputTokens: 0,
-    reasoningOutputTokens: 0,
-    modelContextWindow: 0,
-  },
-  artifactRefs: [],
-  gateRefs: [],
-  createdAt: "2026-08-28T08:00:00Z",
-  nextActions: [],
-};
-
-const node: RunNode = {
-  ref: "nod_agent",
-  runRef: run.ref,
-  type: "AGENT_EXECUTION",
-  state: "RUNNING",
-  displayName: "Аналитик продаж",
-  attempt: 1,
-  artifactRefs: [],
-  childRunRefs: [],
-  createdAt: "2026-08-28T08:00:01Z",
-  nextActions: [],
-};
+});
+const node = runActivityNodeFixture(run.ref);
 
 const events: PresentedRunEvent[] = [
   {

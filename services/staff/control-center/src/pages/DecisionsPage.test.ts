@@ -144,6 +144,28 @@ const auditEvent: AuditEvent = {
   occurredAt: "2026-08-29T10:05:00Z",
 };
 
+// Создаёт отдельные router и store для каждого SSR-сценария с теми же синтетическими объектами.
+async function decisionsRenderContext() {
+  const pinia = createPinia();
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: "/decisions", component: DecisionsPage },
+      {
+        path: "/:pathMatch(.*)*",
+        component: defineComponent({ render: () => h("div") }),
+      },
+    ],
+  });
+  await router.push("/decisions");
+  await router.isReady();
+  const platform = usePlatformStore(pinia);
+  platform.projects[project.ref] = project;
+  platform.runs[run.ref] = run;
+  platform.gates[gate.ref] = gate;
+  return { pinia, router, platform };
+}
+
 describe("DecisionsPage", () => {
   async function renderIntegration(
     intent: NonNullable<OwnerGate["integrationIntent"]>,
@@ -390,24 +412,7 @@ describe("DecisionsPage", () => {
   });
 
   it("показывает сгруппированный контекст и ведёт на точный узел запуска", async () => {
-    const pinia = createPinia();
-    const router = createRouter({
-      history: createMemoryHistory(),
-      routes: [
-        { path: "/decisions", component: DecisionsPage },
-        {
-          path: "/:pathMatch(.*)*",
-          component: defineComponent({ render: () => h("div") }),
-        },
-      ],
-    });
-    await router.push("/decisions");
-    await router.isReady();
-
-    const platform = usePlatformStore(pinia);
-    platform.projects[project.ref] = project;
-    platform.runs[run.ref] = run;
-    platform.gates[gate.ref] = gate;
+    const { pinia, router, platform } = await decisionsRenderContext();
     platform.auditEvents = [auditEvent];
     const i18n = createI18n({
       legacy: false,
@@ -545,23 +550,7 @@ describe("DecisionsPage", () => {
     const originalContextSummary = gate.contextSummary;
     gate.contextSummary = 'op.internal {"body":{"value":"новое значение"}}';
     try {
-      const pinia = createPinia();
-      const router = createRouter({
-        history: createMemoryHistory(),
-        routes: [
-          { path: "/decisions", component: DecisionsPage },
-          {
-            path: "/:pathMatch(.*)*",
-            component: defineComponent({ render: () => h("div") }),
-          },
-        ],
-      });
-      await router.push("/decisions");
-      await router.isReady();
-      const platform = usePlatformStore(pinia);
-      platform.projects[project.ref] = project;
-      platform.runs[run.ref] = run;
-      platform.gates[gate.ref] = gate;
+      const { pinia, router } = await decisionsRenderContext();
       const i18n = createI18n({
         legacy: false,
         locale: "ru",

@@ -9296,6 +9296,46 @@
       "fragmentSHA256": "715c896074c4b2c1ec0600b943bc818a0b7206435d0b894656d2f12f7fded7bd",
       "count": 1,
       "reason": "Сходные wrappers AuthorizePromotion и DecideAdmissionRisk вызывают общий retry, но запускают разные специализированные transitions и возвращают разные типы. Promotion проверяет version-bound claim и credential generation, а admission risk применяет owner/policy и фиксирует risk decision с возможной новой attempt и event. Общий dispatcher ради синтаксической обвязки скрыл бы границы authority и lifecycle. Сохранены только точные пути, hash и count1; ни одна операция или policy не исключена."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/assistant/components/AssistantProjectIntegrationGrantPlanForm.test.ts",
+      "secondPath": "services/staff/control-center/src/features/assistant/components/AssistantSystemIntegrationGrantPlanForm.test.ts",
+      "fragmentSHA256": "462a55b78b44e54f40e71d8ad5103d7fea2a933a482396a05a6fdb0325e3f20b",
+      "count": 1,
+      "reason": "Окно сравнивает hoisted Vitest mocks PROJECT и SYSTEM форм grant. Каждая создаёт собственный AbortController и закрытый набор SDK вызовов: project assistant и project candidates против system assistant и system candidates; test setup и authority pins намеренно независимы. Общие production-проекция и owner-reset уже выделены. Общий глобальный mock пересёк бы hoisting boundary и связал состояние owner разных suites. Сохранена только точная пара путей, hash и count1; проверки этих форм не исключены."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/managed-configurations/ConfigurationEditor.vue",
+      "secondPath": "services/staff/control-center/src/features/managed-configurations/ConfigurationEditor.vue",
+      "fragmentSHA256": "06d48b6566ba305a665ea2042d01246979e361805aad0bc712216061f94757b7",
+      "count": 1,
+      "reason": "Окно сравнивает два специализированных retry в ConfigurationEditor. Оба сохраняют исходный intent и проверяют identity/readback, но prompt использует publication impact, sourceVersion и draftRef, а role image использует image impact, configurationVersion и отдельный apply/recover. Общий параметризованный retry скрыл бы разные authority pins и допустимые terminal transitions, что противоречит явной проверке каждого вида операции. Сохранён только точный внутрефайловый hash и count1; retry, версия и owner не исключены."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/providers/ProviderAccountLifecyclePanel.realtime.test.ts",
+      "secondPath": "services/staff/control-center/src/features/providers/ProviderLifecycleRecovery.test.ts",
+      "fragmentSHA256": "68e450ba8105a2424ebfe214f4ee6adec4ee2652cae21e04f04629784369ad55",
+      "count": 1,
+      "reason": "Два тестовых harness используют общий lifecycle renderer, но монтируют разные provider панели и наблюдают разные emits и разные AbortSignal: загрузку blockers и повтор lifecycle операции. Каждая suite независимо владеет app, mocks и idempotent unmount; объединение в универсальный harness потребовало бы конфигурации разных событий и скрывало бы проверяемый request lifetime. Сохранены только точные пути, hash и count1; проверки отмены и результатов остаются исполняемыми."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/role-images/RoleImageEditor.realtime.test.ts",
+      "secondPath": "services/staff/control-center/src/features/role-images/RoleImageEditor.supporting.test.ts",
+      "fragmentSHA256": "7119441dcae9874e18a4a61a006b8dca8dff093691e170fcb4059f3b16412a90",
+      "count": 1,
+      "reason": "Окно сравнивает отдельные hoisted mocks двух suites RoleImageEditor. Каждая suite имеет собственные platform/store состояния и router mock для своих realtime или supporting сценариев; общая обычная переменная не доступна в hoisted vi.mock, а общая глобальная ссылка связала бы изоляцию тестов. Оставлены точные пути, hash и count1; остальные проверки и состояния тестов не исключены."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/runtime/EnvironmentImpactDialog.vue",
+      "secondPath": "services/staff/control-center/src/features/runtime/SecretImpactDialog.vue",
+      "fragmentSHA256": "97b53047633c9bf4feed8e331447a5217cec9fa07d0465b1e11461f0d8672381",
+      "count": 1,
+      "reason": "Окно сравнивает lifecycle двух impact dialog для environment и secret. Оба используют общий cursor composable, но у environment выбранные consumers хранятся в Set и сбрасываются через clear, а secret сбрасывает массив selections и проверяет другой revision/resource; read/apply и authority pins также различаются. Общий callback watcher ради таймера и abort скрыл бы разные типы выбора и порядок сброса чувствительного readback. Сохранены только точные пути, hash и count1; очистка и проверки owner не исключены."
     }
   ]
 }

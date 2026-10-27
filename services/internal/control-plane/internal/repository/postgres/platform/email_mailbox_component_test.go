@@ -242,19 +242,24 @@ func testEmailMailboxOwner(t *testing.T, ctx context.Context, repository *Reposi
 	if err != nil || !found || recovery.Configuration.Revision <= stale.Configuration.Revision || len(recovery.Configuration.Mailboxes) != 0 {
 		t.Fatalf("recovery must advance revision and remove revoked mailbox: %v", err)
 	}
-	document, err = mailpolicy.Produce(ctx, recovery.Configuration, strings.Repeat("a", 64), mailboxOwnerResolver{})
-	if err != nil {
-		t.Fatal(err)
+	// Общая тестовая подготовка applied readback; завершение каждого перехода проверяется отдельно.
+	prepareAppliedReadback := func(item entity.EmailMailboxPublicationWork) {
+		t.Helper()
+		document, err := mailpolicy.Produce(ctx, item.Configuration, strings.Repeat("a", 64), mailboxOwnerResolver{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := repository.StageEmailMailboxPolicy(ctx, item, document); err != nil {
+			t.Fatal(err)
+		}
+		if err := repository.MarkEmailMailboxApplied(ctx, item); err != nil {
+			t.Fatal(err)
+		}
+		if err := service.ReportEmailConfigurationReadback(ctx, worker, item.Configuration.Revision, api.Digest(item.Configuration)); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if err := repository.StageEmailMailboxPolicy(ctx, recovery, document); err != nil {
-		t.Fatal(err)
-	}
-	if err := repository.MarkEmailMailboxApplied(ctx, recovery); err != nil {
-		t.Fatal(err)
-	}
-	if err := service.ReportEmailConfigurationReadback(ctx, worker, recovery.Configuration.Revision, api.Digest(recovery.Configuration)); err != nil {
-		t.Fatal(err)
-	}
+	prepareAppliedReadback(recovery)
 	if err := repository.CompleteEmailMailboxPublication(ctx, recovery); err != nil {
 		t.Fatalf("complete removal recovery: %v", err)
 	}
@@ -285,19 +290,7 @@ func testEmailMailboxOwner(t *testing.T, ctx context.Context, repository *Reposi
 		if recovered, err := repository.RecoverEmailMailboxPublication(ctx, work); err != nil || recovered {
 			t.Fatalf("fresh Git snapshot rejected: %v", err)
 		}
-		document, err := mailpolicy.Produce(ctx, work.Configuration, strings.Repeat("a", 64), mailboxOwnerResolver{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := repository.StageEmailMailboxPolicy(ctx, work, document); err != nil {
-			t.Fatal(err)
-		}
-		if err := repository.MarkEmailMailboxApplied(ctx, work); err != nil {
-			t.Fatal(err)
-		}
-		if err := service.ReportEmailConfigurationReadback(ctx, worker, work.Configuration.Revision, api.Digest(work.Configuration)); err != nil {
-			t.Fatal(err)
-		}
+		prepareAppliedReadback(work)
 		if err := repository.CompleteEmailMailboxPublication(ctx, work); err != nil {
 			t.Fatalf("Git binding activation: %v", err)
 		}

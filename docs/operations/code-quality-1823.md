@@ -4,11 +4,28 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.596.0
+version: 1.597.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие подготовки почтового readback и UI-тестов — 27.10.2026
+
+Компонентный почтовый тест использует общую подготовку applied readback для
+восстановления и Git-сценария, сохраняя отдельные проверки завершения. Два
+run activity теста получают независимые синтетические run/node из фабрик с
+прежними различающимися полями. Два SSR-сценария решений используют общую
+подготовку отдельных router/store. Обратное сравнение четырёх целых тестов и
+точная сериализация обеих фикстур PASS.
+
+PostgreSQL почтовой сценарий до и после: 9 событий PASS, FAIL/SKIP 0. UI-тесты
+до и после: 191 и 10 PASS, FAIL/SKIP 0; control-plane build/unit/vet PASS: 3094
+события PASS, 70 условных SKIP. Typecheck, форматирование и lint PASS. Пять
+разных тестовых mocks и owner/lifecycle фрагментов сохранены адресно; 30 мутаций
+решений отклонены, 17 тестов инструментов качества PASS. Context7: [Vitest fixtures](https://github.com/vitest-dev/vitest/blob/v4.1.6/docs/guide/test-context.md), [Go testing](https://pkg.go.dev/testing%40go1.25.3).
+Анализ: 1318 raw / 1311 retained / 7 unresolved, Go-комментарии 21750/21750.
+Браузер, E2E, live/deploy/startup и QA не выполнялись.
 
 ## Общие блокирующие чтения promotion — 27.10.2026
 
