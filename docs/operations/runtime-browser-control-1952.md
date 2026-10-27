@@ -4,7 +4,7 @@ title: Изолированный контроль падения Chromium в ru
 type: operations
 status: approved
 owner: developer
-version: 1.2.0
+version: 1.3.0
 updated: 2026-10-27
 ---
 
@@ -43,6 +43,24 @@ QA самой платформы уже воспроизвёл SIGTRAP двум�
 параметра, который равен false согласно Context7 `/microsoft/playwright`,
 `docs/src/api/params.md`; эти проверки не эквивалентны.
 
+# Полученное свидетельство
+
+На `750d826853de08f4e1e2ebb6eb8fd16bc11ebb61` обе Node-команды записали
+marker и завершились с exit 0. Chromium в обоих профилях завершился SIGTRAP
+через 376 и 386 мс. При диагностическом `/proc = read` журнал дополнительно
+показал `setsockopt: Operation not permitted`. stdout вложенной Node-команды
+был пуст даже при подтверждённой записи marker; отсутствие stdout не доказывает
+отсутствие исполнения. Pod и NetworkPolicy удалены с exact UID readback.
+
+В [исходниках Codex rust-v0.160.0](https://raw.githubusercontent.com/openai/codex/rust-v0.160.0/codex-rs/linux-sandbox/src/landlock.rs)
+режим Restricted запрещает `setsockopt` без проверки типа сокета. Наблюдение
+согласуется с [upstream #47452](https://github.com/openai/codex/issues/47452),
+но не заменяет трассировку фактического фильтра и аттестацию binary-to-source.
+Открытие `/proc` не исправило браузер. Поддержанный исправленный sandbox либо
+отдельный ограниченный browser worker ещё не реализован; браузерный путь
+сотрудника остаётся FAIL. Обычный smoke образа вне Codex sandbox не подтверждает
+готовность браузерного инструмента сотрудника.
+
 # Порядок оператора
 
 1. Проверить текущие cluster, namespace и node UID штатным
@@ -55,8 +73,10 @@ QA самой платформы уже воспроизвёл SIGTRAP двум�
 3. Выполнить server dry-run с явным `--context k3d-kodex`. Создать сначала
    NetworkPolicy и проверить exact spec/UID, затем Pod. В Pod нет секретов и
    service-account token. Отдельная NetworkPolicy запрещает ingress/egress;
-   её добавление не меняет правила других Pod. Проверить, что иные namespace
-   policies не выбирают этот диагностический label и не расширяют egress.
+   её добавление не меняет правила других Pod. Проверить весь набор namespace
+   policies, выбирающих диагностический Pod: ни одна не должна разрешать ingress
+   или egress. Общая default-deny policy допустима; отдельная запрещающая policy
+   не отменяет разрешения из других выбирающих policies.
 4. Сохранить assigned UID и фактический spec обоих ресурсов. Ожидать terminal
    не более 60 секунд, читать только журнал `browser-control` и termination.
    Browser открывает локальный DOM; внешние URL и `--no-sandbox` запрещены.
