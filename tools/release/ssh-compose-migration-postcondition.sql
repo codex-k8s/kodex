@@ -108,6 +108,8 @@ column_expected(table_name,column_name,type_name,required,default_expression) AS
  ('integration_invocations','ssh_compose_snapshot','jsonb',false,NULL),
  ('integration_invocations','ssh_compose_deadline','timestamp with time zone',false,NULL),
  ('integration_invocations','ssh_compose_recovery','boolean',true,'false'),
+ ('integration_invocations','ssh_compose_admission_blocked','boolean',true,'false'),
+ ('integration_invocations','ssh_compose_admission_block_reason','text',true,$default$''::text$default$),
  ('integration_connection_tests','ssh_compose_snapshot','jsonb',false,NULL)
 ), ssh_column_rows AS (
  SELECT expected.*,a.attnum,a.atttypid,a.attnotnull,a.atthasdef,pg_get_expr(d.adbin,d.adrelid) AS actual_default,
@@ -121,6 +123,7 @@ column_expected(table_name,column_name,type_name,required,default_expression) AS
  ('integration_invocations','integration_invocations_resource_kind_check',$expected$CHECK((resource_kind=ANY(ARRAY['SYNTHETIC_JOURNAL','GITHUB_REPOSITORY','GITLAB_PROJECT','JIRA_PROJECT','CONFLUENCE_SPACE','EMAIL_SENDER','MATTERMOST_CHANNEL','HTTPS_RESOURCE','SSH_TARGET'])))$expected$),
  ('runtime_secrets','runtime_secrets_purpose_check',$expected$CHECK((purpose=ANY(ARRAY['APPLICATION','SSH_COMPOSE'])))$expected$),
  ('integration_invocations','ssh_compose_snapshot_bounds',$expected$CHECK(((ssh_compose_snapshotISNULL)OR((jsonb_typeof(ssh_compose_snapshot)='object')AND(octet_length((ssh_compose_snapshot))<=32768))))$expected$),
+ ('integration_invocations','ssh_compose_admission_block_shape',$expected$CHECK((((NOTssh_compose_admission_blocked)AND(ssh_compose_admission_block_reason=''))OR(ssh_compose_admission_blockedAND(ssh_compose_admission_block_reason='CURRENT_ADMISSION_DENIED'))))$expected$),
  ('integration_connection_tests','ssh_compose_test_snapshot_bounds',$expected$CHECK(((ssh_compose_snapshotISNULL)OR((jsonb_typeof(ssh_compose_snapshot)='object')AND(octet_length((ssh_compose_snapshot))<=32768))))$expected$)
 ), ssh_check_rows AS (
  SELECT e.*,c.oid,c.convalidated,c.conenforced,c.connoinherit,
@@ -128,10 +131,12 @@ column_expected(table_name,column_name,type_name,required,default_expression) AS
  FROM ssh_checks e LEFT JOIN pg_constraint c ON c.conrelid=to_regclass('control_plane.'||e.table_name) AND c.conname=e.constraint_name AND c.contype='c'
 ), ssh_functions(signature,source_md5) AS (VALUES
  ('control_plane.guard_ssh_compose_snapshot()','eb414956bfcd23b3e22d5093b6882e7d'),
+ ('control_plane.guard_ssh_compose_admission_block()','c504ff89154b91a03cfedd56dc5f9de2'),
  ('control_plane.guard_ssh_compose_secret_purpose()','da345f85ac1516dc7f2325bf43773c4f')
 ), ssh_function_rows AS (
  SELECT expected.*,p.* FROM ssh_functions expected LEFT JOIN pg_proc p ON p.oid=to_regprocedure(expected.signature)
 ), ssh_triggers(table_name,trigger_name,signature) AS (VALUES
+ ('integration_invocations','ssh_compose_admission_block_immutable','control_plane.guard_ssh_compose_admission_block()'),
  ('integration_invocations','ssh_compose_invocation_snapshot_immutable','control_plane.guard_ssh_compose_snapshot()'),
  ('integration_connection_tests','ssh_compose_test_snapshot_immutable','control_plane.guard_ssh_compose_snapshot()'),
  ('runtime_secrets','ssh_compose_secret_purpose_irreversible','control_plane.guard_ssh_compose_secret_purpose()')
@@ -212,16 +217,16 @@ $body$
      AND md5(function_row.prosrc)='14e949376306c955058e804dfcfa0855'),
 
  'sshComposeProfile','SSH_COMPOSE_V1',
- 'sshColumns',(SELECT count(*)=5 AND bool_and(attnum IS NOT NULL AND atttypid=to_regtype(type_name) AND attnotnull=required
+ 'sshColumns',(SELECT count(*)=7 AND bool_and(attnum IS NOT NULL AND atttypid=to_regtype(type_name) AND attnotnull=required
    AND atthasdef=(expected_default IS NOT NULL) AND actual_default IS NOT DISTINCT FROM expected_default AND owner='control_plane_owner') FROM ssh_column_rows),
- 'sshConstraints',(SELECT count(*)=6 AND bool_and(oid IS NOT NULL AND convalidated AND conenforced AND NOT connoinherit AND actual_definition=definition) FROM ssh_check_rows),
- 'sshFunctions',(SELECT count(*)=2 AND bool_and(oid IS NOT NULL AND md5(prosrc)=source_md5 AND pg_get_userbyid(proowner)='control_plane_owner'
+ 'sshConstraints',(SELECT count(*)=7 AND bool_and(oid IS NOT NULL AND convalidated AND conenforced AND NOT connoinherit AND actual_definition=definition) FROM ssh_check_rows),
+ 'sshFunctions',(SELECT count(*)=3 AND bool_and(oid IS NOT NULL AND md5(prosrc)=source_md5 AND pg_get_userbyid(proowner)='control_plane_owner'
    AND NOT prosecdef AND provolatile='v' AND prorettype='trigger'::regtype AND NOT proretset AND prolang=(SELECT oid FROM pg_language WHERE lanname='plpgsql')
    AND proconfig=ARRAY['search_path=pg_catalog'] AND has_function_privilege('control_plane_runtime',oid,'EXECUTE')
    AND NOT EXISTS(SELECT 1 FROM aclexplode(COALESCE(proacl,acldefault('f',proowner))) acl WHERE acl.grantee=0 AND acl.privilege_type='EXECUTE')) FROM ssh_function_rows),
- 'sshTriggers',(SELECT count(*)=3 AND bool_and(oid IS NOT NULL AND NOT tgisinternal AND tgtype=19 AND tgenabled='O'
+ 'sshTriggers',(SELECT count(*)=4 AND bool_and(oid IS NOT NULL AND NOT tgisinternal AND tgtype=19 AND tgenabled='O'
    AND tgattr=''::int2vector AND tgqual IS NULL AND tgnargs=0 AND NOT tgdeferrable AND tgfoid=to_regprocedure(signature)) FROM ssh_trigger_rows),
- 'sshRuntimeColumns',(SELECT count(*)=5 AND bool_and(has_column_privilege('control_plane_runtime',to_regclass('control_plane.'||table_name),column_name,'SELECT')
+ 'sshRuntimeColumns',(SELECT count(*)=7 AND bool_and(has_column_privilege('control_plane_runtime',to_regclass('control_plane.'||table_name),column_name,'SELECT')
    AND has_column_privilege('control_plane_runtime',to_regclass('control_plane.'||table_name),column_name,'UPDATE')) FROM ssh_columns),
  'workflowColumns',(SELECT count(*) FROM column_rows WHERE attnum IS NOT NULL),
  'workflowConstraints',(SELECT count(*) FROM check_rows WHERE oid IS NOT NULL)+(SELECT count(*) FROM origin_fk),

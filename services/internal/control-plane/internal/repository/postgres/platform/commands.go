@@ -2094,7 +2094,7 @@ func validIntegrationActionBinding(eventType, summary, ref string) bool {
 			return false
 		}
 	}
-	return summary == "i18n:INTEGRATION_ACTION_SUCCEEDED" || summary == "i18n:INTEGRATION_ACTION_FAILED" || summary == "i18n:INTEGRATION_ACTION_OUTCOME_UNKNOWN"
+	return summary == "i18n:INTEGRATION_ACTION_SUCCEEDED" || summary == "i18n:INTEGRATION_ACTION_FAILED" || summary == "i18n:INTEGRATION_ACTION_OUTCOME_UNKNOWN" || summary == sshComposeAdmissionBlockSummary
 }
 
 func (repository *Repository) emitRunEventWithBinding(ctx context.Context, tx pgx.Tx, scope scope, projectID, rootRunID, aggregateRef, eventType, nodeRef, edgeRef, gateRef, artifactRef string, incident *entity.Incident, message *entity.RunMessage, summary, runState, nodeState, integrationInvocationRef string) (entity.RunEvent, error) {

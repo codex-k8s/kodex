@@ -243,8 +243,9 @@ $body$
 SELECT (proof || jsonb_build_object(
  'sshComposeAbsent',NOT EXISTS(SELECT 1 FROM pg_attribute a JOIN pg_class r ON r.oid=a.attrelid JOIN pg_namespace n ON n.oid=r.relnamespace
  WHERE n.nspname='control_plane' AND a.attnum>0 AND NOT a.attisdropped AND ((r.relname='runtime_secrets' AND a.attname='purpose')
- OR (r.relname='integration_invocations' AND a.attname IN('ssh_compose_snapshot','ssh_compose_deadline','ssh_compose_recovery'))
+ OR (r.relname='integration_invocations' AND a.attname IN('ssh_compose_snapshot','ssh_compose_deadline','ssh_compose_recovery','ssh_compose_admission_blocked','ssh_compose_admission_block_reason'))
  OR (r.relname='integration_connection_tests' AND a.attname='ssh_compose_snapshot')))
+ AND to_regprocedure('control_plane.guard_ssh_compose_admission_block()') IS NULL
  AND to_regprocedure('control_plane.guard_ssh_compose_snapshot()') IS NULL AND to_regprocedure('control_plane.guard_ssh_compose_secret_purpose()') IS NULL,
     'oldClaimSessions', (SELECT count(*) FROM pg_stat_activity
         WHERE datname = current_database() AND pid <> pg_backend_pid()

@@ -19,6 +19,7 @@ LEFT JOIN control_plane.integration_credential_revisions cr ON cr.id=c.credentia
 LEFT JOIN control_plane.integration_approval_scopes approval ON approval.id=i.approval_scope_id
 WHERE i.organization_id=$1::uuid
   AND (c.definition_key='ssh-compose')=$5::boolean
+  AND (NOT $5::boolean OR NOT i.ssh_compose_admission_blocked)
   AND (r.project_id IS NOT NULL OR control_plane.owned_organization_assistant_run(r.organization_id,r.root_run_id))
   AND root.state IN ('RUNNING','WAITING_HUMAN')
   AND control_plane.runtime_execution_before_deadline(i.organization_id,i.run_id)

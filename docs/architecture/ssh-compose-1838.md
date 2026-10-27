@@ -4,7 +4,7 @@ title: Защищённая доставка Compose через SSH
 type: architecture
 status: approved
 owner: architect
-version: 1.0.1
+version: 1.0.2
 updated: 2026-10-27
 ---
 
@@ -220,3 +220,65 @@ PG FAIL/STOP сохранены в evidence, новый план выполня�
 review зафиксированного SHA. Настоящие SSH/Compose/модельные проверки пока
 `NOT RUN`; private Go/SQLite build/provenance/pull prerequisites не подменяются
 публичным base image или host shell.
+
+
+## Исправление admission и сохранение Git mode
+
+Подтверждённые source findings контрольной точки `8f29b9a50` сохраняются в
+истории review. Successor проверяет canonical `integration.manage` root actor
+отдельно для GitHub source connection при prepare, claim, renew и broker
+projection. Owner назначает actor из root graph; payload и сохранённые agent
+READ grants не заменяют это право. DEPLOY подтверждает renew перед Git release
+read и повторно после него; INSPECT сначала подтверждает broker admission,
+затем читает Git один раз до SSH. STATUS не читает новый release.
+
+`admissionBlocked` и `admissionBlockReason=CURRENT_ADMISSION_DENIED` — отдельные
+метаданные допуска в существующем GetIntegrationInvocation. Причина не является
+provider error, receipt или доказательством отсутствия effect. Прежние state,
+safeErrorCode, result, receipt, snapshot и execution generation не меняются.
+В начальном профиле нет unblock/rebind: возврат полномочий не возобновляет старую
+попытку. Для нового намерения нужен отдельный явный owner сценарий; текущая
+реализация поддерживает только Cancel исполнения с сохранением UNKNOWN.
+
+| Сценарий | Owner-транзакция и очередь | Consumer |
+| --- | --- | --- |
+| READY либо UNKNOWN, все текущие pins и ACL допустимы | Прежний claim/permit; UNKNOWN получает только STATUS | Прежний результат, marker отсутствует |
+| Постоянный Forbidden/NotFound target/source/package/pins | Откат candidate savepoint, exact CAS исходного invocation, monotonic block, один audit и TURN_PROGRESS | READY немедленно возвращает attention; UNKNOWN сохраняется вместе с closed reason |
+| Страница32 кандидатов полностью отклонена | COMMIT всех marker без claims; следующий poll получает следующий prefix | Это успешная пустая страница claim, не provider success |
+| Blocked invocation, доступ восстановлен | Selector исключает marker до LIMIT; lease и новое поколение не выдаются | Причина остаётся видимой; автоматического повтора нет |
+| Context/Unavailable/serialization/root lock contention | Marker не фиксируется; транзакция откатывается | Прежний typed transient отказ |
+| Owner Cancel | Закрывает root/leases; UNKNOWN и исходный receipt не подменяются | История показывает отмену исполнения отдельно от неизвестного эффекта |
+| Повреждённый marker либо неизвестная reason | Get/caster/RC закрыто отклоняют результат | Нет успешного receipt или polling READY до timeout |
+
+Candidate savepoint начинается до target actor ACL. Marker привязан к exact
+invocation/state/generation/input digest/snapshot и root; root lock берётся
+NOWAIT, чтобы не ждать обратный root→invocation lock order. Claims, permanent
+markers, audit и events принадлежат одной owner-транзакции. Marker исключается
+до LIMIT, а не только в памяти worker. Dynamic scan не используется как замена
+устойчивому progress.
+
+Git entry100644 материализуется как0644,100755 — как0755 независимо от umask.
+Mode задаётся на новом открытом descriptor. Immutable replay проверяет и bytes,
+и mode без исправления существующего файла. Связь commit/tree/blob сохраняется;
+symlink, иной Git mode, shell fallback и произвольное повышение прав запрещены.
+
+Новые native fixtures создают бизнес-состояние только штатными командами:
+rotate/reconnect; ограниченный root actor с отозванным source ACL; prefix32
+отклонённых invocations и независимый healthy target. Проверяются atomic marker,
+one audit/event, неизменность UNKNOWN и прогресс следующего poll. Отдельные
+schema clones проверяют отсутствующий admission CHECK и отключённый guard.
+Само наличие этих fixtures не означает их исполнения: до root native receipt
+их статус `NOT RUN`. Proto codegen, module suites, browser и current011 migration
+proof привязываются к окончательному SHA отдельно; исторические FAIL/STOP не
+переписываются. До actual011 metadata операторский SSH predecessor010 остаётся
+историческим профилем, а не готовым планом поставки после011.
+
+
+Поставка successor выполняется при остановленных источниках SSH claims и без
+активных SSH consumers. DDL применяется штатным отдельным checkpoint. API,
+PWA и runtime-controller с пониманием marker/event поставляются до активации
+нового CP/IG writer; полная совместимость подтверждается exact readback всех
+реплик. Старый RC иначе продолжал бы ожидать READY, а старый API не знает
+новую closed summary. После первого admission marker либо соответствующего
+event возврат к несовместимому consumer не является допустимым rollback:
+нужен совместимый roll-forward; marker, UNKNOWN и историю не очищают.

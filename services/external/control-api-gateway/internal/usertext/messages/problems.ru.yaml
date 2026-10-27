@@ -406,6 +406,8 @@ INTEGRATION_ACTION_SUCCEEDED:
   other: Действие интеграции выполнено успешно
 INTEGRATION_ACTION_FAILED:
   other: Действие интеграции отклонено или завершилось ошибкой
+INTEGRATION_ADMISSION_BLOCKED:
+  other: Допуск вызова заблокирован: текущие полномочия или закреплённые зависимости недоступны
 INTEGRATION_ACTION_OUTCOME_UNKNOWN:
   other: Результат действия интеграции неизвестен
 RUNTIME_INPUT_INVALID:

@@ -18,7 +18,6 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/libs/go/sshcompose"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
-	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/emailpolicy"
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 	scheduleservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/schedule"
@@ -1479,28 +1478,18 @@ func (repository *Repository) claimIntegrationInvocations(ctx context.Context, p
 	if _, err := tx.Exec(ctx, queryWorkersClaimintegrationinvocationsExpireStaleInvocationLeases, scope.organizationID, principal.CallerWorkload); err != nil {
 		return nil, errs.ErrUnavailable
 	}
-	rows, err := tx.Query(ctx, queryWorkersClaimintegrationinvocationsSelectIntegrationInvocationsOrganizationIdState, scope.organizationID, limit, principal.CallerWorkload, route, sshLane)
+	candidateLimit := limit
+	if sshLane {
+		candidateLimit = sshComposeAdmissionScanLimit
+	}
+	rows, err := tx.Query(ctx, queryWorkersClaimintegrationinvocationsSelectIntegrationInvocationsOrganizationIdState, scope.organizationID, candidateLimit, principal.CallerWorkload, route, sshLane)
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
-	type candidate struct {
-		id, ref, state, connectionRef, definitionKey, capabilityKey, nodeID, runID string
-		initiatorRef                                                               string
-		definitionVersion, definitionDigest, operation, risk, approvalPolicy       string
-		resourceKind, resourceScopeDigest, effectKey, inputDigest                  string
-		approvalScopeDigest, approvalSchemaDigest                                  string
-		approvalScopePaths                                                         []string
-		grantRef                                                                   string
-		grantVersion                                                               int64
-		generation                                                                 int64
-		configuration, boundedInput, resourceScope                                 []byte
-		sshSnapshot                                                                []byte
-		credential                                                                 entity.IntegrationCredentialRevision
-		credentialCreatedAt                                                        *time.Time
-	}
-	candidates := make([]candidate, 0, limit)
+
+	candidates := make([]integrationInvocationCandidate, 0, candidateLimit)
 	for rows.Next() {
-		var item candidate
+		var item integrationInvocationCandidate
 		if err := rows.Scan(
 			&item.id, &item.ref, &item.generation, &item.state, &item.connectionRef, &item.definitionKey,
 			&item.configuration, &item.capabilityKey, &item.boundedInput, &item.definitionVersion,
@@ -1523,95 +1512,43 @@ func (repository *Repository) claimIntegrationInvocations(ctx context.Context, p
 	}
 	result := make([]map[string]any, 0, len(candidates))
 	for _, item := range candidates {
-		initiatorScope := scope
-		initiatorScope.actorRef = item.initiatorRef
-		if err := repository.requireAccess(ctx, tx, initiatorScope, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: item.connectionRef}); err != nil {
-			continue
-		}
-		if item.definitionKey == "context7" {
-			if err := requireCurrentManagedMCPHealth(ctx, tx, scope.organizationID, item.nodeID, item.connectionRef); err != nil {
-				return nil, err
-			}
-		}
-		definition, err := repository.integrationPackage(ctx, tx, scope.organizationID, item.connectionRef, item.definitionKey, item.definitionVersion, item.definitionDigest)
-		if err != nil {
-			return nil, err
-		}
-		capability, capabilityOK := definition.Capability(item.capabilityKey)
-		if !capabilityOK || item.grantVersion < 1 || item.grantRef == "" ||
-			capability.Risk != item.risk || capability.Operation != item.operation ||
-			definition.ValidateInvocationApprovalPolicy(capability, item.approvalPolicy, item.boundedInput) != nil {
-			return nil, errs.ErrForbidden
-		}
-		if item.approvalPolicy == string(integrationpackage.ApprovalHumanScoped) {
-			resolvedScope, scopeErr := capability.ResolveApprovalScope(item.approvalScopePaths, item.boundedInput)
-			schemaDigest, digestErr := capability.InputSchemaDigest()
-			if scopeErr != nil || digestErr != nil || resolvedScope.Digest != item.approvalScopeDigest ||
-				schemaDigest != item.approvalSchemaDigest {
-				return nil, errs.ErrForbidden
-			}
-		}
-		leaseRef, _ := newRef("lea")
-		fence, _ := newRef("eff")
-		digest := sha256.Sum256([]byte(fence))
-		generation := item.generation + 1
-		expiresAt := time.Now().UTC().Add(30 * time.Second)
-		deadline, expired, deadlineErr := readRuntimeExecutionDeadline(ctx, tx, scope.organizationID, item.runID)
-		if deadlineErr != nil {
-			return nil, deadlineErr
-		}
-		if expired {
-			continue
-		}
-		if deadline != nil && deadline.EffectiveDeadlineAt.Before(expiresAt) {
-			expiresAt = deadline.EffectiveDeadlineAt
-		}
-		tag, err := tx.Exec(ctx, queryWorkersClaimintegrationinvocationsClaimInvocationLease, item.id, leaseRef, hex.EncodeToString(digest[:]), generation, instance, expiresAt, principal.CallerWorkload, item.state)
-		if err != nil || tag.RowsAffected() != 1 {
-			return nil, errs.ErrConflict
-		}
-		configuration, bounded := map[string]any{}, map[string]any{}
-		resourceScope := map[string]string{}
-		_ = json.Unmarshal(item.configuration, &configuration)
-		_ = json.Unmarshal(item.boundedInput, &bounded)
-		_ = json.Unmarshal(item.resourceScope, &resourceScope)
-		workMode := "EXECUTE"
-		if item.state == "UNKNOWN_OUTCOME" {
-			workMode = "RECOVER_READ_ONLY"
-		}
-		claim := map[string]any{
-			"invocationRef": item.ref, "connectionRef": item.connectionRef, "definitionKey": item.definitionKey,
-			"definitionPackage": asJSON(definition),
-			"capabilityKey":     item.capabilityKey, "configuration": configuration, "boundedInput": bounded,
-			"definitionVersion": item.definitionVersion, "definitionDigest": item.definitionDigest,
-			"operation": item.operation, "risk": item.risk, "approvalPolicy": item.approvalPolicy,
-			"grantRef": item.grantRef, "grantVersion": item.grantVersion,
-			"resourceKind": item.resourceKind, "resourceScope": resourceScope,
-			"resourceScopeDigest": item.resourceScopeDigest, "effectKey": item.effectKey, "inputDigest": item.inputDigest,
-			"workMode": workMode,
-			"leaseRef": leaseRef, "fence": fence, "generation": generation, "expiresAt": expiresAt,
-		}
+		candidateTx := tx
 		if sshLane {
-			purpose := ""
-			if workMode == "RECOVER_READ_ONLY" {
-				purpose = "STATUS"
-				if _, err := tx.Exec(ctx, querySSHComposeRecovery, pgx.StrictNamedArgs{"invocation_id": item.id}); err != nil {
-					return nil, errs.ErrUnavailable
-				}
+			candidateTx, err = tx.Begin(ctx)
+			if err != nil {
+				return nil, errs.ErrUnavailable
 			}
-			prepared, prepareErr := repository.issueSSHComposePermit(ctx, tx, scope, platformrepo.SSHComposeLeaseBinding{
-				WorkloadInstance: instance, InvocationRef: item.ref, LeaseRef: leaseRef, Fence: fence, Generation: generation,
-			}, purpose, false)
-			if prepareErr != nil {
-				return nil, prepareErr
-			}
-			claim["sshSnapshot"], claim["sshPermit"], claim["expiresAt"] = prepared["snapshot"], prepared["permit"], prepared["expiresAt"]
 		}
-		if definition.RequiresConnectionCredential() && item.credential.Ref != "" && item.credentialCreatedAt != nil {
-			item.credential.CreatedAt = *item.credentialCreatedAt
-			claim["credential"] = item.credential
+		claim, claimErr := repository.claimIntegrationInvocationCandidateTx(ctx, candidateTx, scope, principal, instance, sshLane, item)
+		if sshLane {
+			if claimErr != nil || claim == nil {
+				if err := rollbackSSHComposeAdmissionCandidate(ctx, candidateTx); err != nil {
+					return nil, err
+				}
+				if permanentSSHComposeAdmissionDenial(claimErr) {
+					if err := repository.blockSSHComposeAdmissionTx(ctx, tx, scope, item); err != nil {
+						return nil, err
+					}
+					continue
+				}
+				if claimErr != nil {
+					return nil, claimErr
+				}
+				continue
+			}
+			if err := candidateTx.Commit(ctx); err != nil {
+				return nil, errs.ErrUnavailable
+			}
+		} else if claimErr != nil {
+			return nil, claimErr
+		}
+		if claim == nil {
+			continue
 		}
 		result = append(result, claim)
+		if len(result) >= int(limit) {
+			break
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, errs.ErrConflict
@@ -1624,14 +1561,20 @@ func (repository *Repository) GetIntegrationInvocation(ctx context.Context, prin
 	if err != nil {
 		return nil, err
 	}
-	var state, resultSummary, safeErrorCode, gateRef, receiptRef string
-	if err := repository.pool.QueryRow(ctx, queryWorkersGetintegrationinvocationSelectIntegrationInvocationsOrganizationIdRef, scope.organizationID, ref).Scan(&state, &resultSummary, &safeErrorCode, &gateRef, &receiptRef); err != nil {
+	var state, resultSummary, safeErrorCode, gateRef, receiptRef, admissionBlockReason string
+	var admissionBlocked bool
+	if err := repository.pool.QueryRow(ctx, queryWorkersGetintegrationinvocationSelectIntegrationInvocationsOrganizationIdRef, scope.organizationID, ref).Scan(&state, &resultSummary, &safeErrorCode, &gateRef, &receiptRef, &admissionBlocked, &admissionBlockReason); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errs.ErrNotFound
 		}
 		return nil, errs.ErrUnavailable
 	}
-	return map[string]any{"state": state, "resultSummary": resultSummary, "safeErrorCode": safeErrorCode, "gateRef": gateRef, "effectReceiptRef": receiptRef}, nil
+	if (!admissionBlocked && admissionBlockReason != "") || (admissionBlocked &&
+		(admissionBlockReason != entity.IntegrationAdmissionCurrentDenied || receiptRef != "" || !contains([]string{"READY", "UNKNOWN_OUTCOME", "FAILED", "CANCELLED"}, state))) {
+		return nil, errs.ErrUnavailable
+	}
+	return map[string]any{"state": state, "resultSummary": resultSummary, "safeErrorCode": safeErrorCode, "gateRef": gateRef, "effectReceiptRef": receiptRef,
+		"admissionBlocked": admissionBlocked, "admissionBlockReason": admissionBlockReason}, nil
 }
 
 func (repository *Repository) completeIntegrationInvocation(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {

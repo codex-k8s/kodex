@@ -381,7 +381,15 @@ func extractBundle(directory string, bundle Bundle) error {
 		if err != nil {
 			return ErrorInvalid
 		}
-		if err := writeImmutable(name, raw, 0644); err != nil {
+		mode := os.FileMode(0644)
+		switch file.Mode {
+		case "100644":
+		case "100755":
+			mode = 0755
+		default:
+			return ErrorInvalid
+		}
+		if err := writeImmutable(name, raw, mode); err != nil {
 			return err
 		}
 	}
@@ -408,13 +416,21 @@ func privateDirectories(directory string) error {
 	return nil
 }
 
-// writeImmutable accepts existing bytes only after same-descriptor identity checks.
-// writeImmutable принимает существующие bytes только после проверки того же descriptor.
+// writeImmutable fixes the exact new-file mode independently of caller umask. Existing bytes
+// are accepted only with the same descriptor identity and mode; replay never repairs permissions.
+// writeImmutable закрепляет точный mode нового файла независимо от umask. Существующие bytes
+// принимаются только с теми же descriptor identity и mode; replay не исправляет права.
 func writeImmutable(name string, raw []byte, mode os.FileMode) error {
+	if mode != 0600 && mode != 0644 && mode != 0755 {
+		return ErrorInvalid
+	}
 	fd, err := syscall.Open(name, syscall.O_CREAT|syscall.O_EXCL|syscall.O_WRONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, uint32(mode))
 	if err == nil {
 		file := os.NewFile(uintptr(fd), "release-file")
-		_, writeErr := file.Write(raw)
+		writeErr := file.Chmod(mode)
+		if writeErr == nil {
+			_, writeErr = file.Write(raw)
+		}
 		if writeErr == nil {
 			writeErr = file.Sync()
 		}
@@ -434,7 +450,7 @@ func writeImmutable(name string, raw []byte, mode os.FileMode) error {
 	file := os.NewFile(uintptr(fd), "existing-release")
 	defer file.Close()
 	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Size() != int64(len(raw)) {
+	if err != nil || !info.Mode().IsRegular() || info.Mode() != mode || info.Size() != int64(len(raw)) {
 		return ErrorInvalid
 	}
 	metadata, ok := info.Sys().(*syscall.Stat_t)

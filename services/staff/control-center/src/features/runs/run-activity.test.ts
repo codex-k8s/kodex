@@ -12,6 +12,7 @@ import {
   isAssistantPlanToolReceipt,
   isSuccessfulIntegrationToolReceipt,
   integrationToolPresentationState,
+  integrationToolAdmissionBlocked,
   activeTranscriptItemId,
   assistantTerminalTranscriptScopes,
   assistantTranscriptReplacesWorkingFallback,
@@ -208,6 +209,44 @@ describe("закрытая проекция результата интегра�
       );
     },
   );
+  it.each(["READY", "UNKNOWN_OUTCOME"])(
+    "показывает блокировку admission для %s без подмены outcome",
+    (state) => {
+      const blocked = {
+        ...receipt,
+        state,
+        admissionBlocked: true,
+        admissionBlockReason: "CURRENT_ADMISSION_DENIED",
+      };
+      const value = Object.freeze({
+        ...tool,
+        safeResult: JSON.stringify(blocked),
+      });
+      expect(integrationToolPresentationState(value)).toBe("NEEDS_ATTENTION");
+      expect(integrationToolAdmissionBlocked(value)).toBe(true);
+      expect(isSuccessfulIntegrationToolReceipt(value)).toBe(false);
+    },
+  );
+  it("не скрывает неизвестную причину или противоречивый marker за attention", () => {
+    const blocked = {
+      ...receipt,
+      state: "READY",
+      admissionBlocked: true,
+      admissionBlockReason: "CURRENT_ADMISSION_DENIED",
+    };
+    for (const invalid of [
+      { ...blocked, admissionBlocked: false },
+      { ...blocked, admissionBlockReason: "PRIVATE_UNKNOWN_REASON" },
+      { ...blocked, admissionBlockReason: "" },
+      { ...blocked, state: "SUCCEEDED" },
+      { ...blocked, extra: "private metadata" },
+      { ...receipt, state: "READY" },
+    ]) {
+      const value = { ...tool, safeResult: JSON.stringify(invalid) };
+      expect(integrationToolPresentationState(value)).toBeUndefined();
+      expect(integrationToolAdmissionBlocked(value)).toBe(false);
+    }
+  });
   it("не интерпретирует произвольный payload, незавершённую или failed обёртку", () => {
     for (const safeResult of [
       "FAILED",

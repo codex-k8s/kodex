@@ -126,8 +126,23 @@ func (worker *sshComposeWorker) execute(ctx context.Context, claim *cp.Integrati
 	defer cancel()
 	lease := claim.GetLease()
 	binding := &cp.SSHComposeLeaseBinding{WorkloadInstance: worker.config.InstanceID, InvocationRef: claim.GetInvocationRef(), LeaseRef: lease.GetRef(), Fence: lease.GetFence(), Generation: lease.GetGeneration()}
+	renew := func(ctx context.Context) ([]byte, error) {
+		bounded, cancel := context.WithTimeout(ctx, worker.config.RequestTimeout)
+		defer cancel()
+		response, err := worker.control.Runtime.RenewSSHComposeInvocation(bounded, &cp.RenewSSHComposeInvocationRequest{Binding: binding})
+		if err != nil {
+			return nil, err
+		}
+		claim.Lease = response.GetLease()
+		return response.GetPermit(), nil
+	}
 	var bundle *sshcompose.Bundle
 	if deploy {
+		// Fresh owner admission precedes hidden source credential/network reads.
+		// Свежий owner admission предшествует скрытому чтению source credential/network.
+		if _, err := renew(operation); err != nil {
+			return integration.Result{}, err
+		}
 		fetch, cancel := context.WithTimeout(operation, worker.config.OperationTimeout)
 		value, err := worker.adapter.ReadSSHComposeRelease(fetch, snapshot)
 		cancel()
@@ -135,35 +150,35 @@ func (worker *sshComposeWorker) execute(ctx context.Context, claim *cp.Integrati
 			return integration.Result{}, err
 		}
 		bundle = &value
-		bounded, cancel := context.WithTimeout(operation, worker.config.RequestTimeout)
-		renewed, err := worker.control.Runtime.RenewSSHComposeInvocation(bounded, &cp.RenewSSHComposeInvocationRequest{Binding: binding})
-		cancel()
-		if err != nil {
+		if _, err := renew(operation); err != nil {
 			return integration.Result{}, err
 		}
-		claim.Lease = renewed.GetLease()
 	}
 	projected, err := worker.projectKey(operation, binding, snapshot.Target.Ref)
 	if err != nil {
 		return integration.Result{}, err
 	}
 	defer clear(projected.GetPrivateKey())
+	if claim.GetOperation() == "ssh.compose.inspect" && snapshot.Source != nil {
+		value, err := worker.adapter.ReadSSHComposeRelease(operation, snapshot)
+		if err != nil {
+			return integration.Result{}, err
+		}
+		bundle = &value
+	}
 	var renewal integration.SSHComposeRenewal
 	if deploy {
-		renewal = func(ctx context.Context) ([]byte, error) {
-			response, err := worker.control.Runtime.RenewSSHComposeInvocation(ctx, &cp.RenewSSHComposeInvocationRequest{Binding: binding})
-			if err != nil {
-				return nil, err
-			}
-			claim.Lease = response.GetLease()
-			return response.GetPermit(), nil
-		}
+		renewal = renew
 	}
 	permit := projected.GetPermit()
 	if claim.GetWorkMode() == cp.IntegrationInvocationWorkMode_INTEGRATION_INVOCATION_WORK_MODE_RECOVER_READ_ONLY {
 		permit = claim.GetSshComposePermit()
 	}
-	response, err := integration.RunSSHCompose(operation, snapshot.Target, projected.GetPrivateKey(), permit, bundle, renewal)
+	deploymentBundle := bundle
+	if !deploy {
+		deploymentBundle = nil
+	}
+	response, err := integration.RunSSHCompose(operation, snapshot.Target, projected.GetPrivateKey(), permit, deploymentBundle, renewal)
 	if err != nil {
 		if claim.GetOperation() != "ssh.compose.deploy" {
 			return integration.Result{}, &integration.SafeError{Code: "INTEGRATION_PROVIDER_UNAVAILABLE"}
@@ -175,15 +190,14 @@ func (worker *sshComposeWorker) execute(ctx context.Context, claim *cp.Integrati
 	case "ssh.compose.inspect":
 		output = map[string]any{"ready": true, "target_ref": snapshot.Target.Ref}
 		if snapshot.Source != nil {
-			value, err := worker.adapter.ReadSSHComposeRelease(operation, snapshot)
+			if bundle == nil {
+				return integration.Result{}, sshcompose.ErrorInvalid
+			}
+			raw, _, err := bundle.Canonical()
 			if err != nil {
 				return integration.Result{}, err
 			}
-			raw, _, err := value.Canonical()
-			if err != nil {
-				return integration.Result{}, err
-			}
-			output["merged_sha"], output["tree_sha"], output["bundle_sha256"] = value.MergedSHA, value.TreeSHA, sshcompose.Digest(raw)
+			output["merged_sha"], output["tree_sha"], output["bundle_sha256"] = bundle.MergedSHA, bundle.TreeSHA, sshcompose.Digest(raw)
 		}
 	case "ssh.compose.deploy", "ssh.compose.status":
 		if response.Receipt == nil {

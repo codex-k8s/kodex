@@ -32,6 +32,8 @@ func TestServerWorkflowMigrationProofComponent(t *testing.T) {
 		{name: "disabled-ssh-snapshot-guard", rejectedField: "sshTriggers", expected: false},
 		{name: "missing-ssh-purpose-check", rejectedField: "sshConstraints", expected: false},
 		{name: "public-ssh-execute", rejectedField: "sshFunctions", expected: false},
+		{name: "disabled-ssh-admission-guard", rejectedField: "sshTriggers", expected: false},
+		{name: "missing-ssh-admission-check", rejectedField: "sshConstraints", expected: false},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)

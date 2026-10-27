@@ -26,6 +26,12 @@ ALTER TABLE control_plane.integration_invocations
   ADD COLUMN ssh_compose_snapshot jsonb,
   ADD COLUMN ssh_compose_deadline timestamptz,
   ADD COLUMN ssh_compose_recovery boolean NOT NULL DEFAULT false,
+  ADD COLUMN ssh_compose_admission_blocked boolean NOT NULL DEFAULT false,
+  ADD COLUMN ssh_compose_admission_block_reason text NOT NULL DEFAULT '',
+  ADD CONSTRAINT ssh_compose_admission_block_shape CHECK (
+    (NOT ssh_compose_admission_blocked AND ssh_compose_admission_block_reason='') OR
+    (ssh_compose_admission_blocked AND ssh_compose_admission_block_reason='CURRENT_ADMISSION_DENIED')
+  ),
   ADD CONSTRAINT ssh_compose_snapshot_bounds CHECK (
     ssh_compose_snapshot IS NULL OR
     (jsonb_typeof(ssh_compose_snapshot)='object' AND octet_length(ssh_compose_snapshot::text)<=32768)
@@ -54,6 +60,54 @@ FOR EACH ROW EXECUTE FUNCTION control_plane.guard_ssh_compose_snapshot();
 CREATE TRIGGER ssh_compose_test_snapshot_immutable
 BEFORE UPDATE ON control_plane.integration_connection_tests
 FOR EACH ROW EXECUTE FUNCTION control_plane.guard_ssh_compose_snapshot();
+
+-- Блокировка допуска не превращает неизвестный эффект в terminal verdict.
+-- Lease/pins остаются прежними; разблокирования в этом профиле нет.
+-- +goose StatementBegin
+CREATE FUNCTION control_plane.guard_ssh_compose_admission_block()
+RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog AS $$
+BEGIN
+  IF OLD.ssh_compose_admission_blocked OR NEW.ssh_compose_admission_blocked THEN
+    IF NEW.ssh_compose_snapshot IS NULL
+       OR NEW.operation NOT IN ('ssh.compose.inspect','ssh.compose.deploy','ssh.compose.status')
+       OR NEW.effect_receipt_id IS NOT NULL
+       OR (OLD.ssh_compose_admission_blocked AND
+          (NOT NEW.ssh_compose_admission_blocked OR
+           NEW.ssh_compose_admission_block_reason IS DISTINCT FROM OLD.ssh_compose_admission_block_reason))
+       OR ROW(NEW.id,NEW.organization_id,NEW.run_id,NEW.node_id,NEW.connection_id,
+              NEW.grant_id,NEW.grant_version,NEW.capability_key,NEW.idempotency_key,NEW.intent_digest,NEW.approval_scope_id,NEW.approval_scope_paths,NEW.mailbox_gate_required,NEW.definition_version,NEW.definition_digest,
+              NEW.operation,NEW.risk,NEW.approval_policy,NEW.resource_kind,NEW.resource_scope,
+              NEW.resource_scope_digest,NEW.effect_key,NEW.input_digest,NEW.bounded_input,
+              NEW.ssh_compose_snapshot,NEW.ssh_compose_deadline,NEW.ssh_compose_recovery,
+              NEW.generation,NEW.claimed_workload,NEW.claimed_lease_ref,NEW.claimed_fence_digest,
+              NEW.effect_receipt_id)
+          IS DISTINCT FROM
+          ROW(OLD.id,OLD.organization_id,OLD.run_id,OLD.node_id,OLD.connection_id,
+              OLD.grant_id,OLD.grant_version,OLD.capability_key,OLD.idempotency_key,OLD.intent_digest,OLD.approval_scope_id,OLD.approval_scope_paths,OLD.mailbox_gate_required,OLD.definition_version,OLD.definition_digest,
+              OLD.operation,OLD.risk,OLD.approval_policy,OLD.resource_kind,OLD.resource_scope,
+              OLD.resource_scope_digest,OLD.effect_key,OLD.input_digest,OLD.bounded_input,
+              OLD.ssh_compose_snapshot,OLD.ssh_compose_deadline,OLD.ssh_compose_recovery,
+              OLD.generation,OLD.claimed_workload,OLD.claimed_lease_ref,OLD.claimed_fence_digest,
+              OLD.effect_receipt_id)
+       OR NEW.lease_ref IS NOT NULL OR NEW.effect_fence_digest IS NOT NULL
+       OR NEW.workload_instance IS NOT NULL OR NEW.lease_expires_at IS NOT NULL
+       OR OLD.state NOT IN ('READY','UNKNOWN_OUTCOME','FAILED','CANCELLED')
+       OR (NOT OLD.ssh_compose_admission_blocked AND NEW.state IS DISTINCT FROM OLD.state)
+       OR (OLD.state='UNKNOWN_OUTCOME' AND
+           ROW(NEW.state,NEW.result_summary,NEW.safe_error_code) IS DISTINCT FROM
+           ROW(OLD.state,OLD.result_summary,OLD.safe_error_code))
+       OR (OLD.state<>'UNKNOWN_OUTCOME' AND NEW.state NOT IN ('READY','FAILED','CANCELLED')) THEN
+      RAISE EXCEPTION 'SSH Compose blocked admission is immutable';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+-- +goose StatementEnd
+CREATE TRIGGER ssh_compose_admission_block_immutable
+BEFORE UPDATE ON control_plane.integration_invocations
+FOR EACH ROW EXECUTE FUNCTION control_plane.guard_ssh_compose_admission_block();
+REVOKE ALL ON FUNCTION control_plane.guard_ssh_compose_admission_block() FROM PUBLIC;
 
 -- +goose StatementBegin
 CREATE FUNCTION control_plane.guard_ssh_compose_secret_purpose()
@@ -123,6 +177,7 @@ END;
 $migration$;
 -- +goose StatementEnd
 GRANT EXECUTE ON FUNCTION control_plane.guard_ssh_compose_snapshot(),control_plane.guard_ssh_compose_secret_purpose() TO control_plane_runtime;
+GRANT EXECUTE ON FUNCTION control_plane.guard_ssh_compose_admission_block() TO control_plane_runtime;
 REVOKE ALL ON FUNCTION control_plane.guard_workflow_effect_records() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION control_plane.guard_workflow_effect_records() TO control_plane_runtime;
 RESET ROLE;

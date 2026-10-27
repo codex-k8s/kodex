@@ -67,7 +67,7 @@ func (repository *Repository) resolveSSHComposeSnapshot(ctx context.Context, tx 
 		mergeRef, _ := input["merge_invocation_ref"].(string)
 		if mergeRef != "" {
 			snapshot.MergeInvocationRef = mergeRef
-			snapshot.Source, snapshot.MergedSHA, err = repository.resolveSSHComposeSource(ctx, tx, current.organizationID, projectID, nodeID, snapshot.OriginRuntimeRevisionID, target, mergeRef)
+			snapshot.Source, snapshot.MergedSHA, err = repository.resolveSSHComposeSource(ctx, tx, current, projectID, nodeID, snapshot.OriginRuntimeRevisionID, target, mergeRef)
 		}
 	case "ssh.compose.deploy", "ssh.compose.status":
 		key, predecessorOperation := "inspect_invocation_ref", "ssh.compose.inspect"
@@ -91,7 +91,7 @@ func (repository *Repository) resolveSSHComposeSnapshot(ctx context.Context, tx 
 			return snapshot, errs.ErrForbidden
 		}
 		snapshot.MergeInvocationRef = predecessor.MergeInvocationRef
-		snapshot.Source, snapshot.MergedSHA, err = repository.resolveSSHComposeSource(ctx, tx, current.organizationID, projectID, nodeID, snapshot.OriginRuntimeRevisionID, target, predecessor.MergeInvocationRef)
+		snapshot.Source, snapshot.MergedSHA, err = repository.resolveSSHComposeSource(ctx, tx, current, projectID, nodeID, snapshot.OriginRuntimeRevisionID, target, predecessor.MergeInvocationRef)
 		if err != nil {
 			return snapshot, err
 		}
@@ -203,15 +203,19 @@ func resolveSSHComposeSecret(ctx context.Context, tx pgx.Tx, organizationID, pro
 	return binding, nil
 }
 
-// resolveSSHComposeSource checks committed merge evidence and all three current source read grants.
-// resolveSSHComposeSource проверяет committed merge evidence и три current source read grants.
-func (repository *Repository) resolveSSHComposeSource(ctx context.Context, tx pgx.Tx, organizationID, projectID, nodeID, revisionID string, target sshcompose.Target, mergeRef string) (*sshcompose.SourceBinding, string, error) {
+// resolveSSHComposeSource checks committed merge evidence, fresh root-actor access to the exact
+// source connection, and all three current source read grants. A prior merge receipt grants no
+// continued permission to read private repository bytes after the initiator loses access.
+// resolveSSHComposeSource проверяет committed merge evidence, свежий доступ root actor к точной
+// исходной connection и три current source read grants. Прежний merge receipt не разрешает
+// читать private repository bytes после отзыва доступа инициатора.
+func (repository *Repository) resolveSSHComposeSource(ctx context.Context, tx pgx.Tx, current scope, projectID, nodeID, revisionID string, target sshcompose.Target, mergeRef string) (*sshcompose.SourceBinding, string, error) {
 	parts := strings.Split(target.Repository, "/")
 	var scopeJSON, summary []byte
 	var digest string
 	var source sshcompose.SourceBinding
 	err := tx.QueryRow(ctx, querySSHComposeMerge, pgx.StrictNamedArgs{
-		"organization_id": organizationID, "project_id": projectID, "node_id": nodeID, "merge_ref": mergeRef, "owner": parts[0], "repository": parts[1], "target_ref": target.Ref,
+		"organization_id": current.organizationID, "project_id": projectID, "node_id": nodeID, "merge_ref": mergeRef, "owner": parts[0], "repository": parts[1], "target_ref": target.Ref,
 	}).Scan(&scopeJSON, &summary, &digest, &source.ConnectionRef, &source.DefinitionVersion, &source.DefinitionDigest,
 		&source.CredentialRef, &source.CredentialRevision, &source.SecretRef, &source.SecretUID, &source.SecretResourceVersion, &source.CredentialSHA256)
 	var result struct {
@@ -224,11 +228,14 @@ func (repository *Repository) resolveSSHComposeSource(ctx context.Context, tx pg
 	if err != nil {
 		return nil, "", serializableTransactionError(err, errs.ErrUnavailable)
 	}
+	if err := repository.requireAccess(ctx, tx, current, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: source.ConnectionRef}); err != nil {
+		return nil, "", err
+	}
 	if sshcompose.Digest(summary) != digest || sshcompose.Decode(summary, &result, 16384) != nil || !result.Merged || !sshComposeCommitPattern.MatchString(result.SHA) {
 		return nil, "", errs.ErrForbidden
 	}
 	rows, err := tx.Query(ctx, querySSHComposeSourceGrants, pgx.StrictNamedArgs{
-		"organization_id": organizationID, "node_id": nodeID, "runtime_revision_id": revisionID, "connection_ref": source.ConnectionRef, "owner": parts[0], "repository": parts[1],
+		"organization_id": current.organizationID, "node_id": nodeID, "runtime_revision_id": revisionID, "connection_ref": source.ConnectionRef, "owner": parts[0], "repository": parts[1],
 	})
 	if err != nil {
 		return nil, "", errs.ErrUnavailable

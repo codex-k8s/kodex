@@ -947,11 +947,7 @@ func (server *Server) GetIntegrationInvocation(ctx context.Context, request *con
 	if err != nil {
 		return nil, transportError(err)
 	}
-	return &controlplanev1.GetIntegrationInvocationResponse{
-		State: mapString(result, "state"), ResultSummary: mapString(result, "resultSummary"),
-		SafeErrorCode: mapString(result, "safeErrorCode"), GateRef: mapString(result, "gateRef"),
-		EffectReceiptRef: mapString(result, "effectReceiptRef"),
-	}, nil
+	return castIntegrationInvocation(result)
 }
 
 // CompleteIntegrationInvocation preserves unknown outcome and optional effect-receipt fields

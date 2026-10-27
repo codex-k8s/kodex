@@ -2429,3 +2429,19 @@ owner receipt сохраняют UNKNOWN_OUTCOME, recovery читает сост
 Restart после reboot допускается только для existing exact container,
 подтверждённого durable successful receipt; reserved/unknown попытка не
 возобновляется автоматически.
+
+
+Отзыв actor access проверяется для каждого скрыто используемого integration
+source, а не только для основного target. Успешный прежний receipt и agent READ
+binds не заменяют текущий canonical actor ACL источника; worker подтверждает
+допуск у владельца перед скрытым чтением source credential либо Git release.
+
+Постоянный отказ нового admission не переопределяет outcome старого effect.
+Для SSH owner может атомарно закрепить отдельный необратимый admission block,
+сохранив state, safe error, receipt, immutable pins и поколение invocation.
+Transient failure, отмена, serialization и lock contention не становятся таким
+решением. Bounded очередь обязана сохранять прогресс отбраковки между polls,
+в том числе при полностью отклонённой странице; один старый UNKNOWN не блокирует
+неограниченно следующие допустимые вызовы. Возврат доступа не снимает marker
+автоматически. Owner Cancel закрывает исполнение, но не доказывает отсутствие
+внешнего эффекта и не превращает UNKNOWN в подтверждённый terminal outcome.

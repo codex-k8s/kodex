@@ -2482,6 +2482,8 @@ type integrationToolResult struct {
 	OwnerDecisionRequired bool   `json:"owner_decision_required,omitempty"`
 	InvocationRef         string `json:"invocationRef"`
 	ReceiptRef            string `json:"receiptRef,omitempty"`
+	AdmissionBlocked      bool   `json:"admissionBlocked,omitempty"`
+	AdmissionBlockReason  string `json:"admissionBlockReason,omitempty"`
 	state                 string
 	inputSHA256           string
 }
@@ -2493,7 +2495,13 @@ type integrationToolResult struct {
 // поля owner receipt/decision. Private state/input digest не выводятся;
 // receipt shape проверяется без предоставления invocation authority.
 func (r integrationToolResult) MarshalJSON() ([]byte, error) {
+	if !validIntegrationAdmissionMarker(r.AdmissionBlocked, r.AdmissionBlockReason, r.state) || (r.AdmissionBlocked && r.OK) {
+		return nil, errIntegrationAdmissionMarkerInvalid
+	}
 	value := map[string]any{"ok": r.OK, "invocationRef": r.InvocationRef}
+	if r.AdmissionBlocked {
+		value["admissionBlocked"], value["admissionBlockReason"] = true, r.AdmissionBlockReason
+	}
 	if r.ReceiptRef != "" {
 		if !r.OK || !safeEffectReceiptRef(r.ReceiptRef) {
 			return nil, errIntegrationReceiptReferenceInvalid
@@ -2592,15 +2600,24 @@ func safeToolCallResult(tool string, result any, toolErr error) string {
 		}
 		switch value.state {
 		case "SUCCEEDED", "FAILED", "REJECTED", "CANCELLED", "WAITING_APPROVAL", "UNKNOWN_OUTCOME":
+		case "READY":
+			if !value.AdmissionBlocked {
+				return "TOOL_UNAVAILABLE"
+			}
 		default:
 			return "TOOL_UNAVAILABLE"
 		}
+		if !validIntegrationAdmissionMarker(value.AdmissionBlocked, value.AdmissionBlockReason, value.state) || (value.AdmissionBlocked && value.OK) {
+			return "TOOL_UNAVAILABLE"
+		}
 		raw, _ := json.Marshal(struct {
-			Version       int    `json:"version"`
-			InvocationRef string `json:"invocationRef"`
-			State         string `json:"state"`
-			InputSHA256   string `json:"inputSHA256"`
-		}{1, value.InvocationRef, value.state, value.inputSHA256})
+			Version              int    `json:"version"`
+			InvocationRef        string `json:"invocationRef"`
+			State                string `json:"state"`
+			InputSHA256          string `json:"inputSHA256"`
+			AdmissionBlocked     bool   `json:"admissionBlocked,omitempty"`
+			AdmissionBlockReason string `json:"admissionBlockReason,omitempty"`
+		}{1, value.InvocationRef, value.state, value.inputSHA256, value.AdmissionBlocked, value.AdmissionBlockReason})
 		return string(raw)
 	}
 	values, _ := result.(map[string]any)
@@ -2712,6 +2729,14 @@ func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerIn
 		readCancel()
 		if readErr != nil {
 			return nil, status.Error(status.Code(readErr), "read integration invocation")
+		}
+		blocked, reason, markerErr := ownerIntegrationAdmissionMarker(state)
+		if markerErr != nil {
+			return nil, markerErr
+		}
+		if blocked {
+			return integrationToolResult{ErrorCode: state.GetSafeErrorCode(), OwnerDecisionRequired: true, InvocationRef: resolved.GetInvocationRef(),
+				AdmissionBlocked: true, AdmissionBlockReason: reason, state: state.GetState(), inputSHA256: hex.EncodeToString(inputDigest[:])}, nil
 		}
 		switch state.GetState() {
 		case "SUCCEEDED":

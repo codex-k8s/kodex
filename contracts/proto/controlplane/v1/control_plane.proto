@@ -4733,6 +4733,14 @@ message GetIntegrationInvocationResponse {
   string safe_error_code = 3;
   string gate_ref = 4;
   string effect_receipt_ref = 5;
+  bool admission_blocked = 6;
+  SSHComposeAdmissionBlockReason admission_block_reason = 7;
+}
+
+// Причина блокировки допуска не подменяет внешний outcome вызова.
+enum SSHComposeAdmissionBlockReason {
+  SSH_COMPOSE_ADMISSION_BLOCK_REASON_UNSPECIFIED = 0;
+  SSH_COMPOSE_ADMISSION_BLOCK_REASON_CURRENT_ADMISSION_DENIED = 1;
 }
 
 // IntegrationEffectReceipt является immutable exactly-once readback одного effect key.

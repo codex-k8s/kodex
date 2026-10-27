@@ -15,7 +15,7 @@ import (
 // завершения интеграции с сохранением отсутствующих исторических связей и отказом неверным либо
 // преждевременным.
 func TestRunIntegrationBindingProjection(t *testing.T) {
-	for _, summary := range []string{"i18n:INTEGRATION_ACTION_SUCCEEDED", "i18n:INTEGRATION_ACTION_FAILED", "i18n:INTEGRATION_ACTION_OUTCOME_UNKNOWN"} {
+	for _, summary := range []string{"i18n:INTEGRATION_ACTION_SUCCEEDED", "i18n:INTEGRATION_ACTION_FAILED", "i18n:INTEGRATION_ACTION_OUTCOME_UNKNOWN", "i18n:INTEGRATION_ADMISSION_BLOCKED"} {
 		event := &cp.RunEvent{Type: cp.RunEventType_RUN_EVENT_TYPE_TURN_PROGRESS, Summary: summary, IntegrationInvocationRef: proto.String("inv_fixture01")}
 		got, err := messageMap(event)
 		if err != nil || got["integrationInvocationRef"] != "inv_fixture01" {

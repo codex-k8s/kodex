@@ -14,6 +14,9 @@ func TestIntegrationActionBinding(t *testing.T) {
 			t.Fatal("owner completion binding rejected")
 		}
 	}
+	if !validIntegrationActionBinding("TURN_PROGRESS", sshComposeAdmissionBlockSummary, "inv_fixture01") {
+		t.Fatal("owner admission block binding rejected")
+	}
 	for _, fixture := range []struct{ kind, summary, ref string }{
 		{"TOOL_CALL_RECORDED", "i18n:INTEGRATION_ACTION_SUCCEEDED", "inv_fixture01"},
 		{"TURN_PROGRESS", "i18n:INTEGRATION_ACTION_STARTED", "inv_fixture01"},

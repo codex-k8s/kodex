@@ -22,7 +22,7 @@ import (
 // exact deployment acceptance и read-only recovery без SSH, Docker либо модели.
 // Synthetic provider completions проверяют owner boundary, но не live health.
 func TestSSHComposeWorkflowComponent(t *testing.T) {
-	for _, mode := range []string{"accepted-deployment", "origin-first", "known-success-rejoin", "unknown-readonly"} {
+	for _, mode := range []string{"accepted-deployment", "origin-first", "known-success-rejoin", "unknown-readonly", "source-acl-revoked"} {
 		t.Run(mode, func(t *testing.T) { testSSHComposeWorkflow(t, mode) })
 	}
 }
@@ -75,6 +75,11 @@ func testSSHComposeWorkflow(t *testing.T, mode string) {
 		}
 		connection = *f.execute(command.ChangeIntegrationGrant, "ssh-grant-"+capability, &connection.Version, command.IntegrationGrantInput{ConnectionRef: connection.Ref, AgentRef: agents["c"].Ref, CapabilityKey: capability, ApprovalPolicy: approval, Enabled: true}).Connection
 	}
+	queueMode := mode == "rotated-secret-queue" || mode == "source-acl-queue" || mode == "target-acl-prefix"
+	var nextConnection entity.IntegrationConnection
+	if queueMode {
+		nextConnection = fixture.queueTarget(t, agents["c"].Ref)
+	}
 	target, err := sshcompose.TargetFromConfiguration(fixture.configuration(secret))
 	if err != nil {
 		t.Fatal(err)
@@ -90,7 +95,18 @@ func testSSHComposeWorkflow(t *testing.T, mode string) {
 	if workflow.Published == nil {
 		t.Fatal("SSH workflow publication missing")
 	}
-	f.runRef = f.execute(command.LaunchRun, "ssh-launch", nil, command.LaunchRunInput{ProjectRef: f.projectRef, Task: "Complete immutable SSH release", Target: entity.RunTarget{Type: "WORKFLOW", Ref: workflow.Ref}}).Run.Ref
+	launchActor := f.owner
+	var sourceBinding entity.AccessBinding
+	var targetBindings []entity.AccessBinding
+	if mode == "source-acl-revoked" || mode == "source-acl-queue" || mode == "target-acl-prefix" {
+		targetRefs := []string{connection.Ref}
+		if queueMode {
+			targetRefs = append(targetRefs, nextConnection.Ref)
+		}
+		launchActor, sourceBinding, targetBindings = fixture.sourceActor(t, github.Ref, targetRefs...)
+	}
+	launched := fixture.execute(t, launchActor, command.LaunchRun, "ssh-launch", nil, command.LaunchRunInput{ProjectRef: f.projectRef, Task: "Complete immutable SSH release", Target: entity.RunTarget{Type: "WORKFLOW", Ref: workflow.Ref}})
+	f.runRef = launched.Run.Ref
 	claim := func(key, step string) map[string]any {
 		t.Helper()
 		items := f.claims(key)
@@ -190,6 +206,14 @@ func testSSHComposeWorkflow(t *testing.T, mode string) {
 	bytes, ok := deployed["sshSnapshot"].([]byte)
 	if !ok || sshcompose.Decode(bytes, &snapshot, 32768) != nil || snapshot.OriginRuntimeRevisionID == "" || snapshot.OriginLeaseID == "" || snapshot.OriginGeneration != runtimeRevisionMapInt64(sre, "generation") {
 		t.Fatal("SSH snapshot lost exact immutable execution")
+	}
+	if queueMode {
+		fixture.assertAdmissionQueue(t, f, mode, secret, connection, nextConnection, sourceBinding, targetBindings, sre, deployed)
+		return
+	}
+	if mode == "source-acl-revoked" {
+		fixture.assertSourceAccessRevocation(t, f, worker, sourceBinding, connection.Ref, sre, deployed, snapshot)
+		return
 	}
 	if mode == "unknown-readonly" {
 		completeSSHFixtureInvocation(t, fixture, gitWorker, deployed, "", "", true)

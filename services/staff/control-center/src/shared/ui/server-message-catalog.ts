@@ -572,6 +572,10 @@ export const serverTokenTranslations = {
     "Действие интеграции отклонено или завершилось ошибкой",
     "Integration action was rejected or failed",
   ],
+  INTEGRATION_ADMISSION_BLOCKED: [
+    "Допуск вызова заблокирован: текущие полномочия или закреплённые зависимости недоступны",
+    "Invocation admission is blocked: current authority or pinned dependencies are unavailable",
+  ],
   INTEGRATION_ACTION_OUTCOME_UNKNOWN: [
     "Результат действия интеграции неизвестен",
     "Integration action outcome is unknown",

@@ -93,7 +93,8 @@ type IntegrationReceiptState =
   | "REJECTED"
   | "CANCELLED"
   | "WAITING_APPROVAL"
-  | "UNKNOWN_OUTCOME";
+  | "UNKNOWN_OUTCOME"
+  | "READY";
 
 // Состояние отображения не заменяет исходное состояние вызова в аудите.
 export function integrationToolPresentationState(
@@ -107,14 +108,33 @@ export function integrationToolPresentationState(
   | "NEEDS_ATTENTION"
   | undefined {
   const receipt = integrationToolReceipt(tool);
+  if (
+    receipt?.admissionBlocked &&
+    ["READY", "UNKNOWN_OUTCOME"].includes(receipt.state)
+  )
+    return "NEEDS_ATTENTION";
+  if (receipt?.state === "READY") return undefined;
   if (receipt?.state === "WAITING_APPROVAL") return "WAITING_HUMAN";
   if (receipt?.state === "UNKNOWN_OUTCOME") return "NEEDS_ATTENTION";
   return receipt?.state;
 }
 
+// Причина берётся только из exact owner receipt, не из произвольного текста модели.
+export function integrationToolAdmissionBlocked(
+  tool: NonNullable<RunActivityItem["toolCall"]>,
+): boolean {
+  return integrationToolReceipt(tool)?.admissionBlocked === true;
+}
+
 function integrationToolReceipt(
   tool: NonNullable<RunActivityItem["toolCall"]>,
-): { invocationRef: string; state: IntegrationReceiptState } | undefined {
+):
+  | {
+      invocationRef: string;
+      state: IntegrationReceiptState;
+      admissionBlocked: boolean;
+    }
+  | undefined {
   if (
     tool.state !== "SUCCEEDED" ||
     tool.safeResult.length > 512 ||
@@ -130,7 +150,16 @@ function integrationToolReceipt(
     if (!value || typeof value !== "object" || Array.isArray(value))
       return undefined;
     const receipt = value as Record<string, unknown>;
+    const blocked = receipt.admissionBlocked === true;
+    const validMarker = blocked
+      ? receipt.admissionBlockReason === "CURRENT_ADMISSION_DENIED" &&
+        ["READY", "UNKNOWN_OUTCOME", "FAILED", "CANCELLED"].includes(
+          String(receipt.state),
+        )
+      : !Object.hasOwn(receipt, "admissionBlocked") &&
+        !Object.hasOwn(receipt, "admissionBlockReason");
     const valid =
+      validMarker &&
       receipt.version === 1 &&
       typeof receipt.state === "string" &&
       [
@@ -140,7 +169,9 @@ function integrationToolReceipt(
         "CANCELLED",
         "WAITING_APPROVAL",
         "UNKNOWN_OUTCOME",
+        "READY",
       ].includes(receipt.state) &&
+      (receipt.state !== "READY" || blocked) &&
       typeof receipt.invocationRef === "string" &&
       /^inv_[A-Za-z0-9_-]{8,124}$/.test(receipt.invocationRef) &&
       typeof receipt.inputSHA256 === "string" &&
@@ -151,11 +182,18 @@ function integrationToolReceipt(
           invocationRef: receipt.invocationRef,
           state: receipt.state,
           inputSHA256: receipt.inputSHA256,
+          ...(blocked
+            ? {
+                admissionBlocked: true,
+                admissionBlockReason: "CURRENT_ADMISSION_DENIED",
+              }
+            : {}),
         });
     return valid
       ? {
           invocationRef: String(receipt.invocationRef),
           state: receipt.state as IntegrationReceiptState,
+          admissionBlocked: blocked,
         }
       : undefined;
   } catch {
