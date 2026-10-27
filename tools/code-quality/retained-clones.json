@@ -5531,22 +5531,6 @@
     },
     {
       "format": "go",
-      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/file_binding_targets.go",
-      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/run_attachment_eligibility.go",
-      "fragmentSHA256": "7e5a749c2b0743b405072a425084c64841d948b75deab142350c6347c08b788f",
-      "count": 1,
-      "reason": "Окно105 tokens сравнивает короткий вход двух read-only repeatable-read запросов: validation tail, общий resolveScope, pgx BeginTx и deferred rollback. Полные ListArtifactBindingTargets и GetRunAttachmentEligibility прочитаны: первый проверяет artifact.bind/agent.view и строит каталог целей, второй отдельно authorizeCommand LaunchRun и run.view, затем собирает pinned dependencies без выдачи grant. Общие технические вызовы уже pgx/resolveScope; callback transaction dispatcher скрыл бы отдельные typed результаты, authority checks и error/commit paths ради этого короткого glue. Общий JSON digest алгоритм этих запросов вынесен отдельно. Сохранена только точная пара/hash/count1, не handlers, access rules или lifecycle."
-    },
-    {
-      "format": "go",
-      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/file_binding_targets.go",
-      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/system_assistant_integration_grant_candidates.go",
-      "fragmentSHA256": "a8a092029622fde34e5bf5f1035630b96f8f36023b93b890c918abd22204c51a",
-      "count": 1,
-      "reason": "Окно118 tokens сравнивает общий вход resolveScope/BeginTx/rollback двух разных read-only RR методов. Полные функции прочитаны: artifact binding проверяет artifact.bind и видимость каждого project agent; system assistant candidates требует отдельного organization owner, exact connection/package pins и readiness. Сами алгоритмы authority, построения страницы и cursor раздельны, общий JSON hash теперь использует jsonValueDigest. Generic callback runner смешал бы typed results и скрывал собственные owner/eligibility steps, не удаляя общего бизнесового алгоритма. Оставлена только эта точная пара путей/hash/count1; scopes, SQL, rollback и grant policies не подавляются целиком."
-    },
-    {
-      "format": "go",
       "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/role_images_promotions.go",
       "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/role_images_promotions.go",
       "fragmentSHA256": "1122f331eb98125b3a86fc3b097beb20af781ee7e649736ab043ed9b35bb8f85",

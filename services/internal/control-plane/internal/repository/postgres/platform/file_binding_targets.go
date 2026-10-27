@@ -231,13 +231,9 @@ func (repository *Repository) ListArtifactBindingTargets(ctx context.Context, pr
 	if !validOverlayHistoryRef(artifactRef) || !utf8.ValidString(filter.Query) || len([]rune(filter.Query)) > 200 || strings.ContainsRune(filter.Query, '\x00') || len(filter.Page.Token) > 2048 {
 		return result, errs.ErrInvalid
 	}
-	current, err := repository.resolveScope(ctx, principal)
+	current, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
 	if err != nil {
 		return result, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return result, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	artifact, err := repository.readFileBindingArtifact(ctx, tx, current, artifactRef)

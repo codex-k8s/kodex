@@ -76,13 +76,9 @@ func (repository *Repository) GetRunAttachmentEligibility(ctx context.Context, p
 	if !validOverlayHistoryRef(projectRef) || !validOverlayHistoryRef(target.Ref) || !contains([]string{"AGENT", "WORKFLOW"}, target.Type) || runRef != "" && !validOverlayHistoryRef(runRef) {
 		return result, errs.ErrInvalid
 	}
-	current, err := repository.resolveScope(ctx, principal)
+	current, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
 	if err != nil {
 		return result, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return result, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	resolved, err := repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{Kind: "RESOURCE_INSTANCE", ProjectRef: projectRef, ResourceKind: target.Type, ResourceRef: target.Ref})

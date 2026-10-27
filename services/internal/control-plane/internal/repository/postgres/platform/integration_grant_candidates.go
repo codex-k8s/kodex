@@ -146,13 +146,9 @@ func (repository *Repository) integrationCandidates(ctx context.Context, princip
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	current, err := repository.resolveScope(ctx, principal)
+	current, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
 	if err != nil {
 		return result, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return result, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	c := input.Context
