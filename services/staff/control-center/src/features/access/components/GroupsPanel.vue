@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 
+import { createSearchScheduler } from "@/features/access/search-scheduler";
+import { useAccessCursorList } from "@/features/access/use-access-cursor-list";
+
 import type {
   AccessBinding,
   OidcGroup,
@@ -8,8 +11,6 @@ import type {
 import type { AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
-import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
-import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const props = defineProps<{
   groups: OidcGroup[];
@@ -27,28 +28,25 @@ const emit = defineEmits<{
 }>();
 const query = ref("");
 const selectedRef = ref("");
-let timer: ReturnType<typeof setTimeout> | undefined;
 const listRoot = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
-const pageSize = useAdaptiveCursorPageSize({
-  container: listRoot,
+const pageSize = useAccessCursorList({
+  listRoot,
+  sentinel,
   itemSelector: ".group-table__row",
   itemCount: () => props.groups.length,
   estimatedItemHeight: 62,
-});
-useCursorInfiniteScroll({
-  root: listRoot,
-  sentinel,
   enabled: () => props.hasMore && !props.loading,
-  loadMore: () => emit("more", query.value.trim(), pageSize.value),
+  loadMore: (size) => emit("more", query.value.trim(), size),
 });
+const searchScheduler = createSearchScheduler((value) =>
+  emit("search", value, pageSize.value),
+);
+
 watch(query, (value) => {
-  if (timer) clearTimeout(timer);
-  timer = setTimeout(() => emit("search", value.trim(), pageSize.value), 250);
+  searchScheduler.schedule(value);
 });
-onBeforeUnmount(() => {
-  if (timer) clearTimeout(timer);
-});
+onBeforeUnmount(() => searchScheduler.cancel());
 
 function mappings(group: OidcGroup): AccessBinding[] {
   return props.bindings.filter(

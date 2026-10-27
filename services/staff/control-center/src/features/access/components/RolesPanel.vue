@@ -2,6 +2,9 @@
 import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
+import { createSearchScheduler } from "@/features/access/search-scheduler";
+import { useAccessCursorList } from "@/features/access/use-access-cursor-list";
+
 import { permissionMessage } from "@/features/access/presentation";
 import type {
   AccessRole,
@@ -10,8 +13,6 @@ import type {
 import type { AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
-import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
-import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const props = defineProps<{
   roles: AccessRole[];
@@ -36,28 +37,25 @@ const permissionMessages = computed(() =>
 const query = ref("");
 const selectedRef = ref("");
 const searchId = useId();
-let timer: ReturnType<typeof setTimeout> | undefined;
 const listRoot = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
-const pageSize = useAdaptiveCursorPageSize({
-  container: listRoot,
+const pageSize = useAccessCursorList({
+  listRoot,
+  sentinel,
   itemSelector: ".role-table__row",
   itemCount: () => props.roles.length,
   estimatedItemHeight: 60,
-});
-useCursorInfiniteScroll({
-  root: listRoot,
-  sentinel,
   enabled: () => props.hasMore && !props.loading,
-  loadMore: () => emit("more", query.value.trim(), pageSize.value),
+  loadMore: (size) => emit("more", query.value.trim(), size),
 });
+const searchScheduler = createSearchScheduler((value) =>
+  emit("search", value, pageSize.value),
+);
+
 watch(query, (value) => {
-  if (timer) clearTimeout(timer);
-  timer = setTimeout(() => emit("search", value.trim(), pageSize.value), 250);
+  searchScheduler.schedule(value);
 });
-onBeforeUnmount(() => {
-  if (timer) clearTimeout(timer);
-});
+onBeforeUnmount(() => searchScheduler.cancel());
 
 function permissionDefinition(key: string): PermissionDefinition | undefined {
   return props.permissions.find((permission) => permission.key === key);

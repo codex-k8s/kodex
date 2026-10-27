@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 
+import { createSearchScheduler } from "@/features/access/search-scheduler";
+import { useAccessCursorList } from "@/features/access/use-access-cursor-list";
+
 import {
   membershipForSubject,
   subjectBindings,
@@ -17,8 +20,6 @@ import type {
 import type { AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
-import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
-import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const props = defineProps<{
   subjects: AccessSubject[];
@@ -51,20 +52,16 @@ const emit = defineEmits<{
 const query = ref(props.initialQuery ?? "");
 const selectedRef = ref(props.selectedSubjectRef ?? "");
 const searchId = useId();
-let timer: ReturnType<typeof setTimeout> | undefined;
 const listRoot = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
-const pageSize = useAdaptiveCursorPageSize({
-  container: listRoot,
+const pageSize = useAccessCursorList({
+  listRoot,
+  sentinel,
   itemSelector: ".access-table__row",
   itemCount: () => props.subjects.length,
   estimatedItemHeight: 88,
-});
-useCursorInfiniteScroll({
-  root: listRoot,
-  sentinel,
   enabled: () => props.hasMore && !props.loading,
-  loadMore: () => emit("more", query.value.trim(), pageSize.value),
+  loadMore: (size) => emit("more", query.value.trim(), size),
 });
 
 const groupNames = computed(
@@ -174,10 +171,13 @@ watch(
   { immediate: true },
 );
 
+const searchScheduler = createSearchScheduler((value) =>
+  emit("search", value, pageSize.value),
+);
+
 watch(query, (value) => {
   if (value === (props.initialQuery ?? "")) return;
-  if (timer) clearTimeout(timer);
-  timer = setTimeout(() => emit("search", value.trim(), pageSize.value), 250);
+  searchScheduler.schedule(value);
 });
 watch(
   () => props.initialQuery,
@@ -185,9 +185,7 @@ watch(
     query.value = value ?? "";
   },
 );
-onBeforeUnmount(() => {
-  if (timer) clearTimeout(timer);
-});
+onBeforeUnmount(() => searchScheduler.cancel());
 </script>
 
 <template>
