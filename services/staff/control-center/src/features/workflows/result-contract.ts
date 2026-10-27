@@ -117,7 +117,8 @@ export function validWorkflowRequirements(
   }
   if (profile === "GITHUB_REVIEW_QA_V1") {
     for (const kind of ["REVIEW", "QA"]) {
-      if (verified.filter((item) => item.kind === kind).length > 1) return false;
+      if (verified.filter((item) => item.kind === kind).length > 1)
+        return false;
     }
     for (const item of verified) {
       if (
