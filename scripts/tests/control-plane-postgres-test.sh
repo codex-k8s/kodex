@@ -8,9 +8,26 @@ fail() {
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 container_name="kodex-control-plane-postgres-${BASHPID}"
+upgrade_container_id=""
 test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestBootstrapComponent|TestConcurrentBootstrapComponent|TestWorkerGrantInstancesComponent|TestTrustedWorkloadGenerationComponent|TestAssistantCredentialScopesComponent|TestAssistantParallelLifecycleComponent|TestProjectAssistantProfilesComponent|TestOrganizationRoleImagesComponent|TestOrganizationRuntimeEnvironmentComponent|TestOrganizationRuntimeSecretComponent|TestAssistantSystemRunProjectScopeComponent|TestRuntimeTerminalStorageComponent|TestIntegrationGateFeedbackComponent|TestWorkflowMetadataDraftComponent|TestDeletedEnvironmentSecretRetentionComponent|TestHistoricalEnvironmentSecretAdmissionComponent|TestHistoricalSecretRecoveryConcurrencyComponent|TestWorkflowGateDecisionsComponent|TestCompletionReceiptComponent|TestUsageCompletenessComponent|TestRepositoryBundlePublicationComponent|TestCommitAckArtifactComponent|TestOwnerGateExpiryComponent|TestOwnerGateExpiryMigrationProofComponent|TestProjectPurgeAuthorityComponent|TestProjectPurgeAuthorityMigrationProofComponent|TestServerWorkflowMigrationProofComponent|TestOverviewEligibilityComponent|TestWorkflowExceptionContextComponent|TestWorkflowExceptionContextMigrationProofComponent)$'}}
 
+# Новый upgrade-контур принимает только созданную ниже пустую disposable БД.
+if [[ "$test_pattern" == --review-qa-upgrade ]]; then
+  for key in KODEX_WORKFLOW_REVIEW_QA_UPGRADE_DSN KODEX_WORKFLOW_REVIEW_QA_UPGRADE_DISPOSABLE; do
+    [[ ! -v "$key" ]] || fail "external fixture configuration is forbidden: $key"
+  done
+  unset PGPASSWORD PGSERVICE PGSERVICEFILE PGOPTIONS PGHOST PGPORT PGUSER PGDATABASE
+  export PGPASSFILE=/dev/null
+fi
+
 cleanup() {
+  if [[ "$test_pattern" == --review-qa-upgrade ]]; then
+    # Новый контур никогда не очищает лишь совпавшее имя после неизвестного create.
+    if [[ "$upgrade_container_id" =~ ^[a-f0-9]{64}$ ]]; then
+      docker stop --time 5 "$upgrade_container_id" >/dev/null 2>&1 || true
+    fi
+    return
+  fi
   docker stop --time 5 "$container_name" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -69,6 +86,11 @@ for attempt in 1 2 3 4; do
   sleep 1
 done
 
+if [[ "$test_pattern" == --review-qa-upgrade ]]; then
+  [[ "$docker_run_output" =~ ^[a-f0-9]{64}$ ]] || fail 'disposable container identity is unconfirmed'
+  upgrade_container_id="$docker_run_output"
+fi
+
 if [[ "$network_mode" == bridge ]]; then
   port=$(docker inspect --format '{{(index (index .NetworkSettings.Ports "5432/tcp") 0).HostPort}}' "$container_name")
 fi
@@ -92,6 +114,17 @@ run_migration() {
   CONTROL_PLANE_POSTGRES_ADMIN_DSN_FILE=<(printf '%s' "$dsn") \
     env -u GOFLAGS GOENV=off GOWORK=off go run -p 2 ./cmd/cli "$@"
 }
+
+if [[ "$test_pattern" == --review-qa-upgrade ]]; then
+  (
+    cd -- "$repository_root/services/internal/control-plane"
+    KODEX_WORKFLOW_REVIEW_QA_UPGRADE_DSN="$dsn" \
+      KODEX_WORKFLOW_REVIEW_QA_UPGRADE_DISPOSABLE=dedicated-loopback-container \
+      env -u GOFLAGS GOENV=off GOWORK=off go test -p 2 -v -count=1 -timeout=180s \
+      ./cmd/cli -run '^TestWorkflowReviewQAEvidenceForwardUpgrade$'
+  )
+  exit
+fi
 
 (
   cd -- "$repository_root/services/internal/control-plane"

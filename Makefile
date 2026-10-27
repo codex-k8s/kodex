@@ -454,3 +454,7 @@ test-workflow-result-contract:
 .PHONY: test-workflow-review-qa-evidence-postgres
 test-workflow-review-qa-evidence-postgres: check-go-toolchain
 	@timeout --kill-after=10s 300s bash scripts/tests/control-plane-postgres-test.sh '^(TestWorkflowReviewQAEvidenceComponent|TestWorkflowReviewQAEvidenceMigrationProofComponent)$$'
+
+.PHONY: test-workflow-review-qa-upgrade-postgres
+test-workflow-review-qa-upgrade-postgres: check-go-toolchain
+	@timeout --kill-after=10s 300s bash scripts/tests/control-plane-postgres-test.sh --review-qa-upgrade

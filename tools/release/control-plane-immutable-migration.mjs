@@ -263,7 +263,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     ensure(result.readOnly === 'on' && result.database === 'control_plane' && result.gooseVersion === configuration.previousVersion &&
       result[configuration.emptyField] === true && fields.every(key => result[key] === 0) && Number.isSafeInteger(result.oldClaimSessions) &&
       result.oldClaimSessions >= 0 && (!requireStopped || result.oldClaimSessions === 0), 'MIGRATION_OWNER_PRECONDITION_FAILED');
-    if (profile === 'workflow-review-qa-evidence') ensure(validWorkflowUpstreamReworkMigrationPostcondition(result) && validWorkflowReviewQAEvidenceSchema(result,4), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if (profile === 'workflow-review-qa-evidence') ensure(validWorkflowReviewQAEvidenceMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'legacy-workflow-rework') ensure(validServerWorkflowMigrationPostcondition(result) && result.legacyPurgeSource===true, 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'workflow-exception-context')
       ensure(validWorkflowExceptionContextMigrationPrecondition(result), 'MIGRATION_OWNER_PRECONDITION_FAILED');
@@ -691,6 +691,11 @@ function validWorkflowReviewQAEvidenceSchema(proof, functionCount) {
       'RuntimeRolesUnprivileged','Triggers','PurgeGuard'].every(key=>proof['reviewQAEvidence'+key]===true) &&
     proof.purgeNodes===105 && proof.purgeEdges===287 && proof.purgeNodeFingerprint==='f51a0de25bd942a250997775617eeaee' &&
     typeof proof.purgeEdgeFingerprint==='string' && /^[a-f0-9]{32}$/.test(proof.purgeEdgeFingerprint);
+}
+// Общая проверка оператора и disposable upgrade принимает только полную013 без объектов014.
+export function validWorkflowReviewQAEvidenceMigrationPrecondition(proof) {
+  return validWorkflowUpstreamReworkMigrationPostcondition(proof) &&
+    validWorkflowReviewQAEvidenceSchema(proof,4) && proof.reviewQAEvidenceAbsent===true;
 }
 // Прежний013 verifier не принимает014; final014 проверяет весь predecessor с новыми четырьмя телами.
 export function validWorkflowReviewQAEvidenceMigrationPostcondition(proof) {

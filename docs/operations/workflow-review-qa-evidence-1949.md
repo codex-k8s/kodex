@@ -139,6 +139,13 @@ verifier намеренно отвергает014. Ни source-derived hashes, �
 
 Публичные ограниченные точки входа:
 
+- `make test-workflow-review-qa-upgrade-postgres`:300s, отдельный disposable
+  PostgreSQL с canonical database `control_plane`. На пустом bootstrap Goose
+  применяет миграции до013, затем настоящий полный pre014 SQL проверяется тем же
+  exported verifier оператора; после forward014 проверяются post014 и неизменность
+  proof при повторном up. Имена БД и результаты не подменяются. Модель, staging
+  и business fixtures не используются. Этот новый контур до фактического запуска
+  имеет статус NOT RUN; source и mock проверки не заменяют его результат.
 - `make test-workflow-result-contract`:30s, JSON Schema portion общего serialized
   corpus. Go decoder использует тот же corpus в domain unit suite; contextual
   kind/authority проверяет owner decoder, schema доказывает только форму.
