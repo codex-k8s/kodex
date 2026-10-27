@@ -4,7 +4,7 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.9
+version: 1.0.10
 updated: 2026-10-28
 ---
 
@@ -89,8 +89,30 @@ socket с kernel peer UID и повторным inode/owner check. Ни root/DAC
 224MiB/900m, минимальный `workspace-reader`32MiB/100m. Reader executable
 не импортирует Kubernetes controller. Подготовка socket directory выполняется
 UID10001 с primary GID29000 и проверкой mode2770, без CAP_FSETID; reader
-работает UID10002 без capabilities. Неизвестное владение,
-недоступный private directory или изменённый descriptor оставляют PVC в BLOCKED.
+работает UID10002 без capabilities. Неизвестное владение, недоступное обоим
+разрешённым UID mixed-owner дерево или изменённый descriptor оставляют PVC в BLOCKED.
+
+Private directory UID10002/mode0700 обходится только через отдельные typed
+read-only операции того же exact reader. Прежний `KWR1` остаётся regular-file-only
+и не принимает directory/O_PATH/writable/extra FD. `KWD1` выдаёт ровно один
+read-only/CLOEXEC directory FD fixed provider, равный observed inode; cursor
+должен быть нулевым. `KWS1` возвращает только77-byte fixed metadata frame,
+без FD. Request сохраняет exact task digest, root device/inode и bounded
+relative path; SO_PEERCRED и caller deadline обязательны для каждого пути.
+
+| Read-only операция | Инициатор/authority и источник состояния | Проверка и исход |
+| --- | --- | --- |
+| HELLO/KWR1 | Main UID10001 → private Unixpacket → helper UID10002. CP-owned frozen SNAPSHOT task и exact mounted root; payload не выдаёт owner grant | Прежние request bytes и file checks; не более2×file quota requests. Неизвестный kind/peer/task/root/framing закрывает connection |
+| KWD1 | Тот же bound main требует provider-owned directory, видимый через authenticated helper; root/scope не выбираются заново | Openat2 BENEATH/NO_SYMLINKS/NO_XDEV, fixed provider owner/group, supported mode; exact read-only directory FD. Не более1×file quota. Main дублирует только уже validated FD для bounded Readdirnames; прав исходника не меняет |
+| KWS1 | Только EACCES у local stat под уже validated provider directory; helper читает kernel metadata через временный O_PATH handle под exact root | Handle не передаётся. Fixed-size response без rights, only DIR/REG, no hard-linked/special files; provider owner/group/same device. Не более3×file quota: listing, before и after. Foreign/mixed-owner результат отклоняется |
+| Entry complete | Main сверяет before/after FD и current parent/path observation; source stream по-прежнему имеет aggregate byte/file quotas | Любой mismatch/overflow/cancel закрывает checkpoint целиком; нет пропуска файла или chmod. Read-only операции не создают domain events и не меняют grants. Авторитетные paths — owner task, exact Job/Pod result и retained PVC; owner snapshot ACK остаётся отдельным |
+
+Main/helper одного Job используют один pinned image. Старый helper не обязан
+понимать новые typed requests: такой skew закрыто отклоняется без повторного
+эффекта и сохраняет PVC. Неподдерживаемое mixed-owner private дерево также
+сохраняется, без расширения DAC/capabilities либо silent partial archive.
+Порядок canonical TAR, owner/modes, stream/source digest и quotas не меняются.
+
 Read-only checkpoint verifier проверяет exact root receipt, scope/generation,
 все последовательно прочитанные part versions и их digest/размеры. Canonical TAR
 повторно кодируется в hash sink: неизвестные владельцы, links, traversal,

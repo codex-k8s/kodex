@@ -98,7 +98,10 @@ def main():
     parser.add_argument('--mode', choices=['snapshot', 'restore'], default='snapshot')
     parser.add_argument('--writer-binary')
     parser.add_argument('--writer-sha256')
+    parser.add_argument('--roundtrip', action='store_true')
     arguments = parser.parse_args()
+    if arguments.roundtrip and arguments.mode != 'restore':
+        raise RuntimeError('NATIVE_ROUNDTRIP_PROFILE_INVALID')
     binary = Path(arguments.binary)
     info = binary.lstat()
     if (not binary.is_absolute() or not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
@@ -218,6 +221,17 @@ def main():
                  '--env', 'KODEX_WORKSPACE_WRITER_NATIVE=reconcile', '--env', 'GOMAXPROCS=1'],
                 ['-test.run=^'+test_name+'$', '-test.timeout=30s', '-test.v'],
                 identities, user='10001:29000'))
+            if arguments.roundtrip:
+                outcomes.append(run_container(volume+'-roundtrip', nonce,
+                    ['--cap-add=SETUID', '--cap-add=SETGID', '--entrypoint=/qa-test',
+                     '--mount', 'type=bind,source='+str(binary)+',target=/qa-test,readonly',
+                     '--mount', 'type=volume,source='+volume+',target=/workspace/work,volume-subpath='+RESTORE_FIXTURE_PARENT+'/tree,readonly',
+                     '--tmpfs', '/var/run/kodex/work-reader:rw,nosuid,nodev,noexec,size=1m,uid=10001,gid=29000,mode=2770',
+                     '--tmpfs', '/tmp:rw,nosuid,nodev,noexec,size=4m,mode=1777',
+                     '--env', 'KODEX_WORKSPACE_READER_NATIVE=coordinator',
+                     '--env', 'KODEX_WORKSPACE_READER_NATIVE_TREE=restored', '--env', 'GOMAXPROCS=1'],
+                    ['-test.run=^TestWorkspaceReaderTwoUIDNative$', '-test.timeout=30s', '-test.v'], identities))
+                result['privateDirectoryRoundtrip'] = 'PASS'
         result['status'] = 'PASS'
     except (RuntimeError, subprocess.TimeoutExpired) as error:
         result['reason'] = str(error) if isinstance(error, RuntimeError) else 'DOCKER_TIMEOUT'

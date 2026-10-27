@@ -144,6 +144,63 @@ func (reader *WorkspaceFDReader) Open(path string, expected unix.Stat_t) (*os.Fi
 	return openWorkspaceReaderSource(reader.connection, request, expected, workspaceReaderProviderUID, workspaceReaderProviderUID, workspaceReaderGroup)
 }
 
+// sendEntryRequest binds a typed read-only lookup to the already authenticated connection, task and root.
+// Its caller holds the single connection mutex; no new credentials, grant or root are accepted here.
+// sendEntryRequest связывает typed read-only lookup с authenticated connection/task/root.
+// Caller держит single connection mutex; новые credentials/grant/root здесь не принимаются.
+func (reader *WorkspaceFDReader) sendEntryRequest(name string, kind workspaceReaderOperation) error {
+	peer, err := workspaceReaderPeerUID(reader.connection)
+	if reader.ctx.Err() != nil || err != nil || peer != workspaceReaderProviderUID {
+		return errWorkspaceReaderInvalid
+	}
+	request := reader.request
+	request.path, request.kind, request.hello = name, kind, false
+	raw, err := encodeWorkspaceReaderRequest(request)
+	if err != nil {
+		return errWorkspaceReaderInvalid
+	}
+	n, controls, err := reader.connection.WriteMsgUnix(raw, nil, nil)
+	if err != nil || n != len(raw) || controls != 0 {
+		return errWorkspaceReaderInvalid
+	}
+	return nil
+}
+
+// OpenDirectory grants only an exact provider-owned read-only directory FD; it never passes through the file-only receiver.
+// OpenDirectory выдаёт только exact provider-owned read-only directory FD, не проходя через file-only receiver.
+func (reader *WorkspaceFDReader) OpenDirectory(name string, expected unix.Stat_t) (*os.File, error) {
+	if reader == nil {
+		return nil, errWorkspaceReaderInvalid
+	}
+	reader.mu.Lock()
+	defer reader.mu.Unlock()
+	if expected.Dev != reader.root.Dev || expected.Uid != workspaceReaderProviderUID || expected.Gid != workspaceReaderGroup ||
+		!workspaceReaderEntryKind(expected, true) || reader.sendEntryRequest(name, workspaceReaderDirectory) != nil {
+		return nil, errWorkspaceReaderInvalid
+	}
+	return receiveWorkspaceReaderDescriptor(reader.connection, expected, true)
+}
+
+// Stat obtains bounded kernel metadata for an otherwise inaccessible provider-owned descendant, without granting a descriptor.
+// Role-owned, foreign, linked, special and cross-device observations are never accepted as provider metadata.
+// Stat получает bounded kernel metadata недоступного provider-owned descendant без выдачи descriptor.
+// Role-owned/foreign/linked/special/cross-device observations не принимаются как provider metadata.
+func (reader *WorkspaceFDReader) Stat(name string) (unix.Stat_t, error) {
+	if reader == nil {
+		return unix.Stat_t{}, errWorkspaceReaderInvalid
+	}
+	reader.mu.Lock()
+	defer reader.mu.Unlock()
+	if reader.sendEntryRequest(name, workspaceReaderMetadata) != nil {
+		return unix.Stat_t{}, errWorkspaceReaderInvalid
+	}
+	info, err := receiveWorkspaceReaderMetadata(reader.connection)
+	if err != nil || info.Dev != reader.root.Dev || info.Uid != workspaceReaderProviderUID || info.Gid != workspaceReaderGroup {
+		return unix.Stat_t{}, errWorkspaceReaderInvalid
+	}
+	return info, nil
+}
+
 // Close stops the only owned connection and joins its cancellation watcher exactly once.
 // Close останавливает owned connection и завершает cancellation watcher ровно один раз.
 func (reader *WorkspaceFDReader) Close() error {
@@ -168,6 +225,6 @@ func EncodeWorkspaceSnapshot(ctx context.Context, destination io.Writer, task mo
 		return "", 0, 0, 0, errWorkspaceReaderInvalid
 	}
 	defer reader.Close()
-	return scanWorkspaceOwnedTree(ctx, rootFD, destination, task.Workspace.Policy,
-		workspaceReaderRoleUID, workspaceReaderGroup, workspaceReaderProviderUID, reader.Open)
+	return scanWorkspaceReaderTree(ctx, rootFD, destination, task.Workspace.Policy,
+		workspaceReaderRoleUID, workspaceReaderGroup, workspaceReaderProviderUID, reader)
 }

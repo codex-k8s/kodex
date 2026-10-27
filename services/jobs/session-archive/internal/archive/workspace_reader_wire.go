@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"io"
 	"net"
 	"os"
 
@@ -17,6 +18,12 @@ const (
 	// workspaceReaderHelloMagic binds the same task/root before any stream or object write starts.
 	// workspaceReaderHelloMagic связывает same task/root до начала stream или object write.
 	workspaceReaderHelloMagic = "KWH1"
+	// workspaceReaderDirectoryMagic identifies a separate read-only directory FD operation; KWR1 still grants regular files only.
+	// workspaceReaderDirectoryMagic обозначает отдельную read-only directory FD operation; KWR1 выдаёт только regular files.
+	workspaceReaderDirectoryMagic = "KWD1"
+	// workspaceReaderMetadataMagic requests exact provider-owned metadata without granting any descriptor.
+	// workspaceReaderMetadataMagic запрашивает exact provider-owned metadata без выдачи descriptor.
+	workspaceReaderMetadataMagic = "KWS1"
 	// workspaceReaderHeaderBytes contains magic, canonical task SHA256, root device/inode and path byte count.
 	// workspaceReaderHeaderBytes содержит magic, canonical task SHA256, root device/inode и path byte count.
 	workspaceReaderHeaderBytes = 4 + 32 + 8 + 8 + 2
@@ -39,12 +46,30 @@ type workspaceReaderRequest struct {
 	inode      uint64
 	path       string
 	hello      bool
+	kind       workspaceReaderOperation
 }
+
+// workspaceReaderOperation is a closed local read-only operation kind, never an actor or filesystem permission.
+// workspaceReaderOperation — закрытый local read-only operation kind, не actor либо filesystem permission.
+type workspaceReaderOperation uint8
+
+const (
+	// workspaceReaderFile retains the original regular-file-only request and response validation.
+	// workspaceReaderFile сохраняет original regular-file-only request/response validation.
+	workspaceReaderFile workspaceReaderOperation = iota
+	// workspaceReaderDirectory permits only an exact owned read-only directory FD under the same root.
+	// workspaceReaderDirectory допускает только exact owned read-only directory FD под тем же root.
+	workspaceReaderDirectory
+	// workspaceReaderMetadata returns only a bounded fixed-field stat observation under the same root.
+	// workspaceReaderMetadata возвращает только bounded fixed-field stat observation под тем же root.
+	workspaceReaderMetadata
+)
 
 // encodeWorkspaceReaderRequest preserves raw UTF-8 path bytes inside a fixed bounded frame, avoiding JSON expansion.
 // encodeWorkspaceReaderRequest сохраняет UTF-8 path bytes в fixed bounded frame без JSON expansion.
 func encodeWorkspaceReaderRequest(value workspaceReaderRequest) ([]byte, error) {
-	if value.hello && value.path != "" || !value.hello && !workspaceStreamPath(value.path) || value.inode == 0 || value.taskSHA256 == [32]byte{} {
+	if value.hello && (value.path != "" || value.kind != workspaceReaderFile) || !value.hello && !workspaceStreamPath(value.path) ||
+		value.inode == 0 || value.taskSHA256 == [32]byte{} || value.kind > workspaceReaderMetadata {
 		return nil, errWorkspaceReaderInvalid
 	}
 	raw := make([]byte, workspaceReaderHeaderBytes+len(value.path))
@@ -54,6 +79,10 @@ func encodeWorkspaceReaderRequest(value workspaceReaderRequest) ([]byte, error) 
 	copy(raw[:4], workspaceReaderWireMagic)
 	if value.hello {
 		copy(raw[:4], workspaceReaderHelloMagic)
+	} else if value.kind == workspaceReaderDirectory {
+		copy(raw[:4], workspaceReaderDirectoryMagic)
+	} else if value.kind == workspaceReaderMetadata {
+		copy(raw[:4], workspaceReaderMetadataMagic)
 	}
 	copy(raw[4:36], value.taskSHA256[:])
 	binary.BigEndian.PutUint64(raw[36:44], value.device)
@@ -67,12 +96,18 @@ func encodeWorkspaceReaderRequest(value workspaceReaderRequest) ([]byte, error) 
 // decodeWorkspaceReaderRequest отклоняет unknown versions, trailing bytes, пустые commitments и path escapes.
 func decodeWorkspaceReaderRequest(raw []byte) (workspaceReaderRequest, error) {
 	if len(raw) < workspaceReaderHeaderBytes || len(raw) > workspaceReaderMaximumFrame ||
-		!bytes.Equal(raw[:4], []byte(workspaceReaderWireMagic)) && !bytes.Equal(raw[:4], []byte(workspaceReaderHelloMagic)) ||
+		!bytes.Equal(raw[:4], []byte(workspaceReaderWireMagic)) && !bytes.Equal(raw[:4], []byte(workspaceReaderHelloMagic)) &&
+			!bytes.Equal(raw[:4], []byte(workspaceReaderDirectoryMagic)) && !bytes.Equal(raw[:4], []byte(workspaceReaderMetadataMagic)) ||
 		int(binary.BigEndian.Uint16(raw[52:54])) != len(raw)-workspaceReaderHeaderBytes {
 		return workspaceReaderRequest{}, errWorkspaceReaderInvalid
 	}
 	value := workspaceReaderRequest{device: binary.BigEndian.Uint64(raw[36:44]), inode: binary.BigEndian.Uint64(raw[44:52]), path: string(raw[54:]), hello: bytes.Equal(raw[:4], []byte(workspaceReaderHelloMagic))}
 	copy(value.taskSHA256[:], raw[4:36])
+	if bytes.Equal(raw[:4], []byte(workspaceReaderDirectoryMagic)) {
+		value.kind = workspaceReaderDirectory
+	} else if bytes.Equal(raw[:4], []byte(workspaceReaderMetadataMagic)) {
+		value.kind = workspaceReaderMetadata
+	}
 	if _, err := encodeWorkspaceReaderRequest(value); err != nil {
 		return workspaceReaderRequest{}, err
 	}
@@ -107,6 +142,14 @@ func workspaceReaderPeerUID(connection *net.UnixConn) (uint32, error) {
 // receiveWorkspaceReaderFile закрывает все received descriptors при framing/ownership/identity mismatch.
 // Возвращается только один read-only CLOEXEC regular-file descriptor с независимо observed inode.
 func receiveWorkspaceReaderFile(connection *net.UnixConn, expected unix.Stat_t) (*os.File, error) {
+	return receiveWorkspaceReaderDescriptor(connection, expected, false)
+}
+
+// receiveWorkspaceReaderDescriptor applies one closed kind's exact inode and read-only rights checks, closing all rejected descriptors.
+// The regular-file wrapper always passes false; directory requests cannot widen its accepted file kinds.
+// receiveWorkspaceReaderDescriptor проверяет exact inode/read-only rights закрытого kind и закрывает все rejected descriptors.
+// Regular-file wrapper всегда передаёт false; directory requests не расширяют допустимые file kinds.
+func receiveWorkspaceReaderDescriptor(connection *net.UnixConn, expected unix.Stat_t, directory bool) (*os.File, error) {
 	if connection == nil {
 		return nil, errWorkspaceReaderInvalid
 	}
@@ -130,10 +173,15 @@ func receiveWorkspaceReaderFile(connection *net.UnixConn, expected unix.Stat_t) 
 	var info unix.Stat_t
 	fileFlags, fileErr := unix.FcntlInt(uintptr(fd), unix.F_GETFL, 0)
 	closeFlags, closeErr := unix.FcntlInt(uintptr(fd), unix.F_GETFD, 0)
-	if unix.Fstat(fd, &info) != nil || info.Mode&unix.S_IFMT != unix.S_IFREG || info.Nlink != 1 || info.Mode&0o7000 != 0 ||
+	if unix.Fstat(fd, &info) != nil || !workspaceReaderEntryKind(info, directory) ||
 		!workspaceTreeIdentityEqual(info, expected) || fileErr != nil || fileFlags&unix.O_ACCMODE != unix.O_RDONLY || fileFlags&unix.O_PATH != 0 ||
 		closeErr != nil || closeFlags&unix.FD_CLOEXEC == 0 {
 		return nil, errWorkspaceReaderInvalid
+	}
+	if directory {
+		if offset, err := unix.Seek(fd, 0, io.SeekCurrent); err != nil || offset != 0 {
+			return nil, errWorkspaceReaderInvalid
+		}
 	}
 	accepted = true
 	return os.NewFile(uintptr(fd), "workspace-read-only-source"), nil

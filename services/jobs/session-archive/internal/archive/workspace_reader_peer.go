@@ -50,7 +50,8 @@ func serveWorkspaceReaderPeer(ctx context.Context, connection *net.UnixConn, roo
 	if err != nil || peer != mainUID || unix.Fstat(rootFD, &root) != nil || root.Mode&unix.S_IFMT != unix.S_IFDIR {
 		return errWorkspaceReaderInvalid
 	}
-	hello, opened := false, int64(0)
+	hello := false
+	var opened [3]int64
 	for {
 		payload := make([]byte, workspaceReaderMaximumFrame)
 		control := make([]byte, unix.CmsgSpace(4))
@@ -85,8 +86,28 @@ func serveWorkspaceReaderPeer(ctx context.Context, connection *net.UnixConn, roo
 			hello = true
 			continue
 		}
-		opened++
-		if !hello || opened > 2*maximumFiles || sendWorkspaceReaderSource(connection, rootFD, request.path, sourceUID, sourceGID) != nil {
+		if !hello {
+			return errWorkspaceReaderInvalid
+		}
+		opened[request.kind]++
+		maximum := 2 * maximumFiles
+		if request.kind == workspaceReaderDirectory {
+			maximum = maximumFiles
+		} else if request.kind == workspaceReaderMetadata {
+			maximum = 3 * maximumFiles
+		}
+		if opened[request.kind] > maximum {
+			return errWorkspaceReaderInvalid
+		}
+		switch request.kind {
+		case workspaceReaderFile:
+			err = sendWorkspaceReaderSource(connection, rootFD, request.path, sourceUID, sourceGID)
+		case workspaceReaderDirectory:
+			err = sendWorkspaceReaderDescriptor(connection, rootFD, request.path, sourceUID, sourceGID, true)
+		case workspaceReaderMetadata:
+			err = sendWorkspaceReaderMetadata(connection, rootFD, request.path, sourceUID, sourceGID)
+		}
+		if err != nil {
 			return errWorkspaceReaderInvalid
 		}
 	}
@@ -97,18 +118,27 @@ func serveWorkspaceReaderPeer(ctx context.Context, connection *net.UnixConn, roo
 // sendWorkspaceReaderSource открывает relative owned regular file под fixed read-only work root.
 // Sender закрывает original FD после SCM_RIGHTS; receiver отдельно проверяет inode/access flags.
 func sendWorkspaceReaderSource(connection *net.UnixConn, rootFD int, path string, sourceUID, sourceGID uint32) error {
+	return sendWorkspaceReaderDescriptor(connection, rootFD, path, sourceUID, sourceGID, false)
+}
+
+// sendWorkspaceReaderDescriptor grants one closed read-only inode kind, retaining the original file-only wrapper's restrictions.
+// sendWorkspaceReaderDescriptor выдаёт один closed read-only inode kind, сохраняя ограничения original file-only wrapper.
+func sendWorkspaceReaderDescriptor(connection *net.UnixConn, rootFD int, path string, sourceUID, sourceGID uint32, directory bool) error {
 	if connection == nil || rootFD < 0 || !workspaceStreamPath(path) {
 		return errWorkspaceReaderInvalid
 	}
-	fd, err := unix.Openat2(rootFD, path, &unix.OpenHow{Flags: unix.O_RDONLY | unix.O_CLOEXEC | unix.O_NOFOLLOW | unix.O_NONBLOCK,
+	flags := uint64(unix.O_RDONLY | unix.O_CLOEXEC | unix.O_NOFOLLOW | unix.O_NONBLOCK)
+	if directory {
+		flags |= unix.O_DIRECTORY
+	}
+	fd, err := unix.Openat2(rootFD, path, &unix.OpenHow{Flags: flags,
 		Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_SYMLINKS | unix.RESOLVE_NO_XDEV})
 	if err != nil {
 		return errWorkspaceReaderInvalid
 	}
 	defer unix.Close(fd)
 	var info unix.Stat_t
-	if unix.Fstat(fd, &info) != nil || info.Uid != sourceUID || info.Gid != sourceGID || info.Mode&unix.S_IFMT != unix.S_IFREG ||
-		info.Nlink != 1 || info.Mode&0o7000 != 0 {
+	if unix.Fstat(fd, &info) != nil || info.Uid != sourceUID || info.Gid != sourceGID || !workspaceReaderEntryKind(info, directory) {
 		return errWorkspaceReaderInvalid
 	}
 	rights := unix.UnixRights(fd)
