@@ -401,18 +401,7 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 	}
 	t.Run("system assistant prepares an isolated project profile for human publication", func(t *testing.T) {
 		prepareObservedWarmFixture(t, ctx, repository)
-		system, err := service.GetSystemAssistant(ctx, owner)
-		if err != nil {
-			t.Fatal(err)
-		}
-		warmWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-			ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "runtime-controller", Operation: "platform.runtime.warm.report",
-		}, "runtime-controller")
-		if _, err := service.ReportWarmRuntime(ctx, warmWorker, command.WarmRuntimeInput{
-			WorkloadInstance: "catalog-observed-warm-fixture", RuntimeRevision: system.DesiredRuntimeRevision, State: "READY",
-		}); err != nil {
-			t.Fatal(err)
-		}
+		system := reportReadySystemAssistantFixture(t, ctx, repository, service, owner)
 		project := execute(command.CreateProject, "planned-project", command.ProjectInput{Name: "Planned assistant project", Language: "en"}).Project
 		conversation := execute(command.CreateAssistantConversation, "system-planner", command.AssistantConversationInput{
 			AssistantScope: "SYSTEM",

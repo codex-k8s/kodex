@@ -74,3 +74,24 @@ func newReadyAssistantComponentService(t *testing.T, ctx context.Context, pool *
 	}
 	return repository, service, owner, worker, assistant
 }
+
+// reportReadySystemAssistantFixture reads the current assistant, resolves the synthetic warm
+// reporter and records READY for that exact revision. The caller owns fixture preparation.
+// reportReadySystemAssistantFixture читает текущего помощника, разрешает synthetic warm reporter
+// и фиксирует READY точной ревизии. Подготовка fixture остаётся у вызывающего теста.
+func reportReadySystemAssistantFixture(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal) entity.SystemAssistant {
+	t.Helper()
+	system, err := service.GetSystemAssistant(ctx, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	warmWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "runtime-controller", Operation: "platform.runtime.warm.report",
+	}, "runtime-controller")
+	if _, err := service.ReportWarmRuntime(ctx, warmWorker, command.WarmRuntimeInput{
+		WorkloadInstance: "catalog-observed-warm-fixture", RuntimeRevision: system.DesiredRuntimeRevision, State: "READY",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return system
+}

@@ -58,18 +58,7 @@ func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, rep
 	if err != nil {
 		t.Fatal(err)
 	}
-	system, err := service.GetSystemAssistant(ctx, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	warmWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "runtime-controller", Operation: "platform.runtime.warm.report",
-	}, "runtime-controller")
-	if _, err := service.ReportWarmRuntime(ctx, warmWorker, command.WarmRuntimeInput{
-		WorkloadInstance: "catalog-observed-warm-fixture", RuntimeRevision: system.DesiredRuntimeRevision, State: "READY",
-	}); err != nil {
-		t.Fatal(err)
-	}
+	reportReadySystemAssistantFixture(t, ctx, repository, service, owner)
 	project, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-move-project"},
 		Payload:  command.ProjectInput{Name: "Assistant move destination", Language: "en"}})
