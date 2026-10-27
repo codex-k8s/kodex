@@ -108,14 +108,7 @@ func rehydrateEditedAssistantSystemInstructions(
 		Version:           *original.ExpectedVersion,
 	}
 	hydrated, err := hydrateAssistantSystemInstructionFields(assistant, edited)
-	if err != nil {
-		return entity.AssistantPlanOperation{}, err
-	}
-	if !reflect.DeepEqual(hydrated.Before, original.Before) {
-		return entity.AssistantPlanOperation{}, errs.ErrConflict
-	}
-	hydrated.Selected = selected
-	return hydrated, nil
+	return finishRehydratedAssistantOperation(original.Before, selected, hydrated, err)
 }
 
 // assistantSystemInstructionsSnapshotMatches reloads the current assistant and compares both

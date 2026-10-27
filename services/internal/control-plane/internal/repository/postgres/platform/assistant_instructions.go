@@ -99,14 +99,7 @@ func rehydrateEditedAssistantInstructionDraft(original, edited entity.AssistantP
 	selected := edited.Selected
 	hydrated, err := hydrateAssistantInstructionDraftFields(original.Target.Ref,
 		assistantString(original.Before, "name"), *original.ExpectedVersion, edited)
-	if err != nil {
-		return entity.AssistantPlanOperation{}, err
-	}
-	if !reflect.DeepEqual(hydrated.Before, original.Before) {
-		return entity.AssistantPlanOperation{}, errs.ErrConflict
-	}
-	hydrated.Selected = selected
-	return hydrated, nil
+	return finishRehydratedAssistantOperation(original.Before, selected, hydrated, err)
 }
 
 // assistantInstructionDraftSnapshotMatches delegates project-managed configuration operations to

@@ -873,14 +873,7 @@ func rehydrateEditedAssistantAgent(original, edited entity.AssistantPlanOperatio
 		assistantString(original.Before, "name"), assistantString(original.Before, "purpose"),
 		assistantString(original.Before, "roleDescription"), assistantString(original.Before, "avatarUrl"),
 		*original.ExpectedVersion, edited)
-	if err != nil {
-		return entity.AssistantPlanOperation{}, err
-	}
-	if !reflect.DeepEqual(hydrated.Before, original.Before) {
-		return entity.AssistantPlanOperation{}, errs.ErrConflict
-	}
-	hydrated.Selected = selected
-	return hydrated, nil
+	return finishRehydratedAssistantOperation(original.Before, selected, hydrated, err)
 }
 
 // rehydrateEditedAssistantAgentCapability requires exact original agent/key/version/capability and
@@ -907,14 +900,7 @@ func rehydrateEditedAssistantAgentCapability(original, edited entity.AssistantPl
 	selected := edited.Selected
 	hydrated, err := hydrateAssistantAgentCapabilityFields(original.Target.Ref, original.Target.Name,
 		assistantString(original.Before, "capabilityKey"), currentlyEnabled, enabled, *original.ExpectedVersion, edited)
-	if err != nil {
-		return entity.AssistantPlanOperation{}, err
-	}
-	if !reflect.DeepEqual(hydrated.Before, original.Before) {
-		return entity.AssistantPlanOperation{}, errs.ErrConflict
-	}
-	hydrated.Selected = selected
-	return hydrated, nil
+	return finishRehydratedAssistantOperation(original.Before, selected, hydrated, err)
 }
 
 // rehydrateEditedAssistantIntegrationGrant preserves original connection/recipient identity and
@@ -994,14 +980,7 @@ func rehydrateEditedAssistantConnection(original, edited entity.AssistantPlanOpe
 	edited.Parameters = parameters
 	selected := edited.Selected
 	hydrated, err := hydrateAssistantConnectionFields(connection, edited)
-	if err != nil {
-		return entity.AssistantPlanOperation{}, err
-	}
-	if !reflect.DeepEqual(hydrated.Before, original.Before) {
-		return entity.AssistantPlanOperation{}, errs.ErrConflict
-	}
-	hydrated.Selected = selected
-	return hydrated, nil
+	return finishRehydratedAssistantOperation(original.Before, selected, hydrated, err)
 }
 
 // assistantConnectionUpdateSnapshotMatches reads the current connection/package/grants, validates

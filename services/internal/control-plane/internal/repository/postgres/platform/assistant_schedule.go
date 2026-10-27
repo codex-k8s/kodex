@@ -176,14 +176,7 @@ func rehydrateAssistantEditableFields(original, edited entity.AssistantPlanOpera
 	edited.Parameters = parameters
 	selected := edited.Selected
 	hydrated, err := hydrate(original.Before, *original.ExpectedVersion, edited)
-	if err != nil {
-		return entity.AssistantPlanOperation{}, err
-	}
-	if !reflect.DeepEqual(hydrated.Before, original.Before) {
-		return entity.AssistantPlanOperation{}, errs.ErrConflict
-	}
-	hydrated.Selected = selected
-	return hydrated, nil
+	return finishRehydratedAssistantOperation(original.Before, selected, hydrated, err)
 }
 
 // withAssistantExpectedVersion makes a nonnil shallow copy of the fields and overwrites
