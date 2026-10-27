@@ -30,8 +30,6 @@ export function immutableMigrationProfile(profile = 'outbox-index') {
   ensure(isImmutableMigrationProfile(profile),'IMMUTABLE_MIGRATION_PROFILE_INVALID');
   return Object.freeze({...immutableProfiles[profile]});
 }
-// Общий закрытый registry используется каждой CLI phase; неизвестное имя не получает immutable authority.
-export function isImmutableMigrationProfile(profile) { return Object.hasOwn(immutableProfiles,profile); }
 const caBundleSpec = {sources:[{secret:{name:'kodex-installation-ca',key:'tls.crt'}}],
   target:{namespaceSelector:{matchLabels:{'kubernetes.io/metadata.name':namespace}},configMap:{key:'ca.pem'}}};
 const dsnPath = '/var/run/secrets/kodex/control-plane/postgres-migration/dsn';
