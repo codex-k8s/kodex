@@ -2,6 +2,11 @@
 import { computed, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
+import {
+  createPickerLabels,
+  selection,
+} from "@/features/access/picker-presentation";
+
 import AccessScopeEditor from "@/features/access/components/AccessScopeEditor.vue";
 import {
   accessRoleOptions,
@@ -91,6 +96,7 @@ const emit = defineEmits<{
   clear: [];
 }>();
 const i18n = useI18n();
+const pickerLabels = createPickerLabels((key) => i18n.t(key));
 const permissionMessages = computed(() =>
   i18n.tm("access.permissionsRegistry"),
 );
@@ -214,22 +220,6 @@ function submit(): void {
       conditions: { requireOwner: false },
     },
   });
-}
-
-function selection(value: string | null | readonly string[]): string {
-  return typeof value === "string" ? value : "";
-}
-
-function pickerLabels(label: string, searchPlaceholder: string) {
-  return {
-    label,
-    searchPlaceholder,
-    loading: i18n.t("common.loading"),
-    loadingMore: i18n.t("common.loading"),
-    empty: i18n.t("common.empty"),
-    error: i18n.t("errors.default"),
-    retry: i18n.t("common.retry"),
-  };
 }
 
 function loadSubjects(
