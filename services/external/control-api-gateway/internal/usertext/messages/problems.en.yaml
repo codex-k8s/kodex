@@ -714,6 +714,8 @@ PERMISSION_AUDIT_VIEW_DESCRIPTION:
   other: Read audit events in the assigned scope
 SESSION_ARCHIVE_TASK_SUCCEEDED:
   other: Session archive task completed
+SESSION_WORKSPACE_OBSERVED:
+  other: Workspace state observed
 SESSION_ARCHIVE_TASK_READY:
   other: Session archive task scheduled for retry
 SESSION_ARCHIVE_TASK_DEAD_LETTER:

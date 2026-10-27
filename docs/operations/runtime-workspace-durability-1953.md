@@ -91,6 +91,15 @@ V1 receipt при наличии work не разрешает удаление �
 их exact UID readback. После v2 записей восстановление требует совместимого
 forward reader; удаление metadata ради старого бинарного rollback запрещено.
 
+Private config `SESSION_WORKSPACE_STORAGE_PROFILE` по умолчанию отсутствует
+либо пуст: это прежний профиль без назначения work binding. Единственный
+opt-in — `SESSION_WORKSPACE_V2`; unknown значение закрыто останавливает startup.
+До включения оператор подтверждает dual readers CP/RC/runner/archive worker,
+точный допустимый runtime image contract, readiness, schema proof и drain
+старых destructive jobs. После назначения V2 ошибки не дают silent fallback
+к legacy и не сбрасывают work. Отзыв opt-in не разрешает старому reader
+обрабатывать уже созданные V2 metadata либо удалять соответствующую PVC.
+
 Backup фиксирует точное поколение подтверждённого checkpoint со всеми parts.
 Активное неподтверждённое дерево не выдаётся за полный backup исходников.
 Restore не возвращает старые leases, credentials или RuntimeRevision authority.
@@ -102,3 +111,12 @@ Forward migration `20261026001150` располагается после01100 и
 точному отдельному checkpoint, без allow-missing и без обхода остановленных
 native-путей других задач. Проверки operator, native, backup/restore и реальная
 приёмка сотрудником обязательны до заявления готовности.
+
+Поставка приложения требует предварительно подтверждённой schema01150 даже
+при выключенном opt-in: claim query читает owner storage eligibility до LIMIT.
+Default legacy означает отсутствие новых bindings, а не разрешение запуска
+нового CP на старой схеме. Первый V2 init использует отдельный protected mode
+`runtime-bind-workspace`; отсутствующий input не включает legacy prepare.
+Только этот init получает private PVC root, остальные containers — exact
+work subPath и отдельные read-only inode/ACK records. Другой live consumer
+той же PVC закрывает BIND; один RWO access mode не доказывает exclusivity.

@@ -896,6 +896,10 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		return runtimecontract.RunnerInput{}, err
 	}
 	input.WorkspacePolicy = workspacePolicy
+	input.WorkspaceStorage, err = workspaceStorageFromProto(revision.GetWorkspaceStorage())
+	if err != nil {
+		return runtimecontract.RunnerInput{}, err
+	}
 	executionDeadline, err := RuntimeExecutionDeadlineFromProto(revision.GetExecutionDeadline())
 	if err != nil {
 		return runtimecontract.RunnerInput{}, err
@@ -2464,6 +2468,9 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 				{Name: "workspace-init", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, TerminationMessagePath: "/dev/termination-log", TerminationMessagePolicy: corev1.TerminationMessageReadFile, Args: []string{"runtime-init-workspace"}, SecurityContext: restrictedSecurityContext(10001), VolumeMounts: initMounts, Resources: smallResources()},
 			},
 			Containers: []corev1.Container{role, provider, relay}, Volumes: volumes}}
+	if !configureWorkspaceStoragePod(pod, input) {
+		return nil
+	}
 	if manager.config.RPCProfile == runtimecontract.CallbackProfileTrustedCluster {
 		pod.Labels["kodex.dev/security-profile"] = runtimecontract.CallbackProfileTrustedCluster
 		pod.Spec.Volumes = slices.DeleteFunc(pod.Spec.Volumes, func(volume corev1.Volume) bool {

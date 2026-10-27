@@ -7,6 +7,9 @@ import (
 )
 
 const (
+	// WorkspaceStorageRootMount is reserved for the trusted first initializer, never the model container.
+	// WorkspaceStorageRootMount предназначен trusted first initializer, не model container.
+	WorkspaceStorageRootMount = "/var/run/config/kodex/session-workspace"
 	// WorkspaceMountProofSchema identifies local inode evidence produced only after owner BIND.
 	// WorkspaceMountProofSchema обозначает local inode evidence, создаваемое лишь после owner BIND.
 	WorkspaceMountProofSchema = "kodex.runtime-workspace-mount.v1"

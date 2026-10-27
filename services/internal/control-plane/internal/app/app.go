@@ -139,7 +139,8 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err := repository.ConfigureRoleImages(platformrepository.RoleImageConfig{
 		PolicyRevision: config.ImagePolicyRevision, PolicySHA256: config.ImagePolicySHA256,
 		RoleRuntimeContractRevision: config.RoleRuntimeContractRevision, RoleRuntimeContractSHA256: config.RoleRuntimeContractSHA256,
-		BuildLeaseDuration: config.ImageBuildLeaseDuration, AdmissionClaimTTL: config.ImageAdmissionClaimTTL,
+		WorkspaceStorageProfile: config.WorkspaceStorageProfile,
+		BuildLeaseDuration:      config.ImageBuildLeaseDuration, AdmissionClaimTTL: config.ImageAdmissionClaimTTL,
 		PromotionClaimTTL: config.ImagePromotionClaimTTL, MaximumAttempts: config.ImageMaximumAttempts,
 		StagingRepository: config.StagingImageRepository, PromotedRepository: config.PromotedImageRepository,
 		DefaultImageReference: config.DefaultRoleImageReference, LeaseSigningKey: leaseSigningKey,

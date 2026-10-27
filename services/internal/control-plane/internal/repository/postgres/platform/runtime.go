@@ -113,6 +113,8 @@ func (repository *Repository) changeExecution(ctx context.Context, tx pgx.Tx, sc
 		return repository.commitProviderCredentialRefresh(ctx, tx, scope, input)
 	case command.CompleteExecution:
 		return repository.completeExecution(ctx, tx, scope, input)
+	case command.ObserveWorkspace:
+		return repository.observeWorkspace(ctx, tx, scope, input)
 	case command.DelegateExecution:
 		return repository.delegateExecution(ctx, tx, scope, input)
 	case command.LaunchWorkflowExecution:
@@ -423,7 +425,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 	readinessChanged := false
 	rows, err := tx.Query(ctx, queryRuntimeClaimExecutionSelectClaimableAgentExecutions,
 		scope.organizationID, payload.Limit, repository.roleImages.RoleRuntimeContractRevision,
-		repository.roleImages.RoleRuntimeContractSHA256)
+		repository.roleImages.RoleRuntimeContractSHA256, repository.roleImages.WorkspaceStorageProfile)
 	if err != nil {
 		return commandOutcome{}, fmt.Errorf("select claimable executions: %v: %w", err, errs.ErrUnavailable)
 	}
@@ -536,6 +538,13 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			return commandOutcome{}, err
 		}
 		if !environmentEligible {
+			continue
+		}
+		workspaceBinding, workspaceReady, err := repository.prepareSessionWorkspaceTx(ctx, tx, scope, candidate)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		if !workspaceReady {
 			continue
 		}
 		candidateTx, err := tx.Begin(ctx)
@@ -972,6 +981,9 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			if executionDeadline != nil {
 				snapshot["executionDeadline"] = executionDeadline
 			}
+			if workspaceBinding != nil {
+				snapshot["workspaceStorage"] = workspaceBinding
+			}
 			if sttConfiguration.ConfigurationRef != "" {
 				snapshot["systemSTTConfigurationRef"] = sttConfiguration.ConfigurationRef
 				snapshot["systemSTTConfigurationRevisionRef"] = sttConfiguration.RevisionRef
@@ -1042,6 +1054,9 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 				payload.WorkloadInstance, hex.EncodeToString(fenceDigest[:]), generation,
 				inputDigestHex, expiresAt); err != nil {
 				return commandOutcome{}, fmt.Errorf("insert runtime lease: %w", errs.ErrUnavailable)
+			}
+			if err := claimSessionWorkspaceTx(ctx, tx, scope, workspaceBinding, leaseRef); err != nil {
+				return commandOutcome{}, err
 			}
 			if err := registerRuntimeMaterializationTx(ctx, tx, scope.organizationID, runtimeMaterializationInput{
 				WorkloadInstance: payload.WorkloadInstance, LeaseRef: leaseRef, Fence: fence,
@@ -1442,6 +1457,18 @@ func runtimeRevisionDigestFromSnapshot(values map[string]any) (string, error) {
 		}
 	} else if _, present := values["promptRuntimeContractVersion"]; present {
 		return "", errs.ErrConflict
+	}
+	workspaceBinding, err := runtimeWorkspaceSnapshotBinding(values)
+	if err != nil {
+		return "", err
+	}
+	if workspaceBinding != nil {
+		validationInput := input
+		validationInput.Mode = runtimecontract.RunnerModeTurn
+		if workspaceBinding.ValidateForInput(validationInput) != nil {
+			return "", errs.ErrConflict
+		}
+		input.WorkspaceStorage = workspaceBinding
 	}
 	return runtimecontract.RuntimeRevisionDigest(input, runtimecontract.RuntimeRevisionCredentialSource{
 		SecretName: stringMap(values, "providerSecretName"), SecretUID: stringMap(values, "providerSecretUID"),

@@ -248,6 +248,9 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 				controlplanev1.RuntimeWorkspaceDenialReason(controlplanev1.RuntimeWorkspaceDenialReason_value["RUNTIME_WORKSPACE_DENIAL_REASON_"+reason]))
 		}
 	}
+	if !castRuntimeWorkspace(result, values) {
+		return nil
+	}
 	profileRevision := mapString(values, "profileRevision")
 	if profileRevision == "" {
 		profileRevision = mapString(values, "runtimeRevision")

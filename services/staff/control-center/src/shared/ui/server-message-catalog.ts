@@ -1067,6 +1067,10 @@ export const serverTokenTranslations = {
     "Архивирование сессии завершено",
     "Session archival completed",
   ],
+  SESSION_WORKSPACE_OBSERVED: [
+    "Состояние рабочей области подтверждено",
+    "Workspace state observed",
+  ],
   SESSION_CONTINUATION: ["Продолжение сессии", "Session continuation"],
   SESSION_CONTINUED: ["Сессия продолжена", "Session continued"],
   SKILL_BUNDLE_CHANGED: ["Пакет навыка изменён", "Skill bundle changed"],

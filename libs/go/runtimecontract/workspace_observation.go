@@ -7,6 +7,9 @@ import (
 )
 
 const (
+	// WorkspaceObservationOperation is the sole service-owned writer observation permission.
+	// WorkspaceObservationOperation — единственное service-owned разрешение writer observation.
+	WorkspaceObservationOperation = "platform.runtime.workspace.observe"
 	// WorkspaceObserveBind requires a fresh current writer CAS before application filesystem writes.
 	// WorkspaceObserveBind требует fresh current writer CAS до любых application filesystem writes.
 	WorkspaceObserveBind = "BIND"

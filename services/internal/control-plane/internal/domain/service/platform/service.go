@@ -1473,6 +1473,9 @@ func (service *Service) SimulateAccess(ctx context.Context, p value.Principal, i
 // Execute rejects a workflow-child launch from the wrong workload/permission before principal resolution, then replaces the command principal with its authoritative resolution and enters executeResolved. Payload identifiers are not resolved as the caller's identity here.
 // Execute отклоняет дочерний запуск процесса с неверными workload или полномочием до разрешения субъекта, затем заменяет субъекта команды его авторитетным разрешением и вызывает executeResolved. Идентификаторы payload здесь не разрешаются как идентичность вызывающего.
 func (service *Service) Execute(ctx context.Context, input command.Command) (command.Result, error) {
+	if input.Kind == command.ObserveWorkspace && (input.Principal.CallerWorkload != "runtime-controller" || input.Principal.Permission != runtimecontract.WorkspaceObservationOperation) {
+		return command.Result{}, errs.ErrForbidden
+	}
 	if input.Kind == command.LaunchWorkflowExecution && (input.Principal.CallerWorkload != "runtime-controller" || input.Principal.Permission != "platform.runtime.execution.workflow.launch") {
 		return command.Result{}, errs.ErrForbidden
 	}
@@ -1789,6 +1792,7 @@ func knownCommand(kind command.Kind) bool {
 		command.UpdateAssistantInstructions, command.RecoverAssistant, command.ClaimExecution,
 		command.RenewExecution, command.ReportExecutionProgress, command.CommitProviderCredentialRefresh,
 		command.CompleteExecution,
+		command.ObserveWorkspace,
 		command.DelegateExecution, command.LaunchWorkflowExecution, command.ProposeAssistantPlan, command.ProposeAssistantMetadata,
 		command.ProposeRunMetadata, command.RecordRunToolCall,
 		command.CompleteSessionSnapshot, command.CompleteSessionRestore,

@@ -127,6 +127,7 @@ type Config struct {
 	DefaultRoleImageReference       string        `env:"CONTROL_PLANE_DEFAULT_ROLE_IMAGE_REFERENCE"`
 	RoleRuntimeContractRevision     uint64        `env:"CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_REVISION"`
 	RoleRuntimeContractSHA256       string        `env:"CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_SHA256"`
+	WorkspaceStorageProfile         string        `env:"SESSION_WORKSPACE_STORAGE_PROFILE"`
 	OIDCIssuer                      string        `env:"CONTROL_PLANE_OIDC_ISSUER"`
 	OIDCAudience                    string        `env:"CONTROL_PLANE_OIDC_AUDIENCE"`
 	OIDCJWKSURL                     string        `env:"CONTROL_PLANE_OIDC_JWKS_URL"`
@@ -287,6 +288,7 @@ func (config Config) validate() error {
 		!validSHA256(config.RoleImageBuilderSHA256) || !validSHA256(config.RoleImageFrontendSHA256) ||
 		!validSHA256(config.RoleImageToolchainSHA256) ||
 		config.RoleRuntimeContractRevision == 0 || !validSHA256(config.RoleRuntimeContractSHA256) ||
+		config.WorkspaceStorageProfile != "" && config.WorkspaceStorageProfile != runtimecontract.WorkspaceStorageProfile ||
 		config.AuthorityVerifierUID == 0 || config.AuthorityVerifierGID == 0 ||
 		config.OIDCAudience != "kodex-control-api" || config.OIDCTLSServerName == "" || net.ParseIP(config.OIDCTLSServerName) != nil ||
 		config.OIDCRefreshInterval < 10*time.Second || config.OIDCRefreshInterval > time.Minute ||

@@ -71,11 +71,11 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 		return errors.New("agent-runner mode is required")
 	}
 	mode := args[1]
-	if mode != "runtime-prepare-workspace" && mode != "runtime-init-workspace" && mode != "runtime-session" && mode != "runtime-warm" && mode != "runtime-provider" && mode != "runtime-provider-credential-relay" && mode != workspaceCanaryMode {
+	if mode != "runtime-prepare-workspace" && mode != runtimeBindWorkspaceMode && mode != "runtime-init-workspace" && mode != "runtime-session" && mode != "runtime-warm" && mode != "runtime-provider" && mode != "runtime-provider-credential-relay" && mode != workspaceCanaryMode {
 		return errors.New("agent-runner mode is invalid")
 	}
 	var initializationInput model.Input
-	if mode == "runtime-init-workspace" {
+	if mode == "runtime-init-workspace" || mode == runtimeBindWorkspaceMode {
 		defer func() {
 			if resultErr != nil {
 				resultErr = publishInitializationFailure(initializationInput, resultErr)
@@ -96,12 +96,15 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 	}
 	input, err := model.DecodeInput(inputPath)
 	if err != nil {
-		if mode == "runtime-init-workspace" {
+		if mode == "runtime-init-workspace" || mode == runtimeBindWorkspaceMode {
 			return runtimecontract.InitializationError("INPUT_DECODE", "INPUT_INVALID", err)
 		}
 		return err
 	}
 	initializationInput = input
+	if mode == runtimeBindWorkspaceMode {
+		return prepareBoundWorkspace(lifecycleContext, input)
+	}
 	if mode == workspaceCanaryMode {
 		err := runWorkspaceCanary(lifecycleContext, input)
 		result := "OK"
@@ -115,6 +118,11 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 		return credentialrelay.Serve(lifecycleContext, input)
 	}
 	if mode == "runtime-init-workspace" {
+		if input.WorkspaceStorage != nil {
+			if _, err := bindWorkspaceWriter(lifecycleContext, input); err != nil {
+				return runtimecontract.InitializationError("WORKSPACE_LAYOUT", "UNKNOWN", err)
+			}
+		}
 		if err := materializeRuntimeEgressTrust(); err != nil {
 			return runtimecontract.InitializationError("EGRESS_TRUST", initializationFilesystemReason(err), err)
 		}
