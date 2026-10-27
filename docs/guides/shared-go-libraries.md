@@ -4,7 +4,7 @@ title: Общие библиотеки Go
 type: guide
 status: approved
 owner: architect
-version: 1.0.5
+version: 1.0.6
 updated: 2026-10-25
 ---
 
@@ -90,6 +90,19 @@ nil/empty semantics. Неполная конфигурация checker закр�
 Имена policy, порядок их проверки, source registration, TLS/RBAC и budget
 остаются у callers. Это последовательное observation, не атомарный snapshot
 или гарантия admission каждого будущего запроса.
+
+### `kubernetestransport`
+
+Узкий конструктор отдельного HTTP client сохраняет переданные CA pool, TLS server
+name, timeout и текст отказа redirect, задаёт TLS 1.3, попытку HTTP/2 и не
+использует proxy окружения. Nil CA pool, пустое имя, неположительный timeout и
+пустой текст redirect закрыто отклоняются. Helper не проверяет endpoint, содержимое
+CA, допустимость имени, bearer или resource authority: вызывающий обязан проверить
+их до создания клиента и
+владеет закрытием соединений. Это транспорт, а не разрешение на Kubernetes API.
+Helper не заменяет точечную библиотеку `exactkubernetessecret` с собственными
+resource/token границами и лимитами соединений. Локальные TLS unit-тесты не
+заменяют проверку доступа к настоящему кластеру.
 
 ### `serviceruntime`
 

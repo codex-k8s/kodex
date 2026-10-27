@@ -3,7 +3,6 @@ package snapshot
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -16,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	apiclient "github.com/codex-k8s/kodex/libs/go/kubernetestransport"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 	authoritysnapshot "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/snapshot"
 )
@@ -79,23 +79,13 @@ func New(config Config) (*Delivery, error) {
 	if !roots.AppendCertsFromPEM(caRaw) {
 		return nil, errors.New("authority snapshot Kubernetes CA is invalid")
 	}
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			MinVersion: tls.VersionTLS13,
-			RootCAs:    roots,
-			ServerName: config.TLSServerName,
-		},
-		ForceAttemptHTTP2: true,
+	client, err := apiclient.New(roots, config.TLSServerName, config.Timeout, "kubernetes API redirect is forbidden")
+	if err != nil {
+		return nil, err
 	}
 	return &Delivery{
 		config: config,
-		client: &http.Client{
-			Transport: transport,
-			Timeout:   config.Timeout,
-			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-				return errors.New("kubernetes API redirect is forbidden")
-			},
-		},
+		client: client,
 		resourceURL: config.Address + "/api/v1/namespaces/" +
 			url.PathEscape(config.Namespace) + "/secrets/" +
 			url.PathEscape(config.SecretName),

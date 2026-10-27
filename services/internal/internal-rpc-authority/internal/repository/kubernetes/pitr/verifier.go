@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
@@ -18,6 +17,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	apiclient "github.com/codex-k8s/kodex/libs/go/kubernetestransport"
 	"github.com/codex-k8s/kodex/libs/go/securefile"
 	domainrepository "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
@@ -110,23 +110,13 @@ func NewVerifier(config Config) (*Verifier, error) {
 	if err != nil {
 		return nil, errors.New("parse restore evidence public key")
 	}
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			MinVersion: tls.VersionTLS13,
-			RootCAs:    rootCAs,
-			ServerName: config.TLSServerName,
-		},
-		ForceAttemptHTTP2: true,
+	client, err := apiclient.New(rootCAs, config.TLSServerName, config.Timeout, "kubernetes API redirect is forbidden")
+	if err != nil {
+		return nil, err
 	}
 	return &Verifier{
 		config: config,
-		client: &http.Client{
-			Transport: transport,
-			Timeout:   config.Timeout,
-			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-				return errors.New("kubernetes API redirect is forbidden")
-			},
-		},
+		client: client,
 		evidenceURL: config.Address + "/api/v1/namespaces/" +
 			url.PathEscape(config.Namespace) + "/secrets/" +
 			url.PathEscape(config.EvidenceSecretName),

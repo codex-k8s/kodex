@@ -3300,14 +3300,6 @@
     {
       "format": "docker",
       "firstPath": "services/external/control-api-gateway/Dockerfile",
-      "secondPath": "services/internal/internal-rpc-authority/Dockerfile",
-      "fragmentSHA256": "204bc05c0dbbdf422783d70b90ddfa839f97b33b9976eddede9613247356cb1a",
-      "count": 1,
-      "reason": "Начало Dockerfile использует одинаково закреплённый Go compiler, но internal-rpc-authority копирует manifest roots и выпускает набор issuer/verifier/restore бинарей с особым runtime uid. Control API этого не делает; обобщение builder-стадии скрыло бы разные trust boundaries. После добавления точного httpserver COPY новое окно повторно сверено с полными Dockerfile обоих компонентов; сохранены прежние разные dependency/runtime inputs и exact count1."
-    },
-    {
-      "format": "docker",
-      "firstPath": "services/external/control-api-gateway/Dockerfile",
       "secondPath": "services/internal/secret-broker/Dockerfile",
       "fragmentSHA256": "7ce83416542809a2cde8472aae4018b9d5e8ad321b28970e1cc2f59bca34448f",
       "count": 1,
@@ -9104,6 +9096,30 @@
       "fragmentSHA256": "68f866bbbbad64f43a389e7487e289ef140bad1dd9f4212b5ef9c4b91c269445",
       "count": 1,
       "reason": "После выноса общего чтения и блокировки с проверкой версии совпадает только форма ветвления create/update. Создание памяти и набора навыков использует разные typed payload, SQL и идентификаторы; при обновлении проверяются разные состояния PURGED и ACTIVE. Общий lockOwnerVersionState уже сохраняет tenant scope, порядок lock → OCC и отображение ошибок. Универсальная фабрика SQL или callback ради оставшихся веток скрыла бы разные предметные команды и их lifecycle. Сохранена только одна точная пара путей/hash/count1; проверки доступа и остальные участки не исключены."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/control-api-gateway/Dockerfile",
+      "secondPath": "services/internal/internal-rpc-authority/Dockerfile",
+      "fragmentSHA256": "fdd9ee5bb24b87b53289167801b9bb907454027fb1da5090a704c62b7b67b693",
+      "count": 1,
+      "reason": "Окно после добавления COPY нового модуля сравнивает начало двух Dockerfile: одинаковые закреплённые frontend/compiler, GOTOOLCHAIN и WORKDIR, но разные явные зависимости и deployable. Gateway собирает один HTTP binary и запускается как 10001; authority дополнительно копирует policy и trust roots, собирает отдельные verifier/restore binaries и запускается как 65532. Общий builder с объединённым COPY расширил бы build context и скрыл раздельные dependency/trust boundaries. Сохранена только точная пара путей, hash и count1; код Dockerfile и security-проверки не исключены."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/internal/internal-rpc-authority/Dockerfile",
+      "secondPath": "services/internal/stt-tts-service/Dockerfile",
+      "fragmentSHA256": "80f5f9653878faf23d11ee6a668439c1f195bf11d5d03601a0d83840488b8b68",
+      "count": 1,
+      "reason": "Окно сравнивает декларативные COPY общих Go-модулей двух самостоятельных образов. Authority добавляет exact Kubernetes Secret и Kubernetes transport, policy и несколько verifier/restore binaries; STT использует sttapi и отдельный runtime с ffmpeg. Общий COPY всех зависимостей расширил бы каждый build context и не устранил разные binaries, зависимости и runtime. Сохранена только точная пара путей, hash и count1; остальные части Dockerfile и проверка зависимостей не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/internal-rpc-authority/internal/repository/kubernetes/credentialrollout/rollout.go",
+      "secondPath": "services/internal/internal-rpc-authority/internal/repository/kubernetes/restore/store.go",
+      "fragmentSHA256": "53d8316ada183bda71af467f192e0737711009f5801b9704f7aead29f4e1809d",
+      "count": 1,
+      "reason": "После выноса защищённого HTTP transport совпадает техническая последовательность os.ReadFile CA, проверки PEM и передачи roots для двух разных Kubernetes ресурсов. Полные constructors проверены: rollout привязан к фиксированным deployments, restore coordination — к собственному HTTPS адресу и ConfigMap; авторизация и переходы различаются. Универсальное файловое чтение в общей библиотеке добавило бы скрытый I/O без передаваемого lifecycle context и изменило бы контракты чтения и диагностик остальных четырёх constructors; существующий exactkubernetessecret имеет иные file limits. Сохранена только точная пара путей/hash/count1; validation, CA, TLS и resource authority не исключены."
     }
   ]
 }

@@ -4,11 +4,30 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.584.0
+version: 1.585.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общий Kubernetes HTTP transport authority — 27.10.2026
+
+Шесть constructors используют `libs/go/kubernetestransport`: исходные проверки
+endpoint и CA, разные имена ресурсов, ошибки и lifecycle остаются у callers.
+Новая библиотека закрыто отклоняет nil roots, пустое имя, неположительный timeout
+и пустую ошибку redirect; прежние callers уже проверяют необходимые значения.
+Точность настроек, отказ неверного TLS name, недоверенной CA и redirect проверены
+на локальном TLS server. Обратное преобразование шести файлов совпало с исходным
+Go-кодом; сохранены оригинальные сообщения, порядок проверок и привязки.
+
+Authority build/unit/vet PASS до и после: 370 unit PASS / 2 условных SKIP.
+Новая библиотека build/vet и 3 unit PASS, FAIL/SKIP 0; `go mod tidy -diff` обоих
+модулей чист. Dockerfile включает новый модуль, OCI build не выполнялся. Две
+точные Docker-декларации и один ограниченный CA-read fragment оставлены с причинами;
+18 мутаций решений отвергнуты, 17 unit инструментов качества PASS. Context7:
+[Go net/http](https://pkg.go.dev/net/http%40go1.25.3). Анализ: 1337 raw /
+1284 retained / 53 unresolved, Go-комментарии 21730/21730. Реальный Kubernetes,
+браузер, E2E, live/deploy/startup и QA не выполнялись.
 
 ## Общая проверка формы объекта в PWA — 27.10.2026
 

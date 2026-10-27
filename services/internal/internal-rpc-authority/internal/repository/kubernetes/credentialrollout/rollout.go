@@ -7,7 +7,6 @@ package credentialrollout
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"errors"
@@ -17,6 +16,8 @@ import (
 	"os"
 	"regexp"
 	"time"
+
+	apiclient "github.com/codex-k8s/kodex/libs/go/kubernetestransport"
 )
 
 // maxResponseBytes caps the amount discarded from each deployment PATCH response at one MiB; truncation is not treated as an oversized-response error because no response JSON is consumed.
@@ -72,22 +73,13 @@ func New(config Config) (*Rollout, error) {
 	if !rootCAs.AppendCertsFromPEM(caRaw) {
 		return nil, errors.New("kubernetes API CA is invalid")
 	}
+	client, err := apiclient.New(rootCAs, config.TLSServerName, config.Timeout, "kubernetes API redirect is forbidden")
+	if err != nil {
+		return nil, err
+	}
 	return &Rollout{
 		config: config,
-		client: &http.Client{
-			Timeout: config.Timeout,
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{
-					MinVersion: tls.VersionTLS13,
-					RootCAs:    rootCAs,
-					ServerName: config.TLSServerName,
-				},
-				ForceAttemptHTTP2: true,
-			},
-			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-				return errors.New("kubernetes API redirect is forbidden")
-			},
-		},
+		client: client,
 	}, nil
 }
 
