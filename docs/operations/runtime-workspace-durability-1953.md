@@ -157,7 +157,7 @@ Forward migration `20261026001500` располагается после пол�
 native-путей других задач. Проверки operator, native, backup/restore и реальная
 приёмка сотрудником обязательны до заявления готовности.
 
-Поставка приложения требует предварительно подтверждённой schema015 даже
+Поставка приложения требует предварительно подтверждённой schema016 даже
 при выключенном opt-in: claim query читает owner storage eligibility до LIMIT.
 Default legacy означает отсутствие новых bindings, а не разрешение запуска
 нового CP на старой схеме. Первый V2 init использует отдельный protected mode
@@ -198,6 +198,36 @@ Context7 использован для проверки FSGroup semantics. Nativ
 Это промежуточная поставка полного unit #1953: opt-in остаётся выключенным.
 
 ## Метаданные подтверждения checkpoint
+
+Forward016 расширяет существующие archive/task ledgers закрытым discriminator,
+сохраняя прежний publication key `(session_id,content_generation,object_key)`.
+Только format2 допускает отсутствующие Codex ID/path; v1 сохраняет прежние
+обязательность и bounds. Workspace scope/generation/checkpoint/quiescence
+и task body неизменны. Применённые015 и более ранние миграции не меняются.
+
+| Переход016 | Authority и immutable input | Устойчивый эффект/наблюдение |
+| --- | --- | --- |
+| Create+claim | Existing signed session-archive claim RPC; org из transport; session lock → workspace lock → task lock; frozen ABI4 RR/policy и released positive join | Один SNAPSHOT intent с derived root key; audit/run-changed в той же transaction; первая attempt может писать |
+| Content generation | Под общим session lock выбирается max session_storage/archives/tasks +1; workspace generation отдельна | Сохраняется общий high-watermark без повторного использования content generation |
+| Retry/expired claim | Тот же task/body/root, fresh monotonic generation/lease/fence; typed input digest включает attempt и reconciliation flag | После первой попытки только read-only reconciliation; нет cleanup неопределённых objects |
+| Renew | Exact stored task/lease/fence/generation, fresh current workspace и source pins | Тот же grant и продлённый expiry; события нет, authoritative path — owner task/renew response |
+| Complete snapshot | Exact current task и frozen source; format2 root receipt, SHA/bytes/entries и quota bounds | Archive receipt + CHECKPOINT_READY/current_archive + SUCCEEDED без lease атомарны с command receipt/audit/run-changed |
+| Fail/final expiry | Closed safe error либо clock owner; не более5 attempts | READY с сохранённым intent либо DEAD_LETTER и отзыв grant; PVC сохраняется; run outcome не меняется |
+| Replay/late old grant | Immutable command receipt либо exact current generation | Старый lease не действует; matching повтор возвращает прежний archive ref без нового snapshot |
+| Cancel/project deletion | Execution grants закрываются прежним owner; storage past facts остаются | Новый worker не создаётся по неизвестному writer; external purge заблокирован до PURGED |
+
+016 producer использует существующие private Claim/Renew/CompleteSessionSnapshot/
+FailSessionArchiveTask RPC и того же consumer Job/permissions. Request format
+не выбирает task profile: owner разрешает persisted workspace discriminator
+в trusted organization. Default legacy reader не обслуживает такие задачи.
+После выключения opt-in compatible reader сохраняет storage-only processing
+ранее назначенных bindings; новых execution bindings opt-in не создаёт.
+
+Принятие work-checkpoint не создаёт DELETE_PVC: сначала требуется отдельный
+proof сохранности Codex history той же PVC. Snapshot/owner metadata не дают
+CLEAN, нового RuntimeRevision, model run либо прав на восстановление. Release
+readiness требует полного016 schema/operator proof и compatible archive image;
+наличие migration или producer кода само по себе не подтверждает rollout.
 
 Owner выдаёт новую задачу как typed `WorkspaceArchiveWork`; transport переносит
 её в существующий Proto field22. Отсутствующий legacy discriminator сохраняет

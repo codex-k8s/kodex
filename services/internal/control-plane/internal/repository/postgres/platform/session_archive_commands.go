@@ -33,6 +33,9 @@ func (repository *Repository) changeSessionArchive(ctx context.Context, tx pgx.T
 		input.Principal.Permission != sessionArchivePermission(input.Kind) {
 		return commandOutcome{}, errs.ErrForbidden
 	}
+	if outcome, found, err := repository.changeWorkspaceArchive(ctx, tx, scope, input, payload); found || err != nil {
+		return outcome, err
+	}
 	locked, err := repository.lockSessionArchiveTask(ctx, tx, scope, payload)
 	if err != nil {
 		return commandOutcome{}, err

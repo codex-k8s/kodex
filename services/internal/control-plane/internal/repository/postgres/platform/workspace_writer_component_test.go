@@ -159,6 +159,13 @@ func TestWorkspaceWriterOwnerComponent(t *testing.T) {
 	}) {
 		return
 	}
+	claimPrincipal := sessionArchivePrincipal(t, ctx, repository, "platform.session-archive.tasks.claim")
+	t.Run("checkpoint_requires_released_writer", func(t *testing.T) {
+		items, err := service.ClaimSessionArchiveTasks(ctx, claimPrincipal, "workspace-checkpoint-fixture", 1)
+		if err != nil || len(items) != 0 {
+			t.Fatal("checkpoint claimed before physical release acknowledgement", err)
+		}
+	})
 	t.Run("released_writer_and_immutable_block_receipt", func(t *testing.T) {
 		result := execute(command.ObserveWorkspace, observer, "released", released)
 		if result.Runtime["workspaceWriterReleased"] != true || stringMap(result.Runtime, "workspaceStorageState") != "CHECKPOINT_PENDING" {
@@ -174,4 +181,5 @@ func TestWorkspaceWriterOwnerComponent(t *testing.T) {
 			t.Fatal("storage-only observation reopened cancelled run", err)
 		}
 	})
+	testWorkspaceCheckpointOwner(t, ctx, repository, service, pool, owner, claimPrincipal, binding, run.Ref)
 }

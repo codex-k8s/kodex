@@ -13,6 +13,12 @@ WITH previous AS (
      WHERE archive.id = previous.current_archive_id
        AND archive.lifecycle_state = 'AVAILABLE'
     RETURNING archive.id
+), next_generation AS (
+    SELECT GREATEST(
+      COALESCE((SELECT content_generation FROM control_plane.session_storage WHERE session_id=@session_id::uuid),0),
+      COALESCE((SELECT max(content_generation) FROM control_plane.session_archives WHERE session_id=@session_id::uuid),0),
+      COALESCE((SELECT max(content_generation) FROM control_plane.session_archive_tasks WHERE session_id=@session_id::uuid),0)
+    )+1 AS value
 )
 INSERT INTO control_plane.session_storage (
     session_id, organization_id, project_id, provider_account_id, runtime_revision_id,
@@ -20,7 +26,7 @@ INSERT INTO control_plane.session_storage (
     source_size_bytes, current_archive_id, idle_since
 )
 SELECT session.id, session.organization_id, session.project_id, session.provider_account_id,
-       revision.id, @codex_session_id::uuid, 1, 'LIVE', @source_relative_path,
+       revision.id, @codex_session_id::uuid, next_generation.value, 'LIVE', @source_relative_path,
        @source_sha256, @source_size_bytes, NULL, clock_timestamp()
 FROM control_plane.sessions session
 JOIN control_plane.runtime_revisions revision
@@ -28,6 +34,7 @@ JOIN control_plane.runtime_revisions revision
  AND revision.session_id = session.id
  AND revision.provider_account_id = session.provider_account_id
  AND revision.organization_id = session.organization_id
+CROSS JOIN next_generation
 WHERE session.id = @session_id::uuid
   AND session.organization_id = @organization_id::uuid
 ON CONFLICT (session_id) DO UPDATE
@@ -35,7 +42,7 @@ SET project_id = EXCLUDED.project_id,
     provider_account_id = EXCLUDED.provider_account_id,
     runtime_revision_id = EXCLUDED.runtime_revision_id,
     codex_session_id = EXCLUDED.codex_session_id,
-    content_generation = control_plane.session_storage.content_generation + 1,
+    content_generation = EXCLUDED.content_generation,
     state = 'LIVE',
     source_relative_path = EXCLUDED.source_relative_path,
     source_sha256 = EXCLUDED.source_sha256,

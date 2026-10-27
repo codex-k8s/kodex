@@ -1766,6 +1766,9 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	if hasArchiveBinding {
+		if err := lockSessionContentGeneration(ctx, tx, scope.organizationID, sessionID); err != nil {
+			return commandOutcome{}, err
+		}
 		stored, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpsertSessionStorage, pgx.StrictNamedArgs{
 			"organization_id":      scope.organizationID,
 			"session_id":           sessionID,

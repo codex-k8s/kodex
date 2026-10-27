@@ -279,6 +279,9 @@ func recordExpiredRuntimeCompletion(ctx context.Context, tx pgx.Tx, current scop
 		if tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectRunsId, lease["runID"]).Scan(&sessionID, &targetType) != nil {
 			return errs.ErrUnavailable
 		}
+		if err := lockSessionContentGeneration(ctx, tx, current.organizationID, sessionID); err != nil {
+			return err
+		}
 		stored, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpsertSessionStorage, pgx.StrictNamedArgs{
 			"organization_id": current.organizationID, "session_id": sessionID, "runtime_revision_id": lease["runtimeRevisionID"],
 			"codex_session_id": payload.CodexSessionID, "source_relative_path": payload.ArchiveRelativePath, "source_sha256": payload.ArchiveSHA256,

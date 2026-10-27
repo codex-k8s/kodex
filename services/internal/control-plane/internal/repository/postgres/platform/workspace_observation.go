@@ -125,12 +125,7 @@ func readWorkspaceObservationLease(ctx context.Context, tx pgx.Tx, current scope
 	if err != nil || json.Unmarshal(policyRaw, &policy) != nil {
 		return result, errs.ErrConflict
 	}
-	input.WorkspacePolicy = runtimecontract.RuntimeWorkspacePolicy{Revision: policy.Revision, Root: policy.Root,
-		Digest: policy.Digest, MaximumWritableBytes: policy.MaximumWritableBytes, MaximumFileCount: policy.MaximumFileCount,
-		DenialReasons: append([]string(nil), policy.DenialReasons...)}
-	for _, rule := range policy.Rules {
-		input.WorkspacePolicy.Rules = append(input.WorkspacePolicy.Rules, runtimecontract.RuntimeWorkspacePathRule{Path: rule.Path, Access: rule.Access})
-	}
+	input.WorkspacePolicy = runtimeWorkspacePolicyContract(policy)
 	if input.WorkspacePolicy.Validate() != nil || input.WorkspaceStorage.ValidateForInput(*input) != nil {
 		return result, errs.ErrConflict
 	}

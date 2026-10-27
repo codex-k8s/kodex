@@ -52,6 +52,10 @@ func (repository *Repository) ClaimSessionArchiveTasks(ctx context.Context, prin
 		return nil, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	workspaceItems, err := repository.claimWorkspaceArchiveTasks(ctx, tx, scope, workloadInstance, limit)
+	if err != nil {
+		return nil, err
+	}
 	changedRows, err := tx.Query(ctx, querySessionArchiveMaterializeTasks, pgx.StrictNamedArgs{
 		"idle_seconds": int64(sessionArchiveIdleAfter / time.Second), "retention_seconds": int64(sessionArchiveRetention / time.Second),
 		"maximum_attempts": sessionArchiveMaxAttempts,
@@ -77,7 +81,7 @@ func (repository *Repository) ClaimSessionArchiveTasks(ctx context.Context, prin
 			return nil, err
 		}
 	}
-	rows, err := tx.Query(ctx, querySessionArchiveSelectClaimableTasks, pgx.StrictNamedArgs{"organization_id": scope.organizationID, "limit": limit})
+	rows, err := tx.Query(ctx, querySessionArchiveSelectClaimableTasks, pgx.StrictNamedArgs{"organization_id": scope.organizationID, "limit": limit - int32(len(workspaceItems))})
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
@@ -106,7 +110,7 @@ func (repository *Repository) ClaimSessionArchiveTasks(ctx context.Context, prin
 	}
 	rows.Close()
 
-	items := make([]map[string]any, 0, len(candidates))
+	items := append(make([]map[string]any, 0, len(candidates)+len(workspaceItems)), workspaceItems...)
 	for _, candidate := range candidates {
 		leaseRef, err := newRef("lea")
 		if err != nil {
@@ -197,6 +201,9 @@ func (repository *Repository) RenewSessionArchiveTask(ctx context.Context, princ
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return nil, err
+	}
+	if result, found, err := repository.renewWorkspaceArchive(ctx, scope, input); found || err != nil {
+		return result, err
 	}
 	digest := sha256.Sum256([]byte(input.Fence))
 	expiresAt := time.Now().UTC().Add(sessionArchiveLeaseDuration)
