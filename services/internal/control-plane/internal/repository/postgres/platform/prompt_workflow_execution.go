@@ -20,10 +20,13 @@ var queryPromptWorkflowExecutionContext string
 
 const workflowExecutionGuidanceRevision = "workflow-execution-guidance-v2"
 
+// workflowExecutionPromptStep carries advisory step and exact gate outcome without approval authority.
+// workflowExecutionPromptStep передаёт рекомендательное состояние шага и точный исход Gate без полномочий согласования.
 type workflowExecutionPromptStep struct {
 	StepKey, NodeRef, State, MaterializationState      string
 	Ready                                              bool
 	ResultGateRef, ResultGateState, ResultGateDecision string
+	ResultGateResolutionKind                           string `json:",omitempty"`
 }
 
 // workflowExecutionPromptContext contains public advisory state, never private authorization pins.
@@ -122,7 +125,7 @@ func applyWorkflowExecutionPrompt(snapshot *entity.PromptMaterializationSnapshot
 	}
 	execution.Revision, execution.Mode = workflowExecutionGuidanceRevision, "CURRENT_ROOT_STAGE"
 	if execution.ExecutionMode == workflowservice.ServerDAGV1 {
-		execution.Revision, execution.Mode = "server-dag-guidance-v1", "SERVER_ASSIGNED_STAGE"
+		execution.Revision, execution.Mode = "server-dag-guidance-v2", "SERVER_ASSIGNED_STAGE"
 		if _, exception := workflowExceptionStepNumber(execution.WorkflowStageKey); exception {
 			if continued || execution.RunRef == execution.RootRunRef {
 				return errs.ErrConflict
@@ -147,7 +150,7 @@ func applyWorkflowExecutionPrompt(snapshot *entity.PromptMaterializationSnapshot
 	}
 	seen := make(map[string]bool, len(execution.Steps))
 	for _, step := range execution.Steps {
-		if !validWorkflowPromptResultGate(step) {
+		if !validWorkflowPromptResultGate(step) || (step.ResultGateResolutionKind != "" && execution.ExecutionMode != workflowservice.ServerDAGV1) {
 			return errs.ErrConflict
 		}
 		if step.StepKey == "" || !workflowLaunchRefPattern.MatchString(step.NodeRef) || seen[step.StepKey] ||
@@ -190,12 +193,17 @@ func applyWorkflowExecutionPrompt(snapshot *entity.PromptMaterializationSnapshot
 	return nil
 }
 
+// validWorkflowPromptResultGate distinguishes exact human decisions from supersession without inventing approval.
+// validWorkflowPromptResultGate отличает точные решения человека от замены устаревшего Gate, не выдумывая согласование.
 func validWorkflowPromptResultGate(step workflowExecutionPromptStep) bool {
 	if step.ResultGateRef == "" {
-		return step.ResultGateState == "" && step.ResultGateDecision == ""
+		return step.ResultGateState == "" && step.ResultGateDecision == "" && step.ResultGateResolutionKind == ""
 	}
 	if !workflowLaunchRefPattern.MatchString(step.ResultGateRef) {
 		return false
+	}
+	if step.ResultGateResolutionKind != "" {
+		return step.ResultGateResolutionKind == "SUPERSEDED" && step.ResultGateState == "CANCELLED" && step.ResultGateDecision == ""
 	}
 	want := map[string]string{"OPEN": "", "APPROVED": "APPROVE", "REJECTED": "REJECT", "CHANGES_REQUESTED": "REQUEST_CHANGES", "CANCELLED": "CANCEL"}
 	decision, ok := want[step.ResultGateState]
@@ -211,5 +219,6 @@ SAME_ROOT_CONTINUATION uses only successful current-root callback receipts and t
 // serverWorkflowExecutionGuidance reserves orchestration and acceptance to the server for this profile.
 // serverWorkflowExecutionGuidance закрепляет запуск и приёмку шагов за сервером данного профиля.
 const serverWorkflowExecutionGuidance = `The server schedules this DAG after verifying mandatory typed results and exact owner gates. Do not delegate stages, launch a replacement workflow, route your result to a manager, or infer acceptance from technical SUCCEEDED. Ready and step states are advisory context, never authority for an action.
+ResultGateResolutionKind SUPERSEDED identifies a cancelled obsolete result gate with no human decision. It does not cancel the fresh author attempt, accept the old result or authorize an external effect.
 SERVER_ASSIGNED_STAGE completes only its assigned stage and mandatory result declaration. SERVER_STAGE_CONTINUATION continues the same business attempt using only exact captured artifact revisions and integration receipts available in the current catalog. History, filenames, URLs and model claims do not replace evidence. The server alone starts downstream stages.
 SERVER_EXCEPTION_ANALYSIS diagnoses the recorded exception for the owner. It cannot accept results, waive predicates, approve a gate or authorize retry. A retry requires a recorded owner decision and receives a fresh execution; analysis alone never retries an external effect. Preserve the original task and current permission boundaries. An absent, expired, cancelled or OPEN gate is not approval; do not act on behalf of the owner.`
