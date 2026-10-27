@@ -1562,6 +1562,9 @@ func (repository *Repository) getRunGraph(ctx context.Context, principal value.P
 	if err := projectArtifactResults(ctx, tx, scope, &command.Result{Graph: &graph}); err != nil {
 		return entity.Run{}, entity.RunGraph{}, err
 	}
+	if err := attachWorkflowRetryProofs(ctx, tx, scope, &graph); err != nil {
+		return entity.Run{}, entity.RunGraph{}, err
+	}
 	if includeRuns {
 		if run.Ref != graph.RunRef {
 			return entity.Run{}, entity.RunGraph{}, errs.ErrInvalid

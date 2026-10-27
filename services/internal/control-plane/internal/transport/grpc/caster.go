@@ -686,7 +686,11 @@ func castNode(value entity.RunNode) *controlplanev1.RunNode {
 // castEdge projects stored edge/root endpoints, relation type and label; returning IDs does not authorize creation or traversal of a new relation.
 // castEdge отображает сохранённые концы ребра и корня, вид связи и подпись; возврат ID не разрешает создание или обход новой связи.
 func castEdge(value entity.RunEdge) *controlplanev1.RunEdge {
-	return &controlplanev1.RunEdge{Ref: value.Ref, RunRef: value.RunRef, SourceNodeRef: value.SourceNodeRef, TargetNodeRef: value.TargetNodeRef, Type: edgeType(value.Type), Label: value.Label}
+	result := &controlplanev1.RunEdge{Ref: value.Ref, RunRef: value.RunRef, SourceNodeRef: value.SourceNodeRef, TargetNodeRef: value.TargetNodeRef, Type: edgeType(value.Type), Label: value.Label}
+	if proof := value.ServerWorkflowRetry; proof != nil {
+		result.ServerWorkflowRetry = &controlplanev1.WorkflowRetryReadProof{WorkflowVersionRef: proof.WorkflowVersionRef, WorkflowVersionDigest: proof.WorkflowVersionDigest, OriginNodeRef: proof.OriginNodeRef, StepKey: proof.StepKey, PreviousBusinessAttempt: proof.PreviousBusinessAttempt, BusinessAttempt: proof.BusinessAttempt}
+	}
+	return result
 }
 
 // castRunDelta preserves absent run delta and maps versioned lifecycle/graph/event/usage/result metadata without merging it into an existing state.

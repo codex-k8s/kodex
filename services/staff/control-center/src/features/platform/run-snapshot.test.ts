@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Run, RunGraph } from "@/shared/api/generated/openapi/types.gen";
 import { usePlatformStore } from "./store";
+import { workflowRetrySnapshot } from "@/test/workflow-retry-snapshot";
 
 function requiredFixture<T>(value: T | undefined): T {
   if (value === undefined) throw new Error("Missing required test fixture");
@@ -76,6 +77,277 @@ function fixture(): { graph: RunGraph; runs: Run[] } {
   };
   return { graph, runs: [root, child] };
 }
+
+describe("SERVER business retry full snapshot", () => {
+  beforeEach(() => setActivePinia(createPinia()));
+  const make = (previous = 1, accepted = false) =>
+    workflowRetrySnapshot(
+      requiredFixture(fixture().runs[0]),
+      previous,
+      accepted,
+    );
+  for (const previous of [1, 2, 3])
+    for (const accepted of [false, true])
+      it(`принимает цепочку попытки ${String(previous + 1)} и accepted=${String(accepted)} после terminal`, () => {
+        const value = make(previous, accepted),
+          store = usePlatformStore();
+        for (const run of value.runs)
+          if (run.state === "RUNNING") run.state = "CANCELLED";
+        for (const node of value.graph.nodes)
+          if (node.state === "RUNNING" || node.state === "QUEUED")
+            node.state = "CANCELLED";
+        store.applyRunReadinessSnapshot(value.graph, value.runs);
+        expect(
+          store.hasRunReadinessSnapshot(
+            value.graph.runRef,
+            value.graph.sequence,
+          ),
+        ).toBe(true);
+        expect(
+          store.graphs[value.graph.runRef]?.edges.filter(
+            (edge) => edge.serverWorkflowRetry,
+          ),
+        ).toHaveLength(previous);
+        store.applyRunReadinessSnapshot(
+          structuredClone(value.graph),
+          structuredClone(value.runs),
+        );
+        expect(Object.keys(store.runs)).toHaveLength(value.runs.length);
+      });
+  const cases: [string, (value: ReturnType<typeof make>) => void][] = [
+    [
+      "нет technical edge",
+      (v) => {
+        v.graph.edges = v.graph.edges.filter(
+          (edge) =>
+            edge.type !== "CONTINUES" || edge.targetNodeRef !== v.final.ref,
+        );
+      },
+    ],
+    [
+      "повтор technical edge",
+      (v) => {
+        const edge = requiredFixture(
+          v.graph.edges.find(
+            (edge) =>
+              edge.type === "CONTINUES" && edge.targetNodeRef === v.final.ref,
+          ),
+        );
+        v.graph.edges.push({ ...edge, ref: "edg_duplicate1" });
+      },
+    ],
+    [
+      "пропуск runtime attempt",
+      (v) => {
+        v.final.attempt = 5;
+      },
+    ],
+    [
+      "technical parent подменён root",
+      (v) => {
+        v.final.parentNodeRef = "nod_root0001";
+      },
+    ],
+    [
+      "чужой technical run",
+      (v) => {
+        requiredFixture(
+          v.graph.nodes.find((node) => node.ref === "nod_technical2"),
+        ).runRef = v.fresh.ref;
+      },
+    ],
+    [
+      "чужой technical agent",
+      (v) => {
+        requiredFixture(
+          v.graph.nodes.find((node) => node.ref === "nod_technical2"),
+        ).agentRef = "agt_foreign1";
+      },
+    ],
+    [
+      "null proof",
+      (v) => {
+        Object.assign(v.retry, { serverWorkflowRetry: null });
+      },
+    ],
+    [
+      "неполный proof",
+      (v) => {
+        Object.assign(v.retry, { serverWorkflowRetry: { stepKey: "work" } });
+      },
+    ],
+    [
+      "digest с newline",
+      (v) => {
+        requiredFixture(v.retry.serverWorkflowRetry).workflowVersionDigest =
+          "a".repeat(64) + "\n";
+      },
+    ],
+    [
+      "step с newline",
+      (v) => {
+        requiredFixture(v.retry.serverWorkflowRetry).stepKey = "work\n";
+      },
+    ],
+    [
+      "ref с newline",
+      (v) => {
+        requiredFixture(v.retry.serverWorkflowRetry).workflowVersionRef += "\n";
+      },
+    ],
+    [
+      "нет proof",
+      (v) => {
+        delete v.retry.serverWorkflowRetry;
+      },
+    ],
+    [
+      "лишнее поле",
+      (v) => {
+        Object.assign(v.retry.serverWorkflowRetry ?? {}, {
+          privateGrant: "not-authority",
+        });
+      },
+    ],
+    [
+      "неизвестный origin",
+      (v) => {
+        requiredFixture(v.retry.serverWorkflowRetry).originNodeRef =
+          "nod_foreign1";
+      },
+    ],
+    [
+      "неверный step",
+      (v) => {
+        requiredFixture(v.retry.serverWorkflowRetry).stepKey = "invalid.step";
+      },
+    ],
+    [
+      "пропуск попытки",
+      (v) => {
+        requiredFixture(v.retry.serverWorkflowRetry).businessAttempt = 4;
+      },
+    ],
+    [
+      "дробная попытка",
+      (v) => {
+        requiredFixture(v.retry.serverWorkflowRetry).previousBusinessAttempt =
+          1.5;
+      },
+    ],
+    [
+      "пятая попытка",
+      (v) => {
+        const p = requiredFixture(v.retry.serverWorkflowRetry);
+        p.previousBusinessAttempt = 4;
+        p.businessAttempt = 5;
+      },
+    ],
+    [
+      "неверный digest",
+      (v) => {
+        requiredFixture(v.retry.serverWorkflowRetry).workflowVersionDigest =
+          "G".repeat(64);
+      },
+    ],
+    [
+      "нет journal",
+      (v) => {
+        delete v.origin.workflowResults;
+      },
+    ],
+    [
+      "чужой journal run",
+      (v) => {
+        requiredFixture(v.origin.workflowResults?.[0]).runRef = "run_foreign1";
+      },
+    ],
+    [
+      "повтор journal",
+      (v) => {
+        const first = requiredFixture(v.origin.workflowResults?.[0]);
+        v.origin.workflowResults?.push(first);
+      },
+    ],
+    [
+      "неверный agent",
+      (v) => {
+        v.current.agentRef = "agt_foreign1";
+      },
+    ],
+    [
+      "неверный parent",
+      (v) => {
+        v.current.parentNodeRef = "nod_foreign1";
+      },
+    ],
+    [
+      "неверный runtime attempt",
+      (v) => {
+        v.current.attempt = 2;
+      },
+    ],
+    [
+      "чужой root",
+      (v) => {
+        v.retry.runRef = "run_foreign1";
+      },
+    ],
+    [
+      "чужой project",
+      (v) => {
+        v.fresh.projectRef = "prj_foreign1";
+      },
+    ],
+    [
+      "подмена ordinary retry",
+      (v) => {
+        v.fresh.retryOfRunRef = v.final.runRef;
+      },
+    ],
+    [
+      "proof на CONTINUES",
+      (v) => {
+        v.retry.type = "CONTINUES";
+      },
+    ],
+    [
+      "дублирование slot",
+      (v) => {
+        v.graph.edges.push({ ...v.retry, ref: "edg_duplicate1" });
+      },
+    ],
+  ];
+  for (const [name, mutate] of cases)
+    it("закрыто отклоняет " + name, () => {
+      const value = make(),
+        store = usePlatformStore();
+      mutate(value);
+      expect(() =>
+        store.applyRunReadinessSnapshot(value.graph, value.runs),
+      ).toThrow();
+      expect(Object.keys(store.runs)).toEqual([]);
+    });
+  it("не смешивает версии proof в одной цепочке", () => {
+    const value = make(3),
+      store = usePlatformStore();
+    requiredFixture(value.retry.serverWorkflowRetry).workflowVersionRef =
+      "wfv_foreign1";
+    expect(() =>
+      store.applyRunReadinessSnapshot(value.graph, value.runs),
+    ).toThrow();
+  });
+  it("требует собственное proof первого physical node прежней business attempt", () => {
+    const value = make(3),
+      store = usePlatformStore();
+    value.graph.edges = value.graph.edges.filter(
+      (edge) => edge.serverWorkflowRetry?.businessAttempt !== 2,
+    );
+    expect(() =>
+      store.applyRunReadinessSnapshot(value.graph, value.runs),
+    ).toThrow();
+  });
+});
 
 describe("полный owner run snapshot", () => {
   beforeEach(() => setActivePinia(createPinia()));

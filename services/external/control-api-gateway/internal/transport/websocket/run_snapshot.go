@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"sync"
 	"time"
 
@@ -260,7 +261,20 @@ func snapshotRetryPredecessors(graph *controlplanev1.RunGraph, values []*control
 	}
 	links := map[string]string{}
 	previous := map[string]bool{}
+	serverTargets, serverSlots := map[string]bool{}, map[string]bool{}
+	serverVersion := ""
 	for _, edge := range graph.GetEdges() {
+		if proof := edge.GetServerWorkflowRetry(); proof != nil {
+			version := proof.GetWorkflowVersionRef() + ":" + proof.GetWorkflowVersionDigest()
+			slot := proof.GetOriginNodeRef() + ":" + strconv.FormatInt(int64(proof.GetBusinessAttempt()), 10)
+			if !validServerWorkflowRetrySnapshot(graph, edge, nodes, runs) || serverTargets[edge.GetTargetNodeRef()] || serverSlots[slot] ||
+				serverVersion != "" && serverVersion != version {
+				return nil, false
+			}
+			serverVersion = version
+			serverTargets[edge.GetTargetNodeRef()], serverSlots[slot] = true, true
+			continue
+		}
 		if edge.GetType() != controlplanev1.RunEdgeType_RUN_EDGE_TYPE_RETRY_OF && edge.GetType() != controlplanev1.RunEdgeType_RUN_EDGE_TYPE_CONTINUES {
 			continue
 		}

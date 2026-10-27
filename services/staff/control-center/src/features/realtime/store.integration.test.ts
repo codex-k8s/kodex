@@ -24,6 +24,7 @@ vi.mock("./ticket", () => ticketApi);
 import { usePlatformStore } from "@/features/platform/store";
 import { useAccessStore } from "@/features/access/store";
 import { useProvidersStore } from "@/features/providers/store";
+import { workflowRetrySnapshot } from "@/test/workflow-retry-snapshot";
 import {
   useRealtimeStore,
   webSocketHandshakeTimeoutMs,
@@ -292,6 +293,45 @@ function fullRun(ref: string, sequence: number): Run {
 }
 
 describe("browser-session realtime multiplexer", () => {
+  it("SERVER retry получает RUN_READY и восстанавливается на новом socket без HTTP resync", async () => {
+    const store = useRealtimeStore(),
+      platform = usePlatformStore();
+    const runRef = "run_realtime01";
+    store.openRun(runRef);
+    await flushProcessing();
+    const sendSnapshot = async (socket: FakeWebSocket) => {
+      const value = workflowRetrySnapshot(fullRun(runRef, 7), 3, true);
+      socket.open();
+      socket.message(
+        runEnvelope(socket, runRef, {
+          type: "RUN_GRAPH_SNAPSHOT",
+          cursor: 7,
+          snapshot: value.graph,
+          runs: value.runs,
+        }),
+      );
+      socket.message(
+        runEnvelope(socket, runRef, { type: "RUN_READY", cursor: 7 }),
+      );
+      socket.message({
+        type: "SESSION_READY",
+        requestRef: requestRef(socket),
+        streams: [
+          { streamKind: "PLATFORM", streamRef: "PLATFORM", cursor: 0 },
+          { streamKind: "RUN", streamRef: runRef, cursor: 7 },
+        ],
+      });
+      await flushProcessing();
+      expect(store.state[runRef]?.state).toBe("live");
+      expect(platform.hasRunReadinessSnapshot(runRef, 7)).toBe(true);
+      expect(platform.loadRun).not.toHaveBeenCalled();
+    };
+    await sendSnapshot(socketAt(0));
+    store.refreshSession();
+    await flushProcessing();
+    await sendSnapshot(socketAt(1));
+    store.closeAll();
+  });
   it("сохраняет PARTIAL snapshot и COMPLETE0 delta, отвергая неизвестное качество", async () => {
     const store = useRealtimeStore(),
       platform = usePlatformStore();

@@ -3257,6 +3257,18 @@ export type RunNode = {
     nextActions: Array<NextAction>;
 };
 
+/**
+ * Историческая SERVER lineage, проверенная владельцем; не разрешает retry и не принимает результат.
+ */
+export type WorkflowRetryReadProof = {
+    workflowVersionRef: OpaqueRef;
+    workflowVersionDigest: string;
+    originNodeRef: OpaqueRef;
+    stepKey: string;
+    previousBusinessAttempt: number;
+    businessAttempt: number;
+};
+
 export type RunEdge = {
     ref: OpaqueRef;
     runRef: OpaqueRef;
@@ -3264,6 +3276,7 @@ export type RunEdge = {
     targetNodeRef: OpaqueRef;
     type: 'DELEGATED_TO' | 'CALLBACK_TO' | 'RETRY_OF' | 'CONTINUES' | 'WAITING_FOR';
     label: string;
+    serverWorkflowRetry?: WorkflowRetryReadProof;
 };
 
 export type RunDelta = {

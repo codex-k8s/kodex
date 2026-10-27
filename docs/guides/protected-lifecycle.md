@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.54
+version: 1.1.55
 updated: 2026-10-27
 ---
 
@@ -19,6 +19,15 @@ FAILED, выдумывать turn/RR или менять materialization рад�
 Полный owner envelope сохраняет подтверждённые результаты и uncertain WRITE,
 закрывает leases/Gates и не мешает claim другого root. Матрица:
 [#1935](../operations/server-root-deadline-1935.md).
+
+Исторический SERVER business retry между двумя дочерними runs не является
+root-to-root retry. Полный reader доказывает exact logical origin, опубликованную
+политику, предыдущий immutable final journal/COMPLETED tuple и одобренный recovery,
+затем передаёт bounded typed read proof всем строгим consumers. Same-root само по
+себе недостаточно; technical final может отличаться от первого physical node.
+Terminal/cancel не стирает историю и не требует нового active grant для её чтения;
+текущая reader eligibility сохраняется. Матрица:
+[#1939](../operations/server-workflow-retry-snapshot-1939.md).
 
 Новая business attempt не разрешает повтор уже успешного внешнего WRITE.
 При повторном исполнении owner сопоставляет опубликованный logical intent,

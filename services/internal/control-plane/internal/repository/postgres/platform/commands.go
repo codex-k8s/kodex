@@ -2469,6 +2469,9 @@ func (repository *Repository) readRunGraphTx(ctx context.Context, tx pgx.Tx, sco
 		return entity.Run{}, entity.RunGraph{}, fmt.Errorf("iterate run graph edges: %w", errs.ErrUnavailable)
 	}
 	edgeRows.Close()
+	if err := attachWorkflowRetryProofs(ctx, tx, scope, &graph); err != nil {
+		return entity.Run{}, entity.RunGraph{}, err
+	}
 	return run, graph, nil
 }
 
