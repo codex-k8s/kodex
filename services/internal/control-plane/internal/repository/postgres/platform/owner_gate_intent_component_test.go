@@ -38,18 +38,7 @@ var gateIntentActiveNodeQuery string
 // откатываемой транзакции.
 func gateTestProjectID(t *testing.T, ctx context.Context, repository *Repository, owner value.Principal, ref string) string {
 	t.Helper()
-	principal, err := repository.ResolvePrincipal(ctx, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	current, err := repository.resolveScope(ctx, principal)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tx, err := repository.pool.Begin(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	current, tx := openComponentScopeTransaction(t, ctx, repository, owner)
 	defer func() { _ = tx.Rollback(ctx) }()
 	_, target, err := repository.resolveCommandTarget(ctx, tx, current, "project.view", "PROJECT", ref, ref)
 	if err != nil {
@@ -71,18 +60,7 @@ func testGateSourceAndHistoricalConsequences(t *testing.T, ctx context.Context, 
 		t.Fatalf("source fixture upload: %v", err)
 	}
 	ref := finalizedAttachmentSetRef(t, ctx, service, owner, gate.ProjectRef, "RUN_INPUT", "gate-source-set", artifact.Ref)
-	principal, err := repository.ResolvePrincipal(ctx, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	current, err := repository.resolveScope(ctx, principal)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tx, err := repository.pool.Begin(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	current, tx := openComponentScopeTransaction(t, ctx, repository, owner)
 	defer func() { _ = tx.Rollback(ctx) }()
 	_, target, err := repository.resolveCommandTarget(ctx, tx, current, "project.view", "PROJECT", gate.ProjectRef, gate.ProjectRef)
 	if err != nil {

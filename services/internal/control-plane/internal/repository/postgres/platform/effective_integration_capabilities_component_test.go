@@ -115,18 +115,7 @@ func testManagedRuntimeCapabilityAuthority(t *testing.T, ctx context.Context, re
 			t.Fatal("same-key public connection authority escaped")
 		}
 	}
-	resolved, err := repository.ResolvePrincipal(ctx, candidate)
-	if err != nil {
-		t.Fatal(err)
-	}
-	current, err := repository.resolveScope(ctx, resolved)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tx, err := repository.pool.Begin(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	current, tx := openComponentScopeTransaction(t, ctx, repository, candidate)
 	defer func() { _ = tx.Rollback(ctx) }()
 	_, grants, err := repository.agentCapabilityAuthority(ctx, tx, current, project.Project.Ref, agent.Ref, nil)
 	if err != nil || len(grants) != 1 || grants[0]["connectionRef"] != allowed.Ref || grants[0]["definitionDigest"] != definition.Digest {

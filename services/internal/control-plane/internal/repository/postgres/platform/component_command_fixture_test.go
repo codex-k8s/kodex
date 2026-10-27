@@ -7,6 +7,7 @@ import (
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
+	"github.com/jackc/pgx/v5"
 )
 
 // newComponentCommandExecutor returns a test-only command executor with the caller's exact
@@ -24,4 +25,25 @@ func newComponentCommandExecutor(t *testing.T, ctx context.Context, service *pla
 		}
 		return result
 	}
+}
+
+// openComponentScopeTransaction resolves the test principal and opens the same default transaction.
+// The caller owns rollback, access checks and any fixture effects; this helper grants no authority.
+// openComponentScopeTransaction разрешает test principal и открывает прежнюю default transaction.
+// Rollback, проверка доступа и эффекты fixture принадлежат caller; helper не выдаёт полномочий.
+func openComponentScopeTransaction(t *testing.T, ctx context.Context, repository *Repository, owner value.Principal) (scope, pgx.Tx) {
+	t.Helper()
+	principal, err := repository.ResolvePrincipal(ctx, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := repository.resolveScope(ctx, principal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx, err := repository.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return current, tx
 }

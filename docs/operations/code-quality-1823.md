@@ -4,11 +4,22 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.580.0
+version: 1.581.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая транзакция тестовых owner-сценариев — 27.10.2026
+
+Три тестовых пути используют общую подготовку principal, scope и default
+transaction. Прежние rollback, проверки доступа и эффекты остаются у сценариев;
+production-код не менялся. Control-plane build/vet PASS, 3073 unit PASS / 70
+условных SKIP. На disposable PostgreSQL выбранный owner-gate набор дал 3 PASS
+события до и после, сценарии assistant — 43 PASS события после, managed
+configuration — 2 PASS события после, FAIL/SKIP 0. Анализ: 1341 raw / 1282
+retained / 59 unresolved, Go-комментарии 21721/21721. Браузер, E2E,
+live/deploy/startup и QA не выполнялись.
 
 ## Общее сравнение полей расписания и ревизии — 27.10.2026
 
