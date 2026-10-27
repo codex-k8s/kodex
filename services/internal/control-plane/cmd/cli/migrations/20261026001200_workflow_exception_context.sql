@@ -10,18 +10,23 @@ SET LOCAL statement_timeout = '30s';
 DO $migration$
 DECLARE
  v_version bigint;
+ v_legacy boolean;
  v_path text;
+ v_role text:=current_setting('role');
  v_catalog jsonb;
- v_relation oid:=to_regclass('control_plane.session_workspace_storage');
+ v_relation oid;
 BEGIN
- SELECT max(version_id) INTO v_version FROM public.goose_db_version WHERE is_applied;
+ SELECT max(version_id),bool_or(version_id=20261026001100)
+ INTO v_version,v_legacy FROM public.goose_db_version WHERE is_applied;
+ -- Ledger читается от migrator; metadata домена доступна только после штатного SET ROLE.
+ -- Временная роль назначается из константы, не из payload, и восстанавливается до выхода.
+ PERFORM set_config('role','control_plane_owner',true);
+ v_relation:=to_regclass('control_plane.session_workspace_storage');
  IF v_version=20261026001100 THEN
    IF v_relation IS NOT NULL OR to_regprocedure('control_plane.guard_session_workspace_storage()') IS NOT NULL THEN
      RAISE EXCEPTION 'workflow exception context has an untracked workspace profile';
    END IF;
- ELSIF v_version=20261026001150 AND v_relation IS NOT NULL AND EXISTS (
-   SELECT 1 FROM public.goose_db_version WHERE version_id=20261026001100 AND is_applied
- ) THEN
+ ELSIF v_version=20261026001150 AND v_legacy AND v_relation IS NOT NULL THEN
    -- Допускается только точная композиция01150. Хеши взяты из PostgreSQL18
    -- после штатного01150 и закрепляют все columns/defaults, constraints/FK,
    -- indexes, пользовательский trigger и source/security metadata его function.
@@ -32,8 +37,7 @@ SELECT jsonb_build_object(
 'constraints',(SELECT jsonb_agg(jsonb_build_array(c.conname,c.contype,c.convalidated,c.conenforced,c.condeferrable,c.condeferred,pg_get_constraintdef(c.oid)) ORDER BY c.conname) FROM pg_constraint c WHERE c.conrelid='control_plane.session_workspace_storage'::regclass),
 'indexes',(SELECT jsonb_agg(jsonb_build_array(c.relname,i.indisunique,i.indisvalid,i.indisready,pg_get_indexdef(i.indexrelid)) ORDER BY c.relname) FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid WHERE i.indrelid='control_plane.session_workspace_storage'::regclass),
 'triggers',(SELECT jsonb_agg(jsonb_build_array(t.tgname,t.tgtype,t.tgenabled,t.tgisinternal,t.tgdeferrable,t.tginitdeferred,t.tgnargs,t.tgattr::text,pg_get_expr(t.tgqual,t.tgrelid),t.tgfoid::regprocedure::text) ORDER BY t.tgname) FROM pg_trigger t WHERE t.tgrelid='control_plane.session_workspace_storage'::regclass AND NOT t.tgisinternal),
-'function',(SELECT jsonb_build_array(md5(p.prosrc),pg_get_userbyid(p.proowner),p.prosecdef,p.provolatile,p.proconfig,p.prorettype::regtype::text,l.lanname) FROM pg_proc p JOIN pg_language l ON l.oid=p.prolang WHERE p.oid='control_plane.guard_session_workspace_storage()'::regprocedure),
-'version',(SELECT max(version_id) FROM public.goose_db_version WHERE is_applied)) INTO v_catalog;
+'function',(SELECT jsonb_build_array(md5(p.prosrc),pg_get_userbyid(p.proowner),p.prosecdef,p.provolatile,p.proconfig,p.prorettype::regtype::text,l.lanname) FROM pg_proc p JOIN pg_language l ON l.oid=p.prolang WHERE p.oid='control_plane.guard_session_workspace_storage()'::regprocedure)) INTO v_catalog;
    PERFORM set_config('search_path',v_path,true);
    IF
        md5((v_catalog->'columns')::text) IS DISTINCT FROM '2504916f99e7d1a367c0cc609ee821fa' OR
@@ -80,6 +84,7 @@ SELECT jsonb_build_object(
  ELSE
    RAISE EXCEPTION 'workflow exception context requires exact profile011 or workspace01150';
  END IF;
+ PERFORM set_config('role',v_role,true);
 END $migration$;
 -- +goose StatementEnd
 
