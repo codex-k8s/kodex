@@ -65,6 +65,18 @@ spec:
           const { spawnSync } = require('node:child_process');
           const root = fs.mkdtempSync('/workspace/browser-control-');
           const runner = root + '/browser.cjs';
+          // Дочерний процесс мог завершиться посреди записи; предел чтения жёсткий.
+          const readEvidence = (path) => {
+            let descriptor;
+            try {
+              descriptor = fs.openSync(path, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+              if (!fs.fstatSync(descriptor).isFile()) return {state:'NOT_REGULAR'};
+              const buffer = Buffer.alloc(16385);
+              const length = fs.readSync(descriptor,buffer,0,buffer.length,0);
+              return {state:length>16384?'TRUNCATED':'READ',text:buffer.subarray(0,Math.min(length,16384)).toString('utf8')};
+            } catch(error) {return {state:error.code==='ENOENT'?'ABSENT':'READ_FAILED',code:error.code};}
+            finally {if(descriptor!==undefined)fs.closeSync(descriptor);}
+          };
           // Только в этом пустом Pod: сравнение /proc не меняет профиль сотрудников.
           const browserSource = [
             'const fs=require("node:fs");const record=(v)=>fs.writeFileSync(process.argv[2],JSON.stringify(v),{mode:0o600});record({stage:"NODE_STARTED"});',
@@ -104,11 +116,11 @@ spec:
               const smoke = spawnSync('/usr/local/bin/codex', ['sandbox','-P','qa','-C',root,'/usr/local/bin/node','-e','require("node:fs").writeFileSync(process.argv[1],"NODE_STARTED",{mode:0o600});process.stdout.write("NODE_STARTED");',smokeMarker], {
                 env,timeout:5000,killSignal:'SIGKILL',maxBuffer:4096,encoding:'utf8',
               });
-              const marker = fs.existsSync(smokeMarker) ? fs.readFileSync(smokeMarker,'utf8') : null;
+              const markerRead = readEvidence(smokeMarker);
+              const marker = markerRead.state==='READ' ? markerRead.text : null;
               const logs = ['log/codex-tui.log','logs/codex.log'].flatMap((name)=>{
-                const path=codexHome+'/'+name;
-                const stat=fs.lstatSync(path,{throwIfNoEntry:false});
-                return stat?.isFile() && stat.size<=16384 ? [{name,text:fs.readFileSync(path,'utf8')}] : [];
+                const evidence=readEvidence(codexHome+'/'+name);
+                return evidence.state==='ABSENT' ? [] : [{name,...evidence}];
               });
               console.log(JSON.stringify({stage:'SANDBOX_SMOKE',procAccess:access,exit:smoke.status,signal:smoke.signal,errorCode:smoke.error?.code,marker,stdout:smoke.stdout,stderr:smoke.stderr,logs}));
               if(smoke.error){process.exitCode=1;break;}
@@ -118,7 +130,12 @@ spec:
               const result = spawnSync('/usr/local/bin/codex', ['sandbox','-P','qa','-C',root,'/usr/local/bin/node',runner,observed], {
                 env,timeout:15000,killSignal:'SIGKILL',maxBuffer:16384,encoding:'utf8',
               });
-              const evidence=fs.existsSync(observed)?JSON.parse(fs.readFileSync(observed,'utf8')):null;
+              const file=readEvidence(observed);
+              let evidence={state:file.state};
+              if(file.state==='READ'){
+                try {evidence=JSON.parse(file.text);}
+                catch {evidence={state:'FILE_PARTIAL_OR_INVALID'};}
+              }
               console.log(JSON.stringify({scope:'CREDENTIAL_FREE_CODEX_SANDBOX_CONTROL',procAccess:access,exit:result.status,signal:result.signal,errorCode:result.error?.code,elapsedMs:Date.now()-started,evidence,stdout:result.stdout,stderr:result.stderr}));
               if (result.error) {process.exitCode=1;break;}
             }
