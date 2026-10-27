@@ -4,11 +4,65 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.531.0
-updated: 2026-10-26
+version: 1.532.0
+updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общий путь runtime-команд агента — 27.10.2026
+
+В agents/detail/runtime-api.ts mutateAgentRuntime обслуживает четыре typed
+wrappers и пять SDK-команд: publishAgentRuntimeConfiguration,
+createConfigOverlayDraft, validateConfigOverlayDraft, publishConfigOverlayDraft
+и bindAgentRuntimeEnvironment. Выбор команды, agentRef, версия и конкретный
+payload остаются явными у callers. Helper переносит исходные mutateWithRetry,
+versionHeaders, requestSignal и data readback без нового retry/read/resync.
+Заголовки и signal создаются внутри прежней попытки; idempotency key, If-Match,
+CSRF, bounded delays и owner lifetime принадлежат неизменённой общей mutation
+библиотеке. Четыре wrappers возвращают promise helper непосредственно, без
+дополнительного async await. Отдельная saveRuntimeEnvironment по-прежнему
+использует mutate без retry; каталоги и чтение не менялись.
+
+| Wrapper | SDK-команда / payload | Версия и результат |
+| --- | --- | --- |
+| saveAgentRuntime | publishAgentRuntimeConfiguration / исходный input object | прежний agentVersion, собственный configuration readback |
+| saveOverlayDraft | createConfigOverlayDraft / content | прежний agentVersion, собственный draft readback |
+| changeOverlay | VALIDATE или PUBLISH / без body | прежний agentVersion, результат выбранной команды |
+| bindRuntimeEnvironment | bindAgentRuntimeEnvironment / environmentRef | прежний agentVersion, собственный configuration readback |
+
+Новых actor/owner/grant/state/event/terminal переходов нет. Проверенный owner
+контекст, граница session lifetime и backend command handlers не менялись.
+Нельзя подменять ответ команды чтением чужой параллельной ревизии; прежние
+тесты uncertain retry и exhaustion сохранены. Полное обратное преобразование
+четырёх wrappers восстанавливает исходный файл. 120 сравнений native/current
+по пяти SDK-профилям и трём версиям проверили success, sync/rejected error,
+retry, отсутствие If-Match, отказ signal, null response и null data. Проверены
+240 SDK invocations, порядок headers/signal, точный набор полей, отсутствие
+body у changeOverlay и identity payload/ошибки/readback. Сеть не использовалась.
+
+Исходные 8 runtime-api unit-тестов PASS до/после. Три новых случая защищают
+VALIDATE/PUBLISH dispatch без body и environment binding на точной версии;
+итого 11 PASS,0FAIL/SKIP. Вся PWA unit suite:4129PASS,0FAIL/SKIP,59.03s.
+Форматирование0.47s/lint8.99s/typecheck48.45s/production build8.94s PASS LOCAL.
+Сохранён прежний Vite chunk>500kB warning. Vite/Vitest envDir:false,
+project dotenv не загружался, runtime env очищен. Это локальные unit/build,
+не browser E2E, живой runtime или QA.
+
+Три окна platform typed hoisted mocks и одно provider/role-image SDK declarations
+сохранены адресно: разные имена и generated signatures используют уже общие
+vi.hoisted/vi.fn. AST восьми фрагментов подтвердил 44 различных mock bindings,
+без второго алгоритма; заголовки соседних declarations не расширяют исключение
+на их тела. Три исходных test files побайтно прежние. Проверка первоначально
+ошибочно захватывала полное тело следующего const за концом окна; границы
+исправлены и AST proof выполнен повторно. 24 registry mutations отвергнуты,
+17 quality unit tests PASS. Одна прежняя raw-группа устранена, новых нет;
+registry1120, raw1414/retained1263/unresolved151(Go80/TypeScript71).
+Sources6788/excluded222,Go21629/21629 EN→RU,thresholds/exclusions прежние.
+Context7 resolve/query /microsoft/typescript-website и/vitest-dev/vitest PASS:
+проверены instantiation expressions и доступность imports/typed mocks при
+hoisted initialization. Generated files/dependencies/contracts/deploy resources
+не менялись. Полные E2E/browser/live/deploy/startup/QA NOT RUN.
 
 ## Общая запись проекций и сброс test mocks — 26.10.2026
 

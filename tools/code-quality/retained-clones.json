@@ -3,6 +3,38 @@
   "entries": [
     {
       "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/platform/store.test.ts",
+      "secondPath": "services/staff/control-center/src/features/platform/store.test.ts",
+      "fragmentSHA256": "89618f66865c5f9ada460fb1350acea7a489c93f82c3967ec4e26c8366fca3da",
+      "count": 1,
+      "reason": "Окно сопоставляет разные именованные const mocks одного platform suite: audit/run/command/artifact против integration/upload. Каждый binding использует уже общие vi.hoisted/vi.fn; typed mocks привязаны к собственным generated SDK signatures commandRun/createRun/changeArtifactBinding/updateIntegrationConnection/deleteIntegrationConnection/uploadArtifact. Здесь нет второй реализации вызова API, reset или assertion. Динамический реестр имён либо общий untyped factory скрыл бы проверяемую связь конкретного SDK-метода и его mock. Сохранён только точный внутрефайловый hash/count1; beforeEach, runtime и сами тесты не исключены."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/platform/store.test.ts",
+      "secondPath": "services/staff/control-center/src/features/platform/store.test.ts",
+      "fragmentSHA256": "b7835c9ccdd3d5c899eee1c00c42f3e3b796e1086de95d995a9c5f1babe62d3c",
+      "count": 1,
+      "reason": "Окно содержит два набора разных hoisted const declarations внутри platform suite: run/artifact bindings и agent/artifact/integration bindings. Совпадает форма vi.fn<typeof import(...).operation>, а сами operation signatures различны и проверяются TypeScript. Общие фабрики vi.fn/vi.hoisted уже переиспользованы; импортируемый helper не доступен при hoisted initialization, а строковый dispatcher потерял бы прямую связь operation/mock. Алгоритма, lifecycle или assertion в этом фрагменте нет. Исключение ограничено одним exact внутрефайловым fragment hash/count1, не всем store.test.ts."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/platform/store.test.ts",
+      "secondPath": "services/staff/control-center/src/features/platform/store.test.ts",
+      "fragmentSHA256": "9151b6e3aa013cba4a5d2eb96f92f53dda069a712b419af9afcc13b8dee87f4d",
+      "count": 1,
+      "reason": "Самоперекрывающиеся окна содержат один список разных integration/artifact hoisted mocks и границу vi.mock SDK. create/configure/update/delete/list/upload — разные зависимости platform store; typed update/delete/upload bindings сохраняют собственные generated signatures. Это декларативные const bindings, не несколько reset/load/mutation implementations. Общая инфраструктура уже vi.hoisted/vi.fn/vi.mock; динамическая генерация имён скрыла бы точные зависимости и типы. Сохранён только один exact self-overlap hash/count1; product code, reset loops и assertions остаются в анализе."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/providers/api.test.ts",
+      "secondPath": "services/staff/control-center/src/features/role-images/api.test.ts",
+      "fragmentSHA256": "5d080afc48e44dcf1f79972375d13058b5115b966a0c50773541a09598514e46",
+      "count": 1,
+      "reason": "Окно — два разных hoisted object literals со списками независимых SDK mocks: provider authorize/refresh/revoke/concurrency/device-code и role-image recipe/catalog/admission/promote. Совпадает только форма именованных vi.fn declarations; реальные API, authority и receipt сценарии различаются и не входят в исключение. vi.hoisted/vi.fn уже общие primitives. Единый global SDK mock registry расширил бы зависимости suites и скрыл их явные списки; imported factory недоступна при hoisting. Сохранена только точная пара путей/hash/count1, без исключения API adapters и mutation stubs."
+    },
+    {
+      "format": "typescript",
       "firstPath": "services/staff/control-center/src/features/access/api.test.ts",
       "secondPath": "services/staff/control-center/src/features/session/store.test.ts",
       "fragmentSHA256": "d05ee38d4b3af4459a9615b0a86c5b8e5bf1b255a075ee3b121bf9bde7696b26",
