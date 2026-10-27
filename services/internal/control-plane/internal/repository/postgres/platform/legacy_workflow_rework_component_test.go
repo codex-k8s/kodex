@@ -249,6 +249,10 @@ func runLegacyWorkflowReworkScenario(t *testing.T, decision string) {
 	if read() != after {
 		t.Fatal("exact owner replay duplicated rework graph or changed immutable history")
 	}
+	requestedGate, err := service.GetOwnerGate(ctx, owner, gate.Ref)
+	if err != nil || requestedGate.State != "CHANGES_REQUESTED" || requestedGate.Decision != "REQUEST_CHANGES" || requestedGate.DecisionComment != feedback || requestedGate.Version != gate.Version+1 || requestedGate.ProjectRef != project.Ref || requestedGate.RunRef != root.Ref || requestedGate.NodeRef != gate.NodeRef {
+		t.Fatal("owner rework lost exact historical change-request decision", completionOutcomeClass(err))
+	}
 	reworked := claim("reworked-child")
 	if len(reworked) != 1 || stringMap(reworked[0], "runRef") == child.Ref || stringMap(reworked[0], "runRef") == root.Ref || stringMap(reworked[0], "nodeRef") == stringMap(first, "nodeRef") || stringMap(reworked[0], "runtimeRevisionRef") == stringMap(first, "runtimeRevisionRef") || stringMap(reworked[0], "leaseRef") == stringMap(first, "leaseRef") || !strings.Contains(stringMap(reworked[0], "task"), feedback) {
 		t.Fatal("owner rework did not claim one fresh child with exact saved feedback")
@@ -552,20 +556,41 @@ func runLegacyWorkflowReworkScenario(t *testing.T, decision string) {
 		t.Fatal("coordinator consumed a stale or unapproved rework callback")
 	}
 	currentRoot, err = service.GetRun(ctx, owner, root.Ref)
-	if err != nil || currentRoot.State != "WAITING_HUMAN" || len(currentRoot.GateRefs) != int(callbackBase) {
-		t.Fatal("new physical attempt did not retain its own result gate")
+	// GateRefs retains every historical decision; one fresh result Gate must coexist with the original request and any independent OPEN Gate.
+	// GateRefs сохраняет историю решений; новый result Gate сосуществует с исходным запросом и независимым OPEN Gate, если он есть.
+	if err != nil || currentRoot.State != "WAITING_HUMAN" || len(currentRoot.GateRefs) != int(callbackBase+1) {
+		t.Fatal("new physical attempt did not retain exact historical and fresh result gates", completionOutcomeClass(err), currentRoot.State, len(currentRoot.GateRefs), callbackBase+1)
 	}
-	acceptedGateRef := currentRoot.GateRefs[0]
-	if multipleGates {
-		for _, ref := range currentRoot.GateRefs {
-			if ref != independentGate.Ref {
-				acceptedGateRef = ref
+	var acceptedGate entity.OwnerGate
+	seenGates := make(map[string]bool, len(currentRoot.GateRefs))
+	historicalGates, freshGates := int64(0), 0
+	for _, ref := range currentRoot.GateRefs {
+		candidate, readErr := service.GetOwnerGate(ctx, owner, ref)
+		if readErr != nil || seenGates[ref] || candidate.Ref != ref || candidate.ProjectRef != project.Ref || candidate.RunRef != root.Ref {
+			t.Fatal("result gate history lost unique exact owner scope", completionOutcomeClass(readErr))
+		}
+		seenGates[ref] = true
+		switch ref {
+		case requestedGate.Ref:
+			if candidate.State != requestedGate.State || candidate.Decision != requestedGate.Decision || candidate.DecisionComment != requestedGate.DecisionComment || candidate.Version != requestedGate.Version || candidate.NodeRef != requestedGate.NodeRef {
+				t.Fatal("new result rewrote historical change-request gate")
 			}
+			historicalGates++
+		case independentGate.Ref:
+			if !multipleGates || candidate.State != "OPEN" || candidate.Version != independentGate.Version || candidate.NodeRef != independentGate.NodeRef || candidate.Decision != independentGate.Decision || candidate.DecisionComment != independentGate.DecisionComment {
+				t.Fatal("new result changed independent open gate")
+			}
+			historicalGates++
+		default:
+			if candidate.State != "OPEN" || candidate.Decision != "" || candidate.DecisionComment != "" || candidate.NodeRef == requestedGate.NodeRef || candidate.NodeRef == independentGate.NodeRef {
+				t.Fatal("fresh result gate reused a historical decision boundary")
+			}
+			acceptedGate = candidate
+			freshGates++
 		}
 	}
-	acceptedGate, err := service.GetOwnerGate(ctx, owner, acceptedGateRef)
-	if err != nil || acceptedGate.Ref == gate.Ref || acceptedGate.State != "OPEN" {
-		t.Fatal("new physical attempt reused the first gate")
+	if historicalGates != callbackBase || freshGates != 1 || acceptedGate.Ref == "" {
+		t.Fatal("result gate history did not contain exact known decisions and one fresh open gate", historicalGates, callbackBase, freshGates)
 	}
 	if decision == "REJECT" || decision == "CANCEL" {
 		execute(owner, command.ResolveOwnerGate, "close-reworked", &acceptedGate.Version, command.GateResolutionInput{GateRef: acceptedGate.Ref, Decision: decision, Comment: "Закрыть без повторного исполнения."})
