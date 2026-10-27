@@ -17,6 +17,15 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+const (
+	// workspaceStreamRoleOwner identifies role-owned entries without persisting a host UID.
+	// workspaceStreamRoleOwner обозначает владельца ROLE без сохранения UID хоста.
+	workspaceStreamRoleOwner = "ROLE"
+	// workspaceStreamProviderOwner identifies provider-owned entries for the fixed restore identity.
+	// workspaceStreamProviderOwner обозначает владельца PROVIDER для фиксированной restore identity.
+	workspaceStreamProviderOwner = "PROVIDER"
+)
+
 // errWorkspaceStreamInvalid is a fixed format sentinel without filesystem paths or object details.
 // errWorkspaceStreamInvalid — фиксированный format sentinel без filesystem paths и object details.
 var errWorkspaceStreamInvalid = errors.New("session workspace stream is invalid")
@@ -110,10 +119,18 @@ func workspaceStreamPath(name string) bool {
 }
 
 // appendEntry writes one strictly ordered regular file or directory with preserved execute bits.
-// Links, special files, caller PAX metadata, owners and timestamps are never part of this format.
+// Links, special files, caller PAX metadata, numeric host owners and timestamps are excluded.
 // appendEntry пишет одну строго упорядоченную regular file/directory, сохраняя execute bits.
-// Links, special files, caller PAX metadata, owners и timestamps не входят в этот формат.
-func (encoder *workspaceStreamEncoder) appendEntry(name string, directory bool, mode uint32, size int64, source io.Reader) (resultErr error) {
+// Links, special files, caller PAX metadata, числовые владельцы хоста и timestamps исключены.
+func (encoder *workspaceStreamEncoder) appendEntry(name string, directory bool, mode uint32, size int64, source io.Reader) error {
+	return encoder.appendOwnedEntry(name, directory, mode, size, source, workspaceStreamRoleOwner)
+}
+
+// appendOwnedEntry writes a closed logical owner; restore maps it to its fixed ROLE or PROVIDER writer.
+// Unknown owner values poison the stream before a header or any source bytes can be emitted.
+// appendOwnedEntry записывает закрытого логического владельца для фиксированного ROLE/PROVIDER writer.
+// Неизвестное значение закрывает поток до записи заголовка или исходных байтов.
+func (encoder *workspaceStreamEncoder) appendOwnedEntry(name string, directory bool, mode uint32, size int64, source io.Reader, owner string) (resultErr error) {
 	if encoder != nil {
 		defer func() {
 			if resultErr != nil {
@@ -122,7 +139,8 @@ func (encoder *workspaceStreamEncoder) appendEntry(name string, directory bool, 
 		}()
 	}
 	if encoder == nil || encoder.closed || encoder.failed || encoder.ctx.Err() != nil || !workspaceStreamPath(name) ||
-		encoder.entries >= encoder.maximumFiles || mode&^uint32(0o777) != 0 || size < 0 || size > encoder.maximumBytes-encoder.bytes {
+		encoder.entries >= encoder.maximumFiles || mode&^uint32(0o777) != 0 || size < 0 || size > encoder.maximumBytes-encoder.bytes ||
+		(owner != workspaceStreamRoleOwner && owner != workspaceStreamProviderOwner) {
 		return errWorkspaceStreamInvalid
 	}
 	entryName := name
@@ -141,7 +159,7 @@ func (encoder *workspaceStreamEncoder) appendEntry(name string, directory bool, 
 	}
 	before := encoder.output.written
 	if encoder.tar.WriteHeader(&tar.Header{Name: entryName, Typeflag: typeFlag, Mode: int64(mode), Size: size,
-		Uid: 0, Gid: 0, ModTime: time.Unix(0, 0), Format: tar.FormatPAX}) != nil ||
+		Uid: 0, Gid: 0, Uname: owner, ModTime: time.Unix(0, 0), Format: tar.FormatPAX}) != nil ||
 		encoder.output.written-before > runtimecontract.WorkspaceArchiveEntryOverheadBytes {
 		return errWorkspaceStreamInvalid
 	}

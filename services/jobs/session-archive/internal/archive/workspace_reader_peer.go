@@ -14,7 +14,7 @@ import (
 // The returned stop function has one owner; no database, source descriptor or unrelated resource is closed.
 // watchWorkspaceReaderCancel закрывает owned socket при отмене и завершает единственный watcher до возврата.
 // Stop function имеет одного owner; database/source descriptor/чужой resource не закрывается.
-func watchWorkspaceReaderCancel(ctx context.Context, connection *net.UnixConn) func() {
+func watchWorkspaceReaderCancel(ctx context.Context, connection io.Closer) func() {
 	stop, joined := make(chan struct{}), make(chan struct{})
 	go func() {
 		defer close(joined)

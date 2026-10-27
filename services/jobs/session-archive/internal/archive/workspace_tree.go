@@ -18,6 +18,8 @@ import (
 type workspaceTreeScanner struct {
 	rootFD             int
 	ownerUID, ownerGID uint32
+	providerUID        uint32
+	providerOpen       func(string, unix.Stat_t) (*os.File, error)
 	listed             int64
 	encoder            *workspaceStreamEncoder
 }
@@ -34,13 +36,22 @@ type workspaceTreeEntry struct {
 // scanWorkspaceTree кодирует exact owned files без crossing descendant mounts и без following links.
 // Caller владеет rootFD, stopped-writer proof и production IDs; fixture IDs не дают authority.
 func scanWorkspaceTree(ctx context.Context, rootFD int, destination io.Writer, policy runtimecontract.RuntimeWorkspacePolicy, ownerUID, ownerGID uint32) (string, int64, int64, int64, error) {
+	return scanWorkspaceOwnedTree(ctx, rootFD, destination, policy, ownerUID, ownerGID, 0, nil)
+}
+
+// scanWorkspaceOwnedTree accepts a separately authenticated provider reader for regular files only.
+// Directories remain local descriptor walks, so inaccessible private directories fail closed.
+// scanWorkspaceOwnedTree допускает отдельно аутентифицированный provider reader только для regular files.
+// Каталоги обходятся локальными descriptors; недоступный private directory закрыто отклоняется.
+func scanWorkspaceOwnedTree(ctx context.Context, rootFD int, destination io.Writer, policy runtimecontract.RuntimeWorkspacePolicy,
+	ownerUID, ownerGID, providerUID uint32, providerOpen func(string, unix.Stat_t) (*os.File, error)) (string, int64, int64, int64, error) {
 	encoder, err := newWorkspaceStreamEncoder(ctx, destination, policy)
 	var before, after unix.Stat_t
 	if err != nil || rootFD < 0 || unix.Fstat(rootFD, &before) != nil || before.Mode&unix.S_IFMT != unix.S_IFDIR ||
 		before.Uid != ownerUID || before.Gid != ownerGID {
 		return "", 0, 0, 0, errSourceIdentity
 	}
-	scanner := workspaceTreeScanner{rootFD: rootFD, ownerUID: ownerUID, ownerGID: ownerGID, encoder: encoder}
+	scanner := workspaceTreeScanner{rootFD: rootFD, ownerUID: ownerUID, ownerGID: ownerGID, providerUID: providerUID, providerOpen: providerOpen, encoder: encoder}
 	if scanner.directory(rootFD, "") != nil || unix.Fstat(rootFD, &after) != nil || !workspaceTreeIdentityEqual(before, after) {
 		return "", 0, 0, 0, errSourceIdentity
 	}
@@ -103,7 +114,7 @@ func (scanner *workspaceTreeScanner) directory(fd int, prefix string) error {
 // ownedEntry отклоняет foreign owners, special permissions, hard-linked files и unsupported kinds.
 func (scanner *workspaceTreeScanner) ownedEntry(info unix.Stat_t) bool {
 	kind := info.Mode & unix.S_IFMT
-	return info.Uid == scanner.ownerUID && info.Gid == scanner.ownerGID &&
+	return (info.Uid == scanner.ownerUID || scanner.providerOpen != nil && info.Uid == scanner.providerUID) && info.Gid == scanner.ownerGID &&
 		(kind == unix.S_IFDIR && info.Mode&0o5000 == 0 || kind == unix.S_IFREG && info.Nlink == 1 && info.Mode&0o7000 == 0)
 }
 
@@ -112,29 +123,37 @@ func (scanner *workspaceTreeScanner) ownedEntry(info unix.Stat_t) bool {
 // entry читает один descriptor и сверяет identity после bytes или descendants.
 // Read failure закрывает checkpoint целиком; пропуск файла не создаёт partial successful tree.
 func (scanner *workspaceTreeScanner) entry(parentFD int, entry workspaceTreeEntry, name string) error {
-	flags := uint64(unix.O_RDONLY | unix.O_CLOEXEC | unix.O_NONBLOCK)
-	if entry.directory {
-		flags |= unix.O_DIRECTORY
-	}
-	fd, err := unix.Openat2(parentFD, strings.TrimSuffix(entry.name, "/"), &unix.OpenHow{Flags: flags,
-		Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_SYMLINKS | unix.RESOLVE_NO_XDEV})
-	if err != nil {
-		return errSourceIdentity
-	}
-	file := os.NewFile(uintptr(fd), "workspace-checkpoint-entry")
-	defer file.Close()
 	var before, after unix.Stat_t
-	if unix.Fstat(fd, &before) != nil || !scanner.ownedEntry(before) || (before.Mode&unix.S_IFMT == unix.S_IFDIR) != entry.directory {
+	component := strings.TrimSuffix(entry.name, "/")
+	if unix.Fstatat(parentFD, component, &before, unix.AT_SYMLINK_NOFOLLOW) != nil || !scanner.ownedEntry(before) ||
+		(before.Mode&unix.S_IFMT == unix.S_IFDIR) != entry.directory {
 		return errSourceIdentity
 	}
+	file, err := scanner.openEntry(parentFD, component, name, before)
+	if err != nil || file == nil {
+		if file != nil {
+			_ = file.Close()
+		}
+		return errSourceIdentity
+	}
+	defer file.Close()
+	fd := int(file.Fd())
+	if unix.Fstat(fd, &after) != nil || !workspaceTreeIdentityEqual(before, after) {
+		return errSourceIdentity
+	}
+	owner := workspaceStreamRoleOwner
+	if scanner.providerOpen != nil && before.Uid == scanner.providerUID {
+		owner = workspaceStreamProviderOwner
+	}
 	if entry.directory {
-		if scanner.encoder.appendEntry(name, true, before.Mode&0o777, 0, nil) != nil || scanner.directory(fd, name+"/") != nil {
+		if scanner.encoder.appendOwnedEntry(name, true, before.Mode&0o777, 0, nil, owner) != nil || scanner.directory(fd, name+"/") != nil {
 			return errSourceIdentity
 		}
-	} else if scanner.encoder.appendEntry(name, false, before.Mode&0o777, before.Size, io.NewSectionReader(file, 0, before.Size)) != nil {
+	} else if scanner.encoder.appendOwnedEntry(name, false, before.Mode&0o777, before.Size, io.NewSectionReader(file, 0, before.Size), owner) != nil {
 		return errSourceIdentity
 	}
-	if unix.Fstat(fd, &after) != nil || !workspaceTreeIdentityEqual(before, after) {
+	if unix.Fstat(fd, &after) != nil || !workspaceTreeIdentityEqual(before, after) ||
+		unix.Fstatat(parentFD, component, &after, unix.AT_SYMLINK_NOFOLLOW) != nil || !workspaceTreeIdentityEqual(before, after) {
 		return errSourceIdentity
 	}
 	return nil
@@ -145,4 +164,24 @@ func (scanner *workspaceTreeScanner) entry(parentFD int, entry workspaceTreeEntr
 func workspaceTreeIdentityEqual(before, after unix.Stat_t) bool {
 	return before.Dev == after.Dev && before.Ino == after.Ino && before.Mode == after.Mode && before.Nlink == after.Nlink &&
 		before.Uid == after.Uid && before.Gid == after.Gid && before.Size == after.Size && before.Mtim == after.Mtim && before.Ctim == after.Ctim
+}
+
+// openEntry preserves the descriptor boundary even when the paired reader supplies private provider bytes.
+// No directory, role-owned file or unsupported entry is delegated to the provider reader.
+// openEntry сохраняет descriptor boundary при чтении private provider bytes через paired reader.
+// Каталоги, role-owned файлы и неподдержанные entries не передаются provider reader.
+func (scanner *workspaceTreeScanner) openEntry(parentFD int, component, name string, expected unix.Stat_t) (*os.File, error) {
+	if expected.Mode&unix.S_IFMT == unix.S_IFREG && scanner.providerOpen != nil && expected.Uid == scanner.providerUID {
+		return scanner.providerOpen(name, expected)
+	}
+	flags := uint64(unix.O_RDONLY | unix.O_CLOEXEC | unix.O_NONBLOCK)
+	if expected.Mode&unix.S_IFMT == unix.S_IFDIR {
+		flags |= unix.O_DIRECTORY
+	}
+	fd, err := unix.Openat2(parentFD, component, &unix.OpenHow{Flags: flags,
+		Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_SYMLINKS | unix.RESOLVE_NO_XDEV})
+	if err != nil {
+		return nil, errSourceIdentity
+	}
+	return os.NewFile(uintptr(fd), "workspace-checkpoint-entry"), nil
 }

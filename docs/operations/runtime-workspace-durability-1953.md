@@ -87,7 +87,10 @@ socket с kernel peer UID и повторным inode/owner check. Ни root/DAC
 получает object-storage credentials, API token, provider auth или session root;
 прежний общий CPU/RAM budget разделяется между consumers. Неизвестное владение,
 недоступный private directory или изменённый descriptor оставляют PVC в BLOCKED.
-Restore создаёт новые файлы под UID10001/GID29000 в собственной generation.
+Canonical stream сохраняет закрытый logical owner ROLE/PROVIDER в Uname,
+а числовые UID/GID обнуляет. Restore сопоставляет ROLE с UID10001, PROVIDER
+с UID10002 при общем GID29000 и создаёт файлы только в новой собственной
+generation. Произвольные usernames и UID не разрешают смену владельца.
 Private generation parents0700 не монтируются snapshot consumers. Legacy v1
 consumer сохраняет UID10002. Renderer/native permissions и реальная двух-UID
 проверка обязательны; pure codec/scanner unit этого не доказывает.
