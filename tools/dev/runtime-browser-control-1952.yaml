@@ -67,16 +67,20 @@ spec:
           const runner = root + '/browser.cjs';
           // Только в этом пустом Pod: сравнение /proc не меняет профиль сотрудников.
           const browserSource = [
+            'const fs=require("node:fs");const record=(v)=>fs.writeFileSync(process.argv[2],JSON.stringify(v),{mode:0o600});record({stage:"NODE_STARTED"});',
             'const { chromium } = require("/opt/kodex/npm-toolchain/node_modules/playwright");',
             '(async()=>{let browser; const started=Date.now(); try {',
             'browser=await chromium.launch({executablePath:"/usr/lib/chromium/chromium",headless:true,chromiumSandbox:true,timeout:10000,env:{PATH:"/usr/bin:/bin",HOME:process.env.HOME,TMPDIR:"/tmp"}});',
             'const page=await browser.newPage(); await page.setContent("<title>runtime control</title>",{timeout:3000});',
-            'const titleOK=await page.title()==="runtime control"; console.log(JSON.stringify({titleOK,elapsedMs:Date.now()-started})); if(!titleOK)process.exitCode=1;',
-            '} catch(error) { console.log(JSON.stringify({failed:true,elapsedMs:Date.now()-started,error:String(error.message).slice(0,10000)}));process.exitCode=1;',
+            'const titleOK=await page.title()==="runtime control";const result={stage:"BROWSER_FINISHED",titleOK,elapsedMs:Date.now()-started};record(result);console.log(JSON.stringify(result));if(!titleOK)process.exitCode=1;',
+            '} catch(error) {const result={stage:"BROWSER_FAILED",failed:true,elapsedMs:Date.now()-started,error:String(error.message).slice(0,10000)};record(result);console.log(JSON.stringify(result));process.exitCode=1;',
             '} finally {if(browser)await browser.close();}})().catch(()=>{console.error("Browser control cleanup failed");process.exitCode=1;});',
           ].join('\n');
           fs.writeFileSync(runner, browserSource, {mode:0o600,flag:'wx'});
           try {
+            const version = spawnSync('/usr/local/bin/codex', ['--version'], {env:{PATH:'/usr/local/bin:/usr/bin:/bin',HOME:'/tmp'},timeout:1000,maxBuffer:4096,encoding:'utf8'});
+            console.log(JSON.stringify({stage:'CLI_VERSION',exit:version.status,stdout:version.stdout,stderr:version.stderr}));
+            if(version.status!==0)throw new Error('Codex version control failed');
             for (const access of ['deny', 'read']) {
               const home = root + '/home-' + access;
               const codexHome = root + '/codex-' + access;
@@ -95,12 +99,27 @@ spec:
                 '"/proc" = "' + access + '"',
               ].join('\n');
               fs.writeFileSync(codexHome + '/config.toml', config, {mode:0o600,flag:'wx'});
-              const started = Date.now();
-              const result = spawnSync('/usr/local/bin/codex', ['sandbox','-P','qa','-C',root,'/usr/local/bin/node',runner], {
-                env: {PATH:'/usr/local/bin:/usr/bin:/bin',HOME:home,CODEX_HOME:codexHome},
-                timeout:18000, killSignal:'SIGKILL', maxBuffer:16384, encoding:'utf8',
+              const env = {PATH:'/usr/local/bin:/usr/bin:/bin',HOME:home,CODEX_HOME:codexHome};
+              const smokeMarker = root + '/smoke-' + access + '.json';
+              const smoke = spawnSync('/usr/local/bin/codex', ['sandbox','-P','qa','-C',root,'/usr/local/bin/node','-e','require("node:fs").writeFileSync(process.argv[1],"NODE_STARTED",{mode:0o600});process.stdout.write("NODE_STARTED");',smokeMarker], {
+                env,timeout:5000,killSignal:'SIGKILL',maxBuffer:4096,encoding:'utf8',
               });
-              console.log(JSON.stringify({scope:'CREDENTIAL_FREE_CODEX_SANDBOX_CONTROL',procAccess:access,exit:result.status,signal:result.signal,errorCode:result.error?.code,elapsedMs:Date.now()-started,stdout:result.stdout,stderr:result.stderr}));
+              const marker = fs.existsSync(smokeMarker) ? fs.readFileSync(smokeMarker,'utf8') : null;
+              const logs = ['log/codex-tui.log','logs/codex.log'].flatMap((name)=>{
+                const path=codexHome+'/'+name;
+                const stat=fs.lstatSync(path,{throwIfNoEntry:false});
+                return stat?.isFile() && stat.size<=16384 ? [{name,text:fs.readFileSync(path,'utf8')}] : [];
+              });
+              console.log(JSON.stringify({stage:'SANDBOX_SMOKE',procAccess:access,exit:smoke.status,signal:smoke.signal,errorCode:smoke.error?.code,marker,stdout:smoke.stdout,stderr:smoke.stderr,logs}));
+              if(smoke.error){process.exitCode=1;break;}
+              if(smoke.status!==0||marker!=='NODE_STARTED')continue;
+              const observed = root + '/observed-' + access + '.json';
+              const started = Date.now();
+              const result = spawnSync('/usr/local/bin/codex', ['sandbox','-P','qa','-C',root,'/usr/local/bin/node',runner,observed], {
+                env,timeout:15000,killSignal:'SIGKILL',maxBuffer:16384,encoding:'utf8',
+              });
+              const evidence=fs.existsSync(observed)?JSON.parse(fs.readFileSync(observed,'utf8')):null;
+              console.log(JSON.stringify({scope:'CREDENTIAL_FREE_CODEX_SANDBOX_CONTROL',procAccess:access,exit:result.status,signal:result.signal,errorCode:result.error?.code,elapsedMs:Date.now()-started,evidence,stdout:result.stdout,stderr:result.stderr}));
               if (result.error) {process.exitCode=1;break;}
             }
           } finally {
