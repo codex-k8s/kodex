@@ -116,6 +116,7 @@ function stepAt(
 }
 const disposers: Array<() => void> = [];
 afterEach(() => {
+  vi.unstubAllGlobals();
   resolveConfirmation(false);
   disposers.splice(0).forEach((dispose) => dispose());
 });
@@ -135,6 +136,7 @@ function mount(count = 33) {
     validStep: (step: Record<string, unknown>, pending?: boolean) => boolean;
     changeStep: (index: number, key: string, value: unknown) => void;
     changeMode: (event: Event) => Promise<void>;
+    changeEvidenceProfile: (event: Event) => void;
     changeReworkPolicy: (
       value: "" | "OWNER_APPROVED_UPSTREAM_V1",
     ) => Promise<void>;
@@ -480,3 +482,103 @@ it.each(["mode", "permission"])(
     );
   },
 );
+
+function evidenceProfileEvent(value: string): Event {
+  class FixtureSelect {
+    constructor(public value: string) {}
+  }
+  vi.stubGlobal("HTMLSelectElement", FixtureSelect);
+  const target = new FixtureSelect(value);
+  const event = new Event("change");
+  Object.defineProperty(event, "target", { value: target });
+  return event;
+}
+
+it.each(["CREATE_WORKFLOW", "UPDATE_WORKFLOW"] as const)(
+  "сброс SERVER→MANAGER очищает evidence profile только после подтверждения (%s)",
+  async (kind) => {
+    const { props, state } = mount(2);
+    props.operation.value.type = kind;
+    if (kind === "UPDATE_WORKFLOW") {
+      props.operation.value.action = "UPDATE";
+      props.operation.value.target.ref = "wf_fixture";
+      updateOperationParameter(props.operation, "workflowRef", "wf_fixture");
+    }
+    updateOperationParameter(props.operation, "executionMode", "SERVER_DAG_V1");
+    updateOperationParameter(
+      props.operation,
+      "resultEvidenceProfile",
+      "GITHUB_REVIEW_QA_V1",
+    );
+    await nextTick();
+    const change = () =>
+      state.changeMode({
+        target: { value: "MANAGER_DRIVEN" },
+      } as unknown as Event);
+    const before = operationInputs([props.operation]);
+    const rejected = change();
+    resolveConfirmation(false);
+    await rejected;
+    expect(operationInputs([props.operation])).toEqual(before);
+    const revoked = change();
+    props.disabled = true;
+    resolveConfirmation(true);
+    await revoked;
+    expect(operationInputs([props.operation])).toEqual(before);
+    props.disabled = false;
+    const accepted = change();
+    resolveConfirmation(true);
+    await accepted;
+    const parameters = operationInputs([props.operation])[0]?.parameters;
+    expect(parameters?.executionMode).toBe("MANAGER_DRIVEN");
+    if (kind === "UPDATE_WORKFLOW")
+      expect(parameters?.resultEvidenceProfile).toBe("");
+    else expect(parameters).not.toHaveProperty("resultEvidenceProfile");
+  },
+);
+
+it("UPDATE clear сохраняет явное пустое mutation field, но не блокирует local DAG", async () => {
+  const { props, state } = mount(2);
+  props.operation.value.type = "UPDATE_WORKFLOW";
+  props.operation.value.action = "UPDATE";
+  props.operation.value.target.ref = "wf_fixture";
+  updateOperationParameter(props.operation, "workflowRef", "wf_fixture");
+  updateOperationParameter(props.operation, "executionMode", "SERVER_DAG_V1");
+  updateOperationParameter(
+    props.operation,
+    "steps",
+    stepsOf(props.operation).map((step, index) => ({
+      ...step,
+      key: index === 0 ? "code" : "review",
+      agentRef: index === 0 ? "agt_developer" : "agt_reviewer",
+      dependsOn: index === 0 ? [] : ["code"],
+      resultRequirements:
+        index === 0
+          ? [
+              {
+                key: "pr",
+                kind: "PULL_REQUEST",
+                repository: "codex-k8s/test-repo",
+              },
+            ]
+          : [{ key: "review", kind: "REVIEW", subjectStepKey: "code" }],
+    })),
+  );
+  updateOperationParameter(
+    props.operation,
+    "resultEvidenceProfile",
+    "GITHUB_REVIEW_QA_V1",
+  );
+  await vi.waitFor(() => expect(state.valid.value).toBe(true));
+  state.changeEvidenceProfile(evidenceProfileEvent(""));
+  await nextTick();
+  expect(
+    operationInputs([props.operation])[0]?.parameters.resultEvidenceProfile,
+  ).toBe("");
+  expect(state.valid.value).toBe(true);
+  for (const invalid of [null, "UNKNOWN_PROFILE"]) {
+    updateOperationParameter(props.operation, "resultEvidenceProfile", invalid);
+    await nextTick();
+    expect(state.valid.value).toBe(false);
+  }
+});

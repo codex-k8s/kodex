@@ -349,13 +349,15 @@ func runWorkflowEvidenceNative(t *testing.T, mode string) {
 			}
 		}
 		receipt := fixture.finishEffect(invocation, "github-review:91", `{"id":91,"body":"Native independent COMMENT","state":"COMMENTED","commit_id":"`+sha+`"}`)
+		nativeReceipt := receipt
 		if modelFirst {
-			lease = fixture.claim(reviewer.Ref)
+			lease = fixture.claimOutcome(lease, reviewer.Ref)
 			rejoined, err := fixture.resolve(lease, "evidence-review-rejoin", "github.pull_request.review.create", input)
 			if err != nil || stringMap(rejoined, "invocationRef") != stringMap(invocation, "invocationRef") || stringMap(rejoined, "receiptRef") != receipt {
 				t.Fatal("fresh COMMENT continuation repeated or lost native fact", completionOutcomeClass(err))
 			}
 		}
+		var finalDeclaration string
 		if mixed {
 			source := evidenceCapturedSource(subjectArtifact)
 			if mode == "mixed-changed-revision" {
@@ -367,9 +369,21 @@ func runWorkflowEvidenceNative(t *testing.T, mode string) {
 			if mode == "mixed-missing-comment" {
 				receipt = ""
 			}
-			fixture.complete(lease, evidenceDeclaration(entity.WorkflowDeclaredResult{Key: "design", Source: source, Verdict: "CHANGES_REQUIRED"}, entity.WorkflowDeclaredResult{Key: "review", HeadSHA: sha, Verdict: "PASS", ReceiptRef: receipt}))
+			finalDeclaration = evidenceDeclaration(entity.WorkflowDeclaredResult{Key: "design", Source: source, Verdict: "CHANGES_REQUIRED"}, entity.WorkflowDeclaredResult{Key: "review", HeadSHA: sha, Verdict: "PASS", ReceiptRef: receipt})
 		} else {
-			fixture.complete(lease, evidenceDeclaration(entity.WorkflowDeclaredResult{Key: "review", HeadSHA: sha, Verdict: "PASS", ReceiptRef: receipt}))
+			finalDeclaration = evidenceDeclaration(entity.WorkflowDeclaredResult{Key: "review", HeadSHA: sha, Verdict: "PASS", ReceiptRef: receipt})
+		}
+		fixture.complete(lease, finalDeclaration)
+		if !modelFirst {
+			if len(fixture.history(lease)) != 0 {
+				t.Fatal("synchronous evidence skipped its single owner outcome delivery")
+			}
+			lease = fixture.claimOutcome(lease, reviewer.Ref)
+			rejoined, err := fixture.resolve(lease, "evidence-review-rejoin", "github.pull_request.review.create", input)
+			if err != nil || stringMap(rejoined, "invocationRef") != stringMap(invocation, "invocationRef") || stringMap(rejoined, "receiptRef") != nativeReceipt {
+				t.Fatal("outcome delivery repeated or lost synchronous COMMENT", completionOutcomeClass(err))
+			}
+			fixture.complete(lease, finalDeclaration)
 		}
 	} else {
 		logProgress := `{"schema":"kodex.workflow-capture-progress.v1","phase":"CAPTURE_PROGRESS","cause":"ARTIFACTS_FOR_CONTINUATION","artifactKeys":["log"]}`
@@ -439,6 +453,9 @@ func runWorkflowEvidenceNative(t *testing.T, mode string) {
 			if err != nil {
 				t.Fatal("admit captured finding Issue", completionOutcomeClass(err))
 			}
+			if mode == "qa-issue-effect-first" && (stringMap(invocation, "state") != "WAITING_APPROVAL" || stringMap(invocation, "receiptRef") != "") {
+				t.Fatal("effect-first race did not begin with the actual owner-decision ACK")
+			}
 			if modelFirst {
 				fixture.complete(lease, "The Issue is still pending; no fabricated receipt.")
 				if len(fixture.history(lease)) != 0 {
@@ -446,8 +463,16 @@ func runWorkflowEvidenceNative(t *testing.T, mode string) {
 				}
 			}
 			receipt := fixture.finishEffect(invocation, "github-issue:17", `{"number":17,"title":"Native fixture finding","state":"open"}`)
-			if modelFirst {
-				lease = fixture.claim(reviewer.Ref)
+			if mode == "qa-issue-effect-first" {
+				// The model received WAITING_APPROVAL before the owner and worker settled the effect.
+				// Модель получила WAITING_APPROVAL до завершения эффекта владельцем и worker.
+				fixture.complete(lease, "The Issue is awaiting the owner decision; no receipt was returned to this turn.")
+				if len(fixture.history(lease)) != 0 {
+					t.Fatal("settled owner-decision ACK reached business evaluation before outcome delivery")
+				}
+			}
+			if modelFirst || mode == "qa-issue-effect-first" {
+				lease = fixture.claimOutcome(lease, reviewer.Ref)
 				rejoined, err := fixture.resolve(lease, "evidence-issue-rejoin", "github.issue.create", input)
 				if err != nil || stringMap(rejoined, "invocationRef") != stringMap(invocation, "invocationRef") || stringMap(rejoined, "receiptRef") != receipt {
 					t.Fatal("fresh Issue continuation repeated or lost native fact", completionOutcomeClass(err))

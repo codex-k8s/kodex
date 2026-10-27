@@ -71,10 +71,12 @@ recovery. Другой head/body/report в прежнем slot отклоняе�
 
 | Переход | Owner state и продолжение |
 | --- | --- |
-| Effect завершился до model completion | Final declaration проверяется в обычном completed capture; новый ход ради уже прочитанного результата не требуется. |
+| Effect завершился до model completion | Completed capture и lease сохраняются; physical run остаётся RUNNING до одного owner outcome CONTINUES. Бизнес-проверка выполняется на следующем fresh turn, даже если прежний NONE-вызов уже вернул receipt. |
 | Model завершился до native claim/completion | Completed lease/capture неизменяемы; physical run удерживается RUNNING, journal/downstream не создаются. Только exact native evidence invocation может быть claimed после producer completion. |
 | Последний effect завершился после model | Owner сохраняет native receipt и полный terminal envelope; один fresh CONTINUES наследует logical origin/business attempt, исходную задачу и полные outcomes. Новый RR/grants создаются обычным claim. |
 | Несколько effects | Join ждёт settlement всех invocations данного physical node; task не выбирает latest и не выбрасывает FAILED/REJECTED. |
+| HUMAN_EACH_EFFECT ACK и быстрый APPROVE | WAITING_APPROVAL мог быть возвращён до owner/worker completion. Порядок не выводится из текста модели: обе стороны соединяются тем же owner join перед evaluator. |
+| Повторный join или новый turn | У parent уже есть CONTINUES — второго ребра нет. Новый physical node без собственных native invocations финализирует обычную декларацию; rejoin старого receipt не создаёт новый WRITE или бесконечную цепочку. |
 | Pending/UNKNOWN | Нет acceptance и повторного POST. UNKNOWN не становится FAILED ради очереди; разрешено только authoritative readback/owner attention. Общий GitHub recovery сервис не заявляется. |
 | Отзыв authority до join | Нового turn/WRITE нет; native факт сохраняется, canonical owner graph closure закрывает leases/grants/Gates. |
 | Общий/step deadline | Нового join нет; существующий canonical expiry закрывает весь owner graph с прежним приоритетом execution clock над Gate. Срок не продлевается. |
@@ -87,6 +89,9 @@ recovery. Другой head/body/report в прежнем slot отклоняе�
 slots. Оно не открывает generic READ/WRITE continuation, не снимает STOP #1848
 либо #1943 и не расширяет capabilities координатора. Existing limits12steps,
 4business attempts,2parallel,8KiB published text и32768-byte task сохраняются.
+Обязательный outcome turn относится только к opt-in профилю и двум операциям.
+Его дополнительный model turn расходует прежний бюджет и требует обычного fresh
+claim с актуальными grants; обход лимита аккаунта либо повторный POST не допускается.
 
 ## Миграция, доставка и rollback
 

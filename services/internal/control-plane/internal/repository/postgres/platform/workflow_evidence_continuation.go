@@ -21,6 +21,14 @@ import (
 //go:embed sql/workflow_evidence__continuation.sql
 var queryWorkflowEvidenceContinuation string
 
+// queryWorkflowEvidenceJoin finds only this physical producer's declared evidence operations.
+// Its seed selects the common outcome envelope, never a latest receipt or another producer.
+// queryWorkflowEvidenceJoin находит только declared evidence operations текущего physical producer.
+// Seed выбирает общий outcome envelope, не latest receipt либо другого producer.
+//
+//go:embed sql/workflow_evidence__join.sql
+var queryWorkflowEvidenceJoin string
+
 // workflowEvidenceDeliveryLimit names the durable closed failure for an unreadable complete
 // outcome envelope; preserving receipts never permits omission or truncation to fit a task.
 // workflowEvidenceDeliveryLimit задаёт durable closed failure нечитаемого полного envelope;
@@ -57,4 +65,44 @@ func workflowEvidenceContinuationTask(snapshot []byte) (string, error) {
 // native receipts и capture сохраняются, leases/grants/Gates закрываются атомарно.
 func (repository *Repository) closeWorkflowEvidenceDeliveryTx(ctx context.Context, tx pgx.Tx, current scope, rootID, nodeID, projectID, code, summary string) error {
 	return repository.failRuntimeGraph(ctx, tx, current, command.Command{Kind: command.CompleteIntegrationInvocation, Mutation: value.Mutation{Operation: "controlplane.workflow_evidence_delivery"}, Principal: value.Principal{CorrelationRef: current.correlationRef}}, claimableExecution{rootRunID: rootID, nodeID: nodeID, projectID: projectID}, code, summary)
+}
+
+// joinWorkflowEvidenceTx delivers exactly one owner outcome turn before business evaluation,
+// regardless of which completion arrives first. It grants no WRITE, cannot revive a terminal
+// physical run and closes an unavailable delivery durably without discarding captured facts.
+// joinWorkflowEvidenceTx доставляет ровно один owner outcome turn до business evaluation независимо
+// от порядка completions. WRITE не выдаётся, terminal physical run не оживляется; недоступная
+// доставка закрывается durable без потери captured facts.
+func (repository *Repository) joinWorkflowEvidenceTx(ctx context.Context, tx pgx.Tx, current scope, lease map[string]any) (bool, error) {
+	var invocationID string
+	var pending int64
+	if err := tx.QueryRow(ctx, queryWorkflowEvidenceJoin, pgx.StrictNamedArgs{"organization_id": current.organizationID, "node_id": stringMap(lease, "nodeID")}).Scan(&invocationID, &pending); err != nil {
+		return false, errs.ErrUnavailable
+	}
+	if invocationID == "" {
+		return false, nil
+	}
+	if pending > 0 {
+		return true, nil
+	}
+	continued, err := repository.scheduleIntegrationContinuation(ctx, tx, current, invocationID, stringMap(lease, "projectID"))
+	if err != nil || continued {
+		return continued, err
+	}
+	var rootState string
+	if err := tx.QueryRow(ctx, queryRuntimeIntegrationReadRootState, pgx.StrictNamedArgs{"organization_id": current.organizationID, "root_run_id": stringMap(lease, "rootRunID")}).Scan(&rootState); err != nil {
+		return false, errs.ErrUnavailable
+	}
+	if contains([]string{"FAILED", "CANCELLED", "SUCCEEDED"}, rootState) {
+		return true, nil
+	}
+	_, expired, err := readRuntimeExecutionDeadline(ctx, tx, current.organizationID, stringMap(lease, "runID"))
+	if err != nil {
+		return false, err
+	}
+	code, summary := "RUNTIME_INPUT_INVALID", runtimeClaimEligibilityChanged
+	if expired {
+		code, summary = "RUNTIME_TIMEOUT", runtimeTimeoutSummary
+	}
+	return true, repository.closeWorkflowEvidenceDeliveryTx(ctx, tx, current, stringMap(lease, "rootRunID"), stringMap(lease, "nodeID"), stringMap(lease, "projectID"), code, summary)
 }
