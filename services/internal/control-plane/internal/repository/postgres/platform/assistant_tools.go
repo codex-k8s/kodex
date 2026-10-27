@@ -1564,7 +1564,7 @@ func validAssistantPromptTemplate(value string) bool {
 // владельца. Отсутствующий режим сохраняет прежний вывод графа; полномочия проекта и сотрудников
 // по ссылкам не назначаются и остаются частью допуска команды.
 func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
-	if !onlyAssistantFields(input, "reworkPolicy", "executionMode", "projectRef", "name", "purpose", "coordinatorAgentRef", "inputFields", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria") ||
+	if !onlyAssistantFields(input, "resultEvidenceProfile", "reworkPolicy", "executionMode", "projectRef", "name", "purpose", "coordinatorAgentRef", "inputFields", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria") ||
 		!hasAssistantFields(input, "projectRef", "name", "purpose", "coordinatorAgentRef", "steps") {
 		return command.WorkflowInput{}, errs.ErrInvalid
 	}
@@ -1582,8 +1582,9 @@ func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
 	} else if !timeoutOK || timeout < 1 || timeout > 604800 {
 		return command.WorkflowInput{}, errs.WithAssistantPlanField(errs.ErrInvalid, "TIMEOUT_SECONDS")
 	}
+	profile, profileOK := assistantWorkflowEvidenceProfile(input, false)
 	mode, modeOK := assistantWorkflowMode(input)
-	if !modeOK {
+	if !modeOK || !profileOK {
 		return command.WorkflowInput{}, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_SHAPE")
 	}
 	rawSteps, ok := input["steps"].([]any)
@@ -1595,7 +1596,7 @@ func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
 		return command.WorkflowInput{}, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_INVARIANTS")
 	}
 	draft := entity.WorkflowVersion{Ref: "draft", Name: name, Purpose: assistantString(input, "purpose"), CoordinatorAgentRef: coordinator,
-		ExecutionMode: mode, ReworkPolicy: rework, VersionNumber: 1, Concurrency: int32(concurrency), TimeoutSeconds: timeout, CompletionCriteria: assistantString(input, "completionCriteria"), ResultSchema: map[string]any{}}
+		ResultEvidenceProfile: profile, ExecutionMode: mode, ReworkPolicy: rework, VersionNumber: 1, Concurrency: int32(concurrency), TimeoutSeconds: timeout, CompletionCriteria: assistantString(input, "completionCriteria"), ResultSchema: map[string]any{}}
 	if rawFields, exists := input["inputFields"]; exists {
 		fields, ok := rawFields.([]any)
 		if !ok || len(fields) > 100 {

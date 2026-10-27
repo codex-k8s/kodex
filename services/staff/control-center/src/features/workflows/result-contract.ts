@@ -42,10 +42,13 @@ function boundedText(value: unknown, max: number): value is string {
 export function validWorkflowRequirements(
   value: unknown,
   dependencies: string[],
+  profile?: unknown,
 ): value is WorkflowResultRequirement[] {
+  if (profile !== undefined && profile !== "GITHUB_REVIEW_QA_V1") return false;
   if (!Array.isArray(value) || value.length < 1 || value.length > 4)
     return false;
   const seen = new Set<string>();
+  const verified: Item[] = [];
   for (const item of value) {
     if (
       !workflowItem(item) ||
@@ -95,6 +98,8 @@ export function validWorkflowRequirements(
       default:
         return false;
     }
+    if (item.kind === "QA" && profile === "GITHUB_REVIEW_QA_V1")
+      keys.push("evidenceKey");
     if (
       Object.keys(item).some((key) => !keys.includes(key)) ||
       keys.some((key) => typeof item[key] !== "string" || item[key] === "")
@@ -113,6 +118,26 @@ export function validWorkflowRequirements(
         !dependencies.includes(item.subjectStepKey))
     )
       return false;
+    verified.push(item);
+  }
+  if (profile === "GITHUB_REVIEW_QA_V1") {
+    for (const kind of ["REVIEW", "QA"]) {
+      if (verified.filter((item) => item.kind === kind).length > 1)
+        return false;
+    }
+    for (const item of verified) {
+      if (
+        item.kind === "QA" &&
+        (!validWorkflowKey(item.evidenceKey) ||
+          !verified.some(
+            (report) =>
+              report.key === item.evidenceKey &&
+              report.kind === "ARTIFACT" &&
+              report.mediaType === "application/json",
+          ))
+      )
+        return false;
+    }
   }
   return true;
 }
@@ -123,6 +148,7 @@ export function validWorkflowDAG(
   text: string,
   keyField: "ref" | "key",
   reworkPolicy: unknown = "",
+  profile?: unknown,
 ): boolean {
   if (
     !Array.isArray(steps) ||
@@ -144,6 +170,7 @@ export function validWorkflowDAG(
   const published = new Map<string, WorkflowResultRequirement[]>();
   const agents = new Map<string, string>();
   const reviewers = new Map<string, string>();
+  const pullRequests = new Map<string, number>();
   for (const step of steps) {
     if (!workflowItem(step)) return false;
     const key = step[keyField];
@@ -159,7 +186,7 @@ export function validWorkflowDAG(
       !deps.every(
         (dep): dep is string => typeof dep === "string" && agents.has(dep),
       ) ||
-      !validWorkflowRequirements(step.resultRequirements, deps)
+      !validWorkflowRequirements(step.resultRequirements, deps, profile)
     )
       return false;
     if (
@@ -170,6 +197,21 @@ export function validWorkflowDAG(
       )
     )
       return false;
+    if (profile === "GITHUB_REVIEW_QA_V1") {
+      for (const requirement of step.resultRequirements) {
+        if (
+          (requirement.kind === "REVIEW" || requirement.kind === "QA") &&
+          pullRequests.get(requirement.subjectStepKey ?? "") !== 1
+        )
+          return false;
+      }
+    }
+    pullRequests.set(
+      key,
+      step.resultRequirements.filter(
+        (requirement) => requirement.kind === "PULL_REQUEST",
+      ).length,
+    );
     for (const requirement of step.resultRequirements) {
       if (
         requirement.kind === "ARTIFACT_REVIEW" &&
@@ -235,6 +277,25 @@ export function workflowModeSteps<T extends object>(
         else delete next.key;
       }
     }
+    return next as T;
+  });
+}
+
+// Выбор profile меняет только редактируемые QA selectors; published snapshots и evidence не меняются.
+export function workflowEvidenceProfileSteps<T extends object>(
+  steps: T[],
+  profile: unknown,
+): T[] {
+  return steps.map((step) => {
+    const next = { ...step } as Item;
+    if (Array.isArray(next.resultRequirements))
+      next.resultRequirements = next.resultRequirements.map((item: unknown) => {
+        if (!workflowItem(item)) return item;
+        const requirement = { ...item };
+        if (profile !== "GITHUB_REVIEW_QA_V1") delete requirement.evidenceKey;
+        else if (requirement.kind === "QA") requirement.evidenceKey ??= "";
+        return requirement;
+      });
     return next as T;
   });
 }

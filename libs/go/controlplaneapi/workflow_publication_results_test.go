@@ -93,3 +93,64 @@ func TestWorkflowPublicationServerRejectsIncompleteProfile(t *testing.T) {
 		})
 	}
 }
+
+// TestWorkflowPublicationEvidenceV3 requires explicit wire3 and preserves legacy field omission;
+// a v2 consumer cannot silently interpret newly configured report/receipt predicates as old policy.
+// TestWorkflowPublicationEvidenceV3 требует явную wire3 и сохраняет отсутствие новых legacy полей;
+// v2 consumer не интерпретирует report/receipt условия как прежнюю политику молча.
+func TestWorkflowPublicationEvidenceV3(t *testing.T) {
+	value := serverPublicationFixture()
+	value.Version, value.ResultEvidenceProfile = 3, "GITHUB_REVIEW_QA_V1"
+	value.Steps[1].ResultRequirements = []WorkflowPublicationRequirement{{Key: "report", Kind: "ARTIFACT", FileName: "qa.json", MediaType: "application/json"}, {Key: "qa", Kind: "QA", SubjectStepKey: "step-001", EvidenceKey: "report"}}
+	raw, digest, err := EncodeWorkflowPublication(value)
+	decoded, decodeErr := DecodeWorkflowPublication(raw, digest)
+	if err != nil || decodeErr != nil || !reflect.DeepEqual(decoded, value) {
+		t.Fatal("wire3 evidence profile lost", err, decodeErr)
+	}
+	for _, mutate := range []func(*WorkflowPublication){
+		func(v *WorkflowPublication) { v.Version = 2 },
+		func(v *WorkflowPublication) { v.ResultEvidenceProfile = "UNKNOWN" },
+		func(v *WorkflowPublication) { v.ResultEvidenceProfile = "" },
+		func(v *WorkflowPublication) { v.Steps[1].ResultRequirements[1].EvidenceKey = "missing" },
+		func(v *WorkflowPublication) { v.Steps[1].ResultRequirements[0].MediaType = "text/plain" },
+	} {
+		changed := value
+		changed.Steps = append([]WorkflowPublicationStep{}, value.Steps...)
+		changed.Steps[1].ResultRequirements = append([]WorkflowPublicationRequirement{}, value.Steps[1].ResultRequirements...)
+		mutate(&changed)
+		if _, _, err := EncodeWorkflowPublication(changed); err == nil {
+			t.Fatal("invalid evidence wire accepted")
+		}
+	}
+	for _, legacy := range []WorkflowPublication{publicationFixture(), serverPublicationFixture()} {
+		wire, _, err := EncodeWorkflowPublication(legacy)
+		if err != nil || strings.Contains(string(wire), "result_evidence_profile") || strings.Contains(string(wire), "evidence_key") {
+			t.Fatal("old publication bytes gained evidence defaults")
+		}
+	}
+}
+
+// TestWorkflowPublicationEvidenceSubjectRelations binds wire3 consumers to the same direct PR
+// relation as the owner, retaining the previously valid REVIEW-only legacy wire2 graph.
+// TestWorkflowPublicationEvidenceSubjectRelations связывает wire3 consumers с той же direct PR
+// relation, что owner, сохраняя прежний допустимый REVIEW-only граф wire2.
+func TestWorkflowPublicationEvidenceSubjectRelations(t *testing.T) {
+	value := serverPublicationFixture()
+	value.Steps = append(value.Steps, WorkflowPublicationStep{Key: "checker", Position: 3, AgentRef: "agt_checker123", TimeoutSeconds: 300, DependsOn: []string{"review"}, ResultRequirements: []WorkflowPublicationRequirement{{Key: "checked", Kind: "REVIEW", SubjectStepKey: "review"}}})
+	if _, _, err := EncodeWorkflowPublication(value); err != nil {
+		t.Fatal("legacy reviewer subject changed")
+	}
+	value.Version, value.ResultEvidenceProfile = 3, "GITHUB_REVIEW_QA_V1"
+	if _, _, err := EncodeWorkflowPublication(value); err == nil {
+		t.Fatal("wire3 accepted REVIEW-only subject")
+	}
+	value.Steps[2].DependsOn = []string{"step-001"}
+	value.Steps[2].ResultRequirements[0].SubjectStepKey = "step-001"
+	if _, _, err := EncodeWorkflowPublication(value); err != nil {
+		t.Fatal("wire3 direct PR subject rejected", err)
+	}
+	value.Steps[0].ResultRequirements = append(value.Steps[0].ResultRequirements, WorkflowPublicationRequirement{Key: "other_pr", Kind: "PULL_REQUEST", Repository: "codex-k8s/test-repo"})
+	if _, _, err := EncodeWorkflowPublication(value); err == nil {
+		t.Fatal("wire3 accepted ambiguous PR subject")
+	}
+}

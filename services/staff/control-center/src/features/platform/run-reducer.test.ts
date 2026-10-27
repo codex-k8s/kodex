@@ -302,3 +302,41 @@ describe("reduceRunEvent", () => {
     expect(state.runs[rootRunRef]?.incidents?.[0]?.state).toBe("RESOLVED");
   });
 });
+
+it("закрывает invalid accepted/evidence до mutation графа и события", () => {
+  const invalid = rootNode();
+  invalid.workflowResults = [
+    {
+      attempt: 1,
+      runRef: rootRunRef,
+      accepted: true,
+      reason: "",
+      results: [],
+      evidence: [
+        {
+          key: "review",
+          kind: "REVIEW",
+          digest: "a".repeat(64),
+          receiptRef: "erc_12345678",
+          repository: "owner/repo",
+          number: 7,
+          headSha: "b".repeat(40),
+          verdict: "CHANGES_REQUIRED",
+        },
+      ],
+    },
+  ];
+  const state = projection(),
+    before = structuredClone(state);
+  const current = state.graphs[rootRunRef];
+  if (!current) throw new Error("Missing test graph");
+  const graph: RunGraph = { ...current, nodes: [invalid] };
+  expect(() => mergeRunGraph(undefined, graph)).toThrow(
+    "Invalid workflow graph evidence",
+  );
+  const event = delegationEvent();
+  if (!event.node) throw new Error("Missing test event node");
+  event.node.workflowResults = invalid.workflowResults;
+  expect(reduceRunEvent(state, event)).toBe("invalid");
+  expect(state).toEqual(before);
+});

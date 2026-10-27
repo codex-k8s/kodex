@@ -2530,12 +2530,32 @@ func (repository *Repository) scheduleIntegrationContinuation(ctx context.Contex
 	var invocationRef, invocationState, resultSummary, safeErrorCode, receiptRef string
 	var decision integrationContinuationDecision
 	var attempt int32
-	var legacyReadSnapshot []byte
+	var legacyReadSnapshot, workflowEvidenceSnapshot []byte
+	var evidenceAuthority, evidenceBudget bool
 	err := tx.QueryRow(ctx, queryRuntimeIntegrationResolveContinuation, pgx.StrictNamedArgs{
 		"invocation_id": invocationID, "organization_id": current.organizationID,
 	}).Scan(&parentNodeID, &runID, &rootRunID, &agentID, &attempt, &displayName, &role, &sessionID,
 		&agentRef, &workflowVersionID, &invocationRef, &invocationState, &resultSummary, &safeErrorCode,
 		&decision.GateRef, &decision.GateVersion, &decision.Decision, &decision.Comment, &receiptRef)
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = tx.QueryRow(ctx, queryWorkflowEvidenceContinuation, pgx.StrictNamedArgs{"organization_id": current.organizationID, "invocation_id": invocationID}).Scan(
+			&parentNodeID, &runID, &rootRunID, &agentID, &attempt, &displayName, &role, &sessionID, &agentRef, &workflowVersionID, &evidenceAuthority, &evidenceBudget, &workflowEvidenceSnapshot)
+		if err == nil {
+			_, expired, clockErr := readRuntimeExecutionDeadline(ctx, tx, current.organizationID, runID)
+			if clockErr != nil {
+				return false, clockErr
+			}
+			if expired {
+				return false, nil
+			}
+			if !evidenceBudget {
+				return false, repository.closeWorkflowEvidenceDeliveryTx(ctx, tx, current, rootRunID, parentNodeID, projectID, workflowEvidenceDeliveryLimit, "i18n:"+workflowEvidenceDeliveryLimit)
+			}
+		}
+		if err == nil && !evidenceAuthority {
+			return false, repository.closeWorkflowEvidenceDeliveryTx(ctx, tx, current, rootRunID, parentNodeID, projectID, "RUNTIME_INPUT_INVALID", runtimeClaimEligibilityChanged)
+		}
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = tx.QueryRow(ctx, queryLegacyReworkReadContinuation, pgx.StrictNamedArgs{"organization_id": current.organizationID, "invocation_id": invocationID}).Scan(
 			&parentNodeID, &runID, &rootRunID, &agentID, &attempt, &displayName, &role, &sessionID, &agentRef, &workflowVersionID, &legacyReadSnapshot)
@@ -2562,7 +2582,12 @@ func (repository *Repository) scheduleIntegrationContinuation(ctx context.Contex
 		return false, errs.ErrUnavailable
 	}
 	var task string
-	if legacyReadSnapshot != nil {
+	if workflowEvidenceSnapshot != nil {
+		task, err = workflowEvidenceContinuationTask(workflowEvidenceSnapshot)
+		if errors.Is(err, errWorkflowEvidenceDeliveryLimit) {
+			return false, repository.closeWorkflowEvidenceDeliveryTx(ctx, tx, current, rootRunID, parentNodeID, projectID, workflowEvidenceDeliveryLimit, "i18n:"+workflowEvidenceDeliveryLimit)
+		}
+	} else if legacyReadSnapshot != nil {
 		task, err = legacyReworkReadTask(legacyReadSnapshot)
 		if errors.Is(err, errs.ErrLegacyReworkReadLimit) {
 			return false, repository.closeLegacyReworkReadBudgetTx(ctx, tx, current, rootRunID, parentNodeID, projectID)

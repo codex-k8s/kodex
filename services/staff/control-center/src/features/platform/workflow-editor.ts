@@ -4,16 +4,20 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import type { PromptTarget } from "@/features/agents/detail/prompt-context";
 
-export type WorkflowEditorState = Omit<
-  Required<WorkflowInput>,
-  "reworkPolicy"
-> & { reworkPolicy: "" | "OWNER_APPROVED_UPSTREAM_V1" };
+export type WorkflowEditorInput = Required<
+  Omit<WorkflowInput, "resultEvidenceProfile" | "reworkPolicy">
+> &
+  Pick<WorkflowInput, "resultEvidenceProfile"> & {
+    reworkPolicy: "" | "OWNER_APPROVED_UPSTREAM_V1";
+  };
+export type WorkflowEditorState = WorkflowEditorInput;
 
-export function workflowEditorInput(workflow: Workflow): WorkflowEditorState {
+export function workflowEditorInput(workflow: Workflow): WorkflowEditorInput {
   const body = workflow.draft ?? workflow;
   return {
     executionMode: body.executionMode ?? "MANAGER_DRIVEN",
     reworkPolicy: body.reworkPolicy ?? "",
+    resultEvidenceProfile: body.resultEvidenceProfile,
     name: workflow.name,
     purpose: workflow.purpose,
     coordinatorAgentRef: body.coordinatorAgentRef ?? "",
@@ -53,12 +57,12 @@ export function workflowEditorInput(workflow: Workflow): WorkflowEditorState {
 }
 
 export function workflowEditorAfterAuthoritativeUpdate(
-  current: WorkflowEditorState,
+  current: WorkflowEditorInput,
   saved: string,
   projectRef: string,
   workflowRef: string,
   workflow: Workflow,
-): WorkflowEditorState | undefined {
+): WorkflowEditorInput | undefined {
   if (
     !saved ||
     JSON.stringify(current) !== saved ||

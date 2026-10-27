@@ -7,7 +7,10 @@ package entity
 type WorkflowResultRequirement struct {
 	// SubjectResultKey pins one published ARTIFACT output; omission preserves historical spec bytes.
 	// SubjectResultKey закрепляет published ARTIFACT output; отсутствие сохраняет historical spec bytes.
-	SubjectResultKey                                                                 string `json:",omitempty"`
+	SubjectResultKey string `json:",omitempty"`
+	// EvidenceKey selects a same-step published ARTIFACT predicate, never a caller-supplied file identity.
+	// EvidenceKey выбирает опубликованное ARTIFACT условие того же шага, не назначая identity файла из payload.
+	EvidenceKey                                                                      string `json:",omitempty"`
 	Key, Kind, FileName, MediaType, Repository, SubjectStepKey, Operation, TargetRef string
 }
 
@@ -95,7 +98,10 @@ type WorkflowAttemptResult struct {
 	// They are excluded by explicit public casters and omitted for all historical receipts.
 	// ReworkSubjects сохраняют typed rejection до усечения краткого progress summary.
 	// Public casters их исключают; historical receipts не получают это поле.
-	ReworkSubjects    []WorkflowReviewSubject       `json:"reworkSubjects,omitempty"`
+	ReworkSubjects []WorkflowReviewSubject `json:"reworkSubjects,omitempty"`
+	// ReviewEvidence retains verified negative-review facts separately from accepted results.
+	// ReviewEvidence сохраняет проверенные факты отрицательного review отдельно от принятых results.
+	ReviewEvidence    []WorkflowAcceptedResult      `json:"evidence,omitempty"`
 	Attempt           int32                         `json:"attempt"`
 	RunRef            string                        `json:"runRef"`
 	RuntimeRevisionID string                        `json:"runtimeRevisionId"`

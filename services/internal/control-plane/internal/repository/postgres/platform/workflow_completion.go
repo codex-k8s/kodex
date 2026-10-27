@@ -98,13 +98,13 @@ func (repository *Repository) completeServerWorkflowTx(ctx context.Context, tx p
 			reason := evaluation.Reason
 			if !captureBlocked {
 				var cause error
-				evaluation, cause = repository.evaluateWorkflowStepResultDetailedTx(ctx, tx, current, lease, payload, root.Version.ReworkPolicy == workflowservice.OwnerApprovedUpstreamV1)
+				evaluation, cause = repository.evaluateWorkflowStepResultDetailedForProfileTx(ctx, tx, current, lease, payload, root.Version.ReworkPolicy == workflowservice.OwnerApprovedUpstreamV1, root.Version.ResultEvidenceProfile)
 				reason = evaluation.Reason
 				if cause != nil {
 					return commandOutcome{}, true, cause
 				}
 			}
-			if _, err := appendWorkflowAttemptTx(ctx, tx, current, lease, reason == "", reason, evaluation.Results, evaluation.Rework); err != nil {
+			if _, err := appendWorkflowAttemptEvidenceTx(ctx, tx, current, lease, reason == "", reason, evaluation.Results, evaluation.ReviewEvidence, evaluation.Rework); err != nil {
 				return commandOutcome{}, true, err
 			}
 			if reason != "" {

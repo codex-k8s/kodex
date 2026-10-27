@@ -501,6 +501,11 @@ func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.Messa
 		current, exists := value[field.JSONName()]
 		if !exists {
 			if field.IsList() {
+				// Empty optional negative evidence is absent; mandatory results and false acceptance remain explicit.
+				// Пустые optional negative evidence отсутствуют; обязательные results и false acceptance остаются явными.
+				if descriptor.FullName() == "controlplane.v1.WorkflowAttemptResult" && field.Name() == "evidence" {
+					continue
+				}
 				value[field.JSONName()] = []any{}
 			} else if field.IsMap() {
 				value[field.JSONName()] = map[string]any{}
@@ -1268,7 +1273,7 @@ func flattenWorkflow(value map[string]any) {
 	}
 	if draft, ok := value["draftVersion"].(map[string]any); ok {
 		snapshot := map[string]any{}
-		for _, key := range []string{"ref", "version", "revision", "state", "coordinatorAgentRef", "inputFields", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria", "executionMode", "validationMessages"} {
+		for _, key := range []string{"ref", "version", "revision", "state", "coordinatorAgentRef", "inputFields", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria", "executionMode", "resultEvidenceProfile", "validationMessages"} {
 			if item, exists := draft[key]; exists {
 				snapshot[key] = item
 			}
@@ -1282,7 +1287,7 @@ func flattenWorkflow(value map[string]any) {
 	if version != nil {
 		value["revisionRef"] = version["ref"]
 	}
-	for _, key := range []string{"revision", "coordinatorAgentRef", "inputFields", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria", "executionMode", "validationMessages"} {
+	for _, key := range []string{"revision", "coordinatorAgentRef", "inputFields", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria", "executionMode", "resultEvidenceProfile", "validationMessages"} {
 		if item, exists := version[key]; exists {
 			value[key] = item
 		}

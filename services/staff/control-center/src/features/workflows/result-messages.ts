@@ -33,6 +33,15 @@ export const workflowResultMessages = {
       WAITING_OWNER: "Ожидается согласование результата",
       BLOCKED: "Результат не допускает продолжение процесса",
     },
+    evidenceProfile: "Доказательства ревью и QA",
+    evidenceLegacy: "Прежний профиль",
+    evidenceNative: "GitHub COMMENT и сохранённый QA-отчёт",
+    enableEvidence: "Включить COMMENT и QA-отчёт",
+    evidenceHelp:
+      "Ревью требует реальный COMMENT на точный PR/commit. QA сохраняет JSON-отчёт и вывод команд; сервер проверяет файлы и происхождение, а не аттестует выполнение тестов. Issue создаётся только для реального дефекта.",
+    evidenceKey: "JSON-файл отчёта QA этого этапа",
+    negativeEvidence:
+      "Сохранённые доказательства отклонённой попытки; обязательные результаты не приняты.",
     attempts: "Результаты этапа",
     accepted: "Обязательные результаты приняты",
     historicalAccepted:
@@ -111,6 +120,15 @@ export const workflowResultMessages = {
       WAITING_OWNER: "Waiting for result approval",
       BLOCKED: "Result cannot advance the workflow",
     },
+    evidenceProfile: "Review and QA evidence",
+    evidenceLegacy: "Previous profile",
+    evidenceNative: "GitHub COMMENT and captured QA report",
+    enableEvidence: "Enable COMMENT and QA report",
+    evidenceHelp:
+      "Review requires a real COMMENT on the exact PR/commit. QA captures its JSON report and command output; the server verifies files and provenance without attesting test execution. Create an Issue only for a real defect.",
+    evidenceKey: "Same-stage QA JSON report",
+    negativeEvidence:
+      "Retained facts from the rejected attempt; required results are not accepted.",
     attempts: "Stage results",
     accepted: "Required results accepted",
     historicalAccepted:

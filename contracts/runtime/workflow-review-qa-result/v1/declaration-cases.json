@@ -1,0 +1,65 @@
+[
+  {
+    "name": "REVIEW-PASS-receipt",
+    "kind": "REVIEW",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"checked\",\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"PASS\",\"receiptRef\":\"erc_12345678\"}]}",
+    "schemaValid": true,
+    "valid": true
+  },
+  {
+    "name": "REVIEW-PASS-no-receipt",
+    "kind": "REVIEW",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"checked\",\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"PASS\"}]}",
+    "schemaValid": true,
+    "valid": false
+  },
+  {
+    "name": "QA-PASS-no-receipt",
+    "kind": "QA",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"checked\",\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"PASS\"}]}",
+    "schemaValid": true,
+    "valid": true
+  },
+  {
+    "name": "QA-PASS-receipt",
+    "kind": "QA",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"checked\",\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"PASS\",\"receiptRef\":\"erc_12345678\"}]}",
+    "schemaValid": true,
+    "valid": false
+  },
+  {
+    "name": "QA-CHANGES_REQUIRED-receipt",
+    "kind": "QA",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"checked\",\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"CHANGES_REQUIRED\",\"receiptRef\":\"erc_12345678\"}]}",
+    "schemaValid": true,
+    "valid": true
+  },
+  {
+    "name": "QA-CHANGES_REQUIRED-no-receipt",
+    "kind": "QA",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"checked\",\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"CHANGES_REQUIRED\"}]}",
+    "schemaValid": true,
+    "valid": true
+  },
+  {
+    "name": "unknown",
+    "kind": "REVIEW",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"checked\",\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"PASS\",\"kind\":\"REVIEW\",\"receiptRef\":\"erc_12345678\"}]}",
+    "schemaValid": false,
+    "valid": false
+  },
+  {
+    "name": "null-receipt",
+    "kind": "REVIEW",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"checked\",\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"PASS\",\"receiptRef\":null}]}",
+    "schemaValid": false,
+    "valid": false
+  },
+  {
+    "name": "duplicate-key",
+    "kind": "REVIEW",
+    "raw": "{\"schema\":\"kodex.workflow-result.v1\",\"results\":[{\"key\":\"checked\",\"key\":\"checked\",\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"PASS\",\"receiptRef\":\"erc_12345678\"}]}",
+    "schemaValid": false,
+    "valid": false
+  }
+]

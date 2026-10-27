@@ -32,6 +32,9 @@ type WorkflowPublication struct {
 	// ReworkPolicy is explicit opt-in metadata, never implied by historical declarations.
 	// ReworkPolicy — explicit opt-in metadata, не выводимая из historical declarations.
 	ReworkPolicy string `json:"rework_policy,omitempty"`
+	// ResultEvidenceProfile is emitted only by the explicit third-version evidence contract.
+	// ResultEvidenceProfile передаётся только явным evidence контрактом третьей версии.
+	ResultEvidenceProfile string `json:"result_evidence_profile,omitempty"`
 	// ExecutionMode is present only in the server-driven version-two wire profile.
 	// ExecutionMode присутствует только в серверном профиле второй версии передачи.
 	ExecutionMode       string                     `json:"execution_mode,omitempty"`
@@ -103,14 +106,17 @@ type WorkflowPublicationRequirement struct {
 	// SubjectResultKey identifies one published ARTIFACT output, not an arbitrary file selector.
 	// SubjectResultKey обозначает published ARTIFACT output, не произвольный file selector.
 	SubjectResultKey string `json:"subject_result_key,omitempty"`
-	Key              string `json:"key"`
-	Kind             string `json:"kind"`
-	FileName         string `json:"file_name,omitempty"`
-	MediaType        string `json:"media_type,omitempty"`
-	Repository       string `json:"repository,omitempty"`
-	SubjectStepKey   string `json:"subject_step_key,omitempty"`
-	Operation        string `json:"operation,omitempty"`
-	TargetRef        string `json:"target_ref,omitempty"`
+	// EvidenceKey is a published same-step report selector, not artifact authority.
+	// EvidenceKey — опубликованный selector report того же шага, не artifact authority.
+	EvidenceKey    string `json:"evidence_key,omitempty"`
+	Key            string `json:"key"`
+	Kind           string `json:"kind"`
+	FileName       string `json:"file_name,omitempty"`
+	MediaType      string `json:"media_type,omitempty"`
+	Repository     string `json:"repository,omitempty"`
+	SubjectStepKey string `json:"subject_step_key,omitempty"`
+	Operation      string `json:"operation,omitempty"`
+	TargetRef      string `json:"target_ref,omitempty"`
 }
 
 // WorkflowPublicationSchema accepts only local structural JSON Schema
@@ -248,7 +254,7 @@ func validWorkflowPublication(v WorkflowPublication) bool {
 	}
 	seen := map[string]bool{}
 	for i, step := range v.Steps {
-		if v.Version == 1 && len(step.ResultRequirements) != 0 || v.Version == 2 && !validWorkflowPublicationServerStep(step) || !validWorkflowPublicationReviews(v, step) {
+		if v.Version == 1 && len(step.ResultRequirements) != 0 || v.Version >= 2 && !validWorkflowPublicationServerStepForProfile(step, v.ResultEvidenceProfile) || !validWorkflowPublicationReviews(v, step) {
 			return false
 		}
 		if step.ApprovalTimeoutSeconds != nil && (!step.HumanGateAfter || *step.ApprovalTimeoutSeconds < 1 || *step.ApprovalTimeoutSeconds > 604800) {
@@ -298,7 +304,7 @@ func workflowPublicationText(v WorkflowPublication) bool {
 		texts = append(texts, s.DependsOn...)
 		texts = append(texts, s.RequiredCapabilityKeys...)
 		for _, r := range s.ResultRequirements {
-			texts = append(texts, r.Key, r.Kind, r.FileName, r.MediaType, r.Repository, r.SubjectStepKey, r.Operation, r.TargetRef)
+			texts = append(texts, r.Key, r.Kind, r.FileName, r.MediaType, r.Repository, r.SubjectStepKey, r.Operation, r.TargetRef, r.EvidenceKey)
 		}
 	}
 	for _, s := range texts {

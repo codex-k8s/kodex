@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.57
+version: 1.1.59
 updated: 2026-10-27
 ---
 
@@ -23,6 +23,17 @@ complete/cancel/expiry/revoke история сохраняется, прежн�
 registry профилей владельца: копии списка известных профилей не доказывают готовность
 исполняемого пути. Матрица: [#1943](../operations/workflow-exception-context-1943.md).
 
+Явный evidence profile не расширяет authority по наличию payload-полей. Native
+receipt должен связываться с опубликованным result key, exact dependency head,
+producing epoch и неизменяемыми source pins. Отрицательное заключение сохраняет
+проверенные facts отдельно от accepted results: они не становятся входом
+зависимого шага как успешный результат. Captured command/log bytes подтверждают
+происхождение и содержимое, а не автоматически сам факт выполнения команды.
+Если model заканчивается раньше разрешённого native effect, completed capture
+и lease не оживают: owner удерживает physical envelope до единственного join,
+создающего fresh CONTINUES/RR. Outcome overflow сохраняет native fact и закрывает
+граф устойчивым typed failure вместо усечения или повторного внешнего действия.
+Пример закрытого профиля: [native COMMENT и QA report](../operations/workflow-review-qa-evidence-1949.md).
 
 Часы всего SERVER DAG принадлежат его существующему `ROOT_PROCESS`, а не
 первому planned anchor: реальные физические исполнители могут уже находиться
@@ -353,6 +364,16 @@ replay, не открывая удалённый ресурс обычному �
 Правила дополняют общую структуру `GO-DOC-001`, PostgreSQL-профиль
 `GO-DOC-002`, события `GO-DOC-004` и распределённую безопасность
 `GUIDE-DOC-003`.
+
+Unresolved native effect обязан удерживать exact captured report/log revisions,
+которыми владелец разрешил effect, независимо от terminal root, отменённого lease
+или отозванного grant. Такое удержание не выдаёт reader eligibility и снимается
+только после известного authoritative outcome либо точного project purge.
+Admission удерживает ACTIVE HEAD SHARE до commit intent; purge получает HEAD
+UPDATE и новым statement повторно проверяет retention. Снимок retention до
+ожидания HEAD не разрешает удалять bytes после принятого intent. Проверка включает
+оба порядка блокировок, UNKNOWN после cancel/expiry/revoke, known-terminal release
+и отсутствие pin для посторонней revision.
 
 ## Защищённый вид ресурса
 

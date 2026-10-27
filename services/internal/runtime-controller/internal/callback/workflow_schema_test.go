@@ -169,3 +169,60 @@ func TestWorkflowMCPSchemaLegacyCreationRejectsServerFields(t *testing.T) {
 		t.Fatal("server update without repeated mode rejected before owner readback", err)
 	}
 }
+
+// TestWorkflowMCPEvidenceProfile validates the shipped compiled CREATE/UPDATE schema, preserving
+// optional absence and explicit update clearing while never accepting null or legacy opt-in.
+// TestWorkflowMCPEvidenceProfile проверяет поставляемую compiled CREATE/UPDATE schema, сохраняя
+// отсутствие поля и явное снятие opt-in при UPDATE без принятия null либо legacy opt-in.
+func TestWorkflowMCPEvidenceProfile(t *testing.T) {
+	create := resolvedWorkflowSchema(t, workflowInputSchema(opaqueRefSchema(), opaqueRefSchema()))
+	update := resolvedWorkflowSchema(t, workflowUpdateInputSchema("wfl_fixture123"))
+	fixture := func() map[string]any {
+		value := assistantWorkflowSchemaFixture(t)
+		value["resultEvidenceProfile"] = "GITHUB_REVIEW_QA_V1"
+		step := value["steps"].([]any)[0].(map[string]any)
+		step["dependsOn"] = []any{"author"}
+		step["resultRequirements"] = []any{
+			map[string]any{"key": "report", "kind": "ARTIFACT", "fileName": "qa.json", "mediaType": "application/json"},
+			map[string]any{"key": "qa", "kind": "QA", "subjectStepKey": "author", "evidenceKey": "report"},
+		}
+		return value
+	}
+	if err := create.Validate(fixture()); err != nil {
+		t.Fatal("valid evidence profile schema rejected", err)
+	}
+	for name, mutate := range map[string]func(map[string]any){
+		"missing mode": func(v map[string]any) { delete(v, "executionMode") },
+		"null":         func(v map[string]any) { v["resultEvidenceProfile"] = nil },
+		"unknown":      func(v map[string]any) { v["resultEvidenceProfile"] = "UNKNOWN" },
+		"create clear": func(v map[string]any) { v["resultEvidenceProfile"] = "" },
+		"missing evidence key": func(v map[string]any) {
+			delete(v["steps"].([]any)[0].(map[string]any)["resultRequirements"].([]any)[1].(map[string]any), "evidenceKey")
+		},
+		"non QA evidence key": func(v map[string]any) {
+			v["steps"].([]any)[0].(map[string]any)["resultRequirements"].([]any)[0].(map[string]any)["evidenceKey"] = "report"
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			value := fixture()
+			mutate(value)
+			if create.Validate(value) == nil {
+				t.Fatal("invalid evidence profile accepted by MCP schema")
+			}
+		})
+	}
+	for _, profile := range []any{nil, "UNKNOWN"} {
+		if update.Validate(map[string]any{"workflowRef": "wfl_fixture123", "resultEvidenceProfile": profile}) == nil {
+			t.Fatal("invalid optional update evidence profile accepted")
+		}
+	}
+	for _, value := range []map[string]any{
+		{"workflowRef": "wfl_fixture123", "name": "Сохранить прежний профиль"},
+		{"workflowRef": "wfl_fixture123", "resultEvidenceProfile": ""},
+		{"workflowRef": "wfl_fixture123", "resultEvidenceProfile": "GITHUB_REVIEW_QA_V1"},
+	} {
+		if err := update.Validate(value); err != nil {
+			t.Fatal("sparse evidence profile update rejected", err)
+		}
+	}
+}

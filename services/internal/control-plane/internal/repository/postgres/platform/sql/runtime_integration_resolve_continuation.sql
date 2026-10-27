@@ -39,6 +39,9 @@ WHERE invocation.id=@invocation_id::uuid
        AND control_plane.owned_organization_assistant_run(gate.organization_id,root.id)))
   AND gate.root_run_id=root.id
   AND node.owner_rework_gate_id IS NULL
+  AND NOT (invocation.operation IN ('github.pull_request.review.create','github.issue.create')
+      AND EXISTS(SELECT 1 FROM control_plane.workflow_versions version WHERE version.id=root.workflow_version_id
+          AND version.organization_id=root.organization_id AND version.spec->>'ResultEvidenceProfile'='GITHUB_REVIEW_QA_V1'))
   AND node.state='SUCCEEDED'
   AND node.finished_at IS NOT NULL
   AND (invocation.updated_at>node.finished_at OR invocation.operation='github.repository.bundle.publish')

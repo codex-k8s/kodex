@@ -70,13 +70,24 @@ func (wire declaredResultWire) declaredResult() (entity.WorkflowDeclaredResult, 
 // округления. Ограничения лексемы и экспоненты до big.Rat исключают произвольный масштаб выделения
 // памяти; большая экспонента не даст допустимого целого при установленном бюджете входных байтов.
 func exactRevision(raw json.RawMessage) (int64, bool) {
+	return exactSafeInteger(raw, MaximumResultBytes)
+}
+
+// exactSafeInteger reuses the exact rational conversion under the enclosing document budget;
+// callers cannot allocate an exponent beyond the bounded result/report wire.
+// exactSafeInteger повторно использует точный rational conversion в бюджете enclosing document;
+// caller не выделяет память по экспоненте вне bounded result/report wire.
+func exactSafeInteger(raw json.RawMessage, maximumBytes int) (int64, bool) {
+	if maximumBytes < 1 || maximumBytes > MaximumQAReportBytes {
+		return 0, false
+	}
 	number := string(bytes.TrimSpace(raw))
-	if len(number) > MaximumResultBytes || !revisionNumberPattern.MatchString(number) {
+	if len(number) > maximumBytes || !revisionNumberPattern.MatchString(number) {
 		return 0, false
 	}
 	if index := strings.IndexAny(number, "eE"); index >= 0 {
 		exponent, err := strconv.Atoi(number[index+1:])
-		if err != nil || exponent < -MaximumResultBytes-16 || exponent > MaximumResultBytes+16 {
+		if err != nil || exponent < -maximumBytes-16 || exponent > maximumBytes+16 {
 			return 0, false
 		}
 	}

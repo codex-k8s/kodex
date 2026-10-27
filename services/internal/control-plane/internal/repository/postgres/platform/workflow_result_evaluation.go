@@ -22,9 +22,10 @@ type workflowReviewRejection = entity.WorkflowReviewSubject
 // workflowStepEvaluation separates all-or-nothing evidence acceptance from typed owner rework causes.
 // workflowStepEvaluation отделяет полную приёмку evidence от typed owner rework causes.
 type workflowStepEvaluation struct {
-	Results []entity.WorkflowAcceptedResult
-	Reason  string
-	Rework  []workflowReviewRejection
+	Results        []entity.WorkflowAcceptedResult
+	ReviewEvidence []entity.WorkflowAcceptedResult
+	Reason         string
+	Rework         []workflowReviewRejection
 }
 
 // rejectedWorkflowEvaluation emits no accepted evidence when any mandatory predicate fails.
@@ -40,6 +41,14 @@ func rejectedWorkflowEvaluation(reason string) workflowStepEvaluation {
 // Opt-in rework проверяет все predicates до routing; legacy сохраняет прежний первый отказ.
 // Функция не меняет state, grants, history или внешнее действие.
 func (repository *Repository) evaluateWorkflowStepResultDetailedTx(ctx context.Context, tx pgx.Tx, current scope, lease map[string]any, payload command.CompleteExecutionInput, upstream bool) (workflowStepEvaluation, error) {
+	return repository.evaluateWorkflowStepResultDetailedForProfileTx(ctx, tx, current, lease, payload, upstream, "")
+}
+
+// evaluateWorkflowStepResultDetailedForProfileTx combines owner-verified predicate facts with
+// separate rejection routing; a negative artifact review never waives a native COMMENT predicate.
+// evaluateWorkflowStepResultDetailedForProfileTx объединяет owner-verified predicate facts с
+// отдельным маршрутом отклонения; negative artifact review не отменяет native COMMENT predicate.
+func (repository *Repository) evaluateWorkflowStepResultDetailedForProfileTx(ctx context.Context, tx pgx.Tx, current scope, lease map[string]any, payload command.CompleteExecutionInput, upstream bool, profile string) (workflowStepEvaluation, error) {
 	var step entity.WorkflowStep
 	var inputs []workflowResultDependency
 	var rawStep, rawInputs []byte
@@ -51,18 +60,19 @@ func (repository *Repository) evaluateWorkflowStepResultDetailedTx(ctx context.C
 	if err != nil {
 		return workflowStepEvaluation{}, errs.ErrUnavailable
 	}
-	if decodeStrict(rawStep, &step) != nil || decodeStrict(rawInputs, &inputs) != nil || len(inputs) > 8 || !workflowservice.ValidRequirements(step.ResultRequirements, step.DependsOn) || payload.Success != (state == "SUCCEEDED") {
+	if decodeStrict(rawStep, &step) != nil || decodeStrict(rawInputs, &inputs) != nil || len(inputs) > 8 || !workflowservice.ValidRequirementsForProfile(profile, step.ResultRequirements, step.DependsOn) || payload.Success != (state == "SUCCEEDED") {
 		return workflowStepEvaluation{}, errs.ErrConflict
 	}
 	if !payload.Success {
 		return rejectedWorkflowEvaluation(workflowExecutionFailed), nil
 	}
-	declared, err := workflowservice.DecodeDeclaration(payload.ResultSummary, step.ResultRequirements)
+	declared, err := workflowservice.DecodeDeclarationForProfile(payload.ResultSummary, step.ResultRequirements, profile)
 	if err != nil {
 		return rejectedWorkflowEvaluation(workflowDeclarationInvalid), nil
 	}
 	results := make([]entity.WorkflowAcceptedResult, 0, len(step.ResultRequirements))
 	var changes []workflowReviewRejection
+	rejected := false
 	for _, requirement := range step.ResultRequirements {
 		declaration := declared[requirement.Key]
 		var result entity.WorkflowAcceptedResult
@@ -99,25 +109,51 @@ func (repository *Repository) evaluateWorkflowStepResultDetailedTx(ctx context.C
 			}
 			result.Key, result.Kind, result.Verdict = requirement.Key, requirement.Kind, declaration.Verdict
 			if declaration.Verdict != "PASS" {
-				if !upstream {
+				if !upstream && profile == "" {
 					return rejectedWorkflowEvaluation(workflowChangesRequired), nil
 				}
-				changes = append(changes, workflowReviewRejection{RequirementKey: requirement.Key, SubjectStepKey: requirement.SubjectStepKey, SubjectResultKey: requirement.SubjectResultKey})
-				continue
+				rejected = true
+				if upstream {
+					changes = append(changes, workflowReviewRejection{RequirementKey: requirement.Key, SubjectStepKey: requirement.SubjectStepKey, SubjectResultKey: requirement.SubjectResultKey})
+				}
 			}
 		case "REVIEW", "QA":
-			subject, found := workflowResultSubject(inputs, requirement.SubjectStepKey)
-			if !found || declaration.HeadSHA != subject.HeadSHA {
-				return rejectedWorkflowEvaluation(workflowReviewSubjectMismatch), nil
+			if profile == workflowservice.GitHubReviewQAV1 {
+				var reason string
+				if requirement.Kind == "REVIEW" {
+					proof, why, lookupErr := readWorkflowIntegrationResultTx(ctx, tx, current, lease, declaration.ReceiptRef)
+					if lookupErr != nil {
+						return workflowStepEvaluation{}, lookupErr
+					}
+					if why != "" {
+						return rejectedWorkflowEvaluation(why), nil
+					}
+					result, reason = acceptWorkflowCommentResult(requirement, declaration, proof, inputs)
+				} else {
+					result, reason, err = repository.evaluateWorkflowQAResultTx(ctx, tx, current, lease, projectID, step, requirement, declaration, declared, inputs)
+					if err != nil {
+						return workflowStepEvaluation{}, err
+					}
+				}
+				if reason != "" {
+					return rejectedWorkflowEvaluation(reason), nil
+				}
+			} else {
+				subject, found := workflowResultSubject(inputs, requirement.SubjectStepKey)
+				if !found || declaration.HeadSHA != subject.HeadSHA {
+					return rejectedWorkflowEvaluation(workflowReviewSubjectMismatch), nil
+				}
+				result = entity.WorkflowAcceptedResult{Key: requirement.Key, Kind: requirement.Kind, Repository: subject.Repository, Number: subject.Number, HeadSHA: subject.HeadSHA, Verdict: declaration.Verdict, Digest: workflowResultSHA(asJSON(declaration))}
 			}
 			if declaration.Verdict != "PASS" {
-				if !upstream {
+				if !upstream && profile == "" {
 					return rejectedWorkflowEvaluation(workflowChangesRequired), nil
 				}
-				changes = append(changes, workflowReviewRejection{RequirementKey: requirement.Key, SubjectStepKey: requirement.SubjectStepKey, SubjectResultKey: ""})
-				continue
+				rejected = true
+				if upstream {
+					changes = append(changes, workflowReviewRejection{RequirementKey: requirement.Key, SubjectStepKey: requirement.SubjectStepKey, SubjectResultKey: ""})
+				}
 			}
-			result = entity.WorkflowAcceptedResult{Key: requirement.Key, Kind: requirement.Kind, Repository: subject.Repository, Number: subject.Number, HeadSHA: subject.HeadSHA, Verdict: "PASS", Digest: workflowResultSHA(asJSON(declaration))}
 		case "DEPLOYMENT":
 			return rejectedWorkflowEvaluation(workflowDeploymentUnsupported), nil
 		default:
@@ -125,8 +161,12 @@ func (repository *Repository) evaluateWorkflowStepResultDetailedTx(ctx context.C
 		}
 		results = append(results, result)
 	}
-	if len(changes) != 0 {
-		return workflowStepEvaluation{Reason: workflowChangesRequired, Rework: changes}, nil
+	if rejected {
+		evaluation := workflowStepEvaluation{Reason: workflowChangesRequired, Rework: changes}
+		if profile == workflowservice.GitHubReviewQAV1 {
+			evaluation.ReviewEvidence = results
+		}
+		return evaluation, nil
 	}
 	return workflowStepEvaluation{Results: results}, nil
 }

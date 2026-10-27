@@ -149,3 +149,138 @@ func TestWorkflowPublicProjectionRejectsUnknownEvidence(t *testing.T) {
 		}
 	}
 }
+
+// TestWorkflowNegativeEvidenceProjection exercises the shared actual HTTP/WS message writer:
+// verified negative facts survive, but accepted results and private owner coordinates do not.
+// TestWorkflowNegativeEvidenceProjection проверяет actual общий HTTP/WS message writer:
+// negative facts сохраняются, accepted results и private owner coordinates не выдаются.
+func TestWorkflowNegativeEvidenceProjection(t *testing.T) {
+	attempt := &cp.WorkflowAttemptResult{Attempt: 1, RunRef: "run_fixture1", Accepted: false, Reason: "CHANGES_REQUIRED", Evidence: []*cp.WorkflowAcceptedResult{{Key: "review", Kind: "REVIEW", Digest: strings.Repeat("a", 64), ReceiptRef: "erc_12345678", Repository: "owner/repo", Number: 42, HeadSha: strings.Repeat("b", 40), Verdict: "CHANGES_REQUIRED"}}}
+	node := &cp.RunNode{Ref: "nod_fixture1", RunRef: "run_fixture1", WorkflowResults: []*cp.WorkflowAttemptResult{attempt}}
+	view, err := messageMap(node)
+	if err != nil {
+		t.Fatal("negative evidence unavailable", err)
+	}
+	row := view["workflowResults"].([]any)[0].(map[string]any)
+	if row["accepted"] != false || len(row["results"].([]any)) != 0 || len(row["evidence"].([]any)) != 1 {
+		t.Fatal("negative evidence became acceptance")
+	}
+	for _, change := range []func(*cp.WorkflowAttemptResult){
+		func(v *cp.WorkflowAttemptResult) { v.Accepted = true },
+		func(v *cp.WorkflowAttemptResult) { v.Reason = "RESULT_INVALID" },
+		func(v *cp.WorkflowAttemptResult) { v.Results = v.Evidence },
+		func(v *cp.WorkflowAttemptResult) { v.Evidence[0].ReceiptRef = "" },
+		func(v *cp.WorkflowAttemptResult) { v.Evidence[0].Verdict = "PASS" },
+	} {
+		changed := proto.Clone(node).(*cp.RunNode)
+		change(changed.WorkflowResults[0])
+		if _, err := messageMap(changed); err == nil {
+			t.Fatal("invalid negative envelope projected")
+		}
+	}
+}
+
+// TestWorkflowPublicGeneratedHistoryRemainsTyped detects successful codegen that accidentally
+// replaces a closed history DTO with interface{} through partial schema compositions.
+// TestWorkflowPublicGeneratedHistoryRemainsTyped ловит успешный codegen, который случайно
+// заменил закрытый DTO истории на interface{} из-за частичных schema compositions.
+func TestWorkflowPublicGeneratedHistoryRemainsTyped(t *testing.T) {
+	wire := reflect.TypeFor[generated.WorkflowAttemptResult]()
+	if wire.Kind() != reflect.Struct {
+		t.Fatal("workflow history DTO lost its closed typed object")
+	}
+	for _, field := range []string{"Attempt", "RunRef", "Accepted", "Reason", "Results", "Evidence"} {
+		if _, exists := wire.FieldByName(field); !exists {
+			t.Fatal("generated workflow history lost required typed field", field)
+		}
+	}
+}
+
+// TestWorkflowPublicEvidenceSubjectRelations exercises the actual shared HTTP/WS projection;
+// the public graph cannot advertise an opt-in relation rejected by canonical owner SQL.
+// TestWorkflowPublicEvidenceSubjectRelations проверяет actual общий HTTP/WS projection:
+// public graph не объявляет opt-in relation, которую canonical owner SQL отвергнет.
+func TestWorkflowPublicEvidenceSubjectRelations(t *testing.T) {
+	version := &cp.WorkflowVersion{Ref: "wfv_evidence1", Version: 1, Revision: 1, State: cp.WorkflowState_WORKFLOW_STATE_PUBLISHED, ExecutionMode: "SERVER_DAG_V1", Steps: []*cp.WorkflowStep{
+		{Ref: "author", AgentRef: "agt_author123", ResultRequirements: []*cp.WorkflowResultRequirement{{Key: "pr", Kind: "PULL_REQUEST", Repository: "owner/repo"}}},
+		{Ref: "review", AgentRef: "agt_review123", DependsOn: []string{"author"}, ResultRequirements: []*cp.WorkflowResultRequirement{{Key: "review", Kind: "REVIEW", SubjectStepKey: "author"}}},
+		{Ref: "checker", AgentRef: "agt_checker123", DependsOn: []string{"review"}, ResultRequirements: []*cp.WorkflowResultRequirement{{Key: "checked", Kind: "REVIEW", SubjectStepKey: "review"}}},
+	}}
+	if _, err := messageMap(version); err != nil {
+		t.Fatal("legacy public relation changed", err)
+	}
+	version.ResultEvidenceProfile = "GITHUB_REVIEW_QA_V1"
+	if _, err := messageMap(version); err == nil {
+		t.Fatal("public wire admitted REVIEW-only evidence subject")
+	}
+	version.Steps[2].DependsOn = []string{"author"}
+	version.Steps[2].ResultRequirements[0].SubjectStepKey = "author"
+	if _, err := messageMap(version); err != nil {
+		t.Fatal("public direct PR subject rejected", err)
+	}
+	version.Steps[2].DependsOn = []string{"review"}
+	if _, err := messageMap(version); err == nil {
+		t.Fatal("public wire admitted a non-direct PR evidence subject")
+	}
+	version.Steps[2].DependsOn = []string{"author"}
+	version.Steps[0].ResultRequirements = append(version.Steps[0].ResultRequirements, &cp.WorkflowResultRequirement{Key: "other_pr", Kind: "PULL_REQUEST", Repository: "owner/repo"})
+	if _, err := messageMap(version); err == nil {
+		t.Fatal("public wire admitted ambiguous PR evidence subject")
+	}
+}
+
+// TestWorkflowPublicOptionalEvidenceAbsence preserves the same HTTP/WS shape for nil and empty
+// repeated evidence while retaining mandatory false acceptance, empty results and owner bytes.
+// TestWorkflowPublicOptionalEvidenceAbsence сохраняет HTTP/WS форму для nil и empty repeated
+// evidence с обязательными false acceptance, empty results и неизменёнными owner bytes.
+func TestWorkflowPublicOptionalEvidenceAbsence(t *testing.T) {
+	for _, evidence := range [][]*cp.WorkflowAcceptedResult{nil, {}} {
+		attempt := &cp.WorkflowAttemptResult{Attempt: 1, RunRef: "run_fixture1", Reason: "RESULT_INVALID", Evidence: evidence}
+		before := proto.Clone(attempt)
+		view, err := ProtoMap(attempt)
+		if err != nil {
+			t.Fatal("legacy history unavailable", err)
+		}
+		if _, exists := view["evidence"]; exists {
+			t.Fatal("optional empty evidence was invented")
+		}
+		if view["accepted"] != false || !reflect.DeepEqual(view["results"], []any{}) || view["reason"] != "RESULT_INVALID" {
+			t.Fatal("mandatory rejected history defaults changed")
+		}
+		if !proto.Equal(attempt, before) {
+			t.Fatal("public projection mutated owner history")
+		}
+	}
+}
+
+// TestWorkflowMixedNegativeEvidenceWriter preserves data-only reviewed artifacts and native
+// COMMENT facts together, including the owner's historical effectiveness discriminator.
+// TestWorkflowMixedNegativeEvidenceWriter сохраняет data-only reviewed artifacts вместе с native
+// COMMENT facts и историческим discriminator эффективности, не превращая их в accepted results.
+func TestWorkflowMixedNegativeEvidenceWriter(t *testing.T) {
+	attempt := &cp.WorkflowAttemptResult{Attempt: 1, RunRef: "run_fixture1", Reason: "CHANGES_REQUIRED", EffectiveState: "REWORK_PENDING", Evidence: []*cp.WorkflowAcceptedResult{
+		{Key: "design", Kind: "ARTIFACT_REVIEW", ArtifactRef: "art_fixture1", ArtifactRevision: "arev_fixture1", Digest: strings.Repeat("a", 64), Verdict: "CHANGES_REQUIRED"},
+		{Key: "comment", Kind: "REVIEW", ReceiptRef: "erc_fixture1", Repository: "owner/repo", Number: 42, HeadSha: strings.Repeat("b", 40), Digest: strings.Repeat("c", 64), Verdict: "PASS"},
+	}}
+	node := &cp.RunNode{Ref: "nod_fixture1", RunRef: "run_fixture1", WorkflowResults: []*cp.WorkflowAttemptResult{attempt}}
+	view, err := messageMap(node)
+	if err != nil {
+		t.Fatal("mixed negative evidence unavailable", err)
+	}
+	row := view["workflowResults"].([]any)[0].(map[string]any)
+	if row["accepted"] != false || row["effectiveState"] != "REWORK_PENDING" || len(row["results"].([]any)) != 0 || len(row["evidence"].([]any)) != 2 {
+		t.Fatal("mixed negative facts changed")
+	}
+	for _, change := range []func(*cp.WorkflowAttemptResult){
+		func(v *cp.WorkflowAttemptResult) { v.Accepted = true },
+		func(v *cp.WorkflowAttemptResult) { v.Evidence[0].ArtifactRevision = "" },
+		func(v *cp.WorkflowAttemptResult) { v.Evidence[1].ReceiptRef = "" },
+		func(v *cp.WorkflowAttemptResult) { v.Evidence[0].Verdict = "PASS" },
+	} {
+		changed := proto.Clone(node).(*cp.RunNode)
+		change(changed.WorkflowResults[0])
+		if _, err := messageMap(changed); err == nil {
+			t.Fatal("invalid mixed negative projection accepted")
+		}
+	}
+}

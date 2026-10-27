@@ -4,7 +4,7 @@ title: Повторное чтение успешного эффекта сер�
 type: runbook
 status: approved
 owner: architect
-version: 1.0.2
+version: 1.0.3
 updated: 2026-10-27
 ---
 
@@ -14,6 +14,11 @@ updated: 2026-10-27
 сохраняют прежнее поведение. Успешная native component-проверка не заменяет
 GitHub/live PDLC: новый сценарий должен пройти отдельный disposable PG-контур
 на точном интегрированном SHA. До такого прогона native-статус — `NOT RUN`.
+
+Optional `GITHUB_REVIEW_QA_V1` из #1949 является отдельным strict wire3
+профилем [native COMMENT и QA report](workflow-review-qa-evidence-1949.md).
+Следующее описание verdict/head относится к отсутствующему opt-in и сохраняется
+для исторических v1/v2. Новая policy не назначается прежним snapshots задним числом.
 
 ## Опубликованные привязки
 

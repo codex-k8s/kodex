@@ -206,3 +206,17 @@ it("сохраняет DAG-поля отдельного черновика бе
   expect(stage.resultRequirements[0]?.targetRef).toBe("ssh_fixture");
   expect(workflowEditorInput(workflow).executionMode).toBe("MANAGER_DRIVEN");
 });
+
+it("сохраняет явный evidence profile при clone и удаляет старый profile при новом legacy readback", () => {
+  const native = structuredClone(workflow);
+  native.executionMode = "SERVER_DAG_V1";
+  native.resultEvidenceProfile = "GITHUB_REVIEW_QA_V1";
+  delete native.draft;
+  expect(workflowEditorInput(native).resultEvidenceProfile).toBe(
+    "GITHUB_REVIEW_QA_V1",
+  );
+  const stale = workflowEditorInput(native);
+  Object.assign(stale, workflowEditorInput(workflow));
+  expect(stale.resultEvidenceProfile).toBeUndefined();
+  expect(native.resultEvidenceProfile).toBe("GITHUB_REVIEW_QA_V1");
+});

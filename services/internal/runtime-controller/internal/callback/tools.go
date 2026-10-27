@@ -934,9 +934,10 @@ func workflowUpdateInputSchema(workflowRef string) map[string]any {
 	step["properties"].(map[string]any)["key"] = map[string]any{"type": "string", "minLength": 1, "maxLength": 96,
 		"description": "Preserve the existing step key from the workflow readback; omit only for a new step."}
 	schema := objectSchema([]string{"workflowRef"}, map[string]any{
-		"executionMode": enumSchema("MANAGER_DRIVEN", "SERVER_DAG_V1"),
-		"reworkPolicy":  enumSchema("", "OWNER_APPROVED_UPSTREAM_V1"),
-		"workflowRef":   enumSchema(workflowRef), "name": stringSchema(1, 160),
+		"executionMode":         enumSchema("MANAGER_DRIVEN", "SERVER_DAG_V1"),
+		"reworkPolicy":          enumSchema("", "OWNER_APPROVED_UPSTREAM_V1"),
+		"resultEvidenceProfile": enumSchema("", "GITHUB_REVIEW_QA_V1"),
+		"workflowRef":           enumSchema(workflowRef), "name": stringSchema(1, 160),
 		"purpose": stringSchema(0, 2000), "coordinatorAgentRef": opaqueRefSchema(),
 		"instructions":       stringSchema(0, 65536),
 		"completionCriteria": stringSchema(0, 2000),
@@ -944,8 +945,8 @@ func workflowUpdateInputSchema(workflowRef string) map[string]any {
 		"timeoutSeconds":     map[string]any{"type": "integer", "minimum": 1, "maximum": 604800},
 		"inputFields":        fields, "steps": steps,
 	})
-	branches := make([]map[string]any, 0, 10)
-	for _, field := range []string{"reworkPolicy", "executionMode", "name", "purpose", "coordinatorAgentRef", "instructions", "completionCriteria", "maxConcurrency", "timeoutSeconds", "inputFields", "steps"} {
+	branches := make([]map[string]any, 0, 12)
+	for _, field := range []string{"executionMode", "resultEvidenceProfile", "reworkPolicy", "name", "purpose", "coordinatorAgentRef", "instructions", "completionCriteria", "maxConcurrency", "timeoutSeconds", "inputFields", "steps"} {
 		branches = append(branches, map[string]any{"required": []string{field}})
 	}
 	schema["anyOf"] = branches
@@ -1115,16 +1116,17 @@ func workflowInputSchema(projectRef, agentRef map[string]any) map[string]any {
 	})
 	step["allOf"] = []map[string]any{{"if": map[string]any{"required": []string{"approvalTimeoutSeconds"}}, "then": map[string]any{"properties": map[string]any{"humanGate": map[string]any{"const": true}}}}}
 	schema := objectSchema([]string{"projectRef", "name", "purpose", "coordinatorAgentRef", "steps"}, map[string]any{
-		"executionMode": enumSchema("MANAGER_DRIVEN", "SERVER_DAG_V1"),
-		"reworkPolicy":  enumSchema("OWNER_APPROVED_UPSTREAM_V1"),
-		"projectRef":    projectRef, "name": stringSchema(1, 160), "purpose": stringSchema(1, 1000), "coordinatorAgentRef": agentRef,
+		"executionMode":         enumSchema("MANAGER_DRIVEN", "SERVER_DAG_V1"),
+		"reworkPolicy":          enumSchema("OWNER_APPROVED_UPSTREAM_V1"),
+		"resultEvidenceProfile": enumSchema("GITHUB_REVIEW_QA_V1"),
+		"projectRef":            projectRef, "name": stringSchema(1, 160), "purpose": stringSchema(1, 1000), "coordinatorAgentRef": agentRef,
 		"inputFields":    map[string]any{"type": "array", "maxItems": 100, "items": inputField},
 		"steps":          map[string]any{"type": "array", "minItems": 1, "maxItems": 200, "items": step},
 		"maxConcurrency": map[string]any{"type": "integer", "minimum": 1, "maximum": 100},
 		"timeoutSeconds": map[string]any{"type": "integer", "minimum": 1, "maximum": 604800}, "completionCriteria": stringSchema(0, 2000),
 	})
 	schema["allOf"] = workflowCreationBounds()
-	schema["description"] = workflowServerTextBudgetGuidance + " Omitted executionMode or MANAGER_DRIVEN retains legacy manager coordination; do not supply key, dependsOn or resultRequirements during legacy creation. SERVER_DAG_V1 requires every step to provide a stable key, explicit dependsOn and one to four typed resultRequirements. It permits at most 12 steps, 2 concurrent executions and 8 predecessors per step. Completion of a model turn alone does not satisfy a required artifact, pull request, review or release receipt. All predicates are checked by the owner before advancing. Optional reworkPolicy OWNER_APPROVED_UPSTREAM_V1 enables owner-approved return to exact published authors with fresh dependent rechecks; ARTIFACT_REVIEW requires subjectStepKey and subjectResultKey naming a published ARTIFACT. Narrative never routes rework."
+	schema["description"] = "Optional resultEvidenceProfile=GITHUB_REVIEW_QA_V1 is SERVER-only, selects strict publication wire3 and requires native COMMENT receipts for REVIEW and same-step application/json ARTIFACT evidenceKey for QA. Each REVIEW/QA subjectStepKey must be a direct predecessor with exactly one published PULL_REQUEST requirement; REVIEW/QA-only subjects and multiple PR predicates are rejected. QA report/log pins prove bytes and producing lineage, not automatic execution attestation; create one aggregate Issue only for real CHANGES_REQUIRED with captured findings. Omission preserves previous policy. " + workflowServerTextBudgetGuidance + " Omitted executionMode or MANAGER_DRIVEN retains legacy manager coordination; do not supply key, dependsOn or resultRequirements during legacy creation. SERVER_DAG_V1 requires every step to provide a stable key, explicit dependsOn and one to four typed resultRequirements. It permits at most 12 steps, 2 concurrent executions and 8 predecessors per step. Completion of a model turn alone does not satisfy a required artifact, pull request, review or release receipt. All predicates are checked by the owner before advancing. Optional reworkPolicy OWNER_APPROVED_UPSTREAM_V1 enables owner-approved return to exact published authors with fresh dependent rechecks; ARTIFACT_REVIEW requires subjectStepKey and subjectResultKey naming a published ARTIFACT. Narrative never routes rework."
 	return schema
 }
 

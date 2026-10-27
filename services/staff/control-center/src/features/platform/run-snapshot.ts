@@ -4,6 +4,7 @@ import type {
   RunGraph,
   RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
+import { validWorkflowAttemptEvidence } from "./workflow-evidence";
 import { assertRunOwner, sameAssistantRunPin } from "@/features/runs/run-owner";
 
 const refPattern = /^[A-Za-z0-9_-]{8,128}$/;
@@ -66,6 +67,8 @@ export function validateRunSnapshot(
   for (const node of graph.nodes) {
     if (!refPattern.test(node.ref) || nodes.has(node.ref))
       throw new Error("Invalid graph node identity");
+    if (!validWorkflowAttemptEvidence(node))
+      throw new Error("Invalid workflow attempt evidence");
     nodes.add(node.ref);
   }
   for (const edge of graph.edges) {

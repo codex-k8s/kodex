@@ -6,6 +6,10 @@ import type {
   RunGraph,
   RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
+import {
+  validWorkflowAttemptEvidence,
+  assertWorkflowGraphEvidence,
+} from "./workflow-evidence";
 import { usageCompleteness } from "@/features/runs/token-usage";
 
 export type RunEventOutcome = "applied" | "duplicate" | "gap" | "invalid";
@@ -58,6 +62,7 @@ export function mergeRunGraph(
   current: RunGraph | undefined,
   incoming: RunGraph,
 ): RunGraph {
+  assertWorkflowGraphEvidence(incoming);
   if (!current || incoming.sequence < current.sequence)
     return current ?? incoming;
   return {
@@ -72,6 +77,7 @@ export function mergeRunGraph(
 }
 
 function isConsistent(event: RunEvent): boolean {
+  if (event.node && !validWorkflowAttemptEvidence(event.node)) return false;
   try {
     usageCompleteness(event.run.usage);
   } catch {

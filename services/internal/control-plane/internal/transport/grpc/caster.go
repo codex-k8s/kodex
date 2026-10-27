@@ -608,7 +608,7 @@ func castWorkflowVersion(value *entity.WorkflowVersion, state, coordinatorAgentR
 			GateDecisions: gateDecisions(step.GateDecisions), RequiredCapabilityKeys: append([]string(nil), step.RequiredCapabilityKeys...),
 		})
 	}
-	return &controlplanev1.WorkflowVersion{ExecutionMode: value.ExecutionMode, ReworkPolicy: value.ReworkPolicy, Ref: value.Ref, Version: int64(value.VersionNumber), Revision: value.VersionNumber, State: workflowState(state), CoordinatorAgentRef: coordinatorAgentRef, InputFields: inputs, Steps: steps, MaxConcurrency: value.Concurrency, TimeoutSeconds: int32(value.TimeoutSeconds), CompletionCriteria: value.CompletionCriteria}
+	return &controlplanev1.WorkflowVersion{ResultEvidenceProfile: value.ResultEvidenceProfile, ExecutionMode: value.ExecutionMode, ReworkPolicy: value.ReworkPolicy, Ref: value.Ref, Version: int64(value.VersionNumber), Revision: value.VersionNumber, State: workflowState(state), CoordinatorAgentRef: coordinatorAgentRef, InputFields: inputs, Steps: steps, MaxConcurrency: value.Concurrency, TimeoutSeconds: int32(value.TimeoutSeconds), CompletionCriteria: value.CompletionCriteria}
 }
 
 // castWorkflow projects published/draft workflow versions and optional card/readiness snapshots, preserving absent activity and authoritative readiness metadata rather than recomputing counts or eligibility.

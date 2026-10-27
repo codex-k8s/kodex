@@ -16,7 +16,7 @@ import (
 // assistantWorkflowEditableFields is the closed plan-edit surface, excluding owner snapshots and grants.
 // assistantWorkflowEditableFields задаёт закрытую поверхность редактирования без owner snapshots и grants.
 var assistantWorkflowEditableFields = []string{
-	"executionMode", "reworkPolicy",
+	"executionMode", "resultEvidenceProfile", "reworkPolicy",
 	"name", "purpose", "coordinatorAgentRef", "instructions", "completionCriteria",
 	"maxConcurrency", "timeoutSeconds", "inputFields", "steps",
 }
@@ -114,6 +114,9 @@ func (repository *Repository) readAssistantWorkflowSnapshot(ctx context.Context,
 	if workflow.Draft.ExecutionMode != "" {
 		snapshot["executionMode"] = workflow.Draft.ExecutionMode
 	}
+	if workflow.Draft.ResultEvidenceProfile != "" {
+		snapshot["resultEvidenceProfile"] = workflow.Draft.ResultEvidenceProfile
+	}
 	return snapshot, workflow.Version, nil
 }
 
@@ -143,7 +146,7 @@ func hydrateAssistantWorkflowFields(before map[string]any, version int64,
 ) (entity.AssistantPlanOperation, error) {
 	after := make(map[string]any, len(assistantWorkflowEditableFields)+2)
 	for _, key := range append([]string{"workflowRef", "projectRef"}, assistantWorkflowEditableFields...) {
-		if _, exists := before[key]; (key == "executionMode" || key == "reworkPolicy") && !exists {
+		if _, exists := before[key]; (key == "executionMode" || key == "reworkPolicy" || key == "resultEvidenceProfile") && !exists {
 			continue
 		}
 		after[key] = before[key]
@@ -155,6 +158,12 @@ func hydrateAssistantWorkflowFields(before map[string]any, version int64,
 			continue
 		}
 		switch key {
+		case "resultEvidenceProfile":
+			profile, valid := assistantWorkflowEvidenceProfile(operation.Parameters, true)
+			if !valid {
+				return entity.AssistantPlanOperation{}, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_SHAPE")
+			}
+			value = profile
 		case "executionMode":
 			mode, valid := assistantWorkflowMode(operation.Parameters)
 			if !valid {
@@ -237,7 +246,7 @@ func assistantUpdateWorkflow(operation entity.AssistantPlanOperation) (command.W
 	if input == nil {
 		input = withAssistantExpectedVersion(operation.Parameters, valueOrZero(operation.ExpectedVersion))
 	}
-	if !onlyAssistantFields(input, "reworkPolicy", "executionMode", "workflowRef", "projectRef", "name", "purpose", "instructions",
+	if !onlyAssistantFields(input, "resultEvidenceProfile", "reworkPolicy", "executionMode", "workflowRef", "projectRef", "name", "purpose", "instructions",
 		"coordinatorAgentRef", "completionCriteria", "maxConcurrency", "timeoutSeconds", "inputFields", "steps", "expectedVersion") ||
 		!hasAssistantFields(input, "workflowRef", "projectRef", "name", "purpose", "instructions",
 			"coordinatorAgentRef", "completionCriteria", "maxConcurrency", "timeoutSeconds", "inputFields", "steps", "expectedVersion") {
@@ -265,6 +274,13 @@ func assistantUpdateWorkflow(operation entity.AssistantPlanOperation) (command.W
 	var draft entity.WorkflowVersion
 	if json.Unmarshal(raw, &draft) != nil || !validWorkflowVersion(draft) {
 		return command.WorkflowInput{}, 0, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_DRAFT")
+	}
+	if _, present := input["resultEvidenceProfile"]; present {
+		profile, valid := assistantWorkflowEvidenceProfile(input, true)
+		if !valid {
+			return command.WorkflowInput{}, 0, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_SHAPE")
+		}
+		draft.ResultEvidenceProfile = profile
 	}
 	if _, present := input["executionMode"]; present {
 		mode, valid := assistantWorkflowMode(input)
@@ -412,6 +428,9 @@ func assistantUpdateWorkflowGraph(input map[string]any, draft *entity.WorkflowVe
 	}
 	if draft.ReworkPolicy != "" {
 		proposal["reworkPolicy"] = draft.ReworkPolicy
+	}
+	if draft.ResultEvidenceProfile != "" {
+		proposal["resultEvidenceProfile"] = draft.ResultEvidenceProfile
 	}
 	parsed, err := assistantWorkflow(proposal)
 	if err != nil || parsed.Draft == nil {

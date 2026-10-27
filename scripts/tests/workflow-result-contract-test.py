@@ -174,5 +174,43 @@ class WorkflowCaptureProgressContractTest(unittest.TestCase):
                 self.assertEqual(valid, case["valid"])
 
 
+class WorkflowEvidenceContractTest(unittest.TestCase):
+    """Форма данных не доказывает published kind, authority или исполнение команды."""
+
+    def test_shared_evidence_wire_corpora(self):
+        def exact_number(raw):
+            value = Decimal(raw)
+            if value.is_zero():
+                return 0
+            if -16 <= value.adjusted() <= 16 and value == value.to_integral_value():
+                return int(value)
+            return value
+
+        def unique_object(pairs):
+            result = {}
+            for key, value in pairs:
+                if key in result:
+                    raise ValueError("duplicate object member")
+                result[key] = value
+            return result
+
+        for directory, cases_file in (("workflow-qa-report/v1", "report-cases.json"),
+                                      ("workflow-review-qa-result/v1", "declaration-cases.json")):
+            base = ROOT / "contracts/runtime" / directory
+            schema = json.loads((base / "schema.json").read_text())
+            Draft202012Validator.check_schema(schema)
+            validator = Draft202012Validator(schema)
+            for case in json.loads((base / cases_file).read_text()):
+                with self.subTest(name=case["name"], schema=directory):
+                    try:
+                        value = json.loads(case["raw"], object_pairs_hook=unique_object,
+                                           parse_float=exact_number)
+                    except ValueError:
+                        valid = False
+                    else:
+                        valid = validator.is_valid(value)
+                    self.assertEqual(valid, case.get("schemaValid", case["valid"]))
+
+
 if __name__ == "__main__":
     unittest.main()

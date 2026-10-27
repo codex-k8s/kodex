@@ -982,6 +982,8 @@ message WorkflowResultRequirement {
   string target_ref = 8;
   // subject_result_key выбирает exact ARTIFACT predicate published prerequisite только для ARTIFACT_REVIEW.
   string subject_result_key = 9;
+  // evidence_key связывает QA с same-step JSON ARTIFACT только явного профиля.
+  string evidence_key = 10;
 }
 
 message WorkflowStep {
@@ -1024,6 +1026,8 @@ message WorkflowVersion {
   string execution_mode = 16;
   // rework_policy включается только новой публикацией, не переосмысливает legacy Gates.
   string rework_policy = 17;
+  // Новый profile не переинтерпретирует прежние published snapshots.
+  string result_evidence_profile = 18;
 }
 
 message Workflow {
@@ -1204,6 +1208,8 @@ message WorkflowAttemptResult {
   repeated WorkflowAcceptedResult results = 5;
   // Текущая owner freshness не изменяет historical accepted.
   string effective_state = 6;
+  // evidence сохраняет проверенные факты отклонённой попытки и не означает принятия results.
+  repeated WorkflowAcceptedResult evidence = 7;
 }
 
 message RunNode {

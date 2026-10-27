@@ -14985,6 +14985,10 @@ components:
         repository: { type: string, maxLength: 200 }
         subjectStepKey: { $ref: "#/components/schemas/WorkflowStepKey" }
         subjectResultKey: { $ref: "#/components/schemas/WorkflowStepKey" }
+        evidenceKey:
+          type: string
+          pattern: "^[A-Za-z0-9_-]{1,96}$"
+          description: Только QA выбранного профиля; ключ ARTIFACT application/json того же шага.
         operation:
           {
             type: string,
@@ -15133,6 +15137,10 @@ components:
           type: string
           enum: [OWNER_APPROVED_UPSTREAM_V1]
           description: Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
+        resultEvidenceProfile:
+          type: string
+          enum: [GITHUB_REVIEW_QA_V1]
+          description: Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
         projectRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -15247,6 +15255,10 @@ components:
           type: string
           enum: [OWNER_APPROVED_UPSTREAM_V1]
           description: Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
+        resultEvidenceProfile:
+          type: string
+          enum: [GITHUB_REVIEW_QA_V1]
+          description: Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version:
           {
@@ -15289,6 +15301,10 @@ components:
           type: string
           enum: [OWNER_APPROVED_UPSTREAM_V1]
           description: Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
+        resultEvidenceProfile:
+          type: string
+          enum: ["", GITHUB_REVIEW_QA_V1]
+          description: Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия. Пустое значение снимает draft opt-in; весь итоговый граф заново проверяется.
         name: { type: string, minLength: 1, maxLength: 160 }
         purpose: { type: string, minLength: 1, maxLength: 1000 }
         coordinatorAgentRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -15535,10 +15551,11 @@ components:
         repository: { type: string, maxLength: 200 }
         number: { type: integer, minimum: 0, maximum: 9007199254740991 }
         headSha: { type: string, maxLength: 64 }
-        verdict: { type: string, enum: [PASS] }
+        verdict: { type: string, enum: [PASS, CHANGES_REQUIRED] }
     WorkflowAttemptResult:
       type: object
       additionalProperties: false
+      description: Закрытый typed snapshot. Отношения accepted/results/evidence проверяются общим API validator и каждым PWA graph/event ingress; evidence разрешено только при accepted=false, reason=CHANGES_REQUIRED, results=[] и наличии отрицательного ARTIFACT_REVIEW/REVIEW/QA.
       required: [attempt, runRef, accepted, reason, results]
       properties:
         effectiveState: { type: string, enum: [CURRENT, HISTORICAL, STALE_DEPENDENCY, REWORK_PENDING, WAITING_OWNER, BLOCKED] }
@@ -15552,6 +15569,12 @@ components:
             maxItems: 4,
             items: { $ref: "#/components/schemas/WorkflowAcceptedResult" },
           }
+        evidence:
+          type: array
+          minItems: 1
+          maxItems: 4
+          description: Проверенные факты отклонённого ARTIFACT_REVIEW/REVIEW/QA; accepted=false, reason=CHANGES_REQUIRED, results остаётся пустым.
+          items: { $ref: "#/components/schemas/WorkflowAcceptedResult" }
     RunNode:
       type: object
       additionalProperties: false

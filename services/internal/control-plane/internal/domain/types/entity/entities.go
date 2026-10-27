@@ -732,6 +732,9 @@ type WorkflowVersion struct {
 	// ReworkPolicy explicitly enables owner-approved upstream rework; absence retains old recovery.
 	// ReworkPolicy явно включает owner-approved upstream rework; отсутствие сохраняет старый recovery.
 	ReworkPolicy string `json:",omitempty"`
+	// ResultEvidenceProfile explicitly opts a published SERVER version into owner-verified review/QA evidence.
+	// ResultEvidenceProfile явно включает owner-verified review/QA evidence для опубликованной SERVER версии.
+	ResultEvidenceProfile string `json:",omitempty"`
 	// ExecutionMode is an explicit immutable policy; absence retains historical manager orchestration.
 	// ExecutionMode — явная неизменяемая политика; отсутствие сохраняет прежнюю оркестрацию менеджером.
 	ExecutionMode                                                             string `json:",omitempty"`

@@ -9,4 +9,5 @@ export interface WorkflowAttemptResult {
   accepted: boolean;
   reason: string;
   results: WorkflowAcceptedResult[];
+  evidence?: WorkflowAcceptedResult[];
 }

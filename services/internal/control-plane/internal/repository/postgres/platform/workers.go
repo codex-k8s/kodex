@@ -1269,7 +1269,7 @@ func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context
 	var workflowAdmission *workflowEffectAdmission
 	if risk == "WRITE" {
 		var rejoined map[string]any
-		workflowAdmission, rejoined, err = admitWorkflowEffectTx(ctx, tx, scope, workflowRootID, input, capability.Operation, grantRef, grantVersion, definitionDigest, resourceScopeDigest, approvalPolicy, encodedScope, canonicalInput, semanticInput)
+		workflowAdmission, rejoined, err = repository.admitWorkflowEffectTx(ctx, tx, scope, workflowRootID, input, capability.Operation, grantRef, grantVersion, definitionDigest, resourceScopeDigest, approvalPolicy, encodedScope, canonicalInput, semanticInput)
 		if err != nil {
 			return nil, err
 		}
