@@ -1,11 +1,7 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
+import { onBeforeUnmount, ref, useId, watch } from "vue";
 import { usePlatformStore } from "@/features/platform/store";
-import {
-  operationInputs,
-  operationParameter,
-  type EditablePlanOperation,
-} from "../model";
+import type { EditablePlanOperation } from "../model";
 import {
   systemIntegrationGrantPlanCandidate,
   systemIntegrationGrantAppliedCandidate,
@@ -14,7 +10,6 @@ import {
 import {
   readSystemGrantCandidates,
   readSystemGrantOwner,
-  validSystemGrantSelection,
 } from "../system-integration-grants";
 import {
   getIntegrationConnection,
@@ -27,7 +22,7 @@ import type {
 import { requestSignal } from "@/shared/api/client";
 import { ownerRequestSignal } from "@/shared/api/owner-lifetime";
 import { unwrap } from "@/shared/api/problem";
-import { useIntegrationGrantPlanPolicy } from "../use-integration-grant-plan-policy";
+import { useIntegrationGrantPlanDraft } from "../use-integration-grant-plan-draft";
 import AssistantIntegrationGrantPolicyFields from "./AssistantIntegrationGrantPolicyFields.vue";
 
 const props = defineProps<{
@@ -47,38 +42,20 @@ const connection = ref<IntegrationConnection>();
 const candidate = ref<SystemAssistantIntegrationGrantCandidate>();
 const loading = ref(false);
 const failed = ref(false);
-function value(key: string): unknown {
-  try {
-    return operationParameter(props.operation, key);
-  } catch {
-    return undefined;
-  }
-}
-const input = computed(() => {
-  try {
-    return operationInputs([props.operation])[0];
-  } catch {
-    return undefined;
-  }
-});
-const ownerValid = computed(
-  () =>
-    !ownerLifetime.aborted &&
-    !!input.value &&
-    systemIntegrationGrantPlanOwner(
-      input.value,
-      platform.bootstrap?.organizationRef,
-    ),
-);
-const { policy, paths, fields, changePolicy, togglePath } =
-  useIntegrationGrantPlanPolicy(candidate, value, changed);
-const valid = computed(
-  () =>
-    ownerValid.value &&
-    !loading.value &&
-    !failed.value &&
-    validSystemGrantSelection(candidate.value, policy.value, paths.value),
-);
+const { input, value, ownerValid, valid, fields, changePolicy, togglePath } =
+  useIntegrationGrantPlanDraft(
+    () => props.operation,
+    ownerLifetime,
+    (operation) =>
+      systemIntegrationGrantPlanOwner(
+        operation,
+        platform.bootstrap?.organizationRef,
+      ),
+    candidate,
+    loading,
+    failed,
+    changed,
+  );
 watch(valid, (selected) => emit("valid", selected), { immediate: true });
 watch(
   () =>

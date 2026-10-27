@@ -9,17 +9,12 @@ import {
 } from "vue";
 import { usePlatformStore } from "@/features/platform/store";
 import { ChevronDown } from "@lucide/vue";
-import {
-  operationInputs,
-  operationParameter,
-  type EditablePlanOperation,
-} from "../model";
+import type { EditablePlanOperation } from "../model";
 import {
   projectIntegrationGrantPlanCandidate,
   projectIntegrationGrantAppliedCandidate,
   projectIntegrationGrantPlanOwner,
 } from "../project-integration-grant-plan";
-import { validSystemGrantSelection } from "../system-integration-grants";
 import {
   projectGrantBatchContext,
   type ProjectGrantBatchContext,
@@ -33,7 +28,7 @@ import type {
   SystemAssistantIntegrationGrantCandidate,
 } from "@/shared/api/generated/openapi/types.gen";
 import { ownerRequestSignal } from "@/shared/api/owner-lifetime";
-import { useIntegrationGrantPlanPolicy } from "../use-integration-grant-plan-policy";
+import { useIntegrationGrantPlanDraft } from "../use-integration-grant-plan-draft";
 import AssistantIntegrationGrantPolicyFields from "./AssistantIntegrationGrantPolicyFields.vue";
 
 const props = defineProps<{
@@ -62,37 +57,27 @@ const expanded = ref(false);
 watch(expanded, (value) => emit("expanded", value));
 const localReadBundle = createProjectIntegrationGrantReadBundle();
 onScopeDispose(() => localReadBundle.close());
-function value(key: string): unknown {
-  try {
-    return operationParameter(props.operation, key);
-  } catch {
-    return undefined;
-  }
-}
-const input = computed(() => {
-  try {
-    return operationInputs([props.operation])[0];
-  } catch {
-    return undefined;
-  }
-});
-const ownerValid = computed(
-  () =>
-    !ownerLifetime.aborted &&
-    !!input.value &&
+const {
+  input,
+  value,
+  ownerValid,
+  valid,
+  policy,
+  fields,
+  changePolicy,
+  togglePath,
+} = useIntegrationGrantPlanDraft(
+  () => props.operation,
+  ownerLifetime,
+  (operation) =>
     projectIntegrationGrantPlanOwner(
-      input.value,
+      operation,
       platform.bootstrap?.organizationRef,
     ),
-);
-const { policy, paths, fields, changePolicy, togglePath } =
-  useIntegrationGrantPlanPolicy(candidate, value, changed);
-const valid = computed(
-  () =>
-    ownerValid.value &&
-    !loading.value &&
-    !failed.value &&
-    validSystemGrantSelection(candidate.value, policy.value, paths.value),
+  candidate,
+  loading,
+  failed,
+  changed,
 );
 watch(valid, (selected) => emit("valid", selected), { immediate: true });
 const batchContext = computed(() =>
