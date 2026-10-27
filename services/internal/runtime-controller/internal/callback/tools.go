@@ -944,8 +944,8 @@ func workflowUpdateInputSchema(workflowRef string) map[string]any {
 		"timeoutSeconds":     map[string]any{"type": "integer", "minimum": 1, "maximum": 604800},
 		"inputFields":        fields, "steps": steps,
 	})
-	branches := make([]map[string]any, 0, 10)
-	for _, field := range []string{"executionMode", "name", "purpose", "coordinatorAgentRef", "instructions", "completionCriteria", "maxConcurrency", "timeoutSeconds", "inputFields", "steps"} {
+	branches := make([]map[string]any, 0, 11)
+	for _, field := range []string{"executionMode", "resultEvidenceProfile", "name", "purpose", "coordinatorAgentRef", "instructions", "completionCriteria", "maxConcurrency", "timeoutSeconds", "inputFields", "steps"} {
 		branches = append(branches, map[string]any{"required": []string{field}})
 	}
 	schema["anyOf"] = branches
