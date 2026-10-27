@@ -133,8 +133,15 @@ func TestWorkspaceWriterOwnerComponent(t *testing.T) {
 	released.Phase, released.BlockReason = runtimecontract.WorkspaceObserveReleased, ""
 	t.Run("missing_join_blocks_release", func(t *testing.T) {
 		if _, err := service.Execute(ctx, command.Command{Kind: command.ObserveWorkspace, Principal: observer,
-			Mutation: value.Mutation{IdempotencyKey: "workspace-owner-no-join"}, Payload: released}); !errors.Is(err, errs.ErrConflict) {
-			t.Fatal("missing Pod was accepted as positive join", err)
+			Mutation: value.Mutation{IdempotencyKey: "workspace-owner-no-join"}, Payload: released}); !errors.Is(err, errs.ErrForbidden) {
+			t.Fatal("missing join did not return closed authority failure", err)
+		}
+		var state string
+		var released, joined bool
+		if err := pool.QueryRow(ctx, `SELECT state,writer_released,quiescence_record IS NOT NULL
+			FROM control_plane.session_workspace_storage WHERE ref=$1`, binding.WorkspaceRef).Scan(&state, &released, &joined); err != nil ||
+			state != "BLOCKED" || released || joined {
+			t.Fatal("rejected release changed writer custody", err)
 		}
 	})
 	joined, err := runtimecontract.EncodeWorkspaceQuiescence(runtimecontract.WorkspaceQuiescence{Schema: runtimecontract.WorkspaceQuiescenceSchema,
