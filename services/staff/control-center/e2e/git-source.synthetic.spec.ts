@@ -1,3 +1,4 @@
+import { installSyntheticCsrf } from "./fixtures/browser-session";
 import { handleSyntheticRuntimeRequest } from "./synthetic-runtime-route";
 import { expect, test } from "@playwright/test";
 import { browserHTTPConsoleStatus } from "./synthetic-diagnostics";
@@ -31,16 +32,7 @@ for (const width of [390, 2900]) {
       if (["warning", "error"].includes(message.type()))
         failures.push(message.text());
     });
-    await context.addCookies([
-      {
-        name: "__Host-kodex-csrf",
-        value: "s".repeat(43),
-        domain: "kodex.test",
-        path: "/",
-        secure: true,
-        sameSite: "Strict",
-      },
-    ]);
+    await installSyntheticCsrf(context, "s");
     const revision: ManagedConfigurationRevision = {
       sourceAvailable: true,
       ref: "revision_published",

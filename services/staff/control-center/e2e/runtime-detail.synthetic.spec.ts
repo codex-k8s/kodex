@@ -1,3 +1,4 @@
+import { installSyntheticCsrf } from "./fixtures/browser-session";
 import { handleSyntheticRuntimeRequest } from "./synthetic-runtime-route";
 import { expect, test } from "@playwright/test";
 import { isFirefoxScrollAdvisory } from "./synthetic-diagnostics";
@@ -32,16 +33,7 @@ for (const width of [1440, 390, 2900]) {
       if (["warning", "error"].includes(message.type()))
         failures.push(message.text());
     });
-    await page.context().addCookies([
-      {
-        name: "__Host-kodex-csrf",
-        value: "a".repeat(43),
-        domain: "kodex.test",
-        path: "/",
-        secure: true,
-        sameSite: "Strict",
-      },
-    ]);
+    await installSyntheticCsrf(page.context(), "a");
     const digest = "a".repeat(64);
     const now = "2026-09-05T00:00:00Z";
     let content = 'personality = "none"';

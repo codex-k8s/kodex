@@ -1,3 +1,4 @@
+import type { BrowserContext, WebSocketRoute } from "@playwright/test";
 import type { OwnerSessionMetadata } from "../../src/shared/api/generated/openapi/types.gen";
 
 export function syntheticBrowserSession(
@@ -16,4 +17,33 @@ export function syntheticBrowserSession(
     renewalMode: "BACKEND_REFRESH",
     ...overrides,
   };
+}
+
+// Устанавливает только синтетический CSRF marker в заданный browser context; вызывающий
+// выбирает значение и отвечает за дальнейшие маршруты и lifecycle.
+export function installSyntheticCsrf(
+  context: Pick<BrowserContext, "addCookies">,
+  character: string,
+): Promise<void> {
+  return context.addCookies([
+    {
+      name: "__Host-kodex-csrf",
+      value: character.repeat(43),
+      domain: "kodex.test",
+      path: "/",
+      secure: true,
+      sameSite: "Strict",
+    },
+  ]);
+}
+
+// Регистрирует synthetic socket и завершает close handshake с прежними значениями по умолчанию.
+export function trackSyntheticSocket<
+  T extends { socket: WebSocketRoute; closed: boolean },
+>(connections: T[], connection: T): void {
+  connections.push(connection);
+  connection.socket.onClose((code, reason) => {
+    connection.closed = true;
+    void connection.socket.close({ code: code ?? 1000, reason: reason ?? "" });
+  });
 }

@@ -4,11 +4,24 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.585.0
+version: 1.586.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая синтетическая browser-session оснастка — 27.10.2026
+
+Четырнадцать browser-фикстур используют общее создание synthetic CSRF marker;
+две сетевые фикстуры также используют общее завершение WebSocket close handshake.
+Вызовы и значения остались прежними, отдельные route и проверки сценариев не менялись.
+15 полных обратных сравнений исходников PASS; локальная проверка 14 вызовов,
+передачи ошибки и двух вариантов close PASS. E2E TypeScript compile до и после,
+адресные formatting и lint PASS. Сквозные тесты и браузер не запускались.
+Context7: [Playwright BrowserContext](https://github.com/microsoft/playwright/blob/main/docs/src/api/class-browsercontext.md)
+и [WebSocketRoute](https://github.com/microsoft/playwright/blob/main/docs/src/api/class-websocketroute.md).
+Анализ: 1336 raw / 1284 retained / 52 unresolved, Go-комментарии 21730/21730.
+Live/deploy/startup и QA не выполнялись.
 
 ## Общий Kubernetes HTTP transport authority — 27.10.2026
 

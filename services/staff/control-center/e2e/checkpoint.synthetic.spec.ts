@@ -1,3 +1,4 @@
+import { installSyntheticCsrf } from "./fixtures/browser-session";
 import { handleSyntheticRuntimeRequest } from "./synthetic-runtime-route";
 import { expect, test } from "@playwright/test";
 
@@ -20,16 +21,7 @@ for (const width of [1440, 390]) {
       if (request.failure()?.errorText !== "net::ERR_ABORTED")
         failures.push("Request failed");
     });
-    await context.addCookies([
-      {
-        name: "__Host-kodex-csrf",
-        value: "s".repeat(43),
-        domain: "kodex.test",
-        path: "/",
-        secure: true,
-        sameSite: "Strict",
-      },
-    ]);
+    await installSyntheticCsrf(context, "s");
     await page.route("**/*", async (route) => {
       const url = new URL(route.request().url());
       if (await handleSyntheticRuntimeRequest(route, url, failures)) return;
