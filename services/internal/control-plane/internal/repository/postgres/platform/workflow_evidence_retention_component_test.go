@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	_ "embed"
+	"encoding/hex"
 	"errors"
 	"os"
 	"strings"
@@ -39,18 +40,17 @@ var queryWorkflowEvidenceDeadlineWait string
 
 // evidenceRetentionAdministrator restricts fault/observation access to the exact disposable native database.
 // evidenceRetentionAdministrator ограничивает fault/observation access exact disposable native database.
-func evidenceRetentionAdministrator(t *testing.T, ctx context.Context) *pgx.Conn {
+func evidenceRetentionAdministrator(t *testing.T, ctx context.Context, runtime *pgx.ConnConfig) *pgx.Conn {
 	t.Helper()
-	runtime, err := pgx.ParseConfig(isolatedAssistantComponentDSN(t))
-	if err != nil || !strings.HasPrefix(runtime.Database, "kodex_assistant_test_") {
-		t.Fatal("invalid disposable evidence database")
-	}
 	admin, err := pgx.ParseConfig(os.Getenv("KODEX_CONTROL_PLANE_TEST_ADMIN_DSN"))
-	if err != nil || admin.Host != runtime.Host || admin.Port != runtime.Port || admin.Database != "postgres" || admin.User != "postgres" {
+	if err != nil {
 		t.Fatal("invalid disposable evidence administrator")
 	}
-	admin.Database = runtime.Database
-	conn, err := pgx.ConnectConfig(ctx, admin)
+	bound, err := evidenceRetentionAdminConfig(runtime, admin)
+	if err != nil {
+		t.Fatal("invalid exact disposable evidence scope")
+	}
+	conn, err := pgx.ConnectConfig(ctx, bound)
 	if err != nil {
 		t.Fatal("connect disposable evidence administrator")
 	}
@@ -62,6 +62,26 @@ func evidenceRetentionAdministrator(t *testing.T, ctx context.Context) *pgx.Conn
 	return conn
 }
 
+// evidenceRetentionAdminConfig copies the disposable administrator onto the already-created business
+// database, without allocating a second clone or changing either original connection config.
+// evidenceRetentionAdminConfig привязывает копию disposable administrator к уже созданной business
+// database без второго clone и без изменения исходных connection configs.
+func evidenceRetentionAdminConfig(runtime, admin *pgx.ConnConfig) (*pgx.ConnConfig, error) {
+	if runtime == nil || admin == nil || (runtime.Host != "localhost" && runtime.Host != "127.0.0.1") || runtime.Port < 1024 || runtime.User == "postgres" ||
+		admin.Host != runtime.Host || admin.Port != runtime.Port || admin.Database != "postgres" || admin.User != "postgres" ||
+		!strings.HasPrefix(runtime.Database, "kodex_assistant_test_") {
+		return nil, errs.ErrConflict
+	}
+	suffix := strings.TrimPrefix(runtime.Database, "kodex_assistant_test_")
+	identity, err := hex.DecodeString(suffix)
+	if err != nil || len(identity) != 8 || strings.ToLower(suffix) != suffix {
+		return nil, errs.ErrConflict
+	}
+	bound := admin.Copy()
+	bound.Database = runtime.Database
+	return bound, nil
+}
+
 // assertIssueRetention checks exact report/log revisions and rejects another captured file or a foreign revision ID.
 // assertIssueRetention проверяет exact report/log revisions и отвергает другой capture либо foreign revision ID.
 func (fixture *workflowEvidenceNativeFixture) assertIssueRetention(admin *pgx.Conn, report, log, unrelated entity.Artifact, want bool) {
@@ -69,8 +89,11 @@ func (fixture *workflowEvidenceNativeFixture) assertIssueRetention(admin *pgx.Co
 	f.t.Helper()
 	var reportPin, logPin, otherPin, foreignRevision, retainedReport, retainedLog bool
 	err := admin.QueryRow(f.ctx, queryWorkflowEvidenceRetentionProof, report.Ref, log.Ref, unrelated.Ref).Scan(&reportPin, &logPin, &otherPin, &foreignRevision, &retainedReport, &retainedLog)
-	if err != nil || reportPin != want || logPin != want || otherPin || foreignRevision || want && (!retainedReport || !retainedLog) {
-		f.t.Fatal("exact unresolved evidence retention mismatch")
+	if err != nil {
+		f.t.Fatalf("exact unresolved evidence retention query failed: no_rows=%t", errors.Is(err, pgx.ErrNoRows))
+	}
+	if reportPin != want || logPin != want || otherPin || foreignRevision || want && (!retainedReport || !retainedLog) {
+		f.t.Fatalf("exact unresolved evidence retention mismatch: want=%t report_pin=%t log_pin=%t unrelated_pin=%t foreign_revision=%t generic_report=%t generic_log=%t", want, reportPin, logPin, otherPin, foreignRevision, retainedReport, retainedLog)
 	}
 }
 
@@ -101,7 +124,7 @@ func (fixture *workflowEvidenceNativeFixture) deleteEvidence(file entity.Artifac
 func (fixture *workflowEvidenceNativeFixture) checkIssueRetention(mode string, lease map[string]any, report, log, unrelated entity.Artifact, input map[string]any) {
 	f := fixture.f
 	f.t.Helper()
-	admin := evidenceRetentionAdministrator(f.t, f.ctx)
+	admin := evidenceRetentionAdministrator(f.t, f.ctx, f.pool.Config().ConnConfig.Copy())
 	if strings.HasSuffix(mode, "head-deleted") {
 		report = fixture.deleteEvidence(report)
 		if _, err := fixture.resolve(lease, "evidence-issue", "github.issue.create", input); err == nil {
@@ -325,4 +348,36 @@ func (fixture *workflowEvidenceNativeFixture) resolveIssueUnderHeadFence(admin *
 		f.t.Fatal("admission HEAD SHARE did not fence concurrent purge UPDATE", completionOutcomeClass(result.err))
 	}
 	return result.value
+}
+
+// TestWorkflowEvidenceRetentionAdministratorUsesExistingClone proves the observer connects to the
+// existing business database, preserves both inputs and refuses foreign scope before any connection.
+// TestWorkflowEvidenceRetentionAdministratorUsesExistingClone доказывает привязку observer к
+// existing business database, сохранение обоих inputs и отказ foreign scope до соединения.
+func TestWorkflowEvidenceRetentionAdministratorUsesExistingClone(t *testing.T) {
+	runtime := &pgx.ConnConfig{Config: pgconn.Config{Host: "127.0.0.1", Port: 15432, User: "control_plane_runtime_g1", Database: "kodex_assistant_test_0123456789abcdef"}}
+	admin := &pgx.ConnConfig{Config: pgconn.Config{Host: runtime.Host, Port: runtime.Port, User: "postgres", Database: "postgres"}}
+	bound, err := evidenceRetentionAdminConfig(runtime, admin)
+	if err != nil || bound == admin || bound.Database != runtime.Database || bound.User != "postgres" || admin.Database != "postgres" || runtime.Database != "kodex_assistant_test_0123456789abcdef" {
+		t.Fatal("retention observer lost the exact existing business clone")
+	}
+	for _, change := range []func(*pgx.ConnConfig, *pgx.ConnConfig){
+		func(r, _ *pgx.ConnConfig) { r.Database = "control_plane" },
+		func(r, _ *pgx.ConnConfig) { r.Database = "kodex_assistant_test_invalid" },
+		func(r, _ *pgx.ConnConfig) { r.Host = "remote.example" },
+		func(r, _ *pgx.ConnConfig) { r.User = "postgres" },
+		func(_, a *pgx.ConnConfig) { a.Host = "localhost" },
+		func(_, a *pgx.ConnConfig) { a.Port++ },
+		func(_, a *pgx.ConnConfig) { a.Database = "another_database" },
+		func(_, a *pgx.ConnConfig) { a.User = "another_administrator" },
+	} {
+		r, a := runtime.Copy(), admin.Copy()
+		change(r, a)
+		if _, err := evidenceRetentionAdminConfig(r, a); err == nil {
+			t.Fatal("retention observer accepted a foreign disposable scope")
+		}
+	}
+	if _, err := evidenceRetentionAdminConfig(nil, admin); err == nil {
+		t.Fatal("retention observer accepted a missing business connection")
+	}
 }
