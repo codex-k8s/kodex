@@ -19,13 +19,38 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryPromptContinuationSession embeds active tenant session/account/target lookup with the
+// latest exact runtime revision and predecessor run. It is a source locator; project run
+// visibility and execution actor checks follow in the preview path.
+// queryPromptContinuationSession встраивает поиск активной сессии организации, аккаунта и цели с
+// последней точной runtime-ревизией и предыдущим запуском. Это поиск источника; видимость
+// проектного запуска и субъект исполнения проверяются в пути preview.
+//
 //go:embed sql/prompt_continuation_session.sql
 var queryPromptContinuationSession string
 
+// promptContinuationPreviewTx uses the current scope as both viewer and execution actor when
+// building a continuation preview. It delegates all validation and digest construction and neither
+// creates a turn nor commits.
+// promptContinuationPreviewTx использует текущую область как зрителя и субъекта исполнения при
+// построении continuation preview. Передаёт проверки и вычисление дайджестов общей реализации, не
+// создаёт turn и не выполняет Commit.
 func (repository *Repository) promptContinuationPreviewTx(ctx context.Context, tx pgx.Tx, current scope, sessionRef string, input query.PromptPreviewContext) (entity.PromptMaterializationSnapshot, error) {
 	return repository.promptContinuationPreviewForActorTx(ctx, tx, current, current, sessionRef, input)
 }
 
+// promptContinuationPreviewForActorTx builds a prospective continuation from the active session,
+// authorized prior run, pinned workflow input, current runtime/model policy and exact predecessor
+// snapshot. Files, skills/memory and capabilities are resolved under viewer/execution boundaries,
+// with cross-actor visibility checks. It validates the continuation template and returns separate
+// dependency and full snapshot digests plus context diff; no turn, claim, grant or provider effect
+// is created and the caller owns commit.
+// promptContinuationPreviewForActorTx строит предполагаемое продолжение по активной сессии,
+// разрешённому прежнему запуску, закреплённому workflow input, текущей runtime/model policy и
+// точному снимку предшественника. Файлы, навыки, память и capabilities разрешаются в границах
+// зрителя и исполнителя с проверкой видимости между субъектами. Проверяет шаблон продолжения и
+// возвращает отдельные дайджесты зависимостей и полного снимка и diff контекста; не создаёт turn,
+// claim, grant или эффект провайдера, Commit принадлежит вызывающему коду.
 func (repository *Repository) promptContinuationPreviewForActorTx(ctx context.Context, tx pgx.Tx, current, execution scope, sessionRef string, input query.PromptPreviewContext) (entity.PromptMaterializationSnapshot, error) {
 	var sessionID, projectID, projectRef, targetType, targetRef, accountRef, previousRunRef, previousRef string
 	if err := tx.QueryRow(ctx, queryPromptContinuationSession, pgx.StrictNamedArgs{"organization_id": current.organizationID, "session_ref": sessionRef}).Scan(

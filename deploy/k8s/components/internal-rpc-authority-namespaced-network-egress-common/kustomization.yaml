@@ -1,0 +1,10 @@
+# Закрытый набор существующих политик с namespaceSelector; профиль локального namespace сюда не включён.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+patches:
+- path: patch.yaml
+  target:
+    group: networking.k8s.io
+    version: v1
+    kind: NetworkPolicy
+    name: (automation-scheduler-internal-rpc-authority-exact-paths|email-bridge-internal-rpc-authority-exact-paths|integration-gateway-internal-rpc-authority-exact-paths|interaction-gateway-internal-rpc-authority-exact-paths|role-image-builder-internal-rpc-authority-exact-paths|secret-broker-internal-rpc-authority-exact-paths|session-archive-internal-rpc-authority-exact-paths)

@@ -12,7 +12,12 @@ import (
 	"testing"
 )
 
-// Старые lifecycle fixtures проходят новый настоящий Prepare, не подставляют plan ref.
+// executePromptPublicationFixture routes prompt publication through the real prepare-impact
+// command, requires its plan and explicitly selects no consumers; other commands execute
+// unchanged.
+// executePromptPublicationFixture проводит публикацию prompt через настоящую команду подготовки
+// влияния, требует её план и явно не выбирает потребителей; остальные команды исполняет без
+// изменения.
 func executePromptPublicationFixture(t *testing.T, ctx context.Context, service *platformservice.Service, input command.Command) (command.Result, error) {
 	t.Helper()
 	if input.Kind != command.PublishPromptTemplateDraft {
@@ -36,6 +41,12 @@ func executePromptPublicationFixture(t *testing.T, ctx context.Context, service 
 	return service.Execute(ctx, input)
 }
 
+// testPromptImpactLifecycle checks selective prompt publication applies exact current consumers,
+// records stale/archived outcomes without exposing hidden consumers, preserves old conflicting
+// bindings and replays one committed impact receipt.
+// testPromptImpactLifecycle проверяет применение выборочной публикации prompt к точным текущим
+// потребителям, фиксацию устаревших и архивных исходов без раскрытия скрытых потребителей,
+// сохранение прежних конфликтующих привязок и повтор одной сохранённой квитанции влияния.
 func testPromptImpactLifecycle(t *testing.T, ctx context.Context, r *Repository) {
 	owner := resolvedTestPrincipal(t, ctx, r, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.command.projects.create"}, "control-api-gateway")
 	service, err := platformservice.New(r)

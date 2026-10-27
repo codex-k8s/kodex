@@ -7,6 +7,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
 // castProjectPurgeRecovery projects project presence, snapshot digest, recovery counts, resolution
@@ -24,15 +25,14 @@ func castProjectPurgeRecovery(item entity.ProjectPurgeRecovery) *cp.ProjectPurge
 // GetProjectPurgeRecovery читает восстановление окончательного удаления с проверенным query
 // principal и преобразует снимок владельца.
 func (server *Server) GetProjectPurgeRecovery(ctx context.Context, request *cp.GetProjectPurgeRecoveryRequest) (*cp.GetProjectPurgeRecoveryResponse, error) {
-	p, err := principal(ctx, cp.PlatformQueryService_GetProjectPurgeRecovery_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	item, err := server.service.GetProjectPurgeRecovery(ctx, p, request.GetProjectRef())
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &cp.GetProjectPurgeRecoveryResponse{Recovery: castProjectPurgeRecovery(item)}, nil
+	return queryResponse(ctx, cp.PlatformQueryService_GetProjectPurgeRecovery_FullMethodName, func(p value.Principal) (*cp.GetProjectPurgeRecoveryResponse, error) {
+		item, err := server.service.GetProjectPurgeRecovery(ctx, p, request.GetProjectRef())
+		if err != nil {
+			return nil, err
+		}
+		return &cp.GetProjectPurgeRecoveryResponse{Recovery: castProjectPurgeRecovery(item)}, nil
+
+	})
 }
 
 // ResolveProjectPurgeRecovery passes snapshot digest and explicit unknown-outcome acknowledgment

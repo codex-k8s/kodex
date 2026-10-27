@@ -9,6 +9,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestAssistantPlanVariantsRemainIndependentAcrossTurns inspects embedded SQL for absence of old
+// plan superseding/STALE updates on a new turn and presence of exact conversation/history
+// ordering. This is a string-contract guard, not a transaction or concurrent-turn component test.
+// TestAssistantPlanVariantsRemainIndependentAcrossTurns проверяет embedded SQL на отсутствие
+// прежнего superseding/STALE обновления plans новым turn и наличие точных conversation/history
+// ordering. Это string-contract guard, а не transaction и concurrent-turn component test.
 func TestAssistantPlanVariantsRemainIndependentAcrossTurns(t *testing.T) {
 	t.Parallel()
 
@@ -31,6 +37,14 @@ func TestAssistantPlanVariantsRemainIndependentAcrossTurns(t *testing.T) {
 	}
 }
 
+// TestAssistantPlanPromotesOnlySingleSelectedProject table-checks that only one selected project
+// with no other selected operations permits promotion, ignoring unselected alternatives. It also
+// checks tenant/creator/projectless/ACTIVE SQL guard strings for session/conversation promotion
+// without executing SQL.
+// TestAssistantPlanPromotesOnlySingleSelectedProject таблично проверяет promotion лишь одного
+// selected project без других selected operations, игнорируя unselected alternatives. Также
+// сверяет tenant/creator/projectless/ACTIVE SQL guard strings session/conversation promotion без
+// исполнения SQL.
 func TestAssistantPlanPromotesOnlySingleSelectedProject(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -63,6 +77,13 @@ func TestAssistantPlanPromotesOnlySingleSelectedProject(t *testing.T) {
 	}
 }
 
+// TestAssistantTurnContextIsSnapshottedPerRun checks embedded run-insert/claim/proposal queries
+// retain immutable assistant context fields and avoid mutable conversation context, while
+// conversation refresh updates its own fields. This verifies source SQL text rather than a real
+// turn/claim snapshot.
+// TestAssistantTurnContextIsSnapshottedPerRun проверяет immutable assistant context fields в
+// embedded run-insert/claim/proposal queries без mutable conversation context и обновление
+// собственных полей conversation refresh. Проверяет текст SQL, а не настоящий turn/claim snapshot.
 func TestAssistantTurnContextIsSnapshottedPerRun(t *testing.T) {
 	t.Parallel()
 
@@ -106,6 +127,13 @@ func TestAssistantTurnContextIsSnapshottedPerRun(t *testing.T) {
 	}
 }
 
+// TestAssistantPlanCarriesAgentVersionWithinAtomicApply checks agent OCC advances coherently in
+// Target/Input/ExpectedVersion without mutating the original operation, and nonagent operations do
+// not enter version carry. It tests pure copy/mapping semantics without performing an atomic DB
+// apply.
+// TestAssistantPlanCarriesAgentVersionWithinAtomicApply проверяет согласованное продвижение agent
+// OCC в Target/Input/ExpectedVersion без изменения исходной operation и исключение nonagent
+// operations из version carry. Проверяет чистые copy/mapping semantics без atomic DB apply.
 func TestAssistantPlanCarriesAgentVersionWithinAtomicApply(t *testing.T) {
 	t.Parallel()
 
@@ -135,6 +163,12 @@ func TestAssistantPlanCarriesAgentVersionWithinAtomicApply(t *testing.T) {
 	}
 }
 
+// TestAssistantPlanAuthorizationProblemKeepsVersionConflict checks a wrapped version mismatch
+// retains the operation-indexed version-conflict problem, while Forbidden maps to not-permitted.
+// It exercises safe diagnostic classification without an authorization backend.
+// TestAssistantPlanAuthorizationProblemKeepsVersionConflict проверяет сохранение operation-indexed
+// version-conflict problem для wrapped version mismatch и mapping Forbidden в not-permitted.
+// Проверяет safe diagnostic classification без authorization backend.
 func TestAssistantPlanAuthorizationProblemKeepsVersionConflict(t *testing.T) {
 	t.Parallel()
 

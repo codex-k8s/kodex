@@ -1,8 +1,9 @@
+import { memoryStorage as browserStorage } from "@/test-utils/memory-storage";
+import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
 import {
-  createRenderer,
   defineComponent,
   h,
   reactive,
@@ -155,18 +156,7 @@ async function editor(localized = false) {
 
 function mountedEditor(): Awaited<ReturnType<typeof editor>> {
   let state!: Awaited<ReturnType<typeof editor>>;
-  const renderer = createRenderer<object, object>({
-    insert() {},
-    remove() {},
-    createElement: () => ({}),
-    createText: () => ({}),
-    createComment: () => ({}),
-    setText() {},
-    setElementText() {},
-    parentNode: () => null,
-    nextSibling: () => null,
-    patchProp() {},
-  });
+  const renderer = createNoopRenderer();
   const component = defineComponent({
     setup(props, context) {
       state = (
@@ -205,23 +195,6 @@ beforeEach(() => {
   platform.bootstrap = { organizationRef: "org_synthetic" };
 });
 
-function browserStorage(): Storage {
-  const values = new Map<string, string>();
-  return {
-    get length() {
-      return values.size;
-    },
-    key: (index) => [...values.keys()][index] ?? null,
-    getItem: (key) => values.get(key) ?? null,
-    setItem: (key, value) => {
-      values.set(key, value);
-    },
-    removeItem: (key) => {
-      values.delete(key);
-    },
-    clear: () => values.clear(),
-  };
-}
 function savedDraft(): RuntimeEnvironmentDraft {
   return {
     scopeKind: "PROJECT",

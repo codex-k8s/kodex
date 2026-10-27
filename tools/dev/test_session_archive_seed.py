@@ -1,14 +1,17 @@
 """Проверка preserved platform OCI и публикации без Docker, сети и node cache."""
 
 import hashlib
-import io
 import json
 import os
 from pathlib import Path
 import subprocess
-import tarfile
 import tempfile
 import unittest
+
+if __package__:
+    from .oci_archive_test_fixtures import assert_preserved_archive, write_tar_members
+else:
+    from oci_archive_test_fixtures import assert_preserved_archive, write_tar_members
 
 ROOT = Path(__file__).resolve().parents[2]
 SEED = ROOT / "tools/dev/seed-local-image-supply-chain.sh"
@@ -49,11 +52,7 @@ class PlatformArchiveSeed(unittest.TestCase):
         return {"mediaType": media_type, "digest": digest, "size": len(data)}
 
     def write_archive(self):
-        with tarfile.open(self.archive, "w") as archive:
-            for name, value in self.members.items():
-                member = tarfile.TarInfo(name)
-                member.size = len(value)
-                archive.addfile(member, io.BytesIO(value))
+        write_tar_members(self.archive, self.members)
         self.archive.chmod(0o600)
 
     def verify(self, expected=None):
@@ -64,9 +63,7 @@ class PlatformArchiveSeed(unittest.TestCase):
     def test_preserved_bytes_without_any_node_image_cache(self):
         self.write_archive()
         result = self.verify()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.output.read_bytes(), self.archive.read_bytes())
-        self.assertEqual(self.output.stat().st_mode & 0o777, 0o400)
+        assert_preserved_archive(self, result, self.archive, self.output)
 
     def test_corrupt_layer_never_becomes_verified(self):
         self.members["blobs/sha256/" + self.layer["digest"][7:]] = b"SENTINEL_PRIVATE_PAYLOAD"

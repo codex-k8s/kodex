@@ -1,3 +1,7 @@
+import {
+  accessRoleOption,
+  accessSubjectOption,
+} from "@/features/access/picker-presentation";
 import { requestSignal } from "@/shared/api/client";
 import {
   listAccessRoles,
@@ -13,12 +17,46 @@ import type {
   AccessSubjectKind,
 } from "@/shared/api/generated/openapi/types.gen";
 import { unwrap } from "@/shared/api/problem";
-import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
+import type {
+  AsyncEntityOption,
+  AsyncEntityOptionPage,
+} from "@/shared/ui/async-entity-picker";
 
 export type AccessSubjectCapture = (items: AccessSubject[]) => void;
 export type AccessRoleCapture = (items: AccessRole[]) => void;
 
-export async function accessSubjectOptions(
+// Пустые фильтр и cursor не отправляются; пробелы и явный pageSize сохраняются.
+function pickerPageQuery(
+  query: string,
+  pageToken: string | undefined,
+  pageSize: number,
+) {
+  return {
+    ...(query ? { query } : {}),
+    ...(pageToken ? { pageToken } : {}),
+    pageSize,
+  };
+}
+
+// Вызов SDK остаётся внутри единственного async-шага: синхронный отказ
+// подготовки запроса возвращает rejected Promise, как у исходных loaders.
+// Capture получает исходные items до проекции; cursor остаётся явным полем.
+async function loadPickerOptions<T>(
+  request: () => Parameters<
+    typeof unwrap<{ items: T[]; nextPageToken?: string }>
+  >[0],
+  option: (item: T) => AsyncEntityOption,
+  capture?: (items: T[]) => void,
+): Promise<AsyncEntityOptionPage> {
+  const page = (await unwrap(request())).data;
+  capture?.(page.items);
+  return {
+    items: page.items.map(option),
+    nextPageToken: page.nextPageToken,
+  };
+}
+
+export function accessSubjectOptions(
   kind: AccessSubjectKind | undefined,
   query: string,
   pageToken: string | undefined,
@@ -26,8 +64,8 @@ export async function accessSubjectOptions(
   pageSize = 20,
   capture?: AccessSubjectCapture,
 ): Promise<AsyncEntityOptionPage> {
-  const page = (
-    await unwrap(
+  return loadPickerOptions(
+    () =>
       listAccessSubjects({
         query: {
           ...(query ? { query } : {}),
@@ -37,19 +75,12 @@ export async function accessSubjectOptions(
         },
         signal: requestSignal(signal),
       }),
-    )
-  ).data;
-  capture?.(page.items);
-  return {
-    items: page.items.map((item) => ({
-      ref: item.ref,
-      title: item.displayName,
-    })),
-    nextPageToken: page.nextPageToken,
-  };
+    accessSubjectOption,
+    capture,
+  );
 }
 
-export async function accessRoleOptions(
+export function accessRoleOptions(
   query: string,
   pageToken: string | undefined,
   signal: AbortSignal,
@@ -57,8 +88,8 @@ export async function accessRoleOptions(
   capture?: AccessRoleCapture,
   value: "ROLE" | "VERSION" = "ROLE",
 ): Promise<AsyncEntityOptionPage> {
-  const page = (
-    await unwrap(
+  return loadPickerOptions(
+    () =>
       listAccessRoles({
         query: {
           ...(query ? { query } : {}),
@@ -68,134 +99,93 @@ export async function accessRoleOptions(
         },
         signal: requestSignal(signal),
       }),
-    )
-  ).data;
-  capture?.(page.items);
-  return {
-    items: page.items.map((item) => ({
-      ref: value === "VERSION" ? item.currentVersion.ref : item.ref,
-      title: item.currentVersion.name,
-      description: item.currentVersion.description,
-      meta: `v${String(item.currentVersion.revision)}`,
-    })),
-    nextPageToken: page.nextPageToken,
-  };
+    (item) => accessRoleOption(item, value),
+    capture,
+  );
 }
 
-export async function accessProjectOptions(
+export function accessProjectOptions(
   query: string,
   pageToken: string | undefined,
   signal: AbortSignal,
   pageSize = 20,
 ): Promise<AsyncEntityOptionPage> {
-  const page = (
-    await unwrap(
+  return loadPickerOptions(
+    () =>
       listProjects({
-        query: {
-          ...(query ? { query } : {}),
-          ...(pageToken ? { pageToken } : {}),
-          pageSize,
-        },
+        query: pickerPageQuery(query, pageToken, pageSize),
         signal: requestSignal(signal),
       }),
-    )
-  ).data;
-  return {
-    items: page.items.map((item) => ({
+    (item) => ({
       ref: item.ref,
       title: item.name,
       description: item.purpose,
-    })),
-    nextPageToken: page.nextPageToken,
-  };
+    }),
+  );
 }
 
-export async function accessAgentOptions(
+export function accessAgentOptions(
   projectRef: string,
   query: string,
   pageToken: string | undefined,
   signal: AbortSignal,
   pageSize = 20,
 ): Promise<AsyncEntityOptionPage> {
-  if (!projectRef) return { items: [] };
-  const page = (
-    await unwrap(
+  if (!projectRef) return Promise.resolve({ items: [] });
+  return loadPickerOptions(
+    () =>
       listAgents({
         path: { projectRef },
-        query: {
-          ...(query ? { query } : {}),
-          ...(pageToken ? { pageToken } : {}),
-          pageSize,
-        },
+        query: pickerPageQuery(query, pageToken, pageSize),
         signal: requestSignal(signal),
       }),
-    )
-  ).data;
-  return {
-    items: page.items.map((item) => ({
+    (item) => ({
       ref: item.ref,
       title: item.name,
       description: item.roleDescription,
-    })),
-    nextPageToken: page.nextPageToken,
-  };
+    }),
+  );
 }
 
-export async function accessWorkflowOptions(
+export function accessWorkflowOptions(
   projectRef: string,
   query: string,
   pageToken: string | undefined,
   signal: AbortSignal,
   pageSize = 20,
 ): Promise<AsyncEntityOptionPage> {
-  if (!projectRef) return { items: [] };
-  const page = (
-    await unwrap(
+  if (!projectRef) return Promise.resolve({ items: [] });
+  return loadPickerOptions(
+    () =>
       listWorkflows({
         path: { projectRef },
-        query: {
-          ...(query ? { query } : {}),
-          ...(pageToken ? { pageToken } : {}),
-          pageSize,
-        },
+        query: pickerPageQuery(query, pageToken, pageSize),
         signal: requestSignal(signal),
       }),
-    )
-  ).data;
-  return {
-    items: page.items.map((item) => ({
+    (item) => ({
       ref: item.ref,
       title: item.name,
       description: item.purpose,
-    })),
-    nextPageToken: page.nextPageToken,
-  };
+    }),
+  );
 }
 
-export async function accessIntegrationOptions(
+export function accessIntegrationOptions(
   query: string,
   pageToken: string | undefined,
   signal: AbortSignal,
   pageSize = 20,
 ): Promise<AsyncEntityOptionPage> {
-  const page = (
-    await unwrap(
+  return loadPickerOptions(
+    () =>
       listIntegrationConnections({
-        query: {
-          ...(query ? { query } : {}),
-          ...(pageToken ? { pageToken } : {}),
-          pageSize,
-        },
+        query: pickerPageQuery(query, pageToken, pageSize),
         signal: requestSignal(signal),
       }),
-    )
-  ).data;
-  return {
-    items: page.items.map((item) => ({
+    (item) => ({
       ref: item.ref,
       title: item.name,
       description: item.definitionKey,
-    })),
-    nextPageToken: page.nextPageToken,
-  };
+    }),
+  );
 }

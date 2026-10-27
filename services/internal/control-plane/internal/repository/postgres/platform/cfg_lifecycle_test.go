@@ -6,6 +6,12 @@ import (
 	"testing"
 )
 
+// TestCFGActionAvailabilityDoesNotGrantSourceOrReviveArchive checks six explicit
+// source/manage/build/shipped/archive action sets plus GIT ownership, preserving COPY versus
+// ARCHIVE distinctions; action hints do not grant execution permission.
+// TestCFGActionAvailabilityDoesNotGrantSourceOrReviveArchive проверяет шесть явных наборов
+// source/manage/build/shipped/archive actions и GIT ownership, сохраняя различие COPY и ARCHIVE;
+// action hints не выдают полномочий исполнения.
 func TestCFGActionAvailabilityDoesNotGrantSourceOrReviveArchive(t *testing.T) {
 	set := entity.ManagedConfigurationSet{Kind: "ROLE_IMAGE", ManagedBy: "UI", CurrentRevision: &entity.ManagedConfigurationRevision{Ref: "mrev_fixture"}}
 	for _, test := range []struct {

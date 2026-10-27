@@ -1,12 +1,9 @@
+import { syntheticEmailEffectFixture } from "../../src/test-utils/email-effect-fixture";
 import { expect, type Page } from "@playwright/test";
 import { installEmailOidc } from "./email-oidc";
 import { sampleBrowserDiagnostics } from "./browser-diagnostics";
 import type { SyntheticSnapshotInstaller } from "./runs-catalog";
-import type {
-  EmailEffectReceiptView,
-  EmailReconciliationInput,
-  IntegrationConnection,
-} from "../../src/shared/api/generated/openapi/types.gen";
+import type { EmailReconciliationInput } from "../../src/shared/api/generated/openapi/types.gen";
 export async function checkEmailEffects(
   page: Page,
   capture: () => Promise<void>,
@@ -14,37 +11,11 @@ export async function checkEmailEffects(
 ): Promise<void> {
   if (process.env.KODEX_SYNTHETIC_DIAGNOSTICS === "1")
     await sampleBrowserDiagnostics(page, "BEFORE_EMAIL");
-  const connection: IntegrationConnection = {
-    ref: "email_synthetic",
-    version: 5,
-    definitionKey: "email",
-    name: "Email synthetic",
-    state: "CONNECTED",
-    credentialsConfigured: true,
-    credentialsHint: "",
-    capabilities: [],
-    grants: [],
-    nextActions: [],
-    definitionVersion: "1",
-    definitionDigest: "a".repeat(64),
-    publicConfiguration: {},
-  };
-  const view: EmailEffectReceiptView = {
-    receipt: {
-      ref: "receipt_synthetic",
-      version: 7,
-      invocationRef: "invocation_synthetic",
-      externalReceiptDigest: "b".repeat(64),
-      semanticInputDigest: "c".repeat(64),
-      outcome: "UNKNOWN_OUTCOME",
-      mailboxRef: "mailbox_synthetic",
-      configurationRevision: 4,
-      connectionRef: connection.ref,
-      projectRef: "project_synthetic",
-      createdAt: "2026-09-05T00:00:00Z",
-      updatedAt: "2026-09-05T00:00:00Z",
-    },
-  };
+  const { connection, view } = syntheticEmailEffectFixture(
+    "email_synthetic",
+    5,
+    "Email synthetic",
+  );
   let decisions = 0;
   const oidc = await installEmailOidc(page, view.receipt);
   await page.route("**/api/v1/integration-connections**", async (route) => {

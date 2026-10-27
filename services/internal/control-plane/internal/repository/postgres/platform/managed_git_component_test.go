@@ -14,6 +14,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// testManagedGitOwnership checks Git-owned configuration rejects direct UI draft/publication
+// changes and allows idempotent explicit copy/detach with preserved published parent/current
+// revision.
+// testManagedGitOwnership проверяет отклонение прямого изменения черновика и публикации UI для
+// Git-owned конфигурации и разрешение идемпотентного явного копирования и отсоединения с
+// сохранением опубликованной родительской и текущей ревизии.
 func testManagedGitOwnership(t *testing.T, ctx context.Context, service *platformservice.Service, pool *pgxpool.Pool, owner value.Principal, configuration entity.ManagedConfigurationSet, publishedRef string) {
 	t.Helper()
 	if _, err := pool.Exec(ctx, `UPDATE control_plane.managed_configuration_sets

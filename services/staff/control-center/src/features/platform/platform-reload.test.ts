@@ -1,12 +1,10 @@
+import { createDeferred } from "@/test-utils/create-deferred";
 import { describe, expect, it } from "vitest";
 
 import { runBoundedPlatformReload } from "./platform-reload";
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
-  let resolve!: () => void;
-  const promise = new Promise<void>((ready) => {
-    resolve = ready;
-  });
+  const { promise, resolve } = createDeferred();
   return { promise, resolve };
 }
 

@@ -14,6 +14,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// writeBackActor resolves active membership for the supplied actor/organization and requires the
+// current organization ID, copying only correlation context; lookup failures close as Forbidden.
+// writeBackActor разрешает активное membership указанного actor/organization и требует текущий
+// organization ID, копируя только correlation context; ошибки поиска закрывает как Forbidden.
 func (repository *Repository) writeBackActor(ctx context.Context, tx pgx.Tx, current scope, ref, organizationRef string) (scope, error) {
 	var actor scope
 	if tx.QueryRow(ctx, queryRepositoryResolvescopeSelectMembershipsOrganizationIdSubjectIdActive, ref, organizationRef).Scan(
@@ -24,6 +28,14 @@ func (repository *Repository) writeBackActor(ctx context.Context, tx pgx.Tx, cur
 	return actor, nil
 }
 
+// writeBackEligibility revalidates both root and approver authority, substituting the current
+// actor while approving, against current set/source/connection versions and exact
+// credential/public-configuration JSON pins. A changed set version is Conflict; other pin
+// mismatches are Forbidden.
+// writeBackEligibility повторно проверяет полномочия root и approver, подставляя текущего actor
+// при одобрении, по текущим set/source/connection versions и точным JSON pins
+// credential/public-configuration. Изменённая версия set даёт Conflict; остальные несовпадения
+// pins дают Forbidden.
 func (repository *Repository) writeBackEligibility(ctx context.Context, tx pgx.Tx, current scope, row writeBackRow, approving bool) error {
 	actors := []string{row.rootRef, row.approverRef}
 	if approving {
@@ -57,6 +69,12 @@ func (repository *Repository) writeBackEligibility(ctx context.Context, tx pgx.T
 	return nil
 }
 
+// writeBackActions rebuilds APPROVE/REJECT/CANCEL hints from current mutation access, database
+// time and state; only APPROVE additionally checks fresh source eligibility. These hints do not
+// replace command authority, approval digest or version checks.
+// writeBackActions перестраивает подсказки APPROVE/REJECT/CANCEL по текущим mutation access,
+// времени БД и состоянию; только APPROVE дополнительно проверяет свежую source eligibility.
+// Подсказки не заменяют command authority, approval digest или version checks.
 func (repository *Repository) writeBackActions(ctx context.Context, tx pgx.Tx, current scope, row *writeBackRow) {
 	p := &row.proposal
 	p.NextActions = nil
@@ -83,6 +101,13 @@ func (repository *Repository) writeBackActions(ctx context.Context, tx pgx.Tx, c
 	}
 }
 
+// GetConfigurationWriteBack reads a locked validated proposal in RepeatableRead, checks set
+// visibility and content permission including role-image source access, then adds action hints. It
+// returns base/proposed text with the raw commit result, which may accompany a populated view.
+// GetConfigurationWriteBack читает проверенное предложение с блокировкой в RepeatableRead,
+// проверяет видимость set и разрешение содержимого, включая доступ к role-image source, затем
+// добавляет подсказки действий. Возвращает исходный/предлагаемый текст с исходным результатом
+// commit, который может сопровождать заполненный view.
 func (repository *Repository) GetConfigurationWriteBack(ctx context.Context, principal value.Principal, ref string) (entity.ConfigurationWriteBackView, error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -115,8 +140,20 @@ func (repository *Repository) GetConfigurationWriteBack(ctx context.Context, pri
 	return entity.ConfigurationWriteBackView{Proposal: row.proposal, BaseContent: row.snapshot.BaseContent, ProposedContent: row.snapshot.ProposedContent}, tx.Commit(ctx)
 }
 
+// writeBackCursor carries the organization/actor/configuration digest and last proposal reference
+// for unsigned base64url pagination; it is a scope consistency marker, not authorization.
+// writeBackCursor несёт digest organization/actor/configuration и последнюю ссылку proposal для
+// неподписанной base64url пагинации; это маркер согласованности scope, а не полномочия.
 type writeBackCursor struct{ Scope, After string }
 
+// ListConfigurationWriteBacks checks set visibility in RepeatableRead, validates the bounded
+// scope-bound cursor, counts all proposals and reads a reference page plus one. It locks/validates
+// each returned proposal and adds action hints without content; raw commit failure may accompany
+// populated results.
+// ListConfigurationWriteBacks проверяет видимость set в RepeatableRead, ограниченный cursor с
+// привязкой scope, считает все предложения и читает страницу ссылок с одной дополнительной.
+// Блокирует/проверяет каждое возвращаемое proposal и добавляет подсказки без содержимого; исходная
+// ошибка commit может сопровождать заполненные результаты.
 func (repository *Repository) ListConfigurationWriteBacks(ctx context.Context, principal value.Principal, ref string, filter query.Filter) ([]entity.ConfigurationWriteBack, string, int64, error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {

@@ -314,28 +314,9 @@ watch(
   </section>
 </template>
 
+<style scoped src="./assistant-result-card.css"></style>
+
 <style scoped>
-.assistant-environment-card {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-  margin-top: 10px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel);
-}
-.assistant-environment-card header,
-.assistant-environment-card__actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-.assistant-environment-card p {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
 .assistant-environment-card__problem {
   color: var(--danger);
 }

@@ -1,3 +1,4 @@
+import { createDeferred } from "@/test-utils/create-deferred";
 import { readFile } from "node:fs/promises";
 
 import { createPinia } from "pinia";
@@ -84,10 +85,7 @@ function deferred(): {
   promise: Promise<void>;
   resolve: () => void;
 } {
-  let resolve!: () => void;
-  const promise = new Promise<void>((ready) => {
-    resolve = ready;
-  });
+  const { promise, resolve } = createDeferred();
   return { promise, resolve };
 }
 

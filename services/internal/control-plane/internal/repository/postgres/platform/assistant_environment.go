@@ -13,13 +13,51 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// assistantEnvironmentTextFields lists the three trimmed textual environment edits used for change
+// detection: name, description and image-artifact ref. Other form values use their specialized
+// typed parsers; this list grants no image or environment permission.
+// assistantEnvironmentTextFields перечисляет три текстовых изменения environment с обрезкой
+// пробелов для определения изменений: name, description и image-artifact ref. Остальные значения
+// формы используют специализированные typed parsers; список не выдаёт image или environment
+// permission.
 var assistantEnvironmentTextFields = []string{"name", "description", "imageArtifactRef"}
+
+// assistantEnvironmentEditableFields defines the closed edited-plan values copied onto a pinned
+// environment snapshot, including public values, secret-binding descriptors, tools and policy.
+// Environment/project/SYSTEM identities are checked and seeded separately; descriptors reference
+// secret revisions without containing their payload bytes.
+// assistantEnvironmentEditableFields задаёт закрытые edited-plan values для копирования поверх
+// закреплённого environment snapshot, включая public values, secret-binding descriptors, tools и
+// policy. Environment/project/SYSTEM identities проверяются и подготавливаются отдельно;
+// descriptors ссылаются на secret revisions без байтов их payload.
 var assistantEnvironmentEditableFields = []string{"name", "description", "imageArtifactRef", "publicValues", "secretBindings", "tools", "policy"}
+
+// assistantEnvironmentProposalFields extends the initial environment proposal shape with
+// public-value patch/removal operations and a SYSTEM assistant locator. Full replacement versus
+// patch/removal is validated later and is not an implicit edit of project identity or a secret
+// value.
+// assistantEnvironmentProposalFields расширяет форму исходного environment proposal операциями
+// patch/removal public values и locator SYSTEM assistant. Полная замена против patch/removal
+// проверяется далее и не является неявным изменением project identity или значения секрета.
 var assistantEnvironmentProposalFields = []string{
 	"name", "description", "imageArtifactRef", "publicValues", "publicValueUpdates", "publicValueRemovals",
 	"secretBindings", "tools", "policy", "systemAssistantRef",
 }
 
+// readAssistantEnvironmentSnapshot uses the project ENVIRONMENT context and exact prepare
+// permission, or resolves the current SYSTEM assistant and its exact organization-scoped bound
+// environment. It rejects wrong project/deleted/missing-version state, builds safe revisioned
+// secret-binding descriptors and JSON-round-trips the public draft specification. The snapshot
+// carries environment/version/image/policy identity and a canonical SYSTEM ref when applicable. It
+// uses the caller transaction and reads no secret payload; SYSTEM lookup/configuration mismatches
+// remain Forbidden.
+// readAssistantEnvironmentSnapshot использует project ENVIRONMENT context с точным prepare
+// permission либо разрешает текущий SYSTEM assistant и его точное связанное organization-scoped
+// environment. Отклоняет чужой project, удалённое состояние и отсутствие version, строит
+// безопасные revisioned secret-binding descriptors и выполняет JSON round-trip public draft
+// specification. Snapshot несёт environment/version/image/policy identity и канонический SYSTEM
+// ref при необходимости. Использует транзакцию вызывающего без чтения secret payload; несовпадения
+// SYSTEM lookup/configuration остаются Forbidden.
 func (repository *Repository) readAssistantEnvironmentSnapshot(ctx context.Context, tx pgx.Tx, actorScope scope,
 	projectRef, environmentRef, systemAssistantRef string,
 ) (map[string]any, int64, error) {
@@ -86,6 +124,16 @@ func (repository *Repository) readAssistantEnvironmentSnapshot(ctx context.Conte
 	return snapshot, environment.Version, nil
 }
 
+// assistantEnvironmentPolicyInput projects resources, optional workspace limits, volumes, web
+// rules and Kubernetes access kind into fresh form maps. HTTP methods are copied and core network
+// destinations are the fixed DNS/provider-proxy/runtime-callback set. This compact editor input is
+// not a serialization of every policy field and does not validate, admit or grant
+// network/Kubernetes access.
+// assistantEnvironmentPolicyInput проецирует resources, optional workspace limits, volumes, web
+// rules и Kubernetes access kind в новые maps формы. HTTP methods копируются, core network
+// destinations заданы фиксированным набором DNS/provider-proxy/runtime-callback. Этот компактный
+// editor input не сериализует каждое поле policy и не валидирует, не допускает и не выдаёт
+// network/Kubernetes access.
 func assistantEnvironmentPolicyInput(policy runtimecontract.RuntimeEnvironmentPolicy) map[string]any {
 	resources := policy.Resources
 	resourceInput := map[string]any{
@@ -124,6 +172,14 @@ func assistantEnvironmentPolicyInput(policy runtimecontract.RuntimeEnvironmentPo
 	}
 }
 
+// hydrateAssistantEnvironmentOperation accepts the closed environment proposal shape, requires
+// environmentRef and either project or SYSTEM locator, then reads the corresponding authoritative
+// snapshot/version in the supplied transaction. It delegates typed pure hydration; a caller
+// locator does not by itself authorize an organization or project environment.
+// hydrateAssistantEnvironmentOperation принимает закрытую форму environment proposal, требует
+// environmentRef и project либо SYSTEM locator, затем читает соответствующие авторитетные
+// snapshot/version в переданной транзакции. Делегирует чистую typed hydration; locator вызывающего
+// сам не авторизует organization или project environment.
 func (repository *Repository) hydrateAssistantEnvironmentOperation(ctx context.Context, tx pgx.Tx, actorScope scope,
 	projectRef string, operation entity.AssistantPlanOperation,
 ) (entity.AssistantPlanOperation, error) {
@@ -146,6 +202,19 @@ func (repository *Repository) hydrateAssistantEnvironmentOperation(ctx context.C
 	return hydrateAssistantEnvironmentFields(before, version, operation)
 }
 
+// hydrateAssistantEnvironmentFields builds a fresh pinned ref/name/image map, validates mutually
+// exclusive public-value replacement versus patch/removal and checks resulting values against
+// secret bindings. Typed tools/policy changes use their existing parsers and comparison rules.
+// Unchanged or invalid byte-bounded name/description state is Conflict; malformed image ref is
+// Invalid. On success it restores Before/target/version, selects the operation and clears Input.
+// It neither publishes an environment nor reads secret payloads or admits the referenced image.
+// hydrateAssistantEnvironmentFields строит новую map с закреплёнными ref/name/image, проверяет
+// несовместимость полной замены public values с patch/removal и совместимость итоговых values с
+// secret bindings. Typed tools/policy changes используют прежние parsers и comparison rules.
+// Неизменённое либо недопустимое по byte bounds состояние name/description даёт Conflict; неверный
+// image ref даёт Invalid. При успехе восстанавливает Before/target/version, выбирает operation и
+// очищает Input. Environment не публикует, secret payloads не читает и referenced image не
+// допускает.
 func hydrateAssistantEnvironmentFields(before map[string]any, version int64,
 	operation entity.AssistantPlanOperation,
 ) (entity.AssistantPlanOperation, error) {
@@ -250,6 +319,16 @@ func hydrateAssistantEnvironmentFields(before map[string]any, version int64,
 	return operation, nil
 }
 
+// rehydrateEditedAssistantEnvironment requires original environment kind/type/key/ref/version and
+// unchanged project/SYSTEM identities in the closed edited shape. It explicitly seeds the original
+// environment ref and optional stored SYSTEM ref before calling the shared field-copy/hydration
+// helper. Only supplied editable values are forwarded; original Before/version and edited
+// selection survive, without broadening project or organization authority.
+// rehydrateEditedAssistantEnvironment требует исходные environment kind/type/key/ref/version и
+// неизменённые project/SYSTEM identities в закрытой edited shape. Явно подготавливает исходный
+// environment ref и optional сохранённый SYSTEM ref до общего helper копирования полей/hydration.
+// Передаются только заданные editable values; исходные Before/version и edited selection
+// сохраняются без расширения project или organization authority.
 func rehydrateEditedAssistantEnvironment(original, edited entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {
 	if original.Type != "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || original.Key != edited.Key ||
 		original.Target.Kind != "ENVIRONMENT" || original.Target.Ref == "" ||
@@ -264,24 +343,19 @@ func rehydrateEditedAssistantEnvironment(original, edited entity.AssistantPlanOp
 	if systemAssistantRef := assistantString(original.Before, "systemAssistantRef"); systemAssistantRef != "" {
 		parameters["systemAssistantRef"] = systemAssistantRef
 	}
-	for _, field := range assistantEnvironmentEditableFields {
-		if value, supplied := edited.Parameters[field]; supplied {
-			parameters[field] = value
-		}
-	}
-	edited.Parameters = parameters
-	selected := edited.Selected
-	hydrated, err := hydrateAssistantEnvironmentFields(original.Before, *original.ExpectedVersion, edited)
-	if err != nil {
-		return entity.AssistantPlanOperation{}, err
-	}
-	if !reflect.DeepEqual(hydrated.Before, original.Before) {
-		return entity.AssistantPlanOperation{}, errs.ErrConflict
-	}
-	hydrated.Selected = selected
-	return hydrated, nil
+	return rehydrateAssistantEditableFields(original, edited, parameters, assistantEnvironmentEditableFields, hydrateAssistantEnvironmentFields)
 }
 
+// assistantEnvironmentSnapshotMatches delegates project-assistant configuration to its specialized
+// checker; otherwise it re-reads project or SYSTEM environment state and compares both version
+// pins, target/name, snapshot identity, Parameters/After and scope refs. SYSTEM mode forces an
+// empty effective project. Read errors propagate and mismatch is false; this check does not create
+// an environment revision, grant or external runtime.
+// assistantEnvironmentSnapshotMatches делегирует project-assistant configuration
+// специализированному checker; иначе повторно читает project или SYSTEM environment state и
+// сравнивает обе version pins, target/name, snapshot identity, Parameters/After и scope refs.
+// SYSTEM mode требует пустой effective project. Ошибки чтения передаются выше, несовпадение даёт
+// false; проверка не создаёт environment revision, grant или внешний runtime.
 func (repository *Repository) assistantEnvironmentSnapshotMatches(ctx context.Context, tx pgx.Tx, actorScope scope,
 	projectRef string, operation entity.AssistantPlanOperation,
 ) (bool, error) {
@@ -307,6 +381,16 @@ func (repository *Repository) assistantEnvironmentSnapshotMatches(ctx context.Co
 		assistantString(operation.Parameters, "systemAssistantRef") == systemAssistantRef, nil
 }
 
+// assistantEnvironmentSnapshotIdentityMatches rejects unknown snapshot keys, compares the exact
+// textual environment/project/name/description/image/version/SYSTEM identity tuple and requires a
+// nonempty current version ref/digest. It deliberately does not deeply compare specification or
+// policyInput; their surrounding version/digest and command checks remain separate, so this
+// predicate alone is not content validation or authority.
+// assistantEnvironmentSnapshotIdentityMatches отклоняет неизвестные snapshot keys, сравнивает
+// точный текстовый environment/project/name/description/image/version/SYSTEM identity tuple и
+// требует непустые текущие version ref/digest. Намеренно не сравнивает specification или
+// policyInput глубоко; окружающие version/digest и command checks остаются отдельными, поэтому
+// predicate сам не валидирует content и не даёт полномочий.
 func assistantEnvironmentSnapshotIdentityMatches(stored, current map[string]any) bool {
 	if !onlyAssistantFields(stored, "environmentRef", "projectRef", "name", "description", "imageArtifactRef",
 		"versionRef", "versionDigest", "specification", "policyInput", "systemAssistantRef") ||
@@ -322,6 +406,18 @@ func assistantEnvironmentSnapshotIdentityMatches(stored, current map[string]any)
 	return assistantString(current, "versionRef") != "" && assistantString(current, "versionDigest") != ""
 }
 
+// assistantEnvironmentRevisionCommand requires a closed typed Input with refs matching Before and
+// a positive version, reconstructs the saved draft specification and overlays validated public
+// values, binding descriptors, tools and policy. It checks binding compatibility and returns the
+// specialized project draft command, or an organization draft command only with SYSTEM ref and
+// empty project. It prepares a command without applying it, authorizing a scope or copying secret
+// payload bytes.
+// assistantEnvironmentRevisionCommand требует закрытый typed Input с refs, совпадающими с Before,
+// и положительной version, восстанавливает сохранённую draft specification и накладывает
+// допустимые public values, binding descriptors, tools и policy. Проверяет совместимость bindings
+// и возвращает специализированную project draft command либо organization draft command только с
+// SYSTEM ref и пустым project. Подготавливает команду без применения, авторизации scope или
+// копирования байтов secret payload.
 func assistantEnvironmentRevisionCommand(operation entity.AssistantPlanOperation) (command.Command, error) {
 	input := operation.Input
 	if !onlyAssistantFields(input, "environmentRef", "projectRef", "name", "description", "imageArtifactRef", "publicValues", "secretBindings", "tools", "policy", "systemAssistantRef", "expectedVersion") ||

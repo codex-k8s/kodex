@@ -5,6 +5,14 @@ import (
 	"testing"
 )
 
+// TestAssistantSearchExtraKeepsTenantScopeAndSecretMetadataOnly checks exact counts of
+// tenant/project-lifecycle SQL guards and forbids sensitive
+// description/credential/public-configuration source fields. It inspects embedded query text only,
+// not database visibility or a live search result.
+// TestAssistantSearchExtraKeepsTenantScopeAndSecretMetadataOnly проверяет точное число
+// tenant/project-lifecycle SQL guards и запрещает sensitive
+// description/credential/public-configuration source fields. Анализирует лишь embedded query text,
+// а не DB visibility и live search result.
 func TestAssistantSearchExtraKeepsTenantScopeAndSecretMetadataOnly(t *testing.T) {
 	t.Parallel()
 	if strings.Count(queryAssistantSearchExtra, "organization_id = @organization_id::uuid") != 5 ||
@@ -18,6 +26,12 @@ func TestAssistantSearchExtraKeepsTenantScopeAndSecretMetadataOnly(t *testing.T)
 	}
 }
 
+// TestAssistantIntegrationCatalogOnlyReturnsEnabledPublicMetadata checks enabled-only bounded
+// integration-definition selection and absence of credential/secret/connection-data SQL fields.
+// This static string guard does not query a catalog or prove runtime row authorization.
+// TestAssistantIntegrationCatalogOnlyReturnsEnabledPublicMetadata проверяет enabled-only bounded
+// integration-definition selection и отсутствие credential/secret/connection-data SQL fields.
+// Static string guard не читает каталог и не доказывает runtime row authorization.
 func TestAssistantIntegrationCatalogOnlyReturnsEnabledPublicMetadata(t *testing.T) {
 	t.Parallel()
 	if !strings.Contains(queryAssistantIntegrationDefinitions, "WHERE enabled") ||

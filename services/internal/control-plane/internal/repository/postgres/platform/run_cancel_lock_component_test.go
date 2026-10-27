@@ -13,6 +13,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// testRunCancellationLockOrder holds a runtime node lock, observes cancellation waiting, verifies
+// node-to-root lock acquisition avoids deadlock and requires CANCELLED after releasing the runtime
+// transaction.
+// testRunCancellationLockOrder удерживает блокировку runtime-узла, наблюдает ожидание отмены,
+// проверяет захват блокировки от узла к корню без deadlock и требует CANCELLED после освобождения
+// runtime-транзакции.
 func testRunCancellationLockOrder(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	t.Helper()
 	seedObservedCatalogFixture(t, ctx, repository)
@@ -54,6 +60,10 @@ func testRunCancellationLockOrder(t *testing.T, ctx context.Context, repository 
 		t.Fatal(err)
 	}
 
+	// cancelResult carries the asynchronous cancellation result and error to the lock-order fixture
+	// without sharing mutable command state.
+	// cancelResult передаёт асинхронные результат отмены и ошибку в fixture порядка блокировок без
+	// общего изменяемого состояния команды.
 	type cancelResult struct {
 		result command.Result
 		err    error

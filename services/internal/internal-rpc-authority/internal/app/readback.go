@@ -11,7 +11,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/grpcserver"
 	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	"github.com/codex-k8s/kodex/libs/go/observability"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
@@ -23,9 +22,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/snapshot"
 	authoritygrpc "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/transport/grpc"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
 )
 
 // ReadbackConfig carries the independent attestor's listener/TLS/database locators, root/manifest/credential-trust file references, verifier generation and shutdown budget. It contains no decoded trust or guarantee that a running attestor has activated a durable watermark.
@@ -171,26 +167,7 @@ func RunReadbackAttestor(
 	readiness := serviceruntime.NewReadiness()
 	readiness.Set(false, "starting")
 	metrics.SetReady(false)
-	grpcRuntime := grpc.NewServer(
-		grpc.Creds(credentials.NewTLS(serverTLS)),
-		grpc.ForceServerCodec(grpcserver.StrictProtoCodec()),
-		grpc.ChainUnaryInterceptor(
-			metrics.UnaryServerInterceptor(),
-			telemetry.UnaryServerInterceptor(methods),
-			grpcserver.ErrorBoundary(grpcserver.ErrorObserverFunc(func(
-				_ context.Context,
-				method string,
-				code codes.Code,
-				_ error,
-			) {
-				logger.Error(
-					"unexpected gRPC failure",
-					"method", normalizeReadbackMethod(method),
-					"code", code.String(),
-				)
-			})),
-		),
-	)
+	grpcRuntime := newObservedTCPGRPCServer(serverTLS, metrics, telemetry, methods, logger, normalizeReadbackMethod)
 	internalrpcauthorityv1.RegisterAuthorityReadbackAttestorServiceServer(
 		grpcRuntime,
 		authoritygrpc.NewAuthorityReadbackAttestorServer(

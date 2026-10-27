@@ -14,17 +14,36 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+// artifactReadCleanupStub embeds an unimplemented transaction and implements only rollback
+// counting with a chosen error. Unexpected use of other transaction methods is unsupported; the
+// stub proves cleanup control flow, not PostgreSQL rollback.
+// artifactReadCleanupStub встраивает нереализованную transaction и поддерживает только подсчёт
+// rollback с выбранной ошибкой. Прочие transaction methods не поддерживаются; stub проверяет
+// cleanup control flow, а не PostgreSQL rollback.
 type artifactReadCleanupStub struct {
 	pgx.Tx
 	rollback error
 	calls    int
 }
 
+// Rollback increments the cleanup call counter and returns the configured error without inspecting
+// context or contacting a backend. It models each attempted rollback, including unsuccessful
+// cleanup.
+// Rollback увеличивает cleanup call counter и возвращает configured error без проверки context
+// либо обращения к backend. Моделирует каждую попытку rollback, включая неуспешный cleanup.
 func (tx *artifactReadCleanupStub) Rollback(ctx context.Context) error {
 	tx.calls++
 	return tx.rollback
 }
 
+// TestArtifactContentReadRetryKeepsExhaustedFallbackAndCleanup exhausts serialization-marked read
+// retries with immediate backoff and requires exactly one rollback per attempt plus the original
+// Unavailable/Conflict fallback. Private SQL sentinel text must not escape; no database or reader
+// is opened.
+// TestArtifactContentReadRetryKeepsExhaustedFallbackAndCleanup исчерпывает serialization-marked
+// read retries с immediate backoff и требует одного rollback на attempt с исходным
+// Unavailable/Conflict fallback. Private SQL sentinel text не должен выходить наружу; БД и reader
+// не открываются.
 func TestArtifactContentReadRetryKeepsExhaustedFallbackAndCleanup(t *testing.T) {
 	for _, fallback := range []error{errs.ErrUnavailable, errs.ErrConflict} {
 		attempts, rollbacks := 0, 0
@@ -42,8 +61,22 @@ func TestArtifactContentReadRetryKeepsExhaustedFallbackAndCleanup(t *testing.T) 
 	}
 }
 
+// artifactReadImmediateBackoff returns zero delay regardless of attempt or remaining budget to
+// make exhausted-retry tests deterministic and immediate. Production jitter and waiting are
+// exercised separately.
+// artifactReadImmediateBackoff возвращает нулевую задержку независимо от attempt и remaining
+// budget для детерминированных immediate exhausted-retry tests. Production jitter и ожидание
+// проверяются отдельно.
 func artifactReadImmediateBackoff(int, time.Duration) time.Duration { return 0 }
 
+// TestArtifactContentReadRetryRecoversFourthAndEighthSlot simulates serialization failures until
+// the fourth or last read slot, checking discarded partial grants and rollback count before one
+// successful result. It also pins mutation retry count and the five-second read budget; no real
+// contention is generated.
+// TestArtifactContentReadRetryRecoversFourthAndEighthSlot моделирует serialization failures до
+// четвёртого либо последнего read slot, проверяя отброшенные partial grants и rollback count до
+// одного success. Также фиксирует mutation retry count и пятисекундный read budget; реальная
+// конкуренция не создаётся.
 func TestArtifactContentReadRetryRecoversFourthAndEighthSlot(t *testing.T) {
 	for _, successAttempt := range []int{4, artifactContentReadAttempts} {
 		attempts, rollbacks := 0, 0
@@ -67,6 +100,14 @@ func TestArtifactContentReadRetryRecoversFourthAndEighthSlot(t *testing.T) {
 	}
 }
 
+// TestArtifactContentReadBackoffJitterAndBudgetBounds samples each exponential jitter window,
+// requires variation, clips delay to remaining nanosecond budget and forbids waiting after
+// exhaustion. The random-sampling assertion checks the backoff function rather than real
+// concurrent transactions.
+// TestArtifactContentReadBackoffJitterAndBudgetBounds сэмплирует каждое exponential jitter window,
+// требует variation, ограничивает delay оставшимся nanosecond budget и запрещает ожидание после
+// exhaustion. Random-sampling assertion проверяет backoff function, а не реальные concurrent
+// transactions.
 func TestArtifactContentReadBackoffJitterAndBudgetBounds(t *testing.T) {
 	for attempt := 1; attempt <= artifactContentReadAttempts+1; attempt++ {
 		window := artifactContentReadBackoffBase
@@ -96,6 +137,14 @@ func TestArtifactContentReadBackoffJitterAndBudgetBounds(t *testing.T) {
 	}
 }
 
+// TestArtifactContentReadRetryCancellationKeepsPrimaryDiagnostic cancels during backoff after one
+// serialization failure and requires the original audit-stage SQLSTATE/attempt diagnostic and
+// exhausted flag to survive without another attempt. Private SQL detail remains behind the safe
+// diagnostic boundary.
+// TestArtifactContentReadRetryCancellationKeepsPrimaryDiagnostic отменяет context во время backoff
+// после одного serialization failure и требует сохранения исходных audit-stage SQLSTATE/attempt
+// diagnostic и exhausted flag без новой attempt. Private SQL detail остаётся за safe diagnostic
+// boundary.
 func TestArtifactContentReadRetryCancellationKeepsPrimaryDiagnostic(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -113,6 +162,14 @@ func TestArtifactContentReadRetryCancellationKeepsPrimaryDiagnostic(t *testing.T
 	}
 }
 
+// TestArtifactContentReadRetryRejectsUnknownCommitDeadlockAndCleanupFailure requires
+// single-attempt Conflict fallback for rollback/body-cleanup failure, deadlock, connection/unique
+// errors, commit rollback and unknown network errors. Private cause text must remain hidden; only
+// the dedicated safe serialization path may retry.
+// TestArtifactContentReadRetryRejectsUnknownCommitDeadlockAndCleanupFailure требует single-attempt
+// Conflict fallback при rollback/body-cleanup failure, deadlock, connection/unique errors, commit
+// rollback и unknown network errors. Private cause text остаётся скрытым; retry допустим только
+// для выделенного safe serialization path.
 func TestArtifactContentReadRetryRejectsUnknownCommitDeadlockAndCleanupFailure(t *testing.T) {
 	for _, test := range []struct {
 		state           string
@@ -142,6 +199,14 @@ func TestArtifactContentReadRetryRejectsUnknownCommitDeadlockAndCleanupFailure(t
 	}
 }
 
+// TestArtifactContentReadRetryRefreshesAuthorityAndStopsFreshDenial returns a serialization marker
+// once and then a fresh Forbidden/NotFound/Invalid/VersionMismatch, requiring exactly two calls
+// and zero partial result. A pre-cancelled context must invoke no attempt; the fake callback
+// models fresh authority without verifying a real actor.
+// TestArtifactContentReadRetryRefreshesAuthorityAndStopsFreshDenial один раз возвращает
+// serialization marker, затем fresh Forbidden/NotFound/Invalid/VersionMismatch, требуя ровно двух
+// calls и нулевого partial result. Заранее отменённый context не вызывает attempt; fake callback
+// моделирует fresh authority без проверки реального actor.
 func TestArtifactContentReadRetryRefreshesAuthorityAndStopsFreshDenial(t *testing.T) {
 	for _, denial := range []error{errs.ErrForbidden, errs.ErrNotFound, errs.ErrInvalid, errs.ErrVersionMismatch} {
 		attempts := 0
@@ -165,6 +230,12 @@ func TestArtifactContentReadRetryRefreshesAuthorityAndStopsFreshDenial(t *testin
 	}
 }
 
+// TestArtifactContentReadRetryDoesNotCancelReturnedReaderContext recovers after one synthetic
+// serialization marker and requires the caller context to remain live alongside the successful
+// grant. It guards lifetime ownership only; no streaming reader or storage object is opened.
+// TestArtifactContentReadRetryDoesNotCancelReturnedReaderContext восстанавливается после одного
+// synthetic serialization marker и требует сохранения live caller context вместе с successful
+// grant. Проверяет только lifetime ownership; streaming reader и storage object не открываются.
 func TestArtifactContentReadRetryDoesNotCancelReturnedReaderContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()

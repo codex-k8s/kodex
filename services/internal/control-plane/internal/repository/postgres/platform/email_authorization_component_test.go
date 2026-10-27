@@ -19,6 +19,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testEmailProducer checks exact email producer grants and mailbox approval, credential isolation
+// and immutable report replay using synthetic worker observations.
+// testEmailProducer проверяет точные полномочия отправителя почты, подтверждение доступа к ящику,
+// изоляцию учётных данных и неизменяемый повтор отчёта на синтетических наблюдениях исполнителя.
 func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, connection entity.IntegrationConnection, config api.Configuration) {
 	t.Helper()
 	seedObservedCatalogFixture(t, ctx, repository)

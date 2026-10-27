@@ -6,6 +6,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestGraphRetrySnapshotExactLineage accepts only the exact canonical retry predecessor/edge graph
+// and rejects missing, foreign, duplicate, mismatched or cyclic lineage.
+// TestGraphRetrySnapshotExactLineage принимает только точный канонический граф предшественника и
+// ребра повтора и отклоняет отсутствующие, чужие, дублированные, несовпадающие и циклические связи
+// происхождения.
 func TestGraphRetrySnapshotExactLineage(t *testing.T) {
 	fixture := func() (*entity.RunGraph, map[string]entity.Run) {
 		return &entity.RunGraph{Nodes: []entity.RunNode{
@@ -53,6 +58,12 @@ func TestGraphRetrySnapshotExactLineage(t *testing.T) {
 	}
 }
 
+// TestGraphContinuationSnapshotExactLineage requires a succeeded predecessor in the same nonempty
+// Session with exact root nodes and one owner-bound CONTINUES edge, rejecting retry or foreign
+// lineage substitutions.
+// TestGraphContinuationSnapshotExactLineage требует успешного предшественника той же непустой
+// Session с точными корневыми узлами и одним принадлежащим владельцу ребром CONTINUES, отклоняя
+// подмену повтором либо чужим происхождением.
 func TestGraphContinuationSnapshotExactLineage(t *testing.T) {
 	fixture := func() (*entity.RunGraph, map[string]entity.Run) {
 		return &entity.RunGraph{Nodes: []entity.RunNode{

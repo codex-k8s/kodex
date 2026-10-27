@@ -17,6 +17,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/systemassistant"
 )
 
+// assertPlatformInstructions marks the assertion frame and requires a valid current binding with
+// exact revision/content SHA-256 and REST/WebSocket scope text. It verifies immutable prompt
+// input, without treating that text as actor authority or a transport integration test.
+// assertPlatformInstructions помечает assertion frame и требует допустимый current binding с exact
+// revision/content SHA-256 и REST/WebSocket scope text. Проверяет immutable prompt input, не
+// считая этот текст actor authority либо transport integration test.
 func assertPlatformInstructions(t *testing.T, snapshot entity.PromptMaterializationSnapshot) {
 	t.Helper()
 	if snapshot.PlatformInstructions == nil || validatePlatformInstructions(snapshot) != nil {
@@ -29,6 +35,13 @@ func assertPlatformInstructions(t *testing.T, snapshot entity.PromptMaterializat
 	}
 }
 
+// TestPlatformInstructionsV1ContentIsImmutableAndScoped pins published v1 text digests, refs and
+// revision for English/Russian and requires its transport rule to stay within the platform
+// interface scope. External business projects must remain outside that rule; no published text is
+// rewritten.
+// TestPlatformInstructionsV1ContentIsImmutableAndScoped фиксирует published v1 text digests, refs
+// и revision для English/Russian и требует ограничения transport rule областью platform interface.
+// External business projects остаются вне правила; published text не переписывается.
 func TestPlatformInstructionsV1ContentIsImmutableAndScoped(t *testing.T) {
 	for locale, expected := range map[string]string{"en": "fa572d1632e72e967d8e3855ad4922505e55b68c2ea3807bab53a6fdd44b3fa0", "ru": "6d0134419a5a5c2543cf1a10244faa93c25e0d4cb3aece94084ed0906481e9ea"} {
 		binding, err := platformInstructionBindingForRevision("platform-source-conformity-v1", locale)
@@ -42,6 +55,14 @@ func TestPlatformInstructionsV1ContentIsImmutableAndScoped(t *testing.T) {
 	}
 }
 
+// TestPlatformInstructionsGitHelperIsConditionalScopedAndNotAuthority checks both v3 locales for
+// exact conditional Git credential-protocol guidance, secrecy, approved-operation scope and
+// denial/unknown handling. It rejects persistent credential/global-config/login fallbacks and
+// executes no Git or credential helper.
+// TestPlatformInstructionsGitHelperIsConditionalScopedAndNotAuthority проверяет обе v3 locale на
+// exact conditional Git credential-protocol guidance, secrecy, approved-operation scope и
+// denial/unknown handling. Отклоняет persistent credential/global-config/login fallbacks; Git и
+// credential helper не запускаются.
 func TestPlatformInstructionsGitHelperIsConditionalScopedAndNotAuthority(t *testing.T) {
 	for _, locale := range []string{"en", "ru"} {
 		binding, err := platformInstructionBindingForRevision("platform-source-conformity-v3", locale)
@@ -68,6 +89,14 @@ func TestPlatformInstructionsGitHelperIsConditionalScopedAndNotAuthority(t *test
 	}
 }
 
+// TestPlatformInstructionsEveryFreshTargetAndLocale tests all four fresh target kinds in both
+// locales, requiring one platform CONSTRAINTS projection while preserving owner overlays/input,
+// ABI and effective capabilities. Content digests must change, safe preview must omit binding ref,
+// and serialized rejoin must reproduce exact prompt/digests through the shared consumer.
+// TestPlatformInstructionsEveryFreshTargetAndLocale проверяет четыре fresh target kinds в обеих
+// locale, требуя одну platform CONSTRAINTS projection с сохранением owner overlays/input, ABI и
+// effective capabilities. Content digests должны меняться, safe preview исключать binding ref,
+// serialized rejoin воспроизводить exact prompt/digests через shared consumer.
 func TestPlatformInstructionsEveryFreshTargetAndLocale(t *testing.T) {
 	for _, locale := range []string{"en", "ru"} {
 		for _, kind := range []string{promptservice.TargetAgent, promptservice.TargetWorkflowStage, promptservice.TargetAutomation, promptservice.TargetSessionContinuation} {
@@ -119,6 +148,15 @@ func TestPlatformInstructionsEveryFreshTargetAndLocale(t *testing.T) {
 	}
 }
 
+// TestPlatformInstructionsRejectMismatchWithoutMutation rejects forged binding
+// identity/revision/content/digest including rehashed text,
+// encoding/size/locale/service/projection drift and unknown fields. Dependency validation and
+// rebinding must fail Conflict without replacing the serialized immutable snapshot; no instruction
+// text grants SYSTEM authority.
+// TestPlatformInstructionsRejectMismatchWithoutMutation отклоняет forged binding
+// identity/revision/content/digest, включая rehashed text, encoding/size/locale/service/projection
+// drift и unknown fields. Dependency validation и rebinding дают Conflict без замены serialized
+// immutable snapshot; instruction text не выдаёт SYSTEM authority.
 func TestPlatformInstructionsRejectMismatchWithoutMutation(t *testing.T) {
 	for _, field := range []string{"ref", "revision", "digest", "content", "rehash", "oversize", "nul", "utf8", "locale", "service", "projection", "unknown-field"} {
 		t.Run(field, func(t *testing.T) {
@@ -177,6 +215,13 @@ func TestPlatformInstructionsRejectMismatchWithoutMutation(t *testing.T) {
 	}
 }
 
+// TestPlatformInstructionsHistoricalV2V3RemainUnchanged keeps historical prompt-service v2/v3
+// snapshots with nil platform binding free of invented dependencies and preserves exact
+// materialization/digests across serialization. Compatibility does not silently upgrade historical
+// immutable inputs.
+// TestPlatformInstructionsHistoricalV2V3RemainUnchanged сохраняет historical prompt-service v2/v3
+// snapshots с nil platform binding без выдуманных dependencies и exact materialization/digests
+// после serialization. Совместимость не обновляет historical immutable inputs молча.
 func TestPlatformInstructionsHistoricalV2V3RemainUnchanged(t *testing.T) {
 	for _, revision := range []string{"prompt-service-v2", "prompt-service-v3"} {
 		snapshot := workflowPromptFixture()
@@ -200,6 +245,14 @@ func TestPlatformInstructionsHistoricalV2V3RemainUnchanged(t *testing.T) {
 	}
 }
 
+// TestPlatformInstructionsWarmHasNoAuthorityAndEscapesOwner materializes a warm prompt containing
+// template-looking owner text, checks the fresh platform binding with unchanged ABI and zero
+// capabilities, then requires exact rejoin. It does not start a warm runtime or interpret owner
+// text as a template or grant.
+// TestPlatformInstructionsWarmHasNoAuthorityAndEscapesOwner материализует warm prompt с
+// template-looking owner text, проверяет fresh platform binding с неизменным ABI и нулём
+// capabilities, затем требует exact rejoin. Не запускает warm runtime и не считает owner text
+// template либо grant.
 func TestPlatformInstructionsWarmHasNoAuthorityAndEscapesOwner(t *testing.T) {
 	owner := `OWNER {{slot "TOOLS"}} {{.project.ref}}`
 	previous, err := promptservice.MaterializeWarm("Core", owner, "ins_fixture", strings.Repeat("a", 64), "agt_fixture", "ses_fixture")
@@ -217,6 +270,14 @@ func TestPlatformInstructionsWarmHasNoAuthorityAndEscapesOwner(t *testing.T) {
 	}
 }
 
+// TestPlatformInstructionsDependencyChangesResumeAndDiff requires a new platform binding to add
+// exactly one INSTRUCTIONS dependency/change while MODEL, ENVIRONMENT, CAPABILITIES, POLICY and
+// TOOLS remain equal. This pure runtime-diff regression proves visibility of pinned content
+// changes without expanding authority.
+// TestPlatformInstructionsDependencyChangesResumeAndDiff требует добавления new platform binding
+// ровно одной INSTRUCTIONS dependency/change при равных MODEL, ENVIRONMENT, CAPABILITIES, POLICY и
+// TOOLS. Pure runtime-diff regression проверяет видимость pinned content changes без расширения
+// authority.
 func TestPlatformInstructionsDependencyChangesResumeAndDiff(t *testing.T) {
 	snapshot := workflowPromptFixture()
 	snapshot.TargetKind = promptservice.TargetAgent
@@ -247,6 +308,14 @@ func TestPlatformInstructionsDependencyChangesResumeAndDiff(t *testing.T) {
 	}
 }
 
+// TestPlatformInstructionsV5ConsumerBudget materializes the shipped core with synthetic v4/v5
+// owner snapshots in both locales, preserving ABI/capabilities and the 256 KiB main-instructions
+// bound. The shared consumer must decode v5; logged digests/lengths describe synthetic content,
+// not live readback or the separate 64 KiB notice bound.
+// TestPlatformInstructionsV5ConsumerBudget материализует shipped core с synthetic v4/v5 owner
+// snapshots в обеих locale, сохраняя ABI/capabilities и bound main instructions 256 KiB. Shared
+// consumer обязан декодировать v5; logged digests/lengths описывают synthetic content, а не live
+// readback либо отдельный notice bound 64 KiB.
 func TestPlatformInstructionsV5ConsumerBudget(t *testing.T) {
 	// Реальный shipped core и synthetic owner snapshot, не live readback.
 	// Main instructions ограничены consumer 256KiB; 64KiB относятся к notice.

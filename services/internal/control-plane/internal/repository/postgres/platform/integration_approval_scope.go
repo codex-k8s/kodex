@@ -11,14 +11,27 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// sortedApprovalScopePaths returns a sorted copy of the supplied scope paths. It preserves
+// duplicates and does not validate paths or mutate the input slice.
+// sortedApprovalScopePaths возвращает отсортированную копию путей области одобрения. Сохраняет
+// повторы, не проверяет пути и не меняет исходный срез.
 func sortedApprovalScopePaths(paths []string) []string {
 	result := append([]string{}, paths...)
 	sort.Strings(result)
 	return result
 }
 
-// Одобрение владельца создаёт право на повторные эффекты из фактического
-// invocation и закреплённого grant; модель не поставляет пути или authority.
+// approveIntegrationScope loads and locks an exact waiting invocation/grant/connection tied to the
+// owner gate and root run, requiring HUMAN_SCOPED non-READ capability and matching
+// package/input/schema pins. It derives scope values from canonical bounded input, limits encoded
+// values to 65536 bytes, inserts the bounded approval scope and binds exactly one invocation.
+// Caller authorization and outer commit remain separate; payload paths do not create authority.
+// approveIntegrationScope загружает и блокирует точные ожидающие invocation, grant и подключение,
+// связанные с owner gate и корневым запуском, требуя HUMAN_SCOPED, риск не READ и совпадение
+// пакета, входа и схемы. Выводит значения области из канонического ограниченного ввода,
+// ограничивает JSON 65536 байтами, записывает ограниченную область одобрения и связывает ровно
+// одну invocation. Авторизация вызывающего кода и внешний Commit отдельны; пути из payload не
+// создают полномочий.
 func (repository *Repository) approveIntegrationScope(
 	ctx context.Context, tx pgx.Tx, current scope, gateID, invocationID, rootRunID, projectID string,
 ) error {

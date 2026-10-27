@@ -2,6 +2,10 @@ package platform
 
 import "testing"
 
+// TestRuntimeSecretCursorBindsProjectAndQuery round-trips the secret reference only for the
+// original project/query filter and rejects either changed filter.
+// TestRuntimeSecretCursorBindsProjectAndQuery проверяет обратимое кодирование ref секрета только с
+// исходным фильтром проекта и запроса и отклонение изменения любого фильтра.
 func TestRuntimeSecretCursorBindsProjectAndQuery(t *testing.T) {
 	token, err := encodeRuntimeSecretListCursor("prj_example", "database", "sec_example")
 	if err != nil {

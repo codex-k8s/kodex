@@ -8,12 +8,24 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// mailboxBindingEffect carries server-resolved tenant/connection/configuration IDs and
+// expected/current observation versions for one publication effect. It is transaction-local
+// metadata, not a caller capability or proof of external application.
+// mailboxBindingEffect хранит серверные tenant/connection/configuration IDs и expected/current
+// observation versions одного publication effect. Это локальные метаданные транзакции, а не
+// capability клиента и не доказательство внешнего применения.
 type mailboxBindingEffect struct {
 	organizationID, connectionRef, connectionID, setID, revisionID string
 	expected, version                                              int64
 	enabled                                                        bool
 }
 
+// readMailboxBindingEffects locks and scans the publication connection effects in SQL order,
+// including observation-version carry. No rows returns a nil slice; query/scan/iteration errors
+// discard accumulated effects as Unavailable. It does not itself check tenant/OCC or commit.
+// readMailboxBindingEffects блокирует и читает connection effects публикации в SQL-порядке с
+// переносом observation version. Без строк возвращает nil slice; ошибки query/scan/iteration
+// отбрасывают накопленные effects как Unavailable. Сам не проверяет tenant/OCC и не делает Commit.
 func readMailboxBindingEffects(ctx context.Context, tx pgx.Tx, ref string) ([]mailboxBindingEffect, error) {
 	rows, err := tx.Query(ctx, queryEmailMailboxPublicationBindings, ref)
 	if err != nil {
@@ -34,6 +46,16 @@ func readMailboxBindingEffects(ctx context.Context, tx pgx.Tx, ref string) ([]ma
 	return result, nil
 }
 
+// applyMailboxPublicationBindings rechecks each effect tenant/OCC and matches mailbox metadata by
+// tenant plus connection; enabled mailbox against a disabled connection conflicts. It updates
+// exactly one connection, applies/removes local bindings and emits READY snapshots for nonanchor
+// connections using publication correlation. Later errors require caller rollback of earlier
+// effects; no Secret delivery or independent commit occurs.
+// applyMailboxPublicationBindings перепроверяет tenant/OCC каждого effect и ищет mailbox metadata
+// по tenant и connection; enabled mailbox при disabled connection даёт Conflict. Меняет ровно одну
+// connection, применяет либо удаляет локальные bindings и пишет READY snapshots для nonanchor
+// connections с publication correlation. Поздняя ошибка требует rollback прежних effects
+// вызывающим кодом; доставки Secret и отдельного Commit нет.
 func (repository *Repository) applyMailboxPublicationBindings(ctx context.Context, tx pgx.Tx, current scope, ref string, configuration api.Configuration, anchor string) error {
 	effects, err := readMailboxBindingEffects(ctx, tx, ref)
 	if err != nil {

@@ -8,6 +8,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// revisionOperationFixture builds a fresh synthetic selected UPDATE artifact-revision operation
+// with immutable previous revision/OCC and prepared-content ref/digest/size pins. It contains no
+// persisted ledger or object bytes; each call gets independently mutable maps.
+// revisionOperationFixture создаёт свежую synthetic selected UPDATE artifact-revision operation с
+// immutable previous revision/OCC и prepared-content ref/digest/size pins. Не содержит сохранённый
+// ledger и object bytes; каждый вызов получает отдельные изменяемые maps.
 func revisionOperationFixture() entity.AssistantPlanOperation {
 	version := int64(3)
 	item := entity.Artifact{Ref: "art_revision_fixture", CurrentRevisionRef: "arv_previous_fixture", FileName: "note.md", MediaType: "text/markdown",
@@ -19,6 +25,14 @@ func revisionOperationFixture() entity.AssistantPlanOperation {
 	return op
 }
 
+// TestAssistantFileRevisionClosedTypedPlan checks normalized typed revision mapping preserves
+// immutable source/content refs without inline body or caller-prepared descriptor, then rejects
+// forged target, name, version and action. It validates the in-memory contract without DB
+// ownership or object-store writes.
+// TestAssistantFileRevisionClosedTypedPlan проверяет сохранение immutable source/content refs при
+// normalized typed revision mapping без inline body и caller-prepared descriptor, затем отклоняет
+// подмену target, name, version и action. Проверяет контракт в памяти без DB ownership и
+// object-store writes.
 func TestAssistantFileRevisionClosedTypedPlan(t *testing.T) {
 	op := revisionOperationFixture()
 	normalized, err := normalizeAssistantOperation(op)
@@ -47,6 +61,13 @@ func TestAssistantFileRevisionClosedTypedPlan(t *testing.T) {
 	}
 }
 
+// TestAssistantFilePersistenceRejectsUnstagedBody accepts an operation only with the supplied
+// synthetic staged-ledger mapping, rejecting raw body in Parameters/After/Input and a missing
+// staging map. It verifies the pre-persistence guard without creating or validating a real durable
+// ledger.
+// TestAssistantFilePersistenceRejectsUnstagedBody принимает operation лишь с переданным synthetic
+// staged-ledger mapping, отклоняя raw body в Parameters/After/Input и отсутствие staging map.
+// Проверяет pre-persistence guard без создания и проверки настоящего durable ledger.
 func TestAssistantFilePersistenceRejectsUnstagedBody(t *testing.T) {
 	op := revisionOperationFixture()
 	prepared := map[string]string{op.Key: "ledger_fixture"}
@@ -69,6 +90,14 @@ func TestAssistantFilePersistenceRejectsUnstagedBody(t *testing.T) {
 	}
 }
 
+// TestAssistantFileRevisionRawContentBoundary checks empty, Unicode and exact1MiB raw proposals
+// preserve bytes/size/digest yet are not durable prepared content. NUL, invalid UTF-8 and
+// one-byte-over-limit bodies must fail typed mapping; no upload, scanner or SQL persistence is
+// exercised.
+// TestAssistantFileRevisionRawContentBoundary проверяет сохранение bytes/size/digest для пустых,
+// Unicode и ровно1MiB raw proposals, которые ещё не являются durable prepared content. NUL,
+// invalid UTF-8 и превышение на байт должны отклоняться typed mapping; upload, scanner и SQL
+// persistence не выполняются.
 func TestAssistantFileRevisionRawContentBoundary(t *testing.T) {
 	for _, body := range []string{"новый текст", "", strings.Repeat("a", 1<<20)} {
 		op := revisionOperationFixture()
@@ -101,6 +130,14 @@ func TestAssistantFileRevisionRawContentBoundary(t *testing.T) {
 	}
 }
 
+// TestAssistantFileRevisionDraftPreservesImmutableBaseline checks owner edits can replace
+// content/media while preserving original Before/Target/OCC, then rejects metadata-only changes,
+// latest-revision fallback and caller digest substitution. This tests draft rehydration without
+// applying a revision or rebasing stored state.
+// TestAssistantFileRevisionDraftPreservesImmutableBaseline проверяет замену content/media owner
+// edits с сохранением исходных Before/Target/OCC, затем отклоняет metadata-only changes,
+// latest-revision fallback и caller digest substitution. Проверяет draft rehydration без
+// применения ревизии и rebase сохранённого состояния.
 func TestAssistantFileRevisionDraftPreservesImmutableBaseline(t *testing.T) {
 	original := revisionOperationFixture()
 	edited := revisionOperationFixture()
@@ -129,6 +166,14 @@ func TestAssistantFileRevisionDraftPreservesImmutableBaseline(t *testing.T) {
 	}
 }
 
+// TestAssistantFilePlanHistoryRedactsRawBodyWithoutMutatingHistory checks Parameters and After
+// lose raw content in the public operation projection while the shared original source map retains
+// its historical body. It exercises copy-before-redaction alias behavior in memory, not
+// stored-history access control.
+// TestAssistantFilePlanHistoryRedactsRawBodyWithoutMutatingHistory проверяет удаление raw content
+// из Parameters и After публичной проекции operation при сохранении исторического body в общем
+// исходном map. Проверяет copy-before-redaction alias behavior в памяти, а не доступ к сохранённой
+// истории.
 func TestAssistantFilePlanHistoryRedactsRawBodyWithoutMutatingHistory(t *testing.T) {
 	parameters := map[string]any{"content": "historical body", "fileName": "note.md"}
 	operations := []entity.AssistantPlanOperation{{Type: "CREATE_PROJECT_FILE", Parameters: parameters, After: parameters}}

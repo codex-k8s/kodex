@@ -1,3 +1,4 @@
+import { createTestStorage as storage } from "@/test-utils/storage";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -5,20 +6,6 @@ import {
   rememberRuntimeSecretReauthSuggestion,
   runtimeSecretReauthSuggestionStorageKey,
 } from "./reauth-suggestion";
-
-function storage(): Storage {
-  const values = new Map<string, string>();
-  return {
-    clear: () => values.clear(),
-    getItem: (key) => values.get(key) ?? null,
-    key: (index) => [...values.keys()][index] ?? null,
-    get length() {
-      return values.size;
-    },
-    removeItem: (key) => values.delete(key),
-    setItem: (key, value) => values.set(key, value),
-  };
-}
 
 const suggestion = {
   name: "SERVICE_AUTH",

@@ -14,6 +14,21 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// changeProviderAccount dispatches specialized account transitions after exact
+// organization/account lock and expected version, with creation and queued-work cancellation on
+// their own paths. It preserves concurrency role/bounds, pending/terminal authorization
+// validation, credential activation, active-runtime/warm-consumer revoke guards and durable
+// cleanup intent. PENDING device polling emits no account event; successful changes return
+// hydrated metadata and event intent, while the outer command owns authority,
+// audit/idempotency/outbox and commit. No secret bytes or provider network operation is performed
+// here.
+// changeProviderAccount направляет специализированные переходы после точной блокировки account
+// организации и проверки версии; создание и отмена queued work имеют отдельные пути. Сохраняет
+// role и предел concurrency, pending и terminal authorization validation, активацию credential,
+// guards активных runtime и warm consumers перед revoke, durable cleanup intent. PENDING poll не
+// создаёт account event; изменения возвращают metadata и намерение события, внешняя команда
+// владеет authority, audit, idempotency, outbox и commit. Значения секретов и provider network
+// operations здесь отсутствуют.
 func (repository *Repository) changeProviderAccount(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -215,9 +230,18 @@ func (repository *Repository) changeProviderAccount(
 	return outcome, nil
 }
 
-// ProviderMaterializationReferenced проверяет owner-side exact reference после
-// неоднозначного результата command transaction. Ошибка чтения никогда не
-// интерпретируется как разрешение удалить Kubernetes Secret.
+// ProviderMaterializationReferenced checks owner-side materialization interest after an ambiguous
+// command using exactly one attempt locator or validated credential descriptor, exact account
+// access and a ReadCommitted account lock. Missing account returns false/nil, but access is hidden
+// as NotFound and read failures remain errors, never cleanup permission. The query also keeps any
+// exact RESERVED authorization alive; this method returns metadata only and defers ignored
+// request-context rollback without commit.
+// ProviderMaterializationReferenced проверяет owner-side ссылку после неоднозначной команды по
+// одному attempt locator либо проверенному credential descriptor, точному account доступу и
+// ReadCommitted блокировке. Отсутствующий account даёт false/nil, отказ доступа скрывается как
+// NotFound, ошибки чтения не становятся разрешением очистки. SQL также сохраняет интерес RESERVED
+// authorization; метод возвращает только метаданные и использует отложенный ignored rollback с
+// request context без commit.
 func (repository *Repository) ProviderMaterializationReferenced(
 	ctx context.Context,
 	principal value.Principal,
@@ -273,6 +297,14 @@ func (repository *Repository) ProviderMaterializationReferenced(
 	return referenced, nil
 }
 
+// createProviderAccount validates trimmed name and provider key, generates a server account ref
+// and inserts only against an enabled definition in the caller transaction. No definition is
+// NotFound; write failures use the domain mapper. Hydrated metadata and creation event intent are
+// returned without committing or authorizing the outer command.
+// createProviderAccount проверяет нормализованное имя и provider key, создаёт серверную ссылку
+// account и вставляет только при включённом definition в переданной транзакции. Отсутствие
+// definition — NotFound, ошибки записи отображаются в доменные. Возвращает metadata и намерение
+// события без commit и авторизации внешней команды.
 func (repository *Repository) createProviderAccount(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -307,6 +339,14 @@ func (repository *Repository) createProviderAccount(
 	}, nil
 }
 
+// insertProviderAuthorization inserts authorization/materializer metadata or applies a RESERVED
+// record only when its exact organization/account/actor/method/version/deadline predicates match.
+// Write errors use mapWriteError and any affected count other than one is Conflict; authorization
+// input validation and account locking remain with the caller.
+// insertProviderAuthorization вставляет authorization и materializer metadata либо применяет
+// RESERVED запись только при совпадении организации, account, субъекта, метода, версии и срока.
+// Ошибки записи проходят mapWriteError, число строк не один даёт Conflict; валидация входа и
+// блокировка account остаются у вызывающего.
 func (repository *Repository) insertProviderAuthorization(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -332,6 +372,16 @@ func (repository *Repository) insertProviderAuthorization(
 	return nil
 }
 
+// activateProviderCredential requires a valid exact Kubernetes descriptor and bounded nonempty
+// masked account identity, inserts the next credential revision and activates it under the caller
+// account lock. A replaced credential gets durable cleanup after the retention grace; failures
+// require rollback of all preceding changes. It stores descriptor metadata, never secret bytes,
+// and performs no external apply/delete or commit.
+// activateProviderCredential требует допустимый Kubernetes descriptor и ограниченную непустую
+// masked identity, вставляет следующую credential revision и активирует её под блокировкой
+// account. Прежняя credential получает durable cleanup после retention grace; ошибка требует
+// rollback всех изменений. Хранит только дескриптор, не значения; внешних apply, delete и commit
+// нет.
 func (repository *Repository) activateProviderCredential(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -369,6 +419,13 @@ func (repository *Repository) activateProviderCredential(
 	return nil
 }
 
+// providerAccountByRef reads exact organization/account metadata, computes existing management
+// hints from role and hydrates lifecycle details in the same transaction. Errors return an empty
+// account; unconditional action inputs here rely on the surrounding authorized path and never
+// replace command permission checks.
+// providerAccountByRef читает metadata точного account организации, вычисляет прежние подсказки
+// действий по роли и дополняет lifecycle в той же транзакции. При ошибке account пуст; безусловные
+// action inputs опираются на авторизованный внешний путь и не заменяют проверки команды.
 func (repository *Repository) providerAccountByRef(ctx context.Context, tx pgx.Tx, current scope, ref string) (entity.ProviderAccount, error) {
 	item, err := scanProviderAccount(tx.QueryRow(ctx, queryMVPGetProviderAccount, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "account_ref": ref,
@@ -384,16 +441,35 @@ func (repository *Repository) providerAccountByRef(ctx context.Context, tx pgx.T
 	return items[0], nil
 }
 
+// validPendingProviderAuthorization checks the existing pauth_ prefix, DEVICE_CODE/PENDING values
+// and presence of materializer ref, verification URI, user code and expiry pointer. It does not
+// validate URI trust, future expiry or materializer identity/readback; those are separate boundary
+// checks.
+// validPendingProviderAuthorization проверяет прежний pauth_ префикс, DEVICE_CODE и PENDING,
+// наличие materializer ref, verification URI, user code и expiry pointer. Доверие URI, будущий
+// срок и materializer identity/readback здесь не проверяются.
 func validPendingProviderAuthorization(payload command.ProviderAccountInput) bool {
 	return strings.HasPrefix(payload.AuthorizationRef, "pauth_") && payload.AuthorizationMethod == "DEVICE_CODE" &&
 		payload.AuthorizationState == "PENDING" && payload.MaterializerAttemptRef != "" &&
 		payload.VerificationURI != "" && payload.UserCode != "" && payload.AuthorizationExpiresAt != nil
 }
 
+// providerAccountCanAuthorize allows authorization only from PENDING_AUTHORIZATION or
+// REAUTHORIZATION_REQUIRED. It is a state predicate; actor permission, expected version and
+// credential/materializer validation remain external.
+// providerAccountCanAuthorize разрешает начало авторизации только из PENDING_AUTHORIZATION и
+// REAUTHORIZATION_REQUIRED. Это условие состояния; полномочия субъекта, ожидаемая версия и
+// credential/materializer validation проверяются отдельно.
 func providerAccountCanAuthorize(state string) bool {
 	return state == "PENDING_AUTHORIZATION" || state == "REAUTHORIZATION_REQUIRED"
 }
 
+// providerAccountEnabledTransition permits only DISABLED/false to AUTHORIZED/true or the inverse
+// with a current credential. Missing credential, redundant requests and other states return an
+// empty state/false without mutation or authorization.
+// providerAccountEnabledTransition допускает только DISABLED/false в AUTHORIZED/true либо обратный
+// переход при текущей credential. Без credential, при повторном запросе и ином состоянии
+// возвращает пустое состояние и false без изменения и авторизации.
 func providerAccountEnabledTransition(state string, enabled, hasCredential, requested bool) (string, bool) {
 	if !hasCredential {
 		return "", false
@@ -407,26 +483,38 @@ func providerAccountEnabledTransition(state string, enabled, hasCredential, requ
 	return "", false
 }
 
+// validTerminalProviderAuthorization checks the existing authorization ref prefix,
+// API_KEY/DEVICE_CODE method and AUTHORIZED state, requiring a credential pointer only when
+// requested. It does not inspect that descriptor, expiry, failure code or caller authority; the
+// transition validates these separately.
+// validTerminalProviderAuthorization проверяет прежний префикс ссылки, метод API_KEY либо
+// DEVICE_CODE и AUTHORIZED, требуя credential pointer только по флагу. Дескриптор, срок, failure
+// code и полномочия не проверяет; это делает переход отдельно.
 func validTerminalProviderAuthorization(payload command.ProviderAccountInput, credentialRequired bool) bool {
 	return strings.HasPrefix(payload.AuthorizationRef, "pauth_") &&
 		(payload.AuthorizationMethod == "API_KEY" || payload.AuthorizationMethod == "DEVICE_CODE") &&
 		payload.AuthorizationState == "AUTHORIZED" && (!credentialRequired || payload.Credential != nil)
 }
 
+// validProviderCredential checks a DNS-label Secret name, UUID-parsable UID, nonempty resource
+// version at most 128 bytes and exact lowercase SHA-256 text. It does not contact Kubernetes,
+// compare content or establish namespace, actor or provenance authority.
+// validProviderCredential проверяет DNS-label имя Secret, UID, разбираемый как UUID, непустую
+// resource version до 128 байт и точный строчный SHA-256. Kubernetes не вызывает, содержимое не
+// сравнивает, полномочия namespace, субъекта и происхождения не устанавливает.
 func validProviderCredential(value entity.ProviderCredentialDescriptor) bool {
 	_, uuidErr := uuid.Parse(value.SecretUID)
 	return validDNSLabel(value.SecretName) && uuidErr == nil && value.SecretResourceVersion != "" &&
 		len(value.SecretResourceVersion) <= 128 && validProviderSHA256(value.ContentSHA256)
 }
 
+// validProviderSHA256 delegates the exact unprefixed 64-byte lowercase hexadecimal grammar to the
+// existing shared SHA-256 validator, preserving zeros and rejecting other lengths, case, controls
+// and Unicode. It validates representation only without hashing, I/O or content/provenance
+// verification.
+// validProviderSHA256 передаёт существующему общему валидатору точную грамматику 64 строчных
+// hex-байт без префикса, сохраняя нулевой хеш и отклоняя длину, регистр, control и Unicode.
+// Проверяет представление без хеширования, I/O и проверки содержимого и происхождения.
 func validProviderSHA256(value string) bool {
-	if len(value) != 64 {
-		return false
-	}
-	for _, character := range value {
-		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
-			return false
-		}
-	}
-	return true
+	return exactSHA256(value)
 }

@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	serviceplatform "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
@@ -20,15 +19,48 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// queryTaskSessionComponentExecution embeds a disposable mutation that substitutes one event
+// Execution.SessionRef while returning the previous Execution JSON. The negative lineage test
+// restores that exact value; it is not a production read or repair path.
+// queryTaskSessionComponentExecution встраивает disposable mutation, подменяющую
+// Execution.SessionRef одного event с возвратом прежнего Execution JSON. Негативный lineage test
+// восстанавливает точное прежнее значение; это не production read или repair path.
+//
 //go:embed testdata/sql/assistant_task_session_component__execution.sql
 var queryTaskSessionComponentExecution string
 
+// queryTaskSessionComponentRestoreExecution embeds restoration of one fixture event Execution JSON
+// after the deliberately corrupted session pin. It updates only the supplied event ref in the
+// disposable database and does not authorize runtime lineage changes.
+// queryTaskSessionComponentRestoreExecution встраивает восстановление Execution JSON одного
+// fixture event после намеренного повреждения session pin. Меняет лишь переданный event ref в
+// disposable БД и не авторизует изменение runtime lineage.
+//
 //go:embed testdata/sql/assistant_task_session_component__restore_execution.sql
 var queryTaskSessionComponentRestoreExecution string
 
+// queryTaskSessionComponentSourceVersion embeds a one-run version increment used to invalidate the
+// previous history cursor commitment. It is isolated test drift, not a normal command, receipt or
+// authorization update.
+// queryTaskSessionComponentSourceVersion встраивает увеличение version одного run для
+// инвалидирования прежнего history cursor commitment. Это изолированный test drift, а не обычная
+// command, receipt или authorization update.
+//
 //go:embed testdata/sql/assistant_task_session_component__source_version.sql
 var queryTaskSessionComponentSourceVersion string
 
+// TestAssistantTaskSessionReadComponent checks disposable PostgreSQL published task-session
+// history with failed results, stable two-page messages, canonical source pins and no
+// business/audit/receipt/outbox writes. It rejects source-version drift, forged/expired/terminal
+// leases, corrupt session lineage and foreign/archived projects, then proves an anchor-only USER
+// cannot read another run through the shared session and loses access after revocation. Provider
+// activity is synthetic and the component scenario skips without an isolated DSN.
+// TestAssistantTaskSessionReadComponent проверяет published task-session history на disposable
+// PostgreSQL с failed results, устойчивыми двумя страницами сообщений, canonical source pins и
+// отсутствием business/audit/receipt/outbox writes. Отклоняет source-version drift,
+// forged/expired/terminal leases, повреждённую session lineage и чужие/архивные projects, затем
+// проверяет, что anchor-only USER не читает другой run через общую session и теряет доступ после
+// revocation. Provider activity синтетическая; component scenario пропускается без isolated DSN.
 func TestAssistantTaskSessionReadComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
@@ -37,19 +69,7 @@ func TestAssistantTaskSessionReadComponent(t *testing.T) {
 		t.Fatal("open isolated task session PostgreSQL")
 	}
 	defer pool.Close()
-	r, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = r.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
-		t.Fatal(err)
-	}
-	if err = r.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3, StagingRepository: "registry.invalid/staging", PromotedRepository: "registry.invalid/roles", DefaultImageReference: "registry.invalid/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
-		t.Fatal(err)
-	}
-	if err = r.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
+	r := newSyntheticRuntimeComponentRepository(t, ctx, pool)
 	seedObservedCatalogFixture(t, ctx, r)
 	principal := func(workload, operation string) value.Principal {
 		actor, tenant := "20000000-0000-4000-8000-000000000001", "20000000-0000-4000-8000-000000000002"

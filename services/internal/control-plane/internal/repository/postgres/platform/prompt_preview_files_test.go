@@ -8,6 +8,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestPreviewFileScopesMatchRuntimeAndPreserveContext checks preview file scopes match runtime
+// descriptors without replacing existing owner context, reject imprecise revisions and hide all
+// file families when the agent capability is removed.
+// TestPreviewFileScopesMatchRuntimeAndPreserveContext проверяет совпадение файловых областей
+// предпросмотра и runtime без замены существующего контекста владельца, отклонение неточных
+// ревизий и скрытие всех семейств файлов после удаления capability агента.
 func TestPreviewFileScopesMatchRuntimeAndPreserveContext(t *testing.T) {
 	items := []map[string]any{
 		promptArtifactFixture("artifact_abcdefgh", "input.txt", runtimecontract.AttachmentScopeInput, "aset_abcdefgh", 1),

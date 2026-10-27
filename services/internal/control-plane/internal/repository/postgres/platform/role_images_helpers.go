@@ -286,6 +286,25 @@ func scanLockedArtifact(row roleImageRowScanner) (lockedArtifact, error) {
 	return result, nil
 }
 
+// lockRoleImageArtifact reads and locks one exact tenant/artifact using the caller transaction,
+// mapping missing rows to NotFound and all scan/decoding failures to Unavailable without exposing
+// partial state. It does not check operation authority, scope, OCC or lease eligibility, and does
+// not own commit; candidate-selection paths with different missing-row semantics use their own read.
+// lockRoleImageArtifact читает и блокирует точный tenant/artifact в транзакции вызывающего метода,
+// возвращая NotFound при отсутствии строки и Unavailable при scan/decoding error без частичного
+// результата. Не проверяет полномочия операции, scope, OCC либо допустимость lease и не владеет
+// commit; выбор кандидата с другим ответом на отсутствие строки сохраняет собственное чтение.
+func lockRoleImageArtifact(ctx context.Context, tx pgx.Tx, current scope, artifactRef string) (lockedArtifact, error) {
+	artifact, err := scanLockedArtifact(tx.QueryRow(ctx, queryRoleImagesLockArtifact, current.organizationID, artifactRef))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return lockedArtifact{}, errs.ErrNotFound
+	}
+	if err != nil {
+		return lockedArtifact{}, errs.ErrUnavailable
+	}
+	return artifact, nil
+}
+
 // scanLockedPromotionRequest scans the exact promotion request identity, evidence, receipt, state,
 // requester and creation columns, returning a zero value on scan failure.
 // scanLockedPromotionRequest сканирует точные колонки identity, evidence, receipt, state,
@@ -298,6 +317,39 @@ func scanLockedPromotionRequest(row roleImageRowScanner) (lockedPromotionRequest
 		return lockedPromotionRequest{}, err
 	}
 	return result, nil
+}
+
+// readLockedPromotionRequest executes the existing organization/artifact-scoped locking query and
+// returns its scan result or raw error. The caller owns the transaction and maps absence/errors
+// according to its specific claim, authorization or completion transition.
+// readLockedPromotionRequest выполняет прежний блокирующий запрос в области organization/artifact
+// и возвращает результат scan либо исходную ошибку. Caller владеет транзакцией и сопоставляет
+// отсутствие и ошибки согласно конкретному переходу claim, authorization или completion.
+func readLockedPromotionRequest(ctx context.Context, tx pgx.Tx, current scope, artifactID string) (lockedPromotionRequest, error) {
+	return scanLockedPromotionRequest(tx.QueryRow(ctx, queryRoleImagesLockPromotionRequest, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID, "image_artifact_id": artifactID,
+	}))
+}
+
+// lockPromotionArtifactAndRequest preserves the authorization/completion lock order and maps
+// an absent request to Forbidden and other request failures to Unavailable. The caller owns the
+// transaction, role-image policy, recipe checks, version checks and transition.
+// lockPromotionArtifactAndRequest сохраняет порядок блокировок authorization/completion и
+// сопоставляет отсутствие request с Forbidden, другие ошибки request — с Unavailable. Caller
+// владеет транзакцией, role-image policy, проверкой recipe, версий и переходом.
+func lockPromotionArtifactAndRequest(ctx context.Context, tx pgx.Tx, current scope, artifactRef string) (lockedArtifact, lockedPromotionRequest, error) {
+	artifact, err := lockRoleImageArtifact(ctx, tx, current, artifactRef)
+	if err != nil {
+		return lockedArtifact{}, lockedPromotionRequest{}, err
+	}
+	request, err := readLockedPromotionRequest(ctx, tx, current, artifact.ID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return lockedArtifact{}, lockedPromotionRequest{}, errs.ErrForbidden
+	}
+	if err != nil {
+		return lockedArtifact{}, lockedPromotionRequest{}, errs.ErrUnavailable
+	}
+	return artifact, request, nil
 }
 
 // roleImageActions returns OPEN and management hints based on ACTIVE state, omitting mutation
@@ -322,9 +374,7 @@ func roleImageActions(recipe entity.RoleImageRecipe, canManage bool) []string {
 // roleImageDigest хеширует существующее JSON encoding строчным SHA-256, сохраняя игнорирование
 // marshal errors и их nil-byte hash fallback.
 func roleImageDigest(value any) string {
-	encoded, _ := json.Marshal(value)
-	sum := sha256.Sum256(encoded)
-	return hex.EncodeToString(sum[:])
+	return jsonValueDigest(value)
 }
 
 // roleImageToken HMAC-signs the NUL-delimited purpose, reference, attempt, fence, generation and

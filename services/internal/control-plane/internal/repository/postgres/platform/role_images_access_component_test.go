@@ -16,6 +16,17 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testRoleImageApplicationAccess drives the disposable owner/service access scenario from project
+// creation through metadata-only viewing, exact build/source roles, source edits and
+// archive/restore/build cancellation. It checks signed project scope, cursor actor/filter binding,
+// literal search and source redaction before and after revocation, including receipt replay and
+// managed history; worker claim and restored-image impact are separate explicit steps.
+// testRoleImageApplicationAccess проводит сценарий доступа через owner/service в disposable БД: от
+// создания проекта до чтения одних metadata, точных build/source roles, правок source и
+// archive/restore/build cancellation. Проверяет signed project scope, привязку cursor к
+// actor/filter, буквальный поиск и скрытие source до и после отзыва полномочий, включая receipt
+// replay и managed history; worker claim и impact восстановленного образа проверяются отдельными
+// явными шагами.
 func testRoleImageApplicationAccess(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	ownerInput := platformrepo.ProofPrincipalInput{
@@ -325,6 +336,12 @@ func testRoleImageApplicationAccess(t *testing.T, ctx context.Context, repositor
 	}
 }
 
+// roleImageTestMutation builds a deterministic test mutation with a lowercased action-specific
+// operation, supplied key/OCC pointer and fixed synthetic intent digest. It does not calculate a
+// production payload commitment or grant operation authority.
+// roleImageTestMutation создаёт детерминированный test mutation с operation по action в нижнем
+// регистре, переданными key/OCC pointer и фиксированным синтетическим intent digest. Не вычисляет
+// production payload commitment и не выдаёт полномочий операции.
 func roleImageTestMutation(key, action string, expectedVersion *int64) value.Mutation {
 	return value.Mutation{
 		Operation: "role-image-recipe." + strings.ToLower(action), IdempotencyKey: key,
@@ -332,6 +349,12 @@ func roleImageTestMutation(key, action string, expectedVersion *int64) value.Mut
 	}
 }
 
+// createRoleImageAccessRole creates an access role through the owner service using exactly the
+// requested permission keys and allowed scopes, failing the component test unless a concrete role
+// is returned.
+// createRoleImageAccessRole создаёт access role через owner service с ровно запрошенными
+// permission keys и allowed scopes, завершая component test при ошибке либо отсутствии конкретной
+// роли.
 func createRoleImageAccessRole(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, key, name string, permissions, scopes []string) entity.AccessRole {
 	t.Helper()
 	result, err := service.Execute(ctx, command.Command{Kind: command.CreateAccessRole, Principal: owner,
@@ -344,6 +367,12 @@ func createRoleImageAccessRole(t *testing.T, ctx context.Context, service *platf
 	return *result.AccessRole
 }
 
+// createRoleImageAccessBinding creates a USER binding through the owner service for the exact
+// subject, immutable role version and scope, and requires a non-nil binding result; it does not
+// fabricate verified principal authority.
+// createRoleImageAccessBinding создаёт USER binding через owner service для точных subject,
+// неизменяемой role version и scope и требует конкретный binding result; проверенные полномочия
+// principal не подделяются.
 func createRoleImageAccessBinding(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, key, subjectRef, roleVersionRef string, scope entity.AccessScope) entity.AccessBinding {
 	t.Helper()
 	result, err := service.Execute(ctx, command.Command{Kind: command.CreateAccessBinding, Principal: owner,
@@ -356,6 +385,10 @@ func createRoleImageAccessBinding(t *testing.T, ctx context.Context, service *pl
 	return *result.AccessBinding
 }
 
+// containsString performs exact case-sensitive membership comparison for test action/blocker
+// lists; nil and empty slices return false and the input is not modified.
+// containsString проверяет точное регистрозависимое вхождение в тестовых action/blocker списках;
+// nil и пустой slice дают false, исходный список не изменяется.
 func containsString(values []string, expected string) bool {
 	for _, value := range values {
 		if value == expected {
@@ -365,6 +398,10 @@ func containsString(values []string, expected string) bool {
 	return false
 }
 
+// sameStrings compares test string slices by length and positional equality, preserving duplicates
+// and order while treating nil and empty as equal; it is not a set comparison.
+// sameStrings сравнивает тестовые string slices по длине и позиционному равенству, сохраняя
+// дубликаты и порядок и считая nil и пустой slice равными; множества не сравниваются.
 func sameStrings(left, right []string) bool {
 	if len(left) != len(right) {
 		return false

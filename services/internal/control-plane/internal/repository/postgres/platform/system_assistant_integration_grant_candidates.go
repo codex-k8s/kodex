@@ -2,10 +2,7 @@ package platform
 
 import (
 	"context"
-	"crypto/sha256"
 	_ "embed"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -43,13 +40,9 @@ func (repository *Repository) GetSystemAssistantIntegrationGrantCandidates(ctx c
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	current, err := repository.resolveScope(ctx, principal)
+	current, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
 	if err != nil {
 		return result, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return result, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	target, err := repository.systemAssistantIntegrationGrantOwner(ctx, tx, current, connectionRef)
@@ -77,12 +70,10 @@ func (repository *Repository) GetSystemAssistantIntegrationGrantCandidates(ctx c
 	if err != nil {
 		return result, err
 	}
-	encoded, _ := json.Marshal(struct {
+	contextDigest := jsonValueDigest(struct {
 		Tenant, Actor, Connection, Assistant, Definition, Search string
 		ConnectionVersion, AssistantVersion                      int64
 	}{current.organizationID, current.actorID, connectionRef, target.ref, result.DefinitionDigest, search, result.ConnectionVersion, target.version})
-	digest := sha256.Sum256(encoded)
-	contextDigest := hex.EncodeToString(digest[:])
 	after, err := assistantIntegrationCandidateAfter(page.Token, contextDigest)
 	if err != nil {
 		return result, err

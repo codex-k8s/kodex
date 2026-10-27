@@ -13,6 +13,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// receiptFreshPrincipal resolves fresh fixture proof authority for the fixed reader and exact
+// project or organization bootstrap scope; it does not authenticate a real transport.
+// receiptFreshPrincipal разрешает свежие тестовые полномочия фиксированного читателя для точного
+// проекта либо области bootstrap организации; не аутентифицирует реальный transport.
 func receiptFreshPrincipal(t *testing.T, ctx context.Context, repository *Repository, projectRef string) value.Principal {
 	t.Helper()
 	operation := "platform.query.projects.get"
@@ -26,6 +30,10 @@ func receiptFreshPrincipal(t *testing.T, ctx context.Context, repository *Reposi
 	return value.Principal{ActorID: authority.ActorID, AuthorityTenant: authority.OrganizationID, ProjectRef: authority.ProjectID, Permission: operation, CorrelationRef: "receipt-authority-component", CallerWorkload: "control-api-gateway", CredentialRevision: 1}
 }
 
+// receiptAccessBinding creates a role version and exact scoped user binding through owner commands
+// and returns the binding for later revocation.
+// receiptAccessBinding создаёт версию роли и точную привязку пользователя с заданной областью
+// командами владельца и возвращает привязку для последующего отзыва.
 func receiptAccessBinding(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, actorRef, key string, permissions []string, target entity.AccessScope) entity.AccessBinding {
 	t.Helper()
 	role, err := service.Execute(ctx, command.Command{Kind: command.CreateAccessRole, Principal: owner, Mutation: value.Mutation{IdempotencyKey: key + "-role"}, Payload: command.AccessRoleInput{Name: key, PermissionKeys: permissions, AllowedScopes: []string{target.Kind}, ChangeComment: "Receipt authority fixture"}})
@@ -39,6 +47,12 @@ func receiptAccessBinding(t *testing.T, ctx context.Context, service *platformse
 	return *bound.AccessBinding
 }
 
+// prepareDeletedReceiptAuthorityFixture assigns exact deletion/visibility authority to the command
+// and returns assertions that foreign-project and revoked receipt replay fail before exposing
+// terminal snapshots, then restores the owner principal.
+// prepareDeletedReceiptAuthorityFixture назначает команде точные полномочия удаления и видимости и
+// возвращает проверки отказа для чужого проекта и отозванного повторного чтения квитанции до
+// раскрытия завершённых снимков, затем восстанавливает principal владельца.
 func prepareDeletedReceiptAuthorityFixture(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, input *command.Command, kind, ref, projectRef, permission string) func() {
 	t.Helper()
 	key := "delete-receipt-" + kind

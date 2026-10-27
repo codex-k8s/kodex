@@ -1,6 +1,6 @@
+import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import { readFileSync } from "node:fs";
 import {
-  createRenderer,
   defineComponent,
   h,
   nextTick,
@@ -107,18 +107,7 @@ function mount() {
     dirty: Ref<boolean>;
     save: () => Promise<void>;
   };
-  const renderer = createRenderer<object, object>({
-    insert() {},
-    remove() {},
-    patchProp() {},
-    createElement: () => ({}),
-    createText: () => ({}),
-    createComment: () => ({}),
-    setText() {},
-    setElementText() {},
-    parentNode: () => null,
-    nextSibling: () => null,
-  });
+  const renderer = createNoopRenderer();
   const app = renderer
     .createApp(
       defineComponent({

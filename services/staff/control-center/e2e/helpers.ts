@@ -434,3 +434,19 @@ export async function assertNoDuplicateGraphNodes(page: Page): Promise<void> {
   expect(refs.every(Boolean)).toBe(true);
   expect(new Set(refs).size).toBe(refs.length);
 }
+
+// expectMobileViewport проверяет видимые границы панели и отсутствие горизонтального overflow.
+// Конкретный viewport и содержимое остаются обязанностью сценария.
+export async function expectMobileViewport(
+  page: Page,
+  assistant: Locator,
+): Promise<void> {
+  const bounds = await assistant.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds?.x ?? -1).toBeGreaterThanOrEqual(0);
+  expect((bounds?.x ?? 390) + (bounds?.width ?? 390)).toBeLessThanOrEqual(391);
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+}

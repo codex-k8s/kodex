@@ -17,9 +17,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// emailReceiptFixtureQuery seeds an UNKNOWN_OUTCOME email invocation and its receipt for the
+// selected project and run; it sends no mail.
+// emailReceiptFixtureQuery создаёт почтовый вызов UNKNOWN_OUTCOME и его квитанцию для выбранного
+// проекта и запуска; письма не отправляются.
+//
 //go:embed testdata/sql/email_receipt_fixture.sql
 var emailReceiptFixtureQuery string
 
+// testEmailReceiptReconciliation checks owner-selected reconciliation, authority freshness and
+// immutable email receipts with durable observation history.
+// testEmailReceiptReconciliation проверяет выбранное владельцем согласование, актуальность
+// полномочий и неизменяемые почтовые квитанции с сохранённой историей наблюдений.
 func testEmailReceiptReconciliation(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	// Адресный запуск не наследует наблюдение каталога от соседних сценариев.
 	seedObservedCatalogFixture(t, ctx, repository)

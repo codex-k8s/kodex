@@ -17,12 +17,32 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryEmailMailboxConfigurationOwner embeds exact organization/configuration ownership through
+// EMAIL_MAILBOX set and email connection, returning server mailbox identity. It does not accept an
+// owner assignment from content or establish caller permission.
+// queryEmailMailboxConfigurationOwner встраивает точного владельца organization/configuration
+// через EMAIL_MAILBOX set и email connection, возвращая серверную идентичность mailbox. Не
+// принимает назначение владельца из content и не определяет право caller.
+//
 //go:embed sql/email_mailbox_configuration_owner.sql
 var queryEmailMailboxConfigurationOwner string
 
+// queryEmailMailboxConfigurationInsertOwner embeds creation of the mailbox owner binding only from
+// matching organization, EMAIL_MAILBOX set and email connection. The caller supplies a
+// server-generated mailbox ref and requires one inserted row.
+// queryEmailMailboxConfigurationInsertOwner встраивает создание owner binding mailbox только из
+// совпадающих organization, EMAIL_MAILBOX set и email connection. Caller передаёт серверный
+// mailbox ref и требует одну вставленную строку.
+//
 //go:embed sql/email_mailbox_configuration_insert_owner.sql
 var queryEmailMailboxConfigurationInsertOwner string
 
+// newMailboxRef generates an opaque mailbox-prefixed identifier from16 cryptographically random
+// bytes; entropy failure is Unavailable. The ref is identity, not a credential or authorization
+// token.
+// newMailboxRef создаёт непрозрачный идентификатор mailbox с префиксом из16 криптографически
+// случайных байтов; ошибка энтропии даёт Unavailable. Ref является идентичностью, а не credential
+// и authorization token.
 func newMailboxRef() (string, error) {
 	var raw [16]byte
 	if _, err := rand.Read(raw[:]); err != nil {
@@ -31,6 +51,16 @@ func newMailboxRef() (string, error) {
 	return "mailbox-" + hex.EncodeToString(raw[:]), nil
 }
 
+// changeEmailMailbox constrains organization-level EMAIL_MAILBOX input, resolves immutable
+// connection ownership and locks its version. Create/save canonicalize decoded specification as
+// JSON; existing sets require OCC and an allowed lifecycle action. It delegates managed revision
+// changes, creates an owner binding if needed and returns fresh mailbox view in the caller
+// transaction without publishing externally.
+// changeEmailMailbox ограничивает вход организационным EMAIL_MAILBOX, разрешает неизменяемого
+// connection owner и блокирует его версию. Create/save канонизируют декодированную specification в
+// JSON; прежние sets требуют OCC и допустимого lifecycle action. Передаёт изменение managed
+// revisions, при необходимости создаёт owner binding и возвращает свежий mailbox view в переданной
+// транзакции без внешней публикации.
 func (repository *Repository) changeEmailMailbox(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.EmailMailboxInput)
 	if !ok || payload.Managed.ProjectRef != "" || payload.Managed.Kind != "" && payload.Managed.Kind != revisionservice.KindEmailMailbox {
@@ -100,6 +130,16 @@ func (repository *Repository) changeEmailMailbox(ctx context.Context, tx pgx.Tx,
 	return outcome, nil
 }
 
+// validateEmailMailboxRevision decodes and materializes a revision using server
+// mailbox/tenant/connection and current credential generation. It forces enabled=true only on the
+// local validation copy so disabled specifications still require credential ownership.
+// Syntax/config/credential conflicts return a safe diagnostic with Invalid; other backend failures
+// propagate without external delivery.
+// validateEmailMailboxRevision декодирует и материализует ревизию с серверными
+// mailbox/tenant/connection и текущим credential generation. Назначает enabled=true только
+// локальной проверяемой копии, чтобы disabled specification также требовала владельца credential.
+// Syntax/config/credential conflicts возвращают безопасную diagnostic с Invalid, остальные backend
+// errors передаются без внешней доставки.
 func (repository *Repository) validateEmailMailboxRevision(ctx context.Context, tx pgx.Tx, current scope, configuration managedSet, revision entity.ManagedConfigurationRevision) ([]revisionservice.Diagnostic, error) {
 	invalid := func(code string) ([]revisionservice.Diagnostic, error) {
 		diagnostic := emailpolicy.Diagnostic(code)

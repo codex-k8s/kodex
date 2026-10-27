@@ -58,6 +58,27 @@ function required<T>(value: T | undefined): T {
   return value;
 }
 
+// Проверяет положение выбранных узлов в заданном viewport без изменения layout.
+function expectSelectedNodesWithinViewport(
+  layout: ReturnType<typeof layoutRunGraph>,
+  viewport: ReturnType<typeof runGraphFitTransform>,
+  refs: readonly string[] | undefined,
+  width: number,
+  height: number,
+): void {
+  for (const ref of refs ?? []) {
+    const item = required(layout.nodes.find((item) => item.node.ref === ref));
+    expect(item.x * viewport.zoom + viewport.x).toBeGreaterThan(0);
+    expect(item.y * viewport.zoom + viewport.y).toBeGreaterThan(0);
+    expect(
+      (item.x + runGraphNodeWidth) * viewport.zoom + viewport.x,
+    ).toBeLessThan(width);
+    expect(
+      (item.y + runGraphNodeHeight) * viewport.zoom + viewport.y,
+    ).toBeLessThan(height);
+  }
+}
+
 function sampleCurve(path: string): Array<{ x: number; y: number }> {
   const coordinates = path.match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
   const points: Array<{ x: number; y: number }> = [];
@@ -163,19 +184,13 @@ describe("layoutRunGraph", () => {
         options,
       );
       expect(viewport.zoom).toBeGreaterThanOrEqual(0.85);
-      for (const ref of options.nodes ?? []) {
-        const item = required(
-          layout.nodes.find((item) => item.node.ref === ref),
-        );
-        expect(item.x * viewport.zoom + viewport.x).toBeGreaterThan(0);
-        expect(item.y * viewport.zoom + viewport.y).toBeGreaterThan(0);
-        expect(
-          (item.x + runGraphNodeWidth) * viewport.zoom + viewport.x,
-        ).toBeLessThan(width);
-        expect(
-          (item.y + runGraphNodeHeight) * viewport.zoom + viewport.y,
-        ).toBeLessThan(height);
-      }
+      expectSelectedNodesWithinViewport(
+        layout,
+        viewport,
+        options.nodes,
+        width,
+        height,
+      );
       expect(layout.nodes).toHaveLength(24);
       expect(layout.edges).toHaveLength(26);
       const elements = createRunGraphFlowElements(nodes, edges, {
@@ -265,19 +280,13 @@ describe("layoutRunGraph", () => {
         const bounds = runGraphContentBounds(layout, options.nodes);
         const viewport = runGraphFitTransform(bounds, width, height, options);
         expect(viewport.zoom).toBeGreaterThanOrEqual(0.85);
-        for (const ref of options.nodes ?? []) {
-          const item = required(
-            layout.nodes.find((item) => item.node.ref === ref),
-          );
-          expect(item.x * viewport.zoom + viewport.x).toBeGreaterThan(0);
-          expect(item.y * viewport.zoom + viewport.y).toBeGreaterThan(0);
-          expect(
-            (item.x + runGraphNodeWidth) * viewport.zoom + viewport.x,
-          ).toBeLessThan(width);
-          expect(
-            (item.y + runGraphNodeHeight) * viewport.zoom + viewport.y,
-          ).toBeLessThan(height);
-        }
+        expectSelectedNodesWithinViewport(
+          layout,
+          viewport,
+          options.nodes,
+          width,
+          height,
+        );
       }
       const options = runGraphFitViewOptions(width, true);
       const viewport = runGraphFitTransform(

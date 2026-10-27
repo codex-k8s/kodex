@@ -134,11 +134,7 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 	}
 	startup, cancelStartup := context.WithTimeout(lifecycleContext, 10*time.Second)
 	defer cancelStartup()
-	telemetryConfig, err := sharedobservability.RuntimeConfigFromEnv("agent-runner", buildVersion)
-	if err != nil {
-		return err
-	}
-	telemetry, err := sharedobservability.NewRuntime(startup, telemetryConfig)
+	telemetry, err := sharedobservability.NewRuntimeFromEnv(startup, "agent-runner", buildVersion)
 	if err != nil {
 		return err
 	}

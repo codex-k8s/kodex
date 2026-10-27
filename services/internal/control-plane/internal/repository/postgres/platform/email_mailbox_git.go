@@ -19,42 +19,122 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryEmailMailboxGitReceipt Reads the latest import revision/digest/publication ref for a
+// configured source. The source is deployment-owned, not arbitrary RPC payload; monotonic replay
+// checks are performed by the importer.
+// queryEmailMailboxGitReceipt Читает последние ревизию, хеш и публикацию импорта настроенного
+// источника. Источник принадлежит deployment, а не произвольному RPC payload; монотонность и
+// replay проверяет импортёр.
+//
 //go:embed sql/email_mailbox_git_receipt.sql
 var queryEmailMailboxGitReceipt string
 
+// queryEmailMailboxGitReceiptInsert Records source revision/digest and optional publication ref in
+// the caller transaction. It performs no external apply and relies on the locked importer for
+// monotonic source checks.
+// queryEmailMailboxGitReceiptInsert Фиксирует ревизию, хеш и необязательную публикацию источника в
+// транзакции вызывающего. Внешнего применения нет; монотонность обеспечивает заблокированный
+// импортёр.
+//
 //go:embed sql/email_mailbox_git_receipt_insert.sql
 var queryEmailMailboxGitReceiptInsert string
 
+// queryEmailMailboxGitSourceInsert Associates the configured source/mailbox key with a resolved
+// managed configuration set. Owner/tenant/connection validity is established before this
+// insertion.
+// queryEmailMailboxGitSourceInsert Связывает настроенный источник и ключ mailbox с разрешённым
+// набором конфигурации. Владение, организацию и соединение проверяют до вставки.
+//
 //go:embed sql/email_mailbox_git_source_insert.sql
 var queryEmailMailboxGitSourceInsert string
 
+// queryEmailMailboxGitSources Locks configuration/connection rows for a configured source in the
+// exact organization, returning ownership and version metadata ordered by connection. UI-owned or
+// UI-bound objects are handled separately by the importer.
+// queryEmailMailboxGitSources Блокирует строки конфигураций и соединений настроенного источника
+// точной организации, возвращает владение и версии по порядку соединения. UI-owned или UI-bound
+// объекты отдельно обрабатывает импортёр.
+//
 //go:embed sql/email_mailbox_git_sources.sql
 var queryEmailMailboxGitSources string
 
+// queryEmailMailboxGitSourceUpdate Updates source revision only on the exact internal set still
+// managed by GIT and matching source. Callers require one affected row so detached ownership is
+// not silently overwritten.
+// queryEmailMailboxGitSourceUpdate Меняет ревизию источника только у точного внутреннего
+// GIT-набора с совпавшим source. Вызывающий требует одну строку, чтобы не перезаписать отделённое
+// владение молча.
+//
 //go:embed sql/email_mailbox_git_source_update.sql
 var queryEmailMailboxGitSourceUpdate string
 
+// queryEmailMailboxGitConnectionTouch Advances exact organization/connection version under OCC and
+// returns the new version used to pin publication effects. It does not apply mailbox configuration
+// externally.
+// queryEmailMailboxGitConnectionTouch Продвигает версию точного соединения организации под OCC и
+// возвращает её для привязки эффектов публикации. Внешнюю mailbox-конфигурацию не применяет.
+//
 //go:embed sql/email_mailbox_git_connection_touch.sql
 var queryEmailMailboxGitConnectionTouch string
 
+// queryEmailMailboxPublicationBindingInsert Stores one exact
+// publication/organization/connection/version effect with optional set/revision pins in the caller
+// transaction. It is durable publication intent rather than an external effect.
+// queryEmailMailboxPublicationBindingInsert Сохраняет точный эффект публикации, организации,
+// соединения и версии с необязательными привязками набора и ревизии в транзакции. Это устойчивое
+// намерение, а не внешний эффект.
+//
 //go:embed sql/email_mailbox_publication_binding_insert.sql
 var queryEmailMailboxPublicationBindingInsert string
 
+// queryEmailMailboxPublicationBindings Locks all exact publication connections and reads expected
+// version from observation receipts or original effect pins plus current versions and eligibility.
+// The caller rechecks OCC before applying local bindings.
+// queryEmailMailboxPublicationBindings Блокирует точные соединения публикации, читает ожидаемую
+// версию из наблюдений либо исходных привязок, текущие версии и пригодность. Вызывающий повторно
+// проверяет OCC до применения локальных привязок.
+//
 //go:embed sql/email_mailbox_publication_bindings.sql
 var queryEmailMailboxPublicationBindings string
 
+// queryEmailMailboxUIBinding Checks whether an exact organization/connection has a UI-managed
+// bound set, letting Git import preserve detached UI ownership. The boolean does not authorize UI
+// mutation or detach.
+// queryEmailMailboxUIBinding Проверяет UI-managed привязку точного соединения организации, чтобы
+// Git-импорт сохранял отделённое UI-владение. Boolean не разрешает изменение или detach через UI.
+//
 //go:embed sql/email_mailbox_ui_binding.sql
 var queryEmailMailboxUIBinding string
 
+// mailboxGitSource Carries a locked source mailbox key, configuration ownership, connection
+// identity and version for import reconciliation. It contains no credential values or external
+// authority token.
+// mailboxGitSource Хранит заблокированные ключ mailbox источника, владение конфигурацией,
+// идентичность и версию соединения для сверки импорта. Значений credential и внешних токенов
+// полномочий нет.
 type mailboxGitSource struct {
 	key, ref, managedBy, connectionRef, connectionID string
 	version                                          int64
 }
+
+// mailboxGitEffect Carries the exact connection/version and optional set/revision scheduled for a
+// Git publication, including removal effects with empty revision pins. It does not record
+// successful external application.
+// mailboxGitEffect Хранит точные соединение и версию, необязательные набор и ревизию
+// запланированной Git-публикации, включая удаление с пустыми привязками ревизии. Успешное внешнее
+// применение не подтверждает.
 type mailboxGitEffect struct {
 	connectionRef, connectionID, setID, revisionID string
 	version                                        int64
 }
 
+// mailboxSpecification Projects configurable mailbox fields into the domain specification,
+// deliberately omitting deployment identity/revision/credential-generation envelope. Nested
+// slices/configuration retain their existing shallow-copy semantics; no normalization or secret
+// read occurs.
+// mailboxSpecification Проецирует настраиваемые поля mailbox в доменную спецификацию без
+// deployment-оболочки идентичности, ревизии и поколения credential. Вложенные срезы и конфигурация
+// сохраняют поверхностное копирование; нормализации или чтения секретов нет.
 func mailboxSpecification(mailbox api.Mailbox) entity.EmailMailboxSpecification {
 	return entity.EmailMailboxSpecification{Enabled: mailbox.Enabled, ReceiveProtocol: mailbox.ReceiveProtocol,
 		AllowedFolders: mailbox.AllowedFolders, ArchiveFolder: mailbox.ArchiveFolder, DraftsFolder: mailbox.DraftsFolder,
@@ -62,7 +142,16 @@ func mailboxSpecification(mailbox api.Mailbox) entity.EmailMailboxSpecification 
 		SMTP: mailbox.Smtp, IMAP: mailbox.Imap, POP: mailbox.Pop, Limits: mailbox.Limits, Policies: mailbox.Policies}
 }
 
-// importGitMailboxes вызывается только из configured startup source, не RPC payload.
+// importGitMailboxes Accepts only validated configured Git startup input, serializes publication
+// and resolves the installation identity, enforces monotonic source replay and respects UI
+// ownership. Reconciles source revisions/removals with accepted mailboxes, validates credentials,
+// pins touched connections and records GIT_SYNC effects/receipt/audit/events before commit; it
+// does not perform Kubernetes or remote-mail apply.
+// importGitMailboxes Принимает только проверенный настроенный Git-вход запуска, сериализует
+// публикацию и разрешает системную личность, требует монотонный source replay и сохраняет
+// UI-владение. Сверяет ревизии и удаления с принятыми mailbox, проверяет credential, закрепляет
+// соединения и пишет GIT_SYNC эффекты, квитанцию, аудит и события до commit. Kubernetes и внешний
+// mail не применяет.
 func (repository *Repository) importGitMailboxes(ctx context.Context, input api.Configuration) error {
 	if input.ManagedBy != "git" || input.Source == "release-bootstrap" || len(input.Source) == 0 || len(input.Source) > 512 || api.ValidateConfiguration(input) != nil {
 		return errs.ErrInvalid
@@ -252,6 +341,14 @@ func (repository *Repository) importGitMailboxes(ctx context.Context, input api.
 	return tx.Commit(ctx)
 }
 
+// importGitMailboxRevision Resolves or creates a GIT-owned set and exact connection/mailbox owner,
+// bounds the projected specification, creates a hashed JSON child revision, validates and
+// publishes it, then advances matching Git source revision. All writes stay in the caller
+// transaction; ownership mismatch or stale source is rejected.
+// importGitMailboxRevision Разрешает либо создаёт GIT-набор и точного владельца соединения с
+// mailbox, ограничивает спецификацию, создаёт дочернюю JSON-ревизию с хешем, проверяет и публикует
+// её, продвигает совпавший Git source. Записи принадлежат транзакции вызывающего; иное владение
+// или устаревший source отклоняется.
 func (repository *Repository) importGitMailboxRevision(ctx context.Context, tx pgx.Tx, current scope, input api.Configuration, mailbox api.Mailbox, existingRef string) (managedSet, lockedManagedRevision, string, error) {
 	var set managedSet
 	var err error

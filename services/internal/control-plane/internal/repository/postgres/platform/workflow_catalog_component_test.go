@@ -4,23 +4,28 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/controlplaneapi"
-	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
-	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	serviceplatform "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Каждая launch fixture получает pins тем же leased catalog, что native tool.
+// workflowCatalogLaunchInput uses the same leased execution-workflow catalog as the native tool,
+// changing only a value copy of principal permission and following at most ten pages. It checks
+// page size, published/digest/readiness pins for the requested ref and constructs the launch
+// payload; missing/invalid catalog data fails the test. It uses synthetic fixture identity and
+// does not manufacture owner authority or bypass catalog eligibility.
+// workflowCatalogLaunchInput использует тот же leased execution-workflow catalog, что native tool,
+// меняя только копию principal permission и проходя максимум десять страниц. Проверяет page size и
+// published/digest/readiness pins запрошенного ref и строит launch payload; отсутствующие либо
+// неверные catalog data завершают тест. Использует синтетическую fixture identity и не создаёт
+// owner authority или обход catalog eligibility.
 func workflowCatalogLaunchInput(t *testing.T, service *serviceplatform.Service, principal value.Principal, lease map[string]any, ref, task string) command.LaunchWorkflowInput {
 	t.Helper()
 	principal.Permission = "platform.runtime.execution.workflow.catalog"
@@ -35,7 +40,7 @@ func workflowCatalogLaunchInput(t *testing.T, service *serviceplatform.Service, 
 		}
 		for _, item := range result.Items {
 			if item.WorkflowRef == ref {
-				if item.PublishedRef == "" || !workflowSpecDigestPattern.MatchString(item.SpecDigest) || item.Readiness.RevisionRef != item.PublishedRef {
+				if item.PublishedRef == "" || !exactSHA256(item.SpecDigest) || item.Readiness.RevisionRef != item.PublishedRef {
 					t.Fatal("catalog pins missing")
 				}
 				return command.LaunchWorkflowInput{LeaseRef: input.LeaseRef, Fence: input.Fence, Generation: input.Generation, WorkflowRef: ref, Task: task, ExpectedPublishedRef: item.PublishedRef, ExpectedSpecDigest: item.SpecDigest, ExpectedWorkflowVersion: item.WorkflowVersion}
@@ -50,30 +55,28 @@ func workflowCatalogLaunchInput(t *testing.T, service *serviceplatform.Service, 
 	return command.LaunchWorkflowInput{}
 }
 
+// TestExecutionWorkflowCatalogComponent exercises disposable PostgreSQL leased discovery, complete
+// publication encoding and active-run pagination under exact actor/project/capability pins. It
+// rejects stale/foreign resources, cross-mode and publication-drift cursors, preserves historical
+// active-run revisions and applies visibility before limits, then rejects revoked origin
+// capability/closed lease. Provider, storage and role images are synthetic; the scenario skips
+// without an isolated component DSN and does not prove a live provider launch or deployed
+// acceptance.
+// TestExecutionWorkflowCatalogComponent проверяет на disposable PostgreSQL leased discovery,
+// полное publication encoding и active-run pagination внутри точных actor/project/capability pins.
+// Отклоняет stale/foreign resources, cross-mode и publication-drift cursors, сохраняет
+// исторические active-run revisions и применяет visibility до limits, затем отклоняет revoked
+// origin capability/closed lease. Provider, storage и role images синтетические; сценарий
+// пропускается без isolated component DSN и не доказывает live provider launch или развёрнутую
+// приёмку.
 func TestExecutionWorkflowCatalogComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
 	defer pool.Close()
-	r, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = r.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
-		t.Fatal(err)
-	}
-	if err = r.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3, StagingRepository: "registry.invalid/staging", PromotedRepository: "registry.invalid/roles", DefaultImageReference: "registry.invalid/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
-		t.Fatal(err)
-	}
-	if err = r.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
+	r := newSyntheticRuntimeComponentRepository(t, ctx, pool)
 	prepareObservedWarmFixture(t, ctx, r)
-	owner := resolvedTestPrincipal(t, ctx, r, port.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.runs.launch"}, "control-api-gateway")
-	worker := resolvedTestPrincipal(t, ctx, r, port.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim"}, "runtime-controller")
+	owner, worker := resolveRunLaunchComponentPrincipals(t, ctx, r)
 	reader := worker
 	reader.Permission = "platform.runtime.execution.workflow.catalog"
 	service, err := serviceplatform.New(r)

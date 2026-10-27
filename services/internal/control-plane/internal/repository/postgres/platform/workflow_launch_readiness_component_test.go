@@ -16,9 +16,20 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryWorkflowReadinessDisableAgent disables only the exact organization/coordinator fixture
+// dependency for launch-readiness parity checks.
+// queryWorkflowReadinessDisableAgent отключает только точную тестовую зависимость организации и
+// координатора для проверки согласованности готовности запуска.
+//
 //go:embed testdata/sql/workflow_readiness_disable_agent.sql
 var queryWorkflowReadinessDisableAgent string
 
+// testWorkflowLaunchReadiness checks single/list readiness agrees with actual authorized launch in
+// a rolled-back probe, denying missing permission, unexecutable steps, stale default image or
+// disabled coordinator without unrelated file authority.
+// testWorkflowLaunchReadiness проверяет согласованность готовности единичного и списочного чтения
+// с фактическим разрешённым запуском в откатываемой пробе, отклоняя отсутствие прав, неисполнимые
+// шаги, устаревший образ и отключённого координатора без требования посторонних файловых прав.
 func testWorkflowLaunchReadiness(t *testing.T, ctx context.Context, r *Repository, s *platformservice.Service, owner value.Principal, workflow *entity.Workflow) {
 	t.Helper()
 	if workflow.LaunchReadiness == nil || !workflow.LaunchReadiness.AllowedToSubmit || workflow.LaunchReadiness.Reason != "READY" {

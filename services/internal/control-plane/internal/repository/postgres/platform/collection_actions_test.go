@@ -7,6 +7,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestCollectionCreateActions checks only owner/administrator role fixtures receive collection
+// creation actions while operator/member/auditor fixtures receive none.
+// TestCollectionCreateActions проверяет выдачу действий создания коллекции только тестовым ролям
+// владельца и администратора и их отсутствие у оператора, участника и аудитора.
 func TestCollectionCreateActions(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -29,6 +33,10 @@ func TestCollectionCreateActions(t *testing.T) {
 	}
 }
 
+// TestAssistantActions checks assistant conversation/turn actions depend on readiness while
+// edit/recovery actions remain limited to the owner role.
+// TestAssistantActions проверяет зависимость действий беседы и реплики ассистента от готовности и
+// ограничение редактирования и восстановления ролью владельца.
 func TestAssistantActions(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -51,6 +59,12 @@ func TestAssistantActions(t *testing.T) {
 	}
 }
 
+// TestProjectResourceActionsArePermissionAware checks ordered mutation/launch/publication/trash
+// actions across resource states and explicit permissions, closing unknown node actions; these
+// presentation predicates do not authenticate transport.
+// TestProjectResourceActionsArePermissionAware проверяет порядок действий изменения, запуска,
+// публикации и корзины по состояниям ресурсов и явным правам, закрывая неизвестные действия узла;
+// эти предикаты представления не аутентифицируют transport.
 func TestProjectResourceActionsArePermissionAware(t *testing.T) {
 	t.Parallel()
 	agent := entity.Agent{State: "READY", Enabled: true}

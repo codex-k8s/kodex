@@ -192,26 +192,4 @@ watch(
   </section>
 </template>
 
-<style scoped>
-.assistant-created-entity {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-  margin-top: 10px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel);
-}
-.assistant-created-entity header,
-.assistant-created-entity__actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-.assistant-created-entity p {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-</style>
+<style scoped src="./assistant-result-card.css"></style>

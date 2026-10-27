@@ -5,6 +5,12 @@ import (
 	"testing"
 )
 
+// TestDeclaredScopeRejectsIncompleteWithoutExecutionError allows only the tested continuation
+// runtime-context deferral for run.ref, rejecting missing capability/files, incomplete unexplained
+// scope and project.files deferral.
+// TestDeclaredScopeRejectsIncompleteWithoutExecutionError допускает лишь проверенную отсрочку
+// runtime-контекста продолжения для run.ref, отклоняя отсутствие capability и файлов, неполную
+// область без объяснения и отсрочку project.files.
 func TestDeclaredScopeRejectsIncompleteWithoutExecutionError(t *testing.T) {
 	for _, code := range []string{"CAPABILITY_REQUIRED", "FILES_REQUIRED", "RUNTIME_CONTEXT_REQUIRED"} {
 		result := promptservice.Materialization{Diagnostics: []promptservice.Diagnostic{{Code: code, Severity: "ERROR", VariableName: "run.ref"}}}

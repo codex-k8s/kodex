@@ -3,6 +3,11 @@ import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import {
+  createPickerLabels,
+  selection,
+} from "@/features/access/picker-presentation";
+
+import {
   accessAgentOptions,
   accessIntegrationOptions,
   accessProjectOptions,
@@ -43,6 +48,7 @@ const emit = defineEmits<{
   "load-project-resources": [projectRef: string];
 }>();
 const i18n = useI18n();
+const pickerLabels = createPickerLabels((key) => i18n.t(key));
 const chosenProject = ref<AsyncEntityOption>();
 const chosenResource = ref<AsyncEntityOption>();
 
@@ -119,22 +125,6 @@ const selectedResourceOption = computed<AsyncEntityOption | undefined>(() => {
     ? chosenResource.value
     : undefined;
 });
-
-function selection(value: string | null | readonly string[]): string {
-  return typeof value === "string" ? value : "";
-}
-
-function pickerLabels(label: string, searchPlaceholder: string) {
-  return {
-    label,
-    searchPlaceholder,
-    loading: i18n.t("common.loading"),
-    loadingMore: i18n.t("common.loading"),
-    empty: i18n.t("common.empty"),
-    error: i18n.t("errors.default"),
-    retry: i18n.t("common.retry"),
-  };
-}
 
 function loadResources(
   query: string,

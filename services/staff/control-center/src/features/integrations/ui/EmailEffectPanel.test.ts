@@ -1,3 +1,4 @@
+import { syntheticEmailEffectFixture } from "@/test-utils/email-effect-fixture";
 import { defineComponent, type Ref, type SetupContext } from "vue";
 import { createI18n } from "vue-i18n";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -29,37 +30,11 @@ vi.mock("../email-effects", async (importOriginal) => ({
 }));
 import EmailEffectPanel from "./EmailEffectPanel.vue";
 
-const connection: IntegrationConnection = {
-  ref: "connection_synthetic",
-  version: 3,
-  definitionKey: "email",
-  name: "Email",
-  state: "CONNECTED",
-  credentialsConfigured: true,
-  credentialsHint: "",
-  capabilities: [],
-  grants: [],
-  nextActions: [],
-  definitionVersion: "1",
-  definitionDigest: "a".repeat(64),
-  publicConfiguration: {},
-};
-const initial: EmailEffectReceiptView = {
-  receipt: {
-    ref: "receipt_synthetic",
-    version: 7,
-    invocationRef: "invocation_synthetic",
-    externalReceiptDigest: "b".repeat(64),
-    semanticInputDigest: "c".repeat(64),
-    outcome: "UNKNOWN_OUTCOME",
-    mailboxRef: "mailbox_synthetic",
-    configurationRevision: 4,
-    connectionRef: connection.ref,
-    projectRef: "project_synthetic",
-    createdAt: "2026-09-05T00:00:00Z",
-    updatedAt: "2026-09-05T00:00:00Z",
-  },
-};
+const { connection, view: initial } = syntheticEmailEffectFixture(
+  "connection_synthetic",
+  3,
+  "Email",
+);
 interface PanelState {
   load(): Promise<void>;
   reconcile(): Promise<void>;

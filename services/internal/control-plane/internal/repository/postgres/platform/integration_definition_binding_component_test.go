@@ -15,6 +15,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// testIntegrationDefinitionBindingRead checks authoritative integration binding reads and exact
+// rebind pins, distinguishing proven absence from an existing ineligible binding.
+// testIntegrationDefinitionBindingRead проверяет авторитетное чтение привязки интеграции и точные
+// версии перепривязки, отличая доказанное отсутствие от существующей недоступной привязки.
 func testIntegrationDefinitionBindingRead(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{

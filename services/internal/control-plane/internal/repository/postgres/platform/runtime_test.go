@@ -13,6 +13,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// TestDecodeStoredRuntimeEnvironmentProjectsSecretDescriptor round-trips a synthetic environment
+// and full Secret descriptor through payload validation and stored projection, comparing exact
+// runtime values. Missing source ref, namespace or revision must fail; this pure test reads no
+// real Secret.
+// TestDecodeStoredRuntimeEnvironmentProjectsSecretDescriptor проверяет круговой проход synthetic
+// environment и полного Secret descriptor через payload validation и stored projection с точным
+// сравнением runtime values. Отсутствие source ref, namespace либо revision должно давать отказ;
+// реальный Secret не читается.
 func TestDecodeStoredRuntimeEnvironmentProjectsSecretDescriptor(t *testing.T) {
 	t.Parallel()
 	values := []entity.RuntimeEnvironmentValue{{Name: "APP_TEST_MODE", Value: "local"}}
@@ -52,6 +60,14 @@ func TestDecodeStoredRuntimeEnvironmentProjectsSecretDescriptor(t *testing.T) {
 	}
 }
 
+// TestRuntimeRevisionDigestBindsEnvironmentImageAndTools computes a baseline revision digest and
+// proves that exact image digest/reference or selected tool usage-hint changes alter it after
+// recomputing the environment digest. It checks content binding, not image provenance or
+// execution.
+// TestRuntimeRevisionDigestBindsEnvironmentImageAndTools вычисляет baseline revision digest и
+// доказывает, что изменение exact image digest/reference либо selected tool usage hint меняет его
+// после пересчёта environment digest. Проверяет content binding, а не image provenance либо
+// execution.
 func TestRuntimeRevisionDigestBindsEnvironmentImageAndTools(t *testing.T) {
 	t.Parallel()
 	image := runtimecontract.RuntimeEnvironmentImage{
@@ -101,6 +117,12 @@ func TestRuntimeRevisionDigestBindsEnvironmentImageAndTools(t *testing.T) {
 	}
 }
 
+// TestRuntimeExecutionProviderUsesClosedAdapterRegistry requires only the openai-codex definition
+// key to resolve to the openai runtime adapter and rejects empty, adapter-name and unknown keys.
+// No provider API is contacted.
+// TestRuntimeExecutionProviderUsesClosedAdapterRegistry требует разрешения только definition key
+// openai-codex в runtime adapter openai и отклоняет empty, adapter-name и unknown keys. Provider
+// API не вызывается.
 func TestRuntimeExecutionProviderUsesClosedAdapterRegistry(t *testing.T) {
 	t.Parallel()
 	provider, err := runtimeExecutionProvider("openai-codex")
@@ -114,6 +136,14 @@ func TestRuntimeExecutionProviderUsesClosedAdapterRegistry(t *testing.T) {
 	}
 }
 
+// TestRuntimeWorkspacePolicyIsBoundedAndServerOwned checks the fixed workspace root, revision,
+// quotas, denial-reason order and exact projection against the shared versioned policy. Restoring
+// all path rules must validate and preserve its digest; filesystem enforcement is outside this
+// pure regression.
+// TestRuntimeWorkspacePolicyIsBoundedAndServerOwned проверяет fixed workspace root, revision,
+// quotas, порядок denial reasons и точную проекцию shared versioned policy. Восстановление всех
+// path rules должно пройти validation и сохранить digest; filesystem enforcement не входит в pure
+// regression.
 func TestRuntimeWorkspacePolicyIsBoundedAndServerOwned(t *testing.T) {
 	policy := runtimeWorkspacePolicy()
 	if policy.Revision != 1 || policy.Root != "/workspace" || policy.MaximumWritableBytes != 1<<30 ||
@@ -137,6 +167,13 @@ func TestRuntimeWorkspacePolicyIsBoundedAndServerOwned(t *testing.T) {
 	}
 }
 
+// TestProviderCredentialRefreshValidationRequiresExactImmutableSecretBinding accepts one synthetic
+// fenced refresh descriptor and rejects uppercase digest, noncanonical Secret UUID/name and
+// missing fence mutations. This is shape validation only; it grants no lease authority or live
+// Secret access.
+// TestProviderCredentialRefreshValidationRequiresExactImmutableSecretBinding принимает один
+// synthetic fenced refresh descriptor и отклоняет uppercase digest, некорректные Secret UUID/name
+// и missing fence. Проверяет только shape; не выдаёт lease authority или live Secret access.
 func TestProviderCredentialRefreshValidationRequiresExactImmutableSecretBinding(t *testing.T) {
 	t.Parallel()
 	valid := command.ProviderCredentialRefreshInput{
@@ -165,6 +202,12 @@ func TestProviderCredentialRefreshValidationRequiresExactImmutableSecretBinding(
 	}
 }
 
+// TestDirectRootWithoutProcessNode allows only ErrNoRows with equal nonempty run/root IDs to
+// represent a direct root without a separate process node. Backend failure, child lineage and
+// missing identity must remain failures; no database is used.
+// TestDirectRootWithoutProcessNode допускает только ErrNoRows с равными непустыми run/root IDs как
+// direct root без отдельного process node. Backend failure, child lineage и missing identity
+// остаются отказами; БД не используется.
 func TestDirectRootWithoutProcessNode(t *testing.T) {
 	t.Parallel()
 
@@ -190,6 +233,12 @@ func TestDirectRootWithoutProcessNode(t *testing.T) {
 	}
 }
 
+// TestRuntimeSafeErrorCodeAcceptsMCPUnavailable checks that the closed completion-code classifier
+// accepts RUNTIME_MCP_UNAVAILABLE while rejecting an internal diagnostic lookalike. It does not
+// test an actual MCP outage.
+// TestRuntimeSafeErrorCodeAcceptsMCPUnavailable проверяет, что closed completion-code classifier
+// принимает RUNTIME_MCP_UNAVAILABLE и отклоняет похожий internal diagnostic. Реальный MCP outage
+// не проверяется.
 func TestRuntimeSafeErrorCodeAcceptsMCPUnavailable(t *testing.T) {
 	t.Parallel()
 
@@ -201,6 +250,12 @@ func TestRuntimeSafeErrorCodeAcceptsMCPUnavailable(t *testing.T) {
 	}
 }
 
+// TestRuntimeSafeErrorCodeAcceptsArtifactFailureOnly requires the public artifact-invalid
+// completion code and rejects its internal diagnostic lookalike. The assertion covers the closed
+// code boundary, not object scanning or storage.
+// TestRuntimeSafeErrorCodeAcceptsArtifactFailureOnly требует public artifact-invalid completion
+// code и отклоняет похожий internal diagnostic. Assertion проверяет closed code boundary, а не
+// object scanning либо storage.
 func TestRuntimeSafeErrorCodeAcceptsArtifactFailureOnly(t *testing.T) {
 	t.Parallel()
 	if !runtimeSafeErrorCode("RUNTIME_ARTIFACT_INVALID") || runtimeSafeErrorCode("RUNTIME_ARTIFACT_INTERNAL_DIAGNOSTIC") {
@@ -208,6 +263,12 @@ func TestRuntimeSafeErrorCodeAcceptsArtifactFailureOnly(t *testing.T) {
 	}
 }
 
+// TestAssistantTerminalTurnDoesNotChangeConversationTitles inspects the shipped terminal
+// conversation UPDATE for exact session/version/timestamp semantics and absence of title or
+// second-argument writes. This SQL-shape assertion does not execute a terminal transaction.
+// TestAssistantTerminalTurnDoesNotChangeConversationTitles проверяет shipped terminal conversation
+// UPDATE на exact session/version/timestamp semantics и отсутствие title либо second-argument
+// writes. SQL-shape assertion не выполняет terminal transaction.
 func TestAssistantTerminalTurnDoesNotChangeConversationTitles(t *testing.T) {
 	t.Parallel()
 	query := queryRuntimeCompleteexecutionUpdateAssistantConversationsVersionUpdatedAt
@@ -219,6 +280,12 @@ func TestAssistantTerminalTurnDoesNotChangeConversationTitles(t *testing.T) {
 	}
 }
 
+// TestDecodeRunUsageValidatesStoredTurnBreakdown decodes stored aggregate and per-turn token usage
+// into the exact expected totals, rejecting unknown fields, inconsistent totals and invalid turn
+// keys. It checks strict stored JSON handling without provider billing or live metering.
+// TestDecodeRunUsageValidatesStoredTurnBreakdown декодирует stored aggregate и per-turn token
+// usage в точные expected totals, отклоняя unknown fields, несогласованные totals и invalid turn
+// keys. Проверяет strict stored JSON handling без provider billing либо live metering.
 func TestDecodeRunUsageValidatesStoredTurnBreakdown(t *testing.T) {
 	t.Parallel()
 
@@ -254,6 +321,12 @@ func TestDecodeRunUsageValidatesStoredTurnBreakdown(t *testing.T) {
 	}
 }
 
+// TestFilterIntegrationGrantsCannotBypassEffectiveCapabilities filters mixed read/write grants by
+// the supplied effective capability set and requires only the read grant to remain. It is a local
+// projection regression, not proof of actor or grant authority.
+// TestFilterIntegrationGrantsCannotBypassEffectiveCapabilities фильтрует смешанные read/write
+// grants по переданному effective capability set и требует сохранения только read grant. Это local
+// projection regression, а не доказательство actor либо grant authority.
 func TestFilterIntegrationGrantsCannotBypassEffectiveCapabilities(t *testing.T) {
 	t.Parallel()
 	grants := []map[string]string{{"capabilityKey": "read", "operation": "mattermost.post.read"}, {"capabilityKey": "write", "operation": "mattermost.post.send"}}
@@ -263,6 +336,13 @@ func TestFilterIntegrationGrantsCannotBypassEffectiveCapabilities(t *testing.T) 
 	}
 }
 
+// TestRuntimeIntegrationGrantsExcludeSystemSubscriptions requires both callable and
+// capability-filtered projections to retain an ordinary read while excluding inbound,
+// gate-decision and empty operations sharing its capability. Broker subscriptions and actual
+// runtime grants are not created.
+// TestRuntimeIntegrationGrantsExcludeSystemSubscriptions требует от callable и capability-filtered
+// projections сохранить обычный read и исключить inbound, gate-decision и empty operations с той
+// же capability. Broker subscriptions и реальные runtime grants не создаются.
 func TestRuntimeIntegrationGrantsExcludeSystemSubscriptions(t *testing.T) {
 	t.Parallel()
 	grants := []map[string]string{

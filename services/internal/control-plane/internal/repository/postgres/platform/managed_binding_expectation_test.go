@@ -6,6 +6,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestManagedBindingExpectationIsExplicitAndClosed requires either explicit absence or an exact
+// revision/version expectation, rejecting mixed, missing, unsafe-integer and malformed revision
+// inputs.
+// TestManagedBindingExpectationIsExplicitAndClosed требует явное отсутствие либо точное ожидание
+// ревизии и версии, отклоняя смешанные, отсутствующие параметры, небезопасное целое и неверный ref
+// ревизии.
 func TestManagedBindingExpectationIsExplicitAndClosed(t *testing.T) {
 	for _, test := range []struct {
 		input entity.ManagedConfigurationConsumer

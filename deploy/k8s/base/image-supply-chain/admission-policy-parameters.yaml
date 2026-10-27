@@ -117,33 +117,5 @@ metadata:
   labels:
     app.kubernetes.io/name: kodex-image-admission
     kodex.dev/owner-intent: "true"
-spec:
-  orchestrationRevision: "0000000000000000000000000000000000000000"
-  toolsImage: admission-tools.invalid/kodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
-  admissionImage: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
-  authorityImage: ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
-  promotionRepository: kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003/kodex/roles
-  promotionEvidenceRepository: kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003/kodex/evidence
-  evidenceRepository: kodex-image-registry-evidence.kodex-system.svc.cluster.local:5007/evidence/role-image-admission
-  promotedPullRepository: registry-pull.invalid/kodex/roles
-  pullRegistryHost: registry-pull.invalid
-  pullCredentialGeneration: "0"
-  nodeReadbackImage: registry-pull.invalid/kodex/agent-runner@sha256:0000000000000000000000000000000000000000000000000000000000000000
-  roleImageInputRepository: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/role-image-inputs
-  policyRevision: "0"
-  policySHA256: "0000000000000000000000000000000000000000000000000000000000000000"
-  builderIdentity: spiffe://kodex.local/ns/kodex-system/sa/role-image-builder
-  buildType: https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md
-  trustedRoleBaseRepository: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/agent-runner
-  trustedRoleBaseDigest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-  builderSHA256: "0168606be2315b7c807a03b3d8aa79beefdb31c98740cebdffdfeebf31190c9f"
-  frontendSHA256: "0000000000000000000000000000000000000000000000000000000000000000"
-  toolchainSHA256: "0000000000000000000000000000000000000000000000000000000000000000"
-  roleRuntimeContractRevision: "3"
-  roleRuntimeContractSHA256: "0000000000000000000000000000000000000000000000000000000000000000"
-  providerAppArmorProfile: ""
-  scannerIdentity: kodex-image-scanner
-  signerIdentity: kodex-image-signer
-  admissionOwnerIdentity: kodex-image-admission-owner
-  promotionIdentity: kodex-image-promotion-writer
-  requiredTools: base64,cmp,cosign,grype,image-admission-bridge,image-tool-inventory-validator,image-vulnerability-report-validator,jq,regctl,sha256sum,syft,tr,wc
+# Значения spec проецируются из ConfigMap.data при канонической сборке Kustomize.
+spec: {}

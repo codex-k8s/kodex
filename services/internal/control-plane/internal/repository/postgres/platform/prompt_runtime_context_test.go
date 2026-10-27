@@ -12,6 +12,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// workflowPromptFixture returns a minimal prompt snapshot with explicit template/locale, preserved
+// structured input and file count, and matching delegation capabilities.
+// workflowPromptFixture возвращает минимальный снимок prompt с явными шаблоном и языком,
+// сохранёнными структурированным входом и количеством файлов и совпадающими capability
+// делегирования.
 func workflowPromptFixture() entity.PromptMaterializationSnapshot {
 	return entity.PromptMaterializationSnapshot{
 		ServiceTemplateRevision: promptservice.ServiceTemplateRevision, Locale: "en",
@@ -25,6 +30,12 @@ func workflowPromptFixture() entity.PromptMaterializationSnapshot {
 	}
 }
 
+// TestWorkflowPromptPublishedDAGEveryStage checks every coordinator/step snapshot carries the full
+// published DAG and exact stage pins, preserves existing context, redacts safe preview and
+// deep-copies mutable dependency/gate slices.
+// TestWorkflowPromptPublishedDAGEveryStage проверяет полный опубликованный DAG и точные привязки
+// этапа в каждом снимке координатора и шага, сохранение контекста, скрытие безопасного
+// предпросмотра и глубокое копирование изменяемых срезов зависимостей и решений.
 func TestWorkflowPromptPublishedDAGEveryStage(t *testing.T) {
 	version := validWorkflowFixture()
 	version.Steps[1].Parallel, version.Steps[1].ParallelGroup = true, 2
@@ -67,6 +78,12 @@ func TestWorkflowPromptPublishedDAGEveryStage(t *testing.T) {
 	}
 }
 
+// TestWorkflowPromptPublishedDAGDigestsAndCompactness checks assignment/dependency/revision
+// changes alter data digests without changing the service template digest and keeps a
+// thirty-nine-stage metadata projection bounded without private instruction bodies.
+// TestWorkflowPromptPublishedDAGDigestsAndCompactness проверяет изменение дайджестов данных при
+// смене назначения, зависимости и ревизии без смены дайджеста служебного шаблона и ограничивает
+// проекцию метаданных тридцати девяти этапов без закрытых тел инструкций.
 func TestWorkflowPromptPublishedDAGDigestsAndCompactness(t *testing.T) {
 	version := validWorkflowFixture()
 	materialize := func(version entity.WorkflowVersion) promptservice.Materialization {

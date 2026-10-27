@@ -9,6 +9,12 @@ import (
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 )
 
+// testSTTCatalogAuthority checks owner-only organization STT catalog authority before
+// configuration and exact trusted-profile operations/workloads, rejecting protected-profile
+// mixing, project scope and forged owner claims.
+// testSTTCatalogAuthority проверяет полномочия владельца каталога STT организации до настройки и
+// точные операции и workload доверенного профиля, отклоняя смешение с защищённым профилем, область
+// проекта и поддельное заявление владельца.
 func testSTTCatalogAuthority(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	owner := platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: sttModelCatalogOperation, OwnerClaim: true}

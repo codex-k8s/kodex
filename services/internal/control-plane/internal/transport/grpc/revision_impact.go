@@ -8,6 +8,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -16,11 +17,9 @@ import (
 // PreparePromptTemplateImpact передаёт ссылки конфигурации и ревизии отдельной команде подготовки
 // влияния и преобразует полученный план.
 func (s *Server) PreparePromptTemplateImpact(ctx context.Context, request *cp.PreparePromptTemplateImpactRequest) (*cp.PreparePromptTemplateImpactResponse, error) {
-	result, err := execute(ctx, s.service, cp.PlatformCommandService_PreparePromptTemplateImpact_FullMethodName, command.PreparePromptTemplateImpact, request.GetMutation(), command.ManagedConfigurationInput{ConfigurationRef: request.GetConfigurationRef(), RevisionRef: request.GetRevisionRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &cp.PreparePromptTemplateImpactResponse{Plan: castRevisionImpactPlan(result.RevisionImpactPlan)}, nil
+	return executeResponse(ctx, s.service, cp.PlatformCommandService_PreparePromptTemplateImpact_FullMethodName, command.PreparePromptTemplateImpact, request.GetMutation(), command.ManagedConfigurationInput{ConfigurationRef: request.GetConfigurationRef(), RevisionRef: request.GetRevisionRef()}, func(result command.Result) *cp.PreparePromptTemplateImpactResponse {
+		return &cp.PreparePromptTemplateImpactResponse{Plan: castRevisionImpactPlan(result.RevisionImpactPlan)}
+	})
 }
 
 // PrepareInstructionsImpact passes the agent locator to the dedicated instruction-impact command
@@ -28,11 +27,9 @@ func (s *Server) PreparePromptTemplateImpact(ctx context.Context, request *cp.Pr
 // PrepareInstructionsImpact передаёт ссылку агента отдельной команде влияния инструкции с
 // principal точного RPC и mutation.
 func (s *Server) PrepareInstructionsImpact(ctx context.Context, request *cp.PrepareInstructionsImpactRequest) (*cp.PrepareInstructionsImpactResponse, error) {
-	result, err := execute(ctx, s.service, cp.PlatformCommandService_PrepareInstructionsImpact_FullMethodName, command.PrepareInstructionsImpact, request.GetMutation(), command.AgentInput{Ref: request.GetAgentRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &cp.PrepareInstructionsImpactResponse{Plan: castRevisionImpactPlan(result.RevisionImpactPlan)}, nil
+	return executeResponse(ctx, s.service, cp.PlatformCommandService_PrepareInstructionsImpact_FullMethodName, command.PrepareInstructionsImpact, request.GetMutation(), command.AgentInput{Ref: request.GetAgentRef()}, func(result command.Result) *cp.PrepareInstructionsImpactResponse {
+		return &cp.PrepareInstructionsImpactResponse{Plan: castRevisionImpactPlan(result.RevisionImpactPlan)}
+	})
 }
 
 // PrepareEnvironmentDraftImpact passes the draft locator through the dedicated environment-impact
@@ -40,11 +37,9 @@ func (s *Server) PrepareInstructionsImpact(ctx context.Context, request *cp.Prep
 // PrepareEnvironmentDraftImpact передаёт ссылку черновика отдельной команде влияния среды и
 // возвращает представление её плана.
 func (s *Server) PrepareEnvironmentDraftImpact(ctx context.Context, request *cp.PrepareEnvironmentDraftImpactRequest) (*cp.PrepareEnvironmentDraftImpactResponse, error) {
-	result, err := execute(ctx, s.service, cp.PlatformCommandService_PrepareEnvironmentDraftImpact_FullMethodName, command.PrepareEnvironmentDraftImpact, request.GetMutation(), command.RuntimeEnvironmentDraftInput{DraftRef: request.GetDraftRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &cp.PrepareEnvironmentDraftImpactResponse{Plan: castRevisionImpactPlan(result.RevisionImpactPlan)}, nil
+	return executeResponse(ctx, s.service, cp.PlatformCommandService_PrepareEnvironmentDraftImpact_FullMethodName, command.PrepareEnvironmentDraftImpact, request.GetMutation(), command.RuntimeEnvironmentDraftInput{DraftRef: request.GetDraftRef()}, func(result command.Result) *cp.PrepareEnvironmentDraftImpactResponse {
+		return &cp.PrepareEnvironmentDraftImpactResponse{Plan: castRevisionImpactPlan(result.RevisionImpactPlan)}
+	})
 }
 
 // GetRevisionImpactPlan reads the authorized plan page and projects consumer outcomes and
@@ -52,23 +47,22 @@ func (s *Server) PrepareEnvironmentDraftImpact(ctx context.Context, request *cp.
 // GetRevisionImpactPlan читает авторизованную страницу плана и преобразует исходы потребителей и
 // привязки результата с общим числом и токеном продолжения.
 func (s *Server) GetRevisionImpactPlan(ctx context.Context, request *cp.GetRevisionImpactPlanRequest) (*cp.GetRevisionImpactPlanResponse, error) {
-	p, err := principal(ctx, cp.PlatformQueryService_GetRevisionImpactPlan_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	result, err := s.service.GetRevisionImpactPlan(ctx, p, request.GetPlanRef(), request.GetQuery(), page(request.GetPage()))
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &cp.GetRevisionImpactPlanResponse{Plan: castRevisionImpactPlan(&result.Plan), Total: result.Total, Page: &cp.PageInfo{NextPageToken: result.NextPageToken}}
-	for _, item := range result.Items {
-		response.Items = append(response.Items, &cp.RevisionImpactItem{Ref: item.Ref, ProjectRef: item.ProjectRef, ScopeKind: roleImageScopeKind(item.ScopeKind), OrganizationRef: item.OrganizationRef,
-			ConsumerKind: cp.RevisionImpactConsumerKind(cp.RevisionImpactConsumerKind_value["REVISION_IMPACT_CONSUMER_KIND_"+item.ConsumerKind]),
-			ConsumerRef:  item.ConsumerRef, ConsumerVersion: item.ConsumerVersion, BindingRef: item.BindingRef, BindingVersion: item.BindingVersion,
-			SourceRevisionRef: item.SourceRevisionRef, Outcome: cp.RevisionImpactOutcome(cp.RevisionImpactOutcome_value["REVISION_IMPACT_OUTCOME_"+item.Outcome]),
-			ResultRevisionRef: item.ResultRevisionRef, ResultBindingRef: item.ResultBindingRef, ResultBindingVersion: item.ResultBindingVersion, ResultConsumerVersion: item.ResultConsumerVersion})
-	}
-	return response, nil
+	return queryResponse(ctx, cp.PlatformQueryService_GetRevisionImpactPlan_FullMethodName, func(p value.Principal) (*cp.GetRevisionImpactPlanResponse, error) {
+		result, err := s.service.GetRevisionImpactPlan(ctx, p, request.GetPlanRef(), request.GetQuery(), page(request.GetPage()))
+		if err != nil {
+			return nil, err
+		}
+		response := &cp.GetRevisionImpactPlanResponse{Plan: castRevisionImpactPlan(&result.Plan), Total: result.Total, Page: &cp.PageInfo{NextPageToken: result.NextPageToken}}
+		for _, item := range result.Items {
+			response.Items = append(response.Items, &cp.RevisionImpactItem{Ref: item.Ref, ProjectRef: item.ProjectRef, ScopeKind: roleImageScopeKind(item.ScopeKind), OrganizationRef: item.OrganizationRef,
+				ConsumerKind: cp.RevisionImpactConsumerKind(cp.RevisionImpactConsumerKind_value["REVISION_IMPACT_CONSUMER_KIND_"+item.ConsumerKind]),
+				ConsumerRef:  item.ConsumerRef, ConsumerVersion: item.ConsumerVersion, BindingRef: item.BindingRef, BindingVersion: item.BindingVersion,
+				SourceRevisionRef: item.SourceRevisionRef, Outcome: cp.RevisionImpactOutcome(cp.RevisionImpactOutcome_value["REVISION_IMPACT_OUTCOME_"+item.Outcome]),
+				ResultRevisionRef: item.ResultRevisionRef, ResultBindingRef: item.ResultBindingRef, ResultBindingVersion: item.ResultBindingVersion, ResultConsumerVersion: item.ResultConsumerVersion})
+		}
+		return response, nil
+
+	})
 }
 
 // validatePublishedImpactResult requires an applied version-two plan with exact

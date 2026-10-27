@@ -15,12 +15,26 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// queryResumableSessionFixtureState changes only the selected fixture Session state to test cursor
+// invalidation and cleanup.
+// queryResumableSessionFixtureState изменяет состояние только выбранной тестовой Session для
+// проверки аннулирования курсора и очистки.
+//
 //go:embed testdata/sql/resumable_session_state.sql
 var queryResumableSessionFixtureState string
 
+// queryResumableAgentFixtureEnabled toggles the fixture target agent to test continuation
+// eligibility and restore its enabled state.
+// queryResumableAgentFixtureEnabled переключает тестового целевого агента для проверки доступности
+// продолжения и восстановления его включённого состояния.
+//
 //go:embed testdata/sql/resumable_agent_enabled.sql
 var queryResumableAgentFixtureEnabled string
 
+// testResumableTargetChange temporarily disables the target agent, verifies catalog/action denial
+// and restores the fixture even after context cancellation.
+// testResumableTargetChange временно отключает целевого агента, проверяет отсутствие в каталоге и
+// запрет действия, затем восстанавливает fixture даже при отмене контекста.
 func testResumableTargetChange(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, run entity.Run) {
 	t.Helper()
 	if _, err := repository.pool.Exec(ctx, queryResumableAgentFixtureEnabled, run.Target.Ref, false); err != nil {
@@ -38,6 +52,10 @@ func testResumableTargetChange(t *testing.T, ctx context.Context, repository *Re
 	}
 }
 
+// testResumableSessionPagination checks latest-Run-per-Session pagination, immutable target
+// affinity, actor/filter cursor binding and version mismatch after terminal Session closure.
+// testResumableSessionPagination проверяет пагинацию по последнему Run каждой Session, неизменную
+// целевую привязку, связь курсора с actor и фильтрами и конфликт версии после закрытия Session.
 func testResumableSessionPagination(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner, worker, reader value.Principal, original entity.Run) {
 	t.Helper()
 	other := createLifecycleAgent(t, ctx, service, owner, original.ProjectRef, "file-target-other-continuation-agent", "Other continuation target")
@@ -116,6 +134,11 @@ func testResumableSessionPagination(t *testing.T, ctx context.Context, repositor
 	}
 }
 
+// testResumableSessionAuthority creates a read-only project principal and proves run.view alone
+// grants neither continuation listings/actions nor AddSessionTurn authority.
+// testResumableSessionAuthority создаёт principal с правами чтения проекта и доказывает, что
+// одного run.view недостаточно для каталога продолжения, соответствующих действий и
+// AddSessionTurn.
 func testResumableSessionAuthority(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, run entity.Run) value.Principal {
 	t.Helper()
 	input := platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000008499", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
@@ -157,6 +180,12 @@ func testResumableSessionAuthority(t *testing.T, ctx context.Context, repository
 	return reader
 }
 
+// testResumableSessionCatalog checks continuation eligibility across resumable/ordinary catalogs,
+// single Run, graph, attachments and events, including cancellation and closed target-filter
+// boundaries.
+// testResumableSessionCatalog проверяет доступность продолжения в специализированном и обычном
+// каталогах, единичном Run, графе, вложениях и событиях, включая отмену и закрытые границы целевых
+// фильтров.
 func testResumableSessionCatalog(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, run entity.Run, available bool) {
 	t.Helper()
 	filter := query.Filter{ProjectRef: run.ProjectRef, Query: "Verify immutable provider account affinity.", ResumableSessionsOnly: true, Page: query.Page{Size: 1}}

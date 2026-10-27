@@ -6,11 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
@@ -22,24 +20,79 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// queryAssistantToolPhaseCoordinates embeds organization/node/generation lookup for an exact
+// fixture RuntimeRevision ref. It supplies trusted negative-test coordinates in the isolated
+// database, not caller-issued execution authority.
+// queryAssistantToolPhaseCoordinates встраивает organization/node/generation lookup точного
+// fixture RuntimeRevision ref. Даёт trusted negative-test coordinates изолированной БД, а не
+// caller-issued execution authority.
+//
 //go:embed testdata/sql/runtime_assistant_tool_phase_coordinates.sql
 var queryAssistantToolPhaseCoordinates string
 
+// queryAssistantToolPhaseSnapshotFixture embeds substitution of one immutable-snapshot JSON field
+// only inside the disposable administrator transaction. The test enables its dedicated guard
+// override and always rolls back; production snapshot mutation is not enabled.
+// queryAssistantToolPhaseSnapshotFixture встраивает подмену одного immutable-snapshot JSON field
+// только внутри disposable administrator transaction. Тест включает свой guard override и всегда
+// откатывается; production snapshot mutation не разрешается.
+//
 //go:embed testdata/sql/runtime_assistant_tool_phase_snapshot_fixture.sql
 var queryAssistantToolPhaseSnapshotFixture string
 
+// queryAssistantToolPhaseAllowSnapshotFixture embeds transaction-local disabling of the
+// runtime-revision protection trigger for deliberately impossible negative fixtures. It is
+// restricted to the isolated test administrator and undone by rollback, never used by the runtime
+// command path.
+// queryAssistantToolPhaseAllowSnapshotFixture встраивает transaction-local отключение
+// runtime-revision protection trigger для намеренно невозможных negative fixtures. Ограничено
+// isolated test administrator и отменяется rollback; runtime command path его не использует.
+//
 //go:embed testdata/sql/runtime_assistant_tool_phase_allow_snapshot_fixture.sql
 var queryAssistantToolPhaseAllowSnapshotFixture string
 
+// queryAssistantToolPhaseConversationFixture embeds archival and purge metadata for one fixture
+// conversation within the rollback-only negative transaction. It checks inactive-conversation
+// eligibility without running production deletion or cleanup.
+// queryAssistantToolPhaseConversationFixture встраивает archive и purge metadata одной fixture
+// conversation внутри rollback-only negative transaction. Проверяет inactive-conversation
+// eligibility без production deletion или cleanup.
+//
 //go:embed testdata/sql/runtime_assistant_tool_phase_conversation_fixture.sql
 var queryAssistantToolPhaseConversationFixture string
 
+// queryAssistantToolPhaseActorFixture embeds deactivation of the root initiator resolved from an
+// exact fixture RuntimeRevision. The surrounding rollback restores that actor after the
+// eligibility assertion; no caller actor ref becomes authority.
+// queryAssistantToolPhaseActorFixture встраивает деактивацию root initiator, разрешённого из
+// точной fixture RuntimeRevision. Окружающий rollback восстанавливает actor после eligibility
+// assertion; caller actor ref не становится authority.
+//
 //go:embed testdata/sql/runtime_assistant_tool_phase_actor_fixture.sql
 var queryAssistantToolPhaseActorFixture string
 
+// queryAssistantToolPhaseProjectFixture embeds archival of one fixture project for an isolated
+// rollback-only eligibility check. It neither performs the canonical project lifecycle command nor
+// changes production permissions.
+// queryAssistantToolPhaseProjectFixture встраивает archival одного fixture project для isolated
+// rollback-only eligibility check. Не выполняет canonical project lifecycle command и не меняет
+// production permissions.
+//
 //go:embed testdata/sql/runtime_assistant_tool_phase_project_fixture.sql
 var queryAssistantToolPhaseProjectFixture string
 
+// TestRuntimeAssistantRecordToolCallPhaseComponent checks PROJECT/SYSTEM/ordinary tool activity
+// authors and execution pins, terminal revision conflicts, exact own-read leases and absence of
+// implied integration grants. Rollback-only administrator fixtures reject corrupt
+// scope/profile/agent/project and inactive owner dependencies; canonical cancellation then rejects
+// all old tool/own-read calls. Runtime/provider activity is synthetic, the component suite
+// requires an isolated DSN and administrator and does not prove browser or live execution.
+// TestRuntimeAssistantRecordToolCallPhaseComponent проверяет PROJECT/SYSTEM/ordinary tool activity
+// authors и execution pins, terminal revision conflicts, точные own-read leases и отсутствие
+// подразумеваемых integration grants. Rollback-only administrator fixtures отклоняют повреждённые
+// scope/profile/agent/project и inactive owner dependencies; canonical cancellation затем
+// отклоняет прежние tool/own-read calls. Runtime/provider activity синтетическая, component suite
+// требует isolated DSN и administrator и не доказывает browser или live execution.
 func TestRuntimeAssistantRecordToolCallPhaseComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
@@ -48,19 +101,7 @@ func TestRuntimeAssistantRecordToolCallPhaseComponent(t *testing.T) {
 		t.Fatal("open isolated tool phase PostgreSQL")
 	}
 	defer pool.Close()
-	r, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = r.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
-		t.Fatal(err)
-	}
-	if err = r.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3, StagingRepository: "registry.invalid/staging", PromotedRepository: "registry.invalid/roles", DefaultImageReference: "registry.invalid/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
-		t.Fatal(err)
-	}
-	if err = r.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
+	r := newSyntheticRuntimeComponentRepository(t, ctx, pool)
 	seedObservedCatalogFixture(t, ctx, r)
 	principal := func(workload, operation, actor, tenant string) value.Principal {
 		return resolvedTestPrincipal(t, ctx, r, port.ProofPrincipalInput{ExternalActorID: actor, ExternalTenantID: tenant, CallerWorkload: workload, Operation: operation}, workload)
@@ -72,14 +113,7 @@ func TestRuntimeAssistantRecordToolCallPhaseComponent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	execute := func(kind command.Kind, actor value.Principal, key string, version *int64, payload any) command.Result {
-		t.Helper()
-		result, err := service.Execute(ctx, command.Command{Kind: kind, Principal: actor, Mutation: value.Mutation{IdempotencyKey: "tool-phase-" + key, ExpectedVersion: version}, Payload: payload})
-		if err != nil {
-			t.Fatalf("%s %s: %v", kind, key, err)
-		}
-		return result
-	}
+	execute := newComponentCommandExecutor(t, ctx, service, "tool-phase-")
 	project := execute(command.CreateProject, owner, "project", nil, command.ProjectInput{Name: "Tool phase project", Language: "en"}).Project
 	profile := execute(command.CreateProjectAssistant, owner, "profile", nil, command.ProjectAssistantInput{ProjectRef: project.Ref, Name: "Own helper", Purpose: "Synthetic tool phase", Instructions: "Use only approved project operations."}).ProjectAssistant
 	conversation := execute(command.CreateAssistantConversation, owner, "conversation", nil, command.AssistantConversationInput{AssistantScope: "PROJECT", ProjectRef: project.Ref}).Conversation
@@ -92,10 +126,26 @@ func TestRuntimeAssistantRecordToolCallPhaseComponent(t *testing.T) {
 		}
 		return items[0]
 	}
+	metadataActor := principal("runtime-controller", "platform.runtime.assistant.metadata.propose", "kodex-system-subject", "kodex-installation")
+	checkMetadata := func(key, conversationRef, title string, item map[string]any) {
+		t.Helper()
+		input := command.ProposeAssistantMetadataInput{LeaseRef: stringMap(item, "leaseRef"), Fence: stringMap(item, "fence"), Generation: item["generation"].(int64), Title: title}
+		invalid := input
+		invalid.Fence = "stale-fixture"
+		if _, err := service.Execute(ctx, command.Command{Kind: command.ProposeAssistantMetadata, Principal: metadataActor,
+			Mutation: value.Mutation{IdempotencyKey: "tool-phase-metadata-stale-" + key}, Payload: invalid}); !errors.Is(err, errs.ErrForbidden) {
+			t.Fatalf("stale metadata lease accepted: %v", err)
+		}
+		result := execute(command.ProposeAssistantMetadata, metadataActor, "metadata-"+key, nil, input)
+		if result.Conversation == nil || result.Conversation.Ref != conversationRef || result.Conversation.Title != title || result.Conversation.TitleSource != "AGENT_PROPOSED" {
+			t.Fatal("assistant metadata lost its conversation or title")
+		}
+	}
 	lease := claim("project-claim")
 	if stringMap(lease, "assistantScope") != "PROJECT" || stringMap(lease, "assistantProfileRef") != profile.Ref || stringMap(lease, "agentRef") != profile.AgentRef {
 		t.Fatal("claim lost exact project assistant pins")
 	}
+	checkMetadata("project", conversation.Ref, "Synthetic project summary", lease)
 	callFor := func(item map[string]any, ref, tool, capability string) command.RunToolCallInput {
 		return command.RunToolCallInput{LeaseRef: stringMap(item, "leaseRef"), Fence: stringMap(item, "fence"), Generation: runtimeRevisionMapInt64(item, "generation"), CallRef: ref, Tool: tool, CapabilityRef: capability, SafeParameters: map[string]any{}, State: "RUNNING", Revision: 1}
 	}
@@ -171,6 +221,7 @@ func TestRuntimeAssistantRecordToolCallPhaseComponent(t *testing.T) {
 	systemConversation := execute(command.CreateAssistantConversation, owner, "system-conversation", nil, command.AssistantConversationInput{AssistantScope: "SYSTEM"}).Conversation
 	execute(command.AddAssistantTurn, owner, "system-turn", nil, command.AssistantTurnInput{ConversationRef: systemConversation.Ref, Content: "Inspect system configuration", DeliveryMode: "QUEUE"})
 	systemLease := claim("system-claim")
+	checkMetadata("system", systemConversation.Ref, "Synthetic system summary", systemLease)
 	systemCall := callFor(systemLease, "tcl_system_phase", "get_configuration_catalog", "platform.configuration.read")
 	systemEvent := execute(command.RecordRunToolCall, toolActor, "system-tool", nil, systemCall).Event
 	if systemEvent.Actor.Kind != "SYSTEM_ASSISTANT" || systemEvent.Actor.Ref != systemConversation.AssistantRef {

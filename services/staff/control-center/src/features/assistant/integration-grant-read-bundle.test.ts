@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  createRenderer,
   defineComponent,
   h,
   ssrContextKey,
@@ -8,6 +7,7 @@ import {
   type Ref,
   type SetupContext,
 } from "vue";
+import { createLifecycleTestRenderer } from "@/test-utils/lifecycle-renderer";
 import type {
   IntegrationGrantCapabilityCandidatePage,
   ListIntegrationGrantCapabilityCandidatesData,
@@ -106,20 +106,7 @@ function mountedBatch(count = 19) {
     loading: Ref<boolean>;
     candidate: Ref<unknown>;
   }[] = [];
-  const renderer = createRenderer<Record<string, never>, Record<string, never>>(
-    {
-      patchProp() {},
-      insert() {},
-      remove() {},
-      createElement: () => ({}),
-      createText: () => ({}),
-      createComment: () => ({}),
-      setText() {},
-      setElementText() {},
-      parentNode: () => null,
-      nextSibling: () => null,
-    },
-  );
+  const renderer = createLifecycleTestRenderer();
   const original = (
     GrantForm as unknown as {
       setup: (

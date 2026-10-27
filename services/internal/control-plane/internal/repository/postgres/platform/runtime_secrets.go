@@ -338,15 +338,7 @@ func (repository *Repository) PrepareRuntimeSecretOperation(ctx context.Context,
 // runtimeSecretOperationTransaction resolves the verified principal's scope before opening a serializable secret-operation transaction. It maps only BeginTx failure to Unavailable; callers retain permission checks, rollback, locks, owner revalidation, audit and commit.
 // runtimeSecretOperationTransaction разрешает область проверенного principal перед открытием сериализуемой транзакции операции секрета. Только отказ BeginTx заменяется на Unavailable; проверки полномочий, rollback, блокировки, повторная проверка владельца, аудит и commit остаются у вызывающих методов.
 func (repository *Repository) runtimeSecretOperationTransaction(ctx context.Context, principal value.Principal) (scope, pgx.Tx, error) {
-	current, err := repository.resolveScope(ctx, principal)
-	if err != nil {
-		return scope{}, nil, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
-	if err != nil {
-		return scope{}, nil, errs.ErrUnavailable
-	}
-	return current, tx, nil
+	return repository.beginScopedTransaction(ctx, principal, pgx.TxOptions{IsoLevel: pgx.Serializable})
 }
 
 // prepareRuntimeSecretTarget locks or creates the metadata target within the resolved organization/project and checks action-specific access before returning it. CREATE may insert PROVISIONING metadata; existing secret refs and caller project scope never independently confer authority.

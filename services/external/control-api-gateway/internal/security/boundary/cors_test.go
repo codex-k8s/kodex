@@ -360,9 +360,9 @@ func TestSessionRenewalRunsOnlyAfterCompleteSecurityBoundary(t *testing.T) {
 	}
 }
 
-// TestRevokedBrowserSessionIsRejected ensures a revoked exact browser-session identifier returns 401 without reaching the protected handler.
-// TestRevokedBrowserSessionIsRejected проверяет ответ 401 для отозванного точного идентификатора браузерной сессии без допуска защищённого обработчика.
-func TestRevokedBrowserSessionIsRejected(t *testing.T) {
+// revocationSessionFixture creates the same fresh synthetic browser/OIDC bindings for revocation failure tests: revision seven, a SHA-256-bound CSRF value and the original cookie/principal lifetimes. It does not authenticate or persist a real session.
+// revocationSessionFixture создаёт прежние свежие тестовые привязки браузерной и OIDC-сессии для отказов отзыва: revision семь, CSRF с SHA-256 и исходные сроки cookie/principal. Реальную сессию не проверяет и не сохраняет.
+func revocationSessionFixture() (string, session.Claims, oidcauth.Principal) {
 	now := time.Now().UTC().Truncate(time.Second)
 	csrf := strings.Repeat("c", 43)
 	csrfDigest := sha256.Sum256([]byte(csrf))
@@ -375,6 +375,13 @@ func TestRevokedBrowserSessionIsRejected(t *testing.T) {
 		Subject: claims.Subject, OrganizationID: claims.OrganizationID, SessionID: claims.OIDCSessionID,
 		SessionRevision: claims.SessionRevision, ExpiresAt: now.Add(time.Hour),
 	}
+	return csrf, claims, principal
+}
+
+// TestRevokedBrowserSessionIsRejected ensures a revoked exact browser-session identifier returns 401 without reaching the protected handler.
+// TestRevokedBrowserSessionIsRejected проверяет ответ 401 для отозванного точного идентификатора браузерной сессии без допуска защищённого обработчика.
+func TestRevokedBrowserSessionIsRejected(t *testing.T) {
+	csrf, claims, principal := revocationSessionFixture()
 	store := &fakeSessionStore{claims: claims}
 	revocations := &fakeRevocationStore{revoked: true}
 	security := testBoundaryWithRevocations(t, &fakeOIDCVerifier{principal: principal}, store, revocations)
@@ -392,18 +399,7 @@ func TestRevokedBrowserSessionIsRejected(t *testing.T) {
 // TestRevocationStoreFailureRejectsBrowserSession ensures an unavailable revocation lookup produces 503 and never treats missing validation as successful authentication.
 // TestRevocationStoreFailureRejectsBrowserSession проверяет ответ 503 при недоступности поиска отзыва, не позволяя считать отсутствие проверки успешным входом.
 func TestRevocationStoreFailureRejectsBrowserSession(t *testing.T) {
-	now := time.Now().UTC().Truncate(time.Second)
-	csrf := strings.Repeat("c", 43)
-	csrfDigest := sha256.Sum256([]byte(csrf))
-	claims := session.Claims{
-		Subject: uuid.NewString(), OrganizationID: uuid.NewString(), OIDCSessionID: uuid.NewString(),
-		SessionRevision: 7, SessionID: uuid.NewString(), Bearer: "bearer",
-		CSRFHash: hex.EncodeToString(csrfDigest[:]), IssuedAt: now.Add(-time.Minute).Unix(), ExpiresAt: now.Add(14 * time.Minute).Unix(),
-	}
-	principal := oidcauth.Principal{
-		Subject: claims.Subject, OrganizationID: claims.OrganizationID, SessionID: claims.OIDCSessionID,
-		SessionRevision: claims.SessionRevision, ExpiresAt: now.Add(time.Hour),
-	}
+	csrf, claims, principal := revocationSessionFixture()
 	revocations := &fakeRevocationStore{revokedErr: errors.New("NATS unavailable")}
 	security := testBoundaryWithRevocations(t, &fakeOIDCVerifier{principal: principal}, &fakeSessionStore{claims: claims}, revocations)
 	request := authenticatedRequest(http.MethodGet, csrf)

@@ -1,3 +1,4 @@
+import { installSyntheticCsrf } from "./fixtures/browser-session";
 import { syntheticRuntimeConfig } from "./synthetic-runtime-route";
 import { expect, test } from "@playwright/test";
 
@@ -10,16 +11,7 @@ for (const project of [false, true])
       let queries = 0;
       const errors: string[] = [];
       page.on("pageerror", () => errors.push("PAGE_ERROR"));
-      await context.addCookies([
-        {
-          name: "__Host-kodex-csrf",
-          value: "s".repeat(43),
-          domain: "kodex.test",
-          path: "/",
-          secure: true,
-          sameSite: "Strict",
-        },
-      ]);
+      await installSyntheticCsrf(context, "s");
       await page.route("https://kodex.test/**", async (route) => {
         const url = new URL(route.request().url());
         if (url.pathname === "/config/runtime-config.json") {

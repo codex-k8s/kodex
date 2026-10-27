@@ -1,3 +1,5 @@
+import { runtimePolicyFixture } from "@/test-utils/runtime-policy-fixture";
+import { createDeferred } from "@/test-utils/create-deferred";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -39,25 +41,15 @@ const runtimeImage = {
   digest: "f".repeat(64),
 };
 
-const runtimePolicy = {
-  resources: defaultRuntimeEnvironmentPolicy().resources,
-  volumes: [],
-  network: {
-    denyByDefault: true,
-    egress: [
-      { destination: "DNS", protocol: "TCP", port: 53 },
-      { destination: "DNS", protocol: "UDP", port: 53 },
-      { destination: "PROVIDER_PROXY", protocol: "TCP", port: 8084 },
-      { destination: "RUNTIME_CALLBACK", protocol: "TCP", port: 8444 },
-    ],
-    webAccess: { mode: "NONE", rules: [] },
+const runtimePolicy = runtimePolicyFixture(
+  defaultRuntimeEnvironmentPolicy().resources,
+  {
+    resourcesDigest: "1".repeat(64),
+    volumesDigest: "2".repeat(64),
+    networkDigest: "3".repeat(64),
+    rbacDigest: "4".repeat(64),
   },
-  kubernetesAccess: { kind: "NONE", namespace: "kodex-runtime" },
-  resourcesDigest: "1".repeat(64),
-  volumesDigest: "2".repeat(64),
-  networkDigest: "3".repeat(64),
-  rbacDigest: "4".repeat(64),
-} satisfies RuntimeEnvironmentPolicy;
+) satisfies RuntimeEnvironmentPolicy;
 
 vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   ...(await importOriginal<
@@ -98,10 +90,7 @@ function deferred<T>(): {
   promise: Promise<T>;
   resolve: (value: T) => void;
 } {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((ready) => {
-    resolve = ready;
-  });
+  const { promise, resolve } = createDeferred<T>();
   return { promise, resolve };
 }
 
@@ -192,26 +181,30 @@ describe("runtime store", () => {
 
   beforeEach(() => {
     setActivePinia(createPinia());
-    getAgentRuntimeConfigurationMock.mockReset();
-    publishAgentRuntimeConfigurationMock.mockReset();
-    createConfigOverlayDraftMock.mockReset();
-    validateConfigOverlayDraftMock.mockReset();
-    publishConfigOverlayDraftMock.mockReset();
-    rollbackConfigOverlayMock.mockReset();
-    bindAgentRuntimeEnvironmentMock.mockReset();
-    listAgentRuntimeConfigurationVersionsMock.mockReset();
-    createRuntimeEnvironmentSetMock.mockReset();
-    deleteRuntimeEnvironmentMock.mockReset();
-    getRoleImageRecipeMock.mockReset();
-    getRuntimeEnvironmentReadinessMock.mockReset();
-    listRoleImageRecipesMock.mockReset();
-    listRuntimeEnvironmentSetsMock.mockReset();
-    listRuntimeEnvironmentAgentsMock.mockReset();
-    listRuntimeEnvironmentVersionsMock.mockReset();
-    publishRuntimeEnvironmentVersionMock.mockReset();
-    rollbackRuntimeEnvironmentMock.mockReset();
-    setRuntimeEnvironmentEnabledMock.mockReset();
-    mutateMock.mockReset();
+    for (const mock of [
+      getAgentRuntimeConfigurationMock,
+      publishAgentRuntimeConfigurationMock,
+      createConfigOverlayDraftMock,
+      validateConfigOverlayDraftMock,
+      publishConfigOverlayDraftMock,
+      rollbackConfigOverlayMock,
+      bindAgentRuntimeEnvironmentMock,
+      listAgentRuntimeConfigurationVersionsMock,
+      createRuntimeEnvironmentSetMock,
+      deleteRuntimeEnvironmentMock,
+      getRoleImageRecipeMock,
+      getRuntimeEnvironmentReadinessMock,
+      listRoleImageRecipesMock,
+      listRuntimeEnvironmentSetsMock,
+      listRuntimeEnvironmentAgentsMock,
+      listRuntimeEnvironmentVersionsMock,
+      publishRuntimeEnvironmentVersionMock,
+      rollbackRuntimeEnvironmentMock,
+      setRuntimeEnvironmentEnabledMock,
+      mutateMock,
+    ]) {
+      mock.mockReset();
+    }
     mutateMock.mockImplementation(
       async (request: (headers: Record<string, string>) => Promise<unknown>) =>
         request({

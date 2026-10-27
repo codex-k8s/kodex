@@ -16,6 +16,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// testAssistantContextAuthority checks exact assistant context eligibility, scoped pagination and
+// mutation capabilities, including revoked and foreign resources.
+// testAssistantContextAuthority проверяет допустимость точного контекста ассистента, пагинацию и
+// полномочия команд, включая отзыв доступа и чужие ресурсы.
 func testAssistantContextAuthority(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	prepareObservedWarmFixture(t, ctx, repository)
@@ -131,14 +135,7 @@ func testAssistantContextAuthority(t *testing.T, ctx context.Context, repository
 	if err != nil || connection.Connection == nil {
 		t.Fatal(err)
 	}
-	resolvedOwner, err := repository.ResolvePrincipal(ctx, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ownerScope, err := repository.resolveScope(ctx, resolvedOwner)
-	if err != nil {
-		t.Fatal(err)
-	}
+	ownerScope := resolvedComponentScope(t, ctx, repository, owner)
 	connectionTx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 	if err != nil {
 		t.Fatal(err)

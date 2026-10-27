@@ -75,20 +75,8 @@ for resource_name in "$ingress_namespace" "$ingress_pod_name" "$ingress_service_
   [[ "$resource_name" =~ ^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$ ]] ||
     fail "exact ingress namespace, pod name and service name are required"
 done
-valid_dns_host() {
-  local host=$1 label
-  local -a labels=()
-
-  [[ ${#host} -le 253 && "$host" == *.* ]] || return 1
-  [[ "$host" != .* && "$host" != *. && "$host" != *..* ]] || return 1
-  [[ "$host" != *.svc && "$host" != *.svc.cluster.local ]] || return 1
-  IFS='.' read -r -a labels <<<"$host"
-  ((${#labels[@]} >= 2)) || return 1
-  for label in "${labels[@]}"; do
-    [[ ${#label} -le 63 ]] || return 1
-    [[ "$label" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]] || return 1
-  done
-}
+# shellcheck source=lib/registry-host.sh
+source "${BASH_SOURCE[0]%"${BASH_SOURCE[0]##*/}"}lib/registry-host.sh"
 valid_dns_host "$release_registry_host" || fail "exact release registry DNS host is required"
 registry_host="kodex-registry.${registry_namespace}.svc.cluster.local"
 ingress_service_host="${ingress_service_name}.${ingress_namespace}.svc.cluster.local"

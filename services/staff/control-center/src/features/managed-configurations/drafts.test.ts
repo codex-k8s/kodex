@@ -19,22 +19,9 @@ vi.mock("@/shared/api/client", () => ({
 }));
 vi.mock("@/shared/api/mutation", async () => {
   const { unwrap } = await import("@/shared/api/problem");
-  return {
-    etag: (version: number) => `"${String(version)}"`,
-    mutate: (
-      request: (
-        headers: Record<string, string>,
-      ) => Parameters<typeof unwrap>[0],
-      version: number,
-    ) =>
-      unwrap(
-        request({
-          "If-Match": `"${String(version)}"`,
-          "Idempotency-Key": "synthetic-key",
-          "X-CSRF-Token": "synthetic-csrf",
-        }),
-      ),
-  };
+  const { managedSyntheticMutation } =
+    await import("@/test-utils/synthetic-mutation");
+  return managedSyntheticMutation(unwrap, "synthetic-key", "synthetic-csrf");
 });
 import {
   changeDraft,

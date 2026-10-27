@@ -15,6 +15,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// ConfigureSkillScanner requires a nonnil scanner and assigns the repository dependency during
+// composition before concurrent use. It performs no probe or scan and does not synchronize runtime
+// replacement.
+// ConfigureSkillScanner требует nonnil scanner и назначает зависимость repository при сборке до
+// конкурентного использования. Не выполняет probe либо scan и не синхронизирует runtime
+// replacement.
 func (repository *Repository) ConfigureSkillScanner(scanner skillpolicy.Scanner) error {
 	if scanner == nil {
 		return errs.ErrInvalid
@@ -23,11 +29,27 @@ func (repository *Repository) ConfigureSkillScanner(scanner skillpolicy.Scanner)
 	return nil
 }
 
+// skillScanDigest hashes revision digest and scanner engine separated by a newline as lowercase
+// SHA-256. The commitment binds stored scan metadata to that pair, not an independent malware
+// verdict or file-byte readback.
+// skillScanDigest хеширует разделённые новой строкой revision digest и scanner engine в строчный
+// SHA-256. Обязательство связывает stored scan metadata с парой, а не доказывает независимый
+// malware verdict и file-byte readback.
 func skillScanDigest(digest, engine string) string {
 	value := sha256.Sum256([]byte(digest + "\n" + engine))
 	return hex.EncodeToString(value[:])
 }
 
+// readSkillFile requires current artifact.view and a CLEAN active exact project/revision
+// descriptor, bounds size to32MiB and matches declared size/digest. It fetches the exact object
+// version, verifies metadata including ETag, reads at most size+1 bytes and recomputes SHA-256
+// before return. Query/metadata/hash mismatch and read failures retain their existing
+// Conflict/Unavailable mapping; body close is best effort, no AV scan happens here.
+// readSkillFile требует текущее artifact.view и CLEAN active exact project/revision descriptor,
+// ограничивает размер32MiB и сопоставляет declared size/digest. Читает точную object version,
+// сверяет metadata с ETag, загружает максимум size+1 bytes и заново вычисляет SHA-256.
+// Query/metadata/hash mismatch и read failures сохраняют прежнее Conflict/Unavailable mapping;
+// body close остаётся best effort, AV scan здесь не выполняется.
 func (repository *Repository) readSkillFile(ctx context.Context, tx pgx.Tx, current scope, projectID string, file entity.SkillBundleFile) ([]byte, error) {
 	if err := repository.requireAccess(ctx, tx, current, "artifact.view", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "ARTIFACT", ResourceRef: file.ArtifactRef}); err != nil {
 		return nil, err
@@ -59,6 +81,16 @@ func (repository *Repository) readSkillFile(ctx context.Context, tx pgx.Tx, curr
 	return body, nil
 }
 
+// inspectSkill requires the caller-checked draft and configured scanner, validates paths and reads
+// each pinned file with current artifact access. SKILL.md must match revision manifest identity;
+// every successful scan has a nonempty consistent engine. It returns safe ERROR/INFECTED/CLEAN
+// diagnostics, stopping on the first failure without storing state or exposing raw file/scanner
+// errors.
+// inspectSkill требует проверенный caller draft и настроенный scanner, проверяет paths и читает
+// каждый pinned file с текущим artifact access. SKILL.md должен совпасть с manifest identity
+// ревизии, каждый успешный scan имеет непустой согласованный engine. Возвращает safe
+// ERROR/INFECTED/CLEAN diagnostics, останавливаясь на первой ошибке без записи state и раскрытия
+// исходных file/scanner errors.
 func (repository *Repository) inspectSkill(ctx context.Context, tx pgx.Tx, current scope, bundle skillBundleRow) (string, string, []string) {
 	revision := bundle.DraftRevision
 	if repository.skillScanner == nil {
@@ -95,6 +127,16 @@ func (repository *Repository) inspectSkill(ctx context.Context, tx pgx.Tx, curre
 	return "CLEAN", engine, []string{}
 }
 
+// validateSkillDraft locks an ACTIVE tenant bundle/OCC and exact draft ref/digest in a permitted
+// revalidation state, then inspects its pinned files. CLEAN becomes VALIDATED, other verdicts
+// INVALID; safe diagnostics and scan commitment replace prior review metadata, requiring one
+// revision row before bumping bundle version and readback. Scanner failure is stored as an invalid
+// draft rather than asserted success; caller owns authorization, audit/event/receipt and commit.
+// validateSkillDraft блокирует ACTIVE tenant bundle/OCC и exact draft ref/digest в допустимом
+// revalidation state, затем проверяет pinned files. CLEAN становится VALIDATED, прочие verdicts —
+// INVALID; safe diagnostics и scan commitment заменяют прежние review metadata с требованием одной
+// revision row до увеличения bundle version и readback. Scanner failure сохраняется как invalid
+// draft без заявления об успехе; caller владеет авторизацией, audit/event/receipt и Commit.
 func (repository *Repository) validateSkillDraft(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.SkillBundleInput)
 	if !ok {

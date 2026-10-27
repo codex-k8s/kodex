@@ -94,11 +94,7 @@ func systemAssistantGrantCandidatePage(v *cp.GetSystemAssistantIntegrationGrantC
 // paths с mutation заголовками отдельной команде владельца. Payload connection/capability
 // selectors не дают caller полномочий и не исполняют эффекты провайдера.
 func (s *Server) ChangeSystemAssistantIntegrationGrant(w http.ResponseWriter, r *http.Request, p generated.ChangeSystemAssistantIntegrationGrantParams) {
-	body, ok := decodeJSON[generated.SystemAssistantIntegrationGrantInput](w, r)
-	if !ok {
-		return
-	}
-	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, mutation, ok := decodeMutationBody[generated.SystemAssistantIntegrationGrantInput](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -110,9 +106,5 @@ func (s *Server) ChangeSystemAssistantIntegrationGrant(w http.ResponseWriter, r 
 		Mutation: mutation, ConnectionRef: body.ConnectionRef, CapabilityKey: body.CapabilityKey, Enabled: body.Enabled,
 		ApprovalPolicy: cp.IntegrationApprovalPolicy(cp.IntegrationApprovalPolicy_value["INTEGRATION_APPROVAL_POLICY_"+string(body.ApprovalPolicy)]), ApprovalScopePaths: paths,
 	})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "connection", "")
+	writeRPCResult(w, http.StatusOK, response, err, "connection", "")
 }

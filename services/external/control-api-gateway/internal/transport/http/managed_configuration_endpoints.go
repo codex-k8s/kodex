@@ -489,11 +489,7 @@ func (server *Server) DetachGitManagedConfiguration(w http.ResponseWriter, r *ht
 // точную команду копирования выбранной конфигурации. Общий ответ201 проверяет конфигурацию и ревизию,
 // а не меняет локально владение исходником.
 func (server *Server) CopyGitManagedConfiguration(w http.ResponseWriter, r *http.Request, ref generated.ConfigurationRef, p generated.CopyGitManagedConfigurationParams) {
-	body, ok := decodeJSON[generated.ManagedConfigurationCopyInput](w, r)
-	if !ok {
-		return
-	}
-	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, mutation, ok := decodeMutationBody[generated.ManagedConfigurationCopyInput](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -550,7 +546,7 @@ func (server *Server) ListManagedConfigurationHistory(w http.ResponseWriter, r *
 // преобразования потребителей. Ответ является свидетельством влияния, а не подтверждением
 // перепривязки.
 func (server *Server) GetManagedConfigurationImpact(w http.ResponseWriter, r *http.Request, ref generated.ConfigurationRef, revisionRef generated.ConfigurationRevisionRef, p generated.GetManagedConfigurationImpactParams) {
-	if !opaqueHTTPReference.MatchString(ref) || !opaqueHTTPReference.MatchString(revisionRef) || !validHTTPPage(p.PageSize, p.PageToken) || !validSearchText(stringValue(p.Query), 0, 200) {
+	if !opaqueHTTPReference.MatchString(ref) || !opaqueHTTPReference.MatchString(revisionRef) || !validFilteredHTTPPage(p.PageSize, p.PageToken, p.Query) {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}

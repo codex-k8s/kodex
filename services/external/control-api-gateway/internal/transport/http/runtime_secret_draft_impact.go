@@ -33,7 +33,7 @@ func (s *Server) PrepareRuntimeSecretDraftImpact(w http.ResponseWriter, r *http.
 // GetRuntimeSecretDraftImpact проверяет plan/search/page syntax, передаёт фильтрацию владельцу и сверяет точный plan, bounded filtered totals, уникальные item refs и единый consumer owner tuple до полной выдачи. Не скрывает unauthorized items локальной фильтрацией, не сравнивает продвижение cursor и не применяет current expiry по локальным часам.
 func (s *Server) GetRuntimeSecretDraftImpact(w http.ResponseWriter, r *http.Request, ref generated.OpaqueRef, p generated.GetRuntimeSecretDraftImpactParams) {
 	setRuntimeSecretHeaders(w)
-	if !opaqueHTTPReference.MatchString(ref) || len(ref) > 96 || !validHTTPPage(p.PageSize, p.PageToken) || !validSearchText(stringValue(p.Query), 0, 200) {
+	if !opaqueHTTPReference.MatchString(ref) || len(ref) > 96 || !validFilteredHTTPPage(p.PageSize, p.PageToken, p.Query) {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}

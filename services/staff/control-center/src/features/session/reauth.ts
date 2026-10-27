@@ -1,3 +1,4 @@
+import { hasExactKeys, isRecord } from "@/shared/lib/exact-object";
 import {
   parseRuntimeResourceScope,
   runtimeResourceAddressScope,
@@ -254,22 +255,6 @@ export function runtimeEnvironmentPolicyPath(
     ? `${projectPath}/${encodeURIComponent(environmentRef)}`
     : `${projectPath}/new`;
   return surface === "assistant" ? `${path}?assistantForm=1` : path;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function hasExactKeys(
-  value: Record<string, unknown>,
-  expected: readonly string[],
-): boolean {
-  const actual = Object.keys(value).sort();
-  const sortedExpected = [...expected].sort();
-  return (
-    actual.length === sortedExpected.length &&
-    sortedExpected.every((key, index) => actual[index] === key)
-  );
 }
 
 function validBase(

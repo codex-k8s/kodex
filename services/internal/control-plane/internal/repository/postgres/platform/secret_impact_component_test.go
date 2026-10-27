@@ -17,6 +17,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// testSecretImpact checks secret impact pagination and selective rebinding with atomic stale-batch
+// rejection and no reactivation of retired revisions.
+// testSecretImpact проверяет страницы влияния секрета и выборочную перепривязку с атомарным
+// отказом устаревшего пакета без повторной активации выведенных ревизий.
 func testSecretImpact(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001",

@@ -7,6 +7,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 )
 
+// TestIntegrationExecutionRoute accepts only the explicit integration/interaction workload routes
+// and denies empty, unrelated or route-name callers.
+// TestIntegrationExecutionRoute принимает только явные маршруты workload integration и interaction
+// и отклоняет пустых, посторонних вызывающих и имя маршрута вместо workload.
 func TestIntegrationExecutionRoute(t *testing.T) {
 	for workload, want := range map[string]string{"integration-gateway": "MANAGED_MCP", "interaction-gateway": "INTERACTION"} {
 		got, err := integrationExecutionRoute(workload)
@@ -21,6 +25,10 @@ func TestIntegrationExecutionRoute(t *testing.T) {
 	}
 }
 
+// TestIntegrationActionOutcomeMessage checks exact localization keys for successful, failed and
+// unknown integration outcomes.
+// TestIntegrationActionOutcomeMessage проверяет точные ключи локализации успешного, ошибочного и
+// неизвестного результата интеграции.
 func TestIntegrationActionOutcomeMessage(t *testing.T) {
 	for state, want := range map[string]string{
 		"SUCCEEDED":       "i18n:INTEGRATION_ACTION_SUCCEEDED",
@@ -33,6 +41,10 @@ func TestIntegrationActionOutcomeMessage(t *testing.T) {
 	}
 }
 
+// TestIntegrationGateContextSummary checks connection and operation names form the approval
+// summary, falling back to the operation key when its display name is absent.
+// TestIntegrationGateContextSummary проверяет составление сводки подтверждения из имён соединения
+// и операции с возвратом к ключу операции при отсутствии её отображаемого имени.
 func TestIntegrationGateContextSummary(t *testing.T) {
 	if got := integrationGateContextSummary("Тестовое подключение", "Изменить запись", "write"); got != "Тестовое подключение · Изменить запись" {
 		t.Fatalf("unexpected gate context summary: %q", got)

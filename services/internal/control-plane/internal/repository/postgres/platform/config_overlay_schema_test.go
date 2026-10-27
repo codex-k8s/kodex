@@ -8,6 +8,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 )
 
+// TestRuntimeOverlayReasoningValuesUseExactKeyNotPosition reads reasoning capabilities by their
+// exact schema key despite field reordering, rejecting missing/duplicate/wrong-typed fields and
+// retaining validation for an explicitly empty model capability set.
+// TestRuntimeOverlayReasoningValuesUseExactKeyNotPosition читает reasoning capability по точному
+// ключу схемы при перестановке полей, отклоняет отсутствие, дубли и неверный тип поля и сохраняет
+// валидацию явно пустого набора capability модели.
 func TestRuntimeOverlayReasoningValuesUseExactKeyNotPosition(t *testing.T) {
 	schema := runtimecontract.OverlaySchema([]string{"medium"}, "medium")
 	schema.Fields[0], schema.Fields[1] = schema.Fields[1], schema.Fields[0]

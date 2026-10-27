@@ -12,6 +12,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testIntegrationTestAuthority checks generic connection tests are claimed/completed/replayed only
+// by the exact integration workload even when another workload has the same lease/fence tuple;
+// completion is synthetic.
+// testIntegrationTestAuthority проверяет захват, завершение и повтор обычного теста соединения
+// только точным integration workload, даже если другой workload располагает теми же lease и fence;
+// завершение искусственное.
 func testIntegrationTestAuthority(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	service, err := platformservice.New(repository)

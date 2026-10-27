@@ -11,10 +11,15 @@ targets=$(yq -r '
   select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-publisher-target-registry") |
   .data."key-delivery-targets.yaml"
 ' "$render" | yq -o=json -I=0 '.targets' | jq '[.[] | select(.workload_id == "email-bridge")]')
-policies=$(yq -o=json -I=0 'select(.kind == "NetworkPolicy")' \
-  "$root"/deploy/k8s/base/email-bridge/*.yaml \
-  "$root"/deploy/k8s/base/email-bridge-data/*.yaml \
-  "$root"/deploy/k8s/base/email-bridge-migration/*.yaml | jq -s '.')
+# Expected policies принадлежат полным repo-owned kustomizations, включая components.
+# Ошибка любой базы прерывает subshell даже при отключённом errexit внутри $(...).
+policies=$(
+  for capability in email-bridge email-bridge-data email-bridge-migration; do
+    kubectl kustomize "$root/deploy/k8s/base/$capability" |
+      yq -o=json -I=0 'select(.kind == "NetworkPolicy")' |
+      jq -sc 'if length > 0 then .[] else error("expected NetworkPolicy source is empty") end' || exit 1
+  done | jq -s '.'
+)
 mail_digest=$(yq -o=json -I=0 'select(.kind == "ConfigMap" and .data."mail-policy.json" != null)' "$render" |
   jq -sj 'if length == 1 then .[0].data["mail-policy.json"] else error("mail policy count is invalid") end' |
   sha256sum | awk '{print $1}')

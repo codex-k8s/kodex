@@ -34,73 +34,295 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// unavailableReadinessObjectStore embeds the configured object store while replacing only
+// readiness Check with an unavailable response and a call counter. Other Store operations remain
+// delegated; the fixture does not simulate object contents or successful readiness.
+// unavailableReadinessObjectStore встраивает настроенное объектное хранилище, заменяя только
+// readiness Check ответом о недоступности и счётчиком вызовов. Остальные операции Store
+// делегируются; оснастка не имитирует содержимое объектов или успешную готовность.
 type unavailableReadinessObjectStore struct {
 	objectstorage.Store
 	checkCalls int
 }
 
+// Check increments the fixture call counter and always returns objectstorage.ErrUnavailable
+// without using the supplied context or calling the embedded store. The counter is unsynchronized
+// and belongs to the sequential readiness assertions.
+// Check увеличивает счётчик оснастки и всегда возвращает objectstorage.ErrUnavailable без
+// использования переданного контекста и вызова встроенного хранилища. Счётчик не синхронизирован и
+// предназначен для последовательных readiness assertions.
 func (store *unavailableReadinessObjectStore) Check(context.Context) error {
 	store.checkCalls++
 	return objectstorage.ErrUnavailable
 }
 
 var (
+	// bootstrapComponentReadbackQuery embeds a read-only aggregate of bootstrap rows: organizations,
+	// pending owner contracts, ready system assistant, published core prompts, starting runtime,
+	// capabilities, optional integrations, enabled provider definition, authorized default account,
+	// first credential revisions and completed installation. Its counts are installation-wide fixture
+	// observations, not caller authorization checks.
+	// bootstrapComponentReadbackQuery содержит встроенный запрос сводных счётчиков bootstrap:
+	// организаций, ожидающих owner contracts, готового системного ассистента, опубликованных core
+	// prompts, запускаемого runtime, capabilities, optional integrations, включённого provider
+	// definition, авторизованного default account, первых credential revisions и завершённой
+	// установки. Это наблюдения по всей тестовой установке, а не проверка полномочий вызывающего.
 	//go:embed testdata/sql/bootstrap_component_readback.sql
 	bootstrapComponentReadbackQuery string
+	// bootstrapComponentDisableSystemAssistantQuery embeds a direct fixture UPDATE that disables every
+	// system-assistant agent, sets DISABLED and refreshes updated_at. The component test expects
+	// database protection to reject this bypass; the variable itself performs no mutation.
+	// bootstrapComponentDisableSystemAssistantQuery содержит прямой тестовый UPDATE: выключает всех
+	// агентов system-assistant, задаёт DISABLED и обновляет updated_at. Компонентный тест ожидает
+	// запрета такого обхода защитой БД; само объявление ничего не изменяет.
 	//go:embed testdata/sql/bootstrap_component_disable_system_assistant.sql
 	bootstrapComponentDisableSystemAssistantQuery string
+	// bootstrapComponentDeleteSystemAssistantQuery embeds a direct DELETE selected by the
+	// system-assistant key for the protected-row rejection test. It has no tenant parameter or service
+	// authorization and is used only against the disposable component database.
+	// bootstrapComponentDeleteSystemAssistantQuery содержит прямой DELETE по ключу system-assistant
+	// для проверки запрета удаления защищённой строки. Tenant parameter и сервисная авторизация
+	// отсутствуют; запрос предназначен только для одноразовой компонентной БД.
 	//go:embed testdata/sql/bootstrap_component_delete_system_assistant.sql
 	bootstrapComponentDeleteSystemAssistantQuery string
+	// bootstrapComponentReplaceCorePromptQuery embeds an attempted replacement of every core
+	// instruction content with a fixed fixture string. It deliberately bypasses publication commands
+	// so the component test can assert database immutability protection.
+	// bootstrapComponentReplaceCorePromptQuery содержит попытку заменить содержимое всех core
+	// instructions фиксированной тестовой строкой. Намеренно обходит команды публикации, чтобы
+	// компонентный тест проверял защиту неизменяемости в БД.
 	//go:embed testdata/sql/bootstrap_component_replace_core_prompt.sql
 	bootstrapComponentReplaceCorePromptQuery string
+	// bootstrapComponentReplaceSessionProviderAccountQuery embeds a CTE that inserts a disabled
+	// pending-authorization account for system-issued subjects and attempts to assign it to
+	// SYSTEM_ASSISTANT sessions. The protected-affinity test expects rejection; it does not establish
+	// a usable provider connection or authority.
+	// bootstrapComponentReplaceSessionProviderAccountQuery содержит CTE, который создаёт выключенный
+	// account в ожидании авторизации для системных subjects и пытается назначить его SYSTEM_ASSISTANT
+	// sessions. Тест защищённой привязки ожидает запрета; запрос не создаёт пригодного provider
+	// connection или полномочий.
 	//go:embed testdata/sql/bootstrap_component_replace_session_provider_account.sql
 	bootstrapComponentReplaceSessionProviderAccountQuery string
+	// bootstrapComponentConnectIntegrationQuery embeds a fixture UPDATE by connection ref that sets
+	// connected/configured states and a successful test summary, timestamps the test, increments
+	// version and returns that version. It simulates persisted readiness without testing credentials
+	// or contacting an integration.
+	// bootstrapComponentConnectIntegrationQuery содержит тестовый UPDATE по connection ref: задаёт
+	// connected/configured и успешное резюме проверки, сохраняет время теста, увеличивает и возвращает
+	// version. Имитирует сохранённую готовность без проверки credentials или обращения к интеграции.
 	//go:embed testdata/sql/bootstrap_component_connect_integration.sql
 	bootstrapComponentConnectIntegrationQuery string
+	// bootstrapComponentMakeInteractionDeliveryDueQuery embeds a fixture UPDATE that makes only the
+	// referenced FAILED delivery immediately available using the database clock. It neither changes
+	// the delivery state nor performs delivery, claim or retry processing.
+	// bootstrapComponentMakeInteractionDeliveryDueQuery содержит тестовый UPDATE, делающий указанную
+	// FAILED delivery доступной сейчас по часам БД. Не меняет состояние доставки и не выполняет
+	// отправку, claim или обработку retry.
 	//go:embed testdata/sql/bootstrap_component_make_interaction_delivery_due.sql
 	bootstrapComponentMakeInteractionDeliveryDueQuery string
+	// bootstrapComponentMakeScheduleDueQuery embeds a fixture UPDATE that subtracts seven days from
+	// the referenced schedule next_run_at and refreshes updated_at. It preserves version and lifecycle
+	// fields and only arranges the due-work precondition.
+	// bootstrapComponentMakeScheduleDueQuery содержит тестовый UPDATE, вычитающий семь дней из
+	// next_run_at указанного расписания и обновляющий updated_at. Сохраняет version и lifecycle
+	// fields, подготавливая только условие наступившего срока.
 	//go:embed testdata/sql/bootstrap_component_make_schedule_due.sql
 	bootstrapComponentMakeScheduleDueQuery string
+	// bootstrapComponentScheduleOccurrenceReadbackQuery embeds a read by occurrence ref joined to its
+	// run, returning occurrence state, a combined null check for all four claim fields and run source.
+	// It observes persisted claim cleanup without renewing, completing or authorizing the occurrence.
+	// bootstrapComponentScheduleOccurrenceReadbackQuery содержит чтение occurrence по ref с
+	// присоединённым run: возвращает состояние, общую проверку NULL для четырёх полей claim и источник
+	// run. Наблюдает сохранённую очистку claim без продления, завершения или авторизации occurrence.
 	//go:embed testdata/sql/bootstrap_component_schedule_occurrence_readback.sql
 	bootstrapComponentScheduleOccurrenceReadbackQuery string
+	// bootstrapComponentChangeScheduleAfterClaimQuery embeds a fixture UPDATE by schedule ref that
+	// replaces input with a fixed task, increments version and refreshes updated_at. It creates a
+	// post-claim configuration mismatch without changing the already captured occurrence snapshot.
+	// bootstrapComponentChangeScheduleAfterClaimQuery содержит тестовый UPDATE по schedule ref:
+	// заменяет input фиксированной задачей, увеличивает version и обновляет updated_at. Создаёт
+	// несовпадение конфигурации после claim, не изменяя уже зафиксированный snapshot occurrence.
 	//go:embed testdata/sql/bootstrap_component_change_schedule_after_claim.sql
 	bootstrapComponentChangeScheduleAfterClaimQuery string
+	// bootstrapComponentExpireScheduleClaimQuery embeds a fixture UPDATE that moves the referenced
+	// occurrence lease expiry one second before the database clock. It leaves claim identity and state
+	// intact so the real expiry path must perform cleanup.
+	// bootstrapComponentExpireScheduleClaimQuery содержит тестовый UPDATE, сдвигающий истечение lease
+	// указанного occurrence на секунду в прошлое по часам БД. Сохраняет identity claim и состояние,
+	// оставляя очистку настоящему пути обработки истечения.
 	//go:embed testdata/sql/bootstrap_component_expire_schedule_claim.sql
 	bootstrapComponentExpireScheduleClaimQuery string
+	// bootstrapComponentScheduleTargetStateReadbackQuery embeds a join constrained by both schedule
+	// and occurrence refs, returning schedule enabled, occurrence state and whether all claim fields
+	// are null. The read proves only persisted target/claim state and does not execute a lifecycle
+	// transition.
+	// bootstrapComponentScheduleTargetStateReadbackQuery содержит join с ограничением одновременно по
+	// schedule и occurrence refs: возвращает enabled расписания, состояние occurrence и отсутствие
+	// всех полей claim. Чтение подтверждает только сохранённое состояние цели и claim, не выполняя
+	// переход жизненного цикла.
 	//go:embed testdata/sql/bootstrap_component_schedule_target_state_readback.sql
 	bootstrapComponentScheduleTargetStateReadbackQuery string
+	// bootstrapComponentScheduleArchiveReadbackQuery embeds a read for the exact schedule/occurrence
+	// pair, observing archived lifecycle, enabled/next-run and claim cleanup plus archive audit count
+	// and matching SCHEDULE_CHANGED outbox count. Event matching includes aggregate ref/version and
+	// archived state/summary; the query does not publish or acknowledge events.
+	// bootstrapComponentScheduleArchiveReadbackQuery содержит чтение точной пары schedule/occurrence:
+	// наблюдает архивный lifecycle, enabled/next-run, очистку claim, число archive audit и подходящих
+	// SCHEDULE_CHANGED outbox records. Сопоставление события включает aggregate ref/version и архивные
+	// state/summary; запрос не публикует и не подтверждает события.
 	//go:embed testdata/sql/bootstrap_component_schedule_archive_readback.sql
 	bootstrapComponentScheduleArchiveReadbackQuery string
+	// bootstrapComponentCorePromptUpgradeReadbackQuery embeds the system-assistant
+	// runtime/current-core-instruction join, returning prompt/runtime revisions, state,
+	// content/version and counts of published core prompts and organization upgrade audits. This is a
+	// database readback of upgrade effects, not runtime execution evidence.
+	// bootstrapComponentCorePromptUpgradeReadbackQuery содержит join runtime системного ассистента с
+	// текущей core instruction: возвращает prompt/runtime revisions, состояние, содержимое/version и
+	// счётчики опубликованных core prompts и upgrade audits организации. Это чтение эффектов
+	// обновления в БД, а не доказательство исполнения runtime.
 	//go:embed testdata/sql/bootstrap_component_core_prompt_upgrade_readback.sql
 	bootstrapComponentCorePromptUpgradeReadbackQuery string
+	// bootstrapComponentWarmHeartbeatCountsQuery embeds two installation-wide counts: warm-runtime
+	// report audits and control-plane platform outbox rows. Callers compare snapshots around heartbeat
+	// operations; the query does not attribute rows to a particular runtime or consume events.
+	// bootstrapComponentWarmHeartbeatCountsQuery содержит два счётчика всей установки: audits отчётов
+	// warm runtime и строки platform outbox control-plane. Вызывающий сравнивает снимки вокруг
+	// heartbeat; запрос не относит строки к отдельному runtime и не потребляет события.
 	//go:embed testdata/sql/bootstrap_component_warm_heartbeat_counts.sql
 	bootstrapComponentWarmHeartbeatCountsQuery string
+	// bootstrapComponentProviderCredentialReadbackQuery embeds a join from the default provider
+	// account to its current credential revision, reading revision number, secret identity/resource
+	// version, content digest, account version and total account credential revisions. It reads
+	// descriptor metadata only, never credential payload bytes.
+	// bootstrapComponentProviderCredentialReadbackQuery содержит join default provider account с
+	// текущей credential revision: читает номер ревизии, identity/resource version секрета, digest
+	// содержимого, version account и число его credential revisions. Читает только метаданные
+	// descriptor, без байтов credential payload.
 	//go:embed testdata/sql/bootstrap_component_provider_credential_readback.sql
 	bootstrapComponentProviderCredentialReadbackQuery string
+	// bootstrapComponentInstructionDraftReadbackQuery embeds an aggregate for the agent resolved by
+	// ref over DRAFT, VALID and INVALID instruction rows. It returns count plus minimum state/content
+	// for test assertions; published versions are excluded and no validation or publication occurs.
+	// bootstrapComponentInstructionDraftReadbackQuery содержит агрегат по DRAFT, VALID и INVALID
+	// instructions агента, найденного по ref. Возвращает число строк и минимальные state/content для
+	// тестовых assertions; опубликованные версии исключены, валидация и публикация не выполняются.
 	//go:embed testdata/sql/bootstrap_component_instruction_draft_readback.sql
 	bootstrapComponentInstructionDraftReadbackQuery string
+	// bootstrapComponentEffectReceiptCountQuery embeds a count of integration effect receipts selected
+	// by exact effect key. The fixture uses this observation for idempotency assertions; the query
+	// creates no receipt and does not prove external effect delivery.
+	// bootstrapComponentEffectReceiptCountQuery содержит подсчёт integration effect receipts по
+	// точному effect key. Оснастка использует наблюдение для проверки идемпотентности; запрос не
+	// создаёт receipt и не доказывает доставку внешнего эффекта.
 	//go:embed testdata/sql/bootstrap_component_effect_receipt_count.sql
 	bootstrapComponentEffectReceiptCountQuery string
+	// bootstrapComponentSequenceReadbackQuery embeds a read of platform_sequence and
+	// authority_proof_sequence from the singleton installation row. It snapshots durable counters for
+	// before/after assertions without advancing either sequence or deriving caller authority.
+	// bootstrapComponentSequenceReadbackQuery содержит чтение platform_sequence и
+	// authority_proof_sequence единственной строки установки. Получает устойчивые счётчики для
+	// сравнения до/после, не увеличивая их и не выводя полномочия вызывающего.
 	//go:embed testdata/sql/bootstrap_component_sequence_readback.sql
 	bootstrapComponentSequenceReadbackQuery string
+	// bootstrapComponentToolCallOutboxReadbackQuery embeds a run-event-ref lookup joined to outbox by
+	// event_id and extracts the nested tool-call tool value from UTF-8 JSON payload. It reads stored
+	// event materialization only and does not execute the tool or deliver the outbox record.
+	// bootstrapComponentToolCallOutboxReadbackQuery содержит поиск run event по ref с join outbox по
+	// event_id и извлечением вложенного tool-call tool из UTF-8 JSON payload. Читает только
+	// сохранённую материализацию события, не исполняет tool и не доставляет outbox record.
 	//go:embed testdata/sql/bootstrap_component_tool_call_outbox_readback.sql
 	bootstrapComponentToolCallOutboxReadbackQuery string
+	// bootstrapComponentInsertSecondaryProviderQuery embeds multi-statement fixture setup for an
+	// authorized secondary account and first credential descriptor owned by the system subject. Its
+	// final UPDATE links every matching account/credential pair, without limiting that UPDATE to the
+	// inserted account; callers rely on isolated fixture state. No real provider or secret payload is
+	// created.
+	// bootstrapComponentInsertSecondaryProviderQuery содержит несколько операторов подготовки
+	// авторизованного secondary account и первого credential descriptor от системного subject.
+	// Последний UPDATE связывает все подходящие пары account/credential без ограничения только
+	// добавленным account; вызывающий полагается на изоляцию оснастки. Реальный provider или secret
+	// payload не создаётся.
 	//go:embed testdata/sql/bootstrap_component_insert_secondary_provider.sql
 	bootstrapComponentInsertSecondaryProviderQuery string
+	// bootstrapComponentInsertWarmFailoverProviderQuery embeds multi-statement setup for an authorized
+	// warm-failover account and synthetic first credential descriptor. Both descriptor selection and
+	// final current-revision UPDATE are restricted to the fixture account ref; it prepares database
+	// metadata without provisioning credentials or contacting the provider.
+	// bootstrapComponentInsertWarmFailoverProviderQuery содержит несколько операторов подготовки
+	// авторизованного warm-failover account и синтетического первого credential descriptor. Выбор
+	// account для descriptor и последний UPDATE текущей ревизии ограничены ref тестового account;
+	// подготавливаются метаданные БД без выдачи credentials и обращения к provider.
 	//go:embed testdata/sql/bootstrap_component_insert_warm_failover_provider.sql
 	bootstrapComponentInsertWarmFailoverProviderQuery string
+	// bootstrapComponentIntegrationInvocationEffectKeyQuery embeds a read of the effect key for an
+	// integration invocation selected by exact ref. It resolves persisted idempotency identity for
+	// assertions without claiming the invocation or applying an effect.
+	// bootstrapComponentIntegrationInvocationEffectKeyQuery содержит чтение effect key integration
+	// invocation по точному ref. Разрешает сохранённую identity идемпотентности для assertions без
+	// claim invocation или применения эффекта.
 	//go:embed testdata/sql/bootstrap_component_integration_invocation_effect_key.sql
 	bootstrapComponentIntegrationInvocationEffectKeyQuery string
+	// bootstrapComponentRuntimeProviderReadbackQuery embeds a read by runtime-revision ref returning
+	// provider account and credential-revision UUIDs as text. It observes the immutable revision
+	// provider binding without resolving an active account, retrieving secret bytes or granting
+	// runtime authority.
+	// bootstrapComponentRuntimeProviderReadbackQuery содержит чтение runtime revision по ref с
+	// возвратом UUID provider account и credential revision как текста. Наблюдает привязку provider в
+	// immutable revision без разрешения активного account, чтения секрета или выдачи runtime
+	// authority.
 	//go:embed testdata/sql/bootstrap_component_runtime_provider_readback.sql
 	bootstrapComponentRuntimeProviderReadbackQuery string
+	// bootstrapComponentProviderAccountReadbackQuery embeds a provider-account lookup by UUID,
+	// returning state, current credential-revision UUID as text and account version. It observes
+	// stored lifecycle/OCC metadata without authorizing, enabling or rotating the account.
+	// bootstrapComponentProviderAccountReadbackQuery содержит поиск provider account по UUID с
+	// возвратом state, UUID текущей credential revision как текста и version account. Наблюдает
+	// сохранённые lifecycle/OCC metadata без авторизации, включения или ротации account.
 	//go:embed testdata/sql/bootstrap_component_provider_account_readback.sql
 	bootstrapComponentProviderAccountReadbackQuery string
+	// bootstrapComponentRotateProviderCredentialQuery embeds a fixture CTE that locks the selected
+	// account, inserts the next credential descriptor using supplied identity/version/digest and
+	// atomically advances the matching current pointer, authorized state and account version. It
+	// returns the inserted UUID and preserves the previous descriptor; it does not rotate an external
+	// secret or invoke production credential commands.
+	// bootstrapComponentRotateProviderCredentialQuery содержит тестовый CTE: блокирует выбранный
+	// account, добавляет следующий credential descriptor с переданными identity/version/digest и
+	// атомарно обновляет совпавший current pointer, authorized state и version account. Возвращает
+	// UUID новой записи и сохраняет предыдущий descriptor; не ротирует внешний секрет и не вызывает
+	// production credential commands.
 	//go:embed testdata/sql/bootstrap_component_rotate_provider_credential.sql
 	bootstrapComponentRotateProviderCredentialQuery string
+	// bootstrapComponentRuntimeEnvironmentReconcileReadbackQuery embeds the system-assistant
+	// runtime/binding/environment/current-version join, reading version and digests, parent presence,
+	// version count, runtime state/desired revision and cleared warm-instance/heartbeat flags. It
+	// observes persisted reconciliation results without launching or proving readiness of a runtime.
+	// bootstrapComponentRuntimeEnvironmentReconcileReadbackQuery содержит join runtime системного
+	// ассистента, binding, environment и текущей version: читает номер/digests, наличие parent, число
+	// версий, runtime state/desired revision и признаки очистки warm instance/heartbeat. Наблюдает
+	// сохранённый результат reconciliation без запуска runtime или доказательства его готовности.
 	//go:embed testdata/sql/bootstrap_component_runtime_environment_reconcile_readback.sql
 	bootstrapComponentRuntimeEnvironmentReconcileReadbackQuery string
+	// bootstrapComponentProviderRestartReadbackQuery embeds the fixture read of an account UUID joined
+	// to its credential revisions, returning state, current credential UUID, account version and
+	// revision count grouped by the account fields. The inner join preserves the original no-row
+	// behavior when no revision exists; the query neither locks nor repairs the account and reads no
+	// credential payload.
+	// bootstrapComponentProviderRestartReadbackQuery содержит встроенное тестовое чтение account по
+	// UUID с join его credential revisions: возвращает state, UUID текущего credential, version
+	// account и число ревизий с группировкой по полям account. Inner join сохраняет прежнее отсутствие
+	// строки без ревизий; запрос не блокирует и не исправляет account и не читает credential payload.
+	//go:embed testdata/sql/bootstrap_component_provider_restart_readback.sql
+	bootstrapComponentProviderRestartReadbackQuery string
 )
 
+// finalizedAttachmentSetRef creates and finalizes a fixture attachment-set draft through
+// specialized commands with exact project/purpose/artifact refs and returned expected version. It
+// requires FINALIZED and returns the server ref; the caller supplies its disposable service and
+// principal, so this helper creates no grant by itself.
+// finalizedAttachmentSetRef создаёт и финализирует fixture attachment-set draft
+// специализированными командами с точными project, purpose, artifact refs и полученной expected
+// version. Требует FINALIZED и возвращает server ref; disposable service и principal задаёт
+// caller, helper сам не выдаёт grant.
 func finalizedAttachmentSetRef(t *testing.T, ctx context.Context, service *platformservice.Service,
 	principal value.Principal, projectRef, purpose, key string, artifactRefs ...string,
 ) string {
@@ -123,6 +345,19 @@ func finalizedAttachmentSetRef(t *testing.T, ctx context.Context, service *platf
 	return finalized.AttachmentSet.Ref
 }
 
+// TestBootstrapComponent runs the existing sequential owner regression matrix only when the
+// component DSN is configured, with a five-minute context, synthetic object/provider/image
+// fixtures and two idempotent bootstraps. It checks readiness independence and
+// protected-state/cursor invariants before delegating
+// catalog/authority/runtime/secret/graph/configuration scenarios to their existing helpers.
+// Scenario order and the final account-disable case are preserved; missing DSN skips, and no live
+// provider, broker, Kubernetes or browser acceptance is established.
+// TestBootstrapComponent выполняет прежнюю последовательную owner regression matrix только при
+// component DSN, с context пять минут, синтетическими object, provider и image fixtures и двумя
+// idempotent bootstrap. Проверяет readiness independence, protected-state и cursor invariants,
+// затем вызывает прежние catalog, authority, runtime, secret, graph и configuration helpers.
+// Порядок и последний account-disable случай сохраняются; без DSN skip, живые provider, broker,
+// Kubernetes и browser не принимаются.
 func TestBootstrapComponent(t *testing.T) {
 	dsn := os.Getenv("KODEX_CONTROL_PLANE_TEST_DSN")
 	if dsn == "" {
@@ -141,23 +376,7 @@ func TestBootstrapComponent(t *testing.T) {
 		t.Fatalf("construct repository: %v", err)
 	}
 	configureComponentArtifactScanner(t, repository)
-	if err := repository.ConfigureProviderCredential(ProviderCredentialConfig{
-		SecretName:            "runtime-provider-openai-default-r1",
-		SecretUID:             "10000000-0000-4000-8000-000000000001",
-		SecretResourceVersion: "1",
-		ContentSHA256:         "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-	}); err != nil {
-		t.Fatalf("configure provider credential: %v", err)
-	}
-	if err := repository.ConfigureRoleImages(RoleImageConfig{
-		PolicyRevision: 1, RoleRuntimeContractRevision: 1,
-		PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64),
-		BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3,
-		StagingRepository: "registry.invalid/kodex/staging", PromotedRepository: "registry.invalid/kodex/roles",
-		DefaultImageReference: "registry.invalid/kodex/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32)),
-	}); err != nil {
-		t.Fatalf("configure role images: %v", err)
-	}
+	configureComponentProviderAndRoleImages(t, repository)
 	for attempt := 0; attempt < 2; attempt++ {
 		if err := repository.Bootstrap(ctx); err != nil {
 			t.Fatalf("bootstrap attempt %d: %v", attempt+1, err)
@@ -411,6 +630,26 @@ func TestBootstrapComponent(t *testing.T) {
 	})
 }
 
+// testManagedConfigurationLifecycle builds its own catalog/project/agent fixtures and exercises
+// prompt draft replay, OCC, validation, immutable publication and selective consumer rebind. It
+// also checks search/VFS/catalog/history pagination and delegates metadata redaction, Git
+// ownership, impact and CFG scenarios. The STT branch pins published configuration and credential
+// generation across broker/trusted-cluster reads, rejects changed or ineligible accounts, and
+// restores its revoked account fixture. Role-image branches check project/version/snapshot
+// boundaries, replacement-build fencing and rejection of unpromoted effective images; integration
+// reads require the pinned kind and authority. Git copy/detach preserves lineage and published
+// rows reject UPDATE/DELETE. Direct SQL only arranges/observes component state; no STT, image
+// build or integration is executed.
+// testManagedConfigurationLifecycle создаёт собственные catalog/project/agent fixtures и проверяет
+// повтор draft, OCC, валидацию, неизменяемую публикацию prompt и выборочную перепривязку consumer.
+// Проверяет pagination поиска/VFS/catalog/history и делегирует сценарии metadata redaction, Git
+// ownership, impact и CFG. Ветка STT связывает опубликованную конфигурацию с credential generation
+// в broker/trusted-cluster reads, отклоняет изменённые или недопустимые accounts и восстанавливает
+// отозванный тестовый account. Ветки role image проверяют project/version/snapshot boundaries,
+// отмену заменённой сборки и запрет effective image без promotion; integration reads требуют
+// закреплённый kind и полномочия. Git copy/detach сохраняет lineage, опубликованные строки
+// запрещают UPDATE/DELETE. Прямой SQL только подготавливает и наблюдает компонентное состояние;
+// STT, image build и integration не исполняются.
 func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	// Адресный запуск сам завершает owner catalog tasks, не зависит от соседних сценариев.
 	seedObservedCatalogFixture(t, ctx, repository)
@@ -1065,6 +1304,17 @@ WHERE account.ref = $1
 	testCFGLifecycle(t, ctx, repository, service, owner, integrationReader, projectResult.Project.Ref, connection.Connection.Ref, integrationDefinition)
 }
 
+// testManagedPromptHistoryRedaction proves that an initially unbound subject is forbidden, then
+// grants only project.view in one project and reads its managed prompt metadata. Paginated catalog
+// reads must stay in that project, suppress content, avoid duplicate rows and reject a cursor
+// under a changed filter. History retains the published pointer while redacting current and
+// historical content without prompt.full.view; the fixture creates a role/binding but grants no
+// content-read permission.
+// testManagedPromptHistoryRedaction проверяет запрет для изначально непривязанного subject, затем
+// выдаёт только project.view в одном проекте и читает метаданные managed prompt. Страницы каталога
+// должны оставаться в этом проекте, скрывать content, не повторять строки и отклонять cursor с
+// изменённым filter. История сохраняет published pointer, скрывая текущее и историческое
+// содержимое без prompt.full.view; оснастка создаёт role/binding без права чтения content.
 func testManagedPromptHistoryRedaction(
 	t *testing.T,
 	ctx context.Context,
@@ -1150,6 +1400,16 @@ func testManagedPromptHistoryRedaction(
 	}
 }
 
+// testIntegrationDefinitionRebindAuthority creates an organization-scoped manager with
+// organization.manage/project.manage but no exact integration.manage permission, after checking
+// that the unbound subject is forbidden. Even with an owner-computed impact digest and current
+// configuration version, its connection rebind must return NotFound. The component assertion keeps
+// broad management authority separate from the specialized integration command.
+// testIntegrationDefinitionRebindAuthority создаёт manager с organization scope и
+// organization.manage/project.manage, но без точного integration.manage, предварительно проверив
+// запрет для непривязанного subject. Даже с impact digest от владельца и текущей version
+// конфигурации перепривязка connection должна вернуть NotFound. Компонентная проверка отделяет
+// общие управленческие полномочия от специализированной integration command.
 func testIntegrationDefinitionRebindAuthority(
 	t *testing.T,
 	ctx context.Context,
@@ -1207,6 +1467,20 @@ func testIntegrationDefinitionRebindAuthority(
 	}
 }
 
+// publishAndRebindManagedConfiguration runs caller-selected create/validate/publish commands with
+// derived idempotency keys and each returned configuration version, requiring DRAFT, VALID and
+// PUBLISHED. For role images it instead asserts legacy rebind rejection and unpromoted-plan
+// Conflict and returns the published result. Other kinds use a fresh impact digest and a consumer
+// copy initially marked absent; an existing integration binding supplies its exact
+// revision/version. The helper returns the rebind result or fails the test, without bypassing
+// service authority or promoting an image.
+// publishAndRebindManagedConfiguration выполняет выбранные вызывающим create/validate/publish
+// commands с производными idempotency keys и каждой полученной version конфигурации, требуя DRAFT,
+// VALID и PUBLISHED. Для role images вместо перепривязки проверяет запрет legacy rebind и Conflict
+// плана без promotion и возвращает published result. Прочие kinds используют свежий impact digest
+// и копию consumer с начальным признаком отсутствия; существующая integration binding задаёт
+// точные revision/version. Helper возвращает rebind result либо завершает тест, не обходя
+// сервисные полномочия и не выполняя promotion image.
 func publishAndRebindManagedConfiguration(
 	t *testing.T,
 	ctx context.Context,
@@ -1276,6 +1550,16 @@ func publishAndRebindManagedConfiguration(
 	return rebound
 }
 
+// testStaleRoleRuntimeContractRejectsLaunch creates a project/agent, launches and cancels a
+// baseline run, then snapshots durable session/run counts. It temporarily advances the configured
+// runtime-contract revision and digest and requires another launch to fail with Conflict without
+// increasing either count. A deferred restore reinstates the original role-image configuration;
+// successful command creation is not evidence of running a workload.
+// testStaleRoleRuntimeContractRejectsLaunch создаёт project/agent, запускает и отменяет baseline
+// run, затем сохраняет счётчики sessions/runs. Временно повышает настроенные revision и digest
+// runtime contract и требует Conflict при новом launch без увеличения обоих счётчиков. Отложенное
+// восстановление возвращает исходную role-image configuration; успешное создание команды не
+// доказывает исполнение workload.
 func testStaleRoleRuntimeContractRejectsLaunch(
 	t *testing.T,
 	ctx context.Context,
@@ -1359,6 +1643,27 @@ func testStaleRoleRuntimeContractRejectsLaunch(
 	}
 }
 
+// testSystemAssistantWarmRuntimeProviderFailover arranges a rejected default account and alternate
+// catalog-backed provider and proves that broad agent permissions cannot read or publish system
+// runtime configuration. Reconcile must atomically close the old session, create one active
+// fallback, clear warm evidence and append one exact provider-policy version; two Bootstrap calls
+// must preserve rejected credential metadata. READY reports and lifecycle heartbeats keep
+// specification identity stable, while dependency changes and content reversion each create a
+// fresh revision and reject stale reports. The final conversation must follow eligible provider
+// policy. Deferred cleanup restores the configured credential descriptor and default account
+// eligibility; SQL/service readbacks and reported READY are component evidence, not a running
+// provider or workload.
+// testSystemAssistantWarmRuntimeProviderFailover подготавливает rejected default account и
+// альтернативный provider с catalog и проверяет, что общие agent permissions не разрешают чтение
+// или публикацию system runtime configuration. Reconcile должен атомарно закрыть старую session,
+// создать одну активную fallback session, очистить warm evidence и добавить одну точную
+// provider-policy version; два Bootstrap должны сохранить метаданные rejected credential. READY
+// reports и lifecycle heartbeats сохраняют identity спецификации, а изменение зависимости и
+// возврат содержимого каждый создают свежую revision и отклоняют устаревшие reports. Итоговая
+// conversation должна следовать допустимой provider policy. Deferred cleanup восстанавливает
+// настроенный credential descriptor и eligibility default account; SQL/service readbacks и
+// переданный READY являются компонентными наблюдениями без доказательства работы provider или
+// workload.
 func testSystemAssistantWarmRuntimeProviderFailover(
 	t *testing.T,
 	ctx context.Context,
@@ -1665,45 +1970,27 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 		t.Fatalf("warm provider failover is not atomic: old=%s/%s current=%s/%s instance=%v heartbeat=%v active=%d",
 			oldState, oldProviderID, currentState, currentProviderID, currentWarmInstance, currentHeartbeat, activeSessions)
 	}
-	var rejectedState, rejectedCredentialID string
-	var rejectedVersion, rejectedRevisionCount int64
-	if err := pool.QueryRow(ctx, `
-		SELECT account.state, account.current_credential_revision_id::text, account.version,
-		       count(revision.id)::bigint
-		FROM control_plane.provider_accounts account
-		JOIN control_plane.provider_credential_revisions revision
-		  ON revision.provider_account_id = account.id
-		WHERE account.id = $1::uuid
-		GROUP BY account.state, account.current_credential_revision_id, account.version
-	`, currentAccountID).Scan(&rejectedState, &rejectedCredentialID, &rejectedVersion, &rejectedRevisionCount); err != nil {
+	rejected, err := readBootstrapProviderRestartState(ctx, pool, currentAccountID)
+	if err != nil {
 		t.Fatalf("read rejected default provider before bootstrap restart: %v", err)
 	}
-	if rejectedState != "REAUTHORIZATION_REQUIRED" {
-		t.Fatalf("default provider state before bootstrap restart = %q", rejectedState)
+	if rejected.state != "REAUTHORIZATION_REQUIRED" {
+		t.Fatalf("default provider state before bootstrap restart = %q", rejected.state)
 	}
 	for attempt := 1; attempt <= 2; attempt++ {
 		if err := repository.Bootstrap(ctx); err != nil {
 			t.Fatalf("bootstrap after warm provider failover attempt %d: %v", attempt, err)
 		}
 	}
-	var restartedState, restartedCredentialID string
-	var restartedVersion, restartedRevisionCount int64
-	if err := pool.QueryRow(ctx, `
-		SELECT account.state, account.current_credential_revision_id::text, account.version,
-		       count(revision.id)::bigint
-		FROM control_plane.provider_accounts account
-		JOIN control_plane.provider_credential_revisions revision
-		  ON revision.provider_account_id = account.id
-		WHERE account.id = $1::uuid
-		GROUP BY account.state, account.current_credential_revision_id, account.version
-	`, currentAccountID).Scan(&restartedState, &restartedCredentialID, &restartedVersion, &restartedRevisionCount); err != nil {
+	restarted, err := readBootstrapProviderRestartState(ctx, pool, currentAccountID)
+	if err != nil {
 		t.Fatalf("read rejected default provider after bootstrap restart: %v", err)
 	}
-	if restartedState != rejectedState || restartedCredentialID != rejectedCredentialID ||
-		restartedVersion != rejectedVersion || restartedRevisionCount != rejectedRevisionCount {
+	if restarted.state != rejected.state || restarted.credentialRevisionID != rejected.credentialRevisionID ||
+		restarted.accountVersion != rejected.accountVersion || restarted.credentialRevisionCount != rejected.credentialRevisionCount {
 		t.Fatalf("bootstrap restart changed rejected default provider: state=%s->%s credential=%s->%s version=%d->%d revisions=%d->%d",
-			rejectedState, restartedState, rejectedCredentialID, restartedCredentialID,
-			rejectedVersion, restartedVersion, rejectedRevisionCount, restartedRevisionCount)
+			rejected.state, restarted.state, rejected.credentialRevisionID, restarted.credentialRevisionID,
+			rejected.accountVersion, restarted.accountVersion, rejected.credentialRevisionCount, restarted.credentialRevisionCount)
 	}
 	reported, err := service.ReportWarmRuntime(ctx, reportWorker, command.WarmRuntimeInput{
 		WorkloadInstance: workloadInstance, RuntimeRevision: failedOver.DesiredRuntimeRevision, State: "READY",
@@ -1807,6 +2094,51 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 	}
 }
 
+// bootstrapProviderRestartState holds the four comparable metadata observations used to detect
+// bootstrap changes to a rejected provider: state, current credential revision identity, account
+// version and total revision count. It is a test readback value, not an authorization grant or
+// external secret snapshot.
+// bootstrapProviderRestartState хранит четыре сравнимых наблюдения метаданных для обнаружения
+// изменений rejected provider после bootstrap: state, identity текущей credential revision,
+// version account и общее число ревизий. Это тестовое значение readback, а не grant полномочий или
+// snapshot внешнего секрета.
+type bootstrapProviderRestartState struct {
+	state                   string
+	credentialRevisionID    string
+	accountVersion          int64
+	credentialRevisionCount int64
+}
+
+// readBootstrapProviderRestartState reads the exact account UUID with the shared component query
+// and scans state, current credential UUID, account version and revision count in their original
+// order. It returns the possibly partial value and unchanged query/scan error; callers retain
+// phase-specific test failures. The supplied context/pool are used directly with no transaction,
+// retry, mutation or secret access.
+// readBootstrapProviderRestartState читает точный UUID account общим компонентным запросом и
+// сканирует state, UUID текущего credential, version account и число ревизий в прежнем порядке.
+// Возвращает возможно частичное значение и неизменённую ошибку query/scan; вызывающие сохраняют
+// сообщения теста для своей фазы. Переданные context/pool используются напрямую без транзакции,
+// retry, записи или чтения секрета.
+func readBootstrapProviderRestartState(ctx context.Context, pool *pgxpool.Pool, accountID string) (bootstrapProviderRestartState, error) {
+	var observed bootstrapProviderRestartState
+	err := pool.QueryRow(ctx, bootstrapComponentProviderRestartReadbackQuery, accountID).Scan(
+		&observed.state, &observed.credentialRevisionID, &observed.accountVersion, &observed.credentialRevisionCount,
+	)
+	return observed, err
+}
+
+// testSystemAssistantRuntimeEnvironmentReconciliation leaves a new default system image configured
+// and reconciles it twice in explicitly committed transactions with deferred rollback cleanup. It
+// resolves the exact persisted image, recomputes environment digests with the default policy and
+// requires version two with a parent, exactly two versions, RECOVERING, the digest-derived desired
+// revision and cleared warm-instance/heartbeat fields after both calls. These assertions prove
+// persisted idempotent reconciliation, not image execution or readiness.
+// testSystemAssistantRuntimeEnvironmentReconciliation оставляет настроенным новый default system
+// image и дважды выполняет reconciliation в явно фиксируемых транзакциях с отложенным rollback
+// cleanup. Разрешает точный сохранённый image, пересчитывает environment digests с default policy
+// и после обоих вызовов требует version two с parent, ровно две версии, RECOVERING, desired
+// revision из digest и очищенные warm-instance/heartbeat fields. Проверяет сохранённую
+// идемпотентную reconciliation без доказательства исполнения image или готовности.
 func testSystemAssistantRuntimeEnvironmentReconciliation(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	t.Helper()
 	config := repository.roleImages
@@ -1871,6 +2203,18 @@ func testSystemAssistantRuntimeEnvironmentReconciliation(t *testing.T, ctx conte
 	assertReadback(2)
 }
 
+// testProviderAccountApplicationAccess checks owner collection/create/revoke action visibility,
+// creates a pending-authorization account and resolves allowed account-view access. An initially
+// unbound second subject is forbidden; after a resource-kind provider.account.view binding it sees
+// the same collection and OPEN-only actions in list/detail, with no collection creation action.
+// This fixture checks read/action projections and owner creation, not an attempted unauthorized
+// mutation or provider authentication.
+// testProviderAccountApplicationAccess проверяет видимость owner collection/create/revoke actions,
+// создаёт account в ожидании авторизации и разрешает account-view access. Второй изначально
+// непривязанный subject получает запрет; после binding provider.account.view по resource kind
+// видит ту же коллекцию и только OPEN в list/detail без действия создания в коллекции. Оснастка
+// проверяет чтение, проекции действий и создание владельцем, но не попытку запрещённой записи или
+// аутентификацию provider.
 func testProviderAccountApplicationAccess(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	ownerInput := platformrepo.ProofPrincipalInput{
@@ -1955,6 +2299,21 @@ func testProviderAccountApplicationAccess(t *testing.T, ctx context.Context, rep
 	}
 }
 
+// testRuntimeConfigurationPublish seeds a secondary provider/catalog and checks that a new agent
+// uses the active promoted SHIPPED base with exact readonly provenance and rejects recipe mutation
+// actions. It validates the two-account policy, rejects missing/forged/provider-mismatched catalog
+// inputs and stale pins with their distinct errors, then publishes valid candidates with
+// configuration/agent version increments. An unsupported reasoning-effort overlay must produce one
+// versioned safe location diagnostic, remain INVALID and fail publication with Conflict. All
+// effects are component metadata; no provider, build or runtime is contacted.
+// testRuntimeConfigurationPublish подготавливает secondary provider/catalog и проверяет у нового
+// агента активную promoted SHIPPED base с точным readonly provenance и запретом recipe mutation
+// actions. Проверяет policy двух accounts, отклоняет отсутствующие, самоназначенные, чужие
+// provider catalog inputs и устаревшие pins с разными ошибками, затем публикует допустимые
+// candidates с увеличением configuration/agent versions. Overlay с неподдерживаемым reasoning
+// effort должен дать одну безопасную versioned diagnostic с позицией, остаться INVALID и получить
+// Conflict при публикации. Эффекты ограничены компонентными метаданными; обращений к provider,
+// build или runtime нет.
 func testRuntimeConfigurationPublish(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	if _, err := repository.pool.Exec(ctx, bootstrapComponentInsertSecondaryProviderQuery); err != nil {
@@ -2082,6 +2441,26 @@ func testRuntimeConfigurationPublish(t *testing.T, ctx context.Context, reposito
 	}
 }
 
+// testSessionProviderAffinityAfterPolicyMutation pins a launched session to its primary account,
+// changes current policy to a secondary account and requires claims/runtime revisions to retain
+// the session account. It checks server-owned effort, instruction/materialization provenance,
+// workspace policy, exact run/session previews and revision predecessors, delegating related
+// resumability/proof checks. Credential refresh requires a fresh observed catalog; revocation
+// yields no fallback claim, restoration without observation closes the continuation, and retry
+// after observation retains affinity. Changed model defaults require explicit republication,
+// non-reasoning models get no invented effort and a secondary-only model cannot switch the session
+// account. Fixture cleanup restores account eligibility and final policy/catalog; no real provider
+// execution occurs.
+// testSessionProviderAffinityAfterPolicyMutation закрепляет запущенную session за primary account,
+// меняет текущую policy на secondary account и требует сохранить session account в claims/runtime
+// revisions. Проверяет серверный effort, происхождение instructions/materialization, workspace
+// policy, точные run/session previews и предшествующие revisions, делегируя связанные проверки
+// resumability/proof. Credential refresh требует свежего observed catalog; отзыв не даёт fallback
+// claim, восстановление без observation закрывает continuation, а retry после observation
+// сохраняет привязку. Изменённые model defaults требуют явной перепубликации, non-reasoning model
+// не получает выдуманный effort, secondary-only model не может переключить session account.
+// Cleanup оснастки восстанавливает eligibility account и итоговые policy/catalog; реального
+// исполнения provider нет.
 func testSessionProviderAffinityAfterPolicyMutation(
 	t *testing.T,
 	ctx context.Context,
@@ -2424,6 +2803,14 @@ func testSessionProviderAffinityAfterPolicyMutation(
 	seedObservedCatalogFixture(t, ctx, repository)
 }
 
+// testRuntimeEnvironmentRejectsMissingImage creates an owner project and attempts to create an
+// environment with values but no exact promoted image reference. It requires Invalid and a nil
+// RuntimeEnvironment result; the assertion checks the command response without claiming a
+// successful environment, image admission or workload launch.
+// testRuntimeEnvironmentRejectsMissingImage создаёт проект владельца и пытается создать
+// environment со значениями, но без точной ссылки на promoted image. Требует Invalid и nil
+// RuntimeEnvironment result; проверяет ответ команды без заявления успешного создания environment,
+// допуска image или запуска workload.
 func testRuntimeEnvironmentRejectsMissingImage(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
@@ -2450,6 +2837,22 @@ func testRuntimeEnvironmentRejectsMissingImage(t *testing.T, ctx context.Context
 	}
 }
 
+// testRuntimeEnvironmentLifecycle uses the earlier accepted/promoted image fixture to create two
+// ready environments and checks list/detail actions and exact version binding. Disable/enable
+// preserves the immutable current version, stale OCC is rejected and a bound environment cannot be
+// deleted. After rebinding the agent, deletion must return a stable terminal snapshot, replay
+// exactly and respect revoked-authority/inexact-version masking. Deleted resources disappear from
+// get/readiness/agent-list/catalog reads; SQL requires a DELETED tombstone with no bindings and
+// exactly one matching audit/outbox event. Ready denotes stored component eligibility, not a
+// running container.
+// testRuntimeEnvironmentLifecycle использует ранее подготовленный accepted/promoted image для двух
+// ready environments и проверяет list/detail actions и точную привязку version. Disable/enable
+// сохраняет immutable current version, устаревший OCC отклоняется, bound environment нельзя
+// удалить. После перепривязки агента удаление должно вернуть устойчивый terminal snapshot, точно
+// повторяться и сохранять masking при отзыве полномочий или неточной version. Удалённый ресурс
+// отсутствует в get/readiness/agent-list/catalog; SQL требует DELETED tombstone без bindings и
+// ровно по одному подходящему audit/outbox event. Ready означает сохранённую компонентную
+// eligibility, а не работающий контейнер.
 func testRuntimeEnvironmentLifecycle(
 	t *testing.T,
 	ctx context.Context,
@@ -2674,6 +3077,22 @@ WHERE environment.ref = $1`, first.Ref).Scan(
 	}
 }
 
+// testRuntimeEnvironmentPrivilegedAdmission checks privileged create/publication authentication
+// ordering using missing, older-than-five-minute and more-than-thirty-second-future timestamps.
+// Fresh owner authentication reaches missing-image Invalid rather than granting a usable
+// environment. Unsupported Kubernetes access is rejected without changing the published
+// environment. A project.manage-only principal reaches ordinary validation but receives NotFound
+// for privileged policy with both fresh and stale authentication, preventing a reauthentication
+// oracle before exact privileged permission. This fixture does not grant cluster access or start a
+// runtime.
+// testRuntimeEnvironmentPrivilegedAdmission проверяет порядок аутентификации privileged
+// create/publication с отсутствующим timestamp, возрастом более пяти минут и временем более чем на
+// тридцать секунд в будущем. Свежая аутентификация владельца достигает Invalid отсутствующего
+// image, не создавая пригодное environment. Неподдерживаемый Kubernetes access отклоняется без
+// изменения опубликованного environment. Principal только с project.manage достигает обычной
+// валидации, но получает NotFound для privileged policy и со свежей, и с устаревшей
+// аутентификацией, закрывая reauthentication oracle до точного privileged permission. Оснастка не
+// выдаёт cluster access и не запускает runtime.
 func testRuntimeEnvironmentPrivilegedAdmission(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	now := time.Now().UTC()
@@ -2819,6 +3238,22 @@ func testRuntimeEnvironmentPrivilegedAdmission(t *testing.T, ctx context.Context
 	}
 }
 
+// testEnterpriseAccessRestriction runs eight concurrent synthetic OIDC-group resolutions, requires
+// one membership, checks the unchanged-group fast path against a held subject lock with a 750 ms
+// budget and refreshes an aged group observation. It grants a candidate project view plus one
+// exact agent launch and checks catalog/explain/launch/proof boundaries across another
+// agent/project. Owner keyset cursors reject changed filters/actors, the membership presentation
+// remains a view and exact launch grants must not flatten into project launch authority. The one
+// allowed run is cancelled. These are database/service assertions over fixture identities, without
+// contacting an identity provider or executing a workload.
+// testEnterpriseAccessRestriction выполняет восемь параллельных разрешений синтетической OIDC
+// group, требует одну membership, проверяет fast path неизменённой группы при удерживаемом subject
+// lock с бюджетом750 ms и обновляет устаревшее наблюдение группы. Выдаёт candidate project view и
+// launch одного точного агента, проверяя catalog/explain/launch/proof boundaries относительно
+// другого агента/проекта. Owner keyset cursors отклоняют изменённые filters/actors, memberships
+// остаётся view, точный launch grant не разворачивается в project launch authority. Единственный
+// разрешённый run отменяется. Это assertions БД/сервиса над тестовыми identities без обращения к
+// identity provider и исполнения workload.
 func testEnterpriseAccessRestriction(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	ownerInput := platformrepo.ProofPrincipalInput{
@@ -3077,6 +3512,16 @@ func testEnterpriseAccessRestriction(t *testing.T, ctx context.Context, reposito
 	}
 }
 
+// testInstructionDraftSave creates a project/agent and saves instructions twice through
+// CreateInstructions using each returned agent version and distinct idempotency keys. The second
+// save must increment the agent version and replace the same mutable draft: SQL requires one DRAFT
+// row with the second content. It then delegates instruction binding lifecycle assertions; no
+// draft publication or runtime execution is implied by the saves.
+// testInstructionDraftSave создаёт project/agent и дважды сохраняет instructions через
+// CreateInstructions с каждой полученной agent version и разными idempotency keys. Второе
+// сохранение должно увеличить version агента и заменить тот же mutable draft: SQL требует одну
+// строку DRAFT со вторым content. Затем делегирует проверки instruction binding lifecycle;
+// сохранение не означает публикацию draft или исполнение runtime.
 func testInstructionDraftSave(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
@@ -3122,6 +3567,19 @@ func testInstructionDraftSave(t *testing.T, ctx context.Context, repository *Rep
 	testInstructionBindingLifecycle(t, ctx, repository, service, owner, agent.Ref)
 }
 
+// testProviderCredentialLegacyRepair reads the initial first credential descriptor, changes only
+// configured secret identity/resource version with the same content digest and requires Bootstrap
+// to append revision two and increment account version once. Repetition must be idempotent; a
+// different content digest must fail without changing the stored descriptor, counts or account
+// version. The successful path explicitly restores the repaired configuration at the end. All
+// inputs are synthetic metadata; no secret bytes are read, copied or rotated.
+// testProviderCredentialLegacyRepair читает исходный первый credential descriptor, меняет только
+// настроенные identity/resource version секрета при том же digest и требует от Bootstrap
+// добавления второй revision с однократным увеличением account version. Повтор должен быть
+// идемпотентным; иной digest содержимого должен отклоняться без изменения сохранённого descriptor,
+// счётчиков или account version. Успешный путь явно восстанавливает исправленную конфигурацию в
+// конце. Все inputs являются синтетическими метаданными; байты секретов не читаются, не копируются
+// и не ротируются.
 func testProviderCredentialLegacyRepair(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	t.Helper()
 	readback := func() (revision, accountVersion, count int64, uid, resourceVersion, digest string) {
@@ -3195,6 +3653,18 @@ func testProviderCredentialLegacyRepair(t *testing.T, ctx context.Context, repos
 	}
 }
 
+// testSystemAssistantCorePromptUpgrade advances the shipped core-prompt revision by one and runs
+// reconciliation twice in committed transactions with rollback cleanup. Readback requires the new
+// prompt/revision, RECOVERING and matching desired revision, version two, two published core
+// prompts and one upgrade audit. Attempting the previous shipped revision must fail. The component
+// checks forward-only persisted upgrade and idempotency, without executing or declaring the
+// assistant ready.
+// testSystemAssistantCorePromptUpgrade повышает shipped core-prompt revision на один и дважды
+// выполняет reconciliation в фиксируемых транзакциях с rollback cleanup. Readback требует новый
+// prompt/revision, RECOVERING и совпадающую desired revision, version two, два опубликованных core
+// prompts и один upgrade audit. Попытка прежней shipped revision должна завершиться ошибкой.
+// Компонент проверяет сохранённое forward-only обновление и идемпотентность без исполнения
+// ассистента или заявления его готовности.
 func testSystemAssistantCorePromptUpgrade(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	t.Helper()
 	upgrade := func(revision, prompt string) error {
@@ -3242,6 +3712,20 @@ func testSystemAssistantCorePromptUpgrade(t *testing.T, ctx context.Context, rep
 	}
 }
 
+// testInteractionHealthRouting checks that the optional Mattermost definition exposes
+// interaction-owned routing/readiness and eighteen capabilities, then creates a disconnected
+// connection and seeds only a synthetic credential descriptor. A queued connection test must be
+// invisible to generic integration claims and claimed once by the interaction worker. Completing
+// the exact lease/fence/generation with a generic principal is Forbidden; the interaction
+// principal produces CONNECTED. This verifies persisted routing/authority and completion metadata
+// without contacting Mattermost or testing real credentials.
+// testInteractionHealthRouting проверяет у optional Mattermost definition маршрут и readiness
+// владельца interaction с восемнадцатью capabilities, затем создаёт disconnected connection и
+// добавляет только синтетический credential descriptor. Поставленный connection test должен быть
+// недоступен generic integration claims и однократно выдан interaction worker. Completion точного
+// lease/fence/generation с generic principal запрещён Forbidden; interaction principal получает
+// CONNECTED. Проверяет сохранённые routing/authority и completion metadata без обращения к
+// Mattermost или проверки реальных credentials.
 func testInteractionHealthRouting(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
@@ -3321,6 +3805,23 @@ FROM revision WHERE connection.id=revision.connection_id`, connection.Connection
 	}
 }
 
+// testIntegrationConfigurationAndGrants checks typed integration definitions, closed capability
+// risks and rejection of secret-like public fields, then creates a synthetic
+// connection/project/agent. Direct fixture readiness enables grant OCC/target/capability checks,
+// revoke/update/reenable and TESTING mutation restrictions. Disabling must cancel the pending test
+// and revoke grants atomically. Deletion preserves a terminal snapshot and exact replay, rejects
+// revoked/inexact/other-actor/tenant receipt reads, hides the deleted connection and records one
+// matching audit/outbox event with a disabled tombstone. SQL arranges or observes component state;
+// no external integration or real credentials are exercised.
+// testIntegrationConfigurationAndGrants проверяет типизированные integration definitions, закрытые
+// risk capabilities и запрет похожих на секреты public fields, затем создаёт синтетические
+// connection/project/agent. Прямая тестовая готовность позволяет проверить OCC, target и
+// capability grants, revoke/update/reenable и ограничения записи в TESTING. Выключение должно
+// атомарно отменить ожидающий тест и отозвать grants. Удаление сохраняет terminal snapshot и exact
+// replay, запрещает чтение receipt при отзыве полномочий, неточной version, другом actor/tenant,
+// скрывает удалённый connection и фиксирует по одному подходящему audit/outbox event с disabled
+// tombstone. SQL подготавливает или наблюдает компонентное состояние; внешняя интеграция и
+// реальные credentials не используются.
 func testIntegrationConfigurationAndGrants(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
@@ -3579,20 +4080,27 @@ WHERE connection.ref = $1`, created.Connection.Ref).Scan(
 	}
 }
 
+// testIntegrationEffectLifecycle creates separate READ/NONE and WRITE/HUMAN_EACH_EFFECT grants and
+// proves pinned runtime materialization plus isolation between integration and interaction
+// workers. Reads run without a gate; rejected writes create no receipt and keep the root graph
+// running until explicit cleanup. Approval permits one claimed write with exact
+// effect/input/response digests; matching duplicate completion preserves one receipt and changed
+// digest is Invalid. Both explicit unknown outcome and expired lease recover only through
+// RECOVER_READ_ONLY, then become terminal and unclaimable. Grant revocation blocks queued reads;
+// gate single/list/event/receipt paths retain exact intent and signed project masking. All results
+// are synthetic completion metadata, not executed external effects.
+// testIntegrationEffectLifecycle создаёт раздельные READ/NONE и WRITE/HUMAN_EACH_EFFECT grants и
+// проверяет закреплённую runtime materialization с изоляцией integration и interaction workers.
+// Чтение проходит без gate; rejected write не создаёт receipt и оставляет root graph активным до
+// явной очистки. Approval допускает один claimed write с точными effect/input/response digests;
+// совпадающий повтор completion сохраняет один receipt, изменённый digest даёт Invalid. Явный
+// unknown outcome и истёкший lease восстанавливаются только через RECOVER_READ_ONLY, затем
+// становятся terminal и недоступны claim. Отзыв grant блокирует queued read;
+// single/list/event/receipt пути gate сохраняют точный intent и signed project masking. Все
+// результаты являются синтетическими completion metadata, а не исполненными внешними эффектами.
 func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	t.Helper()
-	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
-		CallerWorkload: "control-api-gateway", Operation: "platform.command.integrations.create",
-	}, "control-api-gateway")
-	runtimeWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
-		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
-	}, "runtime-controller")
-	gateway := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
-		CallerWorkload: "integration-gateway", Operation: "platform.runtime.integrations.claim",
-	}, "integration-gateway")
+	owner, runtimeWorker, gateway := resolveIntegrationEffectTestPrincipals(t, ctx, repository)
 	service, err := platformservice.New(repository)
 	if err != nil {
 		t.Fatal(err)
@@ -3987,6 +4495,25 @@ func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repositor
 	}
 }
 
+// testProjectMembershipCandidate checks existing-owner authority resolution under an unrelated
+// organization lock, then onboards a synthetic subject through separate organization and project
+// memberships. Canonical access-binding projections and immutable role versions must match
+// presentation permissions; assigned candidates disappear and read-only resource actions remain
+// OPEN. Audit/search/VFS/project visibility, cross-project references, self-change, overgrant and
+// administrator-to-owner boundaries are checked independently. Direct binding commands cannot
+// bypass protected membership projections. Organization suspension must revoke both
+// platform/project presentation bindings and subsequent proof authority. These component commands
+// exercise fixture identities, not a live OIDC login or workload execution.
+// testProjectMembershipCandidate проверяет разрешение полномочий существующего владельца при
+// посторонней блокировке организации, затем подключает синтетический subject через отдельные
+// organization и project memberships. Канонические access-binding projections и immutable role
+// versions должны соответствовать отображаемым permissions; назначенные candidates исчезают,
+// read-only resource actions остаются OPEN. Отдельно проверяются audit/search/VFS/project
+// visibility, чужие project refs, изменение собственных прав, overgrant и administrator-to-owner
+// boundaries. Прямые binding commands не обходят защищённые membership projections. Приостановка
+// organization membership должна отозвать platform/project presentation bindings и последующие
+// proof authority. Компонентные команды используют тестовые identities без живого OIDC login или
+// исполнения workload.
 func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	ownerInput := platformrepo.ProofPrincipalInput{
@@ -4410,6 +4937,24 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 	}
 }
 
+// testScheduleLifecycle normalizes a schedule and pins occurrence revision, input and prompt
+// binding across configuration changes and expired-lease recovery. A new lease/generation
+// preserves the captured revision; stale materialization is NotFound, successful materialization
+// clears claim fields and cancellation closes its occurrence. Disabling the target cancels its
+// claim and disables the schedule without implicit reenable. Archive preserves revision/history,
+// records one audit/event and prevents mutation/materialization/future claims. Delete returns an
+// exact terminal snapshot/replay with revoked-authority masking and removes read eligibility;
+// pause/archive OCC and explicit reenable are checked separately. Direct SQL only arranges
+// due/expiry/readback fixtures; no scheduler process or agent is started.
+// testScheduleLifecycle нормализует расписание и закрепляет occurrence revision, input и prompt
+// binding при изменении конфигурации и восстановлении истёкшего lease. Новый lease/generation
+// сохраняет captured revision; устаревшая materialization даёт NotFound, успешная очищает claim
+// fields, отмена закрывает occurrence. Выключение цели отменяет claim и выключает расписание без
+// автоматического включения. Archive сохраняет revision/history, фиксирует по одному audit/event и
+// запрещает mutation/materialization/future claims. Delete возвращает точный terminal
+// snapshot/replay с masking при отзыве полномочий и убирает read eligibility; отдельно проверяются
+// pause/archive OCC и явное включение. Прямой SQL только подготавливает due/expiry/readback
+// fixtures; scheduler process и агент не запускаются.
 func testScheduleLifecycle(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	seedObservedCatalogFixture(t, ctx, repository)
@@ -4719,6 +5264,20 @@ WHERE schedule.ref = $1`, archiveCandidate.Schedule.Ref).Scan(
 	}
 }
 
+// testScheduleContractReadback creates a CONTINUE_ONE schedule, requires a complete first
+// immutable revision and checks a changed second revision through detail reads. It creates a
+// reusable session and binds its identity using a fixture UPDATE constrained by
+// organization/project, then compares detail/list projections and continuation session with the
+// same revision. Cleanup uses a separate two-second context without cancellation inheritance and
+// cancels only a nonterminal fixture run. Readback consistency does not execute an occurrence or
+// grant session authority from the SQL assignment.
+// testScheduleContractReadback создаёт CONTINUE_ONE schedule, требует полную первую immutable
+// revision и проверяет изменённую вторую revision через detail reads. Создаёт повторно
+// используемую session и связывает её identity тестовым UPDATE с ограничением по
+// organization/project, затем сравнивает detail/list projections и continuation session с той же
+// revision. Очистка использует отдельный двухсекундный context без наследования отмены и отменяет
+// только нетерминальный тестовый run. Согласованность чтения не исполняет occurrence и не выдаёт
+// session authority из SQL assignment.
 func testScheduleContractReadback(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	seedObservedCatalogFixture(t, ctx, repository)
@@ -4847,6 +5406,16 @@ WHERE schedule.ref = $1
 	t.Fatalf("created schedule %q is absent from list readback", created.Schedule.Ref)
 }
 
+// assertScheduleContractReadback requires the expected continuation-session ref and exact
+// current-revision identity, number, digest, name, target, schedule expression/timezone, deeply
+// equal input and session/notification policies. CreatedAt must be nonzero but is not compared to
+// the expected timestamp. Any mismatch fails the test; the helper neither recomputes the digest
+// nor validates runtime authority or scheduling execution.
+// assertScheduleContractReadback требует ожидаемый continuation-session ref и точные identity,
+// номер, digest, name, target, schedule expression/timezone текущей revision, глубоко равный input
+// и session/notification policies. CreatedAt должен быть ненулевым, но не сравнивается с ожидаемым
+// timestamp. Любое несовпадение завершает тест; helper не пересчитывает digest и не проверяет
+// runtime authority или исполнение расписания.
 func assertScheduleContractReadback(t *testing.T, item entity.Schedule, expectedRevision entity.ScheduleRevision, expectedSessionRef string) {
 	t.Helper()
 	if item.ContinueSessionRef != expectedSessionRef {
@@ -4864,6 +5433,19 @@ func assertScheduleContractReadback(t *testing.T, item entity.Schedule, expected
 	}
 }
 
+// testIdempotencyOCCAndConcurrentRuns replays an identical project command, rejects changed intent
+// under the same key and verifies current/stale project versions. Two goroutine submissions of one
+// run command must resolve to one ref and consistent project detail/list counters; after
+// cancellation, two distinct keys/inputs must create different refs. It checks every returned
+// error/Run and cancels all created runs. Buffered result channels collect outcomes without an
+// explicit start barrier, so this component fixture is not a proof of every race interleaving or
+// actual runtime execution.
+// testIdempotencyOCCAndConcurrentRuns повторяет одинаковую project command, запрещает изменённый
+// intent с тем же key и проверяет текущую/устаревшую project version. Две отправки одной run
+// command из goroutines должны дать один ref и согласованные project detail/list counters; после
+// отмены два разных keys/inputs должны создать разные refs. Проверяет каждую ошибку/Run и отменяет
+// все созданные runs. Buffered result channels собирают результаты без явного start barrier,
+// поэтому компонентная оснастка не доказывает все варианты гонки или реальное исполнение runtime.
 func testIdempotencyOCCAndConcurrentRuns(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
@@ -4906,6 +5488,14 @@ func testIdempotencyOCCAndConcurrentRuns(t *testing.T, ctx context.Context, repo
 		t.Fatalf("accept stale project version: %v", err)
 	}
 	agent := createLifecycleAgent(t, ctx, service, owner, first.Project.Ref, "concurrent-run-agent", "Procurement analyst")
+	// runResult pairs the Result and error of one asynchronous LaunchRun submission for same-intent
+	// and distinct-intent channel collectors. Receivers reject errors/missing Run before copying run
+	// values and comparing refs; the envelope carries no authority, ordering guarantee or
+	// synchronization outside its channel.
+	// runResult связывает Result и ошибку одной асинхронной отправки LaunchRun для channel collectors
+	// одинакового и разного intent. Получатели отклоняют ошибки/отсутствующий Run до копирования run
+	// values и сравнения refs; оболочка не несёт полномочий, гарантии порядка или синхронизации вне
+	// канала.
 	type runResult struct {
 		result command.Result
 		err    error
@@ -4993,6 +5583,18 @@ func testIdempotencyOCCAndConcurrentRuns(t *testing.T, ctx context.Context, repo
 	}
 }
 
+// testHumanGateLifecycle publishes a one-step gated workflow and requires execution completion to
+// leave one WAITING_HUMAN run/gate with matching project/workflow card counters. APPROVE must
+// close the root graph; a new resolution key on the terminal gate is AlreadyResolved. A separate
+// REQUEST_CHANGES path requeues the agent while keeping the run active, creates a second gate
+// after rework and completes on final approval. It delegates historical-consequence/list checks;
+// these fixture commands do not represent a human review or running agent.
+// testHumanGateLifecycle публикует одношаговый workflow с gate и требует после completion один
+// WAITING_HUMAN run/gate с соответствующими project/workflow card counters. APPROVE должен закрыть
+// root graph; новый resolution key для terminal gate даёт AlreadyResolved. Отдельный путь
+// REQUEST_CHANGES возвращает агента в очередь при активном run, создаёт второй gate после
+// доработки и завершается после итогового approval. Делегирует проверки исторических последствий и
+// списка; тестовые команды не являются ручным review или работающим агентом.
 func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repository) {
 	seedObservedCatalogFixture(t, ctx, repository)
 	t.Helper()
@@ -5127,6 +5729,20 @@ func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	testOwnerGateList(t, ctx, service, owner, project.Project.Ref)
 }
 
+// testCoordinatorOwnedWorkflow publishes a workflow whose only stage belongs to its coordinator
+// and verifies that this exact stage is available without a global delegation capability. Bounded
+// polling allows up to sixteen empty cleanup-progress results but never accepts a foreign run.
+// Completing before executing the stage must fail with RUNTIME_WORKFLOW_INCOMPLETE and leave no
+// planned execution. The valid path materializes a child without inherited delegation targets,
+// keeps the root active after coordinator completion, then completes child and parent continuation
+// successfully with no planned nodes. No external coordinator process is executed.
+// testCoordinatorOwnedWorkflow публикует workflow с единственной стадией собственного coordinator
+// и проверяет доступность этой точной стадии без общей delegation capability. Ограниченный polling
+// допускает до шестнадцати пустых результатов продвижения cleanup, но не принимает чужой run.
+// Completion до исполнения стадии должен дать RUNTIME_WORKFLOW_INCOMPLETE без оставшегося planned
+// execution. Допустимый путь материализует child без унаследованных delegation targets, оставляет
+// root активным после coordinator completion, затем успешно завершает child и parent continuation
+// без planned nodes. Внешний coordinator process не исполняется.
 func testCoordinatorOwnedWorkflow(t *testing.T, ctx context.Context, service *platformservice.Service, owner, worker value.Principal, projectRef string, coordinator entity.Agent) {
 	t.Helper()
 	draft := entity.WorkflowVersion{
@@ -5240,17 +5856,28 @@ func testCoordinatorOwnedWorkflow(t *testing.T, ctx context.Context, service *pl
 	}
 }
 
+// testNestedDelegation seeds a synthetic workflow with an authorized coordinator and two pinned
+// child targets, rejecting unknown runtime/capability and attachment launch without Files.
+// Children receive distinct sessions and exact nil/empty Human Gate capability layers. Coordinator
+// and child completions queue one parent-session continuation behind owner approval; replay
+// preserves callbacks and usage, long callback content remains whole while event summaries stay
+// bounded. Approval resumes the parent with exactly two callbacks and no completed delegation
+// targets, then closes the root with aggregated usage. A separate failed-child branch cancels
+// siblings and rejects late parent/child completions without creating gates or continuations.
+// Commands simulate the graph lifecycle; no agent process is executed.
+// testNestedDelegation подготавливает синтетический workflow с уполномоченным coordinator и двумя
+// закреплёнными child targets, отклоняя неизвестные runtime/capability и launch с attachment без
+// Files. Children получают разные sessions и точные nil/empty слои Human Gate capabilities.
+// Завершения coordinator и children ставят одну continuation в родительской session за owner
+// approval; replay сохраняет callbacks и usage, длинный callback остаётся целым при ограниченных
+// event summaries. Approval продолжает parent ровно с двумя callbacks без завершённых delegation
+// targets, затем закрывает root с суммарным usage. Отдельная ветка failed child отменяет siblings
+// и запрещает поздние parent/child completions без создания gates или continuations. Команды
+// моделируют жизненный цикл графа; процесс агента не исполняется.
 func testNestedDelegation(t *testing.T, ctx context.Context, repository *Repository) {
 	seedObservedCatalogFixture(t, ctx, repository)
 	t.Helper()
-	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
-		CallerWorkload: "control-api-gateway", Operation: "platform.runs.launch",
-	}, "control-api-gateway")
-	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
-		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
-	}, "runtime-controller")
+	owner, worker := resolveExecutionLifecycleTestPrincipals(t, ctx, repository)
 	toolWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.tool-call.record",
@@ -5669,6 +6296,12 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 	}
 }
 
+// graphNodeState returns the state of the first node whose type matches nodeType, preserving slice
+// order. Nil/empty input or no match returns the empty string; duplicate node types are neither
+// aggregated nor validated.
+// graphNodeState возвращает state первого узла с type, совпадающим с nodeType, сохраняя порядок
+// slice. Nil/empty input или отсутствие совпадения даёт пустую строку; повторные node types не
+// агрегируются и не валидируются.
 func graphNodeState(nodes []entity.RunNode, nodeType string) string {
 	for _, node := range nodes {
 		if node.Type == nodeType {
@@ -5678,7 +6311,19 @@ func graphNodeState(nodes []entity.RunNode, nodeType string) string {
 	return ""
 }
 
-func testProviderCredentialRefreshAndCapacity(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
+// resolveExecutionLifecycleTestPrincipals resolves and returns the fixture launch owner followed
+// by the runtime execution worker with the exact actor/tenant/workload/operation inputs shared by
+// nested delegation, provider refresh/rejection and direct-run scenarios. It preserves the
+// existing resolvedTestPrincipal fixture OwnerClaim behavior and returns the principals unchanged.
+// Test helper marking adds no service construction, credential access, claim, transaction or role
+// merging; callers retain their distinct lifecycle actions.
+// resolveExecutionLifecycleTestPrincipals разрешает и возвращает тестового launch owner, затем
+// worker исполнения runtime с точными actor/tenant/workload/operation inputs общими для nested
+// delegation, provider refresh/rejection и direct-run scenarios. Сохраняет существующее тестовое
+// поведение OwnerClaim в resolvedTestPrincipal и возвращает principals без изменения. Пометка test
+// helper не добавляет создание сервиса, чтение credentials, claim, транзакцию или объединение
+// ролей; разные lifecycle actions остаются у callers.
+func resolveExecutionLifecycleTestPrincipals(t *testing.T, ctx context.Context, repository *Repository) (value.Principal, value.Principal) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
@@ -5688,6 +6333,28 @@ func testProviderCredentialRefreshAndCapacity(t *testing.T, ctx context.Context,
 		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
 	}, "runtime-controller")
+	return owner, worker
+}
+
+// testProviderCredentialRefreshAndCapacity sets every fixture provider capacity to one and
+// restores it to thirty-two on exit, then races two claims and requires one lease with an
+// exhausted-capacity projection that still allows submission. An active lease blocks account
+// revocation. Exact-fenced refresh creates one immutable descriptor, retains the superseded
+// descriptor for about one day, replays idempotently and rejects a late changed callback.
+// Completing the first lease permits another claim with the new revision; after both completions
+// the runtime-lease cleanup guard must be false even if a warm consumer remains. Inputs and usage
+// are synthetic; no OAuth exchange or external secret rotation occurs.
+// testProviderCredentialRefreshAndCapacity задаёт всем тестовым providers capacity один и
+// возвращает тридцать два при выходе, затем сталкивает два claim и требует один lease с
+// exhausted-capacity projection, которая всё ещё допускает submission. Активный lease запрещает
+// отзыв account. Refresh с точным fence создаёт один immutable descriptor, сохраняет superseded
+// descriptor примерно на сутки, повторяется идемпотентно и отклоняет поздний изменённый callback.
+// Завершение первого lease допускает следующий claim с новой revision; после обоих завершений
+// runtime-lease cleanup guard должен быть false даже при оставшемся warm consumer. Inputs и usage
+// синтетические; OAuth exchange и ротация внешнего секрета не выполняются.
+func testProviderCredentialRefreshAndCapacity(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
+	t.Helper()
+	owner, worker := resolveExecutionLifecycleTestPrincipals(t, ctx, repository)
 	service, err := platformservice.New(repository)
 	if err != nil {
 		t.Fatalf("construct provider refresh service: %v", err)
@@ -5719,6 +6386,12 @@ func testProviderCredentialRefreshAndCapacity(t *testing.T, ctx context.Context,
 			t.Fatalf("launch provider refresh run %d: run=%#v err=%v", index, launched.Run, launchErr)
 		}
 	}
+	// claimResult couples one concurrent ClaimExecution result with its error in the two-slot channel.
+	// The receiver checks the error before counting RuntimeItems and selecting the sole claimed lease;
+	// the value supplies neither authority nor synchronization beyond that channel.
+	// claimResult связывает результат одного параллельного ClaimExecution с его ошибкой в канале на
+	// два элемента. Получатель проверяет ошибку до подсчёта RuntimeItems и выбора единственного
+	// claimed lease; значение не даёт полномочий и не синхронизирует работу за пределами канала.
 	type claimResult struct {
 		result command.Result
 		err    error
@@ -5863,6 +6536,24 @@ func testProviderCredentialRefreshAndCapacity(t *testing.T, ctx context.Context,
 	}
 }
 
+// testProviderCredentialCleanupLifecycle checks warm-consumer revoke protection, restores the warm
+// fixture and stages a locked active lease before concurrent revoke, which must fail closed.
+// Synthetic authorization retains the superseded descriptor for about a day; account deletion
+// accelerates three cleanup tasks. Claimed descriptor/generation pins survive expiry/reclaim,
+// stale completion is Conflict and terminal receipt replay is exact. Failure retries advance
+// attempt/generation while retaining the descriptor, eventually producing stable DEAD_LETTER
+// without another retry; authorization cleanup and terminal account readback are delegated. SQL
+// only arranges metadata/lease timing, and synthetic receipts do not prove external secret
+// deletion.
+// testProviderCredentialCleanupLifecycle проверяет защиту revoke при warm consumer,
+// восстанавливает warm fixture и подготавливает заблокированный активный lease перед параллельным
+// revoke, который должен закрыто отклоняться. Синтетическая авторизация сохраняет superseded
+// descriptor примерно сутки; удаление account ускоряет три cleanup tasks. Закреплённые
+// descriptor/generation сохраняются при expiry/reclaim, устаревший completion даёт Conflict,
+// terminal receipt повторяется точно. Retry после failure повышает attempt/generation при
+// сохранённом descriptor, затем даёт устойчивый DEAD_LETTER без следующего retry; authorization
+// cleanup и terminal account readback делегируются. SQL подготавливает только метаданные/lease
+// timing, синтетические receipts не доказывают удаление внешнего секрета.
 func testProviderCredentialCleanupLifecycle(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	t.Helper()
 	service, err := platformservice.New(repository)
@@ -6165,16 +6856,25 @@ func testProviderCredentialCleanupLifecycle(t *testing.T, ctx context.Context, r
 	testProviderDeletionTerminalReadback(t, ctx, repository, service, deleteOwner)
 }
 
+// testProviderAuthRejectionLifecycle pins an initial runtime credential, rotates only fixture
+// descriptor metadata and proves that a stale authentication rejection cannot disable the new
+// revision. Rejection of the current revision must require reauthorization while a fresh agent
+// selection uses another eligible account. Device reauthorization keeps the old descriptor pending
+// until the exact attempt installs a new one, advances versions and restores AUTHORIZED. The test
+// delays pending cleanup and temporarily disables/restores the fallback to verify exact restored
+// selection; it does not call a device provider, read secret payloads or infer authority from the
+// rotation inputs.
+// testProviderAuthRejectionLifecycle закрепляет исходный runtime credential, ротирует только
+// метаданные тестового descriptor и проверяет, что устаревший отказ аутентификации не выключает
+// новую revision. Отказ текущей revision должен потребовать reauthorization, а свежий выбор
+// account агента использует другой допустимый account. Device reauthorization сохраняет старый
+// descriptor в ожидании, пока точный attempt не установит новый, повысит versions и вернёт
+// AUTHORIZED. Тест откладывает pending cleanup и временно выключает/восстанавливает fallback для
+// проверки точного restored selection; не обращается к device provider, не читает secret payloads
+// и не выводит полномочия из rotation inputs.
 func testProviderAuthRejectionLifecycle(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	t.Helper()
-	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
-		CallerWorkload: "control-api-gateway", Operation: "platform.runs.launch",
-	}, "control-api-gateway")
-	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
-		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
-	}, "runtime-controller")
+	owner, worker := resolveExecutionLifecycleTestPrincipals(t, ctx, repository)
 	service, err := platformservice.New(repository)
 	if err != nil {
 		t.Fatalf("construct provider rejection service: %v", err)
@@ -6365,6 +7065,15 @@ func testProviderAuthRejectionLifecycle(t *testing.T, ctx context.Context, repos
 	}
 }
 
+// createLifecycleAgent creates a project-scoped fixture agent through CreateAgent with the caller
+// principal/key/name, fixed bounded-task purpose/instructions and the name as role description. It
+// fails the test on command error or a missing Agent and returns a value copy of the server
+// result; it does not publish instructions, claim work or deep-copy nested data.
+// createLifecycleAgent создаёт тестового агента проекта через CreateAgent с переданными
+// principal/key/name, фиксированными purpose/instructions ограниченной задачи и name как role
+// description. Завершает тест при ошибке команды или отсутствии Agent и возвращает копию значения
+// серверного результата; не публикует instructions, не claim работу и не копирует вложенные данные
+// глубоко.
 func createLifecycleAgent(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, projectRef, key, name string) entity.Agent {
 	t.Helper()
 	result, err := service.Execute(ctx, command.Command{Kind: command.CreateAgent, Principal: owner,
@@ -6378,17 +7087,30 @@ func createLifecycleAgent(t *testing.T, ctx context.Context, service *platformse
 	return *result.Agent
 }
 
+// testDirectRunLifecycle creates an agent and clean/quarantined artifact fixtures, checks
+// filtered/keyset catalogs and canonical source-group cursors, then requires Files capability for
+// bindings and attachment launches. It verifies immutable revision/idempotency, VFS projections, a
+// materialized run graph, session FIFO and preservation of a user-edited title. Exact lease-bound
+// artifact reads reject a wrong fence; successful completion closes the root with synthetic usage
+// and a downloadable one-time-grant result. A stable prospective preview has no fabricated runtime
+// identity, invalid/stale context pins are rejected and exact continuation input reuse preserves
+// producer RESULT classification. Cancel/retry retains lineage with attempt two and authoritative
+// monotonic event deltas. Delegated checks and storage reads are fixture operations, not live
+// provider execution.
+// testDirectRunLifecycle создаёт агента и clean/quarantined artifact fixtures, проверяет
+// filtered/keyset catalogs и canonical source-group cursors, затем требует Files capability для
+// bindings и launch с attachments. Проверяет immutable revision/idempotency, VFS projections,
+// materialized run graph, FIFO session и сохранение пользовательского заголовка. Artifact reads по
+// точному lease отклоняют неверный fence; успешное завершение закрывает root с синтетическим usage
+// и результатом для скачивания по одноразовому grant. Устойчивый prospective preview не выдумывает
+// runtime identity, неправильные/устаревшие context pins запрещены, повторное использование
+// точного continuation input сохраняет классификацию producer RESULT. Cancel/retry сохраняет
+// lineage со второй attempt и авторитетными монотонными event deltas. Делегированные проверки и
+// storage reads являются операциями оснастки, а не исполнением живого provider.
 func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	seedObservedCatalogFixture(t, ctx, repository)
-	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
-		CallerWorkload: "control-api-gateway", Operation: "platform.runs.launch",
-	}, "control-api-gateway")
-	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
-		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
-	}, "runtime-controller")
+	owner, worker := resolveExecutionLifecycleTestPrincipals(t, ctx, repository)
 	runtimeReader := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.artifact.read",
@@ -6724,6 +7446,14 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	}
 }
 
+// claimAndCompleteRun claims at most one execution for the fixed fixture workload using the
+// derived claim key, requires exactly one item for expectedRunRef and delegates
+// progress/completion with the same worker, context, key and artifact option. Any mismatch fails
+// the test; the helper does not launch a run or choose a different claim.
+// claimAndCompleteRun claim не более одного execution для фиксированного тестового workload с
+// производным claim key, требует ровно один item для expectedRunRef и делегирует
+// progress/completion с теми же worker, context, key и artifact option. Любое несовпадение
+// завершает тест; helper не запускает run и не выбирает другой claim.
 func claimAndCompleteRun(t *testing.T, ctx context.Context, service *platformservice.Service, worker value.Principal, expectedRunRef, key string, artifact bool) command.Result {
 	t.Helper()
 	claimed, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
@@ -6734,10 +7464,26 @@ func claimAndCompleteRun(t *testing.T, ctx context.Context, service *platformser
 	return completeClaimedExecution(t, ctx, service, worker, claimed.RuntimeItems[0], key, artifact)
 }
 
+// completeClaimedExecution forwards the supplied fixture lease, context, worker, key and artifact
+// flag to the summary-aware completion helper with its fixed customer-response summary. It adds no
+// independent command, validation, usage accounting or test-helper marking.
+// completeClaimedExecution передаёт тестовые lease, context, worker, key и artifact flag в helper
+// завершения с фиксированным резюме ответа клиенту. Не добавляет самостоятельную команду,
+// валидацию, учёт usage или пометку test helper.
 func completeClaimedExecution(t *testing.T, ctx context.Context, service *platformservice.Service, worker value.Principal, lease map[string]any, key string, artifact bool) command.Result {
 	return completeClaimedExecutionWithSummary(t, ctx, service, worker, lease, key, artifact, "Customer response prepared")
 }
 
+// completeClaimedExecutionWithSummary reports progress and then completes the exact
+// lease/fence/generation successfully using separate derived idempotency keys and synthetic usage.
+// If requested, it attaches fixed text bytes with matching SHA-256, size, filename and media type;
+// otherwise the artifact slice is empty. It fails on either command error and returns the
+// completion result without asserting a particular run state or executing a provider.
+// completeClaimedExecutionWithSummary сообщает progress, затем успешно завершает точные
+// lease/fence/generation с разными производными idempotency keys и синтетическим usage. По запросу
+// прикладывает фиксированные текстовые байты с совпадающими SHA-256, size, filename и media type;
+// иначе artifact slice пуст. Завершает тест при ошибке любой команды и возвращает completion
+// result без требования конкретного run state или исполнения provider.
 func completeClaimedExecutionWithSummary(t *testing.T, ctx context.Context, service *platformservice.Service, worker value.Principal, lease map[string]any, key string, artifact bool, resultSummary string) command.Result {
 	t.Helper()
 	if _, err := service.Execute(ctx, command.Command{Kind: command.ReportExecutionProgress, Principal: worker,
@@ -6765,6 +7511,14 @@ func completeClaimedExecutionWithSummary(t *testing.T, ctx context.Context, serv
 	return completed
 }
 
+// turnUsageFixture returns fixed internally related token counters and a model context window for
+// component completion accounting: total input/output plus cached/cache-write and reasoning
+// subsets. These synthetic observations are reusable values and are not measured provider
+// consumption or billing evidence.
+// turnUsageFixture возвращает фиксированные связанные token counters и model context window для
+// компонентного учёта завершения: total input/output с cached/cache-write и reasoning subsets. Эти
+// синтетические наблюдения являются повторно используемыми значениями, а не измеренным расходом
+// provider или доказательством биллинга.
 func turnUsageFixture() entity.TokenUsage {
 	return entity.TokenUsage{
 		TotalTokens: 120, InputTokens: 100, CachedInputTokens: 40,
@@ -6773,6 +7527,25 @@ func turnUsageFixture() entity.TokenUsage {
 	}
 }
 
+// testSystemAssistantTypedPlan checks effect-free repeated warm heartbeats and exact operation
+// permissions, then queues a system conversation without keyword-generated plans and preserves its
+// meaningful title. A queued immutable attachment survives soft deletion for its captured runtime
+// while new turns/ordinary reads reject it and active purge is blocked. Lease-bound
+// resource/schema search enforces fence/generation/permission and stops after completion. The
+// worker proposes a typed draft, the owner edits/validates/applies the exact revision, tool events
+// reach outbox and the final conversation retains the exact operation receipt. Terminal purge and
+// organization-scoped output download are checked independently. READY reports, synthetic
+// execution output and persisted APPLIED do not imply an external model or live assistant ran.
+// testSystemAssistantTypedPlan проверяет отсутствие новых эффектов при повторных warm heartbeats и
+// точные operation permissions, затем ставит system conversation в очередь без планов по ключевым
+// словам и сохраняет содержательный заголовок. Queued immutable attachment переживает soft
+// deletion для captured runtime, но новые turns/обычное чтение запрещены, active purge
+// заблокирован. Поиск ресурсов/схем по lease требует fence/generation/permission и прекращается
+// после completion. Worker предлагает typed draft, владелец редактирует/валидирует/применяет
+// точную revision, tool events попадают в outbox, итоговая conversation сохраняет точный operation
+// receipt. Terminal purge и скачивание organization-scoped output проверяются отдельно. READY
+// reports, синтетический execution output и сохранённый APPLIED не означают запуск внешней модели
+// или живого ассистента.
 func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
@@ -7148,6 +7921,18 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	}
 }
 
+// resolvedTestPrincipal enables OwnerClaim on a copy of the proof input when the supplied workload
+// is control-api-gateway, resolves authority through the repository and fails the test on error.
+// It builds a fixture Principal from the authoritative actor/organization, input operation,
+// derived correlation, supplied workload and credential revision one. The injected owner-claim
+// flag is fixture behavior, not a production bearer/signature or permission inferred from payload
+// identity.
+// resolvedTestPrincipal включает OwnerClaim в копии proof input, когда переданный workload равен
+// control-api-gateway, разрешает authority через repository и завершает тест при ошибке. Строит
+// тестовый Principal из авторитетных actor/organization, input operation, производной correlation,
+// переданного workload и credential revision один. Добавленный owner-claim flag является
+// поведением оснастки, а не production bearer/signature или полномочием, выведенным из identity
+// payload.
 func resolvedTestPrincipal(t *testing.T, ctx context.Context, repository *Repository, input platformrepo.ProofPrincipalInput, workload string) value.Principal {
 	t.Helper()
 	if workload == "control-api-gateway" {
@@ -7161,6 +7946,18 @@ func resolvedTestPrincipal(t *testing.T, ctx context.Context, repository *Reposi
 		Permission: input.Operation, CorrelationRef: input.Operation + "-component", CallerWorkload: workload, CredentialRevision: 1}
 }
 
+// assertBootstrapReadback reads the shared bootstrap aggregate and requires the initial fixture
+// cardinalities: one organization, pending owner contract, ready system assistant, published core
+// prompt, starting runtime, provider definition/account/first credential revision and completed
+// installation, plus nine capabilities and ten enabled optional integration definitions. Query
+// errors or any count mismatch fail the test. Database READY/STARTING rows do not prove a running
+// assistant or external provider readiness.
+// assertBootstrapReadback читает общий bootstrap aggregate и требует начальные cardinalities
+// оснастки: по одной organization, pending owner contract, ready system assistant, published core
+// prompt, starting runtime, provider definition/account/first credential revision и completed
+// installation, плюс девять capabilities и десять включённых optional integration definitions.
+// Ошибка запроса или несовпадение любого счётчика завершает тест. Строки READY/STARTING в БД не
+// доказывают работу ассистента или готовность внешнего provider.
 func assertBootstrapReadback(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 	t.Helper()
 	var organizationCount, ownerContractCount, systemAssistantCount, corePromptCount int

@@ -17,6 +17,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// TestAssistantAgentConfigurationJSONFullPreservation checks full large effective/native
+// instruction preservation and fourteen-field projection, rejecting missing binding,
+// digest/state/size corruption and an inconsistent effective binding using synthetic data.
+// TestAssistantAgentConfigurationJSONFullPreservation проверяет сохранение полного большого
+// effective/native instruction и проекцию четырнадцати полей; отклоняет отсутствие binding,
+// повреждение digest/state/size и несогласованный effective binding на синтетических данных.
 func TestAssistantAgentConfigurationJSONFullPreservation(t *testing.T) {
 	content := strings.Repeat("Полный шаблон {{ .organization.name }} {{ .agent.name }}\n", 1800)
 	digest := sha256.Sum256([]byte(content))
@@ -53,8 +59,16 @@ func TestAssistantAgentConfigurationJSONFullPreservation(t *testing.T) {
 	}
 }
 
-// Вызывается публичной TestProjectAssistantIntegrationGrantsComponent в SYSTEM
-// и PROJECT fixture. Все эффекты принадлежат только disposable PostgreSQL.
+// testAssistantAgentConfigurationUnderLease checks context-bound instructions versus separately
+// allowed same-project runtime metadata, exact hashes and unchanged receipt/audit/outbox state
+// under SYSTEM/PROJECT fixtures. It exercises selector, fence/generation/expiry and
+// revoked-membership denials; direct fixture updates are restored and require the external
+// disposable component suite.
+// testAssistantAgentConfigurationUnderLease проверяет context-bound instructions и отдельно
+// допустимые same-project runtime metadata, точные hashes и неизменность receipt/audit/outbox
+// state в SYSTEM/PROJECT fixtures. Проверяет отказы selectors, fence/generation/expiry и
+// отозванного membership; прямые изменения fixtures восстанавливаются и требуют внешнего
+// одноразового component suite.
 func testAssistantAgentConfigurationUnderLease(t *testing.T, ctx context.Context, repository *Repository, service *serviceplatform.Service, owner, reader value.Principal, lease map[string]any, agentRef, otherRef, foreignHelperRef, expectedScope string) {
 	t.Helper()
 	input := entity.AssistantConfigurationCatalogRequest{Kind: "AGENT_CONFIGURATION", AssistantRef: stringMap(lease, "agentRef"), EntityKind: "AGENT", EntityRef: agentRef}

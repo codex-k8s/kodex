@@ -1,6 +1,7 @@
+import { createDeferred } from "@/test-utils/create-deferred";
+import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import { readFileSync } from "node:fs";
 import {
-  createRenderer,
   createSSRApp,
   defineComponent,
   effectScope,
@@ -33,12 +34,7 @@ interface TestItem extends AsyncEntityPickerItem {
 }
 
 function deferred<T>() {
-  let resolve!: (value: T) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise;
-    reject = rejectPromise;
-  });
+  const { promise, resolve, reject } = createDeferred<T>();
   return { promise, reject, resolve };
 }
 
@@ -601,18 +597,7 @@ describe("AsyncEntityPicker", () => {
       searchInput: Ref<HTMLInputElement | undefined>;
     }
     let state!: State;
-    const renderer = createRenderer<object, object>({
-      patchProp() {},
-      insert() {},
-      remove() {},
-      createElement: () => ({}),
-      createText: () => ({}),
-      createComment: () => ({}),
-      setText() {},
-      setElementText() {},
-      parentNode: () => null,
-      nextSibling: () => null,
-    });
+    const renderer = createNoopRenderer();
     const source = AsyncEntityPicker as unknown as {
       setup(props: unknown, context: SetupContext): State;
     };

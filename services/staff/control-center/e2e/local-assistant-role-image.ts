@@ -9,7 +9,7 @@ import type {
 } from "../src/shared/api/generated/openapi/types.gen";
 import { authenticateOwner } from "./auth-flow";
 import { loadE2EAuthEnvironment } from "./environment";
-import { gotoWithRetry } from "./helpers";
+import { expectMobileViewport, gotoWithRetry } from "./helpers";
 
 const environment = loadE2EAuthEnvironment();
 
@@ -415,18 +415,4 @@ async function mutate<T>(page: Page, path: string, body: unknown): Promise<T> {
       `API mutation failed: ${String(result.status)} ${result.code}`,
     );
   return result.body as T;
-}
-
-async function expectMobileViewport(
-  page: Page,
-  assistant: Locator,
-): Promise<void> {
-  const bounds = await assistant.boundingBox();
-  expect(bounds).not.toBeNull();
-  expect(bounds?.x ?? -1).toBeGreaterThanOrEqual(0);
-  expect((bounds?.x ?? 390) + (bounds?.width ?? 390)).toBeLessThanOrEqual(391);
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth - window.innerWidth,
-  );
-  expect(overflow).toBeLessThanOrEqual(1);
 }

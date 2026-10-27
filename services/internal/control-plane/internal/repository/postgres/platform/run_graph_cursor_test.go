@@ -10,6 +10,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// runGraphCursorFixture implements narrow graph cursor reads with explicit owner/child/root pins
+// and configurable row failures.
+// runGraphCursorFixture реализует узкое чтение курсора графа с явными привязками владельца,
+// дочернего и корневого Run и настраиваемыми ошибками строки.
 type runGraphCursorFixture struct {
 	t                  *testing.T
 	ref                string
@@ -18,10 +22,17 @@ type runGraphCursorFixture struct {
 	called             bool
 }
 
+// Query panics on broad queries because cursor resolution must use the single-row owner path.
+// Query вызывает panic при широком запросе, поскольку разрешение курсора должно использовать путь
+// владельца для одной строки.
 func (fixture *runGraphCursorFixture) Query(context.Context, string, ...any) (pgx.Rows, error) {
 	panic("unexpected graph cursor query")
 }
 
+// QueryRow asserts exact cursor SQL and organization/child/root arguments before returning the
+// configured row.
+// QueryRow проверяет точный SQL курсора и аргументы организации, дочернего и корневого Run перед
+// возвратом настроенной строки.
 func (fixture *runGraphCursorFixture) QueryRow(_ context.Context, sql string, args ...any) pgx.Row {
 	fixture.t.Helper()
 	fixture.called = true
@@ -35,6 +46,10 @@ func (fixture *runGraphCursorFixture) QueryRow(_ context.Context, sql string, ar
 	return fixture
 }
 
+// Scan returns the configured failure or projects root identity, revision and sequence into the
+// expected destinations.
+// Scan возвращает настроенную ошибку либо записывает идентичность корня, ревизию и
+// последовательность в ожидаемые назначения.
 func (fixture *runGraphCursorFixture) Scan(dest ...any) error {
 	if fixture.failure != nil {
 		return fixture.failure
@@ -45,6 +60,11 @@ func (fixture *runGraphCursorFixture) Scan(dest ...any) error {
 	return nil
 }
 
+// TestRootRunGraphCursorClosed checks authoritative child-to-root lookup, immutable child
+// projection and closed failure paths, including validated root fast paths without another query.
+// TestRootRunGraphCursorClosed проверяет авторитетное разрешение дочернего Run в корень,
+// неизменность дочерней проекции и закрытые ошибочные пути, включая проверенный прямой путь корня
+// без нового запроса.
 func TestRootRunGraphCursorClosed(t *testing.T) {
 	t.Parallel()
 	for name, test := range map[string]struct {

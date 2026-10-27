@@ -13,6 +13,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// authorizeSystemAssistantImage resolves the authoritative system-assistant configuration target
+// and requires ORGANIZATION scope plus the current organization reference before canonical
+// organization CREATE/UPDATE image authorization; request references never establish ownership.
+// authorizeSystemAssistantImage разрешает авторитетный system-assistant configuration target и
+// требует ORGANIZATION scope с текущей organization reference до канонической проверки
+// CREATE/UPDATE образа организации; ссылки запроса не устанавливают владение.
 func (repository *Repository) authorizeSystemAssistantImage(ctx context.Context, tx pgx.Tx, current scope, payload command.SystemAssistantRoleImageInput, update bool) (assistantConfigurationTarget, error) {
 	target, err := repository.assistantConfigurationTarget(ctx, tx, current, payload.SystemAssistantRef)
 	if err != nil {
@@ -31,6 +37,16 @@ func (repository *Repository) authorizeSystemAssistantImage(ctx context.Context,
 	return target, nil
 }
 
+// systemAssistantImageInput checks organization assistant authority and exact agent version before
+// resolving catalog input. Update additionally requires active nonshipped visible organization
+// source, exact recipe OCC, editable managed ownership and the saved valid recipe/digest,
+// retaining same-environment options; a supplied specification digest must match the resolved
+// recipe. It returns input/history without mutating state.
+// systemAssistantImageInput проверяет полномочия organization assistant и точную agent version до
+// разрешения catalog input. Update дополнительно требует active nonshipped видимый source
+// организации, точный recipe OCC, editable managed ownership и сохранённые допустимые
+// recipe/digest, сохраняя options того же окружения; переданный specification digest должен
+// совпадать с разрешённым recipe. Возвращает input/history без изменения состояния.
 func (repository *Repository) systemAssistantImageInput(ctx context.Context, tx pgx.Tx, current scope, payload command.SystemAssistantRoleImageInput, mutation value.Mutation, update bool) (roleimagerepo.ManageInput, *entity.RoleImageRecipe, error) {
 	target, err := repository.authorizeSystemAssistantImage(ctx, tx, current, payload, update)
 	if err != nil {
@@ -67,11 +83,7 @@ func (repository *Repository) systemAssistantImageInput(ctx context.Context, tx 
 		if roleimageservice.ValidateManagedOrganizationRecipe(previous.Name, previous.Input) != nil || previous.SpecSHA256 != roleImageDigest(previous.Input) {
 			return input, nil, errs.ErrConflict
 		}
-		if input.Environment.EnvironmentKey == previous.Input.EnvironmentKey {
-			input.Environment.PackageKeys = append([]string(nil), previous.Input.PackageKeys...)
-			input.Environment.ToolKeys = append([]string(nil), previous.Input.ToolKeys...)
-			input.Environment.InstallationBlock = previous.Input.InstallationBlock
-		}
+		input.Environment = inheritAssistantImageOptions(input.Environment, previous.Input)
 	}
 	recipe, err := repository.roleImageCatalogResolver(input.Environment)
 	if err != nil || roleimageservice.ValidateManagedOrganizationRecipe(payload.Name, recipe) != nil {
@@ -84,6 +96,16 @@ func (repository *Repository) systemAssistantImageInput(ctx context.Context, tx 
 	return input, previous, nil
 }
 
+// applySystemAssistantImage requires typed payload and exact spec pin, resolves CREATE versus
+// UPDATE organization input and managed ownership, then applies recipe/build with managed lineage
+// in the caller transaction. It requires a build and returns the existing created-ref and
+// organization/build runtime metadata plus event descriptor; it does not commit or bind the
+// resulting artifact to an environment.
+// applySystemAssistantImage требует typed payload и точный spec pin, разрешает CREATE либо UPDATE
+// organization input и managed ownership, затем применяет recipe/build с managed lineage в
+// транзакции вызывающего метода. Требует build и возвращает прежние created-ref и
+// organization/build runtime metadata с event descriptor; commit и привязку артефакта к окружению
+// не выполняет.
 func (repository *Repository) applySystemAssistantImage(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.SystemAssistantRoleImageInput)
 	if !ok {
@@ -100,11 +122,8 @@ func (repository *Repository) applySystemAssistantImage(ctx context.Context, tx 
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	result, projectID, projectRef, err := repository.applyRoleImageManage(ctx, tx, current, managedInput)
+	result, projectID, projectRef, err := repository.applyAssistantImageManage(ctx, tx, current, managedInput, managed)
 	if err != nil {
-		return commandOutcome{}, err
-	}
-	if err := repository.recordManagedRoleImageCommand(ctx, tx, current, managedInput, managed, result); err != nil {
 		return commandOutcome{}, err
 	}
 	if result.Build == nil {
@@ -115,6 +134,16 @@ func (repository *Repository) applySystemAssistantImage(ctx context.Context, tx 
 		result: command.Result{CreatedRefs: []string{result.Recipe.Ref}, RuntimeItems: []map[string]any{{"scopeKind": "ORGANIZATION", "organizationRef": current.organizationRef, "imageBuildRef": result.Build.Ref, "imageBuildStage": result.Build.Stage}}}}, nil
 }
 
+// hydrateSystemAssistantImage accepts only closed fields and authoritative ORGANIZATION assistant
+// scope, then prepares CREATE or UPDATE with server-owned agent version, target and before/after
+// fields. Create may use the recommended catalog selection; update preserves omitted source
+// choices and records recipe generation/spec pins. It validates the resolved input, rejects
+// no-ops, selects the operation and clears materialized Input without writing.
+// hydrateSystemAssistantImage принимает только закрытые fields и авторитетный ORGANIZATION
+// assistant scope, затем готовит CREATE либо UPDATE с server-owned agent version, target и
+// before/after fields. Create может выбрать рекомендованный catalog selection; update сохраняет
+// пропущенные source choices и записывает recipe generation/spec pins. Проверяет разрешённый
+// input, отклоняет no-op, выбирает operation и очищает материализованный Input без записи.
 func (repository *Repository) hydrateSystemAssistantImage(ctx context.Context, tx pgx.Tx, current scope, operation entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {
 	update := operation.Type == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
 	if !onlyAssistantFields(operation.Parameters, "systemAssistantRef", "recipeRef", "name", "environmentKey", "dockerfile") {
@@ -191,6 +220,12 @@ func (repository *Repository) hydrateSystemAssistantImage(ctx context.Context, t
 	return operation, nil
 }
 
+// systemAssistantImageFields projects system-assistant identity, fixed organization scope/owner,
+// agent version and exact name/environment/Dockerfile into a new field map, including recipeRef
+// only when nonempty; it does not infer authority from these fields.
+// systemAssistantImageFields проецирует system-assistant identity, фиксированные organization
+// scope/owner, agent version и точные name/environment/Dockerfile в новую field map, добавляя
+// recipeRef только при непустом значении; полномочия из этих полей не выводит.
 func systemAssistantImageFields(payload command.SystemAssistantRoleImageInput, name, key, dockerfile string) map[string]any {
 	fields := map[string]any{"systemAssistantRef": payload.SystemAssistantRef, "scopeKind": "ORGANIZATION", "organizationRef": payload.OrganizationRef, "agentVersion": payload.AgentVersion, "name": name, "environmentKey": key, "dockerfile": dockerfile}
 	if payload.RecipeRef != "" {
@@ -199,6 +234,12 @@ func systemAssistantImageFields(payload command.SystemAssistantRoleImageInput, n
 	return fields
 }
 
+// assistantImageDockerfile extracts only a string Dockerfile without trimming any bytes,
+// preserving the immutable confirmed-input digest; missing or nonstring fields yield an empty
+// string for separate validation.
+// assistantImageDockerfile извлекает только строковый Dockerfile без обрезки байтов, сохраняя
+// неизменяемый confirmed-input digest; отсутствующее либо нестроковое поле даёт пустую строку для
+// отдельной валидации.
 func assistantImageDockerfile(fields map[string]any) string {
 	// Dockerfile является байтовой частью immutable спецификации: TrimSpace
 	// изменяет digest между подтверждением и материализацией команды.
@@ -206,6 +247,16 @@ func assistantImageDockerfile(fields map[string]any) string {
 	return content
 }
 
+// systemAssistantImageCommand materializes a typed organization image command from the closed
+// server-resolved Input fields, requiring positive agent version, exact spec digest and bounded
+// nonempty Dockerfile. UPDATE requires recipeRef and positive expected version; CREATE rejects
+// existing recipeRef or operation expected version. It constructs payload/OCC only, leaving
+// principal and execution authority to the caller.
+// systemAssistantImageCommand материализует typed organization image command из закрытых
+// server-resolved Input fields, требуя положительную agent version, точный spec digest и
+// ограниченный непустой Dockerfile. UPDATE требует recipeRef и положительную expected version;
+// CREATE отклоняет существующие recipeRef либо operation expected version. Формирует только
+// payload/OCC, оставляя principal и полномочия исполнения вызывающему методу.
 func systemAssistantImageCommand(operation entity.AssistantPlanOperation) (command.Command, error) {
 	update := operation.Type == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
 	if !onlyAssistantFields(operation.Input, "systemAssistantRef", "scopeKind", "organizationRef", "agentVersion", "recipeRef", "name", "environmentKey", "dockerfile", "specSha256", "expectedVersion") || assistantString(operation.Input, "scopeKind") != "ORGANIZATION" {
@@ -235,6 +286,14 @@ func systemAssistantImageCommand(operation entity.AssistantPlanOperation) (comma
 	return result, nil
 }
 
+// systemAssistantImageSnapshotMatches materializes and revalidates current authoritative
+// system-image input before comparing plan snapshots. CREATE requires an empty before map; UPDATE
+// includes exact recipe generation and saved spec digest using JSON-equivalent before comparison,
+// while both paths require parameters/after equality without applying a mutation.
+// systemAssistantImageSnapshotMatches материализует и заново проверяет текущий авторитетный
+// system-image input до сравнения snapshots плана. CREATE требует пустую before map; UPDATE
+// включает точные recipe generation и сохранённый spec digest с JSON-equivalent before comparison,
+// оба пути требуют равенства parameters/after без изменения состояния.
 func (repository *Repository) systemAssistantImageSnapshotMatches(ctx context.Context, tx pgx.Tx, current scope, operation entity.AssistantPlanOperation) (bool, error) {
 	planned, err := systemAssistantImageCommand(operation)
 	if err != nil {

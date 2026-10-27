@@ -15,6 +15,14 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testConfigurationWriteBackLifecycle exercises proposal replay/read/list, approval, uncertain
+// branch recovery, PR completion, unchanged runtime revision, terminal/OCC/expiry and
+// connection-withdrawal fencing in the disposable repository fixture. Direct SQL adjusts only
+// synthetic fixtures; this helper does not itself provision a database or contact Git providers.
+// testConfigurationWriteBackLifecycle проверяет proposal replay/read/list, approval,
+// восстановление неизвестной ветки, PR completion, неизменность runtime revision,
+// terminal/OCC/expiry и fencing при отзыве connection в одноразовой repository fixture. Прямой SQL
+// меняет только синтетические fixtures; helper сам не создаёт БД и не обращается к Git providers.
 func testConfigurationWriteBackLifecycle(t *testing.T, ctx context.Context, repository *Repository, service *serviceplatform.Service, owner, worker value.Principal, set entity.ManagedConfigurationSet, base string) {
 	t.Helper()
 	proposed := strings.Replace(base, "Synthetic HTTP", "Synthetic writeback", 1)

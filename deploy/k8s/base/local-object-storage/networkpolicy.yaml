@@ -71,16 +71,6 @@ spec:
         - {protocol: TCP, port: 18888}
   egress:
     - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: kube-system
-          podSelector:
-            matchLabels:
-              k8s-app: kube-dns
-      ports:
-        - {protocol: UDP, port: 53}
-        - {protocol: TCP, port: 53}
-    - to:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: seaweedfs
@@ -105,16 +95,6 @@ spec:
   policyTypes: [Ingress, Egress]
   ingress: []
   egress:
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: kube-system
-          podSelector:
-            matchLabels:
-              k8s-app: kube-dns
-      ports:
-        - {protocol: UDP, port: 53}
-        - {protocol: TCP, port: 53}
     - to:
         - podSelector:
             matchLabels:

@@ -4,11 +4,10 @@ import type {
   Agent,
   AgentPage,
   AgentRuntimeConfigurationView,
-  Project,
-  ProjectPage,
   SkillBundle,
   SkillBundlePage,
 } from "../src/shared/api/generated/openapi/types.gen";
+import { exactProject } from "./fixtures/exact-project";
 import { authenticateOwner } from "./auth-flow";
 import { loadE2EAuthEnvironment } from "./environment";
 import { createAgent, gotoWithRetry } from "./helpers";
@@ -45,7 +44,7 @@ test("Skill проходит реальный scan, review, publication и histo
     },
     { mode: "local" },
   );
-  const project = await exactProject(page);
+  const project = await exactProject(page, projectName);
   let skill = await exactSkill(page, project.ref);
   if (!skill) skill = await createSkill(page, project.ref);
 
@@ -79,20 +78,6 @@ test("Skill проходит реальный scan, review, publication и histo
   );
   await bindSkill(page, agent, skill);
 });
-
-async function exactProject(page: Page): Promise<Project> {
-  return await page.evaluate(async (name) => {
-    const response = await fetch(
-      `/api/v1/projects?query=${encodeURIComponent(name)}&pageSize=30`,
-    );
-    if (!response.ok) throw new Error("Acceptance project read failed");
-    const result = (await response.json()) as ProjectPage;
-    const matches = result.items.filter((item) => item.name === name);
-    if (matches.length !== 1)
-      throw new Error("Acceptance project is not unique");
-    return matches[0] as Project;
-  }, projectName);
-}
 
 async function exactSkill(
   page: Page,

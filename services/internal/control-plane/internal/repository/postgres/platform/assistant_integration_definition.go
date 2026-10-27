@@ -13,8 +13,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// План содержит только идентификаторы и дайджест. Содержимое OpenAPI остается
-// в авторитетной ревизии и никогда не попадает в assistant runtime.
+// hydrateAssistantIntegrationDefinitionPublication accepts only organization-scoped
+// configuration/revision refs, resolves a nonarchived UI-owned integration definition and locks a
+// VALID revision with a canonical digest. It builds server-derived target, before/after, pins and
+// selection without copying OpenAPI content into the plan or publishing anything.
+// hydrateAssistantIntegrationDefinitionPublication принимает только ссылки конфигурации и ревизии
+// уровня организации, разрешает неархивное определение интеграции под управлением UI и блокирует
+// VALID ревизию с каноническим дайджестом. Собирает серверные цель, before/after, привязки версий
+// и выбор, не копируя OpenAPI в план и ничего не публикуя.
 func (repository *Repository) hydrateAssistantIntegrationDefinitionPublication(
 	ctx context.Context, tx pgx.Tx, current scope, projectRef string, operation entity.AssistantPlanOperation,
 ) (entity.AssistantPlanOperation, error) {
@@ -64,6 +70,10 @@ func (repository *Repository) hydrateAssistantIntegrationDefinitionPublication(
 	return operation, nil
 }
 
+// validAssistantDefinitionDigest accepts exactly 64 lowercase hexadecimal characters. It checks
+// digest syntax only, without hashing content or proving revision identity.
+// validAssistantDefinitionDigest принимает ровно 64 строчных шестнадцатеричных символа. Проверяет
+// только форму дайджеста, не вычисляя хеш содержимого и не доказывая идентичность ревизии.
 func validAssistantDefinitionDigest(value string) bool {
 	if len(value) != 64 {
 		return false
@@ -78,6 +88,15 @@ func validAssistantDefinitionDigest(value string) bool {
 	return true
 }
 
+// assistantIntegrationDefinitionPublicationCommand requires the closed publication input set,
+// positive matching expected version, bounded ref prefixes, digest syntax and exact target
+// identity. It constructs a typed PublishIntegrationDefinition command; digest equality and
+// current authority are checked by other plan/publication stages, not supplied by this conversion.
+// assistantIntegrationDefinitionPublicationCommand требует закрытый набор входных полей
+// публикации, положительную совпадающую ожидаемую версию, ограниченные ссылки с нужными
+// префиксами, форму дайджеста и точную цель. Собирает типизированную PublishIntegrationDefinition;
+// равенство дайджеста и текущие полномочия проверяются другими стадиями плана и публикации, а не
+// этим преобразованием.
 func assistantIntegrationDefinitionPublicationCommand(operation entity.AssistantPlanOperation) (command.Command, error) {
 	if !onlyAssistantFields(operation.Input, "configurationRef", "revisionRef", "revisionDigest", "expectedVersion") ||
 		!hasAssistantFields(operation.Input, "configurationRef", "revisionRef", "revisionDigest", "expectedVersion") {
@@ -102,6 +121,14 @@ func assistantIntegrationDefinitionPublicationCommand(operation entity.Assistant
 	}, nil
 }
 
+// rehydrateEditedAssistantIntegrationDefinitionPublication requires the original operation
+// type/key, integration-definition target, expected-version presence and unchanged parameters. It
+// returns the original operation with only Selected, Title and Summary replaced from the edit,
+// preventing edited authority or revision fields from entering the canonical operation.
+// rehydrateEditedAssistantIntegrationDefinitionPublication требует исходные тип и ключ операции,
+// цель определения интеграции, наличие ожидаемой версии и неизменные параметры. Возвращает
+// исходную операцию, заменив только Selected, Title и Summary из правки, не пропуская изменённые
+// полномочия или ревизию в каноническую операцию.
 func rehydrateEditedAssistantIntegrationDefinitionPublication(original, edited entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {
 	if original.Type != "PUBLISH_INTEGRATION_DEFINITION" || original.Key != edited.Key ||
 		original.Target.Kind != "INTEGRATION_DEFINITION" || original.ExpectedVersion == nil ||
@@ -114,6 +141,14 @@ func rehydrateEditedAssistantIntegrationDefinitionPublication(original, edited e
 	return original, nil
 }
 
+// assistantIntegrationDefinitionPublicationSnapshotMatches rehydrates the exact stored
+// configuration/revision refs through the current authorized path, then compares target,
+// parameters, before/after and expected version. Lookup/authorization errors propagate; it
+// performs no publication or transaction commit.
+// assistantIntegrationDefinitionPublicationSnapshotMatches заново разрешает точные сохранённые
+// ссылки конфигурации и ревизии через текущий проверенный путь, затем сравнивает цель, параметры,
+// before/after и ожидаемую версию. Ошибки поиска и доступа передаются выше; публикация и
+// завершение транзакции не выполняются.
 func (repository *Repository) assistantIntegrationDefinitionPublicationSnapshotMatches(
 	ctx context.Context, tx pgx.Tx, current scope, operation entity.AssistantPlanOperation,
 ) (bool, error) {

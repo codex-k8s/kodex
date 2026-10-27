@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Locator } from "@playwright/test";
 
+import { browserStorageContains } from "./fixtures/storage-check";
 import { authenticateOwner } from "./auth-flow";
 import { loadE2EAuthEnvironment } from "./environment";
 import { gotoWithRetry } from "./helpers";
+import { mutateLocalApi as mutate } from "./local-api";
 
 const environment = loadE2EAuthEnvironment();
 const localFixtureOrigin =
@@ -465,16 +467,7 @@ test("локальный OpenAPI импорт, первая привязка и 
   await dialog
     .getByLabel("Название интеграции")
     .fill(`Локальная проверка OpenAPI ${randomUUID().slice(0, 8)}`);
-  const createdResponse = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      new URL(response.url()).pathname ===
-        "/api/v1/integration-definition-configurations/drafts",
-  );
-  await dialog.getByRole("button", { name: "Создать черновик" }).click();
-  const created = await createdResponse;
-  expect(created.status()).toBe(201);
-  const draft = (await created.json()) as ConfigurationResult;
+  const draft = await createImportedDefinition(page, dialog);
   expect(draft.configuration.kind).toBe("INTEGRATION_DEFINITION");
   expect(draft.revision.state).toBe("DRAFT");
   await expect(page).toHaveURL(
@@ -483,20 +476,7 @@ test("локальный OpenAPI импорт, первая привязка и 
     ),
   );
 
-  const validated = await mutate<ConfigurationResult>(
-    page,
-    `/api/v1/integration-definition-configurations/${draft.configuration.ref}/revisions/${draft.revision.ref}/validation`,
-    undefined,
-    draft.configuration.version,
-  );
-  expect(validated.revision.state).toBe("VALID");
-  const published = await mutate<ConfigurationResult>(
-    page,
-    `/api/v1/integration-definition-configurations/${draft.configuration.ref}/revisions/${draft.revision.ref}/publication`,
-    undefined,
-    validated.configuration.version,
-  );
-  expect(published.revision.state).toBe("PUBLISHED");
+  const published = await validateAndPublishDefinition(page, draft);
 
   const connectionName = `Локальный OpenAPI ${randomUUID().slice(0, 8)}`;
   const connection = await mutate<Connection>(
@@ -678,35 +658,13 @@ test("помощник ведёт к credential-форме OpenAPI без уте
   await importDialog
     .getByLabel("Название интеграции")
     .fill(`Локальная интеграция с ключом ${randomUUID().slice(0, 8)}`);
-  const createdResponse = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      new URL(response.url()).pathname ===
-        "/api/v1/integration-definition-configurations/drafts",
-  );
-  await importDialog.getByRole("button", { name: "Создать черновик" }).click();
-  const created = await createdResponse;
-  expect(created.status()).toBe(201);
-  const draft = (await created.json()) as ConfigurationResult;
+  const draft = await createImportedDefinition(page, importDialog);
   await expect(page).toHaveURL(
     new RegExp(
       `/configurations/INTEGRATION_DEFINITION/${draft.configuration.ref}$`,
     ),
   );
-  const validated = await mutate<ConfigurationResult>(
-    page,
-    `/api/v1/integration-definition-configurations/${draft.configuration.ref}/revisions/${draft.revision.ref}/validation`,
-    undefined,
-    draft.configuration.version,
-  );
-  expect(validated.revision.state).toBe("VALID");
-  const published = await mutate<ConfigurationResult>(
-    page,
-    `/api/v1/integration-definition-configurations/${draft.configuration.ref}/revisions/${draft.revision.ref}/publication`,
-    undefined,
-    validated.configuration.version,
-  );
-  expect(published.revision.state).toBe("PUBLISHED");
+  const published = await validateAndPublishDefinition(page, draft);
   const executable = JSON.parse(published.revision.content) as {
     spec: {
       credential?: { secretKey: string };
@@ -785,15 +743,7 @@ test("помощник ведёт к credential-форме OpenAPI без уте
   expect(metadata.credentialsConfigured).toBe(true);
   expect(JSON.stringify(metadata).includes(credentialValue)).toBe(false);
   expect(leakedURLs).toEqual([]);
-  const stored = await page.evaluate((value) => {
-    for (const storage of [window.localStorage, window.sessionStorage]) {
-      for (let index = 0; index < storage.length; index += 1) {
-        const key = storage.key(index);
-        if (key && storage.getItem(key)?.includes(value)) return true;
-      }
-    }
-    return false;
-  }, credentialValue);
+  const stored = await browserStorageContains(page, credentialValue);
   expect(stored).toBe(false);
   const tested = await mutate<Connection>(
     page,
@@ -1079,6 +1029,78 @@ async function openGrantsTab(page: Page): Promise<void> {
   await selectGrantsTab(page);
 }
 
+// createImportedDefinition ожидает ответ создания черновика от выбранного диалога.
+// Проверки типа и состава полученного черновика принадлежат каждому сценарию.
+async function createImportedDefinition(
+  page: Page,
+  dialog: Locator,
+): Promise<ConfigurationResult> {
+  const createdResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname ===
+        "/api/v1/integration-definition-configurations/drafts",
+  );
+  await dialog.getByRole("button", { name: "Создать черновик" }).click();
+  const created = await createdResponse;
+  expect(created.status()).toBe(201);
+  return (await created.json()) as ConfigurationResult;
+}
+
+// validateAndPublishDefinition проверяет validation и публикует точную ревизию
+// с версией, возвращённой предыдущим ответом. Окружение выбирает вызывающий тест.
+async function validateAndPublishDefinition(
+  page: Page,
+  draft: ConfigurationResult,
+): Promise<ConfigurationResult> {
+  const validated = await mutate<ConfigurationResult>(
+    page,
+    `/api/v1/integration-definition-configurations/${draft.configuration.ref}/revisions/${draft.revision.ref}/validation`,
+    undefined,
+    draft.configuration.version,
+  );
+  expect(validated.revision.state).toBe("VALID");
+  const published = await mutate<ConfigurationResult>(
+    page,
+    `/api/v1/integration-definition-configurations/${draft.configuration.ref}/revisions/${draft.revision.ref}/publication`,
+    undefined,
+    validated.configuration.version,
+  );
+  expect(published.revision.state).toBe("PUBLISHED");
+  return published;
+}
+
+// chooseGrantOption открывает заданный выбор, ищет текст и выбирает совпадающий вариант.
+// Права, тип получателя и итог разрешения проверяет вызывающий сценарий.
+async function chooseGrantOption(
+  page: Page,
+  panel: Locator,
+  label: string,
+  query: string,
+): Promise<void> {
+  await panel.getByRole("button", { name: label, exact: true }).click();
+  const picker = page.getByRole("dialog", { name: label, exact: true });
+  await picker.getByRole("combobox").fill(query);
+  await picker.getByRole("option", { name: new RegExp(query) }).click();
+}
+
+// submitGrantOption ожидает конкретный POST и проверяет успешный ответ выдачи.
+// Проверка сохранённого grant и дальнейших действий остаётся у сценария.
+async function submitGrantOption(
+  page: Page,
+  panel: Locator,
+  connectionRef: string,
+): Promise<void> {
+  const granted = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname ===
+        `/api/v1/integration-connections/${connectionRef}/grants`,
+  );
+  await panel.getByRole("button", { name: "Выдать разрешение" }).click();
+  expect((await granted).status()).toBe(200);
+}
+
 async function grantWorkflowOpenAPIThroughUI(
   page: Page,
   projectRef: string,
@@ -1124,25 +1146,18 @@ async function grantWorkflowOpenAPIThroughUI(
   );
   await openGrantsTab(page);
   const panel = page.locator(".grant-panel");
-  const choose = async (label: string, query: string): Promise<void> => {
-    await panel.getByRole("button", { name: label, exact: true }).click();
-    const picker = page.getByRole("dialog", { name: label, exact: true });
-    await picker.getByRole("combobox").fill(query);
-    await picker.getByRole("option", { name: new RegExp(query) }).click();
-  };
-  await choose("Подключение", connection.name);
-  await choose("Проект", `Локальная проверка MCP ${suffix}`);
-  await panel.getByLabel("Кому разрешить").selectOption("WORKFLOW");
-  await choose("Получатель разрешения", workflowName);
-  await choose("Возможность", "Проверить чтение");
-  const granted = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      new URL(response.url()).pathname ===
-        `/api/v1/integration-connections/${connectionRef}/grants`,
+
+  await chooseGrantOption(page, panel, "Подключение", connection.name);
+  await chooseGrantOption(
+    page,
+    panel,
+    "Проект",
+    `Локальная проверка MCP ${suffix}`,
   );
-  await panel.getByRole("button", { name: "Выдать разрешение" }).click();
-  expect((await granted).status()).toBe(200);
+  await panel.getByLabel("Кому разрешить").selectOption("WORKFLOW");
+  await chooseGrantOption(page, panel, "Получатель разрешения", workflowName);
+  await chooseGrantOption(page, panel, "Возможность", "Проверить чтение");
+  await submitGrantOption(page, panel, connectionRef);
   const updated = await read<
     Connection & {
       grants: Array<{
@@ -1163,8 +1178,13 @@ async function grantWorkflowOpenAPIThroughUI(
   );
   await page.reload({ waitUntil: "domcontentloaded" });
   await selectGrantsTab(page);
-  await choose("Подключение", connection.name);
-  await choose("Проект", `Локальная проверка MCP ${suffix}`);
+  await chooseGrantOption(page, panel, "Подключение", connection.name);
+  await chooseGrantOption(
+    page,
+    panel,
+    "Проект",
+    `Локальная проверка MCP ${suffix}`,
+  );
   await expect(
     panel
       .locator(".grant-list .entity-row")
@@ -1204,29 +1224,27 @@ async function grantScopedOpenAPIThroughUI(
   );
   await openGrantsTab(page);
   const panel = page.locator(".grant-panel");
-  const choose = async (label: string, query: string): Promise<void> => {
-    await panel.getByRole("button", { name: label, exact: true }).click();
-    const popover = page.getByRole("dialog", { name: label, exact: true });
-    await popover.getByRole("combobox").fill(query);
-    await popover.getByRole("option", { name: new RegExp(query) }).click();
-  };
-  await choose("Подключение", connection.name);
-  await choose("Проект", `Локальная проверка MCP ${suffix}`);
-  await choose("Получатель разрешения", `Исполнитель OpenAPI ${suffix}`);
-  await choose("Возможность", writeCapabilityName);
+
+  await chooseGrantOption(page, panel, "Подключение", connection.name);
+  await chooseGrantOption(
+    page,
+    panel,
+    "Проект",
+    `Локальная проверка MCP ${suffix}`,
+  );
+  await chooseGrantOption(
+    page,
+    panel,
+    "Получатель разрешения",
+    `Исполнитель OpenAPI ${suffix}`,
+  );
+  await chooseGrantOption(page, panel, "Возможность", writeCapabilityName);
   await panel
     .locator(".approval-scope-option")
     .filter({ hasText: approvalPath })
     .locator('input[type="checkbox"]')
     .check();
-  const created = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      new URL(response.url()).pathname ===
-        `/api/v1/integration-connections/${connectionRef}/grants`,
-  );
-  await panel.getByRole("button", { name: "Выдать разрешение" }).click();
-  expect((await created).status()).toBe(200);
+  await submitGrantOption(page, panel, connectionRef);
   const updated = await read<
     Connection & {
       grants: Array<{
@@ -1247,7 +1265,7 @@ async function grantScopedOpenAPIThroughUI(
   );
   await page.reload({ waitUntil: "domcontentloaded" });
   await selectGrantsTab(page);
-  await choose("Подключение", connection.name);
+  await chooseGrantOption(page, panel, "Подключение", connection.name);
   await expect(
     panel
       .locator(".grant-list .entity-row")
@@ -1563,50 +1581,4 @@ async function expectToolCalls(
   }
   expect(invocationRefs.size).toBe(count);
   expect(inputDigests.size).toBe(count);
-}
-
-async function mutate<T>(
-  page: Page,
-  path: string,
-  body?: unknown,
-  version?: number,
-  method: "POST" | "PUT" = "POST",
-): Promise<T> {
-  const result = await page.evaluate(
-    async (input) => {
-      const prefix = `${encodeURIComponent("__Host-kodex-csrf")}=`;
-      const csrf = document.cookie
-        .split(";")
-        .map((item) => item.trim())
-        .find((item) => item.startsWith(prefix))
-        ?.slice(prefix.length);
-      if (!csrf)
-        return { status: 0, code: "CSRF_UNAVAILABLE", body: undefined };
-      const headers: Record<string, string> = {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "Idempotency-Key": input.key,
-        "X-CSRF-Token": decodeURIComponent(csrf),
-      };
-      if (input.version !== undefined)
-        headers["If-Match"] = `"${String(input.version)}"`;
-      const response = await fetch(input.path, {
-        method: input.method,
-        headers,
-        body: input.body === undefined ? undefined : JSON.stringify(input.body),
-      });
-      const decoded = (await response.json()) as Record<string, unknown>;
-      return {
-        status: response.status,
-        code: typeof decoded.code === "string" ? decoded.code : "UNKNOWN",
-        body: response.ok ? decoded : undefined,
-      };
-    },
-    { path, body, version, method, key: randomUUID() },
-  );
-  if (result.status < 200 || result.status >= 300 || !result.body)
-    throw new Error(
-      `API mutation failed: ${String(result.status)} ${result.code}`,
-    );
-  return result.body as T;
 }

@@ -78,6 +78,18 @@ func promptContextInput(value *generated.PromptPreviewContext) (*cp.PromptPrevie
 	return result, true
 }
 
+// validPromptTemplateInput checks the shared template byte/UTF-8/NUL bound before the
+// target-specific locator, digest and converted-context rules. Callers first reject failed
+// context conversion; selectors carry no authority, and this predicate neither materializes
+// a prompt nor changes the context. Empty template text remains accepted by promptText.
+// validPromptTemplateInput проверяет общий лимит байтов/UTF-8/NUL шаблона до правил адресации,
+// digest и преобразованного контекста для выбранной цели. Callers сначала отвергают отказ
+// преобразования контекста; selectors не несут полномочий, а предикат не материализует prompt
+// и не меняет контекст. Пустой шаблон остаётся допустимым по правилам promptText.
+func validPromptTemplateInput(template, kind, ref, expected string, context *cp.PromptPreviewContext) bool {
+	return promptText(template, 256<<10) && validPromptSelection(kind, ref, expected, context)
+}
+
 // validPromptSelection checks target-kind-specific locator/context combinations and an optional
 // expected digest. Synthetic/run/session selectors forbid nonempty preview context; agent and
 // workflow-stage selectors have distinct compatibility rules.
@@ -236,7 +248,7 @@ func (server *Server) QueryPromptTemplateVariables(w http.ResponseWriter, r *htt
 	}
 	context, ok := promptContextInput(body.Context)
 	source := stringValue(body.Source)
-	if !ok || !validPromptSelection(string(body.TargetKind), body.TargetRef, stringValue(body.ExpectedContextDigest), context) || !validHTTPPage(body.PageSize, body.PageToken) || !validSearchText(stringValue(body.Query), 0, 200) || !validTemplateVariableSource(source) {
+	if !ok || !validPromptSelection(string(body.TargetKind), body.TargetRef, stringValue(body.ExpectedContextDigest), context) || !validFilteredHTTPPage(body.PageSize, body.PageToken, body.Query) || !validTemplateVariableSource(source) {
 		writeLocalProblem(w, 400, "INVALID_REQUEST", false)
 		return
 	}

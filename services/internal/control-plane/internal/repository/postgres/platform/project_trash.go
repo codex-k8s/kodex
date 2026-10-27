@@ -13,6 +13,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// ListTrashedProjects requires organization-level OWNER/ADMINISTRATOR authority, validates the
+// trash cursor and reads bounded TRASHED/PURGE_PENDING metadata. It returns RESTORE/PURGE or
+// explicit recovery next actions and a deleted-time/ref cursor without claiming purge completion.
+// Query/scan errors discard output; no lifecycle state changes occur.
+// ListTrashedProjects требует organization-level OWNER/ADMINISTRATOR authority, проверяет trash
+// cursor и читает bounded TRASHED/PURGE_PENDING metadata. Возвращает RESTORE/PURGE либо явные
+// recovery next actions и deleted-time/ref cursor без утверждения о завершении purge. Query/scan
+// errors отбрасывают результат; lifecycle state не меняется.
 func (repository *Repository) ListTrashedProjects(ctx context.Context, principal value.Principal, page query.Page) ([]entity.Project, string, error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -65,11 +73,29 @@ func (repository *Repository) ListTrashedProjects(ctx context.Context, principal
 	return items, next, nil
 }
 
+// activeProjectRun carries one active representative run ref/version per root for caller-owned
+// cancellation with OCC, preferring the root when active. It does not confer authority or include
+// the entire graph snapshot.
+// activeProjectRun хранит ref/version одного активного представителя каждого root для caller-owned
+// отмены с OCC, предпочитая активный root. Не выдаёт полномочия и не содержит полный graph
+// snapshot.
 type activeProjectRun struct {
 	ref     string
 	version int64
 }
 
+// changeProjectLifecycle requires typed ref/OCC, locks tenant project and enforces
+// authority-project before state transitions. Trash cancels due/claimed/retry schedule occurrences
+// and active run representatives atomically; restore uses the SQL retention deadline and does not
+// resume them. Purge persists PURGE_PENDING/receipt and cancels READY archive tasks, leaving
+// physical purge to its owner worker. It returns PROJECT_CHANGED metadata without independent
+// commit; caller supplies owner-role authorization.
+// changeProjectLifecycle требует typed ref/OCC, блокирует tenant project и проверяет
+// authority-project до переходов. Trash атомарно отменяет due/claimed/retry schedule occurrences и
+// активные run representatives; restore использует SQL retention deadline и не возобновляет их.
+// Purge сохраняет PURGE_PENDING/receipt и отменяет READY archive tasks, оставляя физический purge
+// owner worker. Возвращает PROJECT_CHANGED metadata без отдельного Commit; caller проверяет owner
+// role.
 func (repository *Repository) changeProjectLifecycle(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.ProjectLifecycleInput)
 	if !ok || payload.Ref == "" || input.Mutation.ExpectedVersion == nil {
@@ -182,6 +208,14 @@ func (repository *Repository) changeProjectLifecycle(ctx context.Context, tx pgx
 	}, nil
 }
 
+// cancelProjectScheduleOccurrences cancels exact tenant/project DUE/CLAIMED/RETRY_WAIT occurrences
+// in the supplied transaction, clearing lease/fence/instance and returning IDs for caller events.
+// Query/scan/rows failures are Unavailable and require outer rollback; it does not change schedule
+// definitions or commit.
+// cancelProjectScheduleOccurrences отменяет точные tenant/project DUE/CLAIMED/RETRY_WAIT
+// occurrences в переданной транзакции, очищая lease/fence/instance и возвращая IDs для событий
+// caller. Query/scan/rows failures дают Unavailable и требуют outer rollback; не меняет schedule
+// definitions и не делает Commit.
 func (repository *Repository) cancelProjectScheduleOccurrences(ctx context.Context, tx pgx.Tx, current scope, projectID string) ([]string, error) {
 	rows, err := tx.Query(ctx, queryProjectTrashCancelOccurrences, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID,
@@ -205,6 +239,14 @@ func (repository *Repository) cancelProjectScheduleOccurrences(ctx context.Conte
 	return occurrences, nil
 }
 
+// activeProjectRunRoots reads one active representative per exact tenant/project root with the
+// current version, preferring an active root over children. It closes rows and discards partial
+// results as Unavailable on query/scan/iteration errors; cancellation, permissions and lifecycle
+// locking remain with the caller.
+// activeProjectRunRoots читает одного активного представителя каждого exact tenant/project root с
+// текущей версией, предпочитая активный root дочерним runs. Закрывает rows и отбрасывает partial
+// results как Unavailable при query/scan/iteration errors; отмена, права и lifecycle locking
+// остаются у caller.
 func (repository *Repository) activeProjectRunRoots(ctx context.Context, tx pgx.Tx, current scope, projectID string) ([]activeProjectRun, error) {
 	rows, err := tx.Query(ctx, queryProjectTrashActiveRunRoots, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID,

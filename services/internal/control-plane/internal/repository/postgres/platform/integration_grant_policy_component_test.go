@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	serviceplatform "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
@@ -19,11 +18,29 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// queryIntegrationGrantPolicyCredentialFixture embeds insertion of one synthetic integration
+// credential descriptor and connection-state/version binding for a fixture connection. It stores
+// metadata only in the disposable database; no actual credential payload or external secret is
+// read.
+// queryIntegrationGrantPolicyCredentialFixture встраивает добавление одного синтетического
+// integration credential descriptor с привязкой state/version fixture connection. Хранит только
+// metadata в disposable БД; actual credential payload или внешний secret не читается.
+//
 //go:embed testdata/sql/integration_grant_policy_credential_fixture.sql
 var queryIntegrationGrantPolicyCredentialFixture string
 
-// Проверка не вызывает внешний GitHub или model: claim/ACK синтетические,
-// owner выдаёт реальные доменные grants на текущий immutable GitHub package.
+// TestIntegrationGrantApprovalPoliciesComponent checks NONE, HUMAN_EACH_EFFECT and HUMAN_SCOPED
+// grants through persistence/replay, immutable runtime pins, active-policy conflicts, owner gating
+// and exact invocation claims. Synthetic completion/rejection must retain safe typed callback
+// provenance without presenting failed effects as success; cancel graph/replay assertions remain
+// delegated to their existing fixture helper. It uses disposable PostgreSQL and no live
+// GitHub/model/adapter.
+// TestIntegrationGrantApprovalPoliciesComponent проверяет grants NONE, HUMAN_EACH_EFFECT и
+// HUMAN_SCOPED через persistence/replay, immutable runtime pins, active-policy conflicts, owner
+// gates и точные invocation claims. Синтетические completion/rejection обязаны сохранять
+// безопасную typed callback provenance без выдачи failed effects за успех; cancel graph/replay
+// assertions остаются у прежнего fixture helper. Использует disposable PostgreSQL без live
+// GitHub/model/adapter.
 func TestIntegrationGrantApprovalPoliciesComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
@@ -32,19 +49,7 @@ func TestIntegrationGrantApprovalPoliciesComponent(t *testing.T) {
 		t.Fatal("open isolated grant-policy PostgreSQL")
 	}
 	defer pool.Close()
-	r, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = r.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
-		t.Fatal(err)
-	}
-	if err = r.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3, StagingRepository: "registry.invalid/staging", PromotedRepository: "registry.invalid/roles", DefaultImageReference: "registry.invalid/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
-		t.Fatal(err)
-	}
-	if err = r.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
+	r := newSyntheticRuntimeComponentRepository(t, ctx, pool)
 	seedObservedCatalogFixture(t, ctx, r)
 	principal := func(workload, operation, actor, tenant string) value.Principal {
 		return resolvedTestPrincipal(t, ctx, r, port.ProofPrincipalInput{ExternalActorID: actor, ExternalTenantID: tenant, CallerWorkload: workload, Operation: operation}, workload)

@@ -8,6 +8,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -77,15 +78,14 @@ func (server *Server) MoveAssistantConversationToProject(ctx context.Context, re
 // GetSystemAssistant читает и преобразует системного ассистента с principal, проверенным для
 // точного RPC.
 func (server *Server) GetSystemAssistant(ctx context.Context, _ *controlplanev1.GetSystemAssistantRequest) (*controlplanev1.GetSystemAssistantResponse, error) {
-	p, err := principal(ctx, controlplanev1.SystemAssistantService_GetSystemAssistant_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	item, err := server.service.GetSystemAssistant(ctx, p)
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.GetSystemAssistantResponse{Assistant: castAssistant(item)}, nil
+	return queryResponse(ctx, controlplanev1.SystemAssistantService_GetSystemAssistant_FullMethodName, func(p value.Principal) (*controlplanev1.GetSystemAssistantResponse, error) {
+		item, err := server.service.GetSystemAssistant(ctx, p)
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.GetSystemAssistantResponse{Assistant: castAssistant(item)}, nil
+
+	})
 }
 
 // CreateProjectAssistant passes project and profile fields through the dedicated create command
@@ -111,15 +111,14 @@ func (server *Server) CreateProjectAssistant(ctx context.Context, request *contr
 // GetProjectAssistant читает проектного ассистента с проверенным principal, передавая проверку
 // доступности проекта домену.
 func (server *Server) GetProjectAssistant(ctx context.Context, request *controlplanev1.GetProjectAssistantRequest) (*controlplanev1.GetProjectAssistantResponse, error) {
-	p, err := principal(ctx, controlplanev1.SystemAssistantService_GetProjectAssistant_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	item, err := server.service.GetProjectAssistant(ctx, p, request.GetProjectRef())
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.GetProjectAssistantResponse{Profile: castProjectAssistant(item)}, nil
+	return queryResponse(ctx, controlplanev1.SystemAssistantService_GetProjectAssistant_FullMethodName, func(p value.Principal) (*controlplanev1.GetProjectAssistantResponse, error) {
+		item, err := server.service.GetProjectAssistant(ctx, p, request.GetProjectRef())
+		if err != nil {
+			return nil, err
+		}
+		return &controlplanev1.GetProjectAssistantResponse{Profile: castProjectAssistant(item)}, nil
+
+	})
 }
 
 // castProjectAssistant copies the domain profile references, state, version and timestamps to its
@@ -166,9 +165,7 @@ func (server *Server) ListAssistantConversations(ctx context.Context, request *c
 		return nil, transportError(err)
 	}
 	response := &controlplanev1.ListAssistantConversationsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	for _, item := range items {
-		response.Conversations = append(response.Conversations, castConversation(item))
-	}
+	response.Conversations = castResponseItems(items, castConversation)
 	return response, nil
 }
 
@@ -180,11 +177,9 @@ func (server *Server) CreateAssistantConversation(ctx context.Context, request *
 	if conversationScope(request.GetAssistantScope()) == "" {
 		return nil, status.Error(codes.InvalidArgument, "assistant scope is required")
 	}
-	result, err := execute(ctx, server.service, controlplanev1.SystemAssistantService_CreateAssistantConversation_FullMethodName, command.CreateAssistantConversation, request.GetMutation(), command.AssistantConversationInput{ProjectRef: request.GetProjectRef(), AssistantScope: conversationScope(request.GetAssistantScope()), Context: assistantContext(request.GetContext())})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.CreateAssistantConversationResponse{Conversation: castConversation(*result.Conversation)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.SystemAssistantService_CreateAssistantConversation_FullMethodName, command.CreateAssistantConversation, request.GetMutation(), command.AssistantConversationInput{ProjectRef: request.GetProjectRef(), AssistantScope: conversationScope(request.GetAssistantScope()), Context: assistantContext(request.GetContext())}, func(result command.Result) *controlplanev1.CreateAssistantConversationResponse {
+		return &controlplanev1.CreateAssistantConversationResponse{Conversation: castConversation(*result.Conversation)}
+	})
 }
 
 // UpdateAssistantConversationTitle passes the conversation locator and proposed title through the
@@ -193,11 +188,9 @@ func (server *Server) CreateAssistantConversation(ctx context.Context, request *
 // команду изменения.
 func (server *Server) UpdateAssistantConversationTitle(ctx context.Context, request *controlplanev1.UpdateAssistantConversationTitleRequest) (*controlplanev1.UpdateAssistantConversationTitleResponse, error) {
 	payload := command.AssistantConversationTitleInput{ConversationRef: request.GetConversationRef(), Title: request.GetTitle()}
-	result, err := execute(ctx, server.service, controlplanev1.SystemAssistantService_UpdateAssistantConversationTitle_FullMethodName, command.UpdateAssistantConversation, request.GetMutation(), payload)
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.UpdateAssistantConversationTitleResponse{Conversation: castConversation(*result.Conversation)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.SystemAssistantService_UpdateAssistantConversationTitle_FullMethodName, command.UpdateAssistantConversation, request.GetMutation(), payload, func(result command.Result) *controlplanev1.UpdateAssistantConversationTitleResponse {
+		return &controlplanev1.UpdateAssistantConversationTitleResponse{Conversation: castConversation(*result.Conversation)}
+	})
 }
 
 // AddAssistantTurn defaults delivery to QUEUE and preserves optional context presence before
@@ -256,11 +249,9 @@ func (server *Server) CancelAssistantTurn(ctx context.Context, request *controlp
 // ApplyAssistantPlan передаёт ссылку и ревизию плана команде применения и преобразует беседу,
 // план, созданные ссылки и квитанцию.
 func (server *Server) ApplyAssistantPlan(ctx context.Context, request *controlplanev1.ApplyAssistantPlanRequest) (*controlplanev1.ApplyAssistantPlanResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.SystemAssistantService_ApplyAssistantPlan_FullMethodName, command.ApplyAssistantPlan, request.GetMutation(), command.AssistantPlanInput{PlanRef: request.GetPlanRef(), Revision: request.GetRevision()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.ApplyAssistantPlanResponse{Conversation: castConversation(*result.Conversation), Plan: castPlan(result.Plan), CreatedResourceRefs: result.CreatedRefs, Receipt: castPlanReceipt(result.PlanReceipt)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.SystemAssistantService_ApplyAssistantPlan_FullMethodName, command.ApplyAssistantPlan, request.GetMutation(), command.AssistantPlanInput{PlanRef: request.GetPlanRef(), Revision: request.GetRevision()}, func(result command.Result) *controlplanev1.ApplyAssistantPlanResponse {
+		return &controlplanev1.ApplyAssistantPlanResponse{Conversation: castConversation(*result.Conversation), Plan: castPlan(result.Plan), CreatedResourceRefs: result.CreatedRefs, Receipt: castPlanReceipt(result.PlanReceipt)}
+	})
 }
 
 // UpdateAssistantPlanDraft converts draft operations and passes their summary and plan reference
@@ -269,11 +260,9 @@ func (server *Server) ApplyAssistantPlan(ctx context.Context, request *controlpl
 // отдельной команде обновления.
 func (server *Server) UpdateAssistantPlanDraft(ctx context.Context, request *controlplanev1.UpdateAssistantPlanDraftRequest) (*controlplanev1.UpdateAssistantPlanDraftResponse, error) {
 	payload := command.AssistantPlanDraftInput{PlanRef: request.GetPlanRef(), Summary: request.GetSummary(), Operations: assistantOperations(request.GetOperations())}
-	result, err := execute(ctx, server.service, controlplanev1.SystemAssistantService_UpdateAssistantPlanDraft_FullMethodName, command.UpdateAssistantPlan, request.GetMutation(), payload)
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.UpdateAssistantPlanDraftResponse{Plan: castPlan(result.Plan)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.SystemAssistantService_UpdateAssistantPlanDraft_FullMethodName, command.UpdateAssistantPlan, request.GetMutation(), payload, func(result command.Result) *controlplanev1.UpdateAssistantPlanDraftResponse {
+		return &controlplanev1.UpdateAssistantPlanDraftResponse{Plan: castPlan(result.Plan)}
+	})
 }
 
 // ValidateAssistantPlan executes validation for the requested plan revision and returns the
@@ -281,11 +270,9 @@ func (server *Server) UpdateAssistantPlanDraft(ctx context.Context, request *con
 // ValidateAssistantPlan выполняет проверку запрошенной ревизии плана и возвращает представление
 // плана из результата.
 func (server *Server) ValidateAssistantPlan(ctx context.Context, request *controlplanev1.ValidateAssistantPlanRequest) (*controlplanev1.ValidateAssistantPlanResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.SystemAssistantService_ValidateAssistantPlan_FullMethodName, command.ValidateAssistantPlan, request.GetMutation(), command.AssistantPlanInput{PlanRef: request.GetPlanRef(), Revision: request.GetRevision()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.ValidateAssistantPlanResponse{Plan: castPlan(result.Plan)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.SystemAssistantService_ValidateAssistantPlan_FullMethodName, command.ValidateAssistantPlan, request.GetMutation(), command.AssistantPlanInput{PlanRef: request.GetPlanRef(), Revision: request.GetRevision()}, func(result command.Result) *controlplanev1.ValidateAssistantPlanResponse {
+		return &controlplanev1.ValidateAssistantPlanResponse{Plan: castPlan(result.Plan)}
+	})
 }
 
 // RejectAssistantPlan executes rejection for the requested plan revision and returns its resulting
@@ -293,11 +280,9 @@ func (server *Server) ValidateAssistantPlan(ctx context.Context, request *contro
 // RejectAssistantPlan выполняет отклонение запрошенной ревизии плана и возвращает полученные план
 // и квитанцию.
 func (server *Server) RejectAssistantPlan(ctx context.Context, request *controlplanev1.RejectAssistantPlanRequest) (*controlplanev1.RejectAssistantPlanResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.SystemAssistantService_RejectAssistantPlan_FullMethodName, command.RejectAssistantPlan, request.GetMutation(), command.AssistantPlanInput{PlanRef: request.GetPlanRef(), Revision: request.GetRevision()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.RejectAssistantPlanResponse{Plan: castPlan(result.Plan), Receipt: castPlanReceipt(result.PlanReceipt)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.SystemAssistantService_RejectAssistantPlan_FullMethodName, command.RejectAssistantPlan, request.GetMutation(), command.AssistantPlanInput{PlanRef: request.GetPlanRef(), Revision: request.GetRevision()}, func(result command.Result) *controlplanev1.RejectAssistantPlanResponse {
+		return &controlplanev1.RejectAssistantPlanResponse{Plan: castPlan(result.Plan), Receipt: castPlanReceipt(result.PlanReceipt)}
+	})
 }
 
 // assistantContext copies context locators and optional version, omits unspecified operations and
@@ -322,11 +307,9 @@ func assistantContext(input *controlplanev1.AssistantContextDescriptor) entity.A
 // UpdateAssistantOwnerInstructions передаёт предлагаемые инструкции владельца отдельной команде и
 // преобразует ассистента из её результата.
 func (server *Server) UpdateAssistantOwnerInstructions(ctx context.Context, request *controlplanev1.UpdateAssistantOwnerInstructionsRequest) (*controlplanev1.UpdateAssistantOwnerInstructionsResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.SystemAssistantService_UpdateAssistantOwnerInstructions_FullMethodName, command.UpdateAssistantInstructions, request.GetMutation(), command.AssistantInstructionsInput{Instructions: request.GetInstructions()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.UpdateAssistantOwnerInstructionsResponse{Assistant: castAssistant(*result.Assistant)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.SystemAssistantService_UpdateAssistantOwnerInstructions_FullMethodName, command.UpdateAssistantInstructions, request.GetMutation(), command.AssistantInstructionsInput{Instructions: request.GetInstructions()}, func(result command.Result) *controlplanev1.UpdateAssistantOwnerInstructionsResponse {
+		return &controlplanev1.UpdateAssistantOwnerInstructionsResponse{Assistant: castAssistant(*result.Assistant)}
+	})
 }
 
 // RecoverSystemAssistant invokes the dedicated system-assistant recovery command with an empty
@@ -334,9 +317,7 @@ func (server *Server) UpdateAssistantOwnerInstructions(ctx context.Context, requ
 // RecoverSystemAssistant вызывает отдельную команду восстановления системного ассистента с пустыми
 // данными и преобразует результат.
 func (server *Server) RecoverSystemAssistant(ctx context.Context, request *controlplanev1.RecoverSystemAssistantRequest) (*controlplanev1.RecoverSystemAssistantResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.SystemAssistantService_RecoverSystemAssistant_FullMethodName, command.RecoverAssistant, request.GetMutation(), struct{}{})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.RecoverSystemAssistantResponse{Assistant: castAssistant(*result.Assistant)}, nil
+	return executeResponse(ctx, server.service, controlplanev1.SystemAssistantService_RecoverSystemAssistant_FullMethodName, command.RecoverAssistant, request.GetMutation(), struct{}{}, func(result command.Result) *controlplanev1.RecoverSystemAssistantResponse {
+		return &controlplanev1.RecoverSystemAssistantResponse{Assistant: castAssistant(*result.Assistant)}
+	})
 }

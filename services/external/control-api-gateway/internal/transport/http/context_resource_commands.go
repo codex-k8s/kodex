@@ -145,13 +145,8 @@ func (server *Server) SaveSkillBundleDraft(w http.ResponseWriter, r *http.Reques
 		writeLocalProblem(w, 400, "INVALID_REQUEST", false)
 		return
 	}
-	body, ok := decodeJSON[generated.SkillBundleSpecification](w, r)
+	specification, ok := decodeContextSpecification(w, r, skillSpecificationInput)
 	if !ok {
-		return
-	}
-	specification, ok := skillSpecificationInput(body)
-	if !ok {
-		writeLocalProblem(w, 400, "INVALID_REQUEST", false)
 		return
 	}
 	mutation, ok := requireVersionedMutation(w, p.IdempotencyKey, p.IfMatch)
@@ -217,13 +212,8 @@ func (server *Server) ReviseMemoryRecord(w http.ResponseWriter, r *http.Request,
 		writeLocalProblem(w, 400, "INVALID_REQUEST", false)
 		return
 	}
-	body, ok := decodeJSON[generated.MemoryRecordSpecification](w, r)
+	specification, ok := decodeContextSpecification(w, r, memorySpecificationInput)
 	if !ok {
-		return
-	}
-	specification, ok := memorySpecificationInput(body)
-	if !ok {
-		writeLocalProblem(w, 400, "INVALID_REQUEST", false)
 		return
 	}
 	mutation, ok := requireVersionedMutation(w, p.IdempotencyKey, p.IfMatch)
@@ -231,11 +221,7 @@ func (server *Server) ReviseMemoryRecord(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	response, err := server.control.Command.ReviseMemoryRecord(r.Context(), &controlplanev1.ReviseMemoryRecordRequest{Mutation: mutation, RecordRef: recordRef, Specification: specification})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMemoryRecord(w, response.GetRecord(), recordRef, 201)
+	writeMemoryRecordRPCResult(w, response, err, recordRef, 201)
 }
 
 // ValidateSkillBundleDraft reuses the exact digest-mutation input guard and
@@ -251,11 +237,7 @@ func (server *Server) ValidateSkillBundleDraft(w http.ResponseWriter, r *http.Re
 	}
 
 	response, err := server.control.Command.ValidateSkillBundleDraft(r.Context(), &controlplanev1.ValidateSkillBundleDraftRequest{Mutation: mutation, BundleRef: bundleRef, RevisionRef: revisionRef, ExpectedDigest: body.ExpectedDigest})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeSkillBundle(w, response.GetBundle(), bundleRef, 200)
+	writeSkillBundleRPCResult(w, response, err, bundleRef, 200)
 }
 
 // ReviewSkillBundleDraft accepts only APPROVE/REJECT, a valid expected digest
@@ -286,11 +268,7 @@ func (server *Server) ReviewSkillBundleDraft(w http.ResponseWriter, r *http.Requ
 		decision = controlplanev1.SkillReviewDecision_SKILL_REVIEW_DECISION_APPROVE
 	}
 	response, err := server.control.Command.ReviewSkillBundleDraft(r.Context(), &controlplanev1.ReviewSkillBundleDraftRequest{Mutation: mutation, BundleRef: bundleRef, RevisionRef: revisionRef, ExpectedDigest: body.ExpectedDigest, Decision: decision, Comment: body.Comment})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeSkillBundle(w, response.GetBundle(), bundleRef, 200)
+	writeSkillBundleRPCResult(w, response, err, bundleRef, 200)
 }
 
 // PublishSkillBundleDraft validates the same resource/revision/body/header pins
@@ -306,11 +284,7 @@ func (server *Server) PublishSkillBundleDraft(w http.ResponseWriter, r *http.Req
 	}
 
 	response, err := server.control.Command.PublishSkillBundleDraft(r.Context(), &controlplanev1.PublishSkillBundleDraftRequest{Mutation: mutation, BundleRef: bundleRef, RevisionRef: revisionRef, ExpectedDigest: body.ExpectedDigest})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeSkillBundle(w, response.GetBundle(), bundleRef, 200)
+	writeSkillBundleRPCResult(w, response, err, bundleRef, 200)
 }
 
 // DiscardSkillBundleDraft validates exact revision digest and mutation headers
@@ -326,9 +300,5 @@ func (server *Server) DiscardSkillBundleDraft(w http.ResponseWriter, r *http.Req
 	}
 
 	response, err := server.control.Command.DiscardSkillBundleDraft(r.Context(), &controlplanev1.DiscardSkillBundleDraftRequest{Mutation: mutation, BundleRef: bundleRef, RevisionRef: revisionRef, ExpectedDigest: body.ExpectedDigest})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeSkillBundle(w, response.GetBundle(), bundleRef, 200)
+	writeSkillBundleRPCResult(w, response, err, bundleRef, 200)
 }

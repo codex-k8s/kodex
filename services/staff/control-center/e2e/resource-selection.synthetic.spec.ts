@@ -1,3 +1,4 @@
+import { installSyntheticCsrf } from "./fixtures/browser-session";
 import { handleSyntheticRuntimeRequest } from "./synthetic-runtime-route";
 import { expect, test, type Locator } from "@playwright/test";
 import type {
@@ -125,16 +126,7 @@ for (const width of [390, 2900]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 1600 });
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.context().addCookies([
-      {
-        name: "__Host-kodex-csrf",
-        value: "a".repeat(43),
-        domain: "kodex.test",
-        path: "/",
-        secure: true,
-        sameSite: "Strict",
-      },
-    ]);
+    await installSyntheticCsrf(page.context(), "a");
     const nodes = [
       node("INPUT", "file", "ARTIFACT", "Документ"),
       node("SKILL", "skill", "SKILL_BUNDLE", "Навык"),

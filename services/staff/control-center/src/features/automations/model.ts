@@ -95,6 +95,41 @@ function canonicalJson(value: unknown): string {
   return JSON.stringify(canonical(value));
 }
 
+// Общие сохранённые поля расписания и ревизии; календарные поля и привязка цели
+// проверяются отдельно.
+type ScheduleSharedFields = Pick<
+  ScheduleInput,
+  | "timezone"
+  | "sessionPolicy"
+  | "notificationPolicy"
+  | "dstGapPolicy"
+  | "dstFoldPolicy"
+  | "misfirePolicy"
+  | "overlapPolicy"
+  | "automationText"
+  | "promptInputs"
+  | "input"
+>;
+
+// Сравнивает общие поля с сохранением порядка и канонизации JSON.
+function sameScheduleSharedFields(
+  left: ScheduleSharedFields,
+  right: ScheduleSharedFields,
+): boolean {
+  return (
+    left.timezone === right.timezone &&
+    left.sessionPolicy === right.sessionPolicy &&
+    left.notificationPolicy === right.notificationPolicy &&
+    Object.is(left.dstGapPolicy, right.dstGapPolicy) &&
+    Object.is(left.dstFoldPolicy, right.dstFoldPolicy) &&
+    left.misfirePolicy === right.misfirePolicy &&
+    left.overlapPolicy === right.overlapPolicy &&
+    left.automationText === right.automationText &&
+    canonicalJson(left.promptInputs) === canonicalJson(right.promptInputs) &&
+    canonicalJson(left.input) === canonicalJson(right.input)
+  );
+}
+
 function sameInput(left: ScheduleInput, right: ScheduleInput): boolean {
   return (
     left.name === right.name &&
@@ -106,16 +141,7 @@ function sameInput(left: ScheduleInput, right: ScheduleInput): boolean {
     (left.preset === "CUSTOM" || left.timeOfDay === right.timeOfDay) &&
     (left.preset !== "WEEKLY" ||
       (left.dayOfWeek ?? "") === (right.dayOfWeek ?? "")) &&
-    left.timezone === right.timezone &&
-    left.sessionPolicy === right.sessionPolicy &&
-    left.notificationPolicy === right.notificationPolicy &&
-    Object.is(left.dstGapPolicy, right.dstGapPolicy) &&
-    Object.is(left.dstFoldPolicy, right.dstFoldPolicy) &&
-    left.misfirePolicy === right.misfirePolicy &&
-    left.overlapPolicy === right.overlapPolicy &&
-    left.automationText === right.automationText &&
-    canonicalJson(left.promptInputs) === canonicalJson(right.promptInputs) &&
-    canonicalJson(left.input) === canonicalJson(right.input)
+    sameScheduleSharedFields(left, right)
   );
 }
 
@@ -191,16 +217,6 @@ function revisionMatchesInput(
     revision.target.ref === input.targetRef &&
     revision.target.type === input.targetType &&
     revision.preset === input.preset &&
-    revision.timezone === input.timezone &&
-    revision.sessionPolicy === input.sessionPolicy &&
-    revision.notificationPolicy === input.notificationPolicy &&
-    Object.is(revision.dstGapPolicy, input.dstGapPolicy) &&
-    Object.is(revision.dstFoldPolicy, input.dstFoldPolicy) &&
-    revision.misfirePolicy === input.misfirePolicy &&
-    revision.overlapPolicy === input.overlapPolicy &&
-    revision.automationText === input.automationText &&
-    canonicalJson(revision.promptInputs) ===
-      canonicalJson(input.promptInputs) &&
-    canonicalJson(revision.input) === canonicalJson(input.input)
+    sameScheduleSharedFields(revision, input)
   );
 }

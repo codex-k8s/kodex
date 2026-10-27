@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	serviceplatform "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
@@ -21,6 +20,17 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// TestIntegrationCandidateVisibilityComponent instruments the unchanged candidate SQL with a
+// temporary transaction-local visibility counter and checks exact
+// RECIPIENT/PROJECT/CONNECTION/CAPABILITY call cardinality. It also checks unique totals, one-item
+// pagination, changed-query cursor rejection and foreign authority denial. The counter/fixtures
+// roll back in a disposable database and do not change the production predicate or prove external
+// GitHub eligibility.
+// TestIntegrationCandidateVisibilityComponent инструментирует неизменённый candidate SQL временным
+// transaction-local visibility counter и проверяет точную кратность вызовов
+// RECIPIENT/PROJECT/CONNECTION/CAPABILITY. Также проверяет unique totals, страницы по одному item,
+// отказ cursor при смене query и чужих полномочий. Counter/fixtures откатываются в disposable БД,
+// не меняют production predicate и не доказывают внешнюю GitHub eligibility.
 func TestIntegrationCandidateVisibilityComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
@@ -29,19 +39,7 @@ func TestIntegrationCandidateVisibilityComponent(t *testing.T) {
 		t.Fatal("open isolated candidate PostgreSQL")
 	}
 	defer pool.Close()
-	r, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = r.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
-		t.Fatal(err)
-	}
-	if err = r.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3, StagingRepository: "registry.invalid/staging", PromotedRepository: "registry.invalid/roles", DefaultImageReference: "registry.invalid/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
-		t.Fatal(err)
-	}
-	if err = r.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
+	r := newSyntheticRuntimeComponentRepository(t, ctx, pool)
 	seedObservedCatalogFixture(t, ctx, r)
 	owner := resolvedTestPrincipal(t, ctx, r, port.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.command.integrations.create"}, "control-api-gateway")
 	service, err := serviceplatform.New(r)

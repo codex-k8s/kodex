@@ -16,16 +16,38 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// avatarUploadReservation stores the private server reservation/artifact/object locators,
+// materialized version/ETag, lifecycle state and OCC version. It is metadata for the upload owner
+// protocol, not a caller grant or proof that an artifact was adopted.
+// avatarUploadReservation хранит закрытые серверные ссылки reservation, artifact и object,
+// materialized version и ETag, состояние и OCC version. Это metadata протокола владельца загрузки,
+// не клиентское разрешение и не доказательство принятия artifact.
 type avatarUploadReservation struct {
 	ref, artifactRef, objectKey, objectVersion, objectETag, state string
 	version                                                       int64
 }
 
+// avatarCompensationTask pins a claimed reservation to object key/version/ETag, digest/size and
+// reservation version for exact deletion and ACK. An empty descriptor may require authoritative
+// Head resolution before use; the struct alone grants no cleanup authority.
+// avatarCompensationTask связывает захваченную reservation с key, version, ETag, digest, size и
+// версией reservation для точных удаления и ACK. Пустой дескриптор может требовать разрешения
+// через Head; структура сама не выдаёт cleanup authority.
 type avatarCompensationTask struct {
 	ref, objectKey, objectVersion, objectETag, digest string
 	sizeBytes, version                                int64
 }
 
+// UploadAgentAvatar resolves scope and reserves or replays an authorized avatar upload, scans
+// content before object materialization, records the exact receipt and atomically finalizes owner
+// state. A materialization-mark or finalization failure triggers separately bounded durable
+// compensation and joins cleanup errors. Existing replay bypasses new object work; no committed
+// artifact is adopted merely from a storage receipt.
+// UploadAgentAvatar разрешает scope, резервирует либо повторяет авторизованную загрузку, сканирует
+// содержимое до materialization, сохраняет точную квитанцию и атомарно завершает состояние
+// владельца. Ошибка mark либо finalize запускает отдельную ограниченную durable compensation с
+// объединением ошибок. Replay не создаёт object work; одна storage receipt не означает принятие
+// artifact.
 func (repository *Repository) UploadAgentAvatar(
 	ctx context.Context,
 	principal value.Principal,
@@ -69,6 +91,17 @@ func (repository *Repository) UploadAgentAvatar(
 	return item, nil
 }
 
+// reserveAgentAvatarUpload uses ReadCommitted and an actor/operation/key advisory lock, locks the
+// exact agent/project and checks avatar.manage before receipt replay. Replay requires matching
+// intent/resource and fresh agent.view/action filtering; fresh work also checks agent version and
+// persists a server-generated reservation/object key. Commit errors are Conflict; caller
+// input/operation validation remains upstream and deferred request-context rollback errors are
+// ignored.
+// reserveAgentAvatarUpload использует ReadCommitted и advisory lock субъекта, операции и ключа,
+// блокирует точный agent/project и проверяет avatar.manage до replay. Повтор требует совпадения
+// intent и ресурса, свежих agent.view и action filtering; новая работа также проверяет версию
+// агента и сохраняет серверные reservation и object key. Ошибки commit — Conflict; вход и
+// operation валидируются выше, ошибки request-context rollback игнорируются.
 func (repository *Repository) reserveAgentAvatarUpload(
 	ctx context.Context,
 	current scope,
@@ -162,6 +195,14 @@ func (repository *Repository) reserveAgentAvatarUpload(
 	return reservation, nil, nil
 }
 
+// resolveOrMaterializeAvatarObject reuses MATERIALIZED exact-version metadata only when
+// ETag/digest/size match, otherwise checks the reserved key before creating content. An already
+// existing object must match digest/size and have an ETag; errors other than NotFound do not
+// authorize another Put. It returns a storage receipt without adopting owner state.
+// resolveOrMaterializeAvatarObject повторно использует MATERIALIZED exact-version metadata только
+// при совпадении ETag, digest и size; иначе проверяет зарезервированный ключ до записи. Имеющийся
+// объект требует совпадения digest и size и непустого ETag; ошибки кроме NotFound не разрешают ещё
+// один Put. Квитанция не принимает состояние владельца.
 func (repository *Repository) resolveOrMaterializeAvatarObject(
 	ctx context.Context,
 	reservation avatarUploadReservation,
@@ -188,6 +229,14 @@ func (repository *Repository) resolveOrMaterializeAvatarObject(
 	return repository.putArtifactObject(ctx, reservation.objectKey, input)
 }
 
+// markAgentAvatarMaterialized requires receipt key/ETag, writes its exact version/digest/size
+// through guarded reservation SQL in ReadCommitted and commits the new materialized marker.
+// Missing guarded row or commit failure is Conflict; other SQL failures are Unavailable. No
+// agent/avatar publication occurs here.
+// markAgentAvatarMaterialized требует receipt key и ETag, пишет точные version, digest и size
+// защищённым SQL reservation в ReadCommitted и фиксирует marker materialized. Отсутствие строки
+// либо commit failure — Conflict, прочие SQL failures — Unavailable. Публикации avatar агента
+// здесь нет.
 func (repository *Repository) markAgentAvatarMaterialized(
 	ctx context.Context,
 	current scope,
@@ -220,6 +269,17 @@ func (repository *Repository) markAgentAvatarMaterialized(
 	return nil
 }
 
+// finalizeAgentAvatarUpload checks clean scan/receipt agreement, then serializably locks actor
+// idempotency, exact reservation and agent with fresh project/avatar authority and OCC.
+// Artifact/content creation, avatar binding/readback, reservation FINALIZED, audit/event/cards and
+// receipt commit together. Any failure returns an empty agent for outer compensation; ignored
+// reference/JSON helper errors and existing commit mappings remain unchanged. No storage Delete
+// occurs inside the owner transaction.
+// finalizeAgentAvatarUpload проверяет clean scan и receipt, затем serializable блокирует
+// idempotency субъекта, точную reservation и агента со свежими project/avatar authority и OCC.
+// Artifact, content, avatar binding и readback, FINALIZED, audit, event, cards и receipt
+// фиксируются вместе. При ошибке агент пуст для внешней компенсации; игнорируемые ошибки reference
+// и JSON и commit mappings сохранены. Storage Delete внутри owner TX отсутствует.
 func (repository *Repository) finalizeAgentAvatarUpload(
 	ctx context.Context,
 	principal value.Principal,
@@ -361,6 +421,15 @@ func (repository *Repository) finalizeAgentAvatarUpload(
 	return item, nil
 }
 
+// compensateAgentAvatarObject uses a five-second WithoutCancel context to commit an exact
+// unadopted reservation compensation claim before any external delete. The shared delete/readback
+// helper must confirm absence before the exact version/descriptor ACK; claim, storage or ACK
+// failures remain visible for later durable recovery. It does not delete an artifact already
+// adopted by the owner.
+// compensateAgentAvatarObject использует пятисекундный WithoutCancel context и фиксирует точный
+// claim компенсации непринятой reservation до внешнего удаления. Общий delete/readback helper
+// подтверждает отсутствие до точного version/descriptor ACK; ошибки claim, storage и ACK
+// сохраняются для durable recovery. Принятый владельцем artifact не удаляется.
 func (repository *Repository) compensateAgentAvatarObject(
 	ctx context.Context,
 	current scope,
@@ -390,16 +459,22 @@ func (repository *Repository) compensateAgentAvatarObject(
 	if err := tx.Commit(cleanupContext); err != nil {
 		return errs.ErrConflict
 	}
-	if err := repository.objects.Delete(cleanupContext, task.objectKey, task.objectVersion); err != nil &&
-		!errors.Is(err, objectstorage.ErrNotFound) {
-		return mapObjectStorageError(err)
-	}
-	if err := repository.verifyAgentAvatarObjectDeleted(cleanupContext, task); err != nil {
+	if err := repository.deleteArtifactObjectAndVerify(cleanupContext, task.objectKey, task.objectVersion); err != nil {
 		return err
 	}
 	return repository.completeAgentAvatarCompensation(cleanupContext, task)
 }
 
+// CleanupExpiredAgentAvatarUploads validates a 1-to-100 batch, claims expired or abandoned
+// compensation rows with adopted-content exclusion, closes rows and commits before storage
+// operations. Missing descriptors are resolved with guarded Head/OCC; each task then requires
+// delete plus authoritative absence before ACK. Failures accumulate while other tasks continue;
+// caller context, no implicit retry and exact descriptor constraints are preserved.
+// CleanupExpiredAgentAvatarUploads проверяет batch от 1 до 100, захватывает истёкшие и брошенные
+// compensation rows с исключением принятого content, закрывает rows и фиксирует claim до storage.
+// Отсутствующие дескрипторы разрешаются защищённым Head и OCC; каждый task требует delete и
+// подтверждённого отсутствия до ACK. Ошибки накапливаются, остальные tasks продолжаются; context,
+// отсутствие неявного повтора и exact descriptors сохраняются.
 func (repository *Repository) CleanupExpiredAgentAvatarUploads(ctx context.Context, limit int32) error {
 	if limit < 1 || limit > 100 {
 		return errs.ErrInvalid
@@ -441,12 +516,7 @@ func (repository *Repository) CleanupExpiredAgentAvatarUploads(ctx context.Conte
 			}
 			task = resolved
 		}
-		if err := repository.objects.Delete(ctx, task.objectKey, task.objectVersion); err != nil &&
-			!errors.Is(err, objectstorage.ErrNotFound) {
-			cleanupErrors = append(cleanupErrors, mapObjectStorageError(err))
-			continue
-		}
-		if err := repository.verifyAgentAvatarObjectDeleted(ctx, task); err != nil {
+		if err := repository.deleteArtifactObjectAndVerify(ctx, task.objectKey, task.objectVersion); err != nil {
 			cleanupErrors = append(cleanupErrors, err)
 			continue
 		}
@@ -457,6 +527,15 @@ func (repository *Repository) CleanupExpiredAgentAvatarUploads(ctx context.Conte
 	return errors.Join(cleanupErrors...)
 }
 
+// resolveExpiredAgentAvatarDescriptor reads the reserved key latest metadata when no stored
+// descriptor exists and requires exact key/digest/size plus a nonempty ETag before guarded OCC
+// persistence. NotFound retains the original task for absence cleanup; read errors, descriptor
+// mismatch and lost owner version fail closed. It returns copied version/ETag metadata, never a
+// new grant.
+// resolveExpiredAgentAvatarDescriptor читает latest metadata зарезервированного ключа при
+// отсутствии дескриптора, требуя точные key, digest, size и непустой ETag до защищённого OCC
+// сохранения. NotFound сохраняет task для cleanup отсутствия; ошибки чтения, mismatch и потеря
+// owner version вызывают отказ. Возвращает version и ETag, не новое разрешение.
 func (repository *Repository) resolveExpiredAgentAvatarDescriptor(
 	ctx context.Context,
 	task avatarCompensationTask,
@@ -486,16 +565,14 @@ func (repository *Repository) resolveExpiredAgentAvatarDescriptor(
 	return task, nil
 }
 
-func (repository *Repository) verifyAgentAvatarObjectDeleted(ctx context.Context, task avatarCompensationTask) error {
-	if _, err := repository.objects.Head(ctx, task.objectKey, task.objectVersion); !errors.Is(err, objectstorage.ErrNotFound) {
-		if err == nil {
-			return errs.ErrConflict
-		}
-		return mapObjectStorageError(err)
-	}
-	return nil
-}
-
+// completeAgentAvatarCompensation acknowledges only the exact COMPENSATING reservation version and
+// object descriptor with no adopted artifact content, requiring exactly one affected row. SQL
+// error is Unavailable and a stale/missing row Conflict; callers must first prove object absence,
+// since this update performs no external deletion.
+// completeAgentAvatarCompensation подтверждает только точные версию COMPENSATING reservation и
+// object descriptor без принятого artifact content, требуя одну изменённую строку. Ошибка SQL —
+// Unavailable, устаревшая либо отсутствующая строка — Conflict; вызывающий заранее доказывает
+// отсутствие объекта, update не удаляет storage.
 func (repository *Repository) completeAgentAvatarCompensation(ctx context.Context, task avatarCompensationTask) error {
 	tag, err := repository.pool.Exec(ctx, queryAvatarUploadCompleteCompensation, pgx.StrictNamedArgs{
 		"reservation_ref": task.ref, "expected_version": task.version, "object_key": task.objectKey,

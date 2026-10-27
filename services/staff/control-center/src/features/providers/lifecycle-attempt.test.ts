@@ -1,3 +1,4 @@
+import { createTestStorage as storage } from "@/test-utils/storage";
 import { describe, expect, it } from "vitest";
 import {
   clearProviderLifecycleAttempts,
@@ -6,23 +7,6 @@ import {
   rememberProviderLifecycleAttempt,
   type ProviderLifecycleAttempt,
 } from "./lifecycle-attempt";
-function storage(): Storage {
-  const values = new Map<string, string>();
-  return {
-    get length() {
-      return values.size;
-    },
-    key: (index) => [...values.keys()][index] ?? null,
-    clear: () => values.clear(),
-    getItem: (key) => values.get(key) ?? null,
-    setItem: (key, value) => {
-      values.set(key, value);
-    },
-    removeItem: (key) => {
-      values.delete(key);
-    },
-  };
-}
 const attempt: ProviderLifecycleAttempt = {
   action: "CANCEL_QUEUED",
   accountRef: "pacc_synthetic",

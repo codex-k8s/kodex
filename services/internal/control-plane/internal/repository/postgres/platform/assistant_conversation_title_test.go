@@ -6,6 +6,13 @@ import (
 	"unicode/utf8"
 )
 
+// TestAssistantUserMessageTitle checks literal ordinary-topic, whitespace, minimum-length,
+// generic/i18n, UTF-8/control and source-size cases plus bounded long Cyrillic text. All inputs
+// are synthetic and the test exercises title projection only, without runtime execution or
+// persistence.
+// TestAssistantUserMessageTitle проверяет буквальные темы, пробелы, минимальную длину, generic и
+// i18n, UTF-8, control и размер источника, а также длинный кириллический текст. Ввод
+// синтетический; проверяется только проекция заголовка без runtime и сохранения.
 func TestAssistantUserMessageTitle(t *testing.T) {
 	t.Parallel()
 	for _, test := range []struct{ name, input, want string }{
@@ -33,6 +40,12 @@ func TestAssistantUserMessageTitle(t *testing.T) {
 	}
 }
 
+// TestAssistantUserMessageTitleKeepsEarlyProseBeforeTechnicalBody requires the same human topic
+// before fenced JSON, typed refs, digests and a large benign structured body. It proves only the
+// explicit leading-prose fallback, not acceptance of technical content as metadata.
+// TestAssistantUserMessageTitleKeepsEarlyProseBeforeTechnicalBody требует одинаковую человеческую
+// тему перед fenced JSON, типизированными ссылками, хешами и большим безопасным структурированным
+// телом. Проверяет только явный fallback начала, не допуск технического тела в метаданные.
 func TestAssistantUserMessageTitleKeepsEarlyProseBeforeTechnicalBody(t *testing.T) {
 	t.Parallel()
 	const topic = "Настрой окружение помощника"
@@ -48,6 +61,13 @@ func TestAssistantUserMessageTitleKeepsEarlyProseBeforeTechnicalBody(t *testing.
 	}
 }
 
+// TestAssistantUserMessageTechnicalPrefixPreservesWholeInputGuards rejects whole-source synthetic
+// protected fields, password markers, URLs, oversized content, control/format characters and
+// structure-first input even when a normal topic appears elsewhere. No real credential or external
+// request is used.
+// TestAssistantUserMessageTechnicalPrefixPreservesWholeInputGuards отклоняет синтетические
+// protected поля, password маркеры, URL, слишком большой ввод, control/format символы и структуру
+// в начале даже при наличии обычной темы. Реальные credentials и внешние запросы не используются.
 func TestAssistantUserMessageTechnicalPrefixPreservesWholeInputGuards(t *testing.T) {
 	t.Parallel()
 	const topic = "Настрой окружение помощника"
@@ -66,6 +86,14 @@ func TestAssistantUserMessageTechnicalPrefixPreservesWholeInputGuards(t *testing
 	}
 }
 
+// TestAssistantConversationTitleDoesNotDiscloseProtectedInput checks synthetic
+// password/key/bearer/token-like/header/tag/URL/email/code patterns across USER, public and
+// automatic reducers. These are inert fixtures inherited from the source, not live secrets; the
+// test does not claim exhaustive secret classification.
+// TestAssistantConversationTitleDoesNotDiscloseProtectedInput проверяет синтетические password,
+// key, bearer, token-like, header, tag, URL, email и code шаблоны через USER, public и automatic
+// редукторы. Это неизменённые неисполняемые fixtures исходника, не живые секреты; полнота
+// классификации секретов не заявляется.
 func TestAssistantConversationTitleDoesNotDiscloseProtectedInput(t *testing.T) {
 	t.Parallel()
 	for _, input := range []string{
@@ -88,6 +116,14 @@ func TestAssistantConversationTitleDoesNotDiscloseProtectedInput(t *testing.T) {
 	}
 }
 
+// TestAssistantUserMessageTitleUsesSafePrefixBeforeLateURL checks exact bounded leading topics for
+// long synthetic/system and Russian requests, multiple URL cases and whitespace normalization. It
+// also confirms the shared public/automatic filters still reject the original URL-bearing source;
+// embedded shell text is never executed.
+// TestAssistantUserMessageTitleUsesSafePrefixBeforeLateURL проверяет точные ограниченные темы
+// длинных синтетических и русских запросов, несколько URL и нормализацию пробелов. Одновременно
+// подтверждает отказ общих public и automatic фильтров для всего URL-источника; встроенный текст
+// shell не исполняется.
 func TestAssistantUserMessageTitleUsesSafePrefixBeforeLateURL(t *testing.T) {
 	t.Parallel()
 	const system57 = "QA_SYSTEM_GITHUB_57. Маркер KODEX1797_GEN9_GITHUB_407_A2. Только READ smoke Issue1797. Через фактический native exec выполни отдельно git --version и env GIT_TERMINAL_PROMPT=0 git -c protocol.version=0 -c credential.helper= -c credential.interactive=false ls-remote -- https://github.com/codex-k8s/kodex.git HEAD refs/heads/main. protocol.version=0 нужен для GET-only правил текущего окружения, не меняй policy. Без clone/fetch, записей, credentials и изменений GitHub. Верни exit codes и полученные refs/SHA. При отказе сообщи фактическую ошибку; не заменяй вызов памятью/web."
@@ -110,6 +146,14 @@ func TestAssistantUserMessageTitleUsesSafePrefixBeforeLateURL(t *testing.T) {
 	}
 }
 
+// TestAssistantUserMessageLateURLKeepsWholeInputGuards checks both long and short leading prose
+// against protected/email/token-like/code/JSON suffixes, malformed encoding, controls and size
+// overflow anywhere in the source. Early URLs and generic/reserved prefixes still return no title;
+// all credential-looking strings are synthetic fixtures.
+// TestAssistantUserMessageLateURLKeepsWholeInputGuards проверяет длинное и короткое начало при
+// protected, email, token-like, code и JSON суффиксах, неверной кодировке, control и переполнении
+// всего источника. Ранние URL, generic и reserved начала не дают заголовка; credential-like строки
+// — синтетические fixtures.
 func TestAssistantUserMessageLateURLKeepsWholeInputGuards(t *testing.T) {
 	t.Parallel()
 	const prefix = "Проверь настройку помощника и доступность опубликованного репозитория организации перед следующим этапом разработки. "
@@ -151,6 +195,13 @@ func TestAssistantUserMessageLateURLKeepsWholeInputGuards(t *testing.T) {
 	}
 }
 
+// TestAssistantUserMessageTitleUsesShortPrefixBeforeURL checks literal short Russian and
+// eight-rune topics, mixed URL case, repeated links and a URL crossing the rune bound. Shared
+// public/automatic filtering of the full source must remain strict while only the USER path may
+// keep its safe prefix.
+// TestAssistantUserMessageTitleUsesShortPrefixBeforeURL проверяет короткую русскую и восьмирунную
+// тему, регистр URL, повторные ссылки и URL на границе рун. Общие public и automatic фильтры всего
+// источника сохраняют строгость; безопасное начало допускает только USER путь.
 func TestAssistantUserMessageTitleUsesShortPrefixBeforeURL(t *testing.T) {
 	t.Parallel()
 	for _, test := range []struct{ name, input, want string }{
@@ -170,6 +221,12 @@ func TestAssistantUserMessageTitleUsesShortPrefixBeforeURL(t *testing.T) {
 	}
 }
 
+// TestAssistantModelTitleRejectsGenericSummary rejects the closed generic/completion/i18n examples
+// while retaining explicit normal topic examples through the relevant public/generic checks. It
+// performs no model call or evaluation of arbitrary generated output.
+// TestAssistantModelTitleRejectsGenericSummary отклоняет фиксированные generic, completion и i18n
+// примеры, сохраняя обычные темы соответствующими public и generic проверками. Вызов модели и
+// оценка произвольного вывода отсутствуют.
 func TestAssistantModelTitleRejectsGenericSummary(t *testing.T) {
 	t.Parallel()
 	for _, summary := range []string{"готов", "Готово.", "Done!", "План готов", "Настройка завершена", "Изменения применены", "Всё готово", "New conversation", "", "i18n:RUN_COMPLETED"} {
@@ -184,6 +241,12 @@ func TestAssistantModelTitleRejectsGenericSummary(t *testing.T) {
 	}
 }
 
+// TestAssistantModelTitleRejectsTechnicalAndProgressResults rejects literal plan/completion
+// reports, typed refs, digests and bracketed technical summaries from the automatic reducer. The
+// examples are local strings, not accepted model receipts or execution evidence.
+// TestAssistantModelTitleRejectsTechnicalAndProgressResults отклоняет буквальные plan и completion
+// отчёты, типизированные ссылки, хеши и технические списки автоматическим редуктором. Примеры —
+// локальные строки, не квитанции модели и не доказательство исполнения.
 func TestAssistantModelTitleRejectsTechnicalAndProgressResults(t *testing.T) {
 	t.Parallel()
 	for _, summary := range []string{
@@ -201,6 +264,14 @@ func TestAssistantModelTitleRejectsTechnicalAndProgressResults(t *testing.T) {
 	}
 }
 
+// TestAssistantAutomaticTitlePreservesTopicsAndRejectsReports checks literal useful topics versus
+// progress/technical/protected/control reports, plus word-aware Cyrillic truncation, a single long
+// word and an exact whole-word boundary. It preserves existing automatic-title policy without
+// testing manual edits.
+// TestAssistantAutomaticTitlePreservesTopicsAndRejectsReports проверяет буквальные полезные темы
+// против progress, technical, protected и control отчётов, кириллическое усечение по словам, одно
+// длинное слово и точную границу целого слова. Сохраняет автоматическую политику; ручные правки не
+// проверяются.
 func TestAssistantAutomaticTitlePreservesTopicsAndRejectsReports(t *testing.T) {
 	t.Parallel()
 	for _, test := range []struct{ input, want string }{
@@ -231,6 +302,14 @@ func TestAssistantAutomaticTitlePreservesTopicsAndRejectsReports(t *testing.T) {
 	}
 }
 
+// TestAssistantUserMessageTitleUsesOnlyHumanPrefixBeforeJSON allows only human prose before
+// object/array syntax and rejects structure-first or protected/URL/control-bearing sources. JSON
+// payload fields never become the expected title; fixtures do not perform a command or load
+// credentials.
+// TestAssistantUserMessageTitleUsesOnlyHumanPrefixBeforeJSON разрешает только человеческий текст
+// перед объектом и массивом, отклоняя структуру в начале и источники с protected, URL либо
+// control. Поля JSON не становятся ожидаемым заголовком; fixtures не исполняют команд и не
+// загружают credentials.
 func TestAssistantUserMessageTitleUsesOnlyHumanPrefixBeforeJSON(t *testing.T) {
 	t.Parallel()
 	for _, test := range []struct{ input, want string }{
@@ -249,6 +328,14 @@ func TestAssistantUserMessageTitleUsesOnlyHumanPrefixBeforeJSON(t *testing.T) {
 	}
 }
 
+// TestAssistantConversationTitleSQLKeepsExistingNames asserts that USER fallback SQL changes only
+// a meaningful exact SERVER_DEFAULT placeholder and that explicit metadata proposals preserve
+// USER_EDITED names. This is a literal SQL-shape check, not a database concurrency or persistence
+// test.
+// TestAssistantConversationTitleSQLKeepsExistingNames проверяет буквальные SQL-условия: USER
+// fallback меняет только точный SERVER_DEFAULT placeholder осмысленным названием, явное
+// предложение metadata сохраняет USER_EDITED. Это проверка формы SQL, не конкурентного исполнения
+// и сохранения в БД.
 func TestAssistantConversationTitleSQLKeepsExistingNames(t *testing.T) {
 	t.Parallel()
 	const sourceGuard = "title_source = 'SERVER_DEFAULT' AND title = 'i18n:NEW_ASSISTANT_CONVERSATION'"

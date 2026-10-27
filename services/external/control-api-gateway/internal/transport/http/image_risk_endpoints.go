@@ -102,11 +102,7 @@ func imageRiskRequest(body generated.ImageAdmissionRiskDecisionInput, mutation *
 // DecideOrganizationImageAdmissionRisk decodes an explicit versioned risk decision, validates its selected evidence pins and invokes only the organization owner command. A nil or inconsistent result fails before projection; successful acceptance may enqueue admission but does not locally promote or admit the artifact.
 // DecideOrganizationImageAdmissionRisk декодирует явное versioned risk decision, проверяет выбранные evidence pins и вызывает только организационную owner command. Nil и несогласованный результат отклоняются до проекции; acceptance может поставить admission в очередь, но локально artifact не продвигает и не допускает.
 func (server *Server) DecideOrganizationImageAdmissionRisk(w http.ResponseWriter, r *http.Request, recipe generated.RecipeRef, artifact generated.ArtifactRef, p generated.DecideOrganizationImageAdmissionRiskParams) {
-	body, ok := decodeJSON[generated.ImageAdmissionRiskDecisionInput](w, r)
-	if !ok {
-		return
-	}
-	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, m, ok := decodeMutationBody[generated.ImageAdmissionRiskDecisionInput](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -130,11 +126,7 @@ func (server *Server) DecideOrganizationImageAdmissionRisk(w http.ResponseWriter
 // DecideImageAdmissionRisk maps validated risk input into the dedicated project owner command with the selected project, then checks returned decision/artifact metadata against that scope. It retains a separate request and owner method instead of inferring project authority from an organization-shaped input DTO.
 // DecideImageAdmissionRisk переносит проверенный risk input в отдельную проектную owner command с выбранным проектом, затем сверяет decision/artifact metadata с областью. Сохраняет отдельные request и owner method вместо вывода project authority из organization-shaped input DTO.
 func (server *Server) DecideImageAdmissionRisk(w http.ResponseWriter, r *http.Request, project generated.ProjectRef, recipe generated.RecipeRef, artifact generated.ArtifactRef, p generated.DecideImageAdmissionRiskParams) {
-	body, ok := decodeJSON[generated.ImageAdmissionRiskDecisionInput](w, r)
-	if !ok {
-		return
-	}
-	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, m, ok := decodeMutationBody[generated.ImageAdmissionRiskDecisionInput](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}

@@ -16,7 +16,7 @@ import (
 // секрета. Значение секрета не читается и не возвращается.
 func (server *Server) GetRuntimeSecretImpact(w http.ResponseWriter, r *http.Request, ref generated.SecretRef, revision generated.RuntimeSecretRevision, p generated.GetRuntimeSecretImpactParams) {
 	setRuntimeSecretHeaders(w)
-	if !opaqueHTTPReference.MatchString(ref) || revision < 1 || revision > maximumSafeJSONInteger || !validHTTPPage(p.PageSize, p.PageToken) || !validSearchText(stringValue(p.Query), 0, 200) {
+	if !opaqueHTTPReference.MatchString(ref) || revision < 1 || revision > maximumSafeJSONInteger || !validFilteredHTTPPage(p.PageSize, p.PageToken, p.Query) {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}

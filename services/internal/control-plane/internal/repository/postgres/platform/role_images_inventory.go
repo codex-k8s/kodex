@@ -8,7 +8,14 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
-// Историческое отсутствие evidence не заполняется recipe declarations.
+// hydrateArtifactToolInventory preserves historical absence when both raw inventory and its digest
+// are empty; otherwise strictly decodes and checks the raw digest and artifact binding before
+// assigning ToolInventory. Recipe declarations never synthesize missing evidence, and failure
+// leaves the existing inventory pointer unchanged.
+// hydrateArtifactToolInventory сохраняет историческое отсутствие evidence, когда пусты inventory и
+// его digest; иначе строго декодирует данные и проверяет raw digest и связь с артефактом до
+// присваивания ToolInventory. Декларации рецепта не создают отсутствующее evidence, отказ
+// оставляет прежний inventory pointer.
 func hydrateArtifactToolInventory(artifact *entity.ImageArtifact, raw string) error {
 	if raw == "" && artifact.ToolInventorySHA256 == "" {
 		return nil
@@ -21,8 +28,12 @@ func hydrateArtifactToolInventory(artifact *entity.ImageArtifact, raw string) er
 	return nil
 }
 
-// Environment без platform pin выбирает только verified intersection всех платформ.
-// Command — реальный basename из закрытого probe path, не произвольное имя recipe.
+// verifiedImageToolCommands returns a fresh set of actual executable basenames verified on every
+// inventory platform, for environments without a platform pin. Nil or invalid inventory yields an
+// empty set; display names, missing probes and recipe declarations do not select commands.
+// verifiedImageToolCommands возвращает новый набор basename исполняемых файлов, проверенных на
+// каждой платформе inventory, для окружений без platform pin. Nil либо неверный inventory даёт
+// пустой набор; display names, отсутствующие probes и декларации рецепта не выбирают команды.
 func verifiedImageToolCommands(value *runtimecontract.ImageToolInventory) map[string]struct{} {
 	result := map[string]struct{}{}
 	if value == nil || value.Validate() != nil {
@@ -48,6 +59,14 @@ func verifiedImageToolCommands(value *runtimecontract.ImageToolInventory) map[st
 	return result
 }
 
+// inventoryMatchesArtifact checks image/provenance, platform count and each observed platform
+// membership plus specification/build/runtime digests, requiring every declared executable
+// name/version/hash to be VERIFIED there. It does not validate inventory shape or uniqueness
+// itself; strict decoding is a separate caller requirement.
+// inventoryMatchesArtifact проверяет image/provenance, количество платформ и принадлежность каждой
+// наблюдаемой платформы, а также specification/build/runtime digests; требует VERIFIED для имени,
+// версии и hash каждого заявленного executable. Самостоятельно не проверяет форму либо
+// уникальность inventory; строгий decoder остаётся отдельным требованием вызывающей стороны.
 func inventoryMatchesArtifact(value runtimecontract.ImageToolInventory, artifact entity.ImageArtifact) bool {
 	if value.ImageDigest != artifact.ManifestDigest || value.ProvenanceSHA256 != artifact.ProvenanceSHA256 || len(value.Platforms) != len(artifact.Platforms) {
 		return false

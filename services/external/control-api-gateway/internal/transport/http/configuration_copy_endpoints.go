@@ -184,6 +184,23 @@ func (server *Server) CopyIntegrationDefinitionConfiguration(w http.ResponseWrit
 	writeManagedResult(w, http.StatusCreated, result)
 }
 
+// configurationArchiveMutation validates optional empty JSON, the opaque configuration locator
+// and versioned mutation headers in that exact order. It returns no mutation after a local
+// refusal and neither chooses the specialized owner command nor authorizes the locator itself.
+// configurationArchiveMutation проверяет необязательный пустой JSON, opaque locator конфигурации
+// и versioned mutation заголовки именно в таком порядке. После локального отказа mutation
+// не возвращается; специализированную команду владельца и допуск locator helper не выбирает.
+func configurationArchiveMutation(w http.ResponseWriter, r *http.Request, ref generated.ConfigurationRef, key, etag string) (*cp.MutationContext, bool) {
+	if _, ok := decodeOptionalJSON[struct{}](w, r); !ok {
+		return nil, false
+	}
+	if !opaqueHTTPReference.MatchString(ref) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return nil, false
+	}
+	return configurationCopyMutation(w, key, etag)
+}
+
 // ArchiveRoleImageConfiguration accepts an optional empty body and a valid configuration locator,
 // requires mutation/version selection and delegates role-image configuration archival to its
 // specialized owner command.
@@ -191,14 +208,7 @@ func (server *Server) CopyIntegrationDefinitionConfiguration(w http.ResponseWrit
 // конфигурации, требует mutation и выбор версии и поручает архивирование конфигурации role image
 // специализированной команде владельца.
 func (server *Server) ArchiveRoleImageConfiguration(w http.ResponseWriter, r *http.Request, ref generated.ConfigurationRef, p generated.ArchiveRoleImageConfigurationParams) {
-	if _, ok := decodeOptionalJSON[struct{}](w, r); !ok {
-		return
-	}
-	if !opaqueHTTPReference.MatchString(ref) {
-		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
-		return
-	}
-	mutation, ok := configurationCopyMutation(w, p.IdempotencyKey, p.IfMatch)
+	mutation, ok := configurationArchiveMutation(w, r, ref, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -217,14 +227,7 @@ func (server *Server) ArchiveRoleImageConfiguration(w http.ResponseWriter, r *ht
 // конфигурации и mutation заголовки перед архивированием integration definition владельцем; общий
 // generic command с lifecycle role image не используется.
 func (server *Server) ArchiveIntegrationDefinitionConfiguration(w http.ResponseWriter, r *http.Request, ref generated.ConfigurationRef, p generated.ArchiveIntegrationDefinitionConfigurationParams) {
-	if _, ok := decodeOptionalJSON[struct{}](w, r); !ok {
-		return
-	}
-	if !opaqueHTTPReference.MatchString(ref) {
-		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
-		return
-	}
-	mutation, ok := configurationCopyMutation(w, p.IdempotencyKey, p.IfMatch)
+	mutation, ok := configurationArchiveMutation(w, r, ref, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}

@@ -64,10 +64,11 @@ def verify(resources, hot=False):
         service = next(r for r in resources if r.get("kind") == "Service" and r["metadata"]["name"] == "staff-control-center")
         assert service["metadata"]["annotations"][annotation + "service.serverstransport"] == "kodex-system-staff-control-center@kubernetescrd"
         transport = next(r["spec"] for r in resources if r.get("kind") == "ServersTransport" and r["metadata"]["name"] == "staff-control-center")
+        # Traefik 3.4+ использует ссылки Secret в rootCAs; проверяем точный mTLS-профиль.
         assert transport == {
             "serverName": "staff-control-center.kodex-system.svc.cluster.local",
             "insecureSkipVerify": False,
-            "rootCAsSecrets": ["staff-control-center-backend-tls"],
+            "rootCAs": [{"secret": "staff-control-center-backend-tls"}],
             "certificatesSecrets": ["staff-control-center-ingress-client-tls"],
         }
     return public, private, api

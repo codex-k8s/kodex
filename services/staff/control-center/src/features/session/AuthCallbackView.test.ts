@@ -1,6 +1,6 @@
+import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import { readFileSync } from "node:fs";
 import {
-  createRenderer,
   createSSRApp,
   defineComponent,
   ssrContextKey,
@@ -34,18 +34,7 @@ interface State {
 }
 function mount() {
   let state: State | undefined;
-  const renderer = createRenderer<object, object>({
-    patchProp() {},
-    insert() {},
-    remove() {},
-    createElement: () => ({}),
-    createText: () => ({}),
-    createComment: () => ({}),
-    setText() {},
-    setElementText() {},
-    parentNode: () => null,
-    nextSibling: () => null,
-  });
+  const renderer = createNoopRenderer();
   const source = AuthCallbackView as unknown as {
     setup(props: unknown, context: SetupContext): State;
   };

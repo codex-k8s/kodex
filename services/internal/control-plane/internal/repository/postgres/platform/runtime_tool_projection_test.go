@@ -7,6 +7,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 )
 
+// TestExecutionSnapshotProjectionHasNoCapabilityOrForeignSelector checks own-execution reads admit
+// no foreign selector, capability, grant or unknown tool alias.
+// TestExecutionSnapshotProjectionHasNoCapabilityOrForeignSelector проверяет отсутствие чужого
+// селектора, capability, grant и неизвестного псевдонима инструмента при чтении собственного
+// исполнения.
 func TestExecutionSnapshotProjectionHasNoCapabilityOrForeignSelector(t *testing.T) {
 	for _, assistant := range []bool{false, true} {
 		if !toolCapabilityMatches(runtimecontract.ExecutionSnapshotTool, "", false, assistant) ||
@@ -36,6 +41,10 @@ func TestExecutionSnapshotProjectionHasNoCapabilityOrForeignSelector(t *testing.
 	}
 }
 
+// TestNativeToolProjectionDoesNotRequireMCPGrant accepts the closed native-tool set without MCP
+// authority and rejects added capability or grant markers.
+// TestNativeToolProjectionDoesNotRequireMCPGrant принимает закрытый набор нативных инструментов
+// без полномочий MCP и отклоняет добавленные признаки capability либо grant.
 func TestNativeToolProjectionDoesNotRequireMCPGrant(t *testing.T) {
 	for _, kind := range []string{
 		runtimecontract.NativeToolKindShell, runtimecontract.NativeToolKindFileChange,
@@ -52,6 +61,10 @@ func TestNativeToolProjectionDoesNotRequireMCPGrant(t *testing.T) {
 	}
 }
 
+// TestAssistantConfigurationProjectionRequiresEligibleAssistant binds configuration tool
+// projections to their exact capability and eligible assistant without an integration grant.
+// TestAssistantConfigurationProjectionRequiresEligibleAssistant связывает проекции инструментов
+// настройки с точной capability и допустимым ассистентом без разрешения интеграции.
 func TestAssistantConfigurationProjectionRequiresEligibleAssistant(t *testing.T) {
 	t.Parallel()
 	for tool, capability := range map[string]string{
@@ -71,6 +84,10 @@ func TestAssistantConfigurationProjectionRequiresEligibleAssistant(t *testing.T)
 	}
 }
 
+// TestIntegrationCatalogProjectionHasExactReadCapability admits catalog reads for either assistant
+// mode with the exact capability while denying grant escalation or invocation substitution.
+// TestIntegrationCatalogProjectionHasExactReadCapability разрешает чтение каталога в обоих режимах
+// ассистента с точной capability, отклоняя расширение через grant и подмену вызовом интеграции.
 func TestIntegrationCatalogProjectionHasExactReadCapability(t *testing.T) {
 	t.Parallel()
 	if !toolCapabilityMatches("get_integration_catalog", "platform.integration.catalog", false, false) ||
@@ -84,6 +101,12 @@ func TestIntegrationCatalogProjectionHasExactReadCapability(t *testing.T) {
 	}
 }
 
+// TestManagedMCPToolProjectionRequiresExactCapabilityAndGrant checks each managed Context7 alias
+// requires its exact capability and grant, preserving the separate generic integration path and
+// rejecting arbitrary aliases.
+// TestManagedMCPToolProjectionRequiresExactCapabilityAndGrant проверяет требование точной
+// capability и grant для каждого управляемого псевдонима Context7, сохраняя отдельный общий путь
+// интеграции и отклоняя произвольные псевдонимы.
 func TestManagedMCPToolProjectionRequiresExactCapabilityAndGrant(t *testing.T) {
 	t.Parallel()
 	for tool, capability := range map[string]string{

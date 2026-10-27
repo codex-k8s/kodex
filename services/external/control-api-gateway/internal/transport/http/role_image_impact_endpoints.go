@@ -44,7 +44,7 @@ func (s *Server) PrepareRoleImageImpactPlan(w http.ResponseWriter, r *http.Reque
 // cursor до проекции уникальных элементов одной owner-scope тройки. Самостоятельные promotion
 // образа и rebind workload не выполняются.
 func (s *Server) GetRoleImageImpactPlan(w http.ResponseWriter, r *http.Request, ref generated.OpaqueRef, p generated.GetRoleImageImpactPlanParams) {
-	if !fileTargetRef(ref) || !validHTTPPage(p.PageSize, p.PageToken) || !validSearchText(stringValue(p.Query), 0, 200) {
+	if !fileTargetRef(ref) || !validFilteredHTTPPage(p.PageSize, p.PageToken, p.Query) {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}

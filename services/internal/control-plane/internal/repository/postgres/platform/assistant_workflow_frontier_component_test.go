@@ -15,9 +15,20 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryAssistantWorkflowFrontierPins reads the exact root workflow publication spec and original
+// input under the fixture organization/Run pins.
+// queryAssistantWorkflowFrontierPins читает точную спецификацию публикации корневого workflow и
+// исходный вход с привязками тестовой организации и Run.
+//
 //go:embed testdata/sql/assistant_workflow_frontier_pins.sql
 var queryAssistantWorkflowFrontierPins string
 
+// testAssistantWorkflowFrontier checks hydrated normalized workflow updates preserve the original
+// frontier, reject forged/stale After and OCC, and leave already launched root
+// graph/publication/input immutable after a new publication.
+// testAssistantWorkflowFrontier проверяет сохранение исходной границы графа нормализованным
+// обновлением workflow после hydration, отклонение поддельного и устаревшего After и OCC и
+// неизменность уже запущенных корневого графа, публикации и входа после новой публикации.
 func testAssistantWorkflowFrontier(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, projectRef, agentRef string) {
 	t.Helper()
 	draft, _, updated := assistantWorkflowFrontierFixture(t)

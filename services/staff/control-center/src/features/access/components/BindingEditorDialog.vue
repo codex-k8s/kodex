@@ -2,6 +2,13 @@
 import { computed, reactive, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
+import {
+  accessRoleOption,
+  accessSubjectOption,
+  createPickerLabels,
+  selection,
+} from "@/features/access/picker-presentation";
+
 import AccessScopeEditor from "@/features/access/components/AccessScopeEditor.vue";
 import {
   accessRoleOptions,
@@ -56,6 +63,7 @@ const emit = defineEmits<{
   "load-project-resources": [projectRef: string];
 }>();
 const i18n = useI18n();
+const pickerLabels = createPickerLabels((key) => i18n.t(key));
 const permissionMessages = computed(() =>
   i18n.tm("access.permissionsRegistry"),
 );
@@ -75,20 +83,12 @@ const selectedSubject = computed(
 );
 const selectedSubjectOption = computed<AsyncEntityOption | undefined>(() =>
   selectedSubject.value
-    ? {
-        ref: selectedSubject.value.ref,
-        title: selectedSubject.value.displayName,
-      }
+    ? accessSubjectOption(selectedSubject.value)
     : undefined,
 );
 const selectedRoleOption = computed<AsyncEntityOption | undefined>(() =>
   selectedRole.value
-    ? {
-        ref: selectedRole.value.currentVersion.ref,
-        title: selectedRole.value.currentVersion.name,
-        description: selectedRole.value.currentVersion.description,
-        meta: `v${String(selectedRole.value.currentVersion.revision)}`,
-      }
+    ? accessRoleOption(selectedRole.value, "VERSION")
     : undefined,
 );
 const rolePermissions = computed(() =>
@@ -170,22 +170,6 @@ function submit(): void {
       conditions: input.conditions,
     });
   } else emit("save", input);
-}
-
-function selection(value: string | null | readonly string[]): string {
-  return typeof value === "string" ? value : "";
-}
-
-function pickerLabels(label: string, searchPlaceholder: string) {
-  return {
-    label,
-    searchPlaceholder,
-    loading: i18n.t("common.loading"),
-    loadingMore: i18n.t("common.loading"),
-    empty: i18n.t("common.empty"),
-    error: i18n.t("errors.default"),
-    retry: i18n.t("common.retry"),
-  };
 }
 
 function loadSubjects(

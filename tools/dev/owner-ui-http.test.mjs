@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import test from "node:test";
 import {
+  attachInputHandler,
+  closeInputServer,
+  configureInputServer,
   completeInputPreflight,
   readInputBody,
   setInputResponseHeaders,
@@ -88,4 +92,133 @@ test("preflight не выдаёт body и добавляет private-network т�
     );
     assert.deepEqual(events, [204, []]);
   }
+});
+
+test("HTTP timeouts прежние, TLS client error тихий, upgrade socket закрывается", () => {
+  const server = new EventEmitter();
+  configureInputServer(server);
+  assert.equal(server.requestTimeout, 5000);
+  assert.equal(server.headersTimeout, 5000);
+  assert.equal(server.keepAliveTimeout, 1000);
+  assert.equal(
+    server.emit("tlsClientError", new Error("synthetic TLS error")),
+    true,
+  );
+  let destroyed = 0;
+  server.emit("upgrade", {}, { destroy: () => destroyed++ });
+  assert.equal(destroyed, 1);
+  assert.equal(server.listenerCount("request"), 0);
+});
+
+test("async handler получает исходные request/response один раз без закрытия", async () => {
+  const server = new EventEmitter();
+  const request = {};
+  const response = {};
+  const received = [];
+  let closed = 0;
+  attachInputHandler(
+    server,
+    (...args) => {
+      received.push(args);
+      return Promise.resolve();
+    },
+    () => closed++,
+  );
+  server.emit("request", request, response);
+  await Promise.resolve();
+  assert.equal(received.length, 1);
+  assert.equal(received[0][0], request);
+  assert.equal(received[0][1], response);
+  assert.equal(closed, 0);
+});
+
+test("rejected handler сначала уничтожает socket, затем закрывает форму без retry", async () => {
+  const server = new EventEmitter();
+  const events = [];
+  let called = 0;
+  attachInputHandler(
+    server,
+    () => {
+      called++;
+      return Promise.reject(new Error("synthetic handler failure"));
+    },
+    () => events.push("close"),
+  );
+  server.emit(
+    "request",
+    { socket: { destroy: () => events.push("destroy") } },
+    {},
+  );
+  await Promise.resolve();
+  assert.equal(called, 1);
+  assert.deepEqual(events, ["destroy", "close"]);
+});
+
+test("синхронный throw handler сохраняет native throw, без автоматического повтора", () => {
+  const server = new EventEmitter();
+  const failure = new Error("synthetic synchronous handler failure");
+  let closed = 0;
+  attachInputHandler(
+    server,
+    () => {
+      throw failure;
+    },
+    () => closed++,
+  );
+  assert.throws(
+    () => server.emit("request", {}, {}),
+    (error) => error === failure,
+  );
+  assert.equal(closed, 0);
+});
+
+test("graceful close отменяет expiry и force до позднего timer tick", async (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  const events = [];
+  const expiry = setTimeout(() => events.push("expired"), 60000);
+  const server = {
+    close: (callback) => {
+      events.push("close");
+      callback();
+    },
+    closeIdleConnections: () => events.push("idle"),
+    closeAllConnections: () => events.push("all"),
+  };
+  const sockets = new Set([{ destroy: () => events.push("socket") }]);
+  await closeInputServer(server, sockets, expiry);
+  context.mock.timers.tick(60000);
+  assert.deepEqual(events, ["close", "idle"]);
+});
+
+test("force ровно через секунду закрывает только живые sockets и ждёт close callback", async (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  const events = [];
+  const expiry = setTimeout(() => events.push("expired"), 60000);
+  let finish;
+  let completed = false;
+  const server = {
+    close: (callback) => {
+      events.push("close");
+      finish = callback;
+    },
+    closeIdleConnections: () => events.push("idle"),
+    closeAllConnections: () => events.push("all"),
+  };
+  const removed = { destroy: () => events.push("removed") };
+  const sockets = new Set([removed]);
+  const closing = closeInputServer(server, sockets, expiry).then(() => {
+    completed = true;
+  });
+  sockets.delete(removed);
+  sockets.add({ destroy: () => events.push("remaining") });
+  context.mock.timers.tick(999);
+  assert.deepEqual(events, ["close", "idle"]);
+  context.mock.timers.tick(1);
+  assert.deepEqual(events, ["close", "idle", "all", "remaining"]);
+  assert.equal(completed, false);
+  finish();
+  await closing;
+  context.mock.timers.tick(60000);
+  assert.equal(completed, true);
+  assert.deepEqual(events, ["close", "idle", "all", "remaining"]);
 });

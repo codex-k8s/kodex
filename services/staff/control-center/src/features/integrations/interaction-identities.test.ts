@@ -13,16 +13,9 @@ vi.mock("@/shared/api/client", () => ({
   requestSignal: (signal?: AbortSignal) =>
     signal ?? new AbortController().signal,
 }));
-vi.mock("@/shared/api/mutation", () => ({
-  mutate: (
-    request: (headers: Record<string, string>) => Promise<unknown>,
-    version: number,
-  ) =>
-    request({
-      "If-Match": `"${String(version)}"`,
-      "Idempotency-Key": "synthetic-key",
-      "X-CSRF-Token": "synthetic-csrf",
-    }),
+vi.mock("@/shared/api/mutation", async () => ({
+  mutate: (await import("@/test-utils/synthetic-mutation"))
+    .fixedSyntheticMutation,
 }));
 import {
   createInteractionIdentity,

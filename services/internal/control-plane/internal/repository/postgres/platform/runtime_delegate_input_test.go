@@ -12,6 +12,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestWorkflowDelegateInput checks immutable workflow input merging, JSON equality and size limits
+// without mutating caller or root data; invalid input yields no partial result.
+// TestWorkflowDelegateInput проверяет объединение неизменяемого ввода workflow, равенство JSON и
+// ограничения размера без изменения данных вызывающего и корня; неверный ввод не даёт частичного
+// результата.
 func TestWorkflowDelegateInput(t *testing.T) {
 	version := entity.WorkflowVersion{Name: "Workflow", CoordinatorAgentRef: "coordinator", Concurrency: 1, TimeoutSeconds: 3600,
 		Inputs: []entity.WorkflowInputField{{Key: "field-001", Label: "Issue", Type: "TEXT", Required: true}},

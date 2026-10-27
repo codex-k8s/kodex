@@ -1,5 +1,5 @@
+import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import {
-  createRenderer,
   defineComponent,
   nextTick,
   reactive,
@@ -128,18 +128,7 @@ function mount(organization = false) {
   state.platform = platform;
   state.store = store;
   let setupState!: { roleLabel: Ref<string> };
-  const renderer = createRenderer<object, object>({
-    insert() {},
-    remove() {},
-    patchProp() {},
-    createElement: () => ({}),
-    createText: () => ({}),
-    createComment: () => ({}),
-    setText() {},
-    setElementText() {},
-    parentNode: () => null,
-    nextSibling: () => null,
-  });
+  const renderer = createNoopRenderer();
   const props = reactive(
     organization
       ? {

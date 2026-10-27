@@ -18,12 +18,28 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// emailReportShortenLease shortens only a running fixture invocation lease and returns its exact
+// expiry for bounded late-report scenarios.
+// emailReportShortenLease сокращает только lease выполняемого тестового вызова и возвращает точное
+// время её истечения для ограниченных сценариев позднего отчёта.
+//
 //go:embed testdata/sql/email_report_shorten_lease.sql
 var emailReportShortenLease string
 
+// emailReportTerminalSource moves an eligible fixture source invocation to the requested terminal
+// state and clears its lease/fence/workload metadata.
+// emailReportTerminalSource переводит допустимый тестовый исходный вызов в запрошенное
+// окончательное состояние и очищает метаданные lease, fence и workload.
+//
 //go:embed testdata/sql/email_report_terminal_source.sql
 var emailReportTerminalSource string
 
+// testEmailLateReport checks expired-lease report binding, unknown-to-confirmed upgrades and exact
+// replay, owner reconciliation/closed-source readback and rejection of contradictory or resend
+// work using synthetic external receipts.
+// testEmailLateReport проверяет привязку отчёта после истечения lease, переход неизвестного исхода
+// в подтверждённый и точный повтор, сверку владельца и чтение закрытого источника и отклонение
+// противоречащих наблюдений и повторной отправки с искусственными внешними квитанциями.
 func testEmailLateReport(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service,
 	owner, runtime, gateway, email, reporter value.Principal, execution map[string]any, connectionRef string, bounded map[string]any, template query.EmailAuthorization) {
 	t.Helper()

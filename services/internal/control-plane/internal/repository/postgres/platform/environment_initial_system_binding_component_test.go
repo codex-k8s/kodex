@@ -16,12 +16,29 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryEnvironmentInitialSystemBindingFixture clears the initial system binding revision and
+// optionally advances both binding and agent versions to model a stale snapshot.
+// queryEnvironmentInitialSystemBindingFixture очищает ревизию начальной системной привязки и при
+// необходимости повышает версии привязки и агента для моделирования устаревшего снимка.
+//
 //go:embed testdata/sql/environment_initial_system_binding_fixture.sql
 var queryEnvironmentInitialSystemBindingFixture string
 
+// queryEnvironmentInitialSystemBindingReadback reads whether the exact assistant environment
+// binding still has no explicit revision.
+// queryEnvironmentInitialSystemBindingReadback читает отсутствие явной ревизии точной привязки
+// окружения ассистента.
+//
 //go:embed testdata/sql/environment_initial_system_binding_readback.sql
 var queryEnvironmentInitialSystemBindingReadback string
 
+// testInitialSystemEnvironmentPublication checks selected/stale/unselected initial SYSTEM
+// consumers, atomic audit-failure rollback, exact impact/result pins and idempotent publication
+// without changing unrelated configuration or accepting generic stale rebind.
+// testInitialSystemEnvironmentPublication проверяет выбранного, устаревшего и невыбранного
+// начального SYSTEM-потребителя, атомарный откат при ошибке аудита, точные привязки влияния и
+// результата и идемпотентную публикацию без изменения иной конфигурации и приёма общего
+// устаревшего rebind.
 func testInitialSystemEnvironmentPublication(t *testing.T, ctx context.Context, r *Repository, service *platformservice.Service, owner value.Principal, scope scope, assistantRef string) {
 	for _, scenario := range []string{"selected", "stale-binding", "not-selected"} {
 		t.Run(scenario, func(t *testing.T) {

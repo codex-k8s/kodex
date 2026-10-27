@@ -7,20 +7,6 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
-// requireContextResourceMutation checks a skill/memory resource reference before
-// parsing versioned mutation headers. It preserves the handlers' validation order
-// and safe HTTP400 response; resource ownership remains with the called owner RPC.
-// requireContextResourceMutation проверяет ссылку навыка/памяти до заголовков
-// versioned mutation. Порядок и безопасный HTTP400 сохранены; владение ресурсом
-// по-прежнему проверяет вызванный RPC владельца состояния.
-func requireContextResourceMutation(w http.ResponseWriter, ref, key, etag string) (*controlplanev1.MutationContext, bool) {
-	if !opaqueHTTPReference.MatchString(ref) {
-		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
-		return nil, false
-	}
-	return requireVersionedMutation(w, key, etag)
-}
-
 // requireContextBindingMutation decodes a binding body, checks its three exact
 // references and safe binding-version range, then validates mutation headers.
 // No RPC or authority decision occurs here; all four bind/unbind handlers retain
@@ -65,4 +51,25 @@ func requireSkillRevisionDigestMutation(w http.ResponseWriter, r *http.Request, 
 	}
 	mutation, ok := requireVersionedMutation(w, key, etag)
 	return body, mutation, ok
+}
+
+// decodeContextSpecification runs the existing JSON decoder before the selected typed
+// specification converter. Decode failure skips conversion; conversion failure keeps the
+// returned value and writes the same local400 once. Callers retain reference/header order,
+// request type, converter and RPC; a converted value does not establish resource authority.
+// decodeContextSpecification вызывает прежний JSON decoder до выбранного типизированного
+// преобразователя спецификации. Ошибка декодирования пропускает преобразование; его отказ
+// сохраняет возвращённое значение и единожды пишет прежний local400. Порядок ссылок/headers,
+// тип входа, преобразователь и RPC остаются у callers; значение полномочий не назначает.
+func decodeContextSpecification[Input, Output any](w http.ResponseWriter, r *http.Request, convert func(Input) (Output, bool)) (Output, bool) {
+	input, ok := decodeJSON[Input](w, r)
+	if !ok {
+		var zero Output
+		return zero, false
+	}
+	result, ok := convert(input)
+	if !ok {
+		writeLocalProblem(w, 400, "INVALID_REQUEST", false)
+	}
+	return result, ok
 }

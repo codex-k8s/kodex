@@ -5,3 +5,7 @@ resources:
   - runtime.yaml
   - networkpolicy.yaml
 patches: null
+components:
+  - ../../components/authority-controller-technical-defaults
+  - ../../components/local-state-egress-common
+  - ../../components/observability-egress-common

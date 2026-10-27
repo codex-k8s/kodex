@@ -9,6 +9,12 @@ import (
 	"github.com/google/uuid"
 )
 
+// TestRuntimeCredentialProjectionScopeMatrix checks project-bound runtime versus organization-only
+// assistant projection methods with synthetic proof metadata and rejects omitted, mixed or unknown
+// method scope.
+// TestRuntimeCredentialProjectionScopeMatrix проверяет методы проекции runtime с проектом и
+// ассистента только с организацией на искусственных метаданных proof, отклоняя отсутствующую,
+// смешанную и неизвестную область метода.
 func TestRuntimeCredentialProjectionScopeMatrix(t *testing.T) {
 	base := platformrepo.CredentialProjectionAuthority{ActorID: uuid.NewString(), TenantID: uuid.NewString(),
 		ProjectID: uuid.NewString(), ProofJTI: uuid.NewString(), SourceRevision: 1, CallerCredentialRevision: 1,

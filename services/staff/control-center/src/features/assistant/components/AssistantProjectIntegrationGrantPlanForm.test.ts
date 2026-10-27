@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  createRenderer,
   defineComponent,
   h,
   ssrContextKey,
@@ -8,6 +7,11 @@ import {
   type Ref,
   type SetupContext,
 } from "vue";
+import { createLifecycleTestRenderer } from "@/test-utils/lifecycle-renderer";
+import {
+  grantCandidateFixture,
+  grantPlanOperationFixture,
+} from "@/test-utils/assistant-grant-fixture";
 import { createI18n } from "vue-i18n";
 import type { AssistantPlanOperationInput } from "@/shared/api/generated/openapi/types.gen";
 import { editableOperations } from "../model";
@@ -69,45 +73,13 @@ const before = {
   approvalScopePaths: [],
 };
 const after = { ...before, enabled: true };
-const operation: AssistantPlanOperationInput = {
-  ref: "operation_test",
-  type: "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT",
-  action: "UPDATE",
-  title: "Context7",
-  summary: "Доступ к документации",
-  target: {
-    kind: "INTEGRATION_CONNECTION",
-    ref: pins.connectionRef,
-    version: 10,
-    name: "Context7",
-  },
-  expectedVersion: 10,
-  selected: true,
-  permitted: true,
-  validationProblems: [],
-  parameters: after,
+const operation = grantPlanOperationFixture(
+  "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT",
+  pins.connectionRef,
   before,
   after,
-};
-const candidate = {
-  capability: {
-    key: pins.capabilityKey,
-    name: "Документация",
-    description: "",
-    risk: "READ",
-    approvalRequired: false,
-    operation: "READ",
-    resourceKind: "MANAGED_MCP",
-    inputFields: [],
-    approvalPolicy: "NONE",
-    allowedApprovalPolicies: ["NONE"],
-  },
-  grantable: true,
-  reason: "READY",
-  currentGrantVersion: 0,
-  currentGrantEnabled: false,
-  currentApprovalScopePaths: [],
-};
+);
+const candidate = grantCandidateFixture(pins.capabilityKey);
 const page = {
   scopeKind: "ORGANIZATION",
   organizationRef: pins.organizationRef,
@@ -148,20 +120,7 @@ async function setup(
   if (!editable) throw new Error("Missing operation fixture");
   let state!: State;
   // Настоящий mounted watcher: SSR закрывает onCleanup до async readback.
-  const renderer = createRenderer<Record<string, never>, Record<string, never>>(
-    {
-      patchProp() {},
-      insert() {},
-      remove() {},
-      createElement: () => ({}),
-      createText: () => ({}),
-      createComment: () => ({}),
-      setText() {},
-      setElementText() {},
-      parentNode: () => null,
-      nextSibling: () => null,
-    },
-  );
+  const renderer = createLifecycleTestRenderer();
   const original = (
     Form as unknown as {
       setup: (props: Record<string, unknown>, context: SetupContext) => State;

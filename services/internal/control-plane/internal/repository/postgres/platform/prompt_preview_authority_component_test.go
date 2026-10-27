@@ -16,6 +16,10 @@ import (
 	"github.com/google/uuid"
 )
 
+// previewAuthorityActor registers an initially unbound preview actor, grants exact scoped
+// permissions and returns its resolved fixture principal and subject reference.
+// previewAuthorityActor регистрирует изначально непривязанного actor предпросмотра, выдаёт точные
+// права заданной области и возвращает разрешённый тестовый principal и ref субъекта.
 func previewAuthorityActor(t *testing.T, ctx context.Context, r *Repository, s *platformservice.Service, owner value.Principal, key string, permissions []string, target entity.AccessScope) (value.Principal, string) {
 	t.Helper()
 	identity := platformrepo.ProofPrincipalInput{ExternalActorID: uuid.NewString(), ExternalTenantID: "20000000-0000-4000-8000-000000000002", ExternalDisplayName: key, CallerWorkload: "control-api-gateway", Operation: "platform.query.schedules.preview"}
@@ -30,6 +34,10 @@ func previewAuthorityActor(t *testing.T, ctx context.Context, r *Repository, s *
 	return resolvedTestPrincipal(t, ctx, r, identity, "control-api-gateway"), subjects[0].Ref
 }
 
+// previewAuthorityGrant creates a scoped role and user binding through owner commands for preview
+// authorization scenarios.
+// previewAuthorityGrant создаёт роль заданной области и привязку пользователя командами владельца
+// для сценариев авторизации предпросмотра.
 func previewAuthorityGrant(t *testing.T, ctx context.Context, s *platformservice.Service, owner value.Principal, key, subject string, permissions []string, target entity.AccessScope) *entity.AccessBinding {
 	t.Helper()
 	role, err := s.Execute(ctx, command.Command{Kind: command.CreateAccessRole, Principal: owner, Mutation: value.Mutation{IdempotencyKey: key + "-role"}, Payload: command.AccessRoleInput{Name: key, PermissionKeys: permissions, AllowedScopes: []string{target.Kind}, ChangeComment: "Scoped preview fixture"}})
@@ -43,6 +51,12 @@ func previewAuthorityGrant(t *testing.T, ctx context.Context, s *platformservice
 	return bound.AccessBinding
 }
 
+// testSchedulePreviewAuthority checks new versus existing schedule permissions before OCC,
+// separates draft actor from saved revision author and rejects revoked author launch or foreign
+// signed project scope.
+// testSchedulePreviewAuthority проверяет права нового и существующего расписания до OCC, отделяет
+// actor черновика от автора сохранённой ревизии и отклоняет отозванное право запуска автора либо
+// чужую подписанную область проекта.
 func testSchedulePreviewAuthority(t *testing.T, ctx context.Context, r *Repository, s *platformservice.Service, owner value.Principal, input command.ScheduleInput, current entity.Schedule) {
 	t.Helper()
 	when := time.Date(2026, 9, 7, 12, 0, 0, 0, time.UTC)

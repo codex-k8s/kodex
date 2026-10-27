@@ -7,6 +7,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestRuntimeActivityPublishedMessageClosedProjection admits only bounded valid published
+// commentary with exact initial revision and safe reference, rejecting hidden/user phases and
+// malformed text.
+// TestRuntimeActivityPublishedMessageClosedProjection принимает только ограниченный корректный
+// опубликованный комментарий с точной начальной ревизией и безопасным ref, отклоняя скрытые и
+// пользовательские фазы и неверный текст.
 func TestRuntimeActivityPublishedMessageClosedProjection(t *testing.T) {
 	valid := entity.RunMessage{Ref: "msg_fixture01", Phase: "COMMENTARY", Revision: 1, Text: "Проверяю доступные инструменты."}
 	if !validPublishedMessage(&valid) {
@@ -30,6 +36,12 @@ func TestRuntimeActivityPublishedMessageClosedProjection(t *testing.T) {
 	}
 }
 
+// TestRuntimeActivityToolLifecycleClosedProjection checks the initial running and second-revision
+// terminal tool projections while rejecting unknown states, premature output and invalid
+// revision/duration combinations.
+// TestRuntimeActivityToolLifecycleClosedProjection проверяет начальную проекцию выполняемого
+// инструмента и завершённую проекцию второй ревизии, отклоняя неизвестные состояния,
+// преждевременный вывод и неверные сочетания ревизии и длительности.
 func TestRuntimeActivityToolLifecycleClosedProjection(t *testing.T) {
 	for _, state := range []string{"SUCCEEDED", "FAILED", "CANCELLED"} {
 		if !validToolActivityLifecycle(state, 2, "safe result", 1) {

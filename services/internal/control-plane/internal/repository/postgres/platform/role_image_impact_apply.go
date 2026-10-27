@@ -10,6 +10,16 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// publishRoleImageEnvironment reauthorizes the selected environment/source and exact consumer
+// owner tuple, checks environment OCC and source digest/recipe, and publishes a new environment
+// with the promoted plan artifact while preserving values, secret revision pins, tools and policy.
+// It records the environment event and exact managed binding in the caller transaction, validates
+// returned linkage, and does not commit or rebind agents.
+// publishRoleImageEnvironment повторно проверяет полномочия выбранного environment/source и точный
+// owner tuple потребителя, проверяет environment OCC и source digest/recipe и публикует новое
+// окружение с артефактом плана, сохраняя values, secret revision pins, tools и policy. Записывает
+// событие окружения и точный managed binding в транзакции вызывающего метода, проверяет
+// возвращённые связи; commit и перепривязку агентов не выполняет.
 func (r *Repository) publishRoleImageEnvironment(ctx context.Context, tx pgx.Tx, s scope, input command.Command, row roleImageImpactRow, item entity.RoleImageImpactItem, expected int64, projectID string) (entity.RuntimeEnvironmentSet, error) {
 	plan := row.public
 	var empty entity.RuntimeEnvironmentSet
@@ -77,6 +87,20 @@ func (r *Repository) publishRoleImageEnvironment(ctx context.Context, tx pgx.Tx,
 	return *published.result.RuntimeEnvironment, nil
 }
 
+// applyRoleImageImpact validates a PREPARED authorized plan, source revision, immutable digest and
+// unique bounded selection, then deterministically groups items by environment/source. Nested
+// savepoints publish each group and isolate per-agent conflicts or forbidden outcomes; an
+// all-failed group is rolled back, successful groups carry their environment version forward. It
+// persists all item outcomes, finishes the plan and touches set OCC in the outer transaction,
+// whose caller owns final commit and command receipt; ignored rollback errors retain existing
+// behavior.
+// applyRoleImageImpact проверяет PREPARED план с текущими полномочиями, исходную revision,
+// неизменяемый digest и уникальную ограниченную выборку, затем упорядочивает группы по
+// environment/source. Вложенные savepoints публикуют группы и изолируют конфликты либо отказы
+// полномочий отдельных агентов; группа без успехов откатывается, успешная передаёт свою
+// environment version дальше. Сохраняет все item outcomes, завершает план и обновляет set OCC во
+// внешней транзакции; финальные commit и command receipt принадлежат вызывающему методу, прежнее
+// игнорирование rollback errors сохранено.
 func (r *Repository) applyRoleImageImpact(ctx context.Context, tx pgx.Tx, s scope, set managedSet, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.ManagedConfigurationInput)
 	if !ok || payload.PlanRef == "" || len(payload.Consumers) > 0 || len(payload.SelectedItemRefs) > maximumRoleImageImpactItems {

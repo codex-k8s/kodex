@@ -10,8 +10,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
-// Проверяется сохранённый owner outbox, а не только commandOutcome: тот же
-// факт должен доходить до AGENT/INSTRUCTIONS каталога после standalone и plan apply.
+// instructionRealtimeEventCount counts persisted AGENT_CHANGED and INSTRUCTIONS_PUBLISHED outbox
+// events for the exact fixture agent, without proving broker delivery.
+// instructionRealtimeEventCount считает сохранённые события outbox AGENT_CHANGED и
+// INSTRUCTIONS_PUBLISHED точного тестового агента, не доказывая доставку через брокер.
 func instructionRealtimeEventCount(t *testing.T, ctx context.Context, repository *Repository, agentRef string) int {
 	t.Helper()
 	var count int
@@ -21,6 +23,10 @@ func instructionRealtimeEventCount(t *testing.T, ctx context.Context, repository
 	return count
 }
 
+// assertInstructionRealtimeEvent requires one new persisted instruction event with the expected
+// name, projected kind, project and agent version.
+// assertInstructionRealtimeEvent требует одно новое сохранённое событие инструкции с ожидаемым
+// именем, проецируемым видом, проектом и версией агента.
 func assertInstructionRealtimeEvent(t *testing.T, ctx context.Context, repository *Repository, agent entity.Agent, before int, name string) {
 	t.Helper()
 	if count := instructionRealtimeEventCount(t, ctx, repository, agent.Ref); count != before+1 {
@@ -36,6 +42,12 @@ func assertInstructionRealtimeEvent(t *testing.T, ctx context.Context, repositor
 	}
 }
 
+// testAssistantInstructionRealtime proposes, validates and applies an exact agent instruction
+// draft, verifies durable draft/event readback and rejects duplicate event emission on idempotent
+// replay.
+// testAssistantInstructionRealtime предлагает, валидирует и применяет точный черновик инструкции
+// агента, проверяет устойчивый результат черновика и события и отсутствие повторного события при
+// идемпотентном воспроизведении.
 func testAssistantInstructionRealtime(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner, worker value.Principal, lease map[string]any, agentRef, key string) entity.Agent {
 	t.Helper()
 	const instructions = "Prepare intake from Issue, scope, acceptance and available base SHA. Inspect PR and diff when they exist."

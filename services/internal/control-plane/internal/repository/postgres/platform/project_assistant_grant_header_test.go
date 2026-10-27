@@ -1,31 +1,18 @@
 package platform
 
 import (
-	"context"
 	"strings"
-	"sync/atomic"
 	"testing"
-
-	"github.com/jackc/pgx/v5"
 )
 
-// Test-only tracer считает query identity, не сохраняет SQL/args/результаты.
-type projectGrantProjectionCounter struct{ fullReads atomic.Int64 }
-
-func (counter *projectGrantProjectionCounter) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
-	if data.SQL == queryQueriesAttachconnectionSelectIntegrationGrantsOrganizationIdConnectionIdRef ||
-		data.SQL == queryQueriesGetintegrationconnectionSelectIntegrationConnectionsOrganizationIdRef {
-		counter.fullReads.Add(1)
-	}
-	return ctx
-}
-
-func (*projectGrantProjectionCounter) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {
-}
-
-func TestProjectAssistantGrantConnectionHeaderClosed(t *testing.T) {
-	valid := projectAssistantGrantConnectionHeader{ref: "int_owned", name: "Owned connection", version: 1, definitionKey: "github", definitionVersion: "6.0.0", definitionDigest: strings.Repeat("a", 64)}
-	if !validProjectAssistantGrantConnectionHeader(valid, valid.ref) {
+// TestAssistantGrantConnectionHeaderClosed accepts an exact nonempty connection header and
+// rejects foreign identity, missing metadata, invalid version/digest or an unbound reference.
+// TestAssistantGrantConnectionHeaderClosed принимает точный непустой заголовок соединения и
+// отклоняет чужую идентичность, отсутствующие метаданные, неверную версию или дайджест и
+// несвязанный ref.
+func TestAssistantGrantConnectionHeaderClosed(t *testing.T) {
+	valid := assistantGrantConnectionHeader{ref: "int_owned", name: "Owned connection", version: 1, definitionKey: "github", definitionVersion: "6.0.0", definitionDigest: strings.Repeat("a", 64)}
+	if !validAssistantGrantConnectionHeader(valid, valid.ref) {
 		t.Fatal("exact header rejected")
 	}
 	for _, field := range []string{"ref", "name", "version", "key", "revision", "digest"} {
@@ -45,12 +32,12 @@ func TestProjectAssistantGrantConnectionHeaderClosed(t *testing.T) {
 			case "digest":
 				value.definitionDigest = "PRIVATE_SENTINEL"
 			}
-			if validProjectAssistantGrantConnectionHeader(value, valid.ref) {
+			if validAssistantGrantConnectionHeader(value, valid.ref) {
 				t.Fatal("invalid header accepted")
 			}
 		})
 	}
-	if validProjectAssistantGrantConnectionHeader(valid, "") {
+	if validAssistantGrantConnectionHeader(valid, "") {
 		t.Fatal("unbound header accepted")
 	}
 }

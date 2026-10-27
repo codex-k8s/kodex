@@ -10,6 +10,12 @@ import (
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 )
 
+// TestRuntimeMaterializationProofRejectsUntrustedLocatorBeforeDatabase rejects forged
+// worker/actor/tenant, mixed project/assistant scope and missing or noncanonical request digests
+// before repository lookup, returning no authority.
+// TestRuntimeMaterializationProofRejectsUntrustedLocatorBeforeDatabase отклоняет поддельные
+// worker, actor и tenant, смешанную область проекта и ассистента и отсутствующие либо
+// неканонические дайджесты запроса до чтения repository без возврата полномочий.
 func TestRuntimeMaterializationProofRejectsUntrustedLocatorBeforeDatabase(t *testing.T) {
 	mutations := map[string]func(*platformrepo.ProofPrincipalInput){
 		"wrong-worker":           func(input *platformrepo.ProofPrincipalInput) { input.CallerWorkload = "control-api-gateway" },

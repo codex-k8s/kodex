@@ -2,9 +2,7 @@ package platform
 
 import (
 	"context"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
@@ -37,12 +35,7 @@ func newConfiguredAssistantComponentRepository(t *testing.T, pool *pgxpool.Pool,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := repository.ConfigureRoleImages(RoleImageConfig{
-		PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64),
-		BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3,
-		StagingRepository: "registry.invalid/kodex/staging", PromotedRepository: "registry.invalid/kodex/roles",
-		DefaultImageReference: "registry.invalid/kodex/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32)),
-	}); err != nil {
+	if err := repository.ConfigureRoleImages(namespacedRoleImageComponentConfig()); err != nil {
 		t.Fatal(err)
 	}
 	return repository
@@ -80,4 +73,43 @@ func newReadyAssistantComponentService(t *testing.T, ctx context.Context, pool *
 		t.Fatal(err)
 	}
 	return repository, service, owner, worker, assistant
+}
+
+// reportReadySystemAssistantFixture reads the current assistant, resolves the synthetic warm
+// reporter and records READY for that exact revision. The caller owns fixture preparation.
+// reportReadySystemAssistantFixture читает текущего помощника, разрешает synthetic warm reporter
+// и фиксирует READY точной ревизии. Подготовка fixture остаётся у вызывающего теста.
+func reportReadySystemAssistantFixture(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal) entity.SystemAssistant {
+	t.Helper()
+	system, err := service.GetSystemAssistant(ctx, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	warmWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "runtime-controller", Operation: "platform.runtime.warm.report",
+	}, "runtime-controller")
+	if _, err := service.ReportWarmRuntime(ctx, warmWorker, command.WarmRuntimeInput{
+		WorkloadInstance: "catalog-observed-warm-fixture", RuntimeRevision: system.DesiredRuntimeRevision, State: "READY",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return system
+}
+
+// reportReadyUsingWorkerFixture derives the synthetic warm reporter from the supplied worker,
+// reports the current assistant revision and returns that same derived principal to the caller.
+// reportReadyUsingWorkerFixture получает synthetic warm reporter из переданного worker,
+// сообщает текущую ревизию помощника и возвращает того же производного principal вызывающему.
+func reportReadyUsingWorkerFixture(t *testing.T, ctx context.Context, service *platformservice.Service, owner, worker value.Principal) value.Principal {
+	t.Helper()
+	assistant, err := service.GetSystemAssistant(ctx, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	warm := worker
+	warm.Permission = "platform.runtime.warm.report"
+	if _, err := service.ReportWarmRuntime(ctx, warm, command.WarmRuntimeInput{WorkloadInstance: "catalog-observed-warm-fixture", RuntimeRevision: assistant.DesiredRuntimeRevision, State: "READY"}); err != nil {
+		t.Fatal(err)
+	}
+	return warm
 }

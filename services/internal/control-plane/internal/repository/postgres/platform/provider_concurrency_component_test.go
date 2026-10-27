@@ -15,6 +15,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testProviderAccountConcurrency checks owner-only concurrency bounds, versioned mutations and
+// replay without changing account lifecycle or exposing operator edit actions.
+// testProviderAccountConcurrency проверяет доступные только владельцу пределы параллелизма,
+// версионные изменения и повтор без смены жизненного цикла записи и выдачи оператору действий
+// редактирования.
 func testProviderAccountConcurrency(t *testing.T, ctx context.Context, repository *Repository) {
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",

@@ -10,3 +10,5 @@ resources:
   - networkpolicy.yaml
   - servicemonitor.yaml
   - prometheusrule.yaml
+components:
+  - ../../components/local-state-egress-common

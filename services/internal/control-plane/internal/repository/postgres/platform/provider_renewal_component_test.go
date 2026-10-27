@@ -16,12 +16,23 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// TestProviderCredentialRenewalComponent runs disposable renewal completion, unknown-read recovery
+// and account-version cancellation variants with synthetic provider descriptors and receipts.
+// TestProviderCredentialRenewalComponent выполняет одноразовые варианты завершения продления,
+// восстановления неизвестного исхода чтением и отмены после смены версии аккаунта с искусственными
+// дескрипторами и квитанциями провайдера.
 func TestProviderCredentialRenewalComponent(t *testing.T) {
 	t.Run("completion", func(t *testing.T) { testProviderCredentialRenewalComponent(t, false, false) })
 	t.Run("unknown-read-recovery", func(t *testing.T) { testProviderCredentialRenewalComponent(t, true, false) })
 	t.Run("account-version-cancels-authorized-intent", func(t *testing.T) { testProviderCredentialRenewalComponent(t, false, true) })
 }
 
+// testProviderCredentialRenewalComponent checks exact renewal claim/authorize/read-recovery
+// fencing, cancellation and terminal denial, then requires one credential/version/audit effect
+// under lost-ACK replay; it performs no real OAuth renewal.
+// testProviderCredentialRenewalComponent проверяет точный fencing захвата, авторизации и
+// восстановления чтением продления, отмену и окончательный запрет, затем требует один эффект
+// credential, версии и аудита при повторе после потери ACK; не выполняет реальное OAuth-продление.
 func testProviderCredentialRenewalComponent(t *testing.T, recoverUnknown, cancelIntent bool) {
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
@@ -37,10 +48,7 @@ func testProviderCredentialRenewalComponent(t *testing.T, recoverUnknown, cancel
 	if err := repository.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-component", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
 		t.Fatal(err)
 	}
-	if err := repository.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1,
-		PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute,
-		AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3, StagingRepository: "registry.invalid/staging",
-		PromotedRepository: "registry.invalid/roles", DefaultImageReference: "registry.invalid/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
+	if err := repository.ConfigureRoleImages(syntheticRoleImageComponentConfig()); err != nil {
 		t.Fatal(err)
 	}
 	if err := repository.Bootstrap(ctx); err != nil {

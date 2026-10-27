@@ -28,6 +28,10 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+// testEmailCredentials checks immutable mailbox credential generations, replay and owner pins
+// against a fake Kubernetes client without remote secret writes.
+// testEmailCredentials проверяет неизменяемые поколения учётных данных ящика, повтор команд и
+// версии владельца на подставном клиенте Kubernetes без записи удалённых секретов.
 func testEmailCredentials(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{

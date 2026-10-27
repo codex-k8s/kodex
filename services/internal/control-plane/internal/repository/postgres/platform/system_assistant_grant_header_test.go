@@ -5,12 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	serviceplatform "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
@@ -18,53 +15,21 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type systemGrantProjectionCounter struct{ fullReads atomic.Int64 }
-
-func (counter *systemGrantProjectionCounter) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
-	if data.SQL == queryQueriesAttachconnectionSelectIntegrationGrantsOrganizationIdConnectionIdRef || data.SQL == queryQueriesGetintegrationconnectionSelectIntegrationConnectionsOrganizationIdRef {
-		counter.fullReads.Add(1)
-	}
-	return ctx
-}
-func (*systemGrantProjectionCounter) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {
-}
-
-func TestSystemAssistantGrantHeaderClosed(t *testing.T) {
-	header := systemAssistantGrantConnectionHeader{ref: "int_owned", name: "Owned", version: 1, definitionKey: "github", definitionVersion: "6.0.0", definitionDigest: strings.Repeat("a", 64)}
-	if !validSystemAssistantGrantConnectionHeader(header, header.ref) {
-		t.Fatal("exact header rejected")
-	}
-	for _, field := range []string{"ref", "name", "version", "key", "revision", "digest"} {
-		t.Run(field, func(t *testing.T) {
-			bad := header
-			switch field {
-			case "ref":
-				bad.ref = "int_foreign"
-			case "name":
-				bad.name = ""
-			case "version":
-				bad.version = 0
-			case "key":
-				bad.definitionKey = ""
-			case "revision":
-				bad.definitionVersion = ""
-			case "digest":
-				bad.definitionDigest = "PRIVATE_SENTINEL"
-			}
-			if validSystemAssistantGrantConnectionHeader(bad, header.ref) {
-				t.Fatal("invalid header accepted")
-			}
-		})
-	}
-	if validSystemAssistantGrantConnectionHeader(header, "") {
-		t.Fatal("unbound header accepted")
-	}
-}
-
+// TestSystemAssistantGrantHeaderBatchComponent proposes and atomically applies 21 SYSTEM READ
+// grants while the tracer requires zero full connection projections during proposal. It preserves
+// immutable owner tuples, exact versions and one replay receipt, rejects caller owner pins,
+// signed-project/foreign scope and revoked-owner replay. PostgreSQL, warm runtime and integration
+// credentials are disposable/synthetic; timing is observational and not a deployed performance
+// acceptance.
+// TestSystemAssistantGrantHeaderBatchComponent предлагает и атомарно применяет 21 SYSTEM READ
+// grant, пока tracer требует ноль full connection projections при proposal. Сохраняет immutable
+// owner tuples, exact versions и один replay receipt, отклоняет caller owner pins,
+// signed-project/foreign scope и revoked-owner replay. PostgreSQL, warm runtime и integration
+// credentials disposable/synthetic; timing является наблюдением, а не развёрнутой performance
+// acceptance.
 func TestSystemAssistantGrantHeaderBatchComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
@@ -72,32 +37,19 @@ func TestSystemAssistantGrantHeaderBatchComponent(t *testing.T) {
 	if err != nil {
 		t.Fatal("parse isolated SYSTEM header fixture")
 	}
-	counter := &systemGrantProjectionCounter{}
+	counter := &grantProjectionCounter{}
 	config.ConnConfig.Tracer = counter
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		t.Fatal("open isolated SYSTEM header fixture")
 	}
 	defer pool.Close()
-	r, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = r.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
-		t.Fatal(err)
-	}
-	if err = r.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3, StagingRepository: "registry.invalid/staging", PromotedRepository: "registry.invalid/roles", DefaultImageReference: "registry.invalid/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
-		t.Fatal(err)
-	}
-	if err = r.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
+	r := newSyntheticRuntimeComponentRepository(t, ctx, pool)
 	prepareObservedWarmFixture(t, ctx, r)
 	principal := func(workload, operation, actor, tenant string) value.Principal {
 		return resolvedTestPrincipal(t, ctx, r, port.ProofPrincipalInput{ExternalActorID: actor, ExternalTenantID: tenant, CallerWorkload: workload, Operation: operation}, workload)
 	}
-	owner := principal("control-api-gateway", "platform.command.system-assistant.integration-grants.change", "20000000-0000-4000-8000-000000000001", "20000000-0000-4000-8000-000000000002")
-	worker := principal("runtime-controller", "platform.runtime.execution.claim", "kodex-system-subject", "kodex-installation")
+	owner, worker := resolveSystemGrantComponentPrincipals(t, ctx, r)
 	s, err := serviceplatform.New(r)
 	if err != nil {
 		t.Fatal(err)

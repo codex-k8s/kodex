@@ -15,6 +15,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// TestProviderOptionalBootstrapComponent checks repeatable provider-free bootstrap and exactly one
+// initial warm session after synthetic first-provider authorization, then idle state on disable.
+// TestProviderOptionalBootstrapComponent проверяет повторяемый bootstrap без провайдера и
+// единственную начальную тёплую сессию после синтетической авторизации первого провайдера, затем
+// состояние ожидания при отключении.
 func TestProviderOptionalBootstrapComponent(t *testing.T) {
 	dsn := isolatedAssistantComponentDSN(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
@@ -28,14 +33,7 @@ func TestProviderOptionalBootstrapComponent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := repository.ConfigureRoleImages(RoleImageConfig{
-		PolicyRevision: 1, RoleRuntimeContractRevision: 1,
-		PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64),
-		BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute,
-		MaximumAttempts: 3, StagingRepository: "registry.invalid/staging", PromotedRepository: "registry.invalid/roles",
-		DefaultImageReference: "registry.invalid/roles/system@sha256:" + strings.Repeat("c", 64),
-		LeaseSigningKey:       []byte(strings.Repeat("d", 32)),
-	}); err != nil {
+	if err := repository.ConfigureRoleImages(syntheticRoleImageComponentConfig()); err != nil {
 		t.Fatal(err)
 	}
 	for attempt := range 2 {

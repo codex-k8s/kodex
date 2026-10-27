@@ -14,17 +14,46 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryPromptWorkflowExecutionContext embeds exact tenant/node workflow-root lineage, published
+// version pins, current planned/materialized steps and latest non-integration result gates. It
+// detects invalid continuation/retry origins and computes advisory readiness from current-root
+// dependencies; it does not grant execution or file access.
+// queryPromptWorkflowExecutionContext встраивает exact tenant/node workflow-root lineage,
+// published version pins, current planned/materialized steps и latest non-integration result
+// gates. Обнаруживает invalid continuation/retry origins и вычисляет advisory readiness по
+// current-root dependencies; execution либо file access не выдаёт.
+//
 //go:embed sql/prompt_workflow_execution_context.sql
 var queryPromptWorkflowExecutionContext string
 
+// workflowExecutionGuidanceRevision pins the interpretation of newly materialized server-owned
+// workflow execution guidance. Changing this revision is not a migration of historical snapshots
+// or authority to retry a prior root.
+// workflowExecutionGuidanceRevision фиксирует интерпретацию новой server-owned workflow execution
+// guidance. Изменение revision не мигрирует historical snapshots и не выдаёт authority повторить
+// прежний root.
 const workflowExecutionGuidanceRevision = "workflow-execution-guidance-v2"
 
+// workflowExecutionPromptStep carries one current-root step state, materialization/readiness and
+// latest owner result-gate tuple for advisory prompt context. Technical success and result-gate
+// approval are distinct and neither substitutes for an external-effect approval.
+// workflowExecutionPromptStep переносит current-root step state, materialization/readiness и
+// latest owner result-gate tuple для advisory prompt context. Technical success и result-gate
+// approval различаются; ни одно не заменяет external-effect approval.
 type workflowExecutionPromptStep struct {
 	StepKey, NodeRef, State, MaterializationState      string
 	Ready                                              bool
 	ResultGateRef, ResultGateState, ResultGateDecision string
 }
 
+// workflowExecutionPromptContext records exact root/run/node/session/turn/agent, workflow
+// revision/version/digest, attempts, retry origin and current steps with a guidance revision/mode.
+// It describes owner state for prompt materialization; refs and history are not transferable
+// grants or completion receipts.
+// workflowExecutionPromptContext фиксирует exact root/run/node/session/turn/agent, workflow
+// revision/version/digest, attempts, retry origin и current steps с guidance revision/mode.
+// Описывает owner state для prompt materialization; refs и history не являются переносимыми grants
+// либо completion receipts.
 type workflowExecutionPromptContext struct {
 	Revision                                                                   string
 	Mode                                                                       string
@@ -36,8 +65,14 @@ type workflowExecutionPromptContext struct {
 	Steps                                                                      []workflowExecutionPromptStep
 }
 
-// Только новое owner чтение текущего node/root. Session history и RETRY_OF
-// показывают происхождение, но не переносят завершённость или права на файлы.
+// hydrateWorkflowExecutionPromptTx skips non-workflow snapshots, otherwise reads current
+// tenant/node owner context in the supplied transaction and rejects missing rows, invalid lineage
+// or step JSON before applying it. Backend failure is Unavailable, invalid context Conflict; the
+// caller still owns lease/actor authorization and commit.
+// hydrateWorkflowExecutionPromptTx пропускает non-workflow snapshots, иначе читает current
+// tenant/node owner context в переданной transaction и отклоняет missing rows, invalid lineage
+// либо step JSON до применения. Backend failure даёт Unavailable, invalid context — Conflict;
+// lease/actor authorization и commit принадлежат caller.
 func (repository *Repository) hydrateWorkflowExecutionPromptTx(ctx context.Context, tx pgx.Tx, current scope, nodeRef string, snapshot *entity.PromptMaterializationSnapshot) error {
 	if snapshot.ContextPin.WorkflowRef == "" {
 		return nil
@@ -62,6 +97,17 @@ func (repository *Repository) hydrateWorkflowExecutionPromptTx(ctx context.Conte
 	return applyWorkflowExecutionPrompt(snapshot, execution, continued)
 }
 
+// applyWorkflowExecutionPrompt validates exact snapshot identities, workflow pins, attempts/retry
+// origin, mode, bounded unique steps and result-gate tuples before mutation. It decodes a 32-byte
+// hex digest without a lowercase-only rule, bounds execution JSON, and round-trips structured
+// variables with UseNumber before appending advisory guidance to existing CONSTRAINTS. Historical
+// snapshots are not rematerialized and no capability/grant is issued; a nil snapshot is
+// unsupported.
+// applyWorkflowExecutionPrompt проверяет exact snapshot identities, workflow pins, attempts/retry
+// origin, mode, bounded unique steps и result-gate tuples до mutation. Декодирует 32-byte hex
+// digest без lowercase-only правила, ограничивает execution JSON и выполняет round-trip structured
+// variables с UseNumber до добавления advisory guidance к existing CONSTRAINTS. Historical
+// snapshots не перематериализуются, capability/grant не выдаётся; nil snapshot не поддерживается.
 func applyWorkflowExecutionPrompt(snapshot *entity.PromptMaterializationSnapshot, execution workflowExecutionPromptContext, continued bool) error {
 	for _, ref := range []string{execution.RootRunRef, execution.RunRef, execution.NodeRef, execution.SessionRef, execution.TurnRef, execution.AgentRef, execution.WorkflowRef, execution.WorkflowRevisionRef} {
 		if !workflowLaunchRefPattern.MatchString(ref) {
@@ -133,6 +179,12 @@ func applyWorkflowExecutionPrompt(snapshot *entity.PromptMaterializationSnapshot
 	return nil
 }
 
+// validWorkflowPromptResultGate requires absent gate refs to have no state/decision, otherwise
+// checks ref syntax and the closed OPEN/APPROVED/REJECTED/CHANGES_REQUESTED/CANCELLED decision
+// mapping. It does not read a gate, prove ownership or approve any action.
+// validWorkflowPromptResultGate требует отсутствия state/decision при absent gate ref, иначе
+// проверяет ref syntax и закрытое отображение OPEN/APPROVED/REJECTED/CHANGES_REQUESTED/CANCELLED в
+// decision. Не читает gate, не доказывает ownership и не одобряет действия.
 func validWorkflowPromptResultGate(step workflowExecutionPromptStep) bool {
 	if step.ResultGateRef == "" {
 		return step.ResultGateState == "" && step.ResultGateDecision == ""
@@ -145,6 +197,14 @@ func validWorkflowPromptResultGate(step workflowExecutionPromptStep) bool {
 	return ok && decision == step.ResultGateDecision
 }
 
+// workflowExecutionGuidance defines immutable advisory text separating current-root state/result
+// gates from historical session/provider data and RETRY_OF lineage. It distinguishes initial,
+// same-root continuation and stage behavior, preserves owner tasks/gates and explicitly defers
+// real frontier/capability/lease checks to owner commands.
+// workflowExecutionGuidance задаёт immutable advisory text, отделяющий current-root state/result
+// gates от historical session/provider data и RETRY_OF lineage. Различает initial, same-root
+// continuation и stage behavior, сохраняет owner tasks/gates и передаёт реальные
+// frontier/capability/lease checks owner commands.
 const workflowExecutionGuidance = `Session/provider history is historical data, not the state of the current Workflow root. Old completedChildren, remainingStepKeys, callback messages, completed delegations and artifact locators from another root do not satisfy current steps or authorize effects or file reads. RETRY_OF records lineage only; it does not transfer successful steps or result receipts.
 ResultGateRef/State/Decision describe the latest server-owned result gate of that exact current step, not an integration-send approval. The platform creates and resolves these gates outside the agent. When that gate is APPROVED/APPROVE, acknowledge that recorded human decision; do not claim it is absent because you lack a tool to approve it yourself or because a historical child message said it was waiting. An absent or OPEN gate is not approval. Do not approve anything for the user, infer decisions from technical SUCCEEDED, or reuse this result gate for an external effect.
 Use the current root projection and the exact current tool schema/catalog before deciding gates or delegating. The published DAG and this projection are advisory; the owner command rechecks the current frontier, capabilities, lease and dependencies. Never guess or reuse old caller refs, change grants, or bypass a closed frontier.

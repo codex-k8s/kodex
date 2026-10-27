@@ -1,3 +1,4 @@
+-- name: project_trash__recovery_readiness :one
 SELECT to_regprocedure('control_plane.project_purge_recovery_snapshot(uuid,text,text)') IS NOT NULL
  AND to_regprocedure('control_plane.project_purge_recovery_resolve(uuid,text,bigint,text,uuid,text,text)') IS NOT NULL
  AND to_regprocedure('control_plane.project_purge_recovery_claim(text,integer,text)') IS NOT NULL

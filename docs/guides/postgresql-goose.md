@@ -4,8 +4,8 @@ title: PostgreSQL, именованные SQL-запросы и goose
 type: guide
 status: approved
 owner: developer
-version: 1.2.4
-updated: 2026-10-12
+version: 1.2.5
+updated: 2026-10-25
 ---
 
 # PostgreSQL, именованные SQL-запросы и goose
@@ -100,6 +100,17 @@ SQL не собирается конкатенацией пользовател�
   и отказами при изменении authority и lifecycle, а не только созданием функции.
 
 ## Транзакции
+
+Повторяющиеся разрешение scope и `BeginTx` внутри одного service adapter
+допустимо объединять только с сохранением точных server-selected `TxOptions`
+у native wrappers. `Serializable`, `RepeatableRead`, `ReadOnly` и отсутствие
+access-mode override не взаимозаменяемы: изменение режима может сломать lock
+path или snapshot consistency. Helper не выбирает resource permission,
+protected command, owner, deadline, rollback либо commit; эти решения остаются
+у исходной операции. Scope error передаётся без подмены, ошибка начала
+транзакции сохраняет прежнее domain mapping. Частичный результат последующего
+reader не превращается в успешный ответ и не отбрасывается общим wrapper,
+если native контракт возвращает его вместе с ошибкой.
 
 - Транзакционная граница соответствует одному доменному намерению.
 - Уровень изоляции выбирается явно для сценариев, где от него зависит

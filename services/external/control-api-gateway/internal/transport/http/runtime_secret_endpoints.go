@@ -136,11 +136,7 @@ func (server *Server) CreateRuntimeSecret(writer http.ResponseWriter, request *h
 // RotateRuntimeSecret requires idempotency and expected version, decodes and hashes replacement bytes, then follows the owner-prepared rotation grant or terminal receipt. The broker result is checked against the requested secret before output; temporary value bytes are erased, not every string copy.
 // RotateRuntimeSecret требует идемпотентность и ожидаемую версию, декодирует и хеширует замену, затем использует owner-prepared grant ротации либо terminal receipt. Ответ брокера сверяется с запрошенным секретом; затираются временные байты, а не все строковые копии.
 func (server *Server) RotateRuntimeSecret(writer http.ResponseWriter, request *http.Request, secretRef generated.SecretRef, parameters generated.RotateRuntimeSecretParams) {
-	body, ok := decodeJSON[generated.RuntimeSecretRotateInput](writer, request)
-	if !ok {
-		return
-	}
-	mutation, ok := requireMutation(writer, parameters.IdempotencyKey, parameters.IfMatch)
+	body, mutation, ok := decodeMutationBody[generated.RuntimeSecretRotateInput](writer, request, parameters.IdempotencyKey, parameters.IfMatch)
 	if !ok {
 		return
 	}

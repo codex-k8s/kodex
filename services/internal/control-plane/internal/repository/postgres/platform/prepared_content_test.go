@@ -6,6 +6,10 @@ import (
 	"testing"
 )
 
+// TestPreparedContentCommitment keeps reader identity out of the safe request commitment while
+// binding the source lease generation.
+// TestPreparedContentCommitment исключает идентичность reader из безопасного обязательства
+// запроса, сохраняя привязку поколения исходной lease.
 func TestPreparedContentCommitment(t *testing.T) {
 	request := preparedContentRequest{Binding: preparedContentBinding{ActorID: "actor", OperationKey: "operation"}, Digest: "sha256:" + strings.Repeat("a", 64), SizeBytes: 3, Body: strings.NewReader("one")}
 	first := preparedContentRequestDigest(request)
@@ -19,6 +23,10 @@ func TestPreparedContentCommitment(t *testing.T) {
 	}
 }
 
+// TestPreparedContentRequiresExactPositiveReceipt accepts a complete exact object receipt and
+// rejects missing identity/version/ETag or mismatched key and size.
+// TestPreparedContentRequiresExactPositiveReceipt принимает полную точную квитанцию объекта и
+// отклоняет отсутствие идентичности, версии, ETag либо несовпадение ключа и размера.
 func TestPreparedContentRequiresExactPositiveReceipt(t *testing.T) {
 	digest := "sha256:" + strings.Repeat("a", 64)
 	receipt := objectstorage.Receipt{Key: "key", VersionID: "v1", ETag: "etag", Digest: digest, SizeBytes: 1}

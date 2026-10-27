@@ -25,4 +25,10 @@ configMapGenerator:
       - render-config.sh=nats/render-config.sh
 generatorOptions:
   disableNameSuffixHash: true
-patches: null
+patches:
+  - path: authority-certificate-defaults.patch.yaml
+    target:
+      group: cert-manager.io
+      version: v1
+      kind: Certificate
+      name: ^(internal-rpc-authority-(publisher|readback-attestor|restore-controller|restore-operator|(role-image-builder|image-admission|image-promotion|automation-scheduler|session-archive|secret-broker|control-api-gateway|control-plane|integration-gateway|interaction-gateway|runtime-controller)-workload)|runtime-controller-callback-server)$

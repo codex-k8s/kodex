@@ -31,6 +31,7 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/codex-k8s/kodex/libs/go/grpcserver v0.0.0 // indirect
+	github.com/codex-k8s/kodex/libs/go/runtimepolicywire v0.0.0
 	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
@@ -110,3 +111,5 @@ replace github.com/codex-k8s/kodex/libs/go/secretbrokerapi => ../../../libs/go/s
 replace github.com/codex-k8s/kodex/libs/go/serviceruntime => ../../../libs/go/serviceruntime
 
 replace github.com/codex-k8s/kodex/libs/go/securefile => ../../../libs/go/securefile
+
+replace github.com/codex-k8s/kodex/libs/go/runtimepolicywire => ../../../libs/go/runtimepolicywire

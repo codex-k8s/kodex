@@ -29,12 +29,7 @@ func prepareAssistantSessionResumeRepository(t *testing.T, ctx context.Context, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := r.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3, StagingRepository: "registry.invalid/staging", PromotedRepository: "registry.invalid/roles", DefaultImageReference: "registry.invalid/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
-		t.Fatal(err)
-	}
+	configureSyntheticRuntimeComponentRepository(t, r)
 	if err := r.Bootstrap(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -45,15 +40,7 @@ func prepareAssistantSessionResumeRepository(t *testing.T, ctx context.Context, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	assistant, err := service.GetSystemAssistant(ctx, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	warm := worker
-	warm.Permission = "platform.runtime.warm.report"
-	if _, err := service.ReportWarmRuntime(ctx, warm, command.WarmRuntimeInput{WorkloadInstance: "catalog-observed-warm-fixture", RuntimeRevision: assistant.DesiredRuntimeRevision, State: "READY"}); err != nil {
-		t.Fatal(err)
-	}
+	warm := reportReadyUsingWorkerFixture(t, ctx, service, owner, worker)
 	return r, service, owner, worker, warm
 }
 
@@ -62,10 +49,7 @@ func prepareAssistantSessionResumeRepository(t *testing.T, ctx context.Context, 
 func TestAssistantSessionResumeComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
 	defer pool.Close()
 	r, service, owner, worker, warm := prepareAssistantSessionResumeRepository(t, ctx, pool)
 	invoke := func(kind command.Kind, actor value.Principal, key string, payload any) command.Result {
@@ -291,10 +275,7 @@ func TestAssistantSessionResumeComponent(t *testing.T) {
 func TestAssistantFailedRolloutStorageComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
 	defer pool.Close()
 	r, service, owner, worker, _ := prepareAssistantSessionResumeRepository(t, ctx, pool)
 	claimPrincipal := sessionArchivePrincipal(t, ctx, r, "platform.session-archive.tasks.claim")

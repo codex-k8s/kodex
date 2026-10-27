@@ -1,3 +1,4 @@
+import { scheduleRevisionFixture } from "@/test-utils/schedule-revision-fixture";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -70,33 +71,7 @@ function schedule(overrides: Partial<Schedule> = {}): Schedule {
     targetVersion: 2,
     targetDigest: "b".repeat(64),
     cronExpression: "0 9 * * *",
-    currentRevision: {
-      ref: "schedule_revision_4",
-      revision: 4,
-      digest: "a".repeat(64),
-      targetVersion: 2,
-      targetDigest: "b".repeat(64),
-      name: input.name,
-      target: {
-        type: "AGENT",
-        ref: input.targetRef,
-        displayName: "Аналитик продаж",
-        version: 2,
-      },
-      preset: input.preset,
-      cronExpression: "0 9 * * *",
-      timezone: input.timezone,
-      input: input.input,
-      sessionPolicy: input.sessionPolicy,
-      notificationPolicy: input.notificationPolicy,
-      dstGapPolicy: "SHIFT_FORWARD",
-      dstFoldPolicy: "RUN_ONCE_EARLIEST",
-      misfirePolicy: "COALESCE",
-      overlapPolicy: "FORBID",
-      automationText: "",
-      promptInputs: {},
-      createdAt: "2026-08-30T06:00:00Z",
-    },
+    currentRevision: scheduleRevisionFixture(input, 4, "a".repeat(64)),
     nextActions: ["EDIT", "DISABLE", "ARCHIVE"],
     ...overrides,
   };

@@ -1,3 +1,4 @@
+import { createDeferred } from "@/test-utils/create-deferred";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { resetOwnerRequests } from "@/shared/api/owner-lifetime";
@@ -41,10 +42,7 @@ function failure(status: number): AppProblem {
   });
 }
 function deferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => {
-    resolve = done;
-  });
+  const { promise, resolve } = createDeferred<T>();
   return { promise, resolve };
 }
 beforeEach(() => {

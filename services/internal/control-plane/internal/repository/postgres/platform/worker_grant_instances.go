@@ -15,18 +15,51 @@ import (
 )
 
 var (
+	// queryServiceCredentialGeneration embeds the protected workload credential generation read from
+	// the durable high-watermark row. No caller-provided generation is accepted and the lookup does
+	// not renew or revoke a grant.
+	// queryServiceCredentialGeneration встраивает чтение protected credential generation workload из
+	// устойчивой high-watermark строки. Поколение клиента не принимается, чтение не продлевает и не
+	// отзывает grant.
 	//go:embed sql/service_credential_generation.sql
 	queryServiceCredentialGeneration string
+	// queryTrustedWorkloadGeneration embeds enabled trusted workload generation combined with the
+	// previous protected high-watermark floor. It cannot lower durable generation merely because
+	// transport profile changed.
+	// queryTrustedWorkloadGeneration встраивает поколение включённого trusted workload совместно с
+	// прежним protected high-watermark floor. Не позволяет понизить устойчивое поколение из-за смены
+	// транспортного профиля.
 	//go:embed sql/trusted_workload__generation.sql
 	queryTrustedWorkloadGeneration string
+	// queryWorkerGrantAcceptGeneration embeds the shared workload generation-floor insert/lock with
+	// database-time validity, at most five seconds future issue time and a four-minute lifetime. Lower
+	// generations are rejected; an advance resets the generation-local legacy revision without
+	// invalidating sibling instance revisions.
+	// queryWorkerGrantAcceptGeneration встраивает вставку и блокировку общего generation floor
+	// workload с проверкой времени БД, выпуском максимум на пять секунд в будущем и lifetime четыре
+	// минуты. Меньшие поколения отклоняются; продвижение сбрасывает legacy revision поколения без
+	// инвалидации ревизий соседних instances.
 	//go:embed sql/proof_worker_grant_accept_generation.sql
 	queryWorkerGrantAcceptGeneration string
+	// queryWorkerGrantAcceptInstance embeds durable per-workload/instance generation/revision
+	// advancement or an exact same-revision replay including times and envelope hash. Other same/lower
+	// revisions are rejected; caller generation-floor acceptance must share the transaction.
+	// queryWorkerGrantAcceptInstance встраивает устойчивое продвижение generation/revision пары
+	// workload/instance либо точный повтор той же ревизии с временем и хешем оболочки. Другие равные
+	// либо меньшие ревизии отклоняются; допуск общего generation floor выполняется в той же
+	// транзакции.
 	//go:embed sql/proof_worker_grant_accept_instance.sql
 	queryWorkerGrantAcceptInstance string
 )
 
-// ConfigureRPCProfile вызывается composition root до публикации repository.
-// Профиль не берётся из запроса и не использует fallback после отказа допуска.
+// ConfigureRPCProfile sets the repository transport mode from the closed
+// protected-empty/trusted-cluster choices during composition before publication. Unknown profiles
+// return a fixed English error; request headers and admission failures cannot switch this setting
+// through this method.
+// ConfigureRPCProfile назначает транспортный режим repository из закрытых вариантов
+// protected-пустой либо trusted-cluster при сборке до публикации. Неизвестный профиль возвращает
+// фиксированную английскую ошибку; заголовки запросов и отказы допуска не переключают настройку
+// через этот метод.
 func (repository *Repository) ConfigureRPCProfile(profile string) error {
 	switch profile {
 	case "":
@@ -39,10 +72,16 @@ func (repository *Repository) ConfigureRPCProfile(profile string) error {
 	return nil
 }
 
-// ResolveServiceCredentialGeneration не принимает поколение от caller и не
-// меняет историю grants. Срок допуска проверяется по сертификату; bounded
-// emergency revoke ускоренного MVP-профиля вынесен в #1527.
-// сохранённое поколение используется для прежних domain lease fences.
+// ResolveServiceCredentialGeneration loads generation from the profile-specific durable owner
+// registry, rejecting unknown workloads and disabled trusted registrations and values
+// outside1..2^53-1. It never accepts caller generation or changes grant history; certificate
+// lifetime and revocation policy remain with admission/consumers, while the retained generation
+// serves domain lease fences.
+// ResolveServiceCredentialGeneration читает поколение из соответствующего профилю устойчивого
+// реестра владельца, отклоняя неизвестный workload либо выключенную trusted-регистрацию и значения
+// вне1..2^53-1. Не принимает поколение клиента и не меняет историю grants; lifetime сертификата и
+// отзыв остаются у допуска и потребителей, сохранённое поколение используется доменными lease
+// fences.
 func (repository *Repository) ResolveServiceCredentialGeneration(ctx context.Context, workload string) (uint64, error) {
 	if workload == "" {
 		return 0, errs.ErrForbidden
@@ -67,6 +106,16 @@ func (repository *Repository) ResolveServiceCredentialGeneration(ctx context.Con
 	return generation, nil
 }
 
+// acceptWorkerGrantInstance requires canonical nonzero instance UUID, lowercase SHA-256 and
+// issue-time-derived revision, then atomically accepts the shared generation floor and exact
+// per-instance watermark. SQL enforces validity and monotonic/replay constraints; mismatched
+// returned generation/revision is Conflict. It commits only after both checks and does not verify
+// signatures or mint new grants itself.
+// acceptWorkerGrantInstance требует канонический ненулевой UUID instance, строчный SHA-256 и
+// ревизию из времени выпуска, затем атомарно допускает общий generation floor и точный watermark
+// instance. SQL проверяет срок и монотонность либо точный replay; несовпадение возвращённых
+// generation/revision даёт Conflict. Завершает транзакцию после обеих проверок, сам не проверяет
+// подписи и не выпускает grants.
 func (repository *Repository) acceptWorkerGrantInstance(ctx context.Context, input platformrepo.WorkerGrantInput) error {
 	instance, err := uuid.Parse(input.InstanceID)
 	digest, digestErr := hex.DecodeString(input.EnvelopeSHA256)

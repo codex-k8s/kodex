@@ -7,6 +7,12 @@ import (
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 )
 
+// TestModelCatalogContentIdentityExcludesFreshnessAndCredentialButBindsCapabilities keeps catalog
+// content identity stable across observation time and credential-revision changes, while binding
+// capability/default changes and separating receipt freshness.
+// TestModelCatalogContentIdentityExcludesFreshnessAndCredentialButBindsCapabilities сохраняет
+// идентичность содержимого каталога при смене времени наблюдения и ревизии credential, связывая
+// изменения capability и модели по умолчанию и отделяя свежесть квитанции.
 func TestModelCatalogContentIdentityExcludesFreshnessAndCredentialButBindsCapabilities(t *testing.T) {
 	task := platformrepo.ProviderModelCatalogTask{OrganizationID: "tenant", AccountRef: "pacc_account", AccountVersion: 1, CredentialRef: "credential", CredentialRevision: 1, AuthorizationMethod: "API_KEY"}
 	observation := platformrepo.ProviderModelCatalogObservation{AccountRef: task.AccountRef, CredentialRef: task.CredentialRef, ObservedAt: time.Now(), Source: "REMOTE_API", Failure: "NONE", Models: []platformrepo.ProviderModelCatalogRecord{{ID: "model", DefaultReasoningEffort: "adaptive", ReasoningEfforts: []string{"adaptive"}, IsDefault: true}, {ID: "non-reasoning"}}}
@@ -39,6 +45,13 @@ func TestModelCatalogContentIdentityExcludesFreshnessAndCredentialButBindsCapabi
 	}
 }
 
+// TestModelCatalogObservationFailsClosedWithoutRemoteEvidence checks synthetic unverified
+// observations cannot publish cached models, while allowing verified empty catalogs and rejecting
+// invented effort or multiple defaults; no remote probe runs.
+// TestModelCatalogObservationFailsClosedWithoutRemoteEvidence проверяет запрет публикации
+// кэшированных моделей из искусственных непроверенных наблюдений, допуск подтверждённого пустого
+// каталога и отклонение выдуманного effort и нескольких моделей по умолчанию; удалённый probe не
+// выполняется.
 func TestModelCatalogObservationFailsClosedWithoutRemoteEvidence(t *testing.T) {
 	task := platformrepo.ProviderModelCatalogTask{AccountRef: "account", CredentialRef: "credential", AuthorizationMethod: "API_KEY"}
 	base := platformrepo.ProviderModelCatalogObservation{AccountRef: task.AccountRef, CredentialRef: task.CredentialRef, ObservedAt: time.Now(), Failure: "UNVERIFIED_SOURCE"}

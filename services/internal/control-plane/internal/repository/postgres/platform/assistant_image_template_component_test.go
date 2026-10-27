@@ -14,7 +14,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
-// Вызывается обязательной изолированной profile suite без provider или браузера.
+// testAssistantProjectImageTemplateSelection checks explicit template reset against immutable
+// catalog pins, project authority, recipe version and replay without changing custom bytes
+// implicitly.
+// testAssistantProjectImageTemplateSelection проверяет явный сброс шаблона по неизменяемым версиям
+// каталога, полномочиям проекта и версии рецепта; повтор команды не должен неявно менять
+// пользовательские данные.
 func testAssistantProjectImageTemplateSelection(t *testing.T, ctx context.Context, r *Repository, service *platformservice.Service, owner value.Principal, lease map[string]any) {
 	t.Helper()
 	catalog, template := promotionComponentCatalog(t)

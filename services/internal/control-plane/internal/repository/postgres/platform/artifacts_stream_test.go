@@ -15,12 +15,23 @@ import (
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 )
 
+// seekRequiredObjectStore wraps the in-memory object store and records exact incoming reader plus
+// whether it remains seekable. It is a streaming-adapter fixture, not a remote storage or
+// durability implementation.
+// seekRequiredObjectStore оборачивает in-memory object store и записывает exact incoming reader с
+// признаком seekable. Это streaming-adapter fixture, а не remote storage либо durability
+// implementation.
 type seekRequiredObjectStore struct {
 	*objectstoragetest.Store
 	sawSeekable  bool
 	receivedBody io.Reader
 }
 
+// Put captures the input body and rejects it unless it implements io.Seeker, otherwise delegates
+// unchanged input/context to the in-memory store. It adds no real object authorization or network
+// behavior.
+// Put сохраняет input body и отклоняет его без io.Seeker, иначе передаёт неизменные input/context
+// in-memory store. Не добавляет real object authorization либо network behavior.
 func (store *seekRequiredObjectStore) Put(ctx context.Context, input objectstorage.PutInput) (objectstorage.Receipt, error) {
 	store.receivedBody = input.Body
 	_, store.sawSeekable = input.Body.(io.Seeker)
@@ -30,6 +41,12 @@ func (store *seekRequiredObjectStore) Put(ctx context.Context, input objectstora
 	return store.Store.Put(ctx, input)
 }
 
+// TestPutArtifactObjectKeepsStreamingBodySeekable requires the original seekable reader to reach
+// storage unchanged with exact digest/size and remain rewound after verification. The in-memory
+// regression does not prove remote upload/readback behavior or benchmark memory use.
+// TestPutArtifactObjectKeepsStreamingBodySeekable требует передачи original seekable reader в
+// storage без замены с exact digest/size и сохранения rewind после verification. In-memory
+// regression не доказывает remote upload/readback behavior и не измеряет memory use.
 func TestPutArtifactObjectKeepsStreamingBodySeekable(t *testing.T) {
 	t.Parallel()
 
@@ -55,6 +72,12 @@ func TestPutArtifactObjectKeepsStreamingBodySeekable(t *testing.T) {
 	}
 }
 
+// TestPutArtifactObjectDeletesFailedReadback uploads synthetic bytes with a deliberately wrong
+// digest and requires Conflict plus no remaining object in the in-memory store. It guards
+// failed-readback compensation locally without proving real versioned object deletion.
+// TestPutArtifactObjectDeletesFailedReadback загружает synthetic bytes с намеренно неверным digest
+// и требует Conflict с отсутствием object в in-memory store. Локально проверяет failed-readback
+// compensation без доказательства real versioned object deletion.
 func TestPutArtifactObjectDeletesFailedReadback(t *testing.T) {
 	t.Parallel()
 

@@ -148,11 +148,7 @@ func (server *Server) ListAssistantConversations(w http.ResponseWriter, r *http.
 // ArchiveAssistantConversation requires a syntactic reference and mandatory versioned mutation, then checks the owner's exact conversation/version and ARCHIVED outcome before public output.
 // ArchiveAssistantConversation требует формат ссылки и обязательную versioned mutation, затем сверяет точный диалог, версию и ARCHIVED владельца до выдачи.
 func (server *Server) ArchiveAssistantConversation(w http.ResponseWriter, r *http.Request, ref generated.ConversationRef, p generated.ArchiveAssistantConversationParams) {
-	if !opaqueHTTPReference.MatchString(ref) {
-		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
-		return
-	}
-	mutation, ok := requireVersionedMutation(w, p.IdempotencyKey, p.IfMatch)
+	mutation, ok := requireVersionedReferenceMutation(w, ref, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -167,11 +163,7 @@ func (server *Server) ArchiveAssistantConversation(w http.ResponseWriter, r *htt
 // RestoreAssistantConversation requires exact reference/versioned mutation and validates the returned conversation identity, version and ACTIVE state rather than optimistically restoring client data.
 // RestoreAssistantConversation требует точную ссылку и versioned mutation и проверяет identity, версию и ACTIVE ответа вместо оптимистического восстановления клиентских данных.
 func (server *Server) RestoreAssistantConversation(w http.ResponseWriter, r *http.Request, ref generated.ConversationRef, p generated.RestoreAssistantConversationParams) {
-	if !opaqueHTTPReference.MatchString(ref) {
-		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
-		return
-	}
-	mutation, ok := requireVersionedMutation(w, p.IdempotencyKey, p.IfMatch)
+	mutation, ok := requireVersionedReferenceMutation(w, ref, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -186,11 +178,7 @@ func (server *Server) RestoreAssistantConversation(w http.ResponseWriter, r *htt
 // PurgeAssistantConversation invokes the dedicated owner purge with versioned mutation and requires its exact conversation reference before HTTP204; it does not directly erase history or claim unrelated resources are removed.
 // PurgeAssistantConversation вызывает отдельный purge владельца с versioned mutation и требует точную ссылку ответа до HTTP204; историю напрямую не стирает и удаление посторонних ресурсов не утверждает.
 func (server *Server) PurgeAssistantConversation(w http.ResponseWriter, r *http.Request, ref generated.ConversationRef, p generated.PurgeAssistantConversationParams) {
-	if !opaqueHTTPReference.MatchString(ref) {
-		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
-		return
-	}
-	mutation, ok := requireVersionedMutation(w, p.IdempotencyKey, p.IfMatch)
+	mutation, ok := requireVersionedReferenceMutation(w, ref, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -252,30 +240,18 @@ func (server *Server) CreateAssistantConversation(w http.ResponseWriter, r *http
 		return
 	}
 	response, err := server.control.Assistant.CreateAssistantConversation(r.Context(), &controlplanev1.CreateAssistantConversationRequest{Mutation: m, ProjectRef: stringValue(body.ProjectRef), Context: assistantContextInput(body.Context), AssistantScope: assistantScopeInput(body.AssistantScope)})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusCreated, response, "conversation", "")
+	writeRPCResult(w, http.StatusCreated, response, err, "conversation", "")
 }
 
 // UpdateAssistantConversationTitle forwards decoded title, exact conversation and mutation/version pins to the owner without generating or assigning title revision locally.
 // UpdateAssistantConversationTitle передаёт разобранное имя, точный диалог и mutation/version pins владельцу без локальной генерации и назначения title revision.
 func (server *Server) UpdateAssistantConversationTitle(w http.ResponseWriter, r *http.Request, ref generated.ConversationRef, p generated.UpdateAssistantConversationTitleParams) {
-	body, ok := decodeJSON[generated.UpdateAssistantConversationTitleJSONBody](w, r)
-	if !ok {
-		return
-	}
-	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, m, ok := decodeMutationBody[generated.UpdateAssistantConversationTitleJSONBody](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
 	response, err := server.control.Assistant.UpdateAssistantConversationTitle(r.Context(), &controlplanev1.UpdateAssistantConversationTitleRequest{Mutation: m, ConversationRef: ref, Title: body.Title})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "conversation", "")
+	writeRPCResult(w, http.StatusOK, response, err, "conversation", "")
 }
 
 // AddAssistantTurn first reads and checks actual bounded UTF-8 bytes, then closed-decodes and validates shared turn content. It defaults to QUEUE unless INTERRUPT_ACTIVE is explicitly selected and returns HTTP202 after owner admission; it neither runs the model nor declares the turn completed.
@@ -301,21 +277,13 @@ func (server *Server) AddAssistantTurn(w http.ResponseWriter, r *http.Request, r
 		deliveryMode = controlplanev1.AssistantTurnDeliveryMode_ASSISTANT_TURN_DELIVERY_MODE_INTERRUPT_ACTIVE
 	}
 	response, err := server.control.Assistant.AddAssistantTurn(r.Context(), &controlplanev1.AddAssistantTurnRequest{Mutation: m, ConversationRef: ref, Content: body.Content, AttachmentSetRef: stringValue(body.AttachmentSetRef), Context: assistantContextInput(body.Context), DeliveryMode: deliveryMode})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusAccepted, response, "conversation", "")
+	writeRPCResult(w, http.StatusAccepted, response, err, "conversation", "")
 }
 
 // CancelAssistantTurn requires valid conversation syntax/versioned mutation and checks exact returned conversation plus cancelled/run-ref consistency. Cancellation graph, claims and provider interruption belong to the owner, not this transport.
 // CancelAssistantTurn требует формат диалога и versioned mutation и сверяет диалог и согласованность cancelled/run-ref ответа. Граф отмены, claims и прерывание провайдера принадлежат владельцу, а не transport.
 func (server *Server) CancelAssistantTurn(w http.ResponseWriter, r *http.Request, ref generated.ConversationRef, p generated.CancelAssistantTurnParams) {
-	if !opaqueHTTPReference.MatchString(ref) {
-		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
-		return
-	}
-	m, ok := requireVersionedMutation(w, p.IdempotencyKey, p.IfMatch)
+	m, ok := requireVersionedReferenceMutation(w, ref, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -343,11 +311,7 @@ func (server *Server) ApplyAssistantPlan(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	response, err := server.control.Assistant.ApplyAssistantPlan(r.Context(), &controlplanev1.ApplyAssistantPlanRequest{Mutation: m, PlanRef: ref, Revision: body.Revision})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "", "")
+	writeRPCResult(w, http.StatusOK, response, err, "", "")
 }
 
 // UpdateAssistantPlanDraft uses the larger nominal decoder budget, maps proposed operations and mutation pins, then delegates draft update to the owner; mapped before/after data is not trusted execution state.
@@ -362,49 +326,29 @@ func (server *Server) UpdateAssistantPlanDraft(w http.ResponseWriter, r *http.Re
 		return
 	}
 	response, err := server.control.Assistant.UpdateAssistantPlanDraft(r.Context(), &controlplanev1.UpdateAssistantPlanDraftRequest{Mutation: m, PlanRef: ref, Summary: body.Summary, Operations: assistantPlanOperationsInput(body.Operations)})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "plan", "")
+	writeRPCResult(w, http.StatusOK, response, err, "plan", "")
 }
 
 // ValidateAssistantPlan forwards exact plan/revision and mutation context to the owner validation command, returning its public plan without applying changes.
 // ValidateAssistantPlan передаёт точные plan/revision и mutation context проверке владельца, возвращая публичный план без применения изменений.
 func (server *Server) ValidateAssistantPlan(w http.ResponseWriter, r *http.Request, ref generated.PlanRef, p generated.ValidateAssistantPlanParams) {
-	body, ok := decodeJSON[generated.ValidateAssistantPlanJSONBody](w, r)
-	if !ok {
-		return
-	}
-	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, m, ok := decodeMutationBody[generated.ValidateAssistantPlanJSONBody](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
 	response, err := server.control.Assistant.ValidateAssistantPlan(r.Context(), &controlplanev1.ValidateAssistantPlanRequest{Mutation: m, PlanRef: ref, Revision: body.Revision})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "plan", "")
+	writeRPCResult(w, http.StatusOK, response, err, "plan", "")
 }
 
 // RejectAssistantPlan sends explicit plan revision and mutation/version pins to owner rejection; terminal/delegation effects remain in the owner transaction.
 // RejectAssistantPlan передаёт явную ревизию плана и mutation/version pins отклонению владельца; terminal и delegation effects остаются в его транзакции.
 func (server *Server) RejectAssistantPlan(w http.ResponseWriter, r *http.Request, ref generated.PlanRef, p generated.RejectAssistantPlanParams) {
-	body, ok := decodeJSON[generated.RejectAssistantPlanJSONBody](w, r)
-	if !ok {
-		return
-	}
-	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, m, ok := decodeMutationBody[generated.RejectAssistantPlanJSONBody](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
 	response, err := server.control.Assistant.RejectAssistantPlan(r.Context(), &controlplanev1.RejectAssistantPlanRequest{Mutation: m, PlanRef: ref, Revision: body.Revision})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "", "")
+	writeRPCResult(w, http.StatusOK, response, err, "", "")
 }
 
 // assistantContextInput preserves absent context and maps route/resource/version plus requested operation enums, allocating a new operation slice but retaining the optional version pointer. This is an untrusted selection descriptor, not actor eligibility.
@@ -448,20 +392,12 @@ func assistantPlanOperationsInput(items []generated.AssistantPlanOperationInput)
 // UpdateSystemAssistantOwnerInstructions decodes owner instructions and mutation pins for the dedicated owner update, without editing immutable platform instructions or bypassing confirmation policy.
 // UpdateSystemAssistantOwnerInstructions разбирает owner instructions и mutation pins отдельного update владельца без изменения неизменяемых платформенных инструкций и обхода политики подтверждения.
 func (server *Server) UpdateSystemAssistantOwnerInstructions(w http.ResponseWriter, r *http.Request, p generated.UpdateSystemAssistantOwnerInstructionsParams) {
-	body, ok := decodeJSON[generated.UpdateSystemAssistantOwnerInstructionsJSONBody](w, r)
-	if !ok {
-		return
-	}
-	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	body, m, ok := decodeMutationBody[generated.UpdateSystemAssistantOwnerInstructionsJSONBody](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
 	response, err := server.control.Assistant.UpdateAssistantOwnerInstructions(r.Context(), &controlplanev1.UpdateAssistantOwnerInstructionsRequest{Mutation: m, Instructions: body.OwnerInstructions})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "assistant", "")
+	writeRPCResult(w, http.StatusOK, response, err, "assistant", "")
 }
 
 // CommandSystemAssistant accepts only RECOVER and forwards mutation/version pins to the dedicated owner recovery command; it does not restart arbitrary workloads or bypass account readiness.
@@ -480,9 +416,5 @@ func (server *Server) CommandSystemAssistant(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	response, err := server.control.Assistant.RecoverSystemAssistant(r.Context(), &controlplanev1.RecoverSystemAssistantRequest{Mutation: m})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "assistant", "")
+	writeRPCResult(w, http.StatusOK, response, err, "assistant", "")
 }

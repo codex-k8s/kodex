@@ -30,6 +30,8 @@ vi.mock("@/shared/api/problem", () => ({
   unwrap: (value: unknown) => Promise.resolve(value),
 }));
 import {
+  bindRuntimeEnvironment,
+  changeOverlay,
   loadAgentRuntime,
   loadRuntimeCatalog,
   saveAgentRuntime,
@@ -109,6 +111,53 @@ describe("agent detail runtime api", () => {
       body: { content: 'model_reasoning_effort = "xhigh"' },
       headers: {
         "If-Match": '"7"',
+        "Idempotency-Key": "stable-runtime-idempotency-key",
+        "X-CSRF-Token": "a".repeat(43),
+      },
+      signal: mocks.signal,
+    });
+  });
+
+  it.each(["VALIDATE", "PUBLISH"] as const)(
+    "передаёт %s выбранной SDK-команде без payload",
+    async (action) => {
+      const request =
+        action === "VALIDATE"
+          ? mocks.validateConfigOverlayDraft
+          : mocks.publishConfigOverlayDraft;
+      const view = { agentVersion: 8 };
+      request.mockResolvedValue({ data: view });
+
+      await expect(changeOverlay("agent_sales", action, 7)).resolves.toBe(view);
+      expect(request).toHaveBeenCalledExactlyOnceWith({
+        path: { agentRef: "agent_sales" },
+        headers: {
+          "If-Match": '"7"',
+          "Idempotency-Key": "stable-runtime-idempotency-key",
+          "X-CSRF-Token": "a".repeat(43),
+        },
+        signal: mocks.signal,
+      });
+      expect(
+        action === "VALIDATE"
+          ? mocks.publishConfigOverlayDraft
+          : mocks.validateConfigOverlayDraft,
+      ).not.toHaveBeenCalled();
+    },
+  );
+
+  it("привязывает указанное окружение к точной версии агента", async () => {
+    const view = { agentVersion: 10 };
+    mocks.bindAgentRuntimeEnvironment.mockResolvedValue({ data: view });
+
+    await expect(
+      bindRuntimeEnvironment("agent_sales", "environment_sales", 9),
+    ).resolves.toBe(view);
+    expect(mocks.bindAgentRuntimeEnvironment).toHaveBeenCalledExactlyOnceWith({
+      path: { agentRef: "agent_sales" },
+      body: { environmentRef: "environment_sales" },
+      headers: {
+        "If-Match": '"9"',
         "Idempotency-Key": "stable-runtime-idempotency-key",
         "X-CSRF-Token": "a".repeat(43),
       },

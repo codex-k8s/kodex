@@ -19,6 +19,18 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testRoleImagePromotionLifecycle runs disposable owner and domain-service promotion scenarios
+// over synthetic build/admission seeds: candidate visibility, request authority/OCC/provenance and
+// idempotency, concurrent same-key claim, expiry/reclaim and stale-token rejection,
+// authorization/completion/replay and immutable revision linkage. Exact audit/event cardinality
+// and recipe version are read back before invoking selective impact; no actual registry build,
+// signature verification or push occurs.
+// testRoleImagePromotionLifecycle проверяет promotion через owner и domain service в disposable БД
+// с синтетическими build/admission seeds: видимость кандидата, request authority/OCC/provenance и
+// idempotency, конкурентный same-key claim, expiry/reclaim и отказ stale token,
+// authorization/completion/replay и неизменяемую revision linkage. Точные audit/event cardinality
+// и recipe version читаются до выборочного impact; реальная сборка в registry, проверка подписи и
+// push не выполняются.
 func testRoleImagePromotionLifecycle(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	ownerInput := platformrepo.ProofPrincipalInput{
@@ -164,6 +176,10 @@ func testRoleImagePromotionLifecycle(t *testing.T, ctx context.Context, reposito
 	}
 
 	promotionWorker.CorrelationRef = "role-image-promotion-claim"
+	// claimResult transfers each concurrent promotion claim and its error through the result channel,
+	// allowing the scenario to require two identical same-key replies after joining both workers.
+	// claimResult передаёт каждый конкурентный promotion claim и его ошибку через result channel,
+	// позволяя сценарию потребовать два одинаковых same-key ответа после завершения обоих workers.
 	type claimResult struct {
 		claim entity.ImagePromotionClaim
 		err   error
@@ -310,6 +326,11 @@ WHERE ref = $1`, revisionRef, strings.Repeat("0", 64)); err == nil {
 	testRoleImageImpactLifecycle(t, ctx, repository, platform, roleImages, owner, resolvedOwner, readback, *activeArtifact, agent)
 }
 
+// assertSupplyWorkAvailability queries owner supply availability with the supplied principal and
+// requires both admission and promotion booleans to match the current scenario stage; it does not
+// claim work.
+// assertSupplyWorkAvailability читает owner supply availability с переданным principal и требует
+// совпадения admission и promotion flags с текущим шагом сценария; работу не захватывает.
 func assertSupplyWorkAvailability(t *testing.T, ctx context.Context, repository *Repository, principal value.Principal, admission, promotion bool) {
 	t.Helper()
 	got, err := repository.GetSupplyWorkAvailability(ctx, principal)
@@ -318,6 +339,14 @@ func assertSupplyWorkAvailability(t *testing.T, ctx context.Context, repository 
 	}
 }
 
+// promotionComponentCatalog constructs and resolves a pure synthetic available promotion catalog
+// with pinned base/source/context/builder/frontend/toolchain digests and one linux/amd64 platform.
+// Invalid-domain and internal-registry references are test metadata; this helper makes no network
+// or database calls.
+// promotionComponentCatalog создаёт и разрешает чистый синтетический доступный promotion catalog с
+// фиксированными base/source/context/builder/frontend/toolchain digests и одной платформой
+// linux/amd64. Invalid-domain и internal-registry ссылки являются test metadata; helper не
+// обращается к сети либо БД.
 func promotionComponentCatalog(t *testing.T) (*roleimageservice.Catalog, entity.RoleImageRecipeInput) {
 	t.Helper()
 	digestA := strings.Repeat("a", 64)
@@ -346,12 +375,28 @@ func promotionComponentCatalog(t *testing.T) (*roleimageservice.Catalog, entity.
 	return catalog, input
 }
 
+// seedAdmittedPromotionArtifact selects ACCEPTED synthetic admission for the common fixture
+// writer; it does not run a scanner, verify evidence signatures or perform a worker admission
+// claim.
+// seedAdmittedPromotionArtifact выбирает синтетический admission ACCEPTED для общего fixture
+// writer; не запускает сканер, не проверяет подписи evidence и не выполняет worker admission
+// claim.
 func seedAdmittedPromotionArtifact(t *testing.T, ctx context.Context, repository *Repository,
 	principal value.Principal, recipe entity.RoleImageRecipe, build entity.ImageBuild) entity.ImageArtifact {
 	t.Helper()
 	return seedPromotionArtifact(t, ctx, repository, principal, recipe, build, "ACCEPTED")
 }
 
+// seedPromotionArtifact resolves owner scope, completes a synthetic build and inserts its pending
+// artifact through owner SQL. PENDING returns before admission; other supplied decisions directly
+// record synthetic inventory/evidence, then read back and check recipe/version/verdict/revision.
+// The fixture bypasses worker leases and external scanners and does not prove atomic production
+// workflow execution.
+// seedPromotionArtifact разрешает owner scope, завершает синтетическую сборку и вставляет pending
+// artifact через owner SQL. PENDING возвращается до admission; остальные переданные решения
+// напрямую сохраняют синтетические inventory/evidence, после чего readback проверяет
+// recipe/version/verdict/revision. Оснастка обходит worker leases и внешние сканеры и не
+// доказывает атомарное исполнение production workflow.
 func seedPromotionArtifact(t *testing.T, ctx context.Context, repository *Repository,
 	principal value.Principal, recipe entity.RoleImageRecipe, build entity.ImageBuild, decision string) entity.ImageArtifact {
 	t.Helper()
@@ -359,45 +404,13 @@ func seedPromotionArtifact(t *testing.T, ctx context.Context, repository *Reposi
 	if err != nil {
 		t.Fatalf("resolve promotion fixture scope: %v", err)
 	}
-	lockedBuild, err := scanLockedBuild(repository.pool.QueryRow(ctx, queryRoleImagesLockBuild,
-		current.organizationID, build.Ref))
-	if err != nil {
-		t.Fatalf("lock promotion fixture build: %v", err)
-	}
 	manifestDigest := "sha256:" + strings.Repeat("e", 64)
 	provenanceSHA256 := strings.Repeat("f", 64)
-	stagingReference := repository.roleImages.StagingRepository + "@" + manifestDigest
-	if err := repository.pool.QueryRow(ctx, queryRoleImagesCompleteBuild, current.organizationID,
-		lockedBuild.ID, lockedBuild.Build.Version, stagingReference, manifestDigest,
-		provenanceSHA256, lockedBuild.Build.ImmutableBuildSHA256).Scan(
-		&lockedBuild.Build.Version, &lockedBuild.Build.Stage, &lockedBuild.Build.ProgressPercent,
-		&lockedBuild.Build.StagingReference, &lockedBuild.Build.ManifestDigest,
-		&lockedBuild.Build.ProvenanceSHA256, &lockedBuild.Build.ImmutableBuildSHA256,
-		&lockedBuild.Build.UpdatedAt); err != nil {
-		t.Fatalf("complete promotion fixture build: %v", err)
-	}
-	artifactRef, err := newRef("imgart")
-	if err != nil {
-		t.Fatalf("create promotion fixture artifact ref: %v", err)
-	}
-	var artifactID string
-	if err := repository.pool.QueryRow(ctx, queryRoleImagesInsertArtifact, artifactRef,
-		current.organizationID, lockedBuild.ProjectID, lockedBuild.RecipeID,
-		lockedBuild.Build.RecipeVersion, lockedBuild.Build.RecipeGeneration,
-		lockedBuild.Build.SpecSHA256, lockedBuild.ID, lockedBuild.Build.Version,
-		lockedBuild.Build.Attempt, asJSON(lockedBuild.Specification), lockedBuild.PolicyRevision,
-		lockedBuild.PolicySHA256, lockedBuild.ContractRevision, lockedBuild.ContractSHA256,
-		stagingReference, manifestDigest, lockedBuild.Build.ImmutableBuildSHA256,
-		provenanceSHA256).Scan(&artifactID); err != nil {
-		t.Fatalf("insert promotion fixture artifact: %v", err)
-	}
+	artifactID, inventoryArtifact := seedCompletedRoleImageArtifact(t, ctx, repository, current, build.Ref, manifestDigest, provenanceSHA256)
+	artifactRef := inventoryArtifact.Ref
 	var version, admissionRevision uint64
 	var verdict string
 	var updatedAt time.Time
-	inventoryArtifact, err := scanRoleImageArtifact(repository.pool.QueryRow(ctx, queryRoleImagesGetActiveArtifact, current.organizationID, artifactRef))
-	if err != nil {
-		t.Fatal("read synthetic inventory fixture")
-	}
 	if decision == "PENDING" {
 		return inventoryArtifact
 	}
@@ -420,4 +433,56 @@ func seedPromotionArtifact(t *testing.T, ctx context.Context, repository *Reposi
 		t.Fatalf("invalid admitted promotion fixture: artifact=%#v verdict=%s revision=%d", artifact, verdict, admissionRevision)
 	}
 	return artifact
+}
+
+// seedCompletedRoleImageArtifact shares the synthetic completed-build/artifact prefix for policy
+// rotation and promotion fixtures, preserving caller-supplied digests and saved build provenance.
+// It uses the existing ordered pool queries without adding a transaction or a lasting row lock,
+// returns internal artifact ID plus the pending public projection, and does not record admission,
+// claim a worker lease, build an image or contact a registry.
+// Failures identify only the fixture phase and do not print raw database errors or row contents.
+// seedCompletedRoleImageArtifact объединяет синтетическую подготовку completed-build/artifact для
+// policy rotation и promotion fixtures, сохраняя переданные digests и provenance сохранённой сборки.
+// Использует прежние упорядоченные pool queries без новой транзакции либо длительной row lock,
+// возвращает внутренний artifact ID и pending public projection; не записывает admission,
+// не выдаёт worker lease, не собирает образ и не обращается к registry.
+// Ошибки указывают только этап оснастки без raw database errors либо содержимого строк.
+func seedCompletedRoleImageArtifact(t *testing.T, ctx context.Context, repository *Repository, current scope, buildRef, manifestDigest, provenanceSHA256 string) (string, entity.ImageArtifact) {
+	t.Helper()
+	lockedBuild, err := scanLockedBuild(repository.pool.QueryRow(ctx, queryRoleImagesLockBuild,
+		current.organizationID, buildRef))
+	if err != nil {
+		t.Fatal("read synthetic artifact fixture build")
+	}
+	stagingReference := repository.roleImages.StagingRepository + "@" + manifestDigest
+	if err := repository.pool.QueryRow(ctx, queryRoleImagesCompleteBuild, current.organizationID,
+		lockedBuild.ID, lockedBuild.Build.Version, stagingReference, manifestDigest,
+		provenanceSHA256, lockedBuild.Build.ImmutableBuildSHA256).Scan(
+		&lockedBuild.Build.Version, &lockedBuild.Build.Stage, &lockedBuild.Build.ProgressPercent,
+		&lockedBuild.Build.StagingReference, &lockedBuild.Build.ManifestDigest,
+		&lockedBuild.Build.ProvenanceSHA256, &lockedBuild.Build.ImmutableBuildSHA256,
+		&lockedBuild.Build.UpdatedAt); err != nil {
+		t.Fatal("complete synthetic artifact fixture build")
+	}
+	artifactRef, err := newRef("imgart")
+	if err != nil {
+		t.Fatal("allocate synthetic artifact fixture reference")
+	}
+	var artifactID string
+	if err := repository.pool.QueryRow(ctx, queryRoleImagesInsertArtifact, artifactRef,
+		current.organizationID, lockedBuild.ProjectID, lockedBuild.RecipeID,
+		lockedBuild.Build.RecipeVersion, lockedBuild.Build.RecipeGeneration,
+		lockedBuild.Build.SpecSHA256, lockedBuild.ID, lockedBuild.Build.Version,
+		lockedBuild.Build.Attempt, asJSON(lockedBuild.Specification), lockedBuild.PolicyRevision,
+		lockedBuild.PolicySHA256, lockedBuild.ContractRevision, lockedBuild.ContractSHA256,
+		stagingReference, manifestDigest, lockedBuild.Build.ImmutableBuildSHA256,
+		provenanceSHA256).Scan(&artifactID); err != nil {
+		t.Fatal("insert synthetic artifact fixture")
+	}
+	artifact, err := scanRoleImageArtifact(repository.pool.QueryRow(ctx, queryRoleImagesGetActiveArtifact,
+		current.organizationID, artifactRef))
+	if err != nil {
+		t.Fatal("read synthetic artifact fixture")
+	}
+	return artifactID, artifact
 }

@@ -9,6 +9,12 @@ import (
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 )
 
+// TestProviderModelCatalogProofRejectsUntrustedPrincipalBeforeLookup rejects forged catalog
+// caller/operation/project/digest/actor/tenant before lookup through the direct resolver and
+// applicable generic proof dispatch.
+// TestProviderModelCatalogProofRejectsUntrustedPrincipalBeforeLookup отклоняет поддельные caller,
+// операцию, проект, дайджест, actor и tenant каталога до чтения через прямой resolver и применимую
+// общую диспетчеризацию proof.
 func TestProviderModelCatalogProofRejectsUntrustedPrincipalBeforeLookup(t *testing.T) {
 	base := platformrepo.ProofPrincipalInput{CallerWorkload: "control-plane", Operation: platformrepo.ProviderModelCatalogOperation, RequestDigestSHA256: strings.Repeat("a", 64), ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation"}
 	for name, mutate := range map[string]func(*platformrepo.ProofPrincipalInput){

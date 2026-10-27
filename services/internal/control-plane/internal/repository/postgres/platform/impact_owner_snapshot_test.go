@@ -7,6 +7,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 )
 
+// TestImpactOwnerSnapshotClosed distinguishes invalid requested owner tuples from hidden foreign
+// or mismatched persisted tuples while accepting exact organization/project matches.
+// TestImpactOwnerSnapshotClosed различает неверный запрошенный набор владельца и скрытые чужие
+// либо несовпадающие сохранённые наборы, принимая точное совпадение организации и проекта.
 func TestImpactOwnerSnapshotClosed(t *testing.T) {
 	for _, test := range []struct {
 		name, scope, organization, project, expectedScope, expectedOrganization, expectedProject string

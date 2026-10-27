@@ -45,7 +45,10 @@ import { checkAssistantHistory } from "./fixtures/assistant-history";
 import { expectAssistantConversationActions } from "./assistant-readiness";
 import { checkHomeResults } from "./fixtures/home-results";
 import { checkResumableSessions } from "./fixtures/resumable-sessions";
-import { syntheticBrowserSession } from "./fixtures/browser-session";
+import {
+  installSyntheticCsrf,
+  syntheticBrowserSession,
+} from "./fixtures/browser-session";
 import type { PlatformSnapshotEnvelope } from "../src/shared/api/generated/asyncapi/PlatformSnapshotEnvelope";
 import {
   checkRoleImageCatalog,
@@ -391,16 +394,7 @@ for (const { width, height, part, title } of syntheticJourneyProfiles()) {
       pendingRequests.delete(request);
       fetches.terminal(request);
     });
-    await context.addCookies([
-      {
-        name: "__Host-kodex-csrf",
-        value: "s".repeat(43),
-        domain: "kodex.test",
-        path: "/",
-        secure: true,
-        sameSite: "Strict",
-      },
-    ]);
+    await installSyntheticCsrf(context, "s");
     await context.route("**/*", async (route) => {
       const url = new URL(route.request().url());
       if (

@@ -144,8 +144,13 @@ any(resource("Service"; "email-bridge");
 all($targets[]; .role == "AUTHORIZATION_ISSUER" and .startup_readback_required == true and
   .namespace == "kodex-system" and .service_account == "email-bridge" and
   .database_identity.login_principal == "ira_email_bridge_issuer_g1") and
+# Каждая declared policy сверяется после Kustomize с единственным exact namespaced ресурсом.
+# Spec сохраняет полный набор destinations/ports; лишняя egress-запись также является отказом.
 all($policies[]; . as $expected |
-  any($all[]; .kind == "NetworkPolicy" and .metadata.name == $expected.metadata.name and
-    policy_spec == ($expected | policy_spec))) and
+  [$all[] | select(.kind == "NetworkPolicy" and
+    .metadata.name == $expected.metadata.name and
+    .metadata.namespace == $expected.metadata.namespace)] as $actual |
+  ($actual | length == 1) and
+  ($actual[0] | policy_spec) == ($expected | policy_spec)) and
 all($all[] | select(.kind == "Ingress");
   all(.spec.rules[]?.http.paths[]?; .backend.service.name != "email-bridge"))

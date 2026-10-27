@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
@@ -17,9 +16,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// imageRiskReportFixture builds canonical vulnerability evidence from fixed synthetic matches and
+// returns projection and report digests without running a scanner.
+// imageRiskReportFixture строит каноническое доказательство уязвимостей из фиксированных
+// синтетических совпадений и возвращает дайджесты проекции и отчёта без запуска сканера.
 func imageRiskReportFixture(t *testing.T, artifact entity.ImageArtifact, sbom string, blocking bool) (string, string, string) {
 	t.Helper()
 	matches := "[]"
@@ -40,25 +42,17 @@ func imageRiskReportFixture(t *testing.T, artifact entity.ImageArtifact, sbom st
 	return string(projection), runtimecontract.ImageVulnerabilitySHA256(projection), report.ReportSHA256
 }
 
-// Только disposable PostgreSQL: реальные owner TX, синтетические scanner bytes.
+// TestImageAdmissionRiskComponent checks owner-scoped risk acceptance and fresh admission pins,
+// attempt closure and project-history purge using synthetic scanner evidence.
+// TestImageAdmissionRiskComponent проверяет принятие риска в области владельца, свежие версии
+// допуска, закрытие попыток и очистку истории проекта на синтетических доказательствах сканера.
 func TestImageAdmissionRiskComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
+	var err error
 	defer pool.Close()
-	r, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := r.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3, StagingRepository: "registry.invalid/kodex/staging", PromotedRepository: "registry.invalid/kodex/roles", DefaultImageReference: "registry.invalid/kodex/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
+	r := newNamespacedRoleImageComponentRepository(t, ctx, pool)
 	var graphNodes, graphEdges int
 	var graphNodeHash, graphEdgeHash string
 	if err := pool.QueryRow(ctx, `WITH RECURSIVE nodes(relation_id) AS (SELECT 'control_plane.projects'::regclass::oid UNION SELECT c.conrelid FROM nodes JOIN pg_constraint c ON c.contype='f' AND c.confrelid=nodes.relation_id JOIN pg_namespace n ON n.oid=c.connamespace AND n.nspname='control_plane') SELECT (SELECT count(*) FROM nodes),(SELECT md5(string_agg(n.nspname||'.'||c.relname,E'\n' ORDER BY n.nspname,c.relname)) FROM nodes JOIN pg_class c ON c.oid=nodes.relation_id JOIN pg_namespace n ON n.oid=c.relnamespace),count(*),md5(string_agg(cn.nspname||'.'||cc.relname||'|'||c.conname||'|'||pn.nspname||'.'||pc.relname||'|'||c.confdeltype::text,E'\n' ORDER BY cn.nspname,cc.relname,c.conname)) FROM pg_constraint c JOIN pg_class cc ON cc.oid=c.conrelid JOIN pg_namespace cn ON cn.oid=cc.relnamespace JOIN pg_class pc ON pc.oid=c.confrelid JOIN pg_namespace pn ON pn.oid=pc.relnamespace WHERE c.contype='f' AND c.confrelid IN (SELECT relation_id FROM nodes) AND c.conrelid IN (SELECT relation_id FROM nodes)`).Scan(&graphNodes, &graphNodeHash, &graphEdges, &graphEdgeHash); err != nil {

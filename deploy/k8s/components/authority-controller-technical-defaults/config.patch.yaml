@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: authority-controller-technical-common
+data:
+  OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector.observability.svc:4317
+  OTEL_EXPORTER_OTLP_TLS_SERVER_NAME: otel-collector.observability.svc.cluster.local
+  OTEL_EXPORTER_OTLP_CA_FILE: /var/run/config/kodex/internal-rpc-authority/observability/otel-ca.pem
+  OTEL_TRACES_SAMPLER_ARG: '0.1'
+  SENTRY_DSN_FILE: /var/run/secrets/kodex/internal-rpc-authority/observability/sentry-dsn
+  SENTRY_EXPECTED_HOST: sentry-relay.observability.svc:8443

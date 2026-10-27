@@ -12,6 +12,12 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestRuntimeSessionMCPDependenciesPreserveSemanticPins keeps native tool-context dependencies
+// stable across a fresh identical health observation but changes them with
+// credential/configuration semantics, rejecting an unknown profile without remote MCP access.
+// TestRuntimeSessionMCPDependenciesPreserveSemanticPins сохраняет зависимости контекста нативных
+// инструментов при свежем одинаковом наблюдении здоровья, меняя их при смене семантики credential
+// и конфигурации и отклоняя неизвестный профиль без удалённого MCP-доступа.
 func TestRuntimeSessionMCPDependenciesPreserveSemanticPins(t *testing.T) {
 	grants := []map[string]string{}
 	for index, capability := range []string{runtimecontract.Context7ResolveCapability, runtimecontract.Context7QueryCapability} {

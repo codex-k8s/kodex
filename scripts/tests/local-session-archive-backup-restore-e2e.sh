@@ -15,40 +15,19 @@ usage() {
 context=""
 kubeconfig=""
 state_directory=""
-while (($# > 0)); do
-  case "$1" in
-    --context) context=${2:-}; shift 2 ;;
-    --kubeconfig) kubeconfig=${2:-}; shift 2 ;;
-    --state-directory) state_directory=${2:-}; shift 2 ;;
-    --help) usage; exit 0 ;;
-    *) usage; fail "unsupported argument: $1" ;;
-  esac
-done
+# Общие проверки выбираются рядом со скриптом без смены cwd.
+# shellcheck source=lib/local-kubernetes-e2e.sh
+source "${BASH_SOURCE[0]%"${BASH_SOURCE[0]##*/}"}lib/local-kubernetes-e2e.sh"
+kodex_e2e_parse_storage_cluster_arguments "$@"
 
-confirmation=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION
-[[ ${KODEX_E2E_CONFIRM_DISPOSABLE:-} == "$confirmation" ]] ||
-  fail 'explicit disposable installation confirmation is required'
-[[ -n "$context" && "${context,,}" != *prod* && "${context,,}" != *production* ]] ||
-  fail 'exact non-production context is required'
-[[ "$kubeconfig" == /* && -f "$kubeconfig" && -r "$kubeconfig" && ! -L "$kubeconfig" ]] ||
-  fail 'Kubernetes configuration is absent or unsafe'
-[[ "$state_directory" == /* && -d "$state_directory" && ! -L "$state_directory" ]] ||
-  fail 'state directory is absent or unsafe'
+kodex_e2e_require_disposable_storage_inputs
 for command_name in date go head jq kubectl sed sleep yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 
-export KUBECONFIG="$kubeconfig"
-[[ $(kubectl config current-context) == "$context" ]] || fail 'Kubernetes context mismatch'
-kubectl get --raw=/readyz >/dev/null || fail 'Kubernetes API is unavailable'
-kubectl get namespace/kodex-system -o json | jq -e '
-  .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
-  .metadata.labels["kodex.dev/environment"] == "staging" and
-  .metadata.labels["kodex.dev/local-profile"] == "hot-reload"
-' >/dev/null || fail 'Kodex namespace is not the exact disposable local profile'
+kodex_e2e_require_disposable_storage_cluster
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
-source "$repository_root/scripts/tests/lib/local-kubernetes-e2e.sh"
 kodex_e2e_ensure_private_directory "$state_directory/e2e" ||
   fail 'private E2E state directory is unavailable'
 temporary_directory=$(mktemp -d "$state_directory/e2e/session-archive-backup.XXXXXX")

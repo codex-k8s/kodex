@@ -1,5 +1,4 @@
 import {
-  createRenderer,
   defineComponent,
   h,
   nextTick,
@@ -9,6 +8,7 @@ import {
   type Ref,
   type SetupContext,
 } from "vue";
+import { createLifecycleTestRenderer } from "@/test-utils/lifecycle-renderer";
 import { createI18n } from "vue-i18n";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -139,20 +139,7 @@ async function settle(): Promise<void> {
 }
 function mountCard(system: boolean): State {
   let state!: State;
-  const renderer = createRenderer<Record<string, never>, Record<string, never>>(
-    {
-      patchProp() {},
-      insert() {},
-      remove() {},
-      createElement: () => ({}),
-      createText: () => ({}),
-      createComment: () => ({}),
-      setText() {},
-      setElementText() {},
-      parentNode: () => null,
-      nextSibling: () => null,
-    },
-  );
+  const renderer = createLifecycleTestRenderer();
   const setup = (
     Card as unknown as {
       setup: (props: Record<string, unknown>, context: SetupContext) => State;

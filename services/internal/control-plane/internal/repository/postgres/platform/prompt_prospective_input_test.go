@@ -8,6 +8,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestPromptProspectiveWorkflowInput allows missing declared fields only for prospective preview,
+// validates supplied typed values and bounds, and preserves required runtime schema rules.
+// TestPromptProspectiveWorkflowInput допускает отсутствие объявленных полей только при
+// предварительном просмотре, проверяет типы и пределы переданных значений и сохраняет требования
+// runtime-схемы.
 func TestPromptProspectiveWorkflowInput(t *testing.T) {
 	fields := []entity.WorkflowInputField{
 		{Key: "text", Type: "TEXT", Required: true},
@@ -44,6 +49,11 @@ func TestPromptProspectiveWorkflowInput(t *testing.T) {
 	}
 }
 
+// TestPromptProspectiveMissingInputsAreUnavailable marks absent declared input and aggregate
+// values unavailable while retaining supplied values and the original task-origin diagnostic.
+// TestPromptProspectiveMissingInputsAreUnavailable помечает отсутствующие объявленные поля и
+// совокупное значение input недоступными, сохраняя переданные значения и исходную диагностику
+// происхождения задачи.
 func TestPromptProspectiveMissingInputsAreUnavailable(t *testing.T) {
 	snapshot := entity.PromptMaterializationSnapshot{UnavailableVariables: map[string]string{"task": "ORIGIN_REQUIRED"}}
 	fields := []entity.WorkflowInputField{{Key: "provided", Required: true}, {Key: "missing", Required: true}, {Key: "optional"}}

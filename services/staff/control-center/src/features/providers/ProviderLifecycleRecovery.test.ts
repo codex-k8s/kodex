@@ -1,6 +1,8 @@
+import { createTestStorage as storage } from "@/test-utils/storage";
+import { createDeferredWithCleanup } from "@/test-utils/create-deferred";
+import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  createRenderer,
   defineComponent,
   nextTick,
   reactive,
@@ -59,31 +61,7 @@ const source = ProviderLifecycleRecovery as unknown as {
 const disposers: (() => void)[] = [];
 const settleRequests: (() => void)[] = [];
 function deferred() {
-  let resolve!: (value: ProviderLifecycleResult) => void;
-  let reject!: (error: unknown) => void;
-  const promise = new Promise<ProviderLifecycleResult>((yes, no) => {
-    resolve = yes;
-    reject = no;
-  });
-  settleRequests.push(() => resolve(result));
-  return { promise, resolve, reject };
-}
-function storage(): Storage {
-  const values = new Map<string, string>();
-  return {
-    get length() {
-      return values.size;
-    },
-    key: (index) => [...values.keys()][index] ?? null,
-    clear: () => values.clear(),
-    getItem: (key) => values.get(key) ?? null,
-    setItem: (key, value) => {
-      values.set(key, value);
-    },
-    removeItem: (key) => {
-      values.delete(key);
-    },
-  };
+  return createDeferredWithCleanup(settleRequests, result);
 }
 function mount(problem?: unknown) {
   const data = storage();
@@ -93,18 +71,7 @@ function mount(problem?: unknown) {
   const pending = vi.fn();
   const recovered = vi.fn();
   let state!: State;
-  const renderer = createRenderer<object, object>({
-    insert() {},
-    remove() {},
-    createElement: () => ({}),
-    createText: () => ({}),
-    createComment: () => ({}),
-    setText() {},
-    setElementText() {},
-    parentNode: () => null,
-    nextSibling: () => null,
-    patchProp() {},
-  });
+  const renderer = createNoopRenderer();
   const app = renderer.createApp(
     defineComponent({
       emits: ["pending", "recovered"],

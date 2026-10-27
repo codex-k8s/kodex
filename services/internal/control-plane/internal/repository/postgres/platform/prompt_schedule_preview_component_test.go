@@ -15,6 +15,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testScheduleMaterializedPreview checks saved versus draft/continuation preview actor, revision,
+// Session and runtime-diff pins, rejects stale or changed saved specifications and proves preview
+// does not mutate the Schedule.
+// testScheduleMaterializedPreview проверяет привязки actor, ревизии, Session и runtime diff
+// сохранённого, чернового и продолжаемого предпросмотра, отклоняет устаревшую и изменённую
+// сохранённую спецификацию и доказывает отсутствие изменения Schedule предпросмотром.
 func testScheduleMaterializedPreview(t *testing.T, ctx context.Context, r *Repository, service *platformservice.Service, owner value.Principal, schedule *entity.Schedule, continued bool) {
 	t.Helper()
 	current, err := service.GetSchedule(ctx, owner, schedule.Ref)

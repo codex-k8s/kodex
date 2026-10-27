@@ -1,3 +1,4 @@
+import { runtimePolicyFixture } from "@/test-utils/runtime-policy-fixture";
 import { initializeRuntimeOwnerFixture } from "@/test-utils/runtime-owner-fixture";
 import { beforeEach, describe, expect, it } from "vitest";
 import { editableAssistantEnvironment } from "./environment-settings";
@@ -46,25 +47,12 @@ function environment(projectRef?: string): RuntimeEnvironmentSet {
           contentSha256: "b".repeat(64),
         },
       ],
-      policy: {
-        resources: policy.resources,
-        volumes: [],
-        network: {
-          denyByDefault: true,
-          egress: [
-            { destination: "DNS", protocol: "TCP", port: 53 },
-            { destination: "DNS", protocol: "UDP", port: 53 },
-            { destination: "PROVIDER_PROXY", protocol: "TCP", port: 8084 },
-            { destination: "RUNTIME_CALLBACK", protocol: "TCP", port: 8444 },
-          ],
-          webAccess: { mode: "NONE", rules: [] },
-        },
-        kubernetesAccess: { kind: "NONE", namespace: "kodex-runtime" },
+      policy: runtimePolicyFixture(policy.resources, {
         resourcesDigest: "c".repeat(64),
         volumesDigest: "d".repeat(64),
         networkDigest: "e".repeat(64),
         rbacDigest: "f".repeat(64),
-      },
+      }),
       digest: "a".repeat(64),
       createdAt: "2026-10-03T00:00:00Z",
     },

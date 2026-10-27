@@ -8,6 +8,11 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestRuntimeSessionHistoryPreservesWholeMessages preserves complete bounded Unicode/escaped
+// message bodies and returns independent message maps instead of aliases of the source snapshot.
+// TestRuntimeSessionHistoryPreservesWholeMessages сохраняет полные ограниченные Unicode и
+// экранируемые тела сообщений и возвращает независимые maps сообщений вместо ссылок на исходный
+// снимок.
 func TestRuntimeSessionHistoryPreservesWholeMessages(t *testing.T) {
 	original := `{"operations":[{"instructions":"` + strings.Repeat("Полный JSON 😀 <>& ", 600) + `"}],"complete":true}`
 	for _, content := range []string{original, strings.Repeat("😀", 32768), strings.Repeat("\x01", 32768)} {
@@ -23,6 +28,12 @@ func TestRuntimeSessionHistoryPreservesWholeMessages(t *testing.T) {
 	}
 }
 
+// TestRuntimeSessionHistoryBudgetDropsWholeOldestPrefix enforces encoded JSON byte and
+// twenty-message budgets by dropping whole oldest prefixes; an invalid message cuts off earlier
+// context rather than allowing a history rejoin.
+// TestRuntimeSessionHistoryBudgetDropsWholeOldestPrefix соблюдает лимиты байтов закодированного
+// JSON и двадцати сообщений удалением целого старого префикса; неверное сообщение отсекает ранний
+// контекст вместо повторного присоединения истории.
 func TestRuntimeSessionHistoryBudgetDropsWholeOldestPrefix(t *testing.T) {
 	// HTML escaping делает каждое такое сообщение около 192KiB в JSON.
 	content := strings.Repeat("&", runtimecontract.MaximumAssistantTurnCodepoints)

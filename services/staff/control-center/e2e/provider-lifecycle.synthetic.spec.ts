@@ -1,3 +1,4 @@
+import { installSyntheticCsrf } from "./fixtures/browser-session";
 import { expect, test, type Page, type WebSocketRoute } from "@playwright/test";
 import type {
   ProviderAccount,
@@ -178,16 +179,7 @@ async function install(page: Page, failedDeletion = false) {
       });
     },
   );
-  await page.context().addCookies([
-    {
-      name: "__Host-kodex-csrf",
-      value: "c".repeat(43),
-      domain: "kodex.test",
-      path: "/",
-      secure: true,
-      sameSite: "Strict",
-    },
-  ]);
+  await installSyntheticCsrf(page.context(), "c");
   await page.route("**/*", async (route) => {
     const request = route.request(),
       url = new URL(request.url());

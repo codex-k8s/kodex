@@ -1,0 +1,71 @@
+# Exact container0 names проверены перед позиционными операциями; UID/GID/fsGroup не меняются.
+- op: add
+  path: /spec/replicas
+  value: 2
+- op: add
+  path: /spec/minReadySeconds
+  value: 10
+- op: add
+  path: /spec/strategy
+  value:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+- op: add
+  path: /spec/template/spec/automountServiceAccountToken
+  value: false
+- op: add
+  path: /spec/template/spec/terminationGracePeriodSeconds
+  value: 30
+- op: add
+  path: /spec/template/spec/securityContext/runAsNonRoot
+  value: true
+- op: add
+  path: /spec/template/spec/securityContext/fsGroupChangePolicy
+  value: OnRootMismatch
+- op: add
+  path: /spec/template/spec/securityContext/seccompProfile
+  value:
+    type: RuntimeDefault
+- op: add
+  path: /spec/template/spec/containers/0/image
+  value: ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
+- op: add
+  path: /spec/template/spec/containers/0/imagePullPolicy
+  value: IfNotPresent
+- op: add
+  path: /spec/template/spec/containers/0/readinessProbe
+  value:
+    httpGet:
+      path: /readyz
+      port: technical
+    timeoutSeconds: 3
+    periodSeconds: 5
+    failureThreshold: 3
+- op: add
+  path: /spec/template/spec/containers/0/livenessProbe
+  value:
+    httpGet:
+      path: /healthz
+      port: technical
+    timeoutSeconds: 2
+    periodSeconds: 10
+    failureThreshold: 3
+- op: add
+  path: /spec/template/spec/containers/0/resources
+  value:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+- op: add
+  path: /spec/template/spec/containers/0/securityContext
+  value:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+      - ALL

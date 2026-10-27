@@ -10,9 +10,22 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryAssistantProjectMovePendingPlans embeds detection of any conversation plan not APPLIED or
+// REJECTED in the exact organization. Such a plan blocks moving the conversation into a project.
+// queryAssistantProjectMovePendingPlans встраивает поиск любого плана разговора вне APPLIED и
+// REJECTED в точной организации. Такой план блокирует перенос разговора в проект.
+//
 //go:embed sql/assistant_project_move_pending_plans.sql
 var queryAssistantProjectMovePendingPlans string
 
+// authorizeAssistantProjectMove requires typed conversation/project refs and expected-version
+// presence, reuses actor-owned archive admission, requires a SYSTEM assistant and a compatible
+// current project, then checks target project.view and resolves its private ID. It returns locked
+// owner metadata; version/busy/state checks remain with the transition.
+// authorizeAssistantProjectMove требует типизированные ссылки разговора и проекта и наличие
+// ожидаемой версии, использует проверку архива владельца, требует SYSTEM ассистента и совместимый
+// текущий проект, затем проверяет project.view цели и разрешает внутренний ID. Возвращает
+// заблокированные данные владельца; версию, занятость и состояние проверяет переход.
 func (repository *Repository) authorizeAssistantProjectMove(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (assistantArchiveOwner, string, error) {
 	payload, ok := input.Payload.(command.AssistantConversationProjectInput)
 	if !ok || payload.ConversationRef == "" || payload.ProjectRef == "" || input.Mutation.ExpectedVersion == nil {
@@ -47,6 +60,14 @@ func (repository *Repository) authorizeAssistantProjectMove(ctx context.Context,
 	return owner, projectID, nil
 }
 
+// moveAssistantConversationToProject version-checks an ACTIVE, idle, projectless conversation and
+// rejects nonterminal plans before resolving the target project context. It promotes the
+// conversation and requires readback of the exact project and version+1, returning
+// SYSTEM_ASSISTANT_CHANGED without committing the caller transaction.
+// moveAssistantConversationToProject проверяет версию ACTIVE незанятого разговора без проекта и
+// отклоняет незавершённые планы до разрешения целевого контекста проекта. Переносит разговор и
+// требует повторного чтения точного проекта и версии+1, возвращая SYSTEM_ASSISTANT_CHANGED без
+// завершения транзакции вызывающего кода.
 func (repository *Repository) moveAssistantConversationToProject(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, error) {
 	owner, projectID, err := repository.authorizeAssistantProjectMove(ctx, tx, current, input)
 	if err != nil {

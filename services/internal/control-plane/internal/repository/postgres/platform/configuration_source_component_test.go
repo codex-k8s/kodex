@@ -16,6 +16,17 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testConfigurationSourceLifecycle exercises source configure/claim/complete/replay, unchanged
+// publication, periodic/explicit refresh, bounded failure retry and stale-lease/detach denial in
+// the supplied disposable owner suite. It seeds only a synthetic immutable credential descriptor,
+// checks saved source/history provenance, invokes the write-back scenario and then role-image
+// source publication; no provider secret value or actual Git network fetch is supplied.
+// testConfigurationSourceLifecycle проверяет source configure/claim/complete/replay, unchanged
+// publication, periodic/explicit refresh, bounded failure retry и stale-lease/detach denial в
+// переданном disposable owner suite. Подготавливает только synthetic immutable credential
+// descriptor, проверяет сохранённые source/history provenance, вызывает write-back scenario и
+// затем role-image source publication; provider secret value либо actual Git network fetch не
+// передаются.
 func testConfigurationSourceLifecycle(t *testing.T, ctx context.Context, repository *Repository, service *serviceplatform.Service, owner value.Principal) {
 	t.Helper()
 	created, err := service.Execute(ctx, command.Command{Kind: command.CreateConnection, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "cfg-source-connection"},
@@ -163,6 +174,14 @@ func testConfigurationSourceLifecycle(t *testing.T, ctx context.Context, reposit
 	testRoleImageSourcePublication(t, ctx, repository, service, owner, worker, connection.Ref, connection.Version)
 }
 
+// testRoleImageSourcePublication configures a synthetic project role-image Git source using the
+// supplied connection, claims exact work and completes its INITIAL content through the service. It
+// requires exactly one queued build mapped to the accepted revision and idempotent completion
+// replay, without executing a builder or registry operation.
+// testRoleImageSourcePublication настраивает synthetic project role-image Git source с переданной
+// connection, получает точную work и завершает её INITIAL content через service. Требует ровно
+// одну queued build, связанную с accepted revision, и idempotent completion replay без исполнения
+// builder либо registry operation.
 func testRoleImageSourcePublication(t *testing.T, ctx context.Context, repository *Repository, service *serviceplatform.Service, owner, worker value.Principal, connectionRef string, connectionVersion int64) {
 	t.Helper()
 	catalog, _ := promotionComponentCatalog(t)

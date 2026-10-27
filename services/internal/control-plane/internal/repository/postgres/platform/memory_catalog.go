@@ -21,30 +21,12 @@ import (
 func (repository *Repository) ListMemoryRecords(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.KodexMemoryRecord, int64, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	current, err := repository.resolveScope(ctx, principal)
-	if err != nil {
-		return nil, 0, "", err
-	}
-	cursor, err := decodeCatalogCursor(current, "MEMORY_RECORD", filter)
-	if err != nil {
-		return nil, 0, "", err
-	}
-	limit := boundedPage(filter.Page)
-	items, total, err := scanJSONCatalog[entity.KodexMemoryRecord](repository.pool.QueryRow(ctx, queryMemoryRecordList, pgx.StrictNamedArgs{
-		"organization_id": current.organizationID, "actor_id": current.actorID,
-		"authority_project": current.authorityProjectID, "project_ref": filter.ProjectRef,
-		"agent_ref": filter.ResourceRef, "state": filter.State, "query": filter.Query,
-		"cursor_ref": cursor, "page_size": limit + 1, "evaluated_at": time.Now().UTC(),
-	}))
-	if err != nil {
-		return nil, 0, "", err
-	}
-	next := ""
-	if len(items) > int(limit) {
-		items = items[:limit]
-		next = encodeCatalogCursor(current, "MEMORY_RECORD", filter, items[len(items)-1].Ref)
-	}
-	return items, total, next, nil
+	return readScopedContextCatalogPage[entity.KodexMemoryRecord](ctx, repository, principal, "MEMORY_RECORD", filter,
+		func(current scope, cursor string, limit int32) pgx.Row {
+			return repository.pool.QueryRow(ctx, queryMemoryRecordList, contextCatalogPageArgs(current, filter, cursor, limit))
+		},
+		func(item entity.KodexMemoryRecord) string { return item.Ref },
+	)
 }
 
 // ListMemoryRecordRevisions resolves and authorizes the current memory record
@@ -56,25 +38,10 @@ func (repository *Repository) ListMemoryRecords(ctx context.Context, principal v
 func (repository *Repository) ListMemoryRecordRevisions(ctx context.Context, principal value.Principal, ref string, page query.Page) ([]entity.MemoryRecordRevision, int64, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	current, err := repository.resolveScope(ctx, principal)
-	if err != nil {
-		return nil, 0, "", err
-	}
 	filter := query.Filter{ResourceRef: ref, Page: page}
-	cursor, err := decodeCatalogCursor(current, "MEMORY_REVISION", filter)
+	current, before, tx, err := repository.beginContextCatalogRevision(ctx, principal, "MEMORY_REVISION", filter, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return nil, 0, "", err
-	}
-	var before int64
-	if cursor != "" {
-		before, err = strconv.ParseInt(cursor, 10, 64)
-		if err != nil || before < 1 {
-			return nil, 0, "", errs.ErrInvalid
-		}
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return nil, 0, "", errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	record, err := scanMemoryRecord(tx.QueryRow(ctx, queryMemoryRecordGet, current.organizationID, ref))
@@ -92,11 +59,7 @@ func (repository *Repository) ListMemoryRecordRevisions(ctx context.Context, pri
 	if err != nil {
 		return nil, 0, "", err
 	}
-	next := ""
-	if len(items) > int(limit) {
-		items = items[:limit]
-		next = encodeCatalogCursor(current, "MEMORY_REVISION", filter, strconv.FormatInt(items[len(items)-1].Revision, 10))
-	}
+	items, next := catalogPageWithCursor(current, "MEMORY_REVISION", filter, items, limit, func(item entity.MemoryRecordRevision) string { return strconv.FormatInt(item.Revision, 10) })
 	if tx.Commit(ctx) != nil {
 		return nil, 0, "", errs.ErrUnavailable
 	}

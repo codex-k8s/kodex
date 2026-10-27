@@ -8,6 +8,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
 // ListInteractionSources reads authorized sources, requires a typed nonempty credential revision
@@ -15,31 +16,30 @@ import (
 // ListInteractionSources читает авторизованные источники, требует типизированную непустую ревизию
 // credential и преобразует метаданные определения, подключения и возможностей.
 func (server *Server) ListInteractionSources(ctx context.Context, _ *controlplanev1.ListInteractionSourcesRequest) (*controlplanev1.ListInteractionSourcesResponse, error) {
-	p, err := principal(ctx, controlplanev1.InteractionWorkService_ListInteractionSources_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	items, err := server.service.ListInteractionSources(ctx, p)
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.ListInteractionSourcesResponse{}
-	for _, item := range items {
-		credential, ok := item["credential"].(entity.IntegrationCredentialRevision)
-		if !ok || credential.Ref == "" {
-			return nil, transportError(errs.ErrUnavailable)
+	return queryResponse(ctx, controlplanev1.InteractionWorkService_ListInteractionSources_FullMethodName, func(p value.Principal) (*controlplanev1.ListInteractionSourcesResponse, error) {
+		items, err := server.service.ListInteractionSources(ctx, p)
+		if err != nil {
+			return nil, err
 		}
-		response.Sources = append(response.Sources, &controlplanev1.InteractionSource{
-			DefinitionKey: mapString(item, "definitionKey"), DefinitionVersion: mapString(item, "definitionVersion"), DefinitionDigest: mapString(item, "definitionDigest"), DefinitionPackage: interactionPackageBytes(item),
-			CredentialDescriptor: castIntegrationCredential(credential),
-			ConnectionRef:        mapString(item, "connectionRef"), CredentialMaterializationRef: mapString(item, "credentialRef"),
-			BaseUrl: mapString(item, "baseURL"), TeamName: mapString(item, "teamName"),
-			ChannelName: mapString(item, "channelName"), Locale: mapString(item, "locale"),
-			EnabledCapabilities: itemStrings(item, "capabilities"),
-			ConnectionVersion:   mapInt64(item, "connectionVersion"), CredentialRevisionRef: mapString(item, "credentialRevisionRef"), CredentialRevision: mapInt64(item, "credentialRevision"),
-		})
-	}
-	return response, nil
+		response := &controlplanev1.ListInteractionSourcesResponse{}
+		for _, item := range items {
+			credential, ok := item["credential"].(entity.IntegrationCredentialRevision)
+			if !ok || credential.Ref == "" {
+				return nil, errs.ErrUnavailable
+			}
+			response.Sources = append(response.Sources, &controlplanev1.InteractionSource{
+				DefinitionKey: mapString(item, "definitionKey"), DefinitionVersion: mapString(item, "definitionVersion"), DefinitionDigest: mapString(item, "definitionDigest"), DefinitionPackage: interactionPackageBytes(item),
+				CredentialDescriptor: castIntegrationCredential(credential),
+				ConnectionRef:        mapString(item, "connectionRef"), CredentialMaterializationRef: mapString(item, "credentialRef"),
+				BaseUrl: mapString(item, "baseURL"), TeamName: mapString(item, "teamName"),
+				ChannelName: mapString(item, "channelName"), Locale: mapString(item, "locale"),
+				EnabledCapabilities: itemStrings(item, "capabilities"),
+				ConnectionVersion:   mapInt64(item, "connectionVersion"), CredentialRevisionRef: mapString(item, "credentialRevisionRef"), CredentialRevision: mapInt64(item, "credentialRevision"),
+			})
+		}
+		return response, nil
+
+	})
 }
 
 // ClaimInteractionDeliveries reads workload delivery claims, requires typed credential metadata
@@ -93,14 +93,9 @@ func (server *Server) CompleteInteractionDelivery(ctx context.Context, request *
 		UnknownOutcome: request.GetUnknownOutcome(), ConfirmedNoEffect: request.GetConfirmedNoEffect(),
 		ExternalTeamRef: request.GetExternalTeamRef(), ExternalChannelRef: request.GetExternalChannelRef(),
 	}
-	result, err := execute(ctx, server.service, controlplanev1.InteractionWorkService_CompleteInteractionDelivery_FullMethodName, command.CompleteInteractionDelivery, request.GetMutation(), payload)
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.CompleteInteractionDeliveryResponse{
-		DeliveryRef: mapString(result.Runtime, "deliveryRef"), State: mapString(result.Runtime, "state"),
-		CoreRunAffected: false,
-	}, nil
+	return executeResponse(ctx, server.service, controlplanev1.InteractionWorkService_CompleteInteractionDelivery_FullMethodName, command.CompleteInteractionDelivery, request.GetMutation(), payload, func(result command.Result) *controlplanev1.CompleteInteractionDeliveryResponse {
+		return &controlplanev1.CompleteInteractionDeliveryResponse{DeliveryRef: mapString(result.Runtime, "deliveryRef"), State: mapString(result.Runtime, "state"), CoreRunAffected: false}
+	})
 }
 
 // AcceptInteractionMessage converts the optional gate decision and passes external message
@@ -119,15 +114,9 @@ func (server *Server) AcceptInteractionMessage(ctx context.Context, request *con
 		Message: request.GetMessage(), Decision: decision,
 		ExternalTeamRef: request.GetExternalTeamRef(), GateRef: request.GetGateRef(), RunRef: request.GetRunRef(), ExpectedGateVersion: request.GetExpectedGateVersion(),
 	}
-	result, err := execute(ctx, server.service, controlplanev1.InteractionWorkService_AcceptInteractionMessage_FullMethodName, command.AcceptInteractionMessage, request.GetMutation(), payload)
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.AcceptInteractionMessageResponse{
-		Outcome:             interactionOutcome(mapString(result.Runtime, "outcome")),
-		MessageKey:          strings.TrimPrefix(mapString(result.Runtime, "messageKey"), "i18n:"),
-		AcceptedResourceRef: mapString(result.Runtime, "acceptedResourceRef"),
-	}, nil
+	return executeResponse(ctx, server.service, controlplanev1.InteractionWorkService_AcceptInteractionMessage_FullMethodName, command.AcceptInteractionMessage, request.GetMutation(), payload, func(result command.Result) *controlplanev1.AcceptInteractionMessageResponse {
+		return &controlplanev1.AcceptInteractionMessageResponse{Outcome: interactionOutcome(mapString(result.Runtime, "outcome")), MessageKey: strings.TrimPrefix(mapString(result.Runtime, "messageKey"), "i18n:"), AcceptedResourceRef: mapString(result.Runtime, "acceptedResourceRef")}
+	})
 }
 
 // interactionPackageBytes copies the definition package byte slice so the returned payload does

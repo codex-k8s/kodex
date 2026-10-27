@@ -8,6 +8,7 @@ require (
 	github.com/codex-k8s/kodex/libs/go/grpcserver v0.0.0
 	github.com/codex-k8s/kodex/libs/go/httpserver v0.0.0
 	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0
+	github.com/codex-k8s/kodex/libs/go/kubernetestransport v0.0.0
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
 	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0
 	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0
@@ -74,6 +75,8 @@ replace github.com/codex-k8s/kodex/libs/go/httpserver => ../../../libs/go/httpse
 replace github.com/codex-k8s/kodex/libs/go/exactkubernetessecret => ../../../libs/go/exactkubernetessecret
 
 replace github.com/codex-k8s/kodex/libs/go/internalrpcauth => ../../../libs/go/internalrpcauth
+
+replace github.com/codex-k8s/kodex/libs/go/kubernetestransport => ../../../libs/go/kubernetestransport
 
 replace github.com/codex-k8s/kodex/libs/go/observability => ../../../libs/go/observability
 

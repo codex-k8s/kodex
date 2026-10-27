@@ -45,11 +45,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 	}
 	startup, cancel := context.WithTimeout(lifecycle, config.StartupTimeout)
 	defer cancel()
-	telemetryConfig, err := sharedobservability.RuntimeConfigFromEnv(serviceName, buildVersion)
-	if err != nil {
-		return err
-	}
-	telemetry, err := sharedobservability.NewRuntime(startup, telemetryConfig)
+	telemetry, err := sharedobservability.NewRuntimeFromEnv(startup, serviceName, buildVersion)
 	if err != nil {
 		return err
 	}

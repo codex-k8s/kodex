@@ -5,6 +5,11 @@ import (
 	"testing"
 )
 
+// TestRunAssistantPinRejectsIdentityMismatch checks explicit SYSTEM or matching PROJECT assistant
+// pins and rejects missing/unknown scope, foreign project or assistant identity.
+// TestRunAssistantPinRejectsIdentityMismatch проверяет явные привязки SYSTEM либо совпадающего
+// PROJECT ассистента и отклоняет отсутствующую и неизвестную область, чужой проект и идентичность
+// ассистента.
 func TestRunAssistantPinRejectsIdentityMismatch(t *testing.T) {
 	t.Parallel()
 	run := entity.Run{Target: entity.RunTarget{Ref: "agt_fixture01"}}

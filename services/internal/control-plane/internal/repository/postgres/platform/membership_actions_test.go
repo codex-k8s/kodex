@@ -6,6 +6,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestMembershipSelfActions hides project/platform membership actions on the owner self-entry
+// while exposing EDIT and REVOKE for another member.
+// TestMembershipSelfActions скрывает действия над участием самого владельца в проекте и платформе,
+// сохраняя EDIT и REVOKE для другого участника.
 func TestMembershipSelfActions(t *testing.T) {
 	owner := scope{actorRef: "user_owner", role: "OWNER"}
 	self := entity.Membership{User: entity.User{Ref: owner.actorRef}, Role: "OWNER", Active: true}

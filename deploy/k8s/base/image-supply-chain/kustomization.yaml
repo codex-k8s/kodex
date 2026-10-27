@@ -36,3 +36,21 @@ configMapGenerator:
       - release-artifact-materializer.sh
 generatorOptions:
   disableNameSuffixHash: true
+components:
+  - ../../components/observability-egress-common
+  - ../../components/image-registry-technical-defaults
+# Общая policy data является единственным источником начальных значений typed admission parameters.
+replacements:
+- source:
+    version: v1
+    kind: ConfigMap
+    name: kodex-image-admission-policy
+    fieldPath: data
+  targets:
+  - select:
+      group: supplychain.kodex.dev
+      version: v1alpha1
+      kind: ImageAdmissionPolicyParameters
+      name: kodex-image-admission-policy
+    fieldPaths:
+    - spec

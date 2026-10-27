@@ -18,5 +18,8 @@
     "issuer-networkpolicy.yaml",
     "authority-networkpolicy.yaml"
   ],
-  "components": ["../../components/internal-rpc-authority-email-bridge-issuer"]
+  "components": [
+    "../../components/internal-rpc-authority-email-bridge-issuer",
+    "../../components/internal-rpc-authority-namespaced-network-egress-common"
+  ]
 }

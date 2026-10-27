@@ -13,13 +13,15 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
-	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
-	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// preparedObjectsFixture wraps test object storage with a put counter, optional blocking channels
+// and synthetic unavailability for upload and cleanup races.
+// preparedObjectsFixture оборачивает тестовое хранилище счётчиком записей, необязательными
+// блокирующими каналами и синтетической недоступностью для гонок загрузки и очистки.
 type preparedObjectsFixture struct {
 	*objectstoragetest.Store
 	puts             atomic.Int64
@@ -27,13 +29,15 @@ type preparedObjectsFixture struct {
 	entered, release chan struct{}
 }
 
+// TestPreparedContentBindingComponent checks prepared-content adoption, immutable bindings and
+// cleanup fences without restoring purged bytes or changing native plan receipts.
+// TestPreparedContentBindingComponent проверяет принятие подготовленного содержимого, неизменяемые
+// привязки и ограничения очистки без восстановления удалённых данных и изменения квитанций планов.
 func TestPreparedContentBindingComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
+	var err error
 	defer pool.Close()
 	var graph string
 	if err := pool.QueryRow(ctx, `SELECT substring(pg_get_functiondef('control_plane.purge_project_database(uuid,uuid,text)'::regprocedure) FROM 'IF v_nodes <> [0-9]+ OR v_node_fingerprint <> ''[a-f0-9]{32}'' THEN') || E'\n' || substring(pg_get_functiondef('control_plane.purge_project_database(uuid,uuid,text)'::regprocedure) FROM 'IF v_edges <> [0-9]+ OR v_edge_fingerprint <> ''[a-f0-9]{32}'' THEN')`).Scan(&graph); err != nil {
@@ -45,30 +49,9 @@ func TestPreparedContentBindingComponent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	configureComponentArtifactScanner(t, repository)
-	if err := repository.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
-		t.Fatal(err)
-	}
-	if err := repository.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3, StagingRepository: "registry.invalid/staging", PromotedRepository: "registry.invalid/roles", DefaultImageReference: "registry.invalid/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
-		t.Fatal(err)
-	}
-	if err := repository.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
+	configureSyntheticArtifactComponent(t, ctx, repository)
 	prepareObservedWarmFixture(t, ctx, repository)
-	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.assistant.conversations.create"}, "control-api-gateway")
-	service, err := platformservice.New(repository)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assistant, err := service.GetSystemAssistant(ctx, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	warm := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "runtime-controller", Operation: "platform.runtime.warm.report"}, "runtime-controller")
-	if _, err := service.ReportWarmRuntime(ctx, warm, command.WarmRuntimeInput{WorkloadInstance: "catalog-observed-warm-fixture", RuntimeRevision: assistant.DesiredRuntimeRevision, State: "READY"}); err != nil {
-		t.Fatal(err)
-	}
+	service, owner := newPreparedContentComponentService(t, ctx, repository)
 	projectResult, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "ledger-binding-project"}, Payload: command.ProjectInput{Name: "Ledger binding", Language: "ru"}})
 	if err != nil {
 		t.Fatal(err)
@@ -149,13 +132,7 @@ func TestPreparedContentBindingComponent(t *testing.T) {
 	if err := tx.QueryRow(ctx, `INSERT INTO control_plane.artifacts(ref,organization_id,project_id,file_name,media_type,size_bytes,digest,source,scan_state,object_receipt_ref,preview_state,revision,created_by) VALUES ($1,$2,$3,'file.txt','text/plain',3,$4,'CONTROL_CENTER','CLEAN','obj_binding_component','AVAILABLE',1,$5) RETURNING id::text,revision_id::text`, content.ArtifactRef, orgID, projectID, request.Digest, actorID).Scan(&artifactID, &revisionID); err != nil {
 		t.Fatal(err)
 	}
-	scanJSON, err := artifactAntivirusJSON(content.Prepared.Antivirus)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := tx.Exec(ctx, `INSERT INTO control_plane.artifact_content(artifact_id,object_key,object_version,object_etag,digest,size_bytes,antivirus_report) VALUES ($1,$2,$3,$4,$5,3,$6)`, artifactID, content.Prepared.ObjectKey, content.Prepared.ObjectVersion, content.Prepared.ObjectETag, content.Prepared.Digest, scanJSON); err != nil {
-		t.Fatal(err)
-	}
+	insertPreparedContentComponentReceipt(t, ctx, tx, artifactID, content.Prepared)
 	if err := repository.adoptPreparedContentTx(ctx, tx, current, content.LedgerID, revisionID); err != nil {
 		t.Fatal(err)
 	}
@@ -285,17 +262,7 @@ func TestPreparedContentBindingComponent(t *testing.T) {
 		if _, err := pool.Exec(ctx, `INSERT INTO control_plane.assistant_plan_revisions(ref,organization_id,plan_id,revision,summary,operations,content_digest,created_by_kind,created_by_ref) VALUES ('prev_cleanup_component',$1,$2,1,'Synthetic',$3,repeat('a',64),'USER','actor_binding_component')`, orgID, pendingPlanID, pendingOperations); err != nil {
 			t.Fatal(err)
 		}
-		link, err := pool.Begin(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := repository.linkPreparedContentTx(ctx, link, current, pending.LedgerID, pendingPlanID, 1, binding.OperationKey); err != nil {
-			link.Rollback(ctx)
-			t.Fatal(err)
-		}
-		if err := link.Commit(ctx); err != nil {
-			t.Fatal(err)
-		}
+		linkPreparedContentComponentPlan(t, ctx, repository, pool, current, pending.LedgerID, pendingPlanID, binding.OperationKey)
 		if _, err := pool.Exec(ctx, `UPDATE control_plane.prepared_content SET available_until=clock_timestamp()-interval '1 minute',writer_deadline=clock_timestamp()-interval '1 minute' WHERE id=$1`, pending.LedgerID); err != nil {
 			t.Fatal(err)
 		}
@@ -382,17 +349,7 @@ func TestPreparedContentBindingComponent(t *testing.T) {
 		if _, err := pool.Exec(ctx, `INSERT INTO control_plane.assistant_plan_revisions(ref,organization_id,plan_id,revision,summary,operations,content_digest,created_by_kind,created_by_ref) VALUES ('prev_terminal_component',$1,$2,1,'Synthetic',$3,repeat('a',64),'USER','actor_binding_component')`, orgID, terminalPlanID, terminalOperations); err != nil {
 			t.Fatal(err)
 		}
-		link, err := pool.Begin(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := repository.linkPreparedContentTx(ctx, link, current, terminal.LedgerID, terminalPlanID, 1, binding.OperationKey); err != nil {
-			link.Rollback(ctx)
-			t.Fatal(err)
-		}
-		if err := link.Commit(ctx); err != nil {
-			t.Fatal(err)
-		}
+		linkPreparedContentComponentPlan(t, ctx, repository, pool, current, terminal.LedgerID, terminalPlanID, binding.OperationKey)
 		if _, err := pool.Exec(ctx, `UPDATE control_plane.prepared_content SET available_until=clock_timestamp()-interval '1 minute',writer_deadline=clock_timestamp()-interval '1 minute' WHERE id=$1`, terminal.LedgerID); err != nil {
 			t.Fatal(err)
 		}
@@ -446,6 +403,10 @@ func TestPreparedContentBindingComponent(t *testing.T) {
 	})
 }
 
+// Put counts each attempt, optionally waits for release or cancellation, then returns a synthetic
+// failure or delegates to the test store.
+// Put считает каждую попытку, при необходимости ожидает разрешения или отмены, затем возвращает
+// синтетическую ошибку либо вызывает тестовое хранилище.
 func (store *preparedObjectsFixture) Put(ctx context.Context, input objectstorage.PutInput) (objectstorage.Receipt, error) {
 	store.puts.Add(1)
 	if store.entered != nil {
@@ -462,13 +423,15 @@ func (store *preparedObjectsFixture) Put(ctx context.Context, input objectstorag
 	return store.Store.Put(ctx, input)
 }
 
+// TestPreparedContentLedgerComponent checks upload-ledger replay and uncertain outcomes without
+// repeating Put, and prevents cleanup while the writer lease remains active.
+// TestPreparedContentLedgerComponent проверяет повтор операций журнала загрузки и неопределённые
+// исходы без повторного Put, запрещая очистку при действующей аренде записи.
 func TestPreparedContentLedgerComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
+	var err error
 	defer pool.Close()
 	var org, actor, project string
 	for _, item := range []struct {

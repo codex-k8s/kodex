@@ -7,6 +7,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestRuntimeEnvironmentActionsFollowStateAndAuthority checks ordered environment actions reflect
+// explicit manage/disable/delete permissions, published revision count and terminal deletion
+// state.
+// TestRuntimeEnvironmentActionsFollowStateAndAuthority проверяет порядок действий окружения по
+// явным правам управления, отключения и удаления, числу опубликованных ревизий и окончательному
+// удалению.
 func TestRuntimeEnvironmentActionsFollowStateAndAuthority(t *testing.T) {
 	tests := []struct {
 		name                    string

@@ -12,15 +12,43 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryAssistantContextProjection embeds the authoritative actor/project-bound assistant context
+// projection with current entity name, version and allowed operations. It returns metadata, not a
+// reusable command grant.
+// queryAssistantContextProjection встраивает авторитетную проекцию контекста ассистента с
+// привязкой к субъекту и проекту, текущими именем, версией и допустимыми операциями. Возвращает
+// метаданные, а не повторно используемое разрешение команды.
+//
 //go:embed sql/assistant_context_projection.sql
 var queryAssistantContextProjection string
 
+// queryAssistantConversationContext embeds actor-owned conversation or plan context lookup with
+// fresh projection, active-project visibility and specialized assistant operation eligibility. An
+// authority-project pin limits the lookup; stored plan or context fields do not assign authority.
+// queryAssistantConversationContext встраивает поиск контекста разговора либо плана владельца с
+// актуальной проекцией, видимостью активного проекта и допустимостью специализированных операций
+// ассистента. Проект полномочий ограничивает поиск; сохранённые поля плана и контекста не
+// назначают права.
+//
 //go:embed sql/assistant_conversation_context.sql
 var queryAssistantConversationContext string
 
+// queryAssistantConfigurationPlanOwner embeds the tenant/ref lookup of a plan conversation and
+// stored operations. Caller context authorization precedes this lookup, and each privileged
+// operation is reauthorized separately.
+// queryAssistantConfigurationPlanOwner встраивает поиск разговора и сохранённых операций плана по
+// организации и ссылке. Доступ к контексту проверяется до поиска, каждая привилегированная
+// операция авторизуется отдельно.
+//
 //go:embed sql/assistant_configuration__plan_owner.sql
 var queryAssistantConfigurationPlanOwner string
 
+// assistantConversationContext reads current authorized conversation context and project using
+// either conversation or plan ref. NoRows becomes NotFound and other scan failures Unavailable; it
+// neither executes operations nor commits.
+// assistantConversationContext читает текущий разрешённый контекст разговора и проект по ссылке
+// разговора либо плана. NoRows преобразуется в NotFound, прочие ошибки чтения — в Unavailable; не
+// исполняет операции и не завершает транзакцию.
 func (repository *Repository) assistantConversationContext(ctx context.Context, tx pgx.Tx, current scope, conversationRef, planRef string) (entity.AssistantContextDescriptor, string, error) {
 	var descriptor entity.AssistantContextDescriptor
 	var projectRef string
@@ -37,6 +65,16 @@ func (repository *Repository) assistantConversationContext(ctx context.Context, 
 	return descriptor, projectRef, nil
 }
 
+// authorizeAssistantContextCommand routes supported typed payloads through conversation creation
+// or existing context admission. Plan update/validate/apply reload stored operations, require the
+// isolated connection-preparation case, constrain plan scope and reauthorize specialized
+// configuration/file/runtime commands. Other payload types are left to outer dispatch; this guard
+// performs no mutation or commit.
+// authorizeAssistantContextCommand проводит поддерживаемые типизированные payload через допуск
+// создания разговора либо существующего контекста. Для update/validate/apply плана загружает
+// сохранённые операции, требует отдельность подготовки подключения, ограничивает область плана и
+// заново авторизует специализированные команды конфигурации, файлов и runtime. Другие типы
+// оставляет внешней диспетчеризации; сама проверка не меняет состояние и не завершает транзакцию.
 func (repository *Repository) authorizeAssistantContextCommand(ctx context.Context, tx pgx.Tx, current scope, input command.Command) error {
 	var conversationRef, planRef string
 	switch payload := input.Payload.(type) {

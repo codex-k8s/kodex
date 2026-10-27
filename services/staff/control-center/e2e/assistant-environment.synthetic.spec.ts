@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { syntheticAssistantRuntimeConfig } from "./fixtures/assistant-runtime-config";
 import { verifiedInventoryFixture } from "../src/test-utils/image-inventory-fixture";
 const now = "2026-10-04T00:00:00Z",
   digest = "a".repeat(64);
@@ -118,20 +119,7 @@ for (const width of [1440, 390])
         const url = new URL(route.request().url());
         if (url.pathname === "/config/runtime-config.json")
           return route.fulfill({
-            json: {
-              revision: "0".repeat(64),
-              environment: "synthetic",
-              apiBaseUrl: "/",
-              realtimeUrl: "/api/v1",
-              requestTimeoutMs: 10000,
-              oidc: {
-                authority: "https://identity.kodex.test/realms/kodex",
-                clientId: "kodex-test",
-                redirectUri: "https://kodex.test/auth/callback",
-                postLogoutRedirectUri: "https://kodex.test/",
-                scope: "openid profile email",
-              },
-            },
+            json: syntheticAssistantRuntimeConfig(),
           });
         if (
           url.pathname === "/api/v1/agents/agent_fixture/runtime-configuration"

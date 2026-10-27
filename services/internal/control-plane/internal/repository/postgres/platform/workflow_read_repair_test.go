@@ -7,8 +7,16 @@ import (
 	"time"
 )
 
+// workflowRepairRow provides positional values for a stored workflow row; callers must supply
+// matching destination types for reflective assignment.
+// workflowRepairRow предоставляет позиционные значения сохранённой строки workflow; вызывающий
+// должен передать совпадающие типы назначений для присваивания через reflection.
 type workflowRepairRow []any
 
+// Scan copies fixture values into typed destinations without database access or production
+// validation.
+// Scan копирует тестовые значения в типизированные назначения без доступа к БД либо
+// производственной валидации.
 func (row workflowRepairRow) Scan(dest ...any) error {
 	for i, value := range row {
 		reflect.ValueOf(dest[i]).Elem().Set(reflect.ValueOf(value))
@@ -16,6 +24,12 @@ func (row workflowRepairRow) Scan(dest ...any) error {
 	return nil
 }
 
+// TestWorkflowUnexecutableConfigurationCanBeReadForRepair keeps structurally readable but
+// unexecutable draft/published workflow configuration available for repair and assistant
+// inspection, while rejecting corrupt stored JSON.
+// TestWorkflowUnexecutableConfigurationCanBeReadForRepair сохраняет структурно читаемую, но
+// неисполнимую черновую и опубликованную конфигурацию workflow доступной для ремонта и просмотра
+// ассистентом, отклоняя повреждённый сохранённый JSON.
 func TestWorkflowUnexecutableConfigurationCanBeReadForRepair(t *testing.T) {
 	v := validWorkflowFixture()
 	for i := range v.Steps {

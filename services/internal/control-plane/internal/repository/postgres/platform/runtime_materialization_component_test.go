@@ -11,9 +11,20 @@ import (
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 )
 
+// runtimeMaterializationExpectedAuthoritySQL reads server-owned root actor, organization, agent
+// project and revision identity for the exact fixture lease.
+// runtimeMaterializationExpectedAuthoritySQL читает назначенные сервером корневого actor,
+// организацию, проект агента и идентичность ревизии точной тестовой lease.
+//
 //go:embed testdata/sql/runtime_materialization_expected_authority.sql
 var runtimeMaterializationExpectedAuthoritySQL string
 
+// testClaimedRuntimeMaterializationProof binds a claimed request digest to owner execution
+// authority, checks exact root/revision/generation pins and rejects closed execution, foreign
+// project or changed fence without materializing credentials.
+// testClaimedRuntimeMaterializationProof связывает дайджест захваченного запроса с полномочиями
+// исполнения владельца, проверяет точные привязки корня, ревизии и поколения и отклоняет закрытое
+// исполнение, чужой проект и изменённый fence без материализации credential.
 func testClaimedRuntimeMaterializationProof(t *testing.T, ctx context.Context, repository *Repository, lease map[string]any, workloadInstance string, allowed bool) {
 	t.Helper()
 	raw, err := json.Marshal(lease)

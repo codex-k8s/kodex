@@ -2,8 +2,6 @@ package platform
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"strings"
 
@@ -13,9 +11,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Locator найденного сотрудника не несёт полномочий. Actor/project назначены
-// fresh lease resolver; оба штатных reader повторяют agent.view eligibility.
-// Полные инструкции и любые изменения остаются на отдельном context-bound пути.
+// assistantResolvedAgentRuntimeConfigurationTx validates a metadata-only AGENT locator without
+// query/pagination/account/profile selectors, reads ordinary view-eligible agent state and
+// enforces a project source boundary. It rejects system agents and delegates exact runtime
+// projection without requiring the instructions screen context.
+// assistantResolvedAgentRuntimeConfigurationTx проверяет AGENT locator только для metadata без
+// query/pagination/account/profile selectors, читает обычное view-eligible состояние agent и
+// соблюдает project source boundary. Отклоняет system agents и передаёт точную runtime projection
+// без требования контекста экрана инструкций.
 func (repository *Repository) assistantResolvedAgentRuntimeConfigurationTx(ctx context.Context, tx pgx.Tx, current scope, sourceScope, sourceProjectRef string, input entity.AssistantConfigurationCatalogRequest) (entity.AssistantConfigurationCatalogResponse, error) {
 	result := entity.AssistantConfigurationCatalogResponse{Kind: input.Kind, AssistantRef: input.AssistantRef, ScopeKind: "PROJECT", OrganizationRef: current.organizationRef, Entries: []entity.AssistantConfigurationCatalogEntry{}}
 	if input.EntityKind != "AGENT" || input.EntityRef == "" || input.Query != "" || input.Offset != 0 || input.AccountRef != "" || input.RuntimeProfileRef != "" {
@@ -36,8 +39,14 @@ func (repository *Repository) assistantResolvedAgentRuntimeConfigurationTx(ctx c
 	return result, nil
 }
 
-// Context и agent.view проверены до чтения; штатный target resolver сохраняет
-// точную project authority. Этот query не создаёт grants, audit или events.
+// assistantAgentRuntimeConfigurationTx rechecks agent.view and authorityProject against the
+// runtime target, agent/environment versions and exact admitted/promoted project artifact pins
+// including recipe generation. It returns a bounded public projection/hash only after these
+// checks, without grants, audit, events or provider execution.
+// assistantAgentRuntimeConfigurationTx повторно сверяет agent.view и authorityProject с runtime
+// target, agent/environment versions и точными admitted/promoted project artifact pins, включая
+// recipe generation. Возвращает ограниченную публичную projection/hash после проверок, без grants,
+// audit, events или исполнения провайдера.
 func (repository *Repository) assistantAgentRuntimeConfigurationTx(ctx context.Context, tx pgx.Tx, current scope, agent entity.Agent) (entity.AssistantAgentConfiguration, error) {
 	permission, target, err := repository.resolveRuntimeConfigurationTarget(ctx, tx, current, "agent.view", agent.Ref)
 	if err != nil {
@@ -65,13 +74,20 @@ func (repository *Repository) assistantAgentRuntimeConfigurationTx(ctx context.C
 	if err != nil {
 		return entity.AssistantAgentConfiguration{}, err
 	}
-	digest := sha256.Sum256(raw)
-	return entity.AssistantAgentConfiguration{AgentRef: agent.Ref, ProjectRef: agent.ProjectRef, Version: agent.Version, ConfigurationJSON: raw, ConfigurationSHA256: hex.EncodeToString(digest[:])}, nil
+	return entity.AssistantAgentConfiguration{AgentRef: agent.Ref, ProjectRef: agent.ProjectRef, Version: agent.Version, ConfigurationJSON: raw, ConfigurationSHA256: assistantConfigurationSHA256(raw)}, nil
 }
 
-// inventorySourceDigest — trusted receipt exact исходных bytes: scanner уже
-// проверил raw SHA и artifact/provenance binding. Проекция имеет отдельный SHA
-// canonical whitelist bytes и не сравнивает их с порядком полей source JSON.
+// assistantAgentRuntimeConfigurationJSON validates binding/version/image inventory and
+// model/resource metadata, then emits a public eighteen-field whitelist capped before canonical
+// map re-encoding. Configured tool names differ from verified inventory. Trusted source inventory
+// digest syntax is checked separately; delivered canonical inventory receives its own hash,
+// excluding values, secret descriptors and effective config.
+// assistantAgentRuntimeConfigurationJSON проверяет binding/version/image inventory и
+// model/resource metadata, затем выдаёт публичный список восемнадцати разрешённых полей с
+// ограничением размера до канонического map re-encoding. Настроенные имена tools отличаются от
+// verified inventory. Синтаксис trusted source inventory digest проверяется отдельно; переданный
+// canonical inventory получает собственный hash, исключая values, secret descriptors и effective
+// config.
 func assistantAgentRuntimeConfigurationJSON(agent entity.Agent, view entity.AgentRuntimeConfigurationView, inventory *runtimecontract.ImageToolInventory, inventorySourceDigest string) ([]byte, error) {
 	binding, environment := view.EnvironmentBinding, view.Environment
 	image := environment.CurrentVersion.Image

@@ -1,0 +1,10 @@
+# Pull storage остаётся read-only; дополнительный guard получает те же ресурсы и hardening.
+- op: copy
+  from: /spec/template/spec/containers/1/resources
+  path: /spec/template/spec/containers/2/resources
+- op: copy
+  from: /spec/template/spec/containers/1/securityContext
+  path: /spec/template/spec/containers/2/securityContext
+- op: add
+  path: /spec/template/spec/containers/0/volumeMounts/0/readOnly
+  value: true

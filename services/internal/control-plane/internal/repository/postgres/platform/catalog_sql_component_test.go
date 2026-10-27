@@ -9,6 +9,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// testCatalogSQLParity compares SQL visibility against the owner predicate for bounded fixture
+// actors/targets in one read-only repeatable snapshot and requires at least ten comparisons.
+// testCatalogSQLParity сравнивает SQL-видимость с предикатом владельца для ограниченных наборов
+// тестовых actors и целей в одном read-only repeatable снимке и требует не менее десяти сравнений.
 func testCatalogSQLParity(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
@@ -48,6 +52,10 @@ ORDER BY kind, target.ref LIMIT 80`, actor.organizationID)
 		if err != nil {
 			t.Fatal(err)
 		}
+		// candidate keeps target kind, public reference and project together for SQL-versus-owner
+		// visibility comparisons.
+		// candidate хранит вместе вид цели, публичный ref и проект для сравнения SQL-видимости и предиката
+		// владельца.
 		type candidate struct{ kind, ref, project string }
 		var targets []candidate
 		for rows.Next() {

@@ -8,8 +8,13 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// emitSessionStorageRunChanged не создаёт run delta или fanout по всем roots.
-// Anchor и tenant принадлежат owner rows; потребитель заново разрешает подписки.
+// emitSessionStorageRunChanged resolves one server-owned root anchor and tenant for a session
+// identity and emits a RUN_CHANGED metadata snapshot in the caller transaction. No run means no
+// event; it creates neither a run delta nor fanout to all roots, and consumers must reauthorize
+// subscriptions.
+// emitSessionStorageRunChanged разрешает один серверный root anchor и tenant по идентичности
+// сессии и записывает RUN_CHANGED metadata snapshot в переданной транзакции. Без запуска события
+// нет; не создаёт run delta и fanout на все roots, потребители повторно проверяют права подписок.
 func (repository *Repository) emitSessionStorageRunChanged(ctx context.Context, tx pgx.Tx, current scope, sessionID string) error {
 	var anchor string
 	var version int64

@@ -6,24 +6,10 @@ fail() {
   exit 1
 }
 
-usage() {
-  printf 'Usage: %s --mode apply|readback --state-directory <absolute-path>\n' "$0" >&2
-}
-
-mode=""
-state_directory=""
-while (($# > 0)); do
-  case "$1" in
-    --mode) mode=${2:-}; shift 2 ;;
-    --state-directory) state_directory=${2:-}; shift 2 ;;
-    --help) usage; exit 0 ;;
-    *) usage; fail "unsupported argument: $1" ;;
-  esac
-done
-
-case "$mode" in apply|readback) ;; *) fail 'mode is invalid' ;; esac
-[[ "$state_directory" == /* && "$state_directory" != / && "$state_directory" != "$HOME" ]] ||
-  fail 'state directory is invalid'
+# shellcheck source=lib/user-tool-input.sh
+source "${BASH_SOURCE[0]%"${BASH_SOURCE[0]##*/}"}lib/user-tool-input.sh"
+kodex_user_tool_parse "$@"
+set --
 for command_name in awk cmp curl find grep install jq ln mktemp python3 readlink sha256sum unzip; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
@@ -47,16 +33,8 @@ cleanup_installation() {
 }
 trap cleanup_installation EXIT
 
-download_artifact() {
-  local name=$1 output=$2 url expected_sha actual_sha
-  url=$(jq -er --arg name "$name" '.artifacts[] | select(.name == $name) | .url' "$lock_file")
-  expected_sha=$(jq -er --arg name "$name" '.artifacts[] | select(.name == $name) | .sha256' "$lock_file")
-  curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
-    --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 15 \
-    "$url" --output "$output"
-  actual_sha=$(sha256sum "$output" | awk '{print $1}')
-  [[ "$actual_sha" == "$expected_sha" ]] || fail "artifact digest mismatch: $name"
-}
+# shellcheck source=../install/artifact-download.sh
+source "$script_directory/../install/artifact-download.sh"
 
 if [[ "$mode" == apply ]]; then
   install -d -m 0700 "$tool_bin" "$material_root"

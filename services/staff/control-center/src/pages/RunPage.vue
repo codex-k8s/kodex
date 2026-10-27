@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { downloadBlob } from "@/shared/ui/download-blob";
 import { useServerMessage } from "@/shared/ui/server-message";
 import { runListSummary } from "@/shared/ui/run-summary";
 import { ownerRequestSignal } from "@/shared/api/owner-lifetime";
@@ -774,15 +775,7 @@ async function downloadArtifact(artifact: Artifact): Promise<void> {
       artifact.ref,
       "DOWNLOAD",
     );
-    const url = URL.createObjectURL(body);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = artifact.fileName;
-    anchor.hidden = true;
-    document.body.append(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
+    downloadBlob(body, artifact.fileName);
   } catch (error) {
     problem.value = asProblem(error);
   } finally {

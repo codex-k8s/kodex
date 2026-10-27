@@ -1001,18 +1001,19 @@ spec:
         size(variables.roleContainers[0].volumeMounts.filter(mount,
           mount.name == 'runtime-context' && mount.mountPath == '/workspace/context' &&
           !has(mount.subPath) && !has(mount.subPathExpr) && !has(mount.mountPropagation))) == 1 &&
-        size(variables.roleContainers[0].volumeMounts.filter(mount,
-          mount.name == 'runtime-input' && mount.mountPath == '/var/run/config/kodex/runtime' &&
-          !has(mount.subPath) && has(mount.readOnly) && mount.readOnly == true)) == 1 &&
-        size(variables.roleContainers[0].volumeMounts.filter(mount,
-          mount.name == 'runtime-ticket' && mount.subPath == 'token' &&
-          has(mount.readOnly) && mount.readOnly == true)) == 1 &&
-        size(variables.roleContainers[0].volumeMounts.filter(mount,
-          mount.name == 'callback-ca' && mount.mountPath == '/var/run/config/kodex/runtime/callback' &&
-          has(mount.readOnly) && mount.readOnly == true)) == 1 &&
-        size(variables.roleContainers[0].volumeMounts.filter(mount,
-          mount.name == 'callback-client' && mount.mountPath == '/var/run/secrets/kodex/runtime/callback-client' &&
-          has(mount.readOnly) && mount.readOnly == true)) == 1 &&
+        [variables.roleContainers[0], variables.relayContainers[0]].all(container,
+          size(container.volumeMounts.filter(mount,
+            mount.name == 'runtime-input' && mount.mountPath == '/var/run/config/kodex/runtime' &&
+            !has(mount.subPath) && has(mount.readOnly) && mount.readOnly == true)) == 1 &&
+          size(container.volumeMounts.filter(mount,
+            mount.name == 'runtime-ticket' && mount.subPath == 'token' &&
+            has(mount.readOnly) && mount.readOnly == true)) == 1 &&
+          size(container.volumeMounts.filter(mount,
+            mount.name == 'callback-ca' && mount.mountPath == '/var/run/config/kodex/runtime/callback' &&
+            has(mount.readOnly) && mount.readOnly == true)) == 1 &&
+          size(container.volumeMounts.filter(mount,
+            mount.name == 'callback-client' && mount.mountPath == '/var/run/secrets/kodex/runtime/callback-client' &&
+            has(mount.readOnly) && mount.readOnly == true)) == 1) &&
         size(variables.roleContainers[0].volumeMounts.filter(mount,
           mount.name == 'provider-socket' && mount.mountPath == '/run/kodex/provider')) == 1 &&
         size(variables.roleContainers[0].volumeMounts.filter(mount,
@@ -1020,18 +1021,6 @@ spec:
         variables.relayContainers[0].volumeMounts.all(mount,
           mount.name in ['runtime-input', 'runtime-ticket', 'callback-ca',
             'callback-client', 'provider-credential-relay']) &&
-        size(variables.relayContainers[0].volumeMounts.filter(mount,
-          mount.name == 'runtime-input' && mount.mountPath == '/var/run/config/kodex/runtime' &&
-          !has(mount.subPath) && has(mount.readOnly) && mount.readOnly == true)) == 1 &&
-        size(variables.relayContainers[0].volumeMounts.filter(mount,
-          mount.name == 'runtime-ticket' && mount.subPath == 'token' &&
-          has(mount.readOnly) && mount.readOnly == true)) == 1 &&
-        size(variables.relayContainers[0].volumeMounts.filter(mount,
-          mount.name == 'callback-ca' && mount.mountPath == '/var/run/config/kodex/runtime/callback' &&
-          has(mount.readOnly) && mount.readOnly == true)) == 1 &&
-        size(variables.relayContainers[0].volumeMounts.filter(mount,
-          mount.name == 'callback-client' && mount.mountPath == '/var/run/secrets/kodex/runtime/callback-client' &&
-          has(mount.readOnly) && mount.readOnly == true)) == 1 &&
         size(variables.relayContainers[0].volumeMounts.filter(mount,
           mount.name == 'provider-credential-relay' &&
           mount.mountPath == '/run/kodex/provider-credential-relay')) == 1 &&

@@ -13,7 +13,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
-// Вызывается только из изолированного ORG suite; provider и Pod не запускаются.
+// organizationEnvironmentClaimFixture returns a bounded fixture claimant that reports synthetic
+// warm readiness, checks exact claimed/persisted environment pins and cancels its turn; no
+// provider or Pod starts.
+// organizationEnvironmentClaimFixture возвращает ограниченный тестовый захватчик, который сообщает
+// искусственную тёплую готовность, проверяет точные захваченные и сохранённые привязки окружения и
+// отменяет свой turn; провайдер и Pod не запускаются.
 func organizationEnvironmentClaimFixture(t *testing.T, ctx context.Context, r *Repository, service *platformservice.Service, owner value.Principal) func(string, entity.RuntimeEnvironmentSet) string {
 	t.Helper()
 	seedObservedCatalogFixture(t, ctx, r, func(observation *platformrepo.ProviderModelCatalogObservation) {
@@ -76,6 +81,12 @@ func organizationEnvironmentClaimFixture(t *testing.T, ctx context.Context, r *R
 	}
 }
 
+// testOrganizationEnvironmentPinnedClaim publishes a new organization environment without
+// rebinding, proves claims retain the old explicit version, then selectively rebinds and requires
+// a new immutable runtime revision.
+// testOrganizationEnvironmentPinnedClaim публикует новое окружение организации без rebind,
+// доказывает сохранение старой явной версии при захвате, затем выборочно меняет привязку и требует
+// новую неизменную runtime-ревизию.
 func testOrganizationEnvironmentPinnedClaim(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, current scope, assistantRef string, base entity.RuntimeEnvironmentDraftSpecification, claim func(string, entity.RuntimeEnvironmentSet) string) {
 	t.Helper()
 	view, err := service.GetAgentRuntimeConfiguration(ctx, owner, assistantRef)

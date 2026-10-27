@@ -13,11 +13,32 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryWorkflowLaunchReadiness embeds one page-level workflow read/launch eligibility and runtime
+// dependency projection under tenant/actor/project and role-image contract pins. It includes
+// published revision, coordinator and ordered dependency JSON for context hashing; it does not
+// reserve capacity or issue a launch grant.
+// queryWorkflowLaunchReadiness встраивает общую для страницы workflow read/launch eligibility и
+// runtime dependency projection внутри tenant/actor/project и role-image contract pins. Включает
+// published revision, coordinator и упорядоченный dependency JSON для context hashing; не
+// резервирует capacity и не выдаёт launch grant.
+//
 //go:embed sql/workflow_launch_readiness.sql
 var queryWorkflowLaunchReadiness string
 
-// Весь page получает один dependency snapshot; отдельного запроса на каждый
-// Workflow или Agent нет. Этот read не создаёт Session, Run или provider lease.
+// projectWorkflowLaunchReadiness loads one dependency snapshot for all nonnil workflows, accepts
+// only closed SQL reasons and hashes actor/project/ref plus readiness/dependencies. It batches
+// provider admission for allowed coordinators, blocks invalid published graphs and combines
+// provider context digests, then replaces each item readiness and LAUNCH hint in place. Missing
+// rows/provider results fail closed. Earlier items can already be changed when a later error
+// occurs; callers must discard partial output. This read creates no Session, Run, lease or command
+// permission.
+// projectWorkflowLaunchReadiness загружает один dependency snapshot всех ненулевых workflows,
+// принимает только закрытые SQL reasons и хеширует actor/project/ref с readiness/dependencies.
+// Пакетно читает provider admission разрешённых coordinators, блокирует неверный published graph и
+// объединяет provider context digests, затем заменяет readiness и LAUNCH hint каждого item на
+// месте. Отсутствующие rows/provider results закрыто отклоняются. При поздней ошибке предыдущие
+// items могут быть уже изменены; вызывающий обязан отбросить частичный output. Чтение не создаёт
+// Session, Run, lease или command permission.
 func (r *Repository) projectWorkflowLaunchReadiness(ctx context.Context, runner pgx.Tx, s scope, items []*entity.Workflow) error {
 	refs := make([]string, 0, len(items))
 	for _, item := range items {

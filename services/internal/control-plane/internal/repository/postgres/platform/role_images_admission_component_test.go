@@ -18,6 +18,16 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// testRoleImageAdmissionPolicyRotation seeds expired, live and pending synthetic artifacts and
+// rotates only policy SHA under the supplied disposable repository. It checks tenant isolation,
+// caller rollback, atomic stale-only audits/receipt with no new event, exact closed
+// artifact/attempt pins, idle/replay behavior and native policy-pinned rebuild, then restores
+// policy and closes its remaining claim through maintenance.
+// testRoleImageAdmissionPolicyRotation создаёт expired, live и pending синтетические артефакты и
+// меняет только policy SHA переданного disposable repository. Проверяет tenant isolation, rollback
+// вызывающей стороны, атомарные stale-only audit/receipt без нового event, точные закрытые
+// artifact/attempt pins, idle/replay и native rebuild с новой policy, затем восстанавливает policy
+// и закрывает оставшийся claim через maintenance.
 func testRoleImageAdmissionPolicyRotation(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	originalConfig := repository.roleImages
@@ -67,44 +77,9 @@ func testRoleImageAdmissionPolicyRotation(t *testing.T, ctx context.Context, rep
 		if createErr != nil || created.Build == nil {
 			t.Fatalf("create %s role image recipe: result=%#v err=%v", key, created, createErr)
 		}
-		lockedBuild, lockErr := scanLockedBuild(repository.pool.QueryRow(ctx, queryRoleImagesLockBuild,
-			ownerScope.organizationID, created.Build.Ref))
-		if lockErr != nil {
-			t.Fatalf("lock %s role image build: %v", key, lockErr)
-		}
 		manifestDigest := "sha256:" + strings.Repeat(digestCharacter, 64)
 		provenanceSHA256 := strings.Repeat(digestCharacter, 64)
-		stagingReference := repository.roleImages.StagingRepository + "@" + manifestDigest
-		if err := repository.pool.QueryRow(ctx, queryRoleImagesCompleteBuild,
-			ownerScope.organizationID, lockedBuild.ID, lockedBuild.Build.Version,
-			stagingReference, manifestDigest, provenanceSHA256,
-			lockedBuild.Build.ImmutableBuildSHA256).Scan(
-			&lockedBuild.Build.Version, &lockedBuild.Build.Stage, &lockedBuild.Build.ProgressPercent,
-			&lockedBuild.Build.StagingReference, &lockedBuild.Build.ManifestDigest,
-			&lockedBuild.Build.ProvenanceSHA256, &lockedBuild.Build.ImmutableBuildSHA256,
-			&lockedBuild.Build.UpdatedAt); err != nil {
-			t.Fatalf("complete %s role image build: %v", key, err)
-		}
-		artifactRef, refErr := newRef("imgart")
-		if refErr != nil {
-			t.Fatalf("create %s role image artifact ref: %v", key, refErr)
-		}
-		var artifactID string
-		if err := repository.pool.QueryRow(ctx, queryRoleImagesInsertArtifact, artifactRef,
-			ownerScope.organizationID, lockedBuild.ProjectID, lockedBuild.RecipeID,
-			lockedBuild.Build.RecipeVersion, lockedBuild.Build.RecipeGeneration,
-			lockedBuild.Build.SpecSHA256, lockedBuild.ID, lockedBuild.Build.Version,
-			lockedBuild.Build.Attempt, asJSON(lockedBuild.Specification), lockedBuild.PolicyRevision,
-			lockedBuild.PolicySHA256, lockedBuild.ContractRevision, lockedBuild.ContractSHA256,
-			stagingReference, manifestDigest, lockedBuild.Build.ImmutableBuildSHA256,
-			provenanceSHA256).Scan(&artifactID); err != nil {
-			t.Fatalf("insert %s role image artifact: %v", key, err)
-		}
-		artifact, readErr := scanRoleImageArtifact(repository.pool.QueryRow(ctx,
-			queryRoleImagesGetActiveArtifact, ownerScope.organizationID, artifactRef))
-		if readErr != nil {
-			t.Fatalf("read %s role image artifact: %v", key, readErr)
-		}
+		_, artifact := seedCompletedRoleImageArtifact(t, ctx, repository, ownerScope, created.Build.Ref, manifestDigest, provenanceSHA256)
 		return artifact
 	}
 
@@ -140,6 +115,12 @@ func testRoleImageAdmissionPolicyRotation(t *testing.T, ctx context.Context, rep
 	if err != nil || !availability.AdmissionAvailable {
 		t.Fatalf("stale-only admission maintenance is unreachable: available=%t err=%v", availability.AdmissionAvailable, err)
 	}
+	// maintenanceSnapshot holds opaque artifact/attempt JSON fingerprints plus audit, receipt and
+	// outbox counts, allowing denied, rollback and replay paths to be compared without printing stored
+	// claim metadata.
+	// maintenanceSnapshot хранит непрозрачные fingerprints artifact/attempt JSON и количества audit,
+	// receipt и outbox, позволяя сравнить denied, rollback и replay без вывода сохранённых claim
+	// metadata.
 	type maintenanceSnapshot struct {
 		artifacts, attempts      string
 		audits, receipts, events int

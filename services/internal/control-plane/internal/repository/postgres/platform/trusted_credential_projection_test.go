@@ -10,6 +10,12 @@ import (
 	"github.com/google/uuid"
 )
 
+// TestTrustedProjectionRejectsCallerAssignedScopeAndMixedProfiles checks trusted selectors cannot
+// carry caller-assigned authority, recovery snapshots stay profile-bound and proof-based protected
+// access cannot cross the trusted profile predicate.
+// TestTrustedProjectionRejectsCallerAssignedScopeAndMixedProfiles проверяет запрет полномочий,
+// назначенных вызывающим, в доверенных селекторах, привязку снимков восстановления к профилю и
+// невозможность пересечения границы доверенного профиля защищённым доступом на основе proof.
 func TestTrustedProjectionRejectsCallerAssignedScopeAndMixedProfiles(t *testing.T) {
 	trusted := &Repository{trustedCluster: true}
 	protected := &Repository{}

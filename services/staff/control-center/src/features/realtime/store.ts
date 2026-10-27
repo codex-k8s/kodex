@@ -1,3 +1,4 @@
+import { isRecord } from "@/shared/lib/exact-object";
 import {
   documentRequestSignal,
   documentRequestsSuspended,
@@ -125,10 +126,6 @@ export function hasCompleteRunSnapshot(
   if (!Number.isSafeInteger(cursor) || cursor < 0) return false;
   if ((graph?.sequence ?? -1) < cursor) return false;
   return cursor === 0 || Boolean(events?.[cursor]);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function recordField(

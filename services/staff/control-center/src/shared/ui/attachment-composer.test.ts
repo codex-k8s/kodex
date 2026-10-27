@@ -1,3 +1,4 @@
+import { createDeferred } from "@/test-utils/create-deferred";
 import { nextTick } from "vue";
 import { describe, expect, it, vi } from "vitest";
 
@@ -21,12 +22,7 @@ function file(
 }
 
 function deferred<T>() {
-  let resolve!: (value: T) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise;
-    reject = rejectPromise;
-  });
+  const { promise, resolve, reject } = createDeferred<T>();
   return { promise, reject, resolve };
 }
 

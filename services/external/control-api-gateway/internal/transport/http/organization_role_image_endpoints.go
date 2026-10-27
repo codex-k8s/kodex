@@ -64,11 +64,7 @@ func (server *Server) ListSystemRoleImageRecipeRevisions(writer http.ResponseWri
 // PromoteSystemRoleImage forwards mutation/version and artifact/provenance pins to owner promotion, then requires an exact recipe/artifact/provenance receipt before HTTP202. Acceptance is not proof the image was published or risk approved.
 // PromoteSystemRoleImage передаёт mutation/version и artifact/provenance pins продвижению владельца, затем требует точный recipe/artifact/provenance receipt до HTTP202. Принятие не доказывает публикацию и подтверждение риска.
 func (server *Server) PromoteSystemRoleImage(writer http.ResponseWriter, request *http.Request, recipeRef generated.RecipeRef, parameters generated.PromoteSystemRoleImageParams) {
-	body, ok := decodeJSON[generated.RoleImagePromotionInput](writer, request)
-	if !ok {
-		return
-	}
-	mutation, ok := requireMutation(writer, parameters.IdempotencyKey, parameters.IfMatch)
+	body, mutation, ok := decodeMutationBody[generated.RoleImagePromotionInput](writer, request, parameters.IdempotencyKey, parameters.IfMatch)
 	if !ok {
 		return
 	}
@@ -123,55 +119,20 @@ func (server *Server) GetSystemRoleImageRecipe(writer http.ResponseWriter, reque
 		writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 		return
 	}
-	if !validRoleImageLineage(response.GetRecipe().GetManagedLineage()) || !validRoleImageSource(response.GetRecipe()) {
-		writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-		return
-	}
-	result := generated.RoleImageRecipeDetail{
-		Recipe: publicRoleImageRecipe(response.GetRecipe()),
-		Builds: make([]generated.RoleImageBuild, 0, len(response.GetBuilds())),
-	}
-	for _, build := range response.GetBuilds() {
-		if build == nil || !validOrganizationRoleImageBuild(build, response.GetRecipe()) || !validRoleImageBuildSource(build) || build.GetConfigurationRevisionRef() != "" && !effectiveCapabilityRef(build.GetConfigurationRevisionRef()) {
-			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-			return
-		}
-		result.Builds = append(result.Builds, publicRoleImageBuild(build))
-	}
-	if response.GetActiveArtifact() != nil {
-		if !validOrganizationRoleImageArtifact(response.GetActiveArtifact(), response.GetRecipe()) {
-			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-			return
-		}
-		artifact := publicRoleImageArtifact(response.GetActiveArtifact())
-		result.ActiveArtifact = &artifact
-	}
-	if response.GetPromotionCandidate() != nil {
-		if !validOrganizationRoleImageArtifact(response.GetPromotionCandidate(), response.GetRecipe()) {
-			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-			return
-		}
-		artifact := publicRoleImageArtifact(response.GetPromotionCandidate())
-		result.PromotionCandidate = &artifact
-	}
-	setVersionETag(writer, response.GetRecipe().GetVersion())
-	failure, validFailure := publicRoleImageAdmissionFailure(response.GetAdmissionFailure(), response.GetRecipe(), response.GetBuilds())
-	if !validFailure {
-		writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-		return
-	}
-	result.AdmissionFailure = failure
-	writeJSON(writer, http.StatusOK, result)
+	writeRoleImageRecipeDetail(writer, response,
+		func(build *controlplanev1.ImageBuild) bool {
+			return validOrganizationRoleImageBuild(build, response.GetRecipe())
+		},
+		func(artifact *controlplanev1.ImageArtifact) bool {
+			return validOrganizationRoleImageArtifact(artifact, response.GetRecipe())
+		},
+	)
 }
 
 // CreateSystemRoleImageRecipe sends name/environment and create idempotency to the dedicated organization CREATE, validates scoped receipt and emits HTTP201 without assigning organization identity from the body.
 // CreateSystemRoleImageRecipe передаёт name/environment и идемпотентный create отдельному организационному CREATE, проверяет receipt области и выдаёт HTTP201 без назначения организации из тела.
 func (server *Server) CreateSystemRoleImageRecipe(writer http.ResponseWriter, request *http.Request, parameters generated.CreateSystemRoleImageRecipeParams) {
-	body, ok := decodeJSON[generated.RoleImageRecipeUpdateInput](writer, request)
-	if !ok {
-		return
-	}
-	mutation, ok := requireMutation(writer, parameters.IdempotencyKey, "")
+	body, mutation, ok := decodeMutationBody[generated.RoleImageRecipeUpdateInput](writer, request, parameters.IdempotencyKey, "")
 	if !ok {
 		return
 	}
@@ -194,11 +155,7 @@ func (server *Server) CreateSystemRoleImageRecipe(writer http.ResponseWriter, re
 // UpdateSystemRoleImageRecipe maps editable name/environment, exact recipe and mutation/version to organization UPDATE, validates its scoped receipt and preserves ETag/public projection.
 // UpdateSystemRoleImageRecipe преобразует name/environment, точный рецепт и mutation/version в организационный UPDATE, проверяет receipt области и сохраняет ETag и публичную проекцию.
 func (server *Server) UpdateSystemRoleImageRecipe(writer http.ResponseWriter, request *http.Request, recipeRef generated.RecipeRef, parameters generated.UpdateSystemRoleImageRecipeParams) {
-	body, ok := decodeJSON[generated.RoleImageRecipeUpdateInput](writer, request)
-	if !ok {
-		return
-	}
-	mutation, ok := requireMutation(writer, parameters.IdempotencyKey, parameters.IfMatch)
+	body, mutation, ok := decodeMutationBody[generated.RoleImageRecipeUpdateInput](writer, request, parameters.IdempotencyKey, parameters.IfMatch)
 	if !ok {
 		return
 	}

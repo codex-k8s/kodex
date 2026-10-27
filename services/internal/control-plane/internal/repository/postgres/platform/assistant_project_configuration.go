@@ -9,14 +9,37 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// assistantProjectConfigurationOwnerFields lists the server-owned project-assistant
+// identity/scope/profile fields preserved across plan snapshots and removed before ordinary
+// command conversion.
+// assistantProjectConfigurationOwnerFields перечисляет серверные project-assistant
+// identity/scope/profile fields, сохраняемые в plan snapshots и удаляемые до обычного command
+// conversion.
 var assistantProjectConfigurationOwnerFields = []string{"projectAssistantRef", "assistantScope", "scopeKind", "organizationRef", "projectRef", "assistantProfileRef"}
 
+// assistantProjectConfigurationDependencyFields lists agent/environment binding/version/digest
+// pins that must agree across frozen command input, before and after snapshots.
+// assistantProjectConfigurationDependencyFields перечисляет agent/environment
+// binding/version/digest pins, которые должны совпасть в frozen command input, before и after
+// snapshots.
 var assistantProjectConfigurationDependencyFields = []string{"agentVersion", "runtimeEnvironmentBindingRef", "runtimeEnvironmentVersionRef", "runtimeEnvironmentDigest"}
 
+// assistantProjectConfigurationOperation recognizes only a nonempty projectAssistantRef paired
+// with environment preparation, instruction draft creation or environment binding; the locator
+// itself carries no authority.
+// assistantProjectConfigurationOperation распознаёт только непустой projectAssistantRef вместе с
+// environment preparation, instruction draft creation либо environment binding; сам locator не
+// несёт authority.
 func assistantProjectConfigurationOperation(operation entity.AssistantPlanOperation) bool {
 	return assistantString(operation.Parameters, "projectAssistantRef") != "" && (operation.Type == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || operation.Type == "CREATE_INSTRUCTION_DRAFT" || operation.Type == "BIND_AGENT_RUNTIME_ENVIRONMENT")
 }
 
+// authorizeProjectAssistantConfiguration resolves mutation authority from the canonical assistant
+// target and requires a project/profile. Frozen mode additionally compares server-owned identity
+// fields in parameters/before/after, rejecting payload owner substitution.
+// authorizeProjectAssistantConfiguration разрешает mutation authority по каноническому assistant
+// target и требует project/profile. Frozen mode дополнительно сравнивает серверные identity fields
+// в parameters/before/after, отклоняя подстановку owner в payload.
 func (repository *Repository) authorizeProjectAssistantConfiguration(ctx context.Context, tx pgx.Tx, current scope, operation entity.AssistantPlanOperation, frozen bool) (assistantConfigurationTarget, error) {
 	target, err := repository.assistantConfigurationTarget(ctx, tx, current, assistantString(operation.Parameters, "projectAssistantRef"))
 	if err != nil {
@@ -36,8 +59,16 @@ func (repository *Repository) authorizeProjectAssistantConfiguration(ctx context
 	return target, nil
 }
 
-// Locator помощника разрешается отдельно от контекста экрана. Обычные операции
-// сотрудников по-прежнему требуют свой экран и проектную boundary.
+// hydrateProjectAssistantConfiguration resolves the assistant independently of screen context,
+// rejects an injected agentRef/system locator, and binds environment changes to the current
+// project environment. Dedicated ordinary hydrators prepare the three supported operations, then
+// server-owned identity and runtime dependency pins are attached to parameters/before/after
+// without applying changes.
+// hydrateProjectAssistantConfiguration разрешает assistant независимо от screen context, отклоняет
+// подставленный agentRef/system locator и связывает environment changes с текущим project
+// environment. Отдельные обычные hydrators готовят три поддерживаемые операции, затем серверные
+// identity и runtime dependency pins добавляются в parameters/before/after без применения
+// изменений.
 func (repository *Repository) hydrateProjectAssistantConfiguration(ctx context.Context, tx pgx.Tx, current scope, operation entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {
 	target, err := repository.authorizeProjectAssistantConfiguration(ctx, tx, current, operation, false)
 	if err != nil {
@@ -98,6 +129,12 @@ func (repository *Repository) hydrateProjectAssistantConfiguration(ctx context.C
 	return operation, nil
 }
 
+// assistantProjectConfigurationEditable returns the specific editable field set for environment
+// preparation, instruction draft or environment binding; unsupported kinds have no editable
+// fields.
+// assistantProjectConfigurationEditable возвращает отдельный набор редактируемых полей для
+// environment preparation, instruction draft либо environment binding; неподдерживаемые kinds не
+// имеют редактируемых полей.
 func assistantProjectConfigurationEditable(operation entity.AssistantPlanOperation) []string {
 	switch operation.Type {
 	case "PREPARE_RUNTIME_ENVIRONMENT_REVISION":
@@ -110,6 +147,14 @@ func assistantProjectConfigurationEditable(operation entity.AssistantPlanOperati
 	return nil
 }
 
+// refreshProjectAssistantConfiguration rejects operation identity changes, altered immutable
+// parameters and added fields, revalidates the frozen owner and rehydrates only allowed edits.
+// Normal edits require the original before/version/target, while explicit stale refresh permits
+// dependency changes but retains target identity and selected state.
+// refreshProjectAssistantConfiguration отклоняет изменение operation identity, immutable
+// parameters и добавленные поля, повторно проверяет frozen owner и заново готовит лишь допустимые
+// правки. Обычные правки требуют прежние before/version/target, а явный stale refresh допускает
+// dependency changes, сохраняя target identity и selected state.
 func (repository *Repository) refreshProjectAssistantConfiguration(ctx context.Context, tx pgx.Tx, current scope, original, edited entity.AssistantPlanOperation, refreshStale bool) (entity.AssistantPlanOperation, error) {
 	if original.Type != edited.Type || original.Key != edited.Key {
 		return edited, errs.ErrForbidden
@@ -146,6 +191,10 @@ func (repository *Repository) refreshProjectAssistantConfiguration(ctx context.C
 	return refreshed, nil
 }
 
+// assistantMapKeys returns a newly allocated unsorted key list for an allowed-field membership
+// check; map iteration order has no authority or serialization meaning.
+// assistantMapKeys возвращает новый неупорядоченный список ключей для allowed-field membership
+// check; порядок обхода map не задаёт authority или serialization.
 func assistantMapKeys(fields map[string]any) []string {
 	keys := make([]string, 0, len(fields))
 	for key := range fields {
@@ -154,6 +203,12 @@ func assistantMapKeys(fields map[string]any) []string {
 	return keys
 }
 
+// projectAssistantConfigurationSnapshotMatches revalidates frozen owner pins, explicitly
+// rehydrates current dependencies and compares exact before/after/expected-version/target
+// snapshots without applying the operation.
+// projectAssistantConfigurationSnapshotMatches повторно проверяет frozen owner pins, явно
+// восстанавливает текущие dependencies и сравнивает точные before/after/expected-version/target
+// snapshots без применения операции.
 func (repository *Repository) projectAssistantConfigurationSnapshotMatches(ctx context.Context, tx pgx.Tx, current scope, operation entity.AssistantPlanOperation) (bool, error) {
 	if _, err := repository.authorizeProjectAssistantConfiguration(ctx, tx, current, operation, true); err != nil {
 		return false, err
@@ -165,6 +220,14 @@ func (repository *Repository) projectAssistantConfigurationSnapshotMatches(ctx c
 	return assistantJSONEqual(refreshed.Before, operation.Before) && assistantJSONEqual(refreshed.After, operation.After) && assistantJSONEqual(refreshed.ExpectedVersion, operation.ExpectedVersion) && assistantJSONEqual(refreshed.Target, operation.Target), nil
 }
 
+// projectAssistantConfigurationCommand requires owner/dependency fields to agree in
+// input/before/after and nonempty project identity, clones input and strips assistant-only
+// metadata before ordinary command conversion. Environment preparation alone retains projectRef;
+// no principal authority is inferred from these fields.
+// projectAssistantConfigurationCommand требует совпадение owner/dependency fields в
+// input/before/after и непустую project identity, копирует input и удаляет assistant-only metadata
+// перед обычным command conversion. Только environment preparation сохраняет projectRef; principal
+// authority из этих полей не выводится.
 func projectAssistantConfigurationCommand(operation entity.AssistantPlanOperation) (command.Command, error) {
 	for _, key := range append(append([]string(nil), assistantProjectConfigurationOwnerFields...), assistantProjectConfigurationDependencyFields...) {
 		if !assistantJSONEqual(operation.Input[key], operation.Before[key]) || !assistantJSONEqual(operation.Input[key], operation.After[key]) {

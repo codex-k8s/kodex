@@ -7,6 +7,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// auditMailboxOwner inserts an owner audit row with current actor/correlation, anchoring to the
+// connection or organization when connection ref is empty. Ref/Exec failures are Unavailable; no
+// transaction commit, event or delivery occurs here.
+// auditMailboxOwner вставляет owner audit с текущими actor/correlation, привязывая запись к
+// connection либо организации при пустом connection ref. Ошибки ref/Exec дают Unavailable; Commit,
+// event и доставка здесь не выполняются.
 func auditMailboxOwner(ctx context.Context, tx pgx.Tx, current scope, connectionRef, action, summary string) error {
 	ref, err := newRef("aud")
 	if err != nil {

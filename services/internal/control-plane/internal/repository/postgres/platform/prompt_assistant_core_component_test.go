@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
@@ -25,39 +24,39 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/systemassistant"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// queryPromptAssistantCoreUnknownNotice copies a fixture continuation notice with an unsupported
+// service revision to test the closed database constraint.
+// queryPromptAssistantCoreUnknownNotice копирует тестовое уведомление продолжения с
+// неподдерживаемой служебной ревизией для проверки закрытого ограничения БД.
+//
 //go:embed testdata/sql/prompt_assistant_core_unknown_notice.sql
 var queryPromptAssistantCoreUnknownNotice string
 
+// queryPromptAssistantCoreForeignProject creates a synthetic foreign organization/actor/project
+// tuple for negative assistant-core scope checks.
+// queryPromptAssistantCoreForeignProject создаёт искусственный чужой набор организации, actor и
+// проекта для отрицательных проверок области ядра ассистента.
+//
 //go:embed testdata/sql/prompt_assistant_core_foreign_project.sql
 var queryPromptAssistantCoreForeignProject string
 
-// Оснастка создаёт новый installation, SYSTEM project context и независимые
-// PROJECT. Run, claim, complete и следующий turn проходят штатные команды;
-// provider не вызывается, чужая организация существует только в test fixture.
+// TestAssistantCoreInheritanceComponent checks SYSTEM and isolated PROJECT assistants share the
+// exact server core but keep overlays/capabilities separate across preview, claim and
+// continuation. Fresh immutable snapshots, compact core references, dependency-sensitive resume
+// and closed foreign/schema guards use synthetic runtime completions without provider execution.
+// TestAssistantCoreInheritanceComponent проверяет общее точное серверное ядро SYSTEM и
+// изолированных PROJECT ассистентов при раздельных overlay и capability в предпросмотре, захвате и
+// продолжении. Свежие неизменные снимки, компактные ссылки ядра, зависимый от контекста resume и
+// закрытые межобластные ограничения и ограничения схемы используют искусственное завершение
+// runtime без исполнения провайдера.
 func TestAssistantCoreInheritanceComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
 	defer pool.Close()
-	r, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := r.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3, StagingRepository: "registry.invalid/staging", PromotedRepository: "registry.invalid/roles", DefaultImageReference: "registry.invalid/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
+	r := newSyntheticRuntimeComponentRepository(t, ctx, pool)
 	prepareObservedWarmFixture(t, ctx, r)
 	owner := resolvedTestPrincipal(t, ctx, r, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.assistant.turns.add"}, "control-api-gateway")
 	worker := resolvedTestPrincipal(t, ctx, r, platformrepo.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim"}, "runtime-controller")

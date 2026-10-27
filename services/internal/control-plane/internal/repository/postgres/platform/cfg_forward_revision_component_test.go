@@ -10,8 +10,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
-// Восстановление сохраняет старое содержимое, создавая новую публикацию;
-// существующее подключение не следует за указателем configuration автоматически.
+// testCFGForwardRevision restores historical content as a new forward draft/publication with
+// immutable parent lineage and exact replay, retaining old history and the connection explicit
+// revision pin.
+// testCFGForwardRevision восстанавливает историческое содержимое новой последующей черновой и
+// опубликованной ревизией с неизменной родительской связью и точным повтором, сохраняя старую
+// историю и явную привязку ревизии соединения.
 func testCFGForwardRevision(t *testing.T, ctx context.Context, service *platformservice.Service, owner, reader value.Principal, connectionRef string, original command.Result) command.Result {
 	t.Helper()
 	before, _, _, _, err := service.ListManagedConfigurationHistory(ctx, owner, original.ManagedConfiguration.Ref, query.Page{Size: 100})

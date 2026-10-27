@@ -1,9 +1,7 @@
 package platform
 
 import (
-	"context"
 	"errors"
-	"os"
 	"testing"
 	"time"
 
@@ -11,17 +9,18 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// TestTrustedWorkloadGenerationComponent requires an opt-in PostgreSQL DSN and checks exact
+// trusted workload registration, runtime SQL write denial, the protected durable generation floor
+// and repository-restart retention; no live transport identity is tested.
+// TestTrustedWorkloadGenerationComponent требует явно включённый PostgreSQL DSN и проверяет точную
+// регистрацию доверенного workload, запрет SQL-записи runtime, устойчивый нижний предел
+// защищённого поколения и сохранение после перезапуска repository; живая transport identity не
+// проверяется.
 func TestTrustedWorkloadGenerationComponent(t *testing.T) {
-	dsn := os.Getenv("KODEX_CONTROL_PLANE_TEST_DSN")
-	if dsn == "" {
-		t.Skip("KODEX_CONTROL_PLANE_TEST_DSN is not configured")
-	}
-	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	ctx, cancel, pool, err := newOptInSecurityComponentPool(t)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
 		t.Fatal("open disposable PostgreSQL")
 	}

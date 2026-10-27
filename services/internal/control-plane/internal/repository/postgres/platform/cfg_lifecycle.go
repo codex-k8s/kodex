@@ -20,19 +20,44 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryCFGCopyInsert inserts a new UI-owned managed set in the target project or organization with exact copy
+// provenance and current actor, returning the canonical set projection without starting a build.
+// queryCFGCopyInsert вставляет новый UI-owned managed set целевых project либо organization с точными copy
+// provenance и текущим actor, возвращая каноническое set projection без запуска build.
+//
 //go:embed sql/cfg_copy_insert.sql
 var queryCFGCopyInsert string
 
+// queryCFGShippedIntegration reads the active shipped integration definition version/digest/origin
+// needed to bind an exact bootstrap copy, rather than trusting a client package.
+// queryCFGShippedIntegration читает active shipped integration definition version/digest/origin
+// для точной bootstrap copy вместо доверия клиентскому package.
+//
 //go:embed sql/cfg_shipped_integration.sql
 var queryCFGShippedIntegration string
 
+// queryCFGArchive changes the exact set archive flag under version OCC and returns new
+// version/update metadata without deleting revision history.
+// queryCFGArchive изменяет archive flag точного set с version OCC и возвращает новые
+// version/update metadata без удаления revision history.
+//
 //go:embed sql/cfg_archive.sql
 var queryCFGArchive string
 
+// cfgLifecycleCommand recognizes only the four specialized role-image/integration copy/archive
+// commands, leaving other managed actions to their own registry.
+// cfgLifecycleCommand распознаёт только четыре специализированные role-image/integration
+// copy/archive commands, оставляя остальные managed actions собственному registry.
 func cfgLifecycleCommand(kind command.Kind) bool {
 	return kind == command.CopyRoleImageConfiguration || kind == command.CopyIntegrationDefinitionConfiguration || kind == command.ArchiveRoleImageConfiguration || kind == command.ArchiveIntegrationDefinitionConfiguration
 }
 
+// cfgNextActions returns a fresh ordered COPY/ARCHIVE hint list only for role-image/integration
+// sets: COPY requires manage/source/current revision; ARCHIVE independently requires manage/build,
+// UI ownership and nonarchive/nonshipped state. Hints do not grant mutation authority.
+// cfgNextActions возвращает новый упорядоченный COPY/ARCHIVE hint list только для
+// role-image/integration sets: COPY требует manage/source/current revision; ARCHIVE независимо
+// требует manage/build, UI ownership и nonarchive/nonshipped state. Hints не выдают mutation authority.
 func cfgNextActions(set entity.ManagedConfigurationSet, manage, sourceRead, build, shipped bool) []string {
 	result := []string{}
 	if set.Kind != "ROLE_IMAGE" && set.Kind != "INTEGRATION_DEFINITION" {
@@ -47,6 +72,14 @@ func cfgNextActions(set entity.ManagedConfigurationSet, manage, sourceRead, buil
 	return result
 }
 
+// projectCFGActions projects current generic lifecycle hints after resolving set/source/build
+// permissions and shipped status, propagating infrastructure failures instead of converting them
+// to denial. Organization role-image source exposes an explicit empty generic-action list because
+// its mutation path is specialized.
+// projectCFGActions формирует текущие generic lifecycle hints после разрешения set/source/build
+// permissions и shipped status, передавая инфраструктурные ошибки вместо преобразования в denial.
+// Organization role-image source получает явно пустой generic-action list, поскольку изменяется
+// специализированным путём.
 func (repository *Repository) projectCFGActions(ctx context.Context, tx pgx.Tx, current scope, set *entity.ManagedConfigurationSet) error {
 	if set == nil || (set.Kind != "ROLE_IMAGE" && set.Kind != "INTEGRATION_DEFINITION") {
 		return nil
@@ -90,7 +123,12 @@ func (repository *Repository) projectCFGActions(ctx context.Context, tx pgx.Tx, 
 	return nil
 }
 
-// Receipt сохраняет исходную immutable revision, но не возвращает устаревшую доступность set.
+// refreshCFGReceipt refreshes only current archive/version/update metadata in
+// role-image/integration command results, using the specialized role-image impact resolver when
+// needed; the original immutable revision in the receipt is not replaced.
+// refreshCFGReceipt обновляет только текущие archive/version/update metadata в
+// role-image/integration command results, при необходимости используя специализированный
+// role-image impact resolver; исходная immutable revision квитанции не заменяется.
 func (repository *Repository) refreshCFGReceipt(ctx context.Context, tx pgx.Tx, current scope, result *command.Result) error {
 	if result.ManagedConfiguration == nil || (result.ManagedConfiguration.Kind != "ROLE_IMAGE" && result.ManagedConfiguration.Kind != "INTEGRATION_DEFINITION") {
 		return nil
@@ -111,6 +149,14 @@ func (repository *Repository) refreshCFGReceipt(ctx context.Context, tx pgx.Tx, 
 	return nil
 }
 
+// authorizeCFGLifecycle authorizes exact source set/recipe or shipped integration before lifecycle
+// execution, using source.view for copy and image.build for archive. Role-image copies also
+// require current target-project manage and source.manage/view, keeping source readability
+// distinct from permission to create a target copy.
+// authorizeCFGLifecycle авторизует точный source set/recipe либо shipped integration до lifecycle
+// execution, используя source.view для copy и image.build для archive. Role-image copies
+// дополнительно требуют текущие target-project manage и source.manage/view, сохраняя различие
+// source readability и права создать целевую копию.
 func (repository *Repository) authorizeCFGLifecycle(ctx context.Context, tx pgx.Tx, current scope, input command.Command) error {
 	payload, ok := input.Payload.(command.ManagedConfigurationInput)
 	if !ok {
@@ -160,6 +206,16 @@ func (repository *Repository) authorizeCFGLifecycle(ctx context.Context, tx pgx.
 	return nil
 }
 
+// copyCFG checks copy name and expected version, resolves an exact managed revision, recipe or
+// shipped integration provenance and rejects mixed source locators. It preserves or canonicalizes
+// source content by kind, validates allowed origin and shipped catalog pins, then inserts a new UI
+// set and immutable DRAFT with parent/digest/provenance in the caller transaction; no build or
+// publication is implied.
+// copyCFG проверяет имя копии и expected version, разрешает точные managed revision, recipe либо
+// shipped integration provenance и отклоняет смешанные source locators. Сохраняет либо
+// канонизирует source content по kind, проверяет допустимые origin и shipped catalog pins, затем
+// вставляет новый UI set и immutable DRAFT с parent/digest/provenance в транзакции вызывающего
+// метода; build либо publication этим не подразумеваются.
 func (repository *Repository) copyCFG(ctx context.Context, tx pgx.Tx, current scope, input command.Command, payload command.ManagedConfigurationInput, kind string) (commandOutcome, error) {
 	if input.Mutation.ExpectedVersion == nil || strings.TrimSpace(payload.Name) == "" || len(payload.Name) > 160 || !utf8.ValidString(payload.Name) || strings.ContainsRune(payload.Name, 0) {
 		return commandOutcome{}, errs.ErrInvalid
@@ -281,10 +337,22 @@ func (repository *Repository) copyCFG(ctx context.Context, tx pgx.Tx, current sc
 	return managedOutcome(set, &revision.ManagedConfigurationRevision), nil
 }
 
+// roleImageCopyContent serializes a new trimmed copy name with exact
+// role/environment/package/tool/install/Dockerfile fields from the supplied recipe using the
+// existing JSON encoder, without building an image or authorizing its source.
+// roleImageCopyContent сериализует новое очищенное имя копии с точными
+// role/environment/package/tool/install/Dockerfile fields переданного recipe прежним JSON encoder
+// без сборки образа либо авторизации source.
 func roleImageCopyContent(name string, recipe entity.RoleImageRecipe) string {
 	return string(asJSON(map[string]any{"name": strings.TrimSpace(name), "roleImage": map[string]any{"roleDefinitionRef": recipe.RoleDefinitionRef, "environment": map[string]any{"environmentKey": recipe.Input.EnvironmentKey, "packageKeys": recipe.Input.PackageKeys, "toolKeys": recipe.Input.ToolKeys, "installationBlock": recipe.Input.InstallationBlock, "dockerfile": recipe.Input.Dockerfile}}}))
 }
 
+// bootstrapRoleImageCopyContent for a shipped recipe requires the bootstrap-copy selector and
+// replaces only its environment key with the selected UI-capable key before canonical copy
+// serialization; other recipe input bytes remain unchanged.
+// bootstrapRoleImageCopyContent для shipped recipe требует bootstrap-copy selector и заменяет
+// только environment key выбранным UI-capable key до канонической сериализации копии; остальные
+// recipe input bytes не изменяются.
 func (repository *Repository) bootstrapRoleImageCopyContent(name string, recipe entity.RoleImageRecipe) (string, error) {
 	if shippedRoleImage(recipe) {
 		if repository.roleImageBootstrapCopySelection == nil {
@@ -299,6 +367,14 @@ func (repository *Repository) bootstrapRoleImageCopyContent(name string, recipe 
 	return roleImageCopyContent(name, recipe), nil
 }
 
+// archiveCFG permits only a currently unarchived UI set, optionally applies the mapped project
+// role-image archive and its existing recipe-change event, then CAS-archives the managed set and
+// returns its outcome. It preserves missing-mapping tolerance and caller transaction ownership
+// without deleting content.
+// archiveCFG допускает только текущий unarchived UI set, при наличии mapping применяет project
+// role-image archive и прежний recipe-change event, затем CAS-архивирует managed set и возвращает
+// outcome. Сохраняет допуск отсутствия mapping и владение транзакцией вызывающим методом без
+// удаления content.
 func (repository *Repository) archiveCFG(ctx context.Context, tx pgx.Tx, current scope, set managedSet) (commandOutcome, error) {
 	if set.ManagedBy != "UI" || set.Archived {
 		return commandOutcome{}, errs.ErrConflict

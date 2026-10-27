@@ -10,6 +10,14 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestAssistantWorkspaceLimitsPrepareAndPersistExactPolicy checks typed workspace quota survives
+// own organization draft hydration, normalized command/OCC, JSON dependency digest decode and
+// policy round-trip. Warm/turn projections must agree on workspace root/file budget. Persistence
+// is simulated serialization, not SQL or an enforced running container quota.
+// TestAssistantWorkspaceLimitsPrepareAndPersistExactPolicy проверяет сохранение typed workspace
+// quota через own organization draft hydration, normalized command/OCC, JSON dependency digest
+// decode и policy round-trip. Warm/turn projections совпадают по workspace root/file budget.
+// Persistence моделируется сериализацией, а не SQL и действующей container quota.
 func TestAssistantWorkspaceLimitsPrepareAndPersistExactPolicy(t *testing.T) {
 	policyInput := assistantTestEnvironmentPolicy()
 	resources := policyInput["resources"].(map[string]any)
@@ -66,6 +74,14 @@ func TestAssistantWorkspaceLimitsPrepareAndPersistExactPolicy(t *testing.T) {
 	}
 }
 
+// TestAssistantWorkspaceLimitsRejectUnknownAndExcessiveFields rejects
+// zero/oversized/fractional/incomplete quotas, unknown root, wrong value type and a top-level
+// workspaceLimits alias. It tests the closed policy decoder with synthetic maps without applying
+// filesystem or Kubernetes limits.
+// TestAssistantWorkspaceLimitsRejectUnknownAndExcessiveFields отклоняет
+// zero/oversized/fractional/incomplete quotas, unknown root, wrong value type и top-level
+// workspaceLimits alias. Проверяет closed policy decoder на synthetic maps без применения
+// filesystem и Kubernetes limits.
 func TestAssistantWorkspaceLimitsRejectUnknownAndExcessiveFields(t *testing.T) {
 	for _, limits := range []map[string]any{
 		{"maxBytes": float64(0), "maxFiles": float64(10)},

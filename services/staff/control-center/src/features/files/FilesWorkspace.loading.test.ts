@@ -1,6 +1,6 @@
+import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import { readFileSync } from "node:fs";
 import {
-  createRenderer,
   defineComponent,
   reactive,
   ssrContextKey,
@@ -75,18 +75,7 @@ type State = {
 const unmounts: (() => void)[] = [];
 function mount(initialArtifactRef?: string) {
   let state!: State;
-  const renderer = createRenderer<object, object>({
-    patchProp() {},
-    insert() {},
-    remove() {},
-    createElement: () => ({}),
-    createText: () => ({}),
-    createComment: () => ({}),
-    setText() {},
-    setElementText() {},
-    parentNode: () => null,
-    nextSibling: () => null,
-  });
+  const renderer = createNoopRenderer();
   const component = FilesWorkspace as unknown as {
     setup(props: unknown, context: SetupContext): State;
   };

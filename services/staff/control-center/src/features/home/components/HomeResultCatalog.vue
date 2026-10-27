@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { downloadBlob } from "@/shared/ui/download-blob";
 import { Maximize2 } from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { loadHomeResultPage, type HomeResultItem } from "../result-catalog";
@@ -243,15 +244,7 @@ async function download() {
       "DOWNLOAD",
     );
     if (current !== artifactGeneration) return;
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = currentArtifact.fileName;
-    anchor.hidden = true;
-    document.body.append(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, currentArtifact.fileName);
   } catch (error) {
     if (current === artifactGeneration)
       artifactProblem.value = asProblem(error);

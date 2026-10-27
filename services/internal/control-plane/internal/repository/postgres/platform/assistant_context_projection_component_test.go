@@ -10,8 +10,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// План реального запроса доказывает число вычислений, не зависит от скорости хоста.
-// Fixture и EXPLAIN исполняются только в disposable компонентной базе.
+// assertAssistantContextProjectionReused uses EXPLAIN ANALYZE in a read-only repeatable-read
+// fixture transaction to require one projection scan and the exact expected loop count,
+// independently of host timing.
+// assertAssistantContextProjectionReused использует EXPLAIN ANALYZE в тестовой read-only
+// repeatable-read транзакции, требуя один проход проекции и точное ожидаемое число циклов
+// независимо от скорости хоста.
 func assertAssistantContextProjectionReused(t *testing.T, ctx context.Context, repository *Repository, principal value.Principal, projectRef string, expectedLoops int) {
 	t.Helper()
 	current, err := repository.resolveScope(ctx, principal)
@@ -33,6 +37,10 @@ func assertAssistantContextProjectionReused(t *testing.T, ctx context.Context, r
 	if err != nil {
 		t.Fatal("explain repeated-context fixture")
 	}
+	// node decodes only function name, actual loop count and child plans needed to count
+	// assistant-context projection executions.
+	// node декодирует только имя функции, фактическое число циклов и дочерние планы, необходимые для
+	// подсчёта исполнений проекции контекста ассистента.
 	type node struct {
 		Function string  `json:"Function Name"`
 		Loops    float64 `json:"Actual Loops"`

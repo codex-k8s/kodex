@@ -14,12 +14,29 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// queryCardConnection seeds a synthetic connection and agent grant to exercise project-card
+// integration state projection.
+// queryCardConnection подготавливает искусственное соединение и разрешение агента для проверки
+// проекции состояния интеграции в карточке проекта.
+//
 //go:embed testdata/sql/catalog_card_connection.sql
 var queryCardConnection string
 
+// queryCardConnectionState changes only the synthetic card connection state while retaining its
+// fixture identity.
+// queryCardConnectionState изменяет только состояние искусственного соединения карточки, сохраняя
+// его тестовую идентичность.
+//
 //go:embed testdata/sql/catalog_card_connection_state.sql
 var queryCardConnectionState string
 
+// testCatalogCardProjections checks authoritative card counts/activity, published-versus-draft
+// summaries, list/get/replay parity and permission-filtered children/current-run references, with
+// synthetic connection states and terminal run cleanup.
+// testCatalogCardProjections проверяет авторитетные счётчики и активность карточек, опубликованные
+// и черновые сводки, согласованность списка, единичного чтения и повтора и фильтрацию дочерних
+// данных и ref текущего Run по правам, с искусственными состояниями соединения и очисткой
+// завершённого Run.
 func testCatalogCardProjections(t *testing.T, ctx context.Context, repository *Repository) {
 	seedObservedCatalogFixture(t, ctx, repository)
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.runs.launch"}, "control-api-gateway")

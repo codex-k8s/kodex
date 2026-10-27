@@ -87,32 +87,6 @@ const tabs: Array<{
   cursor: pointer;
   font-weight: 500;
 }
-.integration-tab:hover,
-.integration-tab:focus-visible {
-  color: var(--text);
-  background: var(--panel);
-}
-.integration-tab--active {
-  color: var(--accent-strong);
-  border-bottom-color: var(--accent);
-}
-.tab-count {
-  display: inline-grid;
-  place-items: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: var(--panel);
-  color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-}
-.integration-tab--active .tab-count {
-  color: var(--accent-strong);
-  background: var(--accent-soft);
-}
-.tab-count--locked {
-  color: var(--subtle);
-}
 </style>
+
+<style scoped src="../../../shared/ui/section-tab-state.css"></style>

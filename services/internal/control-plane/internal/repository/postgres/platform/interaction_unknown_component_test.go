@@ -9,6 +9,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// testInteractionUnknownOutcome checks expired claimed delivery becomes unknown without automatic
+// resend, distinguishes no-effect/confirmed-success completion and advertises reconciliation; all
+// outcomes are synthetic within rollback.
+// testInteractionUnknownOutcome проверяет переход просроченной захваченной доставки в неизвестный
+// исход без автоматической отправки, различает завершение без эффекта и с подтверждённым успехом и
+// предлагает сверку; все исходы искусственные внутри отката.
 func testInteractionUnknownOutcome(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool, runRef string) {
 	t.Helper()
 	tx, err := pool.Begin(ctx)

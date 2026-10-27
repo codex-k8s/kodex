@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"strconv"
 	"strings"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
@@ -73,4 +74,52 @@ func decodeCatalogCursor(current scope, kind string, filter query.Filter) (strin
 func encodeCatalogCursor(current scope, kind string, filter query.Filter, ref string) string {
 	raw, _ := json.Marshal(catalogCursor{Version: 1, Scope: catalogScope(current, kind, filter), Ref: ref})
 	return base64.RawURLEncoding.EncodeToString(raw)
+}
+
+// decodeCatalogRevisionCursor preserves the catalog envelope checks and the existing signed
+// base-ten int64 parser for revision histories. Empty first-page tokens yield zero; supplied
+// positions must be positive, including the native accepted plus sign and leading zeroes.
+// Malformed, out-of-range or scope-mismatched positions return ErrInvalid. The unsigned scope
+// digest is only a locator: callers still resolve the principal and check resource eligibility
+// in their own read-only transaction after validation. This helper performs no I/O or ownership
+// decision and does not choose a catalog kind or resource for its callers.
+// decodeCatalogRevisionCursor сохраняет проверки конверта каталога и прежний разбор signed
+// base-ten int64 для истории ревизий. Пустой токен первой страницы даёт ноль; переданная позиция
+// должна быть положительной, с прежним допуском плюса и ведущих нулей. Неверная, выходящая за
+// диапазон либо не совпадающая по scope позиция даёт ErrInvalid. Неподписанный scope digest —
+// только locator: callers разрешают principal и проверяют ресурс в собственной read-only
+// transaction после валидации. Helper не выполняет I/O, не решает вопрос владения и не выбирает
+// вид каталога либо ресурс за вызывающего.
+func decodeCatalogRevisionCursor(current scope, kind string, filter query.Filter) (int64, error) {
+	cursor, err := decodeCatalogCursor(current, kind, filter)
+	if err != nil {
+		return 0, err
+	}
+	var before int64
+	if cursor != "" {
+		before, err = strconv.ParseInt(cursor, 10, 64)
+		if err != nil || before < 1 {
+			return 0, errs.ErrInvalid
+		}
+	}
+	return before, nil
+}
+
+// catalogPageWithCursor trims an already eligible lookahead page using the caller's positive
+// bounded limit, keeping the original slice backing array and capacity. Only an excess row
+// triggers the position callback, exactly once after trimming, on the last visible item; an
+// empty or complete page keeps an empty continuation. Kind, scope, filter and typed position
+// mapping stay caller-selected. Totals, SQL access checks, transactions and errors remain outside.
+// catalogPageWithCursor обрезает уже допустимую lookahead страницу по положительному bounded
+// limit вызывающего, сохраняя исходный backing array и capacity среза. Только лишняя строка
+// вызывает position callback ровно один раз после обрезки, для последнего видимого элемента;
+// пустая либо полная страница сохраняет пустое продолжение. Kind, scope, filter и типизированное
+// преобразование позиции задаёт caller. Totals, SQL-допуск, транзакции и ошибки остаются снаружи.
+func catalogPageWithCursor[T any](current scope, kind string, filter query.Filter, items []T, limit int32, position func(T) string) ([]T, string) {
+	next := ""
+	if len(items) > int(limit) {
+		items = items[:limit]
+		next = encodeCatalogCursor(current, kind, filter, position(items[len(items)-1]))
+	}
+	return items, next
 }

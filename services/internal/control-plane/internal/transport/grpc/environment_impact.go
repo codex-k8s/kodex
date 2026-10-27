@@ -7,6 +7,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
 // GetRuntimeEnvironmentImpact reads affected consumers for the requested environment/version with
@@ -14,22 +15,21 @@ import (
 // GetRuntimeEnvironmentImpact читает затронутых потребителей заданной среды и версии с проверенным
 // principal и пагинацией, сохраняя digest цели и привязки версий.
 func (server *Server) GetRuntimeEnvironmentImpact(ctx context.Context, request *controlplanev1.GetRuntimeEnvironmentImpactRequest) (*controlplanev1.GetRuntimeEnvironmentImpactResponse, error) {
-	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetRuntimeEnvironmentImpact_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	result, err := server.service.GetRuntimeEnvironmentImpact(ctx, p, request.GetEnvironmentRef(), request.GetVersionRef(), request.GetQuery(),
-		query.Page{Size: request.GetPage().GetPageSize(), Token: request.GetPage().GetPageToken()})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &controlplanev1.GetRuntimeEnvironmentImpactResponse{EnvironmentRef: result.EnvironmentRef,
-		EnvironmentVersion: result.EnvironmentVersion, TargetVersionRef: result.TargetVersionRef, TargetDigest: result.TargetDigest,
-		Total: result.Total, Page: &controlplanev1.PageInfo{NextPageToken: result.NextPageToken}}
-	for _, item := range result.Consumers {
-		response.Consumers = append(response.Consumers, castRuntimeEnvironmentConsumer(item))
-	}
-	return response, nil
+	return queryResponse(ctx, controlplanev1.PlatformQueryService_GetRuntimeEnvironmentImpact_FullMethodName, func(p value.Principal) (*controlplanev1.GetRuntimeEnvironmentImpactResponse, error) {
+		result, err := server.service.GetRuntimeEnvironmentImpact(ctx, p, request.GetEnvironmentRef(), request.GetVersionRef(), request.GetQuery(),
+			query.Page{Size: request.GetPage().GetPageSize(), Token: request.GetPage().GetPageToken()})
+		if err != nil {
+			return nil, err
+		}
+		response := &controlplanev1.GetRuntimeEnvironmentImpactResponse{EnvironmentRef: result.EnvironmentRef,
+			EnvironmentVersion: result.EnvironmentVersion, TargetVersionRef: result.TargetVersionRef, TargetDigest: result.TargetDigest,
+			Total: result.Total, Page: &controlplanev1.PageInfo{NextPageToken: result.NextPageToken}}
+		for _, item := range result.Consumers {
+			response.Consumers = append(response.Consumers, castRuntimeEnvironmentConsumer(item))
+		}
+		return response, nil
+
+	})
 }
 
 // RebindRuntimeEnvironment converts selected consumer pins before executing the dedicated rebind

@@ -47,14 +47,10 @@ IFS=',' read -r -a api_ports <<<"$api_ports_raw"
 ((${#api_cidrs[@]} >= 1 && ${#api_cidrs[@]} <= 32)) || fail "Kubernetes API CIDRs must contain one to 32 exact endpoints"
 ((${#api_ports[@]} >= 1 && ${#api_ports[@]} <= 8)) || fail "Kubernetes API ports must contain one to eight exact ports"
 has_service_port=false
-for cidr in "${api_cidrs[@]}"; do
-  [[ "$cidr" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/32$ || "$cidr" =~ ^[0-9a-fA-F:]+/128$ ]] || fail "Kubernetes API endpoint must be IPv4 /32 or IPv6 /128"
-done
-for port in "${api_ports[@]}"; do
-  [[ "$port" =~ ^[0-9]+$ ]] && ((10#$port >= 1 && 10#$port <= 65535)) || fail "Kubernetes API port is invalid"
-  [[ "$port" == 443 ]] && has_service_port=true
-done
-[[ "$has_service_port" == true ]] || fail "Kubernetes API Service port 443 is required"
+# shellcheck source=lib/kubernetes-api-input.sh
+source "${BASH_SOURCE[0]%"${BASH_SOURCE[0]##*/}"}lib/kubernetes-api-input.sh"
+kodex_validate_kubernetes_api_cidrs
+kodex_validate_kubernetes_api_ports
 command -v kubectl >/dev/null 2>&1 || fail "kubectl is required"
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"

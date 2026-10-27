@@ -1,0 +1,56 @@
+/* Карточки результатов помощника: scoped-граница принадлежит каждому SFC. */
+:is(
+  .assistant-created-entity,
+  .assistant-created-file,
+  .assistant-schedule-card,
+  .assistant-workflow-card,
+  .assistant-environment-card,
+  .assistant-connection-card,
+  .assistant-run-card
+) {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+:is(
+    .assistant-created-entity,
+    .assistant-created-file,
+    .assistant-schedule-card,
+    .assistant-workflow-card,
+    .assistant-environment-card,
+    .assistant-connection-card,
+    .assistant-run-card
+  )
+  header,
+:is(
+  .assistant-created-entity__actions,
+  .assistant-created-file__actions,
+  .assistant-schedule-card__actions,
+  .assistant-workflow-card__actions,
+  .assistant-environment-card__actions,
+  .assistant-connection-card__actions,
+  .assistant-run-card__actions
+) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+:is(
+    .assistant-created-entity,
+    .assistant-created-file,
+    .assistant-schedule-card,
+    .assistant-workflow-card,
+    .assistant-environment-card,
+    .assistant-connection-card,
+    .assistant-run-card
+  )
+  p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

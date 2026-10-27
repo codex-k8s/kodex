@@ -1,5 +1,11 @@
+import {
+  emailRecoveryEntryLimit,
+  readEmailRecoveryEntries,
+} from "./email-recovery-storage";
 import type { EmailMailboxCredentialKind } from "@/shared/api/generated/openapi/types.gen";
 
+const invalidMailboxCredentialStorage =
+  "Invalid mailbox credential recovery metadata";
 export const mailboxCredentialRecoveryKey = "kodex.email.credential-attempts";
 export interface MailboxCredentialAttempt {
   connectionRef: string;
@@ -9,12 +15,13 @@ export interface MailboxCredentialAttempt {
 }
 type RecoveryStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 function read(storage: RecoveryStorage): MailboxCredentialAttempt[] {
-  const raw = storage.getItem(mailboxCredentialRecoveryKey);
-  if (!raw) return [];
-  const entries: unknown = JSON.parse(raw);
+  const entries = readEmailRecoveryEntries(
+    storage,
+    mailboxCredentialRecoveryKey,
+    invalidMailboxCredentialStorage,
+  );
+  if (entries === null) return [];
   if (
-    !Array.isArray(entries) ||
-    entries.length > 20 ||
     entries.some((entry: unknown) => {
       if (!entry || typeof entry !== "object") return true;
       const value = entry as Partial<MailboxCredentialAttempt>;
@@ -33,7 +40,7 @@ function read(storage: RecoveryStorage): MailboxCredentialAttempt[] {
       );
     })
   )
-    throw new Error("Invalid mailbox credential recovery metadata");
+    throw new Error(invalidMailboxCredentialStorage);
   const result = entries as MailboxCredentialAttempt[];
   if (
     new Set(result.map((entry) => entry.connectionRef)).size !== result.length
@@ -63,7 +70,7 @@ export function rememberMailboxCredential(
   )
     throw new Error("Mailbox credential recovery attempt changed");
   if (!previous) {
-    if (entries.length >= 20)
+    if (entries.length >= emailRecoveryEntryLimit)
       throw new Error("Mailbox credential recovery limit reached");
     entries.push({
       connectionRef: attempt.connectionRef,

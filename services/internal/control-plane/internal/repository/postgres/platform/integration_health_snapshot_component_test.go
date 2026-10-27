@@ -5,11 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
@@ -21,8 +19,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Матрица использует только отдельную мигрированную disposable БД. Completion
-// синтетический: проверяем owner ledger и fences, не выдаём его за live probe.
+// TestIntegrationHealthSnapshotComponent covers the disposable owner health ledger: immutable
+// inputs, exact claim fences, bounded projection-pending READ retries, permanent-error rejection,
+// config/credential drift, current receipts and grant-only changes. It checks
+// refresh/pending/recovery/expiry/revocation, unchanged runtime snapshots, independent eligible
+// work, durable startup budgets and complete failure before runtime grants. Completion and
+// credential metadata are synthetic; no upstream probe or deployed readiness is proven.
+// TestIntegrationHealthSnapshotComponent проверяет disposable owner health ledger: immutable
+// inputs, exact claim fences, bounded projection-pending READ retries, запрет permanent-error
+// retry, config/credential drift, current receipts и grant-only changes. Проверяет
+// refresh/pending/recovery/expiry/revocation, неизменность runtime snapshots, независимую
+// пригодную работу, durable startup budgets и полный отказ до runtime grants. Completion и
+// credential metadata синтетические; upstream probe или развёрнутая readiness не доказываются.
 func TestIntegrationHealthSnapshotComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
@@ -31,19 +39,7 @@ func TestIntegrationHealthSnapshotComponent(t *testing.T) {
 		t.Fatal("open isolated health snapshot PostgreSQL")
 	}
 	defer pool.Close()
-	r, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = r.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
-		t.Fatal(err)
-	}
-	if err = r.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3, StagingRepository: "registry.invalid/staging", PromotedRepository: "registry.invalid/roles", DefaultImageReference: "registry.invalid/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
-		t.Fatal(err)
-	}
-	if err = r.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
+	r := newSyntheticRuntimeComponentRepository(t, ctx, pool)
 	seedObservedCatalogFixture(t, ctx, r)
 	principal := func(workload, operation, actor, tenant string) value.Principal {
 		return resolvedTestPrincipal(t, ctx, r, port.ProofPrincipalInput{ExternalActorID: actor, ExternalTenantID: tenant, CallerWorkload: workload, Operation: operation}, workload)
@@ -709,6 +705,12 @@ func TestIntegrationHealthSnapshotComponent(t *testing.T) {
 
 	t.Run("startup pending is exact and durably bounded", func(t *testing.T) {
 		project := execute(command.CreateProject, "pending-project", nil, command.ProjectInput{Name: "Pending fixture", Language: "en"}).Project
+		// fixture groups one synthetic connection/agent, its organization UUID and exact
+		// RunnerIntegrationGrant projections for startup-pending tests. Copies retain slice/map aliases as
+		// before; the record does not itself validate a health receipt or issue an execution grant.
+		// fixture объединяет synthetic connection/agent, UUID организации и точные RunnerIntegrationGrant
+		// projections для startup-pending tests. Копии сохраняют прежние slice/map aliases; запись сама не
+		// проверяет health receipt и не выдаёт execution grant.
 		type fixture struct {
 			connection     entity.IntegrationConnection
 			agent          entity.Agent

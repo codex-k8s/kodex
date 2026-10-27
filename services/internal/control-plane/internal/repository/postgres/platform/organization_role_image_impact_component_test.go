@@ -17,12 +17,36 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// queryOrganizationImageImpactTargetReadback reads synthetic managed-revision/recipe state and
+// mapped build/artifact counts with admission/policy/runtime match booleans for exact
+// tenant/configuration diagnostics; it does not publish or authorize an impact target.
+// queryOrganizationImageImpactTargetReadback читает synthetic managed-revision/recipe state и
+// количества mapped build/artifact с admission/policy/runtime match flags для диагностики точных
+// tenant/configuration; target не публикует и не авторизует.
+//
 //go:embed testdata/sql/organization_image_impact_target_readback.sql
 var queryOrganizationImageImpactTargetReadback string
 
+// queryOrganizationImageImpactReceiptCount counts all command receipts for the exact fixture
+// organization/actor, allowing revoked-owner attempts to be checked for absence of newly persisted
+// receipts without reading payloads.
+// queryOrganizationImageImpactReceiptCount считает все command receipts точных fixture
+// organization/actor для проверки отсутствия новых сохранённых receipts при revoked-owner попытках
+// без чтения payloads.
+//
 //go:embed testdata/sql/organization_image_impact_receipt_count.sql
 var queryOrganizationImageImpactReceiptCount string
 
+// testOrganizationRoleImageImpactRevokedOwner prepares and applies an empty-consumer plan from the
+// actual published organization lineage, then temporarily downgrades the owner binding. Both
+// matching and wrong digest plus prepare replay must fail before receipt mutation; restoring the
+// owner must recover canonical replay. The returned plan is metadata, not evidence of consumer
+// image execution.
+// testOrganizationRoleImageImpactRevokedOwner готовит и применяет план без потребителей из actual
+// published organization lineage, затем временно понижает owner binding. Совпадающий и неверный
+// digest, как и prepare replay, должны отклоняться до записи receipt; восстановление owner должно
+// вернуть канонический replay. Возвращённый план является metadata, а не доказательством
+// исполнения образа потребителем.
 func testOrganizationRoleImageImpactRevokedOwner(t *testing.T, ctx context.Context, r *Repository, service *platformservice.Service, owner value.Principal, current scope, recipeRef string) entity.RoleImageImpactPlan {
 	t.Helper()
 	var configurationRef string
@@ -107,6 +131,16 @@ func testOrganizationRoleImageImpactRevokedOwner(t *testing.T, ctx context.Conte
 	return *plan
 }
 
+// testOrganizationRoleImageImpactConsumers creates bound and unbound organization environments and
+// binds the canonical system assistant, then updates a synthetic admitted recipe and completes
+// owner promotion. It applies the exact three-item impact plan, requiring organization owner
+// tuples, one fresh environment version each and the assistant binding on the target artifact,
+// while checking canonical source history and closed generic actions.
+// testOrganizationRoleImageImpactConsumers создаёт bound и unbound organization environments и
+// привязывает канонический system assistant, затем обновляет синтетически admitted recipe и
+// завершает owner promotion. Применяет точный план из трёх items, требуя organization owner
+// tuples, по одной свежей environment version и assistant binding на target artifact, одновременно
+// проверяя каноническую source history и закрытые generic actions.
 func testOrganizationRoleImageImpactConsumers(t *testing.T, ctx context.Context, r *Repository, service *platformservice.Service, owner value.Principal, current scope, recipeRef string, old entity.ImageArtifact) {
 	t.Helper()
 	resolved, err := r.ResolvePrincipal(ctx, owner)

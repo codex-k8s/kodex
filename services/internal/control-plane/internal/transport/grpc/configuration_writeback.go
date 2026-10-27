@@ -10,6 +10,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -113,15 +114,14 @@ func (server *Server) CancelManagedConfigurationGitWriteBack(ctx context.Context
 // GetManagedConfigurationGitWriteBack разрешает principal точного query до чтения proposal, base и
 // proposed content через доменного владельца.
 func (server *Server) GetManagedConfigurationGitWriteBack(ctx context.Context, r *cp.GetManagedConfigurationGitWriteBackRequest) (*cp.GetManagedConfigurationGitWriteBackResponse, error) {
-	p, err := principal(ctx, cp.PlatformQueryService_GetManagedConfigurationGitWriteBack_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	view, err := server.service.GetConfigurationWriteBack(ctx, p, r.GetProposalRef())
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &cp.GetManagedConfigurationGitWriteBackResponse{Proposal: castWriteBack(view.Proposal), BaseContent: view.BaseContent, ProposedContent: view.ProposedContent}, nil
+	return queryResponse(ctx, cp.PlatformQueryService_GetManagedConfigurationGitWriteBack_FullMethodName, func(p value.Principal) (*cp.GetManagedConfigurationGitWriteBackResponse, error) {
+		view, err := server.service.GetConfigurationWriteBack(ctx, p, r.GetProposalRef())
+		if err != nil {
+			return nil, err
+		}
+		return &cp.GetManagedConfigurationGitWriteBackResponse{Proposal: castWriteBack(view.Proposal), BaseContent: view.BaseContent, ProposedContent: view.ProposedContent}, nil
+
+	})
 }
 
 // ListManagedConfigurationGitWriteBacks reads an owner-authorized proposal page for the
@@ -129,19 +129,18 @@ func (server *Server) GetManagedConfigurationGitWriteBack(ctx context.Context, r
 // ListManagedConfigurationGitWriteBacks читает разрешённую владельцем страницу proposals
 // configuration, сохраняя total, cursor и nonnil пустой response slice.
 func (server *Server) ListManagedConfigurationGitWriteBacks(ctx context.Context, r *cp.ListManagedConfigurationGitWriteBacksRequest) (*cp.ListManagedConfigurationGitWriteBacksResponse, error) {
-	p, err := principal(ctx, cp.PlatformQueryService_ListManagedConfigurationGitWriteBacks_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	items, next, total, err := server.service.ListConfigurationWriteBacks(ctx, p, r.GetConfigurationRef(), query.Filter{Page: page(r.GetPage())})
-	if err != nil {
-		return nil, transportError(err)
-	}
-	result := &cp.ListManagedConfigurationGitWriteBacksResponse{Proposals: []*cp.ManagedConfigurationGitWriteBack{}, Page: &cp.PageInfo{NextPageToken: next}, Total: total}
-	for _, item := range items {
-		result.Proposals = append(result.Proposals, castWriteBack(item))
-	}
-	return result, nil
+	return queryResponse(ctx, cp.PlatformQueryService_ListManagedConfigurationGitWriteBacks_FullMethodName, func(p value.Principal) (*cp.ListManagedConfigurationGitWriteBacksResponse, error) {
+		items, next, total, err := server.service.ListConfigurationWriteBacks(ctx, p, r.GetConfigurationRef(), query.Filter{Page: page(r.GetPage())})
+		if err != nil {
+			return nil, err
+		}
+		result := &cp.ListManagedConfigurationGitWriteBacksResponse{Proposals: []*cp.ManagedConfigurationGitWriteBack{}, Page: &cp.PageInfo{NextPageToken: next}, Total: total}
+		for _, item := range items {
+			result.Proposals = append(result.Proposals, castWriteBack(item))
+		}
+		return result, nil
+
+	})
 }
 
 // castWriteBackLease copies the owner proposal/attempt/claimant/generation/fence/expiry tuple to

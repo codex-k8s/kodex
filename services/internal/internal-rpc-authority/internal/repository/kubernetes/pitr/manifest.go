@@ -2,7 +2,6 @@ package pitr
 
 import (
 	"context"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
@@ -16,6 +15,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	apiclient "github.com/codex-k8s/kodex/libs/go/kubernetestransport"
 )
 
 // ManifestResolverConfig pins the in-cluster API/TLS boundary, selected Backup, fixed source Cluster, Barman object/server and bounded request timeout. File paths identify mounted credentials rather than embedded secret values.
@@ -144,25 +144,15 @@ func NewManifestResolver(config ManifestResolverConfig) (*ManifestResolver, erro
 	if !rootCAs.AppendCertsFromPEM(caRaw) {
 		return nil, errors.New("Kubernetes API CA is invalid")
 	}
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			MinVersion: tls.VersionTLS13,
-			RootCAs:    rootCAs,
-			ServerName: config.TLSServerName,
-		},
-		ForceAttemptHTTP2: true,
+	client, err := apiclient.New(rootCAs, config.TLSServerName, config.Timeout, "Kubernetes API redirect is forbidden")
+	if err != nil {
+		return nil, err
 	}
 	base := config.Address + "/apis/postgresql.cnpg.io/v1/namespaces/" +
 		url.PathEscape(config.Namespace)
 	return &ManifestResolver{
-		config: config,
-		client: &http.Client{
-			Transport: transport,
-			Timeout:   config.Timeout,
-			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-				return errors.New("Kubernetes API redirect is forbidden")
-			},
-		},
+		config:      config,
+		client:      client,
 		backupsURL:  base + "/backups/" + url.PathEscape(config.BackupName),
 		clustersURL: base + "/clusters/" + url.PathEscape(config.SourceCluster),
 		now:         time.Now,

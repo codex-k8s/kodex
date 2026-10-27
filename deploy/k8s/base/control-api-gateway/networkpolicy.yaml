@@ -28,13 +28,6 @@ spec:
       ports: [{protocol: TCP, port: 9090}, {protocol: TCP, port: 9091}]
   egress:
     - to:
-        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
-          podSelector: {matchLabels: {k8s-app: kube-dns}}
-      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
-    - to:
-        - podSelector: {matchLabels: {app.kubernetes.io/name: control-plane}}
-      ports: [{protocol: TCP, port: 8443}]
-    - to:
         - podSelector: {matchLabels: {app.kubernetes.io/name: secret-broker}}
       ports: [{protocol: TCP, port: 8443}]
     - to:
@@ -50,11 +43,3 @@ spec:
               app.kubernetes.io/name: __KODEX_OIDC_POD_NAME__
               app.kubernetes.io/component: __KODEX_OIDC_POD_COMPONENT__
       ports: [{protocol: TCP, port: __KODEX_OIDC_TARGET_PORT__}]
-    - to:
-        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: observability}}
-          podSelector: {matchLabels: {app.kubernetes.io/name: opentelemetry-collector}}
-      ports: [{protocol: TCP, port: 4317}]
-    - to:
-        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: observability}}
-          podSelector: {matchLabels: {app.kubernetes.io/name: sentry-relay}}
-      ports: [{protocol: TCP, port: 8443}]

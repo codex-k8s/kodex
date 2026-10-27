@@ -13,14 +13,31 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryPromptAssistantCore embeds server-owned SYSTEM/PROJECT assistant-core selection under
+// organization/agent and exact project rules. SYSTEM remains organization-owned even with an
+// active same-tenant project screen context. The projection includes current runtime core pins,
+// published core content and its active instruction binding; ordinary agents return an empty core
+// scope.
+// queryPromptAssistantCore встраивает server-owned выбор SYSTEM/PROJECT assistant core внутри
+// organization/agent и точных project rules. SYSTEM остаётся собственностью организации даже при
+// активном project screen context того же tenant. Проекция содержит текущие runtime core pins,
+// опубликованный core content и его active instruction binding; обычные агенты возвращают пустой
+// core scope.
+//
 //go:embed sql/prompt_assistant_core.sql
 var queryPromptAssistantCore string
 
-// База разрешается только по server-owned профилю того же проекта/организации.
-// SYSTEM принадлежит организации; его project screen context не меняет owner
-// базы. PROJECT и обычный агент сохраняют exact project boundary.
-// Ни agent payload, ни owner template не могут объявить себя помощником.
-// Текущая база закрепляется только в новом snapshot; история не перечитывается.
+// hydrateAssistantCoreTx clears any existing AssistantCore before reading the server-owned
+// projection in the caller transaction. Missing agent is NotFound, SQL failure is Unavailable and
+// an ordinary agent needs no core. Assistant cores require an active binding, nonempty ref and
+// exact compiled revision/content/SHA-256, otherwise Conflict. Only the new in-memory snapshot
+// receives the core; historical snapshots and caller-supplied templates cannot mint an assistant
+// profile.
+// hydrateAssistantCoreTx очищает прежний AssistantCore перед чтением server-owned projection в
+// транзакции вызывающего. Отсутствующий agent даёт NotFound, SQL-отказ — Unavailable, обычному
+// agent core не нужен. Для assistant core требует active binding, непустой ref и точные compiled
+// revision/content/SHA-256, иначе Conflict. Core получает только новый in-memory snapshot;
+// исторические snapshots и templates вызывающего не создают assistant profile.
 func (repository *Repository) hydrateAssistantCoreTx(ctx context.Context, tx pgx.Tx, current scope, snapshot *entity.PromptMaterializationSnapshot) error {
 	snapshot.AssistantCore = nil
 	var core entity.PromptAssistantCore

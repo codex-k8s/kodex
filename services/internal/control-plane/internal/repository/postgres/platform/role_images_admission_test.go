@@ -5,6 +5,12 @@ import (
 	"testing"
 )
 
+// TestRoleImageAdmissionPolicyRotationQueries inspects embedded SQL for stale-policy
+// terminalization, claim-token cleanup, pending/current-policy/latest-build selection and owner
+// expiry instead of lease reclaim; static clauses do not execute or prove concurrent SQL behavior.
+// TestRoleImageAdmissionPolicyRotationQueries проверяет embedded SQL на завершение старой policy,
+// очистку claim tokens, выбор pending/current-policy/latest-build и owner expiry вместо повторного
+// claim; проверка clauses не исполняет SQL и не доказывает конкурентное поведение.
 func TestRoleImageAdmissionPolicyRotationQueries(t *testing.T) {
 	reject := strings.ToLower(queryRoleImagesRejectStaleAdmissionCandidates)
 	for _, required := range []string{
@@ -50,6 +56,12 @@ func TestRoleImageAdmissionPolicyRotationQueries(t *testing.T) {
 	}
 }
 
+// TestRoleImageSupplyWorkAvailabilityIsReadOnlyAndUsesClaimEligibility checks embedded
+// availability SQL contains policy, recipe and expiry eligibility while forbidding locks and write
+// clauses; it verifies query shape without connecting to PostgreSQL.
+// TestRoleImageSupplyWorkAvailabilityIsReadOnlyAndUsesClaimEligibility проверяет наличие policy,
+// recipe и expiry eligibility в embedded availability SQL при запрете locks и write clauses;
+// проверяется форма запроса без соединения с PostgreSQL.
 func TestRoleImageSupplyWorkAvailabilityIsReadOnlyAndUsesClaimEligibility(t *testing.T) {
 	query := strings.ToLower(queryRoleImagesGetSupplyWorkAvailability)
 	for _, required := range []string{

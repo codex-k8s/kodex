@@ -9,6 +9,25 @@ render="$temporary_directory/render.yaml"
 kubectl kustomize "$repository_root/deploy/k8s/profiles/web-only" >"$render"
 optional_render="$temporary_directory/with-mattermost.yaml"
 kubectl kustomize "$repository_root/deploy/k8s/profiles/web-with-mattermost" >"$optional_render"
+# Gateway остаётся внутренним Service: публичный API принадлежит ingress PWA.
+# Каждый overlay должен собираться отдельно, без ссылки на удалённый Ingress.
+for gateway_environment in staging production; do
+  gateway_render="$temporary_directory/gateway-$gateway_environment.yaml"
+  kubectl kustomize "$repository_root/deploy/k8s/overlays/$gateway_environment/control-api-gateway" >"$gateway_render"
+  yq -o=json -I=0 '.' "$gateway_render" | jq -s -e --arg environment "$gateway_environment" '
+    map(select(.kind != null)) as $resources |
+    all($resources[]; .kind != "Ingress") and
+    ([ $resources[] | select(.kind == "Deployment" and .metadata.name == "control-api-gateway") ] | length) == 1 and
+    any($resources[];
+      .kind == "Deployment" and .metadata.name == "control-api-gateway" and
+      .metadata.namespace == "kodex-system" and
+      .metadata.labels."kodex.dev/environment" == $environment and
+      .spec.template.metadata.labels."kodex.dev/environment" == $environment) and
+    any($resources[];
+      .kind == "Service" and .metadata.name == "control-api-gateway" and
+      .metadata.namespace == "kodex-system" and (.spec.type // "ClusterIP") == "ClusterIP")
+  ' >/dev/null || fail "standalone gateway overlay has an invalid boundary: $gateway_environment"
+done
 yq -o=json -I=0 '.' "$render" | jq -s '.' >"$temporary_directory/base.json"
 yq -o=json -I=0 '.' "$optional_render" | jq -s '.' >"$temporary_directory/optional.json"
 jq -n -e --slurpfile base "$temporary_directory/base.json" \

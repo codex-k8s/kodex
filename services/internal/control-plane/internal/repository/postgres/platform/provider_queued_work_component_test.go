@@ -15,9 +15,20 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// queryProviderQueuedFixtureAccount resolves the exact queued Run session provider account through
+// matching organization joins.
+// queryProviderQueuedFixtureAccount разрешает точный аккаунт провайдера сессии ожидающего Run
+// через соединения по совпадающей организации.
+//
 //go:embed testdata/sql/provider_queued_account.sql
 var queryProviderQueuedFixtureAccount string
 
+// testProviderQueuedWorkSnapshot checks blockers filters preserve the owner snapshot digest, exact
+// selected-run cancellation and replay close the Run, and changed blockers reject a stale
+// cancellation request.
+// testProviderQueuedWorkSnapshot проверяет сохранение дайджеста снимка владельца при фильтрации
+// blockers, закрытие Run точной отменой выбранного исполнения и повтором и отклонение устаревшей
+// отмены после изменения blockers.
 func testProviderQueuedWorkSnapshot(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	prepareObservedWarmFixture(t, ctx, repository)

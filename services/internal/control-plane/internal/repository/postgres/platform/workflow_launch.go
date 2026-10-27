@@ -16,14 +16,38 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// workflowLaunchRefPattern accepts only 8 to 96 ASCII letters, digits, underscores or hyphens for
+// required-workflow reference guards. It is a syntax predicate, not existence, publication,
+// ownership or delegation proof.
+// workflowLaunchRefPattern принимает только 8–96 ASCII-букв, цифр, подчёркиваний либо дефисов для
+// required-workflow reference guards. Это синтаксический predicate, а не доказательство
+// существования, публикации, владения или делегирования.
 var workflowLaunchRefPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{8,96}$`)
-var workflowSpecDigestPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
+// validateRequiredWorkflowAuthorities collects required-workflow ancestor origins in the caller
+// transaction, closes rows and then freshly resolves each origin actor through the canonical
+// active-subject/access-role query. It pins project scope, requires effective platform.run.launch
+// and authorizes the specialized workflow LaunchRun target. Stored origins locate authority but do
+// not replace fresh checks; scan failure is Unavailable, missing current actor/capability/access
+// is Forbidden. It neither claims nor launches work.
+// validateRequiredWorkflowAuthorities собирает required-workflow ancestor origins в транзакции
+// вызывающего, закрывает rows, затем заново разрешает каждого origin actor через канонический
+// active-subject/access-role query. Закрепляет project scope, требует effective
+// platform.run.launch и авторизует специализированный workflow LaunchRun target. Сохранённые
+// origins задают locator полномочий, но не заменяют свежую проверку; scan failure даёт
+// Unavailable, отсутствие текущего actor/capability/access — Forbidden. Не выполняет claim или
+// launch.
 func (repository *Repository) validateRequiredWorkflowAuthorities(ctx context.Context, tx pgx.Tx, machine scope, rootID string) error {
 	rows, err := tx.Query(ctx, queryWorkflowLaunchClaimAuthorities, pgx.StrictNamedArgs{"organization_id": machine.organizationID, "root_run_id": rootID})
 	if err != nil {
 		return errs.ErrUnavailable
 	}
+	// authority stores one ancestor origin projection with actor, organization, project, agent
+	// capabilities and workflow ref until query rows close. These local fields are only inputs to
+	// fresh actor/capability/resource checks and are never a caller-issued grant.
+	// authority хранит одну ancestor origin projection с actor, organization, project, agent
+	// capabilities и workflow ref до закрытия query rows. Локальные поля служат только входами свежих
+	// actor/capability/resource checks и не являются выданным caller grant.
 	type authority struct {
 		actorRef, orgRef, projectID, projectRef, agentRef, workflowRef string
 		capabilities                                                   []string
@@ -67,11 +91,21 @@ func (repository *Repository) validateRequiredWorkflowAuthorities(ctx context.Co
 	return nil
 }
 
-// Проверка перед receipt replay: старый idempotency key не оживляет истёкший
-// lease и не заменяет актуальное право пользователя/сотрудника.
+// validateWorkflowLaunchAuthority validates the specialized payload type and expected
+// published-ref/digest/version shape, resolves its live lease/fence/generation origin with owner
+// SQL and refreshes the root actor and effective launch capability. It then checks the exact
+// workflow LaunchRun target before receipt replay. No rows/access denial is hidden as NotFound,
+// actor/capability denial is Forbidden and backend failure is Unavailable. It does not itself
+// compare current published pins or materialize a child.
+// validateWorkflowLaunchAuthority проверяет специализированный payload type и форму expected
+// published-ref/digest/version, разрешает live lease/fence/generation origin через owner SQL и
+// обновляет root actor с effective launch capability. Затем проверяет точный workflow LaunchRun
+// target до receipt replay. Отсутствие строки/доступа скрывается как NotFound, actor/capability
+// denial даёт Forbidden, backend failure — Unavailable. Сам не сравнивает текущие published pins и
+// не материализует child.
 func (repository *Repository) validateWorkflowLaunchAuthority(ctx context.Context, tx pgx.Tx, machine scope, input command.Command) error {
 	payload, ok := input.Payload.(command.LaunchWorkflowInput)
-	if !ok || !workflowLaunchRefPattern.MatchString(payload.ExpectedPublishedRef) || !workflowSpecDigestPattern.MatchString(payload.ExpectedSpecDigest) || payload.ExpectedWorkflowVersion < 1 {
+	if !ok || !workflowLaunchRefPattern.MatchString(payload.ExpectedPublishedRef) || !exactSHA256(payload.ExpectedSpecDigest) || payload.ExpectedWorkflowVersion < 1 {
 		return errs.ErrInvalid
 	}
 	fence := sha256.Sum256([]byte(payload.Fence))
@@ -110,8 +144,17 @@ func (repository *Repository) validateWorkflowLaunchAuthority(ctx context.Contex
 	return nil
 }
 
-// Блокировка exact project предшествует всем row locks команд этого required
-// graph; claim берёт затронутые project в устойчивом порядке без global lock.
+// lockWorkflowLaunchProjects derives a locator/project from the closed command payload types and
+// locks exact related projects using stable SQL advisory-lock order. ClaimExecution and
+// queued-provider cancellation include active required-workflow/root projects; a command without a
+// relevant locator returns nil. Scan/query failures are Unavailable. It locks within the existing
+// transaction and returns project IDs without a global lock, resource authorization or commit.
+// lockWorkflowLaunchProjects выводит locator/project из закрытых command payload types и блокирует
+// точные связанные projects в устойчивом SQL-порядке advisory locks. ClaimExecution и
+// queued-provider cancellation включают активные required-workflow/root projects; команда без
+// подходящего locator возвращает nil. Scan/query failures дают Unavailable. Блокирует внутри
+// существующей транзакции и возвращает project IDs без global lock, resource authorization или
+// commit.
 func lockWorkflowLaunchProjects(ctx context.Context, tx pgx.Tx, current scope, input command.Command) ([]string, error) {
 	locator, projectRef := "", ""
 	switch payload := input.Payload.(type) {
@@ -163,9 +206,23 @@ func lockWorkflowLaunchProjects(ctx context.Context, tx pgx.Tx, current scope, i
 	return projects, nil
 }
 
+// launchWorkflowExecution validates bounded required-workflow input, resolves and locks the live
+// lease origin, refreshes the root actor/capabilities and authorizes the specialized workflow
+// target. Exact accepted intent returns the previous child receipt; a new intent must match
+// current published pins and tree bounds before canonical launchRun. It binds child/parent, proxy,
+// delegation/callback edges and origin pins, emits events and reads the graph in the caller
+// transaction. Reference-generation errors remain ignored as before. No commit, retry or external
+// provider action occurs here; any partial SQL work requires caller rollback on error.
+// launchWorkflowExecution проверяет ограниченный required-workflow input, разрешает и блокирует
+// live lease origin, обновляет root actor/capabilities и авторизует специализированную workflow
+// target. Точный принятый intent возвращает прежний child receipt; новый intent обязан совпасть с
+// current published pins и tree bounds до canonical launchRun. Связывает child/parent, proxy,
+// delegation/callback edges и origin pins, создаёт events и читает graph в транзакции вызывающего.
+// Ошибки генерации refs по-прежнему игнорируются. Commit, retry или внешний provider action здесь
+// не выполняются; частичная SQL-работа при ошибке требует rollback вызывающего.
 func (repository *Repository) launchWorkflowExecution(ctx context.Context, tx pgx.Tx, machine scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.LaunchWorkflowInput)
-	if !ok || !runtimecontract.ValidAssistantTurnContent(payload.Task) || !workflowLaunchRefPattern.MatchString(payload.WorkflowRef) || !workflowLaunchRefPattern.MatchString(payload.ExpectedPublishedRef) || !workflowSpecDigestPattern.MatchString(payload.ExpectedSpecDigest) || payload.ExpectedWorkflowVersion < 1 || len([]rune(payload.Title)) > 240 || !validBoundedRunInput(payload.Input) {
+	if !ok || !runtimecontract.ValidAssistantTurnContent(payload.Task) || !workflowLaunchRefPattern.MatchString(payload.WorkflowRef) || !workflowLaunchRefPattern.MatchString(payload.ExpectedPublishedRef) || !exactSHA256(payload.ExpectedSpecDigest) || payload.ExpectedWorkflowVersion < 1 || len([]rune(payload.Title)) > 240 || !validBoundedRunInput(payload.Input) {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	fence := sha256.Sum256([]byte(payload.Fence))
@@ -282,14 +339,33 @@ func (repository *Repository) launchWorkflowExecution(ctx context.Context, tx pg
 	return outcome, nil
 }
 
+// requiredWorkflowTerminal holds a locked OPEN required-workflow launch projection with
+// origin/parent/child/proxy/callback identities, child version/state and summary. It is temporary
+// reconciliation input; the fields do not independently authorize cancellation, prove callback
+// delivery or mark a transaction committed.
+// requiredWorkflowTerminal хранит заблокированную OPEN required-workflow launch projection с
+// origin/parent/child/proxy/callback identities, child version/state и summary. Это временный вход
+// reconciliation; поля отдельно не авторизуют отмену, не доказывают callback delivery и не
+// отмечают commit транзакции.
 type requiredWorkflowTerminal struct {
 	id, rootID, parentRunID, parentNodeID, parentNodeRef, projectID, childID, childRef, childState, summary, parentState, proxyID, proxyRef, edgeID, edgeRef string
 	version                                                                                                                                                  int64
 }
 
-// Выполняется до command receipt/commit для каждого materialized lifecycle.
-// Терминальный родитель закрывает required subtree той же транзакцией;
-// отдельный terminal W доставляет один callback, но не завершает P успешно.
+// reconcileWorkflowLaunches reconciles only supplied projects in the caller transaction for at
+// most 128 rounds, closing terminal graphs before locking up to 129 open terminal-related
+// launches. A terminal parent cancels a live required child with its current version; completion
+// closes the proxy and emits its state event, while only a nonterminal parent receives the child
+// callback. Empty work succeeds, excessive batch/rounds is Conflict and failures stop for caller
+// rollback. It does not mark the parent successful merely because the child completed or commit
+// separately from the command receipt.
+// reconcileWorkflowLaunches сверяет только переданные projects в транзакции вызывающего максимум
+// за 128 раундов, закрывая terminal graphs до блокировки до 129 открытых terminal-related
+// launches. Terminal parent отменяет живого required child с его текущей version; completion
+// закрывает proxy и создаёт его state event, а child callback получает только nonterminal parent.
+// Пустая работа успешна, чрезмерные batch/rounds дают Conflict, ошибка останавливает путь для
+// rollback вызывающего. Не завершает parent успешно лишь из-за завершения child и не фиксируется
+// отдельно от command receipt.
 func (repository *Repository) reconcileWorkflowLaunches(ctx context.Context, tx pgx.Tx, current scope, projects []string) error {
 	if len(projects) == 0 {
 		return nil
@@ -352,13 +428,29 @@ func (repository *Repository) reconcileWorkflowLaunches(ctx context.Context, tx 
 	return errs.ErrConflict
 }
 
-// Owner gate, claim failure и обычный cancel используют один полный terminal
-// envelope. Повторная сверка не создаёт событий без новых transitions.
+// closeRequiredWorkflowTerminalGraphs reads terminal required-workflow roots for the selected
+// tenant/projects, closes query rows and applies the canonical terminal-graph SQL to each root.
+// That SQL cancels live runs/nodes/turns/leases/gates and preserves UNKNOWN_OUTCOME for uncertain
+// claimed effects/deliveries. It emits only returned RUN/NODE/GATE transitions with the existing
+// state mapping; repeat reads with no transitions add no events. Errors propagate without commit,
+// retry or a partial successful envelope.
+// closeRequiredWorkflowTerminalGraphs читает terminal required-workflow roots выбранных
+// tenant/projects, закрывает query rows и применяет canonical terminal-graph SQL к каждому root.
+// SQL отменяет живые runs/nodes/turns/leases/gates и сохраняет UNKNOWN_OUTCOME для неопределённых
+// claimed effects/deliveries. Создаёт только возвращённые RUN/NODE/GATE transitions с прежним
+// state mapping; повторное чтение без transitions не добавляет events. Ошибки передаются без
+// commit, retry или частично успешной оболочки.
 func (repository *Repository) closeRequiredWorkflowTerminalGraphs(ctx context.Context, tx pgx.Tx, current scope, projects []string) error {
 	rows, err := tx.Query(ctx, queryWorkflowLaunchTerminalRoots, pgx.StrictNamedArgs{"organization_id": current.organizationID, "project_ids": projects})
 	if err != nil {
 		return errs.ErrUnavailable
 	}
+	// terminalRoot retains root UUID/ref, project UUID and terminal state after the root query closes,
+	// allowing the canonical cleanup and event mapper to use the same selected owner projection. It is
+	// not a new grant or durable receipt.
+	// terminalRoot сохраняет root UUID/ref, project UUID и terminal state после закрытия root query,
+	// чтобы canonical cleanup и event mapper использовали одну выбранную owner projection. Не является
+	// новым grant или durable receipt.
 	type terminalRoot struct{ id, ref, project, state string }
 	var roots []terminalRoot
 	for rows.Next() {
@@ -379,6 +471,12 @@ func (repository *Repository) closeRequiredWorkflowTerminalGraphs(ctx context.Co
 		if err != nil {
 			return errs.ErrUnavailable
 		}
+		// transition retains one returned cleanup kind/ref/node triple after transition rows close. The
+		// surrounding mapper selects the existing event kind and node/gate state; this local record does
+		// not add a transition or authorize a different resource.
+		// transition сохраняет одну возвращённую cleanup kind/ref/node тройку после закрытия transition
+		// rows. Окружающий mapper выбирает прежний event kind и node/gate state; локальная запись не
+		// добавляет transition и не авторизует другой resource.
 		type transition struct{ kind, ref, node string }
 		var changes []transition
 		for transitions.Next() {

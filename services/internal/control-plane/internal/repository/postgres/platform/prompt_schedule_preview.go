@@ -19,9 +19,28 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryPromptSchedulePreviewSaved embeds exact nondeleted schedule/project/current revision and
+// its author plus a valid continued-session link. These owner rows determine CURRENT_REVISION
+// execution actor and pins; request fields do not appoint the author.
+// queryPromptSchedulePreviewSaved встраивает чтение точных неудалённого расписания, проекта,
+// текущей ревизии и её автора и корректной связи с продолжаемой сессией. Эти строки владельца
+// назначают исполнителя и pins CURRENT_REVISION; поля запроса не назначают автора.
+//
 //go:embed sql/prompt_schedule_preview_saved.sql
 var queryPromptSchedulePreviewSaved string
 
+// GetSchedulePromptPreviewSnapshot validates schedule mode/input/time and command authority in a
+// five-second read-only repeatable-read transaction, with saved OCC/current target checks.
+// CURRENT_REVISION requires the saved digest and author-based launch authorization; DRAFT previews
+// the caller context. It resolves continuation/template captures and variables, hashes
+// actor/input/pin/snapshot and commits only the read transaction. Partial results on error are not
+// accepted plans, saved revisions or launches.
+// GetSchedulePromptPreviewSnapshot проверяет режим, вход, время и полномочия команды расписания в
+// read-only RepeatableRead транзакции с бюджетом пять секунд, сверяя OCC и текущую цель.
+// CURRENT_REVISION требует сохранённый дайджест и допуск запуска от автора; DRAFT строит контекст
+// вызывающего субъекта. Разрешает продолжение, захваченные шаблоны и переменные, хеширует
+// actor/input/pin/snapshot и завершает только транзакцию чтения. Частичный результат при ошибке не
+// является принятым планом, сохранённой ревизией и запуском.
 func (r *Repository) GetSchedulePromptPreviewSnapshot(ctx context.Context, principal value.Principal, input command.ScheduleInput, ref string, expected int64, scheduledFor time.Time, mode string) (entity.PromptMaterializationSnapshot, entity.SchedulePromptPreviewPin, []entity.TemplateVariable, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -202,6 +221,14 @@ func (r *Repository) GetSchedulePromptPreviewSnapshot(ctx context.Context, princ
 	return snapshot, pin, variables, nil
 }
 
+// applyAutomationPromptVariables initializes variable/unavailability maps, normalizes a parseable
+// scheduled time to UTC and sets automation ref/name/task/timezone/revision values. Empty fields
+// become runtime-required, with REVISION_NOT_SAVED for revision, and task/Automation are replaced;
+// it performs no schedule mutation or permission check.
+// applyAutomationPromptVariables инициализирует карты переменных и недоступности, приводит
+// разбираемое время к UTC и назначает automation ref/name/task/timezone/revision. Пустые поля
+// требуют runtime-контекста, ревизия получает REVISION_NOT_SAVED; task и Automation заменяются. Не
+// изменяет расписание и не проверяет права.
 func applyAutomationPromptVariables(snapshot *entity.PromptMaterializationSnapshot, ref, name, task, scheduledAt, timezone, revision string) {
 	if parsed, err := time.Parse(time.RFC3339Nano, scheduledAt); err == nil {
 		scheduledAt = parsed.UTC().Format(time.RFC3339Nano)
@@ -228,6 +255,12 @@ func applyAutomationPromptVariables(snapshot *entity.PromptMaterializationSnapsh
 	snapshot.Variables["task"] = task
 }
 
+// prepareAutomationCoordinatorPurpose rewrites stage purpose through AutomationTaskPurpose only
+// for the initial workflow coordinator stage. Other targets are unchanged; rendering errors map to
+// Invalid and no execution or schedule write occurs.
+// prepareAutomationCoordinatorPurpose переписывает purpose шага через AutomationTaskPurpose только
+// для начального координатора workflow. Остальные цели не меняются; ошибки преобразуются в
+// Invalid, исполнение и запись расписания не выполняются.
 func prepareAutomationCoordinatorPurpose(snapshot *entity.PromptMaterializationSnapshot) error {
 	if snapshot.TargetKind != promptservice.TargetWorkflowStage || snapshot.ContextPin.WorkflowStageKey != "workflow.coordinator.initial" {
 		return nil

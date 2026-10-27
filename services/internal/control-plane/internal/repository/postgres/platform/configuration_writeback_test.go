@@ -11,6 +11,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestWriteBackEffectUsesActualNarrowedPackageAndExactPins uses a narrowed actual GitHub package
+// fixture to verify input-size enforcement and rejection of altered
+// parent/content/candidate/base-blob pins without provider calls.
+// TestWriteBackEffectUsesActualNarrowedPackageAndExactPins использует суженную фактическую GitHub
+// package fixture для проверки ограничения ввода и отклонения изменённых
+// parent/content/candidate/base-blob pins без вызовов провайдера.
 func TestWriteBackEffectUsesActualNarrowedPackageAndExactPins(t *testing.T) {
 	definitions, err := integrationpackage.LoadShipped()
 	if err != nil {
@@ -62,6 +68,12 @@ func TestWriteBackEffectUsesActualNarrowedPackageAndExactPins(t *testing.T) {
 	}
 }
 
+// TestWriteBackPullRequestURLCannotEscapeRepository checks exact GitHub/GitLab receipt URLs and
+// rejects alternate host/repository, unsafe URL components, wrong IDs and noncanonical numeric
+// references using pure fixtures.
+// TestWriteBackPullRequestURLCannotEscapeRepository проверяет точные GitHub/GitLab receipt URLs и
+// отклоняет другой host/repository, небезопасные URL components, неверные IDs и неканонические
+// числовые ссылки на чистых fixtures.
 func TestWriteBackPullRequestURLCannotEscapeRepository(t *testing.T) {
 	row := writeBackRow{proposal: entity.ConfigurationWriteBack{RepositoryRef: "example/config"}, snapshot: writeBackSnapshot{Source: entity.ManagedConfigurationSourceWork{DefinitionKey: "github"}}}
 	if !validWriteBackPullRequest(row, "12", "https://github.com/example/config/pull/12") {
@@ -82,6 +94,12 @@ func TestWriteBackPullRequestURLCannotEscapeRepository(t *testing.T) {
 	}
 }
 
+// TestWriteBackLeaseRejectsStaleGenerationAndExpiredClaim checks an exact unknown-outcome recovery
+// lease and rejects stale generation, expiry equality and terminal proposal state without a
+// database.
+// TestWriteBackLeaseRejectsStaleGenerationAndExpiredClaim проверяет точный unknown-outcome
+// recovery lease и отклоняет старую generation, равенство expiry и завершённое proposal state без
+// БД.
 func TestWriteBackLeaseRejectsStaleGenerationAndExpiredClaim(t *testing.T) {
 	now := time.Unix(1000, 0)
 	lease := entity.ConfigurationWriteBackLease{ProposalRef: "mcwb_fixture01", Attempt: 1, ClaimGeneration: 2, Claimant: "worker", Fence: "fence", ExpiresAt: now.Add(time.Minute)}

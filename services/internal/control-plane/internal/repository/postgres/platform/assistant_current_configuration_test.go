@@ -8,6 +8,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestAssistantCurrentConfigurationProjectsOnlySafeOwnMetadata verifies synthetic private
+// descriptor/context sentinels are absent, public settings and versioned secret locators remain,
+// source descriptors are unchanged and template/file availability retains exact reasons.
+// TestAssistantCurrentConfigurationProjectsOnlySafeOwnMetadata проверяет отсутствие синтетических
+// private descriptor/context sentinels, сохранение public settings и versioned secret locators,
+// неизменность source descriptors и точные причины template/file availability.
 func TestAssistantCurrentConfigurationProjectsOnlySafeOwnMetadata(t *testing.T) {
 	const private = "PRIVATE_DESCRIPTOR_SENTINEL"
 	view := entity.AgentRuntimeConfigurationView{AgentVersion: 7, Configuration: entity.AgentRuntimeConfiguration{Ref: "cfg_current123", Version: 3},

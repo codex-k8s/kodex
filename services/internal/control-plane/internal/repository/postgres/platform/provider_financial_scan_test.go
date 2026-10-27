@@ -8,11 +8,19 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 )
 
+// financialAccountScanFixture supplies only the provider-account columns needed to test financial
+// JSON and receipt-time projection without a database.
+// financialAccountScanFixture предоставляет только нужные для проверки финансового JSON и времени
+// получения столбцы аккаунта провайдера без БД.
 type financialAccountScanFixture struct {
 	raw      []byte
 	received *time.Time
 }
 
+// Scan requires the twenty-column account scan shape and fills synthetic account, raw observation
+// and receipt-time destinations.
+// Scan требует форму сканирования аккаунта из двадцати столбцов и заполняет назначения
+// искусственного аккаунта, исходного наблюдения и времени получения.
 func (row financialAccountScanFixture) Scan(values ...any) error {
 	if len(values) != 20 {
 		return errors.New("financial account fixture shape is invalid")
@@ -29,6 +37,12 @@ func (row financialAccountScanFixture) Scan(values ...any) error {
 	return nil
 }
 
+// TestFinancialAccountScanRejectsCorruptProjection preserves exact decimal credit text in valid
+// observations and rejects missing receipt time, unknown private fields and duplicate JSON keys
+// without partial financial output.
+// TestFinancialAccountScanRejectsCorruptProjection сохраняет точный десятичный текст баланса в
+// допустимом наблюдении и отклоняет отсутствие времени получения, неизвестные закрытые поля и
+// дубли JSON-ключей без частичного финансового результата.
 func TestFinancialAccountScanRejectsCorruptProjection(t *testing.T) {
 	at := time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC)
 	raw := []byte(`{"sequence":1,"state":"AVAILABLE","windows":[{"usedPercent":100}],"credits":{"hasCredits":true,"balance":"59999.1234567890123456789"}}`)

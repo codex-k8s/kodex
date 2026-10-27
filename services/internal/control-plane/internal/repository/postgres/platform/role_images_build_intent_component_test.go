@@ -7,38 +7,29 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	roleimagerepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/roleimage"
 	roleimageservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/roleimage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// TestRoleImageBuildFreshCorrelationComponent runs complete/fail build scenarios in an isolated
+// database with a forty-five-second budget. Fresh CorrelationRef must replay progress, renew and
+// terminal results exactly, while changed actor/workload/credential revision/tenant is denied;
+// final owner readback requires one persisted build at the original terminal version.
+// TestRoleImageBuildFreshCorrelationComponent выполняет complete/fail build сценарии в
+// изолированной БД с бюджетом сорок пять секунд. Свежий CorrelationRef должен точно повторять
+// progress, renew и terminal results, а смена actor/workload/credential revision/tenant
+// отклоняется; финальный owner readback требует единственную сохранённую сборку с исходной
+// terminal version.
 func TestRoleImageBuildFreshCorrelationComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
+	var err error
 	defer pool.Close()
-	repository, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := repository.ConfigureRoleImages(RoleImageConfig{
-		PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64),
-		BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3,
-		StagingRepository: "registry.invalid/kodex/staging", PromotedRepository: "registry.invalid/kodex/roles",
-		DefaultImageReference: "registry.invalid/kodex/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32)),
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := repository.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
+	repository := newNamespacedRoleImageComponentRepository(t, ctx, pool)
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
 		CallerWorkload: "control-api-gateway", Operation: "platform.organization.role-images.recipes.manage",

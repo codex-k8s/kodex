@@ -91,26 +91,4 @@ const refresh = watchAssistantReadback(target, {
   </section>
 </template>
 
-<style scoped>
-.assistant-workflow-card {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-  margin-top: 10px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel);
-}
-.assistant-workflow-card header,
-.assistant-workflow-card__actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-.assistant-workflow-card p {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-</style>
+<style scoped src="./assistant-result-card.css"></style>

@@ -18,12 +18,22 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryAssistantAgentRuntimeInventoryFixture embeds the exact synthetic artifact inventory update
+// used only by disposable component fixtures; production bootstrap/admission are unchanged.
+// queryAssistantAgentRuntimeInventoryFixture встраивает точное синтетическое обновление artifact
+// inventory только для одноразовых component fixtures; production bootstrap/admission не меняются.
+//
 //go:embed testdata/sql/assistant_agent_runtime_inventory_fixture.sql
 var queryAssistantAgentRuntimeInventoryFixture string
 
-// Disposable bootstrap не наблюдает настоящие image tools. Эта fixture явно
-// сохраняет synthetic наблюдение exact artifact: все бинарники имеют MISSING,
-// а configured tools пусты. Production bootstrap и admission не меняются.
+// seedAssistantAgentRuntimeInventoryFixture seeds and reads back MISSING-tool inventory only for
+// the exact platform-owned bootstrap artifact with no configured tools or prior evidence. Existing
+// inventory returns unchanged; real image observation and provider/build execution are not
+// performed.
+// seedAssistantAgentRuntimeInventoryFixture создаёт и перечитывает MISSING-tool inventory только
+// для точного platform-owned bootstrap artifact без configured tools или прежнего evidence. При
+// существующем inventory возвращается без изменений; реальное наблюдение image и исполнение
+// provider/build не выполняются.
 func seedAssistantAgentRuntimeInventoryFixture(t *testing.T, ctx context.Context, repository *Repository, service *serviceplatform.Service, owner value.Principal, agentRef string) {
 	t.Helper()
 	view, err := service.GetAgentRuntimeConfiguration(ctx, owner, agentRef)
@@ -63,6 +73,13 @@ func seedAssistantAgentRuntimeInventoryFixture(t *testing.T, ctx context.Context
 	}
 }
 
+// TestAssistantAgentRuntimeConfigurationProjectionExcludesPrivateData checks the eighteen-field
+// runtime whitelist preserves configured tool names/binding pins while omitting sentinel config,
+// values and secret descriptors, and rejects foreign/zero binding and inventory image drift.
+// TestAssistantAgentRuntimeConfigurationProjectionExcludesPrivateData проверяет, что runtime
+// список восемнадцати разрешённых полей сохраняет configured tool names/binding pins и исключает
+// sentinel config, values и secret descriptors; отклоняет foreign/zero binding и изменение
+// inventory image.
 func TestAssistantAgentRuntimeConfigurationProjectionExcludesPrivateData(t *testing.T) {
 	digest := strings.Repeat("a", 64)
 	agent := entity.Agent{Ref: "agt_fixture123", ProjectRef: "prj_fixture123", Version: 9}
@@ -107,6 +124,15 @@ func TestAssistantAgentRuntimeConfigurationProjectionExcludesPrivateData(t *test
 	}
 }
 
+// TestAssistantAgentRuntimeConfigurationCanonicalAdmissionInventory checks typed,
+// newline-terminated and sorted-key admission inventories against exact source/provenance binding
+// and one shared contract golden. It verifies projected canonical inventory hashes are distinct
+// from source receipts when bytes differ and rejects malformed source digests without live
+// admission.
+// TestAssistantAgentRuntimeConfigurationCanonicalAdmissionInventory проверяет typed, завершённый
+// newline и sorted-key admission inventory по точной source/provenance binding и общему contract
+// golden. Подтверждает различие projected canonical inventory hashes и source receipts при разных
+// bytes и отклоняет malformed source digests без живого admission.
 func TestAssistantAgentRuntimeConfigurationCanonicalAdmissionInventory(t *testing.T) {
 	digest := strings.Repeat("a", 64)
 	artifact := entity.ImageArtifact{SpecSHA256: digest, ImmutableBuildSHA256: digest, RoleRuntimeContractSHA256: digest, ManifestDigest: "sha256:" + digest, ProvenanceSHA256: digest, Platforms: []entity.RoleImagePlatform{{OS: "linux", Architecture: "amd64"}}}

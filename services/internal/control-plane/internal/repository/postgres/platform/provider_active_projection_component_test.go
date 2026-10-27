@@ -9,15 +9,36 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryProviderActiveProjectionPins reads the exact owner, execution and revision pins of the
+// fixture lease for credential projection checks.
+// queryProviderActiveProjectionPins читает точные привязки владельца, исполнения и ревизии
+// тестовой lease для проверки проекции credential.
+//
 //go:embed testdata/sql/provider_active_projection_pins.sql
 var queryProviderActiveProjectionPins string
 
+// queryProviderActiveProjectionDeleting marks only the account selected through the fixture lease
+// revision as deleting and disabled.
+// queryProviderActiveProjectionDeleting помечает удаляемым и отключённым только аккаунт, выбранный
+// через ревизию тестовой lease.
+//
 //go:embed testdata/sql/provider_active_projection_deleting.sql
 var queryProviderActiveProjectionDeleting string
 
+// queryProviderSTTDeleting marks a referenced fixture provider account deleting and disabled
+// without invoking the provider.
+// queryProviderSTTDeleting помечает указанный тестовый аккаунт провайдера удаляемым и отключённым
+// без вызова провайдера.
+//
 //go:embed testdata/sql/provider_stt_deleting.sql
 var queryProviderSTTDeleting string
 
+// testDeletingAccountRetainsExactActiveProjection checks a deleting account retains its exact
+// active credential projection but rejects a different lease generation inside a rolled-back
+// fixture transaction.
+// testDeletingAccountRetainsExactActiveProjection проверяет сохранение точной активной проекции
+// credential удаляемого аккаунта и отклонение иного поколения lease внутри откатываемой тестовой
+// транзакции.
 func testDeletingAccountRetainsExactActiveProjection(t *testing.T, ctx context.Context, repository *Repository, leaseRef string) {
 	t.Helper()
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{})

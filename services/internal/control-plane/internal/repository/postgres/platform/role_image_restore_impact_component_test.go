@@ -13,7 +13,14 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
-// Восстановленная generation проходит тот же admission/promotion и impact path.
+// testRestoredProjectRoleImageImpact creates, archives and restores a project recipe, requiring a
+// fresh immutable managed revision and exact restore replay, then uses synthetic admitted build
+// data with real owner promotion commands. It prepares and twice applies an empty-consumer impact
+// plan bound to that restored generation, without external registry or runtime execution.
+// testRestoredProjectRoleImageImpact создаёт, архивирует и восстанавливает project recipe, требуя
+// свежую неизменяемую managed revision и точный restore replay, затем использует синтетические
+// admitted build данные с настоящими owner promotion commands. Готовит и дважды применяет план без
+// потребителей, связанный с восстановленной generation; внешний registry и runtime не запускаются.
 func testRestoredProjectRoleImageImpact(t *testing.T, ctx context.Context, r *Repository, service *platformservice.Service, owner, resolved value.Principal, parent entity.RoleImageRecipe) {
 	t.Helper()
 	_, input := promotionComponentCatalog(t)

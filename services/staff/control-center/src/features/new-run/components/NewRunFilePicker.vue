@@ -411,22 +411,12 @@ onBeforeUnmount(() =>
   width: min(1120px, calc(100vw - 40px));
   height: min(720px, calc(100dvh - 40px));
 }
-.new-run-file-picker__overlay :deep(.overlay-panel__body) {
-  overflow: hidden;
-  padding: 0;
-}
+</style>
+
+<style scoped src="./new-run-picker-overlay.css"></style>
+
+<style scoped>
 @media (max-width: 760px) {
-  .new-run-file-picker__overlay {
-    align-items: flex-end;
-    padding: 0;
-  }
-  .new-run-file-picker__overlay :deep(.overlay-panel--modal) {
-    width: 100%;
-    height: calc(100dvh - 40px);
-    max-height: none;
-    border-width: 1px 0 0;
-    border-radius: 10px 10px 0 0;
-  }
   .new-run-file-picker__toolbar {
     min-height: 52px;
   }

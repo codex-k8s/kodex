@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: image-registry-certificate-technical-defaults
+spec:
+  template:
+    spec:
+      containers:
+      - name: certificate-guard
+        image: admission-tools.invalid/kodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/sh
+        - /opt/kodex/registry-readiness.sh
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -ec
+            - test -f /tmp/registry-ready
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 2
+        volumeMounts:
+        - name: credentials
+          mountPath: /identity
+          readOnly: true
+        - name: readiness-script
+          mountPath: /opt/kodex
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp

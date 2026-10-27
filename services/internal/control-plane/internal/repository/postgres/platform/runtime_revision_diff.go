@@ -11,20 +11,33 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryRuntimeRevisionPublicPair embeds the requested/latest run revision and at most one previous
+// revision in the same tenant/project/session, returning only public immutable identity/dependency
+// metadata. Cross-run predecessor access is checked separately before issuance.
+// queryRuntimeRevisionPublicPair встраивает запрошенную либо последнюю ревизию запуска и максимум
+// одну прежнюю ревизию той же организации, проекта и сессии, возвращая только публичные
+// неизменяемые метаданные идентичности и зависимостей. Доступ к предшественнику другого запуска
+// проверяется отдельно до выдачи.
+//
 //go:embed sql/runtime_revision_public_pair.sql
 var queryRuntimeRevisionPublicPair string
 
+// GetRuntimeRevisionPublicPair reads the public current/previous pair in a five-second read-only
+// repeatable-read snapshot after run.view and authority-project checks. A predecessor run is
+// independently authorized before commit; empty results are NotFound and failures return an empty
+// projection. It exposes no safe_snapshot/private contents or execution authority.
+// GetRuntimeRevisionPublicPair читает публичную пару текущей и прежней ревизии в read-only
+// RepeatableRead снимке с бюджетом пять секунд после run.view и проверки проекта полномочий.
+// Запуск предшественника независимо авторизуется до Commit; пустой результат даёт NotFound, ошибки
+// возвращают пустую проекцию. Не раскрывает safe_snapshot и закрытое содержимое и не выдаёт права
+// исполнения.
 func (repository *Repository) GetRuntimeRevisionPublicPair(ctx context.Context, principal value.Principal, runRef, revisionRef string) (entity.RuntimeRevisionPublicProjection, *entity.RuntimeRevisionPublicProjection, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	var empty entity.RuntimeRevisionPublicProjection
-	scope, err := repository.resolveScope(ctx, principal)
+	scope, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
 	if err != nil {
 		return empty, nil, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return empty, nil, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	authorize := func(ref string) error {

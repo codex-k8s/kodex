@@ -12,6 +12,20 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// ListPromptContextVariables delegates an absent target selection to the ordinary
+// template-variable catalog, rejecting orphan preview fields. Otherwise it validates query/source
+// and a lowercase 32-byte context digest, forbids runtime-revision selection, obtains the
+// authorized prospective snapshot and checks project/context pins. It binds pagination to the
+// freshly computed digest, overlays explicit unavailability and empty file-scope markers, filters
+// catalog entries and pages by variable name. Availability is explanatory metadata; preview and
+// cursor do not grant runtime access.
+// ListPromptContextVariables передаёт отсутствие target selection обычному каталогу template
+// variables, отклоняя orphan preview fields. Иначе проверяет query/source и context digest из 32
+// байтов в нижнем регистре, запрещает runtime-revision selection, получает разрешённый prospective
+// snapshot и сверяет project/context pins. Связывает страницы со свежевычисленным digest,
+// накладывает явную недоступность и маркеры пустых file scopes, фильтрует каталог и делит по
+// variable name. Availability является пояснительной metadata; preview и cursor не выдают runtime
+// access.
 func (repository *Repository) ListPromptContextVariables(ctx context.Context, principal value.Principal, filter query.Filter) (entity.PromptVariableCatalog, error) {
 	selection := filter.TemplateContext
 	if selection != nil && selection.TargetKind == "" && (selection.TargetRef != "" || selection.ExpectedContextDigest != "" || selection.Preview.AgentRef != "" || selection.Preview.WorkflowRevisionRef != "" || selection.Preview.WorkflowStageKey != "" || selection.Preview.ExpectedAgentVersion != 0 || selection.Preview.ExpectedWorkflowVersion != 0 || selection.Preview.AttachmentSetRef != "" || selection.Preview.Task != "" || len(selection.Preview.Input) != 0) {

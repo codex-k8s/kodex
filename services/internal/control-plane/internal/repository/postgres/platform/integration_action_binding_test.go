@@ -8,6 +8,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestIntegrationActionBinding allows only terminal integration outcome messages on TURN_PROGRESS
+// with a bounded well-formed invocation reference.
+// TestIntegrationActionBinding разрешает только сообщения завершённых исходов интеграции в
+// TURN_PROGRESS с ограниченным корректным ref вызова.
 func TestIntegrationActionBinding(t *testing.T) {
 	for _, state := range []string{"SUCCEEDED", "FAILED", "UNKNOWN_OUTCOME"} {
 		if !validIntegrationActionBinding("TURN_PROGRESS", integrationActionOutcomeMessage(state), "inv_fixture01") {
@@ -28,6 +32,11 @@ func TestIntegrationActionBinding(t *testing.T) {
 	}
 }
 
+// TestIntegrationActionBindingPersistedDelta checks empty and present invocation references
+// survive event-delta JSON round-trips without inventing the historical field marker.
+// TestIntegrationActionBindingPersistedDelta проверяет сохранение отсутствующего и присутствующего
+// ref вызова при JSON-кодировании и декодировании event delta без добавления исторического маркера
+// поля.
 func TestIntegrationActionBindingPersistedDelta(t *testing.T) {
 	for _, ref := range []string{"", "inv_fixture01"} {
 		encoded, err := json.Marshal(entity.RunEventDelta{IntegrationInvocationRef: ref})

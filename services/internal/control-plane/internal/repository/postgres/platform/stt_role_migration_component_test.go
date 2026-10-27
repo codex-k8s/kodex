@@ -8,6 +8,12 @@ import (
 	"testing"
 )
 
+// testSTTRoleMigration replays the inspected migration body inside rollback, requiring a fresh
+// owner role revision and moved active bindings while preserving prior permissions, then checks
+// idempotent reapplication.
+// testSTTRoleMigration повторяет проверенное тело миграции внутри отката, требуя новую ревизию
+// роли владельца и перенесённые активные привязки при сохранении прежних разрешений, затем
+// проверяет идемпотентное повторное применение.
 func testSTTRoleMigration(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 	t.Helper()
 	content, err := os.ReadFile("../../../../cmd/cli/migrations/20260904000610_issue_1046_stt_system_roles.sql")

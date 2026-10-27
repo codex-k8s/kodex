@@ -8,6 +8,11 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+// TestRetrySerializableTransactionRetriesOnlyTransactionConflicts retries a marked serialization
+// failure exactly once before success and returns an ordinary forbidden error after its first
+// attempt.
+// TestRetrySerializableTransactionRetriesOnlyTransactionConflicts повторяет помеченную ошибку
+// сериализации ровно один раз до успеха и возвращает обычную ошибку запрета после первой попытки.
 func TestRetrySerializableTransactionRetriesOnlyTransactionConflicts(t *testing.T) {
 	t.Parallel()
 
@@ -33,6 +38,10 @@ func TestRetrySerializableTransactionRetriesOnlyTransactionConflicts(t *testing.
 	}
 }
 
+// TestSerializableTransactionErrorClassification preserves the mapped domain error while marking
+// SQLSTATE40001 and40P01 retryable, keeping unique violations outside that retry class.
+// TestSerializableTransactionErrorClassification сохраняет отображённую доменную ошибку, помечая
+// SQLSTATE40001 и40P01 повторяемыми, а нарушение уникальности оставляет вне этого класса повторов.
 func TestSerializableTransactionErrorClassification(t *testing.T) {
 	t.Parallel()
 

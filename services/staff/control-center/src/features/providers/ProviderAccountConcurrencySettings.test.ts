@@ -1,5 +1,5 @@
+import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import {
-  createRenderer,
   defineComponent,
   nextTick,
   reactive,
@@ -61,18 +61,7 @@ afterEach(() => {
 function mountedSettings() {
   const props = reactive({ account: account() });
   let state: State | undefined;
-  const renderer = createRenderer<object, object>({
-    patchProp() {},
-    insert() {},
-    remove() {},
-    createElement: () => ({}),
-    createText: () => ({}),
-    createComment: () => ({}),
-    setText() {},
-    setElementText() {},
-    parentNode: () => null,
-    nextSibling: () => null,
-  });
+  const renderer = createNoopRenderer();
   const component = Settings as unknown as {
     setup(props: object, context: SetupContext): State;
   };

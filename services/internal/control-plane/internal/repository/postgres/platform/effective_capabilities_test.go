@@ -12,6 +12,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 )
 
+// TestCapabilityAuthorityUsesExactCurrentBindings checks active group bindings authorize only the
+// exact target agent and stop at expiry or revocation without escalating other capabilities.
+// TestCapabilityAuthorityUsesExactCurrentBindings проверяет полномочия активных групповых привязок
+// только для точного целевого агента и их прекращение при истечении или отзыве без расширения иных
+// capability.
 func TestCapabilityAuthorityUsesExactCurrentBindings(t *testing.T) {
 	now := time.Now().UTC()
 	until := now.Add(time.Minute)
@@ -45,6 +50,12 @@ func TestCapabilityAuthorityUsesExactCurrentBindings(t *testing.T) {
 	}
 }
 
+// TestIntegrationCapabilityAuthoritySeparatesConnectionsAndRisk confines integration.view to the
+// exact connection and READ risk, rejecting other connections and write, sensitive or unknown
+// risk.
+// TestIntegrationCapabilityAuthoritySeparatesConnectionsAndRisk ограничивает integration.view
+// точным соединением и риском READ, отклоняя чужие соединения и риски записи, чувствительных либо
+// неизвестных операций.
 func TestIntegrationCapabilityAuthoritySeparatesConnectionsAndRisk(t *testing.T) {
 	subject := entity.AccessSubject{Ref: "usr_actor", Kind: "USER", Active: true}
 	target := entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: "int_allowed"}
@@ -67,6 +78,12 @@ func TestIntegrationCapabilityAuthoritySeparatesConnectionsAndRisk(t *testing.T)
 	}
 }
 
+// TestEffectiveCapabilityProjectionCursorIsActorAndSnapshotBound checks sorted paging, stable
+// digest across read clocks, revoked eligibility invalidation, tenant/actor/project binding and
+// server-side search.
+// TestEffectiveCapabilityProjectionCursorIsActorAndSnapshotBound проверяет сортированную
+// пагинацию, устойчивый дайджест при смене времени чтения, аннулирование при отзыве доступности,
+// привязку tenant, actor и проекта и серверный поиск.
 func TestEffectiveCapabilityProjectionCursorIsActorAndSnapshotBound(t *testing.T) {
 	current := scope{organizationID: "org_a", actorID: "actor_a"}
 	fresh := func() entity.AgentEffectiveCapabilities {
@@ -106,6 +123,11 @@ func TestEffectiveCapabilityProjectionCursorIsActorAndSnapshotBound(t *testing.T
 	}
 }
 
+// TestEffectiveCapabilityReasonsPreserveIntersection checks reason precedence across request,
+// actor authority, runtime readiness and workflow exclusion with required capabilities.
+// TestEffectiveCapabilityReasonsPreserveIntersection проверяет приоритет причин по запросу
+// capability, полномочиям actor, готовности runtime и исключению workflow с учётом обязательных
+// capability.
 func TestEffectiveCapabilityReasonsPreserveIntersection(t *testing.T) {
 	for _, test := range []struct {
 		requested, allowed, ready, workflow, required bool

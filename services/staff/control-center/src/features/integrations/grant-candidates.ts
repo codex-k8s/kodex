@@ -124,6 +124,37 @@ export function checkedCandidatePage<T extends CandidatePage>(
   return page;
 }
 
+// SDK выбирает вызывающий; query копируется иsignal связывается заново при каждом GET.
+// Helper не выбирает purpose/pins и не хранит cursor: их проверяет прежний loader.
+function fetchCandidates<TQuery extends object, TPage extends CandidatePage>(
+  context: TQuery,
+  request: (options: {
+    query: TQuery & {
+      query: string;
+      pageToken: string | undefined;
+      pageSize: number;
+    };
+    signal: AbortSignal;
+    cache: "no-store";
+  }) => Parameters<typeof unwrap<TPage>>[0],
+) {
+  return async (
+    query: string,
+    cursor: string | undefined,
+    signal: AbortSignal,
+    pageSize: number,
+  ) =>
+    (
+      await unwrap(
+        request({
+          query: { ...context, query, pageToken: cursor, pageSize },
+          signal: requestSignal(signal),
+          cache: "no-store",
+        }),
+      )
+    ).data;
+}
+
 function loader<T extends CandidatePage>(
   context: IntegrationGrantCandidateContext,
   purpose: "GRANT" | "USE",
@@ -175,16 +206,10 @@ export function connectionCandidates(context: ConnectionQuery) {
   return loader(
     scope,
     purpose,
-    async (query, cursor, signal, pageSize) =>
-      (
-        await unwrap(
-          sdk.listIntegrationGrantConnectionCandidates({
-            query: { ...context, query, pageToken: cursor, pageSize },
-            signal: requestSignal(signal),
-            cache: "no-store",
-          }),
-        )
-      ).data,
+    fetchCandidates<ConnectionQuery, IntegrationGrantConnectionCandidatePage>(
+      context,
+      (options) => sdk.listIntegrationGrantConnectionCandidates(options),
+    ),
   );
 }
 type ProjectQuery = Omit<
@@ -198,16 +223,10 @@ export function projectCandidates(
   return loader(
     context,
     "GRANT",
-    async (query, cursor, signal, pageSize) =>
-      (
-        await unwrap(
-          sdk.listIntegrationGrantProjectCandidates({
-            query: { ...context, query, pageToken: cursor, pageSize },
-            signal: requestSignal(signal),
-            cache: "no-store",
-          }),
-        )
-      ).data,
+    fetchCandidates<ProjectQuery, IntegrationGrantProjectCandidatePage>(
+      context,
+      (options) => sdk.listIntegrationGrantProjectCandidates(options),
+    ),
     expected,
   );
 }
@@ -222,16 +241,10 @@ export function recipientCandidates(
   return loader(
     context,
     "GRANT",
-    async (query, cursor, signal, pageSize) =>
-      (
-        await unwrap(
-          sdk.listIntegrationGrantRecipientCandidates({
-            query: { ...context, query, pageToken: cursor, pageSize },
-            signal: requestSignal(signal),
-            cache: "no-store",
-          }),
-        )
-      ).data,
+    fetchCandidates<RecipientQuery, IntegrationGrantRecipientCandidatePage>(
+      context,
+      (options) => sdk.listIntegrationGrantRecipientCandidates(options),
+    ),
     expected,
   );
 }
@@ -246,16 +259,10 @@ export function capabilityCandidates(
   return loader(
     context,
     "GRANT",
-    async (query, cursor, signal, pageSize) =>
-      (
-        await unwrap(
-          sdk.listIntegrationGrantCapabilityCandidates({
-            query: { ...context, query, pageToken: cursor, pageSize },
-            signal: requestSignal(signal),
-            cache: "no-store",
-          }),
-        )
-      ).data,
+    fetchCandidates<CapabilityQuery, IntegrationGrantCapabilityCandidatePage>(
+      context,
+      (options) => sdk.listIntegrationGrantCapabilityCandidates(options),
+    ),
     expected,
   );
 }

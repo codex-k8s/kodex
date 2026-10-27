@@ -17,6 +17,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testAssistantRecipientIntegrationCatalog checks recipient catalog pins and metadata scope
+// separately from execution eligibility, with lease, generation, version and revocation rejection.
+// testAssistantRecipientIntegrationCatalog проверяет версии каталога получателя и область
+// метаданных отдельно от допуска к исполнению, с отказом при неверной аренде, поколении, версии и
+// отзыве доступа.
 func testAssistantRecipientIntegrationCatalog(t *testing.T, ctx context.Context, repository *Repository, service *serviceplatform.Service, owner, worker value.Principal, project *entity.Project, connectionRef, foreignHelperRef string) {
 	t.Helper()
 	prepareObservedWarmFixture(t, ctx, repository)
@@ -195,15 +200,7 @@ func testAssistantRecipientIntegrationCatalog(t *testing.T, ctx context.Context,
 						}
 						// Новый adapter output contract делает существующий published
 						// managed package пригодным только для metadata read, не execution.
-						for index := range currentDefinition.Spec.Capabilities {
-							if currentDefinition.Spec.Capabilities[index].Key == "github.pull_request.review.create" {
-								for field := range currentDefinition.Spec.Capabilities[index].OutputFields {
-									if currentDefinition.Spec.Capabilities[index].OutputFields[field].Key == "id" {
-										currentDefinition.Spec.Capabilities[index].OutputFields[field].Maximum--
-									}
-								}
-							}
-						}
+						narrowSyntheticReviewOutput(&currentDefinition)
 						currentDefinition, err = integrationpackage.Parse(asJSON(currentDefinition))
 						if err != nil {
 							t.Fatal("canonical prospective adapter contract", err)

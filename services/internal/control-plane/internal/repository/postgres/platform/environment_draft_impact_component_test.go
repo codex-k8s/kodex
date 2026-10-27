@@ -13,6 +13,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testEnvironmentPrepublicationImpact checks immutable prepublication impact pages and selections,
+// expiry and per-consumer outcomes without moving conflicting or unselected bindings.
+// testEnvironmentPrepublicationImpact проверяет неизменяемые страницы и выборки влияния до
+// публикации, срок действия и исходы потребителей без перемещения конфликтующих и невыбранных
+// привязок.
 func testEnvironmentPrepublicationImpact(t *testing.T, ctx context.Context, r *Repository, s *platformservice.Service, owner value.Principal, project, environment string, spec entity.RuntimeEnvironmentDraftSpecification, first, second string) {
 	invoke := func(kind command.Kind, key string, version *int64, payload command.RuntimeEnvironmentDraftInput) (command.Result, error) {
 		return s.Execute(ctx, command.Command{Kind: kind, Principal: owner, Mutation: value.Mutation{IdempotencyKey: key, ExpectedVersion: version}, Payload: payload})

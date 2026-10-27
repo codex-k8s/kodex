@@ -6,6 +6,12 @@ import (
 	"time"
 )
 
+// TestRoleImageImpactCommitmentPinsInputAcrossOutcomeReadback checks immutable commitment survives
+// item reorder and mutable plan/outcome readback while changes to actor, binding version or target
+// artifact alter its digest.
+// TestRoleImageImpactCommitmentPinsInputAcrossOutcomeReadback проверяет сохранение неизменяемого
+// commitment при перестановке items и чтении mutable plan/outcome; смена actor, binding version
+// либо target artifact меняет дайджест.
 func TestRoleImageImpactCommitmentPinsInputAcrossOutcomeReadback(t *testing.T) {
 	plan := entity.RoleImageImpactPlan{Ref: "riip_fixture", ArtifactRef: "imgart_fixture", ArtifactDigest: "digest", Total: 2, State: "PREPARED", Version: 1}
 	items := []entity.RoleImageImpactItem{{Ref: "b", EnvironmentRef: "env", SourceVersionRef: "old", EnvironmentVersion: 2, Outcome: "PENDING"}, {Ref: "a", EnvironmentRef: "env", SourceVersionRef: "old", EnvironmentVersion: 2, Consumer: entity.RuntimeEnvironmentConsumer{AgentRef: "agent", AgentVersion: 3, BindingRef: "binding", BindingVersion: 4}, Outcome: "PENDING"}}

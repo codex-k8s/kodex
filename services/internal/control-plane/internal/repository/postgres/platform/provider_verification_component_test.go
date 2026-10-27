@@ -16,6 +16,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/providercredentialclient"
 )
 
+// testProviderVerificationFreshObservation checks explicit fresh provider verification despite
+// cached catalog state, exact replay and stale completion after disabling the account.
+// testProviderVerificationFreshObservation проверяет явную свежую верификацию провайдера вопреки
+// кэшу каталога, точный повтор и устаревшее завершение после отключения записи.
 func testProviderVerificationFreshObservation(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{

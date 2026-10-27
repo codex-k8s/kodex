@@ -1,13 +1,11 @@
+# Общие параметры выпуска добавляет authority-certificate-defaults.patch.yaml через Kustomize.
+# Имена Secret, SAN, SPIFFE URI и EKU принадлежат конкретному сертификату.
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: internal-rpc-authority-publisher
-  annotations: {argocd.argoproj.io/sync-wave: "-9"}
 spec:
   secretName: internal-rpc-authority-publisher-tls
-  duration: 720h
-  renewBefore: 120h
-  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
   dnsNames:
     - internal-rpc-authority-publisher
     - internal-rpc-authority-publisher.kodex-system.svc
@@ -15,18 +13,13 @@ spec:
   uris:
     - spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-publisher
   usages: [server auth, client auth]
-  issuerRef: {name: kodex-installation-ca, kind: Issuer}
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: internal-rpc-authority-readback-attestor
-  annotations: {argocd.argoproj.io/sync-wave: "-9"}
 spec:
   secretName: internal-rpc-authority-readback-attestor-tls
-  duration: 720h
-  renewBefore: 120h
-  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
   dnsNames:
     - internal-rpc-authority-readback-attestor
     - internal-rpc-authority-readback-attestor.kodex-system.svc
@@ -34,18 +27,13 @@ spec:
   uris:
     - spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-readback-attestor
   usages: [server auth, client auth]
-  issuerRef: {name: kodex-installation-ca, kind: Issuer}
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: internal-rpc-authority-restore-controller
-  annotations: {argocd.argoproj.io/sync-wave: "-9"}
 spec:
   secretName: internal-rpc-authority-restore-controller-tls
-  duration: 720h
-  renewBefore: 120h
-  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
   dnsNames:
     - internal-rpc-authority-restore-controller
     - internal-rpc-authority-restore-controller.kodex-system.svc
@@ -53,199 +41,133 @@ spec:
   uris:
     - spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-restore-controller
   usages: [server auth, client auth]
-  issuerRef: {name: kodex-installation-ca, kind: Issuer}
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: internal-rpc-authority-restore-operator
-  annotations: {argocd.argoproj.io/sync-wave: "-9"}
 spec:
   secretName: internal-rpc-authority-restore-operator-tls
-  duration: 720h
-  renewBefore: 120h
-  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
   uris:
     - spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-restore-operator
   usages: [client auth]
-  issuerRef: {name: kodex-installation-ca, kind: Issuer}
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: internal-rpc-authority-role-image-builder-workload
-  annotations: {argocd.argoproj.io/sync-wave: "-9"}
 spec:
   secretName: internal-rpc-authority-role-image-builder-workload-tls
-  duration: 720h
-  renewBefore: 120h
-  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
   dnsNames: [role-image-builder, role-image-builder.kodex-system.svc, role-image-builder.kodex-system.svc.cluster.local]
   uris: [spiffe://kodex.local/ns/kodex-system/sa/role-image-builder]
   usages: [server auth, client auth]
-  issuerRef: {name: kodex-installation-ca, kind: Issuer}
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: internal-rpc-authority-image-admission-workload
-  annotations: {argocd.argoproj.io/sync-wave: "-9"}
 spec:
   secretName: internal-rpc-authority-image-admission-workload-tls
-  duration: 720h
-  renewBefore: 120h
-  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
   dnsNames: [image-admission, image-admission.kodex-system.svc, image-admission.kodex-system.svc.cluster.local]
   uris: [spiffe://kodex.local/ns/kodex-system/sa/image-admission]
   usages: [server auth, client auth]
-  issuerRef: {name: kodex-installation-ca, kind: Issuer}
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: internal-rpc-authority-image-promotion-workload
-  annotations: {argocd.argoproj.io/sync-wave: "-9"}
 spec:
   secretName: internal-rpc-authority-image-promotion-workload-tls
-  duration: 720h
-  renewBefore: 120h
-  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
   dnsNames: [image-promotion, image-promotion.kodex-system.svc, image-promotion.kodex-system.svc.cluster.local]
   uris: [spiffe://kodex.local/ns/kodex-system/sa/image-promotion]
   usages: [server auth, client auth]
-  issuerRef: {name: kodex-installation-ca, kind: Issuer}
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: internal-rpc-authority-automation-scheduler-workload
-  annotations: {argocd.argoproj.io/sync-wave: "-9"}
 spec:
   secretName: internal-rpc-authority-automation-scheduler-workload-tls
-  duration: 720h
-  renewBefore: 120h
-  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
   dnsNames: [automation-scheduler, automation-scheduler.kodex-system.svc, automation-scheduler.kodex-system.svc.cluster.local]
   uris: [spiffe://kodex.local/ns/kodex-system/sa/automation-scheduler]
   usages: [server auth, client auth]
-  issuerRef: {name: kodex-installation-ca, kind: Issuer}
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: internal-rpc-authority-session-archive-workload
-  annotations: {argocd.argoproj.io/sync-wave: "-9"}
 spec:
   secretName: internal-rpc-authority-session-archive-workload-tls
-  duration: 720h
-  renewBefore: 120h
-  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
   dnsNames: [session-archive, session-archive.kodex-system.svc, session-archive.kodex-system.svc.cluster.local]
   uris: [spiffe://kodex.local/ns/kodex-system/sa/session-archive]
   usages: [server auth, client auth]
-  issuerRef: {name: kodex-installation-ca, kind: Issuer}
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: internal-rpc-authority-secret-broker-workload
-  annotations: {argocd.argoproj.io/sync-wave: "-9"}
 spec:
   secretName: internal-rpc-authority-secret-broker-workload-tls
-  duration: 720h
-  renewBefore: 120h
-  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
   dnsNames: [secret-broker, secret-broker.kodex-system.svc, secret-broker.kodex-system.svc.cluster.local]
   uris: [spiffe://kodex.local/ns/kodex-system/sa/secret-broker]
   usages: [server auth, client auth]
-  issuerRef: {name: kodex-installation-ca, kind: Issuer}
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: internal-rpc-authority-control-api-gateway-workload
-  annotations: {argocd.argoproj.io/sync-wave: "-9"}
 spec:
   secretName: internal-rpc-authority-control-api-gateway-workload-tls
-  duration: 720h
-  renewBefore: 120h
-  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
   dnsNames: [control-api-gateway, control-api-gateway.kodex-system.svc, control-api-gateway.kodex-system.svc.cluster.local]
   uris: [spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway]
   usages: [server auth, client auth]
-  issuerRef: {name: kodex-installation-ca, kind: Issuer}
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: internal-rpc-authority-control-plane-workload
-  annotations: {argocd.argoproj.io/sync-wave: "-9"}
 spec:
   secretName: internal-rpc-authority-control-plane-workload-tls
-  duration: 720h
-  renewBefore: 120h
-  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
   dnsNames: [control-plane, control-plane.kodex-system.svc, control-plane.kodex-system.svc.cluster.local]
   uris: [spiffe://kodex.local/ns/kodex-system/sa/control-plane]
   usages: [server auth, client auth]
-  issuerRef: {name: kodex-installation-ca, kind: Issuer}
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: internal-rpc-authority-integration-gateway-workload
-  annotations: {argocd.argoproj.io/sync-wave: "-9"}
 spec:
   secretName: internal-rpc-authority-integration-gateway-workload-tls
-  duration: 720h
-  renewBefore: 120h
-  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
   dnsNames: [integration-gateway, integration-gateway.kodex-system.svc, integration-gateway.kodex-system.svc.cluster.local]
   uris: [spiffe://kodex.local/ns/kodex-system/sa/integration-gateway]
   usages: [server auth, client auth]
-  issuerRef: {name: kodex-installation-ca, kind: Issuer}
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: internal-rpc-authority-interaction-gateway-workload
-  annotations: {argocd.argoproj.io/sync-wave: "-9"}
 spec:
   secretName: internal-rpc-authority-interaction-gateway-workload-tls
-  duration: 720h
-  renewBefore: 120h
-  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
   dnsNames: [interaction-gateway, interaction-gateway.kodex-system.svc, interaction-gateway.kodex-system.svc.cluster.local]
   uris: [spiffe://kodex.local/ns/kodex-system/sa/interaction-gateway]
   usages: [server auth, client auth]
-  issuerRef: {name: kodex-installation-ca, kind: Issuer}
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: internal-rpc-authority-runtime-controller-workload
-  annotations: {argocd.argoproj.io/sync-wave: "-9"}
 spec:
   secretName: internal-rpc-authority-runtime-controller-workload-tls
-  duration: 720h
-  renewBefore: 120h
-  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
   dnsNames: [runtime-controller, runtime-controller.kodex-system.svc, runtime-controller.kodex-system.svc.cluster.local]
   uris: [spiffe://kodex.local/ns/kodex-system/sa/runtime-controller]
   usages: [server auth, client auth]
-  issuerRef: {name: kodex-installation-ca, kind: Issuer}
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: runtime-controller-callback-server
-  annotations: {argocd.argoproj.io/sync-wave: "-9"}
 spec:
   secretName: runtime-controller-callback-server-tls
-  duration: 720h
-  renewBefore: 120h
-  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
   dnsNames: [runtime-controller-callback, runtime-controller-callback.kodex-system.svc, runtime-controller-callback.kodex-system.svc.cluster.local]
   uris: [spiffe://kodex.local/ns/kodex-system/sa/runtime-controller]
   usages: [server auth]
-  issuerRef: {name: kodex-installation-ca, kind: Issuer}

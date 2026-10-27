@@ -24,13 +24,9 @@ import (
 func (repository *Repository) GetAgentRuntimeConfiguration(ctx context.Context, principal value.Principal, ref string) (entity.AgentRuntimeConfigurationView, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	scope, err := repository.resolveScope(ctx, principal)
+	scope, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
 	if err != nil {
 		return entity.AgentRuntimeConfigurationView{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return entity.AgentRuntimeConfigurationView{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	permission, target, err := repository.resolveRuntimeConfigurationTarget(ctx, tx, scope, "agent.view", ref)
@@ -94,24 +90,12 @@ func (repository *Repository) ListRuntimeEnvironments(ctx context.Context, princ
 	}
 	return authorizedCatalog(ctx, repository, scope, "RUNTIME_ENVIRONMENT", filter,
 		func(ctx context.Context, tx pgx.Tx, cursor string, limit int32) ([]entity.RuntimeEnvironmentSet, error) {
-			rows, err := tx.Query(ctx, queryRuntimeConfigurationListEnvironments, pgx.StrictNamedArgs{
-				"actor_id": scope.actorID, "authority_project": scope.authorityProjectID,
-				"organization_id": scope.organizationID, "project_ref": filter.ProjectRef, "query": strings.TrimSpace(filter.Query),
-				"cursor_ref": cursor, "page_size": limit,
-			})
+			rows, err := tx.Query(ctx, queryRuntimeConfigurationListEnvironments, scopedCatalogPageArgs(scope, filter, cursor, limit))
 			if err != nil {
 				return nil, errs.ErrUnavailable
 			}
 			defer rows.Close()
-			var items []entity.RuntimeEnvironmentSet
-			for rows.Next() {
-				item, err := repository.scanRuntimeEnvironment(rows)
-				if err != nil {
-					return nil, errs.ErrUnavailable
-				}
-				items = append(items, item)
-			}
-			return items, rows.Err()
+			return readCatalogRows(rows, repository.scanRuntimeEnvironment)
 		}, func(item entity.RuntimeEnvironmentSet) entity.AccessScope {
 			return entity.AccessScope{ResourceKind: "RUNTIME_ENVIRONMENT", ResourceRef: item.Ref, ProjectRef: item.ProjectRef}
 		}, func(_ pgx.Tx, item *entity.RuntimeEnvironmentSet, allowed func(string) bool) error {
@@ -641,13 +625,9 @@ func scanRuntimeEnvironmentVersion(scanner rowScanner) (entity.RuntimeEnvironmen
 // scanRuntimeVersionRows collects the supplied bounded-query rows using the exact typed version decoder, preserving row order and mapping scan/iteration failures to Unavailable without returning partial success. It allocates limit+1 capacity for caller pagination; query bounds, row Close and transaction commit remain caller-owned.
 // scanRuntimeVersionRows собирает строки переданного ограниченного запроса точным типизированным декодером версий, сохраняя порядок и заменяя ошибки чтения/итерации на Unavailable без частичного успеха. Выделяет capacity limit+1 для пагинации; границы запроса, Close rows и commit транзакции остаются у вызывающего.
 func scanRuntimeVersionRows[T any](rows pgx.Rows, limit int32, scan func(rowScanner) (T, error)) ([]T, error) {
-	items := make([]T, 0, limit+1)
-	for rows.Next() {
-		item, err := scan(rows)
-		if err != nil {
-			return nil, errs.ErrUnavailable
-		}
-		items = append(items, item)
+	items, err := collectTypedRows(rows, limit, scan)
+	if err != nil {
+		return nil, err
 	}
 	if rows.Err() != nil {
 		return nil, errs.ErrUnavailable
@@ -684,10 +664,7 @@ func decodeRuntimeEnvironmentPolicy(
 // runtimeEnvironmentContract copies non-secret values and secret object-identity/digest descriptors in their original order into non-nil runtime-contract slices, including empty input. It does not read secret material, reorder bindings or validate ownership.
 // runtimeEnvironmentContract копирует несекретные значения и secret object-identity/digest дескрипторы в исходном порядке в non-nil runtime-contract срезы, включая пустой вход. Значения секретов не читает, привязки не сортирует и владение не проверяет.
 func runtimeEnvironmentContract(version entity.RuntimeEnvironmentVersion) ([]runtimecontract.RuntimeEnvironmentValue, []runtimecontract.RuntimeSecretProjection) {
-	values := make([]runtimecontract.RuntimeEnvironmentValue, 0, len(version.Values))
-	for _, item := range version.Values {
-		values = append(values, runtimecontract.RuntimeEnvironmentValue{Name: item.Name, Value: item.Value})
-	}
+	values := runtimeEnvironmentValuesContract(version.Values)
 	secrets := make([]runtimecontract.RuntimeSecretProjection, 0, len(version.SecretDescriptors))
 	for _, item := range version.SecretDescriptors {
 		secrets = append(secrets, runtimecontract.RuntimeSecretProjection{Name: item.Name, SecretName: item.SecretName,
@@ -719,4 +696,18 @@ func versionCursor(token string) (int64, error) {
 		return 0, errors.New("invalid version cursor")
 	}
 	return value, nil
+}
+
+// runtimeEnvironmentValuesContract copies public environment name/value pairs into an independent,
+// ordered runtime-contract slice, keeping duplicates for the caller validator and allocating an
+// empty slice even for nil input. It performs no validation, normalization, secret read or hashing.
+// runtimeEnvironmentValuesContract копирует публичные пары имени и значения в независимый
+// упорядоченный срез runtime-контракта, сохраняя повторы для проверки вызывающим и создавая пустой
+// срез даже при nil на входе. Не проверяет, не нормализует, не читает секреты и не хеширует данные.
+func runtimeEnvironmentValuesContract(input []entity.RuntimeEnvironmentValue) []runtimecontract.RuntimeEnvironmentValue {
+	values := make([]runtimecontract.RuntimeEnvironmentValue, 0, len(input))
+	for _, item := range input {
+		values = append(values, runtimecontract.RuntimeEnvironmentValue{Name: item.Name, Value: item.Value})
+	}
+	return values
 }

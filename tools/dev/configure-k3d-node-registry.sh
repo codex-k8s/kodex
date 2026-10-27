@@ -14,20 +14,10 @@ usage() {
     '  --promoted-pull-host <dns>' >&2
 }
 
-mode=""
-context=""
-material_directory=""
-promoted_pull_host=""
-while (($# > 0)); do
-  case "$1" in
-    --mode) mode=${2:-}; shift 2 ;;
-    --context) context=${2:-}; shift 2 ;;
-    --material-directory) material_directory=${2:-}; shift 2 ;;
-    --promoted-pull-host) promoted_pull_host=${2:-}; shift 2 ;;
-    --help) usage; exit 0 ;;
-    *) usage; fail "unsupported argument: $1" ;;
-  esac
-done
+# shellcheck source=lib/node-registry.sh
+source "${BASH_SOURCE[0]%"${BASH_SOURCE[0]##*/}"}lib/node-registry.sh"
+kodex_node_registry_parse "$@"
+set --
 
 case "$mode" in apply|readback) ;; *) fail 'mode is invalid' ;; esac
 [[ "$context" =~ ^k3d-[a-z0-9]([a-z0-9-]*[a-z0-9])?$ &&
@@ -40,26 +30,7 @@ for command_name in docker jq k3d kubectl mktemp sha256sum stat yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 
-username_file="$material_directory/node-pull/username"
-password_file="$material_directory/node-pull/password"
-ca_file="$material_directory/node-pull/ca.crt"
-certificate_file="$material_directory/node-pull/client.crt"
-private_key_file="$material_directory/node-pull/client.key"
-for input_file in "$username_file" "$password_file" "$ca_file" "$certificate_file" "$private_key_file"; do
-  [[ -f "$input_file" && -s "$input_file" && ! -L "$input_file" ]] ||
-    fail 'node pull material is incomplete'
-  input_mode=$(stat -c '%a' "$input_file")
-  (((8#$input_mode & 8#077) == 0)) || fail 'node pull material permissions are too broad'
-done
-
-# Не наследуем export attribute одноимённых переменных вызывающей стороны.
-export -n username password actual expected actual_host expected_host
-username=$(<"$username_file")
-password=$(<"$password_file")
-[[ -n "$username" && "$username" != *$'\n'* && "$username" != *$'\r'* ]] ||
-  fail 'node pull username is invalid'
-[[ ${#password} -ge 32 && "$password" != *$'\n'* && "$password" != *$'\r'* ]] ||
-  fail 'node pull password is invalid'
+kodex_node_registry_read_material
 
 cluster=${context#k3d-}
 mapfile -t nodes < <(k3d node list -o json | jq -r --arg cluster "$cluster" '
@@ -122,19 +93,7 @@ for node in "${nodes[@]}"; do
 done
 
 expected_json_file="$temporary_directory/expected.json"
-jq -cn --slurpfile existing "$existing_json_file" --arg host "$promoted_pull_host" \
-  --rawfile username "$temporary_directory/username" --rawfile password "$temporary_directory/password" --arg ca "$system_ca" \
-  --arg certificate "$system_certificate" --arg private_key "$system_private_key" '
-    (if ($existing | length) == 1 then $existing[0]
-     else error("registry configuration must contain one JSON value") end) |
-    .mirrors = ((.mirrors // {}) + {($host):{endpoint:[("https://" + $host)]}}) |
-    .configs = ((.configs // {}) + {($host):{
-      auth:{username:$username,password:$password},
-      tls:{ca_file:$ca,cert_file:$certificate,key_file:$private_key}
-    }})
-  ' >"$expected_json_file"
-yq -P <"$expected_json_file" >"$temporary_directory/registries.yaml"
-chmod 0600 "$temporary_directory/registries.yaml"
+kodex_node_registry_render
 
 changed=false
 for node in "${nodes[@]}"; do

@@ -167,17 +167,13 @@ func slicesEqual(left, right []string) bool {
 	return true
 }
 
-// accessScanner allows the shared access projection readers to consume either
-// one row or a rows cursor without acquiring transaction ownership.
-// accessScanner позволяет общим readers проекций доступа принимать одну строку
-// либо курсор rows без перехода владения транзакцией.
-type accessScanner interface {
-	// Scan decodes the current projection into caller destinations and returns
-	// driver errors unchanged for the concrete scanner to classify.
-	// Scan декодирует текущую проекцию в приёмники caller и передаёт ошибки
-	// драйвера без изменений для классификации конкретным scanner.
-	Scan(...any) error
-}
+// accessScanner aliases the common positional scan contract for access projections.
+// Row and cursor readers share the same method set; transaction ownership and concrete
+// projection/error mapping remain with the existing callers.
+// accessScanner использует общий контракт позиционного Scan для проекций доступа.
+// Одиночная строка и курсор имеют прежний набор методов; владение транзакцией и конкретные
+// проекции/преобразование ошибок остаются у исходных вызывающих.
+type accessScanner = rowScanner
 
 // resolvedAccessSubject pairs a tenant-resolved internal identity with the
 // public subject and trusted group snapshot used by the evaluator.
@@ -292,23 +288,7 @@ func (repository *Repository) ListOIDCGroups(ctx context.Context, principal valu
 		return nil, "", errs.ErrUnavailable
 	}
 	defer rows.Close()
-	var result []entity.OIDCGroup
-	for rows.Next() {
-		var item entity.OIDCGroup
-		if err := rows.Scan(&item.Ref, &item.DisplayName, &item.State, &item.MemberCount, &item.BindingCount, &item.LastSeenAt, &item.SynchronizedAt); err != nil {
-			return nil, "", errs.ErrUnavailable
-		}
-		result = append(result, item)
-	}
-	if rows.Err() != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	next := ""
-	if int32(len(result)) > boundedPage(filter.Page) {
-		next = result[boundedPage(filter.Page)-1].Ref
-		result = result[:boundedPage(filter.Page)]
-	}
-	return result, next, tx.Commit(ctx)
+	return readAccessRowsPage(ctx, tx, rows, boundedPage(filter.Page), scanOIDCGroup, func(item entity.OIDCGroup) string { return item.Ref })
 }
 
 // ListAccessRoles validates bounded UTF-8 search text and system-role aliases before
@@ -319,7 +299,7 @@ func (repository *Repository) ListOIDCGroups(ctx context.Context, principal valu
 // неизменяемую версию; продолжение задаётся ref последней возвращённой роли.
 func (repository *Repository) ListAccessRoles(ctx context.Context, principal value.Principal, filter query.Filter, includeArchived bool) ([]entity.AccessRole, string, error) {
 	filter.Query = strings.TrimSpace(filter.Query)
-	if !utf8.ValidString(filter.Query) || utf8.RuneCountInString(filter.Query) > 200 || strings.ContainsRune(filter.Query, 0) || !validAccessRoleQueryAliases(filter.Aliases) {
+	if !validAccessRoleQuery(filter.Query, filter.Aliases) {
 		return nil, "", errs.ErrInvalid
 	}
 	current, tx, err := repository.accessReadTransaction(ctx, principal)
@@ -337,23 +317,7 @@ func (repository *Repository) ListAccessRoles(ctx context.Context, principal val
 		return nil, "", errs.ErrUnavailable
 	}
 	defer rows.Close()
-	var result []entity.AccessRole
-	for rows.Next() {
-		item, scanErr := scanAccessRole(rows)
-		if scanErr != nil {
-			return nil, "", scanErr
-		}
-		result = append(result, item)
-	}
-	if rows.Err() != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	next := ""
-	if int32(len(result)) > boundedPage(filter.Page) {
-		next = result[boundedPage(filter.Page)-1].Ref
-		result = result[:boundedPage(filter.Page)]
-	}
-	return result, next, tx.Commit(ctx)
+	return readAccessRowsPage(ctx, tx, rows, boundedPage(filter.Page), scanAccessRole, func(item entity.AccessRole) string { return item.Ref })
 }
 
 // validAccessRoleQueryAliases accepts at most ten entries from the explicit system-role
@@ -438,7 +402,7 @@ func (repository *Repository) ListAccessRoleVersions(ctx context.Context, princi
 // задаётся ref последней возвращённой привязки.
 func (repository *Repository) ListAccessBindings(ctx context.Context, principal value.Principal, filter query.AccessBindingFilter) ([]entity.AccessBinding, string, error) {
 	filter.Query = strings.TrimSpace(filter.Query)
-	if !utf8.ValidString(filter.Query) || utf8.RuneCountInString(filter.Query) > 200 || strings.ContainsRune(filter.Query, 0) || !validAccessRoleQueryAliases(filter.Aliases) {
+	if !validAccessRoleQuery(filter.Query, filter.Aliases) {
 		return nil, "", errs.ErrInvalid
 	}
 	current, tx, err := repository.accessReadTransaction(ctx, principal)
@@ -457,23 +421,7 @@ func (repository *Repository) ListAccessBindings(ctx context.Context, principal 
 		return nil, "", errs.ErrUnavailable
 	}
 	defer rows.Close()
-	var result []entity.AccessBinding
-	for rows.Next() {
-		item, scanErr := scanAccessBinding(rows)
-		if scanErr != nil {
-			return nil, "", scanErr
-		}
-		result = append(result, item)
-	}
-	if rows.Err() != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	next := ""
-	if int32(len(result)) > boundedPage(filter.Page) {
-		next = result[boundedPage(filter.Page)-1].Ref
-		result = result[:boundedPage(filter.Page)]
-	}
-	return result, next, tx.Commit(ctx)
+	return readAccessRowsPage(ctx, tx, rows, boundedPage(filter.Page), scanAccessBinding, func(item entity.AccessBinding) string { return item.Ref })
 }
 
 // QueryEffectiveAccess evaluates one active tenant subject against an owner-resolved visible
@@ -485,13 +433,9 @@ func (repository *Repository) ListAccessBindings(ctx context.Context, principal 
 // образов дополнительно требуют роли владельца/администратора и управления организацией. В ответе
 // сохраняются публичные координаты цели.
 func (repository *Repository) QueryEffectiveAccess(ctx context.Context, principal value.Principal, subjectRef string, target entity.AccessScope, permissionKeys []string, evaluatedAt time.Time) (entity.EffectiveAccess, error) {
-	current, err := repository.resolveScope(ctx, principal)
+	current, tx, err := repository.beginScopedTransaction(ctx, principal, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead})
 	if err != nil {
 		return entity.EffectiveAccess{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead})
-	if err != nil {
-		return entity.EffectiveAccess{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if subjectRef == "" {
@@ -558,13 +502,9 @@ func (repository *Repository) QueryEffectiveAccess(ctx context.Context, principa
 // разрешённого субъекта и сравнивает исходное решение с дополненным в read-only снимке. Симуляция
 // не создаёт роль, привязку, grant или устойчивый результат команды.
 func (repository *Repository) SimulateAccess(ctx context.Context, principal value.Principal, input command.AccessSimulationInput) (entity.AccessSimulation, error) {
-	current, err := repository.resolveScope(ctx, principal)
+	current, tx, err := repository.beginScopedTransaction(ctx, principal, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead})
 	if err != nil {
 		return entity.AccessSimulation{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead})
-	if err != nil {
-		return entity.AccessSimulation{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if err := repository.requireAccess(ctx, tx, current, "access.manage", organizationTarget(current.organizationRef)); err != nil {
@@ -619,13 +559,9 @@ func (repository *Repository) SimulateAccess(ctx context.Context, principal valu
 // организационным access.view. При отказе rollback выполняется здесь; успешный caller отвечает за
 // последующий commit/rollback.
 func (repository *Repository) accessReadTransaction(ctx context.Context, principal value.Principal) (scope, pgx.Tx, error) {
-	current, err := repository.resolveScope(ctx, principal)
+	current, tx, err := repository.beginScopedTransaction(ctx, principal, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return scope{}, nil, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return scope{}, nil, errs.ErrUnavailable
 	}
 	if err := repository.requireAccess(ctx, tx, current, "access.view", organizationTarget(current.organizationRef)); err != nil {
 		_ = tx.Rollback(ctx)
@@ -1405,4 +1341,63 @@ func accessRoleOutcome(role entity.AccessRole) commandOutcome {
 // outbox путь публикации.
 func accessBindingOutcome(binding entity.AccessBinding) commandOutcome {
 	return commandOutcome{result: command.Result{AccessBinding: &binding}, projectRef: binding.Scope.ProjectRef, resourceKind: "ACCESS_BINDING", resourceRef: binding.Ref, summary: "i18n:ACCESS_BINDING_CHANGED", platformEvent: "MEMBERSHIP_CHANGED"}
+}
+
+// validAccessRoleQuery validates already-trimmed search text and the existing closed alias list.
+// It preserves the original UTF-8, 200-rune, NUL and alias checks in their short-circuit order;
+// trimming and authorization still belong to each role/binding query.
+// validAccessRoleQuery проверяет уже обрезанный поисковый текст и прежний закрытый список aliases.
+// Сохраняет исходный порядок UTF-8, предела 200 рун, NUL и aliases; обрезка пробелов и авторизация
+// по-прежнему принадлежат отдельным запросам ролей и привязок.
+func validAccessRoleQuery(text string, aliases []string) bool {
+	return utf8.ValidString(text) && utf8.RuneCountInString(text) <= 200 && !strings.ContainsRune(text, 0) && validAccessRoleQueryAliases(aliases)
+}
+
+// rawAccessPage preserves a bounded access page's backing array, nil state and raw-ref cursor.
+// Only a lookahead row invokes position, once on the last retained item before trimming, as in
+// the native readers. The caller supplies a positive limit and owns errors, Close and Commit.
+// rawAccessPage сохраняет backing array, nil-состояние и raw-ref cursor ограниченной страницы.
+// Только запасная строка вызывает position, один раз для последнего видимого элемента до обрезки,
+// как в исходных readers. Вызывающий задаёт положительный limit и отвечает за ошибки, Close и Commit.
+func rawAccessPage[T any](items []T, limit int32, position func(T) string) ([]T, string) {
+	next := ""
+	if int32(len(items)) > limit {
+		next = position(items[limit-1])
+		items = items[:limit]
+	}
+	return items, next
+}
+
+// scanOIDCGroup decodes the existing seven-column organization group projection without changing
+// its order, timestamps or counts. A scan failure discards the row as Unavailable; no ownership,
+// membership refresh, row closure or transaction completion is performed here.
+// scanOIDCGroup декодирует прежнюю проекцию группы организации из семи колонок без изменения
+// порядка, времён и счётчиков. Ошибка Scan отбрасывает строку с Unavailable; helper не разрешает
+// владение, не обновляет членство, не закрывает rows и не завершает транзакцию.
+func scanOIDCGroup(scanner rowScanner) (entity.OIDCGroup, error) {
+	var item entity.OIDCGroup
+	if err := scanner.Scan(&item.Ref, &item.DisplayName, &item.State, &item.MemberCount, &item.BindingCount, &item.LastSeenAt, &item.SynchronizedAt); err != nil {
+		return entity.OIDCGroup{}, errs.ErrUnavailable
+	}
+	return item, nil
+}
+
+// readAccessRowsPage applies the native access-reader order: collect with a nil initial slice,
+// pass scan errors through, map iteration failure before pagination, then commit once with the
+// exact caller context. A commit failure preserves items/cursor and its original error. Caller
+// authorization, query, SQL arguments, row Close and deferred rollback stay outside.
+// readAccessRowsPage сохраняет порядок access readers: сбор с nil initial slice, исходную scan
+// error, преобразование iteration failure до пагинации и один Commit с точным caller context.
+// Ошибка Commit сохраняет items/cursor и исходную error. Авторизация, query, SQL arguments,
+// Close rows и отложенный rollback остаются у вызывающего.
+func readAccessRowsPage[T any](ctx context.Context, tx pgx.Tx, rows pgx.Rows, limit int32, scan func(rowScanner) (T, error), position func(T) string) ([]T, string, error) {
+	items, err := collectRowsInto(rows, []T(nil), scan)
+	if err != nil {
+		return nil, "", err
+	}
+	if rows.Err() != nil {
+		return nil, "", errs.ErrUnavailable
+	}
+	items, next := rawAccessPage(items, limit, position)
+	return items, next, tx.Commit(ctx)
 }

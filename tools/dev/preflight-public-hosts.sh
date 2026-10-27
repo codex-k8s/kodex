@@ -78,27 +78,8 @@ print("\n".join(sorted(canonical)))
 PY
 }
 
-canonical_dns_addresses() {
-  local family=$1
-  python3 -c '
-import ipaddress
-import sys
-
-family = int(sys.argv[1])
-result = set()
-for line in sys.stdin:
-    value = line.strip().rstrip(".")
-    if not value:
-        continue
-    try:
-        address = ipaddress.ip_address(value)
-    except ValueError:
-        continue
-    if address.version == family:
-        result.add(str(address))
-print("\n".join(sorted(result)))
-' "$family"
-}
+# shellcheck source=../install/dns-address-normalization.sh
+source "${BASH_SOURCE[0]%"${BASH_SOURCE[0]##*/}"}../install/dns-address-normalization.sh"
 
 allowed_ipv4_output=$(canonical_address_list 4 "$allowed_ipv4_raw") ||
   fail 'allowed IPv4 address list is invalid'
@@ -287,6 +268,35 @@ jq -n --arg namespace "$preflight_namespace" --arg name "$preflight_name" \
   }
 ' | kubectl apply --server-side --field-manager=kodex-acme-preflight -f - >/dev/null
 
+# Проверяет HTTP-01 по точному resolve-аргументу после проверок вызывающей стороны.
+# Сохраняет challenge token, повторы, паузы и таймауты; затем проверяет TCP443
+# один раз на адрес. Это проверка доступности порта; сертификат TLS здесь не проверяется.
+# Читает host/address/http_timeout_seconds/challenge_* и сохраняет прежние
+# body/challenge_verified/checked_https_addresses без новых локальных переменных.
+verify_local_http01_address() {
+    challenge_verified=false
+    for _ in $(seq 1 "$http_timeout_seconds"); do
+      if body=$(curl --fail --silent --show-error --noproxy '*' \
+        --connect-timeout 2 --max-time 3 --resolve "$1" \
+        "http://$host$challenge_path" 2>/dev/null) && [[ "$body" == "$challenge_token" ]]; then
+        challenge_verified=true
+        break
+      fi
+      sleep 1
+    done
+    [[ "$challenge_verified" == true ]] || fail "exact HTTP-01 route is unreachable: $host/$address"
+    if [[ -z "${checked_https_addresses[$address]:-}" ]]; then
+      python3 - "$address" "$http_timeout_seconds" <<'PY' || fail "HTTPS endpoint is unreachable: $host/$address"
+import socket
+import sys
+
+with socket.create_connection((sys.argv[1], 443), timeout=int(sys.argv[2])):
+    pass
+PY
+      checked_https_addresses[$address]=true
+    fi
+}
+
 declare -A checked_https_addresses=()
 for host in "${hosts[@]}"; do
   dns_output=$(timeout "$((dns_timeout_seconds + 2))s" \
@@ -303,53 +313,13 @@ for host in "${hosts[@]}"; do
     printf '%s\n' "${allowed_ipv4[@]}" | grep -Fxq -- "$address" ||
       fail "DNS host resolves to an unauthorized IPv4 address: $host/$address"
     observed_ipv4+=("$address")
-    challenge_verified=false
-    for _ in $(seq 1 "$http_timeout_seconds"); do
-      if body=$(curl --fail --silent --show-error --noproxy '*' \
-        --connect-timeout 2 --max-time 3 --resolve "$host:80:$address" \
-        "http://$host$challenge_path" 2>/dev/null) && [[ "$body" == "$challenge_token" ]]; then
-        challenge_verified=true
-        break
-      fi
-      sleep 1
-    done
-    [[ "$challenge_verified" == true ]] || fail "exact HTTP-01 route is unreachable: $host/$address"
-    if [[ -z "${checked_https_addresses[$address]:-}" ]]; then
-      python3 - "$address" "$http_timeout_seconds" <<'PY' || fail "HTTPS endpoint is unreachable: $host/$address"
-import socket
-import sys
-
-with socket.create_connection((sys.argv[1], 443), timeout=int(sys.argv[2])):
-    pass
-PY
-      checked_https_addresses[$address]=true
-    fi
+    verify_local_http01_address "$host:80:$address"
   done
   for address in "${host_ipv6[@]}"; do
     printf '%s\n' "${allowed_ipv6[@]}" | grep -Fxq -- "$address" ||
       fail "DNS host resolves to an unauthorized IPv6 address: $host/$address"
     observed_ipv6+=("$address")
-    challenge_verified=false
-    for _ in $(seq 1 "$http_timeout_seconds"); do
-      if body=$(curl --fail --silent --show-error --noproxy '*' \
-        --connect-timeout 2 --max-time 3 --resolve "$host:80:[$address]" \
-        "http://$host$challenge_path" 2>/dev/null) && [[ "$body" == "$challenge_token" ]]; then
-        challenge_verified=true
-        break
-      fi
-      sleep 1
-    done
-    [[ "$challenge_verified" == true ]] || fail "exact HTTP-01 route is unreachable: $host/$address"
-    if [[ -z "${checked_https_addresses[$address]:-}" ]]; then
-      python3 - "$address" "$http_timeout_seconds" <<'PY' || fail "HTTPS endpoint is unreachable: $host/$address"
-import socket
-import sys
-
-with socket.create_connection((sys.argv[1], 443), timeout=int(sys.argv[2])):
-    pass
-PY
-      checked_https_addresses[$address]=true
-    fi
+    verify_local_http01_address "$host:80:[$address]"
   done
   verify_external_http01 "$host"
   verify_external_https_port "$host"

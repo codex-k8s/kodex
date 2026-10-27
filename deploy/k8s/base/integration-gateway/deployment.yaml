@@ -6,13 +6,6 @@ metadata:
     app.kubernetes.io/name: integration-gateway
     app.kubernetes.io/component: integration-worker
 spec:
-  replicas: 2
-  revisionHistoryLimit: 2
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 0
-      maxSurge: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: integration-gateway
@@ -24,19 +17,12 @@ spec:
         app.kubernetes.io/component: integration-worker
     spec:
       serviceAccountName: integration-gateway
-      automountServiceAccountToken: false
-      enableServiceLinks: false
-      terminationGracePeriodSeconds: 35
       securityContext:
-        runAsNonRoot: true
         fsGroup: 10001
         fsGroupChangePolicy: OnRootMismatch
-        seccompProfile:
-          type: RuntimeDefault
       containers:
         - name: integration-gateway
           image: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/integration-gateway@sha256:0000000000000000000000000000000000000000000000000000000000000000
-          imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
                 name: integration-gateway-runtime
@@ -73,42 +59,11 @@ spec:
             - name: metrics
               containerPort: 9090
               protocol: TCP
-          startupProbe: &technicalProbe
-            httpGet:
-              path: /healthz
-              port: metrics
-            timeoutSeconds: 2
-            periodSeconds: 2
-            failureThreshold: 30
-          readinessProbe:
-            <<: *technicalProbe
-            httpGet:
-              path: /readyz
-              port: metrics
-            periodSeconds: 5
-            failureThreshold: 2
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: metrics
-            timeoutSeconds: 2
-            periodSeconds: 10
-            failureThreshold: 3
           resources:
             requests:
-              cpu: 50m
               memory: 128Mi
             limits:
-              cpu: "2"
               memory: 512Mi
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 10001
-            runAsGroup: 10001
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: [ALL]
           volumeMounts:
             - name: configuration-writeback-scratch
               mountPath: /tmp

@@ -11,12 +11,34 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryRuntimeCatalogReadOverlayMetadata embeds organization-scoped metadata lookup for explicit
+// overlay refs. Returned diagnostics and schema pins describe stored revisions, not an
+// authorization decision.
+// queryRuntimeCatalogReadOverlayMetadata встраивает чтение metadata явных overlay refs в
+// организации. Возвращённые diagnostics и schema pins описывают сохранённые ревизии, а не решение
+// авторизации.
+//
 //go:embed sql/runtime_catalog__read_overlay_metadata.sql
 var queryRuntimeCatalogReadOverlayMetadata string
 
+// queryRuntimeCatalogSaveOverlayMetadata embeds diagnostics/schema-pin updates only for mutable
+// DRAFT/VALID/INVALID overlays in the organization. Published content is not rewritten; the caller
+// owns transaction and row-count policy.
+// queryRuntimeCatalogSaveOverlayMetadata встраивает обновление diagnostics/schema pins только
+// изменяемых DRAFT/VALID/INVALID overlay организации. Опубликованное содержимое не переписывается;
+// caller отвечает за транзакцию и политику числа строк.
+//
 //go:embed sql/runtime_catalog__save_overlay_metadata.sql
 var queryRuntimeCatalogSaveOverlayMetadata string
 
+// runtimeOverlaySchema intersects reasoning efforts across candidate account catalogs for the
+// configured available model. Matching models update the shared default; absent models contribute
+// an empty effort set. Catalog failures propagate. It delegates schema construction without
+// probing providers or granting account access.
+// runtimeOverlaySchema пересекает reasoning efforts каталогов accounts-кандидатов для настроенной
+// доступной модели. Найденные модели уточняют общий default, отсутствие модели даёт пустой effort
+// set. Ошибки каталогов передаются выше. Передаёт построение schema без provider probes и выдачи
+// доступа к accounts.
 func runtimeOverlaySchema(ctx context.Context, tx pgx.Tx, current scope, config entity.AgentRuntimeConfiguration) (runtimecontract.ConfigOverlaySchema, error) {
 	efforts := []string{}
 	defaultEffort := ""
@@ -46,6 +68,14 @@ func runtimeOverlaySchema(ctx context.Context, tx pgx.Tx, current scope, config 
 	return runtimecontract.OverlaySchema(efforts, defaultEffort), nil
 }
 
+// populateRuntimeOverlaySchema first assigns the computed schema, then reads published/draft
+// metadata and strictly decodes diagnostics before mutating matching view targets.
+// Query/scan/decode failures are Unavailable, final rows.Err propagates; it neither requires all
+// metadata rows nor rolls back prior in-memory changes.
+// populateRuntimeOverlaySchema сначала назначает вычисленную schema, затем читает published/draft
+// metadata и строго декодирует diagnostics перед изменением targets представления. Ошибки
+// query/scan/decode дают Unavailable, итоговый rows.Err передаётся выше; не требует наличия всех
+// metadata rows и не откатывает прежние изменения в памяти.
 func populateRuntimeOverlaySchema(ctx context.Context, tx pgx.Tx, current scope, view *entity.AgentRuntimeConfigurationView) error {
 	schema, err := runtimeOverlaySchema(ctx, tx, current, view.Configuration)
 	if err != nil {
@@ -80,6 +110,14 @@ func populateRuntimeOverlaySchema(ctx context.Context, tx pgx.Tx, current scope,
 	return rows.Err()
 }
 
+// saveRuntimeOverlayDiagnostics diagnoses the selected overlay against explicit allowed reasoning
+// values. Published overlays must already have matching schema pins and no diagnostics; drafts
+// persist even nonempty diagnostics and update the view after Exec. A missing draft conflicts;
+// this function does not commit or require exactly one updated row.
+// saveRuntimeOverlayDiagnostics проверяет выбранный overlay по явному набору допустимых reasoning
+// values. Published overlay уже должен иметь matching schema pins и пустые diagnostics; draft
+// сохраняет также непустые diagnostics и меняет view после Exec. Отсутствие draft даёт Conflict;
+// функция не делает Commit и не требует ровно одной изменённой строки.
 func saveRuntimeOverlayDiagnostics(ctx context.Context, tx pgx.Tx, current scope, view *entity.AgentRuntimeConfigurationView, draft bool) error {
 	target := &view.PublishedOverlay
 	if draft {
@@ -113,7 +151,14 @@ func saveRuntimeOverlayDiagnostics(ctx context.Context, tx pgx.Tx, current scope
 	return nil
 }
 
-// Порядок presentation полей не является источником model compatibility.
+// runtimeOverlayReasoningValues finds exactly one string-valued model_reasoning_effort field
+// regardless of presentation order. Missing/duplicate/wrong-type fields are Unavailable; an
+// explicit nonnil empty values slice preserves a closed compatibility restriction rather than
+// disabling diagnosis.
+// runtimeOverlayReasoningValues находит ровно одно строковое поле model_reasoning_effort
+// независимо от presentation-порядка. Отсутствующее, повторное либо неверно типизированное поле
+// даёт Unavailable; явный nonnil пустой slice values сохраняет закрытое ограничение совместимости
+// вместо отключения проверки.
 func runtimeOverlayReasoningValues(schema runtimecontract.ConfigOverlaySchema) ([]string, error) {
 	var values []string
 	found := false

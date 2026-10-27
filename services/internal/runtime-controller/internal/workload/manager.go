@@ -22,6 +22,7 @@ import (
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/libs/go/runtimepolicywire"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
@@ -960,7 +961,7 @@ func runtimeEnvironmentPolicyFromProto(value *controlplanev1.RuntimeEnvironmentP
 		Network: runtimecontract.RuntimeNetworkPolicy{DenyByDefault: value.GetNetwork().GetDenyByDefault(),
 			WebAccess: runtimecontract.RuntimeWebAccess{Mode: runtimeWebAccessMode(value.GetNetwork().GetWebAccess().GetMode()), Rules: []runtimecontract.RuntimeWebAccessRule{}}},
 		KubernetesAccess: runtimecontract.RuntimeKubernetesAccessProfile{
-			Kind:      runtimeKubernetesAccessKind(value.GetKubernetesAccess().GetKind()),
+			Kind:      runtimepolicywire.KubernetesAccessKindFromProto(value.GetKubernetesAccess().GetKind()),
 			Namespace: value.GetKubernetesAccess().GetNamespace(),
 		},
 		ResourcesDigest: value.GetResourcesDigest(), VolumesDigest: value.GetVolumesDigest(),
@@ -968,12 +969,12 @@ func runtimeEnvironmentPolicyFromProto(value *controlplanev1.RuntimeEnvironmentP
 	}
 	for _, volume := range value.GetVolumes() {
 		policy.Volumes = append(policy.Volumes, runtimecontract.RuntimeVolume{
-			Name: volume.GetName(), Kind: runtimeVolumeKind(volume.GetKind()), SizeMiB: volume.GetSizeMib(), MountPath: volume.GetMountPath(),
+			Name: volume.GetName(), Kind: runtimepolicywire.VolumeKindFromProto(volume.GetKind()), SizeMiB: volume.GetSizeMib(), MountPath: volume.GetMountPath(),
 		})
 	}
 	for _, egress := range value.GetNetwork().GetEgress() {
 		policy.Network.Egress = append(policy.Network.Egress, runtimecontract.RuntimeNetworkEgress{
-			Destination: runtimeNetworkDestination(egress.GetDestination()), Protocol: runtimeNetworkProtocol(egress.GetProtocol()), Port: egress.GetPort(),
+			Destination: runtimepolicywire.NetworkDestinationFromProto(egress.GetDestination()), Protocol: runtimeNetworkProtocol(egress.GetProtocol()), Port: egress.GetPort(),
 		})
 	}
 	for _, rule := range value.GetNetwork().GetWebAccess().GetRules() {
@@ -1003,7 +1004,7 @@ func runtimeKubernetesAccessFromProto(value *controlplanev1.RuntimeKubernetesAcc
 	}
 	access := runtimecontract.RuntimeKubernetesAccess{
 		Profile: runtimecontract.RuntimeKubernetesAccessProfile{
-			Kind: runtimeKubernetesAccessKind(value.GetProfile().GetKind()), Namespace: value.GetProfile().GetNamespace(),
+			Kind: runtimepolicywire.KubernetesAccessKindFromProto(value.GetProfile().GetKind()), Namespace: value.GetProfile().GetNamespace(),
 		},
 		ServiceAccountName: value.GetServiceAccountName(), Rules: []runtimecontract.RuntimeKubernetesRule{}, Digest: value.GetDigest(),
 	}
@@ -1019,34 +1020,6 @@ func runtimeKubernetesAccessFromProto(value *controlplanev1.RuntimeKubernetesAcc
 	return access, nil
 }
 
-// runtimeVolumeKind maps only disk and memory ephemeral-volume enum values; every unknown value becomes empty for later rejection.
-// runtimeVolumeKind преобразует только enum временных дискового и оперативного томов; неизвестные значения становятся пустыми для последующего отказа.
-func runtimeVolumeKind(value controlplanev1.RuntimeVolumeKind) string {
-	switch value {
-	case controlplanev1.RuntimeVolumeKind_RUNTIME_VOLUME_KIND_EPHEMERAL_DISK:
-		return runtimecontract.RuntimeVolumeEphemeralDisk
-	case controlplanev1.RuntimeVolumeKind_RUNTIME_VOLUME_KIND_EPHEMERAL_MEMORY:
-		return runtimecontract.RuntimeVolumeEphemeralMemory
-	default:
-		return ""
-	}
-}
-
-// runtimeNetworkDestination maps only DNS, runtime callback and provider proxy destinations, rejecting unregistered meanings through an empty result.
-// runtimeNetworkDestination преобразует только назначения DNS, runtime callback и прокси провайдера, представляя незарегистрированные значения пустым результатом для отказа.
-func runtimeNetworkDestination(value controlplanev1.RuntimeNetworkDestination) string {
-	switch value {
-	case controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_DNS:
-		return runtimecontract.RuntimeEgressDNS
-	case controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_RUNTIME_CALLBACK:
-		return runtimecontract.RuntimeEgressRuntimeCallback
-	case controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY:
-		return runtimecontract.RuntimeEgressProviderProxy
-	default:
-		return ""
-	}
-}
-
 // runtimeNetworkProtocol maps only TCP and UDP enum values to contract protocol names, returning empty for all others.
 // runtimeNetworkProtocol преобразует только enum TCP и UDP в имена протоколов контракта, возвращая пустую строку для остальных.
 func runtimeNetworkProtocol(value controlplanev1.RuntimeNetworkProtocol) string {
@@ -1055,17 +1028,6 @@ func runtimeNetworkProtocol(value controlplanev1.RuntimeNetworkProtocol) string 
 		return runtimecontract.RuntimeProtocolTCP
 	case controlplanev1.RuntimeNetworkProtocol_RUNTIME_NETWORK_PROTOCOL_UDP:
 		return runtimecontract.RuntimeProtocolUDP
-	default:
-		return ""
-	}
-}
-
-// runtimeKubernetesAccessKind recognizes only the NONE access profile; any other protobuf value remains unsupported rather than gaining a default permission.
-// runtimeKubernetesAccessKind распознаёт только профиль доступа NONE; остальные значения protobuf остаются неподдерживаемыми, не получая разрешения по умолчанию.
-func runtimeKubernetesAccessKind(value controlplanev1.RuntimeKubernetesAccessKind) string {
-	switch value {
-	case controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE:
-		return runtimecontract.RuntimeKubernetesAccessNone
 	default:
 		return ""
 	}

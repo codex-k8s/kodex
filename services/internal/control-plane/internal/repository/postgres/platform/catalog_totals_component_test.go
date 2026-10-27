@@ -15,6 +15,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testRunCatalogTotals checks newest-first bounded Run pages and canonical state filters,
+// actor/tenant eligibility, literal search and hidden-project/artifact counts before cancelling
+// fixture runs.
+// testRunCatalogTotals проверяет ограниченные страницы Run от новых к старым и канонические
+// фильтры состояний, допустимость actor и tenant, буквальный поиск и счётчики скрытых проектов и
+// артефактов перед отменой тестовых Run.
 func testRunCatalogTotals(t *testing.T, ctx context.Context, service *platformservice.Service, owner, reader value.Principal, projectRef, agentRef string) {
 	t.Helper()
 	created, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
@@ -117,6 +123,12 @@ func testRunCatalogTotals(t *testing.T, ctx context.Context, service *platformse
 	}
 }
 
+// testArtifactCatalogTotals checks global/project artifact totals agree with distinct bounded
+// pages and literal filters, rejecting project/query cursor changes and empty-result phantom
+// cursors.
+// testArtifactCatalogTotals проверяет согласованность общих и проектных счётчиков артефактов с
+// неповторяющимися ограниченными страницами и буквальными фильтрами, отклоняя смену проекта и
+// запроса курсора и выдуманный курсор пустого результата.
 func testArtifactCatalogTotals(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, firstProject string) {
 	t.Helper()
 	project, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "catalog-total-other-project"}, Payload: command.ProjectInput{Name: "Catalog totals", Purpose: "Verify global eligibility", Language: "en"}})

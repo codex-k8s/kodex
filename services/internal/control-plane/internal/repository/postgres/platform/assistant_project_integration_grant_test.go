@@ -10,6 +10,14 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestProjectAssistantIntegrationGrantClosedCommand checks exact typed PROJECT assistant grant
+// mapping, rejects every missing key and malformed scope/owner/version or injected
+// authority/credential field. Connection-version carry must preserve owner pins and the source
+// map. It validates the plan boundary without applying a real integration grant.
+// TestProjectAssistantIntegrationGrantClosedCommand проверяет точное typed PROJECT assistant grant
+// mapping, отклоняет каждый missing key и malformed scope/owner/version либо injected
+// authority/credential field. Connection-version carry сохраняет owner pins и исходную map.
+// Проверяет plan boundary без применения real integration grant.
 func TestProjectAssistantIntegrationGrantClosedCommand(t *testing.T) {
 	params := map[string]any{"projectAssistantRef": "agt_owned12345", "assistantScope": "PROJECT", "scopeKind": "ORGANIZATION", "organizationRef": "org_owned12345", "projectRef": "prj_owned12345", "assistantProfileRef": "asstp_owned12345", "agentVersion": int64(2), "profileVersion": int64(1), "connectionRef": "int_owned12345", "capabilityKey": "github.repository.read", "enabled": true, "approvalPolicy": "NONE", "approvalScopePaths": []string{}, "definitionVersion": "2.3.1", "definitionDigest": strings.Repeat("a", 64), "grantRef": "", "grantVersion": int64(0), "defaultApprovalPolicy": "NONE", "allowedApprovalPolicies": []string{"NONE"}, "expectedVersion": int64(4)}
 	op := entity.AssistantPlanOperation{Type: changeProjectAssistantIntegrationGrant, Input: params}

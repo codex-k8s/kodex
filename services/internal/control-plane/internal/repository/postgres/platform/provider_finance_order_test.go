@@ -5,6 +5,14 @@ import (
 	"time"
 )
 
+// TestFinancialCollectorConcurrencyAndReplay checks semantic JSON replay, conflicting
+// same-sequence content, older/newer same or competing collectors, timestamp tie ordering and the
+// first observation. It exercises the pure ordering predicate sequentially; no real transaction
+// race, account lock or provider balance is tested.
+// TestFinancialCollectorConcurrencyAndReplay проверяет semantic JSON replay, противоречивый
+// same-sequence content, старые/новые same либо competing collectors, timestamp tie ordering и
+// первое observation. Последовательно проверяет pure ordering predicate; реальная transaction
+// race, account lock и provider balance не тестируются.
 func TestFinancialCollectorConcurrencyAndReplay(t *testing.T) {
 	at := time.Unix(100, 0)
 	old := at.Add(-time.Second)

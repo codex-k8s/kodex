@@ -335,34 +335,29 @@ api_endpoint_ports=$(kubectl -n default get endpoints kubernetes -o json | jq -e
   [.subsets[]?.ports[]?.port | tostring] | unique | sort | select(length > 0) | join(",")
 ')
 
+# Выполняет выбранную фазу management bootstrap с прежними общими аргументами.
+# Вызывающие ветви сохраняют проверки, порядок фаз и обработку отказа; значения
+# передаются буквально, без изменения переменных или чтения env-файлов.
+bootstrap_management_surfaces() {
+  "$repository_root/infra/management-surfaces/bootstrap.sh" \
+    --context "$KODEX_KUBE_CONTEXT" --mode "$1" \
+    --management-surfaces "$KODEX_MANAGEMENT_SURFACES" \
+    --oidc-issuer "https://$KODEX_OIDC_HOST/realms/kodex" \
+    --oidc-connect-address "$KODEX_OIDC_CONNECT_ADDRESS" \
+    --oidc-target-port "$KODEX_OIDC_TARGET_PORT" \
+    --control-center-host "$KODEX_CONTROL_HOST" --grafana-host "$KODEX_GRAFANA_HOST" \
+    --headlamp-host "$KODEX_HEADLAMP_HOST" \
+    --ingress-class "$KODEX_INGRESS_CLASS" --cluster-issuer "$KODEX_CLUSTER_ISSUER" \
+    --ingress-namespace "$KODEX_INGRESS_NAMESPACE" --ingress-pod-name "$KODEX_INGRESS_POD_NAME" \
+    --kubernetes-api-service-cidr "$api_service_ip/32" \
+    --kubernetes-api-endpoint-cidrs "$api_endpoint_cidrs" \
+    --kubernetes-api-endpoint-ports "$api_endpoint_ports"
+}
+
 if component_selected management; then
   kodex_require_env KODEX_PUBLIC_IPV4_CIDR || exit 1
-  "$repository_root/infra/management-surfaces/bootstrap.sh" \
-    --context "$KODEX_KUBE_CONTEXT" --mode apply-monitoring \
-    --management-surfaces "$KODEX_MANAGEMENT_SURFACES" \
-    --oidc-issuer "https://$KODEX_OIDC_HOST/realms/kodex" \
-    --oidc-connect-address "$KODEX_OIDC_CONNECT_ADDRESS" \
-    --oidc-target-port "$KODEX_OIDC_TARGET_PORT" \
-    --control-center-host "$KODEX_CONTROL_HOST" --grafana-host "$KODEX_GRAFANA_HOST" \
-    --headlamp-host "$KODEX_HEADLAMP_HOST" \
-    --ingress-class "$KODEX_INGRESS_CLASS" --cluster-issuer "$KODEX_CLUSTER_ISSUER" \
-    --ingress-namespace "$KODEX_INGRESS_NAMESPACE" --ingress-pod-name "$KODEX_INGRESS_POD_NAME" \
-    --kubernetes-api-service-cidr "$api_service_ip/32" \
-    --kubernetes-api-endpoint-cidrs "$api_endpoint_cidrs" \
-    --kubernetes-api-endpoint-ports "$api_endpoint_ports"
-  "$repository_root/infra/management-surfaces/bootstrap.sh" \
-    --context "$KODEX_KUBE_CONTEXT" --mode apply-surfaces \
-    --management-surfaces "$KODEX_MANAGEMENT_SURFACES" \
-    --oidc-issuer "https://$KODEX_OIDC_HOST/realms/kodex" \
-    --oidc-connect-address "$KODEX_OIDC_CONNECT_ADDRESS" \
-    --oidc-target-port "$KODEX_OIDC_TARGET_PORT" \
-    --control-center-host "$KODEX_CONTROL_HOST" --grafana-host "$KODEX_GRAFANA_HOST" \
-    --headlamp-host "$KODEX_HEADLAMP_HOST" \
-    --ingress-class "$KODEX_INGRESS_CLASS" --cluster-issuer "$KODEX_CLUSTER_ISSUER" \
-    --ingress-namespace "$KODEX_INGRESS_NAMESPACE" --ingress-pod-name "$KODEX_INGRESS_POD_NAME" \
-    --kubernetes-api-service-cidr "$api_service_ip/32" \
-    --kubernetes-api-endpoint-cidrs "$api_endpoint_cidrs" \
-    --kubernetes-api-endpoint-ports "$api_endpoint_ports"
+  bootstrap_management_surfaces apply-monitoring
+  bootstrap_management_surfaces apply-surfaces
 fi
 
 registry_docker_config="$material_directory/github/release-registry-dockerconfig.json"
@@ -473,19 +468,7 @@ if component_selected platform; then
 fi
 
 if component_selected management; then
-  "$repository_root/infra/management-surfaces/bootstrap.sh" \
-    --context "$KODEX_KUBE_CONTEXT" --mode readback \
-    --management-surfaces "$KODEX_MANAGEMENT_SURFACES" \
-    --oidc-issuer "https://$KODEX_OIDC_HOST/realms/kodex" \
-    --oidc-connect-address "$KODEX_OIDC_CONNECT_ADDRESS" \
-    --oidc-target-port "$KODEX_OIDC_TARGET_PORT" \
-    --control-center-host "$KODEX_CONTROL_HOST" --grafana-host "$KODEX_GRAFANA_HOST" \
-    --headlamp-host "$KODEX_HEADLAMP_HOST" \
-    --ingress-class "$KODEX_INGRESS_CLASS" --cluster-issuer "$KODEX_CLUSTER_ISSUER" \
-    --ingress-namespace "$KODEX_INGRESS_NAMESPACE" --ingress-pod-name "$KODEX_INGRESS_POD_NAME" \
-    --kubernetes-api-service-cidr "$api_service_ip/32" \
-    --kubernetes-api-endpoint-cidrs "$api_endpoint_cidrs" \
-    --kubernetes-api-endpoint-ports "$api_endpoint_ports"
+  bootstrap_management_surfaces readback
 fi
 
 printf 'Kodex installation completed: mode=%s components=%s\n' \

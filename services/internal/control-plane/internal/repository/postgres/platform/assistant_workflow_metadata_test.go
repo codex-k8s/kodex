@@ -10,6 +10,14 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestAssistantWorkflowMetadataPublishedProjection compares a synthetic published graph projection
+// byte-for-byte with the shared golden, checks field/step shape and rejects private
+// sentinels/keys. Removing Published must yield revision0 with no draft steps. It reads a
+// repository fixture only, not owner ACL, broker delivery or a live workflow.
+// TestAssistantWorkflowMetadataPublishedProjection сравнивает synthetic published graph projection
+// byte-for-byte с shared golden, проверяет field/step shape и отсутствие private sentinels/keys.
+// Без Published требуется revision0 без draft steps. Читает лишь repository fixture, а не owner
+// ACL, broker delivery и live workflow.
 func TestAssistantWorkflowMetadataPublishedProjection(t *testing.T) {
 	p := entity.WorkflowVersion{Ref: "wfv_fixture123", Name: "Процесс", CoordinatorAgentRef: "agt_manager123", VersionNumber: 2, Concurrency: 3, TimeoutSeconds: 3600, Instructions: "PRIVATE_SENTINEL", CompletionCriteria: "PRIVATE_SENTINEL", Inputs: []entity.WorkflowInputField{{Key: "private", Label: "Private", Type: "TEXT", DefaultValue: "PRIVATE_SENTINEL"}}, ResultSchema: map[string]any{"private": "PRIVATE_SENTINEL"}}
 	for i, s := range []struct{ key, name, agent string }{{"implementation", "Разработка", "agt_developer123"}, {"review", "Комплексное ревью", "agt_reviewer123"}, {"acceptance", "Приёмка", "agt_manager123"}} {

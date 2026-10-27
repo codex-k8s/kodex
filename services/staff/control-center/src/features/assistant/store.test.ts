@@ -1,3 +1,4 @@
+import { createDeferred } from "@/test-utils/create-deferred";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -153,10 +154,7 @@ function deferred<T>(): {
   promise: Promise<T>;
   resolve: (value: T) => void;
 } {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((next) => {
-    resolve = next;
-  });
+  const { promise, resolve } = createDeferred<T>();
   return { promise, resolve };
 }
 

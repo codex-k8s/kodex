@@ -34,6 +34,51 @@ async function render(content: string): Promise<string> {
 }
 
 describe("SafeMarkdown", () => {
+  it.each([
+    ["заголовке", (text: string) => `# ${text}`],
+    ["абзаце", (text: string) => text],
+    ["цитате", (text: string) => `> ${text}`],
+    ["маркированном списке", (text: string) => `- ${text}`],
+    ["нумерованном списке", (text: string) => `1. ${text}`],
+    ["заголовке таблицы", (text: string) => `| ${text} |\n| --- |\n| Строка |`],
+    ["ячейке таблицы", (text: string) => `| Заголовок |\n| --- |\n| ${text} |`],
+  ])(
+    "одинаково экранирует текст и ограничивает ссылки в %s",
+    async (_label, wrap) => {
+      const html = await render(
+        wrap(
+          "**Жирный** _Курсив_ `a<b` <svg/onload=alert(1)> " +
+            "[Внешняя](https://example.com/help) [Внутренняя](/projects/example) " +
+            "[Якорь](#result) [Письмо](mailto:qa@example.invalid) " +
+            "[Опасная](javascript:bad) ![Картинка](https://example.com/image.png) " +
+            "[Локальная](/workspace/report.md?private=hidden) run_1234567890abcdef",
+        ),
+      );
+      expect(html).toMatch(/<strong[^>]*>Жирный<\/strong>/);
+      expect(html).toMatch(/<em[^>]*>Курсив<\/em>/);
+      expect(html).toMatch(/<code[^>]*>a&lt;b<\/code>/);
+      expect(html).toContain("&lt;svg/onload=alert(1)&gt;");
+      expect(html).not.toContain("<svg");
+      expect(html).not.toContain("<img");
+      expect(html).toContain("Картинка");
+      for (const [href, target] of [
+        ["https://example.com/help", "_blank"],
+        ["/projects/example", "_self"],
+        ["#result", "_self"],
+        ["mailto:qa@example.invalid", "_blank"],
+      ] as const) {
+        expect(html).toContain(
+          `href="${href}" rel="noopener noreferrer" target="${target}"`,
+        );
+      }
+      expect(html).not.toContain('href="javascript:');
+      expect(html).not.toContain('href="/workspace');
+      expect(html).not.toContain("private=hidden");
+      expect(html).not.toContain("run_1234567890abcdef");
+      expect(html).toMatch(/<code[^>]*>\/workspace\/report\.md<\/code>/);
+    },
+  );
+
   it("сохраняет читаемые колонки и полный текст в локально прокручиваемой таблице", async () => {
     const longText =
       "Подробное описание результата проверки без усечения ".repeat(12);

@@ -11,8 +11,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Полномочия и eligibility совпадают с публичным GetWorkflow; экран не
-// назначает READ authority. Project helper сохраняет exact source boundary.
+// assistantResolvedWorkflowMetadataTx accepts only a direct WORKFLOW catalog lookup, resolves the
+// same assistant/visibility boundary as workflow reads and enforces the source project when
+// applicable. It returns bounded published metadata with a digest; it neither exposes private
+// instructions nor grants launch/delegation authority.
+// assistantResolvedWorkflowMetadataTx принимает только прямой WORKFLOW запрос каталога, разрешает
+// ту же границу контекста и видимости, что чтение workflow, и при необходимости требует исходный
+// проект. Возвращает ограниченные опубликованные метаданные с дайджестом; не раскрывает закрытые
+// инструкции и не выдаёт право запуска или делегирования.
 func (repository *Repository) assistantResolvedWorkflowMetadataTx(ctx context.Context, tx pgx.Tx, current scope, sourceScope, sourceProjectRef string, input entity.AssistantConfigurationCatalogRequest) (entity.AssistantConfigurationCatalogResponse, error) {
 	result := entity.AssistantConfigurationCatalogResponse{Kind: input.Kind, AssistantRef: input.AssistantRef, ScopeKind: "PROJECT", OrganizationRef: current.organizationRef, Entries: []entity.AssistantConfigurationCatalogEntry{}}
 	if input.EntityKind != "WORKFLOW" || input.EntityRef == "" || input.Query != "" || input.Offset != 0 || input.AccountRef != "" || input.RuntimeProfileRef != "" {
@@ -38,7 +44,14 @@ func (repository *Repository) assistantResolvedWorkflowMetadataTx(ctx context.Co
 	return result, nil
 }
 
-// Только published graph, без private инструкции и draft/default/result fields.
+// assistantWorkflowMetadataJSON validates an available published workflow structure and serializes
+// only public graph/configuration metadata, with copied dependency/gate slices and a 1 MiB result
+// limit. Without publication it returns empty published fields/steps; private instructions,
+// draft/default/input/result fields are excluded.
+// assistantWorkflowMetadataJSON проверяет имеющуюся опубликованную структуру workflow и
+// сериализует только публичные метаданные графа и конфигурации, копируя срезы зависимостей и gates
+// и ограничивая результат 1 МиБ. Без публикации поля и шаги публикации пусты; закрытые инструкции,
+// черновик, defaults, input и result исключены.
 func assistantWorkflowMetadataJSON(workflow entity.Workflow) ([]byte, error) {
 	steps := []any{}
 	coordinator, publishedRef := "", ""

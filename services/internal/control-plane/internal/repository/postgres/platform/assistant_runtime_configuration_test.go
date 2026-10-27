@@ -9,6 +9,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestAssistantReasoningOverlayPreservesSettings checks reasoning changes retain supported
+// personality/history fields and reject unknown preexisting TOML settings without silently
+// dropping them.
+// TestAssistantReasoningOverlayPreservesSettings проверяет, что изменение reasoning сохраняет
+// поддерживаемые personality/history fields и отклоняет неизвестные исходные TOML settings без
+// молчаливого удаления.
 func TestAssistantReasoningOverlayPreservesSettings(t *testing.T) {
 	before := "model_reasoning_effort = \"high\"\npersonality = \"pragmatic\"\n[history]\npersistence = \"save-all\"\n"
 	content, err := assistantRuntimeOverlay(before, "medium", "")
@@ -24,6 +30,12 @@ func TestAssistantReasoningOverlayPreservesSettings(t *testing.T) {
 	}
 }
 
+// TestAssistantRuntimeOverlayClosedSearchModes checks omitted search mode preserves its value,
+// every supported mode updates it and unknown/case-altered modes fail while reasoning/personality
+// stay consistent.
+// TestAssistantRuntimeOverlayClosedSearchModes проверяет сохранение значения при пропуске search
+// mode, обновление каждым поддерживаемым mode и отказ неизвестных/изменённых по регистру modes при
+// согласованных reasoning/personality.
 func TestAssistantRuntimeOverlayClosedSearchModes(t *testing.T) {
 	before := "web_search = \"indexed\"\npersonality = \"pragmatic\"\n"
 	for _, mode := range []string{"", "disabled", "cached", "indexed", "live", "future", "LIVE"} {
@@ -45,6 +57,14 @@ func TestAssistantRuntimeOverlayClosedSearchModes(t *testing.T) {
 	}
 }
 
+// TestAssistantRuntimeConfigurationNoChangeExactPins checks exact unchanged
+// settings/catalog/profile pins, rejects search-only or identity/version/weight changes, and
+// proves ignored publication fields are normalized on copies. Ordinary failures never match the
+// dedicated no-change marker, which remains Conflict-compatible.
+// TestAssistantRuntimeConfigurationNoChangeExactPins проверяет точные неизменённые
+// settings/catalog/profile pins, отклоняет search-only либо identity/version/weight changes и
+// подтверждает нормализацию игнорируемых publication fields на копиях. Обычные ошибки не совпадают
+// с отдельным no-change marker, сохраняющим совместимость с Conflict.
 func TestAssistantRuntimeConfigurationNoChangeExactPins(t *testing.T) {
 	persisted := []entity.ProviderAccountCandidate{{AccountRef: "pacc_synthetic", Weight: 1, CatalogRevision: "rev-1", CatalogDigest: "digest-1", ProviderDefinitionKey: "provider-synthetic"}}
 	pin := entity.AssistantRuntimeProfilePin{Ref: "profile-synthetic", Version: 2, RuntimeRevision: "runtime-2"}
@@ -111,6 +131,10 @@ func TestAssistantRuntimeConfigurationNoChangeExactPins(t *testing.T) {
 	}
 }
 
+// TestAssistantRuntimeAccountsClosedFields checks a synthetic account list rejects extra
+// credential fields and weights outside1..100 without querying account state.
+// TestAssistantRuntimeAccountsClosedFields проверяет отклонение лишних credential fields и весов
+// вне1..100 в синтетическом account list без запросов account state.
 func TestAssistantRuntimeAccountsClosedFields(t *testing.T) {
 	for _, accounts := range []any{[]any{map[string]any{"accountRef": "pacc_test_one", "weight": 1, "credentialRef": "forbidden"}}, []any{map[string]any{"accountRef": "pacc_test_one", "weight": 0}}, []any{map[string]any{"accountRef": "pacc_test_one", "weight": 101}}} {
 		if _, err := assistantRuntimeAccounts(map[string]any{"providerAccounts": accounts}); err == nil {
@@ -119,6 +143,10 @@ func TestAssistantRuntimeAccountsClosedFields(t *testing.T) {
 	}
 }
 
+// TestAssistantJSONEqualCanonicalPins checks typed and map pins compare identically while distinct
+// int64 versions above the float64 exact-integer boundary remain unequal.
+// TestAssistantJSONEqualCanonicalPins проверяет одинаковое сравнение typed и map pins при
+// сохранении различия int64 versions выше границы точных целых float64.
 func TestAssistantJSONEqualCanonicalPins(t *testing.T) {
 	typed := struct {
 		Ref     string `json:"ref"`

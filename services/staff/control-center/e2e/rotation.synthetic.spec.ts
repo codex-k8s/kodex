@@ -1,3 +1,4 @@
+import { installSyntheticCsrf } from "./fixtures/browser-session";
 import { handleSyntheticRuntimeRequest } from "./synthetic-runtime-route";
 import { expect, test } from "@playwright/test";
 import type {
@@ -63,16 +64,7 @@ for (const width of [390, 2900]) {
       expiresAt: draft.expiresAt,
       state: "PREPARED",
     };
-    await context.addCookies([
-      {
-        name: "__Host-kodex-csrf",
-        value: "s".repeat(43),
-        domain: "kodex.test",
-        path: "/",
-        secure: true,
-        sameSite: "Strict",
-      },
-    ]);
+    await installSyntheticCsrf(context, "s");
     await page.route("**/*", async (route) => {
       const request = route.request();
       const url = new URL(request.url());

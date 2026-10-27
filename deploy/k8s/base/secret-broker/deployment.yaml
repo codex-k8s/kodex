@@ -6,13 +6,6 @@ metadata:
     app.kubernetes.io/name: secret-broker
     app.kubernetes.io/component: secret-broker
 spec:
-  replicas: 2
-  revisionHistoryLimit: 2
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 0
-      maxSurge: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: secret-broker
@@ -24,17 +17,9 @@ spec:
         app.kubernetes.io/component: secret-broker
     spec:
       serviceAccountName: secret-broker
-      automountServiceAccountToken: false
-      enableServiceLinks: false
-      terminationGracePeriodSeconds: 35
-      securityContext:
-        runAsNonRoot: true
-        seccompProfile:
-          type: RuntimeDefault
       containers:
         - name: secret-broker
           image: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/secret-broker@sha256:0000000000000000000000000000000000000000000000000000000000000000
-          imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
                 name: secret-broker-runtime
@@ -89,42 +74,11 @@ spec:
             - name: metrics
               containerPort: 9090
               protocol: TCP
-          startupProbe: &technicalProbe
-            httpGet:
-              path: /healthz
-              port: metrics
-            timeoutSeconds: 2
-            periodSeconds: 2
-            failureThreshold: 30
-          readinessProbe:
-            <<: *technicalProbe
-            httpGet:
-              path: /readyz
-              port: metrics
-            periodSeconds: 5
-            failureThreshold: 2
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: metrics
-            timeoutSeconds: 2
-            periodSeconds: 10
-            failureThreshold: 3
           resources:
             requests:
-              cpu: 50m
               memory: 64Mi
             limits:
-              cpu: "2"
               memory: 256Mi
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 10001
-            runAsGroup: 10001
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: [ALL]
           volumeMounts:
             - name: draft-keyring
               mountPath: /var/run/secrets/kodex/secret-broker/draft-keyring

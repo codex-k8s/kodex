@@ -1,9 +1,7 @@
 package platform
 
 import (
-	"context"
 	"errors"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -12,17 +10,16 @@ import (
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// TestWorkerGrantInstancesComponent checks exact worker instance grants and committed
+// credential-generation floors with a row-lock race; absent test DSN skips the component suite.
+// TestWorkerGrantInstancesComponent проверяет точные разрешения экземпляров исполнителя и
+// зафиксированный порог поколения учётных данных в гонке блокировок; без тестового DSN
+// компонентный сценарий пропускается.
 func TestWorkerGrantInstancesComponent(t *testing.T) {
-	dsn := os.Getenv("KODEX_CONTROL_PLANE_TEST_DSN")
-	if dsn == "" {
-		t.Skip("KODEX_CONTROL_PLANE_TEST_DSN is not configured")
-	}
-	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	ctx, cancel, pool, err := newOptInSecurityComponentPool(t)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
 		t.Fatal("open disposable PostgreSQL")
 	}

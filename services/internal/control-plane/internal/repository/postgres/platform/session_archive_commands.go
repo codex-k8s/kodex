@@ -14,6 +14,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// lockedSessionArchiveTask holds owner-locked task/storage/session pins, nullable-lease-derived
+// binding, input/object/source identity, attempt budget and current execution status. It is
+// internal transaction state used by specialized completion checks, not caller-supplied authority.
+// lockedSessionArchiveTask хранит owner-locked task/storage/session pins, binding из nullable
+// lease fields, input/object/source identity, attempt budget и current execution status. Это
+// internal transaction state для specialized completion checks, а не caller-supplied authority.
 type lockedSessionArchiveTask struct {
 	id, ref, kind, state, fenceDigest, leaseRef         string
 	organizationID, projectID, sessionID, archiveID     string
@@ -27,6 +33,16 @@ type lockedSessionArchiveTask struct {
 	activeTurn                                          bool
 }
 
+// changeSessionArchive checks typed worker input and operation permission before exact task
+// locking, then dispatches snapshot/restore/PVC/object completion or closed-code failure with
+// kind-specific descriptor guards. It maps no row to Conflict, emits the applicable storage wake
+// and returns task outcome; owner receipt/audit/commit remain outside. It records worker evidence
+// without independently performing or proving the external storage action.
+// changeSessionArchive проверяет typed worker input и operation permission до exact task lock,
+// затем dispatch snapshot/restore/PVC/object completion либо closed-code failure с kind-specific
+// descriptor guards. No row даёт Conflict, выпускается применимый storage wake и возвращается task
+// outcome; owner receipt/audit/commit остаются снаружи. Записывает worker evidence, самостоятельно
+// не выполняя и не доказывая external storage action.
 func (repository *Repository) changeSessionArchive(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.SessionArchiveTaskInput)
 	if !ok || input.Principal.CallerWorkload != "session-archive" ||
@@ -121,6 +137,12 @@ func (repository *Repository) changeSessionArchive(ctx context.Context, tx pgx.T
 	}, nil
 }
 
+// sessionArchiveTaskSummary maps successful, retry-ready and dead-letter task states to fixed i18n
+// summaries; unknown states use the dead-letter presentation fallback. It changes no durable state
+// and does not classify a new retry as safe.
+// sessionArchiveTaskSummary отображает successful, retry-ready и dead-letter task states в fixed
+// i18n summaries; unknown states используют dead-letter presentation fallback. Не меняет durable
+// state и не объявляет новый retry безопасным.
 func sessionArchiveTaskSummary(state string) string {
 	switch state {
 	case "SUCCEEDED":
@@ -134,6 +156,16 @@ func sessionArchiveTaskSummary(state string) string {
 	}
 }
 
+// lockSessionArchiveTask validates the supplied binding, locks exact tenant task/storage and
+// rejects non-CLAIMED or missing/partially revoked lease fields before dereference. Exact lease,
+// generation, SHA-256 fence and future expiry must match; non-object-delete tasks also require
+// current storage generation. It returns owner state without committing or checking external
+// object/PVC identity.
+// lockSessionArchiveTask проверяет supplied binding, блокирует exact tenant task/storage и
+// отклоняет non-CLAIMED либо missing/partially revoked lease fields до dereference. Совпадают
+// exact lease, generation, SHA-256 fence и future expiry; для non-object-delete tasks также
+// требуется current storage generation. Возвращает owner state без commit либо проверки external
+// object/PVC identity.
 func (repository *Repository) lockSessionArchiveTask(ctx context.Context, tx pgx.Tx, scope scope, payload command.SessionArchiveTaskInput) (lockedSessionArchiveTask, error) {
 	if payload.TaskRef == "" || payload.LeaseRef == "" || payload.Fence == "" || payload.Generation < 1 {
 		return lockedSessionArchiveTask{}, errs.ErrInvalid
@@ -171,6 +203,12 @@ func (repository *Repository) lockSessionArchiveTask(ctx context.Context, tx pgx
 	return task, nil
 }
 
+// sessionArchivePermission recognizes only the five specialized
+// snapshot/restore/PVC-delete/object-delete completion and task-failure command permissions.
+// Unknown kinds map to empty; this classifier neither validates a principal nor authorizes a task.
+// sessionArchivePermission распознаёт только пять specialized
+// snapshot/restore/PVC-delete/object-delete completion и task-failure command permissions. Unknown
+// kinds дают empty; classifier не проверяет principal и не авторизует task.
 func sessionArchivePermission(kind command.Kind) string {
 	switch kind {
 	case command.CompleteSessionSnapshot:
@@ -188,6 +226,12 @@ func sessionArchivePermission(kind command.Kind) string {
 	}
 }
 
+// validSessionArchiveDigest requires a sha256: prefix and exactly32 bytes of decodable hexadecimal
+// text, accepting either hex letter case. It checks syntax only, without comparing source/object
+// bytes or verifying provenance.
+// validSessionArchiveDigest требует sha256: prefix и ровно32 bytes декодируемого hexadecimal text,
+// принимая оба регистра hex letters. Проверяет только syntax, без сравнения source/object bytes
+// либо проверки provenance.
 func validSessionArchiveDigest(value string) bool {
 	if !strings.HasPrefix(value, "sha256:") || len(value) != len("sha256:")+sha256.Size*2 {
 		return false
@@ -196,6 +240,13 @@ func validSessionArchiveDigest(value string) bool {
 	return err == nil
 }
 
+// validSessionArchiveError accepts only the closed archive
+// source/object/restore/PVC/Kubernetes/worker/timeout error vocabulary. It prevents arbitrary
+// worker diagnostics entering this field but does not determine retryability or alter task
+// lifecycle itself.
+// validSessionArchiveError принимает только closed archive
+// source/object/restore/PVC/Kubernetes/worker/timeout error vocabulary. Не допускает произвольные
+// worker diagnostics в поле, но сам не определяет retryability и не меняет task lifecycle.
 func validSessionArchiveError(value string) bool {
 	switch value {
 	case "SESSION_ARCHIVE_SOURCE_INVALID", "SESSION_ARCHIVE_OBJECT_WRITE_FAILED",

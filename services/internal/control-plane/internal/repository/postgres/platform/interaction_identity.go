@@ -15,21 +15,66 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryInteractionIdentityInsert embeds an organization mapping to an active USER with active
+// organization-level membership, storing exact connection version and external team/channel/user
+// digest. It relies on caller connection authorization/locking and does not accept arbitrary
+// payload identity as authority.
+// queryInteractionIdentityInsert встраивает organization mapping к active USER с active
+// organization-level membership, сохраняя exact connection version и external team/channel/user
+// digest. Полагается на caller connection authorization/locking и не принимает произвольную
+// payload identity как authority.
+//
 //go:embed sql/interaction_identity_insert.sql
 var queryInteractionIdentityInsert string
 
+// queryInteractionIdentityGet embeds one tenant/ref identity projection with connection and
+// subject refs. It has no actor permission or current connection-version/state predicate; those
+// checks belong to mutation/read consumers.
+// queryInteractionIdentityGet встраивает одну tenant/ref identity projection с connection и
+// subject refs. Actor permission и current connection-version/state predicate отсутствуют; их
+// проверяют mutation/read consumers.
+//
 //go:embed sql/interaction_identity_get.sql
 var queryInteractionIdentityGet string
 
+// queryInteractionIdentityRevoke embeds exact tenant/ref/version ACTIVE-to-REVOKED transition with
+// revoking actor and timestamp. No row represents version/state mismatch; caller access and
+// transaction ownership remain separate.
+// queryInteractionIdentityRevoke встраивает exact tenant/ref/version ACTIVE-to-REVOKED transition
+// с revoking actor и timestamp. No row означает version/state mismatch; caller access и
+// transaction ownership остаются отдельными.
+//
 //go:embed sql/interaction_identity_revoke.sql
 var queryInteractionIdentityRevoke string
 
+// queryInteractionIdentityList embeds ordered tenant identity pagination with optional connection
+// filter and integration.manage visibility before limit. Organization access.manage and cursor
+// validation still belong to the reader.
+// queryInteractionIdentityList встраивает ordered tenant identity pagination с optional connection
+// filter и integration.manage visibility до limit. Organization access.manage и cursor validation
+// остаются у reader.
+//
 //go:embed sql/interaction_identity_list.sql
 var queryInteractionIdentityList string
 
+// queryInteractionIdentityResolve embeds exact active Mattermost
+// connection-version/team/channel/user-digest mapping to an active USER with organization
+// membership, under SHARE locks. It returns the mapped human identity/role; a caller-supplied user
+// locator alone is not sufficient.
+// queryInteractionIdentityResolve встраивает exact active Mattermost
+// connection-version/team/channel/user-digest mapping к active USER с organization membership под
+// SHARE locks. Возвращает mapped human identity/role; одного caller-supplied user locator
+// недостаточно.
+//
 //go:embed sql/interaction_identity_resolve.sql
 var queryInteractionIdentityResolve string
 
+// scanInteractionIdentity scans the fixed nine-field mapping projection, mapping no row to
+// NotFound and other scan errors to Unavailable. Partial result fields can accompany an error; it
+// validates neither authority nor current connection freshness.
+// scanInteractionIdentity читает fixed nine-field mapping projection, отображая no row в NotFound,
+// прочие scan errors — в Unavailable. Partial result fields могут сопровождать error; authority и
+// current connection freshness не проверяет.
 func scanInteractionIdentity(row rowScanner) (entity.InteractionIdentity, error) {
 	var result entity.InteractionIdentity
 	err := row.Scan(&result.Ref, &result.Version, &result.ConnectionRef, &result.ConnectionVersion, &result.ExternalTeamRef,
@@ -43,6 +88,16 @@ func scanInteractionIdentity(row rowScanner) (entity.InteractionIdentity, error)
 	return result, nil
 }
 
+// changeInteractionIdentity accepts typed unscoped mutation with expected version; bind validates
+// external locators/digest, integration.manage and active Mattermost connection OCC before
+// inserting the member mapping. The other branch reauthorizes the resolved connection and revokes
+// an exact active mapping version. It returns command outcome only; outer dispatch,
+// receipt/audit/event handling and atomic commit remain with the command owner.
+// changeInteractionIdentity принимает typed unscoped mutation с expected version; bind проверяет
+// external locators/digest, integration.manage и active Mattermost connection OCC до вставки
+// member mapping. Другая ветка заново авторизует resolved connection и отзывает exact active
+// mapping version. Возвращает только command outcome; outer dispatch, receipt/audit/event handling
+// и атомарный commit остаются у command owner.
 func (repository *Repository) changeInteractionIdentity(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.InteractionIdentityInput)
 	if !ok || input.Mutation.ExpectedVersion == nil || current.authorityProjectID != "" {
@@ -111,6 +166,14 @@ func (repository *Repository) changeInteractionIdentity(ctx context.Context, tx 
 	return commandOutcome{result: command.Result{InteractionIdentity: &result}, resourceKind: "INTERACTION_IDENTITY", resourceRef: result.Ref, summary: "i18n:INTERACTION_IDENTITY_CHANGED"}, nil
 }
 
+// ListInteractionIdentities uses a five-second read-only RepeatableRead transaction, rejects
+// project-scoped authority, requires organization access.manage and pages SQL-visible mappings
+// with an actor-bound catalog cursor. It closes/checks rows and commits before return;
+// commit/backend failure is Unavailable and no mapping is modified.
+// ListInteractionIdentities использует пятисекундную read-only RepeatableRead transaction,
+// отклоняет project-scoped authority, требует organization access.manage и постранично читает
+// SQL-visible mappings с actor-bound catalog cursor. Закрывает/проверяет rows и требует commit до
+// возврата; commit/backend failure даёт Unavailable, mappings не меняются.
 func (repository *Repository) ListInteractionIdentities(ctx context.Context, principal value.Principal, connection string, page query.Page) ([]entity.InteractionIdentity, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -163,6 +226,15 @@ func (repository *Repository) ListInteractionIdentities(ctx context.Context, pri
 	return result, next, nil
 }
 
+// resolveInteractionIdentity resolves exact external mapping inside the trusted tenant transaction
+// and replaces actor ID/ref/name/role plus mapping ID on a scope copy. Missing mapping is
+// Forbidden; backend failure Unavailable. It clears credential-authentication time so an
+// interaction cannot inherit fresh interactive authentication; other trusted scope fields remain
+// unchanged.
+// resolveInteractionIdentity разрешает exact external mapping внутри trusted tenant transaction и
+// заменяет actor ID/ref/name/role с mapping ID в scope copy. Missing mapping даёт Forbidden,
+// backend failure — Unavailable. Очищает credential-authentication time, чтобы interaction не
+// наследовала fresh interactive authentication; прочие trusted scope fields сохраняются.
 func (repository *Repository) resolveInteractionIdentity(ctx context.Context, tx pgx.Tx, current scope, input command.InteractionMessageInput) (scope, error) {
 	human := current
 	err := tx.QueryRow(ctx, queryInteractionIdentityResolve, pgx.StrictNamedArgs{"organization_id": current.organizationID,

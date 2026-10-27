@@ -16,19 +16,28 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// queryAgentBootstrapEnvironmentReadback fingerprints exact environment/revision/binding rows and
+// version-history count to detect even timestamp-only bootstrap rewrites.
+// queryAgentBootstrapEnvironmentReadback составляет отпечатки точных строк окружения, ревизии и
+// привязки и числа версий для обнаружения даже изменения только времени при bootstrap.
+//
 //go:embed testdata/sql/agent_bootstrap_environment_readback.sql
 var queryAgentBootstrapEnvironmentReadback string
 
+// TestAgentBootstrapPreservesPublishedProjectEnvironmentComponent checks new-agent creation and
+// replay preserve the owner published environment, binding and history under same/changed default
+// images, while an empty project gets its own initial exact pin; images/credentials are synthetic.
+// TestAgentBootstrapPreservesPublishedProjectEnvironmentComponent проверяет сохранение
+// опубликованного владельцем окружения, привязки и истории при создании нового агента и повторе с
+// прежним и изменённым образом по умолчанию, а пустому проекту назначает собственную начальную
+// точную привязку; образы и credentials искусственные.
 func TestAgentBootstrapPreservesPublishedProjectEnvironmentComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
+	var err error
 	defer pool.Close()
 	r, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
 	if err != nil {
@@ -94,21 +103,10 @@ func TestAgentBootstrapPreservesPublishedProjectEnvironmentComponent(t *testing.
 	if snapshot() != before {
 		t.Fatal("same-image CREATE_AGENT rewrote the published environment")
 	}
-	resolved, err := r.ResolvePrincipal(ctx, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ownerScope, err := r.resolveScope(ctx, resolved)
-	if err != nil {
-		t.Fatal(err)
-	}
+	ownerScope := resolvedComponentScope(t, ctx, r, owner)
 	effects := func() [5]int {
 		t.Helper()
-		var result [5]int
-		if err := pool.QueryRow(ctx, queryAssistantRunScopeEffects, ownerScope.organizationID).Scan(&result[0], &result[1], &result[2], &result[3], &result[4]); err != nil {
-			t.Fatal(err)
-		}
-		return result
+		return readAssistantRunScopeEffects(t, ctx, pool, ownerScope.organizationID)
 	}
 	// Новый default image у producer отличается от уже опубликованного owner image.
 	// Это не разрешает CREATE_AGENT менять существующий environment current.

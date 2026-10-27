@@ -7,6 +7,12 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 )
 
+// TestIntegrationEgressShippedPackagePins accepts only the exact supported shipped egress package
+// pins and rejects stale/foreign adapter identity or incomplete/invalid bound content without
+// network access.
+// TestIntegrationEgressShippedPackagePins принимает только точные привязки поддерживаемого
+// поставляемого egress-пакета и отклоняет устаревшую либо чужую идентичность адаптера и неполное
+// либо неверное связанное содержимое без сетевого доступа.
 func TestIntegrationEgressShippedPackagePins(t *testing.T) {
 	definitions, err := integrationpackage.LoadShipped()
 	if err != nil {

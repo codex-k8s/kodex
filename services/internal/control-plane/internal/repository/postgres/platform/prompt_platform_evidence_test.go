@@ -12,6 +12,14 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestPlatformEvidenceGuidanceIsClaimScopedAndNotAuthority checks bounded versioned v4 EN/RU
+// instruction content contains claim/evidence/UNKNOWN/delegation/denied-URL safeguards and
+// excludes obsolete gate-bypass markers. It tests text clauses only, not agent compliance,
+// full-source reading or actual authority enforcement.
+// TestPlatformEvidenceGuidanceIsClaimScopedAndNotAuthority проверяет
+// claim/evidence/UNKNOWN/delegation/denied-URL safeguards в bounded versioned v4 EN/RU instruction
+// content и отсутствие obsolete gate-bypass markers. Проверяет лишь text clauses, а не agent
+// compliance, full-source reading и actual authority enforcement.
 func TestPlatformEvidenceGuidanceIsClaimScopedAndNotAuthority(t *testing.T) {
 	for _, locale := range []string{"en", "ru"} {
 		t.Run(locale, func(t *testing.T) {
@@ -37,6 +45,12 @@ func TestPlatformEvidenceGuidanceIsClaimScopedAndNotAuthority(t *testing.T) {
 	}
 }
 
+// TestPlatformInstructionsV5ReadScopeAndCompletion checks current EN/RU binding is bounded v5 with
+// the declared FULL-gate origin, scoped-read, EOF/provenance and completion clauses. Presence of
+// guidance text is not evidence that an agent read sources or completed mandatory work.
+// TestPlatformInstructionsV5ReadScopeAndCompletion проверяет bounded v5 current EN/RU binding с
+// объявленными FULL-gate origin, scoped-read, EOF/provenance и completion clauses. Наличие
+// guidance text не доказывает чтение источников агентом и выполнение mandatory work.
 func TestPlatformInstructionsV5ReadScopeAndCompletion(t *testing.T) {
 	for _, locale := range []string{"en", "ru"} {
 		binding, err := platformInstructionBinding(locale)
@@ -55,6 +69,13 @@ func TestPlatformInstructionsV5ReadScopeAndCompletion(t *testing.T) {
 	}
 }
 
+// TestPlatformHistoricalInstructionPins checks all published v1-v4 EN/RU instruction digests
+// against fixed hashes and logs revision/locale/byte-count metadata. It guards immutable
+// historical bytes without migrating snapshots, verifying a runtime consumer or printing
+// credentials.
+// TestPlatformHistoricalInstructionPins сверяет все published v1-v4 EN/RU instruction digests с
+// fixed hashes и логирует revision/locale/byte-count metadata. Защищает immutable historical bytes
+// без миграции snapshots, проверки runtime consumer и вывода credentials.
 func TestPlatformHistoricalInstructionPins(t *testing.T) {
 	protected := map[string]string{
 		"platform-source-conformity-v1/en": "fa572d1632e72e967d8e3855ad4922505e55b68c2ea3807bab53a6fdd44b3fa0",
@@ -80,6 +101,14 @@ func TestPlatformHistoricalInstructionPins(t *testing.T) {
 	}
 }
 
+// TestPlatformInstructionsPublishedRegistryRejoinsExactAllRevisions materializes and JSON-rejoins
+// every v1-v5 EN/RU binding, checking exact dependency pins, prompt/digest/capability equality and
+// rejection of producer rebinding without snapshot mutation. This proves in-memory historical
+// registry round-trip, not durable storage or actual agent submission.
+// TestPlatformInstructionsPublishedRegistryRejoinsExactAllRevisions материализует и JSON-rejoins
+// каждый v1-v5 EN/RU binding, проверяя exact dependency pins, prompt/digest/capability equality и
+// отказ producer rebinding без snapshot mutation. Доказывает historical registry round-trip в
+// памяти, а не durable storage и actual agent submission.
 func TestPlatformInstructionsPublishedRegistryRejoinsExactAllRevisions(t *testing.T) {
 	for _, revision := range []string{"platform-source-conformity-v1", "platform-source-conformity-v2", "platform-source-conformity-v3", "platform-source-conformity-v4", "platform-source-conformity-v5"} {
 		for _, locale := range []string{"en", "ru"} {
@@ -120,6 +149,15 @@ func TestPlatformInstructionsPublishedRegistryRejoinsExactAllRevisions(t *testin
 	}
 }
 
+// TestPlatformInstructionsRegistryRejectsCrossRevisionAndLocalePins mutates
+// revision/ref/content-digest/locale across published bindings and requires Conflict from both
+// snapshot validation and dependency extraction; unknown revision spellings also fail. The fixture
+// tests exact registry pins without rewriting any historical content or exercising network
+// delivery.
+// TestPlatformInstructionsRegistryRejectsCrossRevisionAndLocalePins подменяет
+// revision/ref/content-digest/locale published bindings и требует Conflict snapshot validation и
+// dependency extraction; неизвестные revision spellings также отклоняются. Проверяет exact
+// registry pins без переписывания historical content и network delivery.
 func TestPlatformInstructionsRegistryRejectsCrossRevisionAndLocalePins(t *testing.T) {
 	for _, revision := range []string{"platform-source-conformity-v1", "platform-source-conformity-v2", "platform-source-conformity-v3", "platform-source-conformity-v4", "platform-source-conformity-v5"} {
 		for _, field := range []string{"revision", "ref", "content-digest", "locale"} {
@@ -160,6 +198,15 @@ func TestPlatformInstructionsRegistryRejectsCrossRevisionAndLocalePins(t *testin
 	}
 }
 
+// TestPlatformInstructionsV1ToV2ChangesOnlyInstructionDependency compares v1/v2 synthetic runtime
+// contexts and requires exactly an INSTRUCTIONS change while
+// MODEL/ENVIRONMENT/CAPABILITIES/POLICY/TOOLS stay equal. It verifies dependency diff
+// classification and unchanged fixture authority inputs, not the semantics or execution of either
+// prompt.
+// TestPlatformInstructionsV1ToV2ChangesOnlyInstructionDependency сравнивает v1/v2 synthetic
+// runtime contexts и требует ровно INSTRUCTIONS change при равенстве
+// MODEL/ENVIRONMENT/CAPABILITIES/POLICY/TOOLS. Проверяет dependency diff classification и
+// неизменность fixture authority inputs, а не semantics и исполнение prompt.
 func TestPlatformInstructionsV1ToV2ChangesOnlyInstructionDependency(t *testing.T) {
 	snapshot := workflowPromptFixture()
 	oldBinding, _ := platformInstructionBindingForRevision("platform-source-conformity-v1", snapshot.Locale)

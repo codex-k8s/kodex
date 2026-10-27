@@ -7,6 +7,7 @@ import (
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -64,15 +65,13 @@ func castDraftWork(w entity.RuntimeSecretDraftWork) *cp.RuntimeSecretDraftWork {
 // GetRuntimeSecretDraft читает draft через principal точного метода и owner service и возвращает
 // только разрешённую draft projection.
 func (server *Server) GetRuntimeSecretDraft(ctx context.Context, request *cp.GetRuntimeSecretDraftRequest) (*cp.GetRuntimeSecretDraftResponse, error) {
-	p, err := principal(ctx, cp.PlatformQueryService_GetRuntimeSecretDraft_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	d, err := server.service.GetRuntimeSecretDraft(ctx, p, request.GetDraftRef())
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &cp.GetRuntimeSecretDraftResponse{Draft: castSecretDraft(d)}, nil
+	return queryResponse(ctx, cp.PlatformQueryService_GetRuntimeSecretDraft_FullMethodName, func(p value.Principal) (*cp.GetRuntimeSecretDraftResponse, error) {
+		d, err := server.service.GetRuntimeSecretDraft(ctx, p, request.GetDraftRef())
+		if err != nil {
+			return nil, err
+		}
+		return &cp.GetRuntimeSecretDraftResponse{Draft: castSecretDraft(d)}, nil
+	})
 }
 
 // prepareSecretDraft resolves the exact command principal and delegates a specialized prepare
@@ -204,19 +203,16 @@ func (server *Server) ConsumeRuntimeSecretDraftOperation(ctx context.Context, re
 // ListRuntimeSecretDraftRecoveryWork читает owner recovery page под principal точного worker и
 // сохраняет next cursor без cleanup effects.
 func (server *Server) ListRuntimeSecretDraftRecoveryWork(ctx context.Context, request *cp.ListRuntimeSecretDraftRecoveryWorkRequest) (*cp.ListRuntimeSecretDraftRecoveryWorkResponse, error) {
-	p, err := principal(ctx, cp.RuntimeSecretDraftWorkService_ListRuntimeSecretDraftRecoveryWork_FullMethodName)
-	if err != nil {
-		return nil, err
-	}
-	works, next, err := server.service.ListRuntimeSecretDraftRecovery(ctx, p, page(request.GetPage()))
-	if err != nil {
-		return nil, transportError(err)
-	}
-	response := &cp.ListRuntimeSecretDraftRecoveryWorkResponse{Page: &cp.PageInfo{NextPageToken: next}}
-	for _, work := range works {
-		response.Operations = append(response.Operations, castDraftWork(work))
-	}
-	return response, nil
+	return queryResponse(ctx, cp.RuntimeSecretDraftWorkService_ListRuntimeSecretDraftRecoveryWork_FullMethodName, func(p value.Principal) (*cp.ListRuntimeSecretDraftRecoveryWorkResponse, error) {
+		works, next, err := server.service.ListRuntimeSecretDraftRecovery(ctx, p, page(request.GetPage()))
+		if err != nil {
+			return nil, err
+		}
+		response := &cp.ListRuntimeSecretDraftRecoveryWorkResponse{Page: &cp.PageInfo{NextPageToken: next}}
+		response.Operations = castResponseItems(works, castDraftWork)
+		return response, nil
+
+	})
 }
 
 // CompleteRuntimeSecretDraftOperation reports COMPLETE with operation/claim generation and

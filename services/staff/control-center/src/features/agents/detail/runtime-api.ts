@@ -72,53 +72,21 @@ export async function loadRuntimeCatalog(
   );
 }
 
-export async function saveAgentRuntime(
-  agentRef: string,
-  input: AgentRuntimeConfigurationInput,
-  agentVersion: number,
-): Promise<AgentRuntimeConfigurationView> {
-  return (
-    await mutateWithRetry(
-      (headers) =>
-        publishAgentRuntimeConfiguration({
-          path: { agentRef },
-          body: input,
-          headers: versionHeaders(headers),
-          signal: requestSignal(),
-        }),
-      agentVersion,
-    )
-  ).data;
-}
+type AgentRuntimeRequest = Parameters<
+  typeof mutateWithRetry<AgentRuntimeConfigurationView>
+>[0];
 
-export async function saveOverlayDraft(
+// Повторяет выбранную команду с прежней версией и возвращает только её ответ.
+// Заголовки и signal создаются внутри каждой попытки, payload задаёт вызывающий.
+async function mutateAgentRuntime(
+  request: (options: {
+    path: { agentRef: string };
+    headers: ReturnType<typeof versionHeaders>;
+    signal: AbortSignal;
+  }) => ReturnType<AgentRuntimeRequest>,
   agentRef: string,
-  content: string,
   agentVersion: number,
 ): Promise<AgentRuntimeConfigurationView> {
-  return (
-    await mutateWithRetry(
-      (headers) =>
-        createConfigOverlayDraft({
-          path: { agentRef },
-          body: { content },
-          headers: versionHeaders(headers),
-          signal: requestSignal(),
-        }),
-      agentVersion,
-    )
-  ).data;
-}
-
-export async function changeOverlay(
-  agentRef: string,
-  action: "VALIDATE" | "PUBLISH",
-  agentVersion: number,
-): Promise<AgentRuntimeConfigurationView> {
-  const request =
-    action === "VALIDATE"
-      ? validateConfigOverlayDraft
-      : publishConfigOverlayDraft;
   return (
     await mutateWithRetry(
       (headers) =>
@@ -132,23 +100,53 @@ export async function changeOverlay(
   ).data;
 }
 
-export async function bindRuntimeEnvironment(
+export function saveAgentRuntime(
+  agentRef: string,
+  input: AgentRuntimeConfigurationInput,
+  agentVersion: number,
+): Promise<AgentRuntimeConfigurationView> {
+  return mutateAgentRuntime(
+    (options) => publishAgentRuntimeConfiguration({ ...options, body: input }),
+    agentRef,
+    agentVersion,
+  );
+}
+
+export function saveOverlayDraft(
+  agentRef: string,
+  content: string,
+  agentVersion: number,
+): Promise<AgentRuntimeConfigurationView> {
+  return mutateAgentRuntime(
+    (options) => createConfigOverlayDraft({ ...options, body: { content } }),
+    agentRef,
+    agentVersion,
+  );
+}
+
+export function changeOverlay(
+  agentRef: string,
+  action: "VALIDATE" | "PUBLISH",
+  agentVersion: number,
+): Promise<AgentRuntimeConfigurationView> {
+  const request =
+    action === "VALIDATE"
+      ? validateConfigOverlayDraft
+      : publishConfigOverlayDraft;
+  return mutateAgentRuntime(request, agentRef, agentVersion);
+}
+
+export function bindRuntimeEnvironment(
   agentRef: string,
   environmentRef: string,
   agentVersion: number,
 ): Promise<AgentRuntimeConfigurationView> {
-  return (
-    await mutateWithRetry(
-      (headers) =>
-        bindAgentRuntimeEnvironment({
-          path: { agentRef },
-          body: { environmentRef },
-          headers: versionHeaders(headers),
-          signal: requestSignal(),
-        }),
-      agentVersion,
-    )
-  ).data;
+  return mutateAgentRuntime(
+    (options) =>
+      bindAgentRuntimeEnvironment({ ...options, body: { environmentRef } }),
+    agentRef,
+    agentVersion,
+  );
 }
 
 export async function saveRuntimeEnvironment(

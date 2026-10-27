@@ -2,6 +2,13 @@ package platform
 
 import "testing"
 
+// TestAssistantPlanReceiptMatchesCurrentTerminalState checks APPLIED/REJECTED receipts and
+// STALE→CONFLICT correspondence while rejecting mismatched or revalidated VALID/INVALID state
+// against an old conflict. It tests the pure state matcher without loading a receipt or
+// authorizing a command.
+// TestAssistantPlanReceiptMatchesCurrentTerminalState проверяет APPLIED/REJECTED receipts и
+// соответствие STALE→CONFLICT, отклоняя несовпадение и revalidated VALID/INVALID с прежним
+// conflict. Проверяет чистый state matcher без чтения receipt и авторизации команды.
 func TestAssistantPlanReceiptMatchesCurrentTerminalState(t *testing.T) {
 	t.Parallel()
 
@@ -29,6 +36,12 @@ func TestAssistantPlanReceiptMatchesCurrentTerminalState(t *testing.T) {
 	}
 }
 
+// TestAssistantPlanStateHasReceipt checks only APPLIED/REJECTED/STALE require terminal receipt
+// handling and DRAFT/VALID/INVALID do not. The predicate test does not prove a durable receipt
+// exists or permit replay.
+// TestAssistantPlanStateHasReceipt проверяет terminal receipt handling лишь для
+// APPLIED/REJECTED/STALE и его отсутствие для DRAFT/VALID/INVALID. Тест предиката не доказывает
+// существование durable receipt и не разрешает replay.
 func TestAssistantPlanStateHasReceipt(t *testing.T) {
 	t.Parallel()
 

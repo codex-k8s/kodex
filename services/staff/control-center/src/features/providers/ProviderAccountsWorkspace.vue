@@ -278,40 +278,33 @@ function syncAuthorizationAccount(account: ProviderAccount): void {
     authorizationAccount.value = account;
 }
 
-async function startDevice(): Promise<void> {
+// Применяет результат только к выбранному аккаунту и сохраняет ошибки его операции.
+async function runAuthorizationAction(
+  action: (account: ProviderAccount) => Promise<ProviderAccount>,
+): Promise<void> {
   const account = authorizationAccount.value;
   if (!account || authorizationRecoveryPending.value) return;
   localProblem.value = undefined;
   try {
-    syncAuthorizationAccount(await store.startDevice(account));
+    syncAuthorizationAccount(await action(account));
   } catch (error) {
     if (authorizationAccount.value?.ref === account.ref)
       localProblem.value = asProblem(error);
   }
 }
 
-async function reauthorize(): Promise<void> {
-  const account = authorizationAccount.value;
-  if (!account || authorizationRecoveryPending.value) return;
-  localProblem.value = undefined;
-  try {
-    syncAuthorizationAccount(await store.startDevice(account, true));
-  } catch (error) {
-    if (authorizationAccount.value?.ref === account.ref)
-      localProblem.value = asProblem(error);
-  }
+function startDevice(): Promise<void> {
+  return runAuthorizationAction((account) => store.startDevice(account));
 }
 
-async function refreshAuthorization(): Promise<void> {
-  const account = authorizationAccount.value;
-  if (!account || authorizationRecoveryPending.value) return;
-  localProblem.value = undefined;
-  try {
-    syncAuthorizationAccount(await store.refreshAuthorization(account));
-  } catch (error) {
-    if (authorizationAccount.value?.ref === account.ref)
-      localProblem.value = asProblem(error);
-  }
+function reauthorize(): Promise<void> {
+  return runAuthorizationAction((account) => store.startDevice(account, true));
+}
+
+function refreshAuthorization(): Promise<void> {
+  return runAuthorizationAction((account) =>
+    store.refreshAuthorization(account),
+  );
 }
 
 async function submitApiKey(): Promise<void> {

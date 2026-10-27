@@ -12,11 +12,26 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryCommandDeletedAccessTarget embeds tombstone owner/project/related-ref resolution for
+// deleted integrations, schedules and runtime environments only. These rows support exact
+// specialized delete replay, not ordinary catalog visibility.
+// queryCommandDeletedAccessTarget встраивает разрешение owner/project/related refs tombstone
+// только удалённых integrations, schedules и runtime environments. Строки обслуживают точный
+// replay специализированного delete, а не обычную видимость каталога.
+//
 //go:embed sql/command_deleted_access_target.sql
 var queryCommandDeletedAccessTarget string
 
-// Tombstone не открывается обычному каталогу. Его owner binding используется
-// только для защищённого replay точной специализированной delete-команды.
+// authorizeDeletedCommand maps typed replay targets to closed permissions, resolves tombstone
+// ownership and rejects project-boundary mismatches as NotFound. It rechecks command and read
+// visibility, using project visibility for runtime environments, then returns the tombstone
+// version. No tombstone returns0,nil; this method neither revives the resource nor authorizes a
+// new generic delete.
+// authorizeDeletedCommand сопоставляет typed replay targets с закрытыми permissions, разрешает
+// владельца tombstone и отклоняет нарушение project boundary как NotFound. Перепроверяет command и
+// read visibility, используя видимость проекта для runtime environments, затем возвращает версию
+// tombstone. Без tombstone возвращает0,nil; не восстанавливает ресурс и не разрешает новый
+// универсальный delete.
 func (repository *Repository) authorizeDeletedCommand(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (int64, error) {
 	var kind, ref, projectRef, permission string
 	switch payload := input.Payload.(type) {

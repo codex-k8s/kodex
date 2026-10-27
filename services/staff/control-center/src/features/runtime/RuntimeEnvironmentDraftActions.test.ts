@@ -113,7 +113,8 @@ beforeEach(() => {
     },
   });
 });
-it("NOT_FOUND impact требует явного нового подтверждения и не повторяет publish", async () => {
+// Готовит потерянное подтверждение публикации для отдельных сценариев восстановления.
+async function pendingPublication() {
   const value = await state();
   const validated = {
     ...draft,
@@ -126,6 +127,10 @@ it("NOT_FOUND impact требует явного нового подтвержд
   api.readEnvironmentDraft.mockResolvedValue(validated);
   api.publishEnvironmentDraft.mockRejectedValue(new Error("lost ACK"));
   await value.publish([]);
+  return { value, validated };
+}
+it("NOT_FOUND impact требует явного нового подтверждения и не повторяет publish", async () => {
+  const { value, validated } = await pendingPublication();
   const previousKey = value.pending.value?.key;
   recovery.restore.mockRejectedValue({
     status: 404,
@@ -145,6 +150,7 @@ it("NOT_FOUND impact требует явного нового подтвержд
   });
   await value.reprepareMissingPlan();
   expect(value.pending.value).toBeUndefined();
+  if (!value.plan.value) throw new Error("Expected prepared plan");
   expect(value.plan.value.ref).toBe("new_plan_fixture");
   expect(api.prepareEnvironmentPublication).toHaveBeenCalledWith(
     validated,
@@ -157,18 +163,7 @@ it("NOT_FOUND impact требует явного нового подтвержд
   expect(api.publishEnvironmentDraft).toHaveBeenCalledOnce();
 });
 it("NOT_FOUND уже опубликованного draft сверяет опубликованный ref без повторной публикации", async () => {
-  const value = await state();
-  const validated = {
-    ...draft,
-    state: "VALID" as const,
-    version: 2,
-    validationDigest: "a".repeat(64),
-  };
-  value.draft.value = validated;
-  value.plan.value = plan;
-  api.readEnvironmentDraft.mockResolvedValue(validated);
-  api.publishEnvironmentDraft.mockRejectedValue(new Error("lost ACK"));
-  await value.publish([]);
+  const { value, validated } = await pendingPublication();
   recovery.restore.mockRejectedValue({
     status: 404,
     code: "RESOURCE_NOT_FOUND",
@@ -182,23 +177,13 @@ it("NOT_FOUND уже опубликованного draft сверяет опу�
   await value.reconcile();
   expect(value.pending.value).toBeUndefined();
   expect(value.missingPlan.value).toBe(false);
+  if (!value.draft.value) throw new Error("Expected published draft");
   expect(value.draft.value.state).toBe("PUBLISHED");
   expect(api.prepareEnvironmentPublication).not.toHaveBeenCalled();
   expect(api.publishEnvironmentDraft).toHaveBeenCalledOnce();
 });
 it("NOT_FOUND с новым validation digest не разрешает переподготовить старый intent", async () => {
-  const value = await state();
-  const validated = {
-    ...draft,
-    state: "VALID" as const,
-    version: 2,
-    validationDigest: "a".repeat(64),
-  };
-  value.draft.value = validated;
-  value.plan.value = plan;
-  api.readEnvironmentDraft.mockResolvedValue(validated);
-  api.publishEnvironmentDraft.mockRejectedValue(new Error("lost ACK"));
-  await value.publish([]);
+  const { value, validated } = await pendingPublication();
   recovery.restore.mockRejectedValue({
     status: 404,
     code: "RESOURCE_NOT_FOUND",

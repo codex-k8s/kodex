@@ -18,20 +18,8 @@ valid_ipv4_cidr() {
   IFS=. read -r first second third fourth <<<"$address"
   ((first <= 255 && second <= 255 && third <= 255 && fourth <= 255))
 }
-valid_dns_host() {
-  local host=$1 label
-  local -a labels=()
-
-  [[ ${#host} -le 253 && "$host" == *.* ]] || return 1
-  [[ "$host" != .* && "$host" != *. && "$host" != *..* ]] || return 1
-  [[ "$host" != *.svc && "$host" != *.svc.cluster.local ]] || return 1
-  IFS='.' read -r -a labels <<<"$host"
-  ((${#labels[@]} >= 2)) || return 1
-  for label in "${labels[@]}"; do
-    [[ ${#label} -le 63 ]] || return 1
-    [[ "$label" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]] || return 1
-  done
-}
+# shellcheck source=lib/registry-host.sh
+source "${BASH_SOURCE[0]%"${BASH_SOURCE[0]##*/}"}lib/registry-host.sh"
 if ! valid_ipv4_cidr "$registry_service_cidr" ||
    ! valid_ipv4_cidr "$registry_endpoint_cidr" ||
    ! valid_ipv4_cidr "$ingress_service_cidr" ||

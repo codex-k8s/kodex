@@ -8,8 +8,18 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
-// Исходные поля — данные exact Workflow root/version, не источник полномочий.
-// Ошибка сохранённого snapshot отличается от недопустимого caller input.
+// workflowDelegateInput decodes and validates the stored workflow version and original bounded
+// input, mapping corrupt owner snapshots to Unavailable before checking additional input. It
+// shallow-copies original values, accepts duplicate keys only when JSON encodings match and adds
+// new keys before rechecking the merged budget; caller conflicts are Invalid. Additional keys are
+// budget-checked rather than revalidated against the workflow schema here. Nested values remain
+// shared and data never becomes authority.
+// workflowDelegateInput декодирует и проверяет сохранённые workflow version и исходный bounded
+// input, отображая повреждение owner snapshots в Unavailable до проверки additional input.
+// Поверхностно копирует исходные значения, принимает повторный key только при совпадении
+// JSON-кодирования и добавляет новые keys до повторной проверки общего бюджета; caller conflicts
+// дают Invalid. Новые keys здесь проверяются по бюджету, а не повторно по workflow schema.
+// Вложенные значения остаются общими, данные не становятся полномочиями.
 func workflowDelegateInput(rootInput, workflowSpec []byte, additional map[string]any) (map[string]any, error) {
 	var version entity.WorkflowVersion
 	var original map[string]any

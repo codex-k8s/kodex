@@ -10,6 +10,18 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// authorizeCommand routes typed commands through specialized current owner boundaries before
+// generic permission/target evaluation. Explicit runtime completion/claim kinds defer
+// lease/fence/lifecycle authority to their handlers; nil here is not blanket execution permission.
+// Generic denials hide resources, project-signed lifecycle stays scoped, and capability/grant
+// enablement plus retry/publication/binding actions get fresh checks before receipt replay can
+// preserve stale rights.
+// authorizeCommand направляет typed commands через специализированные текущие owner boundaries до
+// общей проверки permission/target. Явные runtime completion/claim kinds оставляют
+// lease/fence/lifecycle authority своим handlers; nil здесь не даёт универсального права
+// исполнения. Generic denials скрывают ресурсы, project-signed lifecycle сохраняет scope,
+// capability/grant enablement и retry/publication/binding действия проходят свежие проверки до
+// сохранения устаревших прав receipt replay.
 func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, current scope, input command.Command) error {
 	if cfgLifecycleCommand(input.Kind) {
 		return repository.authorizeCFGLifecycle(ctx, tx, current, input)
@@ -239,6 +251,17 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 	return nil
 }
 
+// commandAccessTarget selects permission and owner-resolved target from supported typed payloads,
+// deriving existing project/resource ownership from DB rather than trusting request refs.
+// Specialized environment/secret/memory/skill/provider/mailbox branches add their own checks;
+// local OWNER lookup copies do not change the actor used for final authorization. Unknown payloads
+// return an empty permission for caller rejection. It is a routing step, not universal command
+// validation.
+// commandAccessTarget выбирает permission и owner-resolved target по поддержанным typed payloads,
+// выводя существующую project/resource ownership из БД вместо доверия refs запроса.
+// Специализированные environment/secret/memory/skill/provider/mailbox ветки добавляют проверки;
+// локальные OWNER lookup copies не меняют actor итоговой авторизации. Неизвестный payload даёт
+// пустой permission для отказа caller. Это routing, а не универсальная проверка команды.
 func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (string, resolvedAccessTarget, error) {
 	organization := resolvedAccessTarget{scope: organizationTarget(current.organizationRef)}
 	if input.Kind == command.RecoverAssistant {
@@ -589,6 +612,12 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 	}
 }
 
+// resolveCommandTarget resolves an exact tenant resource/project access target and returns it with
+// the requested permission and original lookup error. It does not itself evaluate that permission
+// or treat caller projectRef as proof of ownership.
+// resolveCommandTarget разрешает точный tenant resource/project access target и возвращает его с
+// запрошенным permission и исходной lookup error. Сам не оценивает permission и не считает
+// projectRef caller доказательством владения.
 func (repository *Repository) resolveCommandTarget(ctx context.Context, tx pgx.Tx, current scope, permission, resourceKind, resourceRef, projectRef string) (string, resolvedAccessTarget, error) {
 	resolved, err := repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{
 		ProjectRef: projectRef, ResourceKind: resourceKind, ResourceRef: resourceRef,
@@ -596,8 +625,12 @@ func (repository *Repository) resolveCommandTarget(ctx context.Context, tx pgx.T
 	return permission, resolved, err
 }
 
-// Legacy query endpoints use this helper only for compatibility filtering.
-// Policy decisions for new commands and access APIs do not use memberships.
+// requireProjectPermission supports legacy query compatibility through exact active
+// tenant/project/actor membership permission. Query failure is Unavailable and denial NotFound;
+// new command/access policy uses authoritative access evaluation instead of this legacy helper.
+// requireProjectPermission поддерживает совместимость legacy queries через точное active
+// tenant/project/actor membership permission. Query failure даёт Unavailable, отказ — NotFound;
+// новая command/access policy использует авторитетную оценку доступа вместо legacy helper.
 func requireProjectPermission(ctx context.Context, tx pgx.Tx, current scope, projectID, permission string) error {
 	var allowed bool
 	if err := tx.QueryRow(ctx, queryPermissionsRequireprojectpermissionSelectMembershipsOrganizationIdProjectIdSubjectId,
@@ -610,6 +643,14 @@ func requireProjectPermission(ctx context.Context, tx pgx.Tx, current scope, pro
 	return nil
 }
 
+// projectIDByResource chooses an embedded lookup from a closed table-name registry and resolves
+// one tenant/ref project ID. Unknown table is Invalid, missing row NotFound and query/scan failure
+// Unavailable. It uses no dynamic SQL and does not authorize access or prove current resource
+// lifecycle eligibility.
+// projectIDByResource выбирает embedded lookup из закрытого реестра table names и разрешает
+// project ID точных tenant/ref. Неизвестная таблица даёт Invalid, отсутствие строки — NotFound,
+// query/scan failure — Unavailable. Не использует dynamic SQL, не разрешает доступ и не доказывает
+// текущую lifecycle допустимость ресурса.
 func projectIDByResource(ctx context.Context, tx pgx.Tx, organizationID, table, ref string) (string, error) {
 	queries := map[string]string{
 		"projects":                 queryPermissionsProjectidbyresourceSelectProjectsOrganizationIdRef,

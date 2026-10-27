@@ -44,7 +44,7 @@ func (s *Server) PrepareEnvironmentDraftImpact(w http.ResponseWriter, r *http.Re
 // плана и counts/cursor и уникальные элементы общей организации. Допуск владельца и cardinality
 // исходов сохраняются без фильтрации неверных элементов.
 func (s *Server) GetRevisionImpactPlan(w http.ResponseWriter, r *http.Request, ref generated.OpaqueRef, p generated.GetRevisionImpactPlanParams) {
-	if !fileTargetRef(ref) || !validHTTPPage(p.PageSize, p.PageToken) || !validSearchText(stringValue(p.Query), 0, 200) {
+	if !fileTargetRef(ref) || !validFilteredHTTPPage(p.PageSize, p.PageToken, p.Query) {
 		writeLocalProblem(w, 400, "INVALID_REQUEST", false)
 		return
 	}

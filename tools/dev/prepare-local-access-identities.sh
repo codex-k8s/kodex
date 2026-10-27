@@ -32,14 +32,9 @@ while (($# > 0)); do
   esac
 done
 
-[[ -n "$expected_context" ]] || fail 'exact context is required'
-[[ "$state_directory" == /* && "$state_directory" != / && "$state_directory" != "$HOME" &&
-  -d "$state_directory" && ! -L "$state_directory" ]] ||
-  fail 'state directory must be an exact existing safe absolute path'
-[[ "${KODEX_E2E_CONFIRM_DISPOSABLE:-}" == I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION ]] ||
-  fail 'disposable installation confirmation is required'
-[[ "${expected_context,,}" != *prod* && "${expected_context,,}" != *production* ]] ||
-  fail 'production context is forbidden'
+# shellcheck source=lib/identity-fixture.sh
+source "${BASH_SOURCE[0]%"${BASH_SOURCE[0]##*/}"}lib/identity-fixture.sh"
+kodex_validate_identity_fixture_scope
 for resource_name in "$namespace" "$deployment" "$realm" "$admin_secret"; do
   [[ "$resource_name" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] ||
     fail 'resource name is invalid'
@@ -47,14 +42,7 @@ done
 for command_name in base64 flock jq kubectl openssl; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
-[[ "$(kubectl config current-context)" == "$expected_context" ]] ||
-  fail 'current Kubernetes context mismatch'
-kubectl -n "$namespace" rollout status "deployment/$deployment" --timeout=300s >/dev/null ||
-  fail 'Keycloak deployment is unavailable'
-kubectl get namespace "$namespace" -o json | jq -e '
-  .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
-  .metadata.labels["kodex.dev/local-profile"] == "hot-reload"
-' >/dev/null || fail 'identity namespace is not an exact local profile'
+kodex_verify_identity_fixture_target
 
 exec 9>"$state_directory/access-identities.lock"
 flock -w 60 9 || fail 'another access identity reconciliation is active'

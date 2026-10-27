@@ -8,42 +8,51 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	roleimagerepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/roleimage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// queryImageAdmissionFailureExpiry expires only the claimed artifact selected by exact
+// organization/ref for owner-side failure recovery tests.
+// queryImageAdmissionFailureExpiry делает просроченным только захваченный артефакт точной
+// организации и ref для тестов восстановления ошибки владельцем.
+//
 //go:embed testdata/sql/image_admission_failure_expiry.sql
 var queryImageAdmissionFailureExpiry string
 
+// queryImageAdmissionFailureReadback reads the terminal artifact and latest admission attempt,
+// exact terminal snapshot and absence of open attempts or retained claim evidence.
+// queryImageAdmissionFailureReadback читает окончательный артефакт и последнюю попытку допуска,
+// точный окончательный снимок и отсутствие открытых попыток и сохранённых данных claim.
+//
 //go:embed testdata/sql/image_admission_failure_readback.sql
 var queryImageAdmissionFailureReadback string
 
+// queryImageAdmissionFailureEventCount counts exact organization/recipe/state outbox facts to
+// enforce one terminal admission event.
+// queryImageAdmissionFailureEventCount считает точные факты outbox организации, рецепта и
+// состояния для требования одного окончательного события допуска.
+//
 //go:embed testdata/sql/image_admission_failure_event_count.sql
 var queryImageAdmissionFailureEventCount string
 
-// Только синтетические owner/build данные в disposable PostgreSQL.
+// TestImageAdmissionFailureComponent checks fenced/OCC technical failure, exact fresh-proof
+// replay, worker expiry and owner/hook recovery, superseded artifact denial and one-winner
+// record/failure races without fabricated admission evidence; all builds and claims are synthetic
+// disposable fixtures.
+// TestImageAdmissionFailureComponent проверяет fencing и OCC технического отказа, точный повтор со
+// свежим proof, истечение worker и восстановление владельцем и hook, запрет вытесненного артефакта
+// и единственного победителя гонки записи и отказа без выдуманного доказательства допуска; все
+// сборки и claims искусственные в одноразовой fixture.
 func TestImageAdmissionFailureComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
+	var err error
 	defer pool.Close()
-	repository, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := repository.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3, StagingRepository: "registry.invalid/kodex/staging", PromotedRepository: "registry.invalid/kodex/roles", DefaultImageReference: "registry.invalid/kodex/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
-		t.Fatal(err)
-	}
-	if err := repository.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
+	repository := newNamespacedRoleImageComponentRepository(t, ctx, pool)
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.organization.role-images.recipes.manage"}, "control-api-gateway")
 	owner, err = repository.ResolvePrincipal(ctx, owner)
 	if err != nil {

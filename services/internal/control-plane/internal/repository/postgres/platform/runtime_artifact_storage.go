@@ -17,6 +17,18 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// prepareCommandObjects routes assistant plan staging separately and preflights typed execution
+// artifacts under current authorization, idempotency and exact lease/write/deadline checks.
+// Expired work validates bytes without uploading; live work commits preflight, then
+// validates/scans/uploads at most16 bounded artifacts and replaces content with prepared
+// descriptors. Later errors can leave partial payload mutations; cleanup is best effort and the
+// outer owner transaction must revalidate and commit metadata.
+// prepareCommandObjects отдельно направляет staging планов ассистента и предварительно проверяет
+// типизированные результаты исполнения по текущим полномочиям, идемпотентности, точным
+// lease/write/deadline. Просроченная работа проверяет байты без загрузки; действующая завершает
+// preflight, затем проверяет, сканирует и загружает максимум16 ограниченных артефактов, заменяя
+// содержимое дескрипторами. Поздние ошибки могут оставить частично изменённый payload; очистка не
+// гарантирована, внешняя owner-транзакция повторно проверяет и фиксирует метаданные.
 func (repository *Repository) prepareCommandObjects(ctx context.Context, scope scope, input *command.Command) ([]objectstorage.Receipt, error) {
 	if input == nil {
 		return nil, nil
@@ -160,6 +172,14 @@ func (repository *Repository) prepareCommandObjects(ctx context.Context, scope s
 	return prepared, nil
 }
 
+// requireRuntimeArtifactWrite requires the artifact capability in both current agent and pinned
+// runtime revision, resolves the active root actor and checks upload access to the lease project.
+// Missing/denied cases are Forbidden; query errors are Unavailable. The actor substitution affects
+// only the local scope copy, not caller identity.
+// requireRuntimeArtifactWrite требует artifact capability у текущего агента и закреплённой
+// runtime-ревизии, разрешает активного root-субъекта и проверяет upload-доступ к проекту аренды.
+// Отсутствие либо отказ дают Forbidden, ошибка запроса — Unavailable. Замена субъекта затрагивает
+// только локальную копию scope, а не идентичность caller.
 func (repository *Repository) requireRuntimeArtifactWrite(ctx context.Context, tx pgx.Tx, current scope, lease map[string]any) error {
 	var allowed bool
 	var actorRef string
@@ -179,6 +199,14 @@ func (repository *Repository) requireRuntimeArtifactWrite(ctx context.Context, t
 	return nil
 }
 
+// cleanupPreparedObjects keeps receipts when requested; otherwise attempts version-specific
+// deletes under one independent five-second cleanup context derived without cancellation. Delete
+// errors are ignored and the shared budget may expire before all objects are removed; this helper
+// proves neither cleanup completion nor metadata rollback.
+// cleanupPreparedObjects сохраняет объекты при keep; иначе пытается удалить точные версии по
+// квитанциям в одном независимом пятисекундном контексте без унаследованной отмены. Ошибки Delete
+// игнорируются, общий бюджет может закончиться до очистки всех объектов; helper не доказывает
+// завершение очистки и rollback метаданных.
 func (repository *Repository) cleanupPreparedObjects(ctx context.Context, prepared []objectstorage.Receipt, keep bool) {
 	if keep {
 		return
@@ -190,6 +218,14 @@ func (repository *Repository) cleanupPreparedObjects(ctx context.Context, prepar
 	}
 }
 
+// resultContainsPreparedObjects checks receipt-count capacity and membership of every server-ref
+// path segment in result.CreatedRefs before cleanup is suppressed. Empty receipts succeed;
+// malformed keys or missing refs fail. It is a containment guard, not an object-store readback,
+// transaction receipt or cryptographic proof.
+// resultContainsPreparedObjects проверяет вместимость CreatedRefs и наличие в нём каждого
+// серверного ref из пути квитанции перед подавлением очистки. Пустой список квитанций успешен;
+// повреждённые пути и отсутствующие refs дают отказ. Это проверка включения, а не readback object
+// storage, квитанция транзакции или криптографическое доказательство.
 func resultContainsPreparedObjects(result command.Result, prepared []objectstorage.Receipt) bool {
 	if len(prepared) == 0 {
 		return true
@@ -197,8 +233,8 @@ func resultContainsPreparedObjects(result command.Result, prepared []objectstora
 	if len(result.CreatedRefs) < len(prepared) {
 		return false
 	}
-	// Prepared keys include a server-assigned artifact ref. The result must expose
-	// every one of those refs before cleanup is suppressed.
+	// Prepared keys содержат назначенный сервером artifact ref. Перед подавлением
+	// очистки результат должен содержать каждый из этих refs.
 	for _, receipt := range prepared {
 		parts := strings.Split(receipt.Key, "/")
 		if len(parts) < 2 {
@@ -219,6 +255,14 @@ func resultContainsPreparedObjects(result command.Result, prepared []objectstora
 	return true
 }
 
+// preparedArtifact requires a prepared descriptor without inline content and validates
+// key/digest/size/media, CLEAN policy and matching noninfected antivirus metadata. It returns a
+// descriptor copy or Invalid; object version/ETag and actual stored bytes are not independently
+// read or verified here.
+// preparedArtifact требует подготовленный дескриптор без inline-содержимого и проверяет
+// key/digest/size/media, CLEAN policy и совпадающие незаражённые AV-метаданные. Возвращает копию
+// дескриптора либо Invalid; версия объекта, ETag и реальные байты здесь независимо не читаются и
+// не проверяются.
 func preparedArtifact(artifact command.CompletedArtifact) (command.PreparedArtifact, error) {
 	if artifact.Prepared == nil || artifact.Content != nil ||
 		artifact.Prepared.Ref == "" || !objectstorage.ValidKey(artifact.Prepared.ObjectKey) ||
@@ -232,6 +276,11 @@ func preparedArtifact(artifact command.CompletedArtifact) (command.PreparedArtif
 	return *artifact.Prepared, nil
 }
 
+// mapPreparedObjectError preserves object storage Conflict as the domain Conflict sentinel and
+// delegates all other failures to the shared storage mapper. It performs no retry, cleanup or
+// outcome reconciliation.
+// mapPreparedObjectError сохраняет object storage Conflict как доменный Conflict, остальные ошибки
+// передаёт общему mapper хранилища. Не выполняет повтор, очистку и установление исхода операции.
 func mapPreparedObjectError(err error) error {
 	if errors.Is(err, objectstorage.ErrConflict) {
 		return errs.ErrConflict

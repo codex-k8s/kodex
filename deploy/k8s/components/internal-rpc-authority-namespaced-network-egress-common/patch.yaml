@@ -1,0 +1,62 @@
+# Общий egress семи issuer-профилей с явными namespace назначения; selectors и ingress остаются в базах.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: internal-rpc-authority-namespaced-egress-common
+spec:
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - {protocol: UDP, port: 53}
+    - {protocol: TCP, port: 53}
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kodex-system
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: kodex-postgresql
+    ports:
+    - {protocol: TCP, port: 5432}
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kodex-system
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: internal-rpc-authority-readback-attestor
+    ports:
+    - {protocol: TCP, port: 8443}
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kodex-system
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: internal-rpc-authority-restore-controller
+    ports:
+    - {protocol: TCP, port: 8443}
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: observability
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: opentelemetry-collector
+    ports:
+    - {protocol: TCP, port: 4317}
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: observability
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: sentry-relay
+    ports:
+    - {protocol: TCP, port: 8443}

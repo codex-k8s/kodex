@@ -5,6 +5,12 @@ import (
 	"unicode/utf8"
 )
 
+// TestExecutionPreviewPreservesInvalidUTF8AndBounds trims only a truncated trailing UTF-8 rune
+// while preserving genuinely invalid bytes for rejection, and checks the closed supported preview
+// media-type set.
+// TestExecutionPreviewPreservesInvalidUTF8AndBounds удаляет только усечённую конечную UTF-8 руну,
+// сохраняя действительно неверные байты для отклонения, и проверяет закрытый набор типов
+// содержимого предпросмотра.
 func TestExecutionPreviewPreservesInvalidUTF8AndBounds(t *testing.T) {
 	for _, test := range []struct {
 		name  string

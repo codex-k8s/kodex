@@ -9,32 +9,29 @@ import {
   formatAutomationOccurrence,
   scheduleTimePreview,
 } from "@/features/automations/prompt-preview";
+import type { EditablePlanOperation } from "@/features/assistant/model";
 import {
-  operationParameter,
-  type EditablePlanOperation,
-} from "@/features/assistant/model";
+  useAssistantExecutionSelection,
+  synchronizeWorkflowInput,
+  createAssistantExecutionFormActions,
+} from "@/features/assistant/execution-form-shared";
 import {
   assistantWorkflowInputDraft,
   prepareAssistantWorkflowInput,
 } from "@/features/assistant/run-input";
 import { watchAssistantExecutionTarget } from "@/features/assistant/execution-target-readback";
 import {
-  createExecutionTargetPickerLoader,
   isEligibleAgent,
   isEligibleWorkflow,
-  selectedExecutionTargetOption,
   type ExecutionTargetPickerOption,
-  type ExecutionTargetType,
 } from "@/shared/api/execution-target-picker";
 import type {
   Agent,
   ScheduleInput,
   SchedulePreview,
   Workflow,
-  WorkflowInputField,
 } from "@/shared/api/generated/openapi/types.gen";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
-import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
 import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
 
 const props = defineProps<{
@@ -74,32 +71,14 @@ function fieldName(key: string): string {
   return `${fieldNamePrefix}-${key}`;
 }
 
-function parameter(key: string): unknown {
-  try {
-    return operationParameter(props.operation, key);
-  } catch {
-    return undefined;
-  }
-}
-function stringParameter(key: string): string {
-  const value = parameter(key);
-  return typeof value === "string" ? value : "";
-}
-const targetType = computed<ExecutionTargetType | undefined>(() => {
-  const value = stringParameter("targetType");
-  return value === "AGENT" || value === "WORKFLOW" ? value : undefined;
-});
-const targetRef = computed(() => stringParameter("targetRef"));
-const workflow = computed(() =>
-  selected.value?.targetType === "WORKFLOW"
-    ? (selected.value.target as Workflow)
-    : undefined,
-);
-const selectedOption = computed(() =>
-  targetType.value && selected.value?.ref === targetRef.value
-    ? selectedExecutionTargetOption(targetType.value, selected.value.target)
-    : undefined,
-);
+const {
+  parameter,
+  stringParameter,
+  targetType,
+  targetRef,
+  workflow,
+  selectedOption,
+} = useAssistantExecutionSelection(() => props.operation, selected);
 const preset = computed(() => stringParameter("preset"));
 
 watch(
@@ -136,20 +115,10 @@ function preparedInput() {
 }
 const inputProblems = computed(() => preparedInput().problems);
 watch(workflow, (current) => {
-  if (!current) return;
-  const prepared = preparedInput();
-  if (Object.keys(prepared.problems).length) return;
-  const existing = inputObject();
-  if (
-    existing &&
-    Object.keys(existing).length === Object.keys(prepared.value).length &&
-    Object.entries(prepared.value).every(
-      ([key, value]) => existing[key] === value,
-    )
-  )
-    return;
-  emit("parameter", "input", prepared.value);
-  emit("dirty");
+  synchronizeWorkflowInput(current, preparedInput, inputObject, (value) => {
+    emit("parameter", "input", value);
+    emit("dirty");
+  });
 });
 
 const previewInput = computed(() => {
@@ -336,31 +305,16 @@ function selectTarget(option: ExecutionTargetPickerOption): void {
   change("input", {});
   rawInput.value = {};
 }
-function loadTargets(
-  query: string,
-  cursor: string | undefined,
-  signal: AbortSignal,
-  pageSize = 40,
-): Promise<AsyncEntityOptionPage> {
-  if (!props.projectRef || !targetType.value)
-    return Promise.resolve({ items: [] });
-  return createExecutionTargetPickerLoader(props.projectRef, targetType.value)(
-    query,
-    cursor,
-    signal,
-    pageSize,
+const { load: loadTargets, change: changeWorkflowInput } =
+  createAssistantExecutionFormActions(
+    () => props.projectRef,
+    targetType,
+    rawInput,
+    invalidInitialInputKeys,
+    preparedInput,
+    (input) => emit("parameter", "input", input),
+    () => emit("dirty"),
   );
-}
-function changeWorkflowInput(field: WorkflowInputField, raw: string): void {
-  rawInput.value = { ...rawInput.value, [field.key]: raw };
-  invalidInitialInputKeys.value = new Set(
-    [...invalidInitialInputKeys.value].filter((key) => key !== field.key),
-  );
-  const prepared = preparedInput();
-  if (!Object.keys(prepared.problems).length)
-    emit("parameter", "input", prepared.value);
-  emit("dirty");
-}
 </script>
 
 <template>

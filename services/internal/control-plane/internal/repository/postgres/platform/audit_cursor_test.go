@@ -8,6 +8,12 @@ import (
 	domainerrs "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 )
 
+// TestAuditCursorRoundTrip checks a non-UTC timestamp/ref cursor round-trip preserves the instant
+// and exact audit ref while normalizing the decoded timestamp to UTC. It tests only the codec, not
+// audit-row access or pagination SQL.
+// TestAuditCursorRoundTrip проверяет сохранение момента и exact audit ref при cursor round-trip
+// non-UTC timestamp с нормализацией decoded timestamp в UTC. Проверяет лишь codec, а не доступ к
+// audit rows и pagination SQL.
 func TestAuditCursorRoundTrip(t *testing.T) {
 	t.Parallel()
 	occurredAt := time.Date(2026, 8, 31, 12, 34, 56, 789, time.FixedZone("test", 4*60*60))
@@ -22,6 +28,13 @@ func TestAuditCursorRoundTrip(t *testing.T) {
 	}
 }
 
+// TestAuditCursorRejectsMalformedValues requires Invalid for malformed/version-mismatched,
+// foreign-kind, wrong-ref-prefix and newline-ref cursors, and accepts empty input as the first
+// page. It uses synthetic tokens without querying audit storage or proving scope authorization.
+// TestAuditCursorRejectsMalformedValues требует Invalid для malformed/version-mismatched,
+// foreign-kind, wrong-ref-prefix и newline-ref cursors и допускает пустой вход как первую
+// страницу. Использует synthetic tokens без audit storage query и доказательства scope
+// authorization.
 func TestAuditCursorRejectsMalformedValues(t *testing.T) {
 	t.Parallel()
 	for _, token := range []string{

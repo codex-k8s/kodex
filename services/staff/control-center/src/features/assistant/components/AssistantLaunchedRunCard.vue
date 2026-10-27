@@ -171,28 +171,9 @@ async function stopRun(): Promise<void> {
   </section>
 </template>
 
+<style scoped src="./assistant-result-card.css"></style>
+
 <style scoped>
-.assistant-run-card {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-  margin-top: 10px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel);
-}
-.assistant-run-card header,
-.assistant-run-card__actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-.assistant-run-card p {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
 .assistant-run-card__result {
   display: grid;
   gap: 8px;

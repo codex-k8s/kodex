@@ -1,0 +1,73 @@
+# Четыре физически раздельные роли registry. После merge guard восстанавливается прежний порядок контейнеров.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+patches:
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: kodex-image-registry-pull
+  patch: |
+    - op: test
+      path: /spec/template/spec/containers/1/name
+      value: pull-authorizer
+    - op: test
+      path: /spec/template/spec/containers/2/name
+      value: certificate-guard
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: kodex-image-registry-push
+  patch: |
+    - op: test
+      path: /spec/template/spec/containers/1/name
+      value: write-authorizer
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: kodex-image-registry-admin
+  patch: |
+    - op: test
+      path: /spec/template/spec/containers/1/name
+      value: certificate-guard
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: kodex-image-registry-promotion
+  patch: |
+    - op: test
+      path: /spec/template/spec/containers/1/name
+      value: certificate-guard
+- path: patch.yaml
+  target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: (kodex-image-registry-pull|kodex-image-registry-push|kodex-image-registry-admin|kodex-image-registry-promotion)
+- path: pull-sidecar.patch.yaml
+  target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: kodex-image-registry-pull
+- path: certificate-guard.patch.yaml
+  target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: (kodex-image-registry-pull|kodex-image-registry-admin|kodex-image-registry-promotion)
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: (kodex-image-registry-pull|kodex-image-registry-admin|kodex-image-registry-promotion)
+  patch: |
+    - op: test
+      path: /spec/template/spec/containers/0/name
+      value: certificate-guard
+    - op: move
+      from: /spec/template/spec/containers/0
+      path: /spec/template/spec/containers/-

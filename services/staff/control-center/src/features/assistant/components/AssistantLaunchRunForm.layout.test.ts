@@ -13,7 +13,7 @@ const editor = readFileSync(
 
 describe("дружественная форма плана запуска", () => {
   it("выбирает только разрешённого исполнителя в текущем проекте", () => {
-    expect(source).toContain("createExecutionTargetPickerLoader");
+    expect(source).toContain("createAssistantExecutionFormActions");
     expect(source).toContain("isEligibleAgent");
     expect(source).toContain("isEligibleWorkflow");
     expect(source).toContain("watchAssistantExecutionTarget(");
@@ -30,7 +30,7 @@ describe("дружественная форма плана запуска", () =
   it("показывает задачу и типизированные входы процесса, не меняя prop", () => {
     expect(source).toContain('stringParameter("task")');
     expect(source).toContain("workflow.inputFields");
-    expect(source).toContain('emit("parameter", "input", prepared.value)');
+    expect(source).toContain("synchronizeWorkflowInput(");
     expect(source).toContain(
       'JSON.stringify([props.operation.value.ref, parameter("input")])',
     );

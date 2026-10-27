@@ -10,6 +10,14 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestSystemAssistantImageSpecPinRequired checks CREATE and UPDATE materialize a server-assigned
+// exact specification pin and preserve confirmed Dockerfile bytes, rejecting missing, malformed,
+// uppercase, prefixed, whitespace-padded and nonstring digests including historical unpinned
+// plans.
+// TestSystemAssistantImageSpecPinRequired проверяет материализацию server-assigned точного
+// specification pin для CREATE и UPDATE с сохранением подтверждённых Dockerfile bytes и отказом
+// missing, malformed, uppercase, prefixed, whitespace-padded и nonstring digests, включая
+// исторические планы без pin.
 func TestSystemAssistantImageSpecPinRequired(t *testing.T) {
 	for _, kind := range []string{"CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"} {
 		t.Run(kind, func(t *testing.T) {

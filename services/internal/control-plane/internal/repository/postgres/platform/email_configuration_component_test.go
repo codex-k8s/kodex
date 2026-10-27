@@ -15,6 +15,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testEmailConfiguration checks email configuration revisions and immutable owner documents, then
+// closes the legacy fixture before mailbox lifecycle checks.
+// testEmailConfiguration проверяет ревизии почтовой конфигурации и неизменяемые документы
+// владельца, затем закрывает прежнюю оснастку перед проверками жизненного цикла ящика.
 func testEmailConfiguration(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	// Старый watermark/protocol fixture использует descriptor из примера без

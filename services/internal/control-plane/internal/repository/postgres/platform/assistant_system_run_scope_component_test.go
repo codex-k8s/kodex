@@ -4,66 +4,38 @@ import (
 	"context"
 	_ "embed"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
-	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// queryAssistantRunScopeEffects reads fixture organization Run/receipt/audit/turn counts and
+// global outbox count to detect durable effects from rejected signed-project commands.
+// queryAssistantRunScopeEffects читает счётчики Run, квитанций, аудита и turn тестовой организации
+// и общий счётчик outbox для обнаружения устойчивых эффектов отклонённых команд подписанного
+// проекта.
+//
 //go:embed testdata/sql/assistant_run_scope_effects.sql
 var queryAssistantRunScopeEffects string
 
-// Проверяется signed-project boundary авторитетного чтения, без provider/Pod.
+// TestAssistantSystemRunProjectScopeComponent checks exact SYSTEM run/target pins and
+// concurrent-renew read behavior, then denies project-signed run/graph/cancel/retry/receipt access
+// before OCC without durable effects; no real provider or Pod is used.
+// TestAssistantSystemRunProjectScopeComponent проверяет точные привязки SYSTEM Run и цели и чтение
+// при конкурентном renew, затем запрещает подписанному проекту доступ к Run, графу, отмене,
+// повтору и квитанции до OCC без устойчивых эффектов; реальный провайдер и Pod не используются.
 func TestAssistantSystemRunProjectScopeComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newIsolatedAssistantComponentPool(t, ctx)
+	var err error
 	defer pool.Close()
-	r, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := r.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1",
-		SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("e", 64)}); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1,
-		PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute,
-		AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3,
-		StagingRepository: "registry.invalid/kodex/staging", PromotedRepository: "registry.invalid/kodex/roles",
-		DefaultImageReference: "registry.invalid/kodex/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
-	prepareObservedWarmFixture(t, ctx, r)
-	owner := resolvedTestPrincipal(t, ctx, r, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001",
-		ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.assistant.turns.add"}, "control-api-gateway")
-	service, err := platformservice.New(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	warm := resolvedTestPrincipal(t, ctx, r, platformrepo.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
-		CallerWorkload: "runtime-controller", Operation: "platform.runtime.warm.report"}, "runtime-controller")
-	assistant, err := service.GetSystemAssistant(ctx, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := service.ReportWarmRuntime(ctx, warm, command.WarmRuntimeInput{WorkloadInstance: "catalog-observed-warm-fixture", RuntimeRevision: assistant.DesiredRuntimeRevision, State: "READY"}); err != nil {
-		t.Fatal(err)
-	}
+	r, service, owner, assistant := newWarmTurnComponentFixture(t, ctx, pool, namespacedRoleImageComponentConfig)
 	execute := func(kind command.Kind, key string, payload any) command.Result {
 		t.Helper()
 		result, err := service.Execute(ctx, command.Command{Kind: kind, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "system-run-scope-" + key}, Payload: payload})
@@ -136,21 +108,10 @@ func TestAssistantSystemRunProjectScopeComponent(t *testing.T) {
 			t.Fatalf("signed PROJECT credential read SYSTEM graph: %v", err)
 		}
 	})
-	resolved, err := r.ResolvePrincipal(ctx, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	current, err := r.resolveScope(ctx, resolved)
-	if err != nil {
-		t.Fatal(err)
-	}
+	current := resolvedComponentScope(t, ctx, r, owner)
 	effects := func() [5]int {
 		t.Helper()
-		var result [5]int
-		if err := pool.QueryRow(ctx, queryAssistantRunScopeEffects, current.organizationID).Scan(&result[0], &result[1], &result[2], &result[3], &result[4]); err != nil {
-			t.Fatal(err)
-		}
-		return result
+		return readAssistantRunScopeEffects(t, ctx, pool, current.organizationID)
 	}
 	assertRejectedCommand := func(t *testing.T, kind command.Kind, key string, version int64) {
 		t.Helper()

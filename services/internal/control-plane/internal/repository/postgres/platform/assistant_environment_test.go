@@ -12,6 +12,15 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestAssistantEnvironmentRevisionPreservesProtectedSpecification checks pure
+// hydration/edit/normalization maps exact environment/version pins while retaining protected
+// image, secrets, tools and policy. Explicit public-value patches/removals materialize
+// canonically; forged raw specification, unsafe values/tools and broad policy are rejected.
+// TestAssistantEnvironmentRevisionPreservesProtectedSpecification проверяет сохранение защищённых
+// образа, секретов, инструментов и политики при чистом преобразовании hydration, редактирования и
+// нормализации с точными привязками окружения и версии. Явные изменения и удаления публичных
+// значений материализуются канонически; поддельная исходная спецификация, небезопасные значения и
+// инструменты и широкая политика отклоняются.
 func TestAssistantEnvironmentRevisionPreservesProtectedSpecification(t *testing.T) {
 	t.Parallel()
 	specification := entity.RuntimeEnvironmentDraftSpecification{
@@ -202,6 +211,12 @@ func TestAssistantEnvironmentRevisionPreservesProtectedSpecification(t *testing.
 	}
 }
 
+// TestSystemAssistantEnvironmentRevisionCreatesPinnedOrganizationDraft checks the exact
+// system-assistant environment proposal maps to an organization draft with no project scope and
+// the original expected version instead of borrowing the current page authority.
+// TestSystemAssistantEnvironmentRevisionCreatesPinnedOrganizationDraft проверяет преобразование
+// точного предложения окружения системного ассистента в черновик организации без области проекта и
+// с исходной ожидаемой версией вместо заимствования полномочий текущего экрана.
 func TestSystemAssistantEnvironmentRevisionCreatesPinnedOrganizationDraft(t *testing.T) {
 	t.Parallel()
 	specification := entity.RuntimeEnvironmentDraftSpecification{
@@ -252,6 +267,11 @@ func TestSystemAssistantEnvironmentRevisionCreatesPinnedOrganizationDraft(t *tes
 	}
 }
 
+// assistantTestEnvironmentPolicy returns explicit synthetic resource limits, empty volumes, closed
+// internal destinations and no Kubernetes access for policy mapping tests.
+// assistantTestEnvironmentPolicy возвращает явные искусственные лимиты ресурсов, пустые тома,
+// закрытые внутренние назначения и отсутствие Kubernetes-доступа для тестов преобразования
+// политики.
 func assistantTestEnvironmentPolicy() map[string]any {
 	return map[string]any{
 		"resources": map[string]any{
@@ -264,6 +284,13 @@ func assistantTestEnvironmentPolicy() map[string]any {
 	}
 }
 
+// TestAssistantEnvironmentHTTPMethodsRoundTrip checks sorted exact HTTPS method sets survive
+// prepare/edit/command and policy JSON round-trips in project/system drafts, rejecting missing,
+// duplicate, unknown or mode/protocol/port-incompatible rules without network requests.
+// TestAssistantEnvironmentHTTPMethodsRoundTrip проверяет сохранение отсортированных точных наборов
+// HTTPS-методов при подготовке, правке, преобразовании команды и JSON-политики в черновиках
+// проекта и системы, отклоняя отсутствующие, повторные, неизвестные и несовместимые с режимом,
+// протоколом и портом правила без сетевых запросов.
 func TestAssistantEnvironmentHTTPMethodsRoundTrip(t *testing.T) {
 	t.Parallel()
 	jsonFields := func(input map[string]any) map[string]any {

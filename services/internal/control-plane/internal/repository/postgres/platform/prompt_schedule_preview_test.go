@@ -8,6 +8,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestAutomationVariablesRequireRealRevisionAndRenderOnce checks canonical schedule timestamps and
+// literal single-pass task rendering, exposing automation revision only after a real saved
+// revision ref is supplied.
+// TestAutomationVariablesRequireRealRevisionAndRenderOnce проверяет каноническое время расписания
+// и однократную буквальную подстановку задачи, раскрывая ревизию автоматизации только после
+// передачи ref сохранённой ревизии.
 func TestAutomationVariablesRequireRealRevisionAndRenderOnce(t *testing.T) {
 	snapshot := entity.PromptMaterializationSnapshot{TargetKind: "AGENT", TargetRef: "agt_fixture", ProjectRef: "prj_fixture", TemplateRef: "ins_fixture", TemplateDigest: strings.Repeat("a", 64), ServiceTemplateRevision: promptservice.ServiceTemplateRevision, Locale: "en"}
 	applyAutomationPromptVariables(&snapshot, "", "Draft", "Literal {{.user.name}}", "2026-09-07T12:00:00+00:00", "UTC", "")

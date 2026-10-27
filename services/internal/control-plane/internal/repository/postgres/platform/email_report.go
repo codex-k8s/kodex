@@ -18,18 +18,59 @@ import (
 )
 
 var (
+	// queryEmailReceiptInsert embeds owner-derived receipt insertion from the exact saved
+	// authorization and invocation, including external receipt and semantic pins. Outcome is left to
+	// the schema default; input identifiers alone cannot create an authorization row.
+	// queryEmailReceiptInsert встраивает вставку owner-derived квитанции из точных сохранённых
+	// authorization и invocation с external receipt и semantic pins. Outcome остаётся schema default;
+	// одни входные identifiers не создают authorization row.
 	//go:embed sql/email_receipt_insert.sql
 	queryEmailReceiptInsert string
+	// queryEmailReceiptUpdate embeds version-checked advancement only from UNKNOWN_OUTCOME to the
+	// supplied validated outcome. Caller/DB transition rules constrain the change; the query does not
+	// repeat the external effect or independently commit.
+	// queryEmailReceiptUpdate встраивает version-checked продвижение только из UNKNOWN_OUTCOME к
+	// переданному проверенному outcome. Caller и DB transition rules ограничивают изменение; запрос не
+	// повторяет внешний эффект и не делает отдельный Commit.
 	//go:embed sql/email_receipt_update.sql
 	queryEmailReceiptUpdate string
+	// queryEmailReceiptAuthorizationRef embeds receipt-to-authorization linkage read by internal
+	// receipt ID. It supports exact report replay checks and does not authorize a new write by receipt
+	// reference.
+	// queryEmailReceiptAuthorizationRef встраивает чтение связи receipt→authorization по внутреннему
+	// receipt ID. Поддерживает точную проверку replay отчёта и не разрешает новый write по ссылке
+	// квитанции.
 	//go:embed sql/email_receipt_authorization_ref.sql
 	queryEmailReceiptAuthorizationRef string
+	// queryEmailReportRecoverySource embeds a locked nonread invocation bound to saved authorization
+	// tenant/lease/fence/generation and the integration-gateway claimant. It accepts only closed or
+	// expired-running source states for recording a prior fact, without renewing authority.
+	// queryEmailReportRecoverySource встраивает заблокированный nonread invocation, связанный с
+	// сохранёнными tenant/lease/fence/generation authorization и claimant integration-gateway.
+	// Допускает только закрытые либо expired-running source states для записи прежнего факта без
+	// продления полномочий.
 	//go:embed sql/email_report_recovery_source.sql
 	queryEmailReportRecoverySource string
+	// queryEmailReportExpireSource embeds exact expired-running source transition to UNKNOWN_OUTCOME
+	// while clearing active lease/fence/instance and advancing version. Other source states are
+	// unchanged; recording a report does not permit another provider mutation.
+	// queryEmailReportExpireSource встраивает точный переход expired-running source в UNKNOWN_OUTCOME
+	// с очисткой active lease/fence/instance и продвижением версии. Другие состояния не меняются;
+	// запись отчёта не разрешает новую provider mutation.
 	//go:embed sql/email_report_expire_source.sql
 	queryEmailReportExpireSource string
 )
 
+// authorizeEmailReport validates report/receipt/binding shape and requires email-bridge with no
+// authority-project restriction. It matches saved authorization and existing receipt pins; exact
+// fact replay returns early without new write authority. Expired sources use the locked recovery
+// path; live sources require fresh owner decision equality after fence handling. Backend failures
+// and denied/changed facts remain distinct, and expiry is never extended.
+// authorizeEmailReport проверяет форму report/receipt/binding и требует email-bridge без
+// authority-project ограничения. Сопоставляет сохранённые authorization и receipt pins; exact fact
+// replay возвращается раньше без новых прав write. Expired sources используют заблокированный
+// recovery path, live sources требуют равенства свежего owner decision после обработки fence.
+// Backend failures и запрещённые либо изменённые факты различаются, expiry не продлевается.
 func (repository *Repository) authorizeEmailReport(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (string, entity.EmailAuthorization, emailReceiptOwner, error) {
 	var decision entity.EmailAuthorization
 	var owner emailReceiptOwner
@@ -110,6 +151,16 @@ func (repository *Repository) authorizeEmailReport(ctx context.Context, tx pgx.T
 	return ref, decision, owner, nil
 }
 
+// reportEmailEffect authorizes the report, validates monotonic receipt transition and retires an
+// expired source before writing. A prior reconciliation decision must agree with an outcome
+// change; new receipts use schema defaults, existing unknown receipts may advance, and owner
+// readback forms the result. It returns metadata in the caller transaction without repeating an
+// external effect or independently committing.
+// reportEmailEffect проверяет доступ отчёта, монотонный receipt transition и завершает expired
+// source перед записью. Прежний reconciliation decision должен совпасть с изменением outcome;
+// новые receipts используют schema defaults, прежние unknown receipts могут продвигаться,
+// результат строится owner readback. Возвращает metadata в переданной транзакции без повтора
+// внешнего эффекта и отдельного Commit.
 func (repository *Repository) reportEmailEffect(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (commandOutcome, error) {
 	ref, authorization, owner, err := repository.authorizeEmailReport(ctx, tx, current, input)
 	if err != nil {

@@ -1,3 +1,4 @@
+import { installSyntheticCsrf, trackSyntheticSocket } from "./browser-session";
 import { expect, type Page, type WebSocketRoute } from "@playwright/test";
 import type {
   AssistantConversation,
@@ -226,25 +227,10 @@ export class AssistantConcurrencyNetwork {
     }
   }
   async install(page: Page): Promise<void> {
-    await page.context().addCookies([
-      {
-        name: "__Host-kodex-csrf",
-        value: "c".repeat(43),
-        domain: "kodex.test",
-        path: "/",
-        secure: true,
-        sameSite: "Strict",
-      },
-    ]);
+    await installSyntheticCsrf(page.context(), "c");
     await page.routeWebSocket("**/api/v1/session/stream*", (socket) => {
       const connection: Connection = { socket, closed: false };
-      this.connections.push(connection);
-      socket.onClose((code, reason) => {
-        connection.closed = true;
-        // onClose заменяет автоматическую пересылку close: оснастка обязана
-        // завершить handshake, иначе браузер остаётся в CLOSING до timeout.
-        void socket.close({ code: code ?? 1000, reason: reason ?? "" });
-      });
+      trackSyntheticSocket(this.connections, connection);
       socket.onMessage((message) => {
         const resume = JSON.parse(String(message)) as Resume;
         expect(resume.type).toBe("SESSION_RESUME");

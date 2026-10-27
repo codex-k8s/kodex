@@ -11,8 +11,20 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// continuationTaskProjectionRevision identifies version 2 of the immutable task-reference payload
+// inserted into continuation PURPOSE. It versions the projection format without changing renderer
+// behavior or execution authority.
+// continuationTaskProjectionRevision задаёт версию 2 неизменяемых данных ссылки на задачу,
+// помещаемых в PURPOSE продолжения. Версионирует форму проекции без изменения renderer и
+// полномочий исполнения.
 const continuationTaskProjectionRevision = "continuation-task-projection-v2"
 
+// continuationTaskProjectionPin describes exact task bytes/hash, mode and
+// session/run/node/turn/runtime/attempt provenance in the continuation notice. These are data
+// pins, not a signed credential or delegation grant.
+// continuationTaskProjectionPin описывает точные размер и хеш задачи, режим и происхождение
+// session/run/node/turn/runtime/attempt в уведомлении продолжения. Это привязки данных, а не
+// подписанный credential или разрешение делегирования.
 type continuationTaskProjectionPin struct {
 	Revision           string `json:"revision"`
 	Mode               string `json:"mode"`
@@ -26,9 +38,17 @@ type continuationTaskProjectionPin struct {
 	Attempt            int64  `json:"attempt,omitempty"`
 }
 
-// Runner всегда добавляет exact Task после SessionContext той же submission
-// (app.buildPrompt), включая cold и resume. Notice ссылается на эти полные
-// bytes, не дублирует generated DAG и не меняет Task, INPUT или USER/history.
+// bindRuntimeContinuationTaskProjection requires exact task and run/session/node/turn matches with
+// the current runtime map, valid provenance refs and a positive attempt before binding
+// CURRENT_SUBMISSION. It does not infer the current task from history order or perform an
+// execution transition. The notice relies on the runner submitting the exact task after
+// SessionContext in the same cold/resume request; it does not duplicate the generated DAG or
+// history.
+// bindRuntimeContinuationTaskProjection требует точное совпадение задачи и run/session/node/turn с
+// текущей runtime-картой, корректные ссылки происхождения и положительную попытку перед привязкой
+// CURRENT_SUBMISSION. Не выводит текущую задачу из порядка истории и не выполняет переход
+// исполнения. Уведомление опирается на передачу runner точной задачи после SessionContext в том же
+// cold/resume запросе; не дублирует сгенерированный DAG и историю.
 func bindRuntimeContinuationTaskProjection(prompt *entity.PromptMaterializationSnapshot, current map[string]any) error {
 	task := stringMap(current, "task")
 	if task != prompt.Variables["task"] || prompt.RunRef != stringMap(current, "runRef") ||
@@ -46,6 +66,12 @@ func bindRuntimeContinuationTaskProjection(prompt *entity.PromptMaterializationS
 		RuntimeRevisionRef: stringMap(current, "runtimeRevisionRef"), Attempt: runtimeRevisionMapInt64(current, "attempt")})
 }
 
+// bindProspectiveContinuationTaskProjection leaves an absent/blank preview task unchanged,
+// preserving the incomplete/runtime-required path. Otherwise it requires a valid session ref and
+// binds PROSPECTIVE task metadata without inventing run, attempt or execution authority.
+// bindProspectiveContinuationTaskProjection оставляет отсутствующую либо пустую задачу preview без
+// изменения, сохраняя путь incomplete/runtime-required. Иначе требует корректную ссылку сессии и
+// связывает PROSPECTIVE данные задачи, не выдумывая запуск, попытку и полномочия исполнения.
 func bindProspectiveContinuationTaskProjection(prompt *entity.PromptMaterializationSnapshot) error {
 	// Preview без заданного task сохраняет прежний incomplete/runtime-required
 	// path, а не превращается в новый claim или отказ authority.
@@ -58,6 +84,14 @@ func bindProspectiveContinuationTaskProjection(prompt *entity.PromptMaterializat
 	return bindContinuationTaskProjection(prompt, prompt.Variables["task"], continuationTaskProjectionPin{Mode: "PROSPECTIVE", SessionRef: prompt.SessionRef})
 }
 
+// bindContinuationTaskProjection requires SESSION_CONTINUATION, bounded nonblank UTF-8 task text
+// without NUL and no existing PURPOSE slot. It hashes the unchanged task, bounds serialized pin
+// data to 2048 bytes and adds the versioned notice to semantic values. It does not alter
+// Task/INPUT/history or supply authority.
+// bindContinuationTaskProjection требует SESSION_CONTINUATION, ограниченный непустой UTF-8 текст
+// задачи без NUL и отсутствие прежнего PURPOSE. Хеширует неизменный текст, ограничивает JSON
+// привязки 2048 байтами и добавляет версионное уведомление в semantic values. Не меняет Task,
+// INPUT и историю и не выдаёт полномочий.
 func bindContinuationTaskProjection(prompt *entity.PromptMaterializationSnapshot, task string, pin continuationTaskProjectionPin) error {
 	if prompt.TargetKind != "SESSION_CONTINUATION" || strings.TrimSpace(task) == "" || len(task) > 1<<20 ||
 		!utf8.ValidString(task) || strings.ContainsRune(task, 0) {

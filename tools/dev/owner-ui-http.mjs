@@ -38,3 +38,42 @@ export async function readInputBody(request, maximumBody, requireInput) {
   }
   return { body: Buffer.concat(chunks), size };
 }
+
+// Настраивает прежние HTTP timeouts и закрывает неподдерживаемый upgrade.
+// TLS/SNI, loopback bind, peer/Origin/intent и срок формы задаёт вызывающий.
+export function configureInputServer(server) {
+  server.requestTimeout = 5000;
+  server.headersTimeout = 5000;
+  server.keepAliveTimeout = 1000;
+  server.on("tlsClientError", () => {});
+  server.on("upgrade", (_request, socket) => socket.destroy());
+}
+
+// Передаёт запрос исходному async handler ровно один раз. Его отказ сначала
+// закрывает socket, затем форму; сырая ошибка не выводится и не повторяется.
+export function attachInputHandler(server, handler, close) {
+  server.on("request", (request, response) => {
+    void handler(request, response).catch(() => {
+      request.socket.destroy();
+      void close();
+    });
+  });
+}
+
+// Снимает expiry timer и начинает прежний bounded drain: close, idle, затем
+// через секунду closeAll и оставшиеся sockets. Callback отменяет force timer.
+// Кэш closing Promise и живой Set соединений по-прежнему принадлежат caller.
+export function closeInputServer(server, sockets, timer) {
+  clearTimeout(timer);
+  return new Promise((resolve) => {
+    const force = setTimeout(() => {
+      server.closeAllConnections();
+      for (const socket of sockets) socket.destroy();
+    }, 1000);
+    server.close(() => {
+      clearTimeout(force);
+      resolve();
+    });
+    server.closeIdleConnections();
+  });
+}

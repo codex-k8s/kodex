@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId } from "vue";
 import { useI18n } from "vue-i18n";
 import type {
   RoleImageImpactPlan,
   RoleImageImpactPage,
 } from "@/shared/api/generated/openapi/types.gen";
-import { asProblem, type AppProblem } from "@/shared/api/problem";
+import { type AppProblem } from "@/shared/api/problem";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRuntimeStore } from "@/features/runtime/store";
 import {
@@ -16,6 +16,8 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
+import { createImpactEditability } from "@/shared/ui/impact-editability";
+import { useImpactPageLoader } from "@/shared/ui/use-impact-page";
 import { roleImagePlanIdentity, readImageImpact } from "./role-image-impact";
 
 const props = defineProps<{ plan: RoleImageImpactPlan; busy?: boolean }>();
@@ -77,70 +79,13 @@ const selected = ref(new Set<string>());
 const query = ref("");
 const loading = ref(false);
 const problem = ref<AppProblem>();
-const now = ref(Date.now());
-const clock = setInterval(() => {
-  now.value = Date.now();
-}, 1000);
-let controller: AbortController | undefined;
-let generation = 0;
-let debounce: ReturnType<typeof setTimeout> | undefined;
-const cursors = new Set<string>();
-const editable = computed(
-  () =>
-    !props.busy &&
-    !loading.value &&
-    !problem.value &&
-    page.value?.plan.state === "PREPARED" &&
-    Date.parse(page.value.plan.expiresAt) > now.value,
-);
+const { now, editable, stop } = createImpactEditability({
+  busy: () => props.busy,
+  loading: () => loading.value,
+  problem: () => problem.value,
+  page: () => page.value,
+});
 
-async function load(more = false): Promise<void> {
-  if (props.busy || (more && (loading.value || !page.value?.nextPageToken)))
-    return;
-  clearTimeout(debounce);
-  const previous = page.value;
-  const current = ++generation;
-  controller?.abort();
-  const active = new AbortController();
-  controller = active;
-  loading.value = true;
-  problem.value = undefined;
-  if (!more) {
-    page.value = undefined;
-    selected.value.clear();
-    cursors.clear();
-  }
-  try {
-    const next = await readImageImpact(
-      props.plan,
-      active.signal,
-      query.value,
-      more ? previous?.nextPageToken : undefined,
-      pageSize.value,
-      platform.bootstrap?.organizationRef,
-    );
-    if (current !== generation) return;
-    if (more && previous) {
-      if (previous.nextPageToken) cursors.add(previous.nextPageToken);
-      if (
-        (next.nextPageToken && cursors.has(next.nextPageToken)) ||
-        next.total !== previous.total ||
-        next.plan.state !== previous.plan.state ||
-        previous.items.length + next.items.length > next.total ||
-        next.items.some((item) =>
-          previous.items.some((old) => old.ref === item.ref),
-        )
-      )
-        throw new Error("Publication impact pagination changed");
-      page.value = { ...next, items: [...previous.items, ...next.items] };
-    } else page.value = next;
-  } catch (error) {
-    if (current === generation && !active.signal.aborted)
-      problem.value = asProblem(error);
-  } finally {
-    if (current === generation) loading.value = false;
-  }
-}
 function toggle(ref: string): void {
   if (
     !editable.value ||
@@ -156,39 +101,32 @@ function publish(): void {
   if (!editable.value || !page.value) return;
   emit("apply", [...selected.value]);
 }
-watch(
-  () => [
+const { load } = useImpactPageLoader<RoleImageImpactPage>({
+  page,
+  query,
+  loading,
+  problem,
+  busy: () => props.busy,
+  identity: () => [
     roleImagePlanIdentity(props.plan),
     props.plan.state,
     props.plan.version,
   ],
-  () => {
-    void load();
+  read: (signal, token) =>
+    readImageImpact(
+      props.plan,
+      signal,
+      query.value,
+      token,
+      pageSize.value,
+      platform.bootstrap?.organizationRef,
+    ),
+  clearSelection: () => {
+    selected.value.clear();
   },
-  { immediate: true },
-);
-watch(query, () => {
-  controller?.abort();
-  generation++;
-  clearTimeout(debounce);
-  page.value = undefined;
-  selected.value.clear();
-  loading.value = true;
-  debounce = setTimeout(() => {
-    void load();
-  }, 400);
 });
-watch(
-  () => props.busy,
-  (busy, previous) => {
-    if (!busy && previous) void load();
-  },
-);
 onBeforeUnmount(() => {
-  controller?.abort();
-  generation++;
-  clearTimeout(debounce);
-  clearInterval(clock);
+  stop();
 });
 useCursorInfiniteScroll({
   root: itemList,

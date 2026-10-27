@@ -4,11 +4,26 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.30
-updated: 2026-10-16
+version: 1.7.32
+updated: 2026-10-26
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
+
+## Ожидаемые политики из полного desired render
+
+При сверке NetworkPolicy ожидаемое состояние строится из полного repo-owned
+kustomization deployable, включая components и patches. Чтение только сырых
+YAML-файлов базы теряет унаследованные ограничения и даёт неверное сравнение.
+Expected не выводится из фактически проверяемого render. Каждая ожидаемая policy
+сопоставляется с одним ресурсом по kind, namespace и name; затем проверяется
+полный spec с точными destinations и ports. Лишняя, удалённая или перенесённая
+в другой namespace запись не принимается как допустимое расширение.
+Ошибка компиляции любой базы или пустой обязательный набор expected закрывают
+всю проверку, включая середину stream из нескольких баз. Отрицательные cases отдельно затрагивают component-owned
+поля и отказ получения expected; успешное сравнение остальных ресурсов не
+заменяет эту границу. Правило относится к проверке desired state и не доказывает
+фактическую доступность маршрута либо применение policy в кластере.
 
 ## Прототипный профиль trusted-cluster
 
@@ -147,6 +162,17 @@ securityContext), `/grpc/grpc-go` (transport credentials, metadata/interceptors)
 `/jackc/pgx` (QueryRow/ErrNoRows) и `/pressly/goose` (transactional SQL migrations).
 
 ## CAS поставки Kubernetes
+
+Проверка admission перед публикацией использует общий `libs/go/kubernetesadmission`
+и закрытый caller-owned реестр точных policy/binding names и expected sources.
+Сначала читается policy, затем binding; expected source вызывается только после
+обоих успешных чтений. Наличие UID/resourceVersion, положительное observed
+поколение, type-checking status без warnings и точные spec обязательны.
+Fixed caller errors не отражают provider response либо policy body. Ошибка
+останавливает publisher до следующего действия; checker ничего не публикует.
+Два последовательных GET не являются атомарным snapshot или допуском будущей
+записи: namespace, TLS/RBAC, policy registry и native publication fences остаются
+отдельными обязанностями adapter. JSON equality не нормализует nil/empty.
 
 В SRE-переходах status update контроллера может изменить `resourceVersion`
 после quiesce без изменения конфигурации. Непосредственно перед единственным

@@ -1,8 +1,8 @@
+import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import { renderToString } from "@vue/server-renderer";
 import { readFileSync } from "node:fs";
 import {
   createSSRApp,
-  createRenderer,
   defineComponent,
   h,
   nextTick,
@@ -171,18 +171,7 @@ function canvasProps() {
 }
 function mountCanvas(props = canvasProps()): CanvasState {
   let state: CanvasState | undefined;
-  const renderer = createRenderer<object, object>({
-    patchProp() {},
-    insert() {},
-    remove() {},
-    createElement: () => ({}),
-    createText: () => ({}),
-    createComment: () => ({}),
-    setText() {},
-    setElementText() {},
-    parentNode: () => null,
-    nextSibling: () => null,
-  });
+  const renderer = createNoopRenderer();
   const original = (
     RunGraphCanvas as unknown as {
       setup: (props: object, context: SetupContext) => CanvasState;

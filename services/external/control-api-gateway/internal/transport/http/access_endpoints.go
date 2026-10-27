@@ -144,11 +144,7 @@ func (server *Server) CreateAccessRole(writer http.ResponseWriter, request *http
 	response, err := server.control.Access.CreateAccessRole(request.Context(), &controlplanev1.CreateAccessRoleRequest{
 		Mutation: mutation, Name: body.Name, Description: body.Description, PermissionKeys: append([]string(nil), body.PermissionKeys...), AllowedScopes: protoScopeKinds(body.AllowedScopes), ChangeComment: body.ChangeComment,
 	})
-	if err != nil {
-		writeRPCProblem(writer, err)
-		return
-	}
-	writeMessage(writer, http.StatusCreated, response, "role", "")
+	writeRPCResult(writer, http.StatusCreated, response, err, "role", "")
 }
 
 // CreateAccessRoleVersion sends full proposed role metadata and mutation/version pins to the owner version command; it does not overwrite historical versions locally.
@@ -161,11 +157,7 @@ func (server *Server) CreateAccessRoleVersion(writer http.ResponseWriter, reques
 	response, err := server.control.Access.CreateAccessRoleVersion(request.Context(), &controlplanev1.CreateAccessRoleVersionRequest{
 		Mutation: mutation, RoleRef: roleRef, Name: body.Name, Description: body.Description, PermissionKeys: append([]string(nil), body.PermissionKeys...), AllowedScopes: protoScopeKinds(body.AllowedScopes), ChangeComment: body.ChangeComment,
 	})
-	if err != nil {
-		writeRPCProblem(writer, err)
-		return
-	}
-	writeMessage(writer, http.StatusCreated, response, "role", "")
+	writeRPCResult(writer, http.StatusCreated, response, err, "role", "")
 }
 
 // ArchiveAccessRole delegates exact role archival with mutation/version pins and public-projects the result; dependency and binding effects remain owner-managed.
@@ -176,11 +168,7 @@ func (server *Server) ArchiveAccessRole(writer http.ResponseWriter, request *htt
 		return
 	}
 	response, err := server.control.Access.ArchiveAccessRole(request.Context(), &controlplanev1.ArchiveAccessRoleRequest{Mutation: mutation, RoleRef: roleRef})
-	if err != nil {
-		writeRPCProblem(writer, err)
-		return
-	}
-	writeMessage(writer, http.StatusOK, response, "role", "")
+	writeRPCResult(writer, http.StatusOK, response, err, "role", "")
 }
 
 // CreateAccessBinding maps subject, exact role-version selector, scope and conditions under create mutation context for owner authorization. Payload subject/scope never assigns the caller's own identity or permissions.
@@ -194,11 +182,7 @@ func (server *Server) CreateAccessBinding(writer http.ResponseWriter, request *h
 		Mutation: mutation, SubjectKind: protoSubjectKind(string(body.SubjectKind)), SubjectRef: body.SubjectRef,
 		RoleVersionRef: body.RoleVersionRef, Scope: protoAccessScope(body.Scope), Conditions: protoAccessConditions(body.Conditions),
 	})
-	if err != nil {
-		writeRPCProblem(writer, err)
-		return
-	}
-	writeMessage(writer, http.StatusCreated, response, "binding", "")
+	writeRPCResult(writer, http.StatusCreated, response, err, "binding", "")
 }
 
 // ChangeAccessBinding sends exact binding, role version, scope/conditions and mutation pins to the specialized owner update, leaving old/new scope eligibility to owner policy.
@@ -211,11 +195,7 @@ func (server *Server) ChangeAccessBinding(writer http.ResponseWriter, request *h
 	response, err := server.control.Access.ChangeAccessBinding(request.Context(), &controlplanev1.ChangeAccessBindingRequest{
 		Mutation: mutation, BindingRef: bindingRef, RoleVersionRef: body.RoleVersionRef, Scope: protoAccessScope(body.Scope), Conditions: protoAccessConditions(body.Conditions),
 	})
-	if err != nil {
-		writeRPCProblem(writer, err)
-		return
-	}
-	writeMessage(writer, http.StatusOK, response, "binding", "")
+	writeRPCResult(writer, http.StatusOK, response, err, "binding", "")
 }
 
 // RevokeAccessBinding invokes explicit owner revocation with exact binding/version/idempotency and returns public state without directly editing IdP groups or session credentials.
@@ -226,11 +206,7 @@ func (server *Server) RevokeAccessBinding(writer http.ResponseWriter, request *h
 		return
 	}
 	response, err := server.control.Access.RevokeAccessBinding(request.Context(), &controlplanev1.RevokeAccessBindingRequest{Mutation: mutation, BindingRef: bindingRef})
-	if err != nil {
-		writeRPCProblem(writer, err)
-		return
-	}
-	writeMessage(writer, http.StatusOK, response, "binding", "")
+	writeRPCResult(writer, http.StatusOK, response, err, "binding", "")
 }
 
 // protoAccessScope maps public kind/project/resource selectors into a fresh protobuf scope without validating their consistency or making them authoritative actor claims.

@@ -1,12 +1,14 @@
-import { expect, test, type Page } from "@playwright/test";
+import {
+  expect,
+  test,
+  type Locator,
+  type Page,
+  type Response,
+} from "@playwright/test";
 
-import type {
-  Agent,
-  AgentPage,
-  Project,
-  ProjectPage,
-  PromptTemplatePreview,
-} from "../src/shared/api/generated/openapi/types.gen";
+import type { PromptTemplatePreview } from "../src/shared/api/generated/openapi/types.gen";
+import { exactAgent } from "./fixtures/exact-agent";
+import { exactProject } from "./fixtures/exact-project";
 import { authenticateOwner } from "./auth-flow";
 import { loadE2EAuthEnvironment } from "./environment";
 import { gotoWithRetry } from "./helpers";
@@ -32,40 +34,11 @@ type PromptProblem = {
 test("Материализованный preview показывает pin и безопасную ошибку шаблона", async ({
   page,
 }) => {
-  const serverFailures: string[] = [];
-  page.on("response", (response) => {
-    if (response.status() >= 500)
-      serverFailures.push(
-        `${String(response.status())} ${new URL(response.url()).pathname}`,
-      );
-  });
-  await authenticateOwner(
-    page,
-    {
-      username: environment.ownerUsername,
-      password: environment.ownerPassword,
-    },
-    { mode: "local" },
-  );
-  const project = await exactProject(page);
-  const agent = await exactAgent(page, project.ref);
-  await gotoWithRetry(
-    page,
-    `/projects/${encodeURIComponent(project.ref)}/agents/${encodeURIComponent(agent.ref)}`,
-  );
-  await page.getByRole("tab", { name: "Инструкции", exact: true }).click();
-  const panel = page.locator("#agent-panel-instructions");
-  const editor = panel.getByRole("textbox", {
-    name: "Инструкции",
-    exact: true,
-  });
+  const { serverFailures, panel, editor, agent } =
+    await openInstructionEditor(page);
   await expect(editor).not.toHaveText("");
 
-  const successfulPreview = page.waitForResponse(isPromptPreviewResponse);
-  await panel
-    .getByRole("button", { name: "Проверка подстановки", exact: true })
-    .click();
-  const successfulResponse = await successfulPreview;
+  const successfulResponse = await previewInstructions(page, panel);
   expect(successfulResponse.status()).toBe(200);
   const preview = (await successfulResponse.json()) as PromptTemplatePreview;
   expect(preview.complete).toBe(true);
@@ -91,11 +64,7 @@ test("Материализованный preview показывает pin и б�
 
   await panel.getByRole("button", { name: "Редактор", exact: true }).click();
   await editor.fill("{{.unknown.value}}");
-  const invalidPreview = page.waitForResponse(isPromptPreviewResponse);
-  await panel
-    .getByRole("button", { name: "Проверка подстановки", exact: true })
-    .click();
-  const invalidResponse = await invalidPreview;
+  const invalidResponse = await previewInstructions(page, panel);
   expect(invalidResponse.status()).toBeGreaterThanOrEqual(400);
   expect(invalidResponse.status()).toBeLessThan(500);
   const problem = (await invalidResponse.json()) as PromptProblem;
@@ -116,11 +85,7 @@ test("Материализованный preview показывает pin и б�
 
   await panel.getByRole("button", { name: "Редактор", exact: true }).click();
   await editor.fill("{{range .agent.name}}value{{end}}");
-  const wrongTypePreview = page.waitForResponse(isPromptPreviewResponse);
-  await panel
-    .getByRole("button", { name: "Проверка подстановки", exact: true })
-    .click();
-  const wrongTypeResponse = await wrongTypePreview;
+  const wrongTypeResponse = await previewInstructions(page, panel);
   expect(wrongTypeResponse.status()).toBe(400);
   const wrongTypeProblem = (await wrongTypeResponse.json()) as PromptProblem;
   expect(wrongTypeProblem).toMatchObject({
@@ -141,11 +106,7 @@ test("Материализованный preview показывает pin и б�
 
   await panel.getByRole("button", { name: "Редактор", exact: true }).click();
   await editor.fill("Простой текст без переменных.");
-  const simplePreview = page.waitForResponse(isPromptPreviewResponse);
-  await panel
-    .getByRole("button", { name: "Проверка подстановки", exact: true })
-    .click();
-  const simpleResponse = await simplePreview;
+  const simpleResponse = await previewInstructions(page, panel);
   const simpleBody = (await simpleResponse.json()) as PromptTemplatePreview;
   expect(simpleResponse.status()).toBe(200);
   expect(simpleBody.complete).toBe(true);
@@ -161,11 +122,7 @@ test("Материализованный preview показывает pin и б�
   await editor.fill(
     "{{range .input.files}}{{.name}}{{end}} {{range .runtime.environment.tools}}{{.name}}{{end}}",
   );
-  const unavailableRangePreview = page.waitForResponse(isPromptPreviewResponse);
-  await panel
-    .getByRole("button", { name: "Проверка подстановки", exact: true })
-    .click();
-  const unavailableRangeResponse = await unavailableRangePreview;
+  const unavailableRangeResponse = await previewInstructions(page, panel);
   expect(unavailableRangeResponse.status()).toBe(400);
   const unavailableRangeProblem =
     (await unavailableRangeResponse.json()) as PromptProblem;
@@ -191,40 +148,10 @@ test("Материализованный preview показывает pin и б�
 test("MVP-UI-35 не дублирует пользовательский slot и показывает служебный порядок", async ({
   page,
 }) => {
-  const serverFailures: string[] = [];
-  page.on("response", (response) => {
-    if (response.status() >= 500)
-      serverFailures.push(
-        `${String(response.status())} ${new URL(response.url()).pathname}`,
-      );
-  });
-  await authenticateOwner(
-    page,
-    {
-      username: environment.ownerUsername,
-      password: environment.ownerPassword,
-    },
-    { mode: "local" },
-  );
-  const project = await exactProject(page);
-  const agent = await exactAgent(page, project.ref);
-  await gotoWithRetry(
-    page,
-    `/projects/${encodeURIComponent(project.ref)}/agents/${encodeURIComponent(agent.ref)}`,
-  );
-  await page.getByRole("tab", { name: "Инструкции", exact: true }).click();
-  const panel = page.locator("#agent-panel-instructions");
-  const editor = panel.getByRole("textbox", {
-    name: "Инструкции",
-    exact: true,
-  });
+  const { serverFailures, panel, editor } = await openInstructionEditor(page);
   await editor.fill('Пользовательская часть\n{{slot "PURPOSE"}}');
 
-  const previewResponse = page.waitForResponse(isPromptPreviewResponse);
-  await panel
-    .getByRole("button", { name: "Проверка подстановки", exact: true })
-    .click();
-  const response = await previewResponse;
+  const response = await previewInstructions(page, panel);
   expect(response.status()).toBe(200);
   const preview = (await response.json()) as PromptTemplatePreview;
   expect(preview.complete).toBe(true);
@@ -289,6 +216,56 @@ test("MVP-UI-35 не дублирует пользовательский slot и
   expect(serverFailures).toEqual([]);
 });
 
+// openInstructionEditor готовит общий локальный путь к редактору и собирает ошибки сервера.
+// Сценарии самостоятельно задают содержимое и проверяют ответы preview.
+// previewInstructions ожидает ответ проверки и запускает её после регистрации ожидания.
+async function previewInstructions(
+  page: Page,
+  panel: Locator,
+): Promise<Response> {
+  const response = page.waitForResponse(isPromptPreviewResponse);
+  await panel
+    .getByRole("button", { name: "Проверка подстановки", exact: true })
+    .click();
+  return response;
+}
+
+async function openInstructionEditor(page: Page) {
+  const serverFailures: string[] = [];
+  page.on("response", (response) => {
+    if (response.status() >= 500)
+      serverFailures.push(
+        `${String(response.status())} ${new URL(response.url()).pathname}`,
+      );
+  });
+  await authenticateOwner(
+    page,
+    {
+      username: environment.ownerUsername,
+      password: environment.ownerPassword,
+    },
+    { mode: "local" },
+  );
+  const project = await exactProject(page, projectName);
+  const agent = await exactAgent(
+    page,
+    project.ref,
+    agentName,
+    "Prompt preview agent fixture is not unique",
+  );
+  await gotoWithRetry(
+    page,
+    `/projects/${encodeURIComponent(project.ref)}/agents/${encodeURIComponent(agent.ref)}`,
+  );
+  await page.getByRole("tab", { name: "Инструкции", exact: true }).click();
+  const panel = page.locator("#agent-panel-instructions");
+  const editor = panel.getByRole("textbox", {
+    name: "Инструкции",
+    exact: true,
+  });
+  return { serverFailures, panel, editor, agent };
+}
+
 function isPromptPreviewResponse(response: {
   request(): { method(): string };
   url(): string;
@@ -296,42 +273,5 @@ function isPromptPreviewResponse(response: {
   return (
     response.request().method() === "POST" &&
     new URL(response.url()).pathname === "/api/v1/prompt-templates/preview"
-  );
-}
-
-async function exactProject(page: Page): Promise<Project> {
-  return await page.evaluate(async (name) => {
-    const response = await fetch(
-      `/api/v1/projects?query=${encodeURIComponent(name)}&pageSize=30`,
-    );
-    if (!response.ok) throw new Error("Acceptance project read failed");
-    const result = (await response.json()) as ProjectPage;
-    const matches = result.items.filter((item) => item.name === name);
-    if (matches.length !== 1)
-      throw new Error("Acceptance project is not unique");
-    return matches[0] as Project;
-  }, projectName);
-}
-
-async function exactAgent(page: Page, projectRef: string): Promise<Agent> {
-  return await page.evaluate(
-    async ({ name, project }) => {
-      const query = new URLSearchParams({
-        projectRef: project,
-        query: name,
-        pageSize: "40",
-      });
-      const response = await fetch(`/api/v1/agents?${query}`);
-      if (!response.ok) throw new Error("Agent catalog read failed");
-      const result = (await response.json()) as AgentPage;
-      const matches = result.items.filter(
-        (item) =>
-          item.projectRef === project && !item.system && item.name === name,
-      );
-      if (matches.length !== 1)
-        throw new Error("Prompt preview agent fixture is not unique");
-      return matches[0] as Agent;
-    },
-    { name: agentName, project: projectRef },
   );
 }

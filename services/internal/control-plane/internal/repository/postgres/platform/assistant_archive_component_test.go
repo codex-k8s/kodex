@@ -14,6 +14,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+// testAssistantHistoryArchive checks actor-bound history cursors, archive replay and restore, and
+// retention purge with durable event readback.
+// testAssistantHistoryArchive проверяет привязанные к участнику курсоры истории, повтор архивации
+// и восстановление, а также очистку по сроку хранения с чтением событий из БД.
 func testAssistantHistoryArchive(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	prepareObservedWarmFixture(t, ctx, repository)

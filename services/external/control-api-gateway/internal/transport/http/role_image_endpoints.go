@@ -68,41 +68,23 @@ func (server *Server) GetRoleImageRecipe(writer http.ResponseWriter, request *ht
 		writeLocalProblem(writer, http.StatusNotFound, "NOT_FOUND", false)
 		return
 	}
-	if !validRoleImageLineage(response.GetRecipe().GetManagedLineage()) || !validRoleImageSource(response.GetRecipe()) {
-		writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-		return
-	}
-	result := generated.RoleImageRecipeDetail{
-		Recipe: publicRoleImageRecipe(response.GetRecipe()),
-		Builds: make([]generated.RoleImageBuild, 0, len(response.GetBuilds())),
-	}
-	for _, build := range response.GetBuilds() {
-		if build == nil || !validRoleImageBuildSource(build) || build.GetConfigurationRevisionRef() != "" && !effectiveCapabilityRef(build.GetConfigurationRevisionRef()) {
-			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-			return
-		}
-		result.Builds = append(result.Builds, publicRoleImageBuild(build))
-	}
-	if response.GetActiveArtifact() != nil {
-		if !validImageRiskHistory(response.GetActiveArtifact()) {
-			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-			return
-		}
-		artifact := publicRoleImageArtifact(response.GetActiveArtifact())
-		result.ActiveArtifact = &artifact
-	}
-	if response.GetPromotionCandidate() != nil {
-		if !validImageRiskHistory(response.GetPromotionCandidate()) {
-			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-			return
-		}
-		artifact := publicRoleImageArtifact(response.GetPromotionCandidate())
-		result.PromotionCandidate = &artifact
-	}
-	setVersionETag(writer, response.GetRecipe().GetVersion())
-	failure, validFailure := publicRoleImageAdmissionFailure(response.GetAdmissionFailure(), response.GetRecipe(), response.GetBuilds())
+	writeRoleImageRecipeDetail(writer, response, nil, validImageRiskHistory)
+}
+
+// writeRoleImageDetail finishes an already scoped detail after its caller has set the recipe
+// ETag. It validates admission-failure metadata against the same recipe/builds, then writes the
+// public failure and HTTP200 body, or the existing HTTP502 problem. It neither authorizes a
+// resource, mutates the prepared collections nor performs image promotion or admission.
+// writeRoleImageDetail завершает уже проверенное представление после установки ETag рецепта
+// вызывающим кодом. Проверяет metadata ошибки допуска по тем же рецепту/сборкам и выдаёт
+// публичную ошибку и HTTP200 либо прежнюю проблему HTTP502. Полномочия на ресурс не назначает,
+// подготовленные коллекции не меняет, продвижение образа и допуск не выполняет.
+func writeRoleImageDetail(writer http.ResponseWriter, result generated.RoleImageRecipeDetail, admissionFailure *controlplanev1.RoleImageAdmissionFailure,
+	recipe *controlplanev1.RoleImageRecipe, builds []*controlplanev1.ImageBuild,
+) {
+	failure, validFailure := publicRoleImageAdmissionFailure(admissionFailure, recipe, builds)
 	if !validFailure {
-		writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		writeLocalProblem(writer, http.StatusBadGateway, invalidUpstreamResponseCode, false)
 		return
 	}
 	result.AdmissionFailure = failure

@@ -10,6 +10,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 )
 
+// TestPlatformDiscoveryV4ResolvesCanonicalDocumentsWithoutAuthority checks exact bounded EN/RU
+// discovery guidance resolves canonical document pins without guessing or assigning authority,
+// preserving denial and Git credential boundaries in current v5 text.
+// TestPlatformDiscoveryV4ResolvesCanonicalDocumentsWithoutAuthority проверяет точные ограниченные
+// инструкции EN/RU поиска канонических документов без угадывания и назначения полномочий, сохраняя
+// запреты и границы Git credentials в текущем тексте v5.
 func TestPlatformDiscoveryV4ResolvesCanonicalDocumentsWithoutAuthority(t *testing.T) {
 	for _, locale := range []string{"en", "ru"} {
 		t.Run(locale, func(t *testing.T) {
@@ -49,6 +55,10 @@ func TestPlatformDiscoveryV4ResolvesCanonicalDocumentsWithoutAuthority(t *testin
 	}
 }
 
+// TestPlatformDiscoveryV4KeepsHistoricalV3ExactPins checks historical v3 refs/digests remain exact
+// and exclude the later pinned-directory-listing guidance.
+// TestPlatformDiscoveryV4KeepsHistoricalV3ExactPins проверяет точность исторических ref и
+// дайджестов v3 и отсутствие более поздней инструкции поиска по закреплённому списку каталога.
 func TestPlatformDiscoveryV4KeepsHistoricalV3ExactPins(t *testing.T) {
 	for locale, digest := range map[string]string{"en": "58db829606aba2667bcd43423b0fa5935ec9d7f5a18f85abf75be4772638dc48", "ru": "fbe4937c81ddca7a9158b300bbb597bca8f018dc388d6d0be8e42dbfba18a654"} {
 		binding, err := platformInstructionBindingForRevision("platform-source-conformity-v3", locale)
@@ -58,6 +68,12 @@ func TestPlatformDiscoveryV4KeepsHistoricalV3ExactPins(t *testing.T) {
 	}
 }
 
+// TestPlatformDiscoveryCurrentProducerPassesUnchangedRunnerConsumer checks a fresh continuation
+// producer passes the shared runner consumer and rejects forged instruction ref, revision,
+// content, digest or locale in validation and dependency extraction.
+// TestPlatformDiscoveryCurrentProducerPassesUnchangedRunnerConsumer проверяет принятие свежего
+// producer продолжения общим runner consumer и отклонение подменённых ref, ревизии, содержимого,
+// дайджеста либо языка инструкции при валидации и извлечении зависимости.
 func TestPlatformDiscoveryCurrentProducerPassesUnchangedRunnerConsumer(t *testing.T) {
 	input := continuationTaskOracleFixture(t)
 	if notice, err := runtimecontract.ValidateRuntimeSessionContext(input); err != nil || !notice {

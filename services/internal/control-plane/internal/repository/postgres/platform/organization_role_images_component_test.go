@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	roleimagerepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/roleimage"
@@ -19,53 +18,68 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// queryOrganizationImageComponentOwner changes only the exact fixture organization/subject
+// platform-membership binding to the named system role version for owner-revocation tests.
+// queryOrganizationImageComponentOwner изменяет только platform-membership binding точных fixture
+// organization/subject на версию именованной system role для owner-revocation tests.
+//
 //go:embed testdata/sql/organization_role_image_component_owner.sql
 var queryOrganizationImageComponentOwner string
 
+// queryOrganizationImageComponentExpiry expires the identified synthetic build lease through the
+// disposable database clock without changing production TTL.
+// queryOrganizationImageComponentExpiry завершает lease указанной synthetic build через clock
+// disposable БД без изменения production TTL.
+//
 //go:embed testdata/sql/organization_role_image_component_expiry.sql
 var queryOrganizationImageComponentExpiry string
 
+// queryOrganizationImageComponentReparent attempts to reparent the exact fixture build to another
+// recipe so immutable owner-tuple enforcement must reject the write.
+// queryOrganizationImageComponentReparent пытается сменить родительский recipe точной fixture
+// build, чтобы immutable owner-tuple enforcement отклонил запись.
+//
 //go:embed testdata/sql/organization_role_image_component_reparent.sql
 var queryOrganizationImageComponentReparent string
 
+// queryOrganizationImageComponentProject resolves the internal project ID only for exact fixture
+// tenant and public project reference to construct a signed-project negative context.
+// queryOrganizationImageComponentProject разрешает внутренний project ID только для точных fixture
+// tenant и public project reference для построения signed-project negative context.
+//
 //go:embed testdata/sql/organization_role_image_component_project.sql
 var queryOrganizationImageComponentProject string
 
+// queryOrganizationImageComponentTerminalExpiry sets the fixture build attempt limit to the
+// current attempt and expires its lease, making the next claim test terminal dead-letter closure
+// instead of retry.
+// queryOrganizationImageComponentTerminalExpiry устанавливает limit попыток fixture build равным
+// текущей attempt и завершает её lease, чтобы следующий claim проверил terminal dead-letter
+// closure вместо retry.
+//
 //go:embed testdata/sql/organization_role_image_component_terminal_expiry.sql
 var queryOrganizationImageComponentTerminalExpiry string
 
-// Только пустая disposable БД и синтетические build/admission callbacks.
+// TestOrganizationRoleImagesComponent uses an isolated migrated database and sixty-second context
+// to exercise organization recipe/build/admission/promotion with synthetic callbacks, exact
+// scope/source/revision reads, expiry retry and terminal closure. It checks owner revoke,
+// signed-project denial before OCC/digest/replay, immutable parent rejection and actual
+// organization impact, then verifies expiry-only receipts for both organization/project owners;
+// registry and scanners are not executed.
+// TestOrganizationRoleImagesComponent использует изолированную мигрированную БД и контекст на
+// шестьдесят секунд для проверки organization recipe/build/admission/promotion с synthetic
+// callbacks, точных scope/source/revision reads, expiry retry и terminal closure. Проверяет owner
+// revoke, signed-project denial до OCC/digest/replay, отказ immutable parent и actual organization
+// impact, затем expiry-only receipts обоих organization/project owners; registry и scanners не
+// запускаются.
 func TestOrganizationRoleImagesComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
-	config, err := pgxpool.ParseConfig(isolatedAssistantComponentDSN(t))
-	if err != nil {
-		t.Fatal("parse isolated fixture configuration")
-	}
-	config.ConnConfig.Tracer = organizationImageQueryTracer{t: t}
-	pool, err := pgxpool.NewWithConfig(ctx, config)
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := newTracedOrganizationComponentPool(t, ctx)
 	defer pool.Close()
-	repository, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := repository.ConfigureRoleImages(RoleImageConfig{
-		PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64),
-		BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3,
-		StagingRepository: "registry.invalid/kodex/staging", PromotedRepository: "registry.invalid/kodex/roles",
-		DefaultImageReference: "registry.invalid/kodex/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32)),
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := repository.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
+	repository := newNamespacedRoleImageComponentRepository(t, ctx, pool)
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
 		CallerWorkload: "control-api-gateway", Operation: "platform.organization.role-images.recipes.manage",
@@ -345,11 +359,26 @@ WHERE convert_from(payload, 'UTF8')::jsonb->>'eventName' = 'ROLE_IMAGE_RECIPE_CH
 	testRoleImageExpiryOutcome(t, ctx, repository, resolved, owner, worker, project.Project.Ref)
 }
 
+// organizationImageQueryTracer holds the component test logger for PostgreSQL query rejections in
+// the synthetic isolated fixture; tracing records neither SQL text nor query arguments.
+// organizationImageQueryTracer хранит component test logger для PostgreSQL query rejections в
+// synthetic isolated fixture; tracing не записывает SQL text либо query arguments.
 type organizationImageQueryTracer struct{ t *testing.T }
 
+// TraceQueryStart returns the supplied query context unchanged and ignores the connection/query
+// metadata, without creating a span or observing parameters.
+// TraceQueryStart возвращает переданный query context без изменений и игнорирует connection/query
+// metadata без создания span либо чтения parameters.
 func (tracer organizationImageQueryTracer) TraceQueryStart(ctx context.Context, _ *pgx.Conn, _ pgx.TraceQueryStartData) context.Context {
 	return ctx
 }
+
+// TraceQueryEnd logs PostgreSQL error code, constraint name and message only for errors wrapping
+// PgError in the synthetic fixture; other errors produce no trace output and SQL/arguments are not
+// printed.
+// TraceQueryEnd записывает PostgreSQL error code, constraint name и message только для errors с
+// вложенным PgError в synthetic fixture; остальные ошибки не дают trace output, SQL/arguments не
+// печатаются.
 func (tracer organizationImageQueryTracer) TraceQueryEnd(_ context.Context, _ *pgx.Conn, result pgx.TraceQueryEndData) {
 	var failure *pgconn.PgError
 	if errors.As(result.Err, &failure) {

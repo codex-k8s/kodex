@@ -36,7 +36,6 @@ metadata:
     kodex.dev/registry-scope: pull
 spec:
   replicas: 2
-  revisionHistoryLimit: 2
   selector:
     matchLabels:
       app.kubernetes.io/name: kodex-image-registry
@@ -51,20 +50,8 @@ spec:
         kodex.dev/pull-credential-generation: "0"
     spec:
       serviceAccountName: kodex-image-registry-pull
-      shareProcessNamespace: true
-      automountServiceAccountToken: false
-      enableServiceLinks: false
-      terminationGracePeriodSeconds: 30
-      securityContext:
-        runAsNonRoot: true
-        fsGroup: 10001
-        fsGroupChangePolicy: OnRootMismatch
-        seccompProfile:
-          type: RuntimeDefault
       containers:
         - name: registry
-          image: registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
-          imagePullPolicy: IfNotPresent
           env:
             - name: REGISTRY_HTTP_ADDR
               value: 127.0.0.1:5006
@@ -78,40 +65,9 @@ spec:
           readinessProbe:
             exec:
               command: [/bin/sh, -ec, "nc -z 127.0.0.1 5006"]
-            periodSeconds: 5
-            timeoutSeconds: 2
-            failureThreshold: 3
           livenessProbe:
             exec:
               command: [/bin/sh, -ec, "nc -z 127.0.0.1 5006"]
-            periodSeconds: 15
-            timeoutSeconds: 2
-            failureThreshold: 3
-          resources:
-            requests:
-              cpu: 50m
-              memory: 64Mi
-            limits:
-              cpu: 500m
-              memory: 256Mi
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 10001
-            runAsGroup: 10001
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop:
-                - ALL
-          volumeMounts:
-            - name: data
-              mountPath: /var/lib/registry
-              readOnly: true
-            - name: credentials
-              mountPath: /var/run/secrets/kodex/registry
-              readOnly: true
-            - name: tmp
-              mountPath: /tmp
         - name: pull-authorizer
           image: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/registry-pull-authorizer@sha256:0000000000000000000000000000000000000000000000000000000000000000
           command: [/usr/local/bin/registry-pull-authorizer]
@@ -120,23 +76,10 @@ spec:
               valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: pullRegistryHost}}
           ports: [{name: registry, containerPort: 5000, protocol: TCP}]
           readinessProbe: {tcpSocket: {port: registry}, periodSeconds: 5, timeoutSeconds: 2}
-          resources:
-            requests: {cpu: 10m, memory: 32Mi}
-            limits: {cpu: 100m, memory: 64Mi}
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 10001
-            runAsGroup: 10001
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities: {drop: [ALL]}
           volumeMounts:
             - {name: credentials, mountPath: /identity, readOnly: true}
             - {name: tmp, mountPath: /tmp}
         - name: certificate-guard
-          image: admission-tools.invalid/kodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
-          imagePullPolicy: IfNotPresent
-          command: [/bin/sh, /opt/kodex/registry-readiness.sh]
           env:
             - {name: TARGET_PORT, value: "5000"}
             - {name: SERVER_NAME, value: registry-pull.invalid}
@@ -146,25 +89,6 @@ spec:
             - {name: READBACK_IMAGE, value: "registry-pull.invalid/kodex/control-plane@sha256:0000000000000000000000000000000000000000000000000000000000000000"}
             - name: PULL_CREDENTIAL_GENERATION
               valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: pullCredentialGeneration}}
-          readinessProbe:
-            exec: {command: [/bin/sh, -ec, test -f /tmp/registry-ready]}
-            periodSeconds: 5
-            timeoutSeconds: 2
-            failureThreshold: 2
-          resources:
-            requests: {cpu: 10m, memory: 32Mi}
-            limits: {cpu: 100m, memory: 64Mi}
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 10001
-            runAsGroup: 10001
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities: {drop: [ALL]}
-          volumeMounts:
-            - {name: credentials, mountPath: /identity, readOnly: true}
-            - {name: readiness-script, mountPath: /opt/kodex, readOnly: true}
-            - {name: tmp, mountPath: /tmp}
       volumes:
         - name: data
           persistentVolumeClaim:
@@ -175,12 +99,8 @@ spec:
             secretName: kodex-image-registry-pull
             defaultMode: 292
         - name: tmp
-          emptyDir:
-            sizeLimit: 32Mi
         - name: readiness-script
-          configMap:
-            name: kodex-registry-readiness
-            defaultMode: 0555
+
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -192,7 +112,6 @@ metadata:
     kodex.dev/registry-scope: push
 spec:
   replicas: 1
-  revisionHistoryLimit: 2
   strategy:
     type: Recreate
   selector:
@@ -207,20 +126,8 @@ spec:
         kodex.dev/registry-scope: push
     spec:
       serviceAccountName: kodex-image-registry-push
-      shareProcessNamespace: true
-      automountServiceAccountToken: false
-      enableServiceLinks: false
-      terminationGracePeriodSeconds: 30
-      securityContext:
-        runAsNonRoot: true
-        fsGroup: 10001
-        fsGroupChangePolicy: OnRootMismatch
-        seccompProfile:
-          type: RuntimeDefault
       containers:
         - name: registry
-          image: registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
-          imagePullPolicy: IfNotPresent
           env:
             - name: REGISTRY_HTTP_ADDR
               value: 127.0.0.1:5005
@@ -234,39 +141,9 @@ spec:
           readinessProbe:
             exec:
               command: [/bin/sh, -ec, "nc -z 127.0.0.1 5005"]
-            periodSeconds: 5
-            timeoutSeconds: 2
-            failureThreshold: 3
           livenessProbe:
             exec:
               command: [/bin/sh, -ec, "nc -z 127.0.0.1 5005"]
-            periodSeconds: 15
-            timeoutSeconds: 2
-            failureThreshold: 3
-          resources:
-            requests:
-              cpu: 50m
-              memory: 64Mi
-            limits:
-              cpu: 500m
-              memory: 256Mi
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 10001
-            runAsGroup: 10001
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop:
-                - ALL
-          volumeMounts:
-            - name: data
-              mountPath: /var/lib/registry
-            - name: credentials
-              mountPath: /var/run/secrets/kodex/registry
-              readOnly: true
-            - name: tmp
-              mountPath: /tmp
         - name: write-authorizer
           image: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
           imagePullPolicy: IfNotPresent
@@ -277,16 +154,6 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 2
-          resources:
-            requests: {cpu: 10m, memory: 32Mi}
-            limits: {cpu: 100m, memory: 64Mi}
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 10001
-            runAsGroup: 10001
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities: {drop: [ALL]}
           volumeMounts:
             - {name: credentials, mountPath: /identity, readOnly: true}
             - {name: tmp, mountPath: /tmp}
@@ -299,12 +166,8 @@ spec:
             secretName: kodex-image-registry-push
             defaultMode: 292
         - name: tmp
-          emptyDir:
-            sizeLimit: 32Mi
         - name: readiness-script
-          configMap:
-            name: kodex-registry-readiness
-            defaultMode: 0555
+
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -316,7 +179,6 @@ metadata:
     kodex.dev/registry-scope: admin
 spec:
   replicas: 1
-  revisionHistoryLimit: 2
   strategy:
     type: Recreate
   selector:
@@ -331,20 +193,8 @@ spec:
         kodex.dev/registry-scope: admin
     spec:
       serviceAccountName: kodex-image-registry-admin
-      shareProcessNamespace: true
-      automountServiceAccountToken: false
-      enableServiceLinks: false
-      terminationGracePeriodSeconds: 30
-      securityContext:
-        runAsNonRoot: true
-        fsGroup: 10001
-        fsGroupChangePolicy: OnRootMismatch
-        seccompProfile:
-          type: RuntimeDefault
       containers:
         - name: registry
-          image: registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
-          imagePullPolicy: IfNotPresent
           env:
             - name: REGISTRY_HTTP_ADDR
               value: 0.0.0.0:5002
@@ -368,68 +218,16 @@ spec:
           readinessProbe:
             tcpSocket:
               port: registry
-            periodSeconds: 5
-            timeoutSeconds: 2
-            failureThreshold: 3
           livenessProbe:
             tcpSocket:
               port: registry
-            periodSeconds: 15
-            timeoutSeconds: 2
-            failureThreshold: 3
-          resources:
-            requests:
-              cpu: 50m
-              memory: 64Mi
-            limits:
-              cpu: 500m
-              memory: 256Mi
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 10001
-            runAsGroup: 10001
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop:
-                - ALL
-          volumeMounts:
-            - name: data
-              mountPath: /var/lib/registry
-            - name: credentials
-              mountPath: /var/run/secrets/kodex/registry
-              readOnly: true
-            - name: tmp
-              mountPath: /tmp
         - name: certificate-guard
-          image: admission-tools.invalid/kodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
-          imagePullPolicy: IfNotPresent
-          command: [/bin/sh, /opt/kodex/registry-readiness.sh]
           env:
             - {name: TARGET_PORT, value: "5002"}
             - {name: SERVER_NAME, value: kodex-image-registry-admin.kodex-system.svc.cluster.local}
             - {name: CLIENT_AUTH_REQUIRED, value: "true"}
             - {name: USERNAME_FILE, value: /identity/admin.username}
             - {name: PASSWORD_FILE, value: /identity/admin.password}
-          readinessProbe:
-            exec: {command: [/bin/sh, -ec, test -f /tmp/registry-ready]}
-            periodSeconds: 5
-            timeoutSeconds: 2
-            failureThreshold: 2
-          resources:
-            requests: {cpu: 10m, memory: 32Mi}
-            limits: {cpu: 100m, memory: 64Mi}
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 10001
-            runAsGroup: 10001
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities: {drop: [ALL]}
-          volumeMounts:
-            - {name: credentials, mountPath: /identity, readOnly: true}
-            - {name: readiness-script, mountPath: /opt/kodex, readOnly: true}
-            - {name: tmp, mountPath: /tmp}
       volumes:
         - name: data
           persistentVolumeClaim:
@@ -439,12 +237,8 @@ spec:
             secretName: kodex-image-registry-admin
             defaultMode: 292
         - name: tmp
-          emptyDir:
-            sizeLimit: 32Mi
         - name: readiness-script
-          configMap:
-            name: kodex-registry-readiness
-            defaultMode: 0555
+
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -456,7 +250,6 @@ metadata:
     kodex.dev/registry-scope: promotion
 spec:
   replicas: 1
-  revisionHistoryLimit: 2
   strategy:
     type: Recreate
   selector:
@@ -471,20 +264,8 @@ spec:
         kodex.dev/registry-scope: promotion
     spec:
       serviceAccountName: kodex-image-registry-promotion
-      shareProcessNamespace: true
-      automountServiceAccountToken: false
-      enableServiceLinks: false
-      terminationGracePeriodSeconds: 30
-      securityContext:
-        runAsNonRoot: true
-        fsGroup: 10001
-        fsGroupChangePolicy: OnRootMismatch
-        seccompProfile:
-          type: RuntimeDefault
       containers:
         - name: registry
-          image: registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
-          imagePullPolicy: IfNotPresent
           env:
             - name: REGISTRY_HTTP_ADDR
               value: 0.0.0.0:5003
@@ -508,68 +289,16 @@ spec:
           readinessProbe:
             tcpSocket:
               port: registry
-            periodSeconds: 5
-            timeoutSeconds: 2
-            failureThreshold: 3
           livenessProbe:
             tcpSocket:
               port: registry
-            periodSeconds: 15
-            timeoutSeconds: 2
-            failureThreshold: 3
-          resources:
-            requests:
-              cpu: 50m
-              memory: 64Mi
-            limits:
-              cpu: 500m
-              memory: 256Mi
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 10001
-            runAsGroup: 10001
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop:
-                - ALL
-          volumeMounts:
-            - name: data
-              mountPath: /var/lib/registry
-            - name: credentials
-              mountPath: /var/run/secrets/kodex/registry
-              readOnly: true
-            - name: tmp
-              mountPath: /tmp
         - name: certificate-guard
-          image: admission-tools.invalid/kodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
-          imagePullPolicy: IfNotPresent
-          command: [/bin/sh, /opt/kodex/registry-readiness.sh]
           env:
             - {name: TARGET_PORT, value: "5003"}
             - {name: SERVER_NAME, value: kodex-image-registry-promotion.kodex-system.svc.cluster.local}
             - {name: CLIENT_AUTH_REQUIRED, value: "true"}
             - {name: USERNAME_FILE, value: /identity/promotion.username}
             - {name: PASSWORD_FILE, value: /identity/promotion.password}
-          readinessProbe:
-            exec: {command: [/bin/sh, -ec, test -f /tmp/registry-ready]}
-            periodSeconds: 5
-            timeoutSeconds: 2
-            failureThreshold: 2
-          resources:
-            requests: {cpu: 10m, memory: 32Mi}
-            limits: {cpu: 100m, memory: 64Mi}
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 10001
-            runAsGroup: 10001
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities: {drop: [ALL]}
-          volumeMounts:
-            - {name: credentials, mountPath: /identity, readOnly: true}
-            - {name: readiness-script, mountPath: /opt/kodex, readOnly: true}
-            - {name: tmp, mountPath: /tmp}
       volumes:
         - name: data
           persistentVolumeClaim:
@@ -579,12 +308,8 @@ spec:
             secretName: kodex-image-registry-promotion
             defaultMode: 292
         - name: tmp
-          emptyDir:
-            sizeLimit: 32Mi
         - name: readiness-script
-          configMap:
-            name: kodex-registry-readiness
-            defaultMode: 0555
+
 ---
 apiVersion: v1
 kind: Service

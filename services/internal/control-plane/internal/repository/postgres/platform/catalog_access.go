@@ -15,9 +15,20 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// catalogQueryTimeout bounds one authorized catalog read to five seconds, including scope
+// metadata, pagination, decoration and commit; it does not impose a global request or worker
+// deadline.
+// catalogQueryTimeout ограничивает одно чтение авторизованного каталога пятью секундами, включая
+// данные доступа, пагинацию, дополнение карточек и Commit; не задаёт общий deadline запроса либо
+// worker.
 const catalogQueryTimeout = 5 * time.Second
 
-// Проверка каждой строки и чтение страницы используют один снимок полномочий.
+// authorizedCatalog delegates paging to the same-snapshot authorization engine without a
+// total-count callback and discards its zero total. It preserves returned items, cursor and error;
+// fetch, target and decoration remain caller-specific.
+// authorizedCatalog передаёт пагинацию механизму авторизации на одном снимке без callback общего
+// числа и отбрасывает нулевой total. Сохраняет items, cursor и ошибку; fetch, target и дополнение
+// определяет caller.
 func authorizedCatalog[T any](ctx context.Context, repository *Repository, current scope, kind string, filter query.Filter,
 	fetch func(context.Context, pgx.Tx, string, int32) ([]T, error),
 	target func(T) entity.AccessScope,
@@ -27,15 +38,45 @@ func authorizedCatalog[T any](ctx context.Context, repository *Repository, curre
 	return items, next, err
 }
 
+// queryCatalogSnapshotTime embeds the transaction timestamp used to align count and access
+// evaluation when a catalog total is requested. The query does not resolve an actor or permission.
+// queryCatalogSnapshotTime встраивает время транзакции для согласования count и проверки доступа
+// при запросе общего числа каталога. Запрос не разрешает субъекта и не выдаёт право.
+//
 //go:embed sql/catalog_snapshot_time.sql
 var queryCatalogSnapshotTime string
 
+// queryCatalogRunsCount embeds tenant/project, search, state and authority-project filtering plus
+// current SQL run visibility for the total. It counts matching runs rather than the filtered page
+// already returned to Go.
+// queryCatalogRunsCount встраивает фильтры организации, проекта, поиска, состояния,
+// authority-project и текущей SQL-видимости запусков для total. Считает подходящие запуски, а не
+// уже возвращённую в Go страницу.
+//
 //go:embed sql/catalog_runs_count.sql
 var queryCatalogRunsCount string
 
+// queryCatalogArtifactsCount embeds artifact total filtering by tenant, owner project, run,
+// lifecycle, scan/source/media and search criteria with authoritative artifact visibility. It
+// neither reads bytes nor changes retention.
+// queryCatalogArtifactsCount встраивает total артефактов по организации, owner project, запуску,
+// lifecycle, scan/source/media и поиску с авторитетной видимостью. Не читает байты и не меняет
+// retention.
+//
 //go:embed sql/catalog_artifacts_count.sql
 var queryCatalogArtifactsCount string
 
+// authorizedCatalogWithTotal validates search/cursor and uses a read-only RepeatableRead
+// transaction with one subject/binding snapshot. It scans bounded batches until a visible page
+// plus one is found, skips missing or disallowed targets, decorates allowed items and commits.
+// Runtime environments separate project visibility from action authority; optional counts use
+// transaction time and JSON-safe totals. Failure discards the accumulated result.
+// authorizedCatalogWithTotal проверяет поиск и cursor и использует read-only RepeatableRead с
+// единым снимком субъекта и bindings. Читает ограниченные порции до видимой страницы с одним
+// запасным элементом, пропускает отсутствующие либо недоступные targets, дополняет допустимые
+// карточки и завершает транзакцию. Runtime environments разделяют видимость проекта и права
+// действий; optional count использует время транзакции и JSON-safe total. Ошибка отбрасывает
+// накопленный результат.
 func authorizedCatalogWithTotal[T any](ctx context.Context, repository *Repository, current scope, kind string, filter query.Filter,
 	fetch func(context.Context, pgx.Tx, string, int32) ([]T, error),
 	target func(T) entity.AccessScope,
