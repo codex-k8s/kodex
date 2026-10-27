@@ -707,6 +707,17 @@ export function validWorkflowReviewQAEvidenceMigrationPostcondition(proof) {
     validWorkflowReviewQAEvidenceSchema(proof,8);
 }
 
+// Отдельная015 проверяет полный actual graph и точный каталог; вложенная014
+// обозначает только inverse projection, а не версию реально обслуживаемой БД.
+export function validSessionWorkspaceMigrationPostcondition(proof) {
+  return proof?.profile==='SESSION_WORKSPACE_V2' && proof.readOnly==='on' &&
+    proof.gooseVersion===20261026001500 && proof.workspaceCatalog===true &&
+    proof.workspacePurgeGuard===true && proof.purgeNodes===106 && proof.purgeEdges===294 &&
+    typeof proof.purgeNodeFingerprint==='string' && /^[a-f0-9]{32}$/.test(proof.purgeNodeFingerprint) &&
+    typeof proof.purgeEdgeFingerprint==='string' && /^[a-f0-9]{32}$/.test(proof.purgeEdgeFingerprint) &&
+    validWorkflowReviewQAEvidenceMigrationPostcondition(proof.predecessorProjection);
+}
+
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {

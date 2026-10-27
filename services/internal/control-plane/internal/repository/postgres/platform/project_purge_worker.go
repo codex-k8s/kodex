@@ -86,9 +86,9 @@ var queryProjectPurgeLockReceipt string
 //go:embed sql/project_purge__lock_project.sql
 var queryProjectPurgeLockProject string
 
-// queryProjectPurgeActiveTasks counts READY or CLAIMED archive tasks in the candidate
+// queryProjectPurgeActiveTasks counts READY or CLAIMED archive tasks and workspace custody blockers in the candidate
 // tenant/project as blockers to inventory or finalization.
-// queryProjectPurgeActiveTasks считает READY либо CLAIMED archive tasks области tenant/project
+// queryProjectPurgeActiveTasks считает READY либо CLAIMED archive tasks и незавершённую очистку workspace области tenant/project
 // кандидата как блокеры inventory либо финализации.
 //
 //go:embed sql/project_purge__active_tasks.sql

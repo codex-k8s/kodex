@@ -1,4 +1,13 @@
 -- +goose Up
+-- Workspace следует за полной014: опубликованные predecessor-проверки workflow не меняются.
+-- +goose StatementBegin
+DO $predecessor$
+BEGIN
+ IF (SELECT max(version_id) FROM public.goose_db_version WHERE is_applied) IS DISTINCT FROM 20261026001400::bigint THEN
+   RAISE EXCEPTION 'session workspace requires exact profile014';
+ END IF;
+END $predecessor$;
+-- +goose StatementEnd
 SET ROLE control_plane_owner;
 SET LOCAL lock_timeout = '8s';
 SET LOCAL statement_timeout = '30s';
@@ -198,6 +207,68 @@ CREATE TRIGGER session_workspace_storage_guard BEFORE INSERT OR UPDATE OR DELETE
     FOR EACH ROW EXECUTE FUNCTION control_plane.guard_session_workspace_storage();
 REVOKE ALL ON TABLE control_plane.session_workspace_storage FROM PUBLIC;
 GRANT SELECT,INSERT,UPDATE,DELETE ON TABLE control_plane.session_workspace_storage TO control_plane_runtime;
+
+-- Generic purge уже обходит точные FK и проверяет tenant/project каждой строки.
+-- Новый guard разрешает DELETE только PURGED; живой/неизвестный writer сохраняется.
+-- Inverse proof допускает ровно одну новую relation и её проверенные FK.
+-- +goose StatementBegin
+DO $purge$
+DECLARE
+ v_definition text; v_source text; v_old_edges text; v_old_nodes text;
+ v_nodes oid[]; v_count integer; v_digest text; v_new_nodes text; v_new_edges text;
+BEGIN
+ SELECT pg_get_functiondef(p.oid),p.prosrc INTO STRICT v_definition,v_source FROM pg_proc p
+ WHERE p.oid='control_plane.purge_project_database(uuid,uuid,text)'::regprocedure
+   AND p.proowner='control_plane_owner'::regrole AND p.prosecdef AND p.provolatile='v'
+   AND p.prorettype='integer'::regtype AND NOT p.proretset
+   AND p.prolang=(SELECT oid FROM pg_language WHERE lanname='plpgsql')
+   AND p.proconfig=ARRAY['search_path=pg_catalog']
+   AND has_function_privilege('control_plane_runtime',p.oid,'EXECUTE')
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+     WHERE a.grantee=0 AND a.privilege_type='EXECUTE');
+ v_old_edges:=substring(v_source FROM 'IF v_edges <> 287 OR v_edge_fingerprint <> ''[a-f0-9]{32}'' THEN');
+ v_old_nodes:='IF v_nodes <> 105 OR v_node_fingerprint <> ''f51a0de25bd942a250997775617eeaee'' THEN';
+ IF v_old_edges IS NULL OR regexp_count(v_source,'IF v_edges <>')<>1 OR regexp_count(v_source,'IF v_nodes <>')<>1
+   OR md5(replace(v_source,v_old_edges,'IF v_edges <> 284 OR v_edge_fingerprint <> ''6bf6ad76d8c7ae66e07f75ecf719fdd6'' THEN'))
+     <>'b886c24d4e2f5c4a0ec08123d99462b0' THEN
+   RAISE EXCEPTION 'session workspace purge preimage changed';
+ END IF;
+ WITH RECURSIVE nodes(id) AS (
+   SELECT 'control_plane.projects'::regclass::oid UNION
+   SELECT c.conrelid FROM nodes JOIN pg_constraint c ON c.confrelid=nodes.id
+   WHERE c.contype='f' AND c.connamespace='control_plane'::regnamespace
+ ) SELECT array_agg(id) INTO v_nodes FROM nodes;
+ SELECT count(*),md5(string_agg(n.nspname||'.'||r.relname,E'\n' ORDER BY n.nspname,r.relname))
+ INTO v_count,v_digest FROM pg_class r JOIN pg_namespace n ON n.oid=r.relnamespace
+ WHERE r.oid=ANY(v_nodes) AND r.oid<>'control_plane.session_workspace_storage'::regclass;
+ IF v_count<>105 OR v_digest<>'f51a0de25bd942a250997775617eeaee' THEN
+   RAISE EXCEPTION 'session workspace predecessor graph nodes changed';
+ END IF;
+ SELECT count(*),md5(string_agg(cn.nspname||'.'||cc.relname||'|'||c.conname||'|'||pn.nspname||'.'||pc.relname||'|'||c.confdeltype::text,
+   E'\n' ORDER BY cn.nspname,cc.relname,c.conname)) INTO v_count,v_digest
+ FROM pg_constraint c JOIN pg_class cc ON cc.oid=c.conrelid JOIN pg_namespace cn ON cn.oid=cc.relnamespace
+ JOIN pg_class pc ON pc.oid=c.confrelid JOIN pg_namespace pn ON pn.oid=pc.relnamespace
+ WHERE c.contype='f' AND c.conrelid=ANY(v_nodes) AND c.confrelid=ANY(v_nodes)
+   AND c.conrelid<>'control_plane.session_workspace_storage'::regclass
+   AND c.confrelid<>'control_plane.session_workspace_storage'::regclass;
+ IF v_count<>287 OR v_old_edges IS DISTINCT FROM format('IF v_edges <> %s OR v_edge_fingerprint <> %L THEN',v_count,v_digest) THEN
+   RAISE EXCEPTION 'session workspace predecessor graph edges changed';
+ END IF;
+ SELECT count(*),md5(string_agg(n.nspname||'.'||r.relname,E'\n' ORDER BY n.nspname,r.relname))
+ INTO v_count,v_digest FROM pg_class r JOIN pg_namespace n ON n.oid=r.relnamespace WHERE r.oid=ANY(v_nodes);
+ IF v_count<>106 THEN RAISE EXCEPTION 'session workspace graph node count changed'; END IF;
+ v_new_nodes:=format('IF v_nodes <> %s OR v_node_fingerprint <> %L THEN',v_count,v_digest);
+ SELECT count(*),md5(string_agg(cn.nspname||'.'||cc.relname||'|'||c.conname||'|'||pn.nspname||'.'||pc.relname||'|'||c.confdeltype::text,
+   E'\n' ORDER BY cn.nspname,cc.relname,c.conname)) INTO v_count,v_digest
+ FROM pg_constraint c JOIN pg_class cc ON cc.oid=c.conrelid JOIN pg_namespace cn ON cn.oid=cc.relnamespace
+ JOIN pg_class pc ON pc.oid=c.confrelid JOIN pg_namespace pn ON pn.oid=pc.relnamespace
+ WHERE c.contype='f' AND c.conrelid=ANY(v_nodes) AND c.confrelid=ANY(v_nodes);
+ -- Восьмой FK ведёт к organizations, которая не является потомком projects.
+ IF v_count<>294 THEN RAISE EXCEPTION 'session workspace graph edge count changed'; END IF;
+ v_new_edges:=format('IF v_edges <> %s OR v_edge_fingerprint <> %L THEN',v_count,v_digest);
+ EXECUTE replace(replace(v_definition,v_old_nodes,v_new_nodes),v_old_edges,v_new_edges);
+END $purge$;
+-- +goose StatementEnd
 
 RESET ROLE;
 

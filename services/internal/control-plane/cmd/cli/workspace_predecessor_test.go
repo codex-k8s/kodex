@@ -5,6 +5,7 @@ import (
 	"embed"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -21,10 +22,10 @@ import (
 //go:embed testdata/sql/workspace_predecessor_*.sql
 var workspacePredecessorFixtures embed.FS
 
-// TestSessionWorkspaceMigrationPredecessor proves both historical011 and exact01150 admission,
-// rejects schema/ACL/trigger drift, and applies the real012 migration using its migrator identity.
-// TestSessionWorkspaceMigrationPredecessor доказывает допуск прежнего011 и точного01150,
-// отклоняет изменения схемы/прав/триггеров и применяет настоящую012 от имени migrator.
+// TestSessionWorkspaceMigrationPredecessor applies the full014 predecessor and real015 using the migrator,
+// then rejects catalog drift and proves repeated migration is a no-op.
+// TestSessionWorkspaceMigrationPredecessor применяет полный014 и настоящую015 от имени migrator,
+// затем отклоняет изменения каталога и доказывает отсутствие эффектов повторного обновления.
 func TestSessionWorkspaceMigrationPredecessor(t *testing.T) {
 	// Both upgrade modes share the existing isolated harness, not live credentials.
 	// Оба режима обновления используют существующую изолированную оснастку, не живые реквизиты.
@@ -52,32 +53,17 @@ func TestSessionWorkspaceMigrationPredecessor(t *testing.T) {
 	if err := goose.SetDialect("postgres"); err != nil {
 		t.Fatal("workspace upgrade dialect configuration failed")
 	}
-	source, err := migrations.ReadFile("migrations/20261026001200_workflow_exception_context.sql")
+	guardBytes, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "..", "tools", "release", "session-workspace-catalog-guard.sql"))
 	if err != nil {
-		t.Fatal("read shipped migration predecessor")
+		t.Fatal("read shipped workspace catalog proof", err)
 	}
-	start := strings.Index(string(source), "DO $migration$")
-	end := strings.Index(string(source), "END $migration$;")
-	if start < 0 || end <= start {
-		t.Fatal("shipped predecessor block is missing")
+	guard := string(guardBytes)
+	if err := goose.UpToContext(ctx, database, "migrations", 20261026001400); err != nil {
+		t.Fatal("full workflow predecessor migration failed", err)
 	}
-	guard := string(source[start : end+len("END $migration$;")])
-	if err := goose.UpToContext(ctx, database, "migrations", 20261026001100); err != nil {
-		t.Fatal("legacy predecessor migration failed", err)
-	}
-	if !t.Run("legacy011", func(t *testing.T) {
-		if _, err := database.ExecContext(ctx, guard); err != nil {
-			t.Fatal("legacy predecessor rejected", err)
-		}
-	}) {
-		return
-	}
-	if err := goose.UpToContext(ctx, database, "migrations", 20261026001150); err != nil {
-		t.Fatal("workspace predecessor migration failed", err)
-	}
-	if !t.Run("workspace01150", func(t *testing.T) {
-		if _, err := database.ExecContext(ctx, guard); err != nil {
-			t.Fatal("exact workspace predecessor rejected", err)
+	if !t.Run("forward015", func(t *testing.T) {
+		if err := goose.UpToContext(ctx, database, "migrations", 20261026001500); err != nil {
+			t.Fatal("workspace migration failed", err)
 		}
 	}) {
 		return
@@ -93,8 +79,15 @@ func TestSessionWorkspaceMigrationPredecessor(t *testing.T) {
 		defer stop()
 		_ = observer.Close(cleanup)
 	}()
+	if !t.Run("catalog015", func(t *testing.T) {
+		if _, err := observer.Exec(ctx, guard); err != nil {
+			t.Fatal("exact workspace catalog rejected", err)
+		}
+	}) {
+		return
+	}
 	entries, err := workspacePredecessorFixtures.ReadDir("testdata/sql")
-	if err != nil || len(entries) != 12 {
+	if err != nil || len(entries) != 11 {
 		t.Fatal("workspace drift fixture set changed")
 	}
 	for _, entry := range entries {
@@ -121,18 +114,18 @@ func TestSessionWorkspaceMigrationPredecessor(t *testing.T) {
 			_, err = tx.Exec(ctx, guard)
 			var failure *pgconn.PgError
 			if !errors.As(err, &failure) || failure.Code != "P0001" ||
-				!strings.HasPrefix(failure.Message, "workflow exception context ") {
+				!strings.HasPrefix(failure.Message, "session workspace ") {
 				t.Fatal("changed workspace schema was not rejected by its predecessor guard")
 			}
 		})
 	}
-	t.Run("forward012", func(t *testing.T) {
+	t.Run("repeat015", func(t *testing.T) {
 		for attempt := 0; attempt < 2; attempt++ {
-			if err := goose.UpToContext(ctx, database, "migrations", 20261026001200); err != nil {
+			if err := goose.UpToContext(ctx, database, "migrations", 20261026001500); err != nil {
 				t.Fatal("composed forward migration failed", err)
 			}
 			version, err := goose.GetDBVersionContext(ctx, database)
-			if err != nil || version != 20261026001200 {
+			if err != nil || version != 20261026001500 {
 				t.Fatal("composed migration version readback failed")
 			}
 		}

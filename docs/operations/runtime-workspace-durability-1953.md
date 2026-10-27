@@ -132,13 +132,13 @@ Restore не возвращает старые leases, credentials или Runtim
 Старый work на уже удалённом emptyDir без receipt остаётся отсутствующим либо
 неизвестным, а rollout не переименовывается в восстановленный исходник.
 
-Forward migration `20261026001150` располагается после01100 и до01200;
+Forward migration `20261026001500` располагается после полного workflow014;
 применённые миграции не меняются. Catalog/purge proof и rollout относятся к
 точному отдельному checkpoint, без allow-missing и без обхода остановленных
 native-путей других задач. Проверки operator, native, backup/restore и реальная
 приёмка сотрудником обязательны до заявления готовности.
 
-Поставка приложения требует предварительно подтверждённой schema01150 даже
+Поставка приложения требует предварительно подтверждённой schema015 даже
 при выключенном opt-in: claim query читает owner storage eligibility до LIMIT.
 Default legacy означает отсутствие новых bindings, а не разрешение запуска
 нового CP на старой схеме. Первый V2 init использует отдельный protected mode
@@ -267,30 +267,37 @@ Docker и уже загруженного pinned image; загрузки обр�
 проверяет фактический режим, не расширяя capabilities:
 [Linux chmod(2)](https://man7.org/linux/man-pages/man2/chmod.2.html).
 
-## Совместимость следующей миграции
+## Совместимость миграций и удаления
 
-При native проверке композиции01150 применялась, затем01200 отклоняла новую
-последнюю Goose version. Переход012 теперь различает два закрытых predecessor:
-01100 без workspace metadata и01150 с точным каталогом PostgreSQL18.
-Unknown version, лишний/удалённый столбец, изменённый CHECK/FK/index/guard,
-отключённый внутренний FK trigger или расширенные права закрыто отклоняются.
-Проверяются и обязательные права runtime по отдельности: список privileges
-в `has_table_privilege` означает наличие любого из них, а не всех.
+Workspace вводится отдельной015 после полного014. Первоначальная неприменённая
+01150 была перенумерована: вставка между011 и012 нарушала последовательные
+predecessor и purge graph proof следующих workflow-миграций. Исходная012
+восстановлена дословно;013/014 и их самостоятельные proofs не меняются.
+Отдельный успешный переход01150→012 не доказывал совместимость всей цепочки.
 
 | Сценарий | Actor и источник полномочий | Состояние и результат |
 | --- | --- | --- |
-| Прежний01100 | Штатный migrator и exact Goose ledger |012 допускается лишь при отсутствии workspace table/function |
-| Композиция01150 | Тот же migrator; source-pinned migration и read-only системный каталог | Перед DDL сверяются columns/defaults,37 constraints,4 indexes, guard/source/ACL и все32 FK triggers |
-| Schema drift/unknown predecessor | Payload не выбирает разрешённую версию | Транзакция миграции отклоняется; новая версия не фиксируется |
-| Повтор после успешного012 | Goose ledger | No-op без повторного DDL |
+| Применение015 | Штатный migrator и exact Goose014 | Создание workspace; inverse source proof прежнего purge и точное добавление одной таблицы/семи graph FK |
+| Полная проверка015 | Read-only snapshot и системный каталог |19 columns,37 constraints,4 indexes, guard/source/ACL,32 FK triggers; actual graph106/294 и отдельная inverse014 projection |
+| Schema drift | Payload не выбирает допустимые metadata | Лишний столбец, изменённый CHECK/guard/ACL, выключенный FK trigger закрыто отклоняются |
+| Повтор015 | Goose ledger | No-op; metadata и версия читаются повторно |
+| Project purge | Existing owner inventory и terminal transaction | Наличие workspace не в PURGED блокирует выдачу external inventory и подтверждение удаления; row DELETE дополнительно требует owner purge context и PURGED |
 
-Публичная локальная проверка: `make test-runtime-workspace-predecessor-postgres`.
-Она использует отдельную loopback PostgreSQL и прежний закрытый upgrade fixture,
-проверяет оба predecessor,12 изменений схемы с rollback, реальный forward012
-от имени migrator и повтор. Никакие business rows или live credentials не нужны.
-Проверка не заменяет оставшийся полный workspace/purge/operator proof014,
-retention/restore и реальный запуск сотрудника. Domain event не создаётся:
-авторитетный read path — Goose ledger и системный каталог отдельной БД.
+make test-runtime-workspace-predecessor-postgres использует отдельную
+loopback PostgreSQL: полную014, forward015,11 изменений каталога с rollback
+и повтор. Четыре runtime table privileges проверяются отдельно:
+has_table_privilege со списком проверяет наличие любого, а не всех.
+generate-session-workspace-proof.py --check проверяет воспроизводимость
+полного proof. Frozen014 source hash обязателен; predecessorProjection
+явно обозначает обратную проекцию, actual версия/граф возвращаются отдельно.
+Нет изменения applied migrations, допуска неизвестной схемы или подмены
+actual015 старой версией в отчёте.
 
-Context7: PostgreSQL18 `pg_constraint`, `pg_trigger` и `ALTER TABLE`;
-`convalidated`/`conenforced` не заменяют проверку включённых FK triggers.
+До реализации полного workspace purge consumer новый профиль остаётся
+выключен: блокировка сохраняет custody, но сама по себе не завершает очистку.
+Operator rollout, retention/restore, backup и реальный запуск сотрудника
+ещё требуют завершения всего unit. Domain event от миграции не создаётся:
+авторитетный read path — Goose ledger и системный каталог.
+
+Context7: PostgreSQL18 pg_constraint, pg_trigger и ALTER TABLE;
+convalidated/conenforced не заменяют проверку включённых FK triggers.

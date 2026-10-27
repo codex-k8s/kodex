@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { planControlPlaneMigration, migrationReadback } from './control-plane-migration.mjs';
 import { fingerprint } from './scoped-release.mjs';
 import { validateStableReceipt } from './stable-image-publication.mjs';
-import { waitMigrationMaintenance, immutableMigrationProfile, isImmutableMigrationProfile, validImmutableMigrationPostcondition, validProjectPurgeAuthorityMigrationPostcondition, validOwnerGateExpiryMigrationPostcondition, validRepositoryBundleMigrationPostcondition, validServerWorkflowMigrationPostcondition, validLegacyWorkflowReworkMigrationPostcondition, validWorkflowExceptionContextMigrationPrecondition, validWorkflowExceptionContextMigrationPostcondition, validWorkflowUpstreamReworkMigrationPrecondition, validWorkflowUpstreamReworkMigrationPostcondition, validWorkflowReviewQAEvidenceMigrationPostcondition } from './control-plane-immutable-migration.mjs';
+import { waitMigrationMaintenance, immutableMigrationProfile, isImmutableMigrationProfile, validImmutableMigrationPostcondition, validProjectPurgeAuthorityMigrationPostcondition, validOwnerGateExpiryMigrationPostcondition, validRepositoryBundleMigrationPostcondition, validServerWorkflowMigrationPostcondition, validLegacyWorkflowReworkMigrationPostcondition, validWorkflowExceptionContextMigrationPrecondition, validWorkflowExceptionContextMigrationPostcondition, validWorkflowUpstreamReworkMigrationPrecondition, validWorkflowUpstreamReworkMigrationPostcondition, validWorkflowReviewQAEvidenceMigrationPostcondition, validSessionWorkspaceMigrationPostcondition } from './control-plane-immutable-migration.mjs';
 
 const revision = 'a'.repeat(40), digest = `sha256:${'b'.repeat(64)}`;
 const source = {path:'/fixture/source',revision};
@@ -798,4 +798,26 @@ test('review QA014 refuses missing012013, changed013 and partial014 without muta
   const f=cli(t,'workflow-review-qa-evidence',sourceCase);assert.notEqual(f.run('plan').status,0);
   assert.equal(f.read().calls.filter(a=>a.includes('create')||a.includes('patch')).length,0);
  }
+});
+
+
+// Actual015 и обратная014 проекция проверяются вместе; одна зелёная половина не даёт допуска.
+test('workspace015 requires exact catalog, full graph and complete predecessor',()=>{
+ const proof={profile:'SESSION_WORKSPACE_V2',readOnly:'on',gooseVersion:20261026001500,
+  workspaceCatalog:true,workspacePurgeGuard:true,purgeNodes:106,purgeEdges:294,
+  purgeNodeFingerprint:'a'.repeat(32),purgeEdgeFingerprint:'b'.repeat(32),
+  predecessorProjection:reviewQAEvidenceProof()};
+ assert.equal(validSessionWorkspaceMigrationPostcondition(proof),true);
+ for(const key of Object.keys(proof)){
+  const changed={...proof};delete changed[key];
+  assert.equal(validSessionWorkspaceMigrationPostcondition(changed),false,key);
+ }
+ for(const patch of [{gooseVersion:20261026001400},{readOnly:'off'},{purgeNodes:105},
+   {purgeEdges:287},{workspaceCatalog:false},{workspacePurgeGuard:false},
+   {purgeNodeFingerprint:'unknown'},{purgeEdgeFingerprint:'unknown'},
+   {predecessorProjection:{...proof.predecessorProjection,reviewQAEvidenceFunctionACL:false}},
+   {predecessorProjection:{...proof.predecessorProjection,legacyPurgeSource:false}}]){
+  assert.equal(validSessionWorkspaceMigrationPostcondition({...proof,...patch}),false);
+ }
+ assert.equal(validWorkflowReviewQAEvidenceMigrationPostcondition(proof),false);
 });
