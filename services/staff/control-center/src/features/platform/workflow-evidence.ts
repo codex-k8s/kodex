@@ -155,14 +155,15 @@ export function validWorkflowAttemptEvidence(node: RunNode): boolean {
       return false;
     if (
       attempt.effectiveState !== undefined &&
-      ![
-        "CURRENT",
-        "HISTORICAL",
-        "STALE_DEPENDENCY",
-        "REWORK_PENDING",
-        "WAITING_OWNER",
-        "BLOCKED",
-      ].includes(String(attempt.effectiveState))
+      (typeof attempt.effectiveState !== "string" ||
+        ![
+          "CURRENT",
+          "HISTORICAL",
+          "STALE_DEPENDENCY",
+          "REWORK_PENDING",
+          "WAITING_OWNER",
+          "BLOCKED",
+        ].includes(attempt.effectiveState))
     )
       return false;
     if (attempt.evidence === undefined) return true;

@@ -40,6 +40,7 @@ it("сохраняет owner ARTIFACT_REVIEW facts и effectiveState без priv
     "accepted",
     "private",
     "state",
+    "state-object",
     "missing-artifact",
     "missing-comment",
   ] as const) {
@@ -50,6 +51,8 @@ it("сохраняет owner ARTIFACT_REVIEW facts и effectiveState без priv
     if (fault === "private") Object.assign(attempt, { reworkSubjects: [] });
     if (fault === "state")
       Object.assign(attempt, { effectiveState: "UNKNOWN" });
+    if (fault === "state-object")
+      Object.assign(attempt, { effectiveState: {} });
     if (fault === "missing-artifact" && attempt.evidence?.[0])
       delete attempt.evidence[0].artifactRevision;
     if (fault === "missing-comment" && attempt.evidence?.[1])

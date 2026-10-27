@@ -4,7 +4,7 @@ title: Native COMMENT и сохранённый QA-отчёт серверног
 type: runbook
 status: approved
 owner: architect
-version: 1.2.0
+version: 1.3.1
 updated: 2026-10-27
 ---
 
@@ -96,8 +96,12 @@ origin checks и append-only prefix. Новых FK/таблиц нет; purge gr
 Она не переписывает старые records и не исправляет недоставленные predecessor
 профили. Source-derived fingerprints не являются native proof: перед release
 нужны отдельные canonical/drift проверки на disposable PostgreSQL и exact
-release pre/post/readback. Непроверенные012/013 и STOP1943 нельзя обходить новым
-именем target. До их согласованной композиции поставка014 блокирована.
+release pre/post/readback. Текущая исходная композиция включает root013
+`b1748bfda3d0e9f50287bb84183d919d0aca4439`: его отдельная historical native
+матрица завершилась50PASS/0FAIL/0SKIP. Старые1943 FAIL/STOP сохранены как история;
+отдельные последующие root context probes не превращают новый014 в проверенный.
+Полный014 native и будущая01150 остаются NOT RUN. Поставка014 блокирована до
+проверки актуальной полной цепочки; новый target не заменяет predecessor proof.
 
 До включения profile нужны новые CP и RC (wire3 codec), API и PWA (profile,
 evidenceKey, negative evidence). IG operation wire/adapters не изменяются:
@@ -150,13 +154,19 @@ verifier намеренно отвергает014. Ни source-derived hashes, �
   corpus. Go decoder использует тот же corpus в domain unit suite; contextual
   kind/authority проверяет owner decoder, schema доказывает только форму.
 - `make test-workflow-review-qa-evidence-postgres`:300s, отдельные disposable clones,
-  16 owner lifecycle graphs и девять canonical/drift schema cases. Без готовой
+  20 owner lifecycle graphs и14 canonical/drift schema cases: вместе с двумя
+  parent suites ожидается36PASS/0FAIL/0SKIP. Без готовой
   согласованной012/013 composition этот target должен закрыто завершиться до suites.
 
 Нативные сценарии включают COMMENT effect-first/model-first, UNKNOWN без повторного
 POST, отмену claimed WRITE, отзыв current grant, QA PASS, QA CHANGES_REQUIRED без
 Issue и оба порядка Issue. Повтор completion сравнивает exact owner graph, прежний
 COMMENT input не создаёт второй invocation, другие PR/head/body отвергаются.
+Четыре смешанных сценария проверяют negative ARTIFACT_REVIEW вместе с native
+COMMENT, отсутствие обязательного receipt, смену revision и digest. Отдельные
+predecessor-negative clones проверяют неизменённый context helper/его ACL, возврат
+reader к012, SUPERSEDED CHECK grouping и лишний overload. Retention cases включают
+обе стороны HEAD lock/NOWAIT race; они не заменяются statically inferred PASS.
 Schema fault injection меняет только отдельные disposable clones: partial trigger,
 PUBLIC EXECUTE, body, SECURITY DEFINER, purge body и отсутствие helper. Fixtures
 передают provider-shaped native receipts и не заявляют настоящие GitHub writes.
@@ -237,3 +247,15 @@ revision/digest ни negative evidence, ни reworkSubjects не принима�
 новой композиции, включая новые negative schema cases, до фактического исполнения
 имеют статус NOT RUN. Будущая01150 потребует новой явной композиции metadata;
 проверенные013 fingerprints не объявляют её применённой.
+
+
+Составные JSON expressions с удалением ключей группируются явно:
+`(record->'member') - ARRAY[...]`. Binary `-` имеет более высокий приоритет,
+чем JSON `->`; без скобок PostgreSQL пытается преобразовать имя member в JSON.
+Это проверяется реальным Goose013→014 upgrade, а не mock boolean. После такого
+исправления меняется exact function source pin и заново формируется полный014
+postcondition; прежняя неуспешная миграция не объявляется PASS. Правило одинаково
+для intent/report/log guards и других JSON arithmetic expressions.
+Официальные источники PostgreSQL18 проверены root через Context7:
+[operator precedence §4.1.6](https://www.postgresql.org/docs/18/sql-syntax-lexical.html#SQL-PRECEDENCE),
+[JSON operators](https://www.postgresql.org/docs/18/functions-json.html).

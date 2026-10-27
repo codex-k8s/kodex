@@ -229,18 +229,20 @@ async function changeMode(event: Event): Promise<void> {
   if (mode !== "SERVER_DAG_V1") form.resultEvidenceProfile = undefined;
   if (mode !== "SERVER_DAG_V1") form.reworkPolicy = "";
 }
+// Повторный вызов после await читает актуальные режим и разрешение редактирования.
+function reworkModeEditable(): boolean {
+  return modeEditable() && serverMode.value;
+}
 async function changeReworkPolicy(
   value: "" | "OWNER_APPROVED_UPSTREAM_V1",
 ): Promise<void> {
-  if (!modeEditable() || !serverMode.value || value === form.reworkPolicy)
-    return;
+  if (!reworkModeEditable() || value === form.reworkPolicy) return;
   const before = JSON.stringify(form),
     generation = loadGeneration;
   const context = `${projectRef.value}/${workflowRef.value}`;
   if (
     !(await requestConfirmation(t("workflowResults.reworkChange"))) ||
-    !modeEditable() ||
-    !serverMode.value ||
+    !reworkModeEditable() ||
     loadGeneration !== generation ||
     context !== `${projectRef.value}/${workflowRef.value}` ||
     JSON.stringify(form) !== before

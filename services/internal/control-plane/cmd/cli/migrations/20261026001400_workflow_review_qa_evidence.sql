@@ -74,7 +74,7 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog,
         AND jsonb_typeof(execution.bounded_input->'body')='string' AND length(btrim(execution.bounded_input->>'body'))>0
         AND jsonb_typeof(p_record->'qaReport')='object'
         AND (SELECT count(*) FROM jsonb_object_keys(p_record->'qaReport'))=4
-        AND p_record->'qaReport'-ARRAY['ref','revisionRef','revision','digest']='{}'::jsonb
+        AND (p_record->'qaReport')-ARRAY['ref','revisionRef','revision','digest']='{}'::jsonb
         AND jsonb_typeof(p_record->'qaLogs')='array' AND jsonb_array_length(p_record->'qaLogs') BETWEEN 1 AND 8
         AND (SELECT count(DISTINCT pin->>'ref') FROM jsonb_array_elements(p_record->'qaLogs') pin)=jsonb_array_length(p_record->'qaLogs')
         AND NOT EXISTS (

@@ -291,22 +291,21 @@ async function changeMode(event: Event): Promise<void> {
   if (mode !== "SERVER_DAG_V1" && parameter("reworkPolicy") !== undefined)
     change("reworkPolicy", "");
 }
+// Повторный вызов после await читает актуальные режим и разрешение редактирования.
+function reworkModeEditable(): boolean {
+  return modeEditable() && serverMode.value;
+}
 async function changeReworkPolicy(
   value: "" | "OWNER_APPROVED_UPSTREAM_V1",
 ): Promise<void> {
-  if (
-    !modeEditable() ||
-    !serverMode.value ||
-    value === text(parameter("reworkPolicy"))
-  )
+  if (!reworkModeEditable() || value === text(parameter("reworkPolicy")))
     return;
   const identity = props.operation,
     project = props.projectRef,
     before = JSON.stringify(props.operation);
   if (
     !(await requestConfirmation(t("workflowResults.reworkChange"))) ||
-    !modeEditable() ||
-    !serverMode.value ||
+    !reworkModeEditable() ||
     props.projectRef !== project ||
     props.operation !== identity ||
     JSON.stringify(props.operation) !== before
