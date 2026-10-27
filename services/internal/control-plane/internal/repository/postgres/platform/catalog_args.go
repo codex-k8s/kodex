@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"strings"
 	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
@@ -23,5 +24,19 @@ func contextCatalogPageArgs(current scope, filter query.Filter, cursor string, l
 		"authority_project": current.authorityProjectID, "project_ref": filter.ProjectRef,
 		"agent_ref": filter.ResourceRef, "state": filter.State, "query": filter.Query,
 		"cursor_ref": cursor, "page_size": limit + 1, "evaluated_at": time.Now().UTC(),
+	}
+}
+
+// scopedCatalogPageArgs prepares a fresh strict argument map for scoped membership and
+// environment pages. It preserves the resolved actor and organization, trims only the query,
+// and passes the supplied cursor and limit unchanged; SQL and authorization remain with callers.
+// scopedCatalogPageArgs готовит новый strict map аргументов для scoped страниц membership и
+// environment. Сохраняет разрешённые actor и organization, обрезает только query и передаёт
+// cursor и limit без изменений; SQL и authorization остаются у вызывающих.
+func scopedCatalogPageArgs(current scope, filter query.Filter, cursor string, limit int32) pgx.StrictNamedArgs {
+	return pgx.StrictNamedArgs{
+		"actor_id": current.actorID, "authority_project": current.authorityProjectID,
+		"organization_id": current.organizationID, "project_ref": filter.ProjectRef,
+		"query": strings.TrimSpace(filter.Query), "cursor_ref": cursor, "page_size": limit,
 	}
 }

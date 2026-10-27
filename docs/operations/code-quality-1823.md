@@ -4,11 +4,26 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.577.0
+version: 1.578.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общее чтение страниц membership и runtime environment — 27.10.2026
+
+Каталоги используют общий сбор строк и общий strict map семи SQL-параметров.
+Сохранены точные actor/organization/project, обрезка query, cursor, limit, порядок
+строк, nil пустого результата, отказ при ошибке Scan и прежняя ошибка итерации;
+SQL, authorization и закрытие rows остались у вызывающих. Unit проверяет ключи,
+значения и независимость map; существующий unit проверяет ошибки и порядок чтения.
+
+Control-plane build/vet PASS, 3073 unit PASS / 70 условных SKIP. Выбранные
+component-сценарии на disposable PostgreSQL — 6 PASS events до и после, FAIL/SKIP 0,
+с подготовкой catalog owner и promotion image. Первый запуск без этих фикстур до
+изменения дал FAIL с conflict и отсутствующей image; повтор с фикстурами прошёл.
+Анализ: 1347 raw / 1282 retained / 65 unresolved, Go-комментарии 21718/21718.
+Браузер, E2E, live/deploy/startup и QA не выполнялись.
 
 ## Общий исполнитель тестовых команд assistant — 27.10.2026
 

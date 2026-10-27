@@ -662,24 +662,16 @@ func (repository *Repository) ListMemberships(ctx context.Context, principal val
 	}
 	return authorizedCatalog(ctx, repository, scope, "MEMBERSHIP", filter,
 		func(ctx context.Context, tx pgx.Tx, cursor string, limit int32) ([]entity.Membership, error) {
-			rows, err := tx.Query(ctx, queryProjectMembershipList, pgx.StrictNamedArgs{
-				"actor_id": scope.actorID, "authority_project": scope.authorityProjectID,
-				"organization_id": scope.organizationID, "project_ref": filter.ProjectRef,
-				"query": strings.TrimSpace(filter.Query), "cursor_ref": cursor, "page_size": limit,
-			})
+			rows, err := tx.Query(ctx, queryProjectMembershipList, scopedCatalogPageArgs(scope, filter, cursor, limit))
 			if err != nil {
 				return nil, errs.ErrUnavailable
 			}
 			defer rows.Close()
-			var items []entity.Membership
-			for rows.Next() {
+			return readCatalogRows(rows, func(row rowScanner) (entity.Membership, error) {
 				var item entity.Membership
-				if err := rows.Scan(&item.Ref, &item.ProjectRef, &item.User.Ref, &item.User.DisplayName, &item.User.EmailMasked, &item.User.Active, &item.Role, &item.Permissions, &item.Active, &item.Version); err != nil {
-					return nil, errs.ErrUnavailable
-				}
-				items = append(items, item)
-			}
-			return items, rows.Err()
+				err := row.Scan(&item.Ref, &item.ProjectRef, &item.User.Ref, &item.User.DisplayName, &item.User.EmailMasked, &item.User.Active, &item.Role, &item.Permissions, &item.Active, &item.Version)
+				return item, err
+			})
 		}, func(item entity.Membership) entity.AccessScope {
 			return entity.AccessScope{ResourceKind: "MEMBERSHIP", ResourceRef: item.Ref, ProjectRef: item.ProjectRef}
 		}, func(_ pgx.Tx, item *entity.Membership, _ func(string) bool) error {

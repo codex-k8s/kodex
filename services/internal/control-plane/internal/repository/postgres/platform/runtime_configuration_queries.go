@@ -90,24 +90,12 @@ func (repository *Repository) ListRuntimeEnvironments(ctx context.Context, princ
 	}
 	return authorizedCatalog(ctx, repository, scope, "RUNTIME_ENVIRONMENT", filter,
 		func(ctx context.Context, tx pgx.Tx, cursor string, limit int32) ([]entity.RuntimeEnvironmentSet, error) {
-			rows, err := tx.Query(ctx, queryRuntimeConfigurationListEnvironments, pgx.StrictNamedArgs{
-				"actor_id": scope.actorID, "authority_project": scope.authorityProjectID,
-				"organization_id": scope.organizationID, "project_ref": filter.ProjectRef, "query": strings.TrimSpace(filter.Query),
-				"cursor_ref": cursor, "page_size": limit,
-			})
+			rows, err := tx.Query(ctx, queryRuntimeConfigurationListEnvironments, scopedCatalogPageArgs(scope, filter, cursor, limit))
 			if err != nil {
 				return nil, errs.ErrUnavailable
 			}
 			defer rows.Close()
-			var items []entity.RuntimeEnvironmentSet
-			for rows.Next() {
-				item, err := repository.scanRuntimeEnvironment(rows)
-				if err != nil {
-					return nil, errs.ErrUnavailable
-				}
-				items = append(items, item)
-			}
-			return items, rows.Err()
+			return readCatalogRows(rows, repository.scanRuntimeEnvironment)
 		}, func(item entity.RuntimeEnvironmentSet) entity.AccessScope {
 			return entity.AccessScope{ResourceKind: "RUNTIME_ENVIRONMENT", ResourceRef: item.Ref, ProjectRef: item.ProjectRef}
 		}, func(_ pgx.Tx, item *entity.RuntimeEnvironmentSet, allowed func(string) bool) error {
