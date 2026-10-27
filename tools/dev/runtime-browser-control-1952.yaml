@@ -1,0 +1,97 @@
+# Одноразовый операторский контроль #1952, отдельно от модели и её credentials.
+# Перед create обязательны exact cluster/namespace/node UID и capacity readback.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: qa-browser-control-1952
+  namespace: kodex-runtime
+  labels:
+    qa.kodex.dev/issue: "1952"
+spec:
+  podSelector:
+    matchLabels:
+      qa.kodex.dev/browser-control: "1952"
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress: []
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: qa-browser-control-1952
+  namespace: kodex-runtime
+  labels:
+    qa.kodex.dev/issue: "1952"
+    qa.kodex.dev/browser-control: "1952"
+spec:
+  nodeName: k3d-kodex-server-0
+  restartPolicy: Never
+  activeDeadlineSeconds: 45
+  terminationGracePeriodSeconds: 5
+  automountServiceAccountToken: false
+  enableServiceLinks: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10002
+    runAsGroup: 10002
+    fsGroup: 29000
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: browser-control
+      image: pull.kodex.127.0.0.2.nip.io/kodex/roles@sha256:12ef8b1f1e429a8b4458c218553b5e08578de144999c5ec3c63b09697a3d6634
+      imagePullPolicy: Never
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: [ALL]
+        # Совпадает с provider-runtime текущего образа; настройки хоста не меняются.
+        seccompProfile:
+          type: Unconfined
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+          ephemeral-storage: 64Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+          ephemeral-storage: 256Mi
+      command: [/usr/bin/env, -i, PATH=/usr/local/bin:/usr/bin:/bin, HOME=/tmp, /usr/local/bin/node, -e]
+      args:
+        - |
+          const fs = require('node:fs');
+          const { chromium } = require('/opt/kodex/npm-toolchain/node_modules/playwright');
+          (async () => {
+            const home = fs.mkdtempSync('/tmp/browser-control-');
+            const started = Date.now();
+            let browser;
+            try {
+              browser = await chromium.launch({
+                executablePath: '/usr/lib/chromium/chromium',
+                headless: true,
+                chromiumSandbox: true,
+                timeout: 15000,
+                env: { PATH: '/usr/bin:/bin', HOME: home, TMPDIR: home },
+              });
+              const page = await browser.newPage();
+              await page.setContent('<title>runtime control</title>', { timeout: 5000 });
+              const titleOK = await page.title() === 'runtime control';
+              console.log(JSON.stringify({ scope: 'OPERATOR_CONTROL_OUTSIDE_CODEX_SANDBOX', titleOK, elapsedMs: Date.now() - started }));
+              if (!titleOK) process.exitCode = 1;
+            } catch (error) {
+              console.log(JSON.stringify({ scope: 'OPERATOR_CONTROL_OUTSIDE_CODEX_SANDBOX', failed: true, elapsedMs: Date.now() - started, error: String(error.message).slice(0, 10000) }));
+              process.exitCode = 1;
+            } finally {
+              if (browser) await browser.close();
+              fs.rmSync(home, { recursive: true, force: true });
+            }
+          })().catch(() => { console.error('Browser control cleanup failed'); process.exitCode = 1; });
+      volumeMounts:
+        - name: temporary
+          mountPath: /tmp
+  volumes:
+    - name: temporary
+      emptyDir:
+        sizeLimit: 256Mi
