@@ -4,11 +4,29 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.594.0
+version: 1.595.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая настройка TLS gRPC-серверов authority — 27.10.2026
+
+Publisher, readback attestor и restore controller используют общий конструктор
+TLS gRPC server с прежним strict codec и порядком metrics, tracing и error
+interceptors. Каждый caller передаёт собственный closed method normalizer,
+регистрирует свои RPC и владеет listener, TLS-конфигурацией и shutdown.
+Обратное сравнение трёх целых исходных файлов PASS.
+
+Локальный bufconn mTLS тест проверяет три normalizer, expected/unexpected
+ошибки, однократное безопасное логирование и bounded metrics, а также отказ
+без клиентского сертификата и при неверном имени сервера. Адресный race PASS.
+Authority build/unit/vet до изменения: 370 PASS, 2 условных SKIP; после: 374
+PASS, 2 условных SKIP. Реальный Kubernetes и запущенный сервис не проверялись.
+Два разных startup/attestor фрагмента сохранены адресно; 12 мутаций решений
+отклонены, 17 тестов инструментов качества PASS. Context7: [gRPC interceptors](https://github.com/grpc/grpc-go/blob/master/examples/features/interceptor/README.md).
+Анализ: 1324 raw / 1302 retained / 22 unresolved, Go-комментарии 21738/21738.
+Браузер, E2E, live/deploy/startup и QA не выполнялись.
 
 ## Общая подготовка runtime component-сценариев — 27.10.2026
 

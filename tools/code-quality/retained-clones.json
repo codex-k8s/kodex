@@ -9248,6 +9248,22 @@
       "fragmentSHA256": "933fc0697a8518ca4755eeb100fbe622ee36426a4ab56dc9830f23d9ea2585b0",
       "count": 1,
       "reason": "Короткая общая последовательность читает и валидирует CA PEM перед загрузкой разных ключей в PITR executor и restore evidence verifier. Дальше один конструктор проверяет private JWK для signing, второй public JWK для проверки; собственные resource identity и ошибка конфигурации различаются. Общий TLS transport уже вынесен, а перенос файлового чтения в универсальный helper скрыл бы I/O и порядок проверки разных ключей без объединения authority. Сохранены только точные пути, hash и count1; TLS, CA и проверки ключей не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/internal-rpc-authority/internal/app/publisher.go",
+      "secondPath": "services/internal/internal-rpc-authority/internal/app/readback.go",
+      "fragmentSHA256": "2ca4d6193b89fa6c850760bdc4244c28fd37978cb92ebf0ba608f5df04eb29b2",
+      "count": 1,
+      "reason": "Два запуска publisher и readback attestor используют общие telemetry cleanup и контекст startup, но открывают разные PostgreSQL роли, создают разные типы repository и далее загружают разные target registry либо trust metadata. Pool закрывается на ошибке каждого отдельного конструктора; при последующих ошибках списки ресурсов расходятся. Универсальный callback startup скрыл бы точную ownership boundary и порядок fail-closed очистки без общего доменного store. Сохранены только точные пути, hash и count1; прочие ресурсы, readiness и cleanup не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/internal-rpc-authority/internal/client/readback/client.go",
+      "secondPath": "services/internal/internal-rpc-authority/internal/client/readback/client.go",
+      "fragmentSHA256": "b6ed7b3e05f583f7429c1b5caa19d4e4030feeb2a613e614a3dc069a442ec35d",
+      "count": 1,
+      "reason": "Окно сравнивает отдельные SecretAttestor и FileAttestor: оба открывают общий readback transport и реализуют обязательный Close через transport.close, но получают доказательства из разных источников и применяют разные проверки версии, размеров и ключей. Сам transport уже общий; один общий Close на другом типе потребовал бы перестройки ownership и интерфейсов без удаления отдельного Attest. Сохранён только внутрефайловый hash и count1; validation и attestation обоих источников не исключены."
     }
   ]
 }

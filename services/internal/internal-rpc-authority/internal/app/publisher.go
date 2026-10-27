@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/grpcserver"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	"github.com/codex-k8s/kodex/libs/go/observability"
@@ -21,9 +20,6 @@ import (
 	sessionrepository "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/repository/postgres/session"
 	authoritygrpc "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/transport/grpc"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
 )
 
 // PublisherConfig supplies the publisher's listeners, database identity, fixed-role signer references and provenance, trust/policy/target paths, Kubernetes delivery settings and shutdown budget through tagged environment fields. It carries references rather than credential values; configuration parsing does not prove loaded trust, successful publication or endpoint readiness.
@@ -296,26 +292,7 @@ func RunPublisher(
 	readiness := serviceruntime.NewReadiness()
 	readiness.Set(false, "starting")
 	metrics.SetReady(false)
-	grpcRuntime := grpc.NewServer(
-		grpc.Creds(credentials.NewTLS(serverTLS)),
-		grpc.ForceServerCodec(grpcserver.StrictProtoCodec()),
-		grpc.ChainUnaryInterceptor(
-			metrics.UnaryServerInterceptor(),
-			telemetry.UnaryServerInterceptor(methods),
-			grpcserver.ErrorBoundary(grpcserver.ErrorObserverFunc(func(
-				_ context.Context,
-				method string,
-				code codes.Code,
-				_ error,
-			) {
-				logger.Error(
-					"unexpected gRPC failure",
-					"method", normalizePublisherMethod(method),
-					"code", code.String(),
-				)
-			})),
-		),
-	)
+	grpcRuntime := newObservedTCPGRPCServer(serverTLS, metrics, telemetry, methods, logger, normalizePublisherMethod)
 	internalrpcauthorityv1.RegisterRestoreRoleCredentialPublisherServiceServer(
 		grpcRuntime,
 		authoritygrpc.NewRestoreRoleCredentialPublisherServer(
