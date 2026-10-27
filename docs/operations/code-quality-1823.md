@@ -4,11 +4,27 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.546.0
+version: 1.547.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие проверки версии членства — 27.10.2026
+
+Change и Remove в каждом scope используют собственный общий lock/version:
+проектная проверка сохраняет owner/project и отказ self после проверки версии;
+организационная оставляет owner/self/last-owner и деактивацию в отдельных
+командах. Update/deactivate SQL, ошибки VersionMismatch/Conflict и транзакции
+не объединены. Обратное сопоставление восстановило четыре исходных пути.
+
+Новые unit checks защищают invalid input до SQL, точный scope, порядок version
+и self, и отсутствие commit; весь control-plane build/vet PASS, 3030 unit PASS /
+70 прежних условных SKIP. Выбранные membership/access сценарии на disposable
+PostgreSQL — 28 PASS events до и после, FAIL/SKIP 0. Остаточные разные операции
+сохранены двумя точными решениями; 12 мутаций решений отвергнуты.
+1394 raw / 1273 retained / 121 unresolved, Go 21660/21660. E2E/browser/live/
+deploy/startup/QA не выполнялись.
 
 ## Общая проверка integration claim — 27.10.2026
 

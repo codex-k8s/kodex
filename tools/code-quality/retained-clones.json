@@ -9024,6 +9024,22 @@
       "fragmentSHA256": "9e7b9a1d411b9e917117fb7794823a2ae5ba7da279814fdea31b3e1631ae84e6",
       "count": 1,
       "reason": "Два узких пути принимают разные concrete payload: IntegrationConnectionTestInput с TestRef и IntegrationInvocationInput с InvocationRef, после проверки workload выбирают разные встроенные SQL для соответствующего владельца захвата. Общая проверка точного tuple, дайджеста fence и ошибок вынесена в authorizeIntegrationClaim; слияние типизированных обёрток скрыло бы соответствие команды и запроса. Тесты проверяют подмену типа, запрет workload до SQL и точные параметры обеих ветвей. Исключение ограничено этой парой и hash, не покрывает helper или lifecycle переходы."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/commands.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/commands.go",
+      "fragmentSHA256": "8d4b8aab6d1f28d404348a3691fe14c061cf50d11bc2453a3e75b9ed66a03b89",
+      "count": 1,
+      "reason": "После общего lockMutableProjectMembership остаются специализированные ChangeMembership и RemoveMembership: разные update/deactivate SQL, аргументы actor/permissions/active и разные отображения отсутствующей строки VersionMismatch/Conflict. Общий lock сохраняет owner/project boundary, version и self guard; объединение ветвей скроет разные переходы. Решение ограничено точной парой и hash, не исключает helper или другие команды."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/commands.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/commands.go",
+      "fragmentSHA256": "8bf991de04a6c997f342480a319fbc51cd0014aa5cfdf9895671570282161391",
+      "count": 1,
+      "reason": "После общего lockVersionedPlatformMembership остаются специализированные ChangePlatformMembership и RemovePlatformMembership с различными правилами self/owner, входами protectLastOwner, update/deactivate SQL и VersionMismatch/Conflict при отсутствии строки. Объединение ветвей скроет эти политики и переходы. Решение ограничено точной парой и hash, не исключает helper, транзакцию или другие команды."
     }
   ]
 }

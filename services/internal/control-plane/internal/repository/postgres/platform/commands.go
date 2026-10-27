@@ -632,18 +632,9 @@ func (repository *Repository) changeMembership(ctx context.Context, tx pgx.Tx, s
 			return commandOutcome{}, mapWriteError(err)
 		}
 	case command.ChangeMembership:
-		if input.Mutation.ExpectedVersion == nil || payload.MembershipRef == "" {
-			return commandOutcome{}, errs.ErrInvalid
-		}
-		membershipID, subjectID, err := lockProjectMembership(ctx, tx, scope.organizationID, projectID, payload.MembershipRef, &item)
+		membershipID, err := lockMutableProjectMembership(ctx, tx, scope, projectID, payload.MembershipRef, input.Mutation.ExpectedVersion, &item)
 		if err != nil {
 			return commandOutcome{}, err
-		}
-		if item.Version != *input.Mutation.ExpectedVersion {
-			return commandOutcome{}, errs.ErrVersionMismatch
-		}
-		if subjectID == scope.actorID {
-			return commandOutcome{}, errs.ErrForbidden
 		}
 		err = tx.QueryRow(ctx, queryProjectMembershipUpdate, pgx.StrictNamedArgs{
 			"membership_id":    membershipID,
@@ -661,18 +652,9 @@ func (repository *Repository) changeMembership(ctx context.Context, tx pgx.Tx, s
 			return commandOutcome{}, mapWriteError(err)
 		}
 	case command.RemoveMembership:
-		if input.Mutation.ExpectedVersion == nil || payload.MembershipRef == "" {
-			return commandOutcome{}, errs.ErrInvalid
-		}
-		membershipID, subjectID, err := lockProjectMembership(ctx, tx, scope.organizationID, projectID, payload.MembershipRef, &item)
+		membershipID, err := lockMutableProjectMembership(ctx, tx, scope, projectID, payload.MembershipRef, input.Mutation.ExpectedVersion, &item)
 		if err != nil {
 			return commandOutcome{}, err
-		}
-		if item.Version != *input.Mutation.ExpectedVersion {
-			return commandOutcome{}, errs.ErrVersionMismatch
-		}
-		if subjectID == scope.actorID {
-			return commandOutcome{}, errs.ErrForbidden
 		}
 		err = tx.QueryRow(ctx, queryProjectMembershipDeactivate, pgx.StrictNamedArgs{
 			"membership_id":    membershipID,
@@ -738,16 +720,10 @@ func (repository *Repository) changePlatformMembership(ctx context.Context, tx p
 			return commandOutcome{}, mapWriteError(err)
 		}
 	case command.ChangePlatformMembership:
-		if input.Mutation.ExpectedVersion == nil || payload.MembershipRef == "" {
-			return commandOutcome{}, errs.ErrInvalid
-		}
 		var err error
-		membershipID, subjectID, err = lockPlatformMembership(ctx, tx, scope.organizationID, payload.MembershipRef, &item)
+		membershipID, subjectID, err = lockVersionedPlatformMembership(ctx, tx, scope.organizationID, payload.MembershipRef, input.Mutation.ExpectedVersion, &item)
 		if err != nil {
 			return commandOutcome{}, err
-		}
-		if item.Version != *input.Mutation.ExpectedVersion {
-			return commandOutcome{}, errs.ErrVersionMismatch
 		}
 		if scope.role != "OWNER" && item.Role == "OWNER" {
 			return commandOutcome{}, errs.ErrForbidden
@@ -772,16 +748,10 @@ func (repository *Repository) changePlatformMembership(ctx context.Context, tx p
 			return commandOutcome{}, mapWriteError(err)
 		}
 	case command.RemovePlatformMembership:
-		if input.Mutation.ExpectedVersion == nil || payload.MembershipRef == "" {
-			return commandOutcome{}, errs.ErrInvalid
-		}
 		var err error
-		membershipID, subjectID, err = lockPlatformMembership(ctx, tx, scope.organizationID, payload.MembershipRef, &item)
+		membershipID, subjectID, err = lockVersionedPlatformMembership(ctx, tx, scope.organizationID, payload.MembershipRef, input.Mutation.ExpectedVersion, &item)
 		if err != nil {
 			return commandOutcome{}, err
-		}
-		if item.Version != *input.Mutation.ExpectedVersion {
-			return commandOutcome{}, errs.ErrVersionMismatch
 		}
 		if (scope.role != "OWNER" && item.Role == "OWNER") || subjectID == scope.actorID {
 			return commandOutcome{}, errs.ErrForbidden
@@ -3354,6 +3324,45 @@ func lockPlatformMembership(ctx context.Context, tx pgx.Tx, organizationID, ref 
 	}
 	if err != nil {
 		return "", "", errs.ErrUnavailable
+	}
+	return membershipID, subjectID, nil
+}
+
+// lockMutableProjectMembership resolves the exact project binding, checks the expected version
+// and rejects self mutation. It does not perform a write, grant permissions or commit.
+// lockMutableProjectMembership разрешает точную project binding, проверяет ожидаемую версию
+// и отклоняет изменение себя. Не выполняет запись, выдачу полномочий или commit.
+func lockMutableProjectMembership(ctx context.Context, tx pgx.Tx, scope scope, projectID, ref string, expected *int64, item *entity.Membership) (string, error) {
+	if expected == nil || ref == "" {
+		return "", errs.ErrInvalid
+	}
+	membershipID, subjectID, err := lockProjectMembership(ctx, tx, scope.organizationID, projectID, ref, item)
+	if err != nil {
+		return "", err
+	}
+	if item.Version != *expected {
+		return "", errs.ErrVersionMismatch
+	}
+	if subjectID == scope.actorID {
+		return "", errs.ErrForbidden
+	}
+	return membershipID, nil
+}
+
+// lockVersionedPlatformMembership checks the exact organization binding and expected version.
+// Owner, self, last-owner and deactivation policies remain with each caller.
+// lockVersionedPlatformMembership проверяет точную organization binding и ожидаемую версию.
+// Политики owner, self, last-owner и деактивации остаются у каждого вызывающего.
+func lockVersionedPlatformMembership(ctx context.Context, tx pgx.Tx, organizationID, ref string, expected *int64, item *entity.Membership) (string, string, error) {
+	if expected == nil || ref == "" {
+		return "", "", errs.ErrInvalid
+	}
+	membershipID, subjectID, err := lockPlatformMembership(ctx, tx, organizationID, ref, item)
+	if err != nil {
+		return "", "", err
+	}
+	if item.Version != *expected {
+		return "", "", errs.ErrVersionMismatch
 	}
 	return membershipID, subjectID, nil
 }

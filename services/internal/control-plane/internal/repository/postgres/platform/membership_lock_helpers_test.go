@@ -100,3 +100,65 @@ func TestMembershipLockHelpersPreserveProjectionAndOwnerScope(t *testing.T) {
 		}
 	}
 }
+
+// TestMembershipMutationLocksPreserveOrder checks invalid input before SQL, owner-scoped lock,
+// version-before-self denial and delegation of platform owner policy to the caller.
+// TestMembershipMutationLocksPreserveOrder проверяет invalid input до SQL, owner-scoped lock,
+// отказ по версии до self и передачу platform owner policy вызывающему.
+func TestMembershipMutationLocksPreserveOrder(t *testing.T) {
+	for _, mode := range []struct {
+		name    string
+		project bool
+	}{{"project", true}, {"platform", false}} {
+		for _, test := range []struct {
+			name     string
+			ref      string
+			expected *int64
+			actor    string
+			want     error
+			queries  int
+		}{
+			{name: "missing version", ref: "binding", want: errs.ErrInvalid},
+			{name: "missing ref", expected: new(int64), want: errs.ErrInvalid},
+			{name: "stale before self", ref: "binding", expected: new(int64), actor: "subject", want: errs.ErrVersionMismatch, queries: 1},
+			{name: "matching self", ref: "binding", expected: func() *int64 { v := int64(14); return &v }(), actor: "subject", queries: 1},
+			{name: "matching other", ref: "binding", expected: func() *int64 { v := int64(14); return &v }(), actor: "other", queries: 1},
+		} {
+			t.Run(mode.name+"/"+test.name, func(t *testing.T) {
+				query := queryPlatformMembershipResolveForUpdate
+				args := pgx.StrictNamedArgs{"organization_id": "org", "membership_ref": test.ref}
+				values := []any{"membership", "subject", "binding", "subject-public", "name", "masked", true, "OWNER"}
+				if mode.project {
+					query = queryProjectMembershipResolveForUpdate
+					args["project_id"] = "project"
+					values = append(values, []string{"VIEW"})
+				}
+				values = append(values, true, int64(14))
+				tx := &proofResolutionTx{t: t, ctx: t.Context(), query: query, args: []any{args}}
+				tx.row = proofResolutionRow(func(dest ...any) error {
+					if len(dest) != len(values) {
+						t.Fatal("unexpected membership projection")
+					}
+					for index, value := range values {
+						reflect.ValueOf(dest[index]).Elem().Set(reflect.ValueOf(value))
+					}
+					return nil
+				})
+				var item entity.Membership
+				var err error
+				if mode.project {
+					_, err = lockMutableProjectMembership(tx.ctx, tx, scope{organizationID: "org", actorID: test.actor}, "project", test.ref, test.expected, &item)
+				} else {
+					_, _, err = lockVersionedPlatformMembership(tx.ctx, tx, "org", test.ref, test.expected, &item)
+				}
+				want := test.want
+				if mode.project && test.name == "matching self" {
+					want = errs.ErrForbidden
+				}
+				if !errors.Is(err, want) || tx.queryCalls != test.queries || tx.commitCalls != 0 {
+					t.Fatal("membership validation order or boundary changed")
+				}
+			})
+		}
+	}
+}
