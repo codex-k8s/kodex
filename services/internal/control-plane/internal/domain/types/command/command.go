@@ -1647,6 +1647,7 @@ type CompleteExecutionInput struct {
 type WorkspaceObservationInput struct {
 	LeaseRef, Fence, RuntimeRevisionDigest, ExecutionBindingDigest string
 	WorkspaceRef, Phase, PodUID, PVCUID                            string
+	BlockReason                                                    string
 	Generation, WorkspaceGeneration                                int64
 	Quiescence                                                     []byte
 }

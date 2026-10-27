@@ -16,6 +16,12 @@ const (
 	// WorkspaceObserveQuiescent records a past joined writer and never reopens its business authority.
 	// WorkspaceObserveQuiescent сохраняет past joined writer, не открывая business authority вновь.
 	WorkspaceObserveQuiescent = "QUIESCENT"
+	// WorkspaceObserveBlocked is controller-only past-fact reporting and never grants a writer or restore.
+	// WorkspaceObserveBlocked — controller-only past-fact reporting без writer или restore grant.
+	WorkspaceObserveBlocked = "BLOCKED"
+	// WorkspaceObserveReleased confirms absence only after the same writer's positive join was committed.
+	// WorkspaceObserveReleased подтверждает отсутствие лишь после commit positive join того же writer.
+	WorkspaceObserveReleased = "RELEASED"
 	// WorkspaceWriterAcknowledgementSchema closes the owner ACK metadata stored outside model work.
 	// WorkspaceWriterAcknowledgementSchema закрывает owner ACK metadata вне model work.
 	WorkspaceWriterAcknowledgementSchema = "kodex.runtime-workspace-writer.v1"
@@ -26,6 +32,28 @@ const (
 	// MaximumWorkspaceObservationBytes ограничивает callback отдельно от generic completion.
 	MaximumWorkspaceObservationBytes = 4096
 )
+
+// ValidWorkspaceBlockReason accepts only bounded storage lifecycle causes, never raw Kubernetes errors.
+// ValidWorkspaceBlockReason принимает closed storage lifecycle causes, не raw Kubernetes errors.
+func ValidWorkspaceBlockReason(value string) bool {
+	switch value {
+	case "POD_MISSING", "POD_UNREACHABLE", "PVC_MISSING", "PVC_REPLACED", "OWNERSHIP_CHANGED", "WRITER_JOIN_UNCONFIRMED":
+		return true
+	default:
+		return false
+	}
+}
+
+// ValidWorkspaceStorageState rejects unknown owner phases before a transport consumer interprets them.
+// ValidWorkspaceStorageState отклоняет unknown owner phase до интерпретации transport consumer.
+func ValidWorkspaceStorageState(value string) bool {
+	switch value {
+	case "EMPTY", "WRITER_PENDING", "WRITING", "QUIESCING", "CHECKPOINT_PENDING", "CHECKPOINT_READY", "DELETE_READY", "ARCHIVED", "RESTORE_READY", "RESTORING", "RESTORED", "BLOCKED", "PURGED":
+		return true
+	default:
+		return false
+	}
+}
 
 // RunnerWorkspaceObservation is a closed callback request, never caller-selected storage authority.
 // BIND requires owned Pod/PVC and fresh owner CAS; QUIESCENT additionally requires positive join proof.

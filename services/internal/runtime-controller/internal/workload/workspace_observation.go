@@ -3,6 +3,7 @@ package workload
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -32,7 +33,7 @@ func (manager *Manager) ObserveWorkspaceBind(ctx context.Context, input runtimec
 	}
 	name := runtimecontract.RuntimeTurnPodName(input.LeaseRef)
 	pod, err := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil || !manager.workspaceStoragePodMatches(input, pod) || pod.DeletionTimestamp != nil || !workspaceMainWritersUnstarted(pod) {
+	if err != nil || !manager.workspaceStoragePodMatches(input, pod) || pod.DeletionTimestamp != nil || !workspaceMainWritersUnstarted(pod) || !slices.Contains(pod.Finalizers, workspaceWriterFinalizer) {
 		return empty, denied
 	}
 	pvcName, err := runtimecontract.SessionPVCName(input.SessionRef)
@@ -81,7 +82,8 @@ func (manager *Manager) workspaceStoragePodMatches(input runtimecontract.RunnerI
 	if pod == nil || !validInitializationPodUID(string(pod.UID)) || pod.Name != runtimecontract.RuntimeTurnPodName(input.LeaseRef) ||
 		pod.Namespace != manager.config.RuntimeNamespace || pod.Spec.ServiceAccountName != input.EffectiveKubernetesAccess.ServiceAccountName ||
 		pod.Spec.HostNetwork || pod.Spec.HostPID || pod.Spec.HostIPC || pod.Spec.AutomountServiceAccountToken == nil || *pod.Spec.AutomountServiceAccountToken ||
-		len(pod.Spec.InitContainers) != 2 || len(pod.Spec.Containers) != 3 {
+		len(pod.Spec.InitContainers) != 2 || len(pod.Spec.Containers) != 3 || len(pod.Spec.EphemeralContainers) != 0 ||
+		pod.Spec.ShareProcessNamespace != nil && *pod.Spec.ShareProcessNamespace {
 		return false
 	}
 	expected := metav1.ObjectMeta{Labels: map[string]string{managedLabel: "true", modeLabel: "turn", "app.kubernetes.io/name": "agent-runner", "app.kubernetes.io/component": "role-runtime", "kodex.dev/environment": manager.config.Environment, executionHashLabel: shortHash(input.LeaseRef)}, Annotations: runtimeProjectionAnnotations(input, pod.Name)}
@@ -127,6 +129,9 @@ func (manager *Manager) workspaceStoragePodMatches(input runtimecontract.RunnerI
 			expectedSecurity = restrictedSecurityContext(10003)
 		}
 		if !apiequality.Semantic.DeepEqual(container.SecurityContext, expectedSecurity) {
+			return false
+		}
+		if container.Name == "role-runtime" && (container.TerminationMessagePath != "/dev/termination-log" || container.TerminationMessagePolicy != corev1.TerminationMessageReadFile) {
 			return false
 		}
 	}

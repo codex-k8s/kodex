@@ -15,7 +15,7 @@ func workspaceQuiescenceFixture() (WorkspaceQuiescence, RunnerInput, WorkspaceSt
 	writer.JoinSHA256 = ""
 	record := WorkspaceQuiescence{Schema: WorkspaceQuiescenceSchema, Scope: manifest.Scope, WorkspaceRef: manifest.WorkspaceRef,
 		Generation: manifest.Generation, Joined: true, Writer: writer}
-	input := RunnerInput{Mode: RunnerModeTurn, AssistantScope: AssistantScopeNone, OrganizationRef: manifest.Scope.OrganizationRef, ProjectRef: manifest.Scope.ProjectRef,
+	input := RunnerInput{RoleRuntimeContractRevision: WorkspaceStorageRuntimeContractRevision, Mode: RunnerModeTurn, AssistantScope: AssistantScopeNone, OrganizationRef: manifest.Scope.OrganizationRef, ProjectRef: manifest.Scope.ProjectRef,
 		SessionRef: manifest.Scope.SessionRef, AgentRef: manifest.Scope.AgentRef, RunRef: writer.RunRef, NodeRef: writer.NodeRef, TurnRef: writer.TurnRef,
 		RuntimeRevisionRef: writer.RuntimeRevisionRef, RuntimeRevisionVersion: writer.RuntimeRevisionVersion, RuntimeRevisionDigest: writer.RuntimeRevisionDigest,
 		ExecutionBindingDigest: writer.ExecutionBindingDigest, InputDigest: writer.InputDigest, LeaseRef: writer.LeaseRef,

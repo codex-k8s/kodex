@@ -19,7 +19,7 @@ import (
 // Unknown transport outcome не разрешает запись; body, credential и upstream error не раскрываются.
 func (client *Client) ObserveWorkspace(ctx context.Context, input model.Input, observation runtimecontract.RunnerWorkspaceObservation) (runtimecontract.WorkspaceWriterAcknowledgement, error) {
 	var empty runtimecontract.WorkspaceWriterAcknowledgement
-	if observation.ValidateForInput(input) != nil {
+	if observation.Phase != runtimecontract.WorkspaceObserveBind || observation.ValidateForInput(input) != nil {
 		return empty, errors.New("runtime workspace observation is invalid")
 	}
 	raw, err := json.Marshal(observation)

@@ -142,6 +142,7 @@ func (repository *Repository) ConfigureRuntimeSecretStaging(namespace string) er
 func (repository *Repository) ConfigureRoleImages(config RoleImageConfig) error {
 	if config.PolicyRevision == 0 || config.RoleRuntimeContractRevision == 0 ||
 		config.WorkspaceStorageProfile != "" && config.WorkspaceStorageProfile != runtimecontract.WorkspaceStorageProfile ||
+		config.WorkspaceStorageProfile == runtimecontract.WorkspaceStorageProfile && config.RoleRuntimeContractRevision != runtimecontract.WorkspaceStorageRuntimeContractRevision ||
 		len(config.PolicySHA256) != 64 || len(config.RoleRuntimeContractSHA256) != 64 ||
 		config.BuildLeaseDuration < 30*time.Second || config.AdmissionClaimTTL < time.Minute ||
 		config.PromotionClaimTTL < time.Minute || config.MaximumAttempts < 1 || config.MaximumAttempts > 10 ||

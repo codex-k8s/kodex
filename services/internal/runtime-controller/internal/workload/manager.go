@@ -415,6 +415,12 @@ func (manager *Manager) CleanupStaleTurns(ctx context.Context) error {
 		}
 		for index := range pods.Items {
 			pod := &pods.Items[index]
+			if pod.Annotations[workspaceStorageProfileAnnotation] == runtimecontract.WorkspaceStorageProfile {
+				if executionHash := pod.Labels[executionHashLabel]; len(executionHash) == 16 {
+					activeHashes[executionHash] = struct{}{}
+				}
+				continue
+			}
 			if pod.Annotations[controllerAnnotation] == manager.config.ControllerPodUID {
 				if executionHash := pod.Labels[executionHashLabel]; len(executionHash) == 16 {
 					activeHashes[executionHash] = struct{}{}
@@ -455,7 +461,7 @@ func (manager *Manager) CleanupStaleTurns(ctx context.Context) error {
 			ticket := &tickets.Items[index]
 			executionHash := strings.TrimPrefix(ticket.Annotations[podAnnotation], "runtime-turn-")
 			_, active := activeHashes[executionHash]
-			if ticket.Annotations[controllerAnnotation] == manager.config.ControllerPodUID && active {
+			if ticket.Annotations[workspaceStorageProfileAnnotation] == runtimecontract.WorkspaceStorageProfile || ticket.Annotations[controllerAnnotation] == manager.config.ControllerPodUID && active {
 				continue
 			}
 			if err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Delete(ctx, ticket.Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
@@ -478,7 +484,7 @@ func (manager *Manager) CleanupStaleTurns(ctx context.Context) error {
 			projection := &projections.Items[index]
 			executionHash := strings.TrimPrefix(projection.Annotations[podAnnotation], "runtime-turn-")
 			_, active := activeHashes[executionHash]
-			if projection.Annotations[controllerAnnotation] == manager.config.ControllerPodUID && active {
+			if projection.Annotations[workspaceStorageProfileAnnotation] == runtimecontract.WorkspaceStorageProfile || projection.Annotations[controllerAnnotation] == manager.config.ControllerPodUID && active {
 				continue
 			}
 			if err := manager.client.CoreV1().ConfigMaps(manager.config.RuntimeNamespace).Delete(ctx, projection.Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
@@ -498,6 +504,9 @@ func (manager *Manager) CleanupStaleTurns(ctx context.Context) error {
 func (manager *Manager) orphanedExecutionPolicyHashes(ctx context.Context, selector string, active map[string]struct{}) (map[string]struct{}, error) {
 	orphaned := make(map[string]struct{})
 	inspect := func(metadata metav1.ObjectMeta) {
+		if metadata.Annotations[workspaceStorageProfileAnnotation] == runtimecontract.WorkspaceStorageProfile {
+			return
+		}
 		executionHash := metadata.Labels[executionHashLabel]
 		_, isActive := active[executionHash]
 		if len(executionHash) == 16 && (metadata.Annotations[controllerAnnotation] != manager.config.ControllerPodUID || !isActive) {
@@ -1283,7 +1292,7 @@ func (manager *Manager) ensureExecutionPolicy(ctx context.Context, input runtime
 // executionMetadata derives turn selection labels and revision/lease/controller/policy digest annotations from the selected input without granting Kubernetes access.
 // executionMetadata выводит метки выбора хода и аннотации ревизии, аренды, контроллера и хешей политик из выбранного входа без выдачи доступа Kubernetes.
 func (manager *Manager) executionMetadata(input runtimecontract.RunnerInput) metav1.ObjectMeta {
-	return metav1.ObjectMeta{Namespace: manager.config.RuntimeNamespace,
+	result := metav1.ObjectMeta{Namespace: manager.config.RuntimeNamespace,
 		Labels: map[string]string{managedLabel: "true", modeLabel: "turn", executionHashLabel: shortHash(input.LeaseRef)},
 		Annotations: map[string]string{
 			revisionAnnotation: input.RuntimeRevisionDigest, leaseAnnotation: input.LeaseRef, controllerAnnotation: manager.config.ControllerPodUID,
@@ -1292,6 +1301,10 @@ func (manager *Manager) executionMetadata(input runtimecontract.RunnerInput) met
 			effectiveRBACAnnotation: input.EffectiveKubernetesAccess.Digest,
 		},
 	}
+	if input.WorkspaceStorage != nil {
+		result.Annotations[workspaceStorageProfileAnnotation] = runtimecontract.WorkspaceStorageProfile
+	}
+	return result
 }
 
 // executionNetworkPolicy requires the lease-derived Pod name and emits only configured DNS, controller-callback or platform-proxy peers with explicit ports; unknown destinations fail instead of broadening egress.
@@ -1704,6 +1717,13 @@ func (manager *Manager) StopTurn(ctx context.Context, leaseRef string) error {
 		}
 	}
 	if podName != "" {
+		if secret != nil && secret.Annotations[workspaceStorageProfileAnnotation] == runtimecontract.WorkspaceStorageProfile {
+			input, decodeErr := runtimecontract.DecodeRunnerInput(secret.Data[inputKey])
+			if decodeErr != nil || input.LeaseRef != leaseRef || input.WorkspaceStorage == nil {
+				return errors.New("runtime workspace stop binding is invalid")
+			}
+			return manager.stopWorkspacePod(ctx, input)
+		}
 		if err := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Delete(ctx, podName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 			return errors.New("stop runtime pod")
 		}
@@ -1716,6 +1736,12 @@ func (manager *Manager) StopTurn(ctx context.Context, leaseRef string) error {
 func (manager *Manager) DeleteTurn(ctx context.Context, leaseRef string) error {
 	secretName := ticketName(leaseRef)
 	secret, _ := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, secretName, metav1.GetOptions{})
+	if secret != nil && secret.Annotations[workspaceStorageProfileAnnotation] == runtimecontract.WorkspaceStorageProfile {
+		if err := manager.StopTurn(ctx, leaseRef); err != nil {
+			return err
+		}
+		return errors.New("runtime workspace cleanup awaits owner quiescence acknowledgement")
+	}
 	var result error
 	// Успешный warm turn сохраняет общий Pod; остановка timeout выполняется StopTurn.
 	if secret == nil || secret.Annotations[podAnnotation] != "system-assistant-warm" {
@@ -2002,7 +2028,7 @@ func runtimeProjectionData(input runtimecontract.RunnerInput) (map[string]string
 // runtimeProjectionAnnotations derives required revision/configuration/environment/execution/policy bindings and shortened organization/project/session/turn identities for later immutable readback.
 // runtimeProjectionAnnotations выводит обязательные привязки ревизии, конфигурации, окружения, исполнения и политик и сокращённые идентификаторы организации, проекта, сессии и хода для дальнейшей проверки неизменяемости.
 func runtimeProjectionAnnotations(input runtimecontract.RunnerInput, podName string) map[string]string {
-	return map[string]string{
+	result := map[string]string{
 		revisionAnnotation: input.RuntimeRevisionDigest, configAnnotation: input.RuntimeConfigDigest,
 		environmentAnnotation: input.RuntimeEnvironmentDigest, workspacePolicyAnnotation: input.WorkspacePolicy.Digest,
 		executionBindingAnnotation: input.ExecutionBindingDigest, mcpBindingAnnotation: input.MCPBindingDigest,
@@ -2013,6 +2039,12 @@ func runtimeProjectionAnnotations(input runtimecontract.RunnerInput, podName str
 		organizationHashAnnotation: shortHash(input.OrganizationRef), projectHashAnnotation: shortHash(input.ProjectRef), sessionHashAnnotation: shortHash(input.SessionRef),
 		turnHashAnnotation: shortHash(input.TurnRef), attemptAnnotation: strconv.FormatInt(int64(input.Attempt), 10),
 	}
+	if input.WorkspaceStorage != nil {
+		result[workspaceStorageProfileAnnotation] = runtimecontract.WorkspaceStorageProfile
+		result[workspaceStorageRefAnnotation] = input.WorkspaceStorage.WorkspaceRef
+		result[workspaceStorageGenerationAnnotation] = strconv.FormatInt(input.WorkspaceStorage.Generation, 10)
+	}
+	return result
 }
 
 // ensureProjection creates a size-bounded immutable ConfigMap or requires matching metadata, exact text data and no binary data on an existing one; conflicts are rejected rather than patched.

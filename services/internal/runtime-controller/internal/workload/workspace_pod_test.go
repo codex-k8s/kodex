@@ -23,6 +23,8 @@ func workspaceStoragePodFixture(t *testing.T) (*Manager, *fake.Clientset, runtim
 		t.Fatal(err)
 	}
 	input.SessionRef, input.AgentRef = "ses_workspace000", "agt_workspace000"
+	manager.config.RoleRuntimeContractRevision = runtimecontract.WorkspaceStorageRuntimeContractRevision
+	input.RoleRuntimeContractRevision = runtimecontract.WorkspaceStorageRuntimeContractRevision
 	input.WorkspaceStorage = &runtimecontract.WorkspaceStorageBinding{Profile: runtimecontract.WorkspaceStorageProfile,
 		Scope:        runtimecontract.WorkspaceStorageScope{OrganizationRef: input.OrganizationRef, ProjectRef: input.ProjectRef, SessionRef: input.SessionRef, AgentRef: input.AgentRef},
 		WorkspaceRef: "wks_workspace000", Generation: 1}

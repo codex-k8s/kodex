@@ -139,7 +139,7 @@ func TestWorkspaceManifestBoundsPartsAndExistingBudgets(t *testing.T) {
 // Source shape не является owner authority; authoritative retry selection проверяется repository.
 func TestWorkspaceGenerationNeverSelectsAnAlternateParent(t *testing.T) {
 	manifest := workspaceArchiveFixture()
-	input := RunnerInput{Mode: RunnerModeTurn, AssistantScope: AssistantScopeNone, OrganizationRef: manifest.Scope.OrganizationRef, ProjectRef: manifest.Scope.ProjectRef,
+	input := RunnerInput{RoleRuntimeContractRevision: WorkspaceStorageRuntimeContractRevision, Mode: RunnerModeTurn, AssistantScope: AssistantScopeNone, OrganizationRef: manifest.Scope.OrganizationRef, ProjectRef: manifest.Scope.ProjectRef,
 		SessionRef: manifest.Scope.SessionRef, AgentRef: manifest.Scope.AgentRef, WorkspacePolicy: RuntimeWorkspacePolicyV1()}
 	value := WorkspaceStorageBinding{Profile: WorkspaceStorageProfile, Scope: manifest.Scope, WorkspaceRef: manifest.WorkspaceRef, Generation: 2}
 	path, err := value.GenerationSubPath()

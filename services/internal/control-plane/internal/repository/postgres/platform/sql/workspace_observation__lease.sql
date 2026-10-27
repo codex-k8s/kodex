@@ -1,6 +1,6 @@
 -- name: workspace_observation__lease :one
 SELECT workspace.id::text,workspace.ref,workspace.generation,workspace.state,workspace.version,
-       COALESCE(workspace.writer_lease_id::text,''),COALESCE(workspace.writer_acknowledgement,''),COALESCE(workspace.quiescence_record,''),
+       COALESCE(workspace.writer_lease_id::text,''),COALESCE(workspace.writer_acknowledgement,''),COALESCE(workspace.quiescence_record,''),workspace.block_reason,workspace.writer_released,
        lease.id::text,lease.fence_digest,lease.generation,lease.state,lease.expires_at,
        revision.ref,revision.generation,revision.revision_digest,revision.attempt,revision.safe_snapshot,
        organization.ref,project.ref,session.ref,agent.ref,run.ref,node.ref,turn.ref,lease.input_digest,

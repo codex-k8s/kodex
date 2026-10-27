@@ -358,6 +358,9 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 	if executionErr != nil {
 		logRuntimeExecutionFailure(ctx, runtime.logger, executionErr, activityFailed)
 	}
+	if err := publishWorkspaceQuiescence(input, result); err != nil {
+		return completeMeasuredFailure(ctx, input, client, result, "RUNTIME_UNAVAILABLE")
+	}
 	if input.ExecutionDeadline != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return completeMeasuredFailure(ctx, input, client, result, "RUNTIME_TIMEOUT")
 	}

@@ -4215,6 +4215,8 @@ enum RuntimeWorkspaceObservationPhase {
   RUNTIME_WORKSPACE_OBSERVATION_PHASE_UNSPECIFIED = 0;
   RUNTIME_WORKSPACE_OBSERVATION_PHASE_BIND = 1;
   RUNTIME_WORKSPACE_OBSERVATION_PHASE_QUIESCENT = 2;
+  RUNTIME_WORKSPACE_OBSERVATION_PHASE_BLOCKED = 3;
+  RUNTIME_WORKSPACE_OBSERVATION_PHASE_RELEASED = 4;
 }
 message ObserveWorkspaceRequest {
   MutationContext mutation = 1;
@@ -4230,10 +4232,21 @@ message ObserveWorkspaceRequest {
   // Canonical closed record <=2KiB; tuple сверяет owner, terminal owned Pod — RC.
   bytes quiescence = 11;
   string execution_binding_digest = 12;
+  // Закрытая причина от контроллера, без назначаемого caller исхода run.
+  string block_reason = 13;
 }
 message ObserveWorkspaceResponse {
   // Canonical closed safe writer ACK, не capability/credential.
   bytes writer_acknowledgement = 1;
+  string storage_state = 2;
+  bytes quiescence = 3;
+  string block_reason = 4;
+  // Fresh readback exact текущего lease/generation, отдельно от immutable ACK.
+  bool current_tuple = 5;
+  bool writer_released = 6;
+  // Immutable outcome прежней команды; не current phase.
+  string committed_phase = 7;
+  bytes committed_quiescence = 8;
 }
 
 enum SessionArchiveTaskKind {

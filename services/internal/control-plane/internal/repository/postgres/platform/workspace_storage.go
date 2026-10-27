@@ -11,10 +11,10 @@ import (
 )
 
 var (
-	// queryWorkspaceStorageExists detects the additive schema without referencing absent legacy columns.
-	// queryWorkspaceStorageExists определяет additive schema без обращения к отсутствующим legacy columns.
-	//go:embed sql/workspace_storage__exists.sql
-	queryWorkspaceStorageExists string
+	// queryWorkspaceStorageSession locks the exact session even before its first work row exists.
+	// queryWorkspaceStorageSession блокирует exact session даже до появления первой work row.
+	//go:embed sql/workspace_storage__session.sql
+	queryWorkspaceStorageSession string
 	// queryWorkspaceStorageLock serializes the existing session and exact owned work row.
 	// queryWorkspaceStorageLock сериализует existing session и exact owned work row.
 	//go:embed sql/workspace_storage__lock.sql
@@ -37,19 +37,13 @@ func (repository *Repository) prepareSessionWorkspaceTx(ctx context.Context, tx 
 	if runtimeAssistantScope(candidate.stableKey) != runtimecontract.AssistantScopeNone {
 		return nil, true, nil
 	}
-	var schema bool
-	if err := tx.QueryRow(ctx, queryWorkspaceStorageExists).Scan(&schema); err != nil {
-		return nil, false, errs.ErrUnavailable
-	}
 	activated := repository.roleImages.WorkspaceStorageProfile == runtimecontract.WorkspaceStorageProfile
-	if !schema {
-		if activated {
-			return nil, false, errs.ErrUnavailable
-		}
-		return nil, true, nil
-	}
 	arguments := pgx.StrictNamedArgs{"organization_id": current.organizationID, "session_id": candidate.sessionID,
 		"project_id": candidate.projectID, "agent_id": candidate.agentID}
+	var sessionID string
+	if err := tx.QueryRow(ctx, queryWorkspaceStorageSession, arguments).Scan(&sessionID); err != nil || sessionID != candidate.sessionID {
+		return nil, false, errs.ErrConflict
+	}
 	var reference, state string
 	var generation int64
 	err := tx.QueryRow(ctx, queryWorkspaceStorageLock, arguments).Scan(&reference, &generation, &state)

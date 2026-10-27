@@ -84,6 +84,7 @@ type Result struct {
 	ToolCalls           []runtimecontract.NativeToolCall `json:"ToolCalls,omitempty"`
 	rolloutCapture      *rolloutCaptureProof
 	providerDiagnostic  *runtimecontract.ProviderFailureDiagnostic
+	workspaceJoin       *workspaceJoinProof
 }
 
 // ProviderDiagnostic returns a copy only of the private diagnostic matching the exact input binding;

@@ -289,6 +289,7 @@ func (config Config) validate() error {
 		!validSHA256(config.RoleImageToolchainSHA256) ||
 		config.RoleRuntimeContractRevision == 0 || !validSHA256(config.RoleRuntimeContractSHA256) ||
 		config.WorkspaceStorageProfile != "" && config.WorkspaceStorageProfile != runtimecontract.WorkspaceStorageProfile ||
+		config.WorkspaceStorageProfile == runtimecontract.WorkspaceStorageProfile && config.RoleRuntimeContractRevision != runtimecontract.WorkspaceStorageRuntimeContractRevision ||
 		config.AuthorityVerifierUID == 0 || config.AuthorityVerifierGID == 0 ||
 		config.OIDCAudience != "kodex-control-api" || config.OIDCTLSServerName == "" || net.ParseIP(config.OIDCTLSServerName) != nil ||
 		config.OIDCRefreshInterval < 10*time.Second || config.OIDCRefreshInterval > time.Minute ||

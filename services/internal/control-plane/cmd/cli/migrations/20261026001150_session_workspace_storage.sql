@@ -21,6 +21,8 @@ CREATE TABLE control_plane.session_workspace_storage (
     writer_lease_id uuid REFERENCES control_plane.runtime_leases(id) DEFERRABLE INITIALLY IMMEDIATE,
     writer_acknowledgement text CHECK (writer_acknowledgement IS NULL OR octet_length(writer_acknowledgement) BETWEEN 1 AND 2048),
     quiescence_record text CHECK (quiescence_record IS NULL OR octet_length(quiescence_record) BETWEEN 1 AND 2048),
+    block_reason text NOT NULL DEFAULT '' CHECK (block_reason IN ('','POD_MISSING','POD_UNREACHABLE','PVC_MISSING','PVC_REPLACED','OWNERSHIP_CHANGED','WRITER_JOIN_UNCONFIRMED')),
+    writer_released boolean NOT NULL DEFAULT false,
     source_archive_id uuid REFERENCES control_plane.session_archives(id) DEFERRABLE INITIALLY IMMEDIATE,
     current_archive_id uuid REFERENCES control_plane.session_archives(id) DEFERRABLE INITIALLY IMMEDIATE,
     destructive_task_id uuid REFERENCES control_plane.session_archive_tasks(id) DEFERRABLE INITIALLY IMMEDIATE,
@@ -42,6 +44,12 @@ CREATE TABLE control_plane.session_workspace_storage (
     ),
     CONSTRAINT session_workspace_destructive_required CHECK (
         (state='DELETE_READY')=(destructive_task_id IS NOT NULL)
+    ),
+    CONSTRAINT session_workspace_blocked_shape CHECK (
+        (state='BLOCKED')=(block_reason<>'') AND (state<>'BLOCKED' OR quiescence_record IS NULL)
+    ),
+    CONSTRAINT session_workspace_released_shape CHECK (
+        NOT writer_released OR (quiescence_record IS NOT NULL AND state IN ('CHECKPOINT_PENDING','CHECKPOINT_READY','DELETE_READY','ARCHIVED','PURGED'))
     )
 );
 
@@ -73,7 +81,7 @@ BEGIN
     END IF;
     IF TG_OP='INSERT' THEN
         IF NEW.generation<>1 OR NEW.state<>'EMPTY' OR NEW.version<>1 OR NEW.writer_lease_id IS NOT NULL OR
-            NEW.source_archive_id IS NOT NULL OR NEW.current_archive_id IS NOT NULL THEN
+            NEW.source_archive_id IS NOT NULL OR NEW.current_archive_id IS NOT NULL OR NEW.writer_released THEN
             RAISE EXCEPTION 'session workspace initial state is invalid';
         END IF;
     ELSE
@@ -86,6 +94,7 @@ BEGIN
             IF NEW.generation<>OLD.generation+1 OR OLD.state NOT IN ('CHECKPOINT_READY','RESTORED') OR
                 NEW.state<>'RESTORE_READY' OR NEW.source_archive_id IS NULL OR
                 NEW.source_archive_id IS DISTINCT FROM OLD.current_archive_id OR NEW.writer_lease_id IS NOT NULL OR
+                NOT OLD.writer_released OR NEW.writer_released OR
                 NEW.writer_acknowledgement IS NOT NULL OR NEW.quiescence_record IS NOT NULL OR NEW.current_archive_id IS NOT NULL THEN
                 RAISE EXCEPTION 'session workspace generation is not checkpointed';
             END IF;
@@ -94,14 +103,14 @@ BEGIN
             (OLD.state='WRITER_PENDING' AND NEW.state='WRITING') OR
             (OLD.state='WRITING' AND NEW.state IN ('QUIESCING','CHECKPOINT_PENDING')) OR
             (OLD.state='QUIESCING' AND NEW.state='CHECKPOINT_PENDING') OR
-            (OLD.state='CHECKPOINT_PENDING' AND NEW.state='CHECKPOINT_READY') OR
+            (OLD.state='CHECKPOINT_PENDING' AND NEW.state='CHECKPOINT_READY' AND OLD.writer_released) OR
             (OLD.state='CHECKPOINT_READY' AND NEW.state='DELETE_READY') OR
             (OLD.state='DELETE_READY' AND NEW.state='ARCHIVED') OR
             (OLD.state='ARCHIVED' AND NEW.state='RESTORE_READY') OR
             (OLD.state='RESTORE_READY' AND NEW.state='RESTORING') OR
             (OLD.state='RESTORING' AND NEW.state='RESTORED') OR
             (OLD.state='BLOCKED' AND NEW.state='CHECKPOINT_PENDING' AND OLD.writer_acknowledgement IS NOT NULL) OR
-            (NEW.state='BLOCKED') OR
+            (NEW.state='BLOCKED' AND NEW.quiescence_record IS NULL) OR
             (NEW.state='PURGED' AND OLD.state IN ('CHECKPOINT_READY','ARCHIVED','RESTORED'))
         ) THEN
             RAISE EXCEPTION 'session workspace transition is invalid';
@@ -114,6 +123,17 @@ BEGIN
             (OLD.current_archive_id IS NOT NULL AND NEW.current_archive_id IS DISTINCT FROM OLD.current_archive_id)
         ) THEN
             RAISE EXCEPTION 'session workspace execution pins are immutable';
+        END IF;
+        IF NEW.generation=OLD.generation AND (
+            (OLD.writer_released AND NOT NEW.writer_released) OR
+            (NOT OLD.writer_released AND NEW.writer_released AND
+                (OLD.state<>'CHECKPOINT_PENDING' OR NEW.state<>'CHECKPOINT_PENDING' OR OLD.quiescence_record IS NULL))
+        ) THEN
+            RAISE EXCEPTION 'session workspace released writer is immutable';
+        END IF;
+        IF OLD.block_reason<>'' AND NEW.block_reason IS DISTINCT FROM OLD.block_reason AND
+            NOT (NEW.state='CHECKPOINT_PENDING' AND NEW.block_reason='' AND NEW.quiescence_record IS NOT NULL) THEN
+            RAISE EXCEPTION 'session workspace blocked cause is immutable';
         END IF;
     END IF;
     IF NEW.writer_lease_id IS NOT NULL AND NOT EXISTS (

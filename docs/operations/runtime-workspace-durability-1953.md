@@ -120,3 +120,49 @@ Default legacy означает отсутствие новых bindings, а н�
 Только этот init получает private PVC root, остальные containers — exact
 work subPath и отдельные read-only inode/ACK records. Другой live consumer
 той же PVC закрывает BIND; один RWO access mode не доказывает exclusivity.
+
+
+## Неизменяемый outcome и текущая storage tuple
+
+V2 требует точный role runtime contract revision4; opt-in не повышает старый
+образ revision3. Nil binding сохраняет legacy профиль. Перед назначением V2
+оператор отдельно подтверждает actual image/contract SHA и все readers.
+
+| Наблюдение RC | Условие владельца | Изменение storage | Полномочия выполнения |
+| --- | --- | --- | --- |
+| BIND | Active exact lease/RR, current generation и pinned contract4; проверка до receipt replay | WRITER_PENDING → WRITING, immutable ACK | Новые run/grant не создаются |
+| BLOCKED | Exact frozen lease/current writer; причина из закрытого списка, ACK уже записан | WRITING/QUIESCING → BLOCKED; первая причина сохраняется | UNKNOWN не становится resolved |
+| QUIESCENT | Exact уже известный writer и positive current owned-container proof, в том числе после BLOCKED/terminal | CHECKPOINT_PENDING и immutable join | Не открывает lease, writer или restore |
+| RELEASED | Ранее записанный exact positive join и authoritative отсутствие прежнего Pod | Append-only writerReleased | Только после этого доступен checkpoint; отсутствие без join ничего не разрешает |
+
+Закрытые причины BLOCKED: POD_MISSING, POD_UNREACHABLE, PVC_MISSING,
+PVC_REPLACED, OWNERSHIP_CHANGED и WRITER_JOIN_UNCONFIRMED. Все они сохраняют
+PVC и замораживают продвижение нового writer. Поздний exact QUIESCENT может
+закрыть неизвестность только того же writer; данные и старый audit не стираются.
+
+Command receipt хранит immutable ACK/committed phase и exact committed join
+для QUIESCENT/RELEASED. `currentTuple`, текущие state/reason/released и текущий
+join — отдельный readback под exact owner lock, включая повторную выдачу receipt.
+Чужое поколение не заимствует этот readback. Исторический RELEASED outcome
+допускает очистку только прежних private ticket/projection/policy с UID
+preconditions и новым readback отсутствия Pod; он не разрешает PVC deletion,
+restore или новое выполнение. Semantic replay этих storage outcomes не зависит
+от общего24h request TTL, но сохраняет все exact caller/lease/payload guards.
+
+RC сохраняет ticket и сеть до owner ACK, сначала снимает только собственный
+finalizer по UID/resourceVersion CAS, затем подтверждает исчезновение Pod.
+Клиент модели не может прислать positive QUIESCENT через обычный callback:
+этот факт устанавливает RC по terminal statuses и sealed provider join record.
+Отдельный init-only случай требует failed deleting Pod, явного завершения
+начавшихся init containers и положительных waiting/no-ID/no-restart statuses
+всех никогда не стартовавших main containers. Missing Pod этим доказательством
+не является. Role/provider process group join дополняется завершением всего
+container перед checkpoint, поэтому отдельный detached descendant не обходит
+storage barrier.
+
+Создание private ancestor directories и tree включает fsync(child) и
+fsync(parent), а records — file fsync и generation-directory fsync. После
+crash между полным mount.json и отсутствующим writer.json fresh BIND допускает
+дописать ACK только при неизменном protected proof и пустом либо точно
+восстановленном tree. Частичные/чужие records и изменённое дерево сохраняются
+в закрытом отказе; существующие bytes не удаляются ради повторной попытки.

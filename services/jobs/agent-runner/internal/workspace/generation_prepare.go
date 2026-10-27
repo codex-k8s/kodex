@@ -46,16 +46,22 @@ func PrepareBoundGeneration(ctx context.Context, input runtimecontract.RunnerInp
 		volume.Gid != 29000 || volume.Mode&0o070 != 0o070 {
 		return &Denial{Reason: runtimecontract.RuntimeWorkspacePathOutsideWorkspace}
 	}
-	return prepareBoundGenerationAt(ctx, root, input, ack)
+	return prepareBoundGenerationAt(ctx, root, input, ack, generationFileOwner{uid: 10001, gid: 29000})
 }
+
+// generationFileOwner supplies trusted process IDs to descriptor helpers, never runtime input fields.
+// Production fixes UID10001/GID29000; isolated filesystem tests use their own unprivileged process IDs.
+// generationFileOwner передаёт trusted process IDs descriptor helpers, не поля runtime input.
+// Production закрепляет UID10001/GID29000; filesystem tests используют свои unprivileged process IDs.
+type generationFileOwner struct{ uid, gid uint32 }
 
 // prepareBoundGenerationAt owns descriptor-relative creation and never removes previous generations.
 // Its root is trusted by the production opener; shape validation alone is insufficient to call it.
 // prepareBoundGenerationAt выполняет descriptor-relative создание без удаления прежних generations.
 // Production opener доказывает root; одной shape validation недостаточно для вызова.
-func prepareBoundGenerationAt(ctx context.Context, root int, input runtimecontract.RunnerInput, ack runtimecontract.WorkspaceWriterAcknowledgement) error {
+func prepareBoundGenerationAt(ctx context.Context, root int, input runtimecontract.RunnerInput, ack runtimecontract.WorkspaceWriterAcknowledgement, owner generationFileOwner) error {
 	denied := &Denial{Reason: runtimecontract.RuntimeWorkspacePathOutsideWorkspace}
-	if ctx.Err() != nil || !ack.Matches(input) {
+	if ctx.Err() != nil || uint32(os.Geteuid()) != owner.uid || !ack.Matches(input) {
 		return denied
 	}
 	subpath, err := input.WorkspaceStorage.GenerationSubPath()
@@ -83,7 +89,11 @@ func prepareBoundGenerationAt(ctx context.Context, root int, input runtimecontra
 			return denied
 		}
 		var info unix.Stat_t
-		if created && unix.Fchmod(next, 0o700) != nil || unix.Fstat(next, &info) != nil || info.Uid != 10001 || info.Mode&0o7777 != 0o700 {
+		if created && unix.Fchmod(next, 0o700) != nil || unix.Fstat(next, &info) != nil || info.Uid != owner.uid || info.Mode&0o7777 != 0o700 {
+			unix.Close(next)
+			return denied
+		}
+		if created && (unix.Fsync(next) != nil || unix.Fsync(current) != nil) {
 			unix.Close(next)
 			return denied
 		}
@@ -101,20 +111,23 @@ func prepareBoundGenerationAt(ctx context.Context, root int, input runtimecontra
 		return denied
 	}
 	defer unix.Close(tree)
-	if created && (unix.Fchown(tree, -1, 29000) != nil || unix.Fchmod(tree, 0o2770) != nil) {
+	if created && (unix.Fchown(tree, -1, int(owner.gid)) != nil || unix.Fchmod(tree, 0o2770) != nil) {
+		return denied
+	}
+	if created && (unix.Fsync(tree) != nil || unix.Fsync(current) != nil) {
 		return denied
 	}
 	var info unix.Stat_t
-	if unix.Fstat(tree, &info) != nil || info.Uid != 10001 || info.Gid != 29000 || info.Mode&0o7777 != 0o2770 {
+	if unix.Fstat(tree, &info) != nil || info.Uid != owner.uid || info.Gid != owner.gid || info.Mode&0o7777 != 0o2770 {
 		return denied
 	}
 	expectedAck, err := runtimecontract.EncodeWorkspaceWriterAcknowledgement(ack)
 	if err != nil {
 		return denied
 	}
-	previous, err := readGenerationRecord(current, generationWriterFile, runtimecontract.MaximumWorkspaceQuiescenceBytes)
+	previous, err := readGenerationRecord(current, generationWriterFile, runtimecontract.MaximumWorkspaceQuiescenceBytes, owner)
 	if err == nil {
-		proofRaw, proofErr := readGenerationRecord(current, generationMountFile, runtimecontract.MaximumWorkspaceMountProofBytes)
+		proofRaw, proofErr := readGenerationRecord(current, generationMountFile, runtimecontract.MaximumWorkspaceMountProofBytes, owner)
 		proof, decodeErr := runtimecontract.DecodeWorkspaceMountProof(proofRaw)
 		if !bytes.Equal(previous, expectedAck) || proofErr != nil || decodeErr != nil || !proof.Matches(input, uint64(info.Dev), info.Ino) {
 			return denied
@@ -126,7 +139,7 @@ func prepareBoundGenerationAt(ctx context.Context, root int, input runtimecontra
 	}
 	if source := input.WorkspaceStorage.Source; source != nil {
 		expected, err := json.Marshal(source)
-		actual, readErr := readGenerationRecord(current, generationSourceFile, runtimecontract.MaximumWorkspaceManifestBytes)
+		actual, readErr := readGenerationRecord(current, generationSourceFile, runtimecontract.MaximumWorkspaceManifestBytes, owner)
 		if created || err != nil || readErr != nil || !bytes.Equal(expected, actual) {
 			return denied
 		}
@@ -147,8 +160,18 @@ func prepareBoundGenerationAt(ctx context.Context, root int, input runtimecontra
 		return denied
 	}
 	proofRaw, err := runtimecontract.EncodeWorkspaceMountProof(proof)
-	if err != nil || writeGenerationRecord(current, generationMountFile, proofRaw) != nil ||
-		writeGenerationRecord(current, generationWriterFile, expectedAck) != nil || unix.Fsync(current) != nil || ctx.Err() != nil {
+	if err != nil {
+		return denied
+	}
+	previousProof, readErr := readGenerationRecord(current, generationMountFile, runtimecontract.MaximumWorkspaceMountProofBytes, owner)
+	if readErr == nil {
+		if !bytes.Equal(previousProof, proofRaw) {
+			return denied
+		}
+	} else if !errors.Is(readErr, unix.ENOENT) || writeGenerationRecord(current, generationMountFile, proofRaw, owner) != nil {
+		return denied
+	}
+	if writeGenerationRecord(current, generationWriterFile, expectedAck, owner) != nil || unix.Fsync(current) != nil || ctx.Err() != nil {
 		return denied
 	}
 	return nil
@@ -158,7 +181,7 @@ func prepareBoundGenerationAt(ctx context.Context, root int, input runtimecontra
 // It follows no link and retains no raw operating-system error in the public failure path.
 // readGenerationRecord принимает owned private regular file и отдельно возвращает ENOENT.
 // Ссылки не прослеживаются; raw OS error не попадает в public failure path.
-func readGenerationRecord(parent int, name string, maximum int64) ([]byte, error) {
+func readGenerationRecord(parent int, name string, maximum int64, owner generationFileOwner) ([]byte, error) {
 	fd, err := unix.Openat(parent, name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return nil, err
@@ -166,7 +189,7 @@ func readGenerationRecord(parent int, name string, maximum int64) ([]byte, error
 	file := os.NewFile(uintptr(fd), "bound-work-record")
 	defer file.Close()
 	var info unix.Stat_t
-	if unix.Fstat(fd, &info) != nil || info.Mode&unix.S_IFMT != unix.S_IFREG || info.Uid != 10001 || info.Gid != 29000 ||
+	if unix.Fstat(fd, &info) != nil || info.Mode&unix.S_IFMT != unix.S_IFREG || info.Uid != owner.uid || info.Gid != owner.gid ||
 		info.Nlink != 1 || info.Mode&0o7777 != 0o440 || info.Size < 1 || info.Size > maximum {
 		return nil, &Denial{Reason: runtimecontract.RuntimeWorkspacePathOutsideWorkspace}
 	}
@@ -181,13 +204,13 @@ func readGenerationRecord(parent int, name string, maximum int64) ([]byte, error
 // Its callers already hold the authenticated BIND; failed partial records are preserved, not erased.
 // writeGenerationRecord создаёт synced immutable local record без замены прежних bytes.
 // Caller уже имеет authenticated BIND; partial records сохраняются, а не удаляются.
-func writeGenerationRecord(parent int, name string, raw []byte) error {
+func writeGenerationRecord(parent int, name string, raw []byte, owner generationFileOwner) error {
 	fd, err := unix.Openat(parent, name, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o600)
 	if err != nil {
 		return err
 	}
 	defer unix.Close(fd)
-	if writeFull(fd, raw) != nil || unix.Fchown(fd, -1, 29000) != nil || unix.Fchmod(fd, 0o440) != nil || unix.Fsync(fd) != nil {
+	if writeFull(fd, raw) != nil || unix.Fchown(fd, -1, int(owner.gid)) != nil || unix.Fchmod(fd, 0o440) != nil || unix.Fsync(fd) != nil {
 		return &Denial{Reason: runtimecontract.RuntimeWorkspaceIOError}
 	}
 	return nil

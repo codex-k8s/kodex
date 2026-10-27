@@ -23,21 +23,51 @@ func (server *Server) ObserveWorkspace(ctx context.Context, request *controlplan
 		phase = runtimecontract.WorkspaceObserveBind
 	case controlplanev1.RuntimeWorkspaceObservationPhase_RUNTIME_WORKSPACE_OBSERVATION_PHASE_QUIESCENT:
 		phase = runtimecontract.WorkspaceObserveQuiescent
+	case controlplanev1.RuntimeWorkspaceObservationPhase_RUNTIME_WORKSPACE_OBSERVATION_PHASE_BLOCKED:
+		phase = runtimecontract.WorkspaceObserveBlocked
+	case controlplanev1.RuntimeWorkspaceObservationPhase_RUNTIME_WORKSPACE_OBSERVATION_PHASE_RELEASED:
+		phase = runtimecontract.WorkspaceObserveReleased
 	default:
 		return nil, transportError(errs.ErrInvalid)
 	}
 	payload := command.WorkspaceObservationInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(),
 		RuntimeRevisionDigest: request.GetRuntimeRevisionDigest(), ExecutionBindingDigest: request.GetExecutionBindingDigest(),
 		WorkspaceRef: request.GetWorkspaceRef(), WorkspaceGeneration: request.GetWorkspaceGeneration(), Phase: phase,
-		PodUID: request.GetPodUid(), PVCUID: request.GetPvcUid(), Quiescence: append([]byte(nil), request.GetQuiescence()...)}
+		PodUID: request.GetPodUid(), PVCUID: request.GetPvcUid(), Quiescence: append([]byte(nil), request.GetQuiescence()...), BlockReason: request.GetBlockReason()}
 	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_ObserveWorkspace_FullMethodName,
 		command.ObserveWorkspace, request.GetMutation(), payload)
 	if err != nil {
 		return nil, err
 	}
 	raw := []byte(mapString(result.Runtime, "workspaceWriterAck"))
-	if _, err := runtimecontract.DecodeWorkspaceWriterAcknowledgement(raw); err != nil {
+	ack, decodeErr := runtimecontract.DecodeWorkspaceWriterAcknowledgement(raw)
+	state, reason, joined := mapString(result.Runtime, "workspaceStorageState"), mapString(result.Runtime, "workspaceBlockReason"), []byte(mapString(result.Runtime, "workspaceQuiescence"))
+	currentTuple, released := mapBool(result.Runtime, "workspaceCurrentTuple"), mapBool(result.Runtime, "workspaceWriterReleased")
+	if decodeErr != nil || currentTuple && !runtimecontract.ValidWorkspaceStorageState(state) || !currentTuple && (state != "" || reason != "" || len(joined) != 0 || released) || len(joined) > runtimecontract.MaximumWorkspaceQuiescenceBytes ||
+		state == "BLOCKED" && (!runtimecontract.ValidWorkspaceBlockReason(reason) || len(joined) != 0) || state != "BLOCKED" && reason != "" {
 		return nil, transportError(errs.ErrUnavailable)
 	}
-	return &controlplanev1.ObserveWorkspaceResponse{WriterAcknowledgement: raw}, nil
+	if len(joined) > 0 {
+		record, err := runtimecontract.DecodeWorkspaceQuiescence(joined)
+		if err != nil || record.Writer != ack.Writer || record.Scope != ack.Scope || record.WorkspaceRef != ack.WorkspaceRef || record.Generation != ack.Generation {
+			return nil, transportError(errs.ErrUnavailable)
+		}
+	}
+	committedPhase, committed := mapString(result.Runtime, "workspaceCommittedPhase"), []byte(mapString(result.Runtime, "workspaceCommittedQuiescence"))
+	switch committedPhase {
+	case runtimecontract.WorkspaceObserveBind, runtimecontract.WorkspaceObserveBlocked:
+		if len(committed) != 0 {
+			return nil, transportError(errs.ErrUnavailable)
+		}
+	case runtimecontract.WorkspaceObserveQuiescent, runtimecontract.WorkspaceObserveReleased:
+		record, err := runtimecontract.DecodeWorkspaceQuiescence(committed)
+		if err != nil || record.Writer != ack.Writer || record.Scope != ack.Scope || record.WorkspaceRef != ack.WorkspaceRef || record.Generation != ack.Generation {
+			return nil, transportError(errs.ErrUnavailable)
+		}
+	default:
+		return nil, transportError(errs.ErrUnavailable)
+	}
+	return &controlplanev1.ObserveWorkspaceResponse{WriterAcknowledgement: raw,
+		StorageState: state, Quiescence: joined, BlockReason: reason, CurrentTuple: currentTuple, WriterReleased: released,
+		CommittedPhase: committedPhase, CommittedQuiescence: committed}, nil
 }

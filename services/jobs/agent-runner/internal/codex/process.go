@@ -396,6 +396,9 @@ func executeLocalWithInputProof(ctx context.Context, input model.Input, prompt [
 				result = captureFailedRollout(input, server, state, result)
 			}
 		}
+		if server.captureReady() {
+			result.workspaceJoin = newWorkspaceJoinProof(input)
+		}
 	}()
 	initialize := map[string]any{
 		"clientInfo": map[string]string{"name": "kodex-agent-runner", "title": "Kodex agent-runner", "version": "1"},

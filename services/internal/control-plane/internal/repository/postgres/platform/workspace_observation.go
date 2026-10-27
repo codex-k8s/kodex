@@ -32,6 +32,18 @@ var (
 	// queryWorkspaceObservationQuiescent сохраняет только matching already-known stopped writer.
 	//go:embed sql/workspace_observation__quiescent.sql
 	queryWorkspaceObservationQuiescent string
+	// queryWorkspaceObservationBlock preserves unknown work without changing its run or authority.
+	// queryWorkspaceObservationBlock сохраняет unknown work без изменения run или authority.
+	//go:embed sql/workspace_observation__block.sql
+	queryWorkspaceObservationBlock string
+	// queryWorkspaceObservationReleased gates checkpoint work on acknowledged physical Pod disappearance.
+	// queryWorkspaceObservationReleased допускает checkpoint work после подтверждённого исчезновения Pod.
+	//go:embed sql/workspace_observation__released.sql
+	queryWorkspaceObservationReleased string
+	// queryWorkspaceObservationReceipt retains semantic stopped-writer replay beyond generic request TTL.
+	// queryWorkspaceObservationReceipt сохраняет semantic stopped-writer replay дольше generic request TTL.
+	//go:embed sql/workspace_observation__receipt.sql
+	queryWorkspaceObservationReceipt string
 )
 
 // workspaceObservationLease separates immutable execution identity from mutable storage lifecycle.
@@ -40,6 +52,8 @@ var (
 // Поля не являются grant; BIND и past-fact authorization ниже проверяются отдельно.
 type workspaceObservationLease struct {
 	storageID, storageRef, storageState, writerLeaseID, ackRaw, joinRaw string
+	blockReason                                                         string
+	writerReleased                                                      bool
 	storageGeneration, storageVersion                                   int64
 	leaseID, fenceDigest, leaseState, projectID                         string
 	leaseGeneration                                                     int64
@@ -84,7 +98,7 @@ func readWorkspaceObservationLease(ctx context.Context, tx pgx.Tx, current scope
 	err := tx.QueryRow(ctx, queryWorkspaceObservationLease, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "lease_ref": payload.LeaseRef,
 	}).Scan(&result.storageID, &result.storageRef, &result.storageGeneration, &result.storageState, &result.storageVersion,
-		&result.writerLeaseID, &result.ackRaw, &result.joinRaw, &result.leaseID, &result.fenceDigest, &result.leaseGeneration,
+		&result.writerLeaseID, &result.ackRaw, &result.joinRaw, &result.blockReason, &result.writerReleased, &result.leaseID, &result.fenceDigest, &result.leaseGeneration,
 		&result.leaseState, &result.expiresAt, &input.RuntimeRevisionRef, &input.RuntimeRevisionVersion, &input.RuntimeRevisionDigest,
 		&input.Attempt, &snapshotRaw, &input.OrganizationRef, &input.ProjectRef, &input.SessionRef, &input.AgentRef,
 		&input.RunRef, &input.NodeRef, &input.TurnRef, &input.InputDigest, &result.projectID, &result.active)
@@ -101,6 +115,7 @@ func readWorkspaceObservationLease(ctx context.Context, tx pgx.Tx, current scope
 	input.Mode, input.AssistantScope = runtimecontract.RunnerModeTurn, runtimecontract.AssistantScopeNone
 	input.LeaseRef, input.LeaseFence, input.LeaseGeneration = payload.LeaseRef, payload.Fence, payload.Generation
 	input.ExecutionBindingDigest = payload.ExecutionBindingDigest
+	input.RoleRuntimeContractRevision = uint64(runtimeRevisionMapInt64(snapshot, "roleRuntimeContractRevision"))
 	input.WorkspaceStorage, err = runtimeWorkspaceSnapshotBinding(snapshot)
 	if err != nil || input.WorkspaceStorage == nil {
 		return result, errs.ErrConflict
@@ -122,7 +137,8 @@ func readWorkspaceObservationLease(ctx context.Context, tx pgx.Tx, current scope
 	fence := sha256.Sum256([]byte(payload.Fence))
 	if payload.Generation < 1 || result.leaseGeneration != payload.Generation || result.fenceDigest != hex.EncodeToString(fence[:]) ||
 		input.RuntimeRevisionDigest != payload.RuntimeRevisionDigest || input.WorkspaceStorage.WorkspaceRef != payload.WorkspaceRef ||
-		input.WorkspaceStorage.Generation != payload.WorkspaceGeneration || uuid.Validate(payload.PodUID) != nil || uuid.Validate(payload.PVCUID) != nil {
+		input.WorkspaceStorage.Generation != payload.WorkspaceGeneration ||
+		(payload.Phase == runtimecontract.WorkspaceObserveBind || payload.Phase == runtimecontract.WorkspaceObserveQuiescent) && (uuid.Validate(payload.PodUID) != nil || uuid.Validate(payload.PVCUID) != nil) {
 		return result, errs.ErrForbidden
 	}
 	return result, nil
@@ -134,12 +150,29 @@ func readWorkspaceObservationLease(ctx context.Context, tx pgx.Tx, current scope
 // QUIESCENT replay может вернуть historical ACK после terminal, но не создать нового writer.
 func (repository *Repository) authorizeWorkspaceObservationTx(ctx context.Context, tx pgx.Tx, current scope, input command.Command) error {
 	payload, valid := input.Payload.(command.WorkspaceObservationInput)
-	if !valid || payload.Phase != runtimecontract.WorkspaceObserveBind && payload.Phase != runtimecontract.WorkspaceObserveQuiescent {
+	if !valid || payload.Phase != runtimecontract.WorkspaceObserveBind && payload.Phase != runtimecontract.WorkspaceObserveQuiescent && payload.Phase != runtimecontract.WorkspaceObserveBlocked && payload.Phase != runtimecontract.WorkspaceObserveReleased {
 		return errs.ErrInvalid
 	}
 	locked, err := readWorkspaceObservationLease(ctx, tx, current, payload)
 	if err != nil {
 		return err
+	}
+	if payload.Phase == runtimecontract.WorkspaceObserveReleased {
+		if len(payload.Quiescence) != 0 || payload.PodUID != "" || payload.PVCUID != "" || payload.BlockReason != "" {
+			return errs.ErrInvalid
+		}
+		return nil
+	}
+	if payload.Phase == runtimecontract.WorkspaceObserveBlocked {
+		ack, err := runtimecontract.DecodeWorkspaceWriterAcknowledgement([]byte(locked.ackRaw))
+		if err != nil || !ack.Matches(locked.input) || !runtimecontract.ValidWorkspaceBlockReason(payload.BlockReason) || len(payload.Quiescence) != 0 ||
+			payload.PodUID != "" || payload.PVCUID != "" || locked.writerLeaseID != locked.leaseID || locked.storageGeneration != payload.WorkspaceGeneration {
+			return errs.ErrForbidden
+		}
+		return nil
+	}
+	if payload.BlockReason != "" {
+		return errs.ErrInvalid
 	}
 	observation := runtimecontract.RunnerWorkspaceObservation{RuntimeRevisionDigest: payload.RuntimeRevisionDigest,
 		Phase: payload.Phase, WorkspaceRef: payload.WorkspaceRef, Generation: payload.WorkspaceGeneration}
@@ -148,6 +181,7 @@ func (repository *Repository) authorizeWorkspaceObservationTx(ctx context.Contex
 		if err != nil || !joined.Matches(locked.input, *locked.input.WorkspaceStorage, payload.PodUID, payload.PVCUID) {
 			return errs.ErrInvalid
 		}
+		observation.Phase = runtimecontract.WorkspaceObserveQuiescent
 		observation.Quiescence = &joined
 	} else if len(payload.Quiescence) != 0 || repository.roleImages.WorkspaceStorageProfile != runtimecontract.WorkspaceStorageProfile ||
 		!locked.active || locked.leaseState != "CLAIMED" || !locked.expiresAt.After(time.Now()) ||
@@ -177,6 +211,12 @@ func (repository *Repository) observeWorkspace(ctx context.Context, tx pgx.Tx, c
 	if locked.storageRef != payload.WorkspaceRef || locked.storageGeneration != payload.WorkspaceGeneration || locked.writerLeaseID != locked.leaseID {
 		return commandOutcome{}, errs.ErrConflict
 	}
+	if payload.Phase == runtimecontract.WorkspaceObserveReleased {
+		return repository.observeWorkspaceReleased(ctx, tx, current, locked)
+	}
+	if payload.Phase == runtimecontract.WorkspaceObserveBlocked {
+		return repository.observeWorkspaceBlocked(ctx, tx, current, locked, payload)
+	}
 	writer := runtimecontract.WorkspaceWriterCommitment{RunRef: locked.input.RunRef, NodeRef: locked.input.NodeRef, TurnRef: locked.input.TurnRef,
 		RuntimeRevisionRef: locked.input.RuntimeRevisionRef, RuntimeRevisionVersion: locked.input.RuntimeRevisionVersion,
 		RuntimeRevisionDigest: locked.input.RuntimeRevisionDigest, ExecutionBindingDigest: payload.ExecutionBindingDigest,
@@ -200,6 +240,7 @@ func (repository *Repository) observeWorkspace(ctx context.Context, tx pgx.Tx, c
 		} else if err := tx.QueryRow(ctx, queryWorkspaceObservationBind, arguments).Scan(&version); err != nil {
 			return commandOutcome{}, errs.ErrConflict
 		}
+		locked.storageState = "WRITING"
 	case runtimecontract.WorkspaceObserveQuiescent:
 		if locked.ackRaw != string(raw) {
 			return commandOutcome{}, errs.ErrForbidden
@@ -213,11 +254,136 @@ func (repository *Repository) observeWorkspace(ctx context.Context, tx pgx.Tx, c
 			if err := tx.QueryRow(ctx, queryWorkspaceObservationQuiescent, arguments).Scan(&version); err != nil {
 				return commandOutcome{}, errs.ErrConflict
 			}
+			locked.storageState, locked.blockReason, locked.joinRaw = "CHECKPOINT_PENDING", "", string(payload.Quiescence)
 		}
 	default:
 		return commandOutcome{}, errs.ErrInvalid
 	}
-	return commandOutcome{result: command.Result{Runtime: map[string]any{"workspaceWriterAck": string(raw)}},
+	return commandOutcome{result: command.Result{Runtime: map[string]any{"workspaceWriterAck": string(raw), "workspaceCommittedPhase": payload.Phase, "workspaceCommittedQuiescence": string(payload.Quiescence), "workspaceStorageState": locked.storageState,
+		"workspaceQuiescence": locked.joinRaw, "workspaceBlockReason": locked.blockReason, "workspaceCurrentTuple": true, "workspaceWriterReleased": locked.writerReleased}},
 		projectID: locked.projectID, projectRef: locked.input.ProjectRef, resourceKind: "RUN", resourceRef: locked.input.RunRef,
 		summary: "i18n:SESSION_WORKSPACE_OBSERVED"}, nil
+}
+
+// observeWorkspaceBlocked records the first closed cause without overwriting a positive saved join.
+// Missing-after-ACK readback returns that exact stored past fact; neither branch grants a new writer.
+// observeWorkspaceBlocked сохраняет первую closed cause, не заменяя positive saved join.
+// Missing-after-ACK readback возвращает exact stored past fact; новый writer не разрешается.
+func (repository *Repository) observeWorkspaceBlocked(ctx context.Context, tx pgx.Tx, current scope, locked workspaceObservationLease, payload command.WorkspaceObservationInput) (commandOutcome, error) {
+	ack, err := runtimecontract.DecodeWorkspaceWriterAcknowledgement([]byte(locked.ackRaw))
+	if err != nil || !ack.Matches(locked.input) || !runtimecontract.ValidWorkspaceBlockReason(payload.BlockReason) {
+		return commandOutcome{}, errs.ErrForbidden
+	}
+	if locked.joinRaw == "" {
+		if locked.storageState != "BLOCKED" {
+			err = tx.QueryRow(ctx, queryWorkspaceObservationBlock, pgx.StrictNamedArgs{"organization_id": current.organizationID, "workspace_id": locked.storageID,
+				"workspace_generation": locked.storageGeneration, "version": locked.storageVersion, "lease_id": locked.leaseID, "ack": locked.ackRaw, "reason": payload.BlockReason}).Scan(&locked.blockReason)
+			if err != nil {
+				return commandOutcome{}, errs.ErrConflict
+			}
+			locked.storageState = "BLOCKED"
+		}
+	} else {
+		record, err := runtimecontract.DecodeWorkspaceQuiescence([]byte(locked.joinRaw))
+		if err != nil || !record.Matches(locked.input, *locked.input.WorkspaceStorage, ack.Writer.PodUID, ack.Writer.PVCUID) {
+			return commandOutcome{}, errs.ErrConflict
+		}
+	}
+	return commandOutcome{result: command.Result{Runtime: map[string]any{"workspaceWriterAck": locked.ackRaw, "workspaceCommittedPhase": runtimecontract.WorkspaceObserveBlocked, "workspaceCommittedQuiescence": "", "workspaceStorageState": locked.storageState,
+		"workspaceQuiescence": locked.joinRaw, "workspaceBlockReason": locked.blockReason, "workspaceCurrentTuple": true, "workspaceWriterReleased": locked.writerReleased}}, projectID: locked.projectID, projectRef: locked.input.ProjectRef,
+		resourceKind: "RUN", resourceRef: locked.input.RunRef, summary: "i18n:SESSION_WORKSPACE_OBSERVED"}, nil
+}
+
+// workspaceObservationReceiptMetadata retains only the immutable owner ACK, not a cached current phase.
+// The response's current tuple fields are a separate locked readback on both first delivery and replay.
+// workspaceObservationReceiptMetadata сохраняет лишь immutable owner ACK, не cached current phase.
+// Current tuple fields ответа — отдельный locked readback при первой выдаче и replay.
+func workspaceObservationReceiptMetadata(kind command.Kind, result command.Result) command.Result {
+	if kind != command.ObserveWorkspace {
+		return result
+	}
+	result.Runtime = map[string]any{"workspaceWriterAck": result.Runtime["workspaceWriterAck"], "workspaceCommittedPhase": result.Runtime["workspaceCommittedPhase"], "workspaceCommittedQuiescence": result.Runtime["workspaceCommittedQuiescence"]}
+	return result
+}
+
+// refreshWorkspaceObservationReceipt reads the exact current writer without rewriting a stored receipt.
+// Historical generation replay returns only its ACK; it cannot authorize current cleanup or another writer.
+// refreshWorkspaceObservationReceipt читает exact current writer без изменения stored receipt.
+// Replay historical generation возвращает лишь ACK, не право current cleanup или нового writer.
+func (repository *Repository) refreshWorkspaceObservationReceipt(ctx context.Context, tx pgx.Tx, current scope, input command.Command, result *command.Result) error {
+	if input.Kind != command.ObserveWorkspace {
+		return nil
+	}
+	payload, ok := input.Payload.(command.WorkspaceObservationInput)
+	if !ok || result == nil {
+		return errs.ErrInvalid
+	}
+	locked, err := readWorkspaceObservationLease(ctx, tx, current, payload)
+	if err != nil {
+		return err
+	}
+	*result, err = workspaceObservationCurrentReadback(locked, payload, *result)
+	return err
+}
+
+// workspaceObservationCurrentReadback projects locked metadata into a new map, leaving receipt bytes immutable.
+// Old generations keep their committed outcome without borrowing another generation's current phase.
+// workspaceObservationCurrentReadback выводит locked metadata в новую map, не меняя receipt bytes.
+// Old generation сохраняет committed outcome, не заимствуя current phase нового поколения.
+func workspaceObservationCurrentReadback(locked workspaceObservationLease, payload command.WorkspaceObservationInput, result command.Result) (command.Result, error) {
+	stored, ok := result.Runtime["workspaceWriterAck"].(string)
+	if !ok {
+		return command.Result{}, errs.ErrConflict
+	}
+	ack, err := runtimecontract.DecodeWorkspaceWriterAcknowledgement([]byte(stored))
+	if err != nil {
+		return command.Result{}, errs.ErrConflict
+	}
+	result.Runtime = map[string]any{"workspaceWriterAck": stored,
+		"workspaceCommittedPhase":      result.Runtime["workspaceCommittedPhase"],
+		"workspaceCommittedQuiescence": result.Runtime["workspaceCommittedQuiescence"],
+		"workspaceCurrentTuple":        false}
+	if locked.storageGeneration != payload.WorkspaceGeneration || locked.writerLeaseID != locked.leaseID || locked.ackRaw != stored {
+		return result, nil
+	}
+	if !ack.Matches(locked.input) || !runtimecontract.ValidWorkspaceStorageState(locked.storageState) {
+		return command.Result{}, errs.ErrConflict
+	}
+	if locked.joinRaw != "" {
+		joined, err := runtimecontract.DecodeWorkspaceQuiescence([]byte(locked.joinRaw))
+		if err != nil || joined.Writer != ack.Writer || !joined.Matches(locked.input, *locked.input.WorkspaceStorage, ack.Writer.PodUID, ack.Writer.PVCUID) {
+			return command.Result{}, errs.ErrConflict
+		}
+	}
+	result.Runtime["workspaceCurrentTuple"] = true
+	result.Runtime["workspaceStorageState"] = locked.storageState
+	result.Runtime["workspaceQuiescence"] = locked.joinRaw
+	result.Runtime["workspaceBlockReason"] = locked.blockReason
+	result.Runtime["workspaceWriterReleased"] = locked.writerReleased
+	return result, nil
+}
+
+// observeWorkspaceReleased commits absence only for the already-known same positively joined writer.
+// Its immutable receipt is replayable after later generations, without opening their current authority.
+// observeWorkspaceReleased фиксирует отсутствие лишь для уже известного same positively joined writer.
+// Immutable receipt доступна после новых generations без открытия их current authority.
+func (repository *Repository) observeWorkspaceReleased(ctx context.Context, tx pgx.Tx, current scope, locked workspaceObservationLease) (commandOutcome, error) {
+	ack, err := runtimecontract.DecodeWorkspaceWriterAcknowledgement([]byte(locked.ackRaw))
+	joined, joinErr := runtimecontract.DecodeWorkspaceQuiescence([]byte(locked.joinRaw))
+	if err != nil || joinErr != nil || !ack.Matches(locked.input) || joined.Writer != ack.Writer ||
+		!joined.Matches(locked.input, *locked.input.WorkspaceStorage, ack.Writer.PodUID, ack.Writer.PVCUID) {
+		return commandOutcome{}, errs.ErrForbidden
+	}
+	if !locked.writerReleased {
+		var version int64
+		if err := tx.QueryRow(ctx, queryWorkspaceObservationReleased, pgx.StrictNamedArgs{"organization_id": current.organizationID, "workspace_id": locked.storageID,
+			"workspace_generation": locked.storageGeneration, "version": locked.storageVersion, "lease_id": locked.leaseID, "ack": locked.ackRaw, "record": locked.joinRaw}).Scan(&version); err != nil {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		locked.writerReleased = true
+	}
+	return commandOutcome{result: command.Result{Runtime: map[string]any{"workspaceWriterAck": locked.ackRaw, "workspaceCommittedPhase": runtimecontract.WorkspaceObserveReleased,
+		"workspaceCommittedQuiescence": locked.joinRaw, "workspaceCurrentTuple": true, "workspaceStorageState": locked.storageState, "workspaceQuiescence": locked.joinRaw,
+		"workspaceWriterReleased": true, "workspaceBlockReason": locked.blockReason}}, projectID: locked.projectID, projectRef: locked.input.ProjectRef,
+		resourceKind: "RUN", resourceRef: locked.input.RunRef, summary: "i18n:SESSION_WORKSPACE_OBSERVED"}, nil
 }

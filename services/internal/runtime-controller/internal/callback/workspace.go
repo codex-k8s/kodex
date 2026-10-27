@@ -29,7 +29,7 @@ func (server *Server) observeWorkspace(writer http.ResponseWriter, request *http
 	// QUIESCENT requires the separate finalizer/positive writer-join path; no phase-only fallback is permitted.
 	// QUIESCENT требует отдельный finalizer/positive writer-join path; phase-only fallback запрещён.
 	if payload.Phase != runtimecontract.WorkspaceObserveBind {
-		http.Error(writer, "runtime workspace quiescence is unavailable", http.StatusServiceUnavailable)
+		http.Error(writer, "runtime workspace quiescence requires controller observation", http.StatusForbidden)
 		return
 	}
 	observation, err := server.manager.ObserveWorkspaceBind(ctx, input)
@@ -51,7 +51,8 @@ func (server *Server) observeWorkspace(writer http.ResponseWriter, request *http
 	}
 	raw := response.GetWriterAcknowledgement()
 	ack, err := runtimecontract.DecodeWorkspaceWriterAcknowledgement(raw)
-	if err != nil || !ack.Matches(input) || ack.Writer.PodUID != observation.PodUID || ack.Writer.PVCUID != observation.PVCUID {
+	if err != nil || !ack.Matches(input) || ack.Writer.PodUID != observation.PodUID || ack.Writer.PVCUID != observation.PVCUID ||
+		!response.GetCurrentTuple() || response.GetStorageState() != "WRITING" || response.GetWriterReleased() || response.GetCommittedPhase() != runtimecontract.WorkspaceObserveBind {
 		http.Error(writer, "runtime workspace owner acknowledgement is invalid", http.StatusServiceUnavailable)
 		return
 	}

@@ -7,6 +7,21 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+const (
+	// workspaceStorageProfileAnnotation retains V2 cleanup dependencies across controller replacement.
+	// workspaceStorageProfileAnnotation сохраняет V2 cleanup dependencies после controller replacement.
+	workspaceStorageProfileAnnotation = "runtime.kodex.dev/workspace-storage-profile"
+	// workspaceStorageRefAnnotation pins the non-secret owner work identity for exact mount admission.
+	// workspaceStorageRefAnnotation закрепляет non-secret owner work identity для exact mount admission.
+	workspaceStorageRefAnnotation = "runtime.kodex.dev/workspace-storage-ref"
+	// workspaceStorageGenerationAnnotation pins the owner generation; metadata is not a writer grant.
+	// workspaceStorageGenerationAnnotation закрепляет owner generation; metadata не является writer grant.
+	workspaceStorageGenerationAnnotation = "runtime.kodex.dev/workspace-storage-generation"
+	// workspaceWriterFinalizer holds the exact owned Pod until positive quiescence is committed by its owner.
+	// workspaceWriterFinalizer удерживает exact owned Pod до owner commit positive quiescence.
+	workspaceWriterFinalizer = "runtime.kodex.dev/workspace-writer"
+)
+
 // configureWorkspaceStoragePod preserves legacy Pods and installs one exact V2 work mount after BIND.
 // The first initializer alone receives the private PVC root; no writable metadata mount reaches models.
 // configureWorkspaceStoragePod сохраняет legacy Pods и подключает exact V2 work mount после BIND.
@@ -23,6 +38,7 @@ func configureWorkspaceStoragePod(pod *corev1.Pod, input runtimecontract.RunnerI
 	if err != nil {
 		return false
 	}
+	pod.Finalizers = append(pod.Finalizers, workspaceWriterFinalizer)
 	metadata := strings.TrimSuffix(tree, "/tree")
 	work := corev1.VolumeMount{Name: "session", MountPath: runtimecontract.RuntimeWorkspaceWorkingRoot, SubPath: tree}
 	proof := corev1.VolumeMount{Name: "session", MountPath: runtimecontract.WorkspaceMountProofPath, SubPath: metadata + "/mount.json", ReadOnly: true}
@@ -48,6 +64,8 @@ func configureWorkspaceStoragePod(pod *corev1.Pod, input runtimecontract.RunnerI
 		container := &pod.Spec.Containers[index]
 		switch container.Name {
 		case "role-runtime":
+			container.TerminationMessagePath = "/dev/termination-log"
+			container.TerminationMessagePolicy = corev1.TerminationMessageReadFile
 			container.VolumeMounts = append(container.VolumeMounts, work, proof, ack)
 		case "provider-runtime":
 			container.VolumeMounts = append(container.VolumeMounts, work, proof)

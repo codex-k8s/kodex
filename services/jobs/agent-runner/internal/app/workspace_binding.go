@@ -8,6 +8,7 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/callback"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/codex"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/security"
 	workspacepolicy "github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/workspace"
@@ -55,6 +56,32 @@ func prepareBoundWorkspace(ctx context.Context, input model.Input) error {
 	}
 	if err := workspacepolicy.PrepareBoundGeneration(ctx, input, ack); err != nil {
 		return runtimecontract.InitializationError("WORKSPACE_LAYOUT", initializationFilesystemReason(err), err)
+	}
+	return nil
+}
+
+// publishWorkspaceQuiescence persists a small exact positive join record before the completion callback.
+// It never copies model text/rollout as source proof; a missing private provider witness remains blocked.
+// publishWorkspaceQuiescence сохраняет small exact positive join record до completion callback.
+// Model text/rollout не копируются как source proof; отсутствие private provider witness остаётся blocked.
+func publishWorkspaceQuiescence(input model.Input, result codex.Result) error {
+	if input.WorkspaceStorage == nil {
+		return nil
+	}
+	ack, err := workspacepolicy.ReadBoundWriterAcknowledgement(input)
+	if err != nil {
+		return errors.New("runtime workspace writer acknowledgement is unavailable")
+	}
+	record, ok := result.WorkspaceQuiescence(input, ack)
+	if !ok {
+		return errors.New("runtime workspace writer join is unconfirmed")
+	}
+	raw, err := runtimecontract.EncodeWorkspaceQuiescence(record)
+	if err != nil {
+		return errors.New("runtime workspace writer join record is invalid")
+	}
+	if writeInitializationTermination(initializationTerminationPath, raw) != nil {
+		return errors.New("runtime workspace writer join record is unavailable")
 	}
 	return nil
 }

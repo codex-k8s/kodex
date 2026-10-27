@@ -249,7 +249,7 @@
   "allOf": [
     {
       "if": {"required": ["workspace_storage"]},
-      "then": {"properties": {"mode": {"const": "TURN"}, "assistant_scope": {"const": "NONE"}}, "required": ["assistant_scope"]}
+      "then": {"properties": {"mode": {"const": "TURN"}, "assistant_scope": {"const": "NONE"}, "role_runtime_contract_revision": {"const": 4}}, "required": ["assistant_scope"]}
     },
     {"if": {"required": ["execution_deadline"]}, "then": {"properties": {"mode": {"const": "TURN"}, "assistant_scope": {"const": "NONE"}}}},
     {

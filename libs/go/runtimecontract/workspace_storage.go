@@ -39,6 +39,10 @@ const (
 // errWorkspaceStorageInvalid скрывает отклонённые private metadata и object commitments.
 var errWorkspaceStorageInvalid = errors.New("runtime workspace storage binding is invalid")
 
+// WorkspaceStorageRuntimeContractRevision pins the first complete V2 role ABI; legacy images are not upgraded by opt-in.
+// WorkspaceStorageRuntimeContractRevision закрепляет первый полный V2 role ABI; opt-in не повышает legacy image.
+const WorkspaceStorageRuntimeContractRevision uint64 = 4
+
 // workspaceStorageRefPattern closes the owner-assigned work identity used in mount subpaths.
 // workspaceStorageRefPattern замыкает owner-assigned work identity в mount subpaths.
 var workspaceStorageRefPattern = regexp.MustCompile(`^wks_[A-Za-z0-9_-]{8,89}$`)
@@ -143,6 +147,7 @@ type WorkspaceStorageBinding struct {
 // Выбор source и current-writer CAS остаются ответственностью owner-транзакции.
 func (value WorkspaceStorageBinding) ValidateForInput(input RunnerInput) error {
 	if value.Profile != WorkspaceStorageProfile || value.Scope.Validate() != nil || value.Generation < 1 ||
+		input.RoleRuntimeContractRevision != WorkspaceStorageRuntimeContractRevision ||
 		!workspaceStorageRefPattern.MatchString(value.WorkspaceRef) || input.Mode != RunnerModeTurn || input.AssistantScope != AssistantScopeNone ||
 		value.Scope.OrganizationRef != input.OrganizationRef || value.Scope.ProjectRef != input.ProjectRef ||
 		value.Scope.SessionRef != input.SessionRef || value.Scope.AgentRef != input.AgentRef {

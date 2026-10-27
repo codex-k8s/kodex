@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "policy_revision": 98,
+  "policy_revision": 99,
   "policy": {
     "authority_abi_version": 2,
     "trust_domain": "kodex.local",
@@ -823,7 +823,8 @@
           "platform.runtime.run.metadata.propose",
           "platform.runtime.tool-call.record",
           "platform.runtime.warm.reconcile",
-          "platform.runtime.warm.report"
+          "platform.runtime.warm.report",
+          "platform.runtime.workspace.observe"
         ],
         "server_resolved_fields": [
           "actor",
@@ -15653,6 +15654,41 @@
         "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
         "target_trust_bundle_id": "kodex-internal-ca-g1",
         "permission": "platform.runtime.execution.progress",
+        "authority_proof_producer_id": "control-plane.runtime-controller",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.runtime.workspace.observe",
+        "caller_workload_id": "runtime-controller",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RuntimeWorkService/ObserveWorkspace",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.runtime.workspace.observe",
         "authority_proof_producer_id": "control-plane.runtime-controller",
         "authority_sources": [
           "DOMAIN_STATE"

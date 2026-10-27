@@ -80,6 +80,9 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 	var storedDigest string
 	var storedPayload []byte
 	receiptQuery := queryCommandsExecuteSelectIdempotencyReceiptsOrganizationIdActorIdOperation
+	if input.Kind == command.ObserveWorkspace {
+		receiptQuery = queryWorkspaceObservationReceipt
+	}
 	if payload, ok := input.Payload.(command.LeaseInput); input.Kind == command.ReportExecutionProgress && ok && payload.Financial != nil {
 		// Долгий активный execution сохраняет semantic receipt; текущее право
 		// уже проверено bindFinancialCallbackReceipt, TTL не выдаёт authority.
@@ -104,6 +107,9 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 			return command.Result{}, err
 		}
 		if err := repository.refreshCFGReceipt(ctx, tx, scope, &result); err != nil {
+			return command.Result{}, err
+		}
+		if err := repository.refreshWorkspaceObservationReceipt(ctx, tx, scope, input, &result); err != nil {
 			return command.Result{}, err
 		}
 		if exposesActorActions(input.Principal.CallerWorkload) {
@@ -179,7 +185,7 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 			return command.Result{}, err
 		}
 	}
-	encoded, err := json.Marshal(memoryReceiptMetadata(outcome.result))
+	encoded, err := json.Marshal(workspaceObservationReceiptMetadata(input.Kind, memoryReceiptMetadata(outcome.result)))
 	if err != nil {
 		return command.Result{}, errs.ErrConflict
 	}

@@ -1,0 +1,59 @@
+# Единственная новая PATCH-возможность контроллера снимает свой finalizer,
+# не меняя исполняемый Pod, scope или чужие finalizers. Owner ACK проверяет RC.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: runtime-workspace-finalizer-only
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [UPDATE]
+        resources: [pods]
+  matchConditions:
+    - name: exact-controller-namespace
+      expression: >-
+        request.userInfo.username ==
+          'system:serviceaccount:kodex-system:runtime-controller' &&
+        request.namespace == 'kodex-runtime'
+  validations:
+    - expression: >-
+        oldObject != null &&
+        object.metadata.uid == oldObject.metadata.uid &&
+        object.metadata.name == oldObject.metadata.name &&
+        object.metadata.namespace == oldObject.metadata.namespace &&
+        object.spec == oldObject.spec &&
+        has(object.metadata.labels) && has(oldObject.metadata.labels) &&
+        object.metadata.labels == oldObject.metadata.labels &&
+        has(object.metadata.annotations) && has(oldObject.metadata.annotations) &&
+        object.metadata.annotations == oldObject.metadata.annotations &&
+        object.metadata.labels['runtime.kodex.dev/managed'] == 'true' &&
+        object.metadata.labels['runtime.kodex.dev/mode'] == 'turn' &&
+        object.metadata.annotations['runtime.kodex.dev/workspace-storage-profile']
+          == 'SESSION_WORKSPACE_V2' &&
+        has(oldObject.metadata.deletionTimestamp) &&
+        object.metadata.deletionTimestamp == oldObject.metadata.deletionTimestamp
+      message: runtime workspace finalizer update changed its owned Pod boundary
+    - expression: >-
+        has(oldObject.metadata.finalizers) &&
+        oldObject.metadata.finalizers.filter(name,
+          name == 'runtime.kodex.dev/workspace-writer').size() == 1 &&
+        ((!has(object.metadata.finalizers) &&
+          oldObject.metadata.finalizers.size() == 1) ||
+         (has(object.metadata.finalizers) &&
+          object.metadata.finalizers == oldObject.metadata.finalizers.filter(name,
+            name != 'runtime.kodex.dev/workspace-writer'))) &&
+        has(object.metadata.ownerReferences) == has(oldObject.metadata.ownerReferences) &&
+        (!has(oldObject.metadata.ownerReferences) ||
+          object.metadata.ownerReferences == oldObject.metadata.ownerReferences)
+      message: runtime controller may only remove its exact workspace writer finalizer
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: runtime-workspace-finalizer-only
+spec:
+  policyName: runtime-workspace-finalizer-only
+  validationActions: [Deny]

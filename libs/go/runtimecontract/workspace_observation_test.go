@@ -89,3 +89,31 @@ func TestWorkspaceOwnerAcknowledgementIsClosedAndSecretFree(t *testing.T) {
 		}
 	}
 }
+
+// TestWorkspaceV2RequiresPinnedRoleABIAndClosedBlockCauses rejects opt-in on an older image contract.
+// Closed BLOCKED causes contain neither arbitrary errors nor a claim that an absent Pod stopped.
+// TestWorkspaceV2RequiresPinnedRoleABIAndClosedBlockCauses запрещает opt-in на старом image contract.
+// Closed BLOCKED causes не содержат arbitrary errors и не доказывают остановку отсутствующего Pod.
+func TestWorkspaceV2RequiresPinnedRoleABIAndClosedBlockCauses(t *testing.T) {
+	_, input, binding := workspaceQuiescenceFixture()
+	for _, revision := range []uint64{0, 1, 3, 5} {
+		input.RoleRuntimeContractRevision = revision
+		if binding.ValidateForInput(input) == nil {
+			t.Fatal("unsupported role ABI accepted V2 work")
+		}
+	}
+	input.RoleRuntimeContractRevision = WorkspaceStorageRuntimeContractRevision
+	if binding.ValidateForInput(input) != nil {
+		t.Fatal("V2 role ABI rejected")
+	}
+	for _, reason := range []string{"POD_MISSING", "POD_UNREACHABLE", "PVC_MISSING", "PVC_REPLACED", "OWNERSHIP_CHANGED", "WRITER_JOIN_UNCONFIRMED"} {
+		if !ValidWorkspaceBlockReason(reason) {
+			t.Fatal("closed block cause rejected")
+		}
+	}
+	for _, reason := range []string{"", "UNKNOWN", "Pod not found", "QUIESCENT", "../other", "POD_MISSING\n"} {
+		if ValidWorkspaceBlockReason(reason) {
+			t.Fatal("unclosed cause became storage authority")
+		}
+	}
+}

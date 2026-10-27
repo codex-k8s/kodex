@@ -20,6 +20,7 @@ func persistentWorkingFixture(t *testing.T) (model.Input, string, string) {
 	input.Mode, input.AssistantScope = runtimecontract.RunnerModeTurn, runtimecontract.AssistantScopeNone
 	input.OrganizationRef, input.ProjectRef = "org_fixture000", "prj_fixture000"
 	input.SessionRef, input.AgentRef = "ses_fixture000", "agt_fixture000"
+	input.RoleRuntimeContractRevision = runtimecontract.WorkspaceStorageRuntimeContractRevision
 	input.WorkspaceStorage = &runtimecontract.WorkspaceStorageBinding{Profile: runtimecontract.WorkspaceStorageProfile,
 		Scope:        runtimecontract.WorkspaceStorageScope{OrganizationRef: input.OrganizationRef, ProjectRef: input.ProjectRef, SessionRef: input.SessionRef, AgentRef: input.AgentRef},
 		WorkspaceRef: "wks_fixture000", Generation: 1}
