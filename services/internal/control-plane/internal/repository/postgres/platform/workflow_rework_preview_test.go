@@ -11,7 +11,7 @@ import (
 // TestWorkflowReworkPreviewNeverPublishesPrivatePins проверяет actual serialized public bytes.
 func TestWorkflowReworkPreviewNeverPublishesPrivatePins(t *testing.T) {
 	root, anchors := reworkPlanFixture()
-	plan, err := buildWorkflowUpstreamPlan(root, anchors, "r", 1, []workflowReviewRejection{{"review", "author", "spec"}}, false)
+	plan, err := buildWorkflowUpstreamPlan(root, anchors, "r", 1, []workflowReviewRejection{{RequirementKey: "review", SubjectStepKey: "author", SubjectResultKey: "spec"}}, false)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -31,7 +31,7 @@ func reworkPlanFixture() (*serverWorkflowRoot, map[string]serverWorkflowAnchor) 
 // не выводя автора из model narrative, timestamp либо имени роли.
 func TestWorkflowUpstreamPlanReturnsToAuthorAndInvalidatesBothReviews(t *testing.T) {
 	root, anchors := reworkPlanFixture()
-	plan, err := buildWorkflowUpstreamPlan(root, anchors, "r", 1, []workflowReviewRejection{{"review", "author", "spec"}}, false)
+	plan, err := buildWorkflowUpstreamPlan(root, anchors, "r", 1, []workflowReviewRejection{{RequirementKey: "review", SubjectStepKey: "author", SubjectResultKey: "spec"}}, false)
 	if err != nil || !validWorkflowReworkPlan(plan) || len(plan.Targets) != 1 || plan.Targets[0].StepKey != "author" || plan.Targets[0].PreviousAttempt != 1 || plan.Targets[0].NextAttempt != 2 || len(plan.Rechecks) != 2 || plan.Rechecks[0].StepKey != "r" || plan.Rechecks[1].StepKey != "q" {
 		t.Fatal("wrong author or affected closure")
 	}
@@ -68,12 +68,12 @@ func TestWorkflowUpstreamPlanClosesUnknownPolicyAndIrreversibleEffects(t *testin
 	q := anchors["q"]
 	q.Receipts[0].Results = []entity.WorkflowAcceptedResult{{Kind: "INTEGRATION_RECEIPT"}}
 	anchors["q"] = q
-	plan, err := buildWorkflowUpstreamPlan(root, anchors, "r", 1, []workflowReviewRejection{{"review", "author", "spec"}}, false)
+	plan, err := buildWorkflowUpstreamPlan(root, anchors, "r", 1, []workflowReviewRejection{{RequirementKey: "review", SubjectStepKey: "author", SubjectResultKey: "spec"}}, false)
 	if err != nil || plan.BlockReason != "WORKFLOW_IRREVERSIBLE_EFFECT_REPAIR_REQUIRED" {
 		t.Fatal("known SUCCESS was treated as automatic rollback")
 	}
 	root.Version.ReworkPolicy = ""
-	if _, err := buildWorkflowUpstreamPlan(root, anchors, "r", 1, []workflowReviewRejection{{"review", "author", "spec"}}, false); err == nil {
+	if _, err := buildWorkflowUpstreamPlan(root, anchors, "r", 1, []workflowReviewRejection{{RequirementKey: "review", SubjectStepKey: "author", SubjectResultKey: "spec"}}, false); err == nil {
 		t.Fatal("legacy profile gained upstream authority")
 	}
 }
@@ -87,7 +87,7 @@ func TestWorkflowUpstreamPlanBlocksUnacceptedKnownExternalSuccess(t *testing.T) 
 	author := anchors["author"]
 	author.HasIrreversibleEffect = true
 	anchors["author"] = author
-	plan, err := buildWorkflowUpstreamPlan(root, anchors, "r", 1, []workflowReviewRejection{{"review", "author", "spec"}}, false)
+	plan, err := buildWorkflowUpstreamPlan(root, anchors, "r", 1, []workflowReviewRejection{{RequirementKey: "review", SubjectStepKey: "author", SubjectResultKey: "spec"}}, false)
 	if err != nil || plan.BlockReason != "WORKFLOW_IRREVERSIBLE_EFFECT_REPAIR_REQUIRED" {
 		t.Fatal("known successful external effect was allowed to repeat")
 	}
@@ -97,7 +97,7 @@ func TestWorkflowUpstreamPlanBlocksUnacceptedKnownExternalSuccess(t *testing.T) 
 // TestWorkflowReworkPlanMemberCannotConsumeApprovalForLaterFailure проверяет exact identity/counter.
 func TestWorkflowReworkPlanMemberCannotConsumeApprovalForLaterFailure(t *testing.T) {
 	root, anchors := reworkPlanFixture()
-	plan, err := buildWorkflowUpstreamPlan(root, anchors, "r", 1, []workflowReviewRejection{{"review", "author", "spec"}}, false)
+	plan, err := buildWorkflowUpstreamPlan(root, anchors, "r", 1, []workflowReviewRejection{{RequirementKey: "review", SubjectStepKey: "author", SubjectResultKey: "spec"}}, false)
 	if err != nil {
 		t.Fatal(err)
 	}

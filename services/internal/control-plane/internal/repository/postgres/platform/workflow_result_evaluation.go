@@ -102,7 +102,7 @@ func (repository *Repository) evaluateWorkflowStepResultDetailedTx(ctx context.C
 				if !upstream {
 					return rejectedWorkflowEvaluation(workflowChangesRequired), nil
 				}
-				changes = append(changes, workflowReviewRejection{requirement.Key, requirement.SubjectStepKey, requirement.SubjectResultKey})
+				changes = append(changes, workflowReviewRejection{RequirementKey: requirement.Key, SubjectStepKey: requirement.SubjectStepKey, SubjectResultKey: requirement.SubjectResultKey})
 				continue
 			}
 		case "REVIEW", "QA":
@@ -114,7 +114,7 @@ func (repository *Repository) evaluateWorkflowStepResultDetailedTx(ctx context.C
 				if !upstream {
 					return rejectedWorkflowEvaluation(workflowChangesRequired), nil
 				}
-				changes = append(changes, workflowReviewRejection{requirement.Key, requirement.SubjectStepKey, ""})
+				changes = append(changes, workflowReviewRejection{RequirementKey: requirement.Key, SubjectStepKey: requirement.SubjectStepKey, SubjectResultKey: ""})
 				continue
 			}
 			result = entity.WorkflowAcceptedResult{Key: requirement.Key, Kind: requirement.Kind, Repository: subject.Repository, Number: subject.Number, HeadSHA: subject.HeadSHA, Verdict: "PASS", Digest: workflowResultSHA(asJSON(declaration))}

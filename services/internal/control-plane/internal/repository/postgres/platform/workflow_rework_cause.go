@@ -34,7 +34,7 @@ func enrichWorkflowReworkCauseTx(ctx context.Context, tx pgx.Tx, current scope, 
 			}
 			for _, requirement := range step.ResultRequirements {
 				if requirement.Kind == "ARTIFACT_REVIEW" || requirement.Kind == "REVIEW" || requirement.Kind == "QA" {
-					rejections = append(rejections, workflowReviewRejection{requirement.Key, requirement.SubjectStepKey, requirement.SubjectResultKey})
+					rejections = append(rejections, workflowReviewRejection{RequirementKey: requirement.Key, SubjectStepKey: requirement.SubjectStepKey, SubjectResultKey: requirement.SubjectResultKey})
 				}
 			}
 		}
