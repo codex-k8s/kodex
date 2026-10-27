@@ -4,11 +4,22 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.571.0
+version: 1.572.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая тестовая подготовка привязок запуска — 27.10.2026
+
+Два теста проверяют запуск с общим свежим account, catalog pins и agent fixture.
+Capability digest добавляется только для сценария проверки выбранной модели;
+исходные проверки отзыва, изменения каталога и credentials остались раздельными.
+Два выбранных теста PASS до и после, FAIL/SKIP 0. Тестовая подготовка не меняет
+production-код. Анализ: 1353 raw / 1284 retained / 69 unresolved, Go-комментарии
+21709/21709. Сценарий schedule continuation остаётся FAIL на PR и чистом main;
+причина FAILED workflow run не установлена. Браузер, E2E, live/deploy/startup и QA
+не выполнялись.
 
 ## Общее чтение и блокировка памяти и навыков — 27.10.2026
 

@@ -103,6 +103,26 @@ func TestProviderUsageSeparatesSubmissionAndOperationalEvidence(t *testing.T) {
 	}
 }
 
+// providerUsageLaunchFixture prepares a fresh launch account and its saved catalog pins. The
+// capability pin is included only for tests that exercise selected-model capability freshness.
+// providerUsageLaunchFixture готовит новый launch account и сохранённые привязки каталога.
+// Привязка capability добавляется только для проверок свежести capability выбранной модели.
+func providerUsageLaunchFixture(t *testing.T, withCapability bool) (providerUsageAccount, providerUsageContext, *entity.ProviderAccountUsage) {
+	t.Helper()
+	account, context := providerUsageFixture()
+	first, err := providerAccountUsage(account, context)
+	if err != nil {
+		t.Fatal(err)
+	}
+	context.Input = &entity.ProviderAccountUsageContext{Purpose: "LAUNCH", AgentRef: "agt_usage00001"}
+	candidate := entity.ProviderAccountCandidate{AccountRef: account.Ref, ProviderDefinitionKey: account.Provider, CatalogRevision: first.CatalogRevision, CatalogDigest: first.CatalogDigest, DefaultReasoningEffort: "medium"}
+	if withCapability {
+		candidate.ModelCapabilityDigest = modelcatalog.CapabilityDigest(account.Provider, account.Ref, "model-one", []string{"low", "medium"}, "medium", false)
+	}
+	context.Agent = providerUsageAgent{Ref: context.Input.AgentRef, Enabled: true, State: "READY", ConfigRef: "rcfg_usage001", Provider: account.Provider, Model: "model-one", Candidates: []entity.ProviderAccountCandidate{candidate}}
+	return account, context, first
+}
+
 // TestProviderUsageLaunchPinsAndFreshCredentialBinding accepts exact saved launch pins, binds
 // context identity to credential changes and rejects pending observation or duplicate selected
 // pins.
@@ -110,13 +130,7 @@ func TestProviderUsageSeparatesSubmissionAndOperationalEvidence(t *testing.T) {
 // запуска, связывает идентичность контекста со сменой credential и отклоняет ожидающее наблюдение
 // либо дубли выбранных привязок.
 func TestProviderUsageLaunchPinsAndFreshCredentialBinding(t *testing.T) {
-	account, context := providerUsageFixture()
-	first, err := providerAccountUsage(account, context)
-	if err != nil {
-		t.Fatal(err)
-	}
-	context.Input = &entity.ProviderAccountUsageContext{Purpose: "LAUNCH", AgentRef: "agt_usage00001"}
-	context.Agent = providerUsageAgent{Ref: context.Input.AgentRef, Enabled: true, State: "READY", ConfigRef: "rcfg_usage001", Provider: account.Provider, Model: "model-one", Candidates: []entity.ProviderAccountCandidate{{AccountRef: account.Ref, ProviderDefinitionKey: account.Provider, CatalogRevision: first.CatalogRevision, CatalogDigest: first.CatalogDigest, DefaultReasoningEffort: "medium"}}}
+	account, context, _ := providerUsageLaunchFixture(t, false)
 	usage, err := providerAccountUsage(account, context)
 	if err != nil || !usage.AllowedToSubmit {
 		t.Fatal("matching immutable pins denied")
@@ -146,13 +160,7 @@ func TestProviderUsageLaunchPinsAndFreshCredentialBinding(t *testing.T) {
 // неизменной capability выбранной модели при посторонних изменениях каталога, но отклоняет
 // изменение этой capability либо отзыв аккаунта.
 func TestProviderUsageLaunchSelectedModelPinSurvivesOtherCatalogChanges(t *testing.T) {
-	account, context := providerUsageFixture()
-	first, err := providerAccountUsage(account, context)
-	if err != nil {
-		t.Fatal(err)
-	}
-	context.Input = &entity.ProviderAccountUsageContext{Purpose: "LAUNCH", AgentRef: "agt_usage00001"}
-	context.Agent = providerUsageAgent{Ref: context.Input.AgentRef, Enabled: true, State: "READY", ConfigRef: "rcfg_usage001", Provider: account.Provider, Model: "model-one", Candidates: []entity.ProviderAccountCandidate{{AccountRef: account.Ref, ProviderDefinitionKey: account.Provider, CatalogRevision: first.CatalogRevision, CatalogDigest: first.CatalogDigest, DefaultReasoningEffort: "medium", ModelCapabilityDigest: modelcatalog.CapabilityDigest(account.Provider, account.Ref, "model-one", []string{"low", "medium"}, "medium", false)}}}
+	account, context, first := providerUsageLaunchFixture(t, true)
 	account.CatalogSource = `{"account":"pacc_usage0001","content":"content-two"}`
 	account.Models = append(account.Models, platformrepo.ProviderModelCatalogRecord{ID: "unrelated-model"})
 	updated, err := providerAccountUsage(account, context)
