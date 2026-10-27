@@ -14,8 +14,8 @@ JOIN control_plane.run_nodes gate_node ON gate_node.id=decision.node_id AND gate
 JOIN control_plane.run_nodes predecessor ON predecessor.id=gate_node.parent_node_id AND predecessor.organization_id=root.organization_id
     AND predecessor.root_run_id=root.id AND predecessor.agent_id=rework.agent_id
     AND predecessor.state='SUCCEEDED'
-JOIN LATERAL control_plane.legacy_workflow_step_origin(root.organization_id,predecessor.id) origin_id ON true
-JOIN control_plane.run_nodes logical_origin ON logical_origin.id=origin_id AND logical_origin.workflow_step_key=rework.workflow_step_key
+JOIN LATERAL control_plane.legacy_workflow_step_origin(root.organization_id,predecessor.id) AS origin_id(id) ON true
+JOIN control_plane.run_nodes logical_origin ON logical_origin.id=origin_id.id AND logical_origin.workflow_step_key=rework.workflow_step_key
 JOIN control_plane.runs prior ON prior.id=predecessor.run_id AND prior.organization_id=root.organization_id
     AND prior.root_run_id=root.id AND prior.project_id=root.project_id AND prior.state='SUCCEEDED'
 JOIN control_plane.runs fresh ON fresh.id=rework.run_id AND fresh.organization_id=root.organization_id

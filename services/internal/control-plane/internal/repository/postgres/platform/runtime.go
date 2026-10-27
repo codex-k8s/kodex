@@ -1834,6 +1834,13 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		if err != nil {
 			return commandOutcome{}, err
 		}
+		var currentRootState string
+		if tx.QueryRow(ctx, queryRuntimeIntegrationReadRootState, pgx.StrictNamedArgs{"organization_id": scope.organizationID, "root_run_id": lease["rootRunID"]}).Scan(&currentRootState) != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if currentRootState == "FAILED" {
+			rootAlreadyTerminal, runState = true, "FAILED"
+		}
 	}
 	var requiredPending, hasRequiredOrigin bool
 	if tx.QueryRow(ctx, queryWorkflowLaunchRunPending, pgx.StrictNamedArgs{"run_id": lease["runID"], "node_id": lease["nodeID"]}).Scan(&requiredPending, &hasRequiredOrigin) != nil {
@@ -2304,6 +2311,9 @@ func (repository *Repository) recordChildCallback(ctx context.Context, tx pgx.Tx
 			return false, errs.ErrUnavailable
 		}
 		if !replay {
+			if record.legacyRework {
+				return false, errs.ErrLegacyReworkDeliveryBlocked
+			}
 			return false, errs.ErrConflict
 		}
 		return true, nil
@@ -2516,11 +2526,16 @@ func (repository *Repository) scheduleIntegrationContinuation(ctx context.Contex
 	var invocationRef, invocationState, resultSummary, safeErrorCode, receiptRef string
 	var decision integrationContinuationDecision
 	var attempt int32
+	var legacyReadSnapshot []byte
 	err := tx.QueryRow(ctx, queryRuntimeIntegrationResolveContinuation, pgx.StrictNamedArgs{
 		"invocation_id": invocationID, "organization_id": current.organizationID,
 	}).Scan(&parentNodeID, &runID, &rootRunID, &agentID, &attempt, &displayName, &role, &sessionID,
 		&agentRef, &workflowVersionID, &invocationRef, &invocationState, &resultSummary, &safeErrorCode,
 		&decision.GateRef, &decision.GateVersion, &decision.Decision, &decision.Comment, &receiptRef)
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = tx.QueryRow(ctx, queryLegacyReworkReadContinuation, pgx.StrictNamedArgs{"organization_id": current.organizationID, "invocation_id": invocationID}).Scan(
+			&parentNodeID, &runID, &rootRunID, &agentID, &attempt, &displayName, &role, &sessionID, &agentRef, &workflowVersionID, &legacyReadSnapshot)
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		var publicationRef, nodeID string
 		originErr := tx.QueryRow(ctx, queryRepositoryBundleInvocationOrigin, pgx.StrictNamedArgs{"organization_id": current.organizationID, "invocation_id": invocationID}).Scan(&publicationRef, &nodeID)
@@ -2542,10 +2557,18 @@ func (repository *Repository) scheduleIntegrationContinuation(ctx context.Contex
 	}).Scan(&lockedSessionID, &turnNumber); err != nil || lockedSessionID != sessionID {
 		return false, errs.ErrUnavailable
 	}
-	task, err := integrationContinuationTask(integrationContinuationSnapshot{
-		InvocationRef: invocationRef, State: invocationState, ResultSummary: truncate(resultSummary, 4000),
-		SafeErrorCode: safeErrorCode, OwnerDecision: decision, ReceiptRef: receiptRef,
-	})
+	var task string
+	if legacyReadSnapshot != nil {
+		task, err = legacyReworkReadTask(legacyReadSnapshot)
+		if errors.Is(err, errs.ErrLegacyReworkReadLimit) {
+			return false, repository.closeLegacyReworkReadBudgetTx(ctx, tx, current, rootRunID, parentNodeID, projectID)
+		}
+	} else {
+		task, err = integrationContinuationTask(integrationContinuationSnapshot{
+			InvocationRef: invocationRef, State: invocationState, ResultSummary: truncate(resultSummary, 4000),
+			SafeErrorCode: safeErrorCode, OwnerDecision: decision, ReceiptRef: receiptRef,
+		})
+	}
 	if err != nil {
 		return false, err
 	}

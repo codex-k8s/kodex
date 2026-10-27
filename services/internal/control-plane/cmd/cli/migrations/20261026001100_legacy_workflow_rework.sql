@@ -33,6 +33,8 @@ CREATE UNIQUE INDEX run_nodes_owner_rework_once ON control_plane.run_nodes(owner
     WHERE owner_rework_gate_id IS NOT NULL AND owner_rework_origin_node_id IS NULL;
 CREATE UNIQUE INDEX run_nodes_owner_rework_execution ON control_plane.run_nodes(owner_rework_origin_node_id,attempt)
     WHERE owner_rework_origin_node_id IS NOT NULL;
+CREATE INDEX run_nodes_owner_rework_run ON control_plane.run_nodes(run_id)
+    WHERE owner_rework_gate_id IS NOT NULL;
 
 -- +goose StatementBegin
 CREATE FUNCTION control_plane.legacy_workflow_step_origin(p_organization uuid,p_node uuid) RETURNS SETOF uuid
@@ -84,6 +86,28 @@ CREATE FUNCTION control_plane.guard_legacy_workflow_rework() RETURNS trigger
 LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,control_plane AS $$
 DECLARE original record; first_node record;
 BEGIN
+    IF TG_TABLE_NAME='runs' THEN
+        IF EXISTS (SELECT 1 FROM control_plane.run_nodes node WHERE node.run_id=OLD.id
+            AND node.organization_id=OLD.organization_id AND node.owner_rework_gate_id IS NOT NULL) THEN
+            IF TG_OP='DELETE' THEN
+                IF NOT control_plane.project_purge_authorized() OR NOT EXISTS (
+                    SELECT 1 FROM control_plane.project_purge_targets target
+                    JOIN control_plane.project_purge_context context USING (transaction_id)
+                    WHERE target.transaction_id=pg_current_xact_id_if_assigned() AND context.backend_pid=pg_backend_pid()
+                        AND target.relation_id='control_plane.runs'::regclass AND target.row_key=jsonb_build_array(OLD.id)
+                ) THEN RAISE EXCEPTION 'legacy rework run requires exact project purge' USING ERRCODE='23514'; END IF;
+            ELSIF ROW(NEW.id,NEW.ref,NEW.organization_id,NEW.project_id,NEW.session_id,NEW.root_run_id,NEW.parent_run_id,
+                NEW.workflow_version_id,NEW.retry_of_run_id,NEW.target_type,NEW.target_ref,NEW.source,NEW.attempt,NEW.initiated_by,
+                NEW.task,NEW.input,NEW.created_at,NEW.started_at) IS DISTINCT FROM ROW(
+                OLD.id,OLD.ref,OLD.organization_id,OLD.project_id,OLD.session_id,OLD.root_run_id,OLD.parent_run_id,
+                OLD.workflow_version_id,OLD.retry_of_run_id,OLD.target_type,OLD.target_ref,OLD.source,OLD.attempt,OLD.initiated_by,
+                OLD.task,OLD.input,OLD.created_at,OLD.started_at) THEN
+                RAISE EXCEPTION 'legacy rework physical run lineage is immutable' USING ERRCODE='23514';
+            END IF;
+        END IF;
+        IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+        RETURN NEW;
+    END IF;
     IF TG_OP='DELETE' THEN
         IF OLD.owner_rework_gate_id IS NOT NULL THEN
             IF NOT control_plane.project_purge_authorized() OR NOT EXISTS (
@@ -119,8 +143,8 @@ BEGIN
         AND gate_node.root_run_id=gate.root_run_id AND gate_node.type='HUMAN_GATE'
     JOIN control_plane.run_nodes predecessor ON predecessor.id=gate_node.parent_node_id
         AND predecessor.organization_id=gate.organization_id AND predecessor.root_run_id=gate.root_run_id
-    JOIN LATERAL control_plane.legacy_workflow_step_origin(NEW.organization_id,predecessor.id) origin_id ON true
-    JOIN control_plane.run_nodes logical_origin ON logical_origin.id=origin_id AND logical_origin.organization_id=NEW.organization_id
+    JOIN LATERAL control_plane.legacy_workflow_step_origin(NEW.organization_id,predecessor.id) AS origin_id(id) ON true
+    JOIN control_plane.run_nodes logical_origin ON logical_origin.id=origin_id.id AND logical_origin.organization_id=NEW.organization_id
     JOIN control_plane.runs prior ON prior.id=predecessor.run_id AND prior.organization_id=gate.organization_id
     JOIN control_plane.runs root ON root.id=gate.root_run_id AND root.organization_id=gate.organization_id
         AND root.project_id=gate.project_id AND root.project_id=prior.project_id AND root.id<>prior.id
@@ -163,6 +187,8 @@ END $$;
 -- +goose StatementEnd
 CREATE TRIGGER legacy_workflow_rework_guard BEFORE INSERT OR UPDATE OR DELETE ON control_plane.run_nodes
     FOR EACH ROW EXECUTE FUNCTION control_plane.guard_legacy_workflow_rework();
+CREATE TRIGGER legacy_workflow_rework_run_guard BEFORE UPDATE OR DELETE ON control_plane.runs
+    FOR EACH ROW EXECUTE FUNCTION control_plane.guard_legacy_workflow_rework();
 REVOKE ALL ON FUNCTION control_plane.guard_legacy_workflow_rework() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION control_plane.guard_legacy_workflow_rework() TO control_plane_runtime;
 
@@ -182,6 +208,15 @@ BEGIN
     END IF;
     IF NEW.owner_rework_origin_node_id IS NULL THEN
         IF NOT EXISTS (
+            SELECT 1 FROM control_plane.owner_gates gate
+            JOIN control_plane.run_nodes gate_node ON gate_node.id=gate.node_id AND gate_node.organization_id=NEW.organization_id
+                AND gate_node.root_run_id=NEW.root_run_id
+            JOIN control_plane.run_edges retry ON retry.source_node_id=gate_node.parent_node_id
+                AND retry.target_node_id=NEW.id AND retry.organization_id=NEW.organization_id
+                AND retry.root_run_id=NEW.root_run_id AND retry.type='RETRY_OF'
+            WHERE gate.id=NEW.owner_rework_gate_id AND gate.organization_id=NEW.organization_id
+        ) THEN RAISE EXCEPTION 'legacy rework lacks its exact physical retry edge' USING ERRCODE='23514'; END IF;
+        IF NOT EXISTS (
             WITH RECURSIVE budget AS MATERIALIZED (
                 SELECT count(*) AS nodes FROM control_plane.run_nodes
                 WHERE organization_id=NEW.organization_id AND root_run_id=NEW.root_run_id
@@ -190,9 +225,9 @@ BEGIN
                 FROM control_plane.owner_gates gate
                 JOIN control_plane.run_nodes gate_node ON gate_node.id=gate.node_id AND gate_node.organization_id=NEW.organization_id
                     AND gate_node.root_run_id=NEW.root_run_id
-                JOIN LATERAL control_plane.legacy_workflow_step_origin(NEW.organization_id,gate_node.parent_node_id) origin_id ON true
+                JOIN LATERAL control_plane.legacy_workflow_step_origin(NEW.organization_id,gate_node.parent_node_id) AS origin_id(id) ON true
                 JOIN control_plane.run_edges callback ON callback.organization_id=NEW.organization_id
-                    AND callback.root_run_id=NEW.root_run_id AND callback.source_node_id=origin_id
+                    AND callback.root_run_id=NEW.root_run_id AND callback.source_node_id=origin_id.id
                     AND callback.type='CALLBACK_TO'
                 JOIN control_plane.run_nodes original_parent ON original_parent.id=callback.target_node_id
                     AND original_parent.organization_id=NEW.organization_id AND original_parent.root_run_id=NEW.root_run_id
@@ -256,6 +291,18 @@ GRANT EXECUTE ON FUNCTION control_plane.guard_legacy_workflow_rework_edges() TO 
 DO $migration$
 DECLARE definition text; old_edges text; all_nodes oid[]; nodes_count integer; nodes_hash text; edges_count integer; edges_hash text;
 BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_proc function_row
+        WHERE function_row.oid='control_plane.purge_project_database(uuid,uuid,text)'::regprocedure
+            AND md5(function_row.prosrc)='b886c24d4e2f5c4a0ec08123d99462b0'
+            AND pg_get_userbyid(function_row.proowner)='control_plane_owner' AND function_row.prosecdef
+            AND function_row.provolatile='v' AND function_row.prorettype='integer'::regtype AND NOT function_row.proretset
+            AND function_row.prolang=(SELECT oid FROM pg_language WHERE lanname='plpgsql')
+            AND function_row.proconfig=ARRAY['search_path=pg_catalog']
+            AND has_function_privilege('control_plane_runtime',function_row.oid,'EXECUTE')
+            AND NOT EXISTS (SELECT 1 FROM aclexplode(coalesce(function_row.proacl,acldefault('f',function_row.proowner))) acl
+                WHERE acl.grantee=0 AND acl.privilege_type='EXECUTE')) THEN
+        RAISE EXCEPTION 'legacy rework canonical purge source changed';
+    END IF;
     SELECT pg_get_functiondef('control_plane.purge_project_database(uuid,uuid,text)'::regprocedure) INTO definition;
     old_edges:=substring(definition FROM 'IF v_edges <> [0-9]+ OR v_edge_fingerprint <> ''[a-f0-9]{32}'' THEN');
     IF old_edges IS DISTINCT FROM 'IF v_edges <> 284 OR v_edge_fingerprint <> ''6bf6ad76d8c7ae66e07f75ecf719fdd6'' THEN'
@@ -388,8 +435,8 @@ SELECT EXISTS (
     JOIN control_plane.run_nodes predecessor ON predecessor.id=gate_node.parent_node_id AND predecessor.organization_id=p_organization
         AND predecessor.root_run_id=root.id AND predecessor.run_id=physical.retry_of_run_id
         AND predecessor.agent_id=node.agent_id
-    JOIN LATERAL control_plane.legacy_workflow_step_origin(p_organization,predecessor.id) origin_id ON true
-    JOIN control_plane.run_nodes logical_origin ON logical_origin.id=origin_id AND logical_origin.workflow_step_key=node.workflow_step_key
+    JOIN LATERAL control_plane.legacy_workflow_step_origin(p_organization,predecessor.id) AS origin_id(id) ON true
+    JOIN control_plane.run_nodes logical_origin ON logical_origin.id=origin_id.id AND logical_origin.workflow_step_key=node.workflow_step_key
     WHERE node.id=p_node AND node.organization_id=p_organization AND node.owner_rework_gate_id IS NOT NULL
         AND node.type='AGENT_EXECUTION' AND node.materialization_state='MATERIALIZED'
         AND node.workflow_business_attempt=0 AND node.workflow_step_origin_node_id IS NULL

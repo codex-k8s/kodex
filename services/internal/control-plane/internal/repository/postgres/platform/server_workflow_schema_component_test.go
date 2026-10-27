@@ -60,7 +60,7 @@ func TestServerWorkflowMigrationProofComponent(t *testing.T) {
 					t.Fatal("apply disposable workflow schema drift")
 				}
 			}
-			source, err := os.ReadFile("../../../../../../../tools/release/server-workflow-migration-postcondition.sql")
+			source, err := os.ReadFile("../../../../../../../tools/release/legacy-workflow-rework-migration-postcondition.sql")
 			if err != nil {
 				t.Fatal("read shipped workflow schema proof")
 			}
@@ -79,7 +79,7 @@ func TestServerWorkflowMigrationProofComponent(t *testing.T) {
 					}
 				}
 			}
-			if proof["readOnly"] != "on" || proof["database"] != runtime.Database || proof["gooseVersion"] != float64(20261026001000) || proof["serverWorkflowProfile"] != "SERVER_DAG_V1" {
+			if proof["readOnly"] != "on" || proof["database"] != runtime.Database || proof["gooseVersion"] != float64(20261026001100) || proof["serverWorkflowProfile"] != "SERVER_DAG_V1" {
 				t.Fatal("workflow schema proof identity mismatch")
 			}
 			if fixture.rejectedField != "" {
@@ -100,9 +100,9 @@ func TestServerWorkflowMigrationProofComponent(t *testing.T) {
 			}
 			for field, expected := range map[string]any{
 				"workflowColumns": float64(9), "workflowConstraints": float64(6), "workflowGuards": float64(6), "workflowHelpers": float64(4),
-				"purgeNodes": float64(105), "purgeEdges": float64(284), "purgeBaselineEdges": float64(283),
+				"purgeNodes": float64(105), "purgeEdges": float64(286), "purgeBaselineEdges": float64(283),
 				"bundleTableOwner": "control_plane_owner", "bundleForeignKeys": float64(13), "bundleDeferredForeignKeys": float64(13),
-				"purgeNodeFingerprint": "f51a0de25bd942a250997775617eeaee", "purgeEdgeFingerprint": "6bf6ad76d8c7ae66e07f75ecf719fdd6",
+				"purgeNodeFingerprint": "f51a0de25bd942a250997775617eeaee", "serverPurgeFingerprint": "6bf6ad76d8c7ae66e07f75ecf719fdd6", "serverPurgeEdges": float64(284),
 				"purgeBaselineEdgeFingerprint": "be6e23d9e894687a69a19e9b5777ab09",
 			} {
 				if proof[field] != expected {

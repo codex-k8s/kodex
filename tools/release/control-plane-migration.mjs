@@ -12,6 +12,7 @@ const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const profiles = {
   'server-workflow': { version:'20261026001000', file:'20261026001000_workflow_effect_execution_rejoin.sql', annotation:'kodex.dev/cp-server-workflow-migration-plan' },
+  'legacy-workflow-rework': { version:'20261026001100', file:'20261026001100_legacy_workflow_rework.sql', annotation:'kodex.dev/cp-legacy-workflow-rework-migration-plan' },
   'project-purge-authority': { version:'20261026000200', file:'20261026000200_project_purge_authority_acl.sql', annotation:'kodex.dev/cp-project-purge-authority-migration-plan' },
   'owner-gate-expiry': { version:'20261026000100', file:'20261026000100_owner_gate_expiry.sql', annotation:'kodex.dev/cp-owner-gate-expiry-migration-plan' },
   'repository-bundle': { version:'20261025000200', file:'20261025000200_repository_bundle_publications.sql', annotation:'kodex.dev/cp-repository-bundle-migration-plan' },
@@ -37,7 +38,7 @@ const fileDigest = (path) => createHash('sha256').update(readFileSync(path)).dig
 // Узкая фаза только существующего CP migrator в disposable hot-reload профиле.
 export function planControlPlaneMigration(before, source, inspect = inspectSource, id = randomUUID(), profile = 'legacy', imageEvidence) {
   const migrationVersion = profileFor(profile).version;
-  if (['outbox-index','repository-bundle','owner-gate-expiry','project-purge-authority','server-workflow'].includes(profile)) return planImmutableControlPlaneMigration(before, source, inspect, id, imageEvidence,1,profile);
+  if (['outbox-index','repository-bundle','owner-gate-expiry','project-purge-authority','server-workflow','legacy-workflow-rework'].includes(profile)) return planImmutableControlPlaneMigration(before, source, inspect, id, imageEvidence,1,profile);
   ensure(before?.kind === 'Job' && before.apiVersion === 'batch/v1' && before.metadata?.name === 'control-plane-migrate' && before.metadata.namespace === namespace && before.metadata.uid && before.metadata.resourceVersion && before.metadata.labels?.['app.kubernetes.io/part-of'] === 'kodex' && before.metadata.labels?.['kodex.dev/environment'] === 'staging' && before.metadata.labels?.['kodex.dev/local-profile'] === 'hot-reload', 'MIGRATOR_IDENTITY_INVALID');
   ensure(before.status?.succeeded === 1 && !before.status.active && before.status.conditions?.some((c) => c.type === 'Complete' && c.status === 'True'), 'PREVIOUS_MIGRATION_NOT_COMPLETE');
   const pod = before.spec.template.spec; const container = pod.containers?.[0];
@@ -101,14 +102,14 @@ function normalizedMigrationPodSpec(value) {
 }
 export function migrationReadback(job, plan, logs, pods = [], operation = 'up') {
   const { version: migrationVersion, annotation } = profileFor(plan.profile);
-  ensure(['up','check'].includes(operation) && (operation === 'up' || (['outbox-index','repository-bundle','owner-gate-expiry','project-purge-authority','server-workflow'].includes(plan.profile) && plan.version === 2)), 'MIGRATION_OPERATION_INVALID');
+  ensure(['up','check'].includes(operation) && (operation === 'up' || (['outbox-index','repository-bundle','owner-gate-expiry','project-purge-authority','server-workflow','legacy-workflow-rework'].includes(plan.profile) && plan.version === 2)), 'MIGRATION_OPERATION_INVALID');
   const expectedJob = operation === 'check' ? plan.checkJob : plan.job;
   ensure(job?.metadata?.name === expectedJob.metadata.name && job.metadata.namespace === namespace && job.metadata.annotations?.[annotation] === fingerprint(plan) && job.metadata.uid, 'MIGRATION_JOB_SCOPE_MISMATCH');
   ensure(fingerprint(normalizedMigrationPodSpec(job.spec?.template?.spec)) === fingerprint(normalizedMigrationPodSpec(expectedJob.spec.template.spec)), 'MIGRATION_JOB_SPEC_CHANGED');
   const completed = job.status?.conditions?.some((c) => c.type === 'Complete' && c.status === 'True');
   const failed = job.status?.conditions?.some((c) => c.type === 'Failed' && c.status === 'True');
   ensure(!(completed && failed), 'MIGRATION_STATUS_INVALID');
-  const executed = !['outbox-index','repository-bundle','owner-gate-expiry','project-purge-authority','server-workflow'].includes(plan.profile) || immutableMigrationExecution(job, plan, pods, expectedJob);
+  const executed = !['outbox-index','repository-bundle','owner-gate-expiry','project-purge-authority','server-workflow','legacy-workflow-rework'].includes(plan.profile) || immutableMigrationExecution(job, plan, pods, expectedJob);
   const exact = executed && (operation === 'check' ? (logs ?? '').trim() === 'PostgreSQL connection check completed' :
     new RegExp(`(?:migrated database to version:|current version:)\\s*${migrationVersion}(?:\\s|$)`).test(logs ?? ''));
   return { status: completed ? exact ? 'PASS' : 'READBACK_UNCONFIRMED' : failed ? 'FAIL' : 'RUNNING', jobName: job.metadata.name, jobUID: job.metadata.uid, sourceRevision: plan.source.revision,
@@ -121,18 +122,18 @@ async function main() {
   const profile = options['--profile'] ?? 'legacy'; const { version: migrationVersion, annotation, file } = profileFor(profile);
   ensure(!options['--revalidate-postcondition-revision'] || (phase==='inspect' && profile==='repository-bundle' &&
     /^[a-f0-9]{40}$/.test(options['--revalidate-postcondition-revision'])), 'PHASE_ARGUMENT_INVALID');
-  ensure(!['stop','resume','check'].includes(phase) || ['outbox-index','repository-bundle','owner-gate-expiry','project-purge-authority','server-workflow'].includes(profile), 'PHASE_ARGUMENT_INVALID');
+  ensure(!['stop','resume','check'].includes(phase) || ['outbox-index','repository-bundle','owner-gate-expiry','project-purge-authority','server-workflow','legacy-workflow-rework'].includes(profile), 'PHASE_ARGUMENT_INVALID');
   const migrationPath = `services/internal/control-plane/cmd/cli/migrations/${file}`;
   const context = options['--context']; ensure(/^[A-Za-z0-9_.:@/-]{1,160}$/.test(context ?? '') && !/prod(?:uction)?/i.test(context), 'STAGING_CONTEXT_REQUIRED');
   ensure(phase === 'plan' ? options['--source'] && options['--revision'] && !options['--confirm'] && !options['--evidence'] : !options['--source'] && !options['--revision'] && !options['--base-render'] && options['--evidence'] && options['--confirm'] === (['apply','stop','resume','check'].includes(phase) ? 'APPLY-STAGING-CP-MIGRATION' : undefined), 'PHASE_ARGUMENT_INVALID');
-  ensure(phase === 'plan' && ['outbox-index','repository-bundle','owner-gate-expiry','project-purge-authority','server-workflow'].includes(profile) ? !!options['--predecessor-plan'] === !!options['--predecessor-evidence'] :
+  ensure(phase === 'plan' && ['outbox-index','repository-bundle','owner-gate-expiry','project-purge-authority','server-workflow','legacy-workflow-rework'].includes(profile) ? !!options['--predecessor-plan'] === !!options['--predecessor-evidence'] :
     !options['--predecessor-plan'] && !options['--predecessor-evidence'], 'PHASE_ARGUMENT_INVALID');
-  ensure(['outbox-index','repository-bundle','owner-gate-expiry','project-purge-authority','server-workflow'].includes(profile) && phase === 'plan' ? options['--publication-plan'] && options['--publication-evidence'] && options['--base-render'] : !options['--publication-plan'] && !options['--publication-evidence'], 'PHASE_ARGUMENT_INVALID');
+  ensure(['outbox-index','repository-bundle','owner-gate-expiry','project-purge-authority','server-workflow','legacy-workflow-rework'].includes(profile) && phase === 'plan' ? options['--publication-plan'] && options['--publication-evidence'] && options['--base-render'] : !options['--publication-plan'] && !options['--publication-evidence'], 'PHASE_ARGUMENT_INVALID');
   const kube = (argv, input) => { try { return execFileSync('kubectl', ['--context',context,'--request-timeout=30s',...argv], { input, encoding:'utf8', timeout:35000, maxBuffer:4<<20, stdio:['pipe','pipe','pipe'] }); } catch { throw new Error('KUBERNETES_OPERATION_UNKNOWN'); } };
   const get = (kind,name) => JSON.parse(kube(['-n',namespace,'get',kind,name,'-o','json']));
   const optional = (kind,name) => { const raw = kube(['-n',namespace,'get',kind,name,'--ignore-not-found=true','-o','json']); return raw.trim() ? JSON.parse(raw) : undefined; };
   const clusterUID = JSON.parse(kube(['get','namespace','kube-system','-o','json'])).metadata.uid;
-  if (['outbox-index','repository-bundle','owner-gate-expiry','project-purge-authority','server-workflow'].includes(profile)) return runImmutableControlPlaneMigration(phase, options, {
+  if (['outbox-index','repository-bundle','owner-gate-expiry','project-purge-authority','server-workflow','legacy-workflow-rework'].includes(profile)) return runImmutableControlPlaneMigration(phase, options, {
     kube, clusterUID, privateJSON, writePrivate, renderedBase, migrationReadback, normalizePodSpec:normalizedMigrationPodSpec,
   });
   const base = () => get('job','control-plane-migrate');

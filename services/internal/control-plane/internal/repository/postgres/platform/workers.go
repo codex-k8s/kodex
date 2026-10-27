@@ -1339,7 +1339,7 @@ func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context
 		approvalScopeBinding = approvalScopeID
 	}
 	var invocationID, resolvedRef, resolvedState string
-	if legacyRework && state == "WAITING_APPROVAL" {
+	if legacyRework {
 		// The native owner selector already holds the exact node FOR UPDATE, serializing this slot with concurrent allocations.
 		// Native owner selector уже держит точный node FOR UPDATE, сериализуя slot с конкурентными allocation.
 		var available bool

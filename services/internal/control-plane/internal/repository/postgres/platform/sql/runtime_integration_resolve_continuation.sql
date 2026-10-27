@@ -38,21 +38,10 @@ WHERE invocation.id=@invocation_id::uuid
   AND (gate.scope_kind='PROJECT' OR (gate.scope_kind='ORGANIZATION'
        AND control_plane.owned_organization_assistant_run(gate.organization_id,root.id)))
   AND gate.root_run_id=root.id
+  AND node.owner_rework_gate_id IS NULL
   AND node.state='SUCCEEDED'
   AND node.finished_at IS NOT NULL
-  AND (invocation.updated_at>node.finished_at OR invocation.operation='github.repository.bundle.publish'
-       OR node.owner_rework_gate_id IS NOT NULL)
-  AND (node.owner_rework_gate_id IS NULL OR (
-    invocation.risk='READ' AND control_plane.legacy_rework_execution_assigned(node.organization_id,node.id)
-    AND EXISTS (SELECT 1 FROM control_plane.subjects initiator
-      JOIN control_plane.workflow_versions pinned ON pinned.id=root.workflow_version_id AND pinned.organization_id=root.organization_id
-      JOIN control_plane.workflows workflow ON workflow.id=pinned.workflow_id AND workflow.organization_id=root.organization_id
-        AND workflow.project_id=root.project_id AND workflow.ref=root.target_ref
-      JOIN control_plane.catalog_access_targets target ON target.organization_id=root.organization_id AND target.kind='WORKFLOW' AND target.id=workflow.id
-      WHERE initiator.id=root.initiated_by AND initiator.organization_id=root.organization_id AND initiator.active
-        AND control_plane.catalog_resource_visible(root.organization_id,initiator.id,'workflow.launch','WORKFLOW',target.id,
-          target.project_id,target.owner_id,target.related_ids,statement_timestamp(),false))
-  ))
+  AND (invocation.updated_at>node.finished_at OR invocation.operation='github.repository.bundle.publish')
   AND root.state IN ('RUNNING','WAITING_HUMAN')
   AND (invocation.operation<>'github.repository.bundle.publish' OR (
     agent.enabled AND agent.state='READY'
