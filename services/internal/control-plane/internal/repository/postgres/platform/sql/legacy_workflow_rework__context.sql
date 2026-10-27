@@ -39,7 +39,7 @@ JOIN control_plane.agents agent ON agent.id=node.agent_id AND agent.organization
     AND agent.project_id IS NOT DISTINCT FROM root.project_id
 LEFT JOIN control_plane.projects project ON project.id=root.project_id
 LEFT JOIN control_plane.workflow_versions version ON version.id=root.workflow_version_id AND version.organization_id=root.organization_id
-LEFT JOIN LATERAL control_plane.legacy_workflow_step_origin(root.organization_id,node.id) origin_id ON true
-LEFT JOIN control_plane.run_nodes logical_origin ON logical_origin.id=origin_id AND logical_origin.organization_id=root.organization_id
+LEFT JOIN LATERAL control_plane.legacy_workflow_step_origin(root.organization_id,node.id) AS origin_id(id) ON true
+LEFT JOIN control_plane.run_nodes logical_origin ON logical_origin.id=origin_id.id AND logical_origin.organization_id=root.organization_id
 WHERE root.id=@root_run_id::uuid AND root.organization_id=@organization_id::uuid
 FOR UPDATE OF root,node,physical;

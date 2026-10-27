@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.55
+version: 1.1.56
 updated: 2026-10-27
 ---
 
@@ -28,6 +28,16 @@ root-to-root retry. Полный reader доказывает exact logical origi
 Terminal/cancel не стирает историю и не требует нового active grant для её чтения;
 текущая reader eligibility сохраняется. Матрица:
 [#1939](../operations/server-workflow-retry-snapshot-1939.md).
+
+Повтор результата terminal child не переписывает старый run, RR, callback или
+receipt. Он получает свежий physical attempt и отдельную owner-proved delivery
+boundary. Queued старое продолжение нельзя выдать модели со stale input;
+живое продолжение нельзя скрыто отменить ради повторного WRITE. Приёмка нового
+результата повторно соединяет exact owner decision, final execution provenance
+и все сохранённые producers, включая early CONTINUES artifacts. Отказ
+материализации delivery не отменяет уже подтверждённый внешний факт: нужен
+durable отказ/terminal path и защищённый owner readback.
+Матрица узкого прежнего профиля: [#1924](../operations/legacy-workflow-rework-1924.md).
 
 Новая business attempt не разрешает повтор уже успешного внешнего WRITE.
 При повторном исполнении owner сопоставляет опубликованный logical intent,

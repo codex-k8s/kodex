@@ -53,16 +53,16 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
-	var graphNodes, graphEdges int
-	var graphNodeDigest, graphEdgeDigest string
-	if err := pool.QueryRow(ctx, queryProjectAssistantPurgeGraph).Scan(&graphNodes, &graphNodeDigest, &graphEdges, &graphEdgeDigest); err != nil {
+	var graphNodes, graphEdges, serverEdges int
+	var graphNodeDigest, graphEdgeDigest, serverDigest string
+	if err := pool.QueryRow(ctx, queryProjectAssistantPurgeGraph).Scan(&graphNodes, &graphNodeDigest, &graphEdges, &graphEdgeDigest, &serverEdges, &serverDigest); err != nil {
 		t.Fatal("read project purge graph")
 	}
 	t.Logf("project purge graph: nodes=%d digest=%s edges=%d digest=%s", graphNodes, graphNodeDigest, graphEdges, graphEdgeDigest)
-	// Точный FK-граф схемы010 согласован с отдельным server-workflow postcondition:
-	// включает repository bundle и происхождение физической попытки SERVER.
+	// Точный FK-граф схемы011 согласован с отдельным server-workflow postcondition:
+	// сохраняет прежний284-граф и добавляет две exact owner-rework FK; полный shape проверяет shipped postcondition.
 	// Подмена состава графа по-прежнему закрыто отклоняется.
-	if graphNodes != 105 || graphNodeDigest != "f51a0de25bd942a250997775617eeaee" || graphEdges != 284 || graphEdgeDigest != "6bf6ad76d8c7ae66e07f75ecf719fdd6" {
+	if graphNodes != 105 || graphNodeDigest != "f51a0de25bd942a250997775617eeaee" || graphEdges != 286 || serverEdges != 284 || serverDigest != "6bf6ad76d8c7ae66e07f75ecf719fdd6" {
 		t.Fatal("project assistant purge graph changed")
 	}
 	repository, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())

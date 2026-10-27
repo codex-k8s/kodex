@@ -6,7 +6,8 @@ SELECT root.state,child.state,source.state,
     (SELECT count(*) FROM control_plane.runtime_revisions revision WHERE revision.node_id=source.id),
     (SELECT count(*) FROM control_plane.run_edges edge WHERE edge.root_run_id=root.id AND edge.type='CONTINUES'),
     (SELECT count(*) FROM control_plane.run_events event WHERE event.root_run_id=root.id),
-    (SELECT count(*) FROM control_plane.runs attempt WHERE attempt.root_run_id=root.id)
+    (SELECT count(*) FROM control_plane.runs attempt WHERE attempt.root_run_id=root.id),
+    (SELECT count(*) FROM control_plane.run_events event WHERE event.root_run_id=root.id AND event.run_state='CANCELLED')
 FROM control_plane.runs root
 JOIN control_plane.runs child ON child.root_run_id=root.id AND child.organization_id=root.organization_id
 JOIN control_plane.run_nodes source ON source.run_id=child.id AND source.organization_id=root.organization_id

@@ -109,20 +109,27 @@ run_migration() {
   run_migration up
   run_migration status >/dev/null
   run_migration up
-  # Current010 проверяется собственным закрытым release-профилем; старые
-  # verifiers002/283 не принимают новую схему и не получают обход версии.
+  # Каждый target проверяется собственным закрытым verifier.010 не принимает011;
+  # неизвестная схема не получает обхода либо fallback к старому профилю.
+  schema_version=$(psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" --no-password -X -qAt -v ON_ERROR_STOP=1 \
+    -c 'SELECT max(version_id) FILTER (WHERE is_applied) FROM public.goose_db_version')
+  case "$schema_version" in
+    20261026001000) schema_proof=server-workflow-migration-postcondition.sql; schema_verifier=validServerWorkflowMigrationPostcondition ;;
+    20261026001100) schema_proof=legacy-workflow-rework-migration-postcondition.sql; schema_verifier=validLegacyWorkflowReworkMigrationPostcondition ;;
+    *) fail 'unsupported current workflow schema target' ;;
+  esac
   psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" \
     --no-password -X -qAt -v ON_ERROR_STOP=1 \
-    --file "$repository_root/tools/release/server-workflow-migration-postcondition.sql" | \
+    --file "$repository_root/tools/release/$schema_proof" | \
     node --input-type=module -e '
       const {pathToFileURL} = await import("node:url");
-      const {validServerWorkflowMigrationPostcondition} = await import(pathToFileURL(process.argv[1]));
+      const verifiers = await import(pathToFileURL(process.argv[1]));
       let input = "";
       for await (const chunk of process.stdin) input += chunk;
-      if (!validServerWorkflowMigrationPostcondition(JSON.parse(input)))
-        throw new Error("Server workflow schema postcondition failed");
-      process.stdout.write("Server workflow schema read-only query passed\n");
-    ' "$repository_root/tools/release/control-plane-immutable-migration.mjs"
+      if (!Object.hasOwn(verifiers, process.argv[2]) || !verifiers[process.argv[2]](JSON.parse(input)))
+        throw new Error("Current workflow schema postcondition failed");
+      process.stdout.write("Current workflow schema read-only query passed\n");
+    ' "$repository_root/tools/release/control-plane-immutable-migration.mjs" "$schema_verifier"
   retention_reference_count=$(psql "$runtime_dsn" --no-password -X -qAt -v ON_ERROR_STOP=1 \
     -c "SELECT control_plane.skill_artifact_reference_count('00000000-0000-4000-8000-000000000001'::uuid,'art_component',1,'sha256:' || repeat('0',64))")
   [[ "$retention_reference_count" == "0" ]] || fail 'artifact retention trigger dependency is unavailable'
