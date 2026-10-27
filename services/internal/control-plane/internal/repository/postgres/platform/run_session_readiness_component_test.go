@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
-	serviceplatform "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
@@ -27,10 +26,7 @@ func TestRunSessionReadinessComponent(t *testing.T) {
 	defer cancel()
 	pool := newIsolatedAssistantComponentPool(t, ctx)
 	defer pool.Close()
-	r := newSyntheticRuntimeComponentRepository(t, ctx, pool)
-	seedObservedCatalogFixture(t, ctx, r)
-	owner, worker := resolveRunLaunchComponentPrincipals(t, ctx, r)
-	service, err := serviceplatform.New(r)
+	r, service, owner, worker, err := newRunComponentFixture(t, ctx, pool, false)
 	if err != nil {
 		t.Fatal(err)
 	}

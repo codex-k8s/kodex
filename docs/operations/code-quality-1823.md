@@ -4,11 +4,27 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.593.0
+version: 1.594.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая подготовка runtime component-сценариев — 27.10.2026
+
+Три PostgreSQL-сценария используют общую подготовку synthetic repository,
+выбранного warm/обычного каталога, точных principals запуска и domain service.
+Pool, сроки, ошибки и assertions принадлежат каждому сценарию; обратное
+сравнение трёх целых тестов и существующей фикстуры PASS.
+
+До изменения и после исправления: 13 PostgreSQL-событий PASS, FAIL/SKIP 0.
+Первый прогон после выноса обнаружил неиспользуемую переменную и не собрал
+тестовый пакет; после исправления control-plane build/unit/vet PASS: 3084
+события PASS, 70 условных SKIP. Четыре точные пары разнородных сценариев,
+SQL-методов и CA проверок сохранены адресно, 24 мутации решений отклонены.
+17 тестов инструментов качества PASS. Context7: [pgx pool](https://github.com/jackc/pgx/blob/v5.10.0/_autodocs/api-reference/connection-pool.md).
+Анализ: 1326 raw / 1300 retained / 26 unresolved, Go-комментарии 21733/21733.
+Браузер, E2E, live/deploy/startup и QA не выполнялись.
 
 ## Общий owner-reset форм grant — 27.10.2026
 

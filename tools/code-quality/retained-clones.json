@@ -9216,6 +9216,38 @@
       "fragmentSHA256": "bad1d75d5d285ace36023b0823f1ffd9c4d2db9ad691e5775894079291df24b2",
       "count": 1,
       "reason": "После вынесения общего owner-reset в двух формах осталось окно завершения разных async readback с локальными catch/finally, событиями parameter/dirty и явным подключением общего reset. PROJECT читает scoped bundle, SYSTEM выполняет собственные SDK reads и проверку pagination; каждый watcher владеет своим abort signal и состоянием ошибки. Общий callback ради одинаковых финальных строк скрыл бы отдельные жизненные циклы и порядок событий, тогда как общая реактивная проекция и owner-reset уже переиспользуются. Сохранены только точные пути, hash и count1; сетевые и owner проверки не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/assistant_turn_component_fixture_test.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/project_assistant_component_test.go",
+      "fragmentSHA256": "3ba37ef7397e1c97255ae13044b529d6cb847fa6ce7347c9b793c6c35991f48d",
+      "count": 1,
+      "reason": "Окно сравнивает подготовку двух PostgreSQL компонентных сценариев с разными repository и role-image конфигурациями: assistant turn и project assistant. Первый готовит warm observed catalog и actor для assistant turns, второй наполняет обычный каталог и разрешает principal создания проекта. Общие примитивы bootstrap и разрешения principals уже используются; их объединение под условным fixture скрыло бы разные полномочия и порядок каталога. Сохранены только точные пути, hash и count1; сценарии, owner и подготовка данных не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/queries.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime_configuration_queries.go",
+      "fragmentSHA256": "5462719225fed09539cc75d893e31ae46b377072d6f445e6a3e8a21d88619b47",
+      "count": 1,
+      "reason": "Детектор сопоставил окончание транзакции чтения Artifact и начало ListSchedules с окончанием чтения runtime configuration и началом ListAgentRuntimeConfigurations. Это границы четырёх разных методов, а не повторяемый единый алгоритм: различные типы ответа, scoped SQL, eligibility, курсоры и per-item правила сохраняются у своих владельцев; общий resolveScope уже используется. Универсальная обвязка commit и list скрыла бы предметные контракты и не устранила предметную реализацию. Сохранена только точная пара путей, hash и count1."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/root_run_cursor_component_test.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/run_session_readiness_component_test.go",
+      "fragmentSHA256": "704b564f6c810ed5dcdd1ade1797ffbddf080b806a1d28af3958d73a9850f137",
+      "count": 1,
+      "reason": "Окно сравнивает два независимых component tests: проверку trusted lineage/cursors и проверку MVCC drift для session readiness. Каждый явно разрешает owner scope и открывает собственную RepeatableRead ReadOnly транзакцию с локальным rollback, затем читает разные run refs и утверждает разные инварианты. Удаление локальной видимости snapshot boundary ради короткого helper ухудшило бы проверяемость момента транзакции и не объединяет предметные проверки. Сохранена только точная пара путей, hash и count1; изоляция, owner и readback не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/internal-rpc-authority/internal/repository/kubernetes/pitr/executor.go",
+      "secondPath": "services/internal/internal-rpc-authority/internal/repository/kubernetes/pitr/verifier.go",
+      "fragmentSHA256": "933fc0697a8518ca4755eeb100fbe622ee36426a4ab56dc9830f23d9ea2585b0",
+      "count": 1,
+      "reason": "Короткая общая последовательность читает и валидирует CA PEM перед загрузкой разных ключей в PITR executor и restore evidence verifier. Дальше один конструктор проверяет private JWK для signing, второй public JWK для проверки; собственные resource identity и ошибка конфигурации различаются. Общий TLS transport уже вынесен, а перенос файлового чтения в универсальный helper скрыл бы I/O и порядок проверки разных ключей без объединения authority. Сохранены только точные пути, hash и count1; TLS, CA и проверки ключей не исключены."
     }
   ]
 }

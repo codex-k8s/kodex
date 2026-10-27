@@ -79,6 +79,25 @@ func newProjectAssistantComponentFixture(t *testing.T, ctx context.Context, pool
 	return r, service, owner, worker
 }
 
+// newRunComponentFixture prepares the existing synthetic repository, the caller-selected warm or
+// ordinary catalog, exact run-launch principals and the domain service in their original order.
+// The caller owns pool, deadline, errors and all scenario assertions; no provider is contacted.
+// newRunComponentFixture готовит прежний synthetic repository, выбранный вызывающим warm или
+// обычный каталог, точные principals запуска и domain service в исходном порядке. Вызывающий
+// владеет pool, сроком, обработкой ошибок и всеми проверками сценария; provider не вызывается.
+func newRunComponentFixture(t *testing.T, ctx context.Context, pool *pgxpool.Pool, warm bool) (*Repository, *serviceplatform.Service, value.Principal, value.Principal, error) {
+	t.Helper()
+	r := newSyntheticRuntimeComponentRepository(t, ctx, pool)
+	if warm {
+		prepareObservedWarmFixture(t, ctx, r)
+	} else {
+		seedObservedCatalogFixture(t, ctx, r)
+	}
+	owner, worker := resolveRunLaunchComponentPrincipals(t, ctx, r)
+	service, err := serviceplatform.New(r)
+	return r, service, owner, worker, err
+}
+
 // configureSyntheticRuntimeComponentRepository applies the fixed synthetic provider descriptor and
 // role-image policy to an existing test repository in that order, allocating a fresh signing-key
 // slice each time. Both original guarded errors remain fatal. It does not create storage, read
