@@ -406,10 +406,7 @@ func (repository *Repository) claimPromotion(ctx context.Context, principal valu
 	if err != nil {
 		return entity.ImagePromotionClaim{}, errs.ErrUnavailable
 	}
-	promotionRequest, err := scanLockedPromotionRequest(tx.QueryRow(ctx,
-		queryRoleImagesLockPromotionRequest, pgx.StrictNamedArgs{
-			"organization_id": current.organizationID, "image_artifact_id": locked.ID,
-		}))
+	promotionRequest, err := readLockedPromotionRequest(ctx, tx, current, locked.ID)
 	if err != nil {
 		return entity.ImagePromotionClaim{}, errs.ErrUnavailable
 	}
@@ -519,19 +516,9 @@ func (repository *Repository) authorizePromotion(ctx context.Context, input role
 		}
 		return repository.promotionAuthorizationFromReceipt(replay), nil
 	}
-	locked, err := lockRoleImageArtifact(ctx, tx, current, input.ArtifactRef)
+	locked, promotionRequest, err := lockPromotionArtifactAndRequest(ctx, tx, current, input.ArtifactRef)
 	if err != nil {
 		return entity.ImagePromotionAuthorization{}, err
-	}
-	promotionRequest, err := scanLockedPromotionRequest(tx.QueryRow(ctx,
-		queryRoleImagesLockPromotionRequest, pgx.StrictNamedArgs{
-			"organization_id": current.organizationID, "image_artifact_id": locked.ID,
-		}))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.ImagePromotionAuthorization{}, errs.ErrForbidden
-	}
-	if err != nil {
-		return entity.ImagePromotionAuthorization{}, errs.ErrUnavailable
 	}
 	lockedRecipe, err := scanLockedRecipe(tx.QueryRow(ctx, queryRoleImagesLockRecipe,
 		current.organizationID, locked.Artifact.RecipeRef))
@@ -650,19 +637,9 @@ func (repository *Repository) completePromotion(ctx context.Context, input rolei
 		}
 		return replay, nil
 	}
-	locked, err := lockRoleImageArtifact(ctx, tx, current, input.ArtifactRef)
+	locked, promotionRequest, err := lockPromotionArtifactAndRequest(ctx, tx, current, input.ArtifactRef)
 	if err != nil {
 		return entity.ImageArtifact{}, err
-	}
-	promotionRequest, err := scanLockedPromotionRequest(tx.QueryRow(ctx,
-		queryRoleImagesLockPromotionRequest, pgx.StrictNamedArgs{
-			"organization_id": current.organizationID, "image_artifact_id": locked.ID,
-		}))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.ImageArtifact{}, errs.ErrForbidden
-	}
-	if err != nil {
-		return entity.ImageArtifact{}, errs.ErrUnavailable
 	}
 	lockedRecipe, err := scanLockedRecipe(tx.QueryRow(ctx, queryRoleImagesLockRecipe,
 		current.organizationID, locked.Artifact.RecipeRef))

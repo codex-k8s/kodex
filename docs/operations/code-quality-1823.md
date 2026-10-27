@@ -4,11 +4,29 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.595.0
+version: 1.596.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие блокирующие чтения promotion — 27.10.2026
+
+Три специализированных перехода используют общее чтение promotion request
+по точным organization/artifact. Authorization и completion также используют
+общий порядок блокировок artifact → request с прежним сопоставлением ошибок;
+claim сохраняет свою отдельную обработку. Полномочия, проверки recipe, версии,
+жизненный цикл и владение транзакцией остаются у переходов. Обратное сравнение
+двух целых файлов и трёх исходных вызовов PASS.
+
+Изолированные PostgreSQL promotion и role-image сценарии до и после: 2 и 1
+события PASS соответственно, FAIL/SKIP 0. Unit проверяет точные аргументы,
+порядок блокировок и ошибки отсутствия/чтения. Control-plane build/unit/vet
+PASS: 3094 тестовых события PASS, 70 условных SKIP. Четыре typed wrappers
+разных protected transitions сохранены адресно; 24 мутации решений отклонены,
+17 тестов инструментов качества PASS. Context7: [pgx transactions](https://github.com/jackc/pgx/blob/v5.10.0/_autodocs/api-reference/transactions.md).
+Анализ: 1321 raw / 1306 retained / 15 unresolved, Go-комментарии 21750/21750.
+Реальный registry, браузер, E2E, live/deploy/startup и QA не проверялись.
 
 ## Общая настройка TLS gRPC-серверов authority — 27.10.2026
 

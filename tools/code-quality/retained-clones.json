@@ -9264,6 +9264,38 @@
       "fragmentSHA256": "b6ed7b3e05f583f7429c1b5caa19d4e4030feeb2a613e614a3dc069a442ec35d",
       "count": 1,
       "reason": "Окно сравнивает отдельные SecretAttestor и FileAttestor: оба открывают общий readback transport и реализуют обязательный Close через transport.close, но получают доказательства из разных источников и применяют разные проверки версии, размеров и ключей. Сам transport уже общий; один общий Close на другом типе потребовал бы перестройки ownership и интерфейсов без удаления отдельного Attest. Сохранён только внутрефайловый hash и count1; validation и attestation обоих источников не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/role_images_admission.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/role_images_admission.go",
+      "fragmentSHA256": "50f8c473f5a3b5a7a3159e163755c7d84ac435cff0b0779a460c4610e101e745",
+      "count": 1,
+      "reason": "Окно содержит typed public wrappers ClaimAdmission и ClaimPromotion и начало разных внутренних транзакций. Оба уже используют общий retryRoleImageTransaction, но admission повторно выдаёт только живой claim текущей policy и может commit maintenance с NotFound; promotion имеет собственный тип квитанции, иные liveness и связывает candidate/request/recipe. Дополнительный универсальный dispatcher скрыл бы явную связь операции и результата с её authority/lifecycle. Сохранён только точный внутрефайловый hash и count1; сами transitions и прочие фрагменты не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/role_images_admission.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/role_images_workers.go",
+      "fragmentSHA256": "da67999738d143c2901a17957ce49c8bbc65caf2a5be172a702563d119c59b15",
+      "count": 1,
+      "reason": "Сравниваются typed wrappers ClaimAdmission и ClaimBuild: общая политика полного transaction retry уже вынесена, а разные inner методы используют разные operation identities, replay/expiry и commit событий. Admission выбирает artifact с проверкой policy, build фиксирует bounded attempt и собственный fence. Обобщать оба protected transition через общий dispatcher нельзя без скрытия точных проверок и типов. Сохранена только точная пара путей, hash и count1; остальные проверки и transitions не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/role_images_admission.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/role_images_admission.go",
+      "fragmentSHA256": "9bd00bd6c0199e50ba0830c0c955d4fb7a6811746481d080b312792b4572fd75",
+      "count": 1,
+      "reason": "Окно сравнивает typed AuthorizePromotion и CompletePromotion и начало их inner методов. Общий retry и последовательность чтения/блокировки request уже выделены; authorization проверяет живой claim и выдаёт ограниченное разрешение, completion проверяет разрешение и registry evidence и атомарно завершает artifact/request с revision, audit и event. Универсальный callback перехода скрыл бы различие полномочий, типов результатов и terminal side effects. Сохранён точный внутрефайловый hash и count1; защищённые проверки не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/role_images_admission.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/role_images_risk.go",
+      "fragmentSHA256": "715c896074c4b2c1ec0600b943bc818a0b7206435d0b894656d2f12f7fded7bd",
+      "count": 1,
+      "reason": "Сходные wrappers AuthorizePromotion и DecideAdmissionRisk вызывают общий retry, но запускают разные специализированные transitions и возвращают разные типы. Promotion проверяет version-bound claim и credential generation, а admission risk применяет owner/policy и фиксирует risk decision с возможной новой attempt и event. Общий dispatcher ради синтаксической обвязки скрыл бы границы authority и lifecycle. Сохранены только точные пути, hash и count1; ни одна операция или policy не исключена."
     }
   ]
 }

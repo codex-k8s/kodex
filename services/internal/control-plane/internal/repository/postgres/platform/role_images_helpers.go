@@ -319,6 +319,39 @@ func scanLockedPromotionRequest(row roleImageRowScanner) (lockedPromotionRequest
 	return result, nil
 }
 
+// readLockedPromotionRequest executes the existing organization/artifact-scoped locking query and
+// returns its scan result or raw error. The caller owns the transaction and maps absence/errors
+// according to its specific claim, authorization or completion transition.
+// readLockedPromotionRequest выполняет прежний блокирующий запрос в области organization/artifact
+// и возвращает результат scan либо исходную ошибку. Caller владеет транзакцией и сопоставляет
+// отсутствие и ошибки согласно конкретному переходу claim, authorization или completion.
+func readLockedPromotionRequest(ctx context.Context, tx pgx.Tx, current scope, artifactID string) (lockedPromotionRequest, error) {
+	return scanLockedPromotionRequest(tx.QueryRow(ctx, queryRoleImagesLockPromotionRequest, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID, "image_artifact_id": artifactID,
+	}))
+}
+
+// lockPromotionArtifactAndRequest preserves the authorization/completion lock order and maps
+// an absent request to Forbidden and other request failures to Unavailable. The caller owns the
+// transaction, role-image policy, recipe checks, version checks and transition.
+// lockPromotionArtifactAndRequest сохраняет порядок блокировок authorization/completion и
+// сопоставляет отсутствие request с Forbidden, другие ошибки request — с Unavailable. Caller
+// владеет транзакцией, role-image policy, проверкой recipe, версий и переходом.
+func lockPromotionArtifactAndRequest(ctx context.Context, tx pgx.Tx, current scope, artifactRef string) (lockedArtifact, lockedPromotionRequest, error) {
+	artifact, err := lockRoleImageArtifact(ctx, tx, current, artifactRef)
+	if err != nil {
+		return lockedArtifact{}, lockedPromotionRequest{}, err
+	}
+	request, err := readLockedPromotionRequest(ctx, tx, current, artifact.ID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return lockedArtifact{}, lockedPromotionRequest{}, errs.ErrForbidden
+	}
+	if err != nil {
+		return lockedArtifact{}, lockedPromotionRequest{}, errs.ErrUnavailable
+	}
+	return artifact, request, nil
+}
+
 // roleImageActions returns OPEN and management hints based on ACTIVE state, omitting mutation
 // hints for shipped recipes or callers without management access; hints do not authorize commands.
 // roleImageActions возвращает OPEN и management hints по ACTIVE state, исключая mutation hints
