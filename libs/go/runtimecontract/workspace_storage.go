@@ -191,15 +191,24 @@ type WorkspaceWriterCommitment struct {
 // Validate rejects incomplete commitments; exact Pod/PVC ownership is proved by the controller.
 // Validate отклоняет неполные commitments; exact Pod/PVC ownership доказывает controller.
 func (value WorkspaceWriterCommitment) Validate() error {
+	return validateWorkspaceWriter(value, true)
+}
+
+// validateWorkspaceWriter shares tuple validation while rejecting recursive join hashes in a source record.
+// validateWorkspaceWriter разделяет tuple validation, отвергая recursive join hash в source record.
+func validateWorkspaceWriter(value WorkspaceWriterCommitment, requireJoin bool) error {
 	for _, ref := range []string{value.RunRef, value.NodeRef, value.TurnRef, value.RuntimeRevisionRef, value.LeaseRef} {
 		if !opaqueReferencePattern.MatchString(ref) {
 			return errWorkspaceStorageInvalid
 		}
 	}
-	for _, digest := range []string{value.RuntimeRevisionDigest, value.ExecutionBindingDigest, value.InputDigest, value.JoinSHA256} {
+	for _, digest := range []string{value.RuntimeRevisionDigest, value.ExecutionBindingDigest, value.InputDigest} {
 		if !sha256Pattern.MatchString(digest) {
 			return errWorkspaceStorageInvalid
 		}
+	}
+	if requireJoin && !sha256Pattern.MatchString(value.JoinSHA256) || !requireJoin && value.JoinSHA256 != "" {
+		return errWorkspaceStorageInvalid
 	}
 	if value.LeaseGeneration < 1 || value.RuntimeRevisionVersion < 1 || value.Attempt < 1 || !workspaceUID(value.PodUID) || !workspaceUID(value.PVCUID) {
 		return errWorkspaceStorageInvalid

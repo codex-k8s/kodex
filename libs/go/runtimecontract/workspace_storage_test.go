@@ -84,6 +84,18 @@ func TestWorkspaceManifestBoundsPartsAndExistingBudgets(t *testing.T) {
 	if err != nil || len(raw) > MaximumWorkspaceManifestBytes {
 		t.Fatal("largest derived data stream exceeds the original manifest budget")
 	}
+	escaped := value
+	escaped.Parts = append([]WorkspaceArchivePart(nil), value.Parts...)
+	for index := range escaped.Parts {
+		escaped.Parts[index].Version = strings.Repeat(`"`, 1024)
+		escaped.Parts[index].ETag = strings.Repeat(`\`, 256)
+	}
+	if escaped.Validate() != nil {
+		t.Fatal("escaping fixture changed the independently bounded metadata shape")
+	}
+	if _, err := EncodeWorkspaceArchiveManifest(escaped); err == nil {
+		t.Fatal("JSON escaping bypassed the encoded 64KiB ceiling")
+	}
 	metadata := append([]WorkspaceArchivePart(nil), value.Parts...)
 	for len(metadata) < MaximumWorkspaceArchiveParts {
 		part := metadata[0]
