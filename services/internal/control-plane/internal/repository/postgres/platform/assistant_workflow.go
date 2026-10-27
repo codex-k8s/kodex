@@ -143,7 +143,7 @@ func hydrateAssistantWorkflowFields(before map[string]any, version int64,
 ) (entity.AssistantPlanOperation, error) {
 	after := make(map[string]any, len(assistantWorkflowEditableFields)+2)
 	for _, key := range append([]string{"workflowRef", "projectRef"}, assistantWorkflowEditableFields...) {
-		if _, exists := before[key]; key == "executionMode" && !exists {
+		if _, exists := before[key]; (key == "executionMode" || key == "reworkPolicy") && !exists {
 			continue
 		}
 		after[key] = before[key]
