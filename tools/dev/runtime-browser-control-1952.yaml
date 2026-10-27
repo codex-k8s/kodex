@@ -62,36 +62,59 @@ spec:
       args:
         - |
           const fs = require('node:fs');
-          const { chromium } = require('/opt/kodex/npm-toolchain/node_modules/playwright');
-          (async () => {
-            const home = fs.mkdtempSync('/tmp/browser-control-');
-            const started = Date.now();
-            let browser;
-            try {
-              browser = await chromium.launch({
-                executablePath: '/usr/lib/chromium/chromium',
-                headless: true,
-                chromiumSandbox: true,
-                timeout: 15000,
-                env: { PATH: '/usr/bin:/bin', HOME: home, TMPDIR: home },
+          const { spawnSync } = require('node:child_process');
+          const root = fs.mkdtempSync('/workspace/browser-control-');
+          const runner = root + '/browser.cjs';
+          // Только в этом пустом Pod: сравнение /proc не меняет профиль сотрудников.
+          const browserSource = [
+            'const { chromium } = require("/opt/kodex/npm-toolchain/node_modules/playwright");',
+            '(async()=>{let browser; const started=Date.now(); try {',
+            'browser=await chromium.launch({executablePath:"/usr/lib/chromium/chromium",headless:true,chromiumSandbox:true,timeout:10000,env:{PATH:"/usr/bin:/bin",HOME:process.env.HOME,TMPDIR:"/tmp"}});',
+            'const page=await browser.newPage(); await page.setContent("<title>runtime control</title>",{timeout:3000});',
+            'const titleOK=await page.title()==="runtime control"; console.log(JSON.stringify({titleOK,elapsedMs:Date.now()-started})); if(!titleOK)process.exitCode=1;',
+            '} catch(error) { console.log(JSON.stringify({failed:true,elapsedMs:Date.now()-started,error:String(error.message).slice(0,10000)}));process.exitCode=1;',
+            '} finally {if(browser)await browser.close();}})().catch(()=>{console.error("Browser control cleanup failed");process.exitCode=1;});',
+          ].join('\n');
+          fs.writeFileSync(runner, browserSource, {mode:0o600,flag:'wx'});
+          try {
+            for (const access of ['deny', 'read']) {
+              const home = root + '/home-' + access;
+              const codexHome = root + '/codex-' + access;
+              fs.mkdirSync(home, {mode:0o700});
+              fs.mkdirSync(codexHome, {mode:0o700});
+              const config = [
+                'default_permissions = "qa"',
+                'approval_policy = "never"',
+                'allow_login_shell = false',
+                '[permissions.qa]',
+                'extends = ":workspace"',
+                '[permissions.qa.filesystem]',
+                '"/workspace" = "write"',
+                '"/tmp" = "write"',
+                '"/run/secrets" = "deny"',
+                '"/proc" = "' + access + '"',
+              ].join('\n');
+              fs.writeFileSync(codexHome + '/config.toml', config, {mode:0o600,flag:'wx'});
+              const started = Date.now();
+              const result = spawnSync('/usr/local/bin/codex', ['sandbox','-P','qa','-C',root,'/usr/local/bin/node',runner], {
+                env: {PATH:'/usr/local/bin:/usr/bin:/bin',HOME:home,CODEX_HOME:codexHome},
+                timeout:18000, killSignal:'SIGKILL', maxBuffer:16384, encoding:'utf8',
               });
-              const page = await browser.newPage();
-              await page.setContent('<title>runtime control</title>', { timeout: 5000 });
-              const titleOK = await page.title() === 'runtime control';
-              console.log(JSON.stringify({ scope: 'OPERATOR_CONTROL_OUTSIDE_CODEX_SANDBOX', titleOK, elapsedMs: Date.now() - started }));
-              if (!titleOK) process.exitCode = 1;
-            } catch (error) {
-              console.log(JSON.stringify({ scope: 'OPERATOR_CONTROL_OUTSIDE_CODEX_SANDBOX', failed: true, elapsedMs: Date.now() - started, error: String(error.message).slice(0, 10000) }));
-              process.exitCode = 1;
-            } finally {
-              if (browser) await browser.close();
-              fs.rmSync(home, { recursive: true, force: true });
+              console.log(JSON.stringify({scope:'CREDENTIAL_FREE_CODEX_SANDBOX_CONTROL',procAccess:access,exit:result.status,signal:result.signal,errorCode:result.error?.code,elapsedMs:Date.now()-started,stdout:result.stdout,stderr:result.stderr}));
+              if (result.error) {process.exitCode=1;break;}
             }
-          })().catch(() => { console.error('Browser control cleanup failed'); process.exitCode = 1; });
+          } finally {
+            fs.rmSync(root, {recursive:true,force:true});
+          }
       volumeMounts:
         - name: temporary
           mountPath: /tmp
+        - name: workspace
+          mountPath: /workspace
   volumes:
     - name: temporary
       emptyDir:
-        sizeLimit: 256Mi
+        sizeLimit: 224Mi
+    - name: workspace
+      emptyDir:
+        sizeLimit: 32Mi
