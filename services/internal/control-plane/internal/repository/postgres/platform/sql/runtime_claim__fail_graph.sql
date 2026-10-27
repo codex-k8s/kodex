@@ -10,7 +10,9 @@ WITH graph AS MATERIALIZED (
     RETURNING ref
 ), closed_nodes AS (
     UPDATE control_plane.run_nodes
-    SET state = CASE WHEN id = @failed_node_id::uuid OR type = 'ROOT_PROCESS' THEN 'FAILED' ELSE 'CANCELLED' END,
+    SET state = CASE WHEN materialization_state='PLANNED' THEN 'CANCELLED'
+                     WHEN id = @failed_node_id::uuid OR type = 'ROOT_PROCESS' THEN 'FAILED'
+                     ELSE 'CANCELLED' END,
         safe_error_code = @safe_error_code, safe_error_message = '', next_actions = '{}',
         finished_at = clock_timestamp(), version = version + 1
     WHERE run_id IN (SELECT id FROM graph) AND state IN ('PLANNED', 'QUEUED', 'RUNNING', 'WAITING')

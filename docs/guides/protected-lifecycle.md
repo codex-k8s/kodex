@@ -4,11 +4,21 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.53
+version: 1.1.54
 updated: 2026-10-27
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Часы всего SERVER DAG принадлежат его существующему `ROOT_PROCESS`, а не
+первому planned anchor: реальные физические исполнители могут уже находиться
+в дочерних runs. Autonomous expiry, owner command и выбор раннего execution
+перед Gate expiry используют одну точную область org/root/run и pinned workflow.
+Нематериализованный anchor при terminal closure отменяется; запрещено делать его
+FAILED, выдумывать turn/RR или менять materialization ради закрытия графа.
+Полный owner envelope сохраняет подтверждённые результаты и uncertain WRITE,
+закрывает leases/Gates и не мешает claim другого root. Матрица:
+[#1935](../operations/server-root-deadline-1935.md).
 
 Новая business attempt не разрешает повтор уже успешного внешнего WRITE.
 При повторном исполнении owner сопоставляет опубликованный logical intent,
