@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test } from "@playwright/test";
 
+import { browserStorageContains } from "./fixtures/storage-check";
 import { authenticateOwner } from "./auth-flow";
 import { loadE2EAuthEnvironment } from "./environment";
 import { gotoWithRetry } from "./helpers";
@@ -138,14 +139,6 @@ test("помощник открывает защищённую форму и п�
   expect(secret.name).toBe(name);
   expect(JSON.stringify(secret)).not.toContain(value);
   expect(leakedURLs).toEqual([]);
-  const stored = await page.evaluate((secretValue) => {
-    for (const storage of [window.localStorage, window.sessionStorage]) {
-      for (let index = 0; index < storage.length; index += 1) {
-        const key = storage.key(index);
-        if (key && storage.getItem(key)?.includes(secretValue)) return true;
-      }
-    }
-    return false;
-  }, value);
+  const stored = await browserStorageContains(page, value);
   expect(stored).toBe(false);
 });

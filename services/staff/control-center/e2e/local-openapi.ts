@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 
 import { expect, test, type Page, type Locator } from "@playwright/test";
 
+import { browserStorageContains } from "./fixtures/storage-check";
 import { authenticateOwner } from "./auth-flow";
 import { loadE2EAuthEnvironment } from "./environment";
 import { gotoWithRetry } from "./helpers";
@@ -742,15 +743,7 @@ test("помощник ведёт к credential-форме OpenAPI без уте
   expect(metadata.credentialsConfigured).toBe(true);
   expect(JSON.stringify(metadata).includes(credentialValue)).toBe(false);
   expect(leakedURLs).toEqual([]);
-  const stored = await page.evaluate((value) => {
-    for (const storage of [window.localStorage, window.sessionStorage]) {
-      for (let index = 0; index < storage.length; index += 1) {
-        const key = storage.key(index);
-        if (key && storage.getItem(key)?.includes(value)) return true;
-      }
-    }
-    return false;
-  }, credentialValue);
+  const stored = await browserStorageContains(page, credentialValue);
   expect(stored).toBe(false);
   const tested = await mutate<Connection>(
     page,
