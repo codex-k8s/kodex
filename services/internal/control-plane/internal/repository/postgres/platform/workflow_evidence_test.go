@@ -132,8 +132,19 @@ func TestWorkflowQAIssueEvidence(t *testing.T) {
 	if workflowQAIssueReceipt(proof, changed) {
 		t.Fatal("unrelated report adopted issue")
 	}
-	before, _ := workflowEffectSemanticDigest("qa", "github.issue.create", "scope", asJSON([]any{"kodex.workflow-qa-issue.v1", json.RawMessage(proof.Input), workflowQAReportPin{Ref: "art_12345678", RevisionRef: "arv_12345678", Revision: 1, Digest: "sha256:" + strings.Repeat("a", 64)}}))
-	after, _ := workflowEffectSemanticDigest("qa", "github.issue.create", "scope", asJSON([]any{"kodex.workflow-qa-issue.v1", json.RawMessage(proof.Input), workflowQAReportPin{Ref: "art_12345678", RevisionRef: "arv_12345678", Revision: 2, Digest: "sha256:" + strings.Repeat("b", 64)}}))
+	reportPin := workflowQAReportPin{Ref: "art_12345678", RevisionRef: "arv_12345678", Revision: 1, Digest: "sha256:" + strings.Repeat("a", 64)}
+	logPin := workflowQAReportPin{Ref: "art_22345678", RevisionRef: "arv_22345678", Revision: 1, Digest: "sha256:" + strings.Repeat("c", 64)}
+	first, err := workflowQAIssueSemanticInput(proof.Input, &reportPin, []workflowQAReportPin{logPin})
+	if err != nil {
+		t.Fatal("exact report/log pins unavailable", err)
+	}
+	before, _ := workflowEffectSemanticDigest("qa", "github.issue.create", "scope", first)
+	reportPin.Revision, reportPin.Digest = 2, "sha256:"+strings.Repeat("b", 64)
+	second, err := workflowQAIssueSemanticInput(proof.Input, &reportPin, []workflowQAReportPin{logPin})
+	if err != nil {
+		t.Fatal("changed report pins unavailable", err)
+	}
+	after, _ := workflowEffectSemanticDigest("qa", "github.issue.create", "scope", second)
 	if before == after {
 		t.Fatal("new report lost semantic identity")
 	}
@@ -175,5 +186,41 @@ func TestWorkflowEvidenceOnlyPRSubjects(t *testing.T) {
 	inputs[0].Receipt.Results = append(inputs[0].Receipt.Results, inputs[0].Receipt.Results[0])
 	if _, valid := workflowEvidenceSubject(inputs, "author"); valid {
 		t.Fatal("native evidence accepted multiple PR subjects")
+	}
+}
+
+// TestWorkflowQAIssueCustodyIdentity rejects malformed pins and binds every distinct log while
+// preserving replay identity for duplicate identical references and report test ordering.
+// TestWorkflowQAIssueCustodyIdentity отвергает malformed pins и связывает каждый log, сохраняя
+// replay identity при одинаковых повторных ссылках и изменении порядка tests в report.
+func TestWorkflowQAIssueCustodyIdentity(t *testing.T) {
+	report := workflowQAReportPin{Ref: "art_report12", RevisionRef: "arv_report12", Revision: 1, Digest: "sha256:" + strings.Repeat("a", 64)}
+	a := workflowQAReportPin{Ref: "art_output12", RevisionRef: "arv_output12", Revision: 1, Digest: "sha256:" + strings.Repeat("b", 64)}
+	b := workflowQAReportPin{Ref: "art_output22", RevisionRef: "arv_output22", Revision: 1, Digest: "sha256:" + strings.Repeat("c", 64)}
+	input := []byte(`{"title":"Defect","body":"Actual finding"}`)
+	expected, err := workflowQAIssueSemanticInput(input, &report, []workflowQAReportPin{a, b})
+	if err != nil {
+		t.Fatal("exact custody unavailable", err)
+	}
+	reordered, err := workflowQAIssueSemanticInput(input, &report, []workflowQAReportPin{b, a, a})
+	if err != nil || string(expected) != string(reordered) {
+		t.Fatal("equivalent custody changed logical intent")
+	}
+	for _, pins := range [][]workflowQAReportPin{nil, {a, a, b, b, a, a, b, b, a}, {{Ref: a.Ref, RevisionRef: a.RevisionRef, Revision: 1, Digest: "sha256:" + strings.Repeat("z", 64)}}, {a, {Ref: a.Ref, RevisionRef: b.RevisionRef, Revision: 2, Digest: b.Digest}}} {
+		if _, err := workflowQAIssueSemanticInput(input, &report, pins); err == nil {
+			t.Fatal("invalid or conflicting custody admitted")
+		}
+	}
+	changed := b
+	changed.Revision = 2
+	changed.RevisionRef = "arv_changed2"
+	drift, err := workflowQAIssueSemanticInput(input, &report, []workflowQAReportPin{a, changed})
+	if err != nil || string(expected) == string(drift) {
+		t.Fatal("changed exact log lost semantic identity")
+	}
+	invalid := report
+	invalid.Digest = "sha256:" + strings.Repeat("A", 64)
+	if _, err := workflowQAIssueSemanticInput(input, &invalid, []workflowQAReportPin{a}); err == nil {
+		t.Fatal("noncanonical report pin admitted")
 	}
 }

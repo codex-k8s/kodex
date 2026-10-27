@@ -48,28 +48,31 @@ var queryWorkflowEffectReceipt string
 type workflowEffectIntent struct {
 	// QAReport is assigned only after exact captured report and current log eligibility checks.
 	// QAReport назначает owner после exact captured report и current log eligibility checks.
-	QAReport          *workflowQAReportPin `json:"qaReport,omitempty"`
-	Schema            string               `json:"schema"`
-	ResultKey         string               `json:"resultKey"`
-	Operation         string               `json:"operation"`
-	SemanticDigest    string               `json:"semanticDigest"`
-	ConnectionRef     string               `json:"connectionRef"`
-	ConnectionVersion int64                `json:"connectionVersion"`
-	GrantRef          string               `json:"grantRef"`
-	GrantVersion      int64                `json:"grantVersion"`
-	DefinitionDigest  string               `json:"definitionDigest"`
-	ScopeDigest       string               `json:"scopeDigest"`
-	ApprovalPolicy    string               `json:"approvalPolicy"`
-	OriginNodeID      string               `json:"originNodeId"`
-	OriginRunID       string               `json:"originRunId"`
-	OriginRevisionID  string               `json:"originRevisionId"`
-	OriginLeaseID     string               `json:"originLeaseId"`
-	OriginGeneration  int64                `json:"originGeneration"`
-	OriginAttempt     int64                `json:"originAttempt"`
-	OriginBusiness    int64                `json:"originBusinessAttempt"`
-	InvocationRef     string               `json:"invocationRef"`
-	EffectKey         string               `json:"effectKey"`
-	InputDigest       string               `json:"inputDigest"`
+	QAReport *workflowQAReportPin `json:"qaReport,omitempty"`
+	// QALogs are owner-resolved immutable custody pins, never caller authority.
+	// QALogs — owner-resolved immutable custody pins, не полномочия caller.
+	QALogs            []workflowQAReportPin `json:"qaLogs,omitempty"`
+	Schema            string                `json:"schema"`
+	ResultKey         string                `json:"resultKey"`
+	Operation         string                `json:"operation"`
+	SemanticDigest    string                `json:"semanticDigest"`
+	ConnectionRef     string                `json:"connectionRef"`
+	ConnectionVersion int64                 `json:"connectionVersion"`
+	GrantRef          string                `json:"grantRef"`
+	GrantVersion      int64                 `json:"grantVersion"`
+	DefinitionDigest  string                `json:"definitionDigest"`
+	ScopeDigest       string                `json:"scopeDigest"`
+	ApprovalPolicy    string                `json:"approvalPolicy"`
+	OriginNodeID      string                `json:"originNodeId"`
+	OriginRunID       string                `json:"originRunId"`
+	OriginRevisionID  string                `json:"originRevisionId"`
+	OriginLeaseID     string                `json:"originLeaseId"`
+	OriginGeneration  int64                 `json:"originGeneration"`
+	OriginAttempt     int64                 `json:"originAttempt"`
+	OriginBusiness    int64                 `json:"originBusinessAttempt"`
+	InvocationRef     string                `json:"invocationRef"`
+	EffectKey         string                `json:"effectKey"`
+	InputDigest       string                `json:"inputDigest"`
 }
 
 // workflowEffectRejoin binds a read-only previous success to one fresh immutable execution; no worker grant is issued.
@@ -225,11 +228,14 @@ func (repository *Repository) admitWorkflowEffectTx(ctx context.Context, tx pgx.
 		return nil, nil, err
 	}
 	if evidenceProfile == workflowservice.GitHubReviewQAV1 && operation == "github.issue.create" {
-		intent.QAReport, err = repository.workflowIssueEvidenceTx(ctx, tx, current, admission, intent, step, dependencies, canonicalInput)
+		intent.QAReport, intent.QALogs, err = repository.workflowIssueEvidenceTx(ctx, tx, current, admission, intent, step, dependencies, canonicalInput)
 		if err != nil {
 			return nil, nil, err
 		}
-		semanticInput = asJSON([]any{"kodex.workflow-qa-issue.v1", json.RawMessage(canonicalInput), intent.QAReport})
+		semanticInput, err = workflowQAIssueSemanticInput(canonicalInput, intent.QAReport, intent.QALogs)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	if semanticInput == nil {
 		semanticInput = canonicalInput
@@ -261,7 +267,10 @@ func (repository *Repository) admitWorkflowEffectTx(ctx context.Context, tx pgx.
 		}
 		oldSemantic := oldInput
 		if operation == "github.issue.create" && evidenceProfile == workflowservice.GitHubReviewQAV1 {
-			oldSemantic = asJSON([]any{"kodex.workflow-qa-issue.v1", json.RawMessage(oldInput), old.QAReport})
+			oldSemantic, err = workflowQAIssueSemanticInput(oldInput, old.QAReport, old.QALogs)
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 		if operation == repositoryBundleOperation {
 			var original struct {

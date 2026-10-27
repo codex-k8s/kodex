@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -144,17 +145,77 @@ func readWorkflowAcceptedEvidenceTx(ctx context.Context, tx pgx.Tx, current scop
 // validateWorkflowQALogsTx разрешает каждый output selector через ту же own captured lineage
 // и current frozen catalog; повторные ссылки допустимы только с одинаковыми pins.
 func validateWorkflowQALogsTx(ctx context.Context, tx pgx.Tx, current scope, lease map[string]any, report workflowservice.QAReport) error {
-	pins := map[string]*entity.WorkflowArtifactSource{}
+	_, err := workflowQALogPinsTx(ctx, tx, current, lease, report)
+	return err
+}
+
+// workflowQALogPinsTx retains owner-resolved immutable revision pins for each distinct report
+// log while holding every existing HEAD SHARE lock until the same admission transaction commits.
+// workflowQALogPinsTx сохраняет owner-resolved immutable pins каждого отдельного report log,
+// удерживая прежние HEAD SHARE locks до commit той же admission transaction.
+func workflowQALogPinsTx(ctx context.Context, tx pgx.Tx, current scope, lease map[string]any, report workflowservice.QAReport) ([]workflowQAReportPin, error) {
+	sources := map[string]*entity.WorkflowArtifactSource{}
+	result := make([]workflowQAReportPin, 0, len(report.Tests))
 	for _, test := range report.Tests {
-		if previous, exists := pins[test.Log.ArtifactRef]; exists && !bytes.Equal(asJSON(previous), asJSON(test.Log)) {
-			return errs.ErrConflict
+		if test.Log == nil || test.Log.Kind != "CAPTURED_ARTIFACT" {
+			return nil, errs.ErrConflict
 		}
-		if _, err := readWorkflowCapturedEvidenceTx(ctx, tx, current, lease, "", test.Log); err != nil {
-			return err
+		if previous, exists := sources[test.Log.ArtifactRef]; exists {
+			if !bytes.Equal(asJSON(previous), asJSON(test.Log)) {
+				return nil, errs.ErrConflict
+			}
+			continue
 		}
-		pins[test.Log.ArtifactRef] = test.Log
+		file, err := readWorkflowCapturedEvidenceTx(ctx, tx, current, lease, "", test.Log)
+		if err != nil {
+			return nil, err
+		}
+		sources[test.Log.ArtifactRef] = test.Log
+		result = append(result, workflowQAReportPin{Ref: file.Ref, RevisionRef: file.RevisionRef, Revision: file.Revision, Digest: file.Digest})
 	}
-	return nil
+	return canonicalWorkflowQALogPins(result)
+}
+
+// canonicalWorkflowQALogPins fixes the bounded private ordering without changing report bytes;
+// two revisions of one log identity cannot silently share a logical effect slot.
+// canonicalWorkflowQALogPins задаёт bounded private ordering без изменения report bytes;
+// две ревизии одного log identity не делят logical effect slot молча.
+func canonicalWorkflowQALogPins(pins []workflowQAReportPin) ([]workflowQAReportPin, error) {
+	if len(pins) < 1 || len(pins) > 8 {
+		return nil, errs.ErrConflict
+	}
+	seen := map[string]workflowQAReportPin{}
+	for _, pin := range pins {
+		digest, digestErr := hex.DecodeString(strings.TrimPrefix(pin.Digest, "sha256:"))
+		if pin.Ref == "" || pin.RevisionRef == "" || pin.Revision < 1 || pin.Revision > 9007199254740991 || len(pin.Digest) != 71 || !strings.HasPrefix(pin.Digest, "sha256:") || digestErr != nil || len(digest) != sha256.Size || strings.ToLower(pin.Digest) != pin.Digest {
+			return nil, errs.ErrConflict
+		}
+		if previous, exists := seen[pin.Ref]; exists && previous != pin {
+			return nil, errs.ErrConflict
+		}
+		seen[pin.Ref] = pin
+	}
+	result := make([]workflowQAReportPin, 0, len(seen))
+	for _, pin := range seen {
+		result = append(result, pin)
+	}
+	slices.SortFunc(result, func(a, b workflowQAReportPin) int { return strings.Compare(a.Ref, b.Ref) })
+	return result, nil
+}
+
+// workflowQAIssueSemanticInput commits the exact report and log custody into one replay identity;
+// the versioned private envelope grants neither source access nor permission to create an Issue.
+// workflowQAIssueSemanticInput связывает exact report/log custody с одной replay identity;
+// versioned private envelope не выдаёт доступ к source либо разрешение создать Issue.
+func workflowQAIssueSemanticInput(input []byte, report *workflowQAReportPin, logs []workflowQAReportPin) ([]byte, error) {
+	canonical, err := canonicalWorkflowQALogPins(logs)
+	if err != nil || report == nil || !json.Valid(input) {
+		return nil, errs.ErrConflict
+	}
+	if _, err := canonicalWorkflowQALogPins([]workflowQAReportPin{*report}); err != nil {
+		return nil, err
+	}
+	return asJSON([]any{"kodex.workflow-qa-issue.v2", json.RawMessage(input), report, canonical}), nil
 }
 
 // workflowEvidenceOperation identifies only the two per-business evidence effects of the new
@@ -171,7 +232,7 @@ func workflowEvidenceOperation(profile, operation string) bool {
 // workflowIssueEvidenceTx требует captured finding report в current frozen RR до создания Issue.
 // Published QA predicate задаёт report key и subject; title/body модели должны совпасть с одной
 // агрегированной Issue, сохранённой в точном report.
-func (repository *Repository) workflowIssueEvidenceTx(ctx context.Context, tx pgx.Tx, current scope, admission *workflowEffectAdmission, intent workflowEffectIntent, step entity.WorkflowStep, inputs []workflowResultDependency, input []byte) (*workflowQAReportPin, error) {
+func (repository *Repository) workflowIssueEvidenceTx(ctx context.Context, tx pgx.Tx, current scope, admission *workflowEffectAdmission, intent workflowEffectIntent, step entity.WorkflowStep, inputs []workflowResultDependency, input []byte) (*workflowQAReportPin, []workflowQAReportPin, error) {
 	var requirement, artifact entity.WorkflowResultRequirement
 	for _, candidate := range step.ResultRequirements {
 		if candidate.Key == intent.ResultKey {
@@ -184,30 +245,31 @@ func (repository *Repository) workflowIssueEvidenceTx(ctx context.Context, tx pg
 		}
 	}
 	if requirement.Kind != "QA" || artifact.Kind != "ARTIFACT" || artifact.MediaType != "application/json" {
-		return nil, errs.ErrForbidden
+		return nil, nil, errs.ErrForbidden
 	}
 	lease := map[string]any{"rootRunID": admission.RootID, "nodeID": admission.NodeID, "runtimeRevisionID": intent.OriginRevisionID, "leaseID": intent.OriginLeaseID}
 	file, err := readWorkflowCapturedEvidenceTx(ctx, tx, current, lease, artifact.FileName, nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	report, err := repository.readWorkflowQAReport(ctx, file)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	subject, found := workflowEvidenceSubject(inputs, requirement.SubjectStepKey)
 	if !found || report.Repository != subject.Repository || report.Number != subject.Number || report.HeadSHA != subject.HeadSHA || report.Verdict != "CHANGES_REQUIRED" || report.Issue == nil || len(report.Findings) == 0 {
-		return nil, errs.ErrForbidden
+		return nil, nil, errs.ErrForbidden
 	}
-	if err := validateWorkflowQALogsTx(ctx, tx, current, lease, report); err != nil {
-		return nil, err
+	logs, err := workflowQALogPinsTx(ctx, tx, current, lease, report)
+	if err != nil {
+		return nil, nil, err
 	}
 	_, valid := workflowResultObject(input, []string{"title", "body"}, []string{"title", "body"})
 	var requested workflowservice.QAIssue
 	if !valid || json.Unmarshal(input, &requested) != nil || requested != *report.Issue {
-		return nil, errs.ErrForbidden
+		return nil, nil, errs.ErrForbidden
 	}
-	return &workflowQAReportPin{Ref: file.Ref, RevisionRef: file.RevisionRef, Revision: file.Revision, Digest: file.Digest}, nil
+	return &workflowQAReportPin{Ref: file.Ref, RevisionRef: file.RevisionRef, Revision: file.Revision, Digest: file.Digest}, logs, nil
 }
 
 // workflowEvidenceSubject selects exactly one accepted PULL_REQUEST from one owner-pinned

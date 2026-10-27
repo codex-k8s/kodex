@@ -4,7 +4,7 @@ title: Native COMMENT и сохранённый QA-отчёт серверног
 type: runbook
 status: approved
 owner: architect
-version: 1.1.0
+version: 1.2.0
 updated: 2026-10-27
 ---
 
@@ -61,7 +61,7 @@ CAPTURED_ARTIFACT; source kind/fileName/mediaType не переносятся в
 
 Новые два logical slots имеют максимум один effect каждого вида на business
 attempt. Semantic digest включает repository scope, canonical input и QA report
-pin; COMMENT input уже содержит exact PR/head. Exact execution replay и fresh
+pin и canonical distinct log pins; COMMENT input уже содержит exact PR/head. Exact execution replay и fresh
 same-attempt RR используют существующую invocation/receipt и immutable bridge,
 не создают второй Gate/Begin/POST. Новый business attempt назначает только owner
 recovery. Другой head/body/report в прежнем slot отклоняется. Остальные WRITE,
@@ -123,14 +123,14 @@ fixtures проверяют фактические method/body/projection, dispo
 `control-plane-migration.mjs --profile workflow-review-qa-evidence` использует тот же
 immutable plan/check/stop/apply/inspect/resume протокол. Каждый phase сверяется с
 одним закрытым registry. До DDL требуется clean exact source с полным рядом003..014,
-Goose013, отсутствие новых helpers014, три точных predecessor function bodies,
-INVOKER/owner/search_path/return/EXECUTE и отсутствие активных executions/tasks.
+Goose013, отсутствие новых helpers014, четыре точных predecessor function bodies,
+INVOKER/SECURITY DEFINER/owner/search_path/return/EXECUTE и отсутствие активных executions/tasks.
 Оператор не поставляет отсутствующие012/013 и не принимает их по имени файла.
 Отдельное одобрение и доказательство полного predecessor013 остаётся обязательной
 зависимостью поставки, а не результатом incremental verifier014.
 
-Postcondition исполняет поставляемый READ ONLY SQL: шесть exact bodies и metadata,
-два полных полных row triggers, runtime role boundary и неизменённый purge.
+Postcondition исполняет поставляемый READ ONLY SQL: восемь exact bodies и metadata,
+два полных row triggers, runtime role boundary и неизменённый purge.
 Фактический граф после013 содержит105 relations/287 FK:014 не меняет его. Fingerprint
 читается из actual catalog и должен совпасть с записанным в canonical purge body;
 inverse normalization дополнительно сверяет всё прежнее тело. Отдельный011/010
@@ -143,7 +143,7 @@ verifier намеренно отвергает014. Ни source-derived hashes, �
   corpus. Go decoder использует тот же corpus в domain unit suite; contextual
   kind/authority проверяет owner decoder, schema доказывает только форму.
 - `make test-workflow-review-qa-evidence-postgres`:300s, отдельные disposable clones,
-  девять owner lifecycle graphs и семь canonical/drift schema cases. Без готовой
+  16 owner lifecycle graphs и девять canonical/drift schema cases. Без готовой
   согласованной012/013 composition этот target должен закрыто завершиться до suites.
 
 Нативные сценарии включают COMMENT effect-first/model-first, UNKNOWN без повторного
@@ -153,3 +153,59 @@ COMMENT input не создаёт второй invocation, другие PR/head/
 Schema fault injection меняет только отдельные disposable clones: partial trigger,
 PUBLIC EXECUTE, body, SECURITY DEFINER, purge body и отсутствие helper. Fixtures
 передают provider-shaped native receipts и не заявляют настоящие GitHub writes.
+
+## Удержание незавершённого Issue
+
+Owner admission сохраняет приватные `qaReport` и `qaLogs`: exact artifact ref,
+revision ref/number/digest каждого отдельного вывода. Повторный selector одного
+файла допустим только при совпадении всех pins; список ограничен восемью и имеет
+канонический порядок. Эти поля входят в semantic identity и не входят в public
+wire либо reader authority.
+
+Новый owner-only helper `workflow_evidence_retains_revision` удерживает только
+указанные revisions, когда exact native Issue ещё WAITING_APPROVAL, READY,
+RUNNING либо UNKNOWN_OUTCOME. Исторические root/version/origin/RR/lease/generation,
+invocation/effect/input и closed capture ancestry проверяются без зависимости от
+живого root, grant, agent readiness или active model lease. У producing capture
+по-прежнему обязателен COMPLETED lease. Origin, вызвавший Issue, может быть
+CANCELLED после owner cancellation до model completion: это не уничтожает прежние
+captured bytes. Текущий CLEAN/ACL остаётся обязательным при admission/чтении,
+но последующий quarantine/revoke не даёт retention удалять unresolved evidence.
+
+| Состояние | Дополнительное удержание report/logs |
+| --- | --- |
+| Pending/UNKNOWN и работающий root | Exact revisions удерживаются |
+| UNKNOWN после cancel, execution expiry или grant revoke | Удержание сохраняется; новый POST не разрешён |
+| Известный CANCELLED/FAILED/SUCCEEDED native outcome | Эта причина удержания снимается; прежние bindings/RR/skill/bundle правила сохраняются |
+| Другой capture/revision того же root | Новая причина удержания не возникает |
+| Явный авторизованный project purge | Действует прежний sealed project purge protocol; новый reader доступ не выдаётся |
+
+Unresolved UNKNOWN нельзя объявить известным результатом ради очистки. Если
+авторитетное reconciliation ещё не выполнено, pins сохраняются. Helper не
+выдаётся runtime/retention worker напрямую: его вызывает прежний SECURITY DEFINER
+`artifact_has_retained_revisions`, чьи OID/owner/ACL/search_path и все прежние
+ветки сохраняются. Forward014 не создаёт таблиц или FK.
+
+### Порядок HEAD lock и purge
+
+Admission сначала берёт SHARE NOWAIT на ACTIVE HEAD report и каждого log и
+удерживает их до commit exact intent. Concurrent UPDATE/DELETE/purge не может
+пересечь эту границу. Если HEAD уже DELETED/PURGE_PENDING/PURGED, admission
+отвергается до назначения effect. PurgeArtifact сначала берёт отдельный HEAD
+FOR UPDATE, затем новым READ COMMITTED statement проверяет actual impact и
+retention перед PURGE_PENDING; снимок до ожидания HEAD не используется для
+разрешения удаления. Уже назначенный purge переводит HEAD в PURGE_PENDING,
+поэтому последующее Issue admission закрыто. Worker retention также работает
+только с DELETED/PURGE_PENDING и не может claim-ить ACTIVE report из admission.
+
+Native source cases (пока не доказательство исполнения): UPDATE-lock→NOWAIT deny
+без intent→rollback→успешный admission; owner DELETE до admission→deny; UNKNOWN
+после cancel/expiry/revoke→owner DELETE разрешён, actual purge закрыт и bytes
+удержаны; известный CANCELLED после root cancel→обычный purge освобождается.
+Отдельно проверяются exact unrelated capture и foreign revision ID. Schema
+clones включают повреждённый retention body и выдачу EXECUTE private helper.
+
+Полная поставка014 остаётся заблокирована до актуального полного013 predecessor
+proof в той же read-only snapshot и явной композиции01150→012→013→014. Текущие
+source-derived MD5 и105/287 описывают только схему без будущей01150 и не заменяют
+её actual catalog/fingerprint или разрешение на DDL.

@@ -37,7 +37,7 @@ type workflowEvidenceNativeFixture struct {
 // completion, negative history и replay. Trusted IG completion задаёт provider-shaped facts;
 // оснастка не заявляет внешний GitHub delivery либо автоматическую аттестацию QA commands.
 func TestWorkflowReviewQAEvidenceComponent(t *testing.T) {
-	for _, mode := range []string{"review-effect-first", "review-model-first", "review-unknown", "review-cancel", "review-revoked", "qa-pass", "qa-changes-no-issue", "qa-issue-effect-first", "qa-issue-model-first"} {
+	for _, mode := range []string{"review-effect-first", "review-model-first", "review-unknown", "review-cancel", "review-revoked", "qa-pass", "qa-changes-no-issue", "qa-issue-effect-first", "qa-issue-model-first", "qa-issue-retention-known-cancel", "qa-issue-retention-unknown-cancel", "qa-issue-retention-unknown-model-first", "qa-issue-retention-unknown-revoke", "qa-issue-retention-unknown-expiry", "qa-issue-retention-head-deleted", "qa-issue-retention-head-lock"} {
 		t.Run(mode, func(t *testing.T) { runWorkflowEvidenceNative(t, mode) })
 	}
 }
@@ -260,13 +260,20 @@ func runWorkflowEvidenceNative(t *testing.T, mode string) {
 	}
 	fixture.gateway = resolvedTestPrincipal(t, ctx, repository, port.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "integration-gateway", Operation: "platform.runtime.integrations.claim"}, "integration-gateway")
 	isQA := strings.HasPrefix(mode, "qa-")
-	modelFirst := strings.HasSuffix(mode, "model-first")
+	modelFirst := strings.Contains(mode, "model-first")
+	retention := strings.Contains(mode, "retention")
 	issue := strings.Contains(mode, "issue")
 	check := entity.WorkflowStep{Key: "check", Position: 2, Name: "Проверка", Instructions: "Проверить exact PR/head; сохранить фактические результаты.", ExpectedResult: "Проверяемые доказательства", AgentRef: reviewer.Ref, TimeoutSeconds: 180, DependsOn: []string{"author"}, RequiredCapabilityKeys: []string{runtimecontract.ArtifactCapability, "github.pull_request.review.create", "github.issue.create"}, ResultRequirements: []entity.WorkflowResultRequirement{{Key: "review", Kind: "REVIEW", SubjectStepKey: "author"}}}
 	if isQA {
 		check.ResultRequirements = []entity.WorkflowResultRequirement{{Key: "log", Kind: "ARTIFACT", FileName: "test-output.txt", MediaType: "text/markdown"}, {Key: "report", Kind: "ARTIFACT", FileName: "qa-report.json", MediaType: "application/json"}, {Key: "qa", Kind: "QA", SubjectStepKey: "author", EvidenceKey: "report"}}
 	}
 	draft := entity.WorkflowVersion{ExecutionMode: "SERVER_DAG_V1", ResultEvidenceProfile: workflowservice.GitHubReviewQAV1, Name: "Native evidence", Purpose: "Проверить owner pins, не external delivery.", CoordinatorAgentRef: manager.Ref, Concurrency: 2, TimeoutSeconds: 240, ResultSchema: map[string]any{}, Steps: []entity.WorkflowStep{{Key: "author", Position: 1, Name: "PR", Instructions: "Создать точный PR.", AgentRef: author.Ref, TimeoutSeconds: 120, RequiredCapabilityKeys: []string{"github.pull_request.create"}, ResultRequirements: []entity.WorkflowResultRequirement{{Key: "pr", Kind: "PULL_REQUEST", Repository: "fixture/repository"}}}, check}}
+	if strings.HasSuffix(mode, "unknown-expiry") {
+		draft.TimeoutSeconds, draft.Steps[0].TimeoutSeconds, draft.Steps[1].TimeoutSeconds = 45, 40, 40
+	}
+	if retention {
+		draft.Steps[1].ResultRequirements = append(draft.Steps[1].ResultRequirements, entity.WorkflowResultRequirement{Key: "unrelated", Kind: "ARTIFACT", FileName: "unrelated-output.txt", MediaType: "text/markdown"})
+	}
 	workflow := f.execute(command.CreateWorkflow, "evidence-create", nil, command.WorkflowInput{ProjectRef: project.Ref, Name: draft.Name, Purpose: draft.Purpose, CoordinatorAgentRef: manager.Ref, Draft: &draft}).Workflow
 	workflow = f.execute(command.ValidateWorkflow, "evidence-validate", &workflow.Version, command.WorkflowInput{Ref: workflow.Ref}).Workflow
 	workflow = f.execute(command.PublishWorkflow, "evidence-publish", &workflow.Version, command.WorkflowInput{Ref: workflow.Ref}).Workflow
@@ -329,8 +336,37 @@ func runWorkflowEvidenceNative(t *testing.T, mode string) {
 		}
 		fixture.complete(lease, evidenceDeclaration(entity.WorkflowDeclaredResult{Key: "review", HeadSHA: sha, Verdict: "PASS", ReceiptRef: receipt}))
 	} else {
-		logResult := fixture.complete(lease, `{"schema":"kodex.workflow-capture-progress.v1","phase":"CAPTURE_PROGRESS","cause":"ARTIFACTS_FOR_CONTINUATION","artifactKeys":["log"]}`, workflowCaptureProgressArtifact("test-output.txt", []byte("Fixture-reported command output; no real business tests are claimed.\n")))
-		log := fixture.captured(logResult)
+		logProgress := `{"schema":"kodex.workflow-capture-progress.v1","phase":"CAPTURE_PROGRESS","cause":"ARTIFACTS_FOR_CONTINUATION","artifactKeys":["log"]}`
+		logFiles := []command.CompletedArtifact{workflowCaptureProgressArtifact("test-output.txt", []byte("Fixture-reported command output; no real business tests are claimed.\n"))}
+		if retention {
+			logProgress = `{"schema":"kodex.workflow-capture-progress.v1","phase":"CAPTURE_PROGRESS","cause":"ARTIFACTS_FOR_CONTINUATION","artifactKeys":["log","unrelated"]}`
+			logFiles = append(logFiles, workflowCaptureProgressArtifact("unrelated-output.txt", []byte("Captured by the same employee, absent from the QA report log selectors.")))
+		}
+		logResult := fixture.complete(lease, logProgress, logFiles...)
+		var log, unrelated entity.Artifact
+		if retention {
+			if len(logResult.CreatedRefs) != 2 {
+				t.Fatal("retention capture did not create exact files")
+			}
+			for _, ref := range logResult.CreatedRefs {
+				file, err := service.GetArtifact(ctx, owner, ref)
+				if err != nil || file.ScanState != "CLEAN" {
+					t.Fatal("retention capture metadata unavailable")
+				}
+				if file.FileName == "test-output.txt" {
+					log = file
+				} else if file.FileName == "unrelated-output.txt" {
+					unrelated = file
+				} else {
+					t.Fatal("unexpected retention capture")
+				}
+			}
+			if log.Ref == "" || unrelated.Ref == "" {
+				t.Fatal("retention captures incomplete")
+			}
+		} else {
+			log = fixture.captured(logResult)
+		}
 		lease = fixture.claim(reviewer.Ref)
 		report := workflowservice.QAReport{Schema: "kodex.workflow-qa-report.v1", Repository: "fixture/repository", Number: 7, HeadSHA: sha, Verdict: "PASS", Tests: []workflowservice.QATest{{Name: "Native report fixture", Command: "fixture-output-only", ExitCode: 0, Log: evidenceCapturedSource(log)}}, Findings: []workflowservice.QAFinding{}}
 		negativeQA := issue || mode == "qa-changes-no-issue"
@@ -354,6 +390,10 @@ func runWorkflowEvidenceNative(t *testing.T, mode string) {
 			captured := fixture.captured(reportResult)
 			lease = fixture.claim(reviewer.Ref)
 			input := map[string]any{"title": report.Issue.Title, "body": report.Issue.Body}
+			if retention {
+				fixture.checkIssueRetention(mode, lease, captured, log, unrelated, input)
+				return
+			}
 			invocation, err := fixture.resolve(lease, "evidence-issue", "github.issue.create", input)
 			if err != nil {
 				t.Fatal("admit captured finding Issue", completionOutcomeClass(err))

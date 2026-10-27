@@ -18,6 +18,7 @@ func TestWorkflowReviewQAEvidenceMigrationProofComponent(t *testing.T) {
 		{"canonical", ""}, {"partial_trigger", "triggers"}, {"public_execute", "functionACL"},
 		{"changed_function", "functionSources"}, {"definer", "functionMetadata"},
 		{"changed_purge_body", "purgeGuard"}, {"missing_function", "functionSources"},
+		{"retention_body", "functionSources"}, {"custody_execute", "functionACL"},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
@@ -82,7 +83,7 @@ func TestWorkflowReviewQAEvidenceMigrationProofComponent(t *testing.T) {
 					t.Error("canonical review QA proof rejected", field)
 				}
 			}
-			if proof["functionCount"] != float64(6) || proof["purgeNodes"] != float64(105) || proof["purgeEdges"] != float64(287) {
+			if proof["functionCount"] != float64(8) || proof["purgeNodes"] != float64(105) || proof["purgeEdges"] != float64(287) {
 				t.Fatal("review QA schema composition mismatch")
 			}
 		})

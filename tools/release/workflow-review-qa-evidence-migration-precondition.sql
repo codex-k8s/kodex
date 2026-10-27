@@ -7,7 +7,8 @@ SET LOCAL lock_timeout='500ms';
 WITH RECURSIVE expected(signature,digest,language,volatility,result_type) AS (VALUES
  ('control_plane.guard_workflow_effect_records()','74f7d5fd475cb0919b76579335b547a5','plpgsql','v','trigger'),
  ('control_plane.guard_workflow_attempt_journal()','70f0fd55213d39ae7f29567fb6b2200b','plpgsql','v','trigger'),
- ('control_plane.workflow_public_attempt_results(uuid,uuid)','3045149fe411e8acd562c73e8f2600cf','plpgsql','s','jsonb')
+ ('control_plane.workflow_public_attempt_results(uuid,uuid)','3045149fe411e8acd562c73e8f2600cf','plpgsql','s','jsonb'),
+ ('control_plane.artifact_has_retained_revisions(uuid)','1f71f6d19e09709f61f2c2273a9af0ca','sql','s','boolean')
 ), functions AS (
  SELECT e.*,p.oid,p.prosrc,p.proowner,p.prosecdef,p.provolatile,p.prolang,p.proconfig,p.prorettype,p.proretset,p.proacl
  FROM expected e LEFT JOIN pg_proc p ON p.oid=to_regprocedure(e.signature)
@@ -48,12 +49,15 @@ SELECT jsonb_build_object(
  'reviewQAEvidenceProfile','GITHUB_REVIEW_QA_V1',
  'schemaOwner',(SELECT nspowner='control_plane_owner'::regrole FROM pg_namespace WHERE oid='control_plane'::regnamespace),
  'functionCount',(SELECT count(oid) FROM functions),
- 'functionSources',(SELECT count(*)=3 AND bool_and(oid IS NOT NULL AND md5(prosrc)=digest) FROM functions),
- 'functionMetadata',(SELECT count(*)=3 AND bool_and(oid IS NOT NULL AND proowner='control_plane_owner'::regrole
-    AND NOT prosecdef AND provolatile::text=volatility AND prolang=(SELECT oid FROM pg_language WHERE lanname=language)
-    AND cardinality(proconfig)=1 AND regexp_replace(proconfig[1],'[[:space:]]','','g')='search_path=pg_catalog,control_plane'
+ 'functionSources',(SELECT count(*)=4 AND bool_and(oid IS NOT NULL AND md5(prosrc)=digest) FROM functions),
+ 'functionMetadata',(SELECT count(*)=4 AND bool_and(oid IS NOT NULL AND proowner='control_plane_owner'::regrole
+    AND prosecdef=(signature='control_plane.artifact_has_retained_revisions(uuid)') AND provolatile::text=volatility AND prolang=(SELECT oid FROM pg_language WHERE lanname=language)
+    AND cardinality(proconfig)=1 AND regexp_replace(proconfig[1],'[[:space:]]','','g')=CASE WHEN signature IN ('control_plane.artifact_has_retained_revisions(uuid)','control_plane.workflow_evidence_retains_revision(uuid,uuid,uuid)') THEN 'search_path=pg_catalog' ELSE 'search_path=pg_catalog,control_plane' END
     AND prorettype=to_regtype(result_type) AND NOT proretset) FROM functions),
- 'functionACL',(SELECT count(*)=3 AND bool_and(oid IS NOT NULL AND has_function_privilege('control_plane_runtime',oid,'EXECUTE')
+ 'functionACL',(SELECT count(*)=4 AND bool_and(oid IS NOT NULL AND has_function_privilege('control_plane_runtime',oid,'EXECUTE')=(signature<>'control_plane.workflow_evidence_retains_revision(uuid,uuid,uuid)')
+    AND (signature<>'control_plane.artifact_has_retained_revisions(uuid)' OR has_function_privilege('artifact_retention_runtime',oid,'EXECUTE'))
+    AND (signature<>'control_plane.workflow_evidence_retains_revision(uuid,uuid,uuid)' OR NOT EXISTS(
+        SELECT 1 FROM aclexplode(coalesce(proacl,acldefault('f',proowner))) a WHERE a.grantee<>proowner AND a.privilege_type='EXECUTE'))
     AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(proacl,acldefault('f',proowner))) a
       WHERE (a.grantee=0 AND a.privilege_type='EXECUTE') OR (a.grantee<>'control_plane_owner'::regrole AND a.is_grantable))) FROM functions),
  'runtimeRolesUnprivileged',EXISTS(SELECT 1 FROM runtime_roles WHERE rolcanlogin)
@@ -70,7 +74,7 @@ SELECT jsonb_build_object(
       'IF v_edges <> 284 OR v_edge_fingerprint <> ''6bf6ad76d8c7ae66e07f75ecf719fdd6'' THEN'))='b886c24d4e2f5c4a0ec08123d99462b0'
     AND has_function_privilege('control_plane_runtime',p.oid,'EXECUTE')
     AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE')),
- 'reviewQAEvidenceAbsent',to_regprocedure('control_plane.workflow_evidence_intent_valid(uuid,uuid,uuid,uuid,jsonb,jsonb)') IS NULL AND to_regprocedure('control_plane.workflow_evidence_outcome_valid(uuid,uuid,jsonb,jsonb)') IS NULL AND to_regprocedure('control_plane.workflow_evidence_execution_assigned(uuid,uuid,uuid)') IS NULL
+ 'reviewQAEvidenceAbsent',to_regprocedure('control_plane.workflow_evidence_retains_revision(uuid,uuid,uuid)') IS NULL AND to_regprocedure('control_plane.workflow_evidence_intent_valid(uuid,uuid,uuid,uuid,jsonb,jsonb)') IS NULL AND to_regprocedure('control_plane.workflow_evidence_outcome_valid(uuid,uuid,jsonb,jsonb)') IS NULL AND to_regprocedure('control_plane.workflow_evidence_execution_assigned(uuid,uuid,uuid)') IS NULL
 ,
     'oldClaimSessions', (SELECT count(*) FROM pg_stat_activity
         WHERE datname = current_database() AND pid <> pg_backend_pid()

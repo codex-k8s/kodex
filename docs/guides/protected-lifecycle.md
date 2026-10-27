@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.57
+version: 1.1.58
 updated: 2026-10-27
 ---
 
@@ -351,6 +351,16 @@ replay, не открывая удалённый ресурс обычному �
 Правила дополняют общую структуру `GO-DOC-001`, PostgreSQL-профиль
 `GO-DOC-002`, события `GO-DOC-004` и распределённую безопасность
 `GUIDE-DOC-003`.
+
+Unresolved native effect обязан удерживать exact captured report/log revisions,
+которыми владелец разрешил effect, независимо от terminal root, отменённого lease
+или отозванного grant. Такое удержание не выдаёт reader eligibility и снимается
+только после известного authoritative outcome либо точного project purge.
+Admission удерживает ACTIVE HEAD SHARE до commit intent; purge получает HEAD
+UPDATE и новым statement повторно проверяет retention. Снимок retention до
+ожидания HEAD не разрешает удалять bytes после принятого intent. Проверка включает
+оба порядка блокировок, UNKNOWN после cancel/expiry/revoke, known-terminal release
+и отсутствие pin для посторонней revision.
 
 ## Защищённый вид ресурса
 

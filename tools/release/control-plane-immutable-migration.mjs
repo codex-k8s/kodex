@@ -259,7 +259,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     ensure(result.readOnly === 'on' && result.database === 'control_plane' && result.gooseVersion === configuration.previousVersion &&
       result[configuration.emptyField] === true && fields.every(key => result[key] === 0) && Number.isSafeInteger(result.oldClaimSessions) &&
       result.oldClaimSessions >= 0 && (!requireStopped || result.oldClaimSessions === 0), 'MIGRATION_OWNER_PRECONDITION_FAILED');
-    if (profile === 'workflow-review-qa-evidence') ensure(validWorkflowReviewQAEvidenceSchema(result,3), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if (profile === 'workflow-review-qa-evidence') ensure(validWorkflowReviewQAEvidenceSchema(result,4), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'legacy-workflow-rework') ensure(validServerWorkflowMigrationPostcondition(result) && result.legacyPurgeSource===true, 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     return result;
   };
@@ -651,9 +651,9 @@ function validWorkflowReviewQAEvidenceSchema(proof, functionCount) {
     proof.purgeNodes===105 && proof.purgeEdges===287 && proof.purgeNodeFingerprint==='f51a0de25bd942a250997775617eeaee' &&
     typeof proof.purgeEdgeFingerprint==='string' && /^[a-f0-9]{32}$/.test(proof.purgeEdgeFingerprint);
 }
-// Только014 принимается этим verifier; predecessor013 имеет три прежних функции, final014 — шесть.
+// Только014 принимается этим verifier; predecessor013 имеет четыре прежних функции, final014 — восемь.
 export function validWorkflowReviewQAEvidenceMigrationPostcondition(proof) {
-  return proof?.gooseVersion===20261026001400 && validWorkflowReviewQAEvidenceSchema(proof,6);
+  return proof?.gooseVersion===20261026001400 && validWorkflowReviewQAEvidenceSchema(proof,8);
 }
 
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.

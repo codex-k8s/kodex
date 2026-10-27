@@ -21,7 +21,8 @@ DO $precondition$
 BEGIN
     IF md5((SELECT prosrc FROM pg_proc WHERE oid='control_plane.guard_workflow_effect_records()'::regprocedure)) IS DISTINCT FROM '74f7d5fd475cb0919b76579335b547a5'
         OR md5((SELECT prosrc FROM pg_proc WHERE oid='control_plane.guard_workflow_attempt_journal()'::regprocedure)) IS DISTINCT FROM '70f0fd55213d39ae7f29567fb6b2200b'
-        OR md5((SELECT prosrc FROM pg_proc WHERE oid='control_plane.workflow_public_attempt_results(uuid,uuid)'::regprocedure)) IS DISTINCT FROM '3045149fe411e8acd562c73e8f2600cf' THEN
+        OR md5((SELECT prosrc FROM pg_proc WHERE oid='control_plane.workflow_public_attempt_results(uuid,uuid)'::regprocedure)) IS DISTINCT FROM '3045149fe411e8acd562c73e8f2600cf'
+        OR md5((SELECT prosrc FROM pg_proc WHERE oid='control_plane.artifact_has_retained_revisions(uuid)'::regprocedure)) IS DISTINCT FROM '1f71f6d19e09709f61f2c2273a9af0ca' THEN
         RAISE EXCEPTION 'workflow review evidence requires exact migration013 preimage';
     END IF;
 END $precondition$;
@@ -61,7 +62,7 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog,
  WHERE (SELECT count(*) FROM subjects)=1
     AND subjects.value->>'repository'=(execution.resource_scope->>'owner')||'/'||(execution.resource_scope->>'repository') AND (
     (p_requirement->>'Kind'='REVIEW' AND execution.operation='github.pull_request.review.create'
-        AND NOT p_record ? 'qaReport'
+        AND NOT p_record ?| ARRAY['qaReport','qaLogs']
         AND execution.bounded_input-ARRAY['pull_request_number','sha','event','body']='{}'::jsonb
         AND execution.bounded_input->'pull_request_number'=subjects.value->'number'
         AND execution.bounded_input->>'sha'=subjects.value->>'headSha'
@@ -74,6 +75,33 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog,
         AND jsonb_typeof(p_record->'qaReport')='object'
         AND (SELECT count(*) FROM jsonb_object_keys(p_record->'qaReport'))=4
         AND p_record->'qaReport'-ARRAY['ref','revisionRef','revision','digest']='{}'::jsonb
+        AND jsonb_typeof(p_record->'qaLogs')='array' AND jsonb_array_length(p_record->'qaLogs') BETWEEN 1 AND 8
+        AND (SELECT count(DISTINCT pin->>'ref') FROM jsonb_array_elements(p_record->'qaLogs') pin)=jsonb_array_length(p_record->'qaLogs')
+        AND NOT EXISTS (
+            SELECT 1 FROM jsonb_array_elements(p_record->'qaLogs') log
+            WHERE jsonb_typeof(log)<>'object' OR (SELECT count(*) FROM jsonb_object_keys(log))<>4
+                OR log-ARRAY['ref','revisionRef','revision','digest']<>'{}'::jsonb
+                OR NOT EXISTS (
+                    SELECT 1 FROM control_plane.workflow_captured_artifact_pins(p_tenant,execution.id) captured
+                    JOIN control_plane.artifact_history history ON history.id=captured.artifact_id AND history.revision_id=captured.revision_id
+                        AND history.organization_id=p_tenant AND history.project_id=execution.project_id AND history.run_id=execution.run_id
+                        AND history.node_id<>execution.id AND history.ref=log->>'ref' AND history.revision_ref=log->>'revisionRef'
+                        AND to_jsonb(history.revision)=log->'revision' AND history.digest=log->>'digest'
+                    JOIN control_plane.artifact_heads head ON head.id=history.id AND head.organization_id=p_tenant AND head.lifecycle_state='ACTIVE'
+                    JOIN control_plane.runtime_file_catalogs catalog ON catalog.organization_id=p_tenant AND catalog.node_id=execution.id
+                        AND catalog.run_id=execution.run_id AND catalog.project_id=execution.project_id AND catalog.agent_id=execution.agent_id
+                        AND catalog.actor_id=execution.initiated_by AND catalog.turn_id=execution.turn_id
+                        AND catalog.runtime_revision_ref=execution.revision_ref AND catalog.generation=execution.revision_generation AND catalog.frozen
+                        AND catalog.ref=execution.safe_snapshot #>> '{fileCatalog,ref}' AND catalog.digest=execution.safe_snapshot #>> '{fileCatalog,digest}'
+                        AND to_jsonb(catalog.total)=execution.safe_snapshot #> '{fileCatalog,total}'
+                        AND to_jsonb(catalog.purposes)=execution.safe_snapshot #> '{fileCatalog,purposes}'
+                    JOIN control_plane.runtime_file_visible_entries entry ON entry.catalog_id=catalog.id AND entry.purpose='RUN_RESULT'
+                        AND entry.artifact_id=history.id AND entry.artifact_ref=history.ref AND entry.artifact_revision=history.revision
+                        AND entry.artifact_digest=history.digest AND entry.file_name=history.file_name AND entry.media_type=history.media_type
+                        AND entry.size_bytes=history.size_bytes
+                    WHERE history.lifecycle_state='ACTIVE' AND control_plane.artifact_effective_scan(history.revision_id)='CLEAN'
+                )
+        )
         AND EXISTS (
             SELECT 1 FROM control_plane.workflow_captured_artifact_pins(p_tenant,execution.id) pin
             JOIN control_plane.artifact_history history ON history.id=pin.artifact_id AND history.revision_id=pin.revision_id
@@ -106,6 +134,76 @@ $$;
 REVOKE ALL ON FUNCTION control_plane.workflow_evidence_intent_valid(uuid,uuid,uuid,uuid,jsonb,jsonb) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION control_plane.workflow_evidence_intent_valid(uuid,uuid,uuid,uuid,jsonb,jsonb) TO control_plane_runtime;
 
+-- Приватное удержание не зависит от живого root/lease/grant и не выдаёт reader
+-- eligibility. Exact intent уже закрыт effect guard; historical producer capture
+-- остаётся проверяемым после cancel/expiry. Известный terminal outcome снимает
+-- только эту дополнительную причину удержания, не прежние retention ветки.
+-- +goose StatementBegin
+CREATE FUNCTION control_plane.workflow_evidence_retains_revision(p_tenant uuid,p_artifact uuid,p_revision uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog AS $$
+ WITH candidates AS MATERIALIZED (
+    SELECT origin.id AS origin_id,history.id AS artifact_id,history.revision_id
+    FROM control_plane.integration_invocations invocation
+    JOIN control_plane.run_nodes origin ON origin.id=invocation.node_id AND origin.organization_id=p_tenant
+        AND origin.run_id=invocation.run_id AND origin.root_run_id=invocation.root_run_id AND origin.agent_id=invocation.agent_id
+    JOIN control_plane.run_nodes anchor ON anchor.id=COALESCE(origin.workflow_step_origin_node_id,origin.id)
+        AND anchor.organization_id=p_tenant AND anchor.root_run_id=origin.root_run_id
+        AND anchor.workflow_step_key=origin.workflow_step_key AND anchor.workflow_business_attempt=1
+    JOIN control_plane.runs root ON root.id=origin.root_run_id AND root.organization_id=p_tenant
+    JOIN control_plane.workflow_versions version ON version.id=root.workflow_version_id AND version.organization_id=p_tenant
+        AND version.spec->>'ExecutionMode'='SERVER_DAG_V1' AND version.spec->>'ResultEvidenceProfile'='GITHUB_REVIEW_QA_V1'
+    CROSS JOIN LATERAL jsonb_array_elements(anchor.workflow_effect_intents) intent
+    JOIN control_plane.runtime_revisions revision ON revision.id::text=intent->>'originRevisionId'
+        AND revision.organization_id=p_tenant AND revision.node_id=origin.id AND revision.run_id=origin.run_id
+        AND revision.root_run_id=root.id AND revision.agent_id=origin.agent_id AND revision.turn_id=origin.turn_id
+        AND revision.attempt=origin.attempt AND to_jsonb(revision.generation)=intent->'originGeneration'
+    JOIN control_plane.runtime_leases lease ON lease.id::text=intent->>'originLeaseId' AND lease.organization_id=p_tenant
+        AND lease.runtime_revision_id=revision.id AND lease.node_id=origin.id AND lease.run_id=origin.run_id AND lease.generation=revision.generation
+    CROSS JOIN LATERAL (SELECT intent->'qaReport' AS value UNION ALL SELECT value FROM jsonb_array_elements(intent->'qaLogs')) custody
+    JOIN control_plane.artifact_history history ON history.id=p_artifact AND history.revision_id=p_revision
+        AND history.organization_id=p_tenant AND history.project_id=root.project_id AND history.run_id=origin.run_id
+        AND history.ref=custody.value->>'ref' AND history.revision_ref=custody.value->>'revisionRef'
+        AND to_jsonb(history.revision)=custody.value->'revision' AND history.digest=custody.value->>'digest'
+    WHERE invocation.organization_id=p_tenant AND invocation.operation='github.issue.create'
+        AND invocation.state IN ('WAITING_APPROVAL','READY','RUNNING','UNKNOWN_OUTCOME')
+        AND invocation.ref=intent->>'invocationRef' AND invocation.effect_key=intent->>'effectKey' AND invocation.input_digest=intent->>'inputDigest'
+        AND intent->>'schema'='kodex.workflow-effect-intent.v1' AND intent->>'operation'='github.issue.create'
+        AND origin.id::text=intent->>'originNodeId' AND origin.run_id::text=intent->>'originRunId'
+        AND to_jsonb(origin.workflow_business_attempt)=intent->'originBusinessAttempt' AND to_jsonb(origin.attempt)=intent->'originAttempt'
+ )
+ SELECT EXISTS (
+    SELECT 1 FROM candidates
+    CROSS JOIN LATERAL control_plane.workflow_captured_artifact_pins(p_tenant,candidates.origin_id) captured
+    WHERE captured.artifact_id=candidates.artifact_id AND captured.revision_id=candidates.revision_id
+ );
+$$;
+-- +goose StatementEnd
+-- Вызывается только существующим SECURITY DEFINER retention reader от owner.
+-- Не наследуем baseline default EXECUTE runtime и не открываем новые чтения.
+REVOKE ALL ON FUNCTION control_plane.workflow_evidence_retains_revision(uuid,uuid,uuid) FROM PUBLIC,control_plane_runtime,artifact_retention_runtime;
+
+-- OID/owner/SECURITY DEFINER/search_path/ACL прежнего reader сохраняются.
+-- +goose StatementBegin
+DO $retention_guard$
+DECLARE v_definition text;v_source text;v_marker text;
+BEGIN
+ SELECT prosrc,pg_get_functiondef(oid) INTO STRICT v_source,v_definition
+ FROM pg_proc WHERE oid='control_plane.artifact_has_retained_revisions(uuid)'::regprocedure;
+ IF md5(v_source)<>'1f71f6d19e09709f61f2c2273a9af0ca' THEN RAISE EXCEPTION 'workflow evidence retention preimage changed'; END IF;
+ v_marker:=E'    SELECT EXISTS (\n        SELECT 1 FROM control_plane.artifact_heads retained';
+ IF (length(v_definition)-length(replace(v_definition,v_marker,'')))/length(v_marker)<>1 THEN
+    RAISE EXCEPTION 'workflow evidence retention patch is ambiguous'; END IF;
+ v_definition:=replace(v_definition,v_marker,$patch$    SELECT EXISTS (
+        SELECT 1 FROM control_plane.artifact_heads retained
+        JOIN control_plane.artifact_revisions revision ON revision.artifact_id=retained.id
+        WHERE retained.id=p_artifact_id
+          AND control_plane.workflow_evidence_retains_revision(retained.organization_id,retained.id,revision.id)
+    ) OR EXISTS (
+        SELECT 1 FROM control_plane.artifact_heads retained$patch$);
+ EXECUTE v_definition;
+END $retention_guard$;
+-- +goose StatementEnd
+
 -- Точные native pins прежнего guard сохраняются. Только два новых opt-in slots
 -- получают отдельную identity business attempt; остальные logical slots прежние.
 -- +goose StatementBegin
@@ -116,8 +214,8 @@ BEGIN
  IF md5(v_source)<>'74f7d5fd475cb0919b76579335b547a5' THEN RAISE EXCEPTION 'workflow evidence effect preimage changed'; END IF;
  v_old:=$old$(SELECT count(*) FROM jsonb_object_keys(v_record))<>21$old$;
  v_new:=$new$((SELECT count(*) FROM jsonb_object_keys(v_record))<>21 AND NOT (
-            v_record->>'operation'='github.issue.create' AND v_record ? 'qaReport'
-            AND (SELECT count(*) FROM jsonb_object_keys(v_record))=22))$new$;
+            v_record->>'operation'='github.issue.create' AND v_record ?& ARRAY['qaReport','qaLogs']
+            AND (SELECT count(*) FROM jsonb_object_keys(v_record))=23))$new$;
  IF (length(v_source)-length(replace(v_source,v_old,'')))/length(v_old)<>1 THEN RAISE EXCEPTION 'workflow evidence shape patch is ambiguous'; END IF;
  v_updated:=replace(v_source,v_old,v_new);
  v_old:=$old$AND requirement.value->>'Repository'=(invocation.resource_scope->>'owner')||'/'||(invocation.resource_scope->>'repository')
