@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -21,6 +22,11 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 		return err
 	}
 	switch input.Kind {
+	case command.ObserveWorkspace:
+		if input.Principal.CallerWorkload != "runtime-controller" || input.Principal.Permission != runtimecontract.WorkspaceObservationOperation {
+			return errs.ErrForbidden
+		}
+		return repository.authorizeWorkspaceObservationTx(ctx, tx, current, input)
 	case command.LaunchWorkflowExecution:
 		return repository.validateWorkflowLaunchAuthority(ctx, tx, current, input)
 	case command.CreateProjectAssistantIntegrationConnection:

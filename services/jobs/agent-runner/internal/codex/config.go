@@ -140,6 +140,9 @@ type mcpServerConfig struct {
 // PrepareHomeWithAuth validates reasoning, volume pins, home containment and the authentication digest before publishing auth.json, then materializes and round-trip checks the typed TOML profile. It persists only approved nonsecret environment values, not projected secret values. Later failures can leave the already published auth snapshot: this is not an atomic whole-home transaction, and callers supply the trusted input/MCP endpoint.
 // PrepareHomeWithAuth проверяет reasoning, volume pins, home containment и auth digest до публикации auth.json, затем материализует и сверяет typed TOML profile обратным разбором. Сохраняет лишь approved nonsecret environment values, не secret projection values. Поздний отказ может оставить уже опубликованный auth snapshot: это не атомарная whole-home transaction, trusted input/MCP endpoint задаёт вызывающий.
 func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
+	if input.WorkspaceStorage != nil && input.WorkspaceStorage.ValidateForInput(input) != nil {
+		return ErrRuntimeProfile
+	}
 	if runtimecontract.ValidateEffectiveReasoningEffort(input.ConfigOverlay, input.EffectiveReasoningEffort, input.ReasoningMode) != nil {
 		return ErrRuntimeProfile
 	}
@@ -178,6 +181,10 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 		runtimecontract.RuntimeContextRoot:                  "read",
 		filepath.Join(input.WorkspaceRoot, ".kodex/inbox"):  "read",
 		filepath.Join(input.WorkspaceRoot, ".kodex/outbox"): "read",
+	}
+	if input.WorkspaceStorage != nil {
+		// Private generations остаются недоступны и через alias в session state.
+		filesystem[filepath.Join(input.WorkspaceRoot, ".kodex/state/workspaces")] = "deny"
 	}
 	for path, access := range volumePermissions {
 		filesystem[path] = access

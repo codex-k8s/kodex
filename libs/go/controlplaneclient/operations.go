@@ -450,6 +450,7 @@ func RuntimeOperations() map[string]string {
 		"platform.runtime.execution.progress":                 controlplanev1.RuntimeWorkService_ReportExecutionProgress_FullMethodName,
 		"platform.runtime.provider-credential.refresh.commit": controlplanev1.RuntimeWorkService_CommitProviderCredentialRefresh_FullMethodName,
 		"platform.runtime.execution.complete":                 controlplanev1.RuntimeWorkService_CompleteExecution_FullMethodName,
+		"platform.runtime.workspace.observe":                  controlplanev1.RuntimeWorkService_ObserveWorkspace_FullMethodName,
 		"platform.runtime.execution.delegate":                 controlplanev1.RuntimeWorkService_DelegateExecution_FullMethodName,
 		"platform.runtime.execution.workflow.launch":          controlplanev1.RuntimeWorkService_LaunchWorkflowExecution_FullMethodName,
 		"platform.runtime.execution.workflow.catalog":         controlplanev1.RuntimeWorkService_GetExecutionWorkflowCatalog_FullMethodName,

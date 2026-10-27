@@ -347,6 +347,12 @@ func (server *Server) route(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 	switch parts[3] {
+	case "workspace":
+		if request.Method != http.MethodPost {
+			http.NotFound(writer, request)
+			return
+		}
+		server.observeWorkspace(writer, request, parts[2])
 	case "progress":
 		if request.Method != http.MethodPost {
 			http.NotFound(writer, request)

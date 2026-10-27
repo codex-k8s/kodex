@@ -12819,6 +12819,7 @@ const (
 	RuntimeWorkService_ReportExecutionProgress_FullMethodName                         = "/controlplane.v1.RuntimeWorkService/ReportExecutionProgress"
 	RuntimeWorkService_CommitProviderCredentialRefresh_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/CommitProviderCredentialRefresh"
 	RuntimeWorkService_CompleteExecution_FullMethodName                               = "/controlplane.v1.RuntimeWorkService/CompleteExecution"
+	RuntimeWorkService_ObserveWorkspace_FullMethodName                                = "/controlplane.v1.RuntimeWorkService/ObserveWorkspace"
 	RuntimeWorkService_DelegateExecution_FullMethodName                               = "/controlplane.v1.RuntimeWorkService/DelegateExecution"
 	RuntimeWorkService_LaunchWorkflowExecution_FullMethodName                         = "/controlplane.v1.RuntimeWorkService/LaunchWorkflowExecution"
 	RuntimeWorkService_GetExecutionWorkflowCatalog_FullMethodName                     = "/controlplane.v1.RuntimeWorkService/GetExecutionWorkflowCatalog"
@@ -12868,6 +12869,9 @@ type RuntimeWorkServiceClient interface {
 	ReportExecutionProgress(ctx context.Context, in *ReportExecutionProgressRequest, opts ...grpc.CallOption) (*ReportExecutionProgressResponse, error)
 	CommitProviderCredentialRefresh(ctx context.Context, in *CommitProviderCredentialRefreshRequest, opts ...grpc.CallOption) (*CommitProviderCredentialRefreshResponse, error)
 	CompleteExecution(ctx context.Context, in *CompleteExecutionRequest, opts ...grpc.CallOption) (*CompleteExecutionResponse, error)
+	// Сохраняет только exact writer BIND либо past quiescence fact. Terminal ACK
+	// не создаёт grant, RuntimeRevision, run transition или новую generation.
+	ObserveWorkspace(ctx context.Context, in *ObserveWorkspaceRequest, opts ...grpc.CallOption) (*ObserveWorkspaceResponse, error)
 	DelegateExecution(ctx context.Context, in *DelegateExecutionRequest, opts ...grpc.CallOption) (*DelegateExecutionResponse, error)
 	// Запускает опубликованный Workflow из exact active execution; actor/project
 	// и обязательную связь родителя назначает владелец, не caller payload.
@@ -13077,6 +13081,16 @@ func (c *runtimeWorkServiceClient) CompleteExecution(ctx context.Context, in *Co
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CompleteExecutionResponse)
 	err := c.cc.Invoke(ctx, RuntimeWorkService_CompleteExecution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) ObserveWorkspace(ctx context.Context, in *ObserveWorkspaceRequest, opts ...grpc.CallOption) (*ObserveWorkspaceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ObserveWorkspaceResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_ObserveWorkspace_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -13310,6 +13324,9 @@ type RuntimeWorkServiceServer interface {
 	ReportExecutionProgress(context.Context, *ReportExecutionProgressRequest) (*ReportExecutionProgressResponse, error)
 	CommitProviderCredentialRefresh(context.Context, *CommitProviderCredentialRefreshRequest) (*CommitProviderCredentialRefreshResponse, error)
 	CompleteExecution(context.Context, *CompleteExecutionRequest) (*CompleteExecutionResponse, error)
+	// Сохраняет только exact writer BIND либо past quiescence fact. Terminal ACK
+	// не создаёт grant, RuntimeRevision, run transition или новую generation.
+	ObserveWorkspace(context.Context, *ObserveWorkspaceRequest) (*ObserveWorkspaceResponse, error)
 	DelegateExecution(context.Context, *DelegateExecutionRequest) (*DelegateExecutionResponse, error)
 	// Запускает опубликованный Workflow из exact active execution; actor/project
 	// и обязательную связь родителя назначает владелец, не caller payload.
@@ -13396,6 +13413,9 @@ func (UnimplementedRuntimeWorkServiceServer) CommitProviderCredentialRefresh(con
 }
 func (UnimplementedRuntimeWorkServiceServer) CompleteExecution(context.Context, *CompleteExecutionRequest) (*CompleteExecutionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CompleteExecution not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) ObserveWorkspace(context.Context, *ObserveWorkspaceRequest) (*ObserveWorkspaceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ObserveWorkspace not implemented")
 }
 func (UnimplementedRuntimeWorkServiceServer) DelegateExecution(context.Context, *DelegateExecutionRequest) (*DelegateExecutionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DelegateExecution not implemented")
@@ -13773,6 +13793,24 @@ func _RuntimeWorkService_CompleteExecution_Handler(srv interface{}, ctx context.
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RuntimeWorkServiceServer).CompleteExecution(ctx, req.(*CompleteExecutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_ObserveWorkspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ObserveWorkspaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).ObserveWorkspace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_ObserveWorkspace_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).ObserveWorkspace(ctx, req.(*ObserveWorkspaceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -14207,6 +14245,10 @@ var RuntimeWorkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CompleteExecution",
 			Handler:    _RuntimeWorkService_CompleteExecution_Handler,
+		},
+		{
+			MethodName: "ObserveWorkspace",
+			Handler:    _RuntimeWorkService_ObserveWorkspace_Handler,
 		},
 		{
 			MethodName: "DelegateExecution",

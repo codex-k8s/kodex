@@ -628,6 +628,9 @@ JOIN control_plane.organizations organization ON organization.id = r.organizatio
 LEFT JOIN control_plane.projects p ON p.id = r.project_id
 JOIN control_plane.sessions s ON s.id = r.session_id
 LEFT JOIN control_plane.session_storage session_storage ON session_storage.session_id = s.id
+LEFT JOIN control_plane.session_workspace_storage workspace_storage ON workspace_storage.session_id=s.id
+    AND workspace_storage.organization_id=r.organization_id AND workspace_storage.project_id=r.project_id
+    AND workspace_storage.agent_id=n.agent_id
 JOIN control_plane.provider_accounts pa
   ON pa.id = s.provider_account_id
  AND pa.organization_id = r.organization_id
@@ -726,6 +729,7 @@ LEFT JOIN LATERAL (
     LIMIT 1
 ) role_image ON true
 WHERE n.organization_id = $1::uuid
+  AND (workspace_storage.id IS NULL OR ($5='SESSION_WORKSPACE_V2' AND workspace_storage.state IN ('EMPTY','RESTORED')))
   AND n.type = 'AGENT_EXECUTION'
   AND n.state = 'QUEUED'
   AND r.state IN ('RUNNING', 'QUEUED')

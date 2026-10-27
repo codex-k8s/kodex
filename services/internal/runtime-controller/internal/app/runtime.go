@@ -180,6 +180,9 @@ func (runtime *runtime) Run(ctx context.Context) error {
 				runtime.setAssistantUnavailable(ctx)
 			}
 		case <-poll.C:
+			if err := runtime.reconcileWorkspaceStorage(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				runtime.logger.WarnContext(ctx, "runtime workspace storage reconciliation is unavailable")
+			}
 			if len(runtime.capacity) >= cap(runtime.capacity) {
 				poll.Reset(idleBackoff.Next(true))
 				continue

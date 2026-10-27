@@ -115,8 +115,7 @@ func decodeAttemptInput(input *corev1.ConfigMap) (model.Task, error) {
 	if decoder.Decode(&extra) != io.EOF {
 		return model.Task{}, errors.New("session archive input has trailing data")
 	}
-	task := model.Task(decoded)
-	return task, task.Validate()
+	return model.DecodeTask([]byte(raw))
 }
 
 // validPredecessorInput checks exact ConfigMap identity and equal owner pins, allowing only server-reassigned attempt fields.

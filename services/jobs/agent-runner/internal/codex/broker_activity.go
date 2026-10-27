@@ -92,6 +92,10 @@ func (writer *brokerFrameWriter) finish(response brokerResponse) error {
 	// Факты tool call уже доставлены в ACTIVITY; terminal переносит только итог.
 	response.Result.ToolCalls = nil
 	response.RolloutCapture = nil
+	response.WorkspaceJoin = nil
+	if response.Result.workspaceJoin != nil && response.Result.workspaceJoin.sealed && writer.input != nil && response.Result.workspaceJoin.bound(*writer.input) {
+		response.WorkspaceJoin = response.Result.workspaceJoin
+	}
 	if response.Result.rolloutCapture != nil && response.Result.rolloutCapture.sealed && response.Result.matchesCapture(response.Result.rolloutCapture) {
 		response.RolloutCapture = response.Result.rolloutCapture
 	}
@@ -100,7 +104,7 @@ func (writer *brokerFrameWriter) finish(response brokerResponse) error {
 		return err
 	}
 	// Ограниченный отказ сохраняет измеренный usage, не подтверждая большой итог.
-	failure := brokerResponse{Failure: providerBrokerFailureProvider, Result: failedProviderResult(response.Result), RolloutCapture: response.RolloutCapture, Diagnostic: response.Diagnostic}
+	failure := brokerResponse{Failure: providerBrokerFailureProvider, Result: failedProviderResult(response.Result), RolloutCapture: response.RolloutCapture, Diagnostic: response.Diagnostic, WorkspaceJoin: response.WorkspaceJoin}
 	return writer.frame(brokerFrame{Kind: brokerFrameTerminal, Terminal: &failure})
 }
 
@@ -271,7 +275,7 @@ func readBoundProviderBrokerResponse(reader io.Reader, input *model.Input, write
 			if frame.Activity != nil || frame.Terminal == nil {
 				return Result{}, brokerResponseError(brokerResponseTerminalSchema, errProviderBrokerResponseInvalid)
 			}
-			terminalFields, err := decodeObject(fields["terminal"], schema([]string{"result", "ok"}, "result", "ok", "failure", "rollout_capture", "diagnostic"))
+			terminalFields, err := decodeObject(fields["terminal"], schema([]string{"result", "ok"}, "result", "ok", "failure", "rollout_capture", "diagnostic", "workspace_join"))
 			if err != nil {
 				return Result{}, brokerResponseError(brokerResponseTerminalSchema, errProviderBrokerResponseInvalid)
 			}
@@ -279,6 +283,14 @@ func readBoundProviderBrokerResponse(reader io.Reader, input *model.Input, write
 				return Result{}, brokerResponseError(brokerResponseTerminalSchema, errProviderBrokerResponseInvalid)
 			}
 			terminal = frame.Terminal
+			if raw, present := terminalFields["workspace_join"]; present {
+				keys := []string{"schema", "execution_binding_digest", "runtime_revision_digest", "input_digest", "lease_ref", "lease_generation", "attempt", "joined"}
+				if _, err := decodeObject(raw, schema(keys, keys...)); err != nil || input == nil || writerUID != providerWriterUID || !terminal.WorkspaceJoin.bound(*input) {
+					return Result{}, brokerResponseError(brokerResponseProviderTuple, errProviderBrokerResponseInvalid)
+				}
+				terminal.WorkspaceJoin.sealed = true
+				terminal.Result.workspaceJoin = terminal.WorkspaceJoin
+			}
 			if _, present := terminalFields["diagnostic"]; present {
 				if input == nil || writerUID != providerWriterUID || terminal.Diagnostic == nil || !terminal.Diagnostic.Matches(*input) ||
 					(terminal.OK && (terminal.Result.Outcome != "FAILED" || terminal.Diagnostic.Kind != "TERMINAL_FAILURE" || terminal.Diagnostic.TerminalCode != terminal.Result.FailureCode)) {

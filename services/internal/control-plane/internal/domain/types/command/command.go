@@ -774,6 +774,9 @@ const (
 	// CompleteExecution выбирает фиксацию владельцем точных исхода, использования, артефактов и архива;
 	// поздний результат worker не создаёт полномочий флагом успеха.
 	CompleteExecution Kind = "COMPLETE_EXECUTION"
+	// ObserveWorkspace records a bound writer or its exact past quiescence without execution authority.
+	// ObserveWorkspace сохраняет bound writer либо его past quiescence без execution authority.
+	ObserveWorkspace Kind = "OBSERVE_WORKSPACE"
 	// DelegateExecution selects server-owned child-work delegation from the exact parent lease and target
 	// context, not a child spawned by payload IDs alone.
 	// DelegateExecution выбирает серверное делегирование дочерней работы из точного родительского lease и
@@ -1635,6 +1638,18 @@ type CompleteExecutionInput struct {
 	Success                                       bool
 	Usage                                         entity.TokenUsage
 	Artifacts                                     []CompletedArtifact
+}
+
+// WorkspaceObservationInput carries trusted controller observations, never model-selected storage scope.
+// Only BIND may acquire a current writer; QUIESCENT must match the already immutable stored writer.
+// WorkspaceObservationInput несёт trusted controller observations, не model-selected storage scope.
+// Только BIND назначает current writer; QUIESCENT совпадает с уже immutable stored writer.
+type WorkspaceObservationInput struct {
+	LeaseRef, Fence, RuntimeRevisionDigest, ExecutionBindingDigest string
+	WorkspaceRef, Phase, PodUID, PVCUID                            string
+	BlockReason                                                    string
+	Generation, WorkspaceGeneration                                int64
+	Quiescence                                                     []byte
 }
 
 // CompletedArtifact describes bytes or a prepared receipt produced by an execution. The owner must
