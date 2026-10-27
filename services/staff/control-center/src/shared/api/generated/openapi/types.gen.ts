@@ -3238,19 +3238,10 @@ export type WorkflowAcceptedResult = {
     verdict?: 'PASS' | 'CHANGES_REQUIRED';
 };
 
-export type WorkflowAttemptResult = ({
-    accepted?: true;
-} | {
-    results?: unknown;
-}) & (unknown | {
-    accepted?: false;
-    reason?: 'CHANGES_REQUIRED';
-    results?: unknown;
-}) & ({
-    accepted?: false;
-} | {
-    results?: unknown;
-}) & {
+/**
+ * Закрытый typed snapshot. Отношения accepted/results/evidence проверяются общим API validator и каждым PWA graph/event ingress; evidence разрешено только при accepted=false, reason=CHANGES_REQUIRED, results=[] и наличии отрицательного REVIEW/QA.
+ */
+export type WorkflowAttemptResult = {
     attempt: number;
     runRef: OpaqueRef;
     accepted: boolean;

@@ -15904,8 +15904,17 @@ type WorkflowAcceptedResultKind string
 // WorkflowAcceptedResultVerdict defines model for WorkflowAcceptedResult.Verdict.
 type WorkflowAcceptedResultVerdict string
 
-// WorkflowAttemptResult defines model for WorkflowAttemptResult.
-type WorkflowAttemptResult = interface{}
+// WorkflowAttemptResult Закрытый typed snapshot. Отношения accepted/results/evidence проверяются общим API validator и каждым PWA graph/event ingress; evidence разрешено только при accepted=false, reason=CHANGES_REQUIRED, results=[] и наличии отрицательного REVIEW/QA.
+type WorkflowAttemptResult struct {
+	Accepted bool `json:"accepted"`
+	Attempt  int  `json:"attempt"`
+
+	// Evidence Проверенные факты отклонённого REVIEW/QA; accepted=false, reason=CHANGES_REQUIRED, results остаётся пустым.
+	Evidence *[]WorkflowAcceptedResult `json:"evidence,omitempty"`
+	Reason   string                    `json:"reason"`
+	Results  []WorkflowAcceptedResult  `json:"results"`
+	RunRef   OpaqueRef                 `json:"runRef"`
+}
 
 // WorkflowCardSummary Единая owner projection для get/list/project/global и командного readback. Использует опубликованную revision, иначе draft; HTTP и PWA не пересчитывают значения из steps или частичной страницы.
 type WorkflowCardSummary struct {
