@@ -197,6 +197,30 @@ Context7 использован для проверки FSGroup semantics. Nativ
 отклоняются перед Kubernetes и storage effects, без перехода в legacy.
 Это промежуточная поставка полного unit #1953: opt-in остаётся выключенным.
 
+## Потоковое восстановление
+
+Restore consumer сначала read-only проверяет manifest и каждый part. Второй
+проход повторяет проверку exact versions/digest и canonical TAR одновременно
+с записью в неопубликованное поколение. Scope/target/source назначает owner;
+архив выбирает только закрытый logical owner ROLE/PROVIDER, не числовой UID.
+
+Файловый adapter одной идентичности работает через root descriptor с
+`RESOLVE_BENEATH|NO_SYMLINKS|NO_XDEV`. Создание использует exclusive open,
+существующие entries не перезаписываются. Close проверяет inode, owner/group,
+link count, размер и итоговые права, затем синхронизирует файл и parent.
+Каталоги временно доступны общей группе для двух writer и получают исходный
+mode в глобальном обратном порядке. В памяти остаётся только стек предков,
+а не перечень всех файлов или полное дерево.
+
+Ошибка первого чтения не создаёт source files. Ошибка второго чтения,
+короткая запись либо неизвестный commit сохраняет неопубликованное дерево;
+нет PUT/DELETE-компенсации и нет положительного restore result. Reconcile-only
+задача не получает write credit этого consumer. Отдельные source.json,
+atomic publication, peer authentication и owner ACK остаются обязательны.
+Пока writable peer, generation publisher и owner coordinator не подключены,
+controller по-прежнему закрыто отклоняет V2 RESTORE до запуска effects.
+Наличие stream/filesystem adapter не является готовым восстановлением.
+
 ## Метаданные подтверждения checkpoint
 
 Forward016 расширяет существующие archive/task ledgers закрытым discriminator,
