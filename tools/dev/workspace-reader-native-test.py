@@ -18,6 +18,14 @@ IMAGE = ('docker.io/library/postgres:18.3-alpine3.23@sha256:'
 LABEL = 'kodex.dev/workspace-reader-native'
 
 
+class NativeConsumerFailure(RuntimeError):
+    """Сохранить закрытую диагностику своего worker до обязательной очистки контейнера."""
+
+    def __init__(self, outcome):
+        super().__init__('NATIVE_CONSUMER_FAILED')
+        self.outcome = outcome
+
+
 def docker(arguments, timeout=30, check=True):
     """Запустить ограниченный локальный Docker-вызов без вывода сырой диагностики."""
     result = subprocess.run(['docker', *arguments], capture_output=True, text=True,
@@ -65,14 +73,17 @@ def run_container(name, nonce, arguments, command, identities):
             raise RuntimeError('CONTAINER_DISAPPEARED')
         state = value['State']
         if not state['Running']:
-            if state.get('OOMKilled') or state['ExitCode'] != 0:
-                raise RuntimeError('NATIVE_CONSUMER_FAILED')
             logs = docker(['logs', identity])
             output = logs.stdout+logs.stderr
             rss = re.findall(r'reader_peak_rss_kib=(\d+)', output)
-            return {'id': identity, 'exitCode': state['ExitCode'], 'oomKilled': False,
+            diagnostics = re.findall(r'workspace_reader_native_test\.go:\d+: ([A-Za-z][A-Za-z0-9 _=-]{0,120})$', output, re.M)
+            outcome = {'id': identity, 'exitCode': state['ExitCode'], 'oomKilled': bool(state.get('OOMKilled')),
                     'readerPeakRSSKiB': int(rss[0]) if len(rss) == 1 else None,
+                    'safeDiagnostics': diagnostics[-8:],
                     'logSHA256': hashlib.sha256(output.encode()).hexdigest()}
+            if state.get('OOMKilled') or state['ExitCode'] != 0:
+                raise NativeConsumerFailure(outcome)
+            return outcome
         time.sleep(0.25)
     raise RuntimeError('NATIVE_CONSUMER_TIMEOUT')
 
@@ -127,6 +138,8 @@ def main():
         result['status'] = 'PASS'
     except (RuntimeError, subprocess.TimeoutExpired) as error:
         result['reason'] = str(error) if isinstance(error, RuntimeError) else 'DOCKER_TIMEOUT'
+        if isinstance(error, NativeConsumerFailure):
+            outcomes.append(error.outcome)
     finally:
         absent = []
         for identity in reversed(identities):
