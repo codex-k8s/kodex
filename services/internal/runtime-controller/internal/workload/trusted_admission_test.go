@@ -111,10 +111,7 @@ func TestTrustedAdmissionPreservesTicketAndRejectsCallbackKeys(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			containers := object["spec"].(map[string]any)["containers"].([]any)
-			activation := map[string]any{"object": object, "variables": map[string]any{
-				"roleContainers": []any{containers[0]}, "providerContainers": []any{containers[1]}, "relayContainers": []any{containers[2]},
-			}}
+			activation := runtimeAdmissionActivation(t, environment, policies[0].Spec.Variables, object)
 			accepted := true
 			for _, program := range programs {
 				result, _, err := program.Eval(activation)
