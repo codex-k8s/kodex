@@ -55,22 +55,9 @@ func (repository *Repository) ClaimConfigurationWriteBackWork(ctx context.Contex
 	if tx.QueryRow(ctx, queryCatalogSnapshotTime).Scan(&now) != nil {
 		return nil, errs.ErrUnavailable
 	}
-	rows, err := tx.Query(ctx, queryWriteBackCandidates, current.organizationID, limit)
+	refs, err := readConfigurationWorkCandidates(ctx, tx, queryWriteBackCandidates, current.organizationID, limit)
 	if err != nil {
-		return nil, errs.ErrUnavailable
-	}
-	refs := []string{}
-	for rows.Next() {
-		var ref string
-		if rows.Scan(&ref) != nil {
-			rows.Close()
-			return nil, errs.ErrUnavailable
-		}
-		refs = append(refs, ref)
-	}
-	rows.Close()
-	if rows.Err() != nil {
-		return nil, errs.ErrUnavailable
+		return nil, err
 	}
 	result := make([]entity.ConfigurationWriteBackWork, 0, len(refs))
 	for _, ref := range refs {

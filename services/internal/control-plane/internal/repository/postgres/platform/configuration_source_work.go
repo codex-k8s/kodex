@@ -258,22 +258,9 @@ func (repository *Repository) ClaimConfigurationSourceWork(ctx context.Context, 
 	if err := repository.refreshConfigurationSources(ctx, tx, current, limit); err != nil {
 		return nil, err
 	}
-	rows, err := tx.Query(ctx, queryConfigurationSourceWorkCandidates, current.organizationID, limit)
+	refs, err := readConfigurationWorkCandidates(ctx, tx, queryConfigurationSourceWorkCandidates, current.organizationID, limit)
 	if err != nil {
-		return nil, errs.ErrUnavailable
-	}
-	refs := []string{}
-	for rows.Next() {
-		var ref string
-		if rows.Scan(&ref) != nil {
-			rows.Close()
-			return nil, errs.ErrUnavailable
-		}
-		refs = append(refs, ref)
-	}
-	rows.Close()
-	if rows.Err() != nil {
-		return nil, errs.ErrUnavailable
+		return nil, err
 	}
 	result := make([]entity.ManagedConfigurationSourceWork, 0, len(refs))
 	for _, ref := range refs {
