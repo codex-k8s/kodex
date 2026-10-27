@@ -1,3 +1,4 @@
+import { apiResponse as response } from "@/test-utils/api-response";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -15,13 +16,6 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", () => api);
 vi.mock("@/shared/api/client", () => ({
   requestSignal: () => new AbortController().signal,
 }));
-
-function response<T>(data: T) {
-  return Promise.resolve({
-    data,
-    response: new Response(null, { status: 200 }),
-  });
-}
 
 function artifact(overrides: Partial<Artifact> = {}): Artifact {
   return {

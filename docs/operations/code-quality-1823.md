@@ -4,11 +4,40 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.534.0
+version: 1.535.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общая фабрика успешного SDK-ответа в тестах — 27.10.2026
+
+src/test-utils/api-response.ts содержит прежний Promise.resolve({data,response})
+с новым Response(null,{status:200}) для каждого вызова. Три локальные response<T>
+из new-run/api.test.ts, execution-target-picker.test.ts и role-images/api.test.ts
+заменены обычным импортом apiResponse as response. Сохраняются generic inference,
+ссылка на data, пустой HTTP body, status200 и исходный Promise.resolve без
+дополнительного async await. SDK mocks, доменные DTO fixtures, порядок setup
+и все assertions остаются в прежних тестах; сетевой запрос не выполняется.
+
+Три полных source inverses восстановили исходники; тело нового helper точно
+равно всем трём исходным фабрикам. Три production adapters побайтно прежние.
+Выбранные три unit suites дали22PASS/0FAIL/SKIP до1.57s/после1.62s;
+format0.52s/lint8.94s PASS LOCAL. Production build/typecheck и вся PWA unit
+suite не повторялись для изменения только тестовой подготовки. Прежняя PWA
+4129PASS на ed6145c остаётся исторической. Vite envDir:false и очищенный runtime
+env не загружают project dotenv.
+
+Старая raw-группа abfe0443 исчезла; обнаружилось меньшее d455fdc4 окно с typed
+imports, разными hoisted SDK mocks, стандартным client stub и заголовками разных
+Artifact/Agent fixtures. Реальный общий response kernel уже вынесен. Сохранён
+только этот точный fragment hash/path/count1; полноценные DTO, adapters и
+assertions не исключены.6registry mutations отвергнуты,17quality unit PASS.
+Sources6789/excluded222,1409raw/1267retained/142unresolved(Go72/TypeScript70),
+registry1124,Go21632/21632 EN→RU. Новый собственный test helper включён в inventory;
+thresholds/exclusions прежние. Context7 /microsoft/typescript-website проверен
+для generic identity/inferred return; версии зависимостей и SDK APIs прежние.
+Полные E2E/browser/live/deploy/startup/QA NOT RUN.
 
 ## Адресные решения для реестра команд — 27.10.2026
 

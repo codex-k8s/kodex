@@ -2,6 +2,14 @@
   "version": 1,
   "entries": [
     {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/new-run/api.test.ts",
+      "secondPath": "services/staff/control-center/src/shared/api/execution-target-picker.test.ts",
+      "fragmentSHA256": "d455fdc4ce5244b91daa81e8d831ac8c06aa0d6e55128374645f2c35feefcfd7",
+      "count": 1,
+      "reason": "После реального выноса одинакового Promise.resolve/data/Response200 kernel из трёх tests осталось окно nominal scaffolding: разные typed imports, hoisted listArtifacts/listRuns против listAgents/listWorkflows mocks, стандартное подключение SDK/client и начало разных Artifact/Agent fixture constructors с собственными ref. Общая фабрика ответа теперь apiResponse; полноценные DTO и независимые assertions различаются. vi.hoisted/vi.fn/vi.mock уже общие primitives. Общий dynamic SDK mock installer либо generic resource fixture ради этой формы скрыл бы зависимости и model types, а imported values недоступны при hoisting. Сохранены только exact два пути/hash/count1, не сами API adapters, fixtures целиком или тестовые сценарии."
+    },
+    {
       "format": "go",
       "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/commands.go",
       "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/configuration.go",

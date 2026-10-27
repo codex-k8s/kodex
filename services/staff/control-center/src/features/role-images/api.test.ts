@@ -1,3 +1,4 @@
+import { apiResponse as response } from "@/test-utils/api-response";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { initializeRuntimeOwnerFixture } from "@/test-utils/runtime-owner-fixture";
 
@@ -44,13 +45,6 @@ vi.mock("@/shared/api/client", () => ({
   requestSignal: () => new AbortController().signal,
 }));
 vi.mock("@/shared/api/mutation", () => mutation);
-
-function response<T>(data: T) {
-  return Promise.resolve({
-    data,
-    response: new Response(null, { status: 200 }),
-  });
-}
 
 const recipe: RoleImageRecipe = {
   scopeKind: "PROJECT",
