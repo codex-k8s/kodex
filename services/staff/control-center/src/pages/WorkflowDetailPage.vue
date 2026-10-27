@@ -730,7 +730,7 @@ onBeforeUnmount(() => {
                     form.steps.slice(0, index).map((prior) => ({
                       key: prior.ref ?? '',
                       name: prior.name,
-                      artifactKeys: (prior.resultRequirements ?? []).filter((item) => item.kind === "ARTIFACT").map((item) => item.key),
+                      artifactKeys: (prior.resultRequirements ?? []).filter((item) => item.kind === 'ARTIFACT').map((item) => item.key),
                     }))
                   "
                   :disabled="!canEdit || busy"

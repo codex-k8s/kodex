@@ -802,7 +802,7 @@ watch(
                 (steps ?? []).slice(0, index).map((prior) => ({
                   key: text(prior.key),
                   name: text(prior.name),
-                  artifactKeys: (itemArray(prior.resultRequirements) ?? []).filter((item) => item.kind === "ARTIFACT").map((item) => text(item.key)),
+                  artifactKeys: (itemArray(prior.resultRequirements) ?? []).filter((item) => item.kind === 'ARTIFACT').map((item) => text(item.key)),
                 }))
               "
               :disabled="disabled"
