@@ -56,9 +56,9 @@ JOIN LATERAL (
         SELECT count(*) AS nodes FROM control_plane.run_nodes owned
         WHERE owned.organization_id=root.organization_id AND owned.root_run_id=root.id AND owned.run_id=old_run.id
     ), lineage AS (
-        SELECT previous.id,previous.parent_node_id,previous.attempt,ARRAY[previous.id] AS path
+        SELECT previous.id,previous.parent_node_id,previous.attempt,ARRAY[previous.id] AS path,previous.workflow_rework_gate_id
         UNION ALL
-        SELECT ancestor.id,ancestor.parent_node_id,ancestor.attempt,lineage.path||ancestor.id
+        SELECT ancestor.id,ancestor.parent_node_id,ancestor.attempt,lineage.path||ancestor.id,ancestor.workflow_rework_gate_id
         FROM lineage
         JOIN control_plane.run_edges continuation ON continuation.organization_id=root.organization_id
             AND continuation.root_run_id=root.id AND continuation.type='CONTINUES' AND continuation.target_node_id=lineage.id
