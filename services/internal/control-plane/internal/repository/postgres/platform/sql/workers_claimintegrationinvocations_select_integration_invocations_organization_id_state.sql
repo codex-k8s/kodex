@@ -30,6 +30,40 @@ WHERE i.organization_id=$1::uuid
         AND approved_gate.project_id IS NOT DISTINCT FROM r.project_id
         AND approved_gate.state='APPROVED'
     )
+  ) OR (
+    n.state='SUCCEEDED' AND n.finished_at IS NOT NULL AND n.owner_rework_gate_id IS NOT NULL
+    AND i.risk='READ' AND i.approval_policy='NONE' AND NOT i.mailbox_gate_required
+    AND r.state='RUNNING' AND r.id=n.run_id AND n.root_run_id=root.id
+    AND n.organization_id=i.organization_id AND r.organization_id=i.organization_id AND root.organization_id=i.organization_id
+    AND r.project_id=root.project_id AND initiator.active AND initiator.organization_id=i.organization_id
+    AND c.organization_id=i.organization_id AND c.lifecycle_state='ACTIVE'
+    AND g.organization_id=i.organization_id AND g.connection_id=c.id AND g.risk='READ'
+    AND control_plane.legacy_rework_execution_assigned(i.organization_id,n.id)
+    AND EXISTS (SELECT 1 FROM control_plane.agents agent
+      JOIN control_plane.projects project ON project.id=r.project_id AND project.organization_id=i.organization_id AND project.lifecycle='ACTIVE'
+      JOIN control_plane.workflow_versions version ON version.id=root.workflow_version_id AND version.organization_id=i.organization_id
+      JOIN control_plane.workflows workflow ON workflow.id=version.workflow_id AND workflow.organization_id=i.organization_id
+        AND workflow.project_id=project.id AND workflow.ref=root.target_ref
+      JOIN control_plane.catalog_access_targets target ON target.organization_id=i.organization_id AND target.kind='WORKFLOW' AND target.id=workflow.id
+      WHERE agent.id=n.agent_id AND agent.organization_id=i.organization_id AND agent.project_id=project.id
+        AND agent.enabled AND agent.state='READY' AND r.target_type='AGENT' AND r.target_ref=agent.ref
+        AND g.target_kind='AGENT' AND g.target_ref=agent.ref
+        AND control_plane.catalog_resource_visible(i.organization_id,initiator.id,'workflow.launch','WORKFLOW',target.id,
+          target.project_id,target.owner_id,target.related_ids,statement_timestamp(),false))
+    AND NOT EXISTS (SELECT 1 FROM control_plane.owner_gates gate
+      JOIN control_plane.run_nodes gate_node ON gate_node.id=gate.node_id AND gate_node.organization_id=i.organization_id
+      WHERE gate.organization_id=i.organization_id AND gate.root_run_id=root.id AND gate.state='OPEN'
+        AND gate_node.root_run_id=root.id AND gate_node.run_id=r.id)
+    AND NOT EXISTS (SELECT 1 FROM control_plane.runtime_leases active WHERE active.node_id=n.id AND active.state='CLAIMED')
+    AND EXISTS (SELECT 1 FROM control_plane.runtime_revisions frozen
+      JOIN control_plane.runtime_leases completed ON completed.runtime_revision_id=frozen.id AND completed.node_id=n.id
+        AND completed.organization_id=i.organization_id AND completed.run_id=r.id AND completed.state='COMPLETED'
+        AND completed.generation=frozen.generation AND completed.input_digest=frozen.input_digest
+      WHERE frozen.organization_id=i.organization_id AND frozen.node_id=n.id AND frozen.run_id=r.id AND frozen.root_run_id=root.id
+        AND frozen.project_id=r.project_id AND frozen.session_id=r.session_id AND frozen.turn_id=n.turn_id
+        AND frozen.agent_id=n.agent_id AND frozen.attempt=n.attempt
+        AND frozen.generation=(SELECT max(latest.generation) FROM control_plane.runtime_revisions latest
+          WHERE latest.node_id=n.id AND latest.organization_id=i.organization_id))
   ))
   AND (i.state='READY' OR (
     i.state='UNKNOWN_OUTCOME'

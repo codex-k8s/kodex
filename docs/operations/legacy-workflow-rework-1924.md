@@ -4,7 +4,7 @@ title: Неизменяемая доработка результата преж
 type: operation
 status: approved
 owner: manager
-version: 1.0.0
+version: 1.0.1
 updated: 2026-10-27
 ---
 
@@ -44,7 +44,8 @@ CONTINUES-цепи. QUEUED leaf без RR и active lease сервер отме�
 | Claim / renew | Fresh published step, root initiator, agent capabilities и integration grants проверяются заново. Чужой Gate и terminal root не выдают lease. |
 | Lease expiry | Старый lease закрывается; новый claim того же physical node получает свежие RR/generation/fence. Own OPEN Gate блокирует новый claim. |
 | READ / NONE | Один незавершённый native READ slot на physical turn, под owner node lock; exact replay разрешён. Уже завершённые чтения не блокируют новое чтение. |
-| Model раньше READ | Child сразу остаётся RUNNING; result Gate/callback не создаются до terminal READ. |
+| Model раньше первого worker claim READ | Child сразу остаётся RUNNING; точный COMPLETED RR/lease допускает READY READ/NONE после fresh authority; result Gate/callback не создаются до terminal READ. |
+| READ worker lease expiry | Штатный expiry возвращает READ в READY; после завершённой модели новый claim сохраняет invocation/effect/input и выдаёт свежие lease/fence/generation. Старый worker закрыто получает Forbidden. |
 | READ раньше model | Model completion соединяет все terminal READ results того node в один CONTINUES. |
 | READ ACK | Точный native ledger даёт все invocation refs, состояния, результаты и receipt pins. Fresh authority проверяется перед materialization; нового READ/WRITE не происходит. Gate не выдумывается. |
 | READ UNKNOWN | Удерживает обязательство доставки и запрещает новый pending invocation под другим key. Владелец читает native ledger либо отменяет root. |
@@ -87,8 +88,11 @@ bash scripts/tests/control-plane-postgres-test.sh '^(TestLegacyWorkflowReworkCom
 ```
 
 Реальные бизнес-состояния создаются командами Create/Validate/Publish/Launch,
-Delegate/Claim/Complete/ResolveGate. SQL оснастки читает metadata; DDL drift
-разрешён только в отдельных проверенных loopback clone databases. Прямой SQL
+Delegate/Claim/Complete/ResolveGate. SQL proof-запросы читают metadata. Одно
+bootstrap-исключение READ-оснастки — существующий synthetic credential metadata
+fixture создаёт credential revision и переводит тестовое connection в CONNECTED;
+credential value и внешняя сеть не используются. DDL drift разрешён только в
+отдельных проверенных loopback clone databases. Прямой SQL
 для постановки child/model/callback в готовое состояние недопустим.
 
 Штатный `tools/release/control-plane-migration.mjs` получает отдельный

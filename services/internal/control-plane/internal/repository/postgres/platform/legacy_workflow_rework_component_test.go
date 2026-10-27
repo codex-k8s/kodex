@@ -42,7 +42,7 @@ type legacyWorkflowReworkProof struct {
 // TestLegacyWorkflowReworkComponent executes a real self-delegated step twice and requires distinct immutable delivery after owner rework.
 // TestLegacyWorkflowReworkComponent дважды исполняет настоящий self-step и требует новую immutable доставку после доработки владельцем.
 func TestLegacyWorkflowReworkComponent(t *testing.T) {
-	for _, decision := range []string{"APPROVE", "REJECT", "CANCEL", "CANCEL_RUNNING", "PARENT_BUSY", "LEASE_EXPIRY", "READ_EFFECT_FIRST", "READ_ORIGIN_FIRST", "READ_OVERSIZE", "READ_SOURCE_DELETED", "READ_REVOKED", "MULTIPLE_GATES"} {
+	for _, decision := range []string{"APPROVE", "REJECT", "CANCEL", "CANCEL_RUNNING", "PARENT_BUSY", "LEASE_EXPIRY", "READ_EFFECT_FIRST", "READ_ORIGIN_FIRST", "READ_LEASE_EXPIRY", "READ_OVERSIZE", "READ_SOURCE_DELETED", "READ_REVOKED", "MULTIPLE_GATES"} {
 		t.Run(decision, func(t *testing.T) { runLegacyWorkflowReworkScenario(t, decision) })
 	}
 }
@@ -317,8 +317,9 @@ func runLegacyWorkflowReworkScenario(t *testing.T, decision string) {
 		}
 		return
 	}
-	var completeRead func()
-	var readInvocation map[string]any
+	var completeRead, claimRead func()
+	var readInvocation, readWork map[string]any
+	var readPayload func(map[string]any) command.IntegrationInvocationInput
 	if readScenario {
 		invoke := func(key string) (map[string]any, error) {
 			return service.ResolveIntegrationInvocation(ctx, worker, map[string]string{"run_ref": stringMap(reworked[0], "runRef"), "node_ref": stringMap(reworked[0], "nodeRef"), "connection_ref": connectionRef, "capability_key": "github.issue.read", "idempotency_key": key}, map[string]any{"issue_number": 1})
@@ -368,13 +369,20 @@ func runLegacyWorkflowReworkScenario(t *testing.T, decision string) {
 		if _, err = invoke("legacy-rework-read-second"); !errors.Is(err, errs.ErrLegacyReworkScopeUnsupported) {
 			t.Fatal("second pending READ allocated another technical slot", completionOutcomeClass(err))
 		}
-		work, err := service.ClaimIntegrationInvocations(ctx, gateway, "legacy-rework-read-gateway", 1)
-		if err != nil || len(work) != 1 || stringMap(work[0], "invocationRef") != stringMap(readInvocation, "invocationRef") {
-			t.Fatal("native READ worker did not claim exact invocation", completionOutcomeClass(err))
+		claimRead = func() {
+			t.Helper()
+			work, err := service.ClaimIntegrationInvocations(ctx, gateway, "legacy-rework-read-gateway", 1)
+			if err != nil || len(work) != 1 || stringMap(work[0], "invocationRef") != stringMap(readInvocation, "invocationRef") {
+				t.Fatal("native READ worker did not claim exact invocation", completionOutcomeClass(err))
+			}
+			readWork = work[0]
+			unexpected, err := service.ClaimIntegrationInvocations(ctx, gateway, "legacy-rework-read-no-second", 1)
+			if err != nil || len(unexpected) != 0 {
+				t.Fatal("concurrent READ slot left another committed invocation", completionOutcomeClass(err))
+			}
 		}
-		unexpected, err := service.ClaimIntegrationInvocations(ctx, gateway, "legacy-rework-read-no-second", 1)
-		if err != nil || len(unexpected) != 0 {
-			t.Fatal("concurrent READ slot left another committed invocation", completionOutcomeClass(err))
+		if decision != "READ_ORIGIN_FIRST" {
+			claimRead()
 		}
 
 		body := "Native READ evidence"
@@ -383,8 +391,12 @@ func runLegacyWorkflowReworkScenario(t *testing.T, decision string) {
 		}
 		raw, _ := json.Marshal(map[string]any{"number": 1, "title": "Native issue", "state": "open", "body": body})
 		digest := sha256.Sum256(raw)
-		payload := command.IntegrationInvocationInput{InvocationRef: stringMap(work[0], "invocationRef"), LeaseRef: stringMap(work[0], "leaseRef"), Fence: stringMap(work[0], "fence"), Generation: runtimeRevisionMapInt64(work[0], "generation"), Success: true, ResultSummary: string(raw), EffectKey: stringMap(work[0], "effectKey"), InputDigest: stringMap(work[0], "inputDigest"), ProviderEffectRef: "synthetic-github:issue:1", ResponseDigest: hex.EncodeToString(digest[:])}
+		readPayload = func(work map[string]any) command.IntegrationInvocationInput {
+			return command.IntegrationInvocationInput{InvocationRef: stringMap(work, "invocationRef"), LeaseRef: stringMap(work, "leaseRef"), Fence: stringMap(work, "fence"), Generation: runtimeRevisionMapInt64(work, "generation"), Success: true, ResultSummary: string(raw), EffectKey: stringMap(work, "effectKey"), InputDigest: stringMap(work, "inputDigest"), ProviderEffectRef: "synthetic-github:issue:1", ResponseDigest: hex.EncodeToString(digest[:])}
+		}
 		completeRead = func() {
+			t.Helper()
+			payload := readPayload(readWork)
 			execute(gateway, command.CompleteIntegrationInvocation, "read-complete", nil, payload)
 			execute(gateway, command.CompleteIntegrationInvocation, "read-complete", nil, payload)
 		}
@@ -422,6 +434,43 @@ func runLegacyWorkflowReworkScenario(t *testing.T, decision string) {
 		t.Fatal("reworked result did not preserve distinct native artifact identity")
 	}
 	if readScenario {
+		if decision == "READ_ORIGIN_FIRST" || decision == "READ_LEASE_EXPIRY" {
+			physical, err := service.GetRun(ctx, owner, stringMap(reworked[0], "runRef"))
+			fact, factErr := service.GetIntegrationInvocation(ctx, worker, stringMap(readInvocation, "invocationRef"))
+			wantState := "READY"
+			if decision == "READ_LEASE_EXPIRY" {
+				wantState = "RUNNING"
+			}
+			pending := read()
+			if err != nil || factErr != nil || physical.State != "RUNNING" || pending.root != "RUNNING" || pending.active != 0 || pending.callbacks != callbackBase || pending.snapshot != before.snapshot || stringMap(fact, "state") != wantState || stringMap(fact, "gateRef") != "" || stringMap(fact, "effectReceiptRef") != "" || len(claim("pending-read-no-model")) != 0 {
+				t.Fatal("model completion failed to retain exact READ obligation before worker completion", completionOutcomeClass(err), completionOutcomeClass(factErr))
+			}
+			if decision == "READ_LEASE_EXPIRY" {
+				oldWork := readWork
+				oldPayload := readPayload(oldWork)
+				// Wait for the native worker lease only after the model has completed; do not renew or prepare lease state with SQL.
+				// Ожидаем native worker lease только после завершения модели; SQL либо продление не готовят lease state.
+				timer := time.NewTimer(31 * time.Second)
+				defer timer.Stop()
+				select {
+				case <-ctx.Done():
+					t.Fatal("native READ lease expiry budget elapsed")
+				case <-timer.C:
+				}
+				claimRead()
+				if stringMap(readWork, "leaseRef") == stringMap(oldWork, "leaseRef") || stringMap(readWork, "fence") == stringMap(oldWork, "fence") || runtimeRevisionMapInt64(readWork, "generation") != runtimeRevisionMapInt64(oldWork, "generation")+1 || stringMap(readWork, "effectKey") != stringMap(oldWork, "effectKey") || stringMap(readWork, "inputDigest") != stringMap(oldWork, "inputDigest") {
+					t.Fatal("expired READ did not reclaim exact invocation with fresh immutable lease tuple")
+				}
+				frozen := read()
+				_, err = service.Execute(ctx, command.Command{Kind: command.CompleteIntegrationInvocation, Principal: gateway, Mutation: value.Mutation{IdempotencyKey: "legacy-rework-expired-read-complete"}, Payload: oldPayload})
+				fact, factErr = service.GetIntegrationInvocation(ctx, worker, stringMap(readInvocation, "invocationRef"))
+				if !errors.Is(err, errs.ErrForbidden) || factErr != nil || read() != frozen || stringMap(fact, "state") != "RUNNING" || stringMap(fact, "effectReceiptRef") != "" {
+					t.Fatal("expired READ worker completed a fresh generation", completionOutcomeClass(err), completionOutcomeClass(factErr))
+				}
+			} else {
+				claimRead()
+			}
+		}
 		if decision != "READ_EFFECT_FIRST" {
 			completeRead()
 		}
