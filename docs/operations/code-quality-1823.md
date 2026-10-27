@@ -4,11 +4,27 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.568.0
+version: 1.569.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Общие предварительные проверки Kubernetes-проекций — 27.10.2026
+
+Публикация и readback почтовой проекции используют общую проверку document pins и
+admission; integration-egress — общий этап document → admission → render с прежними
+diagnostic stages. Порядок resource writes и readback остался в отдельных путях.
+Общая проверка Deployment сохраняет точные identity, generation и replica counters;
+сопоставление подтвердило совпадение обоих исходных предикатов. Fake client тесты
+проверяют закрытый отказ до записей и успешное чтение трёх admission pairs; fake
+client не доказывает поведение реального Kubernetes API.
+
+Control-plane build/vet PASS, 3064 unit PASS / 70 условных SKIP. Выбранные тесты
+проекций: 22 PASS до и 29 PASS после добавления проверок. Документация Context7:
+[kubernetes/client-go fake client](https://github.com/kubernetes/client-go/blob/master/testing/doc.go).
+Анализ: 1358 raw / 1283 retained / 75 unresolved, Go-комментарии 21692/21692.
+Браузер, E2E, live/deploy/startup и QA не выполнялись.
 
 ## Общие тестовые данные почты и автоматизаций — 27.10.2026
 

@@ -11,6 +11,7 @@ import (
 	shared "github.com/codex-k8s/kodex/libs/go/integrationegresspolicy"
 	"github.com/codex-k8s/kodex/libs/go/kubernetesadmission"
 	"github.com/codex-k8s/kodex/libs/go/mailpolicy"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/kubernetesprojection"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -420,6 +421,24 @@ func validProjectionLabels(current, expected map[string]string) bool {
 	return true
 }
 
+// prepareProjection validates the document, checks admission and renders typed resources in that
+// order, preserving the closed diagnostic stage. It does not apply or read back the projection.
+// prepareProjection проверяет document и admission, затем создаёт typed resources, сохраняя
+// закрытый diagnostic stage. Не применяет проекцию и не выполняет readback.
+func (publisher *Kubernetes) prepareProjection(ctx context.Context, document shared.Document) (corev1.ConfigMap, networkingv1.NetworkPolicy, string, error) {
+	if document.Validate() != nil {
+		return corev1.ConfigMap{}, networkingv1.NetworkPolicy{}, "document", ErrInvalid
+	}
+	if err := publisher.CheckAdmission(ctx); err != nil {
+		return corev1.ConfigMap{}, networkingv1.NetworkPolicy{}, "admission", err
+	}
+	configMap, network, err := projectionObjects(document)
+	if err != nil {
+		return configMap, network, "render", err
+	}
+	return configMap, network, "", nil
+}
+
 // Publish delegates ordered publication and complete Kubernetes readback to PublishWithStage while
 // discarding only its diagnostic stage.
 // Publish передаёт последовательную публикацию и полный Kubernetes readback в PublishWithStage,
@@ -436,15 +455,9 @@ func (publisher *Kubernetes) Publish(ctx context.Context, document shared.Docume
 // Service и Deployment reconciliation, затем точного readback; закрытые stages обозначают отказ и
 // не делают multi-object writes атомарными.
 func (publisher *Kubernetes) PublishWithStage(ctx context.Context, document shared.Document) (string, error) {
-	if document.Validate() != nil {
-		return "document", ErrInvalid
-	}
-	if err := publisher.CheckAdmission(ctx); err != nil {
-		return "admission", err
-	}
-	configMap, network, err := projectionObjects(document)
+	configMap, network, stage, err := publisher.prepareProjection(ctx, document)
 	if err != nil {
-		return "render", err
+		return stage, err
 	}
 	current, err := publisher.client.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
 	if err != nil {
@@ -518,7 +531,7 @@ func (publisher *Kubernetes) PublishWithStage(ctx context.Context, document shar
 	}); err != nil {
 		return "deployment", ErrConflict
 	}
-	stage, err := publisher.CheckWithStage(ctx, document)
+	stage, err = publisher.CheckWithStage(ctx, document)
 	return "readback_" + stage, err
 }
 
@@ -536,15 +549,9 @@ func (publisher *Kubernetes) Check(ctx context.Context, document shared.Document
 // CheckWithStage повторно проверяет document, admission, точные immutable policy, network, Service
 // и Deployment state и все replica counters, возвращая только закрытый stage с безопасной ошибкой.
 func (publisher *Kubernetes) CheckWithStage(ctx context.Context, document shared.Document) (string, error) {
-	if document.Validate() != nil {
-		return "document", ErrInvalid
-	}
-	if err := publisher.CheckAdmission(ctx); err != nil {
-		return "admission", err
-	}
-	configMap, network, err := projectionObjects(document)
+	configMap, network, stage, err := publisher.prepareProjection(ctx, document)
 	if err != nil {
-		return "render", err
+		return stage, err
 	}
 	if err := publisher.checkConfigMap(ctx, configMap); err != nil {
 		return "configmap", err
@@ -580,23 +587,8 @@ func (publisher *Kubernetes) CheckWithStage(ctx context.Context, document shared
 	if !sameJSON(deployment.Spec, expected.Spec) {
 		return "deployment_spec", ErrConflict
 	}
-	if !deploymentReady(deployment) {
+	if !kubernetesprojection.DeploymentReady(deployment) {
 		return "deployment_ready", ErrConflict
 	}
 	return "complete", nil
-}
-
-// deploymentReady requires observed Deployment identity/version, positive desired replicas and
-// exact generation/replica agreement with no unavailable replicas.
-// deploymentReady требует наблюдаемые Deployment identity и version, положительные desired
-// replicas и точное generation и replica соответствие без unavailable replicas.
-func deploymentReady(deployment *appsv1.Deployment) bool {
-	if deployment.UID == "" || deployment.ResourceVersion == "" || deployment.Generation < 1 ||
-		deployment.Spec.Replicas == nil || *deployment.Spec.Replicas < 1 {
-		return false
-	}
-	desired := *deployment.Spec.Replicas
-	status := deployment.Status
-	return status.ObservedGeneration == deployment.Generation && status.Replicas == desired &&
-		status.UpdatedReplicas == desired && status.ReadyReplicas == desired && status.AvailableReplicas == desired && status.UnavailableReplicas == 0
 }

@@ -8,6 +8,7 @@ import (
 	api "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 	"github.com/codex-k8s/kodex/libs/go/kubernetesadmission"
 	"github.com/codex-k8s/kodex/libs/go/mailpolicy"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/kubernetesprojection"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -80,6 +81,17 @@ func checkPublicationFence(annotations map[string]string, document mailpolicy.Ma
 	return nil
 }
 
+// checkMailboxPublicationInputs validates the exact document/configuration pins before checking
+// admission. It neither renders resources nor performs publication or readback writes.
+// checkMailboxPublicationInputs проверяет точные document/configuration pins до admission. Не
+// создаёт ресурсы и не выполняет публикацию либо readback writes.
+func (publisher *Kubernetes) checkMailboxPublicationInputs(ctx context.Context, configuration api.Configuration, document mailpolicy.MailDocument) error {
+	if document.Validate() != nil || document.ConfigurationRevision != configuration.Revision || document.ConfigurationDigest != api.Digest(configuration) {
+		return ErrInvalid
+	}
+	return publisher.CheckPublicationAdmission(ctx)
+}
+
 // PublishMailbox checks document/configuration pins and admission before ordered ConfigMap,
 // network, gateway, Secret and email Deployment writes; the Secret receipt does not replace later
 // CheckMailbox replica readback or make the writes atomic.
@@ -87,10 +99,7 @@ func checkPublicationFence(annotations map[string]string, document mailpolicy.Ma
 // ConfigMap, network, gateway, Secret и email Deployment writes; Secret receipt не заменяет
 // последующий CheckMailbox replica readback и не делает writes атомарными.
 func (publisher *Kubernetes) PublishMailbox(ctx context.Context, configuration api.Configuration, credentials map[string]string, document mailpolicy.MailDocument) (Receipt, error) {
-	if document.Validate() != nil || document.ConfigurationRevision != configuration.Revision || document.ConfigurationDigest != api.Digest(configuration) {
-		return Receipt{}, ErrInvalid
-	}
-	if err := publisher.CheckPublicationAdmission(ctx); err != nil {
+	if err := publisher.checkMailboxPublicationInputs(ctx, configuration, document); err != nil {
 		return Receipt{}, err
 	}
 	gateway, err := publisher.client.AppsV1().Deployments(publisher.namespace).Get(ctx, "egress-gateway", metav1.GetOptions{})
@@ -318,10 +327,7 @@ func (publisher *Kubernetes) checkMailConfigMap(ctx context.Context, expected co
 // CheckMailbox читает admission, immutable policy data, точные network fences, desired и observed
 // состояния обоих Deployment и Secret receipt; живое SMTP либо IMAP соединение не проверяет.
 func (publisher *Kubernetes) CheckMailbox(ctx context.Context, configuration api.Configuration, credentials map[string]string, document mailpolicy.MailDocument) (Receipt, error) {
-	if document.Validate() != nil || document.ConfigurationRevision != configuration.Revision || document.ConfigurationDigest != api.Digest(configuration) {
-		return Receipt{}, ErrInvalid
-	}
-	if err := publisher.CheckPublicationAdmission(ctx); err != nil {
+	if err := publisher.checkMailboxPublicationInputs(ctx, configuration, document); err != nil {
 		return Receipt{}, err
 	}
 	configMap, network, err := publicationObjects(document)
@@ -344,22 +350,9 @@ func (publisher *Kubernetes) CheckMailbox(ctx context.Context, configuration api
 			return Receipt{}, ErrUnavailable
 		}
 		expected := deployment.DeepCopy()
-		if setMailDeployment(expected, name, document, configMap.Name) != nil || !samePublicationJSON(deployment.Spec, expected.Spec) || !mailDeploymentReady(deployment) {
+		if setMailDeployment(expected, name, document, configMap.Name) != nil || !samePublicationJSON(deployment.Spec, expected.Spec) || !kubernetesprojection.DeploymentReady(deployment) {
 			return Receipt{}, ErrConflict
 		}
 	}
 	return publisher.Check(ctx, configuration, credentials)
-}
-
-// mailDeploymentReady requires nonempty Deployment identity/version, positive desired replicas and
-// exact observed-generation/replica counters with zero unavailable replicas.
-// mailDeploymentReady требует непустые Deployment identity и version, положительные desired
-// replicas и точные observed-generation и replica counters с нулевыми unavailable replicas.
-func mailDeploymentReady(deployment *appsv1.Deployment) bool {
-	if deployment.UID == "" || deployment.ResourceVersion == "" || deployment.Generation < 1 || deployment.Spec.Replicas == nil || *deployment.Spec.Replicas < 1 {
-		return false
-	}
-	desired := *deployment.Spec.Replicas
-	status := deployment.Status
-	return status.ObservedGeneration == deployment.Generation && status.Replicas == desired && status.UpdatedReplicas == desired && status.ReadyReplicas == desired && status.AvailableReplicas == desired && status.UnavailableReplicas == 0
 }
