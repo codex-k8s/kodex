@@ -3,6 +3,7 @@ package archive
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
 	"golang.org/x/sys/unix"
 )
@@ -80,6 +82,10 @@ func TestWorkspaceWriterTwoUIDNative(t *testing.T) {
 		}
 		return
 	}
+	if mode == "task" {
+		workspaceWriterNativeTaskFile(t)
+		return
+	}
 	root, err := unix.Open(workspaceWriterNativeTree, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if err != nil {
 		t.Fatal("open actual native restore tree")
@@ -136,6 +142,33 @@ func TestWorkspaceWriterTwoUIDNative(t *testing.T) {
 	workspaceWriterNativeMain(t, ctx, root, task, store)
 }
 
+// workspaceWriterNativeTaskFile seals only the deterministic fixture input for the real executable's fixed task mount.
+// This disposable fixture neither issues an owner grant nor reads any credentials or live object storage.
+// workspaceWriterNativeTaskFile закрепляет deterministic fixture input для fixed task mount настоящего executable.
+// Disposable fixture не выдаёт owner grant и не читает credentials либо live object storage.
+func workspaceWriterNativeTaskFile(t *testing.T) {
+	t.Helper()
+	task, _ := workspaceWriterNativeCheckpoint(t)
+	raw, err := json.Marshal(task)
+	if _, decodeErr := model.DecodeTask(raw); err != nil || decodeErr != nil || os.Geteuid() != 10001 {
+		t.Fatal("encode native executable task fixture")
+	}
+	root := runtimecontract.WorkspaceStorageRootMount
+	if os.Mkdir(root+"/fixture-task", 0o755) != nil || os.Chmod(root+"/fixture-task", 0o755) != nil ||
+		os.Mkdir(root+"/fixture-ipc", 0o700) != nil {
+		t.Fatal("prepare native executable fixture directories")
+	}
+	file, err := os.OpenFile(root+"/fixture-task/task.json", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o400)
+	if err != nil {
+		t.Fatal("create native executable task fixture")
+	}
+	_, writeErr := file.Write(raw)
+	modeErr, syncErr, closeErr := file.Chmod(0o444), file.Sync(), file.Close()
+	if writeErr != nil || modeErr != nil || syncErr != nil || closeErr != nil {
+		t.Fatal("seal native executable task fixture")
+	}
+}
+
 // workspaceWriterNativeMain restores through the real writable peer and waits for its coordinator-confirmed process exit before publishing.
 // workspaceWriterNativeMain восстанавливает через actual writable peer и ждёт coordinator-confirmed process exit до publication.
 func workspaceWriterNativeMain(t *testing.T, ctx context.Context, root int, task model.Task, store *workspaceObjectFixture) {
@@ -190,6 +223,15 @@ func workspaceWriterNativeChildren(t *testing.T, ctx context.Context) {
 	defer readJoin.Close()
 	defer writeJoin.Close()
 	provider, main := command("provider", 10002), command("main", 10001)
+	if executable := os.Getenv("KODEX_WORKSPACE_WRITER_EXECUTABLE"); executable != "" {
+		if executable != "/qa-writer" {
+			t.Fatal("native writer executable path changed")
+		}
+		provider = exec.CommandContext(ctx, executable, "write")
+		provider.Env = []string{"SESSION_ARCHIVE_WORKER_TIMEOUT=1m", "GOMAXPROCS=1", "GOMEMLIMIT=16MiB", "TMPDIR=/tmp"}
+		provider.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: 10002, Gid: 29000}}
+		provider.WaitDelay = time.Second
+	}
 	main.ExtraFiles = []*os.File{readJoin}
 	var providerOutput, mainOutput bytes.Buffer
 	provider.Stdout, provider.Stderr = &providerOutput, &providerOutput

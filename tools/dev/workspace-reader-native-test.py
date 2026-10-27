@@ -96,6 +96,8 @@ def main():
     parser.add_argument('--binary', required=True)
     parser.add_argument('--sha256', required=True)
     parser.add_argument('--mode', choices=['snapshot', 'restore'], default='snapshot')
+    parser.add_argument('--writer-binary')
+    parser.add_argument('--writer-sha256')
     arguments = parser.parse_args()
     binary = Path(arguments.binary)
     info = binary.lstat()
@@ -104,6 +106,17 @@ def main():
             or not re.fullmatch('[a-f0-9]{64}', arguments.sha256)
             or hashlib.sha256(binary.read_bytes()).hexdigest() != arguments.sha256):
         raise RuntimeError('NATIVE_BINARY_PIN_INVALID')
+    writer = None
+    if arguments.writer_binary is not None or arguments.writer_sha256 is not None:
+        if arguments.mode != 'restore' or not arguments.writer_binary or not arguments.writer_sha256:
+            raise RuntimeError('NATIVE_WRITER_PROFILE_INVALID')
+        writer = Path(arguments.writer_binary)
+        info = writer.lstat()
+        if (not writer.is_absolute() or not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                or info.st_nlink != 1 or info.st_mode & 0o022 or info.st_mode & 0o555 != 0o555
+                or not os.access(writer, os.X_OK) or not re.fullmatch('[a-f0-9]{64}', arguments.writer_sha256)
+                or hashlib.sha256(writer.read_bytes()).hexdigest() != arguments.writer_sha256):
+            raise RuntimeError('NATIVE_WRITER_BINARY_PIN_INVALID')
     endpoint = docker(['context', 'inspect', '--format', '{{.Endpoints.docker.Host}}']).stdout.strip()
     if (not endpoint.startswith('unix://') or os.environ.get('DOCKER_HOST', endpoint) != endpoint
             or docker(['info', '--format', '{{.OSType}}']).stdout.strip() != 'linux'):
@@ -117,6 +130,8 @@ def main():
               'productionChanged': False, 'mode': arguments.mode,
               'scope': ('DISPOSABLE_LOCAL_TWO_UID_READ_ONLY' if arguments.mode == 'snapshot'
                         else 'DISPOSABLE_LOCAL_TWO_UID_WRITABLE_RESTORE')}
+    if writer is not None:
+        result['writerBinarySHA256'] = arguments.writer_sha256
     try:
         docker(['volume', 'create', '--label', LABEL+'='+nonce, volume])
         metadata = json.loads(docker(['volume', 'inspect', volume]).stdout)[0]
@@ -136,13 +151,36 @@ def main():
             ['--cap-add=CHOWN', '--cap-add=FOWNER', '--entrypoint=/bin/sh',
              '--mount', 'type=volume,source='+volume+',target=/source'], ['-ec', prepare], identities))
         if arguments.mode == 'restore':
-            outcomes.append(run_container(volume+'-initialize', nonce,
-                ['--entrypoint=/qa-test',
+            if writer is not None:
+                outcomes.append(run_container(volume+'-task', nonce,
+                    ['--entrypoint=/qa-test',
+                     '--mount', 'type=bind,source='+str(binary)+',target=/qa-test,readonly',
+                     '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/session-workspace',
+                     '--tmpfs', '/tmp:rw,nosuid,nodev,noexec,size=4m,mode=1777',
+                     '--env', 'KODEX_WORKSPACE_WRITER_NATIVE=task', '--env', 'GOMAXPROCS=1'],
+                    ['-test.run=^TestWorkspaceWriterTwoUIDNative$', '-test.timeout=30s', '-test.v'],
+                    identities, user='10001:29000'))
+                # The helper receives only the fixture's fixed task input, never host credentials.
+                outcomes.append(run_container(volume+'-socket', nonce,
+                    ['--entrypoint=/qa-writer',
+                     '--mount', 'type=bind,source='+str(writer)+',target=/qa-writer,readonly',
+                     '--mount', 'type=volume,source='+volume+',target=/tmp,volume-subpath=fixture-ipc'],
+                    ['prepare'], identities, user='10001:29000'))
+            initializer = ['--entrypoint=/qa-test',
                  '--mount', 'type=bind,source='+str(binary)+',target=/qa-test,readonly',
                  '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/session-workspace',
                  '--tmpfs', '/tmp:rw,nosuid,nodev,noexec,size=4m,mode=1777',
-                 '--env', 'KODEX_WORKSPACE_WRITER_NATIVE=prepare', '--env', 'GOMAXPROCS=1'],
-                ['-test.run=^TestWorkspaceWriterTwoUIDNative$', '-test.timeout=30s', '-test.v'],
+                 '--env', 'KODEX_WORKSPACE_WRITER_NATIVE=prepare', '--env', 'GOMAXPROCS=1']
+            initialize_command = ['-test.run=^TestWorkspaceWriterTwoUIDNative$', '-test.timeout=30s', '-test.v']
+            if writer is not None:
+                initializer = ['--entrypoint=/qa-writer',
+                    '--mount', 'type=bind,source='+str(writer)+',target=/qa-writer,readonly',
+                    '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/session-workspace',
+                    '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/session-archive,volume-subpath=fixture-task,readonly',
+                    '--env', 'SESSION_ARCHIVE_WORKER_TIMEOUT=1m', '--env', 'GOMAXPROCS=1']
+                initialize_command = ['generation']
+            outcomes.append(run_container(volume+'-initialize', nonce,
+                initializer, initialize_command,
                 identities, user='10001:29000'))
         # Private fixtures only: no source tree, credentials, daemon socket or host network is mounted.
         consumer_arguments = ['--cap-add=SETUID', '--cap-add=SETGID', '--entrypoint=/qa-test',
@@ -159,8 +197,15 @@ def main():
             consumer_arguments += [
                 '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/workspace-restore-generation,volume-subpath='+RESTORE_FIXTURE_PARENT,
                 '--mount', 'type=volume,source='+volume+',target=/workspace/work,volume-subpath='+RESTORE_FIXTURE_PARENT+'/.restore-tree',
-                '--tmpfs', '/var/run/kodex/work-writer:rw,nosuid,nodev,noexec,size=1m,uid=10001,gid=29000,mode=2770',
                 '--env', 'KODEX_WORKSPACE_WRITER_NATIVE=coordinator']
+            if writer is None:
+                consumer_arguments += ['--tmpfs', '/var/run/kodex/work-writer:rw,nosuid,nodev,noexec,size=1m,uid=10001,gid=29000,mode=2770']
+            else:
+                consumer_arguments += [
+                    '--mount', 'type=bind,source='+str(writer)+',target=/qa-writer,readonly',
+                    '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/session-archive,volume-subpath=fixture-task,readonly',
+                    '--mount', 'type=volume,source='+volume+',target=/var/run/kodex/work-writer,volume-subpath=fixture-ipc/workspace-writer',
+                    '--env', 'KODEX_WORKSPACE_WRITER_EXECUTABLE=/qa-writer']
         outcomes.append(run_container(volume+'-consume', nonce, consumer_arguments,
             ['-test.run=^'+test_name+'$', '-test.timeout=30s', '-test.v'], identities))
         if arguments.mode == 'restore':

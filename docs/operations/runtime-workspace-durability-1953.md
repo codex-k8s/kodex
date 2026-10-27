@@ -4,7 +4,7 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.7
+version: 1.0.8
 updated: 2026-10-27
 ---
 
@@ -465,6 +465,28 @@ UID10001 initializer без capabilities через настоящий PrepareWo
 S3 custody, owner RESTORED или full backup/restore. Default snapshot mode и его
 read-only mount остаются прежними. Отсутствие opt-in в обычном go test даёт
 явный SKIP, отдельный native запуск оценивается по terminal JSON и cleanup.
+
+Для проверки именно поставляемого helper к `--mode restore` добавляются
+`--writer-binary <absolute-writer-binary> --writer-sha256 <sha256>`. Оба
+executable проверяются по hash, owner, single regular-file link и mode0555
+до создания контейнеров; они монтируются read-only. Fixture UID10001 создаёт
+отдельный frozen task без credentials. Настоящий `workspace-writer prepare`
+создаёт socket directory через свой единственный `/tmp` mount; настоящий
+`workspace-writer generation` получает task и полный disposable PVC только
+на время initialization. Затем main/provider получают только точные
+generation metadata/tree, отдельный IPC directory и read-only task. Provider
+UID10002 выполняет настоящий `workspace-writer write`, без S3/API credentials
+и без полного PVC. Exact process Wait предшествует публикации. После неё
+отдельный UID10001 выполняет production RestoreWorkspace reconciliation через
+read-only metadata и published tree, без helper/socket и повторной записи.
+Task и IPC fixture не монтируются в read-only reconciliation. Этот режим
+проверяет executable и filesystem protocol; он не заменяет проверку Job,
+owner-issued grant, реального storage либо штатного immutable image.
+
+Параметры subpath/read-only сверяются с
+[Docker volumes](https://docs.docker.com/engine/storage/volumes/).
+При подготовке этого режима Context7 отклонил текущий API key; использована
+официальная документация Docker. Значение ключа не выводилось и не менялось.
 
 При `chmod` SGID может молча сбрасываться, если процесс не входит в группу
 каталога и не имеет CAP_FSETID. Подготовка использует требуемую группу и
