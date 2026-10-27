@@ -2,6 +2,9 @@ package platform
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -52,4 +55,21 @@ func readImpactSnapshot[Result any](ctx context.Context, p value.Principal, sear
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	return read(ctx, tx, s, search)
+}
+
+// impactCommitmentDigest hashes the exact typed Plan/Actor/Items JSON; normalization and ordering
+// stay with callers, and marshal failure returns unavailable without a partial commitment.
+// impactCommitmentDigest хеширует точный типизированный JSON Plan/Actor/Items; нормализация и
+// порядок остаются у вызывающих, ошибка сериализации не возвращает частичный commitment.
+func impactCommitmentDigest[Plan, Item any](plan Plan, actor string, items []Item) (string, error) {
+	raw, err := json.Marshal(struct {
+		Plan  Plan
+		Actor string
+		Items []Item
+	}{plan, actor, items})
+	if err != nil {
+		return "", errs.ErrUnavailable
+	}
+	digest := sha256.Sum256(raw)
+	return hex.EncodeToString(digest[:]), nil
 }

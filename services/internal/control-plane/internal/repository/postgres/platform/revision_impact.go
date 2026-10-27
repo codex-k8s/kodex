@@ -2,9 +2,7 @@ package platform
 
 import (
 	"context"
-	"crypto/sha256"
 	_ "embed"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"sort"
@@ -135,16 +133,7 @@ func revisionImpactDigest(plan entity.RevisionImpactPlan, actor string, items []
 		canonical[i].ResultBindingVersion, canonical[i].ResultConsumerVersion = 0, 0
 	}
 	sort.Slice(canonical, func(i, j int) bool { return canonical[i].Ref < canonical[j].Ref })
-	raw, err := json.Marshal(struct {
-		Plan  entity.RevisionImpactPlan
-		Actor string
-		Items []entity.RevisionImpactItem
-	}{plan, actor, canonical})
-	if err != nil {
-		return "", errs.ErrUnavailable
-	}
-	digest := sha256.Sum256(raw)
-	return hex.EncodeToString(digest[:]), nil
+	return impactCommitmentDigest(plan, actor, canonical)
 }
 
 // revisionImpact checks rvip prefix and reference length, locks exact tenant/actor ownership and checks

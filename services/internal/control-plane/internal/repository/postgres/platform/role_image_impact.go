@@ -2,9 +2,7 @@ package platform
 
 import (
 	"context"
-	"crypto/sha256"
 	_ "embed"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"sort"
@@ -104,16 +102,7 @@ func roleImageImpactDigest(plan entity.RoleImageImpactPlan, actor string, items 
 		canonical[i].ResultBindingVersion = 0
 	}
 	sort.Slice(canonical, func(i, j int) bool { return canonical[i].Ref < canonical[j].Ref })
-	raw, err := json.Marshal(struct {
-		Plan  entity.RoleImageImpactPlan
-		Actor string
-		Items []entity.RoleImageImpactItem
-	}{plan, actor, canonical})
-	if err != nil {
-		return "", errs.ErrUnavailable
-	}
-	digest := sha256.Sum256(raw)
-	return hex.EncodeToString(digest[:]), nil
+	return impactCommitmentDigest(plan, actor, canonical)
 }
 
 // authorizeRoleImageImpact distinguishes prepared-plan rebind from target preparation, requiring

@@ -5,9 +5,7 @@ import (
 	_ "embed"
 	"errors"
 	"sort"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
@@ -84,56 +82,47 @@ func (repository *Repository) environmentImpactTarget(ctx context.Context, tx pg
 // ошибки возвращают частичные метаданные, которые нельзя считать полной страницей или разрешением
 // перепривязки.
 func (repository *Repository) GetRuntimeEnvironmentImpact(ctx context.Context, principal value.Principal, ref, version, search string, page query.Page) (entity.RuntimeEnvironmentImpact, error) {
-	search = strings.TrimSpace(search)
-	if !utf8.ValidString(search) || utf8.RuneCountInString(search) > 200 || strings.ContainsRune(search, 0) {
-		return entity.RuntimeEnvironmentImpact{}, errs.ErrInvalid
-	}
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	current, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
-	if err != nil {
-		return entity.RuntimeEnvironmentImpact{}, err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	result, _, err := repository.environmentImpactTarget(ctx, tx, current, ref, version)
-	if err != nil {
-		return result, err
-	}
-	filter := query.Filter{ResourceRef: ref, Query: search, Category: result.TargetVersionRef, Page: page}
-	cursor, err := decodeCatalogCursor(current, "ENVIRONMENT_IMPACT", filter)
-	if err != nil {
-		return result, err
-	}
-	limit := boundedPage(page)
-	rows, err := tx.Query(ctx, queryEnvironmentImpactConsumers, pgx.StrictNamedArgs{
-		"organization_id": current.organizationID, "actor_id": current.actorID, "environment_ref": ref, "query": search,
-		"target_ref": result.TargetVersionRef, "evaluated_at": time.Now().UTC(), "cursor_ref": cursor, "page_size": limit + 1,
-	})
-	if err != nil {
-		return result, errs.ErrUnavailable
-	}
-	for rows.Next() {
-		var item entity.RuntimeEnvironmentConsumer
-		if err := rows.Scan(&item.AgentRef, &item.AgentVersion, &item.BindingRef, &item.BindingVersion, &item.VersionRef, &item.ProjectRef, &item.ScopeKind, &item.OrganizationRef, &result.Total); err != nil {
-			rows.Close()
+	return readImpactSnapshot(ctx, principal, search, repository.beginScopedSnapshotRead, func(ctx context.Context, tx pgx.Tx, current scope, search string) (entity.RuntimeEnvironmentImpact, error) {
+		result, _, err := repository.environmentImpactTarget(ctx, tx, current, ref, version)
+		if err != nil {
+			return result, err
+		}
+		filter := query.Filter{ResourceRef: ref, Query: search, Category: result.TargetVersionRef, Page: page}
+		cursor, err := decodeCatalogCursor(current, "ENVIRONMENT_IMPACT", filter)
+		if err != nil {
+			return result, err
+		}
+		limit := boundedPage(page)
+		rows, err := tx.Query(ctx, queryEnvironmentImpactConsumers, pgx.StrictNamedArgs{
+			"organization_id": current.organizationID, "actor_id": current.actorID, "environment_ref": ref, "query": search,
+			"target_ref": result.TargetVersionRef, "evaluated_at": time.Now().UTC(), "cursor_ref": cursor, "page_size": limit + 1,
+		})
+		if err != nil {
 			return result, errs.ErrUnavailable
 		}
-		if item.AgentRef != "" {
-			result.Consumers = append(result.Consumers, item)
+		for rows.Next() {
+			var item entity.RuntimeEnvironmentConsumer
+			if err := rows.Scan(&item.AgentRef, &item.AgentVersion, &item.BindingRef, &item.BindingVersion, &item.VersionRef, &item.ProjectRef, &item.ScopeKind, &item.OrganizationRef, &result.Total); err != nil {
+				rows.Close()
+				return result, errs.ErrUnavailable
+			}
+			if item.AgentRef != "" {
+				result.Consumers = append(result.Consumers, item)
+			}
 		}
-	}
-	rows.Close()
-	if rows.Err() != nil {
-		return result, errs.ErrUnavailable
-	}
-	if len(result.Consumers) > int(limit) {
-		result.Consumers = result.Consumers[:limit]
-		result.NextPageToken = encodeCatalogCursor(current, "ENVIRONMENT_IMPACT", filter, result.Consumers[len(result.Consumers)-1].AgentRef)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return result, errs.ErrUnavailable
-	}
-	return result, nil
+		rows.Close()
+		if rows.Err() != nil {
+			return result, errs.ErrUnavailable
+		}
+		if len(result.Consumers) > int(limit) {
+			result.Consumers = result.Consumers[:limit]
+			result.NextPageToken = encodeCatalogCursor(current, "ENVIRONMENT_IMPACT", filter, result.Consumers[len(result.Consumers)-1].AgentRef)
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return result, errs.ErrUnavailable
+		}
+		return result, nil
+	})
 }
 
 // rebindRuntimeEnvironment delegates a normal typed rebind without a trusted publication source

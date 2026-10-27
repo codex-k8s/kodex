@@ -6,9 +6,7 @@ import (
 	"errors"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
@@ -117,60 +115,51 @@ func (repository *Repository) secretImpactTarget(ctx context.Context, tx pgx.Tx,
 // завершает транзакцию; частичные метаданные при ошибке не означают успешную страницу или
 // разрешение менять потребителей.
 func (repository *Repository) GetRuntimeSecretImpact(ctx context.Context, principal value.Principal, ref string, revision int64, search string, page query.Page) (entity.RuntimeSecretImpact, error) {
-	search = strings.TrimSpace(search)
-	if !utf8.ValidString(search) || utf8.RuneCountInString(search) > 200 || strings.ContainsRune(search, 0) {
-		return entity.RuntimeSecretImpact{}, errs.ErrInvalid
-	}
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	current, tx, err := repository.beginScopedSnapshotRead(ctx, principal)
-	if err != nil {
-		return entity.RuntimeSecretImpact{}, err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	result, _, err := repository.secretImpactTarget(ctx, tx, current, ref, revision)
-	if err != nil {
-		return result, err
-	}
-	filter := query.Filter{ResourceRef: ref, Query: search, Category: strconv.FormatInt(result.TargetRevision, 10), Page: page}
-	cursor, err := decodeCatalogCursor(current, "SECRET_IMPACT", filter)
-	if err != nil {
-		return result, err
-	}
-	limit := boundedPage(page)
-	rows, err := tx.Query(ctx, querySecretImpactConsumers, pgx.StrictNamedArgs{"organization_id": current.organizationID, "actor_id": current.actorID, "query": search,
-		"authority_project": current.authorityProjectID, "secret_ref": ref, "target_revision": result.TargetRevision, "evaluated_at": time.Now().UTC(), "cursor_ref": cursor, "page_size": limit + 1})
-	if err != nil {
-		return result, errs.ErrUnavailable
-	}
-	var cursors []string
-	for rows.Next() {
-		var item entity.RuntimeSecretImpactConsumer
-		var key string
-		if err := rows.Scan(&key, &item.EnvironmentRef, &item.EnvironmentVersion, &item.EnvironmentVersionRef, &item.SecretRevisions,
-			&item.Consumer.AgentRef, &item.Consumer.AgentVersion, &item.Consumer.BindingRef, &item.Consumer.BindingVersion, &item.ProjectRef, &item.ScopeKind, &item.OrganizationRef, &result.Total); err != nil {
-			rows.Close()
+	return readImpactSnapshot(ctx, principal, search, repository.beginScopedSnapshotRead, func(ctx context.Context, tx pgx.Tx, current scope, search string) (entity.RuntimeSecretImpact, error) {
+		result, _, err := repository.secretImpactTarget(ctx, tx, current, ref, revision)
+		if err != nil {
+			return result, err
+		}
+		filter := query.Filter{ResourceRef: ref, Query: search, Category: strconv.FormatInt(result.TargetRevision, 10), Page: page}
+		cursor, err := decodeCatalogCursor(current, "SECRET_IMPACT", filter)
+		if err != nil {
+			return result, err
+		}
+		limit := boundedPage(page)
+		rows, err := tx.Query(ctx, querySecretImpactConsumers, pgx.StrictNamedArgs{"organization_id": current.organizationID, "actor_id": current.actorID, "query": search,
+			"authority_project": current.authorityProjectID, "secret_ref": ref, "target_revision": result.TargetRevision, "evaluated_at": time.Now().UTC(), "cursor_ref": cursor, "page_size": limit + 1})
+		if err != nil {
 			return result, errs.ErrUnavailable
 		}
-		if key != "" {
-			item.Consumer.VersionRef = item.EnvironmentVersionRef
-			item.Consumer.ScopeKind, item.Consumer.OrganizationRef, item.Consumer.ProjectRef = item.ScopeKind, item.OrganizationRef, item.ProjectRef
-			result.Consumers = append(result.Consumers, item)
-			cursors = append(cursors, key)
+		var cursors []string
+		for rows.Next() {
+			var item entity.RuntimeSecretImpactConsumer
+			var key string
+			if err := rows.Scan(&key, &item.EnvironmentRef, &item.EnvironmentVersion, &item.EnvironmentVersionRef, &item.SecretRevisions,
+				&item.Consumer.AgentRef, &item.Consumer.AgentVersion, &item.Consumer.BindingRef, &item.Consumer.BindingVersion, &item.ProjectRef, &item.ScopeKind, &item.OrganizationRef, &result.Total); err != nil {
+				rows.Close()
+				return result, errs.ErrUnavailable
+			}
+			if key != "" {
+				item.Consumer.VersionRef = item.EnvironmentVersionRef
+				item.Consumer.ScopeKind, item.Consumer.OrganizationRef, item.Consumer.ProjectRef = item.ScopeKind, item.OrganizationRef, item.ProjectRef
+				result.Consumers = append(result.Consumers, item)
+				cursors = append(cursors, key)
+			}
 		}
-	}
-	rows.Close()
-	if rows.Err() != nil {
-		return result, errs.ErrUnavailable
-	}
-	if len(result.Consumers) > int(limit) {
-		result.Consumers = result.Consumers[:limit]
-		result.NextPageToken = encodeCatalogCursor(current, "SECRET_IMPACT", filter, cursors[limit-1])
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return result, errs.ErrUnavailable
-	}
-	return result, nil
+		rows.Close()
+		if rows.Err() != nil {
+			return result, errs.ErrUnavailable
+		}
+		if len(result.Consumers) > int(limit) {
+			result.Consumers = result.Consumers[:limit]
+			result.NextPageToken = encodeCatalogCursor(current, "SECRET_IMPACT", filter, cursors[limit-1])
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return result, errs.ErrUnavailable
+		}
+		return result, nil
+	})
 }
 
 // rebindRuntimeSecret authorizes a typed secret rebind with a positive target revision, expected

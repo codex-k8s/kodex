@@ -9104,6 +9104,22 @@
       "fragmentSHA256": "4be38595777954cd86f6391a1160953ce6444de042f2376abd704f6e5728b1e2",
       "count": 1,
       "reason": "Окна содержат typed saveWorkflow/changeWorkflow и saveSchedule/changeSchedule. Общие create/update и versioned mutation уже выполняют saveVersionedResource и mutate; оставшийся код выбирает разные generated SDK methods, typed action, resource ref и store. Динамический общий dispatcher скрыл бы проверяемые resource bindings и версионные параметры. Решение относится только к этой точной паре путей и hash; остальные операции, проверки и тесты остаются в анализе."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/assistant_tools.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/instruction_impact.go",
+      "fragmentSHA256": "287696096bb2f470aa2a7175b89c8bb08a86276de1164e142d4639460155e5f3",
+      "count": 1,
+      "reason": "readAssistantIntegrationGrantSnapshot читает проекцию recipient/connection/capability с actor и authority-project pins, проверяет имена и версии и нормализует approval paths; readInstructionImpact читает другой tuple agent/revision и запрещает system key как Protected. Совпадают только типовая обработка NoRows и ошибки драйвера после Scan; общий callback ради неё скрыл бы разные типы и самостоятельные проверки без общего чтения. Решение ограничено одной парой путей и hash, не исключает scan или authorization."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/email_mailbox_binding_effects.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/prompt_impact.go",
+      "fragmentSHA256": "8b936f72acda21c918664ec24b9c5d9a1c71eaeababb66f7028edc2a6e7a595a",
+      "count": 1,
+      "reason": "readMailboxBindingEffects читает и блокирует effects с observation version и возвращает nil при пустом наборе; readPromptImpactConsumers читает ограниченных потребителей с tenant/configuration pins, назначает каждому PENDING и возвращает непустой по форме empty slice. Общее окно содержит только цикл rows с типизированным Scan и обработкой ошибки; generic callback усложнил бы разные поля, инициализацию и контракт пустого результата. Решение ограничено одной парой путей и hash, не исключает SQL, tenant или публикацию."
     }
   ]
 }
