@@ -2,6 +2,30 @@
   "version": 1,
   "entries": [
     {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/commands.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/configuration.go",
+      "fragmentSHA256": "e4e4a3659608223aebbc4a1b217702c1ee57fd889426af15185db0b27004dbf8",
+      "count": 1,
+      "reason": "Два окна содержат разные закрытые case command.Kind → repository handler bindings: команды agent/environment в общем dispatcher и команды conversation/turn в специализированном changeAssistant. AST подтвердил у всех пересекаемых case только один прямой return вызова соответствующего handler с теми же ctx/tx/scope/input. Имена kind и handler различаются; SQL, authorization, lifecycle и обработка ошибок находятся в специализированных методах. Общая реализация команды здесь не скопирована. Динамический универсальный dispatcher заменил бы явные типизированные маршруты ради синтаксиса switch, не устраняя второй алгоритм. Сохранена только точная пара путей/hash/count1, не тела handlers и не остальные command fragments."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/commands.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/commands.go",
+      "fragmentSHA256": "b09a3c0c6a8faaea00f1e16b885e73c2606c3198cbe09250b192ade38ebe06af",
+      "count": 1,
+      "reason": "Окна разных участков одного закрытого dispatcher содержат разные command families: agent/environment/instructions и archive/occurrence/integration completions. Каждая ветвь только передаёт ctx,tx,scope,input своему существующему repository handler; это проверено AST, без statements до/после return. Общие transaction/authority механизмы и специализированные handlers уже переиспользуются. Объединять разные семантические операции через string/reflection registry ради одинаковой формы return не требуется и скрывает доступный компилятору маршрут. Исключение ограничено одним exact внутрефайловым hash/count1; бизнесовые ветви handlers не исключены."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/repository/postgres/platform/commands.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/commands.go",
+      "fragmentSHA256": "d5f5a4ff8872c4a722bdb07191062d03c80ec008c0d9707f6b2474a0c3143461",
+      "count": 1,
+      "reason": "Два окна одного switch задают разные прямые привязки command families: instructions/runtime/environment/bindings и workflow/run/gate/artifact/attachment/schedule. Case labels перечисляют закрытые command.Kind, а единственное тело case — return специализированного repository метода с неизменными четырьмя аргументами; AST подтвердил форму и реальные имена. Это таблица разных маршрутов, а не повторная реализация исполнения, authority либо lifecycle. Общий generic apply/transition handler нарушил бы предметную явность без устранения алгоритма в этих строках. Сохранён только exact внутрефайловый hash/count1; сами реализации и прочие совпадения остаются в анализе."
+    },
+    {
       "format": "typescript",
       "firstPath": "services/staff/control-center/src/features/platform/store.test.ts",
       "secondPath": "services/staff/control-center/src/features/platform/store.test.ts",

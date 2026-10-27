@@ -4,11 +4,37 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.533.0
+version: 1.534.0
 updated: 2026-10-27
 ---
 
 # Подготовка кода к построчному ревью
+
+## Адресные решения для реестра команд — 27.10.2026
+
+Три nominal dispatcher окна e4e4a365/b09a3c0c/d5f5a4ff сохранены по точным
+path/hash/count1. Это разные command.Kind → repository handler привязки:
+agent/environment/instructions, archive/occurrence/integration completions и
+workflow/run/gate/artifact/attachment/schedule; специализированный changeAssistant
+содержит собственные conversation/turn handlers. У каждого case в шести
+фрагментах только один прямой return своего handler с ctx/tx/scope/input.
+AST проверил42привязки с учётом перекрывающихся окон, конкретные command kinds,
+repository methods и отсутствие промежуточных вычислений. SQL, authority и
+lifecycle реализуются специализированными handlers, их тела не исключаются.
+Динамический универсальный dispatcher ради одинакового синтаксиса не устраняет
+здесь второго алгоритма. Unknown-kind rejection и существующий closed registry
+не менялись. commands.go и configuration.go побайтно равны HEAD; production,
+тестовые исходники и публичные tools не изменялись.
+
+Новые решения ограничены тремя точными keys, не целыми switch/functions/files.
+18registry mutations отвергнуты,17quality unit tests PASS. Пять quality stages
+PASS LOCAL:6788sources/222exclusions,1409raw/1266retained/143unresolved
+(Go72/TypeScript71),registry1123,Go21632/21632 EN→RU. Raw clone set,thresholds,
+exclusions и source inventory прежние. Go/PWA build/unit не повторялись при
+отсутствии изменений исходников; результаты 50dd1b4/ed6145c остаются историческими.
+Context7 /golang/go проверен: parser error отклоняется до использования AST,
+CaseClause/ReturnStmt/CallExpr обходятся через ast.Inspect. Полные E2E/browser/
+live/deploy/startup/QA NOT RUN;готовность всего diff к merge не заявляется.
 
 ## Общая подготовка PostgreSQL-сценариев — 27.10.2026
 
