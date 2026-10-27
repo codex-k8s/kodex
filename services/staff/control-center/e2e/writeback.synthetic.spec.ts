@@ -1,6 +1,6 @@
 import { handleSyntheticRuntimeRequest } from "./synthetic-runtime-route";
 import { createHash } from "node:crypto";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Locator } from "@playwright/test";
 import type {
   ConfigurationWriteBack,
   ManagedConfiguration,
@@ -13,6 +13,25 @@ const digest = (value: string) =>
 const approvalLabel =
   "Подтверждаю этот точный план, отдельную ветку и создание PR/MR";
 const approveLabel = "Подтвердить и создать PR/MR";
+
+// prepareWritebackPanel открывает документ и запускает подготовку плана в synthetic fixture.
+// Проверка approval, UNKNOWN и восстановления остаётся за каждым сценарием.
+async function prepareWritebackPanel(page: Page): Promise<Locator> {
+  const panel = page.getByRole("region", {
+    name: "Изменение через Git",
+    exact: true,
+  });
+  await panel
+    .getByRole("button", { name: "Предлагаемый документ", exact: true })
+    .click();
+  await panel
+    .getByRole("textbox", { name: "Предлагаемый документ", exact: true })
+    .fill(proposedContent);
+  await panel
+    .getByRole("button", { name: "Подготовить план", exact: true })
+    .click();
+  return panel;
+}
 
 async function install(page: Page, lostPrepare: boolean) {
   let proposal: ConfigurationWriteBack = {
@@ -255,19 +274,7 @@ for (const width of [390, 2900]) {
     const fixture = await install(page, false);
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/e2e/fixtures/impact.html?kind=git");
-    const panel = page.getByRole("region", {
-      name: "Изменение через Git",
-      exact: true,
-    });
-    await panel
-      .getByRole("button", { name: "Предлагаемый документ", exact: true })
-      .click();
-    await panel
-      .getByRole("textbox", { name: "Предлагаемый документ", exact: true })
-      .fill(proposedContent);
-    await panel
-      .getByRole("button", { name: "Подготовить план", exact: true })
-      .click();
+    const panel = await prepareWritebackPanel(page);
     await expect(
       panel.getByLabel("Точные изменения исходного файла", { exact: true }),
     ).toContainText("key: new");
@@ -320,19 +327,7 @@ test("synthetic: pagehide сохраняет UNKNOWN intent, отзыв влад
 }) => {
   const fixture = await install(page, true);
   await page.goto("/e2e/fixtures/impact.html?kind=git");
-  const panel = page.getByRole("region", {
-    name: "Изменение через Git",
-    exact: true,
-  });
-  await panel
-    .getByRole("button", { name: "Предлагаемый документ", exact: true })
-    .click();
-  await panel
-    .getByRole("textbox", { name: "Предлагаемый документ", exact: true })
-    .fill(proposedContent);
-  await panel
-    .getByRole("button", { name: "Подготовить план", exact: true })
-    .click();
+  const panel = await prepareWritebackPanel(page);
   await expect(panel).toContainText("Результат запроса неизвестен");
   const before = await page.evaluate(() =>
     sessionStorage.getItem("kodex.writeback.intent.configuration"),
@@ -366,19 +361,7 @@ test("synthetic: неизвестный Prepare переживает reload, his
 }) => {
   const fixture = await install(page, true);
   await page.goto("/e2e/fixtures/impact.html?kind=git");
-  const panel = page.getByRole("region", {
-    name: "Изменение через Git",
-    exact: true,
-  });
-  await panel
-    .getByRole("button", { name: "Предлагаемый документ", exact: true })
-    .click();
-  await panel
-    .getByRole("textbox", { name: "Предлагаемый документ", exact: true })
-    .fill(proposedContent);
-  await panel
-    .getByRole("button", { name: "Подготовить план", exact: true })
-    .click();
+  const panel = await prepareWritebackPanel(page);
   await expect(panel).toContainText("Результат запроса неизвестен");
   expect(fixture.writes).toHaveLength(1);
   const stored = await page.evaluate(() =>
