@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -124,5 +125,78 @@ func TestTrustedAdmissionPreservesTicketAndRejectsCallbackKeys(t *testing.T) {
 				t.Fatal("trusted admission outcome mismatch")
 			}
 		})
+	}
+}
+
+// TestAdmissionMissingContainerMountDenial checks that a malformed sibling mount
+// produces a false CEL result without an evaluation error when a container is absent.
+// TestAdmissionMissingContainerMountDenial проверяет, что повреждённый mount
+// соседнего контейнера при отсутствии другого даёт false без ошибки CEL.
+func TestAdmissionMissingContainerMountDenial(t *testing.T) {
+	program := runtimeAdmissionPrograms(t, "managed role Pod authority mount boundary is invalid")[0]
+	manager := newTestManager(t, fake.NewSimpleClientset())
+	input, binding, err := manager.BuildTurnInput(testExecution(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	credentials := testCredentialProjection(input)
+	fixture := manager.runtimePod(input, binding, &credentials, "runtime-ticket-fixture", "fixture", "turn")
+	for _, missing := range []string{"role-runtime", "provider-credential-relay"} {
+		for _, writable := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/writable=%t", missing, writable), func(t *testing.T) {
+				pod := fixture.DeepCopy()
+				var containers []corev1.Container
+				found := false
+				for _, container := range pod.Spec.Containers {
+					if container.Name == missing {
+						continue
+					}
+					if container.Name == "role-runtime" || container.Name == "provider-credential-relay" {
+						mounts := container.VolumeMounts[:0]
+						for _, mount := range container.VolumeMounts {
+							if mount.Name == "runtime-input" {
+								found = true
+								if !writable {
+									continue
+								}
+								mount.ReadOnly = false
+							}
+							mounts = append(mounts, mount)
+						}
+						container.VolumeMounts = mounts
+					}
+					containers = append(containers, container)
+				}
+				if !found {
+					t.Fatal("runtime input mount missing from fixture")
+				}
+				pod.Spec.Containers = containers
+				object, err := k8sruntime.DefaultUnstructuredConverter.ToUnstructured(pod)
+				if err != nil {
+					t.Fatal(err)
+				}
+				spec := object["spec"].(map[string]any)
+				all := spec["containers"].([]any)
+				role, relay, provider := []any{}, []any{}, []any{}
+				for _, item := range all {
+					switch item.(map[string]any)["name"] {
+					case "role-runtime":
+						role = append(role, item)
+					case "provider-credential-relay":
+						relay = append(relay, item)
+					case "provider-runtime":
+						provider = append(provider, item)
+					}
+				}
+				activation := map[string]any{"object": object, "variables": map[string]any{
+					"roleContainers": role, "relayContainers": relay, "providerContainers": provider,
+					"allContainers": append(append([]any{}, all...), spec["initContainers"].([]any)...),
+				}}
+				result, _, err := program.Eval(activation)
+				if err != nil || result != types.False {
+					t.Fatalf("expected false without CEL error, got %v: %v", result, err)
+				}
+			})
+		}
 	}
 }
