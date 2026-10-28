@@ -751,12 +751,12 @@ export function validWorkspaceVolumeSSHMigrationPrecondition(proof) {
     proof.workspaceVolumeSSHAbsent===true && proof.sshComposeAbsent===true;
 }
 
-// Полный actual109/304 и каталог017 проверяются отдельно от неизменённого inverse014.
+// Полный actual109/303 и каталог017 проверяются отдельно от неизменённого inverse014.
 export function validWorkspaceVolumeSSHMigrationPostcondition(proof) {
   return proof?.profile==='WORKSPACE_VOLUME_SSH_V1' && proof.readOnly==='on' &&
     proof.gooseVersion===20261027000100 && proof.workspaceCatalog===true &&
     proof.checkpointCatalog===true && proof.volumeCatalog===true && proof.workspacePurgeGuard===true &&
-    proof.purgeNodes===109 && proof.purgeEdges===304 &&
+    proof.purgeNodes===109 && proof.purgeEdges===303 &&
     typeof proof.purgeNodeFingerprint==='string' && /^[a-f0-9]{32}$/.test(proof.purgeNodeFingerprint) &&
     typeof proof.purgeEdgeFingerprint==='string' && /^[a-f0-9]{32}$/.test(proof.purgeEdgeFingerprint) &&
     proof.sshComposeProfile==='SSH_COMPOSE_V1' &&
