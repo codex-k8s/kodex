@@ -247,7 +247,17 @@ fi
   schema_version=$(psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" --no-password -X -qAt -v ON_ERROR_STOP=1 \
     -c 'SELECT max(version_id) FILTER (WHERE is_applied) FROM public.goose_db_version')
   case "$schema_version" in
-    20261027000100) schema_proof=ssh-compose-migration-postcondition.sql; schema_verifier=validSSHComposeMigrationPostcondition ;;
+    20261027000100)
+      # Одинаковая конечная Goose version не отличает010+SSH от полного017+SSH.
+      # Выбираем отдельный closed verifier по фактически применённому017;
+      # прежняя SSH-проверка не принимает новые таблицы либо урезанную проекцию.
+      volume_migration_count=$(psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" --no-password -X -qAt -v ON_ERROR_STOP=1 \
+        -c 'SELECT count(*) FROM public.goose_db_version WHERE version_id=20261026001700 AND is_applied')
+      case "$volume_migration_count" in
+        0) schema_proof=ssh-compose-migration-postcondition.sql; schema_verifier=validSSHComposeMigrationPostcondition ;;
+        1) schema_proof=workspace-volume-ssh-migration-postcondition.sql; schema_verifier=validWorkspaceVolumeSSHMigrationPostcondition ;;
+        *) fail 'workspace volume migration history is ambiguous' ;;
+      esac ;;
     20261026001600) schema_proof=workspace-checkpoint-migration-postcondition.sql; schema_verifier=validWorkspaceCheckpointMigrationPostcondition ;;
     20261026001500) schema_proof=session-workspace-migration-postcondition.sql; schema_verifier=validSessionWorkspaceMigrationPostcondition ;;
     20261026001000) schema_proof=server-workflow-migration-postcondition.sql; schema_verifier=validServerWorkflowMigrationPostcondition ;;
