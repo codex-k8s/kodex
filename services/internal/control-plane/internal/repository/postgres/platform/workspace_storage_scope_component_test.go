@@ -3,12 +3,15 @@ package platform
 import (
 	"context"
 	"errors"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
+	"github.com/jackc/pgx/v5"
 )
 
 // testWorkspaceProfileOffRejectsMismatchedRow uses a rolled-back owner-only counterfactual to prove that an existing V2 row cannot become an empty legacy workspace.
@@ -21,7 +24,23 @@ func testWorkspaceProfileOffRejectsMismatchedRow(t *testing.T, ctx context.Conte
 	previous := repository.roleImages.WorkspaceStorageProfile
 	repository.roleImages.WorkspaceStorageProfile = ""
 	defer func() { repository.roleImages.WorkspaceStorageProfile = previous }()
-	tx, err := repository.pool.Begin(ctx)
+	runtime := repository.pool.Config().ConnConfig
+	admin, err := pgx.ParseConfig(os.Getenv("KODEX_CONTROL_PLANE_TEST_ADMIN_DSN"))
+	if err != nil || admin.User != "postgres" || admin.Database != "postgres" || admin.Host != runtime.Host || admin.Port != runtime.Port ||
+		(runtime.Host != "127.0.0.1" && runtime.Host != "localhost") || runtime.Port < 1024 || !strings.HasPrefix(runtime.Database, "kodex_assistant_test_") {
+		t.Fatal("workspace counterfactual requires an exact disposable loopback clone")
+	}
+	admin.Database = runtime.Database
+	conn, err := pgx.ConnectConfig(ctx, admin)
+	if err != nil {
+		t.Fatal("connect exact disposable workspace owner")
+	}
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+		defer cancel()
+		_ = conn.Close(cleanup)
+	}()
+	tx, err := conn.Begin(ctx)
 	if err != nil {
 		t.Fatal("begin isolated workspace mismatch", err)
 	}
