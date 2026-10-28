@@ -13,6 +13,9 @@ CONTEXT = "k3d-kodex"
 NAMESPACE = "kodex-system"
 NODES = ("k3d-kodex-server-0", "k3d-kodex-agent-0")
 SCHEMA = "kodex.dev/staging-capacity-preflight/v1"
+BOUNDED_QA_SCHEMA = "kodex.dev/staging-capacity-preflight/bounded-qa/v1"
+MAX_QA_BUDGET_BYTES = 2 << 30
+MIN_QA_STABLE_SECONDS = 6 * 3600
 UID = re.compile(r"[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\Z")
 MAX_BYTES = (1 << 63) - 1
 MAX_RESPONSE_BYTES = 8 << 20
@@ -134,7 +137,7 @@ def node_records(value, expected):
     return records
 
 
-def filesystem_proof(stats, hard, reclaim, budget, reserve, now):
+def filesystem_proof(stats, hard, reclaim, budget, reserve, now, profile="recovery"):
     require(isinstance(stats, dict), "FILESYSTEM_STATS_UNAVAILABLE")
     capacity = byte_count(stats.get("capacityBytes"), "FILESYSTEM_STATS_INVALID", 1)
     available = byte_count(stats.get("availableBytes"), "FILESYSTEM_STATS_INVALID")
@@ -145,16 +148,23 @@ def filesystem_proof(stats, hard, reclaim, budget, reserve, now):
     minimum_reclaim = threshold_bytes(reclaim, capacity, allow_zero=True)
     recovery_floor = threshold + minimum_reclaim
     remaining = available - budget
-    require(remaining > recovery_floor + reserve, "FILESYSTEM_BUDGET_UNSAFE")
-    return {"capacityBytes": capacity, "availableBytes": available, "statsTime": stats["time"],
+    require(profile in ("recovery", "bounded-qa"), "CAPACITY_PROFILE_INVALID")
+    floor = threshold if profile == "bounded-qa" else recovery_floor
+    require(remaining > floor + reserve, "FILESYSTEM_BUDGET_UNSAFE")
+    result = {"capacityBytes": capacity, "availableBytes": available, "statsTime": stats["time"],
             "evictionHard": hard, "evictionHardBytes": threshold,
             "evictionMinimumReclaim": reclaim, "evictionMinimumReclaimBytes": minimum_reclaim,
             "recoveryFloorBytes": recovery_floor, "budgetBytes": budget,
             "reserveBytes": reserve, "remainingAfterBudgetBytes": remaining,
             "headroomAboveRecoveryAndReserveBytes": remaining - recovery_floor - reserve}
+    if profile == "bounded-qa":
+        result.update({"admissionFloorBytes": floor,
+                       "headroomAboveHardAndReserveBytes": remaining - threshold - reserve,
+                       "recoveryTargetMetAfterBudget": remaining > recovery_floor + reserve})
+    return result
 
 
-def node_proof(name, uid, conditions, summary, config, budget, reserve, now):
+def node_proof(name, uid, conditions, summary, config, budget, reserve, now, profile="recovery"):
     require(isinstance(summary, dict) and isinstance(summary.get("node"), dict) and
             summary["node"].get("nodeName") == name, "SUMMARY_NODE_MISMATCH")
     require(isinstance(config, dict) and isinstance(config.get("kubeletconfig"), dict), "KUBELET_CONFIG_UNAVAILABLE")
@@ -169,14 +179,18 @@ def node_proof(name, uid, conditions, summary, config, budget, reserve, now):
             "FILESYSTEM_PROFILE_UNSUPPORTED")
     require("containerfs.available" not in hard, "FILESYSTEM_PROFILE_UNSUPPORTED")
     period = transition_seconds(effective.get("evictionPressureTransitionPeriod"))
+    if profile == "bounded-qa":
+        for kind in ("Ready", "DiskPressure"):
+            stable = now - timestamp(conditions[kind].get("lastTransitionTime"))
+            require(stable >= max(MIN_QA_STABLE_SECONDS, period), "QA_NODE_STABILITY_UNCONFIRMED")
     node = summary["node"]
     runtime = node.get("runtime")
     require(isinstance(runtime, dict), "FILESYSTEM_STATS_UNAVAILABLE")
     return {"name": name, "uid": uid, "ready": "True", "diskPressure": "False",
             "diskPressureLastTransitionTime": conditions["DiskPressure"]["lastTransitionTime"],
             "evictionPressureTransitionSeconds": period,
-            "nodefs": filesystem_proof(node.get("fs"), hard.get("nodefs.available"), reclaim.get("nodefs.available", "0"), budget, reserve, now),
-            "imagefs": filesystem_proof(runtime.get("imageFs"), hard.get("imagefs.available"), reclaim.get("imagefs.available", "0"), budget, reserve, now)}
+            "nodefs": filesystem_proof(node.get("fs"), hard.get("nodefs.available"), reclaim.get("nodefs.available", "0"), budget, reserve, now, profile),
+            "imagefs": filesystem_proof(runtime.get("imageFs"), hard.get("imagefs.available"), reclaim.get("imagefs.available", "0"), budget, reserve, now, profile)}
 
 
 class Reader:
@@ -201,31 +215,45 @@ class Reader:
 
 
 def inspect(args, reader):
+    profile = getattr(args, "profile", "recovery")
+    require(profile in ("recovery", "bounded-qa"), "CAPACITY_PROFILE_INVALID")
     expected = dict(zip(NODES, (args.expected_server_node_uid, args.expected_agent_node_uid)))
     for uid in (args.expected_cluster_uid, args.expected_namespace_uid, *expected.values()):
         require(isinstance(uid, str) and UID.fullmatch(uid) and uid != "00000000-0000-0000-0000-000000000000",
                 "EXPECTED_UID_INVALID")
     require(len(set(expected.values())) == len(expected), "EXPECTED_UID_INVALID")
     budget = byte_count(args.budget_bytes, "BUDGET_INVALID")
+    if profile == "bounded-qa":
+        require(0 < budget <= MAX_QA_BUDGET_BYTES, "QA_BUDGET_INVALID")
     reserve = byte_count(args.reserve_bytes, "RESERVE_INVALID", MIN_RESERVE_BYTES)
     for name, uid in (("kube-system", args.expected_cluster_uid), (NAMESPACE, args.expected_namespace_uid)):
         namespace_identity(reader.get(["namespace", name, "-o", "json"]), name, uid)
-    node_records(reader.get(["nodes", "-o", "json"]), expected)
+    initial_conditions = node_records(reader.get(["nodes", "-o", "json"]), expected)
     evidence = {}
     for name in NODES:
         config = reader.get(["--raw", "/api/v1/nodes/" + name + "/proxy/configz"])
         summary = reader.get(["--raw", "/api/v1/nodes/" + name + "/proxy/stats/summary"])
         evidence[name] = (summary, config)
     conditions = node_records(reader.get(["nodes", "-o", "json"]), expected)
+    if profile == "bounded-qa":
+        for name in NODES:
+            for kind in ("Ready", "DiskPressure"):
+                require(initial_conditions[name][kind].get("lastTransitionTime") == conditions[name][kind].get("lastTransitionTime"),
+                        "QA_NODE_HEALTH_CHANGED")
     for name, uid in (("kube-system", args.expected_cluster_uid), (NAMESPACE, args.expected_namespace_uid)):
         namespace_identity(reader.get(["namespace", name, "-o", "json"]), name, uid)
     now = datetime.now(timezone.utc)
-    nodes = [node_proof(name, expected[name], conditions[name], *evidence[name], budget, reserve, now.timestamp())
+    nodes = [node_proof(name, expected[name], conditions[name], *evidence[name], budget, reserve, now.timestamp(), profile)
              for name in NODES]
-    return {"schema": SCHEMA, "status": "PASS", "scope": "READ_ONLY_CAPACITY_OBSERVATION",
+    result = {"schema": SCHEMA, "status": "PASS", "scope": "READ_ONLY_CAPACITY_OBSERVATION",
             "context": CONTEXT, "namespace": NAMESPACE, "clusterKubeSystemUID": args.expected_cluster_uid,
             "namespaceUID": args.expected_namespace_uid, "observedAt": now.isoformat(), "nodes": nodes,
             "reservationCreated": False}
+    if profile == "bounded-qa":
+        result.update({"schema": BOUNDED_QA_SCHEMA, "scope": "BOUNDED_QA_CAPACITY_OBSERVATION",
+                       "capacityProfile": "BOUNDED_QA", "coversRecovery": False,
+                       "maximumAdditionalBytes": budget, "minimumStableSeconds": MIN_QA_STABLE_SECONDS})
+    return result
 
 
 class Parser(argparse.ArgumentParser):
@@ -236,6 +264,7 @@ class Parser(argparse.ArgumentParser):
 def main(argv=None):
     try:
         parser = Parser(description=__doc__, allow_abbrev=False)
+        parser.add_argument("--profile", choices=("recovery", "bounded-qa"), default="recovery")
         for name in ("cluster", "namespace", "server-node", "agent-node"):
             parser.add_argument("--expected-" + name + "-uid", required=True)
         parser.add_argument("--budget-bytes", required=True, type=int)

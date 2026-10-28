@@ -49,6 +49,110 @@ class CapacityTests(unittest.TestCase):
             result.extend(["--" + key.replace("_", "-"), str(value)])
         return result
 
+    def bounded_qa(self):
+        """Готовит отдельную metadata fixture, не меняя legacy recovery expectations."""
+        self.args.profile = "bounded-qa"
+        self.args.budget_bytes = 2 * GIB
+        stable = (self.now - timedelta(hours=7)).isoformat().replace("+00:00", "Z")
+        for node in self.nodes["items"]:
+            for condition in node["status"]["conditions"]:
+                condition["lastTransitionTime"] = stable
+        for summary in self.summaries.values():
+            summary["node"]["fs"]["availableBytes"] = 50 * GIB
+            summary["node"]["runtime"]["imageFs"]["availableBytes"] = 50 * GIB
+
+    def test_bounded_qa_is_distinct_from_recovery_with_real_hard_reserve_and_growth(self):
+        self.bounded_qa()
+        result = self.inspect()
+        self.assertEqual(result["schema"], C.BOUNDED_QA_SCHEMA)
+        self.assertNotEqual(result["schema"], C.SCHEMA)
+        self.assertFalse(result["coversRecovery"])
+        self.assertFalse(result["reservationCreated"])
+        self.assertEqual(result["maximumAdditionalBytes"], 2 * GIB)
+        self.assertEqual(len(self.calls), 10)
+        for node in result["nodes"]:
+            for key in ("nodefs", "imagefs"):
+                proof = node[key]
+                self.assertEqual(proof["admissionFloorBytes"], 25 * GIB)
+                self.assertEqual(proof["headroomAboveHardAndReserveBytes"], 18 * GIB)
+                self.assertEqual(proof["recoveryFloorBytes"], 75 * GIB)
+                self.assertEqual(proof["headroomAboveRecoveryAndReserveBytes"], -32 * GIB)
+                self.assertFalse(proof["recoveryTargetMetAfterBudget"])
+        self.args.profile = "recovery"
+        with self.assertRaisesRegex(C.Failure, "FILESYSTEM_BUDGET_UNSAFE"):
+            self.inspect()
+
+    def test_bounded_qa_never_accepts_zero_or_unbounded_growth(self):
+        self.bounded_qa()
+        for budget in (0, -1, 2 * GIB + 1, True):
+            with self.subTest(budget=budget):
+                self.args.budget_bytes = budget
+                with self.assertRaisesRegex(C.Failure, "BUDGET_INVALID"):
+                    self.inspect()
+
+    def test_bounded_qa_requires_stable_ready_and_pressure_conditions(self):
+        self.bounded_qa()
+        original = deepcopy(self.nodes)
+        for kind in ("Ready", "DiskPressure"):
+            for stamp in (None, self.stamp, (self.now + timedelta(days=1)).isoformat().replace("+00:00", "Z")):
+                with self.subTest(kind=kind, stamp=stamp):
+                    self.nodes = deepcopy(original)
+                    for condition in self.nodes["items"][0]["status"]["conditions"]:
+                        if condition["type"] == kind:
+                            condition["lastTransitionTime"] = stamp
+                    with self.assertRaisesRegex(C.Failure, "TIMESTAMP_INVALID|QA_NODE_STABILITY_UNCONFIRMED"):
+                        self.inspect()
+
+    def test_bounded_qa_respects_longer_effective_pressure_transition_period(self):
+        self.bounded_qa()
+        self.configs[C.NODES[0]]["kubeletconfig"]["evictionPressureTransitionPeriod"] = "8h"
+        with self.assertRaisesRegex(C.Failure, "QA_NODE_STABILITY_UNCONFIRMED"):
+            self.inspect()
+
+    def test_bounded_qa_rejects_health_change_between_two_node_observations(self):
+        self.bounded_qa()
+
+        def changing_response(command, **options):
+            result = self.response(command, **options)
+            if command[7:] == ["nodes", "-o", "json"] and self.node_reads == 2:
+                changed = json.loads(result.stdout)
+                changed["items"][0]["status"]["conditions"][0]["lastTransitionTime"] = self.stamp
+                return subprocess.CompletedProcess(command, 0, json.dumps(changed).encode(), b"")
+            return result
+
+        with patch.object(C.subprocess, "run", side_effect=changing_response):
+            with self.assertRaisesRegex(C.Failure, "QA_NODE_HEALTH_CHANGED"):
+                C.inspect(self.args, C.Reader())
+
+    def test_bounded_qa_checks_each_filesystem_at_the_exact_hard_reserve_growth_boundary(self):
+        self.bounded_qa()
+        for name in C.NODES:
+            for stats in (self.summaries[name]["node"]["fs"], self.summaries[name]["node"]["runtime"]["imageFs"]):
+                with self.subTest(node=name, filesystem=id(stats)):
+                    stats["availableBytes"] = 32 * GIB
+                    with self.assertRaisesRegex(C.Failure, "FILESYSTEM_BUDGET_UNSAFE"):
+                        self.inspect()
+                    stats["availableBytes"] += 1
+                    self.inspect()
+                    stats["availableBytes"] = 50 * GIB
+
+    def test_bounded_qa_cannot_ignore_relevant_soft_thresholds(self):
+        self.bounded_qa()
+        self.configs[C.NODES[0]]["kubeletconfig"]["evictionSoft"] = {"nodefs.available": "15%"}
+        with self.assertRaisesRegex(C.Failure, "FILESYSTEM_PROFILE_UNSUPPORTED"):
+            self.inspect()
+
+    def test_bounded_qa_cli_is_explicit_and_has_a_separate_proof_schema(self):
+        self.bounded_qa()
+        output = io.StringIO()
+        with patch.object(C.subprocess, "run", side_effect=self.response), contextlib.redirect_stdout(output):
+            self.assertEqual(C.main(self.argv()), 0)
+        proof = json.loads(output.getvalue())
+        self.assertEqual(proof["schema"], C.BOUNDED_QA_SCHEMA)
+        self.assertEqual(proof["scope"], "BOUNDED_QA_CAPACITY_OBSERVATION")
+        self.assertFalse(proof["coversRecovery"])
+        self.assertEqual(len(self.calls), 10)
+
     def response(self, command, **options):
         self.calls.append(command)
         self.assertEqual(command[:7], ["kubectl", "--context", "k3d-kodex", "--request-timeout=5s",
