@@ -42,4 +42,3 @@ BEGIN
  RAISE EXCEPTION 'combined SSH evidence guard changed';
  END IF;
 END $combined_effect$;
-
