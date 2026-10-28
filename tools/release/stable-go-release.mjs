@@ -162,7 +162,8 @@ async function main(args) {
       const archive = JSON.parse((await kubectl(["-n", "kodex-system", "exec", "-i", "kodex-postgresql-0", "--",
         "psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "control_plane"],
       await readFile(archiveSQLPath, "utf8"))).trim());
-      requireValue(archive.openArchiveTasks === 0 && archive.transitionalStorage === 0, "STABLE_ARCHIVE_NOT_IDLE");
+      requireValue(["openArchiveTasks", "transitionalStorage", "activeRuntimeRuns", "claimedRuntimeLeases",
+        "transitionalWorkspace", "activeWorkspaceVolumeTasks"].every(key => archive[key] === 0), "STABLE_ARCHIVE_NOT_IDLE");
       const workers = JSON.parse(await kubectl(["-n", "kodex-runtime", "get", "jobs,pods", "-l",
         "session-archive.kodex.dev/managed=true", "-o", "json"]));
       requireValue(Array.isArray(workers.items) && workers.items.length === 0, "STABLE_ARCHIVE_WORKERS_PRESENT");

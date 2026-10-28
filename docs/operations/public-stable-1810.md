@@ -4,8 +4,8 @@ title: Штатная поставка Kodex и внешний доступ с S
 type: operations
 status: approved
 owner: manager
-version: 1.2.5
-updated: 2026-10-15
+version: 1.2.6
+updated: 2026-10-29
 ---
 
 # Цель и решения владельца
@@ -2010,3 +2010,36 @@ production-бандла и его существующей отдачи Nginx:
   документации Vite8 через Context7.
 
 Оставшиеся пункты основной цели не выполнялись и не отмечались завершёнными.
+
+
+## Повторное обновление штатного Go image в staging
+
+В рамках #1830/#1931 оператор `stable-go-release.mjs` обслуживает также переход
+между двумя immutable images. Исходный Deployment и Pod должны иметь профиль
+`stable`, точные прежние source/provenance pins, digest image и каноническую
+команду без source mounts. Для архиватора сохраняется режим `controller`,
+а его worker image обновляется тем же digest. Для runtime-controller init
+подготовки spool использует тот же исходный image и точную команду; оба image
+обновляются вместе. Runtime env, Secret references и sidecars сохраняются.
+
+| Переход | Полномочия и эффект | Проверка / неизвестный исход |
+| --- | --- | --- |
+| PLAN | Точные cluster/namespace UID, clean executor SHA, канонический component, source/image/provenance, Deployment/PVC и Role/Binding pins | Server dry-run; новые права не назначаются |
+| Owner idle | Read-only PostgreSQL catalog/state и workload metadata, без credentials или business payload | Нет активных runs/leases/archive tasks, переходных legacy/V2 workspace и volume tasks; неизвестный источник блокирует переход |
+| Архиватор → QUIESCED | Exact Deployment UID/spec CAS меняет только replicas на0 | Все старые Deployment-owned Pod положительно завершены/исчезли; неизвестный lineage блокирует продолжение |
+| QUIESCED → Role | Единственный repo-owned Role `session-archive-controller` в `kodex-runtime`, прежний RoleBinding на SA `session-archive` | UID/RV/rules CAS; только четыре закрытых resource group, PATCH разрешён только `batch/jobs` для physical attempt CAS; deletecollection не возвращается |
+| Role → новый image | Повторная проверка UID/spec/storage и Role/Binding; main/worker/init pins соответствуют одному image | Exact patch journal предшествует записи, rollout и фактические Pod image IDs проверяются отдельно |
+| Неизвестный PATCH | Сохраняется intent и exact before/after tuple | Inspect/recovery сверяет actual spec/UID; повтор эффекта по одному client timeout запрещён |
+| Recovery Go-компонента | Reverse patch восстанавливает прежние source/image, labels и replicas | Сохраняется реальное прежнее значение профиля `stable` либо `hot-reload`; неизвестное значение отклоняется |
+| Recovery архиватора | Прежний image/spec остаётся остановленным при уже суженных правах | Forward-only pause не запускает старый startup bulk cleanup и не расширяет Role |
+
+Поле `beforeProfileValue` в приватном recovery receipt сохраняет прежний профиль;
+старые receipts первого cutover без поля допускают только прежний `hot-reload`
+с тем же exact label hash. Запись поля не заменяет source/spec/UID checks.
+Новая операция не меняет глобальный ingress, авторизацию или соседние приложения.
+
+Локально прошли25 проверок model/CLI, включая повторный immutable image,
+worker pin, отказ source mount/неизвестного режима и восстановление stable labels;
+активные V2 workspace/volume/runs блокируют cutover до первого PATCH.
+Это локальные доказательства оператора. Поставка остальных images и сквозной
+PDLC имеют отдельные live readbacks; данный раздел не объявляет их выполненными.

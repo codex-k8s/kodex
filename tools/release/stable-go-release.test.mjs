@@ -36,7 +36,7 @@ if(i>=0){
   }else process.exit(4);
 }else if(a.includes('exec')){
   const sql=fs.readFileSync(0,'utf8');if(!sql.includes('BEGIN TRANSACTION READ ONLY'))process.exit(5);
-  if(sql.includes('stable_archive_idle')){console.log(JSON.stringify({openArchiveTasks:s.archiveBusy?1:0,transitionalStorage:0}));process.exit(0);}
+  if(sql.includes('stable_archive_idle')){console.log(JSON.stringify({openArchiveTasks:s.archiveBusy?1:0,transitionalStorage:0,activeRuntimeRuns:s.runBusy?1:0,claimedRuntimeLeases:0,transitionalWorkspace:s.workspaceBusy?1:0,activeWorkspaceVolumeTasks:s.volumeBusy?1:0}));process.exit(0);}
   console.log(JSON.stringify({at:new Date().toISOString(),openBuilds:s.busy?1:0,pendingAdmissions:0,pendingPromotions:0,
     activeRuntimeRuns:0,claimedRuntimeLeases:0,promotedArtifactCount:3,promotedPinsSHA256:(s.pinsChanged?'e':'d').repeat(64)}));
 }else if(a.includes('patch')){
@@ -266,7 +266,7 @@ test("old Go plan schema is rejected without compatibility decoder or writes", (
 });
 
 test("archive tasks or surviving workers block cutover before any patch", () => {
-  for (const flag of ["archiveBusy", "archiveWorkers"]) {
+  for (const flag of ["archiveBusy", "archiveWorkers", "runBusy", "workspaceBusy", "volumeBusy"]) {
     const { directory, run } = setup();
     try {
       const planPath = join(directory, "plan.json");
