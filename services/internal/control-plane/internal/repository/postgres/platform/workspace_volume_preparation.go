@@ -60,9 +60,9 @@ func scanWorkspaceVolumeCustody(row pgx.Row) (workspaceVolumeCustody, error) {
 // authorizeWorkspaceVolumeOrigin проверяет active exact employee origin и fresh root actor ACL без доверия к payload actor/project.
 // Используются существующие owner subject resolution/access policy; volume preparation не выдаёт model/integration capability.
 func (repository *Repository) authorizeWorkspaceVolumeOrigin(ctx context.Context, tx pgx.Tx, current scope, nodeID, rootRunID string, expected runtimecontract.WorkspaceStorageScope) (string, error) {
-	var actorID, rootRef, projectRef, sessionRef, agentRef string
+	var actorID, rootRef, projectRef, sessionRef, agentRef, rootTargetType, rootTargetRef string
 	err := tx.QueryRow(ctx, queryWorkspaceVolumeOrigin, pgx.StrictNamedArgs{"organization_id": current.organizationID,
-		"node_id": nodeID, "root_run_id": rootRunID}).Scan(&actorID, &rootRef, &projectRef, &sessionRef, &agentRef)
+		"node_id": nodeID, "root_run_id": rootRunID}).Scan(&actorID, &rootRef, &projectRef, &sessionRef, &agentRef, &rootTargetType, &rootTargetRef)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return "", errs.ErrUnavailable
 	}
@@ -77,7 +77,16 @@ func (repository *Repository) authorizeWorkspaceVolumeOrigin(ctx context.Context
 	if err != nil {
 		return "", errs.ErrForbidden
 	}
-	for _, target := range []struct{ permission, kind, ref string }{{"run.launch", "PROJECT", projectRef}, {"run.view", "RUN", rootRef}} {
+	var launchPermission string
+	switch rootTargetType {
+	case "AGENT":
+		launchPermission = "agent.launch"
+	case "WORKFLOW":
+		launchPermission = "workflow.launch"
+	default:
+		return "", errs.ErrForbidden
+	}
+	for _, target := range []struct{ permission, kind, ref string }{{launchPermission, rootTargetType, rootTargetRef}, {"run.view", "RUN", rootRef}} {
 		err := repository.requireAccess(ctx, tx, actor, target.permission, entity.AccessScope{ResourceKind: target.kind, ResourceRef: target.ref})
 		if errors.Is(err, errs.ErrUnavailable) {
 			return "", err

@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.35
+version: 1.7.36
 updated: 2026-10-28
 ---
 
@@ -2025,6 +2025,13 @@ owner snapshot→Proto→immutable runtime input. Unknown nested wire data не
 а trusted initializer до BIND/private write проверяет sealed root и record
 через nofollow descriptors. ACK для иного PVC UID не разрешает запись.
 Эта проверка не заменяет положительное завершение связанных процессов.
+
+Повторная проверка исходного launch использует каноническое право реестра и
+точную серверную root-цель (`agent.launch` для AGENT либо `workflow.launch`
+для WORKFLOW). Capability сотрудника и private RPC permission не заменяют RBAC
+исходного актёра. Выдуманный общий permission недопустим даже при закрытом
+отказе: он блокирует законную подготовку до первого model lease. Положительный
+owner lifecycle проверяется на PostgreSQL вместе с отказами, не только mocks.
 
 Подготовка должна закрывать и delayed replay первого initializer после допуска
 private data. Один terminal Pod либо отсутствие Pods не запрещают поздний Create
