@@ -585,7 +585,14 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
         noActiveMigrations();
         if (attempts.length) readJob(true);
         else ensure(!optionalJob(plan.job.metadata.name) && migrationPods().length === 0, 'MIGRATION_JOB_WITHOUT_INTENT');
-        if(profile==='workspace-backup') {
+        if(profile==='workspace-backup' && attempts.length && optionalJob(plan.job.metadata.name)?.status?.succeeded===1) {
+          // Успешная Job имеет полный pinned028 proof, включая actual backup ACL.
+          // Этот более сильный read path уже используется inspect; частичный каталог его не заменяет.
+          const proof=readJob();
+          ensure(proof.status==='PASS' && proof.schemaPostcondition==='PASS','MIGRATION_BACKUP_ACL_RESTORE_REQUIRED');
+          journal.append({type:'BACKUP_ACL_RESTORED',gooseVersion:Number(plan.migrationVersion),
+            sqlSHA256:plan.postconditionSQLSHA256,scope:'FULL_SCHEMA_POSTCONDITION'});
+        } else if(profile==='workspace-backup') {
           const sql=readFileSync(`${plan.source.path}/tools/release/workspace-backup-acl-readback.sql`);
           ensure(createHash('sha256').update(sql).digest('hex')===plan.backupACLReadbackSQLSHA256,'MIGRATION_BACKUP_READBACK_SOURCE_CHANGED');
           const proof=JSON.parse(kube(['-n',namespace,'exec','-i','kodex-postgresql-0','--','psql','-XqAt','-U','postgres','-d','control_plane','-v','ON_ERROR_STOP=1'],sql));
