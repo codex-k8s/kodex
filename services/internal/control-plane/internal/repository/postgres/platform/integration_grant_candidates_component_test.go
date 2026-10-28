@@ -11,6 +11,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"testing"
+	"time"
 )
 
 // testIntegrationGrantSelectors checks bounded USE pagination, GRANT project/recipient/capability
@@ -175,13 +176,14 @@ func testIntegrationGrantRevocation(t *testing.T, ctx context.Context, repositor
 	if _, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "selector-unavailable-grant", ExpectedVersion: &stale}, Payload: command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: unavailable.Connection.Ref, AgentRef: agent.Ref, CapabilityKey: "synthetic.journal.read", Enabled: true}}); !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("unavailable connection before OCC: %v", err)
 	}
+	projectionStarted := time.Now()
 	projection, err := service.ListIntegrationGrantConnectionCandidates(ctx, owner, query.IntegrationCandidates{Purpose: "GRANT", Filter: query.Filter{Query: unavailable.Connection.Name}})
 	if err != nil || projection.Total != 1 || len(projection.Items) != 1 || projection.Items[0].Grantable || projection.Items[0].Reason != "CONNECTION_UNAVAILABLE" {
 		observed, readErr := service.GetIntegrationConnection(ctx, owner, unavailable.Connection.Ref)
-		t.Logf("unavailable candidate metadata: total=%d items=%d read_ok=%t state=%s lifecycle=%s enabled=%t same_ref=%t same_definition=%t same_version=%t signed_project=%t capabilities=%d",
+		t.Logf("unavailable candidate metadata: total=%d items=%d read_ok=%t state=%s lifecycle=%s enabled=%t same_ref=%t same_definition=%t same_version=%t signed_project=%t capabilities=%d elapsed_ms=%d unavailable=%t forbidden=%t",
 			projection.Total, len(projection.Items), readErr == nil, observed.State, observed.LifecycleState, observed.Enabled,
 			observed.Ref == unavailable.Connection.Ref, observed.DefinitionDigest == unavailable.Connection.DefinitionDigest,
-			observed.Version == unavailable.Connection.Version, ownerScope.authorityProjectID != "", len(observed.Capabilities))
+			observed.Version == unavailable.Connection.Version, ownerScope.authorityProjectID != "", len(observed.Capabilities), time.Since(projectionStarted).Milliseconds(), errors.Is(err, errs.ErrUnavailable), errors.Is(err, errs.ErrForbidden))
 		t.Fatalf("unavailable grant candidate: count=%d error_nil=%t", projection.Total, err == nil)
 	}
 }
