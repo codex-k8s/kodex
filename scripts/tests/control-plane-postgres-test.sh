@@ -113,7 +113,7 @@ if [[ "$storage_mode" == ram ]]; then
   [[ "$cached_image_id" =~ ^sha256:[a-f0-9]{64}$ ]] || fail 'cached PostgreSQL identity is invalid'
   storage_arguments=(--pull never --read-only --memory 1073741824 --memory-swap 1073741824
     --cpus 1 --pids-limit 128 --log-driver none
-    --tmpfs '/var/lib/postgresql:rw,noexec,nosuid,nodev,size=536870912,mode=0700'
+    --tmpfs '/var/lib/postgresql:rw,noexec,nosuid,nodev,size=536870912,mode=0700,uid=70,gid=70'
     --tmpfs '/var/run/postgresql:rw,noexec,nosuid,nodev,size=16777216,mode=0775'
     --tmpfs '/tmp:rw,noexec,nosuid,nodev,size=16777216,mode=1777')
   if (( ${#postgres_arguments[@]} == 0 )); then postgres_arguments=(postgres); fi
@@ -157,13 +157,14 @@ if [[ "$storage_mode" == ram ]]; then
   memory_max=$(docker exec "$upgrade_container_id" cat /sys/fs/cgroup/memory.max) || fail 'RAM fixture memory readback failed'
   cpu_max=$(docker exec "$upgrade_container_id" cat /sys/fs/cgroup/cpu.max) || fail 'RAM fixture CPU readback failed'
   filesystem=$(docker exec "$upgrade_container_id" stat -f -c %T /var/lib/postgresql) || fail 'RAM fixture filesystem readback failed'
-  [[ "$memory_max" == 1073741824 && "$cpu_max" == '100000 100000' && "$filesystem" == tmpfs ]] || fail 'RAM fixture effective boundary differs'
+  data_owner=$(docker exec "$upgrade_container_id" stat -c %u:%g:%a /var/lib/postgresql) || fail 'RAM fixture data owner readback failed'
+  [[ "$memory_max" == 1073741824 && "$cpu_max" == '100000 100000' && "$filesystem" == tmpfs && "$data_owner" == 70:70:700 ]] || fail 'RAM fixture effective boundary differs'
   boundary=$(docker inspect --format '{"id":{{json .Id}},"image":{{json .Image}},"readonly":{{json .HostConfig.ReadonlyRootfs}},"memory":{{json .HostConfig.Memory}},"swap":{{json .HostConfig.MemorySwap}},"cpu":{{json .HostConfig.NanoCpus}},"pids":{{json .HostConfig.PidsLimit}},"tmpfs":{{json .HostConfig.Tmpfs}},"mounts":{{json .Mounts}}}' "$upgrade_container_id") || fail 'RAM fixture mount readback failed'
   jq -e --arg id "$upgrade_container_id" --arg image "$cached_image_id" '
     .id == $id and .image == $image and .readonly == true and
     .memory == 1073741824 and .swap == 1073741824 and .cpu == 1000000000 and .pids == 128 and
     (.tmpfs | keys == ["/tmp", "/var/lib/postgresql", "/var/run/postgresql"]) and
-    .tmpfs["/var/lib/postgresql"] == "rw,noexec,nosuid,nodev,size=536870912,mode=0700" and
+    .tmpfs["/var/lib/postgresql"] == "rw,noexec,nosuid,nodev,size=536870912,mode=0700,uid=70,gid=70" and
     .tmpfs["/var/run/postgresql"] == "rw,noexec,nosuid,nodev,size=16777216,mode=0775" and
     .tmpfs["/tmp"] == "rw,noexec,nosuid,nodev,size=16777216,mode=1777" and
     all(.mounts[]; .Type == "tmpfs")

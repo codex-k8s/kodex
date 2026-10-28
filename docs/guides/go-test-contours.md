@@ -63,8 +63,8 @@ Component suite использует только созданный этой к
 Для локального Linux Docker поддерживается отдельный ограниченный профиль
 `KODEX_TEST_POSTGRES_STORAGE=ram` у той же PostgreSQL-оснастки. Он использует
 только уже установленный закреплённый образ18.3 (`--pull never`), read-only root,
-tmpfs512MiB для `/var/lib/postgresql`, два tmpfs16MiB для socket/tmp, hard1GiB без
-swap и1CPU. До bootstrap проверяются actual cgroup, tmpfs и отсутствие bind/volume
+tmpfs512MiB UID/GID70/mode0700 для `/var/lib/postgresql`, два tmpfs16MiB для socket/tmp, hard1GiB без
+swap и1CPU. До bootstrap проверяются actual cgroup, tmpfs, owner/mode и отсутствие bind/volume
 mounts. Сверка не читает container env. Очистка использует положительный exact
 container ID и подтверждает его отсутствие; неизвестный Create не повторяется.
 Прежний disk-профиль остаётся default. Поддерживаются прежние bridge и host
