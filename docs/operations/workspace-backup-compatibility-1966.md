@@ -4,8 +4,8 @@ title: Совместимость workspace migrations и backup reader
 type: operations
 status: approved
 owner: sre
-version: 1.0.0
-updated: 2026-10-28
+version: 1.0.1
+updated: 2026-10-29
 ---
 
 # Совместимость workspace migrations и backup reader
@@ -34,9 +34,24 @@ membership и настройки соседних приложений не ме
 
 Проверки: `make test-workspace-backup-upgrade-postgres` использует только
 ограниченный disposable PostgreSQL со штатным bootstrap. Исходный отказ
-воспроизведён на `5ac34568108de48677ca4ff50edf3cc385fd3a54`; это red regression,
-а не готовность исправления. Применение нового режима на staging пока NOT RUN.
-До готовности plan/postcondition нового профиля его нельзя вызывать на живой БД.
+воспроизведён на `5ac34568108de48677ca4ff50edf3cc385fd3a54`. На `4d085b9e8`
+прошли настоящее обновление015→028, отказ лишних прав и отмена с независимым
+cleanup; отдельно прошли55 CLI unit и73 проверки миграционного оператора.
+
+Штатные OCI build/publication/check и migration Job профиля `workspace-backup`
+на staging прошли с образом `4d085b9e89539c9db8cafe28b22261ca228e4a8c`.
+Полный actual postcondition подтвердил028 и восстановленные backup ACL.
+Первый resume выявил синтаксическую ошибку в отдельном минимальном SQL readback;
+RESUME_INTENT тогда отсутствовал. Исправление `2a689563f` использует полный
+pinned postcondition успешной Job перед resume. После этого возврат двух
+Ready-реплик подтверждён. В `3d96895b1` исправлен и минимальный запрос: он
+теперь исполняется native на015 и028. Проверки прошли4/0, без пропусков.
+
+Адресное обновление serving control-plane на тот же immutable image прошло;
+bootstrap, история146 запусков и каталог402 артефактов QA-проекта доступны.
+Это подтверждает metadata readback после перезапуска. Байты всех402 файлов,
+hard-kill в окне ACL maintenance, полная fresh installation и полный PDLC
+этими результатами не принимаются. Остальной source cohort обновляется отдельно.
 
 Откат не запускает `down` и не переписывает ledger. После terminal readback
 восстанавливаются точные backup grants и прежний serving image; уже применённые

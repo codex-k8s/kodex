@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.36
-updated: 2026-10-28
+version: 1.7.37
+updated: 2026-10-29
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -26,6 +26,16 @@ Expected не выводится из фактически проверяемо�
 фактическую доступность маршрута либо применение policy в кластере.
 
 ## Адресный repair служебной PostgreSQL identity
+
+Backup reader и runtime имеют разные полномочия. Совместимость с backup
+не разрешает скрывать произвольный ACL при проверке схемы: до inverse projection
+проверяются точная зарегистрированная роль, её атрибуты, SELECT без grant option,
+grantor, column ACL и schema-scoped defaults. Неизвестная роль, DML либо EXECUTE
+не становятся допустимыми из-за существования backup. Временное снятие SELECT
+допустимо только в отдельном maintenance-профиле с остановленным owner,
+отсутствующими backup consumers и ограниченным восстановлением прав. Успешная
+migration Job проходит полный pinned postcondition перед resume; неизвестный
+commit не даёт права повторить DDL. См. `OPS-DOC-WORKSPACE-BACKUP-1966`.
 
 Ошибка аутентификации одного workload не разрешает общую ротацию ролей.
 Оператор закрепляет exact cluster/namespace/workload и revision источника,

@@ -4,8 +4,8 @@ title: PostgreSQL, именованные SQL-запросы и goose
 type: guide
 status: approved
 owner: developer
-version: 1.2.11
-updated: 2026-10-28
+version: 1.2.12
+updated: 2026-10-29
 ---
 
 # PostgreSQL, именованные SQL-запросы и goose
@@ -293,6 +293,17 @@ PostgreSQL проверяются как фактическая семантик
   декларативных атрибутов роли.
 
 ## Миграции goose
+
+Native upgrade повторяет фактический bootstrap, включая применённые
+`ALTER DEFAULT PRIVILEGES` backup reader. Создание только owner/runtime ролей
+может дать ложный PASS: новая relation наследует SELECT другой штатной роли,
+который закрытый catalog guard считает посторонним. Применённые migrations и
+исторические verifiers не меняются ради этого случая. Отдельный maintenance
+profile сначала доказывает exact backup authority и idle owner, затем выполняет
+ограниченный ACL transition с атомарным rollback и подтверждённым возвратом прав.
+Каждый SQL readback, включая возврат после частичного failure, исполняется в
+native проверке; синтаксический анализ файла не заменяет PostgreSQL execution.
+Пример и матрица — `OPS-DOC-WORKSPACE-BACKUP-1966`.
 
 Миграции находятся в `cmd/cli/migrations` и встраиваются в CLI через
 `embed.FS`.
