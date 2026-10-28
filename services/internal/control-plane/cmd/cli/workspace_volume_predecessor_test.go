@@ -22,8 +22,10 @@ import (
 var workspaceVolumeFixtures embed.FS
 
 // TestWorkspaceVolumeMigrationPredecessor applies the real016→017 upgrade in an empty disposable database and rejects drift atomically.
+// It also checks SSH composition after017 and preserves the complete existing review evidence guard.
 // This schema-only proof does not accept the unfinished physical owner/controller lifecycle or enable the V2 profile.
 // TestWorkspaceVolumeMigrationPredecessor применяет настоящее обновление016→017 в пустой disposable database и атомарно отклоняет drift.
+// Дополнительно проверяет SSH после017 с сохранением всего прежнего review evidence guard.
 // Schema-only proof не принимает незавершённый physical owner/controller lifecycle и не включает профиль V2.
 func TestWorkspaceVolumeMigrationPredecessor(t *testing.T) {
 	dsn := os.Getenv("KODEX_WORKFLOW_REVIEW_QA_UPGRADE_DSN")
@@ -122,4 +124,65 @@ func TestWorkspaceVolumeMigrationPredecessor(t *testing.T) {
 	if err != nil || version != 20261026001700 {
 		t.Fatal("refused rollback changed volume version")
 	}
+	t.Run("ssh_preserves_review_evidence", func(t *testing.T) {
+		query, err := workspaceVolumeFixtures.ReadFile("testdata/sql/volume_ssh_effect_guard.sql")
+		if err != nil {
+			t.Fatal("read combined guard metadata query")
+		}
+		var before string
+		var boundary bool
+		if err := observer.QueryRow(ctx, string(query)).Scan(&before, &boundary); err != nil || !boundary {
+			t.Fatal("review evidence predecessor boundary is invalid")
+		}
+		raw, err := migrations.ReadFile("migrations/20261027000100_ssh_compose_runtime.sql")
+		if err != nil {
+			t.Fatal("read SSH migration")
+		}
+		up, _, found := strings.Cut(string(raw), "-- +goose Down")
+		if !found {
+			t.Fatal("SSH migration has no closed forward section")
+		}
+		drift, err := workspaceVolumeFixtures.ReadFile("testdata/sql/volume_ssh_effect_drift.sql")
+		if err != nil {
+			t.Fatal("read disposable effect guard drift")
+		}
+		tx, err := observer.Begin(ctx)
+		if err != nil {
+			t.Fatal("begin disposable effect guard drift")
+		}
+		if _, err := tx.Exec(ctx, string(drift)); err != nil {
+			_ = tx.Rollback(context.WithoutCancel(ctx))
+			t.Fatal("prepare disposable effect guard drift")
+		}
+		_, migrationErr := tx.Exec(ctx, up)
+		var failure *pgconn.PgError
+		if !errors.As(migrationErr, &failure) || failure.Code != "P0001" {
+			_ = tx.Rollback(context.WithoutCancel(ctx))
+			t.Fatal("SSH migration accepted changed predecessor")
+		}
+		if err := tx.Rollback(ctx); err != nil {
+			t.Fatal("rollback disposable effect guard drift")
+		}
+		for attempt := 0; attempt < 2; attempt++ {
+			if err := goose.UpToContext(ctx, database, "migrations", 20261027000100); err != nil {
+				t.Fatal("SSH migration after workspace failed", err)
+			}
+		}
+		var after string
+		if err := observer.QueryRow(ctx, string(query)).Scan(&after, &boundary); err != nil || !boundary {
+			t.Fatal("combined SSH and evidence boundary is invalid")
+		}
+		_, tail, found := strings.Cut(up, "v_deployment:=$deployment$")
+		deployment, _, closed := strings.Cut(tail, "$deployment$;")
+		if !found || !closed || deployment == "" || strings.Count(after, deployment) != 1 {
+			t.Fatal("combined SSH slot is missing or ambiguous")
+		}
+		if strings.Replace(after, deployment+"\n                    ", "", 1) != before {
+			t.Fatal("SSH migration changed existing review evidence semantics")
+		}
+		version, err := goose.GetDBVersionContext(ctx, database)
+		if err != nil || version != 20261027000100 {
+			t.Fatal("combined migration version readback failed")
+		}
+	})
 }

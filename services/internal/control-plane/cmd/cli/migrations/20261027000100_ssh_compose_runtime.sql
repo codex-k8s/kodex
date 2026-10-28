@@ -132,10 +132,10 @@ REVOKE ALL ON FUNCTION control_plane.guard_ssh_compose_secret_purpose() FROM PUB
 -- Прежние prefix/cap16/full execution tuple/права удаления сохраняются побайтно.
 -- +goose StatementBegin
 DO $migration$
-DECLARE v_source text; v_updated text;
+DECLARE v_source text; v_updated text; v_evidence_slot text; v_deployment text;
 BEGIN
     SELECT prosrc INTO STRICT v_source FROM pg_proc WHERE oid='control_plane.guard_workflow_effect_records()'::regprocedure;
-    IF md5(v_source) IS DISTINCT FROM '74f7d5fd475cb0919b76579335b547a5' THEN
+    IF md5(v_source) NOT IN ('74f7d5fd475cb0919b76579335b547a5','7010547e11bc8d1e8f67ac56feaba030') THEN
         RAISE EXCEPTION 'workflow effect guard source changed';
     END IF;
     v_updated:=replace(v_source,$old$OR (requirement.value->>'Kind'='INTEGRATION_RECEIPT' AND requirement.value->>'Operation'='github.pull_request.merge' AND invocation.operation='github.pull_request.merge'))$old$,$new$OR (requirement.value->>'Kind'='INTEGRATION_RECEIPT' AND requirement.value->>'Operation'='github.pull_request.merge' AND invocation.operation='github.pull_request.merge')
@@ -171,6 +171,49 @@ BEGIN
                                 AND result->>'headSha'=invocation.ssh_compose_snapshot->>'mergedSha'
                                 AND merge_invocation.ref=invocation.ssh_compose_snapshot->>'mergeInvocationRef'
                         )))$new$);
+    -- Профиль014 уже отделил GitHub repository guard от evidence slots.
+    -- SSH проверяется самостоятельной закрытой веткой с exact merge/target pins,
+    -- сохраняя полное тело evidence guard и его прежнюю cardinality.
+    IF md5(v_source)='7010547e11bc8d1e8f67ac56feaba030' THEN
+        v_evidence_slot:=$slot$OR control_plane.workflow_evidence_intent_valid(NEW.organization_id,NEW.id,origin.id,invocation.id,v_record,requirement.value)$slot$;
+        v_deployment:=$deployment$                    OR (requirement.value->>'Kind'='DEPLOYMENT' AND requirement.value->>'Operation'='ssh.compose.deploy'
+                        AND invocation.operation='ssh.compose.deploy' AND invocation.resource_kind='SSH_TARGET' AND connection.definition_key='ssh-compose'
+                        AND invocation.resource_scope->>'target_ref'=requirement.value->>'TargetRef'
+                        AND invocation.ssh_compose_snapshot->'target'->>'ref'=requirement.value->>'TargetRef'
+                        AND invocation.ssh_compose_snapshot->>'originRuntimeRevisionId'=revision.id::text
+                        AND invocation.ssh_compose_snapshot->>'originLeaseId'=lease.id::text
+                        AND invocation.ssh_compose_snapshot->'originGeneration'=to_jsonb(revision.generation)
+                        AND invocation.ssh_compose_snapshot->>'deploymentRef'=invocation.ref
+                        AND invocation.ssh_compose_snapshot->>'deploymentInputDigest'=invocation.input_digest
+                        AND invocation.ssh_compose_snapshot->>'deploymentEffectKey'=invocation.effect_key
+                        AND EXISTS (
+                            SELECT 1 FROM jsonb_array_elements(origin.workflow_inputs) dependency
+                            JOIN control_plane.run_nodes source ON source.id::text=dependency->>'sourceNodeId'
+                                AND source.organization_id=origin.organization_id AND source.root_run_id=origin.root_run_id
+                                AND source.workflow_step_origin_node_id IS NULL AND source.workflow_business_attempt=1
+                                AND source.workflow_step_key=dependency->>'stepKey'
+                            CROSS JOIN LATERAL jsonb_array_elements(source.workflow_attempts) accepted
+                            CROSS JOIN LATERAL jsonb_array_elements(accepted->'results') result
+                            JOIN control_plane.integration_effect_receipts merge_receipt ON merge_receipt.ref=result->>'receiptRef'
+                                AND merge_receipt.organization_id=origin.organization_id
+                            JOIN control_plane.integration_invocations merge_invocation ON merge_invocation.id=merge_receipt.invocation_id
+                                AND merge_invocation.organization_id=origin.organization_id AND merge_invocation.state='SUCCEEDED'
+                                AND merge_invocation.operation='github.pull_request.merge'
+                                AND merge_invocation.effect_receipt_id=merge_receipt.id AND merge_invocation.effect_key=merge_receipt.effect_key
+                                AND merge_invocation.input_digest=merge_receipt.input_digest
+                            WHERE dependency->>'stepKey'=requirement.value->>'SubjectStepKey'
+                                AND step.value->'DependsOn' ? (dependency->>'stepKey')
+                                AND accepted=dependency->'receipt' AND accepted->>'accepted'='true'
+                                AND result->>'kind'='INTEGRATION_RECEIPT' AND result->>'repository'=requirement.value->>'Repository'
+                                AND result->>'headSha'=invocation.ssh_compose_snapshot->>'mergedSha'
+                                AND merge_invocation.ref=invocation.ssh_compose_snapshot->>'mergeInvocationRef'
+                        
+                        ))$deployment$;
+        IF (length(v_source)-length(replace(v_source,v_evidence_slot,'')))/length(v_evidence_slot)<>1 THEN
+            RAISE EXCEPTION 'SSH evidence slot preimage is ambiguous';
+        END IF;
+        v_updated:=replace(v_source,v_evidence_slot,v_deployment||E'\n                    '||v_evidence_slot);
+    END IF;
     IF v_updated=v_source THEN RAISE EXCEPTION 'SSH workflow effect preimage missing'; END IF;
     EXECUTE format('CREATE OR REPLACE FUNCTION control_plane.guard_workflow_effect_records() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,control_plane AS %L',v_updated);
 END;
