@@ -171,7 +171,7 @@ func newTracedOrganizationComponentPool(t *testing.T, ctx context.Context) *pgxp
 	if err != nil {
 		t.Fatal("parse isolated fixture configuration")
 	}
-	config.ConnConfig.Tracer = organizationImageQueryTracer{t: t}
+	config.ConnConfig.Tracer = componentQueryRejectionTracer{t: t}
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		t.Fatal(err)

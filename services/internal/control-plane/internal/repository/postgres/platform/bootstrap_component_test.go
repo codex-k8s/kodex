@@ -366,7 +366,12 @@ func TestBootstrapComponent(t *testing.T) {
 	// Общая расширенная матрица выполняется последовательно; runtime deadlines не меняются.
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, dsn)
+	configuration, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		t.Fatal("parse disposable PostgreSQL configuration")
+	}
+	configuration.ConnConfig.Tracer = componentQueryRejectionTracer{t: t}
+	pool, err := pgxpool.NewWithConfig(ctx, configuration)
 	if err != nil {
 		t.Fatalf("open disposable PostgreSQL: %v", err)
 	}
