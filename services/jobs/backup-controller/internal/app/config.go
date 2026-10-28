@@ -72,7 +72,7 @@ func loadConfig(command string) (Config, error) {
 // RU: validate отклоняет неизвестные команды, небезопасные пути и настройки runtime или retention вне границ.
 func (config Config) validate(command string) error {
 	switch command {
-	case "serve", "backup", "verify", "retain", "restore-drill", "fingerprint-targets", "list-verified", "inspect-backup", "inspect-restore-drill", "preflight-restore", "inspect-restore-targets", "inspect-restore-cleanup", "cleanup-restore-drill":
+	case "serve", "backup", "verify", "retain", "restore-drill", "fingerprint-targets", "list-verified", "inspect-backup", "inspect-verification", "inspect-restore-drill", "preflight-restore", "inspect-restore-targets", "inspect-restore-cleanup", "cleanup-restore-drill":
 	default:
 		return errors.New("backup-controller command is invalid")
 	}
@@ -102,7 +102,7 @@ func (config Config) validate(command string) error {
 	if command == "verify" && config.BackupID == "" {
 		return errors.New("backup-controller backup ID is required")
 	}
-	if command == "inspect-backup" || command == "inspect-restore-drill" {
+	if command == "inspect-backup" || command == "inspect-verification" || command == "inspect-restore-drill" {
 		if !regexp.MustCompile(`^[0-9]{8}T[0-9]{6}Z-[a-f0-9]{16}$`).MatchString(config.BackupID) {
 			return errors.New("backup metadata locator is invalid")
 		}

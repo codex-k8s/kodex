@@ -92,6 +92,15 @@ func buildRunner(ctx context.Context, config Config, command, buildVersion strin
 // runOnce executes one bounded backup, verify, retention or owner-approved restore-drill command.
 // RU: runOnce выполняет одну ограниченную команду копирования, проверки, хранения либо подтверждённого восстановления.
 func runOnce(ctx context.Context, controller *runner.Runner, config Config, command string) error {
+	if command == "inspect-verification" {
+		read, cancel := context.WithTimeout(ctx, config.BackupTimeout)
+		defer cancel()
+		result, err := controller.InspectVerification(read, config.BackupID)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(result)
+	}
 	if command == "list-verified" || command == "inspect-backup" || command == "inspect-restore-drill" || command == "preflight-restore" || command == "inspect-restore-targets" || command == "inspect-restore-cleanup" || command == "cleanup-restore-drill" {
 		read, cancel := context.WithTimeout(ctx, config.StartupTimeout)
 		defer cancel()

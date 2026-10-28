@@ -309,7 +309,7 @@ class ScopedBackupDrill(unittest.TestCase):
         run, prefix = "fixture", "qa-1830-fixture"
         cases = [("backup", drill.backup_job(run, IMAGE, prefix),
                   {"backup-controller-credentials", "backup-controller-postgresql-ca"})]
-        for operation in ("list-verified", "inspect-backup", "verify", "inspect-restore-drill"):
+        for operation in ("list-verified", "inspect-backup", "inspect-verification", "verify", "inspect-restore-drill"):
             rendered = drill.repository_job(run, IMAGE, prefix, operation, "backup-fixture", "restore-fixture", "approval-fixture", "a" * 64)
             cases.append((operation, rendered, {"backup-controller-repository", "backup-controller-postgresql-ca"}))
         isolated = drill.restore_resources(run, IMAGE, prefix)
