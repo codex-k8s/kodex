@@ -85,24 +85,31 @@ func (repository *Repository) GetPlatformEventCursor(ctx context.Context, princi
 	return scope.organizationRef, sequence, nil
 }
 
-// GetOverview combines three independently authorized first pages of runs, open gates and
-// artifacts with organization-wide counters. ActiveRuns filters only the fetched twenty-run page;
-// counters are not scoped to the optional project filter and this is not an atomic snapshot.
-// GetOverview объединяет три независимо авторизованные первые страницы запусков, открытых шлюзов и
-// артефактов со счётчиками всей организации. ActiveRuns фильтрует лишь полученную страницу из
-// двадцати запусков; счётчики не ограничены необязательным фильтром проекта, общего атомарного
-// снимка нет.
+// GetOverview reuses actor-scoped catalogs and their full totals; active states are selected before
+// pagination. Counts use the canonical project/agent predicates, never organization-wide rows or
+// truncated lists. The existing catalog reads retain separate read-only snapshots.
+// GetOverview использует actor-scoped каталоги и полные totals; активные состояния выбираются до
+// страницы. Счётчики используют canonical project/agent predicates, а не все строки организации
+// или усечённые списки. Существующие чтения каталогов сохраняют раздельные read-only snapshots.
 func (repository *Repository) GetOverview(ctx context.Context, principal value.Principal, projectRef string) (platformrepo.Overview, error) {
-	scope, err := repository.resolveScope(ctx, principal)
+	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return platformrepo.Overview{}, err
+	}
+	projectRef = strings.TrimSpace(projectRef)
+	if projectRef != "" {
+		if _, err := repository.GetProject(ctx, principal, projectRef); err != nil {
+			return platformrepo.Overview{}, err
+		}
 	}
 	filter := query.Filter{ProjectRef: projectRef, Page: query.Page{Size: 20}}
-	runs, _, _, err := repository.ListRuns(ctx, principal, filter)
+	activeFilter := filter
+	activeFilter.States = []string{"QUEUED", "RUNNING", "WAITING_HUMAN", "CANCELLING"}
+	runs, runTotal, _, err := repository.ListRuns(ctx, principal, activeFilter)
 	if err != nil {
 		return platformrepo.Overview{}, err
 	}
-	gates, _, _, err := repository.ListOwnerGates(ctx, principal, query.Filter{ProjectRef: projectRef, State: "OPEN", Page: query.Page{Size: 20}})
+	gates, gateTotal, _, err := repository.ListOwnerGates(ctx, principal, query.Filter{ProjectRef: projectRef, State: "OPEN", Page: query.Page{Size: 20}})
 	if err != nil {
 		return platformrepo.Overview{}, err
 	}
@@ -110,20 +117,32 @@ func (repository *Repository) GetOverview(ctx context.Context, principal value.P
 	if err != nil {
 		return platformrepo.Overview{}, err
 	}
-	var result platformrepo.Overview
-	err = repository.pool.QueryRow(ctx, queryQueriesGetoverviewSelectProjectsOrganizationIdLifecycleState, scope.organizationID).Scan(
-		&result.ProjectCount, &result.AgentCount, &result.ActiveRunCount, &result.PendingGateCount)
+	var projectTotal, agentTotal int64
+	err = repository.pool.QueryRow(ctx, queryQueriesGetoverviewSelectProjectsOrganizationIdLifecycleState, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID, "actor_id": current.actorID, "authority_project_id": current.authorityProjectID, "project_ref": projectRef,
+	}).Scan(&projectTotal, &agentTotal)
 	if err != nil {
 		return platformrepo.Overview{}, errs.ErrUnavailable
 	}
-	for _, run := range runs {
-		if run.State == "QUEUED" || run.State == "RUNNING" || run.State == "WAITING_HUMAN" || run.State == "CANCELLING" {
-			result.ActiveRuns = append(result.ActiveRuns, run)
+	result, err := overviewCounters(projectTotal, agentTotal, runTotal, gateTotal)
+	if err != nil {
+		return platformrepo.Overview{}, err
+	}
+	result.ActiveRuns, result.PendingGates, result.RecentArtifacts = runs, gates, artifacts
+	return result, nil
+}
+
+// overviewCounters narrows full owner totals only after validating every signed int32 boundary;
+// malformed counts fail closed rather than wrapping, clamping or being replaced with list lengths.
+// overviewCounters сужает полные owner totals только после проверки всех границ signed int32;
+// неверные числа закрыто отклоняются без переполнения, усечения или замены длиной списков.
+func overviewCounters(projects, agents, runs, gates int64) (platformrepo.Overview, error) {
+	for _, count := range []int64{projects, agents, runs, gates} {
+		if count < 0 || count > 1<<31-1 {
+			return platformrepo.Overview{}, errs.ErrUnavailable
 		}
 	}
-	result.PendingGates = gates
-	result.RecentArtifacts = artifacts
-	return result, nil
+	return platformrepo.Overview{ProjectCount: int32(projects), AgentCount: int32(agents), ActiveRunCount: int32(runs), PendingGateCount: int32(gates)}, nil
 }
 
 // ListCapabilities requires a resolved actor scope and lists enabled capability descriptions and
@@ -1103,14 +1122,10 @@ type queryRunner interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
-// scanWorkflow decodes the fixed workflow projection plus optional actor action flags, validates
-// draft/published structure and publication reference, and normalizes draft identity. Internal
-// reads default both flags true; that convenience does not grant authority. NoRows becomes
-// NotFound and corrupt/other failures become Unavailable.
-// scanWorkflow декодирует фиксированную проекцию workflow и необязательные flags действий
-// субъекта, проверяет структуру draft/published и publication reference, нормализует draft
-// identity. Внутреннее чтение по умолчанию ставит оба flags true; это не предоставляет полномочий.
-// NoRows даёт NotFound, повреждение/остальные ошибки дают Unavailable.
+// scanWorkflow permits bounded empty DRAFT/ARCHIVED readback while keeping validated/published
+// drafts and immutable published snapshots nonempty; malformed stored data fails closed.
+// scanWorkflow допускает bounded чтение пустого DRAFT/ARCHIVED, сохраняя непустоту validated/published
+// draft и immutable published snapshot; повреждённые сохранённые данные закрыто отклоняются.
 func scanWorkflow(row rowScanner, actorScoped bool) (entity.Workflow, error) {
 	var item entity.Workflow
 	var draft, published []byte
@@ -1130,7 +1145,11 @@ func scanWorkflow(row rowScanner, actorScoped bool) (entity.Workflow, error) {
 		return entity.Workflow{}, errs.ErrUnavailable
 	}
 	item.Draft = &entity.WorkflowVersion{}
-	if err := json.Unmarshal(draft, item.Draft); err != nil || workflowVersionStructureInvalidField(*item.Draft) != "" {
+	draftInvalidField := workflowVersionStructureInvalidField
+	if item.State == "DRAFT" || item.State == "ARCHIVED" {
+		draftInvalidField = workflowDraftStructureInvalidField
+	}
+	if err := json.Unmarshal(draft, item.Draft); err != nil || draftInvalidField(*item.Draft) != "" {
 		return entity.Workflow{}, errs.ErrUnavailable
 	}
 	normalizeWorkflowDraftIdentity(item.Ref, item.Draft)
@@ -1856,6 +1875,9 @@ func (repository *Repository) getRunGraph(ctx context.Context, principal value.P
 	if err := projectArtifactResults(ctx, tx, scope, &command.Result{Graph: &graph}); err != nil {
 		return entity.Run{}, entity.RunGraph{}, err
 	}
+	if err := attachWorkflowRetryProofs(ctx, tx, scope, &graph); err != nil {
+		return entity.Run{}, entity.RunGraph{}, err
+	}
 	if includeRuns {
 		if run.Ref != graph.RunRef {
 			return entity.Run{}, entity.RunGraph{}, errs.ErrInvalid
@@ -1876,15 +1898,13 @@ func (repository *Repository) getRunGraph(ctx context.Context, principal value.P
 	return run, graph, nil
 }
 
-// scanRunNode scans the complete node projection including stored action hints, materialization
-// state and artifact/child-run references. NoRows maps to NotFound and any other scan error to
-// Unavailable; caller policy must filter the hints.
-// scanRunNode сканирует полную проекцию узла, включая сохранённые подсказки, materialization state
-// и ссылки артефактов/дочерних запусков. NoRows даёт NotFound, прочие ошибки scan дают
-// Unavailable; вызывающий обязан отфильтровать подсказки политикой.
+// scanRunNode reads the shared snapshot/event projection, including public business outcomes.
+// Both SQL producers select explicit public fields and exclude private execution provenance.
+// scanRunNode читает общую проекцию снимка и события вместе с публичными бизнес-исходами.
+// Оба SQL выбирают явные публичные поля без приватного происхождения исполнения.
 func scanRunNode(row rowScanner) (entity.RunNode, error) {
 	var node entity.RunNode
-	if err := row.Scan(&node.Ref, &node.RunRef, &node.ParentNodeRef, &node.Type, &node.State, &node.DisplayName, &node.Role, &node.AgentRef, &node.TurnRef, &node.Attempt, &node.InputSummary, &node.ProgressSummary, &node.IntegrationNames, &node.CallbackSummary, &node.SafeErrorCode, &node.SafeErrorMessage, &node.NextActions, &node.MaterializationState, &node.CreatedAt, &node.StartedAt, &node.FinishedAt, &node.ArtifactRefs, &node.ChildRunRefs); err != nil {
+	if err := row.Scan(&node.Ref, &node.RunRef, &node.ParentNodeRef, &node.Type, &node.State, &node.DisplayName, &node.Role, &node.AgentRef, &node.TurnRef, &node.Attempt, &node.InputSummary, &node.ProgressSummary, &node.IntegrationNames, &node.CallbackSummary, &node.SafeErrorCode, &node.SafeErrorMessage, &node.NextActions, &node.MaterializationState, &node.CreatedAt, &node.StartedAt, &node.FinishedAt, &node.ArtifactRefs, &node.ChildRunRefs, &node.WorkflowResults); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.RunNode{}, errs.ErrNotFound
 		}
@@ -2014,7 +2034,7 @@ func (repository *Repository) ListRunEvents(ctx context.Context, principal value
 func scanGate(row rowScanner, actorScoped bool) (entity.OwnerGate, error) {
 	var item entity.OwnerGate
 	canResolve := true
-	destinations := []any{&item.Ref, &item.ProjectRef, &item.RunRef, &item.NodeRef, &item.Title, &item.Prompt, &item.ContextSummary, &item.RequestedByRef, &item.RequestedByName, &item.AllowedDecisions, &item.State, &item.Decision, &item.DecisionComment, &item.ResolvedByName, &item.Version, &item.CreatedAt, &item.ResolvedAt, &item.ResolutionAttachmentSetRef, &item.ScopeKind, &item.OrganizationRef}
+	destinations := []any{&item.Ref, &item.ProjectRef, &item.RunRef, &item.NodeRef, &item.Title, &item.Prompt, &item.ContextSummary, &item.RequestedByRef, &item.RequestedByName, &item.AllowedDecisions, &item.State, &item.Decision, &item.DecisionComment, &item.ResolvedByName, &item.Version, &item.CreatedAt, &item.ResolvedAt, &item.ResolutionAttachmentSetRef, &item.ScopeKind, &item.OrganizationRef, &item.ExpiresAt}
 	if actorScoped {
 		canResolve = false
 		destinations = append(destinations, &canResolve)

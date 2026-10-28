@@ -310,6 +310,18 @@ func writableUsage(root string, policy runtimecontract.RuntimeWorkspacePolicy) (
 // writableUsageContext counts regular-file bytes and files while bounding all visited writable entries, checking cancellation and rejecting encountered symlinks or policy escapes. It skips read-only directories and the separate session-state subtree, so it is not a whole-volume quota or race-proof filesystem snapshot.
 // writableUsageContext считает байты и обычные файлы, ограничивая все посещённые writable entries, проверяя отмену и отклоняя встреченные symlinks и выход из policy. Пропускает read-only каталоги и отдельное дерево session state; не является квотой всего тома или защищённым от гонок снимком ФС.
 func writableUsageContext(ctx context.Context, root string, policy runtimecontract.RuntimeWorkspacePolicy) (int64, int64, error) {
+	bytes, files, _, err := WritableUsageUnderLock(ctx, root, policy)
+	return bytes, files, err
+}
+
+// WritableUsageUnderLock includes every writable directory in the existing aggregate quota.
+// The caller owns the workspace lock and stopped-writer proof; this walk grants no authority.
+// WritableUsageUnderLock учитывает все writable directories в прежней общей квоте.
+// Caller владеет workspace lock и stopped-writer proof; обход не выдаёт полномочий.
+func WritableUsageUnderLock(ctx context.Context, root string, policy runtimecontract.RuntimeWorkspacePolicy) (int64, int64, int64, error) {
+	if !filepath.IsAbs(root) || filepath.Clean(root) != root || policy.Validate() != nil {
+		return 0, 0, 0, &Denial{Reason: runtimecontract.RuntimeWorkspacePathOutsideWorkspace}
+	}
 	var bytes, files, entries int64
 	err := filepath.WalkDir(root, func(localPath string, entry fs.DirEntry, walkErr error) error {
 		if ctx != nil && ctx.Err() != nil {
@@ -370,7 +382,7 @@ func writableUsageContext(ctx context.Context, root string, policy runtimecontra
 		}
 		return nil
 	})
-	return bytes, files, err
+	return bytes, files, entries, err
 }
 
 // withinQuota requires nonnegative usage/reservation and enough byte space plus one free file slot; callers separately bound directory-walk entries and proposed payload sizes.

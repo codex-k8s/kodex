@@ -38,6 +38,7 @@ import {
   runDefaultTaskTitleKey,
 } from "@/features/workboard/model";
 import { hasValidGateScope } from "@/features/workboard/gate-scope";
+import IntegrationIntentPreview from "@/features/workboard/components/IntegrationIntentPreview.vue";
 import RunActivityDrawer from "@/features/runs/RunActivityDrawer.vue";
 import RunGraphCanvas from "@/features/runs/RunGraphCanvas.vue";
 import { observeRunOutlineClearance } from "@/features/runs/run-outline-clearance";
@@ -73,6 +74,8 @@ import type {
 import { AppProblem, asProblem } from "@/shared/api/problem";
 import { runPath } from "@/shared/routes";
 import AsyncState from "@/shared/ui/AsyncState.vue";
+import WorkflowReworkPreviewPanel from "@/features/workflows/WorkflowReworkPreviewPanel.vue";
+import RepositoryBundleManifest from "@/features/workboard/RepositoryBundleManifest.vue";
 import AttachmentComposer from "@/shared/ui/AttachmentComposer.vue";
 import type {
   AttachmentComposerHandle,
@@ -83,6 +86,22 @@ import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+const verifiedBundleManifests = ref<Record<string, number>>({});
+function requiresBundleManifest(gate: OwnerGate): boolean {
+  return (
+    gate.integrationIntent?.operation === "github.repository.bundle.publish"
+  );
+}
+function bundleManifestReady(gate: OwnerGate): boolean {
+  return (
+    !requiresBundleManifest(gate) ||
+    verifiedBundleManifests.value[gate.ref] === gate.version
+  );
+}
+function setBundleVerified(gate: OwnerGate, verified: boolean): void {
+  if (verified) verifiedBundleManifests.value[gate.ref] = gate.version;
+  else Reflect.deleteProperty(verifiedBundleManifests.value, gate.ref);
+}
 const platform = usePlatformStore();
 const realtime = useRealtimeStore();
 const route = useRoute();
@@ -625,6 +644,7 @@ async function decide(
     !gate.allowedDecisions.includes(decision)
   )
     return;
+  if (decision === "APPROVE" && !bundleManifestReady(gate)) return;
   const generation = mutationGeneration;
   const project = run.value?.projectRef;
   const scopeRef = runRef.value;
@@ -701,33 +721,6 @@ function gateDisplayQuestion(gate: OwnerGate): string {
       `decisions.integrationRisk.${gateIntegrationRisk(gate)}`,
     ),
   });
-}
-function gateScopeFields(
-  gate: OwnerGate,
-): Array<{ path: string; value: unknown }> {
-  const scope = gate.integrationIntent?.effectPreview.approvalScope;
-  if (!scope || typeof scope !== "object" || Array.isArray(scope)) return [];
-  const selected = (scope as Record<string, unknown>).selected;
-  if (!Array.isArray(selected)) return [];
-  const entries: unknown[] = selected;
-  return entries.filter(
-    (field): field is { path: string; value: unknown } =>
-      field !== null &&
-      typeof field === "object" &&
-      !Array.isArray(field) &&
-      typeof (field as Record<string, unknown>).path === "string" &&
-      "value" in field,
-  );
-}
-function gateScopeValue(value: unknown): string {
-  return typeof value === "string" ? value : JSON.stringify(value);
-}
-function gateScopePath(path: string): string {
-  return path
-    .split("/")
-    .filter(Boolean)
-    .map((part) => part.replaceAll("~1", "/").replaceAll("~0", "~"))
-    .join(".");
 }
 function inspectGateNode(gate: OwnerGate): void {
   const sessionRef = sessionOwnership.value.get(gate.nodeRef);
@@ -1146,45 +1139,21 @@ onBeforeUnmount(() => {
                   {{ gateDisplayQuestion(gate) }}
                 </p>
                 <SafeMarkdown v-else :content="gate.contextSummary" />
-                <template v-if="gate.integrationIntent">
-                  <dl class="gate-integration-details">
-                    <div>
-                      <dt>{{ $t("decisions.integrationOperation") }}</dt>
-                      <dd>
-                        <code>{{ gate.integrationIntent.operation }}</code>
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>{{ $t("decisions.integrationCapability") }}</dt>
-                      <dd>
-                        <code>{{ gate.integrationIntent.capabilityKey }}</code>
-                      </dd>
-                    </div>
-                  </dl>
-                  <div
-                    v-if="gateScopeFields(gate).length"
-                    class="gate-approval-scope"
-                  >
-                    <h3>{{ $t("decisions.approvalScopeTitle") }}</h3>
-                    <p>{{ $t("decisions.approvalScopeExplanation") }}</p>
-                    <dl>
-                      <div
-                        v-for="field in gateScopeFields(gate)"
-                        :key="field.path"
-                      >
-                        <dt>
-                          <code>{{ gateScopePath(field.path) }}</code>
-                        </dt>
-                        <dd>
-                          <code>{{ gateScopeValue(field.value) }}</code>
-                        </dd>
-                      </div>
-                    </dl>
-                  </div>
-                </template>
+                <IntegrationIntentPreview
+                  v-if="gate.integrationIntent"
+                  :intent="gate.integrationIntent"
+                />
                 <h3>{{ $t("decisions.consequences") }}</h3>
                 <SafeMarkdown :content="gate.consequencesSummary" />
               </div>
+              <WorkflowReworkPreviewPanel :gate="gate" />
+              <RepositoryBundleManifest
+                v-if="requiresBundleManifest(gate)"
+                :key="`${gate.ref}:${gate.version}`"
+                :gate-ref="gate.ref"
+                :gate-version="gate.version"
+                @verified="setBundleVerified(gate, $event)"
+              />
               <div class="gate-response">
                 <label class="field"
                   ><span>{{ $t("decisions.comment") }}</span
@@ -1213,7 +1182,11 @@ onBeforeUnmount(() => {
                     "
                     class="button button--primary"
                     type="button"
-                    :disabled="busy || !gateAttachmentsReady(gate.ref)"
+                    :disabled="
+                      busy ||
+                      !gateAttachmentsReady(gate.ref) ||
+                      !bundleManifestReady(gate)
+                    "
                     @click="decide(gate, 'APPROVE')"
                   >
                     {{ $t("common.approve") }}</button
@@ -1464,37 +1437,6 @@ onBeforeUnmount(() => {
 .gate-question dd .button {
   min-height: 0;
   padding: 0;
-}
-.gate-integration-details {
-  display: grid !important;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.gate-integration-details code,
-.gate-approval-scope code {
-  overflow-wrap: anywhere;
-  white-space: normal;
-}
-.gate-approval-scope {
-  margin-top: 14px;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-muted, #f5f7fa);
-}
-.gate-approval-scope h3 {
-  margin-top: 0;
-}
-.gate-approval-scope > p {
-  color: var(--subtle);
-  font-size: 0.76rem;
-}
-.gate-approval-scope dl {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 14px;
-}
-.gate-approval-scope dd {
-  padding-top: 4px;
 }
 .gate-response {
   display: grid;

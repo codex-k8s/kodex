@@ -877,7 +877,7 @@ onBeforeUnmount(() => {
       />
       <ProviderLifecycleRecovery
         :account="authorizationAccount"
-        :problem="localProblem ?? problem"
+        :command-pending="busyRefs.includes(authorizationAccount.ref)"
         @pending="authorizationRecoveryPending = $event"
         @recovered="recovered"
       />

@@ -328,6 +328,21 @@ publisher Deployment. Наличие прежней completed migration Job не
 
 ## Миграции Control Plane в hot-reload
 
+Для immutable staging `k3d-kodex` существует закрытый профиль `outbox-index`
+с отдельными `plan → check → stop → apply/inspect → resume`. Он сохраняет прежний CP
+image на время миграции и принимает exact stable build/publication receipts.
+Перед stop требуется exact read-only connection check, а явная attempt2 связывается
+с известным failed/resumed parent; UNKNOWN не открывает новый create.
+Порядок с адресным maintenance, UNKNOWN/crash recovery и проверкой доступности
+описан в [OPS-CP-IMMUTABLE-MIGRATION-1855](../../docs/operations/control-plane-immutable-migration-1855.md).
+Для SERVER_DAG_V1 закрытый профиль `server-workflow` проводит только переход
+Goose `20261026000200 → 20261026001000`, со всей цепочкой003…010 и отдельными
+readonly pre/postcondition SQL. Он переиспользует этот maintenance protocol;
+старый `project-purge-authority` не принимает новую версию. Exact schema/ACL,
+VFS retention и purge graph проверяются до PASS. Подробные ограничения
+активации и forward-only recovery — в разделе SERVER_DAG_V1 того же runbook.
+Остальные профили ниже сохраняют собственный прежний контракт.
+
 `control-plane-migration.mjs` создаёт отдельный exact-version Job и сохраняет
 приватный журнал intent/readback. Если базовый `control-plane-migrate` уже
 удалён штатным TTL, read-only plan получает `--base-render` с приватным
@@ -610,3 +625,15 @@ node tools/release/control-plane-policy-projection.mjs observe \
 node --test tools/release/authority-policy-environment.test.mjs \
   tools/release/control-plane-policy-projection.test.mjs
 ```
+
+Для SSH/Compose действует отдельный профиль `ssh-compose`: только переход
+`20261026001000 → 20261027000100`. Preflight требует exact server010 schema,
+все bundle/retention/purge/ACL-инварианты, отсутствие новых SSH columns/functions
+и нулевые штатные active counters. Прежний `server-workflow` не принимает новый
+Goose head. После штатных check/stop один immutable migrator применяет новый DDL;
+readback выполняет `ssh-compose-migration-postcondition.sql` с полным наследуемым
+SERVER proof и отдельными purpose/snapshot/enum/trigger/function/ACL checks.
+Ни значения Secret, ни DSN через эти metadata queries не читаются.
+Неизвестный исход требует inspect того же intent; повтор DDL не разрешается.
+Rollback схемы не поддерживается: дальнейшее восстановление только совместимым
+образом и forward migration, без удаления purpose, receipt или immutable pins.

@@ -16,6 +16,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 	roleimageservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/roleimage"
+	workflowservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/workflow"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
@@ -109,9 +110,16 @@ func (repository *Repository) prepareAssistantPlanProposalTx(ctx context.Context
 			return assistantPlanProposal{}, errs.ErrInvalid
 		}
 		seen[operation.Key] = struct{}{}
-		selfConfiguration := assistantSelfConfigurationOperation(assistant.Ref, assistant.Scope, operation)
+		scopedConfiguration := assistantSelfConfigurationOperation(assistant.Ref, assistant.Scope, operation)
+		if operation.Type == prepareAgentRuntimeConfiguration {
+			if assistant.Scope != "PROJECT" || projectRef == "" {
+				return assistantPlanProposal{}, errs.ErrForbidden
+			}
+			scopedConfiguration = true // Exact target access is rechecked by the specialized project resolver.
+			// Точный доступ к цели повторно проверяет специализированный resolver проекта.
+		}
 		if assistantProjectConfigurationOperation(operation) {
-			selfConfiguration = assistant.Scope == "SYSTEM" || assistant.Scope == "PROJECT" && assistantString(operation.Parameters, "projectAssistantRef") == assistant.Ref
+			scopedConfiguration = assistant.Scope == "SYSTEM" || assistant.Scope == "PROJECT" && assistantString(operation.Parameters, "projectAssistantRef") == assistant.Ref
 		}
 		if assistant.Scope == "PROJECT" && !assistantProjectConfigurationOperation(operation) && operation.Type == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" &&
 			assistantString(operation.Parameters, "systemAssistantRef") == "" {
@@ -119,17 +127,17 @@ func (repository *Repository) prepareAssistantPlanProposalTx(ctx context.Context
 			if readErr != nil {
 				return assistantPlanProposal{}, readErr
 			}
-			selfConfiguration = configuration.Environment.ProjectRef == projectRef &&
+			scopedConfiguration = configuration.Environment.ProjectRef == projectRef &&
 				configuration.Environment.Ref == assistantString(operation.Parameters, "environmentRef")
 		}
-		if !contains(allowedOperations, operation.Type) && !selfConfiguration {
+		if !contains(allowedOperations, operation.Type) && !scopedConfiguration {
 			return assistantPlanProposal{}, errs.ErrForbidden
 		}
 		if operation.Type == createProjectFileRevision && (projectRef == "" || assistant.Scope == "SYSTEM" && contextKind != "PROJECT" && contextKind != "FILE") {
 			return assistantPlanProposal{}, errs.ErrForbidden
 		}
 		projectGlobalRevision := operation.Type == createProjectFileRevision && assistant.Scope == "PROJECT"
-		if !selfConfiguration && !projectGlobalRevision && !assistantOperationMatchesContext(contextKind, contextRef, operation) {
+		if !scopedConfiguration && !projectGlobalRevision && !assistantOperationMatchesContext(contextKind, contextRef, operation) {
 			return assistantPlanProposal{}, errs.ErrForbidden
 		}
 		if operation.Type == createProjectFileRevision && assistantString(operation.Parameters, "contentRef") != "" {
@@ -141,7 +149,7 @@ func (repository *Repository) prepareAssistantPlanProposalTx(ctx context.Context
 		} else {
 			operation, err = repository.hydrateAssistantOperation(ctx, tx, actorScope, projectRef, operation)
 		}
-		noRuntimeChange := operation.Type == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" && errors.Is(err, errAssistantRuntimeConfigurationNoChange)
+		noRuntimeChange := preparedRuntimeConfigurationOperation(operation.Type) && errors.Is(err, errAssistantRuntimeConfigurationNoChange)
 		if err != nil && !noRuntimeChange {
 			if (operation.Type == "CHANGE_CAPABILITY" || operation.Type == "CHANGE_INTEGRATION_GRANT") && errors.Is(err, errs.ErrConflict) {
 				continue
@@ -273,7 +281,7 @@ func projectAssistantOperation(operationType string) bool {
 	case "CREATE_PROJECT_FILE", createProjectFileRevision, "UPDATE_PROJECT", "CREATE_AGENT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT",
 		"CREATE_WORKFLOW", "UPDATE_WORKFLOW", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "CREATE_SCHEDULE",
 		"UPDATE_SCHEDULE", "LAUNCH_RUN", "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW", "CREATE_RUNTIME_ENVIRONMENT_DRAFT",
-		"PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":
+		"PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", prepareAgentRuntimeConfiguration:
 		return true
 	default:
 		return false
@@ -334,7 +342,7 @@ func assistantOperationType(value string) bool {
 	case "CREATE_PROJECT", "CREATE_PROJECT_ASSISTANT", "CREATE_PROJECT_FILE", createProjectFileRevision, "UPDATE_PROJECT", "CREATE_AGENT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "CREATE_WORKFLOW", "UPDATE_WORKFLOW", "CHANGE_CAPABILITY",
 		"CHANGE_INTEGRATION_GRANT", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", "CREATE_SCHEDULE", "UPDATE_SCHEDULE", "LAUNCH_RUN",
 		"CREATE_INTEGRATION_CONNECTION", "UPDATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION", "PUBLISH_INTEGRATION_DEFINITION", "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW",
-		"CREATE_RUNTIME_ENVIRONMENT_DRAFT", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":
+		"CREATE_RUNTIME_ENVIRONMENT_DRAFT", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", prepareAgentRuntimeConfiguration:
 		return true
 	default:
 		return false
@@ -355,7 +363,7 @@ func assistantOperationMatchesContext(contextKind, contextRef string, operation 
 		return contextRef != "" && (contextKind == "PROJECT" || contextKind == "FILE")
 	case prepareProjectAssistantConnection, changeProjectAssistantIntegrationGrant:
 		return true
-	case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT":
+	case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", prepareAgentRuntimeConfiguration, "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT":
 		return true
 	case "PUBLISH_INTEGRATION_DEFINITION":
 		return contextKind == "" && contextRef == ""
@@ -428,6 +436,9 @@ func (repository *Repository) hydrateAssistantOperation(
 	}
 	if operation.Type == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || operation.Type == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" {
 		return repository.hydrateSystemAssistantImage(ctx, tx, actorScope, operation)
+	}
+	if operation.Type == prepareAgentRuntimeConfiguration {
+		return repository.hydratePreparedRuntimeConfiguration(ctx, tx, actorScope, projectRef, operation)
 	}
 	if operation.Type == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
 		return repository.hydrateAssistantRuntimeConfiguration(ctx, tx, actorScope, operation)
@@ -1230,7 +1241,7 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	switch operation.Type {
 	case createProjectFileRevision:
 		expectedAction = "UPDATE"
-	case "UPDATE_PROJECT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "UPDATE_ROLE_IMAGE_RECIPE", "PUBLISH_INTEGRATION_DEFINITION", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", changeProjectAssistantIntegrationGrant, "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":
+	case "UPDATE_PROJECT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "UPDATE_ROLE_IMAGE_RECIPE", "PUBLISH_INTEGRATION_DEFINITION", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", changeProjectAssistantIntegrationGrant, "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", prepareAgentRuntimeConfiguration:
 		expectedAction = "UPDATE"
 	case "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW":
 		expectedAction = "ARCHIVE"
@@ -1294,7 +1305,7 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	case "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT":
 		expectedTargetKind = "AGENT"
 		expectedTargetRef = assistantString(operation.Parameters, "agentRef")
-	case "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":
+	case "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", prepareAgentRuntimeConfiguration:
 		expectedTargetKind = "AGENT"
 		expectedTargetRef = assistantString(operation.Parameters, "agentRef")
 	case "UPDATE_WORKFLOW":
@@ -1426,7 +1437,7 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 	if operation.Type == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || operation.Type == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" {
 		return systemAssistantImageCommand(operation)
 	}
-	if operation.Type == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
+	if preparedRuntimeConfigurationOperation(operation.Type) {
 		return assistantRuntimeConfigurationCommand(operation)
 	}
 	if strings.TrimSpace(operation.Summary) == "" || utf8.RuneCountInString(operation.Summary) > 1000 || operation.Input == nil {
@@ -1783,18 +1794,14 @@ func validAssistantPromptTemplate(value string) bool {
 	return true
 }
 
-// assistantWorkflow decodes closed workflow/input/step shapes, assigns stable numbered keys and
-// derives dependencies from sequential/parallel frontiers. It defaults unparsed
-// concurrency/timeout, preserves existing int32 casts, then applies domain version validation and
-// returns safe field diagnostics. It builds a draft payload rather than publishing or admitting a
-// launch.
-// assistantWorkflow декодирует закрытые workflow/input/step формы, назначает стабильные
-// нумерованные keys и выводит зависимости из sequential/parallel frontier. Задаёт defaults для
-// неразобранных concurrency/timeout, сохраняет прежние int32 casts, затем применяет доменную
-// валидацию версии и безопасные field diagnostics. Строит draft payload без публикации и допуска
-// запуска.
+// assistantWorkflow parses a closed editable workflow and checks exact server predicates before
+// returning an owner command. Omitted mode retains the historical inferred graph; references
+// do not establish project or agent authority, which remains part of command admission.
+// assistantWorkflow разбирает закрытую конфигурацию и проверяет серверные условия перед командой
+// владельца. Отсутствующий режим сохраняет прежний вывод графа; полномочия проекта и сотрудников
+// по ссылкам не назначаются и остаются частью допуска команды.
 func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
-	if !onlyAssistantFields(input, "projectRef", "name", "purpose", "coordinatorAgentRef", "inputFields", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria") ||
+	if !onlyAssistantFields(input, "resultEvidenceProfile", "reworkPolicy", "executionMode", "projectRef", "name", "purpose", "coordinatorAgentRef", "inputFields", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria") ||
 		!hasAssistantFields(input, "projectRef", "name", "purpose", "coordinatorAgentRef", "steps") {
 		return command.WorkflowInput{}, errs.ErrInvalid
 	}
@@ -1802,18 +1809,31 @@ func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
 	coordinator := assistantString(input, "coordinatorAgentRef")
 	concurrency, concurrencyOK := assistantInt64(input, "maxConcurrency")
 	timeout, timeoutOK := assistantInt64(input, "timeoutSeconds")
-	if !concurrencyOK {
+	if _, present := input["maxConcurrency"]; !present {
 		concurrency = 1
+	} else if !concurrencyOK || concurrency < 1 || concurrency > 100 {
+		return command.WorkflowInput{}, errs.WithAssistantPlanField(errs.ErrInvalid, "MAX_CONCURRENCY")
 	}
-	if !timeoutOK {
+	if _, present := input["timeoutSeconds"]; !present {
 		timeout = 7200
+	} else if !timeoutOK || timeout < 1 || timeout > 604800 {
+		return command.WorkflowInput{}, errs.WithAssistantPlanField(errs.ErrInvalid, "TIMEOUT_SECONDS")
+	}
+	profile, profileOK := assistantWorkflowEvidenceProfile(input, false)
+	mode, modeOK := assistantWorkflowMode(input)
+	if !modeOK || !profileOK {
+		return command.WorkflowInput{}, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_SHAPE")
 	}
 	rawSteps, ok := input["steps"].([]any)
 	if !ok || len(rawSteps) == 0 || len(rawSteps) > 200 {
 		return command.WorkflowInput{}, errs.ErrInvalid
 	}
+	rework, validRework := assistantWorkflowReworkPolicy(input)
+	if !validRework {
+		return command.WorkflowInput{}, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_INVARIANTS")
+	}
 	draft := entity.WorkflowVersion{Ref: "draft", Name: name, Purpose: assistantString(input, "purpose"), CoordinatorAgentRef: coordinator,
-		VersionNumber: 1, Concurrency: int32(concurrency), TimeoutSeconds: timeout, CompletionCriteria: assistantString(input, "completionCriteria"), ResultSchema: map[string]any{}}
+		ResultEvidenceProfile: profile, ExecutionMode: mode, ReworkPolicy: rework, VersionNumber: 1, Concurrency: int32(concurrency), TimeoutSeconds: timeout, CompletionCriteria: assistantString(input, "completionCriteria"), ResultSchema: map[string]any{}}
 	if rawFields, exists := input["inputFields"]; exists {
 		fields, ok := rawFields.([]any)
 		if !ok || len(fields) > 100 {
@@ -1842,7 +1862,7 @@ func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
 	parallelGroupLabels := map[string]int64{}
 	for index, raw := range rawSteps {
 		stepInput, ok := raw.(map[string]any)
-		if !ok || !onlyAssistantFields(stepInput, "name", "purpose", "agentRef", "parallel", "parallelGroup", "timeoutSeconds", "expectedResult", "humanGate", "gateDecisions", "requiredCapabilityKeys") ||
+		if !ok || !onlyAssistantFields(stepInput, "key", "dependsOn", "resultRequirements", "name", "purpose", "agentRef", "parallel", "parallelGroup", "timeoutSeconds", "expectedResult", "humanGate", "gateDecisions", "requiredCapabilityKeys", "approvalTimeoutSeconds") ||
 			!hasAssistantFields(stepInput, "name", "purpose", "agentRef", "parallel", "parallelGroup", "timeoutSeconds", "expectedResult", "humanGate", "gateDecisions", "requiredCapabilityKeys") {
 			return command.WorkflowInput{}, errs.ErrInvalid
 		}
@@ -1852,8 +1872,17 @@ func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
 		stepTimeout, timeoutOK := assistantInt64(stepInput, "timeoutSeconds")
 		gateDecisions, gateDecisionsOK := assistantStringsValue(stepInput, "gateDecisions")
 		requiredCapabilities, requiredCapabilitiesOK := assistantStringsValue(stepInput, "requiredCapabilityKeys")
-		if !parallelOK || !humanGateOK || !parallelGroupOK || !timeoutOK || !gateDecisionsOK || !requiredCapabilitiesOK {
+		if !parallelOK || !humanGateOK || !parallelGroupOK || parallelGroup < 0 || parallelGroup > 50 || !timeoutOK || stepTimeout < 1 || stepTimeout > 86400 || !gateDecisionsOK || !requiredCapabilitiesOK {
 			return command.WorkflowInput{}, errs.WithAssistantPlanField(errs.ErrInvalid, "STEP_SHAPE")
+		}
+		var approvalTimeout *int32
+		if _, exists := stepInput["approvalTimeoutSeconds"]; exists {
+			ttl, valid := assistantInt64(stepInput, "approvalTimeoutSeconds")
+			if !valid || ttl < 1 || ttl > 604800 || !humanGate {
+				return command.WorkflowInput{}, errs.WithAssistantPlanField(errs.ErrInvalid, "STEP_SHAPE")
+			}
+			seconds := int32(ttl)
+			approvalTimeout = &seconds
 		}
 		key := "step-" + leftPad(index+1, 3)
 		dependencies := append([]string(nil), frontier...)
@@ -1870,10 +1899,27 @@ func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
 			parallelGroups = map[int32][]string{}
 			frontier = []string{key}
 		}
+		var requirements []entity.WorkflowResultRequirement
+		if mode == workflowservice.ServerDAGV1 {
+			var keyOK, dependenciesOK bool
+			key, keyOK = stepInput["key"].(string)
+			dependencies, dependenciesOK = assistantWorkflowDependencies(stepInput["dependsOn"])
+			var parseErr error
+			requirements, parseErr = assistantWorkflowRequirements(stepInput["resultRequirements"])
+			if !keyOK || !dependenciesOK || parseErr != nil {
+				return command.WorkflowInput{}, errs.WithAssistantPlanField(errs.ErrInvalid, "STEP_SHAPE")
+			}
+		} else {
+			for _, field := range []string{"key", "dependsOn", "resultRequirements"} {
+				if _, supplied := stepInput[field]; supplied {
+					return command.WorkflowInput{}, errs.WithAssistantPlanField(errs.ErrInvalid, "STEP_SHAPE")
+				}
+			}
+		}
 		draft.Steps = append(draft.Steps, entity.WorkflowStep{Key: key, Position: int32(index + 1), Name: assistantString(stepInput, "name"),
 			AgentRef: assistantString(stepInput, "agentRef"), Instructions: assistantString(stepInput, "purpose"), Parallel: parallel,
 			ParallelGroup: int32(parallelGroup), TimeoutSeconds: int32(stepTimeout), ExpectedResult: assistantString(stepInput, "expectedResult"),
-			HumanGateAfter: humanGate, DependsOn: dependencies,
+			HumanGateAfter: humanGate, DependsOn: dependencies, ResultRequirements: requirements, ApprovalTimeoutSeconds: approvalTimeout,
 			GateDecisions: gateDecisions, RequiredCapabilityKeys: requiredCapabilities})
 	}
 	if projectRef == "" || !validWorkflowVersion(draft) {

@@ -4,11 +4,161 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.36
-updated: 2026-10-20
+version: 1.1.59
+updated: 2026-10-27
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+
+Менеджер исключения получает сохранённое решение точного source Gate и закреплённые
+данные разбираемого шага. Текст комментария, диагноз модели и artifactRef не являются
+полномочиями. Reader для manager не снимает общий coordinator fence: текущий owner
+episode назначает exact manager node/ref, source closed capture и опубликованные
+accepted dependency receipts; frozen RR/catalog и свежие ACL/effective CLEAN точной
+ревизии проверяются независимо. Новая ревизия не подменяет старый pin. После
+complete/cancel/expiry/revoke история сохраняется, прежний runtime read закрыт.
+Не записывать обычные step inputs в businessAttempt0 ради обхода его provenance
+инварианта. Immutable планирование, CLI dispatch и readback используют один закрытый
+registry профилей владельца: копии списка известных профилей не доказывают готовность
+исполняемого пути. Матрица: [#1943](../operations/workflow-exception-context-1943.md).
+
+Явный evidence profile не расширяет authority по наличию payload-полей. Native
+receipt должен связываться с опубликованным result key, exact dependency head,
+producing epoch и неизменяемыми source pins. Отрицательное заключение сохраняет
+проверенные facts отдельно от accepted results: они не становятся входом
+зависимого шага как успешный результат. Captured command/log bytes подтверждают
+происхождение и содержимое, а не автоматически сам факт выполнения команды.
+Если model заканчивается раньше разрешённого native effect, completed capture
+и lease не оживают: owner удерживает physical envelope до единственного join,
+создающего fresh CONTINUES/RR. Outcome overflow сохраняет native fact и закрывает
+граф устойчивым typed failure вместо усечения или повторного внешнего действия.
+Пример закрытого профиля: [native COMMENT и QA report](../operations/workflow-review-qa-evidence-1949.md).
+
+Часы всего SERVER DAG принадлежат его существующему `ROOT_PROCESS`, а не
+первому planned anchor: реальные физические исполнители могут уже находиться
+в дочерних runs. Autonomous expiry, owner command и выбор раннего execution
+перед Gate expiry используют одну точную область org/root/run и pinned workflow.
+Нематериализованный anchor при terminal closure отменяется; запрещено делать его
+FAILED, выдумывать turn/RR или менять materialization ради закрытия графа.
+Полный owner envelope сохраняет подтверждённые результаты и uncertain WRITE,
+закрывает leases/Gates и не мешает claim другого root. Матрица:
+[#1935](../operations/server-root-deadline-1935.md).
+
+Исторический SERVER business retry между двумя дочерними runs не является
+root-to-root retry. Полный reader доказывает exact logical origin, опубликованную
+политику, предыдущий immutable final journal/COMPLETED tuple и одобренный recovery,
+затем передаёт bounded typed read proof всем строгим consumers. Same-root само по
+себе недостаточно; technical final может отличаться от первого physical node.
+Terminal/cancel не стирает историю и не требует нового active grant для её чтения;
+текущая reader eligibility сохраняется. Матрица:
+[#1939](../operations/server-workflow-retry-snapshot-1939.md).
+
+Повтор результата terminal child не переписывает старый run, RR, callback или
+receipt. Он получает свежий physical attempt и отдельную owner-proved delivery
+boundary. Queued старое продолжение нельзя выдать модели со stale input;
+живое продолжение нельзя скрыто отменить ради повторного WRITE. Приёмка нового
+результата повторно соединяет exact owner decision, final execution provenance
+и все сохранённые producers, включая early CONTINUES artifacts. Отказ
+материализации delivery не отменяет уже подтверждённый внешний факт: нужен
+durable отказ/terminal path и защищённый owner readback.
+Матрица узкого прежнего профиля: [#1924](../operations/legacy-workflow-rework-1924.md).
+
+Новая business attempt не разрешает повтор уже успешного внешнего WRITE.
+При повторном исполнении owner сопоставляет опубликованный logical intent,
+точный semantic input и текущие authority pins с существующим immutable receipt.
+Совпадение допускает только защищённый read-only rejoin; новый lease/callID сам
+по себе не создаёт новый эффект. Изменённое либо несвязанное намерение закрыто
+отклоняется. Матрица ограниченного SERVER-профиля:
+[#1836](../operations/server-workflow-effect-rejoin-1836.md).
+
+Необязательный срок Gate задаётся только опубликованной owner-политикой этапа
+и фиксируется при OPEN из одного момента времени БД. Истечение не подменяет
+решение человека: exact Gate становится EXPIRED, зависимый граф и полномочия
+закрываются атомарно; закрытые Gate не истекают повторно. Общий default и
+обратное заполнение сроков запрещены. Поздний owner command фиксирует истечение
+до возврата отказа и сохраняет его при replay. Ранний workflow deadline остаётся
+отдельным исходом. При выборе ранней причины учитываются параллельные ветви
+всего корня, а событие относится к действительно отказавшему узлу. Публичный
+срок проверяется до сужения числового типа; переполнение не назначает новую
+политику. Матрица и граница поставки: [#1869](../operations/owner-gate-expiry-1869.md).
+
+Ошибка ответа COMMIT не доказывает rollback. Owner write, подготовивший объект
+до transaction, сохраняет его exact version при неизвестном commit outcome,
+включая transport error и cancel; возвращается прежняя ошибка, без fabricated
+success или SQL/PUT retry. Непосредственная компенсация допустима до попытки
+COMMIT либо при доказанном rollback (`pgx.ErrTxCommitRollback`), но не по одному
+`ErrTxClosed`. Повтор исходного намерения заново проверяет authority и читает
+сохранённый receipt. Возможный orphan не удаляется без owner-bound доказательства
+отсутствия ссылки; отдельные ledger/purge paths сохраняют свои правила.
+Матрица двух owner writes и regression с реально потерянным server COMMIT ACK:
+[#1889](../operations/artifact-commit-ack-1889.md).
+
+Preflight completion с artifacts использует ту же canonical
+organization/actor/operation/idempotency-key lock, что и основной Execute:
+matching receipt и intent разрешаются до требования активного lease.
+Отсутствующий receipt сохраняет все свежие lease/grant/CLEAN/actor checks;
+ObjectStore выполняется после commit preflight. Повтор не создаёт новую
+attempt и не открывает terminal graph. Матрица и независимый decoded-payload
+regression: [#1881](../operations/completion-receipt-preflight-1881.md).
+
+Gate результата этапа наследует только exact `GateDecisions` опубликованного
+этапа, закреплённого за execution root/node/agent и immutable RuntimeRevision.
+Координатор не наследует aggregate Gate из наличия Human Gate у своих этапов:
+каждый такой этап сохраняет отдельный materialized node и собственное
+согласование. Новая публикация не меняет список текущего исполнения;
+integration/delivery policies не смешиваются с workflow step policy.
+Матрица: [#1872](../operations/workflow-gate-decisions-1872.md).
+
+Прогноз последствий OPEN Gate выводится из специализированного перехода владельца,
+а не только отсутствия активных физических узлов. Для SERVER-процесса APPROVE
+обещает завершение лишь при принятии всех последних бизнес-попыток, отсутствии
+других Gate, recovery и незавершённых действий; гипотетически одобряется только
+точный producer текущего Gate. Recovery, integration и delivery обещают продолжение.
+Прогноз не выдаёт grant и не заменяет свежие owner/OCC-проверки решения. Закрытая
+история использует сохранённый исход перехода, а не нынешнее состояние графа.
+Матрица: [#1928](../operations/owner-gate-consequences-1928.md).
+
+Preview физического удаления использует тот же канонический retention
+predicate, что фактический owner guard. Его boolean входит в version-pinned
+impact digest, а закрытый blocker доставляется через API/VFS/PWA без
+выдуманных active consumers. Soft delete и physical purge имеют разные
+условия; отказ preview не заменяет свежую проверку под owner lock перед
+внешним удалением.
+
+Закрытый Gate проверяется после fresh authority и receipt replay, до применения
+его исторических clocks. Он не инициирует новый expiry ни terminal root, ни
+ещё активного root после завершённого дочернего этапа. Известное закрытие даёт
+окончательный AlreadyResolved, а SQL failure не превращается в skip. Closed-only
+row lock не меняет порядок блокировок OPEN expiry; перед эффектом выполняется
+повторная проверка. Матрица и адресная проверка:
+[#1873](../operations/terminal-gate-deadline-1873.md).
+
+Чтение изменяемой конфигурации для редактора отделяется от допуска к
+публикации/исполнению. Metadata-only workflow в DRAFT или ARCHIVED может
+не иметь этапов; все bounds полей и eligibility сохраняются. VALID/PUBLISHED
+draft и immutable published snapshot остаются непустыми. Postmutation
+actor-action readback проверяется тем же reader, включая archive и доступные
+replay. Terminal eligibility не расширяется: прежний command resolver может
+скрывать архивный ресурс до receipt, сохраняя query read. Ошибка до commit откатывает
+receipt/audit/outbox вместе с ресурсом.
+Матрица: [#1870](../operations/workflow-metadata-draft-1870.md).
+
+Продолжение после решения владельца переносит авторитетные Gate ref/version,
+решение и точное сохранённое замечание в новый immutable task в транзакции
+создания turn и lineage. Замечание владельца отделяется от результата внешнего
+провайдера; отрицательное решение не описывается как одобрение. Feedback не
+заменяет grant, не разрешает повторный effect и не открывает terminal root.
+Публичная проекция callback сохраняет типизированное скрытие внутренней задачи.
+Для SERVER_DAG_V1 восстановление attempt0 и попыток 2–4 также переносит в
+новую immutable task причину exact episode, сохранённые ref/version/APPROVE/comment
+его Gate и ограниченный текст completed manager analysis. Отсутствие manager
+analysis не заменяется вымышленным разбором. Эти публичные пояснения не
+принимают предыдущий результат, не отменяют published predicates и не разрешают
+повтор UNKNOWN effect. Источник комментария — сохранённая owner-запись в той же
+транзакции, а не повторно интерпретируемый request. Переполнение task закрыто
+отклоняется без усечения сохранённого комментария.
+Матрица и сквозной путь: [#1863](../operations/integration-gate-intent-1075.md#замечание-владельца-в-продолжении-1863).
 
 Финальное удаление большого owner-графа проверяется на реалистичной истории,
 а не только на пустом проекте. Точные relation_id входят в индексируемые
@@ -25,6 +175,15 @@ CONTINUES: оба owner-readable root относятся к одной непу�
 Отсутствующее/дублирующее ребро, цикл, другая сессия или несовпадающий retry pin
 закрыто отклоняются на owner, gateway и frontend boundaries. Это проверка
 авторитетного чтения, без нового grant или события.
+
+Корневой узел помощника имеет тип `AGENT_EXECUTION`, поэтому проверка
+`RETRY_OF` не может отождествлять корень с `ROOT_PROCESS`. Для такого ребра
+оба узла не имеют родителя и принадлежат точным owner-readable root runs
+помощника; сотрудник узла совпадает с `AssistantRunPin`, обе привязки целиком
+равны, сессия непустая и общая, номер попытки увеличен ровно на один.
+Это узкое правило чтения применяется одинаково в control-plane, WebSocket
+проекции и PWA; произвольный `AGENT_EXECUTION` не подтверждает lineage.
+Оно не расширяет допуск `CONTINUES`, не создаёт grant и не меняет retry policy.
 
 Окончательный PermissionDenied точного CompleteExecution закрывает собственные
 runtime Pod/ticket/projection/сеть и tracker независимо от наличия deadline:
@@ -45,12 +204,58 @@ DEFERRABLE INITIALLY IMMEDIATE. Обычные транзакции сохран
 Fingerprint таблиц и действий FK не доказывает deferrability: отдельная
 проверка schema и runtime guard обязательны до terminal-перехода.
 
+Проверка удаления защищённой строки внутри purge опирается на точный
+`project_purge_targets.row_key` и закрытый контекст текущей транзакции/процесса.
+Родительская строка может быть уже удалена при отложенных FK, поэтому повторный
+JOIN к ней не является устойчивым источником права удаления. Обычный runtime
+не может создать контекст или расширить список targets. Отзыв `PUBLIC` не
+отменяет отдельные grants из `ALTER DEFAULT PRIVILEGES`: для служебных таблиц
+явно отзываются runtime INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER.
+Необходимый существующим invoker guards SELECT сохраняется; он не разрешает
+менять authority. Проверяется effective privilege фактической LOGIN-роли,
+включая наследование, и отказ настоящих SQL mutations
+([#1916](https://github.com/codex-k8s/kodex/issues/1916)). Новая связь обновляет
+fingerprint только после сверки прежнего графа без собственного нового ребра.
+
+Служебные таблицы разрешения purge не могут быть источником полномочий,
+если runtime способен записывать в них напрямую. Для новых таблиц проверяются
+не только PUBLIC ACL, но и default privileges владельца, наследуемые и прямые
+права каждого runtime LOGIN, права на столбцы и grant option. Отзыв table-level
+права не доказывает отсутствие column-level grant. Ограничения сохраняются
+и при `SET ROLE`: `INHERIT FALSE` не запрещает переключение
+в альтернативную роль с `SET TRUE`. Проверка охватывает все роли, достижимые
+таким переключением. ADMIN OPTION у runtime или доступной ему роли также
+закрыто отклоняется: он позволяет самостоятельно выдать SET/INHERIT и обойти
+их первоначальное ограничение без собственного CREATEROLE. Runtime сохраняет только
+чтение, необходимое действующим INVOKER guards; запись контекста принадлежит
+защищённой owner-функции. Перевод guard в SECURITY DEFINER не является
+равноценной заменой: он меняет `current_user` и требует отдельной проверки
+всех ветвей authority. Миграция проверяет эффективные права и точное тело
+функции разрешения, а не только её сигнатуру. Процедура —
+[OPS-DOC-PURGE-AUTHORITY-1916](../operations/project-purge-authority-1916.md).
+
+Повтор предварительной проверки инфраструктуры отличают от повтора основного
+эффекта. Failed probe не разрешает новый запуск, пока не доказаны terminal/join
+точной прежней Job, неизменность квитанций и отсутствие intents основного
+эффекта. Если probe предшествует остановке сервиса, проверяется также отсутствие
+STOP/RESUME intents и сохранение прежнего service spec. Новый ограниченный
+attempt получает собственную Job и повторяет precondition; старые Jobs и
+журналы сохраняются. UNKNOWN и утрата доказательств не превращаются в failed
+probe. Матрица — [OPS-CP-IMMUTABLE-MIGRATION-1855](../operations/control-plane-immutable-migration-1855.md).
+
 Диагностика отказа worker различает подтверждённую текущую причину, прошлую
 историю и неизвестность. Exit code либо потеря локального потока не доказывают
 отказ внешнего провайдера или конкретного ресурса. Закрытое наблюдение до
 cleanup не меняет semantic intent повторного completion по тому же ключу;
 результат принадлежит прежней owner-транзакции, usage/archive не теряются.
 Матрица локального OOM-пути — [OPS-RUNTIME-MEMORY-001](../operations/runtime-memory-failure.md).
+
+Completion фоновой работы связывает ключ идемпотентности с назначенным владельцем
+поколением attempt/lease. Неизменный отчёт того же поколения повторяет прежнюю
+квитанцию; новый recovery claim с другим lease/fence/generation не переиспользует
+ключ старого отчёта. Ключ внешнего эффекта при этом сохраняется и не разрешает
+новую запись. Изменённый payload того же поколения закрыто отклоняется.
+Матрица интеграций — [OPS-DOC-INTEGRATION-COMPLETION-1899](../operations/integration-completion-generation-1899.md).
 
 `childRunRefs` принадлежит точному узлу, а не всем узлам родительского run.
 Ordinary child подтверждается серверными `DELEGATED_TO`/`CALLBACK_TO` и
@@ -159,6 +364,16 @@ replay, не открывая удалённый ресурс обычному �
 Правила дополняют общую структуру `GO-DOC-001`, PostgreSQL-профиль
 `GO-DOC-002`, события `GO-DOC-004` и распределённую безопасность
 `GUIDE-DOC-003`.
+
+Unresolved native effect обязан удерживать exact captured report/log revisions,
+которыми владелец разрешил effect, независимо от terminal root, отменённого lease
+или отозванного grant. Такое удержание не выдаёт reader eligibility и снимается
+только после известного authoritative outcome либо точного project purge.
+Admission удерживает ACTIVE HEAD SHARE до commit intent; purge получает HEAD
+UPDATE и новым statement повторно проверяет retention. Снимок retention до
+ожидания HEAD не разрешает удалять bytes после принятого intent. Проверка включает
+оба порядка блокировок, UNKNOWN после cancel/expiry/revoke, known-terminal release
+и отсутствие pin для посторонней revision.
 
 ## Защищённый вид ресурса
 
@@ -294,6 +509,13 @@ Late success не меняет terminal verdict; подтверждённые us
 До реализации developer составляет отдельную строку для каждого применимого
 перехода. Объединять разные виды задач в одну строку без одинаковой семантики
 полномочий и жизненного цикла запрещено.
+
+Если контракт отдаёт приоритет аварийному возврату безопасной конфигурации,
+optional cleanup не становится его предусловием: недоступный workload либо
+внешний endpoint не должны блокировать guarded owner transition. Полномочия,
+UID/version/full-spec и запрет изменения чужих ресурсов при этом сохраняются.
+Незакрытая компенсация остаётся отдельным UNKNOWN с origin/receipts/inputs;
+успешный возврат сам по себе не разрешает final PASS или удаление этих inputs.
 
 | Переход               | Обязательная блокировка и проверка                                                                  | Атомарный результат                                                                                  |
 | --------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
@@ -446,6 +668,71 @@ delivery ID, canonical payload digest и фактический post/interaction
 
 ## Свежая `RuntimeRevision`
 
+Исторический `current_version_id` окружения в terminal `DELETED` не считается
+действующим потребителем секрета. Отзыв и recovery материала используют один
+инвариант: текущая версия любого не удалённого окружения, включая `DISABLED`,
+существующая agent binding и immutable revision активного запуска независимо
+удерживают соответствующий секрет/его ревизию. Удаление ENV не снимает защиту
+binding или активного запуска. История окружений и завершённых запусков
+сохраняется без обязанности бессрочно хранить материал секретов; текущая
+активная ревизия самого секрета остаётся доступной до штатного отзыва.
+Owner/scope, OCC, idempotency и exact UID/RV cleanup при этом не меняются.
+Claim повторно связывает cached candidate с активным ENV, агентом и exact
+binding/version/digest до записи RuntimeRevision. Зависимые row locks берутся
+ENV → agent → binding через `FOR SHARE SKIP LOCKED` внутри малого savepoint:
+изменение либо занятая строка освобождают частичные locks и оставляют работу
+в очереди, ошибка SQL закрыто отклоняется. Успешные locks сохраняются до owner
+commit. Historical version pin не заменяется текущим head; fallback для пустого
+pin разрешён только существующему системному профилю помощника. Caller context
+ограничивает прочие database waits. Этот fence не заменяет отдельный свежий
+допуск секрета при credential projection.
+Область конфигурации выводится из точных agent/ENV metadata: системный помощник
+с общим ENV может иметь проектный контекст conversation/session/run. Такой
+контекст не превращает ENV в проектный ресурс. Для обычного агента сохраняется
+совпадение проекта ENV, агента и запуска; исключение разрешено лишь точному
+системному профилю с `ORGANIZATION` ENV и отсутствующим проектом агента/ENV.
+Регрессия: `TestDeletedEnvironmentSecretRetentionComponent` ([#1875](https://github.com/codex-k8s/kodex/issues/1875)).
+
+Новая привязка либо rollback исторической версии ENV повторно проверяет весь
+сохранённый дескриптор секрета через тот же scoped resolver, что create/publish:
+точные ref/revision, namespace/name/key, UID/RV и digest. Ревизия обязана быть
+явной и `ACTIVE`, сам секрет — `ACTIVE`; замена исторического pin текущей
+ревизией запрещена. Область выводится из ENV/agent metadata, включая системный
+профиль с проектным контекстом запуска. `SHARE NOWAIT` на exact Secret/revision
+сохраняются до commit; занятая строка даёт временную ошибку без изменения
+owner state. Claim выполняет ту же проверку внутри своего candidate savepoint:
+непригодный секрет использует существующий отказ `runtime_environment`, а
+storage/lock error не превращается в terminal отказ графа либо metadata miss.
+
+Terminal retirement recovery отличается от completion активной операции.
+Только завершённые legacy `CREATE|ROTATE` и `PUBLISH/COMPLETED` опубликованного
+draft обрабатываются в `READ COMMITTED` под прежними scoped locks Secret и
+operation/draft. Отдельный retention SELECT после получения Secret lock видит
+победивший admission commit. Retirement, cleanup intent и audit атомарны;
+точные claimant/generation draft и UID/RV материала сохраняются. Известная
+нетерминальная операция откатывает probe без effects и проходит прежний
+`SERIALIZABLE` путь заново. Если locked recheck уже terminal, он возвращает
+Conflict до любых effects или ответа `DELETE`; SQL/auth error не разрешает
+fallback. Ожидание блокировки в `SERIALIZABLE` само по себе не обновляет snapshot
+и не доказывает свежесть retention.
+
+| Сценарий | Авторитетный результат |
+| --- | --- |
+| Historical `ACTIVE` R1 при текущей R2 | Exact R1 допускается; receipt replay сохраняет pin |
+| R1 `RETIRED` либо Secret `REVOKED` | Publish/bind/rebind/rollback закрыто отклоняются без owner effects |
+| Admission удерживает SHARE и фиксирует ссылку первым | Terminal recovery после ожидания видит ссылку и возвращает `KEEP` |
+| Terminal recovery удерживает Secret lock первым | Admission временно недоступен; после retirement новый допуск R1 отклоняется |
+| Ошибка descriptor/retention/retirement/cleanup intent | Полный rollback, разрешение удалить материал не выдаётся |
+| Очистка ciphertext опубликованного draft | Отдельный точный intent/ACK; `KEEP` опубликованного материала не разрешает удалить его |
+
+Регрессии: `TestHistoricalEnvironmentSecretAdmissionComponent` и
+`TestHistoricalSecretRecoveryConcurrencyComponent`
+([#1876](https://github.com/codex-k8s/kodex/issues/1876)). Этот контракт не
+утверждает свежесть reference snapshot для всех secret mutations: completion
+активных операций сохраняет прежнюю изоляцию. Отдельная гонка concurrent
+`Complete REVOKE` с admission отслеживается в
+[#1878](https://github.com/codex-k8s/kodex/issues/1878).
+
 Декларация `platform.run.delegate` не создаёт разрешённые цели делегирования.
 План процесса связывает этап с фактическим исполнителем, а не с текстовым
 поручением координатору найти другого исполнителя. Процесс, в котором все этапы
@@ -455,6 +742,46 @@ delivery ID, canonical payload digest и фактический post/interaction
 Структурно корректная конфигурация остаётся доступной для чтения и исправления,
 даже если новый semantic guard запрещает её выполнение. Readiness закрывает
 запуск, а не весь каталог; повреждённая структура по-прежнему отклоняется.
+
+Для `SERVER_DAG_V1` наличие других исполнителей не требует выдавать менеджеру
+`platform.run.delegate`: штатным переходом владеет сервер, проверяющий результаты.
+В `MANAGER_DRIVEN` прежняя проверка полномочий координатора сохраняется.
+Допуск и публикация конфигурации сами по себе не доказывают работу планировщика.
+
+Физический узел серверного шага получает неизменяемые logical origin,
+business attempt, run, turn, agent и runtime attempt. Материализованный узел
+не возвращается в PLANNED для повторного назначения. Capture завершения
+атомарно сохраняет точные producing RuntimeRevision, completed lease/generation
+и immutable revision/content pins фактически вставленных файлов. NULL означает
+отсутствие capture; пустой batch означает завершение без файлов и также неизменяем.
+Capture не является приёмкой: CLEAN, доступность и обязательные бизнес-результаты
+проверяются отдельно. Повтор completion читает прежний receipt; он не заменяет
+capture и не создаёт новую попытку. Прямое удаление provenance запрещено;
+удаление проекта использует только точный защищённый purge target.
+
+Журнал бизнес-попыток принадлежит logical anchor и пополняется ровно одной
+записью за завершение, без изменения прежнего префикса. Каждая запись связывает
+business attempt с точными final physical node, run, turn, runtime attempt,
+RuntimeRevision и completed lease/generation; technical continuation не меняет
+business attempt. Snapshot входов закрепляет целиком принятую запись объявленного
+предшественника и не меняется после назначения physical node, включая пустой
+snapshot. Проверка происхождения в БД не заменяет бизнес-проверку: перед записью
+принятого результата сервер отдельно проверяет обязательные predicates,
+доступность evidence и отсутствие незавершённых действий. Проверка хранения
+журнала сама по себе не доказывает автоматический dispatch или приёмку PDLC.
+
+`CURRENT_COMPLETION` выбирает единственный файл с именем из опубликованного
+требования внутри capture текущего завершения. `CAPTURED_ARTIFACT` дополнительно
+требует exact revision/digest в frozen catalog завершающей RuntimeRevision и
+производителя в закрытой обратной цепочке CONTINUES той же бизнес-попытки.
+Разветвление, пропущенное звено, другой run/agent/origin или неоднозначное имя
+не превращаются в выбор последнего подходящего файла. Текущий root actor,
+project/agent/run/artifact eligibility, effective CLEAN и content receipt
+проверяются заново; HEAD lock удерживается до общей owner-транзакции, историческая
+ревизия не подменяется текущей версией HEAD. Каталог следующего технического хода
+должен объединять принятые dependency pins и собственные завершённые captures
+этой попытки: ожидание бизнес-приёмки для собственных промежуточных файлов
+создало бы взаимную блокировку между публикацией PR и проверкой его наличия.
 
 Продолжение процесса наследует входные значения только из доступного текущему
 actor завершённого Run той же session/tenant/target. Новый task не подменяет
@@ -811,3 +1138,55 @@ UPDATE. Проверка только перехода UPDATE не закрыв�
 терминального либо подтверждённого объекта. Начальный INSERT допускает лишь
 каноническое исходное состояние; полномочия и решения возникают исключительно
 через специализированную команду владельца состояния.
+
+## Настройка модели обычного сотрудника через проектного помощника ([#1841](https://github.com/codex-k8s/kodex/issues/1841))
+
+`PREPARE_AGENT_RUNTIME_CONFIGURATION` — специализированная операция плана.
+Она не меняет профиль сотрудника через `UPDATE_AGENT` и не расширяет
+`PREPARE_ASSISTANT_RUNTIME_CONFIGURATION`: у двух команд общий внутренний
+примитив публикации, но разные закрытые resolver цели.
+
+Карта контракта: запрос пользователя в PROJECT-диалоге → текущий runtime tool
+`propose_assistant_plan` → `RuntimeWorkService.ProposeAssistantPlan` с exact
+lease/fence/generation → CP выводит actor/tenant/project из owner-состояния →
+ordinary-agent resolver + `agent.manage` → owner-план DRAFT с before/after,
+версией агента, runtime-profile revision и account catalog/model pins → UI
+редактирует только желаемые model/profile/effort/search/account policy → owner
+`validateAssistantPlan` и `applyAssistantPlan` с `If-Match`/idempotency → одна
+транзакция CP сохраняет runtime policy/configuration, опубликованный overlay,
+receipt и audit. На каждую применённую операцию возникает ровно одно
+`AGENT_CHANGED` сотрудника, на переход плана — одно
+`SYSTEM_ASSISTANT_CHANGED`, с проверенным owner actor и в той же транзакции.
+UI читает план, receipt и актуальную конфигурацию. Следующий turn получает новую immutable
+RuntimeRevision штатным materialization путём; активный turn остаётся прежним.
+Runtime-controller не получает права самостоятельно применять план.
+
+| Переход | Проверка и результат | Событие / авторитетное чтение |
+| --- | --- | --- |
+| Подготовка | Действующая PROJECT lease, active exact project, обычная цель без assistant profile, `agent.manage`; новые сотрудники адресуются только реальным ref после CREATE_AGENT | DRAFT плана; штатное событие плана, чтение плана |
+| Безопасный READ | Fresh lease + `agent.view`, exact project; только allowlist metadata и pins, без TOML/ENV/credentials | События нет; `AGENT_RUNTIME_CONFIGURATION` |
+| Редактирование DRAFT | Owner/target/version/pins неизменяемы; желаемые поля заново валидируются; drift не усыновляется | Новая revision DRAFT; штатное событие плана |
+| Validate | Owner access, eligibility, profile/account/model/overlay pins и отсутствие чужого draft проверяются заново | VALID либо проблемы; чтение плана |
+| Apply | Повторная авторизация до OCC/receipt, точный snapshot; runtime и overlay атомарны | APPLIED + exact receipt и `AGENT_CHANGED`, либо STALE/CONFLICT; штатное событие плана |
+| Потерянный ACK / replay | Прежний idempotency key, текущая owner boundary; прежний receipt без повторных эффектов | События повторно нет; чтение receipt |
+| STALE refresh | Явное owner-редактирование создаёт новую revision с новым before/pins; смешанная owner identity отклоняется | DRAFT новой revision; чтение плана |
+| Отзыв доступа / archive / чужой проект | Закрытый отказ до изменения runtime; assistant targets всегда исключены | События конфигурации нет; авторитетный read по текущим правам |
+| Чужой overlay draft / частичная ошибка | Не перезаписывать draft; rollback всех runtime/overlay эффектов общей транзакции | Публикации нет; чтение плана и текущей конфигурации |
+| Отказ от предложения / удаление проекта | До Apply публикаций нет; существующий lifecycle проекта, без отдельной cancel-task/lease/grant этой операции | События конфигурации нет; штатное событие удаления проекта и чтение владельца |
+| Retry / следующий turn | Новый runtime snapshot штатного turn; конфигурация не запускает run и не создаёт grant | Штатные события turn; version-pinned RuntimeRevision |
+
+Proto enum, OpenAPI enum, runtime schema, CP command registry и UI editor
+изменяются вместе. Порядок обновления: **runtime-controller → CP → API gateway
+→ PWA**. Новый RC принимает ровно две закрытые формы безопасного чтения:
+legacy `model_configuration` из 5 полей и v2 из 14 полей. У каждой формы
+проверяется весь известный состав; смешанные, неполные v2 и неизвестные поля
+отклоняются. Legacy READ возвращается без синтеза отсутствующих policy/overlay
+pins и не считается полной конфигурацией для планирования. Новая prepare-команда
+всегда получает свежие pins от CP, независимо от прежнего read snapshot.
+
+До обновления CP новый RC сохраняет прежний READ. После обновления CP доступны
+v2 READ и новая операция; прежний CP закрыто отклоняет неизвестную операцию.
+При rollback сначала возвращается прежний CP, затем RC; API/PWA откатываются
+согласованно, чтобы новая операция не предлагалась старому CP. Схема PostgreSQL
+не меняется. Опубликованные настройки восстанавливаются штатным owner-планом,
+а не ручным SQL. Локальные component/unit проверки не являются live-приёмкой.

@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -237,6 +238,10 @@ type Manager struct {
 	client     kubernetes.Interface
 	config     Config
 	pvcRequest resource.Quantity
+	// Workspace pagination is bounded process-local scheduling state, never storage or writer authority.
+	// Workspace pagination — bounded process-local scheduling state, не storage или writer authority.
+	workspaceObservationMu       sync.Mutex
+	workspaceObservationContinue string
 }
 
 // InCluster loads Kubernetes in-cluster credentials, limits client requests to five seconds and delegates manager configuration validation to New without creating runtime resources.
@@ -416,6 +421,12 @@ func (manager *Manager) CleanupStaleTurns(ctx context.Context) error {
 		}
 		for index := range pods.Items {
 			pod := &pods.Items[index]
+			if pod.Annotations[workspaceStorageProfileAnnotation] == runtimecontract.WorkspaceStorageProfile {
+				if executionHash := pod.Labels[executionHashLabel]; len(executionHash) == 16 {
+					activeHashes[executionHash] = struct{}{}
+				}
+				continue
+			}
 			if pod.Annotations[controllerAnnotation] == manager.config.ControllerPodUID {
 				if executionHash := pod.Labels[executionHashLabel]; len(executionHash) == 16 {
 					activeHashes[executionHash] = struct{}{}
@@ -456,7 +467,7 @@ func (manager *Manager) CleanupStaleTurns(ctx context.Context) error {
 			ticket := &tickets.Items[index]
 			executionHash := strings.TrimPrefix(ticket.Annotations[podAnnotation], "runtime-turn-")
 			_, active := activeHashes[executionHash]
-			if ticket.Annotations[controllerAnnotation] == manager.config.ControllerPodUID && active {
+			if ticket.Annotations[workspaceStorageProfileAnnotation] == runtimecontract.WorkspaceStorageProfile || ticket.Annotations[controllerAnnotation] == manager.config.ControllerPodUID && active {
 				continue
 			}
 			if err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Delete(ctx, ticket.Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
@@ -479,7 +490,7 @@ func (manager *Manager) CleanupStaleTurns(ctx context.Context) error {
 			projection := &projections.Items[index]
 			executionHash := strings.TrimPrefix(projection.Annotations[podAnnotation], "runtime-turn-")
 			_, active := activeHashes[executionHash]
-			if projection.Annotations[controllerAnnotation] == manager.config.ControllerPodUID && active {
+			if projection.Annotations[workspaceStorageProfileAnnotation] == runtimecontract.WorkspaceStorageProfile || projection.Annotations[controllerAnnotation] == manager.config.ControllerPodUID && active {
 				continue
 			}
 			if err := manager.client.CoreV1().ConfigMaps(manager.config.RuntimeNamespace).Delete(ctx, projection.Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
@@ -499,6 +510,9 @@ func (manager *Manager) CleanupStaleTurns(ctx context.Context) error {
 func (manager *Manager) orphanedExecutionPolicyHashes(ctx context.Context, selector string, active map[string]struct{}) (map[string]struct{}, error) {
 	orphaned := make(map[string]struct{})
 	inspect := func(metadata metav1.ObjectMeta) {
+		if metadata.Annotations[workspaceStorageProfileAnnotation] == runtimecontract.WorkspaceStorageProfile {
+			return
+		}
 		executionHash := metadata.Labels[executionHashLabel]
 		_, isActive := active[executionHash]
 		if len(executionHash) == 16 && (metadata.Annotations[controllerAnnotation] != manager.config.ControllerPodUID || !isActive) {
@@ -897,6 +911,10 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		return runtimecontract.RunnerInput{}, err
 	}
 	input.WorkspacePolicy = workspacePolicy
+	input.WorkspaceStorage, err = workspaceStorageFromProto(revision.GetWorkspaceStorage())
+	if err != nil {
+		return runtimecontract.RunnerInput{}, err
+	}
 	executionDeadline, err := RuntimeExecutionDeadlineFromProto(revision.GetExecutionDeadline())
 	if err != nil {
 		return runtimecontract.RunnerInput{}, err
@@ -1241,7 +1259,7 @@ func (manager *Manager) ensureExecutionPolicy(ctx context.Context, input runtime
 // executionMetadata derives turn selection labels and revision/lease/controller/policy digest annotations from the selected input without granting Kubernetes access.
 // executionMetadata выводит метки выбора хода и аннотации ревизии, аренды, контроллера и хешей политик из выбранного входа без выдачи доступа Kubernetes.
 func (manager *Manager) executionMetadata(input runtimecontract.RunnerInput) metav1.ObjectMeta {
-	return metav1.ObjectMeta{Namespace: manager.config.RuntimeNamespace,
+	result := metav1.ObjectMeta{Namespace: manager.config.RuntimeNamespace,
 		Labels: map[string]string{managedLabel: "true", modeLabel: "turn", executionHashLabel: shortHash(input.LeaseRef)},
 		Annotations: map[string]string{
 			revisionAnnotation: input.RuntimeRevisionDigest, leaseAnnotation: input.LeaseRef, controllerAnnotation: manager.config.ControllerPodUID,
@@ -1250,6 +1268,10 @@ func (manager *Manager) executionMetadata(input runtimecontract.RunnerInput) met
 			effectiveRBACAnnotation: input.EffectiveKubernetesAccess.Digest,
 		},
 	}
+	if input.WorkspaceStorage != nil {
+		result.Annotations[workspaceStorageProfileAnnotation] = runtimecontract.WorkspaceStorageProfile
+	}
+	return result
 }
 
 // executionNetworkPolicy requires the lease-derived Pod name and emits only configured DNS, controller-callback or platform-proxy peers with explicit ports; unknown destinations fail instead of broadening egress.
@@ -1662,6 +1684,13 @@ func (manager *Manager) StopTurn(ctx context.Context, leaseRef string) error {
 		}
 	}
 	if podName != "" {
+		if secret != nil && secret.Annotations[workspaceStorageProfileAnnotation] == runtimecontract.WorkspaceStorageProfile {
+			input, decodeErr := runtimecontract.DecodeRunnerInput(secret.Data[inputKey])
+			if decodeErr != nil || input.LeaseRef != leaseRef || input.WorkspaceStorage == nil {
+				return errors.New("runtime workspace stop binding is invalid")
+			}
+			return manager.stopWorkspacePod(ctx, input)
+		}
 		if err := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Delete(ctx, podName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 			return errors.New("stop runtime pod")
 		}
@@ -1674,6 +1703,12 @@ func (manager *Manager) StopTurn(ctx context.Context, leaseRef string) error {
 func (manager *Manager) DeleteTurn(ctx context.Context, leaseRef string) error {
 	secretName := ticketName(leaseRef)
 	secret, _ := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, secretName, metav1.GetOptions{})
+	if secret != nil && secret.Annotations[workspaceStorageProfileAnnotation] == runtimecontract.WorkspaceStorageProfile {
+		if err := manager.StopTurn(ctx, leaseRef); err != nil {
+			return err
+		}
+		return errors.New("runtime workspace cleanup awaits owner quiescence acknowledgement")
+	}
 	var result error
 	// Успешный warm turn сохраняет общий Pod; остановка timeout выполняется StopTurn.
 	if secret == nil || secret.Annotations[podAnnotation] != "system-assistant-warm" {
@@ -1735,14 +1770,26 @@ func (manager *Manager) deleteExecutionPolicyByHash(ctx context.Context, executi
 type TurnPodObservation struct {
 	State          string
 	DiagnosticCode string
+	Initialization *InitializationObservation
+	ObservedPodUID string
 }
 
 // TurnPodMemoryDiagnostic identifies a current OOMKilled termination of a known runtime container, rather than inferring memory failure from exit code 137 alone.
 // TurnPodMemoryDiagnostic обозначает текущее завершение известного runtime-контейнера с OOMKilled, не выводя нехватку памяти только из кода выхода 137.
 const TurnPodMemoryDiagnostic = "CONTAINER_OOM_KILLED"
 
-// ObserveTurnPod reads the turn or warm Pod, checks revision/compatibility pins and projects phase, readiness and known container termination into closed diagnostics; observed success without callback is not owner completion.
-// ObserveTurnPod читает Pod хода либо warm, проверяет ревизию и совместимость, переводит фазу, готовность и завершение известных контейнеров в закрытую диагностику; наблюдаемый успех без callback не является завершением владельца.
+// TurnPodEvictedDiagnostic identifies the typed Pod reason without inferring storage,
+// memory, node pressure or any particular resource from the private message.
+// TurnPodEvictedDiagnostic обозначает типизированную причину Pod без вывода о диске,
+// памяти, нагрузке узла либо конкретном ресурсе из закрытого сообщения.
+const TurnPodEvictedDiagnostic = "ENVIRONMENT_EVICTED"
+
+// ObserveTurnPod checks cold execution metadata or warm compatibility from one GET.
+// Closed cold resource diagnostics carry that observed UID, never a historical UID
+// proof. Creation/adoption keeps full spec checks; observation cannot complete a run.
+// ObserveTurnPod проверяет метаданные холодного исполнения либо warm-совместимость
+// по одному GET. Закрытая диагностика несёт наблюдённый UID, не доказательство его
+// истории. Создание сохраняет полную проверку spec; наблюдение не завершает запуск.
 func (manager *Manager) ObserveTurnPod(ctx context.Context, input runtimecontract.RunnerInput, warmExecution bool) (TurnPodObservation, error) {
 	podName := runtimecontract.RuntimeTurnPodName(input.LeaseRef)
 	if warmExecution {
@@ -1760,17 +1807,36 @@ func (manager *Manager) ObserveTurnPod(ctx context.Context, input runtimecontrac
 		if compatibilityErr != nil || pod.Annotations[warmCompatibilityAnnotation] != compatibility {
 			return TurnPodObservation{State: "CONFLICT", DiagnosticCode: "WARM_COMPATIBILITY_CONFLICT"}, nil
 		}
-	} else if pod.Annotations[revisionAnnotation] != input.RuntimeRevisionDigest {
-		return TurnPodObservation{State: "CONFLICT", DiagnosticCode: "RUNTIME_REVISION_CONFLICT"}, nil
+	} else {
+		if pod.Annotations[revisionAnnotation] != input.RuntimeRevisionDigest {
+			return TurnPodObservation{State: "CONFLICT", DiagnosticCode: "RUNTIME_REVISION_CONFLICT"}, nil
+		}
+		expected := manager.runtimePodMetadata(input, podName, "turn")
+		if pod.UID == "" || pod.Name != expected.Name || pod.Namespace != expected.Namespace ||
+			!managedMetadataMatches(pod.ObjectMeta, expected) {
+			return TurnPodObservation{State: "CONFLICT", DiagnosticCode: "RUNTIME_EXECUTION_CONFLICT"}, nil
+		}
+	}
+	diagnostic := "POD_FAILED"
+	if !warmExecution {
+		diagnostic = terminalContainerDiagnostic(pod)
 	}
 	switch pod.Status.Phase {
 	case corev1.PodSucceeded:
 		return TurnPodObservation{State: "SUCCEEDED", DiagnosticCode: "POD_SUCCEEDED_WITHOUT_CALLBACK"}, nil
 	case corev1.PodFailed:
-		return TurnPodObservation{State: "FAILED", DiagnosticCode: terminalContainerDiagnostic(pod)}, nil
+		observation := TurnPodObservation{State: "FAILED", DiagnosticCode: diagnostic, ObservedPodUID: string(pod.UID)}
+		if !warmExecution && diagnostic == "WORKSPACE_INIT_EXITED_NONZERO" {
+			initialized, valid := manager.observeInitializationFailure(input, pod)
+			if !valid {
+				return TurnPodObservation{State: "CONFLICT", DiagnosticCode: "RUNTIME_EXECUTION_CONFLICT"}, nil
+			}
+			observation.Initialization = initialized
+		}
+		return observation, nil
 	case corev1.PodRunning:
 		if !warmExecution && runtimePodTerminal(pod, "role-runtime", "provider-runtime", "provider-credential-relay") {
-			return TurnPodObservation{State: "FAILED", DiagnosticCode: terminalContainerDiagnostic(pod)}, nil
+			return TurnPodObservation{State: "FAILED", DiagnosticCode: diagnostic, ObservedPodUID: string(pod.UID)}, nil
 		}
 		if podReady(pod) {
 			return TurnPodObservation{State: "READY"}, nil
@@ -1790,8 +1856,11 @@ func (manager *Manager) TurnPodState(ctx context.Context, input runtimecontract.
 	return observation.State, err
 }
 
-// terminalContainerDiagnostic prioritizes current OOMKilled for known containers, then initializer/runtime/provider/relay exits; historical termination and bare exit137 are not accepted as OOM evidence.
-// terminalContainerDiagnostic отдаёт приоритет текущему OOMKilled известных контейнеров, затем выходам инициализаторов, runtime, провайдера и relay; историческое завершение и один exit137 доказательством OOM не считаются.
+// terminalContainerDiagnostic prioritizes current known-container OOMKilled, then
+// typed Pod eviction and generic exits. History, exit137 and messages prove no cause.
+// terminalContainerDiagnostic отдаёт приоритет текущему OOMKilled известного
+// контейнера, затем типизированному выселению Pod и общим выходам. История, exit137
+// и сообщения не доказывают причину.
 func terminalContainerDiagnostic(pod *corev1.Pod) string {
 	// OOM одного известного контейнера важнее обычного выхода соседа.
 	// Исторический LastTerminationState и один exit137 не доказывают OOM.
@@ -1805,6 +1874,9 @@ func terminalContainerDiagnostic(pod *corev1.Pod) string {
 				return TurnPodMemoryDiagnostic
 			}
 		}
+	}
+	if pod.Status.Reason == "Evicted" {
+		return TurnPodEvictedDiagnostic
 	}
 	for _, status := range pod.Status.InitContainerStatuses {
 		if status.State.Terminated == nil {
@@ -1950,7 +2022,7 @@ func runtimeProjectionData(input runtimecontract.RunnerInput) (map[string]string
 // runtimeProjectionAnnotations derives required revision/configuration/environment/execution/policy bindings and shortened organization/project/session/turn identities for later immutable readback.
 // runtimeProjectionAnnotations выводит обязательные привязки ревизии, конфигурации, окружения, исполнения и политик и сокращённые идентификаторы организации, проекта, сессии и хода для дальнейшей проверки неизменяемости.
 func runtimeProjectionAnnotations(input runtimecontract.RunnerInput, podName string) map[string]string {
-	return map[string]string{
+	result := map[string]string{
 		revisionAnnotation: input.RuntimeRevisionDigest, configAnnotation: input.RuntimeConfigDigest,
 		environmentAnnotation: input.RuntimeEnvironmentDigest, workspacePolicyAnnotation: input.WorkspacePolicy.Digest,
 		executionBindingAnnotation: input.ExecutionBindingDigest, mcpBindingAnnotation: input.MCPBindingDigest,
@@ -1961,6 +2033,12 @@ func runtimeProjectionAnnotations(input runtimecontract.RunnerInput, podName str
 		organizationHashAnnotation: shortHash(input.OrganizationRef), projectHashAnnotation: shortHash(input.ProjectRef), sessionHashAnnotation: shortHash(input.SessionRef),
 		turnHashAnnotation: shortHash(input.TurnRef), attemptAnnotation: strconv.FormatInt(int64(input.Attempt), 10),
 	}
+	if input.WorkspaceStorage != nil {
+		result[workspaceStorageProfileAnnotation] = runtimecontract.WorkspaceStorageProfile
+		result[workspaceStorageRefAnnotation] = input.WorkspaceStorage.WorkspaceRef
+		result[workspaceStorageGenerationAnnotation] = strconv.FormatInt(input.WorkspaceStorage.Generation, 10)
+	}
+	return result
 }
 
 // ensureProjection creates a size-bounded immutable ConfigMap or requires matching metadata, exact text data and no binary data on an existing one; conflicts are rejected rather than patched.
@@ -2018,6 +2096,9 @@ func (manager *Manager) ensureTicket(ctx context.Context, name, podName, mode st
 	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: manager.config.RuntimeNamespace,
 		Labels: map[string]string{managedLabel: "true", modeLabel: mode}, Annotations: annotations},
 		Immutable: &immutable, Type: corev1.SecretTypeOpaque, Data: data}
+	if input.WorkspaceStorage != nil {
+		secret.Labels[workspaceStorageProfileAnnotation] = runtimecontract.WorkspaceStorageProfile
+	}
 	_, err = manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Create(ctx, secret, metav1.CreateOptions{})
 	if apierrors.IsAlreadyExists(err) {
 		existing, getErr := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, name, metav1.GetOptions{})
@@ -2056,6 +2137,9 @@ func byteDataSize(data map[string][]byte) int {
 // runtimeTicketMatches проверяет неизменяемые метаданные, привязки провайдера, канонический вход, точное число записей и формат токена; совпадение переданного токена требуется только warm-turn, остальные режимы сохраняют свой случайный токен.
 func runtimeTicketMatches(existing *corev1.Secret, podName, mode string, input runtimecontract.RunnerInput, token string, environmentSecrets map[string][]byte, providerBinding *ProviderSecretBinding) bool {
 	expectedMetadata := metav1.ObjectMeta{Labels: map[string]string{managedLabel: "true", modeLabel: mode}, Annotations: runtimeProjectionAnnotations(input, podName)}
+	if input.WorkspaceStorage != nil {
+		expectedMetadata.Labels[workspaceStorageProfileAnnotation] = runtimecontract.WorkspaceStorageProfile
+	}
 	if existing == nil || existing.Immutable == nil || !*existing.Immutable || !managedMetadataMatches(existing.ObjectMeta, expectedMetadata) ||
 		existing.Labels[managedLabel] != "true" || existing.Labels[modeLabel] != mode ||
 		existing.Annotations[revisionAnnotation] != input.RuntimeRevisionDigest ||
@@ -2390,34 +2474,25 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 			LocalObjectReference: corev1.LocalObjectReference{Name: runtimeSecretName}, Key: runtimeSecretKeys[item.Name], Optional: boolPointer(false),
 		}}})
 	}
-	annotations := runtimeProjectionAnnotations(input, podName)
-	labels := map[string]string{managedLabel: "true", modeLabel: mode, "app.kubernetes.io/name": "agent-runner", "app.kubernetes.io/component": "role-runtime", "kodex.dev/environment": manager.config.Environment}
-	if mode == "turn" {
-		annotations[leaseAnnotation] = input.LeaseRef
-		labels[executionHashLabel] = shortHash(input.LeaseRef)
-		if credentials != nil {
-			annotations[credentialProjectionNameAnnotation] = credentials.SecretName
-			annotations[credentialProjectionUIDAnnotation] = credentials.SecretUID
-			annotations[credentialProjectionVersionAnnotation] = credentials.SecretResourceVersion
-			annotations[credentialProjectionDigestAnnotation] = credentials.ContentSHA256
-		}
+	metadata := manager.runtimePodMetadata(input, podName, mode)
+	if mode == "turn" && credentials != nil {
+		metadata.Annotations[credentialProjectionNameAnnotation] = credentials.SecretName
+		metadata.Annotations[credentialProjectionUIDAnnotation] = credentials.SecretUID
+		metadata.Annotations[credentialProjectionVersionAnnotation] = credentials.SecretResourceVersion
+		metadata.Annotations[credentialProjectionDigestAnnotation] = credentials.ContentSHA256
 	}
-	if mode == "warm" {
-		compatibility, _ := runtimecontract.WarmCompatibilityDigest(input)
-		annotations[warmCompatibilityAnnotation] = compatibility
-	}
-	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: manager.config.RuntimeNamespace,
-		Labels:      labels,
-		Annotations: annotations},
+	pod := &corev1.Pod{ObjectMeta: metadata,
 		Spec: corev1.PodSpec{ServiceAccountName: serviceAccountName, AutomountServiceAccountToken: boolPointer(false), EnableServiceLinks: boolPointer(false), RestartPolicy: corev1.RestartPolicyNever, TerminationGracePeriodSeconds: int64Pointer(150),
-			SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: boolPointer(true), FSGroup: int64Pointer(29000), FSGroupChangePolicy: fsGroupChangePolicyPointer(corev1.FSGroupChangeOnRootMismatch), SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
+			SecurityContext: runtimeWorkloadPodSecurityContext(),
 			InitContainers: []corev1.Container{
 				{Name: "workspace-prepare", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-prepare-workspace"}, SecurityContext: restrictedSecurityContext(10001), VolumeMounts: []corev1.VolumeMount{{Name: "workspace", MountPath: "/workspace"}}, Resources: smallResources()},
-				{Name: "workspace-init", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-init-workspace"}, SecurityContext: restrictedSecurityContext(10001), VolumeMounts: initMounts, Resources: smallResources()},
+				{Name: "workspace-init", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, TerminationMessagePath: "/dev/termination-log", TerminationMessagePolicy: corev1.TerminationMessageReadFile, Args: []string{"runtime-init-workspace"}, SecurityContext: restrictedSecurityContext(10001), VolumeMounts: initMounts, Resources: smallResources()},
 			},
 			Containers: []corev1.Container{role, provider, relay}, Volumes: volumes}}
+	if !configureWorkspaceStoragePod(pod, input) {
+		return nil
+	}
 	if manager.config.RPCProfile == runtimecontract.CallbackProfileTrustedCluster {
-		pod.Labels["kodex.dev/security-profile"] = runtimecontract.CallbackProfileTrustedCluster
 		pod.Spec.Volumes = slices.DeleteFunc(pod.Spec.Volumes, func(volume corev1.Volume) bool {
 			return volume.Name == "callback-ca" || volume.Name == "callback-client"
 		})
@@ -2430,6 +2505,27 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		}
 	}
 	return pod
+}
+
+// runtimePodMetadata shares server-derived execution metadata between creation and
+// observation. It contains no credentials or UID history and grants no authority.
+// runtimePodMetadata объединяет серверные метаданные исполнения для создания и
+// наблюдения. Она не содержит реквизитов либо истории UID и не даёт полномочий.
+func (manager *Manager) runtimePodMetadata(input runtimecontract.RunnerInput, podName, mode string) metav1.ObjectMeta {
+	annotations := runtimeProjectionAnnotations(input, podName)
+	labels := map[string]string{managedLabel: "true", modeLabel: mode, "app.kubernetes.io/name": "agent-runner", "app.kubernetes.io/component": "role-runtime", "kodex.dev/environment": manager.config.Environment}
+	if mode == "turn" {
+		annotations[leaseAnnotation] = input.LeaseRef
+		labels[executionHashLabel] = shortHash(input.LeaseRef)
+	}
+	if mode == "warm" {
+		compatibility, _ := runtimecontract.WarmCompatibilityDigest(input)
+		annotations[warmCompatibilityAnnotation] = compatibility
+	}
+	if manager.config.RPCProfile == runtimecontract.CallbackProfileTrustedCluster {
+		labels["kodex.dev/security-profile"] = runtimecontract.CallbackProfileTrustedCluster
+	}
+	return metav1.ObjectMeta{Name: podName, Namespace: manager.config.RuntimeNamespace, Labels: labels, Annotations: annotations}
 }
 
 // runtimeProxyURL signs a web-access grant bound to the lease or warm revision/session identity and policy digest, embedding it as proxy credentials; the returned URL is private and must not be logged.

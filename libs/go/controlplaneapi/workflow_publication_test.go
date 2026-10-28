@@ -76,3 +76,41 @@ func TestWorkflowPublicationResultSchemaClosed(t *testing.T) {
 		}
 	}
 }
+
+// TestWorkflowPublicationGateExpiry keeps absent legacy wire unchanged and exact TTL digest-bound.
+// TestWorkflowPublicationGateExpiry сохраняет прежнюю передачу без срока и связывает явный срок с дайджестом.
+func TestWorkflowPublicationGateExpiry(t *testing.T) {
+	legacy := publicationFixture()
+	raw, digest, err := EncodeWorkflowPublication(legacy)
+	if err != nil || strings.Contains(string(raw), "approval_timeout_seconds") {
+		t.Fatal("legacy catalog acquired a gate timeout")
+	}
+	decoded, err := DecodeWorkflowPublication(raw, digest)
+	if err != nil || decoded.Steps[0].ApprovalTimeoutSeconds != nil {
+		t.Fatal("absent gate policy did not roundtrip")
+	}
+	for _, ttl := range []int32{0, 1, 604800, 604801} {
+		v := publicationFixture()
+		v.Steps[0].HumanGateAfter = true
+		v.Steps[0].GateDecisions = []string{"APPROVE"}
+		v.Steps[0].ApprovalTimeoutSeconds = &ttl
+		wire, pin, err := EncodeWorkflowPublication(v)
+		if ttl == 0 || ttl > 604800 {
+			if err == nil {
+				t.Fatal("invalid catalog TTL accepted")
+			}
+			continue
+		}
+		if err != nil || pin == digest {
+			t.Fatal("TTL not committed in catalog digest")
+		}
+		actual, err := DecodeWorkflowPublication(wire, pin)
+		if err != nil || actual.Steps[0].ApprovalTimeoutSeconds == nil || *actual.Steps[0].ApprovalTimeoutSeconds != ttl {
+			t.Fatal("strict catalog lost pinned TTL")
+		}
+		v.Steps[0].HumanGateAfter = false
+		if _, _, err := EncodeWorkflowPublication(v); err == nil {
+			t.Fatal("ungated TTL accepted")
+		}
+	}
+}

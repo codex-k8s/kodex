@@ -70,14 +70,16 @@ func TestAssistantPlanDiagnosticsExportOnlyBoundedMetadata(t *testing.T) {
 // диагностики неверного поля точными ErrorInfo metadata и отсутствие вымышленных guard details у
 // обычной invalid-ошибки.
 func TestAssistantPlanInvalidFieldTransportIsMetadataOnly(t *testing.T) {
-	failure := errs.WithAssistantPlanStage(errs.WithAssistantPlanField(errors.Join(errs.ErrInvalid, errors.New("PRIVATE_INPUT")), "STEPS_INSTRUCTIONS"), errs.AssistantPlanHydrate, 1)
-	value := status.Convert(assistantPlanTransportError(failure))
-	if value.Code() != codes.InvalidArgument || len(value.Details()) != 1 || strings.Contains(value.String(), "PRIVATE_INPUT") {
-		t.Fatal("invalid field changed canonical status or exposed input")
-	}
-	info := value.Details()[0].(*errdetails.ErrorInfo)
-	if info.Domain != controlPlaneErrorDomain || info.Reason != errs.AssistantPlanHydrate || len(info.Metadata) != 3 || info.Metadata["category"] != "INVALID" || info.Metadata["field"] != "STEPS_INSTRUCTIONS" || info.Metadata["operation_index"] != "1" {
-		t.Fatal("invalid guard metadata was not exported exactly")
+	for _, field := range []string{"STEPS_INSTRUCTIONS", "WORKFLOW_TEXT_BUDGET"} {
+		failure := errs.WithAssistantPlanStage(errs.WithAssistantPlanField(errors.Join(errs.ErrInvalid, errors.New("PRIVATE_INPUT")), field), errs.AssistantPlanHydrate, 1)
+		value := status.Convert(assistantPlanTransportError(failure))
+		if value.Code() != codes.InvalidArgument || len(value.Details()) != 1 || strings.Contains(value.String(), "PRIVATE_INPUT") {
+			t.Fatal("invalid field changed canonical status or exposed input")
+		}
+		info := value.Details()[0].(*errdetails.ErrorInfo)
+		if info.Domain != controlPlaneErrorDomain || info.Reason != errs.AssistantPlanHydrate || len(info.Metadata) != 3 || info.Metadata["category"] != "INVALID" || info.Metadata["field"] != field || info.Metadata["operation_index"] != "1" {
+			t.Fatal("invalid guard metadata was not exported exactly")
+		}
 	}
 	if len(status.Convert(assistantPlanTransportError(errs.ErrInvalid)).Details()) != 0 {
 		t.Fatal("bare invalid error invented a guard")

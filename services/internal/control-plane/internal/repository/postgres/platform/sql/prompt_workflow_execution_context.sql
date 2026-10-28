@@ -25,6 +25,7 @@ SELECT root.ref, run.ref, node.ref, session.ref, turn.ref, agent.ref,
                'resultGateRef', COALESCE(result_gate.ref, ''),
                'resultGateState', COALESCE(result_gate.state, ''),
                'resultGateDecision', COALESCE(result_gate.decision, ''),
+               'resultGateResolutionKind', COALESCE(result_gate.closure_kind, ''),
                'ready', current_step.materialization_state = 'PLANNED'
                         AND current_step.state = 'PLANNED'
                         AND NOT EXISTS (
@@ -40,8 +41,28 @@ SELECT root.ref, run.ref, node.ref, session.ref, turn.ref, agent.ref,
              ON current_step.organization_id = node.organization_id
             AND current_step.root_run_id = root.id
             AND current_step.workflow_step_key = step.value->>'Key'
+            AND (NOT EXISTS (
+                SELECT 1 FROM control_plane.run_nodes rework
+                WHERE rework.organization_id=root.organization_id AND rework.root_run_id=root.id
+                    AND rework.workflow_step_key=step.value->>'Key' AND rework.owner_rework_gate_id IS NOT NULL
+            ) OR (current_step.owner_rework_gate_id IS NOT NULL
+                AND NOT EXISTS (SELECT 1 FROM control_plane.run_edges continuation
+                    WHERE continuation.organization_id=root.organization_id AND continuation.root_run_id=root.id
+                        AND continuation.source_node_id=current_step.id AND continuation.type='CONTINUES')
+                AND NOT EXISTS (SELECT 1 FROM control_plane.runs replacement
+                    JOIN control_plane.run_nodes fresh ON fresh.run_id=replacement.id AND fresh.organization_id=root.organization_id
+                        AND fresh.root_run_id=root.id AND fresh.owner_rework_gate_id IS NOT NULL
+                        AND fresh.owner_rework_origin_node_id IS NULL AND fresh.workflow_step_key=current_step.workflow_step_key
+                    WHERE replacement.organization_id=root.organization_id AND replacement.root_run_id=root.id
+                        AND replacement.retry_of_run_id=current_step.run_id)))
+            AND (COALESCE(version.spec->>'ExecutionMode','')<>'SERVER_DAG_V1' OR NOT EXISTS (
+                SELECT 1 FROM control_plane.run_nodes newer
+                WHERE newer.organization_id=current_step.organization_id AND newer.root_run_id=current_step.root_run_id
+                  AND COALESCE(newer.workflow_step_origin_node_id,newer.id)=COALESCE(current_step.workflow_step_origin_node_id,current_step.id)
+                  AND (newer.workflow_business_attempt,newer.attempt)>(current_step.workflow_business_attempt,current_step.attempt)
+            ))
            LEFT JOIN LATERAL (
-               SELECT gate.ref, gate.state, gate.decision
+               SELECT gate.ref, gate.state, gate.decision, gate.closure_kind
                FROM control_plane.owner_gates gate
                JOIN control_plane.run_nodes gate_node
                  ON gate_node.id = gate.node_id AND gate_node.organization_id = gate.organization_id
@@ -51,7 +72,9 @@ SELECT root.ref, run.ref, node.ref, session.ref, turn.ref, agent.ref,
                  AND gate.integration_invocation_id IS NULL
                ORDER BY gate.created_at DESC, gate.ref DESC LIMIT 1
            ) result_gate ON true
-       ), '[]'::jsonb)
+       ), '[]'::jsonb),
+       CASE WHEN version.spec->>'ExecutionMode'='SERVER_DAG_V1' THEN 'SERVER_DAG_V1' ELSE '' END,
+       root.id::text
 FROM control_plane.run_nodes node
 JOIN control_plane.runs run ON run.id = node.run_id AND run.organization_id = node.organization_id
 JOIN control_plane.runs root ON root.id = node.root_run_id AND run.root_run_id = root.id

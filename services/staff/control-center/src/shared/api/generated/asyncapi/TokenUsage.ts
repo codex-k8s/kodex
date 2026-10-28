@@ -8,4 +8,5 @@ export interface TokenUsage {
   outputTokens: number;
   reasoningOutputTokens: number;
   modelContextWindow: number;
+  completeness?: string;
 }

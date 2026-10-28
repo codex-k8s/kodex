@@ -1,0 +1,176 @@
+export const workflowResultMessages = {
+  ru: {
+    reworkPolicy: "Возврат результатов на доработку",
+    reworkLegacy: "Повтор текущего этапа после решения владельца",
+    reworkUpstream: "Возврат авторам и повтор зависимых проверок",
+    reworkUnknown: "Неизвестная политика — сохранение недоступно",
+    reworkHelp:
+      "Только явное решение владельца возвращает опубликованных авторов. Старые результаты остаются в истории; новые проверки используют свежие результаты. Лимиты попыток и правила внешних действий сохраняются.",
+    reworkChange:
+      "Изменить политику доработки в черновике? Это повлияет только на будущую опубликованную версию. Сохранение и публикация выполняются отдельно.",
+    subjectResult: "Проверяемый результат-файл",
+    reworkPlan: "План доработки после одобрения",
+    reworkApprovedPlan: "Одобренный план доработки",
+    reworkDeclinedPlan: "План доработки не был разрешён",
+    reworkAuthors: "Вернуть авторам",
+    reworkChecks: "Повторить зависимые этапы",
+    reworkAttempt: "Попытка {previous} → {next}",
+    reworkExhausted: "Бюджет попыток исчерпан",
+    reworkBoundary:
+      "Одобрение разрешает только указанные новые попытки. Оно не принимает прежние результаты и не разрешает повтор внешнего действия с неизвестным исходом.",
+    superseded:
+      "Это согласование утратило актуальность после одобренной доработки. Владелец не отменял процесс; новые результаты потребуют собственного согласования.",
+    blockers: {
+      WORKFLOW_ATTEMPTS_EXHAUSTED: "Новая попытка недоступна: лимит исчерпан",
+      WORKFLOW_IRREVERSIBLE_EFFECT_REPAIR_REQUIRED:
+        "Нужно отдельное решение по уже выполненному слиянию или развёртыванию",
+    },
+    freshness: {
+      CURRENT: "Актуальный результат попытки",
+      HISTORICAL: "Исторический результат",
+      STALE_DEPENDENCY: "Результат относится к прежним входам",
+      REWORK_PENDING: "Ожидается результат одобренной доработки",
+      WAITING_OWNER: "Ожидается согласование результата",
+      BLOCKED: "Результат не допускает продолжение процесса",
+    },
+    evidenceProfile: "Доказательства ревью и QA",
+    evidenceLegacy: "Прежний профиль",
+    evidenceNative: "GitHub COMMENT и сохранённый QA-отчёт",
+    enableEvidence: "Включить COMMENT и QA-отчёт",
+    evidenceHelp:
+      "Ревью требует реальный COMMENT на точный PR/commit. QA сохраняет JSON-отчёт и вывод команд; сервер проверяет файлы и происхождение, а не аттестует выполнение тестов. Issue создаётся только для реального дефекта.",
+    evidenceKey: "JSON-файл отчёта QA этого этапа",
+    negativeEvidence:
+      "Сохранённые доказательства отклонённой попытки; обязательные результаты не приняты.",
+    attempts: "Результаты этапа",
+    accepted: "Обязательные результаты приняты",
+    historicalAccepted:
+      "Условия были пройдены в этой попытке; актуальный допуск указан отдельно",
+    rejected: "Обязательные результаты не приняты",
+    reason: "Причина остановки",
+    healthy: "Проверка состояния пройдена",
+    healthUnverified: "Проверка состояния не подтверждена",
+    mode: "Переход между этапами",
+    modes: {
+      MANAGER_DRIVEN: "По решению менеджера",
+      SERVER_DAG_V1: "Автоматически после проверки результатов",
+    },
+    modeChange:
+      "Изменить режим процесса? При переходе к менеджеру зависимости, условия результатов и политика возврата авторам будут удалены из черновика. При автоматическом переходе их нужно настроить явно. Сохранение выполняется отдельно.",
+    bounds:
+      "Автоматический процесс: до 12 этапов, до 2 одновременных исполнений. Менеджер разбирает отклонения; обычные переходы выполняет сервер.",
+    invalid:
+      "Проверьте ключи, зависимости, обязательные результаты и независимость рецензентов. Разрешены до 8 предшественников и 4 условий на этап, общий текст — до 8 КиБ. Проверка файла требует явной политики возврата авторам. Делегирование и запуск дочерних процессов в этом режиме недоступны.",
+    title: "Обязательные результаты и зависимости",
+    key: "Ключ этапа",
+    dependencies: "Предшествующие этапы",
+    help: "Этап получает принятые результаты выбранных предшественников. Один ответ модели не заменяет файл, PR или подтверждение внешнего действия.",
+    resultKey: "Ключ результата",
+    kind: "Условие",
+    fileName: "Имя файла",
+    mediaType: "Тип содержимого",
+    repository: "Репозиторий, организация/имя",
+    subject: "Этап, результат которого проверяется",
+    target: "Цель SSH из каталога подключений",
+    add: "Добавить условие",
+    remove: "Удалить условие",
+    missing: "Не выбран",
+    unknownDependency: "Недоступный предшественник",
+    kinds: {
+      ARTIFACT: "Файл",
+      ARTIFACT_REVIEW: "Независимая проверка файла",
+      PULL_REQUEST: "Открытый PR",
+      REVIEW: "Независимое ревью PR",
+      QA: "Проверка PR",
+      INTEGRATION_RECEIPT: "Подтверждённое слияние PR",
+      DEPLOYMENT: "Развёртывание с проверкой состояния",
+    },
+  },
+  en: {
+    reworkPolicy: "Result rework policy",
+    reworkLegacy: "Retry the current stage after owner decision",
+    reworkUpstream: "Return to authors and repeat dependent checks",
+    reworkUnknown: "Unknown policy — saving is unavailable",
+    reworkHelp:
+      "Only an explicit owner decision returns published authors to work. Prior results stay in history; new checks use fresh results. Attempt limits and external-effect rules remain mandatory.",
+    reworkChange:
+      "Change the draft rework policy? It affects only a future published version. Saving and publication are separate actions.",
+    subjectResult: "Artifact result to review",
+    reworkPlan: "Rework plan after approval",
+    reworkApprovedPlan: "Approved rework plan",
+    reworkDeclinedPlan: "Rework plan was not authorized",
+    reworkAuthors: "Return to authors",
+    reworkChecks: "Repeat dependent stages",
+    reworkAttempt: "Attempt {previous} → {next}",
+    reworkExhausted: "Attempt budget exhausted",
+    reworkBoundary:
+      "Approval authorizes only the listed fresh attempts. It neither accepts old results nor authorizes repeating an external effect with an unknown outcome.",
+    superseded:
+      "This approval became obsolete after approved rework. The owner did not cancel the workflow; new results need their own approval.",
+    blockers: {
+      WORKFLOW_ATTEMPTS_EXHAUSTED: "No fresh attempt: budget exhausted",
+      WORKFLOW_IRREVERSIBLE_EFFECT_REPAIR_REQUIRED:
+        "A completed merge or deployment requires a separate owner decision",
+    },
+    freshness: {
+      CURRENT: "Current attempt result",
+      HISTORICAL: "Historical result",
+      STALE_DEPENDENCY: "Result belongs to previous inputs",
+      REWORK_PENDING: "Waiting for approved rework results",
+      WAITING_OWNER: "Waiting for result approval",
+      BLOCKED: "Result cannot advance the workflow",
+    },
+    evidenceProfile: "Review and QA evidence",
+    evidenceLegacy: "Previous profile",
+    evidenceNative: "GitHub COMMENT and captured QA report",
+    enableEvidence: "Enable COMMENT and QA report",
+    evidenceHelp:
+      "Review requires a real COMMENT on the exact PR/commit. QA captures its JSON report and command output; the server verifies files and provenance without attesting test execution. Create an Issue only for a real defect.",
+    evidenceKey: "Same-stage QA JSON report",
+    negativeEvidence:
+      "Retained facts from the rejected attempt; required results are not accepted.",
+    attempts: "Stage results",
+    accepted: "Required results accepted",
+    historicalAccepted:
+      "Predicates passed in this attempt; current eligibility is shown separately",
+    rejected: "Required results not accepted",
+    reason: "Stop reason",
+    healthy: "Health check passed",
+    healthUnverified: "Health check not confirmed",
+    mode: "Stage progression",
+    modes: {
+      MANAGER_DRIVEN: "Manager decision",
+      SERVER_DAG_V1: "Automatic after result verification",
+    },
+    modeChange:
+      "Change workflow mode? Switching to manager coordination removes dependencies and result requirements from the draft. Automatic progression requires explicit configuration. Save separately to apply.",
+    bounds:
+      "Automatic workflow: up to 12 stages and 2 concurrent executions. The manager handles exceptions; the server advances ordinary stages.",
+    invalid:
+      "Check keys, dependencies, required results and reviewer independence. Up to 8 predecessors and 4 requirements per stage, with 8 KiB of text total. Delegation and child launches are unavailable in this mode.",
+    title: "Required results and dependencies",
+    key: "Stage key",
+    dependencies: "Predecessor stages",
+    help: "Stages receive accepted predecessor results. A model response alone does not replace a file, PR or external action receipt.",
+    resultKey: "Result key",
+    kind: "Requirement",
+    fileName: "File name",
+    mediaType: "Media type",
+    repository: "Repository, owner/name",
+    subject: "Stage whose result is checked",
+    target: "SSH target from the connection catalog",
+    add: "Add requirement",
+    remove: "Remove requirement",
+    missing: "Not selected",
+    unknownDependency: "Unavailable predecessor",
+    kinds: {
+      ARTIFACT: "File",
+      ARTIFACT_REVIEW: "Independent artifact review",
+      PULL_REQUEST: "Open PR",
+      REVIEW: "Independent PR review",
+      QA: "PR verification",
+      INTEGRATION_RECEIPT: "Confirmed PR merge",
+      DEPLOYMENT: "Deployment with health check",
+    },
+  },
+};

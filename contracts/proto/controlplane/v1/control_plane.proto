@@ -359,6 +359,8 @@ service RuntimeSecretWorkService {
   rpc ResolveRuntimeCredentialProjection(ResolveRuntimeCredentialProjectionRequest) returns (ResolveRuntimeCredentialProjectionResponse);
   rpc ValidateRuntimeCredentialProjection(ValidateRuntimeCredentialProjectionRequest) returns (ValidateRuntimeCredentialProjectionResponse);
   rpc ResolveTranscriptionCredentialProjection(ResolveTranscriptionCredentialProjectionRequest) returns (ResolveTranscriptionCredentialProjectionResponse);
+  // Возвращает только descriptor exact SSH key действующего owner lease.
+  rpc ResolveSSHComposeCredentialProjection(ResolveSSHComposeCredentialProjectionRequest) returns (ResolveSSHComposeCredentialProjectionResponse);
 }
 
 service SystemAssistantService {
@@ -406,6 +408,9 @@ service RuntimeWorkService {
   rpc ReportExecutionProgress(ReportExecutionProgressRequest) returns (ReportExecutionProgressResponse);
   rpc CommitProviderCredentialRefresh(CommitProviderCredentialRefreshRequest) returns (CommitProviderCredentialRefreshResponse);
   rpc CompleteExecution(CompleteExecutionRequest) returns (CompleteExecutionResponse);
+  // Сохраняет только exact writer BIND либо past quiescence fact. Terminal ACK
+  // не создаёт grant, RuntimeRevision, run transition или новую generation.
+  rpc ObserveWorkspace(ObserveWorkspaceRequest) returns (ObserveWorkspaceResponse);
   rpc DelegateExecution(DelegateExecutionRequest) returns (DelegateExecutionResponse);
   // Запускает опубликованный Workflow из exact active execution; actor/project
   // и обязательную связь родителя назначает владелец, не caller payload.
@@ -430,6 +435,10 @@ service RuntimeWorkService {
   rpc CompleteIntegrationConnectionTest(CompleteIntegrationConnectionTestRequest) returns (CompleteIntegrationConnectionTestResponse);
   rpc ResolveIntegrationInvocation(ResolveIntegrationInvocationRequest) returns (ResolveIntegrationInvocationResponse);
   rpc ClaimIntegrationInvocations(ClaimIntegrationInvocationsRequest) returns (ClaimIntegrationInvocationsResponse);
+  // Отдельная очередь сохраняет короткий бюджет остальных adapters.
+  rpc ClaimSSHComposeInvocations(ClaimSSHComposeInvocationsRequest) returns (ClaimSSHComposeInvocationsResponse);
+  // Owner повторно проверяет source/target/grants/secret и подписывает короткий permit.
+  rpc RenewSSHComposeInvocation(RenewSSHComposeInvocationRequest) returns (RenewSSHComposeInvocationResponse);
   rpc GetIntegrationInvocation(GetIntegrationInvocationRequest) returns (GetIntegrationInvocationResponse);
   rpc CompleteIntegrationInvocation(CompleteIntegrationInvocationRequest) returns (CompleteIntegrationInvocationResponse);
 }
@@ -823,6 +832,7 @@ enum IntegrationResourceKind {
   INTEGRATION_RESOURCE_KIND_CONFLUENCE_SPACE = 6;
   INTEGRATION_RESOURCE_KIND_EMAIL_SENDER = 7;
   INTEGRATION_RESOURCE_KIND_HTTPS_RESOURCE = 8;
+  INTEGRATION_RESOURCE_KIND_SSH_TARGET = 9;
 }
 
 // IntegrationDefinitionOrigin фиксирует источник immutable definition revision.
@@ -962,6 +972,30 @@ message WorkflowInputField {
   repeated string options = 6;
 }
 
+// WorkflowResultRequirement выбирает обязательное доказательство; locator не предоставляет права.
+message WorkflowResultRequirement {
+  // key уникален в пределах этапа и связывает объявление с опубликованным условием.
+  string key = 1;
+  // kind принадлежит закрытому реестру ARTIFACT/ARTIFACT_REVIEW/PULL_REQUEST/REVIEW/QA/INTEGRATION_RECEIPT/DEPLOYMENT.
+  string kind = 2;
+  // file_name задаёт имя непосредственного файла outbox только для ARTIFACT.
+  string file_name = 3;
+  // media_type задаёт ожидаемый проверенный MIME файла только для ARTIFACT.
+  string media_type = 4;
+  // repository — точное owner/name, без URL и credentials.
+  string repository = 5;
+  // subject_step_key выбирает точный опубликованный prerequisite, не произвольный Run.
+  string subject_step_key = 6;
+  // operation задаёт закрытую интеграционную операцию проверяемой квитанции.
+  string operation = 7;
+  // target_ref закрепляет разрешённую цель DEPLOYMENT, без подключения либо секрета.
+  string target_ref = 8;
+  // subject_result_key выбирает exact ARTIFACT predicate published prerequisite только для ARTIFACT_REVIEW.
+  string subject_result_key = 9;
+  // evidence_key связывает QA с same-step JSON ARTIFACT только явного профиля.
+  string evidence_key = 10;
+}
+
 message WorkflowStep {
   string ref = 1;
   int32 position = 2;
@@ -975,6 +1009,11 @@ message WorkflowStep {
   bool human_gate = 10;
   repeated OwnerGateDecision gate_decisions = 11;
   repeated string required_capability_keys = 12;
+  optional int32 approval_timeout_seconds = 13;
+  // depends_on сохраняет авторитетные ключи предшественников без вывода из порядка UI.
+  repeated string depends_on = 14;
+  // result_requirements обязательны для явно серверного режима; предел — четыре условия.
+  repeated WorkflowResultRequirement result_requirements = 15;
 }
 
 message WorkflowVersion {
@@ -993,6 +1032,12 @@ message WorkflowVersion {
   repeated string validation_messages = 13;
   google.protobuf.Timestamp created_at = 14;
   google.protobuf.Timestamp published_at = 15;
+  // execution_mode закрепляется опубликованной версией; отсутствие сохраняет прежний режим.
+  string execution_mode = 16;
+  // rework_policy включается только новой публикацией, не переосмысливает legacy Gates.
+  string rework_policy = 17;
+  // Новый profile не переинтерпретирует прежние published snapshots.
+  string result_evidence_profile = 18;
 }
 
 message Workflow {
@@ -1051,6 +1096,15 @@ message TokenUsage {
   int64 output_tokens = 5;
   int64 reasoning_output_tokens = 6;
   int64 model_context_window = 7;
+  // Отсутствующее поле/zero у старых записей означает UNKNOWN, не измеренный ноль.
+  UsageCompleteness completeness = 8;
+}
+
+// Полнота измерений хода; не является биллингом или допуском по квоте.
+enum UsageCompleteness {
+  USAGE_COMPLETENESS_UNSPECIFIED = 0;
+  USAGE_COMPLETENESS_PARTIAL = 1;
+  USAGE_COMPLETENESS_COMPLETE = 2;
 }
 
 // AssistantRunPin — серверная read-only привязка хода к точному диалогу и
@@ -1118,6 +1172,56 @@ message Run {
   RunSessionReadiness session_readiness = 34;
 }
 
+// WorkflowAcceptedResult — доказательство, принятое владельцем, а не заявление модели.
+message WorkflowAcceptedResult {
+  // key соответствует условию опубликованного этапа.
+  string key = 1;
+  // kind определяет закрытый вид доказательства.
+  string kind = 2;
+  // artifact_ref выбирает точный принятый артефакт.
+  string artifact_ref = 3;
+  // artifact_revision закрепляет неизменяемую ревизию артефакта, не текущий head.
+  string artifact_revision = 4;
+  // digest связывает точные байты принятого доказательства.
+  string digest = 5;
+  // receipt_ref выбирает проверенную владельцем квитанцию эффекта.
+  string receipt_ref = 6;
+  // repository содержит точное owner/name принятого GitHub результата.
+  string repository = 7;
+  // number — положительный номер принятого PR для применимого результата.
+  int64 number = 8;
+  // head_sha — полный принятый commit SHA, без веток и сокращений.
+  string head_sha = 9;
+  // verdict — проверенное заключение назначенного REVIEW/QA.
+  string verdict = 10;
+  // target_ref закрепляет разрешённую цель развёртывания, не credential.
+  string target_ref = 11;
+  // bundle_sha256 связывает принятый пакет развёртывания.
+  string bundle_sha256 = 12;
+  // image_digest связывает неизменяемый образ развёртывания.
+  string image_digest = 13;
+  // health_ok относится к точной проверенной deployment receipt.
+  bool health_ok = 14;
+}
+
+// WorkflowAttemptResult хранит один итог бизнес-попытки; технические продолжения не расходуют попытку.
+message WorkflowAttemptResult {
+  // attempt — назначенный сервером номер бизнес-попытки от1 до4.
+  int32 attempt = 1;
+  // run_ref выбирает фактический producing run итогового завершения.
+  string run_ref = 2;
+  // accepted подтверждается только owner predicate и не отменяет отдельный Human Gate.
+  bool accepted = 3;
+  // reason — закрытая диагностическая причина, без ответа провайдера и секретов.
+  string reason = 4;
+  // results содержит не более четырёх принятых доказательств данной попытки.
+  repeated WorkflowAcceptedResult results = 5;
+  // Текущая owner freshness не изменяет historical accepted.
+  string effective_state = 6;
+  // evidence сохраняет проверенные факты отклонённой попытки и не означает принятия results.
+  repeated WorkflowAcceptedResult evidence = 7;
+}
+
 message RunNode {
   string ref = 1;
   string run_ref = 2;
@@ -1144,6 +1248,8 @@ message RunNode {
   // planned=true означает, что вершина уже является частью immutable workflow
   // snapshot, но execution lease для неё ещё не материализован.
   bool planned = 23;
+  // workflow_results — append-only история до четырёх бизнес-попыток логического этапа.
+  repeated WorkflowAttemptResult workflow_results = 24;
 }
 
 message RunEdge {
@@ -1153,6 +1259,8 @@ message RunEdge {
   string target_node_ref = 4;
   RunEdgeType type = 5;
   string label = 6;
+  // server_workflow_retry присутствует только для owner-proved SERVER child-to-child RETRY_OF.
+  WorkflowRetryReadProof server_workflow_retry = 7;
 }
 
 // RunDelta содержит ограниченный безопасный снимок изменившегося корневого
@@ -1313,6 +1421,9 @@ message OwnerGate {
   // ORGANIZATION разрешается только системному помощнику без project locator.
   RuntimeResourceScopeKind scope_kind = 24;
   string organization_ref = 25;
+  // SUPERSEDED отличается от owner CANCEL и TTL expiry.
+  string resolution_kind = 26;
+  WorkflowReworkPreview rework_plan = 27;
 }
 
 message OwnerGateDecisionConsequence {
@@ -1699,6 +1810,8 @@ message AssistantPlanOperation {
     TYPE_CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT = 32;
     // Создать новую immutable ревизию существующего Artifact после owner Apply.
     TYPE_CREATE_PROJECT_FILE_REVISION = 33;
+    // Подготовить атомарную модель и overlay обычного сотрудника точного проекта.
+    TYPE_PREPARE_AGENT_RUNTIME_CONFIGURATION = 34;
   }
   enum Action {
     ACTION_UNSPECIFIED = 0;
@@ -3703,6 +3816,71 @@ message RuntimeRevisionSnapshot {
   string assistant_profile_ref = 77;
   repeated ManagedMCPProfile managed_mcp_profiles = 78;
   RuntimeExecutionDeadline execution_deadline = 79;
+  // Owner-selected private work generation; старый input сохраняет отсутствие поля.
+  RuntimeWorkspaceStorage workspace_storage = 80;
+}
+
+message RuntimeWorkspaceScope {
+  string organization_ref = 1;
+  string project_ref = 2;
+  string session_ref = 3;
+  string agent_ref = 4;
+}
+
+message RuntimeWorkspaceObject {
+  string key = 1;
+  string version = 2;
+  string etag = 3;
+  string digest = 4;
+  int64 size_bytes = 5;
+}
+
+message RuntimeWorkspaceCheckpoint {
+  RuntimeWorkspaceScope scope = 1;
+  string workspace_ref = 2;
+  int64 generation = 3;
+  string checkpoint_ref = 4;
+  RuntimeWorkspaceObject manifest = 5;
+  string tree_sha256 = 6;
+  int64 bytes = 7;
+  int64 entries = 8;
+}
+
+message RuntimeWorkspaceStorage {
+  string profile = 1;
+  RuntimeWorkspaceScope scope = 2;
+  string workspace_ref = 3;
+  int64 generation = 4;
+  RuntimeWorkspaceCheckpoint source = 5;
+  // Accepted owner volume preparation закрепляет exact physical incarnation до BIND/RESTORE.
+  // Наличие record не является grant; актуальные scope/task/PVC UID проверяет owner.
+  RuntimeWorkspaceVolumeReady volume_ready = 6;
+}
+
+// Logical preparation физического тома, отдельная от model revision/lease и writable tree generation.
+message RuntimeWorkspaceVolumePreparation {
+  // Назначаемая owner область сотрудника и сессии; payload не выдаёт полномочий.
+  RuntimeWorkspaceScope scope = 1;
+  // Immutable work identity.
+  string workspace_ref = 2;
+  // Logical PREPARE task из отдельного svt_ namespace.
+  string task_ref = 3;
+  // Положительно наблюдавшийся exact PVC Create UID.
+  string pvc_uid = 4;
+  // Монотонная incarnation физического тома; не model attempt.
+  int64 volume_generation = 5;
+}
+
+// Ограниченное sealed inode observation; не доказывает пустоту поздних business data либо positive process join.
+message RuntimeWorkspaceVolumeReady {
+  // Только поддерживаемая canonical local schema.
+  string schema = 1;
+  // Immutable logical preparation; accepted tuple принадлежит owner.
+  RuntimeWorkspaceVolumePreparation preparation = 2;
+  // Kernel device точного подготовленного root.
+  uint64 device = 3;
+  // Kernel inode точного подготовленного root.
+  uint64 inode = 4;
 }
 
 enum RuntimeFilePurpose {
@@ -4084,6 +4262,44 @@ message CompleteExecutionResponse {
   RunGraph graph = 2;
 }
 
+enum RuntimeWorkspaceObservationPhase {
+  RUNTIME_WORKSPACE_OBSERVATION_PHASE_UNSPECIFIED = 0;
+  RUNTIME_WORKSPACE_OBSERVATION_PHASE_BIND = 1;
+  RUNTIME_WORKSPACE_OBSERVATION_PHASE_QUIESCENT = 2;
+  RUNTIME_WORKSPACE_OBSERVATION_PHASE_BLOCKED = 3;
+  RUNTIME_WORKSPACE_OBSERVATION_PHASE_RELEASED = 4;
+}
+message ObserveWorkspaceRequest {
+  MutationContext mutation = 1;
+  string lease_ref = 2;
+  string fence = 3;
+  int64 generation = 4;
+  string runtime_revision_digest = 5;
+  string workspace_ref = 6;
+  int64 workspace_generation = 7;
+  RuntimeWorkspaceObservationPhase phase = 8;
+  string pod_uid = 9;
+  string pvc_uid = 10;
+  // Canonical closed record <=2KiB; tuple сверяет owner, terminal owned Pod — RC.
+  bytes quiescence = 11;
+  string execution_binding_digest = 12;
+  // Закрытая причина от контроллера, без назначаемого caller исхода run.
+  string block_reason = 13;
+}
+message ObserveWorkspaceResponse {
+  // Canonical closed safe writer ACK, не capability/credential.
+  bytes writer_acknowledgement = 1;
+  string storage_state = 2;
+  bytes quiescence = 3;
+  string block_reason = 4;
+  // Fresh readback exact текущего lease/generation, отдельно от immutable ACK.
+  bool current_tuple = 5;
+  bool writer_released = 6;
+  // Immutable outcome прежней команды; не current phase.
+  string committed_phase = 7;
+  bytes committed_quiescence = 8;
+}
+
 enum SessionArchiveTaskKind {
   SESSION_ARCHIVE_TASK_KIND_UNSPECIFIED = 0;
   SESSION_ARCHIVE_TASK_KIND_SNAPSHOT = 1;
@@ -4127,6 +4343,17 @@ message SessionArchiveTask {
   string target_object_key = 19;
   string target_object_version = 20;
   int32 attempt = 21;
+  SessionWorkspaceArchiveTask workspace = 22;
+}
+
+message SessionWorkspaceArchiveTask {
+  RuntimeWorkspaceStorage target = 1;
+  string checkpoint_ref = 2;
+  string quiescence = 3;
+  string pvc_uid = 4;
+  RuntimeWorkspacePolicy policy = 5;
+  bool reconcile_only = 6;
+  RuntimeWorkspaceCheckpoint checkpoint = 7;
 }
 
 message ClaimSessionArchiveTasksRequest {
@@ -4143,10 +4370,15 @@ message RenewSessionArchiveTaskRequest {
   string lease_ref = 2;
   string fence = 3;
   int64 generation = 4;
+  string observed_pvc_uid = 5;
 }
 
 message RenewSessionArchiveTaskResponse {
   WorkLease lease = 1;
+  bool pvc_delete_armed = 2;
+  string pvc_uid = 3;
+  int64 workspace_generation = 4;
+  string workspace_ref = 5;
 }
 
 message CompleteSessionSnapshotRequest {
@@ -4162,6 +4394,10 @@ message CompleteSessionSnapshotRequest {
   string object_digest = 10;
   int64 object_size_bytes = 11;
   int64 source_size_bytes = 12;
+  // Digest canonical work stream для format2; exact task/lease проверяет владелец. Legacy оставляет пустым.
+  string source_sha256 = 13;
+  // Число проверенных записей format2, включая каталоги; не меняет квоту и не разрешает восстановление.
+  int64 source_entry_count = 14;
 }
 
 message CompleteSessionRestoreRequest {
@@ -4178,6 +4414,7 @@ message CompleteSessionRestoreRequest {
   int64 object_size_bytes = 11;
   string restored_source_sha256 = 12;
   int64 restored_source_size_bytes = 13;
+  string observed_pvc_uid = 14;
 }
 
 message CompleteSessionPVCDeletionRequest {
@@ -4610,6 +4847,19 @@ message IntegrationInvocationClaim {
   IntegrationInvocationWorkMode work_mode = 19;
   string grant_ref = 20;
   int64 grant_version = 21;
+  // Без private key: immutable owner snapshot и initial signed permit.
+  bytes ssh_compose_snapshot = 22;
+  bytes ssh_compose_permit = 23;
+}
+
+// ClaimSSHComposeInvocationsRequest ограничивает отдельную SSH-очередь одним consumer slot.
+message ClaimSSHComposeInvocationsRequest {
+  string workload_instance = 1;
+  int32 limit = 2;
+}
+// ClaimSSHComposeInvocationsResponse переносит существующие owner-issued claims без нового registry.
+message ClaimSSHComposeInvocationsResponse {
+  repeated IntegrationInvocationClaim claims = 1;
 }
 message ClaimIntegrationInvocationsRequest {
   string workload_instance = 1;
@@ -4627,6 +4877,14 @@ message GetIntegrationInvocationResponse {
   string safe_error_code = 3;
   string gate_ref = 4;
   string effect_receipt_ref = 5;
+  bool admission_blocked = 6;
+  SSHComposeAdmissionBlockReason admission_block_reason = 7;
+}
+
+// Причина блокировки допуска не подменяет внешний outcome вызова.
+enum SSHComposeAdmissionBlockReason {
+  SSH_COMPOSE_ADMISSION_BLOCK_REASON_UNSPECIFIED = 0;
+  SSH_COMPOSE_ADMISSION_BLOCK_REASON_CURRENT_ADMISSION_DENIED = 1;
 }
 
 // IntegrationEffectReceipt является immutable exactly-once readback одного effect key.
@@ -5072,6 +5330,7 @@ message PrepareSaveRuntimeSecretDraftRequest {
   string description = 5;
   RuntimeSecretValueType value_type = 6;
   string expected_content_sha256 = 7;
+  string purpose = 8;
 }
 message PrepareSaveRuntimeSecretDraftResponse {
   RuntimeSecretDraftOperationReceipt operation = 1;
@@ -5251,6 +5510,7 @@ message RuntimeSecret {
   repeated NextAction next_actions = 14;
   RuntimeResourceScopeKind scope_kind = 15;
   string organization_ref = 16;
+  string purpose = 17;
 }
 
 message ListRuntimeSecretsRequest {
@@ -5297,6 +5557,7 @@ message PrepareCreateRuntimeSecretRequest {
   // SHA-256 точных bytes, которые будут переданы secret-broker; для BINARY
   // вычисляется после строгого base64 decode.
   string expected_content_sha256 = 6;
+  string purpose = 7;
 }
 message PrepareCreateRuntimeSecretResponse {
   RuntimeSecretOperationReceipt operation = 1;
@@ -8991,4 +9252,66 @@ message ProviderFinancialOverview {
   int64 unknown = 4;
   google.protobuf.Timestamp observed_at = 5;
   google.protobuf.Timestamp valid_until = 6;
+}
+
+// WorkflowRetryReadProof описывает проверенное владельцем историческое ребро SERVER business retry.
+// Это безопасное доказательство чтения, не grant, команда retry или принятие результата.
+message WorkflowRetryReadProof {
+  // workflow_version_ref закрепляет immutable опубликованную версию корня.
+  string workflow_version_ref = 1;
+  // workflow_version_digest — полный SHA256 опубликованной политики.
+  string workflow_version_digest = 2;
+  // origin_node_ref — неизменяемый anchor логического этапа в этом графе.
+  string origin_node_ref = 3;
+  // step_key принадлежит именно закреплённому опубликованному этапу.
+  string step_key = 4;
+  // previous_business_attempt — завершённая попытка от1 до3; source ребра может быть technical final.
+  int32 previous_business_attempt = 5;
+  // business_attempt — новая попытка от2 до4, всегда previous_business_attempt+1.
+  int32 business_attempt = 6;
+}
+
+// WorkflowReworkStepPreview содержит только публичные ключи и ограниченные счётчики.
+message WorkflowReworkStepPreview {
+ string step_key = 1;
+ int32 previous_attempt = 2;
+ // zero означает исчерпанный бюджет, но не разрешение пятой попытки.
+ int32 next_attempt = 3;
+}
+
+// WorkflowReworkPreview объясняет серверный план и не служит execution grant.
+message WorkflowReworkPreview {
+ string schema = 1;
+ string source_step_key = 2;
+ int32 source_attempt = 3;
+ repeated WorkflowReworkStepPreview authors = 4;
+ repeated WorkflowReworkStepPreview rechecks = 5;
+ string block_reason = 6;
+}
+
+message SSHComposeLeaseBinding {
+  string workload_instance = 1;
+  string invocation_ref = 2;
+  string connection_test_ref = 3;
+  string lease_ref = 4;
+  string fence = 5;
+  int64 generation = 6;
+}
+message RenewSSHComposeInvocationRequest {
+  SSHComposeLeaseBinding binding = 1;
+}
+message RenewSSHComposeInvocationResponse {
+  WorkLease lease = 1;
+  bytes permit = 2;
+}
+message ResolveSSHComposeCredentialProjectionRequest {
+  SSHComposeLeaseBinding binding = 1;
+}
+message ResolveSSHComposeCredentialProjectionResponse {
+  RuntimeSecretRevisionDescriptor secret_revision = 1;
+  google.protobuf.Timestamp expires_at = 2;
+  string target_ref = 3;
+  // Подписанный owner permit связывает descriptor и transport-bound lease.
+  bytes permit = 4;
+  string secret_ref = 5;
 }

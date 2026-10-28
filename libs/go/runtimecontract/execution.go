@@ -279,6 +279,7 @@ type RunnerInput struct {
 	SecretProjections                 []RuntimeSecretProjection `json:"secret_projections,omitempty"`
 	EnvironmentPolicy                 RuntimeEnvironmentPolicy  `json:"environment_policy"`
 	WorkspacePolicy                   RuntimeWorkspacePolicy    `json:"workspace_policy"`
+	WorkspaceStorage                  *WorkspaceStorageBinding  `json:"workspace_storage,omitempty"`
 	ExecutionDeadline                 *RuntimeExecutionDeadline `json:"execution_deadline,omitempty"`
 	EffectiveKubernetesAccess         RuntimeKubernetesAccess   `json:"effective_kubernetes_access"`
 	CodexSandbox                      string                    `json:"codex_sandbox"`
@@ -409,6 +410,9 @@ func (input RunnerInput) Validate() error {
 	}
 	if input.FileCatalog != nil && (input.FileCatalog.Validate() != nil || input.Mode != RunnerModeTurn || input.ProjectRef == "") {
 		return errors.New("runner file catalog binding is invalid")
+	}
+	if input.WorkspaceStorage != nil && input.WorkspaceStorage.ValidateForInput(input) != nil {
+		return errWorkspaceStorageInvalid
 	}
 	environmentDigest, err := RuntimeEnvironmentDigest(input.EnvironmentValues, input.SecretProjections, input.EnvironmentImage, input.EnvironmentTools, normalizedPolicy)
 	if err != nil || environmentDigest != input.RuntimeEnvironmentDigest {
@@ -798,19 +802,20 @@ type RunnerArtifact struct {
 // TokenUsage хранит измеренный расход провайдера за ход; cached/cache-write и reasoning являются
 // подмножествами input/output и не прибавляются к общему расходу повторно.
 type TokenUsage struct {
-	TotalTokens           int64 `json:"total_tokens"`
-	InputTokens           int64 `json:"input_tokens"`
-	CachedInputTokens     int64 `json:"cached_input_tokens"`
-	CacheWriteInputTokens int64 `json:"cache_write_input_tokens"`
-	OutputTokens          int64 `json:"output_tokens"`
-	ReasoningOutputTokens int64 `json:"reasoning_output_tokens"`
-	ModelContextWindow    int64 `json:"model_context_window"`
+	Completeness          UsageCompleteness `json:"completeness,omitempty"`
+	TotalTokens           int64             `json:"total_tokens"`
+	InputTokens           int64             `json:"input_tokens"`
+	CachedInputTokens     int64             `json:"cached_input_tokens"`
+	CacheWriteInputTokens int64             `json:"cache_write_input_tokens"`
+	OutputTokens          int64             `json:"output_tokens"`
+	ReasoningOutputTokens int64             `json:"reasoning_output_tokens"`
+	ModelContextWindow    int64             `json:"model_context_window"`
 }
 
 // Validate requires nonnegative counters, exact input-plus-output total, and bounded subcounters.
 // Validate требует неотрицательные счётчики, точную сумму input и output и ограниченные подсчётчики.
 func (usage TokenUsage) Validate() error {
-	if usage.TotalTokens < 0 || usage.InputTokens < 0 || usage.CachedInputTokens < 0 ||
+	if !usage.Completeness.Valid() || usage.TotalTokens < 0 || usage.InputTokens < 0 || usage.CachedInputTokens < 0 ||
 		usage.CacheWriteInputTokens < 0 || usage.OutputTokens < 0 || usage.ReasoningOutputTokens < 0 ||
 		usage.ModelContextWindow < 0 || usage.TotalTokens != usage.InputTokens+usage.OutputTokens ||
 		usage.CachedInputTokens > usage.InputTokens || usage.CacheWriteInputTokens > usage.InputTokens ||

@@ -1,6 +1,7 @@
 GOVULNCHECK_VERSION := v1.6.0
 GO_MIN_VERSION := 1.26.6
 GO_TOOLCHAIN := go1.26.6
+
 BUF_VERSION := 1.71.0
 PROTOBUF_GO_PLUGIN_REMOTE := buf.build/protocolbuffers/go:v1.36.11
 PROTOBUF_GO_PLUGIN_REVISION := 1
@@ -97,6 +98,22 @@ test-interaction-gateway-render:
 test-interaction-gateway-postgres:
 	@./scripts/tests/control-plane-postgres-test.sh '^TestBootstrapComponent$$/(interaction|integration_connection_tests)'
 
+.PHONY: test-workflow-server-postgres
+test-workflow-server-postgres: check-go-toolchain
+	@timeout --kill-after=10s 240s bash scripts/tests/workflow-server-postgres-test.sh
+
+.PHONY: test-workflow-exception-context-postgres
+test-workflow-exception-context-postgres: check-go-toolchain
+	@timeout --kill-after=10s 300s bash scripts/tests/control-plane-postgres-test.sh '^(TestWorkflowExceptionContextComponent|TestWorkflowExceptionContextMigrationProofComponent|TestServerWorkflowMigrationProofComponent|TestLegacyWorkflowReworkMigrationProofComponent|TestWorkflowExceptionRecoveryComponent|TestServerWorkflowRetrySnapshotComponent)$$'
+
+.PHONY: test-workflow-upstream-rework-postgres
+test-workflow-upstream-rework-postgres: check-go-toolchain
+	@timeout --kill-after=10s 300s bash scripts/tests/control-plane-postgres-test.sh '^(TestWorkflowUpstreamReworkComponent|TestWorkflowUpstreamReworkMigrationProofComponent|TestWorkflowExceptionContextComponent|TestWorkflowExceptionContextMigrationProofComponent|TestServerWorkflowMigrationProofComponent|TestLegacyWorkflowReworkMigrationProofComponent)$$'
+
+.PHONY: test-workflow-artifact-query-postgres
+test-workflow-artifact-query-postgres: check-go-toolchain
+	@timeout --kill-after=10s 240s bash scripts/tests/control-plane-postgres-test.sh '^TestWorkflowArtifactQueryBoundaryComponent$$'
+
 test-control-plane-postgres:
 	@./scripts/tests/control-plane-postgres-test.sh
 
@@ -153,6 +170,10 @@ test-provider-bootstrap-postgres:
 
 test-local-backup-controller-credentials-contract:
 	@./scripts/tests/local-backup-controller-credentials-contract-test.sh
+
+.PHONY: test-local-backup-controller-build-contract
+test-local-backup-controller-build-contract:
+	@timeout 60s python3 -B tools/dev/test_build_local_backup_controller.py
 
 test-local-image-cache-import-contract:
 	@./scripts/tests/local-image-cache-import-contract-test.sh
@@ -398,3 +419,75 @@ test-runner-binary-provenance:
 .PHONY: test-role-image-forward-upgrade
 test-role-image-forward-upgrade:
 	TMPDIR=/tmp node --test tools/dev/role-image-forward-upgrade.test.mjs tools/dev/role-image-acceptance.test.mjs tools/dev/role-image-acceptance-cli.test.mjs tools/dev/role-image-runtime-proof.test.mjs tools/dev/email-agent-acceptance.test.mjs
+
+.PHONY: test-scoped-backup-drill
+test-scoped-backup-drill:
+	@timeout 60s python3 -m unittest tools/dev/test_scoped_backup_drill.py tools/release/test_backup_release_pin.py
+	@bash -n tools/release/pin-backup-controller-release.sh tools/release/render-web-only.sh
+
+.PHONY: test-scoped-backup-reader
+.PHONY: test-backup-restore-startup
+test-backup-restore-startup:
+	@timeout 60s python3 -m unittest discover -s tools/dev -p 'test*backup*.py'
+
+test-scoped-backup-reader:
+	@timeout 60s python3 -m unittest discover -s tools/dev -p 'test*backup_reader*.py'
+	@bash -n deploy/k8s/base/platform-state/postgresql/reconcile-runtime-credentials.sh
+	@./scripts/tests/local-backup-controller-credentials-contract-test.sh
+
+.PHONY: test-control-plane-migration
+test-control-plane-migration:
+	@timeout 600s node --test tools/release/control-plane-migration.test.mjs tools/release/control-plane-immutable-migration.test.mjs
+
+.PHONY: test-control-api-nats-startup
+test-control-api-nats-startup:
+	@./scripts/tests/control-api-nats-startup-test.sh
+
+.PHONY: test-staging-capacity-preflight
+test-staging-capacity-preflight:
+	@PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/dev -p test_staging_capacity_preflight.py
+
+.PHONY: test-workflow-result-contract
+test-workflow-result-contract:
+	@timeout --kill-after=5s 30s python3 scripts/tests/workflow-result-contract-test.py
+
+.PHONY: test-workflow-review-qa-evidence-postgres
+test-workflow-review-qa-evidence-postgres: check-go-toolchain
+	@timeout --kill-after=10s 360s bash scripts/tests/control-plane-postgres-test.sh '^(TestWorkflowReviewQAEvidenceComponent|TestWorkflowReviewQAEvidenceMigrationProofComponent)$$'
+
+.PHONY: test-workflow-review-qa-upgrade-postgres
+test-workflow-review-qa-upgrade-postgres: check-go-toolchain
+	@timeout --kill-after=10s 300s bash scripts/tests/control-plane-postgres-test.sh --review-qa-upgrade
+
+.PHONY: test-runtime-checkpoint-predecessor-postgres
+test-runtime-checkpoint-predecessor-postgres: check-go-toolchain
+	@timeout --kill-after=10s 240s bash scripts/tests/control-plane-postgres-test.sh --checkpoint-predecessor
+
+.PHONY: test-workspace-volume-predecessor-postgres
+test-workspace-volume-predecessor-postgres: check-go-toolchain
+	@timeout --kill-after=10s 240s bash scripts/tests/control-plane-postgres-test.sh --volume-predecessor
+
+.PHONY: test-runtime-workspace-predecessor-postgres
+test-runtime-workspace-predecessor-postgres: check-go-toolchain
+	@timeout --kill-after=10s 240s bash scripts/tests/control-plane-postgres-test.sh --workspace-predecessor
+
+.PHONY: test-session-workspace-archive-wire
+test-session-workspace-archive-wire: check-go-toolchain
+	@timeout --kill-after=10s 250s bash scripts/tests/session-workspace-archive-wire-test.sh
+
+.PHONY: test-runtime-workspace-owner-postgres
+test-runtime-workspace-owner-postgres: check-go-toolchain
+	@timeout --kill-after=10s 240s bash scripts/tests/control-plane-postgres-test.sh '^TestWorkspaceWriterOwnerComponent$$'
+
+.PHONY: test-static-backup-identity-plan
+test-static-backup-identity-plan:
+	@timeout 30s python3 -B tools/dev/test_static_backup_identity_plan.py
+
+.PHONY: test-static-backup-identity-operator
+test-static-backup-identity-operator:
+	@timeout 60s python3 -B -m unittest discover -s tools/dev -p 'test_static_backup_identity_*.py'
+	@timeout 60s python3 -B tools/dev/test_scoped_backup_drill.py
+
+.PHONY: test-application-restart
+test-application-restart:
+	@timeout 60s node --test tools/release/application-restart.test.mjs tools/release/scoped-release.test.mjs

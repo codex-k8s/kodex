@@ -72,7 +72,7 @@ const cachedDashboardItems = computed<HomeResultItem[]>(() => {
           : {}),
       }));
   const resumable = props.kind === "SESSION";
-  return platform.runList
+  return platform.realtimeRunList
     .filter((item) =>
       resumable
         ? item.state === "SUCCEEDED" &&
@@ -263,7 +263,7 @@ watch(
 watch(
   () =>
     props.kind !== "ARTIFACT"
-      ? platform.runList
+      ? platform.realtimeRunList
           .map((item) => `${item.ref}:${String(item.version)}`)
           .join("|")
       : Object.values(platform.artifacts)

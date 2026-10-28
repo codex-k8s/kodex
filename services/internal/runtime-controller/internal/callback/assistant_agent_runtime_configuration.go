@@ -44,11 +44,23 @@ type assistantAgentRuntimeReadSnapshot struct {
 	VerifiedToolInventory     *runtimecontract.ImageToolInventory `json:"verified_tool_inventory"`
 	VerifiedToolInventoryHash string                              `json:"verified_tool_inventory_sha256"`
 	ModelConfiguration        struct {
-		Ref      string `json:"ref"`
-		Version  int64  `json:"version"`
-		Digest   string `json:"digest"`
-		Provider string `json:"provider"`
-		Model    string `json:"model"`
+		Ref                string `json:"ref"`
+		Version            int64  `json:"version"`
+		Digest             string `json:"digest"`
+		Provider           string `json:"provider"`
+		Model              string `json:"model"`
+		RuntimeProfileRef  string `json:"runtime_profile_ref"`
+		ProviderPolicyMode string `json:"provider_policy_mode"`
+		ProviderAccounts   []struct {
+			AccountRef string `json:"accountRef"`
+			Weight     int64  `json:"weight"`
+		} `json:"provider_accounts"`
+		ReasoningEffort         string `json:"reasoning_effort"`
+		WebSearchMode           string `json:"web_search_mode"`
+		PublishedOverlayRef     string `json:"published_overlay_ref"`
+		PublishedOverlayVersion int64  `json:"published_overlay_version"`
+		PublishedOverlayDigest  string `json:"published_overlay_digest"`
+		HasDraftOverlay         bool   `json:"has_draft_overlay"`
 	} `json:"model_configuration"`
 	Resources runtimecontract.RuntimeResourcePolicy `json:"resources"`
 }
@@ -103,8 +115,36 @@ func castAssistantAgentRuntimeConfiguration(input runtimecontract.RunnerInput, r
 		return nil, invalid
 	}
 	model, ok := snapshot["model_configuration"].(map[string]any)
-	if !ok || len(model) != 5 || !onlyKeys(model, "ref", "version", "digest", "provider", "model") {
+	if !ok {
 		return nil, invalid
+	}
+	legacy := len(model) == 5 && onlyKeys(model, "ref", "version", "digest", "provider", "model")
+	prepared := len(model) == 14 && onlyKeys(model, "ref", "version", "digest", "provider", "model", "runtime_profile_ref", "provider_policy_mode", "provider_accounts", "reasoning_effort", "web_search_mode", "published_overlay_ref", "published_overlay_version", "published_overlay_digest", "has_draft_overlay")
+	if !legacy && !prepared {
+		return nil, invalid
+	}
+	if prepared {
+		if _, ok := model["has_draft_overlay"].(bool); !ok {
+			return nil, invalid
+		}
+		for _, key := range []string{"reasoning_effort", "web_search_mode"} {
+			if _, ok := model[key].(string); !ok {
+				return nil, invalid
+			}
+		}
+		if !validAssistantAgentRuntimePreparationSnapshot(typed) {
+			return nil, invalid
+		}
+		accounts, ok := model["provider_accounts"].([]any)
+		if !ok || len(accounts) != len(typed.ModelConfiguration.ProviderAccounts) {
+			return nil, invalid
+		}
+		for _, entry := range accounts {
+			account, ok := entry.(map[string]any)
+			if !ok || len(account) != 2 || !onlyKeys(account, "accountRef", "weight") {
+				return nil, invalid
+			}
+		}
 	}
 	resources, ok := snapshot["resources"].(map[string]any)
 	if !ok || len(resources) != 6 || !onlyKeys(resources, "cpu_request_milli", "cpu_limit_milli", "memory_request_mib", "memory_limit_mib", "ephemeral_storage_request_mib", "ephemeral_storage_limit_mib") {
@@ -165,4 +205,23 @@ func validAssistantAgentRuntimeReadSnapshot(value assistantAgentRuntimeReadSnaps
 		}
 	}
 	return validAssistantCatalogDigest(value.VerifiedToolInventoryHash)
+}
+
+// validAssistantAgentRuntimePreparationSnapshot validates all v2-only profile/policy/overlay metadata; legacy reads never synthesize those missing pins.
+// validAssistantAgentRuntimePreparationSnapshot проверяет все новые метаданные профиля, политики и overlay v2; устаревшее чтение не синтезирует отсутствующие pins.
+func validAssistantAgentRuntimePreparationSnapshot(value assistantAgentRuntimeReadSnapshot) bool {
+	model := value.ModelConfiguration
+	if !validAssistantResourceRef(model.RuntimeProfileRef) || !validAssistantResourceRef(model.PublishedOverlayRef) || model.PublishedOverlayVersion < 1 || model.PublishedOverlayVersion > 9007199254740991 || !validAssistantCatalogDigest(model.PublishedOverlayDigest) ||
+		model.WebSearchMode != "" && !runtimecontract.ValidWebSearchMode(model.WebSearchMode) || model.ReasoningEffort != "" && runtimecontract.ValidateEffectiveReasoningEffort("", model.ReasoningEffort, runtimecontract.ReasoningSupported) != nil ||
+		len(model.ProviderAccounts) < 1 || len(model.ProviderAccounts) > 128 || model.ProviderPolicyMode != "FIXED" && model.ProviderPolicyMode != "LEAST_USED" && model.ProviderPolicyMode != "WEIGHTED" || model.ProviderPolicyMode == "FIXED" && len(model.ProviderAccounts) != 1 {
+		return false
+	}
+	seen := make(map[string]bool, len(model.ProviderAccounts))
+	for _, account := range model.ProviderAccounts {
+		if !validAssistantResourceRef(account.AccountRef) || account.Weight < 1 || account.Weight > 100 || model.ProviderPolicyMode != "WEIGHTED" && account.Weight != 1 || seen[account.AccountRef] {
+			return false
+		}
+		seen[account.AccountRef] = true
+	}
+	return true
 }

@@ -25,6 +25,8 @@ var errPublicIntegrationShape = errors.New("public integration response is inval
 func normalizeIntegrationEnum(value any, descriptor protoreflect.EnumDescriptor) (any, error) {
 	prefix := ""
 	switch descriptor.FullName() {
+	case "controlplane.v1.RepositoryBundlePublicationState":
+		prefix = "REPOSITORY_BUNDLE_PUBLICATION_STATE_"
 	case "controlplane.v1.IntegrationRisk":
 		prefix = "INTEGRATION_RISK_"
 	case "controlplane.v1.IntegrationApprovalPolicy":

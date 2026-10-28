@@ -431,6 +431,25 @@ spec:
         (object.metadata.name == 'system-assistant-warm' ||
          object.metadata.name.matches('^runtime-turn-[a-f0-9]{16}$'))
   variables:
+    - name: workspaceStorageV2
+      expression: >-
+        has(object.metadata.annotations) &&
+        'runtime.kodex.dev/workspace-storage-profile' in object.metadata.annotations &&
+        object.metadata.annotations['runtime.kodex.dev/workspace-storage-profile'] ==
+          'SESSION_WORKSPACE_V2'
+    - name: workspaceStoragePrefix
+      expression: >-
+        variables.workspaceStorageV2 &&
+        'runtime.kodex.dev/workspace-storage-ref' in object.metadata.annotations &&
+        'runtime.kodex.dev/workspace-storage-generation' in object.metadata.annotations
+          ? 'workspaces/' + object.metadata.annotations['runtime.kodex.dev/workspace-storage-ref'] +
+            '/g' + object.metadata.annotations['runtime.kodex.dev/workspace-storage-generation']
+          : ''
+    - name: workspaceStorageTrusted
+      expression: >-
+        has(object.metadata.labels) &&
+        'kodex.dev/security-profile' in object.metadata.labels &&
+        object.metadata.labels['kodex.dev/security-profile'] == 'trusted-cluster'
     - name: ticketVolumes
       expression: >-
         object.spec.volumes.filter(volume,
@@ -464,6 +483,100 @@ spec:
         object.spec.volumes.filter(volume,
           volume.name == 'kube-api-access')
   validations:
+    - expression: >-
+        (!has(object.metadata.annotations) ||
+         !('runtime.kodex.dev/workspace-storage-profile' in object.metadata.annotations))
+          ? (!has(object.metadata.annotations) ||
+             !('runtime.kodex.dev/workspace-storage-ref' in object.metadata.annotations) &&
+             !('runtime.kodex.dev/workspace-storage-generation' in object.metadata.annotations))
+          : variables.workspaceStorageV2 &&
+            object.metadata.labels['runtime.kodex.dev/mode'] == 'turn' &&
+            params.data['roleRuntimeContractRevision'] == '4' &&
+            object.metadata.annotations['runtime.kodex.dev/workspace-storage-ref'].matches('^wks_[A-Za-z0-9_-]{8,89}$') &&
+            object.metadata.annotations['runtime.kodex.dev/workspace-storage-generation'].matches('^[1-9][0-9]{0,18}$') &&
+            has(object.metadata.finalizers) &&
+            object.metadata.finalizers == ['runtime.kodex.dev/workspace-writer']
+      message: runtime workspace storage profile or role contract is invalid
+    - expression: >-
+        !variables.workspaceStorageV2 ||
+        (object.spec.initContainers[0].workingDir == '/' &&
+         size(object.spec.initContainers[0].volumeMounts) ==
+           (variables.workspaceStorageTrusted ? 4 : 6) &&
+         object.spec.initContainers[0].volumeMounts.all(mount,
+           !has(mount.subPathExpr) && !has(mount.mountPropagation) &&
+           ((mount.name == 'workspace' && mount.mountPath == '/workspace' &&
+             !has(mount.subPath) && (!has(mount.readOnly) || !mount.readOnly)) ||
+            (mount.name == 'session' &&
+             mount.mountPath == '/var/run/config/kodex/session-workspace' &&
+             !has(mount.subPath) && (!has(mount.readOnly) || !mount.readOnly)) ||
+            (mount.name == 'runtime-input' &&
+             mount.mountPath == '/var/run/config/kodex/runtime' &&
+             !has(mount.subPath) && has(mount.readOnly) && mount.readOnly) ||
+            (mount.name == 'runtime-ticket' &&
+             mount.mountPath == '/var/run/secrets/kodex/runtime/ticket/token' &&
+             mount.subPath == 'token' && has(mount.readOnly) && mount.readOnly) ||
+            (!variables.workspaceStorageTrusted && mount.name == 'callback-ca' &&
+             mount.mountPath == '/var/run/config/kodex/runtime/callback' &&
+             !has(mount.subPath) && has(mount.readOnly) && mount.readOnly) ||
+            (!variables.workspaceStorageTrusted && mount.name == 'callback-client' &&
+             mount.mountPath == '/var/run/secrets/kodex/runtime/callback-client' &&
+             !has(mount.subPath) && has(mount.readOnly) && mount.readOnly))) &&
+         ['workspace', 'session', 'runtime-input', 'runtime-ticket'].all(name,
+           size(object.spec.initContainers[0].volumeMounts.filter(mount,
+             mount.name == name)) == 1) &&
+         (variables.workspaceStorageTrusted ||
+           ['callback-ca', 'callback-client'].all(name,
+             size(object.spec.initContainers[0].volumeMounts.filter(mount,
+               mount.name == name)) == 1)))
+      message: runtime workspace storage first bind mount boundary is invalid
+    - expression: >-
+        !variables.workspaceStorageV2 ||
+        (object.spec.initContainers[0].securityContext.runAsUser == 10001 &&
+         object.spec.initContainers[0].securityContext.runAsGroup == 29000 &&
+         variables.allContainers.all(container,
+           !has(container.volumeMounts) || container.volumeMounts.all(mount,
+             !mount.mountPath.startsWith('/workspace/work/') &&
+             !mount.mountPath.startsWith('/workspace/.kodex/state/workspaces') &&
+             (mount.mountPath != '/workspace/work' || mount.name == 'session') &&
+             (!mount.mountPath.startsWith('/var/run/config/kodex/workspace') ||
+               mount.name == 'session' && mount.mountPath in
+                 ['/var/run/config/kodex/workspace/mount.json',
+                  '/var/run/config/kodex/workspace/writer.json']) &&
+             (!mount.mountPath.startsWith('/var/run/config/kodex/session-workspace') ||
+               container.name == 'workspace-prepare' && mount.name == 'session' &&
+               mount.mountPath == '/var/run/config/kodex/session-workspace') &&
+             (mount.name != 'session' ||
+               !has(mount.subPathExpr) && !has(mount.mountPropagation) &&
+               ((container.name == 'workspace-prepare' &&
+                 mount.mountPath == '/var/run/config/kodex/session-workspace' &&
+                 !has(mount.subPath) && (!has(mount.readOnly) || !mount.readOnly)) ||
+                (container.name in ['role-runtime', 'provider-runtime', 'workspace-init'] &&
+                 ((mount.mountPath == '/workspace/.kodex/state' &&
+                   mount.subPath == 'provider-state' && (!has(mount.readOnly) || !mount.readOnly)) ||
+                  (mount.mountPath == '/workspace/work' &&
+                   mount.subPath == variables.workspaceStoragePrefix + '/tree' &&
+                   (!has(mount.readOnly) || !mount.readOnly)) ||
+                  (mount.mountPath == '/var/run/config/kodex/workspace/mount.json' &&
+                   mount.subPath == variables.workspaceStoragePrefix + '/mount.json' &&
+                   has(mount.readOnly) && mount.readOnly) ||
+                  (container.name != 'provider-runtime' &&
+                   mount.mountPath == '/var/run/config/kodex/workspace/writer.json' &&
+                   mount.subPath == variables.workspaceStoragePrefix + '/writer.json' &&
+                   has(mount.readOnly) && mount.readOnly))))))) &&
+         [variables.roleContainers[0], dyn(object.spec.initContainers[1])].all(container,
+           size(container.volumeMounts.filter(mount, mount.name == 'session')) == 4 &&
+           ['mount.json', 'writer.json'].all(name,
+             size(container.volumeMounts.filter(mount,
+               mount.name == 'session' &&
+               mount.mountPath == '/var/run/config/kodex/workspace/' + name)) == 1)) &&
+         size(variables.providerContainers[0].volumeMounts.filter(mount,
+           mount.name == 'session')) == 3 &&
+         size(variables.providerContainers[0].volumeMounts.filter(mount,
+           mount.name == 'session' &&
+           mount.mountPath == '/var/run/config/kodex/workspace/mount.json')) == 1 &&
+         variables.roleContainers[0].terminationMessagePath == '/dev/termination-log' &&
+         variables.roleContainers[0].terminationMessagePolicy == 'File')
+      message: runtime workspace storage exact generation mounts are invalid
     - expression: >-
         request.userInfo.username ==
         'system:serviceaccount:kodex-system:runtime-controller'
@@ -501,21 +614,28 @@ spec:
         object.spec.initContainers[0].image == variables.roleContainers[0].image &&
         object.spec.initContainers[0].imagePullPolicy == 'IfNotPresent' &&
         (!has(object.spec.initContainers[0].command) || size(object.spec.initContainers[0].command) == 0) &&
-        object.spec.initContainers[0].args == ['runtime-prepare-workspace'] &&
+        object.spec.initContainers[0].args == (variables.workspaceStorageV2
+          ? ['runtime-bind-workspace'] : ['runtime-prepare-workspace']) &&
         object.spec.initContainers[0].securityContext == object.spec.initContainers[1].securityContext &&
         object.spec.initContainers[0].resources == object.spec.initContainers[1].resources &&
-        (!has(object.spec.initContainers[0].env) || size(object.spec.initContainers[0].env) == 0) &&
+        (variables.workspaceStorageV2
+          ? has(object.spec.initContainers[0].env) && size(object.spec.initContainers[0].env) == 1 &&
+            object.spec.initContainers[0].env[0].name == 'KODEX_RUNTIME_REVISION_FILE' &&
+            object.spec.initContainers[0].env[0].value == '/var/run/config/kodex/runtime/runtime.json' &&
+            !has(object.spec.initContainers[0].env[0].valueFrom)
+          : (!has(object.spec.initContainers[0].env) || size(object.spec.initContainers[0].env) == 0)) &&
         (!has(object.spec.initContainers[0].envFrom) || size(object.spec.initContainers[0].envFrom) == 0) &&
         object.spec.initContainers.all(container,
           !has(container.restartPolicy) && !has(container.startupProbe) &&
           !has(container.readinessProbe) && !has(container.livenessProbe) && !has(container.lifecycle)) &&
+        (variables.workspaceStorageV2 || (
         size(object.spec.initContainers[0].volumeMounts) == 1 &&
         object.spec.initContainers[0].volumeMounts[0].name == 'workspace' &&
         object.spec.initContainers[0].volumeMounts[0].mountPath == '/workspace' &&
         (!has(object.spec.initContainers[0].volumeMounts[0].readOnly) || object.spec.initContainers[0].volumeMounts[0].readOnly == false) &&
         !has(object.spec.initContainers[0].volumeMounts[0].subPath) &&
         !has(object.spec.initContainers[0].volumeMounts[0].subPathExpr) &&
-        !has(object.spec.initContainers[0].volumeMounts[0].mountPropagation)
+        !has(object.spec.initContainers[0].volumeMounts[0].mountPropagation)))
       message: workspace preparation boundary is invalid
     - expression: >-
         object.spec.restartPolicy == 'Never' &&
@@ -572,15 +692,15 @@ spec:
           size(container.securityContext.capabilities.drop) == 1 &&
           container.securityContext.capabilities.drop[0] == 'ALL') &&
         variables.roleContainers[0].securityContext.runAsUser == 10001 &&
-        variables.roleContainers[0].securityContext.runAsGroup == 10001 &&
+        variables.roleContainers[0].securityContext.runAsGroup == (variables.workspaceStorageV2 ? 29000 : 10001) &&
         variables.roleContainers[0].securityContext.seccompProfile.type ==
           'RuntimeDefault' &&
         object.spec.initContainers[1].securityContext.runAsUser == 10001 &&
-        object.spec.initContainers[1].securityContext.runAsGroup == 10001 &&
+        object.spec.initContainers[1].securityContext.runAsGroup == (variables.workspaceStorageV2 ? 29000 : 10001) &&
         object.spec.initContainers[1].securityContext.seccompProfile.type ==
           'RuntimeDefault' &&
         variables.providerContainers[0].securityContext.runAsUser == 10002 &&
-        variables.providerContainers[0].securityContext.runAsGroup == 10002 &&
+        variables.providerContainers[0].securityContext.runAsGroup == (variables.workspaceStorageV2 ? 29000 : 10002) &&
         variables.providerContainers[0].securityContext.seccompProfile.type ==
           'Unconfined' &&
         (params.data['providerAppArmorProfile'] == '' ?
@@ -986,7 +1106,7 @@ spec:
           mount.name.matches('^environment-[a-f0-9]{16}$')) &&
         ['workspace', 'session'].all(name,
           size(variables.roleContainers[0].volumeMounts.filter(mount,
-            mount.name == name && (!has(mount.readOnly) || mount.readOnly == false))) == 1) &&
+            mount.name == name && (!has(mount.readOnly) || mount.readOnly == false))) == (variables.workspaceStorageV2 && name == 'session' ? 2 : 1)) &&
         ['vfs-input', 'vfs-knowledge', 'runtime-context'].all(name,
           size(variables.roleContainers[0].volumeMounts.filter(mount,
             mount.name == name && has(mount.readOnly) && mount.readOnly == true)) == 1) &&
@@ -1042,7 +1162,7 @@ spec:
           mount.name.matches('^environment-[a-f0-9]{16}$')) &&
         ['workspace', 'session', 'vfs-input', 'vfs-knowledge', 'runtime-context'].all(name,
           size(object.spec.initContainers[1].volumeMounts.filter(mount,
-            mount.name == name && (!has(mount.readOnly) || mount.readOnly == false))) == 1) &&
+            mount.name == name && (!has(mount.readOnly) || mount.readOnly == false))) == (variables.workspaceStorageV2 && name == 'session' ? 2 : 1)) &&
         size(object.spec.initContainers[1].volumeMounts.filter(mount,
           mount.name == 'workspace' && mount.mountPath == '/workspace')) == 1 &&
         size(object.spec.initContainers[1].volumeMounts.filter(mount,

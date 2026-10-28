@@ -4,6 +4,8 @@ import (
 	"context"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 )
 
@@ -20,7 +22,11 @@ func (server *Server) ClaimSessionArchiveTasks(ctx context.Context, request *con
 	}
 	response := &controlplanev1.ClaimSessionArchiveTasksResponse{Tasks: make([]*controlplanev1.SessionArchiveTask, 0, len(items))}
 	for _, item := range items {
-		response.Tasks = append(response.Tasks, castSessionArchiveTask(item))
+		task := castSessionArchiveTask(item)
+		if task == nil {
+			return nil, transportError(errs.ErrUnavailable)
+		}
+		response.Tasks = append(response.Tasks, task)
 	}
 	return response, nil
 }
@@ -48,6 +54,7 @@ func (server *Server) CompleteSessionSnapshot(ctx context.Context, request *cont
 	payload.FormatVersion, payload.ObjectKey = request.GetFormatVersion(), request.GetObjectKey()
 	payload.ObjectVersion, payload.ObjectETag, payload.ObjectDigest = request.GetObjectVersion(), request.GetObjectEtag(), request.GetObjectDigest()
 	payload.ObjectSizeBytes, payload.SourceSizeBytes = request.GetObjectSizeBytes(), request.GetSourceSizeBytes()
+	payload.SnapshotSourceSHA256, payload.SourceEntryCount = request.GetSourceSha256(), request.GetSourceEntryCount()
 	result, err := server.executeSessionArchive(ctx, controlplanev1.SessionArchiveWorkService_CompleteSessionSnapshot_FullMethodName,
 		command.CompleteSessionSnapshot, request.GetMutation(), payload)
 	if err != nil {
@@ -150,13 +157,14 @@ func mapBool(values map[string]any, key string) bool {
 // castSessionArchiveTask Projects the closed task-kind mapping, tenant/session/runtime pins, source metadata and lease into protobuf. An archive binding is included only for a nested map with a nonempty archiveRef; absent or unknown values keep the established zero defaults.
 // castSessionArchiveTask Переводит закрытое сопоставление вида задачи, tenant/session/runtime pins, метаданные источника и lease в protobuf. Архивная привязка включается только для вложенной map с непустым archiveRef; отсутствующие и неизвестные значения сохраняют прежние нули.
 func castSessionArchiveTask(values map[string]any) *controlplanev1.SessionArchiveTask {
-	kinds := map[string]controlplanev1.SessionArchiveTaskKind{
-		"SNAPSHOT":      controlplanev1.SessionArchiveTaskKind_SESSION_ARCHIVE_TASK_KIND_SNAPSHOT,
-		"RESTORE":       controlplanev1.SessionArchiveTaskKind_SESSION_ARCHIVE_TASK_KIND_RESTORE,
-		"DELETE_PVC":    controlplanev1.SessionArchiveTaskKind_SESSION_ARCHIVE_TASK_KIND_DELETE_PVC,
-		"DELETE_OBJECT": controlplanev1.SessionArchiveTaskKind_SESSION_ARCHIVE_TASK_KIND_DELETE_OBJECT,
+	if value, present := values["workspaceWork"]; present {
+		work, valid := value.(runtimecontract.WorkspaceArchiveWork)
+		if !valid || work.Validate() != nil {
+			return nil
+		}
+		return castWorkspaceArchiveWork(work, castLease(values))
 	}
-	result := &controlplanev1.SessionArchiveTask{TaskRef: mapString(values, "taskRef"), Kind: kinds[mapString(values, "kind")],
+	result := &controlplanev1.SessionArchiveTask{TaskRef: mapString(values, "taskRef"), Kind: castSessionArchiveKind(mapString(values, "kind")),
 		OrganizationRef: mapString(values, "organizationRef"), ProjectRef: mapString(values, "projectRef"),
 		SessionRef: mapString(values, "sessionRef"), ProviderAccountRef: mapString(values, "providerAccountRef"),
 		RuntimeRevisionRef: mapString(values, "runtimeRevisionRef"), RuntimeRevisionVersion: mapInt64(values, "runtimeRevisionVersion"),

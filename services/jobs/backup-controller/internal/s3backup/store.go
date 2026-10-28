@@ -45,6 +45,9 @@ var (
 	// ErrNotFound denotes an absent exact S3 object or version.
 	// RU: ErrNotFound обозначает отсутствие точного объекта S3 либо его версии.
 	ErrNotFound = errors.New("S3 object is not found")
+	// errCurrentKeyAbsent proves an exact key is absent from a completed current inventory, unlike a failed HEAD request.
+	// RU: errCurrentKeyAbsent доказывает отсутствие точного ключа в полном current inventory, в отличие от ошибки HEAD.
+	errCurrentKeyAbsent = errors.New("S3 current key is absent from inventory")
 )
 
 // api narrows the S3 operations used for versioned backup, restore and lock tests.
@@ -278,7 +281,7 @@ func (repository *Repository) deleteCurrentOperationLock(ctx context.Context, re
 	if err != nil {
 		deleteErr := mapError(err)
 		current, readErr := repository.currentReceiptForKey(ctx, receipt.Key)
-		if errors.Is(readErr, ErrNotFound) {
+		if errors.Is(readErr, errCurrentKeyAbsent) {
 			return nil
 		}
 		if readErr == nil && (current.VersionID != receipt.VersionID || current.ETag != receipt.ETag) {
@@ -287,7 +290,7 @@ func (repository *Repository) deleteCurrentOperationLock(ctx context.Context, re
 		return deleteErr
 	}
 	current, err := repository.currentReceiptForKey(ctx, receipt.Key)
-	if errors.Is(err, ErrNotFound) {
+	if errors.Is(err, errCurrentKeyAbsent) {
 		return nil
 	}
 	if err == nil && (current.VersionID != receipt.VersionID || current.ETag != receipt.ETag) {
@@ -443,17 +446,20 @@ func (repository *Repository) LoadJSON(ctx context.Context, key string, maximumB
 	return receipt, nil
 }
 
-// Exists distinguishes a present exact key from a missing key while preserving other storage failures.
-// RU: Exists отличает существующий точный ключ от отсутствующего и сохраняет прочие ошибки хранилища.
+// Exists proves exact-key absence only from a completed immutable inventory; errors reading a listed version remain failures.
+// RU: Exists доказывает отсутствие точного ключа только полным immutable inventory; ошибки чтения найденной версии остаются отказами.
 func (repository *Repository) Exists(ctx context.Context, key string) (bool, error) {
-	_, err := repository.receiptForKey(ctx, repository.key(key))
-	if err == nil {
-		return true, nil
+	key = repository.key(key)
+	objects, err := repository.destination.inventory(ctx, key)
+	if err != nil {
+		return false, err
 	}
-	if errors.Is(err, ErrNotFound) {
-		return false, nil
+	for _, object := range objects {
+		if object.Key == key {
+			return true, nil
+		}
 	}
-	return false, err
+	return false, nil
 }
 
 // CopyPlatformObjects inventories current source versions, copies exact bytes and returns receipts for completed copies.
@@ -528,7 +534,11 @@ func (repository *Repository) RestorePlatformObjects(ctx context.Context, value 
 	if err := target.Check(ctx); err != nil {
 		return nil, err
 	}
-	existing, err := target.listVersions(ctx, targetConfig.Prefix)
+	targetPrefix := strings.Trim(targetConfig.Prefix, "/")
+	if targetPrefix != "" {
+		targetPrefix += "/"
+	}
+	existing, err := target.listVersions(ctx, targetPrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -686,8 +696,8 @@ func (repository *Repository) receiptForKey(ctx context.Context, key string) (ma
 	return manifest.Receipt{}, ErrNotFound
 }
 
-// currentReceiptForKey resolves the latest non-deleted version of one exact key.
-// RU: currentReceiptForKey извлекает последнюю неудалённую версию одного точного ключа.
+// currentReceiptForKey resolves the latest non-deleted version, distinguishing completed inventory absence from a listed version's HEAD failure.
+// RU: currentReceiptForKey извлекает последнюю неудалённую версию, отличая отсутствие в полном inventory от ошибки HEAD найденной версии.
 func (repository *Repository) currentReceiptForKey(ctx context.Context, key string) (manifest.Receipt, error) {
 	objects, err := repository.destination.currentInventory(ctx, key)
 	if err != nil {
@@ -698,7 +708,7 @@ func (repository *Repository) currentReceiptForKey(ctx context.Context, key stri
 			return object, nil
 		}
 	}
-	return manifest.Receipt{}, ErrNotFound
+	return manifest.Receipt{}, errCurrentKeyAbsent
 }
 
 // inventory rejects multiple or mutable versions per key and returns digest-checked exact receipts.
@@ -1007,8 +1017,8 @@ func validDigest(value string) bool {
 	return err == nil
 }
 
-// mapError maps known HTTP precondition, conflict and not-found failures to closed repository sentinels.
-// RU: mapError переводит известные HTTP-отказы precondition, conflict и not-found в закрытые ошибки репозитория.
+// mapError preserves repository sentinels and otherwise retains only a closed typed-cause class, discarding native details.
+// RU: mapError сохраняет ошибки репозитория, а для остальных отказов оставляет только закрытый класс причины без исходных деталей.
 func mapError(err error) error {
 	var responseError *smithyhttp.ResponseError
 	if errors.As(err, &responseError) {
@@ -1019,5 +1029,5 @@ func mapError(err error) error {
 			return ErrNotFound
 		}
 	}
-	return errors.New("S3 operation failed")
+	return operationFailure{class: classifyOperationFailure(err)}
 }

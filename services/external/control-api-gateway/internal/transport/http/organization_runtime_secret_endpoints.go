@@ -48,6 +48,13 @@ func (s *Server) CreateSystemRuntimeSecretDraft(w http.ResponseWriter, r *http.R
 	if !ok {
 		return
 	}
+	if purpose := runtimeSecretCreatePurpose(body); purpose != "" && purpose != "APPLICATION" {
+		invalidSecretDraft(w)
+		return
+	}
+	if !ok {
+		return
+	}
 	valueType := runtimeSecretValueType(string(body.ValueType))
 	value, ok := decodeRuntimeSecretValue(w, valueType, body.Value)
 	if !ok {

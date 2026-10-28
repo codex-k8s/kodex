@@ -24,6 +24,7 @@ vi.mock("./ticket", () => ticketApi);
 import { usePlatformStore } from "@/features/platform/store";
 import { useAccessStore } from "@/features/access/store";
 import { useProvidersStore } from "@/features/providers/store";
+import { workflowRetrySnapshot } from "@/test/workflow-retry-snapshot";
 import {
   useRealtimeStore,
   webSocketHandshakeTimeoutMs,
@@ -292,6 +293,105 @@ function fullRun(ref: string, sequence: number): Run {
 }
 
 describe("browser-session realtime multiplexer", () => {
+  it("SERVER retry получает RUN_READY и восстанавливается на новом socket без HTTP resync", async () => {
+    const store = useRealtimeStore(),
+      platform = usePlatformStore();
+    const runRef = "run_realtime01";
+    store.openRun(runRef);
+    await flushProcessing();
+    const sendSnapshot = async (socket: FakeWebSocket) => {
+      const value = workflowRetrySnapshot(fullRun(runRef, 7), 3, true);
+      socket.open();
+      socket.message(
+        runEnvelope(socket, runRef, {
+          type: "RUN_GRAPH_SNAPSHOT",
+          cursor: 7,
+          snapshot: value.graph,
+          runs: value.runs,
+        }),
+      );
+      socket.message(
+        runEnvelope(socket, runRef, { type: "RUN_READY", cursor: 7 }),
+      );
+      socket.message({
+        type: "SESSION_READY",
+        requestRef: requestRef(socket),
+        streams: [
+          { streamKind: "PLATFORM", streamRef: "PLATFORM", cursor: 0 },
+          { streamKind: "RUN", streamRef: runRef, cursor: 7 },
+        ],
+      });
+      await flushProcessing();
+      expect(store.state[runRef]?.state).toBe("live");
+      expect(platform.hasRunReadinessSnapshot(runRef, 7)).toBe(true);
+      expect(platform.loadRun).not.toHaveBeenCalled();
+    };
+    await sendSnapshot(socketAt(0));
+    store.refreshSession();
+    await flushProcessing();
+    await sendSnapshot(socketAt(1));
+    store.closeAll();
+  });
+  it("сохраняет PARTIAL snapshot и COMPLETE0 delta, отвергая неизвестное качество", async () => {
+    const store = useRealtimeStore(),
+      platform = usePlatformStore();
+    store.openRun("run_realtime01");
+    store.openRun("run_realtime02");
+    await flushProcessing();
+    const socket = socketAt(0);
+    socket.open();
+    const initial = runSnapshot(socket, "run_realtime01");
+    const run = (initial.runs as Run[]).find(
+      (value) => value.ref === "run_realtime01",
+    );
+    if (!run) throw new Error("Synthetic run snapshot is missing");
+    run.usage = {
+      ...run.usage,
+      completeness: "PARTIAL",
+      totalTokens: 100,
+      inputTokens: 100,
+    };
+    socket.message(initial);
+    await flushProcessing();
+    expect(platform.runs.run_realtime01?.usage).toMatchObject({
+      completeness: "PARTIAL",
+      totalTokens: 100,
+    });
+    socket.message(runSnapshot(socket, "run_realtime02"));
+    await flushProcessing();
+    const completed = event("run_realtime02", 2);
+    completed.run.usage.completeness = "COMPLETE";
+    socket.message(
+      runEnvelope(socket, "run_realtime02", {
+        type: "RUN_EVENT",
+        cursor: 2,
+        event: completed,
+      }),
+    );
+    await flushProcessing();
+    expect(platform.runs.run_realtime02?.usage).toMatchObject({
+      completeness: "COMPLETE",
+      totalTokens: 0,
+    });
+    const malformed = event("run_realtime02", 3);
+    Object.assign(malformed.run.usage, { completeness: "INVALID" });
+    socket.message(
+      runEnvelope(socket, "run_realtime02", {
+        type: "RUN_EVENT",
+        cursor: 3,
+        event: malformed,
+      }),
+    );
+    await flushProcessing();
+    expect(platform.runs.run_realtime02?.usage).toMatchObject({
+      completeness: "COMPLETE",
+      totalTokens: 0,
+    });
+    expect(platform.graphs.run_realtime02?.sequence).toBe(2);
+    expect(platform.events.run_realtime02?.[3]).toBeUndefined();
+    store.closeAll();
+  });
+
   it("terminal SESSION_PROBLEM останавливает reconnect", async () => {
     const store = useRealtimeStore();
     store.openPlatform();
@@ -821,6 +921,98 @@ describe("browser-session realtime multiplexer", () => {
     store.closeAll();
   });
 
+  it("принимает PLATFORM heartbeat без requestRef и применяет продление и отзыв речи", async () => {
+    const store = useRealtimeStore();
+    const platform = usePlatformStore();
+    const speech = vi.spyOn(platform, "applySpeechAvailability");
+    store.openPlatform();
+    await flushProcessing();
+    const socket = socketAt(0);
+    socket.open();
+    socket.message({
+      type: "PLATFORM_READY",
+      requestRef: requestRef(socket),
+      streamKind: "PLATFORM",
+      streamRef: "PLATFORM",
+      cursor: 9,
+      availableKinds: [],
+    });
+    await flushProcessing();
+    const heartbeat = {
+      type: "STREAM_HEARTBEAT",
+      streamKind: "PLATFORM",
+      streamRef: "PLATFORM",
+      cursor: 9,
+      serverTime: "2026-10-26T10:00:00Z",
+    };
+    const renewal = {
+      available: true,
+      reason: "READY",
+      validUntil: "2026-10-26T10:00:30Z",
+    };
+    socket.message({ ...heartbeat, speechTranscription: renewal });
+    await flushProcessing();
+    expect(speech).toHaveBeenLastCalledWith(renewal);
+    expect(store.platformState.lastHeartbeat).toBe(heartbeat.serverTime);
+    const denied = { available: false, reason: "STT_PERMISSION_DENIED" };
+    socket.message({ ...heartbeat, speechTranscription: denied });
+    await flushProcessing();
+    expect(speech).toHaveBeenLastCalledWith(denied);
+    expect(speech).toHaveBeenCalledTimes(2);
+    expect(socket.readyState).toBe(FakeWebSocket.OPEN);
+    store.closeAll();
+    socket.message({ ...heartbeat, speechTranscription: renewal });
+    await flushProcessing();
+    expect(speech).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ["cursor", { cursor: 8 }],
+    ["stream", { streamRef: "PLATFORM_OTHER" }],
+    ["speech", { speechTranscription: { available: "true", reason: "READY" } }],
+    ["bootstrap", {}],
+  ])(
+    "закрывает недопустимый PLATFORM heartbeat: %s",
+    async (reason, overrides) => {
+      const store = useRealtimeStore();
+      const platform = usePlatformStore();
+      const speech = vi.spyOn(platform, "applySpeechAvailability");
+      store.openPlatform();
+      await flushProcessing();
+      const socket = socketAt(0);
+      socket.open();
+      if (reason !== "bootstrap") {
+        socket.message({
+          type: "PLATFORM_READY",
+          requestRef: requestRef(socket),
+          streamKind: "PLATFORM",
+          streamRef: "PLATFORM",
+          cursor: 9,
+          availableKinds: [],
+        });
+        await flushProcessing();
+      }
+      socket.message({
+        type: "STREAM_HEARTBEAT",
+        streamKind: "PLATFORM",
+        streamRef: "PLATFORM",
+        cursor: reason === "bootstrap" ? 0 : 9,
+        serverTime: "2026-10-26T10:00:00Z",
+        speechTranscription: {
+          available: true,
+          reason: "READY",
+          validUntil: "2026-10-26T10:00:30Z",
+        },
+        ...overrides,
+      });
+      await flushProcessing();
+      expect(speech).not.toHaveBeenCalled();
+      expect(socket.closeCode).toBe(1002);
+      expect(socket.closeReason).toBe("INVALID_SESSION_ENVELOPE");
+      store.closeAll();
+    },
+  );
+
   it("после обрыва частичного bootstrap запрашивает полный snapshot", async () => {
     const store = useRealtimeStore();
     store.openPlatform();
@@ -1332,6 +1524,220 @@ describe("browser-session realtime multiplexer", () => {
     store.closeAll();
   });
 
+  it.each(["refresh", "socket-close", "document-suspend", "project-change"])(
+    "не переносит повтор чтения запуска в новое соединение: %s",
+    async (transition) => {
+      const store = useRealtimeStore();
+      store.openRun("run_realtime01");
+      await flushProcessing();
+      const first = socketAt(0);
+      first.open();
+      first.message(runSnapshot(first, "run_realtime01"));
+      first.message({
+        type: "SESSION_READY",
+        requestRef: requestRef(first),
+        streams: [
+          { streamKind: "PLATFORM", streamRef: "PLATFORM", cursor: 0 },
+          { streamKind: "RUN", streamRef: "run_realtime01", cursor: 1 },
+        ],
+      });
+      await flushProcessing();
+      first.message(
+        runEnvelope(first, "run_realtime01", {
+          type: "STREAM_PROBLEM",
+          code: "RUN_UNAVAILABLE",
+          title: "Недоступно",
+          retryable: true,
+        }),
+      );
+      await flushProcessing();
+      const previous = [...scheduled.values()].find(
+        (timer) => timer.delay === 1_000,
+      );
+      expect(previous).toBeDefined();
+
+      if (transition === "socket-close") {
+        first.close(1006, "CONNECTION_LOST");
+        runScheduled(1_000);
+      } else if (transition === "document-suspend") {
+        windowEvents.get("kodex:document-requests-suspended")?.();
+        windowEvents.get("kodex:document-requests-resumed")?.();
+      } else if (transition === "project-change") store.changeProjectScope();
+      else store.refreshSession();
+      await flushProcessing();
+      const second = socketAt(1);
+      second.open();
+      expect(
+        [...scheduled.values()].filter((timer) => timer.delay === 1_000),
+      ).toHaveLength(0);
+      // Даже уже извлечённый callback не получает новое соединение и requestRef.
+      previous?.callback();
+      expect(second.sent).toHaveLength(1);
+      second.message(runSnapshot(second, "run_realtime01", 2));
+      second.message(
+        runEnvelope(second, "run_realtime01", { type: "RUN_READY", cursor: 2 }),
+      );
+      second.message({
+        type: "SESSION_READY",
+        requestRef: requestRef(second),
+        streams: [
+          { streamKind: "PLATFORM", streamRef: "PLATFORM", cursor: 0 },
+          { streamKind: "RUN", streamRef: "run_realtime01", cursor: 2 },
+        ],
+      });
+      await flushProcessing();
+      expect(second.readyState).toBe(FakeWebSocket.OPEN);
+      expect(store.state.run_realtime01?.state).toBe("live");
+      store.closeAll();
+    },
+  );
+
+  it("откладывает повтор недоступного запуска до завершения SESSION_RESUME", async () => {
+    const store = useRealtimeStore();
+    store.openRun("run_realtime01");
+    await flushProcessing();
+    const socket = socketAt(0);
+    socket.open();
+    socket.message(
+      runEnvelope(socket, "run_realtime01", {
+        type: "STREAM_PROBLEM",
+        code: "RUN_UNAVAILABLE",
+        title: "Недоступно",
+        retryable: true,
+      }),
+    );
+    await flushProcessing();
+    expect(
+      [...scheduled.values()].filter((timer) => timer.delay === 1_000),
+    ).toHaveLength(0);
+    expect(socket.sent).toHaveLength(1);
+    socket.message({
+      type: "SESSION_READY",
+      requestRef: requestRef(socket),
+      streams: [{ streamKind: "PLATFORM", streamRef: "PLATFORM", cursor: 0 }],
+    });
+    await flushProcessing();
+    runScheduled(1_000);
+    expect(sent(socket, 1)).toMatchObject({
+      type: "SUBSCRIBE_RUN",
+      runRef: "run_realtime01",
+    });
+    store.closeAll();
+  });
+
+  it.each(["close-platform", "platform-heartbeat"])(
+    "возобновляет отложенный повтор при смене готовности платформы: %s",
+    async (transition) => {
+      const store = useRealtimeStore();
+      if (transition === "close-platform") store.openPlatform();
+      store.openRun("run_realtime01");
+      await flushProcessing();
+      const socket = socketAt(0);
+      socket.open();
+      if (transition === "platform-heartbeat") {
+        socket.message({
+          type: "PLATFORM_READY",
+          requestRef: requestRef(socket),
+          streamKind: "PLATFORM",
+          streamRef: "PLATFORM",
+          cursor: 0,
+          availableKinds: [],
+        });
+        socket.message(runSnapshot(socket, "run_realtime01"));
+        socket.message({
+          type: "SESSION_READY",
+          requestRef: requestRef(socket),
+          streams: [
+            { streamKind: "PLATFORM", streamRef: "PLATFORM", cursor: 0 },
+            { streamKind: "RUN", streamRef: "run_realtime01", cursor: 1 },
+          ],
+        });
+        await flushProcessing();
+        store.openPlatform();
+      }
+      socket.message(
+        runEnvelope(socket, "run_realtime01", {
+          type: "STREAM_PROBLEM",
+          code: "RUN_UNAVAILABLE",
+          title: "Недоступно",
+          retryable: true,
+        }),
+      );
+      if (transition === "close-platform")
+        socket.message({
+          type: "SESSION_READY",
+          requestRef: requestRef(socket),
+          streams: [
+            { streamKind: "PLATFORM", streamRef: "PLATFORM", cursor: 0 },
+          ],
+        });
+      await flushProcessing();
+      expect(
+        [...scheduled.values()].filter((timer) => timer.delay === 1_000),
+      ).toHaveLength(0);
+      if (transition === "close-platform") store.closePlatform();
+      else
+        socket.message({
+          type: "STREAM_HEARTBEAT",
+          streamKind: "PLATFORM",
+          streamRef: "PLATFORM",
+          cursor: 0,
+          serverTime: "2026-10-26T10:00:00Z",
+        });
+      await flushProcessing();
+      runScheduled(1_000);
+      expect(sent(socket, 1)).toMatchObject({
+        type: "SUBSCRIBE_RUN",
+        runRef: "run_realtime01",
+      });
+      expect(socket.readyState).toBe(FakeWebSocket.OPEN);
+      store.closeAll();
+    },
+  );
+
+  it("успешный RUN_READY отменяет ранее назначенный повтор", async () => {
+    const store = useRealtimeStore();
+    store.openRun("run_realtime01");
+    await flushProcessing();
+    const socket = socketAt(0);
+    socket.open();
+    socket.message(runSnapshot(socket, "run_realtime01"));
+    socket.message({
+      type: "SESSION_READY",
+      requestRef: requestRef(socket),
+      streams: [
+        { streamKind: "PLATFORM", streamRef: "PLATFORM", cursor: 0 },
+        { streamKind: "RUN", streamRef: "run_realtime01", cursor: 1 },
+      ],
+    });
+    await flushProcessing();
+    socket.message(
+      runEnvelope(socket, "run_realtime01", {
+        type: "STREAM_PROBLEM",
+        code: "RUN_UNAVAILABLE",
+        title: "Недоступно",
+        retryable: true,
+      }),
+    );
+    await flushProcessing();
+    const previous = [...scheduled.values()].find(
+      (timer) => timer.delay === 1_000,
+    );
+    expect(previous).toBeDefined();
+    socket.message(runSnapshot(socket, "run_realtime01", 2));
+    socket.message(
+      runEnvelope(socket, "run_realtime01", { type: "RUN_READY", cursor: 2 }),
+    );
+    await flushProcessing();
+    expect(
+      [...scheduled.values()].filter((timer) => timer.delay === 1_000),
+    ).toHaveLength(0);
+    previous?.callback();
+    expect(socket.sent).toHaveLength(1);
+    expect(store.state.run_realtime01?.state).toBe("live");
+    store.closeAll();
+  });
+
   it("восстанавливает gap одного run без разрыва остальных потоков", async () => {
     const store = useRealtimeStore();
     store.openPlatform();
@@ -1340,8 +1746,25 @@ describe("browser-session realtime multiplexer", () => {
     await flushProcessing();
     const socket = socketAt(0);
     socket.open();
+    socket.message({
+      type: "PLATFORM_READY",
+      requestRef: requestRef(socket),
+      streamKind: "PLATFORM",
+      streamRef: "PLATFORM",
+      cursor: 0,
+      availableKinds: [],
+    });
     socket.message(runSnapshot(socket, "run_realtime01"));
     socket.message(runSnapshot(socket, "run_realtime02"));
+    socket.message({
+      type: "SESSION_READY",
+      requestRef: requestRef(socket),
+      streams: [
+        { streamKind: "PLATFORM", streamRef: "PLATFORM", cursor: 0 },
+        { streamKind: "RUN", streamRef: "run_realtime01", cursor: 1 },
+        { streamKind: "RUN", streamRef: "run_realtime02", cursor: 1 },
+      ],
+    });
     await flushProcessing();
     socket.message(
       runEnvelope(socket, "run_realtime01", {

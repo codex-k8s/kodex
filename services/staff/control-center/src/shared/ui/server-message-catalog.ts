@@ -6,6 +6,30 @@ import {
 
 // Закрытый реестр безопасных сообщений владельца состояния: ru, en.
 export const serverTokenTranslations = {
+  WORKFLOW_EVIDENCE_DELIVERY_LIMIT: [
+    "Запуск остановлен: полный результат интеграций не помещается в продолжение либо исчерпан предел технических продолжений. Квитанции и файлы сохранены; внешнее действие не повторялось.",
+    "The run stopped because its complete integration outcome exceeds the continuation budget or its technical continuation limit. Receipts and files are retained; no external operation was repeated.",
+  ],
+  WORKFLOW_REWORK_QUEUED: [
+    "Назначены новые попытки доработки и зависимых проверок",
+    "Fresh rework and dependent-check attempts have been scheduled",
+  ],
+  WORKFLOW_GATE_SUPERSEDED: [
+    "Прежнее согласование утратило актуальность после одобренной доработки",
+    "Previous result approval was superseded by approved rework",
+  ],
+  LEGACY_REWORK_READ_LIMIT: [
+    "Запуск остановлен: результат чтения не помещается во ввод продолжения. Квитанция чтения и материалы сохранены; начните отдельный процесс с меньшим вводом.",
+    "The run stopped because the read result exceeds the continuation input budget. Its receipt and artifacts are retained; start a separate workflow with smaller input.",
+  ],
+  WORKFLOW_RESULT_ACCEPTED: [
+    "Обязательные результаты этапа проверены и приняты",
+    "Required stage results have been verified and accepted",
+  ],
+  REPOSITORY_BUNDLE_CHANGED: [
+    "Состояние публикации набора файлов обновлено",
+    "Repository bundle publication updated",
+  ],
   PROVIDER_RESULT_UNVERIFIABLE: [
     "Не удалось подтвердить ответ модели. Начните новый ход.",
     "The model response could not be verified. Start a new turn.",
@@ -37,6 +61,14 @@ export const serverTokenTranslations = {
   RUNTIME_PROVIDER_UNAVAILABLE: [
     "Провайдер модели временно недоступен. Повторите запрос позже.",
     "The model provider is temporarily unavailable. Try again later.",
+  ],
+  RUNTIME_INTERRUPTED: [
+    "Исполнение прервано. Причина недоступности не установлена.",
+    "Execution was interrupted. The cause of unavailability is unknown.",
+  ],
+  RUNTIME_ENVIRONMENT_EVICTED: [
+    "Окружение исполнения выселено. Причину следует проверить перед повторным запуском.",
+    "The execution environment was evicted. Check the cause before retrying.",
   ],
   RUNTIME_MEMORY_EXHAUSTED: [
     "Исполнителю не хватило памяти. Проверьте лимит памяти окружения и свободную память узла перед повторным запуском.",
@@ -261,6 +293,154 @@ export const serverTokenTranslations = {
     "Инструменты исполнения недоступны",
     "Runtime tools unavailable",
   ],
+  RUNTIME_INITIALIZATION_FAILED: [
+    "Не удалось подготовить рабочую область сотрудника.",
+    "Agent workspace initialization failed.",
+  ],
+  RUNTIME_INIT_UNKNOWN_UNKNOWN: [
+    "Подготовка рабочего каталога завершилась ошибкой. Причина неизвестна.",
+    "Workspace initialization failed. The cause is unknown.",
+  ],
+  RUNTIME_INIT_INPUT_DECODE_INPUT_INVALID: [
+    "Не удалось проверить входные данные подготовки. Входные данные недопустимы.",
+    "Initialization input validation failed. The input is invalid.",
+  ],
+  RUNTIME_INIT_EGRESS_TRUST_UNKNOWN: [
+    "Не удалось подготовить доверенные сертификаты. Причина неизвестна.",
+    "Trusted certificate preparation failed. The cause is unknown.",
+  ],
+  RUNTIME_INIT_EGRESS_TRUST_FILESYSTEM_IO_FAILED: [
+    "Не удалось подготовить доверенные сертификаты. Не удалось выполнить операцию с рабочими файлами.",
+    "Trusted certificate preparation failed. A workspace file operation failed.",
+  ],
+  RUNTIME_INIT_CONTEXT_SNAPSHOT_INPUT_INVALID: [
+    "Не удалось проверить закреплённый контекст выполнения. Входные данные недопустимы.",
+    "Pinned execution context validation failed. The input is invalid.",
+  ],
+  RUNTIME_INIT_CALLBACK_SETUP_UNKNOWN: [
+    "Не удалось подготовить защищённый канал входных файлов. Причина неизвестна.",
+    "Protected input file channel setup failed. The cause is unknown.",
+  ],
+  RUNTIME_INIT_WORKSPACE_LAYOUT_UNKNOWN: [
+    "Не удалось подготовить рабочие каталоги. Причина неизвестна.",
+    "Workspace directory preparation failed. The cause is unknown.",
+  ],
+  RUNTIME_INIT_WORKSPACE_LAYOUT_CONTEXT_CANCELLED: [
+    "Не удалось подготовить рабочие каталоги. Подготовка отменена.",
+    "Workspace directory preparation failed. Initialization was cancelled.",
+  ],
+  RUNTIME_INIT_WORKSPACE_LAYOUT_DEADLINE_EXCEEDED: [
+    "Не удалось подготовить рабочие каталоги. Истёк срок подготовки.",
+    "Workspace directory preparation failed. The initialization deadline expired.",
+  ],
+  RUNTIME_INIT_WORKSPACE_LAYOUT_READ_ONLY: [
+    "Не удалось подготовить рабочие каталоги. Рабочая область доступна только для чтения.",
+    "Workspace directory preparation failed. The workspace is read-only.",
+  ],
+  RUNTIME_INIT_WORKSPACE_LAYOUT_QUOTA_EXCEEDED: [
+    "Не удалось подготовить рабочие каталоги. Недостаточно разрешённого места для записи.",
+    "Workspace directory preparation failed. Insufficient permitted space is available for writing.",
+  ],
+  RUNTIME_INIT_WORKSPACE_LAYOUT_FILESYSTEM_IO_FAILED: [
+    "Не удалось подготовить рабочие каталоги. Не удалось выполнить операцию с рабочими файлами.",
+    "Workspace directory preparation failed. A workspace file operation failed.",
+  ],
+  RUNTIME_INIT_INPUT_MANIFEST_INPUT_INVALID: [
+    "Не удалось проверить список входных файлов. Входные данные недопустимы.",
+    "Input file manifest validation failed. The input is invalid.",
+  ],
+  RUNTIME_INIT_ARTIFACT_TRANSFER_UNKNOWN: [
+    "Не удалось получить проверенные входные файлы. Причина неизвестна.",
+    "Verified input file download failed. The cause is unknown.",
+  ],
+  RUNTIME_INIT_ARTIFACT_TRANSFER_AUTHENTICATION_REJECTED: [
+    "Не удалось получить проверенные входные файлы. Проверка подлинности запроса отклонена.",
+    "Verified input file download failed. Request authentication was rejected.",
+  ],
+  RUNTIME_INIT_ARTIFACT_TRANSFER_AUTHORITY_REJECTED: [
+    "Не удалось получить проверенные входные файлы. Доступ к источнику отклонён.",
+    "Verified input file download failed. Source access was denied.",
+  ],
+  RUNTIME_INIT_ARTIFACT_TRANSFER_SOURCE_UNAVAILABLE: [
+    "Не удалось получить проверенные входные файлы. Закреплённый источник недоступен.",
+    "Verified input file download failed. The pinned source is unavailable.",
+  ],
+  RUNTIME_INIT_ARTIFACT_TRANSFER_UPSTREAM_UNAVAILABLE: [
+    "Не удалось получить проверенные входные файлы. Источник временно недоступен.",
+    "Verified input file download failed. The source is temporarily unavailable.",
+  ],
+  RUNTIME_INIT_ARTIFACT_TRANSFER_TRANSPORT_UNAVAILABLE: [
+    "Не удалось получить проверенные входные файлы. Не удалось связаться с защищённым источником.",
+    "Verified input file download failed. The protected source could not be reached.",
+  ],
+  RUNTIME_INIT_ARTIFACT_TRANSFER_PIN_MISMATCH: [
+    "Не удалось получить проверенные входные файлы. Метаданные файла не совпали с закреплёнными.",
+    "Verified input file download failed. File metadata does not match its pins.",
+  ],
+  RUNTIME_INIT_ARTIFACT_TRANSFER_CONTENT_DIGEST_MISMATCH: [
+    "Не удалось получить проверенные входные файлы. Контрольная сумма полученного файла не совпала.",
+    "Verified input file download failed. The downloaded file digest does not match.",
+  ],
+  RUNTIME_INIT_ARTIFACT_TRANSFER_CONTEXT_CANCELLED: [
+    "Не удалось получить проверенные входные файлы. Подготовка отменена.",
+    "Verified input file download failed. Initialization was cancelled.",
+  ],
+  RUNTIME_INIT_ARTIFACT_TRANSFER_DEADLINE_EXCEEDED: [
+    "Не удалось получить проверенные входные файлы. Истёк срок подготовки.",
+    "Verified input file download failed. The initialization deadline expired.",
+  ],
+  RUNTIME_INIT_ARTIFACT_TRANSFER_READ_ONLY: [
+    "Не удалось получить проверенные входные файлы. Рабочая область доступна только для чтения.",
+    "Verified input file download failed. The workspace is read-only.",
+  ],
+  RUNTIME_INIT_ARTIFACT_TRANSFER_QUOTA_EXCEEDED: [
+    "Не удалось получить проверенные входные файлы. Недостаточно разрешённого места для записи.",
+    "Verified input file download failed. Insufficient permitted space is available for writing.",
+  ],
+  RUNTIME_INIT_ARTIFACT_TRANSFER_FILESYSTEM_IO_FAILED: [
+    "Не удалось получить проверенные входные файлы. Не удалось выполнить операцию с рабочими файлами.",
+    "Verified input file download failed. A workspace file operation failed.",
+  ],
+  RUNTIME_INIT_INPUT_PROTECTION_UNKNOWN: [
+    "Не удалось защитить подготовленные входные файлы. Причина неизвестна.",
+    "Prepared input file protection failed. The cause is unknown.",
+  ],
+  RUNTIME_INIT_INPUT_PROTECTION_READ_ONLY: [
+    "Не удалось защитить подготовленные входные файлы. Рабочая область доступна только для чтения.",
+    "Prepared input file protection failed. The workspace is read-only.",
+  ],
+  RUNTIME_INIT_INPUT_PROTECTION_QUOTA_EXCEEDED: [
+    "Не удалось защитить подготовленные входные файлы. Недостаточно разрешённого места для записи.",
+    "Prepared input file protection failed. Insufficient permitted space is available for writing.",
+  ],
+  RUNTIME_INIT_INPUT_PROTECTION_FILESYSTEM_IO_FAILED: [
+    "Не удалось защитить подготовленные входные файлы. Не удалось выполнить операцию с рабочими файлами.",
+    "Prepared input file protection failed. A workspace file operation failed.",
+  ],
+  RUNTIME_INIT_CONTEXT_FILES_UNKNOWN: [
+    "Не удалось подготовить навыки и память выполнения. Причина неизвестна.",
+    "Execution skill and memory preparation failed. The cause is unknown.",
+  ],
+  RUNTIME_INIT_CONTEXT_FILES_CONTEXT_CANCELLED: [
+    "Не удалось подготовить навыки и память выполнения. Подготовка отменена.",
+    "Execution skill and memory preparation failed. Initialization was cancelled.",
+  ],
+  RUNTIME_INIT_CONTEXT_FILES_DEADLINE_EXCEEDED: [
+    "Не удалось подготовить навыки и память выполнения. Истёк срок подготовки.",
+    "Execution skill and memory preparation failed. The initialization deadline expired.",
+  ],
+  RUNTIME_INIT_CONTEXT_FILES_READ_ONLY: [
+    "Не удалось подготовить навыки и память выполнения. Рабочая область доступна только для чтения.",
+    "Execution skill and memory preparation failed. The workspace is read-only.",
+  ],
+  RUNTIME_INIT_CONTEXT_FILES_QUOTA_EXCEEDED: [
+    "Не удалось подготовить навыки и память выполнения. Недостаточно разрешённого места для записи.",
+    "Execution skill and memory preparation failed. Insufficient permitted space is available for writing.",
+  ],
+  RUNTIME_INIT_CONTEXT_FILES_FILESYSTEM_IO_FAILED: [
+    "Не удалось подготовить навыки и память выполнения. Не удалось выполнить операцию с рабочими файлами.",
+    "Execution skill and memory preparation failed. A workspace file operation failed.",
+  ],
   RUNTIME_UNAVAILABLE: [
     "Исполнение временно недоступно",
     "Runtime temporarily unavailable",
@@ -268,6 +448,10 @@ export const serverTokenTranslations = {
   RUNTIME_LIMIT_EXCEEDED: [
     "Достигнут лимит исполнения",
     "Runtime limit exceeded",
+  ],
+  OWNER_GATE_EXPIRED: [
+    "Срок согласования истёк. Процесс завершён без одобрения результата.",
+    "Approval waiting time expired. The process ended without approval.",
   ],
   RUNTIME_TIMEOUT: [
     "Превышено время выполнения",
@@ -559,6 +743,10 @@ export const serverTokenTranslations = {
   INTEGRATION_ACTION_FAILED: [
     "Действие интеграции отклонено или завершилось ошибкой",
     "Integration action was rejected or failed",
+  ],
+  INTEGRATION_ADMISSION_BLOCKED: [
+    "Допуск вызова заблокирован: текущие полномочия или закреплённые зависимости недоступны",
+    "Invocation admission is blocked: current authority or pinned dependencies are unavailable",
   ],
   INTEGRATION_ACTION_OUTCOME_UNKNOWN: [
     "Результат действия интеграции неизвестен",
@@ -902,6 +1090,10 @@ export const serverTokenTranslations = {
   SESSION_ARCHIVE_TASK_SUCCEEDED: [
     "Архивирование сессии завершено",
     "Session archival completed",
+  ],
+  SESSION_WORKSPACE_OBSERVED: [
+    "Состояние рабочей области подтверждено",
+    "Workspace state observed",
   ],
   SESSION_CONTINUATION: ["Продолжение сессии", "Session continuation"],
   SESSION_CONTINUED: ["Сессия продолжена", "Session continued"],

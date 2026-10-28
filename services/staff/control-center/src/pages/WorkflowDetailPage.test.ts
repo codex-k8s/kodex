@@ -39,6 +39,8 @@ vi.mock("@/features/agents/detail/EffectiveCapabilityCatalog.vue", () => ({
   default: defineComponent({ render: () => h("span") }),
 }));
 import Component from "./WorkflowDetailPage.vue";
+import { resolveConfirmation } from "@/shared/ui/confirmation";
+import type { WorkflowEditorInput } from "@/features/platform/workflow-editor";
 
 const workflow: Workflow = {
   ref: "wfl_fixture",
@@ -99,11 +101,18 @@ const store = {
   ),
 };
 const disposers: Array<() => void> = [];
-afterEach(() => disposers.splice(0).forEach((dispose) => dispose()));
+afterEach(() => {
+  resolveConfirmation(false);
+  disposers.splice(0).forEach((dispose) => dispose());
+});
 function mount() {
   let state!: {
-    form: Required<WorkflowInput>;
+    form: WorkflowEditorInput;
+    changeReworkPolicy: (
+      value: "" | "OWNER_APPROVED_UPSTREAM_V1",
+    ) => Promise<void>;
     validCompletionText: Ref<boolean>;
+    validDAG: Ref<boolean>;
     dirty: Ref<boolean>;
     save: () => Promise<void>;
   };
@@ -173,12 +182,46 @@ it.each(["я", "🧭"])(
   },
 );
 
-it("связывает доступность кнопки сохранения с тем же ограничением", () => {
+it("не сохраняет серверный процесс без обязательных результатов этапа", async () => {
+  const state = mount();
+  await vi.waitFor(() =>
+    expect(state.form.completionCriteria).toBe(workflow.completionCriteria),
+  );
+  state.form.executionMode = "SERVER_DAG_V1";
+  await nextTick();
+  expect(state.validDAG.value).toBe(false);
+  const before = JSON.stringify(state.form);
+  await state.save();
+  expect(store.saveWorkflow).not.toHaveBeenCalled();
+  expect(JSON.stringify(state.form)).toBe(before);
+});
+
+it("связывает кнопку сохранения с ограничениями текста и графа", () => {
   const source = readFileSync(
     new URL("./WorkflowDetailPage.vue", import.meta.url),
     "utf8",
   );
-  expect(source).toContain(
-    ':disabled="busy || !validStepText || !validCompletionText"',
+  expect(source).toMatch(
+    /:disabled="\s*busy \|\| !validStepText \|\| !validCompletionText \|\| !validDAG\s*"/,
   );
+});
+
+it("не применяет rework policy к изменившемуся режиму после подтверждения", async () => {
+  const state = mount();
+  await vi.waitFor(() =>
+    expect(state.form.completionCriteria).toBe(workflow.completionCriteria),
+  );
+  state.form.executionMode = "SERVER_DAG_V1";
+  await nextTick();
+  const pending = state.changeReworkPolicy("OWNER_APPROVED_UPSTREAM_V1");
+  state.form.executionMode = "MANAGER_DRIVEN";
+  resolveConfirmation(true);
+  await pending;
+  expect(state.form.reworkPolicy).toBe("");
+  state.form.executionMode = "SERVER_DAG_V1";
+  await nextTick();
+  const accepted = state.changeReworkPolicy("OWNER_APPROVED_UPSTREAM_V1");
+  resolveConfirmation(true);
+  await accepted;
+  expect(state.form.reworkPolicy).toBe("OWNER_APPROVED_UPSTREAM_V1");
 });

@@ -4,8 +4,8 @@ title: Файлы, результаты и знания
 type: domain
 status: approved
 owner: architect
-version: 1.3.0
-updated: 2026-10-10
+version: 1.3.1
+updated: 2026-10-26
 ---
 
 # Файлы, результаты и знания
@@ -44,6 +44,20 @@ idempotency/deletion commitments. Они не позволяют восстан�
 source и interaction attachment. Ни один источник не требует Mattermost
 post/thread. Content-addressed object locator остаётся внутренним и не попадает
 в browser, prompt, event или runtime manifest.
+
+### Исходники для публикации Git
+
+Типизированная публикация repository bundle имеет фиксированное назначение
+`GIT_REPOSITORY_SOURCE_ONLY`. Сервер отдельно проверяет полный формат и точные
+байты каждого decoded файла обязательным антивирусом до Human Gate. HTML, SVG,
+XHTML и shebang-текст допустимы только в этом профиле; MZ/ELF и неподдержанные
+двоичные форматы не допускаются. Чистый внешний JSON не удостоверяет его members.
+
+Members не становятся отдельными обычными Artifact с разрешённым preview либо
+исполнением. Upload, runtime capture и materialization сохраняют прежнюю политику;
+caller не может выбрать ослабленный purpose. Immutable snapshot хранит версию
+профиля и per-file receipts, старые снимки читаются по своей известной версии.
+Полный контракт и возврат: [OPS-DOC-1859](../operations/repository-bundle-publication-1859.md).
 
 ### FileBinding
 

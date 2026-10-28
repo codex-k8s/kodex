@@ -55,6 +55,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.command.configuration-writebacks.approve":                 controlplanev1.PlatformCommandService_ApproveManagedConfigurationGitWriteBack_FullMethodName,
 		"platform.command.configuration-writebacks.reject":                  controlplanev1.PlatformCommandService_RejectManagedConfigurationGitWriteBack_FullMethodName,
 		"platform.command.configuration-writebacks.cancel":                  controlplanev1.PlatformCommandService_CancelManagedConfigurationGitWriteBack_FullMethodName,
+		"platform.repository-bundles.get":                                   controlplanev1.RepositoryBundlePublicationService_GetRepositoryBundlePublication_FullMethodName,
 		"platform.query.configuration-writebacks.get":                       controlplanev1.PlatformQueryService_GetManagedConfigurationGitWriteBack_FullMethodName,
 		"platform.query.configuration-writebacks.list":                      controlplanev1.PlatformQueryService_ListManagedConfigurationGitWriteBacks_FullMethodName,
 		"platform.query.email-mailbox.configurations.list":                  controlplanev1.PlatformQueryService_ListEmailMailboxConfigurations_FullMethodName,
@@ -387,6 +388,7 @@ func SecretBrokerOperations() map[string]string {
 		"platform.credential-projections.runtime.resolve":          controlplanev1.RuntimeSecretWorkService_ResolveRuntimeCredentialProjection_FullMethodName,
 		"platform.credential-projections.runtime.validate":         controlplanev1.RuntimeSecretWorkService_ValidateRuntimeCredentialProjection_FullMethodName,
 		"platform.credential-projections.stt.resolve":              controlplanev1.RuntimeSecretWorkService_ResolveTranscriptionCredentialProjection_FullMethodName,
+		"platform.credential-projections.ssh-compose.resolve":      controlplanev1.RuntimeSecretWorkService_ResolveSSHComposeCredentialProjection_FullMethodName,
 		"platform.runtime-secrets.operations.consume":              controlplanev1.RuntimeSecretWorkService_ConsumeRuntimeSecretOperation_FullMethodName,
 		"platform.runtime-secrets.operations.complete":             controlplanev1.RuntimeSecretWorkService_CompleteRuntimeSecretOperation_FullMethodName,
 		"platform.runtime-secrets.operations.fail":                 controlplanev1.RuntimeSecretWorkService_FailRuntimeSecretOperation_FullMethodName,
@@ -431,10 +433,17 @@ func STTCredentialProjectionOperations() map[string]string {
 	}
 }
 
+// SSHComposeCredentialProjectionOperations registers only the fenced SSH worker projection.
+// SSHComposeCredentialProjectionOperations регистрирует только fenced SSH worker projection.
+func SSHComposeCredentialProjectionOperations() map[string]string {
+	return map[string]string{"platform.ssh-compose.credential.project": "/secretbroker.v1.RuntimeCredentialProjectionService/ProjectSSHComposeCredential"}
+}
+
 // RuntimeOperations registers exact execution, file, assistant, integration and warm-runtime RPCs for runtime work clients.
 // RuntimeOperations регистрирует точные RPC исполнения, файлов, помощника, интеграций и warm runtime для runtime-клиентов.
 func RuntimeOperations() map[string]string {
 	return map[string]string{
+		"platform.repository-bundles.prepare":                 controlplanev1.RepositoryBundlePublicationService_PrepareRepositoryBundlePublication_FullMethodName,
 		"platform.runtime.execution.claim":                    controlplanev1.RuntimeWorkService_ClaimExecution_FullMethodName,
 		"platform.runtime.role-image-configuration.get":       controlplanev1.RuntimeWorkService_GetRuntimeEnvironmentRoleImageConfiguration_FullMethodName,
 		"platform.runtime.execution.artifact.read":            controlplanev1.RuntimeWorkService_ReadExecutionArtifact_FullMethodName,
@@ -448,6 +457,7 @@ func RuntimeOperations() map[string]string {
 		"platform.runtime.execution.progress":                 controlplanev1.RuntimeWorkService_ReportExecutionProgress_FullMethodName,
 		"platform.runtime.provider-credential.refresh.commit": controlplanev1.RuntimeWorkService_CommitProviderCredentialRefresh_FullMethodName,
 		"platform.runtime.execution.complete":                 controlplanev1.RuntimeWorkService_CompleteExecution_FullMethodName,
+		"platform.runtime.workspace.observe":                  controlplanev1.RuntimeWorkService_ObserveWorkspace_FullMethodName,
 		"platform.runtime.execution.delegate":                 controlplanev1.RuntimeWorkService_DelegateExecution_FullMethodName,
 		"platform.runtime.execution.workflow.launch":          controlplanev1.RuntimeWorkService_LaunchWorkflowExecution_FullMethodName,
 		"platform.runtime.execution.workflow.catalog":         controlplanev1.RuntimeWorkService_GetExecutionWorkflowCatalog_FullMethodName,
@@ -534,6 +544,12 @@ func SessionArchiveOperations() map[string]string {
 // IntegrationGatewayOperations регистрирует для шлюза задачи Git-конфигурации и методы исполнения runtime-интеграций.
 func IntegrationGatewayOperations() map[string]string {
 	return map[string]string{
+		"platform.repository-bundles.work.claim":          controlplanev1.RepositoryBundlePublicationService_ClaimRepositoryBundlePublications_FullMethodName,
+		"platform.repository-bundles.work.renew":          controlplanev1.RepositoryBundlePublicationService_RenewRepositoryBundlePublication_FullMethodName,
+		"platform.repository-bundles.work.begin":          controlplanev1.RepositoryBundlePublicationService_BeginRepositoryBundlePublication_FullMethodName,
+		"platform.repository-bundles.work.complete":       controlplanev1.RepositoryBundlePublicationService_CompleteRepositoryBundlePublication_FullMethodName,
+		"platform.repository-bundles.work.fail":           controlplanev1.RepositoryBundlePublicationService_FailRepositoryBundlePublication_FullMethodName,
+		"platform.repository-bundles.work.content.read":   controlplanev1.RepositoryBundlePublicationService_ReadRepositoryBundlePublication_FullMethodName,
 		"platform.configuration-writebacks.work.claim":    controlplanev1.ManagedConfigurationGitWriteBackWorkService_ClaimManagedConfigurationGitWriteBackWork_FullMethodName,
 		"platform.configuration-writebacks.work.renew":    controlplanev1.ManagedConfigurationGitWriteBackWorkService_RenewManagedConfigurationGitWriteBackWork_FullMethodName,
 		"platform.configuration-writebacks.work.begin":    controlplanev1.ManagedConfigurationGitWriteBackWorkService_BeginManagedConfigurationGitWriteBackEffect_FullMethodName,
@@ -547,6 +563,8 @@ func IntegrationGatewayOperations() map[string]string {
 		"platform.runtime.integration-tests.claim":        controlplanev1.RuntimeWorkService_ClaimIntegrationConnectionTests_FullMethodName,
 		"platform.runtime.integration-tests.complete":     controlplanev1.RuntimeWorkService_CompleteIntegrationConnectionTest_FullMethodName,
 		"platform.runtime.integrations.claim":             controlplanev1.RuntimeWorkService_ClaimIntegrationInvocations_FullMethodName,
+		"platform.runtime.ssh-compose.claim":              controlplanev1.RuntimeWorkService_ClaimSSHComposeInvocations_FullMethodName,
+		"platform.runtime.ssh-compose.renew":              controlplanev1.RuntimeWorkService_RenewSSHComposeInvocation_FullMethodName,
 		"platform.runtime.integrations.complete":          controlplanev1.RuntimeWorkService_CompleteIntegrationInvocation_FullMethodName,
 	}
 }

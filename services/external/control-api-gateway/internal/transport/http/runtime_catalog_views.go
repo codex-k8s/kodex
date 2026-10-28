@@ -154,6 +154,9 @@ func validateRuntimeCatalogMessage(message protoreflect.Message, depth int) erro
 	if depth > 64 {
 		return invalidRuntimeCatalogView("maximum_depth")
 	}
+	if !validWorkflowPublicMessage(message.Interface()) {
+		return invalidRuntimeCatalogView("workflow_result_contract")
+	}
 	switch item := message.Interface().(type) {
 	case *cp.Run:
 		if !validRunIdentity(item) {

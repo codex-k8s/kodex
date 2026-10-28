@@ -88,3 +88,13 @@ func (m *Metrics) ConfigurationWriteBack(branch, success bool) {
 	}
 	m.operations.WithLabelValues(operation, outcome).Inc()
 }
+
+// RepositoryBundle records the single proposal-branch push attempt before owner finalization; an uncertain provider response remains unknown even if a later readback succeeds.
+// RepositoryBundle учитывает единственную proposal-branch push attempt до owner finalization; uncertain provider response остаётся unknown, даже если поздний readback успешен.
+func (m *Metrics) RepositoryBundle(success bool) {
+	outcome := "unknown"
+	if success {
+		outcome = "success"
+	}
+	m.operations.WithLabelValues("repository_bundle_branch", outcome).Inc()
+}

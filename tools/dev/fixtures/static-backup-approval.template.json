@@ -1,0 +1,12 @@
+{
+  "schema": "kodex.backup-static-approval/v1",
+  "planSHA256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "operatorRevision": "0000000000000000000000000000000000000000",
+  "expiresAt": 0,
+  "approved": false,
+  "quiescent": false,
+  "allowBaselineProjection": false,
+  "allowTwoRollouts": false,
+  "allowRecoveryPodDelete": false,
+  "allowQAFixture": false
+}

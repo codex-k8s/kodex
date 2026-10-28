@@ -7,34 +7,24 @@ import (
 	"strings"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	workflowservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/workflow"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
 )
 
-// assistantWorkflowEditableFields lists the workflow form fields accepted by hydration and
-// edited-plan reconstruction, in stable copy order. Workflow/project refs and the retained typed
-// draft are handled separately; membership in this list grants no permission and does not validate
-// a supplied value.
-// assistantWorkflowEditableFields перечисляет поля формы workflow для hydration и восстановления
-// edited plan в устойчивом порядке копирования. Workflow/project refs и сохранённый typed draft
-// обрабатываются отдельно; наличие в списке не выдаёт полномочий и не проверяет переданное
-// значение.
+// assistantWorkflowEditableFields is the closed plan-edit surface, excluding owner snapshots and grants.
+// assistantWorkflowEditableFields задаёт закрытую поверхность редактирования без owner snapshots и grants.
 var assistantWorkflowEditableFields = []string{
+	"executionMode", "resultEvidenceProfile", "reworkPolicy",
 	"name", "purpose", "coordinatorAgentRef", "instructions", "completionCriteria",
 	"maxConcurrency", "timeoutSeconds", "inputFields", "steps",
 }
 
-// assistantWorkflowGraphFields projects typed workflow inputs/steps into fresh JSON-shaped maps
-// and nonnil slices, including options, gate decisions and required capabilities. Numeric
-// parallel-group/timeouts become float64. This editor projection omits defaults and dependency
-// edges; those remain in the retained draft and are preserved separately during graph
-// reconstruction.
-// assistantWorkflowGraphFields проецирует типизированные workflow inputs/steps в новые
-// JSON-подобные maps и ненулевые slices, включая options, gate decisions и required capabilities.
-// Числовые parallel-group/timeouts становятся float64. Проекция редактора не включает defaults и
-// dependency edges: они остаются в сохранённом draft и отдельно сохраняются при восстановлении
-// графа.
+// assistantWorkflowGraphFields creates editable snapshots with optional approval policy and exact
+// server predicates, while preserving the legacy field shape for older plans.
+// assistantWorkflowGraphFields создаёт редактируемые снимки со сроком согласования и точными
+// серверными условиями, сохраняя прежнюю форму полей исторических планов.
 func assistantWorkflowGraphFields(draft entity.WorkflowVersion) ([]any, []any) {
 	fields := make([]any, 0, len(draft.Inputs))
 	for _, field := range draft.Inputs {
@@ -55,26 +45,31 @@ func assistantWorkflowGraphFields(draft entity.WorkflowVersion) ([]any, []any) {
 		for _, capability := range step.RequiredCapabilityKeys {
 			capabilities = append(capabilities, capability)
 		}
-		steps = append(steps, map[string]any{"key": step.Key, "name": step.Name,
+		item := map[string]any{"key": step.Key, "name": step.Name,
 			"purpose": step.Instructions, "agentRef": step.AgentRef, "parallel": step.Parallel,
 			"parallelGroup": float64(step.ParallelGroup), "timeoutSeconds": float64(step.TimeoutSeconds),
 			"expectedResult": step.ExpectedResult, "humanGate": step.HumanGateAfter,
-			"gateDecisions": decisions, "requiredCapabilityKeys": capabilities})
+			"gateDecisions": decisions, "requiredCapabilityKeys": capabilities}
+		if step.ApprovalTimeoutSeconds != nil {
+			item["approvalTimeoutSeconds"] = float64(*step.ApprovalTimeoutSeconds)
+		}
+		if draft.ExecutionMode == workflowservice.ServerDAGV1 {
+			dependencies := make([]any, 0, len(step.DependsOn))
+			for _, dependency := range step.DependsOn {
+				dependencies = append(dependencies, dependency)
+			}
+			item["dependsOn"] = dependencies
+			item["resultRequirements"] = assistantWorkflowRequirementFields(step.ResultRequirements)
+		}
+		steps = append(steps, item)
 	}
 	return fields, steps
 }
 
-// readAssistantWorkflowSnapshot resolves the exact workflow assistant context in the caller
-// transaction and requires UPDATE_WORKFLOW before reading the tenant/ref projection. It rejects a
-// different project, archived workflow, missing draft or absent EDIT action as NotFound. The
-// returned snapshot includes JSON-round-tripped draft and editable graph fields with the
-// authoritative workflow version; encoding/decoding failure is Unavailable. It creates no
-// transaction, grant or write.
-// readAssistantWorkflowSnapshot разрешает точный assistant context workflow в транзакции
-// вызывающего и требует UPDATE_WORKFLOW до чтения tenant/ref projection. Чужой проект, архивный
-// workflow, отсутствие draft или EDIT action отклоняет как NotFound. Snapshot содержит draft после
-// JSON round-trip и редактируемые graph fields с авторитетной workflow version; отказ
-// кодирования/декодирования даёт Unavailable. Транзакцию, grant или запись не создаёт.
+// readAssistantWorkflowSnapshot reads an eligible editable draft inside owner scope and preserves
+// its version, complete graph and execution mode without granting the assistant additional rights.
+// readAssistantWorkflowSnapshot читает доступный черновик внутри области владельца, сохраняя
+// версию, полный граф и режим без выдачи помощнику дополнительных полномочий.
 func (repository *Repository) readAssistantWorkflowSnapshot(ctx context.Context, tx pgx.Tx, actorScope scope,
 	projectRef, workflowRef string,
 ) (map[string]any, int64, error) {
@@ -104,7 +99,7 @@ func (repository *Repository) readAssistantWorkflowSnapshot(ctx context.Context,
 		return nil, 0, errs.ErrUnavailable
 	}
 	fields, steps := assistantWorkflowGraphFields(*workflow.Draft)
-	return map[string]any{
+	snapshot := map[string]any{
 		"workflowRef": workflow.Ref, "projectRef": workflow.ProjectRef,
 		"name": workflow.Draft.Name, "purpose": workflow.Draft.Purpose,
 		"coordinatorAgentRef": workflow.Draft.CoordinatorAgentRef,
@@ -112,7 +107,17 @@ func (repository *Repository) readAssistantWorkflowSnapshot(ctx context.Context,
 		"maxConcurrency": float64(workflow.Draft.Concurrency), "timeoutSeconds": float64(workflow.Draft.TimeoutSeconds),
 		"inputFields": fields, "steps": steps,
 		"draft": draft,
-	}, workflow.Version, nil
+	}
+	if workflow.Draft.ReworkPolicy != "" {
+		snapshot["reworkPolicy"] = workflow.Draft.ReworkPolicy
+	}
+	if workflow.Draft.ExecutionMode != "" {
+		snapshot["executionMode"] = workflow.Draft.ExecutionMode
+	}
+	if workflow.Draft.ResultEvidenceProfile != "" {
+		snapshot["resultEvidenceProfile"] = workflow.Draft.ResultEvidenceProfile
+	}
+	return snapshot, workflow.Version, nil
 }
 
 // hydrateAssistantWorkflowOperation accepts only workflowRef plus the closed editable fields under
@@ -140,22 +145,18 @@ func (repository *Repository) hydrateAssistantWorkflowOperation(ctx context.Cont
 	return hydrateAssistantWorkflowFields(before, version, operation)
 }
 
-// hydrateAssistantWorkflowFields builds a fresh editable map from the snapshot, trims supplied
-// text, bounds concurrency/timeouts and requires JSON-shaped graph arrays. Unchanged values are
-// Conflict. It restores Before/target/version, selects the operation, clears Input and validates
-// the typed workflow command before deriving canonical After with graph/draft. Map copies remain
-// shallow; this pure transformation performs no authorization, persistence or publication.
-// hydrateAssistantWorkflowFields строит новую editable map из snapshot, обрезает пробелы
-// переданного текста, ограничивает concurrency/timeouts и требует JSON-подобные graph arrays.
-// Неизменённые значения дают Conflict. Восстанавливает Before/target/version, выбирает operation,
-// очищает Input и проверяет typed workflow command перед построением canonical After с
-// graph/draft. Копии maps остаются поверхностными; чистое преобразование не выполняет авторизацию,
-// сохранение или публикацию.
+// hydrateAssistantWorkflowFields merges allowed sparse edits with the authoritative prior snapshot,
+// then revalidates and renders the exact proposed graph. Absent historical mode remains absent.
+// hydrateAssistantWorkflowFields объединяет разрешённые частичные правки с прежним owner snapshot,
+// заново проверяет и отображает граф. Отсутствующий исторический режим остаётся отсутствующим.
 func hydrateAssistantWorkflowFields(before map[string]any, version int64,
 	operation entity.AssistantPlanOperation,
 ) (entity.AssistantPlanOperation, error) {
 	after := make(map[string]any, len(assistantWorkflowEditableFields)+2)
 	for _, key := range append([]string{"workflowRef", "projectRef"}, assistantWorkflowEditableFields...) {
+		if _, exists := before[key]; (key == "executionMode" || key == "reworkPolicy" || key == "resultEvidenceProfile") && !exists {
+			continue
+		}
 		after[key] = before[key]
 	}
 	changed := false
@@ -165,6 +166,18 @@ func hydrateAssistantWorkflowFields(before map[string]any, version int64,
 			continue
 		}
 		switch key {
+		case "resultEvidenceProfile":
+			profile, valid := assistantWorkflowEvidenceProfile(operation.Parameters, true)
+			if !valid {
+				return entity.AssistantPlanOperation{}, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_SHAPE")
+			}
+			value = profile
+		case "executionMode":
+			mode, valid := assistantWorkflowMode(operation.Parameters)
+			if !valid {
+				return entity.AssistantPlanOperation{}, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_TEXT")
+			}
+			value = mode
 		case "maxConcurrency", "timeoutSeconds":
 			integer, valid := assistantInt64(operation.Parameters, key)
 			if !valid || integer < 1 || (key == "maxConcurrency" && integer > 100) ||
@@ -240,24 +253,16 @@ func assistantWorkflowAfterSnapshot(parameters map[string]any, draft entity.Work
 	return after, nil
 }
 
-// assistantUpdateWorkflow parses Input when present or parameters with the expected-version
-// fallback, requiring the exact workflow field set, positive version and refs matching Before. It
-// rebuilds the retained valid draft, applies typed text/numeric edits and reconstructs a changed
-// graph while preserving protected defaults/dependencies, then validates the final workflow. It
-// returns a specialized WorkflowInput/version with field diagnostics; it does not itself resolve
-// current ownership or commit a command.
-// assistantUpdateWorkflow разбирает Input при наличии либо parameters с fallback expected version,
-// требуя точный workflow field set, положительную version и refs, совпадающие с Before.
-// Восстанавливает сохранённый допустимый draft, применяет typed text/numeric edits и перестраивает
-// изменённый граф с сохранением защищённых defaults/dependencies, затем валидирует итоговый
-// workflow. Возвращает специализированные WorkflowInput/version с field diagnostics; сам не
-// разрешает текущее владение и не фиксирует команду.
+// assistantUpdateWorkflow verifies binding and the original draft before applying editable fields;
+// optional mode changes require the entire resulting graph to satisfy the selected owner policy.
+// assistantUpdateWorkflow проверяет привязку и исходный черновик перед применением полей; смена
+// режима требует соответствия всего итогового графа выбранной политике владельца.
 func assistantUpdateWorkflow(operation entity.AssistantPlanOperation) (command.WorkflowInput, int64, error) {
 	input := operation.Input
 	if input == nil {
 		input = withAssistantExpectedVersion(operation.Parameters, valueOrZero(operation.ExpectedVersion))
 	}
-	if !onlyAssistantFields(input, "workflowRef", "projectRef", "name", "purpose", "instructions",
+	if !onlyAssistantFields(input, "resultEvidenceProfile", "reworkPolicy", "executionMode", "workflowRef", "projectRef", "name", "purpose", "instructions",
 		"coordinatorAgentRef", "completionCriteria", "maxConcurrency", "timeoutSeconds", "inputFields", "steps", "expectedVersion") ||
 		!hasAssistantFields(input, "workflowRef", "projectRef", "name", "purpose", "instructions",
 			"coordinatorAgentRef", "completionCriteria", "maxConcurrency", "timeoutSeconds", "inputFields", "steps", "expectedVersion") {
@@ -285,6 +290,27 @@ func assistantUpdateWorkflow(operation entity.AssistantPlanOperation) (command.W
 	var draft entity.WorkflowVersion
 	if json.Unmarshal(raw, &draft) != nil || !validWorkflowVersion(draft) {
 		return command.WorkflowInput{}, 0, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_DRAFT")
+	}
+	if _, present := input["resultEvidenceProfile"]; present {
+		profile, valid := assistantWorkflowEvidenceProfile(input, true)
+		if !valid {
+			return command.WorkflowInput{}, 0, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_SHAPE")
+		}
+		draft.ResultEvidenceProfile = profile
+	}
+	if _, present := input["executionMode"]; present {
+		mode, valid := assistantWorkflowMode(input)
+		if !valid {
+			return command.WorkflowInput{}, 0, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_TEXT")
+		}
+		draft.ExecutionMode = mode
+	}
+	if raw, present := input["reworkPolicy"]; present {
+		value, ok := raw.(string)
+		if !ok || value != "" && value != workflowservice.OwnerApprovedUpstreamV1 || value != "" && draft.ExecutionMode != workflowservice.ServerDAGV1 {
+			return command.WorkflowInput{}, 0, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_INVARIANTS")
+		}
+		draft.ReworkPolicy = value
 	}
 	for _, key := range []string{"name", "purpose", "instructions", "completionCriteria"} {
 		value, ok := input[key].(string)
@@ -321,17 +347,10 @@ func assistantUpdateWorkflow(operation entity.AssistantPlanOperation) (command.W
 		Name: draft.Name, Purpose: draft.Purpose, CoordinatorAgentRef: draft.CoordinatorAgentRef, Draft: &draft}, version, nil
 }
 
-// assistantUpdateWorkflowGraph parses bounded input/step arrays with closed shapes, rejects
-// unknown explicit or duplicate keys and assigns unused server keys to new entries. It
-// reconstructs the typed graph, restores matching input defaults, remaps new dependency keys and
-// retains original dependency edges before replacing draft inputs/steps. Errors carry the existing
-// field diagnostics and leave that final replacement unapplied; no stored workflow is written.
-// assistantUpdateWorkflowGraph разбирает ограниченные input/step arrays с закрытыми shapes,
-// запрещает неизвестные явные или повторные keys и назначает свободные server keys новым
-// элементам. Восстанавливает typed graph, возвращает соответствующие input defaults, переназначает
-// новые dependency keys и сохраняет исходные dependency edges до замены draft inputs/steps. Ошибки
-// несут прежние field diagnostics и не выполняют эту итоговую замену; сохранённый workflow не
-// записывается.
+// assistantUpdateWorkflowGraph preserves input defaults and legacy inferred dependencies; server
+// mode instead retains explicit stable keys, edges and subject keys in one common namespace.
+// assistantUpdateWorkflowGraph сохраняет defaults входа и прежний вывод зависимостей; серверный
+// режим сохраняет явные ключи, рёбра и ссылки условий в одном пространстве ключей.
 func assistantUpdateWorkflowGraph(input map[string]any, draft *entity.WorkflowVersion) error {
 	fields, fieldsOK := input["inputFields"].([]any)
 	steps, stepsOK := input["steps"].([]any)
@@ -379,12 +398,19 @@ func assistantUpdateWorkflowGraph(input map[string]any, draft *entity.WorkflowVe
 	}
 	for index, raw := range steps {
 		step, ok := raw.(map[string]any)
-		if !ok || !onlyAssistantFields(step, "key", "name", "purpose", "agentRef", "parallel", "parallelGroup", "timeoutSeconds", "expectedResult", "humanGate", "gateDecisions", "requiredCapabilityKeys") {
+		if !ok || !onlyAssistantFields(step, "dependsOn", "resultRequirements", "key", "name", "purpose", "agentRef", "parallel", "parallelGroup", "timeoutSeconds", "expectedResult", "humanGate", "gateDecisions", "requiredCapabilityKeys", "approvalTimeoutSeconds") {
 			return errs.WithAssistantPlanField(errs.ErrInvalid, "STEP_SHAPE")
 		}
 		key := assistantString(step, "key")
+		if draft.ExecutionMode == workflowservice.ServerDAGV1 {
+			var valid bool
+			key, valid = step["key"].(string)
+			if !valid || key == "" {
+				return errs.WithAssistantPlanField(errs.ErrInvalid, "STEP_KEY")
+			}
+		}
 		if key != "" {
-			if _, known := previousSteps[key]; !known {
+			if _, known := previousSteps[key]; !known && draft.ExecutionMode != workflowservice.ServerDAGV1 {
 				return errs.WithAssistantPlanField(errs.ErrInvalid, "STEP_KEY")
 			}
 		} else {
@@ -402,7 +428,9 @@ func assistantUpdateWorkflowGraph(input map[string]any, draft *entity.WorkflowVe
 		}
 		usedSteps[key], stepKeys[index] = struct{}{}, key
 		clean := cloneAssistantFields(step)
-		delete(clean, "key")
+		if draft.ExecutionMode != workflowservice.ServerDAGV1 {
+			delete(clean, "key")
+		}
 		cleanSteps = append(cleanSteps, clean)
 	}
 	proposal := map[string]any{"projectRef": assistantString(input, "projectRef"),
@@ -411,6 +439,15 @@ func assistantUpdateWorkflowGraph(input map[string]any, draft *entity.WorkflowVe
 		"inputFields":         cleanFields, "steps": cleanSteps,
 		"maxConcurrency": input["maxConcurrency"], "timeoutSeconds": input["timeoutSeconds"],
 		"completionCriteria": assistantString(input, "completionCriteria")}
+	if draft.ExecutionMode != "" {
+		proposal["executionMode"] = draft.ExecutionMode
+	}
+	if draft.ReworkPolicy != "" {
+		proposal["reworkPolicy"] = draft.ReworkPolicy
+	}
+	if draft.ResultEvidenceProfile != "" {
+		proposal["resultEvidenceProfile"] = draft.ResultEvidenceProfile
+	}
 	parsed, err := assistantWorkflow(proposal)
 	if err != nil || parsed.Draft == nil {
 		field := errs.AssistantPlanField(err)
@@ -439,8 +476,10 @@ func assistantUpdateWorkflowGraph(input map[string]any, draft *entity.WorkflowVe
 			step.DependsOn[dependencyIndex] = remap[dependency]
 		}
 	}
-	if err := retainAssistantWorkflowDependencies(draft.Steps, parsed.Draft.Steps); err != nil {
-		return errs.WithAssistantPlanField(err, "STEPS_GRAPH")
+	if draft.ExecutionMode != workflowservice.ServerDAGV1 {
+		if err := retainAssistantWorkflowDependencies(draft.Steps, parsed.Draft.Steps); err != nil {
+			return errs.WithAssistantPlanField(err, "STEPS_GRAPH")
+		}
 	}
 	draft.Inputs, draft.Steps = parsed.Draft.Inputs, parsed.Draft.Steps
 	return nil

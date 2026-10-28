@@ -4,8 +4,8 @@ title: agent-runner
 type: service
 status: approved
 owner: developer
-version: 3.1.1
-updated: 2026-09-04
+version: 3.1.2
+updated: 2026-10-25
 ---
 
 # agent-runner
@@ -291,7 +291,7 @@ Runner принимает optional `outputSchema` из MCP 2025-06-18 как JSO
 у которого runtime-controller уже публикует `outputSchema`.
 
 `runtimecontract.RuntimeMCPToolNames` задаёт ожидаемый набор для readiness,
-Codex status. Существующий tool approval guard не меняется. Четыре VFS tools появляются только при
+Codex status. Существующий tool approval guard не меняется. Пять VFS tools появляются только при
 `RuntimeFileToolsAvailable`: turn + project + lease/fence/generation + валидный
 FileCatalog. Runtime-controller использует тот же предикат публикации VFS.
 Отсутствующий/невалидный catalog не расширяет набор инструментов.
@@ -300,7 +300,10 @@ FileCatalog. Runtime-controller использует тот же предика�
 controller `serveMCP(tools/list)` сохраняет синтетический wire response в
 одноразовом private каталоге, затем настоящий runner проверяет его через
 initialize/initialized/tools-list. Варианты: обычный Agent, system assistant,
-VFS, email+VFS, делегирование. Тест включён в `make test-agent-runner`; отдельные
+VFS, email+VFS, делегирование, workflow и публикация пакета GitHub с exact grant.
+Последний профиль также проверяет отказ при лишнем/отсутствующем инструменте.
+Новый MCP-каталог требует нового runner внутри допущенного RoleImage, даже
+при неизменном JSON input ABI. Тест включён в `make test-agent-runner`; отдельные
 Go suites без fixture env явно пропускают только этот cross-module профиль.
 Loopback fixture не доказывает live mTLS/provider/email effect.
 

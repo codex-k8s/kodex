@@ -4,8 +4,8 @@ title: Серверная разработка на Go
 type: guide
 status: approved
 owner: developer
-version: 1.4.8
-updated: 2026-10-21
+version: 1.4.11
+updated: 2026-10-25
 ---
 
 # Серверная разработка на Go
@@ -15,6 +15,16 @@ Go-сервиса. Каноническое дерево каталогов пр
 PostgreSQL и миграции - в `GO-DOC-002`, надежная доставка событий - в
 `GO-DOC-004`, межсервисное взаимодействие - в `GO-DOC-005`, а общие
 библиотеки - в `GO-DOC-006`.
+
+## Полнота измерений токенов
+
+Числовые counters не доказывают полноту наблюдений. Закрытое качество UNKNOWN/
+PARTIAL/COMPLETE сохраняется вместе с расходом через success/failure callback,
+Proto, owner JSON aggregate и REST/WebSocket до интерфейса. Legacy без качества
+остаётся UNKNOWN, включая положительные counters; numeric0 при COMPLETE видим.
+PARTIAL показывает только подтверждённый subtotal. Повтор completion сохраняет
+turnRef dedup. Это не provider billing, баланс или допуск по квоте. Точная
+матрица переходов и доставки приведена в `OPS-DOC-USAGE-COMPLETENESS-1840`.
 
 ## Направление зависимостей
 
@@ -772,6 +782,12 @@ Multi-stage Dockerfile учитывает полный local-module closure ос
 3. Docker context и ignore rules явно разрешают ту же closure.
 4. Runtime и migration targets собираются из одного проверенного source tree,
    но имеют минимально разные entrypoint и содержимое.
+5. Входной hash локального OCI cache покрывает тот же набор модулей: изменение
+   любого dependency не переиспользует прежний archive. Даже test-only local
+   `require`/`replace` должен присутствовать до `go mod download`.
+6. Регистры разрешённых компонентов build, OCI verify и publication receipt
+   согласованы. Запись image recipe без исполняемого полного пути доставки
+   не считается поддержкой компонента; неизвестные виды остаются запрещены.
 
 Builder, runtime service, migration/job и agent-runtime images имеют отдельные
 immutable digests. Один digest нельзя неявно переиспользовать для разных

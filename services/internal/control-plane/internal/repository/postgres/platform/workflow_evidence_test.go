@@ -1,0 +1,225 @@
+package platform
+
+import (
+	"errors"
+	"strings"
+	"testing"
+
+	workflowservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/workflow"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+)
+
+// workflowEvidenceSubjectFixture supplies a pinned accepted input for pure boundary tests;
+// it does not replace the native fixture proving how that owner input is created.
+// workflowEvidenceSubjectFixture задаёт pinned accepted input для pure boundary tests;
+// она не заменяет native fixture создания этого owner input.
+func workflowEvidenceSubjectFixture() []workflowResultDependency {
+	return []workflowResultDependency{{StepKey: "author", SourceNodeID: "owner-source-node", Receipt: entity.WorkflowAttemptResult{Attempt: 1, Accepted: true, Results: []entity.WorkflowAcceptedResult{{Key: "pr", Kind: "PULL_REQUEST", Repository: "owner/repo", Number: 42, HeadSHA: strings.Repeat("a", 40)}}}}}
+}
+
+// TestWorkflowEvidenceSlots rejects global writes, self-approval and subject drift before
+// native allocation while preserving the older profile's denial of these new operations.
+// TestWorkflowEvidenceSlots отвергает global WRITE, self-approval и subject drift до native
+// allocation, сохраняя отказ прежнего профиля для новых operations.
+func TestWorkflowEvidenceSlots(t *testing.T) {
+	inputs := workflowEvidenceSubjectFixture()
+	step := entity.WorkflowStep{DependsOn: []string{"author"}, ResultRequirements: []entity.WorkflowResultRequirement{{Key: "review", Kind: "REVIEW", SubjectStepKey: "author"}}}
+	scope := []byte(`{"owner":"owner","repository":"repo"}`)
+	input := `{"pull_request_number":42,"sha":"` + strings.Repeat("a", 40) + `","event":"COMMENT","body":"Проверено"}`
+	if key, err := workflowEffectSlotForProfile(workflowservice.GitHubReviewQAV1, step, inputs, "github.pull_request.review.create", scope, []byte(input)); err != nil || key != "review" {
+		t.Fatal("exact review slot unavailable", err)
+	}
+	if _, err := workflowEffectSlot(step, inputs, "github.pull_request.review.create", scope, []byte(input)); err == nil {
+		t.Fatal("legacy policy widened")
+	}
+	for _, bad := range []string{strings.Replace(input, "COMMENT", "APPROVE", 1), strings.Replace(input, "COMMENT", "REQUEST_CHANGES", 1), strings.Replace(input, strings.Repeat("a", 40), strings.Repeat("b", 40), 1), strings.Replace(input, ":42", ":43", 1), strings.Replace(input, "Проверено", " ", 1)} {
+		if _, err := workflowEffectSlotForProfile(workflowservice.GitHubReviewQAV1, step, inputs, "github.pull_request.review.create", scope, []byte(bad)); err == nil {
+			t.Fatal("wrong review subject/event admitted")
+		}
+	}
+	for _, operation := range []string{"github.issue.create", "github.pull_request.merge", "github.issue.comment.create"} {
+		if _, err := workflowEffectSlotForProfile(workflowservice.GitHubReviewQAV1, step, inputs, operation, scope, []byte(input)); err == nil {
+			t.Fatal("unbound write admitted")
+		}
+	}
+	if _, err := workflowEffectSlotForProfile(workflowservice.GitHubReviewQAV1, step, inputs, "github.pull_request.review.create", []byte(`{"owner":"foreign","repository":"repo"}`), []byte(input)); err == nil {
+		t.Fatal("foreign repository admitted")
+	}
+}
+
+// TestWorkflowEvidenceSubjectPins keeps the canonical accepted dependency requirements visible;
+// incomplete, rejected or ambiguous input receipts cannot authorize either the slot or verdict.
+// TestWorkflowEvidenceSubjectPins сохраняет canonical accepted dependency requirements:
+// неполные, отклонённые либо неоднозначные input receipts не разрешают slot либо verdict.
+func TestWorkflowEvidenceSubjectPins(t *testing.T) {
+	for name, mutate := range map[string]func([]workflowResultDependency){
+		"missing owner source": func(v []workflowResultDependency) { v[0].SourceNodeID = "" },
+		"attempt zero":         func(v []workflowResultDependency) { v[0].Receipt.Attempt = 0 },
+		"attempt above four":   func(v []workflowResultDependency) { v[0].Receipt.Attempt = 5 },
+		"rejected dependency":  func(v []workflowResultDependency) { v[0].Receipt.Accepted = false },
+	} {
+		t.Run(name, func(t *testing.T) {
+			inputs := workflowEvidenceSubjectFixture()
+			mutate(inputs)
+			if _, valid := workflowResultSubject(inputs, "author"); valid {
+				t.Fatal("incomplete owner receipt became an evidence subject")
+			}
+		})
+	}
+	inputs := workflowEvidenceSubjectFixture()
+	if _, valid := workflowResultSubject(append(inputs, inputs[0]), "author"); valid {
+		t.Fatal("ambiguous owner receipt became an evidence subject")
+	}
+}
+
+// TestWorkflowNativeCommentEvidence verifies actual provider projection bytes and operation
+// identity rather than accepting an arbitrary URL, READ receipt or model PASS as evidence.
+// TestWorkflowNativeCommentEvidence проверяет provider projection bytes и operation identity,
+// не принимая URL, READ receipt либо model PASS за evidence.
+func TestWorkflowNativeCommentEvidence(t *testing.T) {
+	sha := strings.Repeat("a", 40)
+	proof := workflowIntegrationResult{Operation: "github.pull_request.review.create", Input: []byte(`{"pull_request_number":42,"sha":"` + sha + `","event":"COMMENT","body":"Проверено"}`), Scope: []byte(`{"owner":"owner","repository":"repo"}`), Summary: `{"id":123,"body":"Проверено","state":"COMMENTED","commit_id":"` + sha + `"}`, ProviderRef: "github-review:123"}
+	proof.Digest = workflowResultSHA([]byte(proof.Summary))
+	req := entity.WorkflowResultRequirement{Key: "review", Kind: "REVIEW", SubjectStepKey: "author"}
+	declaration := entity.WorkflowDeclaredResult{Key: "review", ReceiptRef: "erc_12345678", HeadSHA: sha, Verdict: "CHANGES_REQUIRED"}
+	result, reason := acceptWorkflowCommentResult(req, declaration, proof, workflowEvidenceSubjectFixture())
+	if reason != "" || result.Verdict != "CHANGES_REQUIRED" || result.Digest != proof.Digest || result.ReceiptRef != declaration.ReceiptRef {
+		t.Fatal("negative native facts lost", reason)
+	}
+	for _, mutate := range []func(*workflowIntegrationResult){
+		func(v *workflowIntegrationResult) { v.Operation = "github.pull_request.review.read" },
+		func(v *workflowIntegrationResult) { v.ProviderRef = "github-review:124" },
+		func(v *workflowIntegrationResult) { v.Digest = strings.Repeat("0", 64) },
+		func(v *workflowIntegrationResult) {
+			v.Summary = strings.Replace(v.Summary, "COMMENTED", "APPROVED", 1)
+			v.Digest = workflowResultSHA([]byte(v.Summary))
+		},
+		func(v *workflowIntegrationResult) {
+			v.Summary = strings.Replace(v.Summary, "Проверено", "Другой текст", 1)
+			v.Digest = workflowResultSHA([]byte(v.Summary))
+		},
+		func(v *workflowIntegrationResult) {
+			v.Input = []byte(strings.Replace(string(v.Input), sha, strings.Repeat("b", 40), 1))
+		},
+	} {
+		changed := proof
+		mutate(&changed)
+		if _, why := acceptWorkflowCommentResult(req, declaration, changed, workflowEvidenceSubjectFixture()); why == "" {
+			t.Fatal("unrelated or changed native proof accepted")
+		}
+	}
+}
+
+// TestWorkflowQAIssueEvidence distinguishes real defect publication from a PASS report and
+// requires the exact captured request; the database reader separately binds the report pin.
+// TestWorkflowQAIssueEvidence отличает реальную публикацию дефекта от PASS report и требует
+// exact captured request; database reader отдельно связывает report pin.
+func TestWorkflowQAIssueEvidence(t *testing.T) {
+	report := workflowservice.QAReport{Repository: "owner/repo", Verdict: "CHANGES_REQUIRED", Findings: []workflowservice.QAFinding{{Key: "bug", Summary: "Ошибка"}}, Issue: &workflowservice.QAIssue{Title: "Дефект", Body: "Шаги"}}
+	proof := workflowIntegrationResult{Operation: "github.issue.create", Scope: []byte(`{"owner":"owner","repository":"repo"}`), Input: asJSON(report.Issue), Summary: `{"number":7,"title":"Дефект","state":"open"}`, ProviderRef: "github-issue:7"}
+	proof.Digest = workflowResultSHA([]byte(proof.Summary))
+	if !workflowQAIssueReceipt(proof, report) {
+		t.Fatal("native issue unavailable")
+	}
+	changed := report
+	changed.Verdict = "PASS"
+	if workflowQAIssueReceipt(proof, changed) {
+		t.Fatal("PASS required a fabricated bug")
+	}
+	changed = report
+	changed.Issue = &workflowservice.QAIssue{Title: "Дефект", Body: "Другие шаги"}
+	if workflowQAIssueReceipt(proof, changed) {
+		t.Fatal("unrelated report adopted issue")
+	}
+	reportPin := workflowQAReportPin{Ref: "art_12345678", RevisionRef: "arv_12345678", Revision: 1, Digest: "sha256:" + strings.Repeat("a", 64)}
+	logPin := workflowQAReportPin{Ref: "art_22345678", RevisionRef: "arv_22345678", Revision: 1, Digest: "sha256:" + strings.Repeat("c", 64)}
+	first, err := workflowQAIssueSemanticInput(proof.Input, &reportPin, []workflowQAReportPin{logPin})
+	if err != nil {
+		t.Fatal("exact report/log pins unavailable", err)
+	}
+	before, _ := workflowEffectSemanticDigest("qa", "github.issue.create", "scope", first)
+	reportPin.Revision, reportPin.Digest = 2, "sha256:"+strings.Repeat("b", 64)
+	second, err := workflowQAIssueSemanticInput(proof.Input, &reportPin, []workflowQAReportPin{logPin})
+	if err != nil {
+		t.Fatal("changed report pins unavailable", err)
+	}
+	after, _ := workflowEffectSemanticDigest("qa", "github.issue.create", "scope", second)
+	if before == after {
+		t.Fatal("new report lost semantic identity")
+	}
+}
+
+// TestWorkflowEvidenceContinuationEnvelope retains every failure/receipt and the original task;
+// overflow is a typed durable delivery outcome rather than truncated evidence or another effect.
+// TestWorkflowEvidenceContinuationEnvelope сохраняет каждый failure/receipt и исходный task;
+// overflow — typed durable delivery outcome, не усечение evidence либо повторный effect.
+func TestWorkflowEvidenceContinuationEnvelope(t *testing.T) {
+	snapshot := asJSON(map[string]any{"schema": "kodex.workflow-evidence-outcomes.v1", "task": "Original published stage and final declaration.", "nativeOutcomes": []map[string]any{{"invocationRef": "inv_12345678", "state": "FAILED", "safeErrorCode": "INTEGRATION_REQUEST_REJECTED"}, {"invocationRef": "inv_23456789", "state": "SUCCEEDED", "receiptRef": "erc_12345678", "resultSummary": "Exact result"}}})
+	task, err := workflowEvidenceContinuationTask(snapshot)
+	if err != nil || !strings.Contains(task, "Original published stage") || !strings.Contains(task, "FAILED") || !strings.Contains(task, "erc_12345678") {
+		t.Fatal("continuation omitted owner fact", err)
+	}
+	oversized := asJSON(map[string]any{"schema": "kodex.workflow-evidence-outcomes.v1", "task": strings.Repeat("x", 32768), "nativeOutcomes": []map[string]any{{"state": "SUCCEEDED"}}})
+	if _, err := workflowEvidenceContinuationTask(oversized); !errors.Is(err, errWorkflowEvidenceDeliveryLimit) {
+		t.Fatal("oversized evidence silently truncated")
+	}
+}
+
+// TestWorkflowEvidenceOnlyPRSubjects prevents native evidence admission from interpreting an
+// agreeing REVIEW/QA result or duplicate PR declarations as the one accepted PR identity.
+// TestWorkflowEvidenceOnlyPRSubjects не позволяет native evidence admission принять REVIEW/QA
+// result либо дублирующиеся PR declarations за единственную accepted PR identity.
+func TestWorkflowEvidenceOnlyPRSubjects(t *testing.T) {
+	for _, kind := range []string{"REVIEW", "QA"} {
+		inputs := workflowEvidenceSubjectFixture()
+		inputs[0].Receipt.Results[0].Kind = kind
+		inputs[0].Receipt.Results[0].Verdict = "PASS"
+		if _, valid := workflowResultSubject(inputs, "author"); !valid {
+			t.Fatal("legacy subject boundary changed")
+		}
+		if _, valid := workflowEvidenceSubject(inputs, "author"); valid {
+			t.Fatal("native evidence accepted non-PR subject")
+		}
+	}
+	inputs := workflowEvidenceSubjectFixture()
+	inputs[0].Receipt.Results = append(inputs[0].Receipt.Results, inputs[0].Receipt.Results[0])
+	if _, valid := workflowEvidenceSubject(inputs, "author"); valid {
+		t.Fatal("native evidence accepted multiple PR subjects")
+	}
+}
+
+// TestWorkflowQAIssueCustodyIdentity rejects malformed pins and binds every distinct log while
+// preserving replay identity for duplicate identical references and report test ordering.
+// TestWorkflowQAIssueCustodyIdentity отвергает malformed pins и связывает каждый log, сохраняя
+// replay identity при одинаковых повторных ссылках и изменении порядка tests в report.
+func TestWorkflowQAIssueCustodyIdentity(t *testing.T) {
+	report := workflowQAReportPin{Ref: "art_report12", RevisionRef: "arv_report12", Revision: 1, Digest: "sha256:" + strings.Repeat("a", 64)}
+	a := workflowQAReportPin{Ref: "art_output12", RevisionRef: "arv_output12", Revision: 1, Digest: "sha256:" + strings.Repeat("b", 64)}
+	b := workflowQAReportPin{Ref: "art_output22", RevisionRef: "arv_output22", Revision: 1, Digest: "sha256:" + strings.Repeat("c", 64)}
+	input := []byte(`{"title":"Defect","body":"Actual finding"}`)
+	expected, err := workflowQAIssueSemanticInput(input, &report, []workflowQAReportPin{a, b})
+	if err != nil {
+		t.Fatal("exact custody unavailable", err)
+	}
+	reordered, err := workflowQAIssueSemanticInput(input, &report, []workflowQAReportPin{b, a, a})
+	if err != nil || string(expected) != string(reordered) {
+		t.Fatal("equivalent custody changed logical intent")
+	}
+	for _, pins := range [][]workflowQAReportPin{nil, {a, a, b, b, a, a, b, b, a}, {{Ref: a.Ref, RevisionRef: a.RevisionRef, Revision: 1, Digest: "sha256:" + strings.Repeat("z", 64)}}, {a, {Ref: a.Ref, RevisionRef: b.RevisionRef, Revision: 2, Digest: b.Digest}}} {
+		if _, err := workflowQAIssueSemanticInput(input, &report, pins); err == nil {
+			t.Fatal("invalid or conflicting custody admitted")
+		}
+	}
+	changed := b
+	changed.Revision = 2
+	changed.RevisionRef = "arv_changed2"
+	drift, err := workflowQAIssueSemanticInput(input, &report, []workflowQAReportPin{a, changed})
+	if err != nil || string(expected) == string(drift) {
+		t.Fatal("changed exact log lost semantic identity")
+	}
+	invalid := report
+	invalid.Digest = "sha256:" + strings.Repeat("A", 64)
+	if _, err := workflowQAIssueSemanticInput(input, &invalid, []workflowQAReportPin{a}); err == nil {
+		t.Fatal("noncanonical report pin admitted")
+	}
+}

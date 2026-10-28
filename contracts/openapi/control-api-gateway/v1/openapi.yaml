@@ -4079,6 +4079,32 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/OwnerGate" }
         default: { $ref: "#/components/responses/Problem" }
+  /api/v1/owner-gates/{gateRef}/repository-bundle:
+    get:
+      tags: [Decisions]
+      operationId: getOwnerGateRepositoryBundle
+      description: Точная bounded страница полного immutable manifest. Следующие страницы закреплены version и manifest SHA256; endpoint не разрешает публикацию.
+      parameters:
+        - { $ref: "#/components/parameters/GateRef" }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, maximum: 256, default: 0 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 32, default: 16 }
+        - name: expectedVersion
+          in: query
+          schema: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        - name: expectedManifestSha256
+          in: query
+          schema: { type: string, pattern: '^[0-9a-f]{64}$' }
+      responses:
+        "200":
+          description: Manifest page до 24 КиБ с явной полнотой
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RepositoryBundleManifestPage" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/v1/owner-gates/{gateRef}/resolution:
     post:
       tags: [Decisions]
@@ -11857,6 +11883,7 @@ components:
                 ARTIFACT_NOT_ACTIVE,
                 ARTIFACT_NOT_DELETED,
                 ARTIFACT_HAS_BINDINGS,
+                ARTIFACT_HAS_RETAINED_REVISIONS,
                 ACTIVE_RUN_USES_ARTIFACT,
               ],
           }
@@ -12211,6 +12238,7 @@ components:
           nextActions,
         ]
       properties:
+        purpose: { $ref: "#/components/schemas/RuntimeSecretPurpose" }
         scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
         organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
@@ -12437,11 +12465,15 @@ components:
             items: { $ref: "#/components/schemas/RuntimeSecret" },
           }
         nextPageToken: { type: string, maxLength: 1000 }
+    RuntimeSecretPurpose:
+      type: string
+      enum: [APPLICATION, SSH_COMPOSE]
     RuntimeSecretCreateInput:
       type: object
       additionalProperties: false
       required: [name, description, valueType, value]
       properties:
+        purpose: { $ref: "#/components/schemas/RuntimeSecretPurpose" }
         name: { type: string, minLength: 1, maxLength: 120 }
         description: { type: string, maxLength: 1000 }
         valueType: { $ref: "#/components/schemas/RuntimeSecretValueType" }
@@ -14927,6 +14959,47 @@ components:
             maxItems: 50,
             items: { type: string, minLength: 1, maxLength: 160 },
           }
+    WorkflowStepKey:
+      type: string
+      minLength: 1
+      maxLength: 96
+      pattern: '^[A-Za-z0-9_\-]+$'
+      description: Логический ключ шага внутри одной версии процесса; не является ссылкой на ресурс или источником полномочий.
+    WorkflowResultRequirement:
+      type: object
+      additionalProperties: false
+      required: [key, kind]
+      properties:
+        key: { type: string, pattern: "^[A-Za-z0-9_-]{1,96}$" }
+        kind:
+          {
+            type: string,
+            enum:
+              [
+                ARTIFACT,
+                ARTIFACT_REVIEW,
+                PULL_REQUEST,
+                REVIEW,
+                QA,
+                INTEGRATION_RECEIPT,
+                DEPLOYMENT,
+              ],
+          }
+        fileName: { type: string, maxLength: 160 }
+        mediaType: { type: string, maxLength: 160 }
+        repository: { type: string, maxLength: 200 }
+        subjectStepKey: { $ref: "#/components/schemas/WorkflowStepKey" }
+        subjectResultKey: { $ref: "#/components/schemas/WorkflowStepKey" }
+        evidenceKey:
+          type: string
+          pattern: "^[A-Za-z0-9_-]{1,96}$"
+          description: Только QA выбранного профиля; ключ ARTIFACT application/json того же шага.
+        operation:
+          {
+            type: string,
+            enum: [github.pull_request.merge, ssh.compose.deploy],
+          }
+        targetRef: { type: string, maxLength: 96 }
     WorkflowStep:
       type: object
       additionalProperties: false
@@ -14945,7 +15018,20 @@ components:
           requiredCapabilityKeys,
         ]
       properties:
-        ref: { $ref: "#/components/schemas/OpaqueRef" }
+        dependsOn:
+          {
+            type: array,
+            maxItems: 200,
+            uniqueItems: true,
+            items: { $ref: "#/components/schemas/WorkflowStepKey" },
+          }
+        resultRequirements:
+          {
+            type: array,
+            maxItems: 4,
+            items: { $ref: "#/components/schemas/WorkflowResultRequirement" },
+          }
+        ref: { $ref: "#/components/schemas/WorkflowStepKey" }
         position: { type: integer, minimum: 1, maximum: 200 }
         name: { type: string, maxLength: 160 }
         purpose: { type: string, maxLength: 1000 }
@@ -14955,6 +15041,11 @@ components:
         timeoutSeconds: { type: integer, minimum: 1, maximum: 86400 }
         expectedResult: { type: string, maxLength: 1000 }
         humanGate: { type: boolean }
+        approvalTimeoutSeconds:
+          type: integer
+          minimum: 1
+          maximum: 604800
+          description: Срок ожидания решения после завершения этапа. При отсутствии отдельного срока согласования нет; общий срок процесса действует независимо.
         gateDecisions:
           {
             type: array,
@@ -14985,6 +15076,20 @@ components:
           requiredCapabilityKeys,
         ]
       properties:
+        ref: { $ref: "#/components/schemas/WorkflowStepKey" }
+        dependsOn:
+          {
+            type: array,
+            maxItems: 200,
+            uniqueItems: true,
+            items: { $ref: "#/components/schemas/WorkflowStepKey" },
+          }
+        resultRequirements:
+          {
+            type: array,
+            maxItems: 4,
+            items: { $ref: "#/components/schemas/WorkflowResultRequirement" },
+          }
         position: { type: integer, minimum: 1, maximum: 200 }
         name: { type: string, minLength: 1, maxLength: 160 }
         purpose: { type: string, minLength: 1, maxLength: 1000 }
@@ -14994,6 +15099,11 @@ components:
         timeoutSeconds: { type: integer, minimum: 1, maximum: 86400 }
         expectedResult: { type: string, maxLength: 1000 }
         humanGate: { type: boolean }
+        approvalTimeoutSeconds:
+          type: integer
+          minimum: 1
+          maximum: 604800
+          description: Необязательный срок согласования в секундах, допустимый только при humanGate=true. Отсчёт начинается при открытии согласования сервером.
         gateDecisions:
           {
             type: array,
@@ -15027,6 +15137,15 @@ components:
           cardSummary,
         ]
       properties:
+        executionMode: { type: string, enum: [MANAGER_DRIVEN, SERVER_DAG_V1] }
+        reworkPolicy:
+          type: string
+          enum: [OWNER_APPROVED_UPSTREAM_V1]
+          description: Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
+        resultEvidenceProfile:
+          type: string
+          enum: [GITHUB_REVIEW_QA_V1]
+          description: Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
         projectRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -15136,6 +15255,15 @@ components:
       required:
         [ref, version, revision, state, inputFields, steps, validationMessages]
       properties:
+        executionMode: { type: string, enum: [MANAGER_DRIVEN, SERVER_DAG_V1] }
+        reworkPolicy:
+          type: string
+          enum: [OWNER_APPROVED_UPSTREAM_V1]
+          description: Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
+        resultEvidenceProfile:
+          type: string
+          enum: [GITHUB_REVIEW_QA_V1]
+          description: Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version:
           {
@@ -15173,6 +15301,15 @@ components:
       additionalProperties: false
       required: [name, purpose, coordinatorAgentRef]
       properties:
+        executionMode: { type: string, enum: [MANAGER_DRIVEN, SERVER_DAG_V1] }
+        reworkPolicy:
+          type: string
+          enum: [OWNER_APPROVED_UPSTREAM_V1]
+          description: Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
+        resultEvidenceProfile:
+          type: string
+          enum: ["", GITHUB_REVIEW_QA_V1]
+          description: Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия. Пустое значение снимает draft opt-in; весь итоговый граф заново проверяется.
         name: { type: string, minLength: 1, maxLength: 160 }
         purpose: { type: string, minLength: 1, maxLength: 1000 }
         coordinatorAgentRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -15247,6 +15384,10 @@ components:
         outputTokens: { type: integer, format: int64, minimum: 0 }
         reasoningOutputTokens: { type: integer, format: int64, minimum: 0 }
         modelContextWindow: { type: integer, format: int64, minimum: 0 }
+        completeness:
+          type: string
+          enum: [UNKNOWN, PARTIAL, COMPLETE]
+          description: Полнота наблюдений; отсутствие в legacy означает UNKNOWN, не измеренный ноль.
     Run:
       type: object
       additionalProperties: false
@@ -15384,6 +15525,61 @@ components:
           not: { required: [profileRef] }
         - required: [projectRef, profileRef]
           properties: { scope: { type: string, enum: [PROJECT] } }
+    WorkflowAcceptedResult:
+      type: object
+      additionalProperties: false
+      required: [key, kind, digest]
+      properties:
+        targetRef: { type: string, maxLength: 96 }
+        bundleSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        imageDigest: { type: string, pattern: "^sha256:[a-f0-9]{64}$" }
+        healthOk: { type: boolean }
+        key: { type: string, maxLength: 96 }
+        kind:
+          {
+            type: string,
+            enum:
+              [
+                ARTIFACT,
+                ARTIFACT_REVIEW,
+                PULL_REQUEST,
+                REVIEW,
+                QA,
+                INTEGRATION_RECEIPT,
+                DEPLOYMENT,
+              ],
+          }
+        artifactRef: { $ref: "#/components/schemas/OpaqueRef" }
+        artifactRevision: { type: string, maxLength: 96 }
+        digest: { type: string, pattern: "^[a-f0-9]{64}$" }
+        receiptRef: { $ref: "#/components/schemas/OpaqueRef" }
+        repository: { type: string, maxLength: 200 }
+        number: { type: integer, minimum: 0, maximum: 9007199254740991 }
+        headSha: { type: string, maxLength: 64 }
+        verdict: { type: string, enum: [PASS, CHANGES_REQUIRED] }
+    WorkflowAttemptResult:
+      type: object
+      additionalProperties: false
+      description: Закрытый typed snapshot. Отношения accepted/results/evidence проверяются общим API validator и каждым PWA graph/event ingress; evidence разрешено только при accepted=false, reason=CHANGES_REQUIRED, results=[] и наличии отрицательного ARTIFACT_REVIEW/REVIEW/QA.
+      required: [attempt, runRef, accepted, reason, results]
+      properties:
+        effectiveState: { type: string, enum: [CURRENT, HISTORICAL, STALE_DEPENDENCY, REWORK_PENDING, WAITING_OWNER, BLOCKED] }
+        attempt: { type: integer, minimum: 1, maximum: 4 }
+        runRef: { $ref: "#/components/schemas/OpaqueRef" }
+        accepted: { type: boolean }
+        reason: { type: string, maxLength: 96 }
+        results:
+          {
+            type: array,
+            maxItems: 4,
+            items: { $ref: "#/components/schemas/WorkflowAcceptedResult" },
+          }
+        evidence:
+          type: array
+          minItems: 1
+          maxItems: 4
+          description: Проверенные факты отклонённого ARTIFACT_REVIEW/REVIEW/QA; accepted=false, reason=CHANGES_REQUIRED, results остаётся пустым.
+          items: { $ref: "#/components/schemas/WorkflowAcceptedResult" }
     RunNode:
       type: object
       additionalProperties: false
@@ -15401,6 +15597,12 @@ components:
           nextActions,
         ]
       properties:
+        workflowResults:
+          {
+            type: array,
+            maxItems: 4,
+            items: { $ref: "#/components/schemas/WorkflowAttemptResult" },
+          }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         runRef: { $ref: "#/components/schemas/OpaqueRef" }
         parentNodeRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -15454,6 +15656,18 @@ components:
         finishedAt: { $ref: "#/components/schemas/Timestamp" }
         nextActions:
           { type: array, items: { $ref: "#/components/schemas/NextAction" } }
+    WorkflowRetryReadProof:
+      type: object
+      additionalProperties: false
+      description: Историческая SERVER lineage, проверенная владельцем; не разрешает retry и не принимает результат.
+      required: [workflowVersionRef, workflowVersionDigest, originNodeRef, stepKey, previousBusinessAttempt, businessAttempt]
+      properties:
+        workflowVersionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        workflowVersionDigest: { type: string, pattern: '^[a-f0-9]{64}(?![\s\S])' }
+        originNodeRef: { $ref: "#/components/schemas/OpaqueRef" }
+        stepKey: { type: string, minLength: 1, maxLength: 96, pattern: '^[A-Za-z0-9_-]+(?![\s\S])' }
+        previousBusinessAttempt: { type: integer, format: int32, minimum: 1, maximum: 3 }
+        businessAttempt: { type: integer, format: int32, minimum: 2, maximum: 4 }
     RunEdge:
       type: object
       additionalProperties: false
@@ -15469,6 +15683,7 @@ components:
             enum: [DELEGATED_TO, CALLBACK_TO, RETRY_OF, CONTINUES, WAITING_FOR],
           }
         label: { type: string, maxLength: 120 }
+        serverWorkflowRetry: { $ref: "#/components/schemas/WorkflowRetryReadProof" }
     RunDelta:
       type: object
       additionalProperties: false
@@ -15981,6 +16196,69 @@ components:
         items: { type: array, maxItems: 100, items: { $ref: "#/components/schemas/SystemAssistantIntegrationGrantCandidate" } }
         total: { type: integer, format: int64, minimum: 0 }
         nextPageToken: { type: string, maxLength: 512 }
+    RepositoryBundleArtifactPin:
+      type: object
+      additionalProperties: false
+      required: [ref, revision, version, sha256, sizeBytes]
+      properties:
+        ref: { $ref: "#/components/schemas/OpaqueRef" }
+        revision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        sizeBytes: { type: integer, format: int64, minimum: 1, maximum: 1048576 }
+    RepositoryBundleFile:
+      type: object
+      additionalProperties: false
+      required: [path, mode, bytes, sha256]
+      properties:
+        path: { type: string, minLength: 1, maxLength: 512 }
+        mode: { type: string, enum: ['100644', '100755'] }
+        bytes: { type: integer, format: int64, minimum: 0, maximum: 1048576 }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+    RepositoryBundlePublication:
+      type: object
+      additionalProperties: false
+      required: [ref, version, projectRef, originRunRef, originRuntimeRevisionRef, invocationRef, gateRef, connectionRef, connectionVersion, grantRef, grantVersion, repositoryRef, baseCommitSha, proposalBranch, archive, manifest, approvalDigest, fileCount, totalBytes, state, createdAt, expiresAt]
+      properties:
+        ref: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        originRunRef: { $ref: "#/components/schemas/OpaqueRef" }
+        originRuntimeRevisionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        invocationRef: { $ref: "#/components/schemas/OpaqueRef" }
+        gateRef: { $ref: "#/components/schemas/OpaqueRef" }
+        connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        grantRef: { $ref: "#/components/schemas/OpaqueRef" }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        connectionVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        grantVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        archive: { $ref: "#/components/schemas/RepositoryBundleArtifactPin" }
+        manifest: { $ref: "#/components/schemas/RepositoryBundleArtifactPin" }
+        repositoryRef: { type: string, minLength: 3, maxLength: 201 }
+        proposalBranch: { type: string, minLength: 1, maxLength: 128 }
+        baseCommitSha: { type: string, pattern: '^[0-9a-f]{40}$' }
+        approvalDigest: { type: string, pattern: '^[0-9a-f]{64}$' }
+        fileCount: { type: integer, minimum: 1, maximum: 256 }
+        totalBytes: { type: integer, format: int64, minimum: 0, maximum: 1048576 }
+        state: { type: string, enum: [WAITING_APPROVAL, QUEUED, CLAIMED, EFFECT_STARTED, UNKNOWN_OUTCOME, SUCCEEDED, REJECTED, CANCELLED, EXPIRED, FAILED] }
+        candidateCommitSha: { type: string, pattern: '^[0-9a-f]{40}$' }
+        candidateTreeSha: { type: string, pattern: '^[0-9a-f]{40}$' }
+        failureCode: { type: string, enum: [UNAVAILABLE, AUTHORITY_CHANGED, CONTENT_INVALID, BASE_INVALID, DEADLINE_EXCEEDED, BRANCH_CONFLICT, OUTCOME_UNCONFIRMED] }
+        continuationState: { type: string, enum: [BLOCKED, CANCELLED] }
+        continuationCode: { type: string, enum: [CALLBACK_INPUT_TOO_LARGE, CONTINUATION_AUTHORITY_CHANGED] }
+        continuationNodeRef: { $ref: "#/components/schemas/OpaqueRef" }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        confirmedAt: { type: string, format: date-time }
+    RepositoryBundleManifestPage:
+      type: object
+      additionalProperties: false
+      required: [proposal, files, offset, nextOffset, complete]
+      properties:
+        proposal: { $ref: "#/components/schemas/RepositoryBundlePublication" }
+        files: { type: array, maxItems: 32, items: { $ref: "#/components/schemas/RepositoryBundleFile" } }
+        offset: { type: integer, minimum: 0, maximum: 256 }
+        nextOffset: { type: integer, minimum: 0, maximum: 256 }
+        complete: { type: boolean }
     OwnerGate:
       type: object
       additionalProperties: false
@@ -16003,6 +16281,8 @@ components:
           nextActions,
         ]
       properties:
+        resolutionKind: { type: string, enum: [SUPERSEDED] }
+        reworkPlan: { $ref: "#/components/schemas/WorkflowReworkPreview" }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
         scopeKind: { type: string, enum: [ORGANIZATION, PROJECT] }
@@ -16049,6 +16329,25 @@ components:
         integrationIntent: { $ref: "#/components/schemas/IntegrationIntent" }
         nextActions:
           { type: array, items: { $ref: "#/components/schemas/NextAction" } }
+    WorkflowReworkStepPreview:
+      type: object
+      additionalProperties: false
+      required: [stepKey, previousAttempt, nextAttempt]
+      properties:
+        stepKey: { type: string, pattern: "^[A-Za-z0-9_-]{1,96}$" }
+        previousAttempt: { type: integer, minimum: 0, maximum: 4 }
+        nextAttempt: { type: integer, minimum: 0, maximum: 4 }
+    WorkflowReworkPreview:
+      type: object
+      additionalProperties: false
+      required: [schema, sourceStepKey, sourceAttempt, authors, rechecks]
+      properties:
+        schema: { type: string, enum: [kodex.workflow-upstream-rework-preview.v1] }
+        sourceStepKey: { type: string, pattern: "^[A-Za-z0-9_-]{1,96}$" }
+        sourceAttempt: { type: integer, minimum: 1, maximum: 4 }
+        authors: { type: array, minItems: 1, maxItems: 4, items: { $ref: "#/components/schemas/WorkflowReworkStepPreview" } }
+        rechecks: { type: array, maxItems: 12, items: { $ref: "#/components/schemas/WorkflowReworkStepPreview" } }
+        blockReason: { type: string, enum: [WORKFLOW_ATTEMPTS_EXHAUSTED, WORKFLOW_IRREVERSIBLE_EFFECT_REPAIR_REQUIRED] }
     OwnerGateDecisionConsequence:
       type: object
       additionalProperties: false
@@ -17364,6 +17663,18 @@ components:
           reason,
           pins,
         ]
+      not:
+        anyOf:
+          - properties:
+              definitionKey: { enum: [ssh-compose] }
+              resourceScope:
+                not:
+                  anyOf:
+                    - { type: object, maxProperties: 0 }
+                    - { $ref: "#/components/schemas/SSHComposeResourceValues" }
+          - properties:
+              definitionKey: { not: { enum: [ssh-compose] } }
+              resourceScope: { type: object, minProperties: 9 }
       properties:
         connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
         name: { type: string, maxLength: 500 }
@@ -17375,7 +17686,7 @@ components:
           {
             type: object,
             additionalProperties: { type: string, maxLength: 349528 },
-            maxProperties: 8,
+            maxProperties: 9,
           }
         grantable: { type: boolean }
         usable: { type: boolean }
@@ -17567,6 +17878,7 @@ components:
                 CONFLUENCE_SPACE,
                 EMAIL_SENDER,
                 HTTPS_RESOURCE,
+                SSH_TARGET,
               ],
           }
         inputFields:
@@ -17718,6 +18030,16 @@ components:
       type: object
       additionalProperties: false
       required: [kind, values, digest]
+      # Две запрещённые формы: SSH с неверными pins и другой kind с девятью значениями.
+      # Такая запись сохраняет общую map-модель Go, не расширяя bound других adapters.
+      not:
+        anyOf:
+          - properties:
+              kind: { enum: [SSH_TARGET] }
+              values: { not: { $ref: "#/components/schemas/SSHComposeResourceValues" } }
+          - properties:
+              kind: { not: { enum: [SSH_TARGET] } }
+              values: { type: object, minProperties: 9 }
       properties:
         kind:
           {
@@ -17732,13 +18054,30 @@ components:
                 CONFLUENCE_SPACE,
                 EMAIL_SENDER,
                 HTTPS_RESOURCE,
+                SSH_TARGET,
               ],
           }
         values:
           type: object
-          maxProperties: 8
+          maxProperties: 9
           additionalProperties: { type: string, maxLength: 2048 }
         digest: { type: string, pattern: "^[a-f0-9]{64}$" }
+    SSHComposeResourceValues:
+      type: object
+      additionalProperties: false
+      minProperties: 9
+      maxProperties: 9
+      required: [project_ref, target_ref, owner, repository, address, user, host_key, published_port, runtime_image]
+      properties:
+        project_ref: { $ref: "#/components/schemas/OpaqueRef" }
+        target_ref: { type: string, pattern: "^ssh_[a-f0-9]{32}$" }
+        owner: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$" }
+        repository: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$" }
+        address: { type: string, minLength: 2, maxLength: 45 }
+        user: { type: string, pattern: "^[a-z_][a-z0-9_-]{0,31}$", not: { enum: [root] } }
+        host_key: { type: string, pattern: "^ssh-ed25519 [A-Za-z0-9+/]+={0,2}$", maxLength: 128 }
+        published_port: { type: string, pattern: "^[1-9][0-9]{3,4}$" }
+        runtime_image: { type: string, pattern: "^[a-z0-9][a-z0-9./:_-]{0,240}@sha256:[a-f0-9]{64}$", maxLength: 313 }
     EmailMailboxReceiveProtocol: { type: string, enum: [IMAP, POP3] }
     EmailMailboxTLSMode: { type: string, enum: [IMPLICIT, STARTTLS] }
     EmailMailboxAuthMethod: { type: string, enum: [PASSWORD, OAUTHBEARER] }
@@ -18357,6 +18696,7 @@ components:
                 CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE,
                 UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE,
                 PREPARE_ASSISTANT_RUNTIME_CONFIGURATION,
+                PREPARE_AGENT_RUNTIME_CONFIGURATION,
               ],
           }
         action: { type: string, enum: [CREATE, UPDATE, ARCHIVE, EXECUTE] }
@@ -18561,6 +18901,7 @@ components:
                   CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE,
                   UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE,
                   PREPARE_ASSISTANT_RUNTIME_CONFIGURATION,
+                  PREPARE_AGENT_RUNTIME_CONFIGURATION,
                 ],
             }
     AssistantPlanReceipt:

@@ -3,12 +3,16 @@ module github.com/codex-k8s/kodex/services/external/integration-gateway
 go 1.26.6
 
 require (
+	github.com/codex-k8s/kodex/libs/go/secretbrokerapi v0.0.0
+	github.com/codex-k8s/kodex/libs/go/sshcompose v0.0.0
+	golang.org/x/crypto v0.54.0
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/codex-k8s/kodex/libs/go/controlplaneapi v0.0.0
 	github.com/codex-k8s/kodex/libs/go/controlplaneclient v0.0.0
 	github.com/codex-k8s/kodex/libs/go/credentialfs v0.0.0
 	github.com/codex-k8s/kodex/libs/go/httpserver v0.0.0
 	github.com/codex-k8s/kodex/libs/go/integrationpackage v0.0.0
+	github.com/codex-k8s/kodex/libs/go/repositorybundle v0.0.0
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
 	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0
 	github.com/google/go-github/v74 v74.0.0
@@ -92,3 +96,9 @@ replace github.com/codex-k8s/kodex/libs/go/serviceruntime => ../../../libs/go/se
 replace github.com/codex-k8s/kodex/libs/go/securefile => ../../../libs/go/securefile
 
 replace github.com/codex-k8s/kodex/libs/go/emailbridgeapi => ../../../libs/go/emailbridgeapi
+
+replace github.com/codex-k8s/kodex/libs/go/repositorybundle => ../../../libs/go/repositorybundle
+
+replace github.com/codex-k8s/kodex/libs/go/sshcompose => ../../../libs/go/sshcompose
+
+replace github.com/codex-k8s/kodex/libs/go/secretbrokerapi => ../../../libs/go/secretbrokerapi

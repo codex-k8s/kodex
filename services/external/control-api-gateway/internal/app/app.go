@@ -62,6 +62,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
+	recordInitialOIDCRefresh(startup, logger, oidc)
 	sessions, err := session.New(session.Config{CurrentKeyFile: config.SessionCurrentKeyFile, PreviousKeyFile: config.SessionPreviousKeyFile, TTL: config.SessionTTL})
 	if err != nil {
 		return err
@@ -93,7 +94,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, secrets.Close()) }()
-	bus, err := connectNATS(config, logger)
+	bus, err := connectNATSStartup(startup, config, logger, connectNATS)
 	if err != nil {
 		return err
 	}
@@ -163,7 +164,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	technicalMux.Handle("/metrics", metrics.PrometheusHandler())
 	technical := &http.Server{Addr: config.TechnicalListen, Handler: technicalMux, BaseContext: func(net.Listener) context.Context { return lifecycle }, ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 	readiness.Set(false, "dependencies_starting")
-	workers := serviceruntime.StartWorkers(lifecycle, httpWorker(public, true, config), httpWorker(technical, false, config), readinessWorker(realtime, revocations, browserState, readiness, metrics, logger, config), oidcRefreshWorker(oidc, logger, config))
+	workers := serviceruntime.StartWorkers(lifecycle, httpWorker(public, true, config), httpWorker(technical, false, config), readinessWorker(realtime, revocations, browserState, oidc, readiness, metrics, logger, config), oidcRefreshWorker(oidc, logger, config))
 	err = workers.Wait(context.WithoutCancel(lifecycle))
 	// HTTP-запросы уже завершены либо принудительно закрыты по бюджету.
 	// Отмена закрывает также контексты hijacked WebSocket до закрытия клиентов.
@@ -175,11 +176,11 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 
 // oidcRefreshWorker periodically refreshes OIDC signing keys under the RPC timeout, logs only transitions into/out of degraded state and returns context cancellation. It does not log token contents, refresh browser sessions or change readiness directly.
 // oidcRefreshWorker периодически обновляет OIDC signing keys с RPC timeout, пишет лишь переходы в degraded state и обратно и возвращает отмену контекста. Содержимое токенов не логируется, browser sessions не обновляются и readiness напрямую не меняется.
-func oidcRefreshWorker(verifier *oidcauth.Verifier, logger *slog.Logger, config Config) serviceruntime.Worker {
+func oidcRefreshWorker(verifier signingKeyRefresher, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.ReadinessInterval)
 		defer ticker.Stop()
-		degraded := false
+		degraded := verifier.SigningKeyFailureClass() != ""
 		for {
 			select {
 			case <-ctx.Done():
@@ -190,10 +191,10 @@ func oidcRefreshWorker(verifier *oidcauth.Verifier, logger *slog.Logger, config 
 				cancel()
 				if err != nil && !degraded {
 					degraded = true
-					logger.WarnContext(ctx, "OIDC signing-key refresh degraded", "error_class", "identity_provider")
+					logger.WarnContext(ctx, oidcRefreshDegradedMessage, oidcRefreshClassKey, verifier.SigningKeyFailureClass())
 				} else if err == nil && degraded {
 					degraded = false
-					logger.InfoContext(ctx, "OIDC signing-key refresh restored")
+					logger.InfoContext(ctx, oidcRefreshRestoredMessage)
 				}
 			}
 		}
@@ -203,16 +204,16 @@ func oidcRefreshWorker(verifier *oidcauth.Verifier, logger *slog.Logger, config 
 // connectNATS opens the configured TLS 1.3 NATS connection with pinned server name/CA, client certificate and user credentials, unlimited reconnects and bounded connect/flush checks. Failed initial flush closes the connection; the helper has no lifecycle context and does not create subscriptions.
 // connectNATS открывает настроенное TLS 1.3 NATS-соединение с закреплёнными server name и CA, client certificate и user credentials, неограниченными reconnects и ограниченными connect и flush checks. Отказ первого flush закрывает соединение; lifecycle context не передаётся и subscriptions не создаются.
 func connectNATS(config Config, logger *slog.Logger) (*nats.Conn, error) {
-	options := []nats.Option{nats.Name(serviceName), nats.Secure(&tls.Config{MinVersion: tls.VersionTLS13, ServerName: config.NATSTLSServerName}), nats.RootCAs(config.NATSCAFile), nats.ClientCert(config.NATSCertificateFile, config.NATSPrivateKeyFile), nats.UserCredentials(config.NATSCredentialsFile), nats.NoEcho(), nats.Timeout(3 * time.Second), nats.ReconnectWait(time.Second), nats.MaxReconnects(-1), nats.PingInterval(20 * time.Second), nats.MaxPingsOutstanding(2), nats.DisconnectErrHandler(func(_ *nats.Conn, _ error) {
+	options := []nats.Option{nats.Name(serviceName), nats.Secure(&tls.Config{MinVersion: tls.VersionTLS13, ServerName: config.NATSTLSServerName}), diagnosticNATSOption(natsStageLoadCA, nats.RootCAs(config.NATSCAFile)), diagnosticNATSOption(natsStageLoadClientCertificate, nats.ClientCert(config.NATSCertificateFile, config.NATSPrivateKeyFile)), diagnosticNATSOption(natsStageLoadCredentials, nats.UserCredentials(config.NATSCredentialsFile)), nats.NoEcho(), nats.Timeout(3 * time.Second), nats.ReconnectWait(time.Second), nats.MaxReconnects(-1), nats.PingInterval(20 * time.Second), nats.MaxPingsOutstanding(2), nats.DisconnectErrHandler(func(_ *nats.Conn, _ error) {
 		logger.Warn("realtime NATS connection interrupted", "error_class", "dependency")
 	}), nats.ReconnectHandler(func(_ *nats.Conn) { logger.Info("realtime NATS connection restored") })}
 	connection, err := nats.Connect(config.NATSURL, options...)
 	if err != nil {
-		return nil, errors.New("connect realtime NATS consumer")
+		return nil, natsStartupFailure(natsStageConnect, err)
 	}
 	if err := connection.FlushTimeout(2 * time.Second); err != nil {
 		connection.Close()
-		return nil, errors.New("verify realtime NATS consumer")
+		return nil, natsStartupFailure(natsStageVerify, err)
 	}
 	return connection, nil
 }
@@ -246,9 +247,15 @@ func httpWorker(server *http.Server, tlsEnabled bool, config Config) servicerunt
 	}
 }
 
-// readinessWorker immediately and periodically checks realtime, revocation and browser-state dependencies with one bounded context, updates readiness/metrics and logs state transitions. Exit marks both unready; it does not itself probe every provider or issue a synthetic user request.
-// readinessWorker немедленно и периодически проверяет realtime, revocation и browser-state dependencies одним ограниченным контекстом, обновляет readiness и metrics и логирует переходы. При выходе обе готовности снимаются; каждый provider не опрашивается и синтетический user request не отправляется.
-func readinessWorker(realtime *websockettransport.Server, revocations *sessionrevocation.Store, browserState *browserstate.Store, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
+// readinessWorker checks realtime, revocation and browser-state dependencies
+// under one bounded context and requires the first verified OIDC snapshot before
+// publishing readiness. Later key degradation keeps its existing token policy.
+// Exit clears readiness and metrics; probes never fetch keys or grant authority.
+// readinessWorker проверяет realtime, revocation и browser-state с одним бюджетом
+// и требует первый проверенный снимок OIDC до публикации готовности. Последующая
+// деградация ключей сохраняет прежнюю политику токенов. При выходе готовность
+// и метрики снимаются; probes не получают ключи и не выдают полномочия.
+func readinessWorker(realtime, revocations, browserState readinessDependency, keys signingKeyInitialization, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		defer func() {
 			readiness.Set(false, "shutting_down")
@@ -260,6 +267,11 @@ func readinessWorker(realtime *websockettransport.Server, revocations *sessionre
 			check, cancel := context.WithTimeout(ctx, config.RPCTimeout)
 			err := errors.Join(realtime.Check(check), revocations.Check(check), browserState.Check(check))
 			cancel()
+			reason, class := "direct_infrastructure_unavailable", "direct_infrastructure"
+			if err == nil && !keys.SigningKeysInitialized() {
+				err = errInitialSigningKeys
+				reason, class = initialSigningKeysReason, initialSigningKeysReason
+			}
 			if err == nil {
 				changed := readiness.Set(true, "ready")
 				metrics.SetReady(true)
@@ -267,10 +279,10 @@ func readinessWorker(realtime *websockettransport.Server, revocations *sessionre
 					logger.InfoContext(ctx, "control API readiness restored")
 				}
 			} else {
-				changed := readiness.Set(false, "direct_infrastructure_unavailable")
+				changed := readiness.Set(false, reason)
 				metrics.SetReady(false)
 				if changed {
-					logger.WarnContext(ctx, "control API readiness lost", "error_class", "direct_infrastructure")
+					logger.WarnContext(ctx, "control API readiness lost", "error_class", class)
 				}
 			}
 			select {

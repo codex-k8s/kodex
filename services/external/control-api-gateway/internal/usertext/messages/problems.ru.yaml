@@ -84,6 +84,16 @@ VERSION_OR_STATE_CONFLICT:
   other: Объект изменился; проверьте актуальную версию и повторите действие
 STATE_CONFLICT:
   other: Действие недоступно в текущем состоянии
+LEGACY_REWORK_SCOPE_UNSUPPORTED:
+  other: Доработка поддерживает материалы и не более одного незавершённого чтения одновременно. Дождитесь результата чтения; запись во внешнюю систему, делегирование и запуск процессов здесь недоступны. Используйте процесс SERVER или отмените запуск.
+LEGACY_REWORK_WRITE_REQUIRES_RECONCILIATION:
+  other: В процессе уже есть внешняя запись с отдельной квитанцией. Доработка прежнего режима не повторяет её. Сверьте результат действия и используйте процесс SERVER либо отмените запуск.
+LEGACY_REWORK_PARENT_BUSY:
+  other: Координатор ещё исполняется. Дождитесь его завершения и обновите согласование либо отмените запуск.
+LEGACY_REWORK_DELIVERY_BLOCKED:
+  other: Исправленный результат пока нельзя безопасно передать координатору. Проверьте открытые согласования, доступы и сохранность исходных материалов без изменения версии либо отмените запуск; внешнее действие не повторяется.
+LEGACY_REWORK_READ_LIMIT:
+  other: Новая попытка превысит допустимый размер графа или ввода. Отмените этот запуск и начните отдельный процесс с меньшим вводом.
 RESOURCE_IN_USE:
   other: Объект ещё используется; сначала уберите связанные назначения и повторите действие
 RATE_LIMITED:
@@ -158,6 +168,8 @@ RUNTIME_UNAVAILABLE:
   other: Среда выполнения агента временно недоступна
 RUNTIME_LIMIT_EXCEEDED:
   other: Агент превысил ограничение выполнения
+OWNER_GATE_EXPIRED:
+  other: Срок согласования истёк; результат не одобрен
 RUNTIME_TIMEOUT:
   other: Истекло время выполнения запуска
 SYSTEM_ASSISTANT_NAME:
@@ -404,6 +416,8 @@ INTEGRATION_ACTION_SUCCEEDED:
   other: Действие интеграции выполнено успешно
 INTEGRATION_ACTION_FAILED:
   other: Действие интеграции отклонено или завершилось ошибкой
+INTEGRATION_ADMISSION_BLOCKED:
+  other: "Допуск вызова заблокирован: текущие полномочия или закреплённые зависимости недоступны"
 INTEGRATION_ACTION_OUTCOME_UNKNOWN:
   other: Результат действия интеграции неизвестен
 RUNTIME_INPUT_INVALID:
@@ -702,6 +716,8 @@ PERMISSION_AUDIT_VIEW_DESCRIPTION:
   other: Чтение событий аудита в назначенной области
 SESSION_ARCHIVE_TASK_SUCCEEDED:
   other: Задача архива сессии выполнена
+SESSION_WORKSPACE_OBSERVED:
+  other: Состояние рабочей области подтверждено
 SESSION_ARCHIVE_TASK_READY:
   other: Задача архива сессии запланирована для повтора
 SESSION_ARCHIVE_TASK_DEAD_LETTER:
@@ -939,3 +955,86 @@ PERMISSION_ARTIFACT_REVISION_CREATE_DESCRIPTION:
   other: Создание новой неизменяемой ревизии существующего файла
 SYSTEM_ROLE_ARTIFACT_REVISION_AUTHORITY:
   other: Добавлены полномочия на создание ревизий файлов
+REPOSITORY_BUNDLE_CHANGED:
+  other: Состояние публикации набора файлов обновлено
+WORKFLOW_RESULT_ACCEPTED:
+  other: Обязательные результаты этапа проверены и приняты
+
+RUNTIME_INITIALIZATION_FAILED:
+  other: Не удалось подготовить рабочую область сотрудника.
+RUNTIME_INIT_UNKNOWN_UNKNOWN:
+  other: Подготовка рабочего каталога завершилась ошибкой. Причина неизвестна.
+RUNTIME_INIT_INPUT_DECODE_INPUT_INVALID:
+  other: Не удалось проверить входные данные подготовки. Входные данные недопустимы.
+RUNTIME_INIT_EGRESS_TRUST_UNKNOWN:
+  other: Не удалось подготовить доверенные сертификаты. Причина неизвестна.
+RUNTIME_INIT_EGRESS_TRUST_FILESYSTEM_IO_FAILED:
+  other: Не удалось подготовить доверенные сертификаты. Не удалось выполнить операцию с рабочими файлами.
+RUNTIME_INIT_CONTEXT_SNAPSHOT_INPUT_INVALID:
+  other: Не удалось проверить закреплённый контекст выполнения. Входные данные недопустимы.
+RUNTIME_INIT_CALLBACK_SETUP_UNKNOWN:
+  other: Не удалось подготовить защищённый канал входных файлов. Причина неизвестна.
+RUNTIME_INIT_WORKSPACE_LAYOUT_UNKNOWN:
+  other: Не удалось подготовить рабочие каталоги. Причина неизвестна.
+RUNTIME_INIT_WORKSPACE_LAYOUT_CONTEXT_CANCELLED:
+  other: Не удалось подготовить рабочие каталоги. Подготовка отменена.
+RUNTIME_INIT_WORKSPACE_LAYOUT_DEADLINE_EXCEEDED:
+  other: Не удалось подготовить рабочие каталоги. Истёк срок подготовки.
+RUNTIME_INIT_WORKSPACE_LAYOUT_READ_ONLY:
+  other: Не удалось подготовить рабочие каталоги. Рабочая область доступна только для чтения.
+RUNTIME_INIT_WORKSPACE_LAYOUT_QUOTA_EXCEEDED:
+  other: Не удалось подготовить рабочие каталоги. Недостаточно разрешённого места для записи.
+RUNTIME_INIT_WORKSPACE_LAYOUT_FILESYSTEM_IO_FAILED:
+  other: Не удалось подготовить рабочие каталоги. Не удалось выполнить операцию с рабочими файлами.
+RUNTIME_INIT_INPUT_MANIFEST_INPUT_INVALID:
+  other: Не удалось проверить список входных файлов. Входные данные недопустимы.
+RUNTIME_INIT_ARTIFACT_TRANSFER_UNKNOWN:
+  other: Не удалось получить проверенные входные файлы. Причина неизвестна.
+RUNTIME_INIT_ARTIFACT_TRANSFER_AUTHENTICATION_REJECTED:
+  other: Не удалось получить проверенные входные файлы. Проверка подлинности запроса отклонена.
+RUNTIME_INIT_ARTIFACT_TRANSFER_AUTHORITY_REJECTED:
+  other: Не удалось получить проверенные входные файлы. Доступ к источнику отклонён.
+RUNTIME_INIT_ARTIFACT_TRANSFER_SOURCE_UNAVAILABLE:
+  other: Не удалось получить проверенные входные файлы. Закреплённый источник недоступен.
+RUNTIME_INIT_ARTIFACT_TRANSFER_UPSTREAM_UNAVAILABLE:
+  other: Не удалось получить проверенные входные файлы. Источник временно недоступен.
+RUNTIME_INIT_ARTIFACT_TRANSFER_TRANSPORT_UNAVAILABLE:
+  other: Не удалось получить проверенные входные файлы. Не удалось связаться с защищённым источником.
+RUNTIME_INIT_ARTIFACT_TRANSFER_PIN_MISMATCH:
+  other: Не удалось получить проверенные входные файлы. Метаданные файла не совпали с закреплёнными.
+RUNTIME_INIT_ARTIFACT_TRANSFER_CONTENT_DIGEST_MISMATCH:
+  other: Не удалось получить проверенные входные файлы. Контрольная сумма полученного файла не совпала.
+RUNTIME_INIT_ARTIFACT_TRANSFER_CONTEXT_CANCELLED:
+  other: Не удалось получить проверенные входные файлы. Подготовка отменена.
+RUNTIME_INIT_ARTIFACT_TRANSFER_DEADLINE_EXCEEDED:
+  other: Не удалось получить проверенные входные файлы. Истёк срок подготовки.
+RUNTIME_INIT_ARTIFACT_TRANSFER_READ_ONLY:
+  other: Не удалось получить проверенные входные файлы. Рабочая область доступна только для чтения.
+RUNTIME_INIT_ARTIFACT_TRANSFER_QUOTA_EXCEEDED:
+  other: Не удалось получить проверенные входные файлы. Недостаточно разрешённого места для записи.
+RUNTIME_INIT_ARTIFACT_TRANSFER_FILESYSTEM_IO_FAILED:
+  other: Не удалось получить проверенные входные файлы. Не удалось выполнить операцию с рабочими файлами.
+RUNTIME_INIT_INPUT_PROTECTION_UNKNOWN:
+  other: Не удалось защитить подготовленные входные файлы. Причина неизвестна.
+RUNTIME_INIT_INPUT_PROTECTION_READ_ONLY:
+  other: Не удалось защитить подготовленные входные файлы. Рабочая область доступна только для чтения.
+RUNTIME_INIT_INPUT_PROTECTION_QUOTA_EXCEEDED:
+  other: Не удалось защитить подготовленные входные файлы. Недостаточно разрешённого места для записи.
+RUNTIME_INIT_INPUT_PROTECTION_FILESYSTEM_IO_FAILED:
+  other: Не удалось защитить подготовленные входные файлы. Не удалось выполнить операцию с рабочими файлами.
+RUNTIME_INIT_CONTEXT_FILES_UNKNOWN:
+  other: Не удалось подготовить навыки и память выполнения. Причина неизвестна.
+RUNTIME_INIT_CONTEXT_FILES_CONTEXT_CANCELLED:
+  other: Не удалось подготовить навыки и память выполнения. Подготовка отменена.
+RUNTIME_INIT_CONTEXT_FILES_DEADLINE_EXCEEDED:
+  other: Не удалось подготовить навыки и память выполнения. Истёк срок подготовки.
+RUNTIME_INIT_CONTEXT_FILES_READ_ONLY:
+  other: Не удалось подготовить навыки и память выполнения. Рабочая область доступна только для чтения.
+RUNTIME_INIT_CONTEXT_FILES_QUOTA_EXCEEDED:
+  other: Не удалось подготовить навыки и память выполнения. Недостаточно разрешённого места для записи.
+RUNTIME_INIT_CONTEXT_FILES_FILESYSTEM_IO_FAILED:
+  other: Не удалось подготовить навыки и память выполнения. Не удалось выполнить операцию с рабочими файлами.
+WORKFLOW_REWORK_QUEUED:
+  other: Назначены новые попытки доработки и зависимых проверок
+WORKFLOW_GATE_SUPERSEDED:
+  other: Прежнее согласование утратило актуальность после одобренной доработки

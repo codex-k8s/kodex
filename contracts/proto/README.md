@@ -4,8 +4,8 @@ title: Внутренние Proto/gRPC-контракты
 type: contract-guide
 status: approved
 owner: architect
-version: 1.0.3
-updated: 2026-10-09
+version: 1.0.4
+updated: 2026-10-26
 ---
 
 # Внутренние Proto/gRPC-контракты
@@ -150,6 +150,19 @@ completion criteria, concurrency, deadlines и human gates. ResultSchema
 keywords; `{}` допустим, неизвестная непустая schema закрыто отклоняется,
 не отбрасывается. Произвольный spec/config, credentials, headers и secret
 values не выдаются; `$ref` и resolver отсутствуют.
+
+Для явно закреплённого `SERVER_DAG_V1` публикация использует version2 whitelist:
+`execution_mode` и до четырёх `result_requirements` каждого этапа входят в
+канонические байты и digest. Ограниченный профиль содержит до12этапов,
+до8точных зависимостей и не более2одновременных исполнений. Требования не
+принимаются в version1; исторические байты version1 не получают новые поля.
+`approval_timeout_seconds` сохраняет прежний Proto номер13, `depends_on` и
+`result_requirements` занимают новые14и15; `execution_mode` версии —16.
+Consumer проверяет закрытый вид и поля условий, но не назначает authority,
+CLEAN либо успешный результат. Owner отдельно проверяет независимость REVIEW,
+актуальные bindings и происхождение доказательств. Поля Proto и codec сами
+не включают серверный scheduler: активация режима требует полного owner
+lifecycle, forward migration и согласованных API/UI потребителей по #1836.
 
 Immutable owner `spec_digest` не подменяется digest безопасной проекции.
 CP и RC используют единый typed canonical JSON codec: unknown/duplicate keys,

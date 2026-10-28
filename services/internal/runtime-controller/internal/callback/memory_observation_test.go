@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -17,18 +18,18 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
-// TestCommittedMemoryObservationIsBoundedReadOnlyAndClosed checks nine fake-Pod
+// TestCommittedMemoryObservationIsBoundedReadOnlyAndClosed checks fake-Pod
 // completion cases permit one read only after a new failed owner commit, distinguish
 // current OOMKilled from exit137/history and keep unavailable/mismatched evidence
 // explicit. Success, rejected owner commit and replay add no read/log; private canaries
 // never enter diagnostics. No real cluster or resource limit is changed.
-// TestCommittedMemoryObservationIsBoundedReadOnlyAndClosed проверяет девять fake-Pod
+// TestCommittedMemoryObservationIsBoundedReadOnlyAndClosed проверяет fake-Pod
 // completion cases с одним read лишь после нового failed owner commit,отличает current
 // OOMKilled от exit137/history и явно сохраняет unavailable/mismatched evidence.
 // Success,rejected owner commit/replay не дают read/log,private canaries не попадают
 // в diagnostics. Реальный cluster/resource limit не меняется.
 func TestCommittedMemoryObservationIsBoundedReadOnlyAndClosed(t *testing.T) {
-	for _, scenario := range []string{"current OOM", "exit137", "previous OOM", "revision mismatch", "missing Pod", "read failure", "success", "owner failure", "replay"} {
+	for _, scenario := range []string{"current OOM", "Evicted", "message only", "missing UID", "lease mismatch", "managed mismatch", "unknown container", "exit137", "previous OOM", "revision mismatch", "missing Pod", "read failure", "success", "owner failure", "replay"} {
 		t.Run(scenario, func(t *testing.T) {
 			manager, kube, input, _, _ := providerCredentialRefreshRouteFixture(t)
 			name := runtimecontract.RuntimeTurnPodName(input.LeaseRef)
@@ -36,8 +37,28 @@ func TestCommittedMemoryObservationIsBoundedReadOnlyAndClosed(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			pod.UID = "current-observed-pod-uid"
 			pod.Status.Phase = corev1.PodFailed
 			pod.Status.ContainerStatuses = []corev1.ContainerStatus{{Name: "provider-runtime", State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "OOMKilled", ExitCode: 137, Message: "PRIVATE_POD_MESSAGE"}}}}
+			if scenario == "Evicted" || scenario == "message only" {
+				pod.Status.ContainerStatuses = nil
+				pod.Status.Message = "PRIVATE_POD_MESSAGE Evicted storage pressure"
+			}
+			if scenario == "Evicted" {
+				pod.Status.Reason = "Evicted"
+			}
+			if scenario == "missing UID" {
+				pod.UID = ""
+			}
+			if scenario == "lease mismatch" {
+				pod.Annotations["runtime.kodex.dev/lease-ref"] = "foreign"
+			}
+			if scenario == "managed mismatch" {
+				pod.Labels["runtime.kodex.dev/managed"] = "false"
+			}
+			if scenario == "unknown container" {
+				pod.Status.ContainerStatuses[0].Name = "PRIVATE_CONTAINER"
+			}
 			if scenario == "exit137" || scenario == "previous OOM" {
 				pod.Status.ContainerStatuses[0].State.Terminated.Reason = "Error"
 				pod.Status.ContainerStatuses[0].LastTerminationState.Terminated = &corev1.ContainerStateTerminated{Reason: "OOMKilled", ExitCode: 137}
@@ -76,7 +97,11 @@ func TestCommittedMemoryObservationIsBoundedReadOnlyAndClosed(t *testing.T) {
 			}
 			ctx, cancel := context.WithCancel(t.Context())
 			cancel()
+			before := payload
 			server.logCommittedProviderDiagnostic(ctx, input, payload, ownerError)
+			if !reflect.DeepEqual(payload, before) {
+				t.Fatal("observation changed callback intent")
+			}
 			if scenario == "success" || scenario == "owner failure" || scenario == "replay" {
 				if reads != 0 || logs.Len() != 0 {
 					t.Fatal("non-commit acquired a memory observation")
@@ -93,6 +118,14 @@ func TestCommittedMemoryObservationIsBoundedReadOnlyAndClosed(t *testing.T) {
 			if !strings.Contains(logs.String(), want) {
 				t.Fatal("observation guessed a resource failure")
 			}
+			if scenario == "Evicted" {
+				if !strings.Contains(logs.String(), `"pod_reason":"ENVIRONMENT_EVICTED"`) || !strings.Contains(logs.String(), `"observed_pod_uid":"current-observed-pod-uid"`) {
+					t.Fatal("typed eviction was not independently observed")
+				}
+			} else if scenario != "current OOM" && strings.Contains(logs.String(), `"pod_observation":"OBSERVED"`) {
+				t.Fatal("unbound or untyped observation claimed a resource reason")
+			}
+
 			for _, private := range []string{"PRIVATE_POD_MESSAGE", "PRIVATE_READ_FAILURE", "PRIVATE_PAYLOAD", "PRIVATE_OWNER_ERROR", input.LeaseFence} {
 				if private != "" && strings.Contains(logs.String(), private) {
 					t.Fatal("memory observation exposed private data")

@@ -1,5 +1,6 @@
 import type { Run, RunNode } from "@/shared/api/generated/openapi/types.gen";
 import { requireRuntimeOrganizationRef } from "@/features/runtime/resource-scope";
+import { usageCompleteness } from "./token-usage";
 
 const refPattern = /^[A-Za-z0-9_-]{8,128}$/;
 function validRef(ref: unknown): ref is string {
@@ -10,6 +11,7 @@ export function assertRunOwner(
   run: Run,
   organizationRef: string | undefined,
 ): void {
+  usageCompleteness(run.usage);
   const assistantSource = run.source === "SYSTEM_ASSISTANT";
   const assistantTarget = run.target.type === "SYSTEM_ASSISTANT";
   if (!assistantTarget) {

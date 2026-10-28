@@ -603,10 +603,12 @@ func castWorkflowVersion(value *entity.WorkflowVersion, state, coordinatorAgentR
 			Ref: step.Key, Position: position, Name: step.Name, Purpose: step.Instructions, AgentRef: step.AgentRef,
 			Parallel: step.Parallel, ParallelGroup: step.ParallelGroup, TimeoutSeconds: timeoutSeconds,
 			ExpectedResult: step.ExpectedResult, HumanGate: step.HumanGateAfter,
+			ApprovalTimeoutSeconds: step.ApprovalTimeoutSeconds,
+			DependsOn:              append([]string(nil), step.DependsOn...), ResultRequirements: castWorkflowResultRequirements(step.ResultRequirements),
 			GateDecisions: gateDecisions(step.GateDecisions), RequiredCapabilityKeys: append([]string(nil), step.RequiredCapabilityKeys...),
 		})
 	}
-	return &controlplanev1.WorkflowVersion{Ref: value.Ref, Version: int64(value.VersionNumber), Revision: value.VersionNumber, State: workflowState(state), CoordinatorAgentRef: coordinatorAgentRef, InputFields: inputs, Steps: steps, MaxConcurrency: value.Concurrency, TimeoutSeconds: int32(value.TimeoutSeconds), CompletionCriteria: value.CompletionCriteria}
+	return &controlplanev1.WorkflowVersion{ResultEvidenceProfile: value.ResultEvidenceProfile, ExecutionMode: value.ExecutionMode, ReworkPolicy: value.ReworkPolicy, Ref: value.Ref, Version: int64(value.VersionNumber), Revision: value.VersionNumber, State: workflowState(state), CoordinatorAgentRef: coordinatorAgentRef, InputFields: inputs, Steps: steps, MaxConcurrency: value.Concurrency, TimeoutSeconds: int32(value.TimeoutSeconds), CompletionCriteria: value.CompletionCriteria}
 }
 
 // castWorkflow projects published/draft workflow versions and optional card/readiness snapshots, preserving absent activity and authoritative readiness metadata rather than recomputing counts or eligibility.
@@ -641,7 +643,7 @@ func castRunTarget(value entity.RunTarget) *controlplanev1.RunTarget {
 // castTokenUsage copies all typed token counters and context-window metadata to transport without aggregation, pricing or financial-eligibility decisions.
 // castTokenUsage копирует все типизированные счётчики токенов и метаданные окна контекста в транспорт без агрегирования, расчёта цены или решения финансовой допустимости.
 func castTokenUsage(value entity.TokenUsage) *controlplanev1.TokenUsage {
-	return &controlplanev1.TokenUsage{TotalTokens: value.TotalTokens, InputTokens: value.InputTokens, CachedInputTokens: value.CachedInputTokens, CacheWriteInputTokens: value.CacheWriteInputTokens, OutputTokens: value.OutputTokens, ReasoningOutputTokens: value.ReasoningOutputTokens, ModelContextWindow: value.ModelContextWindow}
+	return &controlplanev1.TokenUsage{Completeness: controlplanev1.UsageCompleteness(value.Completeness), TotalTokens: value.TotalTokens, InputTokens: value.InputTokens, CachedInputTokens: value.CachedInputTokens, CacheWriteInputTokens: value.CacheWriteInputTokens, OutputTokens: value.OutputTokens, ReasoningOutputTokens: value.ReasoningOutputTokens, ModelContextWindow: value.ModelContextWindow}
 }
 
 // usageFromProto maps nil usage to a zero domain value and otherwise copies every typed counter/context window through protobuf getters without interpreting provider limits.
@@ -650,7 +652,11 @@ func usageFromProto(value *controlplanev1.TokenUsage) entity.TokenUsage {
 	if value == nil {
 		return entity.TokenUsage{}
 	}
-	return entity.TokenUsage{TotalTokens: value.GetTotalTokens(), InputTokens: value.GetInputTokens(), CachedInputTokens: value.GetCachedInputTokens(), CacheWriteInputTokens: value.GetCacheWriteInputTokens(), OutputTokens: value.GetOutputTokens(), ReasoningOutputTokens: value.GetReasoningOutputTokens(), ModelContextWindow: value.GetModelContextWindow()}
+	quality := runtimecontract.UsageCompleteness(value.GetCompleteness())
+	if value.GetCompleteness() < 0 || value.GetCompleteness() > controlplanev1.UsageCompleteness_USAGE_COMPLETENESS_COMPLETE {
+		quality = runtimecontract.UsageCompleteness(255)
+	}
+	return entity.TokenUsage{Completeness: quality, TotalTokens: value.GetTotalTokens(), InputTokens: value.GetInputTokens(), CachedInputTokens: value.GetCachedInputTokens(), CacheWriteInputTokens: value.GetCacheWriteInputTokens(), OutputTokens: value.GetOutputTokens(), ReasoningOutputTokens: value.GetReasoningOutputTokens(), ModelContextWindow: value.GetModelContextWindow()}
 }
 
 // castRun projects run/session/root/retry lineage, usage, incidents, attachment/gate refs, readiness and optional assistant pin from the authorized snapshot; it does not create provenance or mutate execution state.
@@ -674,13 +680,17 @@ func castRun(value entity.Run) *controlplanev1.Run {
 // castNode projects graph-node execution/turn/attempt, safe progress/errors and child/artifact refs, deriving Planned only from materialization state; it does not infer new child authority.
 // castNode отображает исполнение, ход и попытку узла графа, безопасные прогресс и ошибки и ссылки детей и файлов, выводя Planned лишь из состояния материализации; новые полномочия детей не выводит.
 func castNode(value entity.RunNode) *controlplanev1.RunNode {
-	return &controlplanev1.RunNode{Ref: value.Ref, RunRef: value.RunRef, ParentNodeRef: value.ParentNodeRef, Type: nodeType(value.Type), State: nodeState(value.State), DisplayName: value.DisplayName, Role: value.Role, AgentRef: value.AgentRef, TurnRef: value.TurnRef, Attempt: value.Attempt, InputSummary: value.InputSummary, ProgressSummary: value.ProgressSummary, IntegrationNames: value.IntegrationNames, ArtifactRefs: value.ArtifactRefs, ChildRunRefs: value.ChildRunRefs, CallbackSummary: value.CallbackSummary, SafeErrorCode: value.SafeErrorCode, SafeErrorMessage: value.SafeErrorMessage, CreatedAt: timestamp(value.CreatedAt), StartedAt: optionalTimestamp(value.StartedAt), FinishedAt: optionalTimestamp(value.FinishedAt), NextActions: nextActions(value.NextActions), Planned: value.MaterializationState == "PLANNED"}
+	return &controlplanev1.RunNode{WorkflowResults: castWorkflowAttemptResults(value.WorkflowResults), Ref: value.Ref, RunRef: value.RunRef, ParentNodeRef: value.ParentNodeRef, Type: nodeType(value.Type), State: nodeState(value.State), DisplayName: value.DisplayName, Role: value.Role, AgentRef: value.AgentRef, TurnRef: value.TurnRef, Attempt: value.Attempt, InputSummary: value.InputSummary, ProgressSummary: value.ProgressSummary, IntegrationNames: value.IntegrationNames, ArtifactRefs: value.ArtifactRefs, ChildRunRefs: value.ChildRunRefs, CallbackSummary: value.CallbackSummary, SafeErrorCode: value.SafeErrorCode, SafeErrorMessage: value.SafeErrorMessage, CreatedAt: timestamp(value.CreatedAt), StartedAt: optionalTimestamp(value.StartedAt), FinishedAt: optionalTimestamp(value.FinishedAt), NextActions: nextActions(value.NextActions), Planned: value.MaterializationState == "PLANNED"}
 }
 
 // castEdge projects stored edge/root endpoints, relation type and label; returning IDs does not authorize creation or traversal of a new relation.
 // castEdge отображает сохранённые концы ребра и корня, вид связи и подпись; возврат ID не разрешает создание или обход новой связи.
 func castEdge(value entity.RunEdge) *controlplanev1.RunEdge {
-	return &controlplanev1.RunEdge{Ref: value.Ref, RunRef: value.RunRef, SourceNodeRef: value.SourceNodeRef, TargetNodeRef: value.TargetNodeRef, Type: edgeType(value.Type), Label: value.Label}
+	result := &controlplanev1.RunEdge{Ref: value.Ref, RunRef: value.RunRef, SourceNodeRef: value.SourceNodeRef, TargetNodeRef: value.TargetNodeRef, Type: edgeType(value.Type), Label: value.Label}
+	if proof := value.ServerWorkflowRetry; proof != nil {
+		result.ServerWorkflowRetry = &controlplanev1.WorkflowRetryReadProof{WorkflowVersionRef: proof.WorkflowVersionRef, WorkflowVersionDigest: proof.WorkflowVersionDigest, OriginNodeRef: proof.OriginNodeRef, StepKey: proof.StepKey, PreviousBusinessAttempt: proof.PreviousBusinessAttempt, BusinessAttempt: proof.BusinessAttempt}
+	}
+	return result
 }
 
 // castRunDelta preserves absent run delta and maps versioned lifecycle/graph/event/usage/result metadata without merging it into an existing state.
@@ -748,7 +758,7 @@ func castGraph(value entity.RunGraph) *controlplanev1.RunGraph {
 // castGate projects exact gate scope, actors, decision/consequence metadata, attachments and optional JSON-normalized integration intent; this read does not resolve a gate or execute its previewed effect.
 // castGate отображает точную область шлюза, авторов, метаданные решения и последствий, вложения и необязательное намерение интеграции с JSON-нормализованным предпросмотром; это чтение шлюз не закрывает и показанное действие не исполняет.
 func castGate(value entity.OwnerGate) *controlplanev1.OwnerGate {
-	gate := &controlplanev1.OwnerGate{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RunRef: value.RunRef, NodeRef: value.NodeRef, Title: value.Title, ContextSummary: value.ContextSummary, ConsequencesSummary: value.Prompt, RequestedBy: &controlplanev1.UserSummary{Ref: value.RequestedByRef, DisplayName: value.RequestedByName}, State: gateState(value.State), AllowedDecisions: gateDecisions(value.AllowedDecisions), Decision: gateDecision(value.Decision), DecisionComment: value.DecisionComment, OpenedAt: timestamp(value.CreatedAt), DecidedAt: optionalTimestamp(value.ResolvedAt), ResolutionAttachmentSetRef: value.ResolutionAttachmentSetRef, NextActions: nextActions(value.NextActions)}
+	gate := &controlplanev1.OwnerGate{ResolutionKind: value.ResolutionKind, ReworkPlan: castWorkflowReworkPreview(value.ReworkPlan), Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RunRef: value.RunRef, NodeRef: value.NodeRef, Title: value.Title, ContextSummary: value.ContextSummary, ConsequencesSummary: value.Prompt, RequestedBy: &controlplanev1.UserSummary{Ref: value.RequestedByRef, DisplayName: value.RequestedByName}, State: gateState(value.State), AllowedDecisions: gateDecisions(value.AllowedDecisions), Decision: gateDecision(value.Decision), DecisionComment: value.DecisionComment, OpenedAt: timestamp(value.CreatedAt), DecidedAt: optionalTimestamp(value.ResolvedAt), ExpiresAt: optionalTimestamp(value.ExpiresAt), ResolutionAttachmentSetRef: value.ResolutionAttachmentSetRef, NextActions: nextActions(value.NextActions)}
 	if value.ResolvedByName != "" {
 		gate.DecidedBy = &controlplanev1.UserSummary{DisplayName: value.ResolvedByName}
 	}

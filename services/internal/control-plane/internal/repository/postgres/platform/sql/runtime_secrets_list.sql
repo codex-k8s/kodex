@@ -6,7 +6,7 @@ SELECT secret.ref, secret.version, COALESCE(project.ref, ''), secret.name, secre
        COALESCE(revision.revision, 0), COALESCE(revision.namespace, ''),
        COALESCE(revision.secret_name, ''), COALESCE(revision.secret_key, ''),
        COALESCE(revision.secret_uid, ''), COALESCE(revision.secret_resource_version, ''),
-       COALESCE(revision.content_sha256, ''), secret.scope_kind, organization.ref
+       COALESCE(revision.content_sha256, ''), secret.scope_kind, organization.ref,secret.purpose
 FROM control_plane.runtime_secrets secret
 JOIN control_plane.projects project ON project.id = secret.project_id
 JOIN control_plane.organizations organization ON organization.id = secret.organization_id

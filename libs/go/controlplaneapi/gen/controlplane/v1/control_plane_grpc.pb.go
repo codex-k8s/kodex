@@ -11618,6 +11618,7 @@ const (
 	RuntimeSecretWorkService_ResolveRuntimeCredentialProjection_FullMethodName       = "/controlplane.v1.RuntimeSecretWorkService/ResolveRuntimeCredentialProjection"
 	RuntimeSecretWorkService_ValidateRuntimeCredentialProjection_FullMethodName      = "/controlplane.v1.RuntimeSecretWorkService/ValidateRuntimeCredentialProjection"
 	RuntimeSecretWorkService_ResolveTranscriptionCredentialProjection_FullMethodName = "/controlplane.v1.RuntimeSecretWorkService/ResolveTranscriptionCredentialProjection"
+	RuntimeSecretWorkService_ResolveSSHComposeCredentialProjection_FullMethodName    = "/controlplane.v1.RuntimeSecretWorkService/ResolveSSHComposeCredentialProjection"
 )
 
 // RuntimeSecretWorkServiceClient is the client API for RuntimeSecretWorkService service.
@@ -11634,6 +11635,8 @@ type RuntimeSecretWorkServiceClient interface {
 	ResolveRuntimeCredentialProjection(ctx context.Context, in *ResolveRuntimeCredentialProjectionRequest, opts ...grpc.CallOption) (*ResolveRuntimeCredentialProjectionResponse, error)
 	ValidateRuntimeCredentialProjection(ctx context.Context, in *ValidateRuntimeCredentialProjectionRequest, opts ...grpc.CallOption) (*ValidateRuntimeCredentialProjectionResponse, error)
 	ResolveTranscriptionCredentialProjection(ctx context.Context, in *ResolveTranscriptionCredentialProjectionRequest, opts ...grpc.CallOption) (*ResolveTranscriptionCredentialProjectionResponse, error)
+	// Возвращает только descriptor exact SSH key действующего owner lease.
+	ResolveSSHComposeCredentialProjection(ctx context.Context, in *ResolveSSHComposeCredentialProjectionRequest, opts ...grpc.CallOption) (*ResolveSSHComposeCredentialProjectionResponse, error)
 }
 
 type runtimeSecretWorkServiceClient struct {
@@ -11744,6 +11747,16 @@ func (c *runtimeSecretWorkServiceClient) ResolveTranscriptionCredentialProjectio
 	return out, nil
 }
 
+func (c *runtimeSecretWorkServiceClient) ResolveSSHComposeCredentialProjection(ctx context.Context, in *ResolveSSHComposeCredentialProjectionRequest, opts ...grpc.CallOption) (*ResolveSSHComposeCredentialProjectionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveSSHComposeCredentialProjectionResponse)
+	err := c.cc.Invoke(ctx, RuntimeSecretWorkService_ResolveSSHComposeCredentialProjection_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RuntimeSecretWorkServiceServer is the server API for RuntimeSecretWorkService service.
 // All implementations must embed UnimplementedRuntimeSecretWorkServiceServer
 // for forward compatibility.
@@ -11758,6 +11771,8 @@ type RuntimeSecretWorkServiceServer interface {
 	ResolveRuntimeCredentialProjection(context.Context, *ResolveRuntimeCredentialProjectionRequest) (*ResolveRuntimeCredentialProjectionResponse, error)
 	ValidateRuntimeCredentialProjection(context.Context, *ValidateRuntimeCredentialProjectionRequest) (*ValidateRuntimeCredentialProjectionResponse, error)
 	ResolveTranscriptionCredentialProjection(context.Context, *ResolveTranscriptionCredentialProjectionRequest) (*ResolveTranscriptionCredentialProjectionResponse, error)
+	// Возвращает только descriptor exact SSH key действующего owner lease.
+	ResolveSSHComposeCredentialProjection(context.Context, *ResolveSSHComposeCredentialProjectionRequest) (*ResolveSSHComposeCredentialProjectionResponse, error)
 	mustEmbedUnimplementedRuntimeSecretWorkServiceServer()
 }
 
@@ -11797,6 +11812,9 @@ func (UnimplementedRuntimeSecretWorkServiceServer) ValidateRuntimeCredentialProj
 }
 func (UnimplementedRuntimeSecretWorkServiceServer) ResolveTranscriptionCredentialProjection(context.Context, *ResolveTranscriptionCredentialProjectionRequest) (*ResolveTranscriptionCredentialProjectionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResolveTranscriptionCredentialProjection not implemented")
+}
+func (UnimplementedRuntimeSecretWorkServiceServer) ResolveSSHComposeCredentialProjection(context.Context, *ResolveSSHComposeCredentialProjectionRequest) (*ResolveSSHComposeCredentialProjectionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveSSHComposeCredentialProjection not implemented")
 }
 func (UnimplementedRuntimeSecretWorkServiceServer) mustEmbedUnimplementedRuntimeSecretWorkServiceServer() {
 }
@@ -12000,6 +12018,24 @@ func _RuntimeSecretWorkService_ResolveTranscriptionCredentialProjection_Handler(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RuntimeSecretWorkService_ResolveSSHComposeCredentialProjection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveSSHComposeCredentialProjectionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeSecretWorkServiceServer).ResolveSSHComposeCredentialProjection(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeSecretWorkService_ResolveSSHComposeCredentialProjection_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeSecretWorkServiceServer).ResolveSSHComposeCredentialProjection(ctx, req.(*ResolveSSHComposeCredentialProjectionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // RuntimeSecretWorkService_ServiceDesc is the grpc.ServiceDesc for RuntimeSecretWorkService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -12046,6 +12082,10 @@ var RuntimeSecretWorkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ResolveTranscriptionCredentialProjection",
 			Handler:    _RuntimeSecretWorkService_ResolveTranscriptionCredentialProjection_Handler,
+		},
+		{
+			MethodName: "ResolveSSHComposeCredentialProjection",
+			Handler:    _RuntimeSecretWorkService_ResolveSSHComposeCredentialProjection_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -12819,6 +12859,7 @@ const (
 	RuntimeWorkService_ReportExecutionProgress_FullMethodName                         = "/controlplane.v1.RuntimeWorkService/ReportExecutionProgress"
 	RuntimeWorkService_CommitProviderCredentialRefresh_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/CommitProviderCredentialRefresh"
 	RuntimeWorkService_CompleteExecution_FullMethodName                               = "/controlplane.v1.RuntimeWorkService/CompleteExecution"
+	RuntimeWorkService_ObserveWorkspace_FullMethodName                                = "/controlplane.v1.RuntimeWorkService/ObserveWorkspace"
 	RuntimeWorkService_DelegateExecution_FullMethodName                               = "/controlplane.v1.RuntimeWorkService/DelegateExecution"
 	RuntimeWorkService_LaunchWorkflowExecution_FullMethodName                         = "/controlplane.v1.RuntimeWorkService/LaunchWorkflowExecution"
 	RuntimeWorkService_GetExecutionWorkflowCatalog_FullMethodName                     = "/controlplane.v1.RuntimeWorkService/GetExecutionWorkflowCatalog"
@@ -12837,6 +12878,8 @@ const (
 	RuntimeWorkService_CompleteIntegrationConnectionTest_FullMethodName               = "/controlplane.v1.RuntimeWorkService/CompleteIntegrationConnectionTest"
 	RuntimeWorkService_ResolveIntegrationInvocation_FullMethodName                    = "/controlplane.v1.RuntimeWorkService/ResolveIntegrationInvocation"
 	RuntimeWorkService_ClaimIntegrationInvocations_FullMethodName                     = "/controlplane.v1.RuntimeWorkService/ClaimIntegrationInvocations"
+	RuntimeWorkService_ClaimSSHComposeInvocations_FullMethodName                      = "/controlplane.v1.RuntimeWorkService/ClaimSSHComposeInvocations"
+	RuntimeWorkService_RenewSSHComposeInvocation_FullMethodName                       = "/controlplane.v1.RuntimeWorkService/RenewSSHComposeInvocation"
 	RuntimeWorkService_GetIntegrationInvocation_FullMethodName                        = "/controlplane.v1.RuntimeWorkService/GetIntegrationInvocation"
 	RuntimeWorkService_CompleteIntegrationInvocation_FullMethodName                   = "/controlplane.v1.RuntimeWorkService/CompleteIntegrationInvocation"
 )
@@ -12868,6 +12911,9 @@ type RuntimeWorkServiceClient interface {
 	ReportExecutionProgress(ctx context.Context, in *ReportExecutionProgressRequest, opts ...grpc.CallOption) (*ReportExecutionProgressResponse, error)
 	CommitProviderCredentialRefresh(ctx context.Context, in *CommitProviderCredentialRefreshRequest, opts ...grpc.CallOption) (*CommitProviderCredentialRefreshResponse, error)
 	CompleteExecution(ctx context.Context, in *CompleteExecutionRequest, opts ...grpc.CallOption) (*CompleteExecutionResponse, error)
+	// Сохраняет только exact writer BIND либо past quiescence fact. Terminal ACK
+	// не создаёт grant, RuntimeRevision, run transition или новую generation.
+	ObserveWorkspace(ctx context.Context, in *ObserveWorkspaceRequest, opts ...grpc.CallOption) (*ObserveWorkspaceResponse, error)
 	DelegateExecution(ctx context.Context, in *DelegateExecutionRequest, opts ...grpc.CallOption) (*DelegateExecutionResponse, error)
 	// Запускает опубликованный Workflow из exact active execution; actor/project
 	// и обязательную связь родителя назначает владелец, не caller payload.
@@ -12892,6 +12938,10 @@ type RuntimeWorkServiceClient interface {
 	CompleteIntegrationConnectionTest(ctx context.Context, in *CompleteIntegrationConnectionTestRequest, opts ...grpc.CallOption) (*CompleteIntegrationConnectionTestResponse, error)
 	ResolveIntegrationInvocation(ctx context.Context, in *ResolveIntegrationInvocationRequest, opts ...grpc.CallOption) (*ResolveIntegrationInvocationResponse, error)
 	ClaimIntegrationInvocations(ctx context.Context, in *ClaimIntegrationInvocationsRequest, opts ...grpc.CallOption) (*ClaimIntegrationInvocationsResponse, error)
+	// Отдельная очередь сохраняет короткий бюджет остальных adapters.
+	ClaimSSHComposeInvocations(ctx context.Context, in *ClaimSSHComposeInvocationsRequest, opts ...grpc.CallOption) (*ClaimSSHComposeInvocationsResponse, error)
+	// Owner повторно проверяет source/target/grants/secret и подписывает короткий permit.
+	RenewSSHComposeInvocation(ctx context.Context, in *RenewSSHComposeInvocationRequest, opts ...grpc.CallOption) (*RenewSSHComposeInvocationResponse, error)
 	GetIntegrationInvocation(ctx context.Context, in *GetIntegrationInvocationRequest, opts ...grpc.CallOption) (*GetIntegrationInvocationResponse, error)
 	CompleteIntegrationInvocation(ctx context.Context, in *CompleteIntegrationInvocationRequest, opts ...grpc.CallOption) (*CompleteIntegrationInvocationResponse, error)
 }
@@ -13083,6 +13133,16 @@ func (c *runtimeWorkServiceClient) CompleteExecution(ctx context.Context, in *Co
 	return out, nil
 }
 
+func (c *runtimeWorkServiceClient) ObserveWorkspace(ctx context.Context, in *ObserveWorkspaceRequest, opts ...grpc.CallOption) (*ObserveWorkspaceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ObserveWorkspaceResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_ObserveWorkspace_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *runtimeWorkServiceClient) DelegateExecution(ctx context.Context, in *DelegateExecutionRequest, opts ...grpc.CallOption) (*DelegateExecutionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DelegateExecutionResponse)
@@ -13263,6 +13323,26 @@ func (c *runtimeWorkServiceClient) ClaimIntegrationInvocations(ctx context.Conte
 	return out, nil
 }
 
+func (c *runtimeWorkServiceClient) ClaimSSHComposeInvocations(ctx context.Context, in *ClaimSSHComposeInvocationsRequest, opts ...grpc.CallOption) (*ClaimSSHComposeInvocationsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimSSHComposeInvocationsResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_ClaimSSHComposeInvocations_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) RenewSSHComposeInvocation(ctx context.Context, in *RenewSSHComposeInvocationRequest, opts ...grpc.CallOption) (*RenewSSHComposeInvocationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RenewSSHComposeInvocationResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_RenewSSHComposeInvocation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *runtimeWorkServiceClient) GetIntegrationInvocation(ctx context.Context, in *GetIntegrationInvocationRequest, opts ...grpc.CallOption) (*GetIntegrationInvocationResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetIntegrationInvocationResponse)
@@ -13310,6 +13390,9 @@ type RuntimeWorkServiceServer interface {
 	ReportExecutionProgress(context.Context, *ReportExecutionProgressRequest) (*ReportExecutionProgressResponse, error)
 	CommitProviderCredentialRefresh(context.Context, *CommitProviderCredentialRefreshRequest) (*CommitProviderCredentialRefreshResponse, error)
 	CompleteExecution(context.Context, *CompleteExecutionRequest) (*CompleteExecutionResponse, error)
+	// Сохраняет только exact writer BIND либо past quiescence fact. Terminal ACK
+	// не создаёт grant, RuntimeRevision, run transition или новую generation.
+	ObserveWorkspace(context.Context, *ObserveWorkspaceRequest) (*ObserveWorkspaceResponse, error)
 	DelegateExecution(context.Context, *DelegateExecutionRequest) (*DelegateExecutionResponse, error)
 	// Запускает опубликованный Workflow из exact active execution; actor/project
 	// и обязательную связь родителя назначает владелец, не caller payload.
@@ -13334,6 +13417,10 @@ type RuntimeWorkServiceServer interface {
 	CompleteIntegrationConnectionTest(context.Context, *CompleteIntegrationConnectionTestRequest) (*CompleteIntegrationConnectionTestResponse, error)
 	ResolveIntegrationInvocation(context.Context, *ResolveIntegrationInvocationRequest) (*ResolveIntegrationInvocationResponse, error)
 	ClaimIntegrationInvocations(context.Context, *ClaimIntegrationInvocationsRequest) (*ClaimIntegrationInvocationsResponse, error)
+	// Отдельная очередь сохраняет короткий бюджет остальных adapters.
+	ClaimSSHComposeInvocations(context.Context, *ClaimSSHComposeInvocationsRequest) (*ClaimSSHComposeInvocationsResponse, error)
+	// Owner повторно проверяет source/target/grants/secret и подписывает короткий permit.
+	RenewSSHComposeInvocation(context.Context, *RenewSSHComposeInvocationRequest) (*RenewSSHComposeInvocationResponse, error)
 	GetIntegrationInvocation(context.Context, *GetIntegrationInvocationRequest) (*GetIntegrationInvocationResponse, error)
 	CompleteIntegrationInvocation(context.Context, *CompleteIntegrationInvocationRequest) (*CompleteIntegrationInvocationResponse, error)
 	mustEmbedUnimplementedRuntimeWorkServiceServer()
@@ -13397,6 +13484,9 @@ func (UnimplementedRuntimeWorkServiceServer) CommitProviderCredentialRefresh(con
 func (UnimplementedRuntimeWorkServiceServer) CompleteExecution(context.Context, *CompleteExecutionRequest) (*CompleteExecutionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CompleteExecution not implemented")
 }
+func (UnimplementedRuntimeWorkServiceServer) ObserveWorkspace(context.Context, *ObserveWorkspaceRequest) (*ObserveWorkspaceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ObserveWorkspace not implemented")
+}
 func (UnimplementedRuntimeWorkServiceServer) DelegateExecution(context.Context, *DelegateExecutionRequest) (*DelegateExecutionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DelegateExecution not implemented")
 }
@@ -13450,6 +13540,12 @@ func (UnimplementedRuntimeWorkServiceServer) ResolveIntegrationInvocation(contex
 }
 func (UnimplementedRuntimeWorkServiceServer) ClaimIntegrationInvocations(context.Context, *ClaimIntegrationInvocationsRequest) (*ClaimIntegrationInvocationsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimIntegrationInvocations not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) ClaimSSHComposeInvocations(context.Context, *ClaimSSHComposeInvocationsRequest) (*ClaimSSHComposeInvocationsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimSSHComposeInvocations not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) RenewSSHComposeInvocation(context.Context, *RenewSSHComposeInvocationRequest) (*RenewSSHComposeInvocationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RenewSSHComposeInvocation not implemented")
 }
 func (UnimplementedRuntimeWorkServiceServer) GetIntegrationInvocation(context.Context, *GetIntegrationInvocationRequest) (*GetIntegrationInvocationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetIntegrationInvocation not implemented")
@@ -13773,6 +13869,24 @@ func _RuntimeWorkService_CompleteExecution_Handler(srv interface{}, ctx context.
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RuntimeWorkServiceServer).CompleteExecution(ctx, req.(*CompleteExecutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_ObserveWorkspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ObserveWorkspaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).ObserveWorkspace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_ObserveWorkspace_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).ObserveWorkspace(ctx, req.(*ObserveWorkspaceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -14101,6 +14215,42 @@ func _RuntimeWorkService_ClaimIntegrationInvocations_Handler(srv interface{}, ct
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RuntimeWorkService_ClaimSSHComposeInvocations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimSSHComposeInvocationsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).ClaimSSHComposeInvocations(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_ClaimSSHComposeInvocations_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).ClaimSSHComposeInvocations(ctx, req.(*ClaimSSHComposeInvocationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_RenewSSHComposeInvocation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenewSSHComposeInvocationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).RenewSSHComposeInvocation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_RenewSSHComposeInvocation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).RenewSSHComposeInvocation(ctx, req.(*RenewSSHComposeInvocationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _RuntimeWorkService_GetIntegrationInvocation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetIntegrationInvocationRequest)
 	if err := dec(in); err != nil {
@@ -14209,6 +14359,10 @@ var RuntimeWorkService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _RuntimeWorkService_CompleteExecution_Handler,
 		},
 		{
+			MethodName: "ObserveWorkspace",
+			Handler:    _RuntimeWorkService_ObserveWorkspace_Handler,
+		},
+		{
 			MethodName: "DelegateExecution",
 			Handler:    _RuntimeWorkService_DelegateExecution_Handler,
 		},
@@ -14279,6 +14433,14 @@ var RuntimeWorkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ClaimIntegrationInvocations",
 			Handler:    _RuntimeWorkService_ClaimIntegrationInvocations_Handler,
+		},
+		{
+			MethodName: "ClaimSSHComposeInvocations",
+			Handler:    _RuntimeWorkService_ClaimSSHComposeInvocations_Handler,
+		},
+		{
+			MethodName: "RenewSSHComposeInvocation",
+			Handler:    _RuntimeWorkService_RenewSSHComposeInvocation_Handler,
 		},
 		{
 			MethodName: "GetIntegrationInvocation",

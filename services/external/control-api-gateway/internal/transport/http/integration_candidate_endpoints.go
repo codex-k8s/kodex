@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/sshcompose"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 	"google.golang.org/protobuf/proto"
 )
@@ -291,8 +292,13 @@ func candidatePageView(v candidatePage, c *cp.IntegrationGrantCandidateContext, 
 			return nil, false
 		}
 		for _, i := range x.Items {
-			if i == nil || !fileTargetRef(i.ConnectionRef) || !validSearchText(i.Name, 1, 500) || !validSearchText(i.DefinitionKey, 1, 500) || !validSearchText(i.ProviderName, 0, 500) || (i.CredentialKind != "" && i.CredentialKind != "TOKEN" && i.CredentialKind != "PASSWORD") || (i.ProjectRef != "" && !fileTargetRef(i.ProjectRef)) || len(i.ResourceScope) > 8 {
+			if i == nil || !fileTargetRef(i.ConnectionRef) || !validSearchText(i.Name, 1, 500) || !validSearchText(i.DefinitionKey, 1, 500) || !validSearchText(i.ProviderName, 0, 500) || (i.CredentialKind != "" && i.CredentialKind != "TOKEN" && i.CredentialKind != "PASSWORD") || (i.ProjectRef != "" && !fileTargetRef(i.ProjectRef)) || len(i.ResourceScope) > 9 || i.DefinitionKey != "ssh-compose" && len(i.ResourceScope) > 8 {
 				return nil, false
+			}
+			if i.DefinitionKey == "ssh-compose" && len(i.ResourceScope) != 0 {
+				if _, err := sshcompose.TargetFromResourceScope(i.ResourceScope); err != nil {
+					return nil, false
+				}
 			}
 			if purpose == "GRANT" && len(i.ResourceScope) != 0 {
 				return nil, false

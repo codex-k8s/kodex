@@ -31,6 +31,7 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/libs/go/providerfinancewire"
+	"github.com/codex-k8s/kodex/libs/go/repositorybundle"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/runtime-controller/internal/workload"
 	"github.com/google/uuid"
@@ -346,6 +347,12 @@ func (server *Server) route(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 	switch parts[3] {
+	case "workspace":
+		if request.Method != http.MethodPost {
+			http.NotFound(writer, request)
+			return
+		}
+		server.observeWorkspace(writer, request, parts[2])
 	case "progress":
 		if request.Method != http.MethodPost {
 			http.NotFound(writer, request)
@@ -694,7 +701,7 @@ func (server *Server) complete(writer http.ResponseWriter, request *http.Request
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(request.Context()), server.config.RequestTimeout)
 	defer cancel()
-	usage := &controlplanev1.TokenUsage{TotalTokens: payload.Usage.TotalTokens, InputTokens: payload.Usage.InputTokens, CachedInputTokens: payload.Usage.CachedInputTokens, CacheWriteInputTokens: payload.Usage.CacheWriteInputTokens, OutputTokens: payload.Usage.OutputTokens, ReasoningOutputTokens: payload.Usage.ReasoningOutputTokens, ModelContextWindow: payload.Usage.ModelContextWindow}
+	usage := &controlplanev1.TokenUsage{Completeness: controlplanev1.UsageCompleteness(payload.Usage.Completeness), TotalTokens: payload.Usage.TotalTokens, InputTokens: payload.Usage.InputTokens, CachedInputTokens: payload.Usage.CachedInputTokens, CacheWriteInputTokens: payload.Usage.CacheWriteInputTokens, OutputTokens: payload.Usage.OutputTokens, ReasoningOutputTokens: payload.Usage.ReasoningOutputTokens, ModelContextWindow: payload.Usage.ModelContextWindow}
 	_, err := server.control.Runtime.CompleteExecution(ctx, &controlplanev1.CompleteExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, "complete")}, LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Success: payload.Success, ResultSummary: payload.ResultSummary, SafeErrorCode: payload.SafeErrorCode, Artifacts: artifacts, Usage: usage, CodexSessionId: payload.CodexSessionID, CodexArchiveRelativePath: payload.ArchiveRelativePath, CodexArchiveSha256: payload.ArchiveSHA256, CodexArchiveSizeBytes: payload.ArchiveSizeBytes})
 	if err != nil && status.Code(err) != codes.AlreadyExists {
 		server.logCompletionRejection(ctx, input, completionOwnerRPCStage, completionRPCRejectedReason, status.Code(err))
@@ -823,6 +830,9 @@ func tools(input runtimecontract.RunnerInput) []map[string]any {
 	if len(input.IntegrationGrants) != 0 {
 		result = append(result, integrationCatalogTool(), integrationTool())
 	}
+	if repositoryBundleAvailable(input) {
+		result = append(result, repositoryBundleTool())
+	}
 	result = append(result, managedMCPTools(input)...)
 	return result
 }
@@ -833,7 +843,7 @@ func tools(input runtimecontract.RunnerInput) []map[string]any {
 // к закреплённой grant-схеме, не выполняя интеграцию.
 func integrationTool() map[string]any {
 	return map[string]any{
-		"name": "invoke_integration", "description": "Invoke one exact grant from this RuntimeRevision. First read the compact get_integration_catalog index, then select its grant_ref to read the input schema. Copy that same grant_ref here with an input matching that schema. The server resolves and revalidates the pinned connection, capability, versions and authority.",
+		"name": "invoke_integration", "description": "Invoke one exact grant from this RuntimeRevision. First read the compact get_integration_catalog index, then select its grant_ref to read the input schema. Copy that same grant_ref here with an input matching that schema. The server resolves and revalidates the pinned connection, capability, versions and authority. A successful result may include receiptRef, the owner-issued immutable effect receipt locator for a workflow result declaration; invocationRef is a different locator. Neither grants authority and neither may be invented.",
 		"inputSchema": objectSchema([]string{"grant_ref", "input"}, map[string]any{
 			"grant_ref": opaqueRefSchema(),
 			"input":     map[string]any{"type": "object"},
@@ -1003,6 +1013,8 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		if err == nil {
 			result, err = server.workflowCatalog(request.Context(), input, params.Arguments)
 		}
+	case repositorybundle.ToolName:
+		result, err = server.prepareRepositoryBundle(request.Context(), input, params.Arguments, rpc.ID)
 	case "invoke_integration":
 		result, err = server.invoke(request.Context(), input, params.Arguments, rpc.ID)
 	case runtimecontract.Context7ResolveTool, runtimecontract.Context7QueryTool:
@@ -1343,7 +1355,7 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 		}
 		before, beforeOK := operation["before"].(map[string]any)
 		after, afterOK := operation["after"].(map[string]any)
-		if kind == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" || projectAssistantLocatorOperation(kind, parameters) {
+		if kind == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || (kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" || kind == "PREPARE_AGENT_RUNTIME_CONFIGURATION") || projectAssistantLocatorOperation(kind, parameters) {
 			before, beforeOK = map[string]any{}, true
 			after, afterOK = parameters, true
 		}
@@ -1690,6 +1702,7 @@ func assistantOperationTitle(kind string, parameters map[string]any, entityName 
 		"CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE":  "Создать рецепт образа Kodex",
 		"UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE":  "Изменить рецепт образа Kodex",
 		"PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":    "Подготовить настройку модели помощника",
+		"PREPARE_AGENT_RUNTIME_CONFIGURATION":        "Подготовить настройку модели сотрудника",
 		"CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT":  "Изменить права интеграции Kodex",
 		"CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT": "Изменить права интеграции помощника проекта",
 	}
@@ -1735,7 +1748,7 @@ func assistantProjectUpdateSummary(parameters map[string]any, projectName string
 // выполнения и не обход owner version/approval gate.
 func assistantServerHydratedOperation(kind string) bool {
 	switch kind {
-	case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT", "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION":
+	case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", "PREPARE_AGENT_RUNTIME_CONFIGURATION", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT", "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION":
 		return true
 	case "CREATE_PROJECT", "CREATE_PROJECT_FILE", "CREATE_PROJECT_FILE_REVISION", "CREATE_AGENT", "CREATE_PROJECT_ASSISTANT", "CREATE_WORKFLOW", "CREATE_INTEGRATION_CONNECTION", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE", "UPDATE_PROJECT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "PUBLISH_INTEGRATION_DEFINITION", "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS":
 		return true
@@ -1831,13 +1844,17 @@ func assistantConfigurationParametersAllowed(input runtimecontract.RunnerInput, 
 		}
 		return onlyKeys(parameters, "systemAssistantRef", "recipeRef", "name", "environmentKey", "dockerfile") &&
 			assistantRequiredStrings(parameters, "recipeRef") && assistantOptionalStrings(parameters, "name", "environmentKey", "dockerfile") && len(parameters) > 2
-	case "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":
+	case "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", "PREPARE_AGENT_RUNTIME_CONFIGURATION":
 		if !input.IsAssistant() || input.AgentRef == "" || parameters == nil ||
 			!onlyKeys(parameters, "agentRef", "runtimeProfileRef", "model", "reasoningEffort", "webSearchMode", "providerPolicyMode", "providerAccounts") ||
 			!assistantRequiredStrings(parameters, "agentRef", "runtimeProfileRef", "model", "providerPolicyMode") {
 			return false
 		}
-		if input.AssistantScope == runtimecontract.AssistantScopeProject && parameters["agentRef"] != input.AgentRef {
+		if kind == "PREPARE_AGENT_RUNTIME_CONFIGURATION" {
+			if input.AssistantScope != runtimecontract.AssistantScopeProject || input.ProjectRef == "" || parameters["agentRef"] == input.AgentRef {
+				return false
+			}
+		} else if input.AssistantScope == runtimecontract.AssistantScopeProject && parameters["agentRef"] != input.AgentRef {
 			return false
 		}
 		effort, ok := parameters["reasoningEffort"].(string)
@@ -2041,7 +2058,7 @@ func assistantServerAction(kind string) string {
 	if kind == "CREATE_PROJECT_FILE_REVISION" {
 		return "UPDATE"
 	}
-	if kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" || kind == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" || kind == "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT" {
+	if kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || (kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" || kind == "PREPARE_AGENT_RUNTIME_CONFIGURATION") || kind == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" || kind == "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT" {
 		return "UPDATE"
 	}
 	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" || kind == "UPDATE_ROLE_IMAGE_RECIPE" || kind == "PUBLISH_INTEGRATION_DEFINITION" || kind == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" {
@@ -2109,7 +2126,7 @@ func assistantServerTarget(kind string, parameters map[string]any, context *runt
 		}
 		return map[string]any{"kind": "PROJECT_ASSISTANT", "name": ref}
 	}
-	if kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
+	if kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" || kind == "PREPARE_AGENT_RUNTIME_CONFIGURATION" {
 		ref, _ := parameters["agentRef"].(string)
 		if strings.TrimSpace(ref) == "" {
 			return nil
@@ -2437,6 +2454,10 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 		return map[string]any{"workflow_ref": workflow}, "platform.run.launch", "", workflowLaunchAvailable(input)
 	case "get_workflow_catalog":
 		return workflowCatalogSafeParameters(arguments), "platform.run.launch", "", workflowLaunchAvailable(input)
+	case repositorybundle.ToolName:
+		if grant, ok := repositoryBundleGrant(input, arguments); ok {
+			return map[string]any{"connection_ref": grant.ConnectionRef, "capability_key": grant.CapabilityKey}, grant.CapabilityKey, grant.Ref, true
+		}
 	case "invoke_integration":
 		if grant, ok := integrationGrantForCall(input, arguments); ok {
 			return map[string]any{"connection_ref": grant.ConnectionRef, "capability_key": grant.CapabilityKey}, grant.CapabilityKey, grant.Ref, true
@@ -2466,18 +2487,33 @@ type integrationToolResult struct {
 	ErrorCode             string `json:"error_code,omitempty"`
 	OwnerDecisionRequired bool   `json:"owner_decision_required,omitempty"`
 	InvocationRef         string `json:"invocationRef"`
+	ReceiptRef            string `json:"receiptRef,omitempty"`
+	AdmissionBlocked      bool   `json:"admissionBlocked,omitempty"`
+	AdmissionBlockReason  string `json:"admissionBlockReason,omitempty"`
 	state                 string
 	inputSHA256           string
 }
 
 // MarshalJSON emits result on OK or error_code otherwise, plus invocationRef
-// and optional owner-decision flag. Private state/input digest remain absent;
-// serialization itself does not validate or authorize an invocation.
+// and optional owner receipt/decision fields. Private state/input digest remain absent;
+// receipt shape is checked without authorizing an invocation.
 // MarshalJSON выдаёт result при OK либо error_code, invocationRef и необязательный
-// owner-decision flag. Private state/input digest не выводятся;
-// сериализация не проверяет и не авторизует invocation.
+// поля owner receipt/decision. Private state/input digest не выводятся;
+// receipt shape проверяется без предоставления invocation authority.
 func (r integrationToolResult) MarshalJSON() ([]byte, error) {
+	if !validIntegrationAdmissionMarker(r.AdmissionBlocked, r.AdmissionBlockReason, r.state) || (r.AdmissionBlocked && r.OK) {
+		return nil, errIntegrationAdmissionMarkerInvalid
+	}
 	value := map[string]any{"ok": r.OK, "invocationRef": r.InvocationRef}
+	if r.AdmissionBlocked {
+		value["admissionBlocked"], value["admissionBlockReason"] = true, r.AdmissionBlockReason
+	}
+	if r.ReceiptRef != "" {
+		if !r.OK || !safeEffectReceiptRef(r.ReceiptRef) {
+			return nil, errIntegrationReceiptReferenceInvalid
+		}
+		value["receiptRef"] = r.ReceiptRef
+	}
 	if r.OK {
 		value["result"] = r.Result
 	} else {
@@ -2487,6 +2523,16 @@ func (r integrationToolResult) MarshalJSON() ([]byte, error) {
 		value["owner_decision_required"] = true
 	}
 	return json.Marshal(value)
+}
+
+// errIntegrationReceiptReferenceInvalid reports malformed owner metadata without reflecting its bytes.
+// errIntegrationReceiptReferenceInvalid сообщает о повреждённых owner metadata без отражения их bytes.
+var errIntegrationReceiptReferenceInvalid = errors.New("integration receipt reference is invalid")
+
+// safeEffectReceiptRef matches the existing workflow erc_ locator shape without granting evidence access.
+// safeEffectReceiptRef проверяет existing workflow erc_ shape, не выдавая доступа к доказательствам.
+func safeEffectReceiptRef(value string) bool {
+	return len(value) >= 12 && len(value) <= 96 && strings.HasPrefix(value, "erc_") && safeInvocationRef(value[4:])
 }
 
 // safeInvocationRef recognizes an eight-to-128-byte ASCII alphanumeric,
@@ -2545,6 +2591,14 @@ func safeToolCallResult(tool string, result any, toolErr error) string {
 		}{1, value.SourceSHA256, value.ProjectionSHA256, len(value.Messages), value.Truncated})
 		return string(raw)
 	}
+	if tool == repositorybundle.ToolName {
+		value, ok := result.(repositoryBundleToolResult)
+		if !ok || value.ProposalRef == "" || value.GateRef == "" || !runtimecontract.ValidSHA256Text(value.ManifestSHA256) {
+			return "TOOL_UNAVAILABLE"
+		}
+		raw, _ := json.Marshal(value)
+		return string(raw)
+	}
 	if tool == "invoke_integration" || tool == runtimecontract.Context7ResolveTool || tool == runtimecontract.Context7QueryTool {
 		value, ok := result.(integrationToolResult)
 		if !ok || !safeInvocationRef(value.InvocationRef) || !runtimecontract.ValidSHA256Text(value.inputSHA256) {
@@ -2552,15 +2606,24 @@ func safeToolCallResult(tool string, result any, toolErr error) string {
 		}
 		switch value.state {
 		case "SUCCEEDED", "FAILED", "REJECTED", "CANCELLED", "WAITING_APPROVAL", "UNKNOWN_OUTCOME":
+		case "READY":
+			if !value.AdmissionBlocked {
+				return "TOOL_UNAVAILABLE"
+			}
 		default:
 			return "TOOL_UNAVAILABLE"
 		}
+		if !validIntegrationAdmissionMarker(value.AdmissionBlocked, value.AdmissionBlockReason, value.state) || (value.AdmissionBlocked && value.OK) {
+			return "TOOL_UNAVAILABLE"
+		}
 		raw, _ := json.Marshal(struct {
-			Version       int    `json:"version"`
-			InvocationRef string `json:"invocationRef"`
-			State         string `json:"state"`
-			InputSHA256   string `json:"inputSHA256"`
-		}{1, value.InvocationRef, value.state, value.inputSHA256})
+			Version              int    `json:"version"`
+			InvocationRef        string `json:"invocationRef"`
+			State                string `json:"state"`
+			InputSHA256          string `json:"inputSHA256"`
+			AdmissionBlocked     bool   `json:"admissionBlocked,omitempty"`
+			AdmissionBlockReason string `json:"admissionBlockReason,omitempty"`
+		}{1, value.InvocationRef, value.state, value.inputSHA256, value.AdmissionBlocked, value.AdmissionBlockReason})
 		return string(raw)
 	}
 	values, _ := result.(map[string]any)
@@ -2626,7 +2689,7 @@ func (server *Server) delegate(ctx context.Context, input runtimecontract.Runner
 // и самостоятельного повторения внешнего effect.
 func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {
 	grant, allowed := integrationGrantForCall(input, arguments)
-	if !allowed {
+	if !allowed || grant.Operation == repositorybundle.Operation || grant.CapabilityKey == repositorybundle.Operation {
 		return nil, &integrationCallInputError{reason: "grant_selection"}
 	}
 	bounded, ok := arguments["input"].(map[string]any)
@@ -2673,9 +2736,21 @@ func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerIn
 		if readErr != nil {
 			return nil, status.Error(status.Code(readErr), "read integration invocation")
 		}
+		blocked, reason, markerErr := ownerIntegrationAdmissionMarker(state)
+		if markerErr != nil {
+			return nil, markerErr
+		}
+		if blocked {
+			return integrationToolResult{ErrorCode: state.GetSafeErrorCode(), OwnerDecisionRequired: true, InvocationRef: resolved.GetInvocationRef(),
+				AdmissionBlocked: true, AdmissionBlockReason: reason, state: state.GetState(), inputSHA256: hex.EncodeToString(inputDigest[:])}, nil
+		}
 		switch state.GetState() {
 		case "SUCCEEDED":
-			return integrationToolResult{OK: true, Result: state.GetResultSummary(), InvocationRef: resolved.GetInvocationRef(), state: state.GetState(), inputSHA256: hex.EncodeToString(inputDigest[:])}, nil
+			receiptRef := state.GetEffectReceiptRef()
+			if receiptRef != "" && !safeEffectReceiptRef(receiptRef) {
+				return nil, errIntegrationReceiptReferenceInvalid
+			}
+			return integrationToolResult{OK: true, Result: state.GetResultSummary(), InvocationRef: resolved.GetInvocationRef(), ReceiptRef: receiptRef, state: state.GetState(), inputSHA256: hex.EncodeToString(inputDigest[:])}, nil
 		case "FAILED", "REJECTED", "CANCELLED":
 			return integrationToolResult{ErrorCode: state.GetSafeErrorCode(), InvocationRef: resolved.GetInvocationRef(), state: state.GetState(), inputSHA256: hex.EncodeToString(inputDigest[:])}, nil
 		case "WAITING_APPROVAL":

@@ -14,6 +14,7 @@ export async function checkGrantCandidates(
   page: Page,
   projectRef: string,
   installSnapshot?: SyntheticSnapshotInstaller,
+  invalidateConnections?: (connections: IntegrationConnection[]) => void,
 ): Promise<void> {
   let connection: IntegrationConnection = {
     ref: "connection_candidates",
@@ -252,6 +253,34 @@ export async function checkGrantCandidates(
   await page.getByRole("option", { name: /Получатель разрешения/ }).click();
   await panel.getByRole("button", { name: "Возможность", exact: true }).click();
   await page.getByRole("option", { name: /Читать репозиторий/ }).click();
+  if (invalidateConnections) {
+    // Второе подключение подтверждает обработку snapshot настоящим UI.
+    // Выбранное подключение передаётся новым объектом с прежними точными pins.
+    invalidateConnections([
+      structuredClone(connection),
+      {
+        ...structuredClone(connection),
+        ref: "connection_refresh_proof",
+        name: "Обновление каталога",
+      },
+    ]);
+    await expect(
+      page.getByRole("tab", { name: /^Подключения\s*2$/ }),
+    ).toBeVisible();
+    await expect(
+      panel.getByRole("button", { name: "Проект", exact: true }),
+    ).toContainText("Проект для разрешения");
+    await expect(
+      panel.getByRole("button", { name: "Получатель разрешения", exact: true }),
+    ).toContainText("Получатель разрешения");
+    await expect(
+      panel.getByRole("button", { name: "Возможность", exact: true }),
+    ).toContainText("Читать репозиторий");
+    await expect(
+      panel.getByRole("button", { name: "Выдать разрешение", exact: true }),
+    ).toBeEnabled();
+    expect(grants).toBe(0);
+  }
   await panel
     .getByRole("button", { name: "Выдать разрешение", exact: true })
     .click();

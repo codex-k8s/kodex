@@ -414,6 +414,9 @@ func (service *Service) PrepareRuntimeSecretOperation(ctx context.Context, p val
 		Kind, ProjectRef, SecretRef, Name, Description, ValueType, ExpectedContentSHA256 string
 		ExpectedVersion                                                                  *int64
 	}{input.Kind, input.ProjectRef, input.SecretRef, input.Name, input.Description, input.ValueType, input.ExpectedContentSHA256, input.Mutation.ExpectedVersion})
+	if input.Purpose == "SSH_COMPOSE" {
+		input.Mutation.IntentDigest = digest(struct{ Original, Purpose string }{input.Mutation.IntentDigest, input.Purpose})
+	}
 	return service.repository.PrepareRuntimeSecretOperation(ctx, p, input)
 }
 
@@ -1473,6 +1476,13 @@ func (service *Service) SimulateAccess(ctx context.Context, p value.Principal, i
 // Execute rejects a workflow-child launch from the wrong workload/permission before principal resolution, then replaces the command principal with its authoritative resolution and enters executeResolved. Payload identifiers are not resolved as the caller's identity here.
 // Execute отклоняет дочерний запуск процесса с неверными workload или полномочием до разрешения субъекта, затем заменяет субъекта команды его авторитетным разрешением и вызывает executeResolved. Идентификаторы payload здесь не разрешаются как идентичность вызывающего.
 func (service *Service) Execute(ctx context.Context, input command.Command) (command.Result, error) {
+	if operation := command.WorkspaceVolumeCommandPermission(input.Kind); operation != "" &&
+		(input.Principal.CallerWorkload != "session-archive" || input.Principal.Permission != operation) {
+		return command.Result{}, errs.ErrForbidden
+	}
+	if input.Kind == command.ObserveWorkspace && (input.Principal.CallerWorkload != "runtime-controller" || input.Principal.Permission != runtimecontract.WorkspaceObservationOperation) {
+		return command.Result{}, errs.ErrForbidden
+	}
 	if input.Kind == command.LaunchWorkflowExecution && (input.Principal.CallerWorkload != "runtime-controller" || input.Principal.Permission != "platform.runtime.execution.workflow.launch") {
 		return command.Result{}, errs.ErrForbidden
 	}
@@ -1762,7 +1772,7 @@ func knownCommand(kind command.Kind) bool {
 		command.CreateAgent, command.UpdateAgent, command.SetAgentEnabled, command.ArchiveAgent,
 		command.CreateAssistantRoleImageRecipe, command.UpdateAssistantRoleImageRecipe,
 		command.CreateSystemAssistantRoleImageRecipe, command.UpdateSystemAssistantRoleImageRecipe,
-		command.PublishAssistantRuntimeConfig,
+		command.PublishAssistantRuntimeConfig, command.PublishPreparedAgentRuntimeConfig,
 		command.SetAgentAvatar, command.RemoveAgentAvatar,
 		command.PrepareInstructionsImpact, command.PreparePromptTemplateImpact,
 		command.CreateInstructions, command.ValidateInstructions, command.PublishInstructions,
@@ -1789,6 +1799,8 @@ func knownCommand(kind command.Kind) bool {
 		command.UpdateAssistantInstructions, command.RecoverAssistant, command.ClaimExecution,
 		command.RenewExecution, command.ReportExecutionProgress, command.CommitProviderCredentialRefresh,
 		command.CompleteExecution,
+		command.ObserveWorkspace,
+		command.ClaimWorkspaceVolumeTasks,
 		command.DelegateExecution, command.LaunchWorkflowExecution, command.ProposeAssistantPlan, command.ProposeAssistantMetadata,
 		command.ProposeRunMetadata, command.RecordRunToolCall,
 		command.CompleteSessionSnapshot, command.CompleteSessionRestore,

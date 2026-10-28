@@ -4,8 +4,8 @@ title: Надежная доставка доменных событий в Go
 type: guide
 status: approved
 owner: architect
-version: 1.4.0
-updated: 2026-08-02
+version: 1.4.1
+updated: 2026-10-25
 ---
 
 # Надежная доставка доменных событий в Go
@@ -36,6 +36,14 @@ updated: 2026-08-02
 Exactly-once между PostgreSQL и внешней шиной не заявляется. Фактический
 контракт - at least once delivery и exactly-once durable effect на стороне
 consumer при сохраненном inbox horizon.
+
+Поиск неопубликованного predecessor должен иметь индекс для точного
+блокирующего предиката, включая terminal `DEAD_LETTER`; полный индекс ключа
+с последующим фильтром может перечитывать всю опубликованную историю для
+каждого кандидата. Claim имеет отдельный bounded database context, а проверка
+с большой историей подтверждает продвижение и сохранение ordered blocking.
+Ошибка или неизвестный commit claim не разрешают publish частичного результата:
+восстановление идёт через прежний lease expiry, без автоматического skip.
 
 ## Общий envelope
 

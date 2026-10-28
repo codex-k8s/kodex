@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 // integrationResultClient records synthetic resolve/read/projection calls, consumes
@@ -28,11 +29,12 @@ import (
 // transport не аутентифицируется и approval decisions не сохраняются.
 type integrationResultClient struct {
 	controlplanev1.RuntimeWorkServiceClient
-	state, invocation string
-	resolves          []*controlplanev1.ResolveIntegrationInvocationRequest
-	reads             []string
-	projection        *controlplanev1.RecordRunToolCallRequest
-	resolveErrors     []error
+	state, invocation, receipt string
+	resolves                   []*controlplanev1.ResolveIntegrationInvocationRequest
+	reads                      []string
+	projection                 *controlplanev1.RecordRunToolCallRequest
+	resolveErrors              []error
+	admissionResponse          *controlplanev1.GetIntegrationInvocationResponse
 }
 
 // ResolveIntegrationInvocation records the original request pointer, consumes one
@@ -59,7 +61,10 @@ func (c *integrationResultClient) ResolveIntegrationInvocation(_ context.Context
 // и проверки владения invocation.
 func (c *integrationResultClient) GetIntegrationInvocation(_ context.Context, r *controlplanev1.GetIntegrationInvocationRequest, _ ...grpc.CallOption) (*controlplanev1.GetIntegrationInvocationResponse, error) {
 	c.reads = append(c.reads, r.InvocationRef)
-	return &controlplanev1.GetIntegrationInvocationResponse{State: c.state, ResultSummary: "private provider result", SafeErrorCode: "INTEGRATION_REJECTED_BY_OWNER"}, nil
+	if c.admissionResponse != nil {
+		return proto.Clone(c.admissionResponse).(*controlplanev1.GetIntegrationInvocationResponse), nil
+	}
+	return &controlplanev1.GetIntegrationInvocationResponse{State: c.state, ResultSummary: "private provider result", EffectReceiptRef: c.receipt, SafeErrorCode: "INTEGRATION_REJECTED_BY_OWNER"}, nil
 }
 
 // TestIntegrationResolveRetriesSameIntentOnce injects one Unavailable and verifies

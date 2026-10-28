@@ -7,6 +7,7 @@ resources:
   - service.yaml
   - serviceaccounts-rbac.yaml
   - runtime-materialization-admission.yaml
+  - runtime-workspace-finalizer-admission.yaml
   - networkpolicy.yaml
   - poddisruptionbudget.yaml
   - servicemonitor.yaml

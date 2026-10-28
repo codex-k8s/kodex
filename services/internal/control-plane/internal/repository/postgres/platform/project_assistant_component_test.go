@@ -77,17 +77,8 @@ var queryProjectAssistantPurgeReadback string
 //go:embed testdata/sql/project_assistant_archived_fixture.sql
 var queryProjectAssistantArchivedFixture string
 
-// TestProjectAssistantProfilesComponent checks isolated immutable project profiles/conversations,
-// disabled/archived assignment, stale-image admission, exact runtime/financial pins, scoped
-// discovery and human-applied configuration plans. Its fixed FK-graph purge preserves foreign data
-// after a synthetic object-cleanup receipt. Disposable PostgreSQL, synthetic credentials/images
-// and an in-memory store do not prove real provider, Pod or object cleanup effects.
-// TestProjectAssistantProfilesComponent проверяет изолированные неизменные профили и беседы
-// проектов, отключённое и архивированное назначение, допуск при устаревшем образе, точные runtime
-// и финансовые привязки, поиск заданной области и планы настройки, применённые владельцем. Очистка
-// по закреплённому FK-графу сохраняет чужие данные после искусственной квитанции очистки объектов.
-// Одноразовый PostgreSQL, искусственные credentials и образы и in-memory store не доказывают
-// реальные эффекты провайдера, Pod либо очистки объектов.
+// TestProjectAssistantProfilesComponent verifies assistant ownership and deletion against the exact current migration graph in an isolated database.
+// TestProjectAssistantProfilesComponent проверяет владение помощниками и удаление по точному графу текущих миграций в изолированной БД.
 func TestProjectAssistantProfilesComponent(t *testing.T) {
 	dsn := isolatedAssistantComponentDSN(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
@@ -97,16 +88,16 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
-	var graphNodes, graphEdges int
-	var graphNodeDigest, graphEdgeDigest string
-	if err := pool.QueryRow(ctx, queryProjectAssistantPurgeGraph).Scan(&graphNodes, &graphNodeDigest, &graphEdges, &graphEdgeDigest); err != nil {
+	var graphNodes, graphEdges, serverEdges int
+	var graphNodeDigest, graphEdgeDigest, serverDigest string
+	if err := pool.QueryRow(ctx, queryProjectAssistantPurgeGraph).Scan(&graphNodes, &graphNodeDigest, &graphEdges, &graphEdgeDigest, &serverEdges, &serverDigest); err != nil {
 		t.Fatal("read project purge graph")
 	}
 	t.Logf("project purge graph: nodes=%d digest=%s edges=%d digest=%s", graphNodes, graphNodeDigest, graphEdges, graphEdgeDigest)
-	// Точный FK-граф после immutable revisions и prepared content ledger:
-	// owner closure включает revision, ledger и его immutable plan bindings.
+	// Точный FK-граф схемы011 согласован с отдельным server-workflow postcondition:
+	// сохраняет прежний284-граф и добавляет две exact owner-rework FK; полный shape проверяет shipped postcondition.
 	// Подмена состава графа по-прежнему закрыто отклоняется.
-	if graphNodes != 104 || graphNodeDigest != "5cbc6bd6bb4a8508ffd75ed4b1dd6189" || graphEdges != 276 || graphEdgeDigest != "75343e68e299c44be699718099c79527" {
+	if graphNodes != 105 || graphNodeDigest != "f51a0de25bd942a250997775617eeaee" || graphEdges != 286 || serverEdges != 284 || serverDigest != "6bf6ad76d8c7ae66e07f75ecf719fdd6" {
 		t.Fatal("project assistant purge graph changed")
 	}
 	repository, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
@@ -367,6 +358,9 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 	if err != nil || len(results) != 0 {
 		t.Fatalf("project assistant search escaped project scope: results=%#v err=%v", results, err)
 	}
+	t.Run("ordinary employee runtime configuration uses exact project", func(t *testing.T) {
+		testPreparedAgentRuntimeConfigurationPipeline(t, ctx, repository, service, owner, worker, searchReader, lease, secondProject.Ref)
+	})
 	t.Run("project helper model configuration and safe discovery", func(t *testing.T) {
 		testAssistantConfigurationPipeline(t, ctx, repository, service, owner, worker, searchReader, lease, "PROJECT")
 	})

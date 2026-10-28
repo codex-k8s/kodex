@@ -63,6 +63,12 @@ export async function checkFileSelection(
     nextActions: ["DELETE", "BIND"],
   };
   let impactCalls = 0;
+  let exactReads = 0;
+  await page.route(`**/api/v1/artifacts/${artifact.ref}`, async (route) => {
+    expect(route.request().method()).toBe("GET");
+    exactReads += 1;
+    await route.fulfill({ json: artifact });
+  });
   await page.route(
     `**/api/v1/artifacts/${artifact.ref}/revisions?**`,
     async (route) => {
@@ -315,6 +321,7 @@ export async function checkFileSelection(
     .locator(".file-details__bindings")
     .getByRole("checkbox", { name: agent.name });
   await expect(binding).toBeChecked();
+  expect(exactReads).toBe(1);
   await expect(binding).toBeEnabled();
   await page
     .locator(".file-details__bindings .binding-targets__rows")

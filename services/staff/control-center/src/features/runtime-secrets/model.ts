@@ -23,6 +23,7 @@ export type RuntimeSecretState = RuntimeSecret["state"];
 export type RuntimeSecretAction = "ROTATE" | "REVOKE" | "REVEAL";
 
 export interface RuntimeSecretDraftSuggestion {
+  purpose?: "APPLICATION" | "SSH_COMPOSE";
   name: string;
   description: string;
   valueType: RuntimeSecretValueType;
@@ -32,16 +33,21 @@ export interface RuntimeSecretDraftSuggestion {
 const mask = "••••••";
 
 export function maskedSecretHint(secret: RuntimeSecret): string {
+  if (secret.purpose === "SSH_COMPOSE") return mask;
   const prefix = (secret.displayHint?.prefix ?? "").slice(0, 6);
   const suffix = (secret.displayHint?.suffix ?? "").slice(-6);
   return `${prefix}${mask}${suffix}`;
 }
 
 export function canRuntimeSecretAction(
-  secret: Pick<RuntimeSecret, "nextActions" | "state">,
+  secret: Pick<RuntimeSecret, "nextActions" | "state" | "purpose">,
   action: RuntimeSecretAction,
 ): boolean {
-  return secret.state === "ACTIVE" && secret.nextActions.includes(action);
+  return (
+    secret.state === "ACTIVE" &&
+    !(action === "REVEAL" && secret.purpose === "SSH_COMPOSE") &&
+    secret.nextActions.includes(action)
+  );
 }
 
 export function validateSecretValue(
@@ -109,6 +115,8 @@ export function normalizeSecretPage(value: unknown): RuntimeSecretPage {
       typeof item.description !== "string" ||
       !["STRING", "JSON", "BINARY"].includes(item.valueType) ||
       !["ACTIVE", "REVOKED"].includes(item.state) ||
+      (item.purpose !== undefined &&
+        !["APPLICATION", "SSH_COMPOSE"].includes(item.purpose)) ||
       !Array.isArray(item.nextActions) ||
       !item.nextActions.every((action) => typeof action === "string") ||
       typeof item.createdAt !== "string" ||
@@ -137,11 +145,14 @@ export function normalizeSecretPage(value: unknown): RuntimeSecretPage {
       description: item.description,
       valueType: item.valueType,
       state: item.state,
+      ...(item.purpose ? { purpose: item.purpose } : {}),
       currentRevision: item.currentRevision,
-      nextActions: [...item.nextActions],
+      nextActions: item.nextActions.filter(
+        (action) => !(item.purpose === "SSH_COMPOSE" && action === "REVEAL"),
+      ),
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
-      ...(item.displayHint
+      ...(item.displayHint && item.purpose !== "SSH_COMPOSE"
         ? {
             displayHint: {
               prefix: item.displayHint.prefix,

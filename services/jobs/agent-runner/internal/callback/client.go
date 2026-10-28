@@ -11,12 +11,14 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -115,8 +117,12 @@ func (client *Client) PublishedMessage(ctx context.Context, input model.Input, m
 		runtimecontract.RunnerProgressRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Message: &message})
 }
 
-// Complete validates the terminal payload and exact revision/attempt, then retries delivery for up to sixty seconds independently of the caller's cancellation, retaining context values.
-// Complete проверяет конечный пакет и точные ревизию/попытку, затем повторяет доставку до шестидесяти секунд независимо от отмены вызывающего, сохраняя значения контекста.
+// Complete validates terminal provenance, normalizes only the exact interrupted
+// wait diagnostic, then freezes one delivery body for bounded retries independent
+// of caller cancellation. Pod state cannot change the accepted completion intent.
+// Complete проверяет provenance завершения, нормализует только exact diagnostic
+// прерванного ожидания и фиксирует одно тело для ограниченных повторов независимо
+// от отмены caller. Состояние Pod не меняет принятый intent завершения.
 func (client *Client) Complete(ctx context.Context, input model.Input, payload runtimecontract.RunnerCompletionRequest) error {
 	if err := payload.Validate(); err != nil {
 		return errors.New("validate runtime completion: " + err.Error())
@@ -124,6 +130,7 @@ func (client *Client) Complete(ctx context.Context, input model.Input, payload r
 	if payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest || payload.Attempt != input.Attempt {
 		return errors.New("validate runtime completion: provenance does not match RuntimeRevision")
 	}
+	payload = interruptedCompletion(input, payload)
 	delivery, cancel := context.WithTimeout(context.WithoutCancel(ctx), callbackDeliveryTimeout)
 	defer cancel()
 	return client.postRetriable(delivery, input, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/complete", payload)
@@ -166,22 +173,39 @@ func (client *Client) WriteArtifact(ctx context.Context, input model.Input, arti
 	request.Header.Set("Accept", artifact.MediaType)
 	response, err := client.files.Do(request)
 	if err != nil {
-		return errors.New("runtime artifact callback is unavailable")
+		return runtimecontract.InitializationError("ARTIFACT_TRANSFER", artifactTransferReason(err), err)
 	}
 	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK || response.Header.Get("Content-Type") != artifact.MediaType ||
-		response.Header.Get("X-Kodex-Artifact-Digest") != artifact.Digest || response.ContentLength != artifact.SizeBytes {
+	if response.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 16<<10))
-		return errors.New("runtime artifact callback rejected request")
+		reason := "UNKNOWN"
+		switch response.StatusCode {
+		case http.StatusUnauthorized:
+			reason = "AUTHENTICATION_REJECTED"
+		case http.StatusForbidden:
+			reason = "AUTHORITY_REJECTED"
+		case http.StatusNotFound:
+			reason = "SOURCE_UNAVAILABLE"
+		case http.StatusRequestTimeout, http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+			reason = "UPSTREAM_UNAVAILABLE"
+		}
+		return runtimecontract.InitializationError("ARTIFACT_TRANSFER", reason, errors.New("runtime artifact callback rejected request"))
+	}
+	if response.Header.Get("Content-Type") != artifact.MediaType || response.Header.Get("X-Kodex-Artifact-Digest") != artifact.Digest || response.ContentLength != artifact.SizeBytes {
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 16<<10))
+		return runtimecontract.InitializationError("ARTIFACT_TRANSFER", "PIN_MISMATCH", errors.New("runtime artifact response metadata is invalid"))
 	}
 	digest := sha256.New()
 	written, err := io.Copy(io.MultiWriter(destination, digest), io.LimitReader(response.Body, runtimecontract.MaximumInputArtifactBytes+1))
-	if err != nil || written > runtimecontract.MaximumInputArtifactBytes || written != artifact.SizeBytes {
-		return errors.New("runtime artifact response is invalid")
+	if err != nil {
+		return runtimecontract.InitializationError("ARTIFACT_TRANSFER", artifactTransferReason(err), err)
+	}
+	if written > runtimecontract.MaximumInputArtifactBytes || written != artifact.SizeBytes {
+		return runtimecontract.InitializationError("ARTIFACT_TRANSFER", "PIN_MISMATCH", errors.New("runtime artifact response is invalid"))
 	}
 	actualDigest := "sha256:" + hex.EncodeToString(digest.Sum(nil))
 	if subtle.ConstantTimeCompare([]byte(actualDigest), []byte(artifact.Digest)) != 1 {
-		return errors.New("runtime artifact digest is invalid")
+		return runtimecontract.InitializationError("ARTIFACT_TRANSFER", "CONTENT_DIGEST_MISMATCH", errors.New("runtime artifact digest is invalid"))
 	}
 	return nil
 }
@@ -391,4 +415,29 @@ func (client *Client) FinancialObservation(ctx context.Context, input model.Inpu
 		return nil
 	}
 	return err
+}
+
+// artifactTransferReason preserves only observed typed cancellation/IO classes, never error text.
+// artifactTransferReason сохраняет лишь наблюдаемые typed cancel/IO classes, не error text.
+func artifactTransferReason(err error) string {
+	switch {
+	case errors.Is(err, context.Canceled):
+		return "CONTEXT_CANCELLED"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "DEADLINE_EXCEEDED"
+	case errors.Is(err, syscall.EROFS):
+		return "READ_ONLY"
+	case errors.Is(err, syscall.ENOSPC), errors.Is(err, syscall.EDQUOT):
+		return "QUOTA_EXCEEDED"
+	}
+	var pathError *os.PathError
+	if errors.As(err, &pathError) {
+		return "FILESYSTEM_IO_FAILED"
+	}
+	var operation *net.OpError
+	var request *url.Error
+	if errors.As(err, &operation) || errors.As(err, &request) {
+		return "TRANSPORT_UNAVAILABLE"
+	}
+	return "UNKNOWN"
 }

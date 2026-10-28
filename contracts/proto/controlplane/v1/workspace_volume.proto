@@ -1,0 +1,162 @@
+syntax = "proto3";
+
+package controlplane.v1;
+
+import "controlplane/v1/control_plane.proto";
+
+option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
+
+// Только зарегистрированный session-archive получает owner-selected задачи физического тома.
+// Этот сервис не выдаёт сотруднику model lease, RuntimeRevision, shell либо Kubernetes credentials.
+service WorkspaceVolumeWorkService {
+  // Owner назначает task/attempt/input/lease после проверки текущего origin и custody.
+  rpc ClaimWorkspaceVolumeTasks(ClaimWorkspaceVolumeTasksRequest) returns (ClaimWorkspaceVolumeTasksResponse);
+  // Продлевает только точный активный grant; отменённый либо истёкший lease не возобновляется.
+  rpc RenewWorkspaceVolumeTask(RenewWorkspaceVolumeTaskRequest) returns (RenewWorkspaceVolumeTaskResponse);
+  // Сохраняет положительный физический факт; поздний ACK не восстанавливает terminal run или grant.
+  rpc CompleteWorkspaceVolumeTask(CompleteWorkspaceVolumeTaskRequest) returns (CompleteWorkspaceVolumeTaskResponse);
+  // Закрывает текущий grant и сохраняет неопределённую custody; неизвестный Create не повторяется.
+  rpc FailWorkspaceVolumeTask(FailWorkspaceVolumeTaskRequest) returns (FailWorkspaceVolumeTaskResponse);
+}
+
+// Закрытый этап owner intent; unknown не допускается к физическому исполнению.
+enum WorkspaceVolumeTaskKind {
+  // Не является разрешением либо выбором этапа.
+  WORKSPACE_VOLUME_TASK_KIND_UNSPECIFIED = 0;
+  // Только первая разрешённая попытка создаёт новый PVC; adoption по имени запрещён.
+  WORKSPACE_VOLUME_TASK_KIND_CREATE = 1;
+  // Подготовка нового пустого root либо явно read-only reconciliation прежнего intent.
+  WORKSPACE_VOLUME_TASK_KIND_PREPARE = 2;
+}
+
+// Immutable логическое намерение из таблицы владельца; payload не выбирает scope или authority.
+message WorkspaceVolumeInput {
+  // Закрытый квалифицированный physical profile, включающий storage class/size/root geometry.
+  string profile = 1;
+  // Owner-derived organization/project/session/employee; не caller-supplied полномочия.
+  RuntimeWorkspaceScope scope = 2;
+  // Серверная work identity; она не является произвольным путём.
+  string workspace_ref = 3;
+  // Монотонная incarnation физического тома, отдельная от поколения рабочего дерева и lease.
+  int64 volume_generation = 4;
+  // Точный первоначальный CREATE intent; PREPARE требует его положительного persisted UID.
+  string create_task_ref = 5;
+  // Логический PREPARE intent sealed record; при read-only recovery не переписывается новым task ref.
+  string preparation_task_ref = 6;
+  // Positive PVC Create UID; в CREATE отсутствует, у PREPARE обязателен и неизменяем.
+  string pvc_uid = 7;
+  // Только owner назначает отдельное reconciliation намерение без write/init credit.
+  bool read_only = 8;
+}
+
+// Полный immutable snapshot одной bounded attempt; model RuntimeRevision здесь не выдумывается.
+message WorkspaceVolumeTask {
+  // Owner-assigned svt_ ref, отличный от archive/model task namespaces.
+  string task_ref = 1;
+  // Этап выводится из persisted task, а не из report caller.
+  WorkspaceVolumeTaskKind kind = 2;
+  // Положительный номер попытки из прежнего предела пяти storage attempts.
+  int32 attempt = 3;
+  // Digest полного effective input; отдельно связывается с lease/fence/workload.
+  string input_digest = 4;
+  // Выводится owner из immutable read_only либо attempt>1; не позволяет повторить Create/init.
+  bool reconcile_only = 5;
+  // Точный immutable logical intent.
+  WorkspaceVolumeInput volume = 6;
+  // Отдельный grant только этой attempt; не доставляется helper Job или модели.
+  WorkLease lease = 7;
+}
+
+// Instance является привязкой зарегистрированного workload, не идентичностью пользователя.
+message ClaimWorkspaceVolumeTasksRequest {
+  // Повтор неизвестного ответа использует тот же owner receipt, не создавая новую attempt.
+  MutationContext mutation = 1;
+  // Сопоставляется с authenticated session-archive и сохраняется в grant ledger.
+  string workload_instance = 2;
+  // Только существующий bounded storage budget; не повышает model/account concurrency.
+  int32 limit = 3;
+}
+
+// Отсутствие задач не подтверждает готовность всего storage/PDLC пути.
+message ClaimWorkspaceVolumeTasksResponse {
+  // Все задачи прошли owner scope/custody/attempt guards до выдачи lease.
+  repeated WorkspaceVolumeTask tasks = 1;
+}
+
+// Точные pins активного grant; ссылки не заменяют principal или stored owner state.
+message RenewWorkspaceVolumeTaskRequest {
+  // Только task внутри trusted organization.
+  string task_ref = 1;
+  // Точный выданный lease.
+  string lease_ref = 2;
+  // Секретный fence передаётся только защищённому owner RPC, не Job/input/log.
+  string fence = 3;
+  // Монотонное поколение конкретного grant.
+  int64 generation = 4;
+}
+
+// Renewal сохраняет исходное намерение и физическую incarnation.
+message RenewWorkspaceVolumeTaskResponse {
+  // Только продлённый прежний grant; новый attempt/RR не создаётся.
+  WorkLease lease = 1;
+}
+
+// Источник факта — зарегистрированный physical observer; owner проверяет persisted kind, lineage и ledger.
+message CompleteWorkspaceVolumeTaskRequest {
+  // Idempotency receipt принадлежит owner; replay не меняет terminal состояние.
+  MutationContext mutation = 1;
+  // Точный логический task; не locator произвольной PVC.
+  string task_ref = 2;
+  // Выданный lease из durable attempt ledger, включая проверяемый past ACK.
+  string lease_ref = 3;
+  // Сопоставляется с сохранённым fence digest без раскрытия в результате.
+  string fence = 4;
+  // Exact ledger generation; terminal grant не открывается заново.
+  int64 generation = 5;
+  // Positive Create UID либо повторная exact UID observation для PREPARE.
+  string observed_pvc_uid = 6;
+  // Обязателен для PREPARE после positive terminal всех Job containers; для CREATE пуст.
+  string pod_uid = 7;
+  // Для PREPARE — типизированный sealed record; для CREATE отсутствует.
+  RuntimeWorkspaceVolumeReady ready = 8;
+}
+
+// Фиксированный отказ не разрешает cleanup или повтор неопределённого внешнего действия.
+message FailWorkspaceVolumeTaskRequest {
+  // Idempotency scope не заменяет проверку владения и grant.
+  MutationContext mutation = 1;
+  // Только exact stored task.
+  string task_ref = 2;
+  // Exact текущий lease.
+  string lease_ref = 3;
+  // Secret fence проверяется по durable digest.
+  string fence = 4;
+  // Exact attempt generation.
+  int64 generation = 5;
+  // Закрытый безопасный класс причины; raw provider/API errors не принимаются.
+  string safe_error_code = 6;
+}
+
+// Storage-only outcome не является бизнес-результатом либо новым execution grant.
+message CompleteWorkspaceVolumeTaskResponse {
+  // Точный подтверждённый task.
+  string task_ref = 1;
+  // Неизменяемый task outcome при записи receipt; поздний ACK сохраняет terminal.
+  string recorded_task_state = 2;
+  // Состояние custody на момент receipt, не fresh model/execution eligibility.
+  string recorded_volume_state = 3;
+  // Факт записан после закрытия grant; не означает продление или возобновление run.
+  bool past_fact = 4;
+  // При записи receipt совпадала текущая incarnation; replay не делает эту отметку свежим grant.
+  bool matched_volume_incarnation = 5;
+}
+
+// Отказ сохраняет данные и не выдаёт неявный retry credit.
+message FailWorkspaceVolumeTaskResponse {
+  // Точный закрытый task.
+  string task_ref = 1;
+  // Авторитетное состояние task после отзыва grant.
+  string recorded_task_state = 2;
+  // Неопределённая физическая custody остаётся BLOCKED.
+  string recorded_volume_state = 3;
+}

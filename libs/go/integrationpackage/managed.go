@@ -73,6 +73,7 @@ func ValidateExecutableRevision(candidate, shipped Package) error {
 			!reflect.DeepEqual(capability.ResourceScope, base.ResourceScope) ||
 			!narrowFields(capability.InputFields, base.InputFields) || !reflect.DeepEqual(capability.OutputFields, base.OutputFields) ||
 			capability.Execution.Idempotency != base.Execution.Idempotency ||
+			capability.Execution.LeaseProfile != base.Execution.LeaseProfile ||
 			capability.Execution.TimeoutSeconds > base.Execution.TimeoutSeconds ||
 			capability.Execution.MaxAttempts > base.Execution.MaxAttempts ||
 			capability.Execution.RetryBackoffMilliseconds < base.Execution.RetryBackoffMilliseconds {

@@ -761,9 +761,9 @@ func (multiplexer *sessionMultiplexer) applyPlatformSignalWithReaders(ctx contex
 	if signal.Sequence != multiplexer.platformCursor+1 {
 		return multiplexer.synchronizePlatformWithRefresh(ctx, refresh)
 	}
-	// Eligibility changes require a full owner read so financial projections do not retain revoked access or old configuration. SYSTEM_ASSISTANT does not change project-agent financial eligibility; its messages and heartbeat retain the targeted delta/rejoin path.
-	// Изменение допуска требует полного чтения владельца, чтобы финансовая проекция не сохраняла отозванный доступ или прежнюю конфигурацию. SYSTEM_ASSISTANT не меняет проектный допуск финансового каталога; сообщения и heartbeat сохраняют адресный путь delta/rejoin.
-	if signal.Kind == "AGENT" || signal.Kind == "MEMBERSHIP" || signal.Kind == "PLATFORM_MEMBERSHIP" {
+	// Eligibility and project lifecycle changes require a full owner read, including dependent run, gate and artifact catalogs after purge. SYSTEM_ASSISTANT messages and heartbeat retain the targeted delta/rejoin path.
+	// Изменение допуска и жизненного цикла проекта требует полного чтения владельца, включая зависимые каталоги запусков, решений и файлов после purge. Сообщения и heartbeat SYSTEM_ASSISTANT сохраняют адресный путь delta/rejoin.
+	if signal.Kind == "PROJECT" || signal.Kind == "AGENT" || signal.Kind == "MEMBERSHIP" || signal.Kind == "PLATFORM_MEMBERSHIP" {
 		return multiplexer.synchronizePlatformWithFloor(ctx, refresh, signal.Sequence)
 	}
 	if platformSignalOutsideScope(signal, multiplexer.projectRef) {

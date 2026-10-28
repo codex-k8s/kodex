@@ -3,7 +3,9 @@ package platform
 import (
 	"context"
 	"errors"
+	"strings"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -33,6 +35,20 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 		return err
 	}
 	switch input.Kind {
+	case command.ClaimWorkspaceVolumeTasks:
+		if input.Principal.CallerWorkload != "session-archive" || input.Principal.Permission != command.WorkspaceVolumeCommandPermission(input.Kind) {
+			return errs.ErrForbidden
+		}
+		payload, ok := input.Payload.(command.WorkspaceVolumeClaimInput)
+		if !ok || payload.Limit < 1 || payload.Limit > 16 || strings.TrimSpace(payload.WorkloadInstance) == "" || len(payload.WorkloadInstance) > 256 {
+			return errs.ErrInvalid
+		}
+		return nil
+	case command.ObserveWorkspace:
+		if input.Principal.CallerWorkload != "runtime-controller" || input.Principal.Permission != runtimecontract.WorkspaceObservationOperation {
+			return errs.ErrForbidden
+		}
+		return repository.authorizeWorkspaceObservationTx(ctx, tx, current, input)
 	case command.LaunchWorkflowExecution:
 		return repository.validateWorkflowLaunchAuthority(ctx, tx, current, input)
 	case command.CreateProjectAssistantIntegrationConnection:
@@ -72,7 +88,7 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 		}
 		_, err := repository.authorizeSystemAssistantImage(ctx, tx, current, payload, input.Kind == command.UpdateSystemAssistantRoleImageRecipe)
 		return err
-	case command.PublishAssistantRuntimeConfig:
+	case command.PublishAssistantRuntimeConfig, command.PublishPreparedAgentRuntimeConfig:
 		payload, ok := input.Payload.(command.AssistantRuntimeConfigurationInput)
 		if !ok {
 			return errs.ErrInvalid

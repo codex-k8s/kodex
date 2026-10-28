@@ -4,8 +4,8 @@ title: Наблюдаемость Go-сервисов
 type: guide
 status: approved
 owner: developer
-version: 1.1.4
-updated: 2026-09-07
+version: 1.1.7
+updated: 2026-10-26
 ---
 
 # Наблюдаемость Go-сервисов
@@ -51,6 +51,15 @@ security/quota обхода или безусловным игнорирован
 Redis command arguments, DSN, token, cookie, телефон, email, внешний subject и
 иные персональные данные.
 
+Если публичный mapping сворачивает несколько причин в один HTTP503, native
+owner до свёртки сохраняет закрытый класс, а transport — точный этап. Диагностика
+не меняет исходный sentinel, retry или authority. Один фактический ответ получает
+одну запись с тем же назначенным сервером correlation и существующим trace;
+исходный SDK error не сериализуется. Успешное восстановление неизвестного ACK
+по exact readback не переименовывается в отказ. Непокрытая причина остаётся
+unknown; наличие лога не доказывает исправление доступности.
+Пример и карта: [#1905](../operations/api-availability-diagnostic-1905.md).
+
 CLI boundary не сериализует цепочку ошибок через `%v`/`Error()`, даже если
 наружный domain error обычно имеет безопасный текст: иной startup path может
 вернуть driver error с секретами. Для диагностики отказа достаточно закрытой
@@ -59,11 +68,59 @@ typed stage, нормализованного domain kind и error class; SQLSTA
 первичного отказа, чтобы окончание retry budget не скрывало PostgreSQL или
 domain rejection. Sentinel tests включают вложенные ошибки и неизвестные поля.
 
+Service startup также сохраняет typed connection cause приватно и выводит
+только закрытый класс и этап из полного реестра прежних фиксированных причин.
+Неизвестные ошибки не разбираются через `Error()`. Начальный PostgreSQL ping
+имеет отдельный ограниченный бюджет внутри общего startup deadline; cancel
+до/во время/после ping закрывает отвергнутый pool и не допускает дальнейший
+startup. Проверка не добавляет retry SQL, сетевые разрешения или credentials.
+Typed PostgreSQL/TLS policy принадлежит сервису; CLI и service используют один
+его classifier, а SDK-neutral `Postgres/Network` mappings — общий `errorclass`.
+
+Для control-plane [#1862](https://github.com/codex-k8s/kodex/issues/1862) задаёт
+закрытую диагностику, а [#1866](https://github.com/codex-k8s/kodex/issues/1866) —
+узкую устойчивость initial connectivity: process lifecycle → прежняя
+config/TLS/pool preparation → ping не дольше10секунд → прежний startup.
+Только типизированный класс `connection_refused` допускает следующий ping
+того же pool после отменяемой паузы1секунда. Все probes и паузы используют
+исходный `StartupTimeout` context `Run`; общий deadline не перезапускается и
+не увеличивается. Иной класс, включая auth/TLS/config/DNS/reset/timeout,
+терминален; текст ошибки не разрешает retry. Fail/cancel закрывает только созданный pool и
+возвращается до storage/worker initialization; success передаёт pool владельцу
+`Run`, который закрывает его после worker join. Общий startup budget и порядок
+эффектов не меняются. Новый domain event не создаётся: авторитетный read path —
+закрытая process diagnostic и Kubernetes container terminal/Ready metadata.
+Исходная причина прошлых restart остаётся UNKNOWN без нового наблюдения.
+
+| Исход initial connectivity | Pool и продолжение | Диагностика |
+| --- | --- | --- |
+| Refused при активном budget | Тот же pool, пауза и следующий ping; SQL/bootstrap/workers не запускаются | Typed cause остаётся приватной |
+| Refused → success | Один pool передаётся `Run`; прежний startup продолжается однократно | Нет ложного terminal failure |
+| Другой отказ, в том числе после refused | Pool закрывается один раз; дальнейших probes/effects нет | Текущий terminal stage/class, без masking прежним refused |
+| Deadline/cancel до ping | Следующего probe нет; отвергнутый pool закрывается | `errors.Is` сохраняет context outcome |
+| Deadline/cancel во время probe/паузы после refused | Pool закрывается один раз; следующий ping и effects запрещены | Первичный refused отдельно от `wait_status=deadline|canceled`; оба private causes доступны `errors.Is` |
+
+Service-owned policy не импортирует migration wait-loop: email CLI допускает
+более широкий набор transient classes и владеет другим apply lifecycle.
+`serviceruntime.IdleBackoff` управляет паузами idle workers и не является
+startup barrier. Здесь используются существующие service typed classifier и
+общие `Postgres/Network`; новый универсальный retry framework не вводится.
+
 При отказе продления lease keeper, tracker и drain записывают закрытое
 наблюдение исходного RPC и request/parent context до собственного cleanup
 cancel. Точные trusted claim/execution pins различаются явно; отсутствующие
 координаты не выдумываются. Такой лог не доказывает отзыв lease или owner commit
 и не разрешает повтор, увеличение срока или продолжение исполнения.
+
+Диагноз отказа исполнения не выводится из произвольного Kubernetes message.
+Текущий typed Pod reason и известный container termination допускаются лишь
+после exact managed metadata / execution tuple проверки; наблюдённый UID одного
+GET не заменяет историческую привязку либо owner lease/fence/generation.
+Mutable Pod не меняет callback intent: mapping допускается только по уже
+проверенному immutable diagnostic до единственной serialization, сохраняя
+usage/artifacts/archive и байты retry. Late postcommit probe остаётся закрытой
+операторской диагностикой, без изменения принятого результата.
+Матрица и ограничения: [#1856](../operations/runtime-memory-failure.md).
 
 ## Общая библиотека
 
@@ -298,3 +355,12 @@ read/repair и запрет ручного изменения состояния
 Используемые версии закрепляются в `libs/go/observability/go.mod`.
 
 Связанные документы: `GO-DOC-001`, `GUIDE-DOC-003`, `INFRA-DOC-001`.
+
+Отказ init до запуска модели имеет отдельную закрытую stage/reason, а не
+предполагаемую provider cause. Bounded termination record проверяется по текущему
+owned Pod и immutable execution tuple; stale/malformed/missing запись даёт
+UNKNOWN, без parsing raw stderr. Причина сохраняется existing owner failure
+summary до normal cleanup, а private UID/tuple остаются safe log metadata после
+owner ACK. Локальный record и лог не подменяют durable owner commit. Смена Pod
+не наследует grace прежнего UID; диагностика не расширяет lease/retry либо
+полномочия. Пример: [#1941](../operations/runtime-initialization-failure.md).

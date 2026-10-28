@@ -10,6 +10,9 @@ export default mergeConfig(base, {
     outDir: "dist-synthetic",
     rolldownOptions: {
       input: {
+        workflowResults: fileURLToPath(
+          new URL("./e2e/fixtures/workflow-results.html", import.meta.url),
+        ),
         assistantRetry: fileURLToPath(
           new URL("./e2e/fixtures/assistant-retry.html", import.meta.url),
         ),

@@ -22,6 +22,7 @@ COPY libs/go/httpserver/ libs/go/httpserver/
 COPY libs/go/i18n/ libs/go/i18n/
 COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
 COPY libs/go/integrationpackage/ libs/go/integrationpackage/
+COPY libs/go/repositorybundle/ libs/go/repositorybundle/
 COPY libs/go/integrationgatewayauth/ libs/go/integrationgatewayauth/
 COPY libs/go/objectstorage/ libs/go/objectstorage/
 COPY libs/go/observability/ libs/go/observability/
@@ -34,6 +35,7 @@ COPY libs/go/secretbrokerapi/ libs/go/secretbrokerapi/
 COPY libs/go/runtimesecret/ libs/go/runtimesecret/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/
 COPY libs/go/securefile/ libs/go/securefile/
+COPY libs/go/sshcompose/ libs/go/sshcompose/
 COPY libs/go/sttapi/ libs/go/sttapi/
 COPY services/internal/control-plane/ services/internal/control-plane/
 

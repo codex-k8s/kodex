@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Объявление результатов профиля GITHUB_REVIEW_QA_V1",
+  "description": "Только для явно опубликованного GITHUB_REVIEW_QA_V1. Сама схема не определяет вид ключа: owner сверяет каждый key с published requirements. REVIEW требует receiptRef COMMENT, QA receiptRef только для CHANGES_REQUIRED с реальным Issue. Legacy schema неизменна.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "results"
+  ],
+  "properties": {
+    "schema": {
+      "const": "kodex.workflow-result.v1"
+    },
+    "results": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "key",
+              "source"
+            ],
+            "properties": {
+              "key": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,96}(?![\\s\\S])"
+              },
+              "source": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "kind"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "const": "CURRENT_COMPLETION"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "kind",
+                      "artifactRef",
+                      "revision",
+                      "digest"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "const": "CAPTURED_ARTIFACT"
+                      },
+                      "artifactRef": {
+                        "type": "string",
+                        "pattern": "^art_[A-Za-z0-9_-]{8,92}(?![\\s\\S])"
+                      },
+                      "revision": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991
+                      },
+                      "digest": {
+                        "type": "string",
+                        "pattern": "^sha256:[a-f0-9]{64}(?![\\s\\S])"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "key",
+              "receiptRef"
+            ],
+            "properties": {
+              "key": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,96}(?![\\s\\S])"
+              },
+              "receiptRef": {
+                "type": "string",
+                "pattern": "^erc_[A-Za-z0-9_-]{8,92}(?![\\s\\S])"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "key",
+              "headSha",
+              "verdict"
+            ],
+            "properties": {
+              "key": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,96}(?![\\s\\S])"
+              },
+              "headSha": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{40}([a-f0-9]{24})?(?![\\s\\S])"
+              },
+              "verdict": {
+                "enum": [
+                  "PASS",
+                  "CHANGES_REQUIRED"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "key",
+              "headSha",
+              "verdict",
+              "receiptRef"
+            ],
+            "properties": {
+              "key": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,96}(?![\\s\\S])"
+              },
+              "headSha": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{40}([a-f0-9]{24})?(?![\\s\\S])"
+              },
+              "verdict": {
+                "enum": [
+                  "PASS",
+                  "CHANGES_REQUIRED"
+                ]
+              },
+              "receiptRef": {
+                "type": "string",
+                "pattern": "^erc_[A-Za-z0-9_-]{8,92}(?![\\s\\S])"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

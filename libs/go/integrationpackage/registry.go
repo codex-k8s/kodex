@@ -75,6 +75,9 @@ const (
 	// AdapterContext7 selects the registered documentation lookup adapter.
 	// AdapterContext7 выбирает зарегистрированный адаптер поиска документации.
 	AdapterContext7 AdapterKey = "CONTEXT7"
+	// AdapterSSHCompose selects only owner-signed bounded Compose release operations.
+	// AdapterSSHCompose выбирает только ограниченные Compose-операции с owner permit.
+	AdapterSSHCompose AdapterKey = "SSH_COMPOSE"
 
 	// OwnerIntegrationGateway names the deployable that owns managed integration commands.
 	// OwnerIntegrationGateway обозначает компонент-владелец управляемых команд интеграций.
@@ -165,6 +168,7 @@ var adapterRegistry = map[AdapterKey]AdapterDescriptor{
 	AdapterOpenAPIMCP:    {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 	AdapterMattermost:    {Owner: OwnerInteractionGateway, Route: RouteInteraction, Readiness: ReadinessReady},
 	AdapterContext7:      {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
+	AdapterSSHCompose:    {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 }
 
 // Adapter looks up one registered descriptor without inventing an owner or execution route for unknown keys.
@@ -210,14 +214,14 @@ var (
 	// fieldFormats — закрытый набор форматов проверки скалярных полей пакета.
 	fieldFormats = map[FieldFormat]struct{}{
 		"": {}, "PLAIN": {}, "HTTPS_ORIGIN": {}, "HTTPS_URL": {}, "HTTPS_PATH": {},
-		"EMAIL": {}, "HOST": {}, "IDENTIFIER": {},
+		"EMAIL": {}, "HOST": {}, "IDENTIFIER": {}, "PUBLIC_IP": {},
 	}
 	// resourceKinds lists the exact external resource scopes supported by published capabilities.
 	// resourceKinds перечисляет точные области внешних ресурсов, поддержанные опубликованными возможностями.
 	resourceKinds = map[ResourceKind]struct{}{
 		"SYNTHETIC_JOURNAL": {}, "GITHUB_REPOSITORY": {}, "GITLAB_PROJECT": {},
 		"JIRA_PROJECT": {}, "CONFLUENCE_SPACE": {}, "EMAIL_SENDER": {},
-		"MATTERMOST_CHANNEL": {}, "HTTPS_RESOURCE": {},
+		"MATTERMOST_CHANNEL": {}, "HTTPS_RESOURCE": {}, "SSH_TARGET": {},
 	}
 )
 

@@ -13,9 +13,12 @@ COPY libs/go/grpcserver/ libs/go/grpcserver/
 COPY libs/go/httpserver/ libs/go/httpserver/
 COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
 COPY libs/go/integrationpackage/ libs/go/integrationpackage/
+COPY libs/go/repositorybundle/ libs/go/repositorybundle/
 COPY libs/go/observability/ libs/go/observability/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/
 COPY libs/go/securefile/ libs/go/securefile/
+COPY libs/go/sshcompose/ libs/go/sshcompose/
+COPY libs/go/secretbrokerapi/ libs/go/secretbrokerapi/
 COPY services/external/integration-gateway/ services/external/integration-gateway/
 
 WORKDIR /workspace/services/external/integration-gateway

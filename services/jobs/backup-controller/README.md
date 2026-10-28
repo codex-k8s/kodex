@@ -4,8 +4,8 @@ title: Backup controller
 type: service
 status: approved
 owner: backend
-version: 1.0.0
-updated: 2026-08-28
+version: 1.0.2
+updated: 2026-10-25
 ---
 
 # Backup controller
@@ -70,3 +70,43 @@ entrypoint `scripts/tests/local-session-archive-backup-restore-e2e.sh`. Он
 manifest и payload, изменяет source fixture, выполняет изолированный restore и
 сравнивает восстановленные bytes с исходными. Все версии fixture и disposable
 restore targets удаляются с readback в рамках сценария.
+
+## Проверка контекста сборки
+
+`make test-local-backup-controller-build-contract` за 60 секунд проверяет, что
+Docker-контекст содержит все локальные `replace` из `go.mod`, а изменение
+`libs/go/objectstorage` меняет входной hash и не переиспользует старый OCI
+archive. Неизменённый источник сохраняет прежний cache. Docker и import в этой
+регрессии заменены локальными fixtures: проверка не собирает настоящий image,
+не обращается к кластеру, не читает credentials и не заменяет restore drill.
+Связанные задачи: [#1003](https://github.com/codex-k8s/kodex/issues/1003),
+[#1830](https://github.com/codex-k8s/kodex/issues/1830).
+
+
+Штатная OCI-only сборка: `tools/release/build-stable-local.sh --component
+backup-controller --source-sha <чистый-SHA> --output-directory <новый-приватный-каталог>`.
+Она использует credential-free `git archive`, создаёт private `build.json` с
+source/context/archive/manifest digests и не выполняет import, admission,
+publication или node pull. Тот же закрытый component registry должен
+допускаться проверкой OCI и publication receipt; незарегистрированные
+компоненты и выдуманные результаты проверок остаются запрещены.
+
+
+## Одноразовый scoped data drill
+
+`tools/dev/scoped_backup_drill.py` предоставляет create-only custody, readback
+неизвестного create, отдельный backup Job и render изолированного PG/TLS с
+UID cleanup. Полный порядок и lifecycle matrix находятся в
+[runbook](../../../docs/runbooks/backup-controller.md#одноразовый-data-drill-10031830).
+Новые безопасные CLI: `list-verified`, `inspect-backup`, `inspect-restore-drill`,
+`preflight-restore`, `inspect-restore-targets`. Только явный
+`cleanup-restore-drill` удаляет receipt-owned target versions;
+`inspect-restore-cleanup` читает его частичный/пустой исход без подтверждения
+полноты восстановленных данных. Никакие metadata команды не запускают serve.
+
+`make test-scoped-backup-drill` — bounded hermetic custody/render регрессии;
+`go test -p 1 ./...` в этом модуле — Go unit. Они не заменяют настоящий drill.
+Shared S3 fixture identity не доказывает credential-level prefix isolation;
+инструмент не меняет глобальные identities и не передаёт credentials моделям.
+Нулевой release revision отвергается runtime; full environment renderer
+связывает его с тем же exact backup image из release lock.

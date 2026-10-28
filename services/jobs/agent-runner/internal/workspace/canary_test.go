@@ -293,6 +293,15 @@ func TestWritableUsageStopsAtDirectoryAndByteBudgets(t *testing.T) {
 	}
 	policy := testPolicy()
 	policy.MaximumFileCount = 3
+	if _, _, err := writableUsage(root, policy); DenialReason(err) != runtimecontract.RuntimeWorkspacePathOutsideWorkspace {
+		t.Fatal("changed quota without its policy digest was accepted")
+	}
+	policy, err := runtimecontract.RuntimeWorkspacePolicyWithLimits(&runtimecontract.RuntimeWorkspaceLimits{
+		MaxBytes: runtimecontract.RuntimeWorkspaceWritableBytes, MaxFiles: 3,
+	})
+	if err != nil {
+		t.Fatal("construct valid reduced quota policy")
+	}
 	if _, _, err := writableUsage(root, policy); DenialReason(err) != runtimecontract.RuntimeWorkspaceQuotaExceeded {
 		t.Fatalf("directory budget error = %v", err)
 	}

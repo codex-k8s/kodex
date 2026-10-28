@@ -6,6 +6,7 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
 	"github.com/codex-k8s/kodex/libs/go/sttapi/errorprofile"
+	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/availability"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/problemresponse"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
@@ -13,7 +14,7 @@ import (
 )
 
 const (
-// controlPlaneErrorDomain identifies the trusted control-plane ErrorInfo namespace; a matching reason from another domain must not select a specialized public problem code.
+	// controlPlaneErrorDomain identifies the trusted control-plane ErrorInfo namespace; a matching reason from another domain must not select a specialized public problem code.
 	// controlPlaneErrorDomain задаёт доверенное пространство ErrorInfo control-plane; совпадающая причина другого домена не выбирает специальный код ошибки.
 	controlPlaneErrorDomain = "kodex.control-plane"
 	// freshAuthenticationRequiredReason preserves the trusted fresh-login requirement only for PermissionDenied responses with the exact control-plane domain.
@@ -50,6 +51,12 @@ func writeRPCProblem(writer http.ResponseWriter, err error) {
 		if rpcErrorHasReason(err, resourceInUseReason) {
 			name = resourceInUseReason
 		}
+		for _, reason := range []string{"LEGACY_REWORK_SCOPE_UNSUPPORTED", "LEGACY_REWORK_WRITE_REQUIRES_RECONCILIATION", "LEGACY_REWORK_PARENT_BUSY", "LEGACY_REWORK_DELIVERY_BLOCKED", "LEGACY_REWORK_READ_LIMIT"} {
+			if rpcErrorHasClosedReason(err, reason) {
+				name = reason
+				break
+			}
+		}
 	case codes.ResourceExhausted:
 		statusCode, name, retryable = http.StatusTooManyRequests, "RATE_LIMITED", true
 	case codes.Canceled:
@@ -64,6 +71,9 @@ func writeRPCProblem(writer http.ResponseWriter, err error) {
 	case codes.DeadlineExceeded:
 		statusCode, name, retryable = http.StatusGatewayTimeout, "DEADLINE_EXCEEDED", true
 	}
+	if statusCode == http.StatusServiceUnavailable {
+		problemresponse.MarkFailure(writer, availability.Fixed("upstream_rpc", "unavailable", err))
+	}
 	writeLocalProblem(writer, statusCode, name, retryable)
 }
 
@@ -77,6 +87,22 @@ func rpcErrorHasReason(err error, reason string) bool {
 	for _, detail := range rpcStatus.Details() {
 		info, ok := detail.(*errdetails.ErrorInfo)
 		if ok && info.GetDomain() == controlPlaneErrorDomain && info.GetReason() == reason {
+			return true
+		}
+	}
+	return false
+}
+
+// rpcErrorHasClosedReason rejects metadata-bearing or foreign details for the bounded owner-rework errors; status text never selects a public code.
+// rpcErrorHasClosedReason отклоняет metadata и чужой domain в bounded owner-rework errors; текст status не выбирает публичный код.
+func rpcErrorHasClosedReason(err error, reason string) bool {
+	rpcStatus, ok := status.FromError(err)
+	if !ok {
+		return false
+	}
+	for _, detail := range rpcStatus.Details() {
+		info, ok := detail.(*errdetails.ErrorInfo)
+		if ok && info.GetDomain() == controlPlaneErrorDomain && info.GetReason() == reason && len(info.GetMetadata()) == 0 {
 			return true
 		}
 	}

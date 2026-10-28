@@ -229,20 +229,22 @@ func (runner *Runner) Backup(ctx context.Context) (backupID string, resultErr er
 func (runner *Runner) Verify(ctx context.Context, backupID string) (resultErr error) {
 	lock, err := runner.repository.AcquireOperationLock(ctx, "verify", backupID, runner.now(), operationLockTTL)
 	if err != nil {
-		return err
+		return verificationFailure("lock_acquire", err)
 	}
-	defer func() { resultErr = errors.Join(resultErr, releaseOperationLock(ctx, lock)) }()
+	defer func() {
+		resultErr = errors.Join(resultErr, verificationFailure("lock_release", releaseOperationLock(ctx, lock)))
+	}()
 	value, receipt, err := runner.repository.LoadManifest(ctx, backupID)
 	if err != nil {
-		return err
+		return verificationFailure("manifest_load", err)
 	}
 	if err := runner.repository.Verify(ctx, value, receipt, runner.workDirectory); err != nil {
-		return err
+		return verificationFailure("payload_verify", err)
 	}
 	verification := manifest.Verification{SchemaVersion: manifest.SchemaVersion, Kind: "kodex-backup-verification",
 		BackupID: backupID, Manifest: receipt, VerifiedAt: runner.now(),
 		ObjectCount: len(value.Databases)*2 + len(value.PlatformObjects) + 1}
-	return runner.repository.EnsureVerification(ctx, value, receipt, verification)
+	return verificationFailure("receipt_ensure", runner.repository.EnsureVerification(ctx, value, receipt, verification))
 }
 
 // Retain deletes only policy-selected backups after a successful restore point exists, counting partial deletions.
@@ -293,6 +295,9 @@ func (runner *Runner) Retain(ctx context.Context, policy Policy) (resultErr erro
 // RestoreDrill binds targets to owner approval, refuses prior terminal failures and verifies isolated restored data.
 // RU: RestoreDrill связывает цели с подтверждением владельца, отклоняет прежние terminal-отказы и проверяет восстановленные данные.
 func (runner *Runner) RestoreDrill(ctx context.Context, approval configspec.RestoreApproval, targets configspec.RestoreTargets) (resultErr error) {
+	if err := configspec.RequireFreshRestoreApproval(approval, runner.now()); err != nil {
+		return err
+	}
 	defer func() {
 		if resultErr == nil {
 			runner.observer.RestoreFinished("success")

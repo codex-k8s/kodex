@@ -17,18 +17,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// prepareCommandObjects routes assistant plan staging separately and preflights typed execution
-// artifacts under current authorization, idempotency and exact lease/write/deadline checks.
-// Expired work validates bytes without uploading; live work commits preflight, then
-// validates/scans/uploads at most16 bounded artifacts and replaces content with prepared
-// descriptors. Later errors can leave partial payload mutations; cleanup is best effort and the
-// outer owner transaction must revalidate and commit metadata.
-// prepareCommandObjects отдельно направляет staging планов ассистента и предварительно проверяет
-// типизированные результаты исполнения по текущим полномочиям, идемпотентности, точным
-// lease/write/deadline. Просроченная работа проверяет байты без загрузки; действующая завершает
-// preflight, затем проверяет, сканирует и загружает максимум16 ограниченных артефактов, заменяя
-// содержимое дескрипторами. Поздние ошибки могут оставить частично изменённый payload; очистка не
-// гарантирована, внешняя owner-транзакция повторно проверяет и фиксирует метаданные.
+// prepareCommandObjects serializes completion receipt reads with the owner transaction before
+// requiring an active lease; fresh artifact admission stays exact and ObjectStore writes stay outside tx.
+// prepareCommandObjects сериализует completion receipt reads с owner transaction до требования
+// активного lease; допуск свежих artifacts остаётся точным, ObjectStore writes выполняются вне tx.
 func (repository *Repository) prepareCommandObjects(ctx context.Context, scope scope, input *command.Command) ([]objectstorage.Receipt, error) {
 	if input == nil {
 		return nil, nil
@@ -56,6 +48,10 @@ func (repository *Repository) prepareCommandObjects(ctx context.Context, scope s
 	defer func() { _ = tx.Rollback(ctx) }()
 	if err := repository.authorizeCommand(ctx, tx, scope, *input); err != nil {
 		return nil, err
+	}
+	if _, err := tx.Exec(ctx, queryCommandsExecuteLockIdempotencyScope, scope.organizationID, scope.actorID,
+		input.Mutation.Operation, input.Mutation.IdempotencyKey); err != nil {
+		return nil, errs.ErrUnavailable
 	}
 	var storedDigest string
 	var storedPayload []byte
@@ -181,6 +177,13 @@ func (repository *Repository) prepareCommandObjects(ctx context.Context, scope s
 // Отсутствие либо отказ дают Forbidden, ошибка запроса — Unavailable. Замена субъекта затрагивает
 // только локальную копию scope, а не идентичность caller.
 func (repository *Repository) requireRuntimeArtifactWrite(ctx context.Context, tx pgx.Tx, current scope, lease map[string]any) error {
+	if rework, err := isLegacyReworkNodeTx(ctx, tx, current, stringMap(lease, "nodeID")); err != nil {
+		return err
+	} else if rework {
+		if err := repository.validateLegacyReworkNodeAuthorityTx(ctx, tx, current, stringMap(lease, "nodeID")); err != nil {
+			return err
+		}
+	}
 	var allowed bool
 	var actorRef string
 	if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectAgentCapability, current.organizationID,

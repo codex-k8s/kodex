@@ -296,6 +296,15 @@ func (server *Server) CommandAgentInstructions(w http.ResponseWriter, r *http.Re
 // workflowDraft преобразует необязательные вход и шаги в новый protobuf-черновик, копируя input options, но сохраняя ссылки slice RequiredCapabilityKeys. Числовые casts и многие семантические ограничения здесь не проверяются; версия не публикуется.
 func workflowDraft(body generated.WorkflowInput) *controlplanev1.WorkflowVersion {
 	draft := &controlplanev1.WorkflowVersion{Name: body.Name, Purpose: body.Purpose, CoordinatorAgentRef: body.CoordinatorAgentRef}
+	if body.ResultEvidenceProfile != nil {
+		draft.ResultEvidenceProfile = string(*body.ResultEvidenceProfile)
+	}
+	if body.ExecutionMode != nil {
+		draft.ExecutionMode = string(*body.ExecutionMode)
+	}
+	if body.ReworkPolicy != nil {
+		draft.ReworkPolicy = string(*body.ReworkPolicy)
+	}
 	if body.InputFields != nil {
 		for _, field := range *body.InputFields {
 			draft.InputFields = append(draft.InputFields, &controlplanev1.WorkflowInputField{Key: stringValue(field.Key), Label: field.Label, Description: field.Description, ValueType: string(field.ValueType), Required: field.Required, Options: append([]string(nil), field.Options...)})
@@ -313,6 +322,17 @@ func workflowDraft(body generated.WorkflowInput) *controlplanev1.WorkflowVersion
 	if body.Steps != nil {
 		for _, step := range *body.Steps {
 			current := &controlplanev1.WorkflowStep{Position: int32(step.Position), Name: step.Name, Purpose: step.Purpose, AgentRef: step.AgentRef, Parallel: step.Parallel, ParallelGroup: int32(step.ParallelGroup), TimeoutSeconds: int32(step.TimeoutSeconds), ExpectedResult: step.ExpectedResult, HumanGate: step.HumanGate, RequiredCapabilityKeys: step.RequiredCapabilityKeys}
+			current.Ref = stringValue(step.Ref)
+			if step.DependsOn != nil {
+				current.DependsOn = append([]string(nil), (*step.DependsOn)...)
+			}
+			if step.ResultRequirements != nil {
+				current.ResultRequirements = workflowResultRequirements(*step.ResultRequirements)
+			}
+			if step.ApprovalTimeoutSeconds != nil {
+				ttl := int32(*step.ApprovalTimeoutSeconds)
+				current.ApprovalTimeoutSeconds = &ttl
+			}
 			for _, decision := range step.GateDecisions {
 				current.GateDecisions = append(current.GateDecisions, gateDecision(string(decision)))
 			}
@@ -320,6 +340,22 @@ func workflowDraft(body generated.WorkflowInput) *controlplanev1.WorkflowVersion
 		}
 	}
 	return draft
+}
+
+// validWorkflowGateTimeouts rejects out-of-range native HTTP integers before narrowing to int32.
+// It preserves absent policy and never silently wraps an oversized or negative owner value.
+// validWorkflowGateTimeouts отклоняет недопустимые HTTP integer до сужения в int32. Отсутствие
+// политики сохраняется; слишком большое или отрицательное значение не превращается в иной срок.
+func validWorkflowGateTimeouts(body generated.WorkflowInput) bool {
+	if body.Steps == nil {
+		return true
+	}
+	for _, step := range *body.Steps {
+		if step.ApprovalTimeoutSeconds != nil && (!step.HumanGate || *step.ApprovalTimeoutSeconds < 1 || *step.ApprovalTimeoutSeconds > 604800) {
+			return false
+		}
+	}
+	return true
 }
 
 // CreateWorkflow binds project context and creates owner workflow metadata, attaching a mapped draft only when a nonempty step list is present. An input-fields-only body does not create Draft here; publication is a separate command.
@@ -331,6 +367,10 @@ func (server *Server) CreateWorkflow(w http.ResponseWriter, r *http.Request, pro
 	}
 	body, ok := decodeJSON[generated.WorkflowInput](w, r)
 	if !ok {
+		return
+	}
+	if !validWorkflowGateTimeouts(body) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
 	m, _ := requireMutation(w, p.IdempotencyKey, "")
@@ -346,6 +386,13 @@ func (server *Server) CreateWorkflow(w http.ResponseWriter, r *http.Request, pro
 // UpdateWorkflowDraft передаёт полный преобразованный draft и mutation/version context отдельному update владельца, возвращая состояние без активации и выполнения.
 func (server *Server) UpdateWorkflowDraft(w http.ResponseWriter, r *http.Request, ref generated.WorkflowRef, p generated.UpdateWorkflowDraftParams) {
 	body, m, ok := decodeMutationBody[generated.WorkflowInput](w, r, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	if !validWorkflowGateTimeouts(body) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
 	if !ok {
 		return
 	}

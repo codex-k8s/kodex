@@ -57,6 +57,68 @@ func TestConfigOverlayHistoryHTTP(t *testing.T) {
 	}
 }
 
+// TestConfigOverlayHistoryPreservesIndependentTimestamps reproduces publication before the
+// created_at default is evaluated and preserves both exact timestamps in list and single reads.
+// Missing or invalid timestamps remain rejected in both paths regardless of publication state.
+// TestConfigOverlayHistoryPreservesIndependentTimestamps воспроизводит публикацию до вычисления
+// DEFAULT created_at и сохраняет обе точные метки в списке и отдельном чтении. Отсутствующие
+// или некорректные метки по-прежнему отклоняются в обоих путях независимо от состояния публикации.
+func TestConfigOverlayHistoryPreservesIndependentTimestamps(t *testing.T) {
+	for _, state := range []string{"PUBLISHED", "SUPERSEDED"} {
+		for _, list := range []bool{false, true} {
+			for name, mutate := range map[string]func(*cp.ConfigOverlayVersion){
+				"independent":         func(*cp.ConfigOverlayVersion) {},
+				"missing creation":    func(v *cp.ConfigOverlayVersion) { v.CreatedAt = nil },
+				"missing publication": func(v *cp.ConfigOverlayVersion) { v.PublishedAt = nil },
+				"invalid creation":    func(v *cp.ConfigOverlayVersion) { v.CreatedAt = &timestamppb.Timestamp{Seconds: 1 << 62} },
+				"invalid publication": func(v *cp.ConfigOverlayVersion) { v.PublishedAt = &timestamppb.Timestamp{Nanos: -1} },
+			} {
+				path := "/api/v1/agents/agt_fixture01/config-overlay/revisions"
+				if !list {
+					path += "/cov_fixture01"
+				}
+				t.Run(state+"/"+path+"/"+name, func(t *testing.T) {
+					item := historyOverlayFixture()
+					item.State = state
+					item.CreatedAt = timestamppb.New(item.PublishedAt.AsTime().Add(42 * time.Microsecond))
+					mutate(item)
+					client := &catalogRPCRecorder{response: &cp.GetConfigOverlayRevisionResponse{Revision: item}}
+					if list {
+						client.response = &cp.ListConfigOverlayRevisionsResponse{Revisions: []*cp.ConfigOverlayVersion{item}, Total: 1}
+					}
+					w := httptest.NewRecorder()
+					catalogTestHandler(client).ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+					if name != "independent" {
+						if w.Code != 502 {
+							t.Fatalf("invalid history timestamp accepted: %d", w.Code)
+						}
+						return
+					}
+					if w.Code != 200 {
+						t.Fatalf("independent history timestamps rejected: %d", w.Code)
+					}
+					var actual generated.ConfigOverlayVersion
+					if list {
+						var page generated.ConfigOverlayRevisionPage
+						if err := json.Unmarshal(w.Body.Bytes(), &page); err != nil || len(page.Items) != 1 {
+							t.Fatal("history page mapping failed")
+						}
+						actual = page.Items[0]
+					} else if err := json.Unmarshal(w.Body.Bytes(), &actual); err != nil {
+						t.Fatal("history revision mapping failed")
+					}
+					if !actual.CreatedAt.Equal(item.CreatedAt.AsTime()) || actual.PublishedAt == nil ||
+						!actual.PublishedAt.Equal(item.PublishedAt.AsTime()) || actual.State != state ||
+						actual.Ref != item.Ref || actual.Revision != item.Revision || actual.Version != item.Version ||
+						actual.Content != item.Content || actual.Digest != item.Digest {
+						t.Fatal("owner history fields changed")
+					}
+				})
+			}
+		}
+	}
+}
+
 // TestConfigOverlayHistoryRejectsUnsafeProducer checks content, publication and version pins, page
 // consistency and concrete owner errors without disclosing private diagnostics.
 // TestConfigOverlayHistoryRejectsUnsafeProducer проверяет pins содержимого, публикации и версии,

@@ -1,0 +1,77 @@
+apiVersion: integrations.kodex.io/v1
+kind: IntegrationPackage
+metadata:
+  key: ssh-compose
+  version: 1.0.0
+  origin: SHIPPED
+spec:
+  name: SSH Compose
+  description: Проверка и развёртывание ограниченного immutable release на одном закреплённом SSH host без произвольных команд.
+  category: deployment
+  adapter: SSH_COMPOSE
+  adapterOwner: integration-gateway
+  executionRoute: MANAGED_MCP
+  readiness: READY
+  configurationFields:
+    - {key: project_ref, type: STRING, format: IDENTIFIER, required: true, maximumLength: 128}
+    - {key: owner, type: STRING, format: IDENTIFIER, required: true, maximumLength: 100}
+    - {key: repository, type: STRING, format: IDENTIFIER, required: true, maximumLength: 100}
+    - {key: address, type: STRING, format: PUBLIC_IP, required: true, maximumLength: 45}
+    - {key: user, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
+    - {key: host_key, type: STRING, format: PLAIN, required: true, maximumLength: 128}
+    - {key: published_port, type: STRING, format: IDENTIFIER, required: true, maximumLength: 5}
+    - {key: runtime_image, type: STRING, format: IDENTIFIER, required: true, maximumLength: 320}
+    - {key: ssh_secret_ref, type: STRING, format: IDENTIFIER, required: true, maximumLength: 128}
+  networkDestinations:
+    - {key: ssh, source: CONFIGURATION, configurationField: address, port: 22, tls: SSH_PINNED}
+    - {key: github-source, source: STATIC, hostname: api.github.com, port: 443, tls: REQUIRED}
+  healthCheck: {operation: ssh.compose.inspect, timeoutSeconds: 10, maxAttempts: 1}
+  capabilities:
+    - key: ssh.compose.inspect
+      name: Проверить SSH и immutable release
+      description: Проверяет pinned host; для merge receipt получает проверенный bounded source bundle и его digest.
+      operation: ssh.compose.inspect
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope: {kind: SSH_TARGET, connectionFields: [project_ref, owner, repository, address, user, host_key, published_port, runtime_image]}
+      inputFields:
+        - {key: merge_invocation_ref, type: STRING, format: IDENTIFIER, required: false, maximumLength: 128}
+      outputFields:
+        - {key: ready, type: BOOLEAN, required: true}
+        - {key: target_ref, type: STRING, format: IDENTIFIER, required: true, maximumLength: 128}
+        - {key: merged_sha, type: STRING, format: IDENTIFIER, required: false, maximumLength: 40}
+        - {key: tree_sha, type: STRING, format: IDENTIFIER, required: false, maximumLength: 40}
+        - {key: bundle_sha256, type: STRING, format: IDENTIFIER, required: false, maximumLength: 64}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: ssh.compose.deploy
+      name: Развернуть проверенный release
+      description: После решения владельца однократно развёртывает exact release из CP-owned inspect receipt и проверяет health.
+      operation: ssh.compose.deploy
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      resourceScope: {kind: SSH_TARGET, connectionFields: [project_ref, owner, repository, address, user, host_key, published_port, runtime_image]}
+      inputFields:
+        - {key: inspect_invocation_ref, type: STRING, format: IDENTIFIER, required: true, maximumLength: 128}
+      outputFields:
+        - {key: receipt, type: STRING, format: PLAIN, required: true, maximumLength: 16384}
+        - {key: target_ref, type: STRING, format: IDENTIFIER, required: true, maximumLength: 128}
+        - {key: deployed_sha, type: STRING, format: IDENTIFIER, required: true, maximumLength: 40}
+        - {key: bundle_sha256, type: STRING, format: IDENTIFIER, required: true, maximumLength: 64}
+        - {key: image_digest, type: STRING, format: IDENTIFIER, required: true, maximumLength: 71}
+        - {key: health_ok, type: BOOLEAN, required: true}
+      execution: {leaseProfile: SSH_COMPOSE_V1, idempotency: EFFECT_KEY, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: ssh.compose.status
+      name: Прочитать итог deploy
+      description: Читает durable receipt exact deployment без повторного выполнения Compose.
+      operation: ssh.compose.status
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope: {kind: SSH_TARGET, connectionFields: [project_ref, owner, repository, address, user, host_key, published_port, runtime_image]}
+      inputFields:
+        - {key: deployment_invocation_ref, type: STRING, format: IDENTIFIER, required: true, maximumLength: 128}
+      outputFields:
+        - {key: receipt, type: STRING, format: PLAIN, required: true, maximumLength: 16384}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 1, retryBackoffMilliseconds: 250}

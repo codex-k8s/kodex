@@ -1,0 +1,2 @@
+-- name: workflow_schema_disabled_bundle_guard :exec
+ALTER TABLE control_plane.repository_bundle_publications DISABLE TRIGGER repository_bundle_publication_guard;

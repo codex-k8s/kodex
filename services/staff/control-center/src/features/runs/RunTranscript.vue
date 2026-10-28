@@ -21,6 +21,7 @@ import {
   assistantFailureMessageKey,
   isAssistantPlanToolReceipt,
   integrationToolPresentationState,
+  integrationToolAdmissionBlocked,
   isTranscriptNearBottom,
   isUnboundRunCancellation,
   presentRunTranscriptItems,
@@ -881,6 +882,12 @@ function bytes(value: number): string {
                     </details>
                   </component>
                   <template v-if="item.toolCall">
+                    <p
+                      v-if="integrationToolAdmissionBlocked(item.toolCall)"
+                      class="run-transcript__admission-blocked"
+                    >
+                      {{ $t("serverMessages.INTEGRATION_ADMISSION_BLOCKED") }}
+                    </p>
                     <SafeMarkdown
                       v-if="toolPreview(item.toolCall, item.working)"
                       :content="toolPreview(item.toolCall, item.working) ?? ''"

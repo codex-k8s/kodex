@@ -4,8 +4,8 @@ title: Общие библиотеки Go
 type: guide
 status: approved
 owner: architect
-version: 1.0.6
-updated: 2026-10-25
+version: 1.0.7
+updated: 2026-10-27
 ---
 
 # Общие библиотеки Go
@@ -25,6 +25,15 @@ deployable-компоненте. Структуру сервиса задают 
 `GO-DOC-004`/`GO-DOC-005`.
 
 ## Критерий вынесения
+
+Закрытый каталог MCP является общим исполняемым контрактом producer и runner,
+даже если JSON входа runner не изменился. Новый специализированный инструмент
+получает один общий предикат доступности; producer и readiness используют его
+без ослабления exact equality. Межмодульная проверка передаёт фактический
+tools/list настоящему consumer и включает новую capability, отрицательные
+профили и лишнее/отсутствующее имя. Доставка требует совместимого runner внутри
+допущенного RoleImage до выдачи нового grant. Пример и матрица:
+[#1859](../operations/repository-bundle-publication-1859.md).
 
 Код сразу размещается в `libs/go`, если одновременно выполняется одно из
 условий:
@@ -48,6 +57,14 @@ deployable-компоненте. Структуру сервиса задают 
 
 Бизнесовые entities, permissions, event payloads, cache keys, TTL, SQL,
 provider policy и use cases остаются в сервисе.
+
+Общее извлечение typed TLS certificate failures принадлежит SDK-neutral
+`observability/errorclass.TLS`. PostgreSQL/NATS sentinels, приоритет классов,
+точные этапы и решение о retry остаются у сервиса. Ошибка SDK сохраняется
+приватно для `errors.Is/As`; process output не форматирует её cause или
+содержимое сертификата/пути/credentials. Diagnostic wrapper не меняет
+применение SDK options, startup budgets и lifecycle.
+Матрица: [#1895](../operations/nats-startup-diagnostic-1895.md).
 
 ## Границы модулей
 
@@ -294,6 +311,17 @@ Pod `fsGroup`, как принадлежащий non-root UID/GID процесс
 изолированного read-only container mount. Эта граница доказывается итоговым
 Kubernetes render по `GUIDE-DOC-003`.
 
+Owned metadata и directories используют отдельные descriptor-relative API,
+не меняющие projected credential contract. Caller заранее доказывает exact
+parent mount/PVC, task grant и lifecycle barrier; имя и filesystem owner не
+являются authority. Record создаётся write-once0440 с exact UID/GID и durable
+readback. Directory допускает только private0700/shared2770 и закрыто
+отклоняет symlink/mount crossing; существующие entry/mode/owner никогда не
+исправляются автоматически. Partial/unknown bytes сохраняются. Lease retry
+не разрешает overwrite или новый effect без специализированного owner-перехода.
+Grant/JSON-schema/generation semantics остаются у runner/archive, а общий
+syscall/mode/ownership boundary проверяется одной библиотекой.
+
 ### `postgrescredential`
 
 Управляемый lifecycle PostgreSQL credentials:
@@ -401,3 +429,34 @@ Execution probes принадлежат deployable agent-runner; shared contract
   сервиса;
 - общий SQL repository на несколько сервисных БД;
 - общий event payload, который заменяет AsyncAPI конкретного домена.
+
+## `sshcompose`
+
+Issue #1838 использует общий закрытый протокол CP→integration-gateway→remote
+forced-command helper. Модуль владеет строгим JSON, exact target/host-key pins,
+коротким подписанным permit, ограниченным полным source tree, безопасным
+Compose profile и устойчивым no-replay journal. Он не выбирает actor, grants,
+merge authority либо Kubernetes credentials. Эти решения остаются у CP и
+secret-broker. Секретный SSH key отсутствует в wire permit/source bundle и
+модельном окружении. Readiness пакета остаётся NOT_READY до сквозной приёмки.
+
+### Прерываемый stdin и join протокольного reader
+
+Наличие `io.ReadCloser` само по себе не доказывает, что `Close` прерывает
+параллельный `Read`. `io.NopCloser` не даёт такой гарантии; обычный blocking
+`os.Stdin` также нельзя считать pollable. Для протокола, где peer держит stdin
+открытым до ответа, writer ответа не должен ждать бесконечного reader join.
+Consumer явно владеет отдельным interruptible input и закрывает/join его при
+завершении либо caller cancel, включая ожидание первого frame. Исходный fd
+не усыновляется и не закрывается чужим consumer; `/dev/stdin` не переоткрывается
+вместо передачи descriptor. Для Unix duplicate fd с nonblocking/poller
+проверяется поддержка deadline, blocking fallback закрыто запрещён.
+
+Согласно [Go1.26.6 NewFile и File.Close](https://pkg.go.dev/os@go1.26.6),
+nonblocking descriptor позволяет создать pollable File, а отмена pending I/O
+через Close гарантируется для deadline-capable File. Участок проверяется
+настоящим child-process OS pipe: peer writer остаётся открытым, пока child
+не вернул ответ и не завершил reader; отдельный случай отменяет context до
+первого frame. Ни успешный `io.Pipe` mock, ни EOF, заранее отправленный fixture,
+не подменяют это доказательство. Наличие caller cancellation не означает
+самостоятельный initial idle deadline CLI: такой бюджет описывается отдельно.

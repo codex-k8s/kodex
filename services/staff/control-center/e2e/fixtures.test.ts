@@ -9,11 +9,14 @@ import {
   type SyntheticSnapshotReader,
 } from "./fixtures/runs-catalog";
 import { installProviderFixture } from "./fixtures/providers";
+import { validateFinancialOverview } from "../src/features/providers/financial-summary";
+import { syntheticProviderFinancialOverview } from "./fixtures/provider-financial";
 import { installEnvironmentFixture } from "./fixtures/environment";
 import {
   type RoleImageRecipePage,
   type RoleImageRecipeDetail,
   type IntegrationGrantInput,
+  type ProviderAccount,
 } from "../src/shared/api/generated/openapi/types.gen";
 import { checkGrantCandidates } from "./fixtures/grant-candidates";
 import {
@@ -34,6 +37,32 @@ import type {
 } from "../src/shared/api/generated/openapi/types.gen";
 
 describe("synthetic typed catalog producers", () => {
+  it("финансовый снимок ограничивает строки, сохраняя полный unknown и исключая удалённый аккаунт", () => {
+    const accounts = [
+      "REVOKED",
+      "AUTHORIZED",
+      "PENDING_AUTHORIZATION",
+      "DELETING",
+      "DELETED",
+    ].map((state, index) => ({
+      ref: `pacc_finance_${String(index)}`,
+      name: `Аккаунт ${String(index)}`,
+      definitionKey: "openai-codex",
+      state,
+    })) as ProviderAccount[];
+    const overview = validateFinancialOverview(
+      syntheticProviderFinancialOverview(accounts),
+    );
+    expect(overview).toMatchObject({ total: 4, unknown: 4, exhausted: 0 });
+    expect(overview.accounts.map((item) => item.ref)).toEqual([
+      "pacc_finance_0",
+      "pacc_finance_1",
+      "pacc_finance_2",
+    ]);
+    expect(
+      overview.accounts.every((item) => item.financialSummary === undefined),
+    ).toBe(true);
+  });
   it("workflow fixture сохраняет strict pins и меняет published state только после unmount прежнего редактора", () => {
     const source = readFileSync(
       new URL("./fixtures/workflow.ts", import.meta.url),
@@ -672,6 +701,9 @@ describe("synthetic typed catalog producers", () => {
       read = value;
     });
     expect(read?.()?.catalog?.accounts).toEqual([]);
+    expect(
+      validateFinancialOverview(read?.()?.catalog?.financialSummary),
+    ).toMatchObject({ accounts: [], total: 0, unknown: 0, exhausted: 0 });
     const request = {
       url: () => "https://kodex.test/api/v1/provider-accounts",
       method: () => "POST",
@@ -690,6 +722,22 @@ describe("synthetic typed catalog producers", () => {
       },
     } as unknown as Route);
     expect(read()?.catalog?.accounts).toEqual([response]);
+    const finance = validateFinancialOverview(
+      read()?.catalog?.financialSummary,
+    );
+    expect(finance).toMatchObject({
+      accounts: [{ ref: "pacc_synthetic_0", name: "Synthetic account" }],
+      total: 1,
+      unknown: 1,
+      exhausted: 0,
+    });
+    const financeAccount = finance.accounts[0];
+    if (!financeAccount) throw new Error("Missing synthetic financial account");
+    financeAccount.name = "Изменённый снимок";
+    expect(
+      validateFinancialOverview(read()?.catalog?.financialSummary).accounts[0]
+        ?.name,
+    ).toBe("Synthetic account");
     const old = read();
     const account = old?.catalog?.accounts?.[0];
     if (!account) throw new Error("Missing synthetic account");
@@ -771,6 +819,9 @@ describe("synthetic typed catalog producers", () => {
       deletion: { state: "DELETED", pendingCleanup: 0 },
     });
     expect(read()?.catalog?.accounts).toEqual([]);
+    expect(
+      validateFinancialOverview(read()?.catalog?.financialSummary),
+    ).toMatchObject({ accounts: [], total: 0, unknown: 0, exhausted: 0 });
     expect(fixture.events).toContain("deleted-readback");
     expect(fixture.failures).toEqual([]);
   });

@@ -34,6 +34,71 @@ async function renderContextOnly(compact: boolean): Promise<string> {
 }
 
 describe("RunTokenUsage", () => {
+  it.each([
+    { completeness: undefined, tokens: 0, label: "unknown", measured: false },
+    {
+      completeness: "UNKNOWN" as const,
+      tokens: 100,
+      label: "unknown",
+      measured: true,
+    },
+    {
+      completeness: "PARTIAL" as const,
+      tokens: 0,
+      label: "partial",
+      measured: true,
+    },
+    {
+      completeness: "PARTIAL" as const,
+      tokens: 100,
+      label: "partial",
+      measured: true,
+    },
+    {
+      completeness: "COMPLETE" as const,
+      tokens: 0,
+      label: undefined,
+      measured: true,
+    },
+  ])(
+    "сохраняет качество $completeness и числовой subtotal $tokens",
+    async (row) => {
+      const app = createSSRApp({
+        render: () =>
+          h(RunTokenUsage, {
+            usage: {
+              completeness: row.completeness,
+              totalTokens: row.tokens,
+              inputTokens: row.tokens,
+              outputTokens: 0,
+              cachedInputTokens: 0,
+              cacheWriteInputTokens: 0,
+              reasoningOutputTokens: 0,
+              modelContextWindow: 475000,
+            },
+          }),
+      });
+      app.use(
+        createI18n({
+          legacy: false,
+          locale: "ru",
+          missingWarn: false,
+          fallbackWarn: false,
+          messages: { ru: {} },
+        }),
+      );
+      const html = await renderToString(app);
+      if (row.label) expect(html).toContain(`runs.usage.${row.label}`);
+      else {
+        expect(html).not.toContain("runs.usage.unknown");
+        expect(html).not.toContain("runs.usage.partial");
+      }
+      expect(html.includes("runs.usage.total")).toBe(row.measured);
+      if (row.completeness === "COMPLETE")
+        expect(html).toMatch(/<dd\b[^>]*>0<\/dd>/);
+    },
+  );
+
   it("не выдаёт размер контекстного окна за расход в компактном виде", async () => {
     expect(await renderContextOnly(true)).not.toContain("token-usage");
   });
@@ -87,7 +152,7 @@ describe("RunTokenUsage", () => {
 
     const html = await renderToString(app);
 
-    expect(html).toContain('class="token-usage token-usage--compact"');
+    expect(html).toMatch(/class="[^"]*\btoken-usage--compact\b[^"]*"/);
     expect(html).toContain('aria-label="Использование токенов"');
     expect(html).toContain(new Intl.NumberFormat("ru").format(43034));
     expect(html).toContain(new Intl.NumberFormat("ru").format(38000));

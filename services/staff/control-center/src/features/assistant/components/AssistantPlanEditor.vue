@@ -910,7 +910,10 @@ const friendlyInputsReady = computed(() =>
           )) &&
         (operation.value.type !== "UPDATE_AGENT" ||
           agentProfileValidity.value[operation.value.ref] === true) &&
-        (operation.value.type !== "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" ||
+        (![
+          "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION",
+          "PREPARE_AGENT_RUNTIME_CONFIGURATION",
+        ].includes(operation.value.type) ||
           assistantRuntimeValidity.value[operation.value.ref] === true) &&
         (operation.value.type !== "CREATE_INSTRUCTION_DRAFT" ||
           fieldValue(operation, "instructions").trim().length >= 20) &&
@@ -2038,8 +2041,10 @@ function validationProblemLabel(problem: string): string {
                   operation.value.target.kind !== 'ROLE_IMAGE_RECIPE' &&
                   operation.value.type !== 'CREATE_AGENT' &&
                   operation.value.type !== 'UPDATE_AGENT' &&
-                  operation.value.type !==
-                    'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION' &&
+                  ![
+                    'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION',
+                    'PREPARE_AGENT_RUNTIME_CONFIGURATION',
+                  ].includes(operation.value.type) &&
                   operation.value.type !== 'CREATE_INSTRUCTION_DRAFT' &&
                   operation.value.type !==
                     'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS'
@@ -2070,8 +2075,10 @@ function validationProblemLabel(problem: string): string {
                     'PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION' &&
                   operation.value.type !== 'CREATE_AGENT' &&
                   operation.value.type !== 'UPDATE_AGENT' &&
-                  operation.value.type !==
-                    'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION' &&
+                  ![
+                    'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION',
+                    'PREPARE_AGENT_RUNTIME_CONFIGURATION',
+                  ].includes(operation.value.type) &&
                   operation.value.type !== 'CREATE_INSTRUCTION_DRAFT' &&
                   operation.value.type !==
                     'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS'
@@ -2598,8 +2605,10 @@ function validationProblemLabel(problem: string): string {
               </template>
               <AssistantRuntimeConfigurationPlanForm
                 v-else-if="
-                  operation.value.type ===
-                  'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION'
+                  [
+                    'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION',
+                    'PREPARE_AGENT_RUNTIME_CONFIGURATION',
+                  ].includes(operation.value.type)
                 "
                 :operation="operation"
                 :disabled="!editable"

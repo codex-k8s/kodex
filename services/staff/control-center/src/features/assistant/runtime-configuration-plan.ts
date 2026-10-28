@@ -64,13 +64,17 @@ export function assistantRuntimePlanOwner(
     "organizationRef",
     "projectRef",
     "assistantProfileRef",
+    "targetKind",
   ];
   if (
     !organizationRef ||
     !/^[A-Za-z0-9_-]{8,128}$/.test(organizationRef) ||
     operation.action !== "UPDATE" ||
     parameters.organizationRef !== organizationRef ||
-    operation.type !== "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" ||
+    ![
+      "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION",
+      "PREPARE_AGENT_RUNTIME_CONFIGURATION",
+    ].includes(operation.type) ||
     target.kind !== "AGENT" ||
     target.ref !== parameters.agentRef ||
     !target.ref ||
@@ -84,6 +88,16 @@ export function assistantRuntimePlanOwner(
     )
   )
     return false;
+  if (operation.type === "PREPARE_AGENT_RUNTIME_CONFIGURATION")
+    return (
+      parameters.targetKind === "AGENT" &&
+      parameters.scopeKind === "PROJECT" &&
+      typeof parameters.projectRef === "string" &&
+      /^[A-Za-z0-9_-]{8,128}$/.test(parameters.projectRef) &&
+      parameters.assistantScope === undefined &&
+      parameters.assistantProfileRef === undefined
+    );
+  if (parameters.targetKind !== undefined) return false;
   if (parameters.assistantScope === "SYSTEM")
     return (
       parameters.scopeKind === "ORGANIZATION" &&

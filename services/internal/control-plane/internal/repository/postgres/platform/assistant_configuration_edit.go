@@ -15,7 +15,7 @@ import (
 // assistantConfigurationOperationType распознаёт только шесть поддерживаемых assistant
 // configuration/image/integration operation kinds; не проверяет payloads и не выдаёт authority.
 func assistantConfigurationOperationType(kind string) bool {
-	return kind == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" || kind == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" || kind == prepareProjectAssistantConnection || kind == changeProjectAssistantIntegrationGrant
+	return kind == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || preparedRuntimeConfigurationOperation(kind) || kind == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" || kind == prepareProjectAssistantConnection || kind == changeProjectAssistantIntegrationGrant
 }
 
 // rehydrateEditedAssistantConfiguration requires unchanged type/key and typed parameters, routes
@@ -44,7 +44,7 @@ func (repository *Repository) rehydrateEditedAssistantConfiguration(ctx context.
 	request := cloneAssistantFields(edited.Parameters)
 	var refreshed entity.AssistantPlanOperation
 	var err error
-	if original.Type == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
+	if preparedRuntimeConfigurationOperation(original.Type) {
 		if !refreshStale {
 			frozen, normalizeErr := normalizeAssistantOperation(original)
 			if normalizeErr != nil {
@@ -72,7 +72,7 @@ func (repository *Repository) rehydrateEditedAssistantConfiguration(ctx context.
 			}
 		}
 		edited.Parameters = parameters
-		refreshed, err = repository.hydrateAssistantRuntimeConfiguration(ctx, tx, current, edited)
+		refreshed, err = repository.hydratePreparedRuntimeConfiguration(ctx, tx, current, assistantString(original.Parameters, "projectRef"), edited)
 	} else {
 		if !refreshStale {
 			frozen, normalizeErr := normalizeAssistantOperation(original)
@@ -111,8 +111,8 @@ func (repository *Repository) rehydrateEditedAssistantConfiguration(ctx context.
 		// После явного STALE меняются только версии зависимостей нового
 		// snapshot. Идентичность ресурса и его владелец остаются прежними.
 		fields := []string{"systemAssistantRef", "scopeKind", "organizationRef", "recipeRef"}
-		if original.Type == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
-			fields = []string{"agentRef", "assistantScope", "scopeKind", "organizationRef", "projectRef", "assistantProfileRef"}
+		if preparedRuntimeConfigurationOperation(original.Type) {
+			fields = []string{"agentRef", "assistantScope", "scopeKind", "organizationRef", "projectRef", "assistantProfileRef", "targetKind"}
 		}
 		for _, field := range fields {
 			if !assistantJSONEqual(refreshed.Parameters[field], original.Parameters[field]) {

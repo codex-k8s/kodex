@@ -10,12 +10,16 @@ import { entityCardMessages } from "@/features/workflows/catalog/messages";
 import { automationPreviewMessages } from "@/features/automations/prompt-preview-messages";
 import { vulnerabilityMessages } from "@/features/role-images/vulnerability-messages";
 import { fileRevisionMessages } from "@/features/files/revision-messages";
+import { repositoryBundleMessages } from "@/features/workboard/repository-bundle-messages";
+import { workflowResultMessages } from "@/features/workflows/result-messages";
 
 import { currentLocale } from "@/shared/locale";
 import { serverMessagesFor } from "@/shared/ui/server-message-catalog";
 import { additionalPermissionMessages } from "@/shared/ui/permission-message-catalog";
 
 const ru = {
+  workflowResults: workflowResultMessages.ru,
+  repositoryBundle: repositoryBundleMessages.ru,
   fileRevision: fileRevisionMessages.ru,
   imageVulnerabilities: vulnerabilityMessages.ru,
   ...sttActivationMessages.ru,
@@ -479,6 +483,8 @@ const ru = {
       ARTIFACT_NOT_ACTIVE: "Файл не активен",
       ARTIFACT_NOT_DELETED: "Файл не находится в корзине",
       ARTIFACT_HAS_BINDINGS: "У файла есть привязки",
+      ARTIFACT_HAS_RETAINED_REVISIONS:
+        "Ревизии файла удерживаются действующими потребителями",
       ACTIVE_RUN_USES_ARTIFACT: "Файл используется активным запуском",
     },
     refresh: "Обновить",
@@ -665,6 +671,7 @@ const ru = {
       inputFields: "Входные поля",
       outputFields: "Выходные поля",
       execution: "Выполнение",
+      leaseProfile: "Профиль аренды выполнения",
       idempotency: "Идемпотентность",
       retryBackoffMilliseconds: "Пауза повтора, мс",
       allowEmpty: "Разрешить пустое значение",
@@ -1829,6 +1836,12 @@ const ru = {
     },
   },
   runtimeSecrets: {
+    purpose: "Назначение секрета",
+    purposeApplication: "Секрет приложения",
+    purposeSSH: "Ключ SSH для Compose",
+    purposeSSHHelp:
+      "Ключ доступен только worker развёртывания. Его нельзя показать или прикрепить к окружению ИИ. Назначение нельзя отменить.",
+
     decodedSize: "Размер данных: {size} байт",
     draft: {
       title: "Черновик секрета",
@@ -2120,6 +2133,9 @@ const ru = {
     parallelGroup: "Номер параллельной группы",
     stepTimeout: "Тайм-аут этапа, секунд",
     expectedResult: "Ожидаемый результат",
+    approvalTimeout: "Срок согласования, секунд",
+    approvalTimeoutHelp:
+      "Пустое поле — без отдельного срока. После истечения процесс завершится ошибкой; общий срок процесса действует независимо.",
     gateDecisions: "Допустимые решения человека",
     gateDecision: {
       APPROVE: "Утвердить",
@@ -2384,6 +2400,8 @@ const ru = {
     promptPreviewSafeHint: "Безопасный состав и версии, не полный ввод модели.",
     usage: {
       title: "Использование токенов",
+      unknown: "Полнота расхода неизвестна",
+      partial: "Неполный расход: показан подтверждённый подытог",
       total: "Всего",
       input: "Вход",
       cached: "Из кэша",
@@ -2477,8 +2495,9 @@ const ru = {
       AGENT_ARCHIVED: "Сотрудник архивирован; новое подключение недоступно.",
       ARTIFACT_UNAVAILABLE: "Состояние файла не допускает это действие.",
     },
+    uploaded: "Загружен",
     bindingHint:
-      "Выберите сотрудников, которым этот проверенный файл будет доступен как источник знаний.",
+      "Выберите сотрудников для доступа к источнику знаний. Подключение доступно только после успешной проверки файла.",
     agentFilesCapabilityRequired:
       "Сначала выдайте сотруднику возможность «Файлы» в его карточке.",
     noAgents: "Сначала создайте ИИ-сотрудника в этом Проекте.",
@@ -2652,6 +2671,7 @@ const ru = {
       CONFLUENCE_SPACE: "Пространство Confluence",
       EMAIL_SENDER: "Почтовый ящик",
       HTTPS_RESOURCE: "HTTPS-ресурс",
+      SSH_TARGET: "Назначение SSH/Compose",
     },
     approvalScopeTitle: "Какие параметры связывает одно согласование",
     approvalScopeHelp:
@@ -2907,6 +2927,10 @@ const ru = {
       title: "Заголовок",
       comment: "Комментарий",
       text: "Текст",
+      merged_sha: "Слитый коммит",
+      tree_sha: "Git tree",
+      bundle_sha256: "SHA-256 полного исходного кода",
+      runtime_image: "Неизменяемый образ приложения",
     },
     comment: "Комментарий",
     commentPlaceholder: "Добавьте контекст для продолжения работы",
@@ -3961,6 +3985,7 @@ const ru = {
       UPDATE_ROLE_IMAGE_RECIPE: "Изменить рецепт образа",
       CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE: "Создать рецепт образа Kodex",
       UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE: "Изменить рецепт образа Kodex",
+      PREPARE_AGENT_RUNTIME_CONFIGURATION: "Настроить модель сотрудника",
       PREPARE_ASSISTANT_RUNTIME_CONFIGURATION:
         "Подготовить настройки модели помощника",
       CREATE_WORKFLOW: "Создать Workflow",
@@ -4486,9 +4511,9 @@ const ru = {
       systemImageNextSteps:
         "Подтверждение сохранит рецепт образа. Затем откройте его и проверьте состояние сборки. После успешного допуска отдельно опубликуйте образ и выберите его в окружении помощника. Текущие ходы сохранят прежний образ.",
       runtimeConfigurationBoundary:
-        "Настройки модели применятся только к закреплённому помощнику и следующим ходам. После сохранения и проверки плана отдельно подтвердите применение; текущие ходы сохранят прежнюю конфигурацию.",
+        "Настройки модели применятся только к закреплённому сотруднику или помощнику и следующим ходам. После сохранения и проверки плана отдельно подтвердите применение; текущие ходы сохранят прежнюю конфигурацию.",
       runtimeConfigurationUnavailable:
-        "Не удалось подтвердить привязку помощника или каталог. Обновите план; изменения пока недоступны.",
+        "Не удалось подтвердить привязку сотрудника или помощника либо каталог. Обновите план; изменения пока недоступны.",
       webSearchMode: "Поиск в интернете",
       webSearchUnchanged: "Не менять",
       webSearchDefault: "Настройка по умолчанию",
@@ -4721,6 +4746,8 @@ const ru = {
 
 const en = {
   ...ru,
+  workflowResults: workflowResultMessages.en,
+  repositoryBundle: repositoryBundleMessages.en,
   fileRevision: fileRevisionMessages.en,
   imageVulnerabilities: vulnerabilityMessages.en,
   ...sttActivationMessages.en,
@@ -4906,6 +4933,8 @@ const en = {
       ARTIFACT_NOT_ACTIVE: "File is not active",
       ARTIFACT_NOT_DELETED: "File is not in the trash",
       ARTIFACT_HAS_BINDINGS: "File has bindings",
+      ARTIFACT_HAS_RETAINED_REVISIONS:
+        "File revisions are retained by current consumers",
       ACTIVE_RUN_USES_ARTIFACT: "File is used by an active run",
     },
     refresh: "Refresh",
@@ -5307,6 +5336,7 @@ const en = {
       inputFields: "Input fields",
       outputFields: "Output fields",
       execution: "Execution",
+      leaseProfile: "Execution lease profile",
       idempotency: "Idempotency",
       retryBackoffMilliseconds: "Retry backoff, ms",
       allowEmpty: "Allow empty value",
@@ -6656,6 +6686,12 @@ const en = {
     },
   },
   runtimeSecrets: {
+    purpose: "Secret purpose",
+    purposeApplication: "Application secret",
+    purposeSSH: "SSH key for Compose",
+    purposeSSHHelp:
+      "Only the deployment worker can access this key. It cannot be revealed or attached to an AI runtime environment. Its purpose cannot be reverted.",
+
     title: "Project secrets",
     draft: {
       title: "Secret draft",
@@ -6827,6 +6863,9 @@ const en = {
     parallelGroup: "Parallel group number",
     stepTimeout: "Step timeout, seconds",
     expectedResult: "Expected result",
+    approvalTimeout: "Approval waiting time, seconds",
+    approvalTimeoutHelp:
+      "Leave empty for no separate limit. Expiry fails the process; its execution deadline still applies independently.",
     gateDecisions: "Allowed human decisions",
     gateDecision: {
       APPROVE: "Approve",
@@ -7093,6 +7132,8 @@ const en = {
     promptPreviewSafeHint: "Safe sections and revisions, not full model input.",
     usage: {
       title: "Token usage",
+      unknown: "Usage completeness is unknown",
+      partial: "Partial usage: confirmed subtotal",
       total: "Total",
       input: "Input",
       cached: "Cached",
@@ -7187,8 +7228,9 @@ const en = {
       AGENT_ARCHIVED: "The employee is archived; new bindings are unavailable.",
       ARTIFACT_UNAVAILABLE: "The file state does not allow this action.",
     },
+    uploaded: "Uploaded",
     bindingHint:
-      "Choose the employees who can use this validated file as a knowledge source.",
+      "Choose employees for knowledge access. Binding is available only after the file passes validation.",
     agentFilesCapabilityRequired:
       "Grant the Files capability in the employee card first.",
     noAgents: "Create an AI employee in this Project first.",
@@ -7363,6 +7405,7 @@ const en = {
       CONFLUENCE_SPACE: "Confluence space",
       EMAIL_SENDER: "Email mailbox",
       HTTPS_RESOURCE: "HTTPS resource",
+      SSH_TARGET: "SSH/Compose target",
     },
     approvalScopeTitle: "Parameters covered by one approval",
     approvalScopeHelp:
@@ -7619,6 +7662,10 @@ const en = {
       title: "Title",
       comment: "Comment",
       text: "Text",
+      merged_sha: "Merged commit",
+      tree_sha: "Git tree",
+      bundle_sha256: "Complete source SHA-256",
+      runtime_image: "Immutable application image",
     },
     comment: "Comment",
     commentPlaceholder: "Add context for the next step",
@@ -8659,6 +8706,7 @@ const en = {
       UPDATE_ROLE_IMAGE_RECIPE: "Update image recipe",
       CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE: "Create Kodex image recipe",
       UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE: "Update Kodex image recipe",
+      PREPARE_AGENT_RUNTIME_CONFIGURATION: "Configure employee model",
       PREPARE_ASSISTANT_RUNTIME_CONFIGURATION:
         "Prepare assistant model settings",
       CREATE_WORKFLOW: "Create Workflow",
@@ -9179,9 +9227,9 @@ const en = {
       systemImageNextSteps:
         "Confirmation saves the image recipe. Then open it and check the build status. After successful admission, publish the image separately and select it in the assistant environment. Current turns keep their existing image.",
       runtimeConfigurationBoundary:
-        "Model settings apply only to the pinned assistant and future turns. Save and validate the plan, then separately confirm application; current turns keep their existing configuration.",
+        "Model settings apply only to the pinned employee or assistant and future turns. Save and validate the plan, then separately confirm application; current turns keep their existing configuration.",
       runtimeConfigurationUnavailable:
-        "The assistant binding or catalog could not be verified. Refresh the plan; changes are unavailable for now.",
+        "The employee or assistant binding or catalog could not be verified. Refresh the plan; changes are unavailable for now.",
       webSearchMode: "Web search",
       webSearchUnchanged: "Keep current setting",
       webSearchDefault: "Default setting",

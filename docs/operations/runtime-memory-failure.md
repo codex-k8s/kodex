@@ -4,8 +4,8 @@ title: Диагностика нехватки памяти исполнител
 type: operations
 status: approved
 owner: manager
-version: 1.0.1
-updated: 2026-10-13
+version: 1.0.2
+updated: 2026-10-25
 ---
 
 # Граница изменения в bootstrap #1797
@@ -63,3 +63,51 @@ Log содержит только stage и прежний gRPC code, не оши
 provider credential или SQL. Endpoint, ответ, scope, locks, rollback/commit,
 OCC/fences, refresh policy, события и eligibility не изменяются. Успех не
 приобретает failure marker. Это диагностика причины, не исправление конфликта.
+
+## Прерывание исполнения и выселение окружения (#1856)
+
+В callback producer `agent-runner/internal/callback.Client.Complete` только
+проверенная exact diagnostic `REQUEST_FAILURE / TERMINAL_WAIT / PROVIDER /
+CONTEXT_CANCELLED` с исходным машинным `PROVIDER_UNAVAILABLE` меняется на
+существующий `RUNTIME_UNAVAILABLE` и резюме `i18n:RUNTIME_INTERRUPTED`.
+Префиксированный `RUNTIME_PROVIDER_UNAVAILABLE` является прежним ключом
+пользовательского сообщения, а не машинным кодом этого predicate.
+Проверяются schema/closed enums и RuntimeRevision/input/execution digests,
+session/turn/attempt. Mapping выполняется после validation, до единственной
+serialization; повтор доставки использует прежние зафиксированные bytes.
+Usage (включая completeness), artifacts, archive и diagnostic не меняются.
+Успех, auth, cancel, timeout, workspace failure и прочие diagnostic не remap.
+Уже принятые старые RC intents не переинтерпретируются.
+
+| Сценарий | Переход и authority | Результат / read path |
+| --- | --- | --- |
+| Отменённое ожидание с exact diagnostic | Прежний callback ticket и owner lease/fence/generation; mapping в runner перед serialization | FAILED с generic code и локализованным прерыванием, прежние usage/archive/artifact receipts; HTTP/WS → SafeSummary |
+| Потерянный callback ACK / retry | Тот же immutable intent и idempotency key; Pod не входит в predicate | Прежний owner replay; изменённый Pod не меняет bytes либо authority |
+| Tracker первым видит текущий `Pod.Status.Reason=Evicted` | Один GET cold Pod, exact metadata и непустой observed UID; прежний callback grace и owner completion | Generic `RUNTIME_UNAVAILABLE`, резюме `RUNTIME_ENVIRONMENT_EVICTED`; без нового event/enum |
+| Текущий OOM известного контейнера | Прежний typed State.Terminated, приоритет над Evicted/обычным выходом | Прежнее `RUNTIME_MEMORY_EXHAUSTED`; exit137/history/чужой контейнер OOM не доказывают |
+| Callback первым завершил ошибку | Только новый успешный owner commit, до cleanup; один bounded cold GET (1s) | Операторские closed `pod_observation/pod_reason/observed_pod_uid`; callback не меняется. Старые memory log keys сохранены |
+| Success / owner error / AlreadyExists | Прежний ответ owner | Без нового probe/лога ошибки; cleanup и cardinality не расширяются |
+| Чужие metadata, revision/lease/attempt, пустой UID / read error / missing Pod | Закрытый конфликт либо недоступность | Нет Evicted/OOM; raw message не используется и не выводится |
+| Warm | Сохраняется существующий compatibility check; probe не читает общий warm Pod | История его ресурсов не приписывается текущему cold исполнению |
+| Cancel/delete/expiry/late callback | Прежние owner terminal guards и отзыв grants | Наблюдение не открывает root и не восстанавливает lease |
+
+Cold metadata берутся из общего producer `runtimePodMetadata`: namespace/name,
+managed/mode/execution hash, revision/config/environment/workspace/execution/MCP
+и policy digests, controller, organization/project/session/turn/attempt, lease.
+Полный `runtimePodMatches` остаётся в Create/adopt. UID — **текущий наблюдённый
+UID одного GET**, а не historical expected UID и не источник полномочий.
+Историческое UID pinning данным unit не вводится; новых реестров/кэшей/прав нет.
+Root/run полномочия и действительность lease по-прежнему проверяет owner.
+
+Typed `Evicted` не различает storage pressure, лимит emptyDir, memory pressure
+и другие причины. Kubernetes message не парсится. Точная storage-specific
+причина в UI позднего callback **не исправлена**: он получает только нейтральное
+прерывание, а доступный текущий Pod даёт отдельную операторскую диагностику.
+Живое воспроизведение эвикции, новые лимиты, cache/TMPDIR tuning и восстановление
+scratch не входят в проверку. Опубликованные CLEAN artifacts и Git остаются
+штатным путём восстановления; временный checkout не является durable state.
+
+Доставка: новый RC с диагностикой принимает прежние callback payloads;
+локализация PWA устанавливается до активации нового runner. Proto/DB/RuntimeRevision hash/права/лимиты не
+меняются. Старый runner сохраняет прежнее поведение; это не remap исторических
+completion receipts. Rollback кода не меняет уже сохранённые сообщения.

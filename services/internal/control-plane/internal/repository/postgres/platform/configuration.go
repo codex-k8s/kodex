@@ -432,6 +432,11 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		if !valid || definition.ValidateConnectionBootstrapConfiguration(configuration) != nil || payload.CredentialRevision != nil {
 			return commandOutcome{}, errs.ErrInvalid
 		}
+		if payload.DefinitionKey == "ssh-compose" {
+			if err := repository.validateSSHComposeConfiguration(ctx, tx, scope, "", configuration); err != nil {
+				return commandOutcome{}, err
+			}
+		}
 		ref, _ := newRef("int")
 		maskedCredentials := "CONFIGURED"
 		if definition.Spec.Credential != nil || payload.DefinitionKey == "openapi-mcp" {
@@ -460,6 +465,9 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	if err := repository.cancelConfigurationWriteBacks(ctx, tx, scope, "", payload.Ref); err != nil {
+		return commandOutcome{}, err
+	}
+	if err := repository.cancelRepositoryBundleDependency(ctx, tx, scope, "CONNECTION", payload.Ref); err != nil {
 		return commandOutcome{}, err
 	}
 	if input.Kind == command.UpdateConnection {
@@ -513,12 +521,22 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		if readErr != nil {
 			return commandOutcome{}, readErr
 		}
+		if err := repository.invalidateSSHComposeDependencies(ctx, tx, scope.organizationID, scope.actorID, scope.correlationRef, payload.Ref, "", ""); err != nil {
+			return commandOutcome{}, err
+		}
 		return commandOutcome{result: command.Result{Connection: &item}, resourceKind: "INTEGRATION_CONNECTION", resourceRef: item.Ref, summary: "i18n:INTEGRATION_CREDENTIAL_CONFIGURED", platformEvent: "INTEGRATION_CONNECTION_CHANGED"}, nil
 	}
 	if input.Kind == command.TestConnection {
 		locked, err := repository.lockIntegrationConnection(ctx, tx, scope.organizationID, payload.Ref)
 		if err != nil {
 			return commandOutcome{}, err
+		}
+		var activeSSHDependency bool
+		if err := tx.QueryRow(ctx, querySSHComposeActiveDependency, pgx.StrictNamedArgs{"organization_id": scope.organizationID, "connection_ref": payload.Ref}).Scan(&activeSSHDependency); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if activeSSHDependency {
+			return commandOutcome{}, errs.ErrConflict
 		}
 		definition, err := repository.integrationPackage(ctx, tx, scope.organizationID, payload.Ref, locked.definitionKey, locked.definitionVersion, locked.definitionDigest)
 		if err != nil {
@@ -556,6 +574,9 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		if !payload.Enabled {
+			if err := repository.invalidateSSHComposeDependencies(ctx, tx, scope.organizationID, scope.actorID, scope.correlationRef, payload.Ref, "", ""); err != nil {
+				return commandOutcome{}, err
+			}
 			args := pgx.StrictNamedArgs{"organization_id": scope.organizationID, "connection_ref": payload.Ref}
 			if err := repository.cancelInteractionIntents(ctx, tx, scope, payload.Ref); err != nil {
 				return commandOutcome{}, err
@@ -572,7 +593,11 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	return commandOutcome{result: command.Result{Connection: &item}, resourceKind: "INTEGRATION_CONNECTION", resourceRef: item.Ref, summary: "i18n:INTEGRATION_CONNECTION_UPDATED", platformEvent: "INTEGRATION_CONNECTION_CHANGED"}, nil
+	outcome := commandOutcome{result: command.Result{Connection: &item}, resourceKind: "INTEGRATION_CONNECTION", resourceRef: item.Ref, summary: "i18n:INTEGRATION_CONNECTION_UPDATED", platformEvent: "INTEGRATION_CONNECTION_CHANGED"}
+	if item.DefinitionKey == "ssh-compose" {
+		outcome.platformAggregateVersion, outcome.platformState = item.Version, item.State
+	}
+	return outcome, nil
 }
 
 // lockedIntegrationConnection holds the locked connection identity, lifecycle/runtime state,
@@ -664,6 +689,11 @@ func (repository *Repository) updateIntegrationConnection(
 	if locked.state == "TESTING" {
 		return commandOutcome{}, errs.ErrConflict
 	}
+	if locked.definitionKey == "ssh-compose" {
+		if err := repository.validateSSHComposeConfiguration(ctx, tx, current, payload.Ref, configuration); err != nil {
+			return commandOutcome{}, err
+		}
+	}
 	activeEffects, _, err := repository.integrationConnectionDependencies(ctx, tx, locked.id)
 	if err != nil {
 		return commandOutcome{}, err
@@ -686,6 +716,9 @@ func (repository *Repository) updateIntegrationConnection(
 	}
 	if _, err := tx.Exec(ctx, queryConfigurationChangeconnectionUpdateIntegrationConnectionTestsStateLeaseRefFenceDigest, dependencyArgs); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if err := repository.invalidateSSHComposeDependencies(ctx, tx, current.organizationID, current.actorID, current.correlationRef, payload.Ref, "", ""); err != nil {
+		return commandOutcome{}, err
 	}
 	item, err := readConnection(ctx, tx, current, updatedRef)
 	if err != nil {
@@ -839,6 +872,18 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 	if !capability.AllowsApprovalPolicy(payload.ApprovalPolicy) {
 		return commandOutcome{}, errs.ErrInvalid
 	}
+	if payload.Enabled && capability.Operation == repositoryBundleOperation {
+		if input.Kind != command.ChangeIntegrationGrant {
+			return commandOutcome{}, errs.ErrForbidden
+		}
+		eligible, err := repositoryBundleRecipientEligible(ctx, tx, scope, targetType, targetRef)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		if !eligible {
+			return commandOutcome{}, errs.ErrForbidden
+		}
+	}
 	if payload.Enabled {
 		if payload.ApprovalPolicy == "HUMAN_SCOPED" {
 			if capability.ValidateApprovalScopePaths(payload.ApprovalScopePaths) != nil {
@@ -887,7 +932,13 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 	if err := repository.cancelInteractionIntents(ctx, tx, scope, payload.ConnectionRef); err != nil {
 		return commandOutcome{}, err
 	}
+	if err := repository.invalidateSSHComposeDependencies(ctx, tx, scope.organizationID, scope.actorID, scope.correlationRef, "", "", grantRef); err != nil {
+		return commandOutcome{}, err
+	}
 	if err := repository.cancelConfigurationWriteBacks(ctx, tx, scope, "", payload.ConnectionRef); err != nil {
+		return commandOutcome{}, err
+	}
+	if err := repository.cancelRepositoryBundleDependency(ctx, tx, scope, "CONNECTION", payload.ConnectionRef); err != nil {
 		return commandOutcome{}, err
 	}
 	tag, err := tx.Exec(ctx, queryConfigurationChangeintegrationgrantUpdateIntegrationConnectionsVersion, connectionID, connectionVersion)
@@ -1545,7 +1596,7 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 				err = errs.ErrConflict
 			}
 		}
-		if operation.Type == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
+		if preparedRuntimeConfigurationOperation(operation.Type) {
 			matching, matchErr := repository.assistantRuntimeConfigurationSnapshotMatches(ctx, operationEffectsTx, scope, operation)
 			if matchErr != nil || !matching {
 				err = errs.ErrConflict

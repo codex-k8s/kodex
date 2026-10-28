@@ -92,7 +92,8 @@ SELECT node.ref,
                         AND (launch.origin_node_id = node.id OR launch.proxy_node_id = node.id)
                   ))
              )
-       ), '{}'::text[])
+       ), '{}'::text[]),
+       control_plane.workflow_public_attempt_results(node.organization_id,node.id)
 FROM control_plane.run_nodes node
 JOIN control_plane.runs run ON run.id = node.run_id
 LEFT JOIN control_plane.run_nodes parent ON parent.id = node.parent_node_id

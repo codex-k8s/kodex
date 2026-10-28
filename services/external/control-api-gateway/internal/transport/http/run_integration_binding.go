@@ -26,7 +26,7 @@ func validateRunIntegrationBinding(value map[string]any, descriptor protoreflect
 		return errors.New("run integration binding is invalid")
 	}
 	switch value["summary"] {
-	case "i18n:INTEGRATION_ACTION_SUCCEEDED", "i18n:INTEGRATION_ACTION_FAILED", "i18n:INTEGRATION_ACTION_OUTCOME_UNKNOWN":
+	case "i18n:INTEGRATION_ACTION_SUCCEEDED", "i18n:INTEGRATION_ACTION_FAILED", "i18n:INTEGRATION_ACTION_OUTCOME_UNKNOWN", "i18n:INTEGRATION_ADMISSION_BLOCKED":
 		return nil
 	default:
 		return errors.New("run integration binding outcome is invalid")

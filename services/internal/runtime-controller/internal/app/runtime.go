@@ -180,6 +180,9 @@ func (runtime *runtime) Run(ctx context.Context) error {
 				runtime.setAssistantUnavailable(ctx)
 			}
 		case <-poll.C:
+			if err := runtime.reconcileWorkspaceStorage(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				runtime.logger.WarnContext(ctx, "runtime workspace storage reconciliation is unavailable")
+			}
 			if len(runtime.capacity) >= cap(runtime.capacity) {
 				poll.Reset(idleBackoff.Next(true))
 				continue
@@ -472,6 +475,8 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 	expired := resetLeaseExpiry(expiry, confirmedUntil)
 	var terminalObservedAt time.Time
 	terminalDiagnostic := ""
+	terminalInitializationKey := ""
+	var terminalInitialization *workload.InitializationObservation
 	progress, cancelProgress := leaseBoundedRequest(execution, runtime.config.RequestTimeout, confirmedUntil)
 	_ = runtime.progress(progress, input, "WORKLOAD_SCHEDULED")
 	cancelProgress()
@@ -518,15 +523,21 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 			if err != nil || !terminalTurnState(observation.State) {
 				terminalObservedAt = time.Time{}
 				terminalDiagnostic = ""
+				terminalInitializationKey = ""
+				terminalInitialization = nil
 				continue
 			}
-			if terminalObservedAt.IsZero() {
+			initializationKey := workload.InitializationObservationKey(observation.Initialization)
+			if terminalObservedAt.IsZero() || terminalInitializationKey != initializationKey {
 				terminalObservedAt = time.Now()
 				terminalDiagnostic = observation.DiagnosticCode
+				terminalInitializationKey = initializationKey
+				terminalInitialization = observation.Initialization
 				continue
 			}
 			if time.Since(terminalObservedAt) < runtime.terminalGrace {
-				if observation.DiagnosticCode == workload.TurnPodMemoryDiagnostic {
+				if observation.DiagnosticCode == workload.TurnPodMemoryDiagnostic ||
+					(observation.DiagnosticCode == workload.TurnPodEvictedDiagnostic && terminalDiagnostic != workload.TurnPodMemoryDiagnostic) {
 					terminalDiagnostic = observation.DiagnosticCode
 				}
 				continue
@@ -540,9 +551,18 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 			if terminalDiagnostic == workload.TurnPodMemoryDiagnostic || observation.DiagnosticCode == workload.TurnPodMemoryDiagnostic {
 				failureCode = "RUNTIME_MEMORY_EXHAUSTED"
 				terminalDiagnostic = workload.TurnPodMemoryDiagnostic
+			} else if terminalDiagnostic == workload.TurnPodEvictedDiagnostic || observation.DiagnosticCode == workload.TurnPodEvictedDiagnostic {
+				failureCode = "RUNTIME_ENVIRONMENT_EVICTED"
+				terminalDiagnostic = workload.TurnPodEvictedDiagnostic
 			}
-			runtime.logger.WarnContext(parent, "runtime terminal callback grace expired", "diagnostic_code", terminalDiagnostic)
-			runtime.completeFailure(context.WithoutCancel(parent), input, failureCode, terminalDiagnostic)
+			runtime.logger.WarnContext(parent, "runtime terminal callback grace expired", "diagnostic_code", terminalDiagnostic,
+				"observed_pod_uid", observation.ObservedPodUID, "run_ref", input.RunRef, "node_ref", input.NodeRef,
+				"session_ref", input.SessionRef, "turn_ref", input.TurnRef, "attempt", input.Attempt, "runtime_revision_digest", input.RuntimeRevisionDigest)
+			if terminalInitialization != nil && failureCode != "RUNTIME_MEMORY_EXHAUSTED" {
+				runtime.completeFailureWithInitialization(context.WithoutCancel(parent), input, terminalInitialization)
+			} else {
+				runtime.completeFailure(context.WithoutCancel(parent), input, failureCode, terminalDiagnostic)
+			}
 			return
 		}
 	}
@@ -662,6 +682,14 @@ func (runtime *runtime) progress(ctx context.Context, input runtimecontract.Runn
 // Успех или AlreadyExists ведут по существующему пути удаления/завершения координатора; PermissionDenied запрашивает очистку отозванного хода, а прочие неразрешённые ошибки сохраняют ресурсы и фиксируют закрытую диагностику.
 // Каждый RPC имеет независимый бюджет, но ожидание повторов соблюдает переданный базовый контекст; очистка выполняется по возможности и не доказывает фиксацию владельцем или однократную доставку.
 func (runtime *runtime) completeFailure(base context.Context, input runtimecontract.RunnerInput, code, diagnosticCode string) {
+	runtime.deliverFailureCompletion(base, input, code, diagnosticCode, nil)
+}
+
+// deliverFailureCompletion freezes one request and preserves existing retry/owner/cleanup semantics.
+// Optional init observation changes only the closed summary and post-ACK safe diagnostic log.
+// deliverFailureCompletion закрепляет один запрос и сохраняет retry/owner/cleanup semantics.
+// Init observation меняет лишь closed summary и безопасный diagnostic log после ACK.
+func (runtime *runtime) deliverFailureCompletion(base context.Context, input runtimecontract.RunnerInput, code, diagnosticCode string, initialization *workload.InitializationObservation) {
 	safeCode := safeRuntimeErrorCode(code)
 	if input.ExecutionDeadline != nil && code == "RUNTIME_TIMEOUT" {
 		safeCode = code
@@ -670,13 +698,18 @@ func (runtime *runtime) completeFailure(base context.Context, input runtimecontr
 	if code == "RUNTIME_REVISION_INVALID" {
 		summary = "i18n:" + safeCode
 	}
+	if initialization != nil && code == runtimecontract.InitializationFailureCode {
+		summary = runtimecontract.InitializationFailureSummary(initialization.Stage, initialization.Reason)
+	}
 	request := &controlplanev1.CompleteExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableIdempotency(input.LeaseRef, "failure:"+code)}, LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Success: false, ResultSummary: summary, SafeErrorCode: safeCode}
 	var err error
+	acknowledged := false
 	for attempt := 0; attempt < failureCompletionMaximumTries; attempt++ {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(base), runtime.config.RequestTimeout)
 		_, err = runtime.control.CompleteExecution(ctx, request)
 		cancel()
 		if err == nil || status.Code(err) == codes.AlreadyExists {
+			acknowledged = err == nil
 			err = nil
 			break
 		}
@@ -698,6 +731,9 @@ func (runtime *runtime) completeFailure(base context.Context, input runtimecontr
 		}
 		runtime.logger.ErrorContext(base, "complete failed runtime execution failed", "error_class", "control_plane", "diagnostic_code", diagnosticCode)
 		return
+	}
+	if acknowledged && initialization != nil {
+		runtime.logInitializationAcknowledgment(base, input, initialization)
 	}
 	cleanup, cancel := context.WithTimeout(context.WithoutCancel(base), runtime.config.RequestTimeout)
 	defer cancel()
@@ -764,6 +800,9 @@ func stableIdempotency(left, right string) string {
 // safeRuntimeErrorCode переводит неверную ревизию и устаревшую конфигурацию в публичные коды входа/профиля, иначе используя общий код недоступности.
 // Произвольный текст ошибки не передаётся, состояние выполнения у владельца не определяется.
 func safeRuntimeErrorCode(code string) string {
+	if code == runtimecontract.InitializationFailureCode {
+		return code
+	}
 	if code == "RUNTIME_REVISION_INVALID" {
 		return "RUNTIME_INPUT_INVALID"
 	}

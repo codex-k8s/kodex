@@ -59,6 +59,7 @@ type Task struct {
 	TargetObjectKey, TargetObjectVersion                   string
 	Attempt                                                int32
 	Archive                                                *ArchiveBinding
+	Workspace                                              *WorkspaceArchiveTask `json:",omitempty"`
 }
 
 // wireTask preserves Task's JSON field layout without recursively calling its custom codec methods.
@@ -71,7 +72,13 @@ func (task Task) MarshalJSON() ([]byte, error) { return json.Marshal(wireTask(ta
 
 // UnmarshalJSON decodes the task wire layout; callers separately apply Validate before use.
 // RU: UnmarshalJSON декодирует wire-поля задания; до использования вызывающая сторона отдельно применяет Validate.
-func (task *Task) UnmarshalJSON(raw []byte) error { return json.Unmarshal(raw, (*wireTask)(task)) }
+func (task *Task) UnmarshalJSON(raw []byte) error {
+	decoded, err := decodeWorkspaceAwareTask(raw)
+	if err == nil {
+		*task = decoded
+	}
+	return err
+}
 
 // FromProto maps the closed RPC task kinds and optional archive receipt, then validates the resulting binding.
 // RU: FromProto преобразует закрытые виды RPC-заданий и необязательную квитанцию архива, затем проверяет привязку.
@@ -100,6 +107,13 @@ func FromProto(input *controlplanev1.SessionArchiveTask) (Task, error) {
 			SourceRelativePath: archive.GetSourceRelativePath(), SourceSHA256: archive.GetSourceSha256(),
 			SourceSizeBytes: archive.GetSourceSizeBytes()}
 	}
+	if workspace := input.GetWorkspace(); workspace != nil {
+		value, err := workspaceTaskFromProto(workspace)
+		if err != nil {
+			return Task{}, err
+		}
+		task.Workspace = &value
+	}
 	return task, task.Validate()
 }
 
@@ -110,8 +124,16 @@ func DecodeFile(path string) (Task, error) {
 	if err != nil || len(raw) == 0 || len(raw) > MaximumTaskBytes {
 		return Task{}, errors.New("read session archive task")
 	}
-	var task Task
-	if json.Unmarshal(raw, &task) != nil || task.Validate() != nil {
+	return DecodeTask(raw)
+}
+
+// DecodeTask validates bounded task bytes while preserving legacy wire and enforcing strict V2 interpretation.
+// It proves no lease, writer or object access; callers still require the current owner-assigned task.
+// DecodeTask валидирует bounded task bytes, сохраняя legacy wire и strict V2 interpretation.
+// Это не lease/writer/object authority; caller отдельно требует current owner-assigned task.
+func DecodeTask(raw []byte) (Task, error) {
+	task, err := decodeWorkspaceAwareTask(raw)
+	if err != nil || task.Validate() != nil {
 		return Task{}, errors.New("decode session archive task")
 	}
 	return task, nil
@@ -120,6 +142,9 @@ func DecodeFile(path string) (Task, error) {
 // Validate checks required identities, size and generation bounds, canonical session path and kind-specific fields.
 // RU: Validate проверяет обязательные идентичности, размеры, поколения, канонический путь сессии и поля вида задания.
 func (task Task) Validate() error {
+	if task.Workspace != nil {
+		return task.validateWorkspace()
+	}
 	for _, required := range []string{task.TaskRef, task.Kind, task.OrganizationRef, task.SessionRef,
 		task.ProviderAccountRef, task.RuntimeRevisionRef, task.RuntimeRevisionDigest, task.CodexSessionID,
 		task.PVCName, task.InputDigest, task.SourceRelativePath, task.SourceSHA256} {
@@ -209,15 +234,16 @@ func NormalizeFailureStage(stage FailureStage) FailureStage {
 // Result reports a closed outcome and the archive/source receipt values observed by the worker.
 // RU: Result сообщает закрытый исход и значения квитанций архива и источника, наблюдавшиеся worker.
 type Result struct {
-	Success         bool         `json:"success"`
-	SafeErrorCode   string       `json:"safe_error_code,omitempty"`
-	FailureStage    FailureStage `json:"failure_stage,omitempty"`
-	FormatVersion   uint32       `json:"format_version,omitempty"`
-	ObjectKey       string       `json:"object_key,omitempty"`
-	ObjectVersion   string       `json:"object_version,omitempty"`
-	ObjectETag      string       `json:"object_etag,omitempty"`
-	ObjectDigest    string       `json:"object_digest,omitempty"`
-	ObjectSizeBytes int64        `json:"object_size_bytes,omitempty"`
-	SourceSHA256    string       `json:"source_sha256,omitempty"`
-	SourceSizeBytes int64        `json:"source_size_bytes,omitempty"`
+	Success          bool         `json:"success"`
+	SafeErrorCode    string       `json:"safe_error_code,omitempty"`
+	FailureStage     FailureStage `json:"failure_stage,omitempty"`
+	FormatVersion    uint32       `json:"format_version,omitempty"`
+	ObjectKey        string       `json:"object_key,omitempty"`
+	ObjectVersion    string       `json:"object_version,omitempty"`
+	ObjectETag       string       `json:"object_etag,omitempty"`
+	ObjectDigest     string       `json:"object_digest,omitempty"`
+	ObjectSizeBytes  int64        `json:"object_size_bytes,omitempty"`
+	SourceSHA256     string       `json:"source_sha256,omitempty"`
+	SourceSizeBytes  int64        `json:"source_size_bytes,omitempty"`
+	SourceEntryCount int64        `json:"source_entry_count,omitempty"`
 }

@@ -4,7 +4,13 @@ WITH current AS (
     FROM control_plane.runs
     WHERE id=$1::uuid
 ), total AS (
-    SELECT COALESCE(sum((item.value->>'total_tokens')::bigint),0)::bigint AS total_tokens,
+    SELECT CASE
+             WHEN count(*) FILTER (WHERE (item.value ? 'completeness' AND jsonb_typeof(item.value->'completeness') <> 'string') OR COALESCE(item.value->>'completeness', 'UNKNOWN') NOT IN ('UNKNOWN', 'PARTIAL', 'COMPLETE')) > 0 THEN 'INVALID'
+             WHEN count(*) FILTER (WHERE item.value->>'completeness' IN ('PARTIAL', 'COMPLETE')) = 0 THEN 'UNKNOWN'
+             WHEN bool_and(COALESCE(item.value->>'completeness', 'UNKNOWN') = 'COMPLETE') THEN 'COMPLETE'
+             ELSE 'PARTIAL'
+           END AS completeness,
+           COALESCE(sum((item.value->>'total_tokens')::bigint),0)::bigint AS total_tokens,
            COALESCE(sum((item.value->>'input_tokens')::bigint),0)::bigint AS input_tokens,
            COALESCE(sum((item.value->>'cached_input_tokens')::bigint),0)::bigint AS cached_input_tokens,
            COALESCE(sum((item.value->>'cache_write_input_tokens')::bigint),0)::bigint AS cache_write_input_tokens,
@@ -26,6 +32,7 @@ SET usage=jsonb_build_object(
         'reasoning_output_tokens',total.reasoning_output_tokens,
         'model_context_window',total.model_context_window,
         'turns',total.turns
-    )
+    ) || CASE WHEN total.completeness = 'UNKNOWN' THEN '{}'::jsonb
+              ELSE jsonb_build_object('completeness', total.completeness) END
 FROM total
 WHERE run.id=$1::uuid

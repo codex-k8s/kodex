@@ -48,6 +48,9 @@ func Run(lifecycle context.Context) error {
 	if err != nil {
 		return writeFailure(configuration.ResultFile, "SESSION_ARCHIVE_SOURCE_INVALID", err)
 	}
+	if task.Workspace != nil && (task.Kind != "SNAPSHOT" && task.Kind != "RESTORE" || task.Kind == "RESTORE" && task.Workspace.PVCUID == "") {
+		return writeFailure(configuration.ResultFile, "SESSION_ARCHIVE_SOURCE_INVALID", errors.New("session workspace task consumer is unavailable"))
+	}
 	accessKey, err := readSecret(configuration.AccessKeyFile)
 	if err != nil {
 		return writeFailure(configuration.ResultFile, "SESSION_ARCHIVE_OBJECT_WRITE_FAILED", err)
@@ -66,9 +69,17 @@ func Run(lifecycle context.Context) error {
 	var result model.Result
 	switch task.Kind {
 	case "SNAPSHOT":
-		result, err = archive.Snapshot(ctx, store, configuration.Workspace, task)
+		if task.Workspace != nil {
+			result, err = archive.SnapshotWorkspace(ctx, store, task)
+		} else {
+			result, err = archive.Snapshot(ctx, store, configuration.Workspace, task)
+		}
 	case "RESTORE":
-		result, err = archive.Restore(ctx, store, configuration.Workspace, task)
+		if task.Workspace != nil {
+			result, err = archive.RestoreWorkspace(ctx, store, task)
+		} else {
+			result, err = archive.Restore(ctx, store, configuration.Workspace, task)
+		}
 	case "DELETE_OBJECT":
 		result, err = archive.Delete(ctx, store, task)
 	default:

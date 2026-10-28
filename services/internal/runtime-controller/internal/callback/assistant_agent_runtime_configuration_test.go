@@ -40,7 +40,7 @@ func assistantAgentRuntimeConfigurationFixture(t *testing.T) (runtimecontract.Ru
 		"published_version_ref": "renvv_fixture123", "published_revision": 4, "published_digest": digest,
 		"image":            map[string]any{"artifact_ref": "imgart_fixture123", "recipe_ref": "recipe_fixture123", "recipe_generation": 2, "reference": "registry.test/runtime@sha256:" + digest, "digest": "sha256:" + digest},
 		"configured_tools": []string{"Configured tool"}, "verified_tool_inventory": inventory,
-		"model_configuration": map[string]any{"ref": "arcfg_fixture123", "version": 5, "digest": digest, "provider": "openai-codex", "model": "gpt-6.1-sol"},
+		"model_configuration": map[string]any{"ref": "arcfg_fixture123", "version": 5, "digest": digest, "provider": "openai-codex", "model": "gpt-6.1-sol", "runtime_profile_ref": "builtin-safe-runtime", "provider_policy_mode": "FIXED", "provider_accounts": []any{map[string]any{"accountRef": "pacc_fixture123", "weight": 1}}, "reasoning_effort": "high", "web_search_mode": "", "published_overlay_ref": "ovl_fixture123", "published_overlay_version": 2, "published_overlay_digest": digest, "has_draft_overlay": false},
 		"resources":           runtimecontract.DefaultRuntimeEnvironmentPolicy().Resources}
 	raw, _ := json.Marshal(snapshot)
 	_ = json.Unmarshal(raw, &snapshot)
@@ -207,6 +207,15 @@ func TestAssistantAgentRuntimeConfigurationRejectsMismatchAndSecrets(t *testing.
 			s["model_configuration"].(map[string]any)["account_ref"] = "PRIVATE_SENTINEL"
 		},
 		func(_ *cp.AssistantConfigurationCatalogResponse, s map[string]any) {
+			s["model_configuration"].(map[string]any)["provider_accounts"].([]any)[0].(map[string]any)["credential"] = "PRIVATE_SENTINEL"
+		},
+		func(_ *cp.AssistantConfigurationCatalogResponse, s map[string]any) {
+			s["model_configuration"].(map[string]any)["provider_accounts"].([]any)[0].(map[string]any)["weight"] = float64(2)
+		},
+		func(_ *cp.AssistantConfigurationCatalogResponse, s map[string]any) {
+			delete(s["model_configuration"].(map[string]any), "has_draft_overlay")
+		},
+		func(_ *cp.AssistantConfigurationCatalogResponse, s map[string]any) {
 			s["resources"].(map[string]any)["memory_limit_mib"] = float64(-1)
 		},
 		func(_ *cp.AssistantConfigurationCatalogResponse, s map[string]any) {
@@ -244,5 +253,66 @@ func TestAssistantAgentRuntimeConfigurationRejectsMismatchAndSecrets(t *testing.
 		if _, err := castAssistantConfigurationCatalog(input, request, response); err == nil || strings.Contains(err.Error(), "PRIVATE_SENTINEL") {
 			t.Fatal("invalid or secret-bearing owner projection accepted")
 		}
+	}
+}
+
+// TestAssistantAgentRuntimeConfigurationRollingReadCompatibility accepts only exact v1 and v2 read projections, returns v1 without invented configuration fields and rejects mixed/incomplete shapes.
+// TestAssistantAgentRuntimeConfigurationRollingReadCompatibility принимает только точные проекции чтения v1 и v2, возвращает v1 без выдуманных полей конфигурации и отвергает смешанные и неполные формы.
+func TestAssistantAgentRuntimeConfigurationRollingReadCompatibility(t *testing.T) {
+	for _, variant := range []string{"v1", "v2", "v2-defaults", "mixed", "incomplete-v2", "invalid-v1", "null-effort", "null-search", "null-draft"} {
+		t.Run(variant, func(t *testing.T) {
+			input, arguments, response := assistantAgentRuntimeConfigurationFixture(t)
+			var snapshot map[string]any
+			if json.Unmarshal(response.AgentRuntimeConfiguration.ConfigurationJson, &snapshot) != nil {
+				t.Fatal("decode rolling fixture")
+			}
+			model := snapshot["model_configuration"].(map[string]any)
+			if variant == "v1" || variant == "mixed" || variant == "invalid-v1" {
+				legacy := map[string]any{}
+				for _, key := range []string{"ref", "version", "digest", "provider", "model"} {
+					legacy[key] = model[key]
+				}
+				model = legacy
+				snapshot["model_configuration"] = model
+			}
+			switch variant {
+			case "v2-defaults":
+				model["reasoning_effort"], model["web_search_mode"] = "", ""
+			case "null-effort":
+				model["reasoning_effort"] = nil
+			case "null-search":
+				model["web_search_mode"] = nil
+			case "null-draft":
+				model["has_draft_overlay"] = nil
+			case "mixed":
+				model["reasoning_effort"] = "high"
+			case "incomplete-v2":
+				delete(model, "published_overlay_digest")
+			case "invalid-v1":
+				model["digest"] = "invalid"
+			}
+			raw, err := json.Marshal(snapshot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			hash := sha256.Sum256(raw)
+			response.AgentRuntimeConfiguration.ConfigurationJson = raw
+			response.AgentRuntimeConfiguration.ConfigurationSha256 = hex.EncodeToString(hash[:])
+			request, err := parseAssistantConfigurationCatalog(input, arguments, arguments["assistant_configuration_catalog"])
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := castAssistantAgentRuntimeConfiguration(input, request, response)
+			valid := variant == "v1" || variant == "v2" || variant == "v2-defaults"
+			if (err == nil) != valid {
+				t.Fatalf("rolling %s acceptance: %v", variant, err)
+			}
+			if variant == "v1" {
+				projected := result["agent_runtime_configuration"].(map[string]any)["configuration"].(map[string]any)["model_configuration"].(map[string]any)
+				if len(projected) != 5 || !onlyKeys(projected, "ref", "version", "digest", "provider", "model") {
+					t.Fatal("legacy read invented missing owner pins")
+				}
+			}
+		})
 	}
 }

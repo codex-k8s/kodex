@@ -1,0 +1,2 @@
+DROP TRIGGER prepared_agent_runtime_overlay_fault ON control_plane.agent_config_overlay_versions;
+DROP FUNCTION control_plane.prepared_agent_runtime_overlay_fault();

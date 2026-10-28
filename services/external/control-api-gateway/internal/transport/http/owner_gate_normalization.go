@@ -4,6 +4,8 @@ import (
 	"errors"
 	"regexp"
 	"unicode/utf8"
+
+	"github.com/codex-k8s/kodex/libs/go/sshcompose"
 )
 
 // errOwnerGateShape is the fixed public-projection rejection error, avoiding inclusion of gate
@@ -82,6 +84,9 @@ func validateOwnerGateProjection(gate map[string]any) error {
 	if len(seen) != len(decisions) {
 		return errOwnerGateShape
 	}
+	if err := validateWorkflowReworkGate(gate); err != nil {
+		return err
+	}
 	value, exists := gate["integrationIntent"]
 	if !exists {
 		return nil
@@ -105,13 +110,26 @@ func validateOwnerGateProjection(gate map[string]any) error {
 		return errOwnerGateShape
 	}
 	switch scope["kind"] {
-	case "SYNTHETIC_JOURNAL", "GITHUB_REPOSITORY", "MATTERMOST_CHANNEL", "GITLAB_PROJECT", "JIRA_PROJECT", "CONFLUENCE_SPACE", "EMAIL_SENDER", "HTTPS_RESOURCE":
+	case "SYNTHETIC_JOURNAL", "GITHUB_REPOSITORY", "MATTERMOST_CHANNEL", "GITLAB_PROJECT", "JIRA_PROJECT", "CONFLUENCE_SPACE", "EMAIL_SENDER", "HTTPS_RESOURCE", "SSH_TARGET":
 	default:
 		return errOwnerGateShape
 	}
 	values, ok := scope["values"].(map[string]any)
-	if !ok || len(values) > 8 {
+	if !ok || len(values) > 9 || scope["kind"] != "SSH_TARGET" && len(values) > 8 {
 		return errOwnerGateShape
+	}
+	if scope["kind"] == "SSH_TARGET" {
+		pins := make(map[string]string, len(values))
+		for key, value := range values {
+			text, valid := value.(string)
+			if !valid {
+				return errOwnerGateShape
+			}
+			pins[key] = text
+		}
+		if _, err := sshcompose.TargetFromResourceScope(pins); err != nil {
+			return errOwnerGateShape
+		}
 	}
 	for _, value := range values {
 		if !gateText(value, 0, 2048) {
@@ -132,4 +150,77 @@ func validateOwnerGateProjection(gate map[string]any) error {
 func gateText(value any, minimum, maximum int) bool {
 	text, ok := value.(string)
 	return ok && utf8.ValidString(text) && utf8.RuneCountInString(text) >= minimum && utf8.RuneCountInString(text) <= maximum
+}
+
+// validateWorkflowReworkGate closes explanatory metadata without changing decision authority.
+// validateWorkflowReworkGate замыкает explanatory metadata без смены decision authority.
+func validateWorkflowReworkGate(gate map[string]any) error {
+	if kind, present := gate["resolutionKind"]; present {
+		if kind != "SUPERSEDED" || gate["state"] != "CANCELLED" || gate["decision"] != nil {
+			return errOwnerGateShape
+		}
+	}
+	raw, present := gate["reworkPlan"]
+	if !present {
+		return nil
+	}
+	plan, ok := raw.(map[string]any)
+	if !ok || len(plan) < 5 || len(plan) > 6 || plan["schema"] != "kodex.workflow-upstream-rework-preview.v1" {
+		return errOwnerGateShape
+	}
+	for key := range plan {
+		if key != "schema" && key != "sourceStepKey" && key != "sourceAttempt" && key != "authors" && key != "rechecks" && key != "blockReason" {
+			return errOwnerGateShape
+		}
+	}
+	key, ok := plan["sourceStepKey"].(string)
+	if !ok || !workflowPredicateKey.MatchString(key) {
+		return errOwnerGateShape
+	}
+	attempt, ok := plan["sourceAttempt"].(float64)
+	if !ok || attempt < 1 || attempt > 4 || attempt != float64(int64(attempt)) {
+		return errOwnerGateShape
+	}
+	blocker, _ := plan["blockReason"].(string)
+	if blocker != "" && blocker != "WORKFLOW_ATTEMPTS_EXHAUSTED" && blocker != "WORKFLOW_IRREVERSIBLE_EFFECT_REPAIR_REQUIRED" {
+		return errOwnerGateShape
+	}
+	if _, exists := plan["blockReason"]; exists && blocker == "" {
+		return errOwnerGateShape
+	}
+	seen := map[string]bool{}
+	for _, name := range []string{"authors", "rechecks"} {
+		items, ok := plan[name].([]any)
+		if !ok || len(items) > 12 || name == "authors" && (len(items) < 1 || len(items) > 4) {
+			return errOwnerGateShape
+		}
+		for _, item := range items {
+			row, ok := item.(map[string]any)
+			if !ok || len(row) != 3 {
+				return errOwnerGateShape
+			}
+			key, ok := row["stepKey"].(string)
+			if !ok || !workflowPredicateKey.MatchString(key) || seen[key] {
+				return errOwnerGateShape
+			}
+			seen[key] = true
+			previous, p := row["previousAttempt"].(float64)
+			next, n := row["nextAttempt"].(float64)
+			if !p || !n || previous < 0 || previous > 4 || previous != float64(int64(previous)) || next < 0 || next > 4 || next != float64(int64(next)) || next != previous+1 && !(next == 0 && previous == 4 && blocker != "") {
+				return errOwnerGateShape
+			}
+		}
+	}
+	if len(seen) > 12 || !seen[key] {
+		return errOwnerGateShape
+	}
+	if blocker != "" {
+		allowed, _ := gate["allowedDecisions"].([]any)
+		for _, decision := range allowed {
+			if decision == "APPROVE" {
+				return errOwnerGateShape
+			}
+		}
+	}
+	return nil
 }

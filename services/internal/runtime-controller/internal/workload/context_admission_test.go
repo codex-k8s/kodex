@@ -33,6 +33,7 @@ func TestContextMountAdmissionEvaluatesGeneratedPodAndRejectsDrift(t *testing.T)
 	}
 	decoder := yaml.NewYAMLOrJSONDecoder(bytes.NewReader(raw), 64<<10)
 	var expressions []string
+	var declarations []admissionv1.Variable
 	for {
 		var policy admissionv1.ValidatingAdmissionPolicy
 		err := decoder.Decode(&policy)
@@ -42,6 +43,10 @@ func TestContextMountAdmissionEvaluatesGeneratedPodAndRejectsDrift(t *testing.T)
 		if err != nil {
 			t.Fatal(err)
 		}
+		if policy.Kind != "ValidatingAdmissionPolicy" || policy.Name != "runtime-role-pod-exact-secret-projection" {
+			continue
+		}
+		declarations = policy.Spec.Variables
 		for _, validation := range policy.Spec.Validations {
 			if validation.Message == "workspace preparation boundary is invalid" ||
 				validation.Message == "managed role Pod container set is invalid" ||
@@ -151,12 +156,7 @@ func TestContextMountAdmissionEvaluatesGeneratedPodAndRejectsDrift(t *testing.T)
 			if err != nil {
 				t.Fatal(err)
 			}
-			spec := object["spec"].(map[string]any)
-			containers, init := spec["containers"].([]any), spec["initContainers"].([]any)
-			activation := map[string]any{"object": object, "variables": map[string]any{
-				"allContainers": append(append([]any{}, init...), containers...), "roleContainers": []any{containers[0]},
-				"providerContainers": []any{containers[1]}, "relayContainers": []any{containers[2]},
-			}}
+			activation := runtimeAdmissionActivation(t, env, declarations, object)
 			accepted := true
 			for _, program := range programs {
 				result, _, err := program.Eval(activation)

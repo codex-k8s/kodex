@@ -4,8 +4,8 @@ title: PostgreSQL, именованные SQL-запросы и goose
 type: guide
 status: approved
 owner: developer
-version: 1.2.5
-updated: 2026-10-25
+version: 1.2.9
+updated: 2026-10-27
 ---
 
 # PostgreSQL, именованные SQL-запросы и goose
@@ -89,6 +89,13 @@ SQL не собирается конкатенацией пользовател�
   objects/entities.
 - Поврежденное состояние БД не пропускается в домен как частично валидная
   сущность.
+- Изменение тела существующей SQL-функции сохраняет её именованные входные
+  параметры и выходные столбцы. Если миграция меняет только проверенный фрагмент
+  тела, она использует полное `pg_get_functiondef` с проверкой единственности
+  замены; сборка сокращённого объявления из одних типов может потерять имена,
+  на которые ссылается тело. Readback проверяет сохранённую сигнатуру вместе
+  с OID/ACL и новым телом. Ссылки на столбцы проверяются на фактической схеме
+  predecessor, а native-применение миграции предшествует проверке сценариев.
 - Ошибка `no rows`, conflict, constraint violation и unavailable отображается в
   устойчивую domain error.
 - Сырой SQL, аргументы с PII/secrets и полный driver error не возвращаются в
@@ -120,6 +127,27 @@ reader не превращается в успешный ответ и не от
 - Частичный результат при ошибке не возвращается как успешный.
 - Retry serialization/deadlock выполняется ограниченно и только для доказанно
   идемпотентной операции.
+
+Startup bootstrap с несколькими репликами также получает SERIALIZABLE snapshot до
+ожидания owner-row lock. Блокировка неизменённой строки не обновляет snapshot:
+последующий reconcile изменённой строки может завершиться 40001. Типизированная
+SQL/context cause сохраняется приватно сквозь domain mapping; безопасный Error и
+process reporter не форматируют payload драйвера. Повтор целого bootstrap допустим
+только для доказанного 40001/40P01 после подтверждённого rollback либо известного
+server abort. Неизвестный COMMIT/cleanup не повторяется; прежний startup deadline,
+cancel и ограниченное число попыток сохраняются. Детерминированная проверка
+использует завершённый QueryEnd и actual server Lock wait, а не TraceQueryStart
+как доказательство snapshot. Матрица: [#1919](../operations/control-plane-bootstrap-1919.md).
+
+Row lock адресует реальный owner aggregate, а не compatibility view: `FOR SHARE`
+на view разворачивается на все её underlying relations, включая nullable side
+внешнего JOIN. Сначала сверяются итоговая schema и фактические UPDATE privileges
+runtime-роли: PostgreSQL требует UPDATE privilege даже для `FOR SHARE`.
+Не выдавать UPDATE на immutable revisions ради чтения. Если canonical writers,
+retention и purge защищены HEAD lock, reader удерживает тот же HEAD; exact
+revision/content и effective scan остаются immutable reads с прежними ACL.
+SQLSTATE классифицируется до безопасного mapping, а diagnostic содержит только
+закрытые stage/class, без SQL, параметров, сообщений БД и provider payload.
 
 Чтение, которое удерживает lease через `FOR SHARE` в `REPEATABLE READ`, может
 получить `40001` при конкурентном renew между snapshot и захватом блокировки.
@@ -165,6 +193,17 @@ commit может смешать version `N` основной записи с ve
 rollback и закрытие получают контекст вызывающего lifecycle; обязательный
 rollback после отмены request выполняется через отдельный bounded shutdown
 контекст, переданный composition root, без скрытого `context.Background()`.
+
+В selector точного immutable artifact сначала материализуются допустимые
+producer/revision/content pins и замкнутая lineage с прежней проверкой уникальности
+имени до eligibility. Mutable HEAD блокируется `FOR SHARE ... NOWAIT` внутри этой
+границы; выбранная историческая ревизия не обязана совпадать с current revision HEAD. Затем
+canonical effective CLEAN и scalar eligibility точных catalog targets вычисляются
+для выбранных pins. Соединение независимых полных RUN/AGENT каталогов не должно
+повторять AV/ACL для их декартова произведения. Это не кеш полномочий: все проверки
+остаются в том же statement/snapshot под HEAD lock; NULL/unknown, неверный frozen
+catalog и недоступная ревизия закрыто отклоняются. Regression использует плотную
+одноразовую native history, прежний request budget и конфликтующую HEAD-блокировку.
 
 Подготовка типизированного плана не загружает полную UI-проекцию подключения
 со всеми дочерними grants, если потребителю нужны только ref, version и
@@ -292,6 +331,14 @@ CREATE TABLE domain_entities (
 - миграции не запускаются неявно при старте application server;
 - deploy явно выполняет CLI-команду `up` отдельным Kubernetes Job до rollout.
 
+Проверка фактически применённой схемы сохраняет семантику ограничений.
+Нормализация `pg_get_constraintdef`/predicate не удаляет смысловые скобки и
+не отождествляет разные AND/OR-группировки. Проверка trigger учитывает события,
+набор колонок `tgattr`, WHEN, enabled state, функцию и её authority; совпадение
+имени функции само по себе не доказывает защиту всех UPDATE. Эти отказы
+проверяются исполнением того же read-only запроса на отдельных disposable
+схемах с адресно изменёнными CHECK и trigger, а не только mock boolean.
+
 Для owner-approved web-first reset установка создаётся с нуля. Активный
 control-plane содержит одну baseline migration, которая создаёт только новую
 схему. В этом reset запрещены legacy backfill, aliases, compatibility tables,
@@ -322,6 +369,13 @@ history без обратного изменения схемы создает �
 
 - `up` — применить все миграции deployable в forward-only порядке;
 - `status` — показать безопасный статус без DSN.
+
+`goose.StatusContext` может инициализировать таблицу версий; его нельзя
+использовать как read-only проверку подключения. Если deployable предоставляет
+команду `check`, она разбирает конфигурацию и выполняет только ограниченный
+`PingContext`, не вызывает Goose и не подтверждает состояние миграций или
+полномочия runtime. Начальный ping `check/up/status` учитывает отмену и меньший
+deadline вызывающего; его timeout не превращается в retry SQL миграций.
 
 Дополнительные команды, например bootstrap broker state, не маскируются под
 миграции PostgreSQL и документируются контрактом соответствующего deployable.
