@@ -467,6 +467,10 @@ test-runtime-checkpoint-predecessor-postgres: check-go-toolchain
 test-workspace-volume-predecessor-postgres: check-go-toolchain
 	@timeout --kill-after=10s 240s bash scripts/tests/control-plane-postgres-test.sh --volume-predecessor
 
+.PHONY: test-workspace-volume-owner-postgres
+test-workspace-volume-owner-postgres: check-go-toolchain
+	@timeout --kill-after=10s 240s bash scripts/tests/control-plane-postgres-test.sh --volume-owner
+
 .PHONY: test-runtime-workspace-predecessor-postgres
 test-runtime-workspace-predecessor-postgres: check-go-toolchain
 	@timeout --kill-after=10s 240s bash scripts/tests/control-plane-postgres-test.sh --workspace-predecessor

@@ -70,7 +70,7 @@ func TestWorkspaceWriterOwnerComponent(t *testing.T) {
 	if run == nil {
 		t.Fatal("workspace run was not returned")
 	}
-	claimed := execute(command.ClaimExecution, worker, "claim", command.LeaseInput{WorkloadInstance: "workspace-owner-controller", Limit: 1})
+	claimed := claimPreparedWorkspaceComponent(t, ctx, repository, service, worker, "workspace-owner-controller", execute)
 	if len(claimed.RuntimeItems) != 1 {
 		t.Fatalf("expected one V2 execution claim, got %d", len(claimed.RuntimeItems))
 	}
@@ -81,6 +81,9 @@ func TestWorkspaceWriterOwnerComponent(t *testing.T) {
 	}
 	if binding.Generation != 1 || binding.Scope.AgentRef != agent.Ref || binding.Scope.SessionRef != run.SessionRef {
 		t.Fatal("workspace binding does not match assigned employee session")
+	}
+	if binding.VolumeReady == nil || binding.VolumeReady.Preparation.PVCUID != "00000000-0000-4000-8000-000000000010" {
+		t.Fatal("model snapshot omitted its accepted physical preparation")
 	}
 	payload := command.WorkspaceObservationInput{LeaseRef: stringMap(item, "leaseRef"), Fence: stringMap(item, "fence"), Generation: runtimeRevisionMapInt64(item, "generation"),
 		RuntimeRevisionDigest: stringMap(item, "revisionDigest"), ExecutionBindingDigest: strings.Repeat("c", 64),

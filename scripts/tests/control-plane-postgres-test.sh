@@ -18,6 +18,12 @@ test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestBootstrapComponent|T
 
 # Оба закрытых upgrade-сценария используют одну и ту же отдельную пустую БД.
 upgrade_test='^TestWorkflowReviewQAEvidenceForwardUpgrade$'
+volume_owner=false
+if [[ "$test_pattern" == --volume-owner ]]; then
+  volume_owner=true
+  upgrade_test='^TestWorkspaceVolumeMigrationPredecessor$'
+  test_pattern=--review-qa-upgrade
+fi
 if [[ "$test_pattern" == --volume-predecessor ]]; then
   upgrade_test='^TestWorkspaceVolumeMigrationPredecessor$'
   test_pattern=--review-qa-upgrade
@@ -204,6 +210,19 @@ if [[ "$test_pattern" == --review-qa-upgrade ]]; then
       env -u GOFLAGS GOENV=off GOWORK=off go test -p "$go_parallelism" -v -count=1 -timeout=180s \
       ./cmd/cli -run "$upgrade_test"
   )
+  if [[ "$volume_owner" == true ]]; then
+    # Полная native017+SSH уже проверена выше; release-verifiers прежних схем не расширяются.
+    psql "$admin_dsn" --no-password -v ON_ERROR_STOP=1 \
+      -c 'CREATE DATABASE control_plane_component_template WITH TEMPLATE control_plane OWNER control_plane_owner' >/dev/null
+    (
+      cd -- "$repository_root/services/internal/control-plane"
+      KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
+        KODEX_CONTROL_PLANE_TEST_ADMIN_DSN="$admin_dsn" \
+        KODEX_CONTROL_PLANE_TEST_TEMPLATE_DATABASE=control_plane_component_template \
+        env -u GOFLAGS GOENV=off GOWORK=off go test -p "$go_parallelism" -v -count=1 -timeout=120s \
+        ./internal/repository/postgres/platform -run '^TestWorkspaceWriterOwnerComponent$'
+    )
+  fi
   exit
 fi
 

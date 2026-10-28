@@ -4,7 +4,7 @@ title: Герметичный и PostgreSQL-контуры Go
 type: guide
 status: approved
 owner: developer
-version: 1.0.1
+version: 1.0.2
 updated: 2026-10-28
 ---
 
@@ -79,6 +79,17 @@ schema qualification, не staging capacity admission, backup durability либ�
 `/docker/docs`; путь data root сверён с [официальным описанием образа PostgreSQL](https://github.com/docker-library/docs/blob/master/postgres/README.md#pgdata)
 и конфигурацией закреплённого локального образа. Результат относится к фактически
 исполненному SHA; наличие профиля не считается PASS.
+
+`make test-workspace-volume-owner-postgres` в той же оснастке сначала выполняет
+полную native016→017→SSH schema qualification, затем создаёт отдельный template
+для writer component. Сценарий через штатные domain commands проводит pending
+CREATE/PREPARE, claim replay, renew/COMPLETE и ACK replay до допуска model lease
+и BIND. Завершённый physical grant не продлевается; до accepted preparation
+model claim пуст. Physical Job/Pod/PVC observations заданы явными fixtures, без
+настоящего Kubernetes, модели и object store. Старые release-verifiers не
+расширяются: этот контур не заменяет combined staging migration proof и полный
+web-first baseline. Бюджет цели240s, включая схему и component; кэш предварительно
+собирается отдельно при необходимости.
 
 ## Каталог checkpoint рабочего дерева
 
