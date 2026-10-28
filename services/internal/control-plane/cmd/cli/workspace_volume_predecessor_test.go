@@ -184,5 +184,14 @@ func TestWorkspaceVolumeMigrationPredecessor(t *testing.T) {
 		if err != nil || version != 20261027000100 {
 			t.Fatal("combined migration version readback failed")
 		}
+		catalogSQL, err := workspaceVolumeFixtures.ReadFile("testdata/sql/volume_catalog_readback.sql")
+		if err != nil {
+			t.Fatal("read volume catalog metadata query")
+		}
+		var catalog string
+		if err := observer.QueryRow(ctx, string(catalogSQL)).Scan(&catalog); err != nil {
+			t.Fatal("read frozen volume catalog metadata", err)
+		}
+		t.Log("VOLUME_CATALOG_FINGERPRINTS " + catalog)
 	})
 }
