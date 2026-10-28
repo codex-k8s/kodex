@@ -191,7 +191,7 @@ func TestWorkspaceWriterOwnerComponent(t *testing.T) {
 	})
 	testWorkspaceCheckpointOwner(t, ctx, repository, service, pool, owner, claimPrincipal, binding, run.Ref)
 	var restoreProfile bool
-	if err := pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM public.goose_db_version WHERE version_id=20261028000100 AND is_applied)").Scan(&restoreProfile); err != nil {
+	if err := pool.QueryRow(ctx, "SELECT to_regclass('control_plane.session_archive_tasks_workspace_restore') IS NOT NULL").Scan(&restoreProfile); err != nil {
 		t.Fatal("read disposable restore profile", err)
 	}
 	if restoreProfile && !t.Failed() {
