@@ -4,7 +4,7 @@ title: Герметичный и PostgreSQL-контуры Go
 type: guide
 status: approved
 owner: developer
-version: 1.0.3
+version: 1.0.4
 updated: 2026-10-28
 ---
 
@@ -53,6 +53,14 @@ Component suite использует только созданный этой к
 - монотонную event sequence, outbox и audit;
 - integration definitions, connections, grants и отсутствие обязательной
   внешней integration connection.
+
+Legacy Human Gate fixture сначала действительно исполняет обязательный child
+и проверяет его result gate. APPROVE не заменяет отдельный coordinator callback.
+REQUEST_CHANGES создаёт новый physical child; прежний результат и решение не
+переписываются. Дополнительно baseline выполняет
+`TestOwnerGateServerCompletionComponent`: первый из двух SERVER result gates
+не завершает root, последний завершает. Историческая проверка source attachment
+и consequences исполняется для обеих сохранённых terminal/nonterminal оценок.
 
 Если Docker или `pg_isready` отсутствуют, команда завершается ошибкой и в
 отчёте классифицируется `NOT RUN`; это не считается `PASS`. Подключать к этой

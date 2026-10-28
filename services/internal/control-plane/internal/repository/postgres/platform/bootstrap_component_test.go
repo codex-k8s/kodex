@@ -5588,18 +5588,16 @@ func testIdempotencyOCCAndConcurrentRuns(t *testing.T, ctx context.Context, repo
 	}
 }
 
-// testHumanGateLifecycle publishes a one-step gated workflow and requires execution completion to
-// leave one WAITING_HUMAN run/gate with matching project/workflow card counters. APPROVE must
-// close the root graph; a new resolution key on the terminal gate is AlreadyResolved. A separate
-// REQUEST_CHANGES path requeues the agent while keeping the run active, creates a second gate
-// after rework and completes on final approval. It delegates historical-consequence/list checks;
+// testHumanGateLifecycle executes a published step through coordinator/delegation commands before checking its WAITING_HUMAN result gate.
+// APPROVE queues the exact legacy callback; only callback completion closes the root. A new decision key remains AlreadyResolved.
+// REQUEST_CHANGES creates a separate physical child and preserves the first gate, then a new result gate precedes the final callback.
+// Card counters and historical source/consequence checks use actual owner reads;
 // these fixture commands do not represent a human review or running agent.
-// testHumanGateLifecycle публикует одношаговый workflow с gate и требует после completion один
-// WAITING_HUMAN run/gate с соответствующими project/workflow card counters. APPROVE должен закрыть
-// root graph; новый resolution key для terminal gate даёт AlreadyResolved. Отдельный путь
-// REQUEST_CHANGES возвращает агента в очередь при активном run, создаёт второй gate после
-// доработки и завершается после итогового approval. Делегирует проверки исторических последствий и
-// списка; тестовые команды не являются ручным review или работающим агентом.
+// testHumanGateLifecycle исполняет опубликованный этап через coordinator/delegation commands до проверки его WAITING_HUMAN result gate.
+// APPROVE ставит exact legacy callback; только completion callback закрывает root. Новый decision key остаётся AlreadyResolved.
+// REQUEST_CHANGES создаёт отдельный physical child и сохраняет первый gate; новый result gate предшествует final callback.
+// Card counters и исторические source/consequence проверяются по actual owner reads;
+// тестовые команды не являются ручным review или работающим агентом.
 func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repository) {
 	seedObservedCatalogFixture(t, ctx, repository)
 	t.Helper()
@@ -5662,7 +5660,27 @@ func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	if err != nil || launched.Run == nil {
 		t.Fatalf("launch gate workflow: run=%#v err=%v", launched.Run, err)
 	}
-	waiting := claimAndCompleteRun(t, ctx, service, worker, launched.Run.Ref, "gate-review", false)
+	// Выполняется опубликованный этап: model success координатора без delegate не является результатом workflow.
+	openResultGate := func(runRef, key string) command.Result {
+		t.Helper()
+		coordinator := claimComponentExecution(t, ctx, service, worker, runRef, key+"-coordinator")
+		child, err := service.Execute(ctx, command.Command{Kind: command.DelegateExecution, Principal: worker,
+			Mutation: value.Mutation{IdempotencyKey: key + "-delegate"}, Payload: command.DelegateInput{
+				LeaseRef: stringMap(coordinator, "leaseRef"), Fence: stringMap(coordinator, "fence"),
+				Generation: runtimeRevisionMapInt64(coordinator, "generation"), TargetAgentRef: reviewer.Ref,
+				WorkflowStepKey: "review", Task: "Review the exact supplier contract."}})
+		if err != nil || child.Run == nil {
+			t.Fatal("materialize the mandatory gated review step")
+		}
+		completeClaimedExecution(t, ctx, service, worker, coordinator, key+"-coordinator", false)
+		claimAndCompleteRun(t, ctx, service, worker, child.Run.Ref, key+"-child", false)
+		root, graph, err := service.GetRunGraph(ctx, owner, runRef)
+		if err != nil {
+			t.Fatal("read the actual gated root after delegated completion")
+		}
+		return command.Result{Run: &root, Graph: &graph}
+	}
+	waiting := openResultGate(launched.Run.Ref, "gate-review")
 	if waiting.Run == nil || waiting.Run.State != "WAITING_HUMAN" || len(waiting.Run.GateRefs) != 1 {
 		t.Fatalf("open owner gate: run=%#v event=%#v", waiting.Run, waiting.Event)
 	}
@@ -5680,13 +5698,14 @@ func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repos
 		Mutation: value.Mutation{IdempotencyKey: "gate-resolve-approve", ExpectedVersion: &gateVersion},
 		Payload:  command.GateResolutionInput{GateRef: gateRef, Decision: "APPROVE", Comment: "Approved for use"},
 	})
-	if err != nil || resolved.Gate == nil || resolved.Gate.State != "APPROVED" || resolved.Run == nil || resolved.Run.State != "SUCCEEDED" {
+	if err != nil || resolved.Gate == nil || resolved.Gate.State != "APPROVED" || resolved.Run == nil || resolved.Run.State != "RUNNING" {
 		t.Fatalf("resolve terminal owner gate: gate=%#v run=%#v err=%v", resolved.Gate, resolved.Run, err)
 	}
-	if resolved.Graph == nil || graphNodeState(resolved.Graph.Nodes, "ROOT_PROCESS") != "SUCCEEDED" {
-		t.Fatalf("terminal gate did not close the root graph: %#v", resolved.Graph)
+	accepted := claimAndCompleteRun(t, ctx, service, worker, launched.Run.Ref, "gate-accepted-callback", false)
+	if accepted.Run == nil || accepted.Run.State != "SUCCEEDED" || accepted.Graph == nil || graphNodeState(accepted.Graph.Nodes, "ROOT_PROCESS") != "SUCCEEDED" {
+		t.Fatal("accepted result callback did not finish the exact root graph")
 	}
-	testGateSourceAndHistoricalConsequences(t, ctx, repository, service, owner, *resolved.Gate)
+	testGateSourceAndHistoricalConsequences(t, ctx, repository, service, owner, *resolved.Gate, false)
 	_, err = service.Execute(ctx, command.Command{Kind: command.ResolveOwnerGate, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "gate-resolve-replay", ExpectedVersion: &gateVersion},
 		Payload:  command.GateResolutionInput{GateRef: gateRef, Decision: "APPROVE", Comment: "Replay"},
@@ -5702,7 +5721,7 @@ func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	if err != nil || changeRun.Run == nil {
 		t.Fatalf("launch change-request workflow: run=%#v err=%v", changeRun.Run, err)
 	}
-	changeWaiting := claimAndCompleteRun(t, ctx, service, worker, changeRun.Run.Ref, "gate-change-review", false)
+	changeWaiting := openResultGate(changeRun.Run.Ref, "gate-change-review")
 	if changeWaiting.Run == nil || changeWaiting.Run.State != "WAITING_HUMAN" || len(changeWaiting.Run.GateRefs) != 1 {
 		t.Fatalf("open change-request gate: run=%#v", changeWaiting.Run)
 	}
@@ -5715,10 +5734,26 @@ func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	if err != nil || changes.Gate == nil || changes.Gate.State != "CHANGES_REQUESTED" || changes.Run == nil || changes.Run.State != "RUNNING" {
 		t.Fatalf("request workflow changes: gate=%#v run=%#v err=%v", changes.Gate, changes.Run, err)
 	}
-	if changes.Graph == nil || graphNodeState(changes.Graph.Nodes, "AGENT_EXECUTION") != "QUEUED" {
-		t.Fatalf("requested changes did not requeue the agent node: %#v", changes.Graph)
+	var reworkRunRef string
+	if changes.Graph != nil {
+		for _, node := range changes.Graph.Nodes {
+			if node.Type == "AGENT_EXECUTION" && node.State == "QUEUED" {
+				if reworkRunRef != "" {
+					t.Fatal("owner rework created more than one queued execution")
+				}
+				reworkRunRef = node.RunRef
+			}
+		}
 	}
-	reworked := claimAndCompleteRun(t, ctx, service, worker, changes.Run.Ref, "gate-change-rework", false)
+	if reworkRunRef == "" || reworkRunRef == changeRun.Run.Ref {
+		t.Fatal("owner changes did not create an exact separate rework execution")
+	}
+	claimAndCompleteRun(t, ctx, service, worker, reworkRunRef, "gate-change-rework", false)
+	reworkedRoot, err := service.GetRun(ctx, owner, changeRun.Run.Ref)
+	if err != nil {
+		t.Fatal("read exact root after owner rework")
+	}
+	reworked := command.Result{Run: &reworkedRoot}
 	if reworked.Run == nil || reworked.Run.State != "WAITING_HUMAN" || len(reworked.Run.GateRefs) != 2 {
 		t.Fatalf("open gate after requested changes: run=%#v", reworked.Run)
 	}
@@ -5728,8 +5763,12 @@ func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repos
 		Mutation: value.Mutation{IdempotencyKey: "gate-resolve-rework", ExpectedVersion: &secondGateVersion},
 		Payload:  command.GateResolutionInput{GateRef: finalGateRef, Decision: "APPROVE", Comment: "Rework approved"},
 	})
-	if err != nil || final.Run == nil || final.Run.State != "SUCCEEDED" {
+	if err != nil || final.Run == nil || final.Run.State != "RUNNING" {
 		t.Fatalf("approve reworked workflow: run=%#v err=%v", final.Run, err)
+	}
+	finished := claimAndCompleteRun(t, ctx, service, worker, changeRun.Run.Ref, "gate-reworked-callback", false)
+	if finished.Run == nil || finished.Run.State != "SUCCEEDED" {
+		t.Fatal("approved rework callback did not finish the exact workflow")
 	}
 	testOwnerGateList(t, ctx, service, owner, project.Project.Ref)
 }

@@ -94,10 +94,10 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 		t.Fatal("read project purge graph")
 	}
 	t.Logf("project purge graph: nodes=%d digest=%s edges=%d digest=%s", graphNodes, graphNodeDigest, graphEdges, graphEdgeDigest)
-	// Точный FK-граф схемы011 согласован с отдельным server-workflow postcondition:
-	// сохраняет прежний284-граф и добавляет две exact owner-rework FK; полный shape проверяет shipped postcondition.
-	// Подмена состава графа по-прежнему закрыто отклоняется.
-	if graphNodes != 105 || graphNodeDigest != "f51a0de25bd942a250997775617eeaee" || graphEdges != 286 || serverEdges != 284 || serverDigest != "6bf6ad76d8c7ae66e07f75ecf719fdd6" {
+	// Полный actual017109/303 закреплён независимо от явно названной inverse010 проекции284.
+	// Полный shape также проверяется shipped current postcondition до запуска component suite.
+	if graphNodes != 109 || graphNodeDigest != "0703c663f033480ed25bd8ed22f43391" || graphEdges != 303 ||
+		graphEdgeDigest != "6582ea6bf763c227cca80675ebaed877" || serverEdges != 284 || serverDigest != "6bf6ad76d8c7ae66e07f75ecf719fdd6" {
 		t.Fatal("project assistant purge graph changed")
 	}
 	repository, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
