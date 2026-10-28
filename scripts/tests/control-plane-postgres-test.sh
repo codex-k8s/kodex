@@ -10,6 +10,9 @@ repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 container_name="kodex-control-plane-postgres-${BASHPID}"
 go_parallelism=${KODEX_CONTROL_PLANE_TEST_GO_PARALLELISM:-2}
 [[ "$go_parallelism" =~ ^[12]$ ]] || fail 'Go parallelism must be 1 or 2'
+storage_mode=${KODEX_TEST_POSTGRES_STORAGE:-disk}
+[[ "$storage_mode" == disk || "$storage_mode" == ram ]] || fail 'test PostgreSQL storage must be disk or ram'
+postgres_image='docker.io/library/postgres:18.3-alpine3.23@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7'
 upgrade_container_id=""
 test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestBootstrapComponent|TestConcurrentBootstrapComponent|TestWorkerGrantInstancesComponent|TestTrustedWorkloadGenerationComponent|TestAssistantCredentialScopesComponent|TestAssistantParallelLifecycleComponent|TestProjectAssistantProfilesComponent|TestOrganizationRoleImagesComponent|TestOrganizationRuntimeEnvironmentComponent|TestOrganizationRuntimeSecretComponent|TestAssistantSystemRunProjectScopeComponent|TestRuntimeTerminalStorageComponent|TestIntegrationGateFeedbackComponent|TestWorkflowMetadataDraftComponent|TestDeletedEnvironmentSecretRetentionComponent|TestHistoricalEnvironmentSecretAdmissionComponent|TestHistoricalSecretRecoveryConcurrencyComponent|TestWorkflowGateDecisionsComponent|TestCompletionReceiptComponent|TestUsageCompletenessComponent|TestRepositoryBundlePublicationComponent|TestCommitAckArtifactComponent|TestOwnerGateExpiryComponent|TestOwnerGateExpiryMigrationProofComponent|TestProjectPurgeAuthorityComponent|TestProjectPurgeAuthorityMigrationProofComponent|TestServerWorkflowMigrationProofComponent|TestOverviewEligibilityComponent|TestWorkflowExceptionContextComponent|TestWorkflowExceptionContextMigrationProofComponent)$'}}
 
@@ -36,16 +39,23 @@ if [[ "$test_pattern" == --review-qa-upgrade ]]; then
   unset PGPASSWORD PGSERVICE PGSERVICEFILE PGOPTIONS PGHOST PGPORT PGUSER PGDATABASE
   export PGPASSFILE=/dev/null
 fi
+if [[ "$storage_mode" == ram ]]; then
+  for key in KODEX_CONTROL_PLANE_TEST_DSN KODEX_CONTROL_PLANE_TEST_ADMIN_DSN; do
+    [[ ! -v "$key" ]] || fail "external fixture configuration is forbidden: $key"
+  done
+  unset PGPASSWORD PGSERVICE PGSERVICEFILE PGOPTIONS PGHOST PGPORT PGUSER PGDATABASE
+  export PGPASSFILE=/dev/null
+fi
 
 cleanup() {
-  if [[ "$test_pattern" == --review-qa-upgrade ]]; then
+  if [[ "$test_pattern" == --review-qa-upgrade || "$storage_mode" == ram ]]; then
     # Новый контур никогда не очищает лишь совпавшее имя после неизвестного create.
     if [[ "$upgrade_container_id" =~ ^[a-f0-9]{64}$ ]]; then
       docker stop --time 5 "$upgrade_container_id" >/dev/null 2>&1 || true
       # stop может вернуться до завершения AutoRemove; проверяем exact ID через
       # успешную авторитетную выборку, а не считаем ошибку inspect отсутствием.
       local cleanup_ids
-      for cleanup_attempt in {1..40}; do
+      for _ in {1..40}; do
         cleanup_ids=$(docker ps -a --no-trunc --filter "id=$upgrade_container_id" --format '{{.ID}}') ||
           fail 'disposable PostgreSQL cleanup readback failed'
         [[ -n "$cleanup_ids" ]] || return 0
@@ -92,6 +102,24 @@ case "$network_mode" in
   *) fail 'test PostgreSQL network must be bridge or host' ;;
 esac
 
+storage_arguments=()
+if [[ "$storage_mode" == ram ]]; then
+  command -v jq >/dev/null 2>&1 || fail 'jq is required for RAM fixture readback'
+  [[ ( -z "${DOCKER_HOST:-}" || "$DOCKER_HOST" == unix:///* ) &&
+     "$(docker context inspect --format '{{.Endpoints.docker.Host}}')" == unix:///* &&
+     "$(docker info --format '{{.OSType}}')" == linux ]] || fail 'RAM fixture requires local Linux Docker'
+  # Только уже установленный exact image; данные и WAL не попадают в anonymous volume.
+  cached_image_id=$(docker image inspect --format '{{.Id}}' "$postgres_image") || fail 'cached PostgreSQL image is required for RAM fixture'
+  [[ "$cached_image_id" =~ ^sha256:[a-f0-9]{64}$ ]] || fail 'cached PostgreSQL identity is invalid'
+  storage_arguments=(--pull never --read-only --memory 1073741824 --memory-swap 1073741824
+    --cpus 1 --pids-limit 128 --log-driver none
+    --tmpfs '/var/lib/postgresql:rw,noexec,nosuid,nodev,size=536870912,mode=0700'
+    --tmpfs '/var/run/postgresql:rw,noexec,nosuid,nodev,size=16777216,mode=0775'
+    --tmpfs '/tmp:rw,noexec,nosuid,nodev,size=16777216,mode=1777')
+  if (( ${#postgres_arguments[@]} == 0 )); then postgres_arguments=(postgres); fi
+  postgres_arguments+=(-c shared_buffers=32MB -c max_wal_size=64MB -c min_wal_size=32MB -c checkpoint_timeout=30s)
+fi
+
 # У rootless Docker выбранный автоматически порт иногда успевает занять другой
 # локальный процесс до того, как RootlessKit создаст listener. Повторяем только
 # этот отказ до запуска теста; уже созданную БД и тестовые эффекты не повторяем.
@@ -99,10 +127,15 @@ for attempt in 1 2 3 4; do
   if docker_run_output=$(docker run --rm -d --name "$container_name" \
     -e POSTGRES_HOST_AUTH_METHOD=trust \
     "${network_arguments[@]}" \
-    docker.io/library/postgres:18.3-alpine3.23@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7 \
+    "${storage_arguments[@]}" \
+    "$postgres_image" \
     "${postgres_arguments[@]}" \
     2>&1); then
     break
+  fi
+  if [[ "$storage_mode" == ram ]]; then
+    # Не повторяем неизвестный Create и не очищаем контейнер лишь по совпавшему имени.
+    fail 'RAM fixture start is unconfirmed; no retry performed'
   fi
   if [[ "$docker_run_output" != *"RootlessKit PortManager.AddPort()"* ||
         "$docker_run_output" != *"bind: address already in use"* ]]; then
@@ -114,9 +147,28 @@ for attempt in 1 2 3 4; do
   sleep 1
 done
 
-if [[ "$test_pattern" == --review-qa-upgrade ]]; then
+if [[ "$test_pattern" == --review-qa-upgrade || "$storage_mode" == ram ]]; then
   [[ "$docker_run_output" =~ ^[a-f0-9]{64}$ ]] || fail 'disposable container identity is unconfirmed'
   upgrade_container_id="$docker_run_output"
+fi
+
+if [[ "$storage_mode" == ram ]]; then
+  # Проверяем actual cgroup и mounts до bootstrap, не полагаясь лишь на argv Docker.
+  memory_max=$(docker exec "$upgrade_container_id" cat /sys/fs/cgroup/memory.max) || fail 'RAM fixture memory readback failed'
+  cpu_max=$(docker exec "$upgrade_container_id" cat /sys/fs/cgroup/cpu.max) || fail 'RAM fixture CPU readback failed'
+  filesystem=$(docker exec "$upgrade_container_id" stat -f -c %T /var/lib/postgresql) || fail 'RAM fixture filesystem readback failed'
+  [[ "$memory_max" == 1073741824 && "$cpu_max" == '100000 100000' && "$filesystem" == tmpfs ]] || fail 'RAM fixture effective boundary differs'
+  boundary=$(docker inspect --format '{"id":{{json .Id}},"image":{{json .Image}},"readonly":{{json .HostConfig.ReadonlyRootfs}},"memory":{{json .HostConfig.Memory}},"swap":{{json .HostConfig.MemorySwap}},"cpu":{{json .HostConfig.NanoCpus}},"pids":{{json .HostConfig.PidsLimit}},"tmpfs":{{json .HostConfig.Tmpfs}},"mounts":{{json .Mounts}}}' "$upgrade_container_id") || fail 'RAM fixture mount readback failed'
+  jq -e --arg id "$upgrade_container_id" --arg image "$cached_image_id" '
+    .id == $id and .image == $image and .readonly == true and
+    .memory == 1073741824 and .swap == 1073741824 and .cpu == 1000000000 and .pids == 128 and
+    (.tmpfs | keys == ["/tmp", "/var/lib/postgresql", "/var/run/postgresql"]) and
+    .tmpfs["/var/lib/postgresql"] == "rw,noexec,nosuid,nodev,size=536870912,mode=0700" and
+    .tmpfs["/var/run/postgresql"] == "rw,noexec,nosuid,nodev,size=16777216,mode=0775" and
+    .tmpfs["/tmp"] == "rw,noexec,nosuid,nodev,size=16777216,mode=1777" and
+    all(.mounts[]; .Type == "tmpfs")
+  ' <<<"$boundary" >/dev/null || fail 'RAM fixture mount boundary differs'
+  printf 'Disposable PostgreSQL RAM boundary verified\n'
 fi
 
 if [[ "$network_mode" == bridge ]]; then
@@ -148,7 +200,7 @@ if [[ "$test_pattern" == --review-qa-upgrade ]]; then
     cd -- "$repository_root/services/internal/control-plane"
     KODEX_WORKFLOW_REVIEW_QA_UPGRADE_DSN="$dsn" \
       KODEX_WORKFLOW_REVIEW_QA_UPGRADE_DISPOSABLE=dedicated-loopback-container \
-      env -u GOFLAGS GOENV=off GOWORK=off go test -p 2 -v -count=1 -timeout=180s \
+      env -u GOFLAGS GOENV=off GOWORK=off go test -p "$go_parallelism" -v -count=1 -timeout=180s \
       ./cmd/cli -run "$upgrade_test"
   )
   exit

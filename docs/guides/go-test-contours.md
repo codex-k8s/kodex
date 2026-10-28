@@ -4,8 +4,8 @@ title: Герметичный и PostgreSQL-контуры Go
 type: guide
 status: approved
 owner: developer
-version: 1.0.0
-updated: 2026-08-23
+version: 1.0.1
+updated: 2026-10-28
 ---
 
 # Герметичный и PostgreSQL-контуры Go
@@ -57,6 +57,28 @@ Component suite использует только созданный этой к
 Если Docker или `pg_isready` отсутствуют, команда завершается ошибкой и в
 отчёте классифицируется `NOT RUN`; это не считается `PASS`. Подключать к этой
 цели внешний DSN запрещено.
+
+## Ограниченная RAM-площадка
+
+Для локального Linux Docker поддерживается отдельный ограниченный профиль
+`KODEX_TEST_POSTGRES_STORAGE=ram` у той же PostgreSQL-оснастки. Он использует
+только уже установленный закреплённый образ18.3 (`--pull never`), read-only root,
+tmpfs512MiB для `/var/lib/postgresql`, два tmpfs16MiB для socket/tmp, hard1GiB без
+swap и1CPU. До bootstrap проверяются actual cgroup, tmpfs и отсутствие bind/volume
+mounts. Сверка не читает container env. Очистка использует положительный exact
+container ID и подтверждает его отсутствие; неизвестный Create не повторяется.
+Прежний disk-профиль остаётся default. Поддерживаются прежние bridge и host
+режимы; host слушает только loopback, firewall не меняется.
+
+Например, `KODEX_TEST_POSTGRES_STORAGE=ram KODEX_TEST_POSTGRES_NETWORK=host
+KODEX_CONTROL_PLANE_TEST_GO_PARALLELISM=1 make test-workspace-volume-predecessor-postgres`
+выполняет настоящие016→017 и SSH-проверки в одноразовой RAM-БД. Go build cache и
+временные файлы настраиваются вызывающим процессом отдельно. Это component/
+schema qualification, не staging capacity admission, backup durability либо
+сквозная приёмка. Семантика Docker CLI проверена через Context7
+`/docker/docs`; путь data root сверён с [официальным описанием образа PostgreSQL](https://github.com/docker-library/docs/blob/master/postgres/README.md#pgdata)
+и конфигурацией закреплённого локального образа. Результат относится к фактически
+исполненному SHA; наличие профиля не считается PASS.
 
 ## Каталог checkpoint рабочего дерева
 
