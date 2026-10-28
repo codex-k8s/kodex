@@ -12,7 +12,7 @@ DO $restore_catalog$
 BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc p
   WHERE p.oid='control_plane.guard_workspace_archive_task()'::regprocedure
-   AND md5(p.prosrc)='93c167add6d2cc818090aea6b4e10531')
+   AND md5(p.prosrc)='93a6276029ab000b40c090d846748cad')
  OR NOT EXISTS(SELECT 1 FROM pg_catalog.pg_index i JOIN pg_catalog.pg_class c ON c.oid=i.indexrelid
    WHERE c.relname='session_archive_tasks_workspace_restore' AND i.indrelid='control_plane.session_archive_tasks'::regclass
     AND i.indisunique AND i.indisvalid AND i.indisready AND i.indislive

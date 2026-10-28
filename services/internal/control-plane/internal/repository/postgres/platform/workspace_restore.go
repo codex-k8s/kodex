@@ -153,7 +153,7 @@ func createWorkspaceRestore(ctx context.Context, tx pgx.Tx, state workspaceArchi
 		"task_ref": task.ref, "organization_id": state.organizationID, "project_id": state.projectID, "session_id": state.sessionID,
 		"archive_id": state.sourceArchiveID, "workspace_id": state.id, "workspace_generation": state.generation,
 		"workspace_input": string(task.body), "content_generation": task.contentGeneration, "input_digest": task.digest,
-		"object_key": task.objectKey, "object_version": task.objectVersion,
+		"object_version": task.objectVersion,
 	}).Scan(&task.id)
 	if err != nil {
 		return task, errs.ErrUnavailable

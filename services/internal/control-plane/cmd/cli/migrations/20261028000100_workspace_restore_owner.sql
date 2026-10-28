@@ -294,7 +294,7 @@ BEGIN
      AND source.deleted_at IS NULL AND source.workspace_generation=w.generation-1
      AND v.state='READY' AND v.pvc_uid IS NOT NULL AND v.ready_record IS NOT NULL AND NOT v.physical_deleted
      AND p.lifecycle IN ('ACTIVE','TRASHED') AND r.safe_snapshot->'roleRuntimeContractRevision'='4'::jsonb
-     AND NEW.object_key=source.object_key AND NEW.object_version=source.object_version;
+     AND NEW.object_key IS NULL AND NEW.object_version=source.object_version;
    IF v_expected IS NULL OR NEW.workspace_input IS DISTINCT FROM v_expected THEN
      RAISE EXCEPTION 'workspace restore task source is invalid';
    END IF;
