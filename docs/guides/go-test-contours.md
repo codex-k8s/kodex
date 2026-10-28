@@ -4,7 +4,7 @@ title: Герметичный и PostgreSQL-контуры Go
 type: guide
 status: approved
 owner: developer
-version: 1.0.2
+version: 1.0.3
 updated: 2026-10-28
 ---
 
@@ -72,7 +72,17 @@ container ID и подтверждает его отсутствие; неизв
 
 Например, `KODEX_TEST_POSTGRES_STORAGE=ram KODEX_TEST_POSTGRES_NETWORK=host
 KODEX_CONTROL_PLANE_TEST_GO_PARALLELISM=1 make test-workspace-volume-predecessor-postgres`
-выполняет настоящие016→017 и SSH-проверки в одноразовой RAM-БД. Go build cache и
+выполняет настоящий010 predecessor proof, переходы011…017 и SSH-проверки
+в одноразовой RAM-БД. Отдельный release profile `workspace-volume-ssh`
+проверяет полный actual graph109/303, точный каталог custody017 и сохранение
+полной inverse014-проекции с единственной exact DEPLOYMENT-веткой. Исторические
+verifier015/016/SSH не принимают новый профиль. Counterfactual-проверки изменяют
+columns, constraints, indexes, table/column/function ACL, function body/owner,
+RLS/policies, internal parent-side FK и origin-close triggers; отдельно проверяются
+изменения прежнего evidence guard и новой DEPLOYMENT-ветки. Все изменения
+выполняются с rollback в disposable БД. Каталоговые PostgreSQL API проверены
+через Context7 `/websites/postgresql` (`pg_get_triggerdef`, `pg_get_expr`,
+`REPEATABLE READ`). Go build cache и
 временные файлы настраиваются вызывающим процессом отдельно. Это component/
 schema qualification, не staging capacity admission, backup durability либо
 сквозная приёмка. Семантика Docker CLI проверена через Context7

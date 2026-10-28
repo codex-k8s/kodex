@@ -4,8 +4,8 @@ title: Адресная immutable-миграция outbox Control Plane
 type: operation-plan
 status: approved
 owner: manager
-version: 1.3.0
-updated: 2026-10-26
+version: 1.3.1
+updated: 2026-10-28
 ---
 
 # Миграция outbox — #1855
@@ -394,3 +394,32 @@ Kubernetes transport и canonical Job render. Они доказывают operat
 но не исполняют DDL и не подтверждают PostgreSQL schema. До отдельной проверки
 этих SQL на disposable PostgreSQL18 их native исход остаётся `NOT RUN`;
 staging migration и реальный workflow имеют отдельные receipts и приёмку.
+
+## Отдельный переход010→custody017+SSH
+
+Профиль `--profile workspace-volume-ssh` предназначен для полного перехода
+от exact Goose010 через011…017 и20261027000100. Исторический `ssh-compose`
+сохраняет прежнюю единственную SSH-миграцию и не принимает combined-схему.
+Новый annotation `kodex.dev/cp-workspace-volume-ssh-migration-plan` отделяет
+план и CAS от старого SSH-профиля; immutable image/source/publication receipts
+и запрет повторного неизвестного Create остаются обязательными.
+
+| Этап | Авторитетная проверка | Отказ и восстановление |
+| --- | --- | --- |
+| Plan/check | Полный010 ACL/bundle/purge proof; отсутствие011…017 и SSH; нулевые счётчики активной работы | Частично установленная схема и ненулевые счётчики запрещают изменения |
+| Stop/up | Exact CP UID/RV/spec CAS, завершённые Pod; одна immutable up Job из чистого source SHA с полной цепочкой | Неизвестный Create не повторяется; сначала inspect по записанному lineage |
+| Postcondition | READ ONLY REPEATABLE READ: actual109tables/303FK, полный purge guard, каталоги015/016/017,6custody functions и все связанные triggers, SSH metadata | Exit0/Goose log не заменяют proof; несовпадение закрывает приёмку |
+| Исторические правила | Полная вложенная014 проекция; исключены только четыре новые таблицы и одна побайтно проверенная DEPLOYMENT-ветка | Изменение старого evidence guard либо новой SSH-ветки отклоняется |
+| Resume | После terminal Job — прежний deployment только через записанный CAS; повторный inspect не запускает DDL | Повторная доставка нового совместимого CP является отдельным release |
+
+DDL остаётся forward-only. Включение V2 и первые записи нового протокола
+не выполняются этим оператором; перед ними необходимы согласованная доставка
+всех consumers и отдельная приёмка. После новых записей возврат к произвольному
+старому CP не считается безопасным. План возврата использует совместимый
+roll-forward либо заранее проверенное восстановление в изолированную область.
+
+SQL воспроизводится `python3 tools/release/generate-workspace-volume-ssh-proof.py
+--check`. Native-проверка и контрпримеры запускаются через
+`make test-workspace-volume-predecessor-postgres`; ограниченный RAM-профиль
+описан в `GUIDE-MC-009`. Это не доказательство выполнения миграции на staging,
+готовности immutable-релиза или полного PDLC.

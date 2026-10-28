@@ -203,7 +203,11 @@ func TestWorkspaceVolumeMigrationPredecessor(t *testing.T) {
 		if err != nil {
 			t.Fatal("read shipped volume catalog guard")
 		}
-		for _, name := range []string{"column", "constraint", "index", "table_acl", "column_acl", "function", "function_acl", "function_owner", "trigger", "parent_fk", "origin_trigger", "rls", "policy"} {
+		effectGuard, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "..", "tools", "release", "workspace-volume-ssh-effect-guard.sql"))
+		if err != nil {
+			t.Fatal("read shipped combined effect guard")
+		}
+		for _, name := range []string{"column", "constraint", "index", "table_acl", "column_acl", "function", "function_acl", "function_owner", "trigger", "parent_fk", "origin_trigger", "rls", "policy", "ssh_evidence", "ssh_deployment"} {
 			t.Run("catalog-reject-"+name, func(t *testing.T) {
 				mutation, err := workspaceVolumeFixtures.ReadFile("testdata/sql/volume_catalog_" + name + ".sql")
 				if err != nil {
@@ -223,9 +227,13 @@ func TestWorkspaceVolumeMigrationPredecessor(t *testing.T) {
 				if _, err := tx.Exec(ctx, string(mutation)); err != nil {
 					t.Fatal("apply volume catalog mutation", err)
 				}
-				_, err = tx.Exec(ctx, string(guard))
+				selected, message := guard, "workspace volume catalog changed"
+				if strings.HasPrefix(name, "ssh_") {
+					selected, message = effectGuard, "combined SSH evidence guard changed"
+				}
+				_, err = tx.Exec(ctx, string(selected))
 				var failure *pgconn.PgError
-				if !errors.As(err, &failure) || failure.Code != "P0001" || failure.Message != "workspace volume catalog changed" {
+				if !errors.As(err, &failure) || failure.Code != "P0001" || failure.Message != message {
 					t.Fatal("volume catalog drift did not fail closed", err)
 				}
 			})

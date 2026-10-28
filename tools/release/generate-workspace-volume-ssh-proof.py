@@ -84,6 +84,7 @@ END $combined_effect$;
 """
     pre = exact(pre, " 'sshComposeAbsent',", absent + " 'sshComposeAbsent',")
     return {"workspace-volume-catalog-guard.sql": guard,
+            "workspace-volume-ssh-effect-guard.sql": projection,
             "workspace-volume-ssh-migration-postcondition.sql": source,
             "workspace-volume-ssh-migration-precondition.sql": pre}
 
