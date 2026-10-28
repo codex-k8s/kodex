@@ -42,7 +42,7 @@ func run(ctx context.Context, args []string) error {
 	if len(args) == 2 && args[0] == "broker" && args[1] == "bootstrap" {
 		return bootstrapBroker(ctx)
 	}
-	if len(args) != 1 || (args[0] != "up" && args[0] != "status" && args[0] != "check") {
+	if len(args) != 1 || !validPostgresCommand(args[0]) {
 		return cliFailure(stageArguments, nil)
 	}
 	return runPostgres(ctx, args[0], os.Stdout, postgresCLIDependencies{
