@@ -43,7 +43,7 @@ func testWorkspaceRestoreOwner(t *testing.T, ctx context.Context, repository *Re
 	if err := pool.QueryRow(ctx, `SELECT w.state,w.generation,(SELECT count(*) FROM control_plane.session_archive_tasks task
 		WHERE task.workspace_id=w.id AND task.kind='RESTORE') FROM control_plane.session_workspace_storage w WHERE w.ref=$1`,
 		previous.WorkspaceRef).Scan(&state, &generation, &count); err != nil || state != "RESTORE_READY" || generation != previous.Generation+1 || count != 1 {
-		t.Fatal("restore generation or logical intent was duplicated", err)
+		t.Fatalf("restore intent mismatch: state=%s generation=%d count=%d error=%v", state, generation, count, err)
 	}
 	claimer := sessionArchivePrincipal(t, ctx, repository, "platform.session-archive.tasks.claim")
 	items, err := service.ClaimSessionArchiveTasks(ctx, claimer, "workspace-restore-fixture", 1)

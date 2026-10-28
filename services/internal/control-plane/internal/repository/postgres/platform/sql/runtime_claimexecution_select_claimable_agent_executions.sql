@@ -729,7 +729,7 @@ LEFT JOIN LATERAL (
     LIMIT 1
 ) role_image ON true
 WHERE n.organization_id = $1::uuid
-  AND (workspace_storage.id IS NULL OR ($5='SESSION_WORKSPACE_V2' AND workspace_storage.state IN ('EMPTY','RESTORED')))
+  AND (workspace_storage.id IS NULL OR ($5='SESSION_WORKSPACE_V2' AND workspace_storage.state IN ('EMPTY','CHECKPOINT_READY','RESTORED')))
   AND n.type = 'AGENT_EXECUTION'
   AND n.state = 'QUEUED'
   AND r.state IN ('RUNNING', 'QUEUED')
