@@ -66,13 +66,19 @@ def write_private(path, value):
 
 
 def read_private(path):
+    def unique(pairs):
+        value = {}
+        for key, item in pairs:
+            require(key not in value, "DUPLICATE_JSON_KEY")
+            value[key] = item
+        return value
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
     with os.fdopen(fd, "rb") as stream:
         info = os.fstat(stream.fileno())
         require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid() and
                 info.st_nlink == 1 and stat.S_IMODE(info.st_mode) == 0o600 and
                 info.st_size <= 1 << 20, "PRIVATE_INPUT_REQUIRED")
-        return json.loads(stream.read())
+        return json.loads(stream.read(), object_pairs_hook=unique)
 
 
 class Kubernetes:
@@ -144,9 +150,12 @@ def labels(run):
             "kodex.dev/e2e-run": run}
 
 
-def custody_plan(kube, storage_secret, run, role="backup"):
-    source_namespace(kube)
-    require(re.fullmatch(r"kodex-external-s3-local-[a-f0-9]{16}", storage_secret), "EXACT_STORAGE_SOURCE_REQUIRED")
+def custody_plan(kube, storage_secret, run, role="backup", static_receipt=None, receipt_max_age=300):
+    if static_receipt is not None:
+        validate_static_storage(kube, static_receipt, storage_secret, run, receipt_max_age)
+    else:
+        source_namespace(kube)
+        require(re.fullmatch(r"kodex-external-s3-local-[a-f0-9]{16}", storage_secret), "EXACT_STORAGE_SOURCE_REQUIRED")
     require(role in ("backup", "repository"), "CUSTODY_ROLE_INVALID")
     value = {"schema": "kodex.backup-custody/v1", "context": CONTEXT, "namespaceUID": SOURCE_UID, "role": role,
             "run": run, "labels": labels(run), "storageSecret": storage_secret,
@@ -154,6 +163,8 @@ def custody_plan(kube, storage_secret, run, role="backup"):
             "targetSecret": "backup-controller-credentials" if role == "backup" else "backup-controller-repository"}
     if role == "backup":
         value["postgresIdentity"] = kube.identity(SOURCE_NAMESPACE, "secret", "kodex-postgresql-runtime-credentials")
+    if static_receipt is not None:
+        value["staticIdentityReceipt"] = static_receipt
     return value
 
 
@@ -162,18 +173,40 @@ def validate_plan(kube, plan, expected):
             plan.get("context") == CONTEXT and plan.get("namespaceUID") == SOURCE_UID and
             plan.get("targetSecret") in ("backup-controller-credentials", "backup-controller-repository") and
             plan.get("labels") == labels(plan.get("run", "")), "CUSTODY_PLAN_INVALID")
-    fresh = custody_plan(kube, plan["storageSecret"], plan["run"], plan.get("role"))
+    # Уже одобренный immutable plan повторно проверяет live UID/template, не старый wall-clock возраст.
+    fresh = custody_plan(kube, plan["storageSecret"], plan["run"], plan.get("role"), plan.get("staticIdentityReceipt"), receipt_max_age=None)
     require(fresh == plan, "CUSTODY_SOURCE_CHANGED")
 
 
 def source_storage(kube, plan):
+    receipt = plan.get("staticIdentityReceipt")
+    if receipt is not None:
+        validate_static_storage(kube, receipt, plan["storageSecret"], plan["run"], max_age=None)
     values = {key: kube.key(SOURCE_NAMESPACE, plan["storageSecret"], key)
               for key in ("endpoint", "region", "bucket", "access-key", "secret-key")}
     require(values["endpoint"] == S3_ENDPOINT and values["region"] == "us-east-1" and
             values["bucket"] == "kodex-artifacts", "LOCAL_STORAGE_CONTRACT_INVALID")
-    return {"name": "backup-repository", "endpoint": S3_ENDPOINT, "region": values["region"],
-            "bucket": "kodex-backups", "accessKeyId": values["access-key"],
-            "secretAccessKey": values["secret-key"], "usePathStyle": True, "allowInsecureLocal": True}
+    if receipt is not None:
+        require(digest(values) == receipt["scopedPayloadSHA256"], "STATIC_SCOPED_PAYLOAD_CHANGED")
+        validate_static_storage(kube, receipt, plan["storageSecret"], plan["run"], max_age=None)
+    result = {"name": "backup-repository", "endpoint": S3_ENDPOINT, "region": values["region"],
+              "bucket": "kodex-backups", "accessKeyId": values["access-key"],
+              "secretAccessKey": values["secret-key"], "usePathStyle": True, "allowInsecureLocal": True}
+    if receipt is not None:
+        result["prefix"] = receipt["plan"]["qaPrefixes"]["repository"]
+    return result
+
+
+def validate_static_storage(kube, receipt, storage_secret, run, max_age):
+    """Static mode не читает auth/shared Admin values и никогда не делает fallback."""
+    import static_backup_identity_operator as static_operator
+    from static_backup_identity_transport import MetadataView
+    view = kube if hasattr(kube, "secret_metadata") and hasattr(kube, "get") else MetadataView(kube)
+    try:
+        return static_operator.validate_static_receipt(view, receipt, storage_secret, run, max_age=max_age)
+    except static_operator.custody.Rejected:
+        # CLI __main__ и импортированный module имеют разные классы exception.
+        raise Rejected("STATIC_STORAGE_AUTHORITY_REJECTED") from None
 
 
 def credentials(kube, plan):
@@ -185,7 +218,7 @@ def credentials(kube, plan):
                   "tlsServerName": POSTGRES_HOST, "caFile": "/var/run/secrets/kodex/backup-controller/tls/ca.pem",
                   "schemaKind": "goose"} for name, database in
                  (("control-plane", "control_plane"), ("internal-rpc-authority", "internal_rpc_authority"))]
-    stores = [dict(storage, name=name, bucket=bucket, prefix=prefix) for name, bucket, prefix in
+    stores = [dict(storage, name=name, bucket=bucket, prefix=prefix + ("/" if "staticIdentityReceipt" in plan else "")) for name, bucket, prefix in
               (("artifacts", "kodex-artifacts", "organizations"),
                ("session-archives", "kodex-session-archives", "session-archive/v1"))]
     return {"schemaVersion": 1, "destination": storage, "databases": databases, "objectStores": stores}
@@ -272,12 +305,30 @@ def job(template, name, namespace, run, image, command, prefix):
             "spec": {"backoffLimit": 0, "activeDeadlineSeconds": 960, "ttlSecondsAfterFinished": 86400, "template": pod}}
 
 
-def backup_job(run, image, prefix):
+def static_render_prefix(run, prefix, static_receipt):
+    """Pure render binding; фактическая custody повторяет live owner admission отдельно."""
+    if static_receipt is None:
+        return prefix
+    import static_backup_identity_operator as static_operator
+    from static_backup_identity_plan import validate_plan
+    value = static_receipt["plan"]
+    try:
+        validate_plan(value)
+    except static_operator.custody.Rejected:
+        raise Rejected("STATIC_RENDER_PLAN_INVALID") from None
+    require(static_receipt["schema"] == static_operator.SCHEMA and static_receipt["planSHA256"] == digest(value) and
+            value["run"] == run and prefix == value["qaPrefixes"]["repository"], "STATIC_RENDER_PREFIX_MISMATCH")
+    return prefix
+
+
+def backup_job(run, image, prefix, static_receipt=None):
+    prefix = static_render_prefix(run, prefix, static_receipt)
     deployment = source_document("deploy/k8s/base/backup-controller/deployment.yaml")
     return job(deployment["spec"]["template"], "backup-controller-" + run, SOURCE_NAMESPACE, run, image, "backup", prefix)
 
 
-def repository_job(run, image, prefix, command, backup_id=None, restore_id=None, approval_id=None, target_sha=None):
+def repository_job(run, image, prefix, command, backup_id=None, restore_id=None, approval_id=None, target_sha=None, static_receipt=None):
+    prefix = static_render_prefix(run, prefix, static_receipt)
     names = {"verify": "verify", "list-verified": "list", "inspect-backup": "backupmeta", "inspect-restore-drill": "drillmeta"}
     require(command in names, "READBACK_COMMAND_INVALID")
     require(command == "list-verified" or backup_id is not None, "BACKUP_ID_REQUIRED")
@@ -360,9 +411,10 @@ exit 1
         "volumeMounts": [{"name": "tls", "mountPath": "/var/run/secrets/kodex/backup-controller/tls", "readOnly": True}]}
 
 
-def restore_resources(run, image, prefix):
+def restore_resources(run, image, prefix, static_receipt=None):
     """Только локальный render: новый PostgreSQL, собственный TLS, без доступа к source PostgreSQL."""
     require(NAME.fullmatch(run) and len(run) <= 32, "DRILL_ID_INVALID")
+    prefix = static_render_prefix(run, prefix, static_receipt)
     namespace = "kodex-qa-restore-" + run
     host = "qa-postgresql." + namespace + ".svc.cluster.local"
     owned = labels(run)
@@ -469,18 +521,22 @@ def restore_resources(run, image, prefix):
     cleanup_readback = copy.deepcopy(restore)
     cleanup_readback["metadata"]["name"] = "qa-cleanup-read-" + run
     cleanup_readback["spec"]["template"]["spec"]["containers"][0]["args"] = ["inspect-restore-cleanup"]
-    return {"schema": "kodex.isolated-restore-render/v1", "run": run, "namespace": namespace, "postgresHost": host, "image": image,
+    rendered = {"schema": "kodex.isolated-restore-render/v1", "run": run, "namespace": namespace, "postgresHost": host, "image": image,
             "prefix": prefix, "roleStubs": role_names, "policyRoles": policy_roles,
             "resources": [ns, deny, account, issuer, certificate, roles, restore_policy, pg_policy, s3_policy, service, database],
             "fingerprintJob": fingerprint, "preflightJob": preflight, "restoreJob": restore, "targetInspectionJob": inspect_target,
             "cleanupJob": cleanup, "cleanupReadbackJob": cleanup_readback}
+    if static_receipt is not None:
+        rendered["staticPlanSHA256"] = static_receipt["planSHA256"]
+        rendered["objectStorePrefix"] = static_receipt["plan"]["qaPrefixes"]["target"]
+    return rendered
 
 
 def apply_restore_inputs(kube, plan, expected, rendered, namespace_uid, output):
     """Один atomic Secret: новый PG password плюс repository/targets; live PG admin не читается."""
     require(rendered.get("schema") == "kodex.isolated-restore-render/v1" and
             rendered.get("run") == plan["run"] and rendered["namespace"] == "kodex-qa-restore-" + plan["run"], "RESTORE_RENDER_INVALID")
-    require(rendered == restore_resources(plan["run"], rendered["image"], rendered["prefix"]), "RESTORE_RENDER_CHANGED")
+    require(rendered == restore_resources(plan["run"], rendered["image"], rendered["prefix"], plan.get("staticIdentityReceipt")), "RESTORE_RENDER_CHANGED")
     require(kube.identity(rendered["namespace"], "namespace", rendered["namespace"])["uid"] == namespace_uid, "RESTORE_NAMESPACE_CHANGED")
     private_directory(Path(output).parent)
     require(not os.path.lexists(output), "OUTPUT_ALREADY_EXISTS")
@@ -495,7 +551,8 @@ def apply_restore_inputs(kube, plan, expected, rendered, namespace_uid, output):
         "tlsMode": "verify-full", "tlsServerName": rendered["postgresHost"],
         "caFile": "/var/run/secrets/kodex/backup-controller/tls/ca.pem"}
         for name, db in (("control-plane", "qa_control_plane"), ("internal-rpc-authority", "qa_internal_rpc_authority"))],
-        "objectStore": dict(storage, name="restore-fixture", bucket="kodex-restore-fixture", prefix="e2e-restore-" + plan["run"])}
+        "objectStore": dict(storage, name="restore-fixture", bucket="kodex-restore-fixture",
+                            prefix=plan["staticIdentityReceipt"]["plan"]["qaPrefixes"]["target"] if "staticIdentityReceipt" in plan else "e2e-restore-" + plan["run"])}
     values = {"password": password, "repository.json": canonical({"schemaVersion": 1, "destination": storage}).decode(),
               "targets.json": canonical(targets).decode()}
     write_private(str(output) + ".intent", {"namespace": rendered["namespace"], "namespaceUID": namespace_uid,
@@ -644,6 +701,7 @@ def main():
     plan.add_argument("--object-storage-secret", required=True)
     plan.add_argument("--run", required=True)
     plan.add_argument("--role", choices=("backup", "repository"), default="backup")
+    plan.add_argument("--static-identity-receipt")
     plan.add_argument("--output", required=True)
     apply = sub.add_parser("custody-apply")
     apply.add_argument("--plan", required=True)
@@ -652,17 +710,20 @@ def main():
     render = sub.add_parser("render-backup")
     for key in ("run", "image", "prefix", "output"):
         render.add_argument("--" + key, required=True)
+    render.add_argument("--static-identity-receipt")
     pull = sub.add_parser("render-pull")
     for key in ("run", "image", "output"):
         pull.add_argument("--" + key, required=True)
     read = sub.add_parser("render-readback")
     for key in ("run", "image", "prefix", "output", "operation"):
         read.add_argument("--" + key, required=True)
+    read.add_argument("--static-identity-receipt")
     for key in ("backup-id", "restore-id", "approval-id", "target-sha"):
         read.add_argument("--" + key)
     restore = sub.add_parser("render-restore")
     for key in ("run", "image", "prefix", "output"):
         restore.add_argument("--" + key, required=True)
+    restore.add_argument("--static-identity-receipt")
     inputs = sub.add_parser("restore-inputs")
     for key in ("plan", "approved-plan-sha", "render", "namespace-uid", "output"):
         inputs.add_argument("--" + key, required=True)
@@ -685,7 +746,8 @@ def main():
     args = parser.parse_args()
     kube = Kubernetes()
     if args.command == "custody-plan":
-        value = custody_plan(kube, args.object_storage_secret, args.run, args.role)
+        value = custody_plan(kube, args.object_storage_secret, args.run, args.role,
+                             read_private(args.static_identity_receipt) if args.static_identity_receipt else None)
         write_private(args.output, value)
         print(json.dumps({"planSHA256": digest(value)}))
     elif args.command == "custody-apply":
@@ -695,14 +757,17 @@ def main():
         write_private(args.output, pull_job(args.run, args.image))
         print(json.dumps({"state": "RENDERED_NOT_APPLIED"}))
     elif args.command == "render-backup":
-        write_private(args.output, backup_job(args.run, args.image, args.prefix))
+        write_private(args.output, backup_job(args.run, args.image, args.prefix,
+                      read_private(args.static_identity_receipt) if args.static_identity_receipt else None))
         print(json.dumps({"state": "RENDERED_NOT_APPLIED"}))
     elif args.command == "render-readback":
         write_private(args.output, repository_job(args.run, args.image, args.prefix, args.operation,
-            args.backup_id, args.restore_id, args.approval_id, args.target_sha))
+            args.backup_id, args.restore_id, args.approval_id, args.target_sha,
+            read_private(args.static_identity_receipt) if args.static_identity_receipt else None))
         print(json.dumps({"state": "RENDERED_NOT_APPLIED"}))
     elif args.command == "render-restore":
-        value = restore_resources(args.run, args.image, args.prefix)
+        value = restore_resources(args.run, args.image, args.prefix,
+                                  read_private(args.static_identity_receipt) if args.static_identity_receipt else None)
         write_private(args.output, value)
         print(json.dumps({"state": "RENDERED_NOT_APPLIED", "renderSHA256": digest(value), "namespace": value["namespace"]}))
     elif args.command == "restore-inputs":

@@ -478,3 +478,12 @@ test-session-workspace-archive-wire: check-go-toolchain
 .PHONY: test-runtime-workspace-owner-postgres
 test-runtime-workspace-owner-postgres: check-go-toolchain
 	@timeout --kill-after=10s 240s bash scripts/tests/control-plane-postgres-test.sh '^TestWorkspaceWriterOwnerComponent$$'
+
+.PHONY: test-static-backup-identity-plan
+test-static-backup-identity-plan:
+	@timeout 30s python3 -B tools/dev/test_static_backup_identity_plan.py
+
+.PHONY: test-static-backup-identity-operator
+test-static-backup-identity-operator:
+	@timeout 60s python3 -B -m unittest discover -s tools/dev -p 'test_static_backup_identity_*.py'
+	@timeout 60s python3 -B tools/dev/test_scoped_backup_drill.py

@@ -1270,6 +1270,27 @@ snapshot получает новый origin. Legacy lookup ограничен н
 
 ## Ротация, пропуск обновлений и однонаправленное восстановление
 
+Клиентский digest, ETag или owner attr не доказывает content CAS, если штатный
+конкурирующий writer может изменить bytes, сохранив эти атрибуты. Компенсация
+credential требует сравнения точного server-owned содержимого/версии атомарно
+с изменением; timestamp, read-before/write-after и повторный readback не заменяют
+эту границу. Неподдерживаемый провайдером CAS закрывает mutation, а не расширяет
+права на metadata либо bucket.
+
+JSONPatch UID/resourceVersion/full-spec CAS одного Kubernetes workload не является
+транзакцией с Secrets/PVC: ссылка по имени не pin-ит UID. Временная immutable auth
+revision требует отдельного контроля writers, exact resource receipts и
+readback обслуживаемого Pod/route. Возврат ссылки, Ready, store ACK и общий 403
+не доказывают отзыв credential: нужен точный отрицательный authentication probe.
+Неизвестный эффект сохраняет origin/inputs и не разрешает новый ключ или retry.
+
+Пустота одноразовой QA области не выводится из имени identity/run. Если контракт
+требует свежую область данных, её prefix связывается с immutable operation nonce,
+а current objects, versions и delete markers проверяются до credential grant.
+Неполный/truncated/неверный scope либо outage не означает пустоту. Начальный proof
+принадлежит exact origin; rejoin после собственных effects не превращает поздние
+own writes в начальную коллизию и не выдаёт доступ к namespace другой операции.
+
 При переносе legacy metadata snapshot digest, registry digest и hash входа
 публикации не взаимозаменяемы. Недостающую историческую связь разрешается
 добавить отдельной owner-owned записью только после сверки полного preimage
