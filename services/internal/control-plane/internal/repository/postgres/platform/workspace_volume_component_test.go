@@ -9,6 +9,7 @@ import (
 	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
@@ -83,4 +84,73 @@ func workspaceVolumeComponentWork(t *testing.T, item map[string]any) runtimecont
 		t.Fatal("physical owner response lost its immutable work commitment")
 	}
 	return work
+}
+
+// testWorkspaceVolumeCancellationOwner retains a late positive CREATE fact after real owner
+// cancellation without reopening the origin, physical grant, READY state or model admission.
+// testWorkspaceVolumeCancellationOwner сохраняет late positive CREATE fact после настоящей
+// owner cancellation без открытия origin, physical grant, READY state либо model admission.
+func testWorkspaceVolumeCancellationOwner(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service,
+	owner, worker value.Principal, projectRef, agentRef string) {
+	t.Helper()
+	execute := func(kind command.Kind, actor value.Principal, key string, payload any) command.Result {
+		t.Helper()
+		result, err := service.Execute(ctx, command.Command{Kind: kind, Principal: actor,
+			Mutation: value.Mutation{IdempotencyKey: "workspace-volume-cancel-" + key}, Payload: payload})
+		if err != nil {
+			t.Fatalf("volume cancellation command %s failed: %v", key, err)
+		}
+		return result
+	}
+	run := execute(command.LaunchRun, owner, "launch", command.LaunchRunInput{ProjectRef: projectRef,
+		Title: "Остановить подготовку каталога", Task: "Сохранить позднее наблюдение без нового запуска",
+		Target: entity.RunTarget{Type: "AGENT", Ref: agentRef}}).Run
+	if run == nil {
+		t.Fatal("volume cancellation origin was not created")
+	}
+	if items := execute(command.ClaimExecution, worker, "pending", command.LeaseInput{WorkloadInstance: "workspace-volume-cancel", Limit: 1}).RuntimeItems; len(items) != 0 {
+		t.Fatal("cancellation fixture admitted a model before physical preparation")
+	}
+	principal := func(operation string) value.Principal {
+		return resolvedTestPrincipal(t, ctx, repository, port.ProofPrincipalInput{ExternalActorID: "kodex-system-subject",
+			ExternalTenantID: "kodex-installation", CallerWorkload: "session-archive", Operation: operation}, "session-archive")
+	}
+	claimer := principal(command.WorkspaceVolumeCommandPermission(command.ClaimWorkspaceVolumeTasks))
+	completer := principal(command.WorkspaceVolumeCommandPermission(command.CompleteWorkspaceVolumeTask))
+	renewer := principal(command.WorkspaceVolumeRenewPermission)
+	claimInput := command.WorkspaceVolumeClaimInput{WorkloadInstance: "workspace-volume-cancel", Limit: 1}
+	claimed := execute(command.ClaimWorkspaceVolumeTasks, claimer, "claim", claimInput)
+	if len(claimed.RuntimeItems) != 1 {
+		t.Fatal("cancellation fixture did not receive one physical task")
+	}
+	item := claimed.RuntimeItems[0]
+	work := workspaceVolumeComponentWork(t, item)
+	if work.Kind != runtimecontract.WorkspaceVolumeCreate || work.Volume.Scope.SessionRef != run.SessionRef {
+		t.Fatal("cancellation fixture borrowed another physical origin")
+	}
+	proof := command.WorkspaceVolumeTaskInput{TaskRef: work.TaskRef, LeaseRef: stringMap(item, "leaseRef"),
+		Fence: stringMap(item, "fence"), Generation: runtimeRevisionMapInt64(item, "generation")}
+	execute(command.CancelRun, owner, "cancel", command.RefInput{Ref: run.Ref})
+	if _, err := service.RenewWorkspaceVolumeTask(ctx, renewer, proof); err == nil {
+		t.Fatal("cancellation left the physical grant renewable")
+	}
+	if pending := execute(command.ClaimWorkspaceVolumeTasks, claimer, "after-cancel", claimInput); len(pending.RuntimeItems) != 0 {
+		t.Fatal("cancellation issued a replacement physical attempt")
+	}
+	report := proof
+	report.ObservedPVCUID = "00000000-0000-4000-8000-000000000020"
+	for attempt := 0; attempt < 2; attempt++ {
+		result := execute(command.CompleteWorkspaceVolumeTask, completer, "late-fact", report)
+		if result.Runtime["pastFact"] != true || stringMap(result.Runtime, "recordedTaskState") != "CANCELLED" ||
+			stringMap(result.Runtime, "recordedVolumeState") == "READY" {
+			t.Fatal("late physical fact reopened cancelled execution authority")
+		}
+	}
+	terminal, err := service.GetRun(ctx, owner, run.Ref)
+	if err != nil || terminal.State != "CANCELLED" {
+		t.Fatal("late physical report changed the terminal business outcome")
+	}
+	if pending := execute(command.ClaimExecution, worker, "model-after-cancel", command.LeaseInput{WorkloadInstance: "workspace-volume-cancel", Limit: 1}); len(pending.RuntimeItems) != 0 {
+		t.Fatal("late physical report revived model admission")
+	}
 }

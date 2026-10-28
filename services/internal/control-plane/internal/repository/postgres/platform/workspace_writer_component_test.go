@@ -185,4 +185,7 @@ func TestWorkspaceWriterOwnerComponent(t *testing.T) {
 		}
 	})
 	testWorkspaceCheckpointOwner(t, ctx, repository, service, pool, owner, claimPrincipal, binding, run.Ref)
+	t.Run("physical_cancel_and_past_fact", func(t *testing.T) {
+		testWorkspaceVolumeCancellationOwner(t, ctx, repository, service, owner, worker, project.Ref, agent.Ref)
+	})
 }
