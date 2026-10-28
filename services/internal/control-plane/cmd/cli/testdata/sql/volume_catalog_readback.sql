@@ -48,12 +48,16 @@ WITH targets AS (
  SELECT r.oid::regclass::text AS relation,
  CASE WHEN t.tgisinternal THEN pg_catalog.regexp_replace(t.tgname,'_[0-9]+$','_<oid>') ELSE t.tgname END AS name,
  pg_catalog.jsonb_build_array(t.tgtype,t.tgenabled,t.tgisinternal,t.tgdeferrable,t.tginitdeferred,
- t.tgnargs,t.tgattr::text,pg_catalog.pg_get_expr(t.tgqual,t.tgrelid),t.tgfoid::regprocedure::text,
+ t.tgnargs,t.tgattr::text,
+ pg_catalog.replace(pg_catalog.pg_get_triggerdef(t.oid),pg_catalog.quote_ident(t.tgname),
+ pg_catalog.quote_ident(CASE WHEN t.tgisinternal THEN pg_catalog.regexp_replace(t.tgname,'_[0-9]+$','_<oid>') ELSE t.tgname END)),
+ t.tgfoid::regprocedure::text,
  c.conname,c.conrelid::regclass::text,c.confrelid::regclass::text,t.tgparentid=0,
  pg_catalog.encode(t.tgargs,'hex'),t.tgoldtable,t.tgnewtable) AS metadata
  FROM pg_catalog.pg_trigger t JOIN pg_catalog.pg_class r ON r.oid=t.tgrelid
  LEFT JOIN pg_catalog.pg_constraint c ON c.oid=t.tgconstraint
  WHERE t.tgrelid IN(SELECT oid FROM targets) OR t.tgfoid IN(SELECT oid FROM functions)
+ OR t.tgconstraint IN(SELECT oid FROM pg_catalog.pg_constraint WHERE conrelid IN(SELECT oid FROM targets))
 )
 SELECT pg_catalog.jsonb_build_object(
  'tables',(SELECT pg_catalog.jsonb_object_agg(relname,
