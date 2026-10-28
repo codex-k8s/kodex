@@ -31,13 +31,17 @@ func workspaceVolumePreparationFixture(t *testing.T, attempt int32, recovery boo
 	if err != nil {
 		t.Fatal("preparation encoding failed")
 	}
+	snapshot, err := runtimecontract.EncodeWorkspaceVolumeWork(work)
+	if err != nil {
+		t.Fatal("attempt encoding failed")
+	}
 	immutable := true
 	input := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: exactWorkerNamespace,
 		Name: workloadName(work.TaskRef, work.Volume.VolumeGeneration, work.Attempt), UID: "20000000-0000-4000-8000-000000000001", ResourceVersion: "1",
 		Labels: map[string]string{managedLabel: "true"}, Annotations: map[string]string{
 			workspaceVolumeTaskAnnotation: work.TaskRef, workspaceVolumeInputAnnotation: work.InputDigest,
 			workspaceVolumePVCUIDAnnotation: work.Volume.PVCUID, workspaceVolumeAttemptAnnotation: strconv.FormatInt(int64(work.Attempt), 10)}},
-		Immutable: &immutable, Data: map[string]string{"volume.json": string(raw)}}
+		Immutable: &immutable, Data: map[string]string{"volume.json": string(raw), "work.json": string(snapshot)}}
 	return work, input
 }
 

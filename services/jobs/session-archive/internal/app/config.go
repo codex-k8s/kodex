@@ -10,6 +10,7 @@ import (
 	"github.com/caarlos0/env/v11"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
 const (
@@ -25,6 +26,7 @@ const (
 // RU: Config содержит настройки owner RPC транспорта, Kubernetes-worker, объектного хранилища и жизненного цикла.
 type Config struct {
 	RPCProfile                      string        `env:"KODEX_RPC_PROFILE"`
+	WorkspaceStorageProfile         string        `env:"SESSION_WORKSPACE_STORAGE_PROFILE"`
 	Environment                     string        `env:"SESSION_ARCHIVE_ENVIRONMENT"`
 	WorkerNamespace                 string        `env:"SESSION_ARCHIVE_WORKER_NAMESPACE"`
 	InstanceID                      string        `env:"SESSION_ARCHIVE_INSTANCE_ID"`
@@ -77,6 +79,12 @@ func loadConfig() (Config, error) {
 // validate rejects unsupported profiles, unsafe paths, foreign worker namespaces and invalid storage or polling bounds.
 // RU: validate отклоняет неподдерживаемые профили, небезопасные пути, чужие пространства worker и неверные границы хранилища либо опроса.
 func (value Config) validate() error {
+	if value.WorkspaceStorageProfile != "" && value.WorkspaceStorageProfile != runtimecontract.WorkspaceStorageProfile {
+		return errors.New("session archive workspace profile is invalid")
+	}
+	if value.WorkspaceStorageProfile != "" && (value.StorageClass != "local-path" || value.SessionPVCSize != "20Gi") {
+		return errors.New("session archive workspace storage geometry is invalid")
+	}
 	if value.RPCProfile != "" && value.RPCProfile != transportprofile.TrustedCluster {
 		return errors.New("session archive RPC profile is invalid")
 	}

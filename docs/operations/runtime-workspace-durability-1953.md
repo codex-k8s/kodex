@@ -4,7 +4,7 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.18
+version: 1.0.19
 updated: 2026-10-28
 ---
 
@@ -709,7 +709,7 @@ attempt digest. Единственный helper UID10001/GID29000 получае
 точный PVC и временный каталог4МиБ. API token, provider auth, object-storage
 credentials и model revision не монтируются. Initial attempt запрашивает
 FSGroup29000 для EMPTY root; retries и отдельный read-only recovery не получают
-FSGroup и имеют read-only PVC source/mount. Job не получает TTL до owner ACK;
+FSGroup и имеют read-only PVC source/mount. Job не получает TTL;
 backoff0, parallelism/completions1 и replacement policy `Failed` не являются
 доказательством однократного исполнения сами по себе.
 
@@ -719,11 +719,56 @@ UID в Bound, Job/Pod geometry, controller owner reference, все container sta
 не даёт READY. Повторное объявление CLEAN-артефакта здесь отсутствует: record
 является внутренним физическим наблюдением, а не проверенным файлом пользователя.
 
-Это всё ещё незавершённый путь. Constructor/observer и fake-client tests
-не заменяют подключение owner-fenced цикла, исключение competing consumers,
-late ACK, cleanup после принятия owner, runtime delivery и native проверку.
-Новый Go-код пока не прошёл исполнение: capacity preflight закрыл тяжёлые
-проверки из-за свободного места. V2 остаётся выключенным.
+Owner queue и physical executor теперь соединены в исходниках отдельным worker
+в `session-archive`. Он включается только через тот же explicit
+`SESSION_WORKSPACE_STORAGE_PROFILE`, что и owner; по умолчанию поле пустое.
+Геометрия profile требует `local-path` и20ГиБ. Отдельный cancel/join worker не
+задерживает capture истории. Общая readiness соединяет успешность обоих путей;
+здоровый legacy worker не скрывает недоступность volume RPC/RBAC. Один controller
+Pod исполняет не более одной physical task за раз; лимит модельных исполнений
+и account budgets не изменяются.
+
+Immutable ConfigMap содержит canonical `volume.json` и complete effective
+`work.json`, без lease/fence или model revision. Current grant отдельно
+продлевается перед каждым Create и в ожидании. Unknown claim response повторяется
+с тем же key. Terminal ACK имеет stable key на task/generation/input digest;
+неизвестный ответ допускает максимум два одинаковых RPC, без повторения физического
+действия. Подтверждённые Create responses учитываются независимо от исхода ACK.
+
+Для первого init требуется отсутствие competing consumers. Read-only attempt
+проверяет bounded snapshots прежних attempts, exact volume lineage, неизменяемый
+input, helper geometry и terminal Job/all-container join. Отсутствующий первый
+Job не подтверждает завершение и не даёт новый init credit. Такой путь ждёт
+в пределах существующего бюджета и закрыто завершается без нового Create/init.
+
+После positive owner ACK удаляются только проверенные завершённые Pods по UID/RV.
+Original immutable inputs и completed Jobs сохраняются как tombstones против
+позднего первого Create/FSGroup. Их нельзя удалять обычной сборкой мусора до
+доказанного physical retirement всего PVC. Неподтверждённый Delete читается
+обратно без слепого повтора. При отказе/cancel controller сначала пытается
+сохранить уже завершённый late fact, иначе выполняет UID/RV CAS suspend своего
+положительно созданного Job и ждёт наблюдаемой остановки. Неизвестный Job Create
+не усыновляется для cleanup. Ни одна из этих операций не удаляет PVC/user bytes.
+
+Readiness делает self-review конкретных namespace/resource/verb полномочий
+контроллера и проверяет тот же Job-list API. В Role только controller добавлены
+`get/delete pods` и `patch jobs`; worker Role остаётся без полномочий, helper не
+получает API token. Текущая live Role этих трёх прав ещё не имеет. Подготовленный
+UID/RV CAS patch прошёл server dry-run с подтверждением неизменности Role;
+применения не было. SSA с новым manager обнаружил существующее владение полями:
+его нельзя заменять слепым force. Source rollout должен обновлять адресно Role
+controller, сохраняя фактические отдельные worker Role/Binding.
+
+Grace controller Pod65секунд покрывает bounded physical stop, terminal owner ACK
+и независимые cleanup. Это срок остановки компонента, не расширение account/model
+budgets. Файлы, history и CLEAN-артефакты остаются разными контурами.
+
+Это по-прежнему незавершённый unit: нужны owner component/native qualification,
+передача принятого volume observation в runtime BIND/RESTORE, paired custody/purge
+и общий migration/release profile. Новые Go-тесты, включая fake-client lifecycle
+и неизменность ACK при retry, ещё NOT RUN: capacity preflight закрыл тяжёлые
+проверки из-за свободного места. V2 остаётся выключенным; локальная форма
+конструктора, server dry-run Role и исходники не являются full PDLC acceptance.
 
 Для API Create и metadata UID использована актуальная документация Context7
 `/kubernetes/client-go`; семантика `PodReplacementPolicy=Failed` сверена также
@@ -756,6 +801,12 @@ transport обрабатывает её отдельно от свежего `ti
 через Context7 `/protocolbuffers/protobuf-go`: `GetUnknown` возвращает сохранённые
 wire bytes; обычное protobuf decoding не отклоняет их автоматически.
 
+Для self-review использована [официальная API-документация Kubernetes](https://kubernetes.io/docs/reference/kubernetes-api/definitions/self-subject-access-review-v1-authorization/).
+Scope namespace задаётся явно; self-review проверяет текущую identity и не выдаёт ей
+новых прав. Context7 для этой операции вернул только общую документацию REST client,
+поэтому точные API-типы также сверены с закреплённым `k8s.io/api v0.36.3`.
+
+
 Матрица описывает полный требуемый owner path. До завершения schema017,
 producer/consumer/RPC registry, cancel/late-ACK, runtime admission и native
 owner-команд этот профиль остаётся не включённым; отдельный codec/helper
@@ -777,9 +828,9 @@ rollback. Завершение включает подтверждение ис�
 Это проверка схемы, а не полный owner component или готовность V2. В текущем
 срезе реализованы отдельные таблицы custody/task/attempt, owner enqueue/claim
 и внутренние обработчики renewal/completion/failure; создание модели ждёт
-accepted volume record. RPC registry/transport подключены в исходниках; физический
-consumer, свежая runtime delivery, restore и protocol удаления должны быть
-подключены совместно
+accepted volume record. RPC registry/transport и physical queue consumer соединены
+в исходниках; свежая runtime delivery, restore и protocol удаления должны быть
+завершены и квалифицированы совместно
 до включения. До появления положительного
 physical cleanup proof схема закрыто отклоняет `physical_deleted=true`, включая
 обычный CRUD. Наличие `PURGED` в закрытом перечне состояний не разрешает этот

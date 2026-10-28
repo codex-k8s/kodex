@@ -12,6 +12,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/libs/go/httpserver"
 	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/controller"
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
@@ -90,7 +91,13 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 	}
 	readiness.Set(false, "control_plane_unchecked")
 	metrics.SetReady(false)
-	workers := serviceruntime.StartWorkers(lifecycle, technical.Worker(), runLoop(control, kubernetes, readiness, metrics, owned, logger, config))
+	volumeEnabled := config.WorkspaceStorageProfile == runtimecontract.WorkspaceStorageProfile
+	availability := newArchiveWorkerReadiness(readiness, metrics, volumeEnabled)
+	workerSet := []serviceruntime.Worker{technical.Worker(), runLoop(control, kubernetes, availability, owned, logger, config)}
+	if volumeEnabled {
+		workerSet = append(workerSet, runWorkspaceVolumeLoop(control, kubernetes, availability, owned, logger, config))
+	}
+	workers := serviceruntime.StartWorkers(lifecycle, workerSet...)
 	err = workers.Wait(context.WithoutCancel(lifecycle))
 	readiness.Set(false, "stopping")
 	metrics.SetReady(false)
@@ -106,7 +113,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 
 // runLoop checks Kubernetes availability and claims at most one owner task before a bounded polling delay.
 // RU: runLoop проверяет доступность Kubernetes и получает не более одного owner-задания до ограниченной паузы опроса.
-func runLoop(control *controlplaneclient.Client, kube *controller.Controller, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, owned *archiveMetrics, logger *slog.Logger, config Config) serviceruntime.Worker {
+func runLoop(control *controlplaneclient.Client, kube *controller.Controller, availability *archiveWorkerReadiness, owned *archiveMetrics, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		var lastKubernetesCheck time.Time
 		kubernetesReady := true
@@ -118,8 +125,7 @@ func runLoop(control *controlplaneclient.Client, kube *controller.Controller, re
 				lastKubernetesCheck = time.Now()
 				kubernetesReady = err == nil
 				if err != nil {
-					readiness.Set(false, "kubernetes_unavailable")
-					metrics.SetReady(false)
+					availability.setArchive(false, "kubernetes_unavailable")
 					logger.WarnContext(ctx, "session archive Kubernetes check failed", "error_class", "kubernetes_api")
 				}
 			}
@@ -129,7 +135,7 @@ func runLoop(control *controlplaneclient.Client, kube *controller.Controller, re
 				cycle, cancel := context.WithTimeout(ctx, config.RPCDeadline)
 				claimed, err := control.SessionArchive.ClaimSessionArchiveTasks(cycle, &controlplanev1.ClaimSessionArchiveTasksRequest{WorkloadInstance: config.InstanceID, Limit: 1})
 				cancel()
-				setArchiveClaimReadiness(readiness, metrics, err)
+				availability.setArchive(err == nil, "control_plane_unavailable")
 				if err != nil {
 					owned.cycles.WithLabelValues("error").Inc()
 					logger.WarnContext(ctx, archiveClaimFailureMessage, "error_class", "control_plane", archiveRPCCodeAttribute, status.Code(err).String())

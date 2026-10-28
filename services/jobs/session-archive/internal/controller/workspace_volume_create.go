@@ -3,9 +3,11 @@ package controller
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strconv"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -15,6 +17,32 @@ import (
 // errWorkspaceVolumeCreateUnconfirmed сохраняет закрытую диагностику при отсутствии positive
 // Create response; raw API errors, credentials и существующее имя не становятся ownership proof.
 var errWorkspaceVolumeCreateUnconfirmed = errors.New("workspace volume create is unconfirmed")
+
+// CheckWorkspaceVolume checks the controller's own effective permissions for the exact
+// namespace/resource/verb paths, without creating a PVC/Job, assigning authority or impersonation.
+// CheckWorkspaceVolume проверяет effective permissions самого controller для exact
+// namespace/resource/verb paths без создания PVC/Job, назначения полномочий или impersonation.
+func (controller *Controller) CheckWorkspaceVolume(ctx context.Context) error {
+	if controller == nil || controller.client == nil || ctx == nil || controller.config.WorkerNamespace != exactWorkerNamespace {
+		return errWorkspaceVolumeCreateUnconfirmed
+	}
+	for _, resource := range []struct{ group, resource, verb string }{
+		{"", "persistentvolumeclaims", "get"}, {"", "persistentvolumeclaims", "create"},
+		{"", "configmaps", "get"}, {"", "configmaps", "create"},
+		{"", "pods", "get"}, {"", "pods", "list"}, {"", "pods", "delete"},
+		{"batch", "jobs", "get"}, {"batch", "jobs", "list"}, {"batch", "jobs", "create"}, {"batch", "jobs", "patch"},
+	} {
+		attributes := &authorizationv1.ResourceAttributes{Namespace: exactWorkerNamespace, Group: resource.group,
+			Version: "v1", Resource: resource.resource, Verb: resource.verb}
+		review, err := controller.client.AuthorizationV1().SelfSubjectAccessReviews().Create(ctx, &authorizationv1.SelfSubjectAccessReview{
+			Spec: authorizationv1.SelfSubjectAccessReviewSpec{ResourceAttributes: attributes}}, metav1.CreateOptions{})
+		if err != nil || review == nil || !review.Status.Allowed || review.Status.Denied || review.Status.EvaluationError != "" ||
+			review.Spec.NonResourceAttributes != nil || !reflect.DeepEqual(review.Spec.ResourceAttributes, attributes) {
+			return errWorkspaceVolumeCreateUnconfirmed
+		}
+	}
+	return controller.Check(ctx)
+}
 
 // workspaceVolumePVC renders only the qualified local-path intent with the unchanged twenty-GiB
 // request. Caller-selected data sources, PV names, owner references and arbitrary storage profiles

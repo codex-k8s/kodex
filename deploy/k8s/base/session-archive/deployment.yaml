@@ -16,7 +16,8 @@ spec:
       serviceAccountName: session-archive
       automountServiceAccountToken: true
       enableServiceLinks: false
-      terminationGracePeriodSeconds: 35
+      # Bounded physical stop, exact owner ACK и независимые telemetry cleanup укладываются в этот срок.
+      terminationGracePeriodSeconds: 65
       securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
       containers:
         - name: session-archive

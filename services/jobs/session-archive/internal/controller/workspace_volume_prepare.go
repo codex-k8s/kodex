@@ -2,6 +2,7 @@ package controller
 
 import (
 	"errors"
+	"reflect"
 	"strconv"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -9,6 +10,30 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// workspaceVolumePreparationInput freezes the helper's credential-free preparation and complete
+// effective attempt together. The second record lets later read-only reconciliation validate
+// predecessor geometry without inventing an old grant or adopting its physical result.
+// workspaceVolumePreparationInput фиксирует credential-free preparation и complete effective
+// attempt вместе. Второй record позволяет read-only reconciliation проверить predecessor geometry
+// без выдумывания старого grant либо adoption его physical result.
+func workspaceVolumePreparationInput(work runtimecontract.WorkspaceVolumeWork) (*corev1.ConfigMap, error) {
+	preparation, err := work.Preparation()
+	if err != nil {
+		return nil, errWorkspaceVolumePrepareUnconfirmed
+	}
+	raw, err := runtimecontract.EncodeWorkspaceVolumePreparation(preparation)
+	snapshot, snapshotErr := runtimecontract.EncodeWorkspaceVolumeWork(work)
+	if err != nil || snapshotErr != nil {
+		return nil, errWorkspaceVolumePrepareUnconfirmed
+	}
+	immutable := true
+	return &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: workloadName(work.TaskRef, work.Volume.VolumeGeneration, work.Attempt), Namespace: exactWorkerNamespace,
+		Labels: map[string]string{managedLabel: "true"}, Annotations: map[string]string{
+			workspaceVolumeTaskAnnotation: work.TaskRef, workspaceVolumeInputAnnotation: work.InputDigest,
+			workspaceVolumePVCUIDAnnotation: work.Volume.PVCUID, workspaceVolumeAttemptAnnotation: strconv.FormatInt(int64(work.Attempt), 10)}},
+		Immutable: &immutable, Data: map[string]string{"volume.json": string(raw), "work.json": string(snapshot)}}, nil
+}
 
 // errWorkspaceVolumePrepareUnconfirmed closes preparation failures without embedding physical
 // metadata, private lease proofs, termination output or raw Kubernetes diagnostics.
@@ -48,19 +73,18 @@ func (controller *Controller) workspaceVolumePreparationJob(work runtimecontract
 	if _, err := controller.workspaceVolumePVC(work); err != nil || work.Kind != runtimecontract.WorkspaceVolumePrepare {
 		return nil, errWorkspaceVolumePrepareUnconfirmed
 	}
-	preparation, err := work.Preparation()
+	wanted, err := workspaceVolumePreparationInput(work)
 	if err != nil {
 		return nil, errWorkspaceVolumePrepareUnconfirmed
 	}
-	raw, err := runtimecontract.EncodeWorkspaceVolumePreparation(preparation)
-	name := workloadName(work.TaskRef, work.Volume.VolumeGeneration, work.Attempt)
-	if err != nil || input == nil || input.UID == "" || input.ResourceVersion == "" || input.Name != name ||
+	name := wanted.Name
+	if input == nil || input.UID == "" || input.ResourceVersion == "" || input.Name != name ||
 		input.Namespace != exactWorkerNamespace || input.Immutable == nil || !*input.Immutable || input.DeletionTimestamp != nil ||
 		len(input.OwnerReferences) != 0 || input.Labels[managedLabel] != "true" ||
 		input.Annotations[workspaceVolumeTaskAnnotation] != work.TaskRef || input.Annotations[workspaceVolumeInputAnnotation] != work.InputDigest ||
 		input.Annotations[workspaceVolumePVCUIDAnnotation] != work.Volume.PVCUID ||
 		input.Annotations[workspaceVolumeAttemptAnnotation] != strconv.FormatInt(int64(work.Attempt), 10) ||
-		len(input.Data) != 1 || len(input.BinaryData) != 0 || input.Data["volume.json"] != string(raw) {
+		len(input.BinaryData) != 0 || !reflect.DeepEqual(input.Data, wanted.Data) {
 		return nil, errWorkspaceVolumePrepareUnconfirmed
 	}
 	pvc, _ := runtimecontract.SessionPVCName(work.Volume.Scope.SessionRef)

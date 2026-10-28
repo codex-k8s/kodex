@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.33
+version: 1.7.34
 updated: 2026-10-28
 ---
 
@@ -2018,6 +2018,18 @@ Payload/annotation и успешный mount не доказывают это п
 неподтверждённая custody блокируют data consumer без recursive repair.
 Проверка привязывается к реальному storage class и фактическим правам после
 повторного Pod: Pod Ready или декларации securityContext недостаточно.
+
+Подготовка должна закрывать и delayed replay первого initializer после допуска
+private data. Один terminal Pod либо отсутствие Pods не запрещают поздний Create
+с прежним именем. В ограниченном профиле сохраняются immutable input и completed
+Job исходной инициализации без TTL; после owner ACK удаляется только positively
+joined Pod по UID/RV. Retained Job/input не являются разрешением выполнять старую
+attempt. Их удаление требует отдельного доказанного retirement физического PVC
+и закрытия всех прежних write credits. При reconciliation неизвестный первый
+initializer блокирует successor; нельзя заново назначать init/FSGroup по отсутствию
+ресурса. Альтернативный протокол должен отдельно доказать тот же запрет поздней
+нормализации private tree. Матрица: [#1953](../operations/runtime-workspace-durability-1953.md).
+
 Если профиль требует единую shared group новых файлов под восстановленными
 private directories, одной supplemental group недостаточно: отсутствие SGID
 на mode0700 возвращает primary group writer. Профиль закрепляет primary GID
