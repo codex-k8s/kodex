@@ -43,13 +43,13 @@ func validWorkspaceVolumeLease(lease *cp.WorkLease, generation int64) bool {
 		lease.GetExpiresAt().CheckValid() == nil && time.Now().Before(lease.GetExpiresAt().AsTime())
 }
 
-// acknowledgeWorkspaceVolume retries only the same already constructed terminal RPC, at most
+// acknowledgeOwner retries only the same already constructed terminal RPC, at most
 // twice and only after an uncertain transport result. It never repeats the physical operation,
 // changes the idempotency key or turns an unknown external result into success.
-// acknowledgeWorkspaceVolume повторяет только тот же заранее построенный terminal RPC максимум
+// acknowledgeOwner повторяет только тот же заранее построенный terminal RPC максимум
 // дважды и лишь после uncertain transport result. Physical operation не повторяется,
 // idempotency key не меняется, неизвестный external result не становится success.
-func acknowledgeWorkspaceVolume(ctx context.Context, timeout time.Duration, call func(context.Context) error) error {
+func acknowledgeOwner(ctx context.Context, timeout time.Duration, call func(context.Context) error) error {
 	var err error
 	for attempt := 0; attempt < 2; attempt++ {
 		rpc, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
@@ -135,7 +135,7 @@ func processWorkspaceVolume(ctx context.Context, client cp.WorkspaceVolumeWorkSe
 		}
 		request := &cp.FailWorkspaceVolumeTaskRequest{Mutation: key("fail"), TaskRef: work.TaskRef, LeaseRef: lease.GetRef(),
 			Fence: lease.GetFence(), Generation: lease.GetGeneration(), SafeErrorCode: code}
-		ackErr := acknowledgeWorkspaceVolume(ctx, timeout, func(rpc context.Context) error {
+		ackErr := acknowledgeOwner(ctx, timeout, func(rpc context.Context) error {
 			response, err := client.FailWorkspaceVolumeTask(rpc, request)
 			if err != nil {
 				return err
@@ -156,7 +156,7 @@ func processWorkspaceVolume(ctx context.Context, client cp.WorkspaceVolumeWorkSe
 		Fence: lease.GetFence(), Generation: lease.GetGeneration(), ObservedPvcUid: pvcUID, JobUid: prepared.JobUID, PodUid: prepared.PodUID,
 		Ready: workspaceVolumeReadyProto(prepared.Ready)}
 	pastFact := false
-	err = acknowledgeWorkspaceVolume(ctx, timeout, func(rpc context.Context) error {
+	err = acknowledgeOwner(ctx, timeout, func(rpc context.Context) error {
 		response, err := client.CompleteWorkspaceVolumeTask(rpc, request)
 		if err != nil {
 			return err

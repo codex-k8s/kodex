@@ -15,6 +15,26 @@ const sqlFile = `${version}_outbox_unpublished_predecessor_index.sql`;
 const read = path => JSON.parse(readFileSync(path,'utf8'));
 const write = (path,value) => writeFileSync(path,JSON.stringify(value),{mode:0o600});
 
+test('restore owner profile requires the complete new catalog and does not broaden historical validators',()=>{
+ const config=immutableMigrationProfile('workspace-restore');
+ assert.equal(config.version,'20261028000100');
+ assert.equal(config.previousVersion,20261026001000);
+ assert.equal(config.requiredMigrations.length,9);
+ assert.equal(config.requiredMigrations.at(-1),'20261028000100_workspace_restore_owner.sql');
+ assert.throws(()=>config.requiredMigrations.push('foreign.sql'));
+ const proof={...workspaceVolumeSSHProof(),profile:'WORKSPACE_RESTORE_V2',gooseVersion:20261028000100,restoreCatalog:true};
+ assert.equal(validImmutableMigrationPostcondition('workspace-restore',proof),true);
+ assert.equal(validImmutableMigrationPostcondition('workspace-volume-ssh',proof),false);
+ assert.equal(validImmutableMigrationPostcondition('workspace-restore',workspaceVolumeSSHProof()),false);
+ for(const key of Object.keys(proof)) {
+  const missing={...proof};delete missing[key];
+  assert.equal(validImmutableMigrationPostcondition('workspace-restore',missing),false,key);
+ }
+ for(const patch of [{restoreCatalog:false},{checkpointCatalog:false},{gooseVersion:20261027000100},
+  {readOnly:'off'},{purgeEdges:304},{volumeCatalog:false},{profile:'WORKSPACE_VOLUME_SSH_V1'}])
+  assert.equal(validImmutableMigrationPostcondition('workspace-restore',{...proof,...patch}),false);
+});
+
 // Реальный repo-owned immutable Job проверяется без копии его credential boundary в оснастке.
 function base() {
   const job = JSON.parse(execFileSync('yq',['-o=json','.',new URL('../../deploy/k8s/base/control-plane/migration-job.yaml',import.meta.url).pathname],{encoding:'utf8'}));

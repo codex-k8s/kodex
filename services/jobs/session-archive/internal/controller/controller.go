@@ -110,7 +110,7 @@ func (controller *Controller) Execute(ctx context.Context, task model.Task, rene
 // execute keeps V2 evidence until the caller receives an owner ACK; legacy cleanup remains unchanged.
 // execute сохраняет V2 evidence до owner ACK у caller; прежняя очистка legacy не меняется.
 func (controller *Controller) execute(ctx context.Context, task model.Task, renew func(context.Context) error, retained *RetainedAttempt) (result model.Result, resultErr error) {
-	if task.Workspace != nil && (task.Validate() != nil || task.Kind != "SNAPSHOT") {
+	if task.Workspace != nil && (task.Validate() != nil || task.Kind != "SNAPSHOT" && task.Kind != "RESTORE") {
 		return model.Result{}, errors.New("session workspace task consumer is unavailable")
 	}
 	if err := controller.cleanupPredecessors(ctx, task, renew); err != nil {
@@ -119,7 +119,7 @@ func (controller *Controller) execute(ctx context.Context, task model.Task, rene
 	if task.Kind == "DELETE_PVC" {
 		return controller.deletePVC(ctx, task)
 	}
-	if task.Kind == "RESTORE" {
+	if task.Kind == "RESTORE" && task.Workspace == nil {
 		if err := controller.ensureRestorePVC(ctx, task); err != nil {
 			return model.Result{}, err
 		}
@@ -136,7 +136,7 @@ func (controller *Controller) execute(ctx context.Context, task model.Task, rene
 		sourcePVCUID = uid
 	}
 	if task.Workspace != nil {
-		if err := controller.checkWorkspaceSource(ctx, task, sourcePVCUID, ""); err != nil {
+		if err := controller.waitWorkspaceSource(ctx, task, sourcePVCUID, renew); err != nil {
 			return model.Result{}, err
 		}
 	}

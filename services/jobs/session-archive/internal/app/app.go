@@ -173,9 +173,15 @@ func setArchiveClaimReadiness(readiness *serviceruntime.Readiness, metrics *shar
 	metrics.SetReady(true)
 }
 
-// process validates a leased task, executes its renewing worker and submits one generation-bound terminal owner command.
-// RU: process проверяет задание с lease, выполняет worker с продлением и отправляет конечную owner-команду, связанную с поколением.
-func process(ctx context.Context, control *controlplaneclient.Client, kube *controller.Controller, claim *controlplanev1.SessionArchiveTask, metrics *archiveMetrics, logger *slog.Logger, config Config) error {
+// archiveTaskExecutor keeps physical execution separate from terminal receipt acknowledgement.
+// archiveTaskExecutor отделяет физическое исполнение от подтверждения конечной квитанции.
+type archiveTaskExecutor interface {
+	ExecuteRetained(context.Context, model.Task, func(context.Context) error) (model.Result, *controller.RetainedAttempt, error)
+}
+
+// process validates a leased task, executes its worker once and retries only the identical generation-bound owner ACK.
+// RU: process проверяет задание с lease, исполняет worker один раз и повторяет только идентичное owner ACK того же поколения.
+func process(ctx context.Context, control *controlplaneclient.Client, kube archiveTaskExecutor, claim *controlplanev1.SessionArchiveTask, metrics *archiveMetrics, logger *slog.Logger, config Config) error {
 	if claim == nil || claim.GetLease() == nil {
 		return errors.New("claimed session archive task is incomplete")
 	}
@@ -207,37 +213,38 @@ func process(ctx context.Context, control *controlplaneclient.Client, kube *cont
 	if runErr != nil {
 		result = model.Result{Success: false, SafeErrorCode: "SESSION_ARCHIVE_KUBERNETES_UNAVAILABLE"}
 	}
-	rpc, cancelRPC := context.WithTimeout(context.WithoutCancel(ctx), config.RPCDeadline)
-	defer cancelRPC()
 	mutation := &controlplanev1.MutationContext{IdempotencyKey: uuid.NewSHA1(uuid.NameSpaceOID, []byte(task.TaskRef+"\x00"+fmt.Sprint(lease.GetGeneration())+"\x00complete")).String()}
 	base := func() (string, string, string, int64) {
 		return lease.GetRef(), lease.GetFence(), task.TaskRef, lease.GetGeneration()
 	}
 	lr, lf, tr, g := base()
 	stage := archiveRPCFail
-	if !result.Success {
-		_, err = control.SessionArchive.FailSessionArchiveTask(rpc, &controlplanev1.FailSessionArchiveTaskRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, SafeErrorCode: result.SafeErrorCode})
-	} else {
-		switch task.Kind {
-		case "SNAPSHOT":
-			stage = archiveRPCCompleteSnapshot
-			request := &controlplanev1.CompleteSessionSnapshotRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, FormatVersion: result.FormatVersion, ObjectKey: result.ObjectKey, ObjectVersion: result.ObjectVersion, ObjectEtag: result.ObjectETag, ObjectDigest: result.ObjectDigest, ObjectSizeBytes: result.ObjectSizeBytes, SourceSizeBytes: result.SourceSizeBytes}
-			if task.Workspace != nil {
-				request.SourceSha256, request.SourceEntryCount = result.SourceSHA256, result.SourceEntryCount
+	err = acknowledgeOwner(ctx, config.RPCDeadline, func(rpc context.Context) error {
+		if !result.Success {
+			_, err = control.SessionArchive.FailSessionArchiveTask(rpc, &controlplanev1.FailSessionArchiveTaskRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, SafeErrorCode: result.SafeErrorCode})
+		} else {
+			switch task.Kind {
+			case "SNAPSHOT":
+				stage = archiveRPCCompleteSnapshot
+				request := &controlplanev1.CompleteSessionSnapshotRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, FormatVersion: result.FormatVersion, ObjectKey: result.ObjectKey, ObjectVersion: result.ObjectVersion, ObjectEtag: result.ObjectETag, ObjectDigest: result.ObjectDigest, ObjectSizeBytes: result.ObjectSizeBytes, SourceSizeBytes: result.SourceSizeBytes}
+				if task.Workspace != nil {
+					request.SourceSha256, request.SourceEntryCount = result.SourceSHA256, result.SourceEntryCount
+				}
+				_, err = control.SessionArchive.CompleteSessionSnapshot(rpc, request)
+			case "RESTORE":
+				stage = archiveRPCCompleteRestore
+				_, err = control.SessionArchive.CompleteSessionRestore(rpc, &controlplanev1.CompleteSessionRestoreRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, FormatVersion: result.FormatVersion, ObjectKey: result.ObjectKey, ObjectVersion: result.ObjectVersion, ObjectEtag: result.ObjectETag, ObjectDigest: result.ObjectDigest, ObjectSizeBytes: result.ObjectSizeBytes, RestoredSourceSha256: result.SourceSHA256, RestoredSourceSizeBytes: result.SourceSizeBytes})
+			case "DELETE_PVC":
+				stage = archiveRPCCompletePVCDeletion
+				_, err = control.SessionArchive.CompleteSessionPVCDeletion(rpc, &controlplanev1.CompleteSessionPVCDeletionRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, PvcName: task.PVCName})
+			case "DELETE_OBJECT":
+				stage = archiveRPCCompleteObjectDeletion
+				_, err = control.SessionArchive.CompleteSessionObjectDeletion(rpc, &controlplanev1.CompleteSessionObjectDeletionRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, ObjectKey: task.TargetObjectKey, ObjectVersion: task.TargetObjectVersion})
 			}
-			_, err = control.SessionArchive.CompleteSessionSnapshot(rpc, request)
-		case "RESTORE":
-			stage = archiveRPCCompleteRestore
-			_, err = control.SessionArchive.CompleteSessionRestore(rpc, &controlplanev1.CompleteSessionRestoreRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, FormatVersion: result.FormatVersion, ObjectKey: result.ObjectKey, ObjectVersion: result.ObjectVersion, ObjectEtag: result.ObjectETag, ObjectDigest: result.ObjectDigest, ObjectSizeBytes: result.ObjectSizeBytes, RestoredSourceSha256: result.SourceSHA256, RestoredSourceSizeBytes: result.SourceSizeBytes})
-		case "DELETE_PVC":
-			stage = archiveRPCCompletePVCDeletion
-			_, err = control.SessionArchive.CompleteSessionPVCDeletion(rpc, &controlplanev1.CompleteSessionPVCDeletionRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, PvcName: task.PVCName})
-		case "DELETE_OBJECT":
-			stage = archiveRPCCompleteObjectDeletion
-			_, err = control.SessionArchive.CompleteSessionObjectDeletion(rpc, &controlplanev1.CompleteSessionObjectDeletionRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, ObjectKey: task.TargetObjectKey, ObjectVersion: task.TargetObjectVersion})
 		}
-	}
-	observeArchiveRPC(rpc, logger, task, stage, err)
+		return err
+	})
+	observeArchiveRPC(ctx, logger, task, stage, err)
 	outcome := "success"
 	if err != nil {
 		outcome = "error"

@@ -99,6 +99,8 @@ func readControlPlaneMigrationProof(t *testing.T, ctx context.Context, observer 
 	switch profile {
 	case "workflow-review-qa-evidence":
 		verifier = "validWorkflowReviewQAEvidenceMigration"
+	case "workspace-restore":
+		verifier = "validWorkspaceRestoreMigration"
 	case "workspace-volume-ssh":
 		verifier = "validWorkspaceVolumeSSHMigration"
 	default:

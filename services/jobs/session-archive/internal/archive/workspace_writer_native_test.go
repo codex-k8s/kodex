@@ -15,6 +15,7 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/libs/go/securefile"
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
 	"golang.org/x/sys/unix"
 )
@@ -51,6 +52,27 @@ func workspaceWriterNativeCheckpoint(t *testing.T) (model.Task, *workspaceObject
 	}
 	task = restoreTaskFromSnapshotFixture(t, task, result)
 	task.Workspace.PVCUID = "pvc-fixture"
+	mode := os.Getenv("KODEX_WORKSPACE_WRITER_NATIVE")
+	if mode == "seal" || mode == "prepare" || mode == "task" {
+		root, err := unix.Open(runtimecontract.WorkspaceStorageRootMount, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+		if err != nil {
+			t.Fatal("open qualified native volume root")
+		}
+		ready, err := prepareWorkspaceVolumeAt(t.Context(), root, task.Workspace.Target.VolumeReady.Preparation,
+			securefile.OwnedRecordIdentity{UID: 10001, GID: 29000}, 0, mode != "seal")
+		_ = unix.Close(root)
+		if err != nil {
+			t.Fatal("qualify actual native volume seal", err)
+		}
+		task.Workspace.Target.VolumeReady = &ready
+	} else if mode != "" {
+		raw, err := os.ReadFile("/var/run/config/kodex/session-archive/task.json")
+		frozen, decodeErr := model.DecodeTask(raw)
+		if err != nil || decodeErr != nil || frozen.Workspace == nil || frozen.Workspace.Target.VolumeReady == nil {
+			t.Fatal("read fixed native fixture volume commitment")
+		}
+		task.Workspace.Target.VolumeReady = frozen.Workspace.Target.VolumeReady
+	}
 	return task, store
 }
 
@@ -80,6 +102,10 @@ func TestWorkspaceWriterTwoUIDNative(t *testing.T) {
 		if os.Geteuid() != 10001 || PrepareWorkspaceRestore(ctx, task) != nil {
 			t.Fatal("fixed UID native generation initializer failed")
 		}
+		return
+	}
+	if mode == "seal" {
+		_, _ = workspaceWriterNativeCheckpoint(t)
 		return
 	}
 	if mode == "task" {

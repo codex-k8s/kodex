@@ -19,6 +19,11 @@ test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestBootstrapComponent|T
 # Оба закрытых upgrade-сценария используют одну и ту же отдельную пустую БД.
 upgrade_test='^TestWorkflowReviewQAEvidenceForwardUpgrade$'
 volume_owner=false
+if [[ "$test_pattern" == --restore-owner ]]; then
+  volume_owner=true
+  upgrade_test='^TestWorkspaceRestoreOwnerMigration$'
+  test_pattern=--review-qa-upgrade
+fi
 if [[ "$test_pattern" == --volume-owner ]]; then
   volume_owner=true
   upgrade_test='^TestWorkspaceVolumeMigrationPredecessor$'
@@ -247,6 +252,7 @@ fi
   schema_version=$(psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" --no-password -X -qAt -v ON_ERROR_STOP=1 \
     -c 'SELECT max(version_id) FILTER (WHERE is_applied) FROM public.goose_db_version')
   case "$schema_version" in
+    20261028000100) schema_proof=workspace-restore-migration-postcondition.sql; schema_verifier=validWorkspaceRestoreMigrationPostcondition ;;
     20261027000100)
       # Одинаковая конечная Goose version не отличает010+SSH от полного017+SSH.
       # Выбираем отдельный closed verifier по фактически применённому017;

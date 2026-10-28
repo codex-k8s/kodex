@@ -190,6 +190,17 @@ func TestWorkspaceWriterOwnerComponent(t *testing.T) {
 		}
 	})
 	testWorkspaceCheckpointOwner(t, ctx, repository, service, pool, owner, claimPrincipal, binding, run.Ref)
+	var restoreProfile bool
+	if err := pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM public.goose_db_version WHERE version_id=20261028000100 AND is_applied)").Scan(&restoreProfile); err != nil {
+		t.Fatal("read disposable restore profile", err)
+	}
+	if restoreProfile && !t.Failed() {
+		if !t.Run("restore_owner_generation", func(t *testing.T) {
+			testWorkspaceRestoreOwner(t, ctx, repository, service, pool, owner, worker, observer, binding, payload, execute)
+		}) {
+			return
+		}
+	}
 	t.Run("physical_cancel_and_past_fact", func(t *testing.T) {
 		testWorkspaceVolumeCancellationOwner(t, ctx, repository, service, owner, worker, project.Ref, agent.Ref)
 	})

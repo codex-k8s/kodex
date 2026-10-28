@@ -495,3 +495,7 @@ test-static-backup-identity-operator:
 .PHONY: test-application-restart
 test-application-restart:
 	@timeout 60s node --test tools/release/application-restart.test.mjs tools/release/scoped-release.test.mjs
+
+.PHONY: test-workspace-restore-owner-postgres
+test-workspace-restore-owner-postgres: check-go-toolchain
+	@timeout --kill-after=10s 300s bash scripts/tests/control-plane-postgres-test.sh --restore-owner

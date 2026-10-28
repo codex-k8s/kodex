@@ -140,7 +140,7 @@ func (attempt *RetainedAttempt) ReleaseAfterAcknowledgement(ctx context.Context)
 // checkWorkspaceSource связывает exact frozen PVC и исключает все остальные Pod-потребители, включая terminal Pods.
 // Positive owner quiescence record остаётся обязательным; одно отсутствие не разрешает snapshot.
 func (controller *Controller) checkWorkspaceSource(ctx context.Context, task model.Task, uid, workerUID types.UID) error {
-	if task.Workspace == nil || task.Validate() != nil || task.Kind != "SNAPSHOT" || uid == "" || string(uid) != task.Workspace.PVCUID {
+	if task.Workspace == nil || task.Validate() != nil || task.Kind != "SNAPSHOT" && task.Kind != "RESTORE" || uid == "" || string(uid) != task.Workspace.PVCUID {
 		return errors.New("session workspace source binding is invalid")
 	}
 	pvc, err := controller.client.CoreV1().PersistentVolumeClaims(exactWorkerNamespace).Get(ctx, task.PVCName, metav1.GetOptions{})
@@ -161,7 +161,7 @@ func (controller *Controller) checkWorkspaceSource(ctx context.Context, task mod
 				owner := metav1.GetControllerOf(&pod)
 				if workerUID == "" || owner == nil || owner.UID != workerUID || owner.Kind != "Job" || owner.APIVersion != "batch/v1" ||
 					owner.Name != workloadName(task.TaskRef, task.ContentGeneration, task.Attempt) {
-					return errors.New("session workspace source has another consumer")
+					return errWorkspaceOtherConsumer
 				}
 			}
 		}

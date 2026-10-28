@@ -4,7 +4,7 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.22
+version: 1.0.23
 updated: 2026-10-28
 ---
 
@@ -940,3 +940,30 @@ owner commands в disposable БД: опубликованный ABI4 и V2 claim
 
 Context7: PostgreSQL18 pg_constraint, pg_trigger и ALTER TABLE;
 convalidated/conenforced не заменяют проверку включённых FK triggers.
+
+
+## Восстановление owner-selected поколения в той же сессии
+
+Forward migration `20261028000100` добавляет отдельный `workspace-restore`
+профиль. Historical015/016/017 и SSH verifier не расширяются. Actual guard,
+единственный RESTORE intent поколения и расширение blocked CHECK проверяются
+до полной обратной017+SSH проекции. Профиль V2 на staging остаётся выключенным
+до проверки полного source cohort; исходники не доказывают live acceptance.
+Прежние утверждения этого документа о dormant RESTORE относятся к этапам,
+предшествовавшим этой forward migration.
+
+| Инициатор и переход | Полномочия, состояние и побочные действия | Наблюдение и отказ |
+| --- | --- | --- |
+| Новый `ClaimExecution`, CHECKPOINT_READY → RESTORE_READY | Session lock; accepted AVAILABLE format2 receipt того же workspace/session/agent; старый writer положительно joined/released. Новое поколение, неизменяемые manifest pins, policy и accepted VolumeReady. Model lease не выдаётся | Один intent, audit и run-changed в owner transaction; повтор claim не создаёт вторую запись |
+| Архивный worker, RESTORE_READY → RESTORING | Specialized claim; точные task/workspace/generation/input digest и новый fenced grant. PVC существует и совпадает с положительным UID; CREATE/adoption/FSGroup запрещены | Перед записью initializer только читает реальный прежний seal. API error, неизвестный UID/owner и конкурирующий consumer закрыто отклоняются |
+| Повтор физической попытки | Fresh attempt/input digest не выдают writable credit: только read-only reconciliation опубликованного дерева. Предыдущий Job/Pod имеют точные owner pins и все expected containers положительно завершены | Отсутствие predecessor не считается join proof. После удаления более раннего доказательства поздняя попытка остаётся закрытой; автоматическое восстановление такой неопределённости не заявлено |
+| CompleteSessionRestore, RESTORING → RESTORED | Source manifest version/ETag/digest/размер и tree SHA/байты совпадают с owner-selected receipt; exact lease/version CAS. Source custody сохраняется, grant закрывается атомарно | Повтор ACK использует прежний idempotency key; worker не запускается повторно. Потеря ответа не равна успеху |
+| Следующий model claim | Заново проходит текущие eligibility и policy. Fresh RuntimeRevision содержит новое поколение и source commitment. Старый writer не получает BIND | Частичное дерево не допускается модели; storage completion не возрождает отменённый run |
+| Fail/lease expiry последней попытки | RESTORE task → DEAD_LETTER, workspace → BLOCKED с RESTORE_UNCONFIRMED в одной транзакции; archive/том сохраняются | Нет бесконечного RESTORING и отсутствует право на автоматическую очистку |
+| Cancel business run во время data custody | Storage intent сохраняет право закончить только сохранение/копирование данных; новый model claim требует отдельной актуальной eligibility | Не выдаёт execution grant, human approve, бизнес-результат либо право удалить источник |
+
+Этот срез не завершает передачу файлов между разными session через retry/DAG
+и поддержку workspace координатора WORKFLOW. Эти пути требуют серверного
+происхождения и отдельной полной проверки; fallback к пустому каталогу не разрешён.
+Context7 для PostgreSQL недоступен: возвращён отказ API key; проверена официальная
+[документация PostgreSQL18 о modifying CTE](https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-MODIFYING).

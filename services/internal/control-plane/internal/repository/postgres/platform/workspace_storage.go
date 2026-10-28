@@ -84,13 +84,28 @@ func (repository *Repository) prepareSessionWorkspaceTx(ctx context.Context, tx 
 	if err != nil {
 		return nil, false, errs.ErrUnavailable
 	}
-	if !activated || state != "EMPTY" {
+	if !activated {
+		return nil, false, nil
+	}
+	if state == "CHECKPOINT_READY" {
+		return nil, false, repository.prepareWorkspaceRestoreTx(ctx, tx, current, candidate, reference, generation)
+	}
+	if state != "EMPTY" && state != "RESTORED" {
 		// Остальные состояния разрешает только owner checkpoint/restore coordinator.
 		return nil, false, nil
 	}
 	binding := &runtimecontract.WorkspaceStorageBinding{Profile: runtimecontract.WorkspaceStorageProfile,
 		Scope: runtimecontract.WorkspaceStorageScope{OrganizationRef: candidate.organizationRef, ProjectRef: candidate.projectRef,
 			SessionRef: candidate.sessionRef, AgentRef: candidate.agentRef}, WorkspaceRef: reference, Generation: generation}
+	if state == "RESTORED" {
+		source, _, err := readWorkspaceRestoreSource(ctx, tx, workspaceArchiveState{
+			organizationID: current.organizationID, ref: reference, generation: generation, scope: binding.Scope,
+		})
+		if err != nil {
+			return nil, false, err
+		}
+		binding.Source = &source
+	}
 	if _, err := binding.GenerationSubPath(); err != nil {
 		return nil, false, errs.ErrConflict
 	}

@@ -128,6 +128,21 @@ func (repository *Repository) changeWorkspaceArchive(ctx context.Context, tx pgx
 			"object_version": checkpoint.Manifest.Version, "object_etag": checkpoint.Manifest.ETag, "object_digest": checkpoint.Manifest.Digest,
 			"object_bytes": checkpoint.Manifest.SizeBytes}).Scan(&archiveRef)
 		taskState = "SUCCEEDED"
+	case command.CompleteSessionRestore:
+		if task.kind != "RESTORE" || state.source == nil || payload.FormatVersion != 2 || payload.PVCName != "" ||
+			payload.SnapshotSourceSHA256 != "" || payload.SourceEntryCount != 0 ||
+			payload.ObjectKey != state.source.Manifest.Key || payload.ObjectVersion != state.source.Manifest.Version ||
+			payload.ObjectETag != state.source.Manifest.ETag || payload.ObjectDigest != state.source.Manifest.Digest ||
+			payload.ObjectSizeBytes != state.source.Manifest.SizeBytes || payload.RestoredSourceSHA256 != state.source.TreeSHA256 ||
+			payload.SourceSizeBytes != state.source.Bytes {
+			return commandOutcome{}, true, errs.ErrInvalid
+		}
+		err = tx.QueryRow(ctx, queryWorkspaceRestoreComplete, pgx.StrictNamedArgs{
+			"organization_id": state.organizationID, "workspace_id": state.id, "workspace_version": state.version,
+			"archive_id": state.sourceArchiveID, "task_id": task.id, "task_generation": task.generation,
+			"lease_ref": payload.LeaseRef, "fence_digest": *task.fenceDigest,
+		}).Scan(&archiveRef)
+		taskState = "SUCCEEDED"
 	case command.FailSessionArchiveTask:
 		if !validSessionArchiveError(payload.SafeErrorCode) {
 			return commandOutcome{}, true, errs.ErrInvalid

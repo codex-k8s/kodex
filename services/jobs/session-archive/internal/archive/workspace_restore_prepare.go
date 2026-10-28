@@ -43,6 +43,15 @@ func PrepareWorkspaceRestore(ctx context.Context, task model.Task) error {
 		volume.Gid != 29000 || volume.Mode&0o070 != 0o070 || unix.Fstatfs(root, &filesystem) != nil || filesystem.Flags&unix.ST_RDONLY != 0 {
 		return errWorkspaceObjectUnconfirmed
 	}
+	expected := task.Workspace.Target.VolumeReady
+	if expected == nil {
+		return errWorkspaceObjectUnconfirmed
+	}
+	ready, err := prepareWorkspaceVolumeAt(ctx, root, expected.Preparation,
+		securefile.OwnedRecordIdentity{UID: 10001, GID: 29000}, 0, true)
+	if err != nil || ready != *expected {
+		return errWorkspaceObjectUnconfirmed
+	}
 	return prepareWorkspaceRestoreGenerationAt(ctx, root, task, task.Workspace.PVCUID, securefile.OwnedRecordIdentity{UID: 10001, GID: 29000})
 }
 

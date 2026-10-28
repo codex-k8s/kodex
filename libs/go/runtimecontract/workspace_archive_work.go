@@ -107,9 +107,20 @@ func (task WorkspaceArchiveWork) Validate() error {
 			value.Checkpoint.Generation != value.Target.Generation) {
 			return errWorkspaceArchiveWorkInvalid
 		}
-		if task.Kind == "RESTORE" && (value.ReconcileOnly != (task.Attempt > 1) || value.Checkpoint.Scope.SessionRef == task.SessionRef &&
+		if task.Kind == "RESTORE" && (task.TargetObjectKey != value.Checkpoint.Manifest.Key || task.TargetObjectVersion != value.Checkpoint.Manifest.Version ||
+			value.ReconcileOnly != (task.Attempt > 1) || value.Checkpoint.Scope.SessionRef == task.SessionRef &&
 			value.Checkpoint.WorkspaceRef == value.Target.WorkspaceRef && value.Checkpoint.Generation >= value.Target.Generation) {
 			return errWorkspaceArchiveWorkInvalid
+		}
+		if task.Kind == "RESTORE" {
+			ready := value.Target.VolumeReady
+			if ready == nil || ready.Preparation.Scope != value.Target.Scope || ready.Preparation.WorkspaceRef != value.Target.WorkspaceRef ||
+				ready.Preparation.PVCUID != value.PVCUID {
+				return errWorkspaceArchiveWorkInvalid
+			}
+			if _, err := EncodeWorkspaceVolumeReady(*ready); err != nil {
+				return errWorkspaceArchiveWorkInvalid
+			}
 		}
 	default:
 		return errWorkspaceArchiveWorkInvalid
