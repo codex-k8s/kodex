@@ -245,11 +245,19 @@ func testIntegrationCandidatePlanModes(t *testing.T, parent context.Context, rep
 		func() {
 			ctx, cancel := context.WithTimeout(parent, 5*time.Second)
 			defer cancel()
-			current, tx, err := repository.beginScopedSnapshotRead(ctx, owner)
+			resolved, err := repository.ResolvePrincipal(ctx, owner)
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
+			current, tx, err := repository.beginScopedSnapshotRead(ctx, resolved)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				cleanup, stop := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+				defer stop()
+				_ = tx.Rollback(cleanup)
+			}()
 			if _, err := tx.Exec(ctx, "SELECT pg_catalog.set_config('plan_cache_mode',$1,true)", mode); err != nil {
 				t.Fatal(err)
 			}
