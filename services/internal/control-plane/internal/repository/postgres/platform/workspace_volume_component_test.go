@@ -130,7 +130,15 @@ func testWorkspaceVolumeCancellationOwner(t *testing.T, ctx context.Context, rep
 	}
 	proof := command.WorkspaceVolumeTaskInput{TaskRef: work.TaskRef, LeaseRef: stringMap(item, "leaseRef"),
 		Fence: stringMap(item, "fence"), Generation: runtimeRevisionMapInt64(item, "generation")}
-	execute(command.CancelRun, owner, "cancel", command.RefInput{Ref: run.Ref})
+	currentRun, err := service.GetRun(ctx, owner, run.Ref)
+	if err != nil {
+		t.Fatal("read current physical origin before cancellation", err)
+	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.CancelRun, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "workspace-volume-cancel-cancel", ExpectedVersion: &currentRun.Version},
+		Payload:  command.RunCommandInput{RunRef: run.Ref}}); err != nil {
+		t.Fatal("cancel current physical origin", err)
+	}
 	if _, err := service.RenewWorkspaceVolumeTask(ctx, renewer, proof); err == nil {
 		t.Fatal("cancellation left the physical grant renewable")
 	}
