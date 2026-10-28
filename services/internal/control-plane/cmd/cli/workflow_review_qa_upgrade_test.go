@@ -142,7 +142,17 @@ import {pathToFileURL} from 'node:url';
 const module = await import(pathToFileURL(process.argv[1]));
 let raw = ''; for await (const chunk of process.stdin) raw += chunk;
 const proof = JSON.parse(raw);
-if (!module[process.argv[2]](proof)) process.exit(1);
+if (!module[process.argv[2]](proof)) {
+  const failed=[];
+  function visit(value,path) {
+    for(const [key,field] of Object.entries(value)) {
+      const name=path?path+'.'+key:key;
+      if(field===false || /^(gooseVersion|purgeNodes|purgeEdges|profile)$/.test(key)) failed.push([name,field]);
+      else if(field && typeof field==='object' && !Array.isArray(field)) visit(field,name);
+    }
+  }
+  visit(proof,''); console.error(JSON.stringify(failed)); process.exit(1);
+}
 if (process.argv[2].endsWith('Precondition')) {
   const fields = ['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases',
     'openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','oldClaimSessions'];
@@ -151,7 +161,7 @@ if (process.argv[2].endsWith('Precondition')) {
 `, filepath.Join(release, "control-plane-immutable-migration.mjs"), verifier)
 	check.Env = []string{"PATH=" + os.Getenv("PATH"), "LANG=C.UTF-8"}
 	check.Stdin = bytes.NewReader(proof)
-	if err := check.Run(); err != nil {
+	if diagnostic, err := check.CombinedOutput(); err != nil {
 		var fields map[string]any
 		_ = json.Unmarshal(proof, &fields)
 		var failed []string
@@ -161,7 +171,7 @@ if (process.argv[2].endsWith('Precondition')) {
 			}
 		}
 		slices.Sort(failed)
-		t.Fatalf("shipped review QA %s verifier rejected actual database proof; false predicates: %v", phase, failed)
+		t.Fatalf("shipped %s %s verifier rejected actual database proof; false predicates: %v; metadata: %s", profile, phase, failed, diagnostic)
 	}
 	t.Logf("review QA %s proof passed: sha256=%x", phase, sha256.Sum256(proof))
 	return proof
