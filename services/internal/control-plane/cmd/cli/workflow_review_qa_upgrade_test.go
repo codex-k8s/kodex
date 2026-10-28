@@ -92,7 +92,8 @@ func readWorkflowReviewQAUpgradeProof(t *testing.T, ctx context.Context, observe
 // readControlPlaneMigrationProof проверяет поставляемый read-only SQL и закрытый verifier без наследования credentials.
 func readControlPlaneMigrationProof(t *testing.T, ctx context.Context, observer *pgx.Conn, profile, phase string) []byte {
 	t.Helper()
-	if phase != "precondition" && phase != "postcondition" {
+	aclReadback := phase == "acl-readback" && profile == "workspace-backup"
+	if phase != "precondition" && phase != "postcondition" && !aclReadback {
 		t.Fatal("invalid review QA proof phase")
 	}
 	var verifier string
@@ -108,7 +109,9 @@ func readControlPlaneMigrationProof(t *testing.T, ctx context.Context, observer 
 	default:
 		t.Fatal("unknown control plane proof profile")
 	}
-	if phase == "precondition" {
+	if aclReadback {
+		verifier = "validWorkspaceBackupACLReadback"
+	} else if phase == "precondition" {
 		verifier += "Precondition"
 	} else {
 		verifier += "Postcondition"
@@ -117,7 +120,11 @@ func readControlPlaneMigrationProof(t *testing.T, ctx context.Context, observer 
 	if err != nil {
 		t.Fatal("resolve shipped review QA proof directory")
 	}
-	source, err := os.ReadFile(filepath.Join(release, profile+"-migration-"+phase+".sql"))
+	filename := profile + "-migration-" + phase + ".sql"
+	if aclReadback {
+		filename = "workspace-backup-acl-readback.sql"
+	}
+	source, err := os.ReadFile(filepath.Join(release, filename))
 	if err != nil {
 		t.Fatal("read shipped review QA upgrade proof")
 	}

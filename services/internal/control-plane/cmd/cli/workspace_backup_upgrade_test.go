@@ -68,6 +68,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE control_plane_owner IN SCHEMA control_plane GR
 		}
 	}
 	readControlPlaneMigrationProof(t, ctx, observer, "workspace-backup", "precondition")
+	readControlPlaneMigrationProof(t, ctx, observer, "workspace-backup", "acl-readback")
 	assertBackupReadable := func(t *testing.T) {
 		t.Helper()
 		var readable bool
@@ -125,6 +126,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE control_plane_owner IN SCHEMA control_plane GR
 		t.Fatal("backup-compatible upgrade did not reach the exact restore schema")
 	}
 	readControlPlaneMigrationProof(t, ctx, observer, "workspace-backup", "postcondition")
+	readControlPlaneMigrationProof(t, ctx, observer, "workspace-backup", "acl-readback")
 	var readable bool
 	if err := observer.QueryRow(ctx, "SELECT has_table_privilege('kodex_backup_reader','control_plane.session_workspace_storage','SELECT')").Scan(&readable); err != nil || !readable {
 		t.Fatal("backup SELECT was not restored")

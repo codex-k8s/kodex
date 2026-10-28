@@ -152,7 +152,7 @@ BEGIN
  SELECT max(version_id) INTO version FROM public.goose_db_version WHERE is_applied;
  SELECT count(*) INTO targets FROM pg_catalog.pg_class r WHERE r.oid IN (TARGETS);
  IF version IS NULL OR version NOT IN(20261026001500,20261026001600,20261026001700,20261027000100,20261028000100)
- OR targets<>CASE WHEN version IN(20261026001500,20261026001600) THEN 3 ELSE 6 END THEN
+ OR targets<>(CASE WHEN version IN(20261026001500,20261026001600) THEN 3 ELSE 6 END) THEN
   RAISE EXCEPTION 'workspace backup restore shape changed';
  END IF;
 END $backup_shape$;

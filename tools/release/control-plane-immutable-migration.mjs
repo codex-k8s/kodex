@@ -596,8 +596,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
           const sql=readFileSync(`${plan.source.path}/tools/release/workspace-backup-acl-readback.sql`);
           ensure(createHash('sha256').update(sql).digest('hex')===plan.backupACLReadbackSQLSHA256,'MIGRATION_BACKUP_READBACK_SOURCE_CHANGED');
           const proof=JSON.parse(kube(['-n',namespace,'exec','-i','kodex-postgresql-0','--','psql','-XqAt','-U','postgres','-d','control_plane','-v','ON_ERROR_STOP=1'],sql));
-          ensure(proof.readOnly==='on' && proof.database==='control_plane' && proof.backupReaderCatalog===true &&
-            [20261026001500,20261026001600,20261026001700,20261027000100,20261028000100].includes(proof.gooseVersion),'MIGRATION_BACKUP_ACL_RESTORE_REQUIRED');
+          ensure(validWorkspaceBackupACLReadback(proof),'MIGRATION_BACKUP_ACL_RESTORE_REQUIRED');
           journal.append({type:'BACKUP_ACL_RESTORED',gooseVersion:proof.gooseVersion,sqlSHA256:plan.backupACLReadbackSQLSHA256});
         }
         transition('RESUME',state,2);
@@ -822,6 +821,12 @@ export function validWorkspaceBackupMigrationPrecondition(proof) {
 export function validWorkspaceBackupMigrationPostcondition(proof) {
   return proof?.profile==='WORKSPACE_RESTORE_BACKUP_V1' && proof.backupReaderCatalog===true &&
     validWorkspaceRestoreMigrationPostcondition({...proof,profile:'WORKSPACE_RESTORE_V2'});
+}
+
+// Частичный terminal допускает resume только с возвращённым backup SELECT на известном actual head.
+export function validWorkspaceBackupACLReadback(proof) {
+  return proof?.readOnly==='on' && proof.database==='control_plane' && proof.backupReaderCatalog===true &&
+    [20261026001500,20261026001600,20261026001700,20261027000100,20261028000100].includes(proof.gooseVersion);
 }
 
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
