@@ -33,12 +33,15 @@ COPY libs/go/serviceruntime/ libs/go/serviceruntime/
 COPY services/jobs/session-archive/ services/jobs/session-archive/
 WORKDIR /workspace/services/jobs/session-archive
 RUN test "$(go env GOVERSION)" = "go1.26.6"
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
+RUN --mount=type=tmpfs,target=/tmp,size=4294967296 \
+    export GOCACHE=/tmp/go-build-cache GOTMPDIR=/tmp/go-tmp GOMAXPROCS=2 GOMEMLIMIT=768MiB \
+ && mkdir -p "$GOCACHE" "$GOTMPDIR" \
+ && CGO_ENABLED=0 GOOS=linux go build -p=1 -trimpath -buildvcs=false \
     -ldflags="-s -w -X main.version=${VERSION}" \
-    -o /out/session-archive ./cmd/session-archive
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
-    -ldflags="-s -w" -o /out/workspace-reader ./cmd/workspace-reader
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
+    -o /out/session-archive ./cmd/session-archive \
+ && CGO_ENABLED=0 GOOS=linux go build -p=1 -trimpath -buildvcs=false \
+    -ldflags="-s -w" -o /out/workspace-reader ./cmd/workspace-reader \
+ && CGO_ENABLED=0 GOOS=linux go build -p=1 -trimpath -buildvcs=false \
     -ldflags="-s -w" -o /out/workspace-writer ./cmd/workspace-writer
 
 FROM gcr.io/distroless/static-debian12:nonroot@sha256:f5b485ea962d9bd1186b2f6b3a061191539b905b82ec395de78cbfae51f20e35 AS runtime

@@ -4,8 +4,8 @@ title: Проверка фактической ёмкости staging перед
 type: operations
 status: approved
 owner: sre
-version: 1.1.1
-updated: 2026-10-28
+version: 1.1.2
+updated: 2026-10-29
 ---
 
 # Проверка фактической ёмкости staging перед работой
@@ -143,6 +143,13 @@ PASS этого профиля не является recovery PASS, разреш
 У завершённого build step сохраняются `/out` и необходимые предыдущие слои.
 Build ENV не переносится в финальный runtime stage. RAM-mount и файлы кэша
 принадлежат одной сборке и не разделяются с runtime-репликами.
+
+Тот же build-only профиль применяется к `runtime-controller`,
+`control-api-gateway`, `integration-gateway` и `session-archive`. Три бинаря
+архивного worker собираются в одном RUN с общим временным кэшем; состав
+финального образа, runtime USER/ENTRYPOINT и флаги версий сохраняются.
+Проверка каждого штатного образа выполняется последовательно с новым
+preflight; успех сборки control-plane не является успехом остальных образов.
 
 К стандартному вызову с точными UID, reserve и budget добавляется только
 `--profile bounded-qa`. Возврат к стандартной проверке — убрать этот аргумент
