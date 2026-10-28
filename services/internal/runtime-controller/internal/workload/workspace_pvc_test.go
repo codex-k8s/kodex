@@ -70,11 +70,18 @@ func TestPreparedWorkspacePVCNeverCreatesOrAdopts(t *testing.T) {
 			}
 			worker := newTestManager(t, isolated)
 			worker.config.StorageClass = "local-path"
+			// Exclude fixture creation so the assertion measures only the admission call.
+			// Исключаем создание fixture: assertion измеряет только admission call.
+			isolated.ClearActions()
 			err := worker.ensureSessionPVC(t.Context(), candidate)
 			if (err == nil) != test.valid {
 				t.Fatalf("unexpected prepared volume admission: valid=%v err=%v", test.valid, err)
 			}
-			for _, action := range isolated.Actions() {
+			actions := isolated.Actions()
+			if len(actions) != 1 {
+				t.Fatal("prepared volume admission did not perform exactly one read")
+			}
+			for _, action := range actions {
 				if action.GetVerb() != "get" || action.GetResource().Resource != "persistentvolumeclaims" {
 					t.Fatal("prepared volume admission performed a write or unrelated action")
 				}
