@@ -417,7 +417,7 @@ INTEGRATION_ACTION_SUCCEEDED:
 INTEGRATION_ACTION_FAILED:
   other: Integration action was rejected or failed
 INTEGRATION_ADMISSION_BLOCKED:
-  other: Invocation admission is blocked: current authority or pinned dependencies are unavailable
+  other: "Invocation admission is blocked: current authority or pinned dependencies are unavailable"
 INTEGRATION_ACTION_OUTCOME_UNKNOWN:
   other: Integration action outcome is unknown
 RUNTIME_INPUT_INVALID:

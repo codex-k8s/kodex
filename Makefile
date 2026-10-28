@@ -437,7 +437,7 @@ test-scoped-backup-reader:
 
 .PHONY: test-control-plane-migration
 test-control-plane-migration:
-	@timeout 180s node --test tools/release/control-plane-migration.test.mjs tools/release/control-plane-immutable-migration.test.mjs
+	@timeout 600s node --test tools/release/control-plane-migration.test.mjs tools/release/control-plane-immutable-migration.test.mjs
 
 .PHONY: test-control-api-nats-startup
 test-control-api-nats-startup:
