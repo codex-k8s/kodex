@@ -1,0 +1,1 @@
+ALTER TABLE control_plane.runtime_secrets DROP CONSTRAINT runtime_secrets_purpose_check;

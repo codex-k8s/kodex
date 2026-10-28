@@ -26,6 +26,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/s3store"
 	"github.com/codex-k8s/kodex/libs/go/oidcverifier"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/libs/go/securefile"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/credentialmaterializer"
@@ -135,6 +136,17 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	leaseSigningKey, err := readBoundedFile(config.LeaseSigningKeyFile)
 	if err != nil {
 		return startupFailure(stageReadRoleImageLeaseSigningKey, err)
+	}
+	if config.SSHComposeSigningKeyFile != "" {
+		key, readErr := securefile.Read(config.SSHComposeSigningKeyFile, 64)
+		if readErr != nil {
+			return errors.New("read SSH Compose signing key")
+		}
+		configureErr := repository.ConfigureSSHComposeSigningKey(key)
+		clear(key)
+		if configureErr != nil {
+			return errors.New("configure SSH Compose signing key")
+		}
 	}
 	if err := repository.ConfigureRoleImages(platformrepository.RoleImageConfig{
 		PolicyRevision: config.ImagePolicyRevision, PolicySHA256: config.ImagePolicySHA256,

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/codex-k8s/kodex/libs/go/repositorybundle"
+	"github.com/codex-k8s/kodex/libs/go/sshcompose"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	workflowservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/workflow"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -155,7 +156,7 @@ func workflowEffectSlotForProfile(profile string, step entity.WorkflowStep, depe
 	repository := resource["owner"] + "/" + resource["repository"]
 	key := ""
 	for _, requirement := range step.ResultRequirements {
-		if requirement.Repository != repository && !(profile == workflowservice.GitHubReviewQAV1 && (requirement.Kind == "REVIEW" || requirement.Kind == "QA")) {
+		if requirement.Kind != "DEPLOYMENT" && requirement.Repository != repository && !(profile == workflowservice.GitHubReviewQAV1 && (requirement.Kind == "REVIEW" || requirement.Kind == "QA")) {
 			continue
 		}
 		allowed := requirement.Kind == "PULL_REQUEST" && contains([]string{repositoryBundleOperation, "github.pull_request.create"}, operation)
@@ -182,6 +183,11 @@ func workflowEffectSlotForProfile(profile string, step entity.WorkflowStep, depe
 					allowed = true
 				}
 			}
+		}
+		if requirement.Kind == "DEPLOYMENT" && operation == "ssh.compose.deploy" && requirement.Operation == operation {
+			subject, found := workflowResultSubject(dependencies, requirement.SubjectStepKey)
+			allowed = found && subject.Kind == "INTEGRATION_RECEIPT" && subject.Repository == requirement.Repository &&
+				workflowservice.CommitPattern.MatchString(subject.HeadSHA) && resource["target_ref"] == requirement.TargetRef
 		}
 		if allowed {
 			if key != "" {
@@ -280,6 +286,13 @@ func (repository *Repository) admitWorkflowEffectTx(ctx context.Context, tx pgx.
 				return nil, nil, errs.ErrConflict
 			}
 			oldSemantic = asJSON([]any{"kodex.workflow-bundle-content.v1", sourcePolicy, original.BaseCommitSHA, json.RawMessage(oldManifest)})
+		}
+		if operation == "ssh.compose.deploy" {
+			var snapshot sshcompose.Snapshot
+			if sshcompose.Decode(oldManifest, &snapshot, 32768) != nil || sshComposeReleaseDigest(snapshot) == "" {
+				return nil, nil, errs.ErrConflict
+			}
+			oldSemantic = asJSON(map[string]string{"releaseDigest": sshComposeReleaseDigest(snapshot), "admissionDigest": sshComposeAdmissionDigest(snapshot)})
 		}
 		provenDigest, digestErr := workflowEffectSemanticDigest(intent.ResultKey, operation, scopeDigest, oldSemantic)
 		if digestErr != nil || provenDigest != old.SemanticDigest {

@@ -2348,7 +2348,7 @@ func validIntegrationActionBinding(eventType, summary, ref string) bool {
 			return false
 		}
 	}
-	return summary == "i18n:INTEGRATION_ACTION_SUCCEEDED" || summary == "i18n:INTEGRATION_ACTION_FAILED" || summary == "i18n:INTEGRATION_ACTION_OUTCOME_UNKNOWN"
+	return summary == "i18n:INTEGRATION_ACTION_SUCCEEDED" || summary == "i18n:INTEGRATION_ACTION_FAILED" || summary == "i18n:INTEGRATION_ACTION_OUTCOME_UNKNOWN" || summary == sshComposeAdmissionBlockSummary
 }
 
 // emitRunEventWithBinding validates explicit integration binding, closes terminal tool activity

@@ -671,6 +671,7 @@ const ru = {
       inputFields: "Входные поля",
       outputFields: "Выходные поля",
       execution: "Выполнение",
+      leaseProfile: "Профиль аренды выполнения",
       idempotency: "Идемпотентность",
       retryBackoffMilliseconds: "Пауза повтора, мс",
       allowEmpty: "Разрешить пустое значение",
@@ -1835,6 +1836,12 @@ const ru = {
     },
   },
   runtimeSecrets: {
+    purpose: "Назначение секрета",
+    purposeApplication: "Секрет приложения",
+    purposeSSH: "Ключ SSH для Compose",
+    purposeSSHHelp:
+      "Ключ доступен только worker развёртывания. Его нельзя показать или прикрепить к окружению ИИ. Назначение нельзя отменить.",
+
     decodedSize: "Размер данных: {size} байт",
     draft: {
       title: "Черновик секрета",
@@ -2664,6 +2671,7 @@ const ru = {
       CONFLUENCE_SPACE: "Пространство Confluence",
       EMAIL_SENDER: "Почтовый ящик",
       HTTPS_RESOURCE: "HTTPS-ресурс",
+      SSH_TARGET: "Назначение SSH/Compose",
     },
     approvalScopeTitle: "Какие параметры связывает одно согласование",
     approvalScopeHelp:
@@ -2919,6 +2927,10 @@ const ru = {
       title: "Заголовок",
       comment: "Комментарий",
       text: "Текст",
+      merged_sha: "Слитый коммит",
+      tree_sha: "Git tree",
+      bundle_sha256: "SHA-256 полного исходного кода",
+      runtime_image: "Неизменяемый образ приложения",
     },
     comment: "Комментарий",
     commentPlaceholder: "Добавьте контекст для продолжения работы",
@@ -5324,6 +5336,7 @@ const en = {
       inputFields: "Input fields",
       outputFields: "Output fields",
       execution: "Execution",
+      leaseProfile: "Execution lease profile",
       idempotency: "Idempotency",
       retryBackoffMilliseconds: "Retry backoff, ms",
       allowEmpty: "Allow empty value",
@@ -6673,6 +6686,12 @@ const en = {
     },
   },
   runtimeSecrets: {
+    purpose: "Secret purpose",
+    purposeApplication: "Application secret",
+    purposeSSH: "SSH key for Compose",
+    purposeSSHHelp:
+      "Only the deployment worker can access this key. It cannot be revealed or attached to an AI runtime environment. Its purpose cannot be reverted.",
+
     title: "Project secrets",
     draft: {
       title: "Secret draft",
@@ -7386,6 +7405,7 @@ const en = {
       CONFLUENCE_SPACE: "Confluence space",
       EMAIL_SENDER: "Email mailbox",
       HTTPS_RESOURCE: "HTTPS resource",
+      SSH_TARGET: "SSH/Compose target",
     },
     approvalScopeTitle: "Parameters covered by one approval",
     approvalScopeHelp:
@@ -7642,6 +7662,10 @@ const en = {
       title: "Title",
       comment: "Comment",
       text: "Text",
+      merged_sha: "Merged commit",
+      tree_sha: "Git tree",
+      bundle_sha256: "Complete source SHA-256",
+      runtime_image: "Immutable application image",
     },
     comment: "Comment",
     commentPlaceholder: "Add context for the next step",

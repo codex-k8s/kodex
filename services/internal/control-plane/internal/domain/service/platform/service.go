@@ -414,6 +414,9 @@ func (service *Service) PrepareRuntimeSecretOperation(ctx context.Context, p val
 		Kind, ProjectRef, SecretRef, Name, Description, ValueType, ExpectedContentSHA256 string
 		ExpectedVersion                                                                  *int64
 	}{input.Kind, input.ProjectRef, input.SecretRef, input.Name, input.Description, input.ValueType, input.ExpectedContentSHA256, input.Mutation.ExpectedVersion})
+	if input.Purpose == "SSH_COMPOSE" {
+		input.Mutation.IntentDigest = digest(struct{ Original, Purpose string }{input.Mutation.IntentDigest, input.Purpose})
+	}
 	return service.repository.PrepareRuntimeSecretOperation(ctx, p, input)
 }
 

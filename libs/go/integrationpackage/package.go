@@ -12,6 +12,7 @@ import (
 	"io"
 	"net"
 	"net/mail"
+	"net/netip"
 	"net/url"
 	"regexp"
 	"sort"
@@ -175,6 +176,7 @@ type OpenAPIHTTP struct {
 // Execution records retry, timeout and backoff limits under the declared idempotency guarantee.
 // Execution хранит лимиты повтора, времени и задержки согласно заявленной гарантии идемпотентности.
 type Execution struct {
+	LeaseProfile             string `yaml:"leaseProfile,omitempty" json:"leaseProfile,omitempty"`
 	Idempotency              string `yaml:"idempotency" json:"idempotency"`
 	TimeoutSeconds           int    `yaml:"timeoutSeconds" json:"timeoutSeconds"`
 	MaxAttempts              int    `yaml:"maxAttempts" json:"maxAttempts"`
@@ -347,6 +349,14 @@ func (capability Capability) ResourceScopeValues(configuration map[string]string
 			return nil, errors.New("integration resource scope is incomplete")
 		}
 		result[key] = value
+	}
+	if capability.ResourceScope.Kind == "SSH_TARGET" {
+		raw, err := json.Marshal(result)
+		if err != nil {
+			return nil, err
+		}
+		digest := sha256.Sum256(raw)
+		result["target_ref"] = "ssh_" + hex.EncodeToString(digest[:])[:32]
 	}
 	return result, nil
 }
@@ -592,6 +602,11 @@ func validateStringValue(field Field, value string, allowPlainMultiline bool) er
 		if net.ParseIP(value) != nil || !validHostname(value) {
 			return errors.New("host field is invalid")
 		}
+	case "PUBLIC_IP":
+		address, err := netip.ParseAddr(value)
+		if err != nil || address.String() != value || !address.IsGlobalUnicast() || address.IsPrivate() || address.IsLoopback() || address.IsLinkLocalUnicast() || address.Is4In6() {
+			return errors.New("public IP field is invalid")
+		}
 	default:
 		return errors.New("string field format is invalid")
 	}
@@ -674,7 +689,7 @@ func validate(result *Package) error {
 	destinationKeys := map[string]struct{}{}
 	for _, destination := range result.Spec.NetworkDestinations {
 		if !validKey(destination.Key) || !oneOf(destination.Source, "STATIC", "CONFIGURATION") ||
-			destination.Port < 1 || destination.Port > 65535 || !oneOf(destination.TLS, "REQUIRED", "NONE") {
+			destination.Port < 1 || destination.Port > 65535 || !oneOf(destination.TLS, "REQUIRED", "NONE", "SSH_PINNED") {
 			return errors.New("integration package network destination is invalid")
 		}
 		if _, exists := destinationKeys[destination.Key]; exists {
@@ -688,12 +703,14 @@ func validate(result *Package) error {
 			}
 		case "CONFIGURATION":
 			field, exists := configurationByKey[destination.ConfigurationField]
-			if destination.Hostname != "" || !exists || field.Type != "STRING" || !oneOf(field.Format, "HTTPS_ORIGIN", "HOST") {
+			if destination.Hostname != "" || !exists || field.Type != "STRING" || !oneOf(field.Format, "HTTPS_ORIGIN", "HOST", "PUBLIC_IP") ||
+				(field.Format == "PUBLIC_IP" && (result.Spec.Adapter != string(AdapterSSHCompose) || destination.TLS != "SSH_PINNED")) {
 				return errors.New("integration package configured network destination is invalid")
 			}
 		}
 		if (destination.TLS == "REQUIRED" && destination.Port != 443) ||
-			(destination.TLS == "NONE" && destination.Port == 443) {
+			(destination.TLS == "NONE" && destination.Port == 443) ||
+			(destination.TLS == "SSH_PINNED" && (result.Spec.Adapter != string(AdapterSSHCompose) || destination.Port != 22 || destination.Source != "CONFIGURATION" || configurationByKey[destination.ConfigurationField].Format != "PUBLIC_IP")) {
 			return errors.New("integration package network TLS policy is invalid")
 		}
 	}
@@ -708,7 +725,7 @@ func validate(result *Package) error {
 			len(capability.ResourceScope.ConnectionFields) == 0 || len(capability.ResourceScope.ConnectionFields) > 8 ||
 			len(capability.InputFields) > 24 || len(capability.OutputFields) == 0 || len(capability.OutputFields) > 24 ||
 			!validIdempotency(capability.Execution.Idempotency) ||
-			capability.Execution.TimeoutSeconds < 1 || capability.Execution.TimeoutSeconds > 120 ||
+			!validExecutionProfile(result.Spec.Adapter, capability) ||
 			capability.Execution.MaxAttempts < 1 || capability.Execution.MaxAttempts > 4 ||
 			capability.Execution.RetryBackoffMilliseconds < 50 || capability.Execution.RetryBackoffMilliseconds > 5000 ||
 			(capability.Risk == "READ") != (capability.Execution.Idempotency == "READ_ONLY") {

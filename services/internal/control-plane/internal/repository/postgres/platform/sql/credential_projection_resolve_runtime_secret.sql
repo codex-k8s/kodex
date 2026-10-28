@@ -9,6 +9,7 @@ WHERE secret.organization_id = @organization_id::uuid
   AND secret.scope_kind = @scope_kind
   AND secret.project_id IS NOT DISTINCT FROM @project_id::uuid
   AND secret.state = 'ACTIVE'
+  AND secret.purpose='APPLICATION'
   AND revision.secret_name = @secret_name
   AND revision.secret_key = @secret_key
   AND revision.secret_uid = @secret_uid

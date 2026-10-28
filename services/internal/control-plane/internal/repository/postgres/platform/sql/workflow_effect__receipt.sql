@@ -2,7 +2,8 @@
 SELECT invocation.ref,invocation.state,invocation.effect_key,invocation.input_digest,
        COALESCE(receipt.ref,''),COALESCE(receipt.response_digest,''),COALESCE(publication.ref,''),
        invocation.idempotency_key,COALESCE(gate.ref,''),invocation.bounded_input,
-       COALESCE(publication.manifest_metadata,'null'::jsonb),COALESCE(publication.input_snapshot->>'SourcePolicy','')
+       CASE WHEN invocation.operation='ssh.compose.deploy' THEN invocation.ssh_compose_snapshot
+            ELSE COALESCE(publication.manifest_metadata,'null'::jsonb) END,COALESCE(publication.input_snapshot->>'SourcePolicy','')
 FROM control_plane.run_nodes anchor
 JOIN control_plane.run_nodes origin ON origin.id=@origin_node_id::uuid AND origin.organization_id=anchor.organization_id
     AND origin.root_run_id=anchor.root_run_id AND COALESCE(origin.workflow_step_origin_node_id,origin.id)=anchor.id

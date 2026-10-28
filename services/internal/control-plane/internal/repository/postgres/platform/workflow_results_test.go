@@ -243,12 +243,12 @@ func workflowEvaluatorFixture(kind string) *workflowEvaluatorTx {
 }
 
 // TestWorkflowEvaluatorOwnsContextAndRejectsUnprovenEvidence covers the actual public evaluator,
-// including artifact resolver reuse, review verdicts and the explicit unsupported deployment path.
+// including artifact resolver reuse, review verdicts and the missing native deployment evidence.
 // TestWorkflowEvaluatorOwnsContextAndRejectsUnprovenEvidence проверяет настоящий evaluator,
-// включая переиспользование artifact resolver, review verdicts и закрытый unsupported deployment.
+// включая переиспользование artifact resolver, review verdicts и отсутствующее native deployment evidence.
 func TestWorkflowEvaluatorOwnsContextAndRejectsUnprovenEvidence(t *testing.T) {
 	r := &Repository{}
-	for _, mode := range []string{"artifact", "artifact-missing", "review", "qa-changes", "review-mismatch", "invalid-declaration", "execution-failed", "owner-mismatch", "sql-error", "artifact-outage", "deployment-unsupported"} {
+	for _, mode := range []string{"artifact", "artifact-missing", "review", "qa-changes", "review-mismatch", "invalid-declaration", "execution-failed", "owner-mismatch", "sql-error", "artifact-outage", "deployment-missing"} {
 		t.Run(mode, func(t *testing.T) {
 			kind := "ARTIFACT"
 			if strings.HasPrefix(mode, "review") {
@@ -257,7 +257,7 @@ func TestWorkflowEvaluatorOwnsContextAndRejectsUnprovenEvidence(t *testing.T) {
 			if mode == "qa-changes" {
 				kind = "QA"
 			}
-			if mode == "deployment-unsupported" {
+			if mode == "deployment-missing" {
 				kind = "DEPLOYMENT"
 			}
 			tx := workflowEvaluatorFixture(kind)
@@ -290,9 +290,9 @@ func TestWorkflowEvaluatorOwnsContextAndRejectsUnprovenEvidence(t *testing.T) {
 				tx.context.err = errors.New("SQL_UNAVAILABLE")
 			case "artifact-outage":
 				tx.queryError = errors.New("SQL_UNAVAILABLE")
-			case "deployment-unsupported":
+			case "deployment-missing":
 				summary = `{"schema":"kodex.workflow-result.v1","results":[{"key":"result","receiptRef":"erc_fixture123"}]}`
-				reason = workflowDeploymentUnsupported
+				reason = workflowReceiptRequired
 			}
 			results, actual, err := r.evaluateWorkflowStepResultTx(t.Context(), tx, scope{organizationID: "tenant-owner"}, map[string]any{}, command.CompleteExecutionInput{Success: success, ResultSummary: summary})
 			if mode == "owner-mismatch" {

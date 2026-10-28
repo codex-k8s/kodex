@@ -85,13 +85,21 @@ JOIN control_plane.integration_invocations invocation ON invocation.ref=intent.v
     AND invocation.operation=intent.value->>'operation' AND invocation.effect_key=intent.value->>'effectKey'
     AND invocation.input_digest=intent.value->>'inputDigest' AND invocation.resource_scope_digest=intent.value->>'scopeDigest'
     AND invocation.definition_digest=intent.value->>'definitionDigest' AND to_jsonb(invocation.grant_version)=intent.value->'grantVersion'
-    AND invocation.approval_policy=intent.value->>'approvalPolicy' AND invocation.resource_kind='GITHUB_REPOSITORY'
+    AND invocation.approval_policy=intent.value->>'approvalPolicy' AND (invocation.resource_kind='GITHUB_REPOSITORY' OR (invocation.resource_kind='SSH_TARGET' AND invocation.operation='ssh.compose.deploy'
+      AND invocation.ssh_compose_snapshot->>'originRuntimeRevisionId'=proof.id::text
+      AND invocation.ssh_compose_snapshot->>'originLeaseId'=origin_lease.id::text
+      AND invocation.ssh_compose_snapshot->'originGeneration'=to_jsonb(proof.generation)
+      AND invocation.ssh_compose_snapshot->>'deploymentRef'=invocation.ref
+      AND invocation.ssh_compose_snapshot->>'deploymentEffectKey'=invocation.effect_key
+      AND invocation.ssh_compose_snapshot->>'deploymentInputDigest'=invocation.input_digest))
 JOIN control_plane.integration_effect_receipts receipt ON receipt.id=invocation.effect_receipt_id AND receipt.organization_id=final.organization_id
     AND receipt.invocation_id=invocation.id AND receipt.effect_key=invocation.effect_key AND receipt.input_digest=invocation.input_digest
     AND receipt.result_summary=invocation.result_summary AND receipt.ref=rejoin.value->>'receiptRef' AND receipt.response_digest=rejoin.value->>'receiptDigest'
 JOIN control_plane.integration_connections connection ON connection.id=invocation.connection_id AND connection.organization_id=final.organization_id
     AND connection.ref=intent.value->>'connectionRef' AND to_jsonb(connection.version)=intent.value->'connectionVersion'
-    AND connection.enabled AND connection.state='CONNECTED' AND connection.definition_key='github'
+    AND connection.enabled AND connection.state='CONNECTED'
+    AND ((connection.definition_key='github' AND invocation.resource_kind='GITHUB_REPOSITORY')
+      OR (connection.definition_key='ssh-compose' AND invocation.resource_kind='SSH_TARGET' AND invocation.operation='ssh.compose.deploy'))
     AND connection.definition_digest=invocation.definition_digest AND connection.definition_version=invocation.definition_version
 JOIN control_plane.agents agent ON agent.id=final.agent_id AND agent.organization_id=final.organization_id AND agent.project_id=final.project_id AND agent.enabled AND agent.state='READY'
 JOIN control_plane.integration_grants grant_binding ON grant_binding.id=invocation.grant_id AND grant_binding.organization_id=final.organization_id

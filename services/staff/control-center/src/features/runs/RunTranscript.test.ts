@@ -1545,6 +1545,7 @@ describe("RunTranscript: компактная работа", () => {
     for (const changes of [
       { summary: "i18n:INTEGRATION_ACTION_FAILED" },
       { summary: "i18n:INTEGRATION_ACTION_OUTCOME_UNKNOWN" },
+      { summary: "i18n:INTEGRATION_ADMISSION_BLOCKED" },
       { summary: "Действие интеграции выполнено успешно. Важный результат" },
       { state: "FAILED" as const },
       { state: "CANCELLED" as const },
@@ -1920,3 +1921,32 @@ describe("RunTranscript: компактная работа", () => {
     );
   });
 });
+
+it.each(["READY", "UNKNOWN_OUTCOME"])(
+  "читабельно показывает owner admission block для %s",
+  async (state) => {
+    const receipt = JSON.stringify({
+      version: 1,
+      invocationRef: "inv_fixture123",
+      state,
+      inputSHA256: "a".repeat(64),
+      admissionBlocked: true,
+      admissionBlockReason: "CURRENT_ADMISSION_DENIED",
+    });
+    for (const locale of ["ru", "en"] as const) {
+      const html = await render("invoke_integration", {}, locale, receipt);
+      const previous = i18n.global.locale.value;
+      i18n.global.locale.value = locale;
+      try {
+        expect(html).toContain(
+          i18n.global.t("serverMessages.INTEGRATION_ADMISSION_BLOCKED"),
+        );
+        expect(html).toContain(i18n.global.t("states.NEEDS_ATTENTION"));
+      } finally {
+        i18n.global.locale.value = previous;
+      }
+      expect(html).not.toContain("RAW_OUTPUT_SENTINEL");
+      expect(html).not.toContain("HIDDEN_REASONING_SENTINEL");
+    }
+  },
+);

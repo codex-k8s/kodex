@@ -8,6 +8,7 @@ import (
 // RuntimeSecretDraftPrepareInput describes a scoped draft operation with exact secret/version/content preconditions, mutation metadata and optional impact-plan selection. It carries metadata, not plaintext secret bytes or caller-issued materialization authority.
 // RuntimeSecretDraftPrepareInput описывает операцию черновика в своей области с точными предусловиями секрета, версии и содержимого, метаданными изменения и необязательным выбором плана влияния. Передаются метаданные, а не открытые байты секрета или выданные вызывающим полномочия материализации.
 type RuntimeSecretDraftPrepareInput struct {
+	Purpose                                                                                    string `json:",omitempty"`
 	ScopeKind                                                                                  string
 	ImpactPlanRef                                                                              string
 	SelectedItemRefs                                                                           []string

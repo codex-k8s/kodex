@@ -98,6 +98,10 @@ watch(
         assertRuntimeResourceScope(scope.value, secret.projectRef);
         if (secret.ref !== ref)
           throw new Error("Runtime secret catalog identity mismatch");
+        if (secret.purpose === "SSH_COMPOSE")
+          throw new Error(
+            "Deployment credential cannot be bound to a runtime environment",
+          );
         selectedSecrets[ref] = {
           ref: secret.ref,
           title: secret.name,
@@ -218,9 +222,13 @@ async function loadSecretPage(
         title: secret.name,
         description: secret.description,
         meta: `${maskedSecretHint(secret)} · rev ${String(secret.currentRevision)}`,
-        disabled: secret.state !== "ACTIVE",
+        disabled: secret.state !== "ACTIVE" || secret.purpose === "SSH_COMPOSE",
         disabledReason:
-          secret.state === "ACTIVE" ? undefined : t("runtime.secretRevoked"),
+          secret.purpose === "SSH_COMPOSE"
+            ? "Ключ SSH недоступен окружению ИИ"
+            : secret.state === "ACTIVE"
+              ? undefined
+              : t("runtime.secretRevoked"),
       }),
     ),
     nextPageToken: page.nextPageToken || undefined,

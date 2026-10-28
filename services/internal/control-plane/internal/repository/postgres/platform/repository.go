@@ -50,6 +50,7 @@ const (
 // Repository реализует хранение владельца через переданные pool и object store с настроенными
 // scanners, каталогами и credential descriptors; закрытие pool ему не принадлежит.
 type Repository struct {
+	sshComposeSigningKey            []byte
 	pool                            *pgxpool.Pool
 	trustedCluster                  bool
 	defaultRuntimeProvider          string

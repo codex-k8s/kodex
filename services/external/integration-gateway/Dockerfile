@@ -17,6 +17,8 @@ COPY libs/go/repositorybundle/ libs/go/repositorybundle/
 COPY libs/go/observability/ libs/go/observability/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/
 COPY libs/go/securefile/ libs/go/securefile/
+COPY libs/go/sshcompose/ libs/go/sshcompose/
+COPY libs/go/secretbrokerapi/ libs/go/secretbrokerapi/
 COPY services/external/integration-gateway/ services/external/integration-gateway/
 
 WORKDIR /workspace/services/external/integration-gateway

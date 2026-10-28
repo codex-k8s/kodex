@@ -169,6 +169,7 @@ type WorkerGrantInput struct {
 // RuntimeSecretPrepareInput описывает вид, область и проект операции секрета, метаданные, тип
 // значения, ожидаемый хеш и привязки изменения без байтов значения секрета.
 type RuntimeSecretPrepareInput struct {
+	Purpose                                                                          string
 	ScopeKind                                                                        string
 	Kind, ProjectRef, SecretRef, Name, Description, ValueType, ExpectedContentSHA256 string
 	Mutation                                                                         value.Mutation

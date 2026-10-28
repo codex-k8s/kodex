@@ -63,7 +63,17 @@ function effectFieldLabel(key: string): string {
     return t("decisions.integrationCommentBody");
   const translation = `decisions.integrationFieldLabels.${key}`;
   return Object.hasOwn(
-    { issue_number: true, body: true, title: true, comment: true, text: true },
+    {
+      issue_number: true,
+      body: true,
+      title: true,
+      comment: true,
+      text: true,
+      merged_sha: true,
+      tree_sha: true,
+      bundle_sha256: true,
+      runtime_image: true,
+    },
     key,
   )
     ? t(translation)

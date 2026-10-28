@@ -212,3 +212,55 @@ it("body1841байт целиком находится в отдельной т�
   expect(row).toContain(body);
   expect(row).not.toContain("issue_number");
 });
+
+it.each(["ru", "en"] as const)(
+  "SSH Gate показывает exact release и public scope, не private custody (%s)",
+  async (locale) => {
+    const value = intent();
+    value.definitionKey = "ssh-compose";
+    value.operation = value.capabilityKey = "ssh.compose.deploy";
+    value.resourceScope = {
+      kind: "SSH_TARGET",
+      digest: "a".repeat(64),
+      values: {
+        project_ref: "prj_ssh_fixture",
+        owner: "example",
+        repository: "project",
+        target_ref: "ssh_immutable_fixture",
+        address: "8.8.8.8",
+        user: "deployer",
+        host_key: "ssh-ed25519 public-fixture",
+        published_port: "8080",
+        runtime_image: `registry.example/qa/app@sha256:${"d".repeat(64)}`,
+      },
+    };
+    const release = {
+      merged_sha: "b".repeat(40),
+      tree_sha: "c".repeat(40),
+      bundle_sha256: "e".repeat(64),
+      runtime_image: value.resourceScope.values.runtime_image,
+    };
+    value.effectPreview.fields = Object.entries(release).map(([key, text]) => ({
+      key,
+      type: "STRING",
+      value: text,
+      bytes: new TextEncoder().encode(text).length,
+      opaque: false,
+      truncated: false,
+    }));
+    const html = await render(value, locale);
+    const primary = html.replace(/<details\b[^]*?<\/details>/g, "");
+    for (const pin of Object.values(release)) expect(primary).toContain(pin);
+    expect(primary).toContain("ssh_immutable_fixture");
+    expect(primary).toContain("8.8.8.8");
+    expect(primary).not.toContain("decisions.integrationFieldLabels.");
+    for (const privateKey of [
+      "sshSecret",
+      "originRuntimeRevisionId",
+      "originLeaseId",
+      "secretUid",
+    ])
+      expect(html).not.toContain(privateKey);
+    expect(primary).not.toContain('role="status"');
+  },
+);

@@ -30,3 +30,27 @@ it("подсказка помощника заполняет только мет
   expect(state.valueType.value).toBe("JSON");
   expect(state.value.value).toBe("");
 });
+
+it.each([true, false])(
+  "назначение SSH зависит от project scope без значения (%s)",
+  async (allowSshCompose) => {
+    const state = (await captureSetupState(
+      RuntimeSecretValueDialog,
+      (app) => app.use(createI18n({ legacy: false, locale: "ru" })),
+      {
+        allowSshCompose,
+        suggestion: {
+          name: "DEPLOY_KEY",
+          description: "Ключ развёртывания",
+          valueType: "STRING",
+          sourceHelp: "Штатный ввод owner",
+          purpose: "SSH_COMPOSE",
+        },
+      },
+    )) as unknown as { purpose: Ref<string>; value: Ref<string> };
+    expect(state.purpose.value).toBe(
+      allowSshCompose ? "SSH_COMPOSE" : "APPLICATION",
+    );
+    expect(state.value.value).toBe("");
+  },
+);

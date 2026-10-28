@@ -63,7 +63,15 @@ SELECT invocation.operation,invocation.bounded_input,invocation.resource_scope,r
                     AND NOT EXISTS (SELECT 1 FROM lineage previous
                         WHERE previous.id=incoming.source_node_id AND previous.depth=current.depth+1))
         ) THEN 'RECEIPT_LINEAGE_INVALID'
-        WHEN invocation.operation<>'github.repository.bundle.publish' AND
+        WHEN invocation.operation='ssh.compose.deploy' AND NOT COALESCE((
+            invocation.ssh_compose_snapshot->>'originRuntimeRevisionId'=proof.id::text
+            AND invocation.ssh_compose_snapshot->>'originLeaseId'=producer_lease.id::text
+            AND invocation.ssh_compose_snapshot->'originGeneration'=to_jsonb(proof.generation)
+            AND invocation.ssh_compose_snapshot->>'deploymentRef'=invocation.ref
+            AND invocation.ssh_compose_snapshot->>'deploymentEffectKey'=invocation.effect_key
+            AND invocation.ssh_compose_snapshot->>'deploymentInputDigest'=invocation.input_digest
+          ),false) THEN 'RECEIPT_LINEAGE_INVALID'
+        WHEN invocation.operation NOT IN('github.repository.bundle.publish','ssh.compose.deploy') AND
             (SELECT count(*) FROM control_plane.runtime_revisions candidate
              WHERE candidate.organization_id=final.organization_id AND candidate.node_id=producer.id)<>1
             THEN 'RECEIPT_LINEAGE_AMBIGUOUS'
@@ -98,14 +106,15 @@ JOIN control_plane.runtime_leases producer_lease ON producer_lease.id::text=prod
     AND to_jsonb(producer_lease.generation)=producer.workflow_captured_artifacts->'generation' AND producer_lease.state='COMPLETED'
 JOIN control_plane.integration_invocations invocation ON invocation.node_id=producer.id AND invocation.run_id=final.run_id
     AND invocation.organization_id=final.organization_id AND invocation.state='SUCCEEDED'
-    AND invocation.resource_kind='GITHUB_REPOSITORY'
+    AND (invocation.resource_kind='GITHUB_REPOSITORY' OR (invocation.resource_kind='SSH_TARGET' AND invocation.operation='ssh.compose.deploy'))
 JOIN control_plane.integration_effect_receipts receipt ON receipt.id=invocation.effect_receipt_id
     AND receipt.invocation_id=invocation.id AND receipt.organization_id=invocation.organization_id
     AND receipt.effect_key=invocation.effect_key AND receipt.input_digest=invocation.input_digest
     AND receipt.result_summary=invocation.result_summary
 JOIN control_plane.integration_connections connection ON connection.id=invocation.connection_id
     AND connection.organization_id=final.organization_id
-    AND connection.definition_key='github'
+    AND ((connection.definition_key='github' AND invocation.resource_kind='GITHUB_REPOSITORY')
+      OR (connection.definition_key='ssh-compose' AND invocation.resource_kind='SSH_TARGET' AND invocation.operation='ssh.compose.deploy'))
 JOIN control_plane.agents agent ON agent.id=final.agent_id AND agent.organization_id=final.organization_id
     AND agent.project_id=final.project_id
 JOIN control_plane.integration_grants grant_binding ON grant_binding.id=invocation.grant_id

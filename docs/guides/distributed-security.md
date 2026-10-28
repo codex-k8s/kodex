@@ -2497,3 +2497,37 @@ bucket не доказывает отсутствие архива в archive bu
 Все активные writers и PVC consumers проверяются до external effects. Frozen
 PURGE_PENDING graph не допускает новых claims/materialization; точный PVC
 удаляется с UID precondition, а replacement не считается прежним ресурсом.
+
+## SSH credential и неопределённый внешний deploy
+
+Для #1838 purpose `SSH_COMPOSE` необратим и отделён от application ENV. Нельзя
+резервировать ранее опубликованный в ENV/RuntimeRevision либо раскрытый
+секрет; проверка истории и смена purpose сериализуются с binding одним owner
+lock. Старый snapshot и rejoin не обходят текущую purpose/revision eligibility.
+Rotate/revoke и смена source/target/grant закрывают зависимые leases в owner
+transaction. Короткий подписанный permit связывает exact target/host key,
+release/input/effect, root/session/turn/attempt и монотонное поколение.
+
+Worker получает SSH key только через отдельный broker method после повторной
+проверки CP. Ни prompt, ни ENV модели, ни универсальный shell его не получают.
+Утрата ACK/cancel не разрешает повторный deploy: durable remote journal и
+owner receipt сохраняют UNKNOWN_OUTCOME, recovery читает состояние без effect.
+Restart после reboot допускается только для existing exact container,
+подтверждённого durable successful receipt; reserved/unknown попытка не
+возобновляется автоматически.
+
+
+Отзыв actor access проверяется для каждого скрыто используемого integration
+source, а не только для основного target. Успешный прежний receipt и agent READ
+binds не заменяют текущий canonical actor ACL источника; worker подтверждает
+допуск у владельца перед скрытым чтением source credential либо Git release.
+
+Постоянный отказ нового admission не переопределяет outcome старого effect.
+Для SSH owner может атомарно закрепить отдельный необратимый admission block,
+сохранив state, safe error, receipt, immutable pins и поколение invocation.
+Transient failure, отмена, serialization и lock contention не становятся таким
+решением. Bounded очередь обязана сохранять прогресс отбраковки между polls,
+в том числе при полностью отклонённой странице; один старый UNKNOWN не блокирует
+неограниченно следующие допустимые вызовы. Возврат доступа не снимает marker
+автоматически. Owner Cancel закрывает исполнение, но не доказывает отсутствие
+внешнего эффекта и не превращает UNKNOWN в подтверждённый terminal outcome.

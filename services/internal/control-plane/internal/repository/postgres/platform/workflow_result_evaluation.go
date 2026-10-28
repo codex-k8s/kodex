@@ -155,7 +155,17 @@ func (repository *Repository) evaluateWorkflowStepResultDetailedForProfileTx(ctx
 				}
 			}
 		case "DEPLOYMENT":
-			return rejectedWorkflowEvaluation(workflowDeploymentUnsupported), nil
+			proof, reason, lookupErr := readWorkflowIntegrationResultTx(ctx, tx, current, lease, declaration.ReceiptRef)
+			if lookupErr != nil {
+				return workflowStepEvaluation{}, lookupErr
+			}
+			if reason != "" {
+				return rejectedWorkflowEvaluation(reason), nil
+			}
+			result, reason = acceptWorkflowDeploymentResult(requirement, declaration, proof, inputs)
+			if reason != "" {
+				return rejectedWorkflowEvaluation(reason), nil
+			}
 		default:
 			return rejectedWorkflowEvaluation(workflowDeclarationInvalid), nil
 		}

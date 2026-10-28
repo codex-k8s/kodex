@@ -27,8 +27,13 @@ function validSuggestion(
     return false;
   const candidate = value as Record<string, unknown>;
   return (
-    Object.keys(candidate).sort().join(",") ===
-      "description,name,sourceHelp,valueType" &&
+    [
+      "description,name,sourceHelp,valueType",
+      "description,name,purpose,sourceHelp,valueType",
+    ].includes(Object.keys(candidate).sort().join(",")) &&
+    (candidate.purpose === undefined ||
+      candidate.purpose === "APPLICATION" ||
+      candidate.purpose === "SSH_COMPOSE") &&
     typeof candidate.name === "string" &&
     candidate.name.length <= 120 &&
     typeof candidate.description === "string" &&
@@ -49,7 +54,10 @@ export function rememberRuntimeSecretReauthSuggestion(
   now = Date.now(),
 ): void {
   const resourceScope = runtimeResourceAddressScope(projectRef);
-  if (!validSuggestion(suggestion))
+  if (
+    !validSuggestion(suggestion) ||
+    (suggestion.purpose === "SSH_COMPOSE" && resourceScope.kind !== "PROJECT")
+  )
     throw new Error("Runtime secret re-auth suggestion is invalid");
   const stored: StoredRuntimeSecretSuggestion = {
     expiresAt: now + lifetimeMs,
@@ -95,7 +103,9 @@ export function consumeRuntimeSecretReauthSuggestion(
           runtimeResourceAddressScope(expected.projectRef),
         ) ||
       value.surface !== expected.surface ||
-      !validSuggestion(value.suggestion)
+      !validSuggestion(value.suggestion) ||
+      (value.suggestion.purpose === "SSH_COMPOSE" &&
+        runtimeResourceAddressScope(expected.projectRef).kind !== "PROJECT")
     )
       return undefined;
     return value.suggestion;

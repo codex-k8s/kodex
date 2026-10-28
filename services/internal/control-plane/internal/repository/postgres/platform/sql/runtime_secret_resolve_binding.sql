@@ -16,5 +16,6 @@ WHERE secret.organization_id = @organization_id::uuid
   AND secret.scope_kind = @scope_kind
   AND secret.ref = @secret_ref
   AND secret.state = 'ACTIVE'
+  AND secret.purpose=@purpose
   AND revision.state='ACTIVE'
 FOR SHARE OF secret, revision;

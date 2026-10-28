@@ -33,14 +33,15 @@ func TestMetricsSubsystemProducesValidPrometheusNames(t *testing.T) {
 	}
 }
 
-// TestSecretBrokerOwnerOperationsIncludeFailureAndRecovery checks the closed 20-entry owner registry and
+// TestSecretBrokerOwnerOperationsIncludeFailureAndRecovery checks the closed 21-entry owner registry and
 // exact renewal/secret/projection/draft RPC mappings, not live authorization effectiveness.
-// TestSecretBrokerOwnerOperationsIncludeFailureAndRecovery проверяет закрытый 20-entry owner registry и
+// TestSecretBrokerOwnerOperationsIncludeFailureAndRecovery проверяет закрытый 21-entry owner registry и
 // exact renewal/secret/projection/draft RPC mappings, не live authorization effectiveness.
 func TestSecretBrokerOwnerOperationsIncludeFailureAndRecovery(t *testing.T) {
 	t.Parallel()
 	operations := secretBrokerOperations()
-	if len(operations) != 20 ||
+	if len(operations) != 21 ||
+		operations["platform.credential-projections.ssh-compose.resolve"] != controlplanev1.RuntimeSecretWorkService_ResolveSSHComposeCredentialProjection_FullMethodName ||
 		operations["platform.provider-accounts.credential.renewal.authorize"] != controlplanev1.ProviderCredentialRenewalWorkService_AuthorizeProviderCredentialRenewal_FullMethodName ||
 		operations["platform.provider-accounts.credential.renewal.validate"] != controlplanev1.ProviderCredentialRenewalWorkService_ValidateProviderCredentialRenewalObservation_FullMethodName ||
 		operations["platform.runtime-secrets.operations.fail"] != controlplanev1.RuntimeSecretWorkService_FailRuntimeSecretOperation_FullMethodName ||

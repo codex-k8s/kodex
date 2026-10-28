@@ -26,6 +26,8 @@ const (
 // loadConfig applies deployment environment overrides before validation; integration-specific policy remains in owner claims and adapters.
 // RU: loadConfig применяет переменные развёртывания до валидации; политика конкретной интеграции остаётся в owner claims и адаптерах.
 type Config struct {
+	SecretBrokerTarget          string        `env:"INTEGRATION_GATEWAY_SECRET_BROKER_TARGET"`
+	SecretBrokerTLSServerName   string        `env:"INTEGRATION_GATEWAY_SECRET_BROKER_TLS_SERVER_NAME"`
 	RPCProfile                  string        `env:"KODEX_RPC_PROFILE"`
 	Environment                 string        `env:"DEPLOYMENT_ENVIRONMENT"`
 	TechnicalListen             string        `env:"INTEGRATION_GATEWAY_TECHNICAL_LISTEN"`
@@ -57,6 +59,7 @@ type Config struct {
 // RU: Значения по умолчанию не задают обязательное окружение развёртывания и не подтверждают корректность либо доступность credential-файлов.
 func loadConfig() (Config, error) {
 	config := Config{
+		SecretBrokerTarget: "secret-broker.kodex-system.svc:8443", SecretBrokerTLSServerName: "secret-broker.kodex-system.svc.cluster.local",
 		TechnicalListen: ":9090", ControlPlaneTarget: "control-plane.kodex-system.svc:8443",
 		ControlPlaneTLSServerName:   "control-plane.kodex-system.svc.cluster.local",
 		ControlPlaneCAFile:          "/var/run/config/kodex/integration-gateway/control-plane/ca.pem",
@@ -86,6 +89,9 @@ func loadConfig() (Config, error) {
 // The optional local OpenAPI route requires the trusted-cluster profile, its exact HTTPS host and a normalized absolute CA path.
 // RU: Необязательный локальный OpenAPI-маршрут требует trusted-cluster профиля, точного HTTPS-хоста и нормализованного абсолютного пути CA.
 func (config Config) validate() error {
+	if config.SecretBrokerTarget != "secret-broker.kodex-system.svc:8443" || config.SecretBrokerTLSServerName != "secret-broker.kodex-system.svc.cluster.local" {
+		return errors.New("SSH credential broker target is invalid")
+	}
 	if config.RPCProfile != "" && config.RPCProfile != transportprofile.TrustedCluster {
 		return errors.New("integration-gateway RPC profile is invalid")
 	}

@@ -8,6 +8,8 @@ fail() {
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 container_name="kodex-control-plane-postgres-${BASHPID}"
+go_parallelism=${KODEX_CONTROL_PLANE_TEST_GO_PARALLELISM:-2}
+[[ "$go_parallelism" =~ ^[12]$ ]] || fail 'Go parallelism must be 1 or 2'
 upgrade_container_id=""
 test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestBootstrapComponent|TestConcurrentBootstrapComponent|TestWorkerGrantInstancesComponent|TestTrustedWorkloadGenerationComponent|TestAssistantCredentialScopesComponent|TestAssistantParallelLifecycleComponent|TestProjectAssistantProfilesComponent|TestOrganizationRoleImagesComponent|TestOrganizationRuntimeEnvironmentComponent|TestOrganizationRuntimeSecretComponent|TestAssistantSystemRunProjectScopeComponent|TestRuntimeTerminalStorageComponent|TestIntegrationGateFeedbackComponent|TestWorkflowMetadataDraftComponent|TestDeletedEnvironmentSecretRetentionComponent|TestHistoricalEnvironmentSecretAdmissionComponent|TestHistoricalSecretRecoveryConcurrencyComponent|TestWorkflowGateDecisionsComponent|TestCompletionReceiptComponent|TestUsageCompletenessComponent|TestRepositoryBundlePublicationComponent|TestCommitAckArtifactComponent|TestOwnerGateExpiryComponent|TestOwnerGateExpiryMigrationProofComponent|TestProjectPurgeAuthorityComponent|TestProjectPurgeAuthorityMigrationProofComponent|TestServerWorkflowMigrationProofComponent|TestOverviewEligibilityComponent|TestWorkflowExceptionContextComponent|TestWorkflowExceptionContextMigrationProofComponent)$'}}
 
@@ -138,7 +140,7 @@ dsn="postgresql://control_plane_migrator@127.0.0.1:${port}/control_plane?sslmode
 runtime_dsn="postgresql://control_plane_runtime_g1@127.0.0.1:${port}/control_plane?sslmode=disable"
 run_migration() {
   CONTROL_PLANE_POSTGRES_ADMIN_DSN_FILE=<(printf '%s' "$dsn") \
-    env -u GOFLAGS GOENV=off GOWORK=off go run -p 2 ./cmd/cli "$@"
+    env -u GOFLAGS GOENV=off GOWORK=off go run -p "$go_parallelism" ./cmd/cli "$@"
 }
 
 if [[ "$test_pattern" == --review-qa-upgrade ]]; then
@@ -163,7 +165,7 @@ fi
       -c 'REVOKE CONNECT ON DATABASE control_plane_scheduler_upgrade FROM PUBLIC; GRANT CONNECT, TEMPORARY ON DATABASE control_plane_scheduler_upgrade TO control_plane_migrator; REVOKE CREATE ON SCHEMA public FROM PUBLIC; GRANT USAGE, CREATE ON SCHEMA public TO control_plane_owner, control_plane_migrator' >/dev/null
     KODEX_CONTROL_PLANE_MIGRATION_TEST_DSN="postgresql://control_plane_migrator@127.0.0.1:${port}/control_plane_scheduler_upgrade?sslmode=disable" \
       KODEX_CONTROL_PLANE_MIGRATION_TEST_DISPOSABLE=dedicated-loopback-container \
-      env -u GOFLAGS GOENV=off GOWORK=off go test -p 2 -count=1 -timeout=90s ./cmd/cli -run '^TestScheduleProtocolUpgrade$'
+      env -u GOFLAGS GOENV=off GOWORK=off go test -p "$go_parallelism" -count=1 -timeout=90s ./cmd/cli -run '^TestScheduleProtocolUpgrade$'
   fi
   run_migration up
   run_migration status >/dev/null
@@ -173,6 +175,7 @@ fi
   schema_version=$(psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" --no-password -X -qAt -v ON_ERROR_STOP=1 \
     -c 'SELECT max(version_id) FILTER (WHERE is_applied) FROM public.goose_db_version')
   case "$schema_version" in
+    20261027000100) schema_proof=ssh-compose-migration-postcondition.sql; schema_verifier=validSSHComposeMigrationPostcondition ;;
     20261026001600) schema_proof=workspace-checkpoint-migration-postcondition.sql; schema_verifier=validWorkspaceCheckpointMigrationPostcondition ;;
     20261026001500) schema_proof=session-workspace-migration-postcondition.sql; schema_verifier=validSessionWorkspaceMigrationPostcondition ;;
     20261026001000) schema_proof=server-workflow-migration-postcondition.sql; schema_verifier=validServerWorkflowMigrationPostcondition ;;
@@ -205,7 +208,7 @@ fi
   KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
     KODEX_CONTROL_PLANE_TEST_ADMIN_DSN="$admin_dsn" \
     KODEX_CONTROL_PLANE_TEST_TEMPLATE_DATABASE=control_plane_component_template \
-    env -u GOFLAGS GOENV=off GOWORK=off go test -p 2 -v -count=1 \
+    env -u GOFLAGS GOENV=off GOWORK=off go test -p "$go_parallelism" -v -count=1 \
       ./internal/repository/postgres/platform -run "$test_pattern"
   # Та же read-only диагностика, которую release использует на staging.
   psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" \
@@ -237,7 +240,7 @@ fi
     KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
       KODEX_CONTROL_PLANE_TEST_ADMIN_DSN="$admin_dsn" \
       KODEX_CONTROL_PLANE_TEST_TEMPLATE_DATABASE=control_plane_component_template \
-      env -u GOFLAGS GOENV=off GOWORK=off go test -p 2 -count=1 \
+      env -u GOFLAGS GOENV=off GOWORK=off go test -p "$go_parallelism" -count=1 \
         ./internal/repository/postgres/platform -run '^TestAvatarLifecycleComponent$'
   fi
 )

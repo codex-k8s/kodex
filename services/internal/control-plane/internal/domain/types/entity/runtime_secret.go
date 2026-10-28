@@ -20,6 +20,7 @@ type RuntimeSecretDisplayHint struct {
 // подсказку и дескриптор текущей ревизии без исходных байтов секрета. NextActions описывает
 // представление; исполнение действия требует новой проверки полномочий и жизненного цикла владельцем.
 type RuntimeSecret struct {
+	Purpose                                                         string
 	ScopeKind, OrganizationRef                                      string
 	Ref, ProjectRef, Name, Description, ValueType, State, Namespace string
 	Version, CurrentRevision                                        int64
