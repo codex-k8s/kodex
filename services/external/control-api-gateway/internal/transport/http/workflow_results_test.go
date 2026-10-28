@@ -72,6 +72,67 @@ func TestWorkflowModesFollowPublishedAndDraftPins(t *testing.T) {
 	}
 }
 
+// TestWorkflowReworkPolicyReadbackPreservesRevisionBoundaries checks the actual owner-message
+// projection and OpenAPI JSON round trip without inferring policy from another workflow revision.
+// TestWorkflowReworkPolicyReadbackPreservesRevisionBoundaries проверяет проекцию сообщения
+// владельца и JSON OpenAPI без вывода политики из другой редакции процесса.
+func TestWorkflowReworkPolicyReadbackPreservesRevisionBoundaries(t *testing.T) {
+	const upstream = "OWNER_APPROVED_UPSTREAM_V1"
+	for _, scenario := range []struct {
+		name, publishedMode, publishedPolicy, draftMode, draftPolicy string
+	}{
+		{name: "draft only", draftMode: "SERVER_DAG_V1", draftPolicy: upstream},
+		{name: "published only", publishedMode: "SERVER_DAG_V1", publishedPolicy: upstream},
+		{name: "new draft opt in", publishedMode: "MANAGER_DRIVEN", draftMode: "SERVER_DAG_V1", draftPolicy: upstream},
+		{name: "draft leaves policy unset", publishedMode: "SERVER_DAG_V1", publishedPolicy: upstream, draftMode: "SERVER_DAG_V1"},
+		{name: "legacy without policy", publishedMode: "MANAGER_DRIVEN", draftMode: "MANAGER_DRIVEN"},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			workflow := &cp.Workflow{Ref: "wfl_fixture1", Version: 3}
+			if scenario.publishedMode != "" {
+				workflow.PublishedVersion = &cp.WorkflowVersion{Ref: "wfv_published1", Version: 2, Revision: 2,
+					State: cp.WorkflowState_WORKFLOW_STATE_PUBLISHED, ExecutionMode: scenario.publishedMode, ReworkPolicy: scenario.publishedPolicy}
+			}
+			if scenario.draftMode != "" {
+				workflow.DraftVersion = &cp.WorkflowVersion{Ref: "wfv_draft001", Version: 3, Revision: 3,
+					State: cp.WorkflowState_WORKFLOW_STATE_DRAFT, ExecutionMode: scenario.draftMode, ReworkPolicy: scenario.draftPolicy}
+			}
+			workflowReadinessFixture(workflow)
+			view, err := messageMap(&cp.GetWorkflowResponse{Workflow: workflow})
+			if err != nil {
+				t.Fatal(err)
+			}
+			public := view["workflow"].(map[string]any)
+			expected := scenario.publishedPolicy
+			if workflow.PublishedVersion == nil {
+				expected = scenario.draftPolicy
+			}
+			if policy, present := public["reworkPolicy"]; present != (expected != "") || present && policy != expected {
+				t.Fatalf("selected revision policy changed: value=%v present=%t expected=%q", policy, present, expected)
+			}
+			if workflow.DraftVersion != nil {
+				draft := public["draft"].(map[string]any)
+				if policy, present := draft["reworkPolicy"]; present != (scenario.draftPolicy != "") || present && policy != scenario.draftPolicy {
+					t.Fatal("draft policy was lost or copied from the published revision")
+				}
+			}
+			raw, err := json.Marshal(public)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var decoded generated.Workflow
+			decoder := json.NewDecoder(bytes.NewReader(raw))
+			decoder.DisallowUnknownFields()
+			if err := decoder.Decode(&decoded); err != nil {
+				t.Fatal("workflow readback is incompatible with the public contract", err)
+			}
+			if decoded.ReworkPolicy == nil && expected != "" || decoded.ReworkPolicy != nil && string(*decoded.ReworkPolicy) != expected {
+				t.Fatal("public JSON round trip lost the selected policy")
+			}
+		})
+	}
+}
+
 // TestWorkflowRejectedAttemptRetainsFalseAndEmptyCollections verifies required zero values in
 // the actual public JSON and generated OpenAPI model without creating successful evidence.
 // TestWorkflowRejectedAttemptRetainsFalseAndEmptyCollections проверяет обязательные нулевые поля
