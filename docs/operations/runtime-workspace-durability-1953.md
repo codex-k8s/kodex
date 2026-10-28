@@ -4,7 +4,7 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.20
+version: 1.0.21
 updated: 2026-10-28
 ---
 
@@ -186,7 +186,17 @@ native-путей других задач. Проверки operator, native, ba
 Поставка приложения требует предварительно подтверждённой schema016 даже
 при выключенном opt-in: claim query читает owner storage eligibility до LIMIT.
 Default legacy означает отсутствие новых bindings, а не разрешение запуска
-нового CP на старой схеме. Первый V2 init использует отдельный protected mode
+нового CP на старой схеме. При выключенном профиле owner сначала блокирует
+exact trusted session и проверяет отсутствие **любого** V2 work этой сессии,
+без фильтра по candidate agent. Только положительное отсутствие сохраняет
+прежний runtime path, включая workflow coordinator с `WORKFLOW`-сессией.
+Наличие work, другой agent, ошибка чтения или неизвестное состояние не
+разрешают fallback. Эта read-only развилка не создаёт событий; авторитетный
+read path — owner workspace row под той же session lock. Native-проверка
+выключения профиля во время CREATE/PREPARE не допускает model lease и сохраняет
+ту же physical task/attempt. Полная поддержка V2 для coordinator требует
+отдельной проверки pinned workflow version и agent; этот отказ не обходится
+при включённом профиле. Первый V2 init использует отдельный protected mode
 `runtime-bind-workspace`; отсутствующий input не включает legacy prepare.
 Только этот init получает private PVC root, остальные containers — exact
 work subPath и отдельные read-only inode/ACK records. Другой live consumer

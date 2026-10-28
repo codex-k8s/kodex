@@ -157,11 +157,11 @@ func newNamespacedRoleImageComponentRepository(t *testing.T, ctx context.Context
 	return repository
 }
 
-// newTracedOrganizationComponentPool opens an isolated pool with the existing organization
+// newTracedOrganizationComponentPool opens an isolated pool with the shared metadata-only
 // query tracer and the exact caller context. Parsing and connection errors keep their original
 // Fatal messages. The caller closes the returned pool before registered database cleanup;
 // deadline, repository configuration and assertions are not selected here.
-// newTracedOrganizationComponentPool открывает изолированный pool с прежним organization
+// newTracedOrganizationComponentPool открывает изолированный pool с общим metadata-only
 // query tracer и точным context вызывающего. Ошибки разбора и подключения сохраняют исходные
 // Fatal messages. Вызывающий закрывает pool до зарегистрированной очистки БД; helper не
 // выбирает deadline, конфигурацию repository и проверки сценария.

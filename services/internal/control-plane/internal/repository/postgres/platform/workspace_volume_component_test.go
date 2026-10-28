@@ -32,6 +32,18 @@ func claimPreparedWorkspaceComponent(t *testing.T, ctx context.Context, reposito
 		if len(pending.RuntimeItems) != 0 {
 			t.Fatal("model execution was admitted before physical preparation")
 		}
+		if !t.Run("profile-off-retains-"+stage.key, func(t *testing.T) {
+			previous := repository.roleImages.WorkspaceStorageProfile
+			repository.roleImages.WorkspaceStorageProfile = ""
+			defer func() { repository.roleImages.WorkspaceStorageProfile = previous }()
+			blocked := execute(command.ClaimExecution, worker, "volume-profile-off-"+stage.key,
+				command.LeaseInput{WorkloadInstance: workload, Limit: 1})
+			if len(blocked.RuntimeItems) != 0 {
+				t.Fatal("profile opt-out bypassed existing V2 custody")
+			}
+		}) {
+			t.FailNow()
+		}
 		claimInput := command.WorkspaceVolumeClaimInput{WorkloadInstance: "workspace-volume-component", Limit: 1}
 		claimed := execute(command.ClaimWorkspaceVolumeTasks, claimer, "volume-claim-"+stage.key, claimInput)
 		if len(claimed.RuntimeItems) != 1 {

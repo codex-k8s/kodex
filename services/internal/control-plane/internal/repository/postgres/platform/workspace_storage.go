@@ -11,6 +11,10 @@ import (
 )
 
 var (
+	// queryWorkspaceStorageLegacyEligible locks the exact trusted session and proves absence of every V2 row, independent of candidate agent.
+	// queryWorkspaceStorageLegacyEligible блокирует exact trusted session и доказывает отсутствие любых V2 rows независимо от candidate agent.
+	//go:embed sql/workspace_storage__legacy_eligible.sql
+	queryWorkspaceStorageLegacyEligible string
 	// queryWorkspaceStorageSession locks the exact session even before its first work row exists.
 	// queryWorkspaceStorageSession блокирует exact session даже до появления первой work row.
 	//go:embed sql/workspace_storage__session.sql
@@ -38,6 +42,21 @@ func (repository *Repository) prepareSessionWorkspaceTx(ctx context.Context, tx 
 		return nil, true, nil
 	}
 	activated := repository.roleImages.WorkspaceStorageProfile == runtimecontract.WorkspaceStorageProfile
+	if !activated {
+		var legacyEligible bool
+		err := tx.QueryRow(ctx, queryWorkspaceStorageLegacyEligible, pgx.StrictNamedArgs{
+			"organization_id": current.organizationID, "session_id": candidate.sessionID,
+			"project_id": candidate.projectID}).Scan(&legacyEligible)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, false, errs.ErrConflict
+		}
+		if err != nil {
+			return nil, false, errs.ErrUnavailable
+		}
+		if legacyEligible {
+			return nil, true, nil
+		}
+	}
 	arguments := pgx.StrictNamedArgs{"organization_id": current.organizationID, "session_id": candidate.sessionID,
 		"project_id": candidate.projectID, "agent_id": candidate.agentID}
 	var sessionID string
