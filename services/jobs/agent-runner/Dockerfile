@@ -21,8 +21,10 @@ COPY libs/go /src/libs/go/
 RUN go mod download
 
 RUN test "$(go env GOVERSION)" = "go1.26.6"
-RUN mkdir -p /out/kodex-protected \
-	&& CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags='-X main.buildVersion=0.1.0' -o /out/kodex-protected/kodex-agent-runner ./cmd/agent-runner
+RUN --mount=type=tmpfs,target=/tmp,size=4294967296 \
+	export GOCACHE=/tmp/go-build-cache GOTMPDIR=/tmp/go-tmp GOMAXPROCS=2 GOMEMLIMIT=768MiB \
+	&& mkdir -p /out/kodex-protected "$GOCACHE" "$GOTMPDIR" \
+	&& CGO_ENABLED=0 go build -p=1 -trimpath -buildvcs=false -ldflags='-X main.buildVersion=0.1.0' -o /out/kodex-protected/kodex-agent-runner ./cmd/agent-runner
 
 # Локальный runtime сохраняет тот же защищенный entrypoint и UID-контракт, но
 # не собирает полный набор инструментов роли. Production-образ остается
