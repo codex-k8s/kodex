@@ -4,7 +4,7 @@ title: Штатная поставка Kodex и внешний доступ с S
 type: operations
 status: approved
 owner: manager
-version: 1.2.6
+version: 1.2.7
 updated: 2026-10-29
 ---
 
@@ -1003,6 +1003,14 @@ toolchain Pod. Обязательны CPU/memory requests и limits; request в�
 unknown resource и незаметная потеря scratch bound отклоняются до PATCH.
 Readback связывает ресурсы тем же spec commitment; rollback восстанавливает
 их exact inverse. Sidecar, Secret references и domain state не меняются.
+
+Для `integration-gateway`, `secret-broker`, `interaction-gateway` и
+`automation-scheduler` базовые Deployment явно задают CPU request50m и limit2.
+До этой правки canonical resource preflight отклонял обновление: CPU bounds
+были только в обслуживаемом staging render. Для трёх работающих компонентов
+значения совпадают с фактическими; отсутствующий в web-only
+`interaction-gateway` получает тот же ограниченный профиль для своего контура.
+Эта правка конфигурации сама по себе не развёртывает дополнительные компоненты.
 
 BuildKit получает2 Pod с независимым `emptyDir` scratch: каждый requests2CPU/
 2GiB, limits8CPU/16GiB. Steady-state общий предел —16CPU/32GiB; при одном

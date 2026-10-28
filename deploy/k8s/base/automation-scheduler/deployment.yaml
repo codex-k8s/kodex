@@ -56,8 +56,10 @@ spec:
               protocol: TCP
           resources:
             requests:
+              cpu: 50m
               memory: 64Mi
             limits:
+              cpu: "2"
               memory: 256Mi
           volumeMounts:
             - name: workload-tls
