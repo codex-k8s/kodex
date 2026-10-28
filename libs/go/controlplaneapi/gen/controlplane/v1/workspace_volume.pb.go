@@ -530,7 +530,9 @@ type CompleteWorkspaceVolumeTaskRequest struct {
 	// Обязателен для PREPARE после positive terminal всех Job containers; для CREATE пуст.
 	PodUid string `protobuf:"bytes,7,opt,name=pod_uid,json=podUid,proto3" json:"pod_uid,omitempty"`
 	// Для PREPARE — типизированный sealed record; для CREATE отсутствует.
-	Ready         *RuntimeWorkspaceVolumeReady `protobuf:"bytes,8,opt,name=ready,proto3" json:"ready,omitempty"`
+	Ready *RuntimeWorkspaceVolumeReady `protobuf:"bytes,8,opt,name=ready,proto3" json:"ready,omitempty"`
+	// Точный Job UID вместе с Pod UID сохраняет происхождение observation после уборки физических объектов.
+	JobUid        string `protobuf:"bytes,9,opt,name=job_uid,json=jobUid,proto3" json:"job_uid,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -619,6 +621,13 @@ func (x *CompleteWorkspaceVolumeTaskRequest) GetReady() *RuntimeWorkspaceVolumeR
 		return x.Ready
 	}
 	return nil
+}
+
+func (x *CompleteWorkspaceVolumeTaskRequest) GetJobUid() string {
+	if x != nil {
+		return x.JobUid
+	}
+	return ""
 }
 
 // Фиксированный отказ не разрешает cleanup или повтор неопределённого внешнего действия.
@@ -894,7 +903,7 @@ const file_controlplane_v1_workspace_volume_proto_rawDesc = "" +
 	"generation\x18\x04 \x01(\x03R\n" +
 	"generation\"T\n" +
 	" RenewWorkspaceVolumeTaskResponse\x120\n" +
-	"\x05lease\x18\x01 \x01(\v2\x1a.controlplane.v1.WorkLeaseR\x05lease\"\xd7\x02\n" +
+	"\x05lease\x18\x01 \x01(\v2\x1a.controlplane.v1.WorkLeaseR\x05lease\"\xf0\x02\n" +
 	"\"CompleteWorkspaceVolumeTaskRequest\x12<\n" +
 	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12\x19\n" +
 	"\btask_ref\x18\x02 \x01(\tR\ataskRef\x12\x1b\n" +
@@ -905,7 +914,8 @@ const file_controlplane_v1_workspace_volume_proto_rawDesc = "" +
 	"generation\x12(\n" +
 	"\x10observed_pvc_uid\x18\x06 \x01(\tR\x0eobservedPvcUid\x12\x17\n" +
 	"\apod_uid\x18\a \x01(\tR\x06podUid\x12B\n" +
-	"\x05ready\x18\b \x01(\v2,.controlplane.v1.RuntimeWorkspaceVolumeReadyR\x05ready\"\xf4\x01\n" +
+	"\x05ready\x18\b \x01(\v2,.controlplane.v1.RuntimeWorkspaceVolumeReadyR\x05ready\x12\x17\n" +
+	"\ajob_uid\x18\t \x01(\tR\x06jobUid\"\xf4\x01\n" +
 	"\x1eFailWorkspaceVolumeTaskRequest\x12<\n" +
 	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12\x19\n" +
 	"\btask_ref\x18\x02 \x01(\tR\ataskRef\x12\x1b\n" +

@@ -5,6 +5,33 @@ import { buildServicePolicy, bindingDigest } from "./service-identity-policy.mjs
 
 const source = JSON.parse(readFileSync(new URL("../../deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",import.meta.url),"utf8"));
 const classification = JSON.parse(readFileSync(new URL("../../services/internal/control-plane/internal/app/service-identity-classification.json",import.meta.url),"utf8"));
+test("очередь физических томов доступна только session-archive с точными RPC и replay profile", () => {
+  const policy = buildServicePolicy(source, classification);
+  const methods = {claim: "ClaimWorkspaceVolumeTasks", renew: "RenewWorkspaceVolumeTask", complete: "CompleteWorkspaceVolumeTask", fail: "FailWorkspaceVolumeTask"};
+  const originals = source.policy.operation_bindings.filter(binding => binding.operation_id.startsWith("platform.workspace-volumes."));
+  assert.equal(originals.length, 4);
+  for (const [action, method] of Object.entries(methods)) {
+    const operation = "platform.workspace-volumes.tasks." + action;
+    const binding = originals.find(value => value.operation_id === operation);
+    assert.equal(binding.authority_proof_producer_id, "control-plane.session-archive");
+    assert.deepEqual(binding.authority_sources, ["DOMAIN_STATE"]);
+    assert.deepEqual(binding.request_profile, {mode: "UNARY_PROTO_SHA256", resource: "FORBIDDEN", version: "FORBIDDEN", attempt: "FORBIDDEN", idempotency: action === "renew" ? "FORBIDDEN" : "REQUIRED"});
+    assert.deepEqual(policy.bindings.filter(value => value.operation_id === operation), [{
+      caller_spiffe_id: "spiffe://kodex.local/ns/kodex-system/sa/session-archive",
+      full_method: "/controlplane.v1.WorkspaceVolumeWorkService/" + method,
+      operation_id: operation, permission: operation, actor_mode: "SERVICE_OWNER_RESOLVED", project_required: false,
+    }]);
+    for (const mutate of [
+      value => { value.caller_spiffe_id = "spiffe://kodex.local/ns/kodex-system/sa/agent-runner"; },
+      value => { value.request_profile.idempotency = action === "renew" ? "REQUIRED" : "FORBIDDEN"; },
+      value => { value.permission = "platform.session-archive.tasks.claim"; },
+    ]) {
+      const changed = structuredClone(source);
+      mutate(changed.policy.operation_bindings.find(value => value.operation_id === operation));
+      assert.throws(() => buildServicePolicy(changed, classification), /service operation classification drift/);
+    }
+  }
+});
 test("workflow catalog preserves leased source binding in local service registry",() => {
   const operation="platform.runtime.execution.workflow.catalog";
   const originals=source.policy.operation_bindings.filter(binding=>binding.operation_id===operation);
@@ -34,8 +61,8 @@ test("workflow catalog preserves leased source binding in local service registry
 });
 test("control-plane policy preserves exact bindings and excludes STT continuation",() => {
   const policy=buildServicePolicy(source,classification);
-  assert.equal(source.policy_revision,99);
-  assert.equal(policy.bindings.length,429);
+  assert.equal(source.policy_revision,100);
+  assert.equal(policy.bindings.length,433);
   for (const [operation, method, caller] of [
     ["platform.runtime.ssh-compose.claim", "/controlplane.v1.RuntimeWorkService/ClaimSSHComposeInvocations", "integration-gateway"],
     ["platform.runtime.ssh-compose.renew", "/controlplane.v1.RuntimeWorkService/RenewSSHComposeInvocation", "integration-gateway"],
@@ -59,7 +86,7 @@ test("control-plane policy preserves exact bindings and excludes STT continuatio
     assert.equal(bindings[0].project_required,false);
   }
   assert.equal(policy.bindings.filter(b=>b.actor_mode==="USER_CREDENTIAL_REQUIRED").length,322);
-  assert.equal(policy.bindings.filter(b=>b.actor_mode==="SERVICE_OWNER_RESOLVED").length,107);
+  assert.equal(policy.bindings.filter(b=>b.actor_mode==="SERVICE_OWNER_RESOLVED").length,111);
   for (const operation of [
     "platform.organization.role-images.recipes.list",
     "platform.organization.role-images.recipes.get",

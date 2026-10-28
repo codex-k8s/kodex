@@ -43,3 +43,20 @@ func TestWorkspaceVolumeClaimRejectsBorrowedMachineAuthority(t *testing.T) {
 		}
 	}
 }
+
+// TestWorkspaceVolumeClaimRejectsProjectScopedAuthority prevents a project-bound proof from granting an organization-wide physical batch.
+// TestWorkspaceVolumeClaimRejectsProjectScopedAuthority не позволяет project-bound proof выдавать organization-wide physical batch.
+func TestWorkspaceVolumeClaimRejectsProjectScopedAuthority(t *testing.T) {
+	repository := &Repository{}
+	input := command.Command{Kind: command.ClaimWorkspaceVolumeTasks,
+		Principal: value.Principal{CallerWorkload: "session-archive", Permission: command.WorkspaceVolumeCommandPermission(command.ClaimWorkspaceVolumeTasks)},
+		Payload:   command.WorkspaceVolumeClaimInput{WorkloadInstance: "fixture", Limit: 1}}
+	if err := repository.authorizeCommand(t.Context(), nil, scope{authorityProjectID: "project-fixture"}, input); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatal("project-bound authority reached an organization-wide queue")
+	}
+	expectedVersion := int64(1)
+	input.Mutation.ExpectedVersion = &expectedVersion
+	if err := repository.authorizeCommand(t.Context(), nil, scope{}, input); !errors.Is(err, errs.ErrInvalid) {
+		t.Fatal("batch claim accepted an unrelated aggregate version")
+	}
+}

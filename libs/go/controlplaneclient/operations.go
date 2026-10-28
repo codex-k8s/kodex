@@ -530,6 +530,10 @@ func AutomationSchedulerOperations() map[string]string {
 // SessionArchiveOperations регистрирует защищённый жизненный цикл задач snapshot, restore, удаления PVC и очистки объектов.
 func SessionArchiveOperations() map[string]string {
 	return map[string]string{
+		"platform.workspace-volumes.tasks.claim":          controlplanev1.WorkspaceVolumeWorkService_ClaimWorkspaceVolumeTasks_FullMethodName,
+		"platform.workspace-volumes.tasks.renew":          controlplanev1.WorkspaceVolumeWorkService_RenewWorkspaceVolumeTask_FullMethodName,
+		"platform.workspace-volumes.tasks.complete":       controlplanev1.WorkspaceVolumeWorkService_CompleteWorkspaceVolumeTask_FullMethodName,
+		"platform.workspace-volumes.tasks.fail":           controlplanev1.WorkspaceVolumeWorkService_FailWorkspaceVolumeTask_FullMethodName,
 		"platform.session-archive.tasks.claim":            controlplanev1.SessionArchiveWorkService_ClaimSessionArchiveTasks_FullMethodName,
 		"platform.session-archive.tasks.renew":            controlplanev1.SessionArchiveWorkService_RenewSessionArchiveTask_FullMethodName,
 		"platform.session-archive.snapshot.complete":      controlplanev1.SessionArchiveWorkService_CompleteSessionSnapshot_FullMethodName,

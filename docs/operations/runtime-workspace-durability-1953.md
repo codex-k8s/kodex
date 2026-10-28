@@ -4,7 +4,7 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.15
+version: 1.0.17
 updated: 2026-10-28
 ---
 
@@ -655,6 +655,28 @@ root geometry; work quotas не повышаются.
 | FailWorkspaceVolumeTask | Только current granted task и закрытый safe error | Grant закрыт; uncertain Create/init остаётся BLOCKED с PVC/input/Job custody. Не выдаёт повторного WRITE |
 | Runtime claim/BIND | Только accepted exact VolumeReady tuple и свежая owner-selected RR | V2 consumer делает GET pinned PVC UID, не Create/adoption; trusted initializer читает sealed volume record до BIND/private writes |
 
+Physical preparation не занимает model/DAG concurrency slot. Claim и renewal
+проверяют текущие origin/ACL и часы точного run со всеми предками; expiry lease
+ограничивается ближайшим execution deadline. Истёкший origin не получает новых
+storage grants; закрываются его task/grants. Полный graph по deadline закрывает
+существующий owner reconcile, без поддельного model lease. Обычный renewal не
+создаёт отдельного business event: авторитетны durable attempt expiry и ответ
+защищённого owner renewal по exact task/lease/fence/generation.
+
+Positive PREPARE сохраняет Job UID вместе с Pod UID, PVC UID и canonical ready
+record. Одна форма record не доказывает process join: physical consumer отдельно
+проверяет exact Job/Pod provenance, фактическую geometry и terminal всех
+контейнеров. [Kubernetes owner references](https://kubernetes.io/docs/concepts/overview/working-with-objects/owners-dependents/)
+связывают объект с UID владельца; labels не заменяют эту связь.
+
+Поздний PREPARE ACK сохраняет metadata, но не переводит отменённый origin в
+READY. Новый eligible origin может получить read-only recovery прежнего sealed
+preparation. Для exact origin предусмотрены не более одного RW и одного RO
+logical intent; terminal отказ не запускает бесконечную генерацию новых tasks.
+Поздний positive CREATE закрывает оставшиеся read-only attempts того же Create
+и сохраняет первый UID. Повтор этого факта не снимает позднее возникший physical
+block уже известной PVC.
+
 | Переход | Полный owner/physical lifecycle |
 | --- | --- |
 | Create intent | Полная кандидатная authority проверяется до enqueue; EMPTY work и origin root/node назначает сервер. Intent/frozen body сохраняются до любых внешних действий |
@@ -671,6 +693,33 @@ root geometry; work quotas не повышаются.
 | Отказ/DEAD_LETTER | Данные и physical evidence сохранены, execution claim не стартует. Ошибка подготовки не превращается в готовый бизнес-результат |
 | Restore | Accepted volume tuple и source checkpoint замораживаются в новом RESTORE intent; model не получает частичное дерево |
 | Purge | Отдельный owner protocol и positive physical cleanup; ledger/task/custody удаляются только через проверенный project purge graph после закрытия grants |
+
+### Транспорт очереди физического тома
+
+Четыре RPC `WorkspaceVolumeWorkService` зарегистрированы в control-plane;
+клиент `session-archive` получает их через отдельный generated interface.
+Реестр authority revision100 и локальная service-identity policy закрепляют
+точные методы и `session-archive` workload. Project scope отсутствует у worker
+batch; owner повторно разрешает конкретную организацию, origin, actor и grants.
+Agent runner, модель и обычный пользователь не получают эти права.
+
+| Инициатор → endpoint → owner | Pins и результат | Событие и потребитель |
+| --- | --- | --- |
+| `session-archive` → `ClaimWorkspaceVolumeTasks` → specialized `CLAIM_WORKSPACE_VOLUME_TASKS` | Явный idempotency key, без OCC; workload instance/limit входят в canonical Proto digest. Owner выбирает immutable task/input/attempt/lease; JSON receipt повторяет исходные pins и срок, не обновляя их | Owner audit/run-changed при изменении; пустой результат не означает готовность хранилища. Physical consumer отдельно проверяет актуальность grant до эффекта |
+| `session-archive` → `RenewWorkspaceVolumeTask` → exact lease repository method | Task/lease/fence/generation входят в digest; нет generic resource/version/attempt headers. Свежие origin/ACL/root deadline проверяются owner; изменяется только срок прежнего grant | Новое бизнес-событие отсутствует; авторитетный read path — exact RPC response и durable attempt ledger |
+| `session-archive` → `CompleteWorkspaceVolumeTask` → specialized `COMPLETE_WORKSPACE_VOLUME_TASK` | Явный idempotency key и exact ledger tuple; положительные PVC/Job/Pod UID и sealed metadata. Неизвестные поля вложенного Proto закрыто отклоняются. Persisted kind выбирает допустимую форму | Fact/receipt/audit/run-changed атомарны; только свежий PREPARE допускает READY. Runtime admission читает owner record, исторический ACK не возрождает execution |
+| `session-archive` → `FailWorkspaceVolumeTask` → specialized `FAIL_WORKSPACE_VOLUME_TASK` | Явный idempotency key, exact current unreported grant и закрытый safe error code. Caller не назначает terminal state или retry credit | Task/grants закрываются owner; custody сохраняется. Run-changed уведомляет зависимые consumers, но не разрешает физическое удаление |
+
+Срок lease в сохранённом JSON receipt представлен строкой RFC3339Nano;
+transport обрабатывает её отдельно от свежего `time.Time`. Пропущенный срок,
+дробное поколение и несовпадение поколения с attempt отклоняются. Повтор
+сохранённого ответа не создаёт fresh grant; physical executor обязан повторно
+проверить его актуальность. Модельные слоты этот путь не занимает.
+
+Для проверки unknown wire fields использована актуальная документация
+[Go Protocol Buffers](https://github.com/protocolbuffers/protobuf-go/blob/master/reflect/protoreflect/value.go)
+через Context7 `/protocolbuffers/protobuf-go`: `GetUnknown` возвращает сохранённые
+wire bytes; обычное protobuf decoding не отклоняет их автоматически.
 
 Матрица описывает полный требуемый owner path. До завершения schema017,
 producer/consumer/RPC registry, cancel/late-ACK, runtime admission и native
@@ -691,10 +740,11 @@ rollback. Завершение включает подтверждение ис�
 после асинхронного Docker AutoRemove. Данные staging не используются.
 
 Это проверка схемы, а не полный owner component или готовность V2. В текущем
-срезе реализованы отдельные таблицы custody/task/attempt и owner enqueue/claim;
-создание модели ждёт accepted volume record. RPC renewal/completion/failure,
-физический consumer, свежая runtime delivery, restore и protocol удаления
-должны быть подключены совместно до включения. До появления положительного
+срезе реализованы отдельные таблицы custody/task/attempt, owner enqueue/claim
+и внутренние обработчики renewal/completion/failure; создание модели ждёт
+accepted volume record. RPC registry/transport и физический consumer, свежая
+runtime delivery, restore и protocol удаления должны быть подключены совместно
+до включения. До появления положительного
 physical cleanup proof схема закрыто отклоняет `physical_deleted=true`, включая
 обычный CRUD. Наличие `PURGED` в закрытом перечне состояний не разрешает этот
 переход. Применённые015/016 не переписываются.

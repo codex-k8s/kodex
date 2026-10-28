@@ -29,6 +29,14 @@ var (
 	// queryWorkspaceVolumeInsertTask фиксирует logical task без model revision, provider identity либо secret fence.
 	//go:embed sql/workspace_volume__insert_task.sql
 	queryWorkspaceVolumeInsertTask string
+	// queryWorkspaceVolumeIntentEligibility prevents concurrent or repeated logical preparation for the exact origin.
+	// queryWorkspaceVolumeIntentEligibility предотвращает concurrent либо repeated logical preparation для exact origin.
+	//go:embed sql/workspace_volume__intent_eligibility.sql
+	queryWorkspaceVolumeIntentEligibility string
+	// queryWorkspaceVolumePrepare pins the original preparation before inserting its deferred task reference.
+	// queryWorkspaceVolumePrepare закрепляет original preparation до вставки deferred task reference.
+	//go:embed sql/workspace_volume__prepare.sql
+	queryWorkspaceVolumePrepare string
 )
 
 // workspaceVolumeCustody is an owner-locked row, never an authority claim made by a physical observer.
@@ -117,25 +125,7 @@ func (repository *Repository) prepareWorkspaceVolumeTx(ctx context.Context, tx p
 		}
 		logical := runtimecontract.WorkspaceVolumeInput{Profile: runtimecontract.WorkspaceVolumeLocalPathProfile,
 			Scope: binding.Scope, WorkspaceRef: binding.WorkspaceRef, VolumeGeneration: value.generation, CreateTaskRef: taskRef}
-		work := runtimecontract.WorkspaceVolumeWork{TaskRef: taskRef, Kind: runtimecontract.WorkspaceVolumeCreate, Attempt: 1, Volume: logical}
-		if _, err := work.Digest(); err != nil {
-			return nil, false, errs.ErrConflict
-		}
-		raw, err := json.Marshal(logical)
-		if err != nil {
-			return nil, false, errs.ErrConflict
-		}
-		var storedRef string
-		if err := tx.QueryRow(ctx, queryWorkspaceVolumeInsertTask, pgx.StrictNamedArgs{
-			"task_ref": taskRef, "volume_id": value.id, "volume_generation": value.generation,
-			"node_id": candidate.nodeID, "root_run_id": candidate.rootRunID, "actor_id": actorID,
-			"kind": runtimecontract.WorkspaceVolumeCreate, "frozen_input": raw}).Scan(&storedRef); err != nil || storedRef != taskRef {
-			return nil, false, errs.ErrConflict
-		}
-		if err := auditWorkspaceVolumeTask(ctx, tx, current, candidate.projectID, taskRef, "Подготавливается рабочая папка"); err != nil {
-			return nil, false, err
-		}
-		if err := repository.emitSessionStorageRunChanged(ctx, tx, current, candidate.sessionID); err != nil {
+		if err := repository.enqueueWorkspaceVolumeIntentTx(ctx, tx, current, candidate, value, taskRef, actorID, runtimecontract.WorkspaceVolumeCreate, logical); err != nil {
 			return nil, false, err
 		}
 		return nil, false, nil
@@ -144,6 +134,9 @@ func (repository *Repository) prepareWorkspaceVolumeTx(ctx context.Context, tx p
 		return nil, false, errs.ErrUnavailable
 	}
 	if value.state != "READY" {
+		if err := repository.prepareWorkspaceVolumeIntentTx(ctx, tx, current, candidate, binding, value); err != nil {
+			return nil, false, err
+		}
 		return nil, false, nil
 	}
 	ready, err := runtimecontract.DecodeWorkspaceVolumeReady([]byte(value.readyRecord))
@@ -153,6 +146,91 @@ func (repository *Repository) prepareWorkspaceVolumeTx(ctx context.Context, tx p
 		return nil, false, errs.ErrConflict
 	}
 	return &ready, true, nil
+}
+
+// enqueueWorkspaceVolumeIntentTx stores the closed owner-built body and its audit/event without accepting actor or kind from an external payload.
+// enqueueWorkspaceVolumeIntentTx сохраняет closed owner-built body и audit/event без actor/kind из external payload.
+func (repository *Repository) enqueueWorkspaceVolumeIntentTx(ctx context.Context, tx pgx.Tx, current scope, candidate claimableExecution, custody workspaceVolumeCustody, taskRef, actorID, kind string, logical runtimecontract.WorkspaceVolumeInput) error {
+	work := runtimecontract.WorkspaceVolumeWork{TaskRef: taskRef, Kind: kind, Attempt: 1, Volume: logical, ReconcileOnly: logical.ReadOnly}
+	if _, err := work.Digest(); err != nil {
+		return errs.ErrConflict
+	}
+	raw, err := json.Marshal(logical)
+	if err != nil {
+		return errs.ErrConflict
+	}
+	var storedRef string
+	if err := tx.QueryRow(ctx, queryWorkspaceVolumeInsertTask, pgx.StrictNamedArgs{
+		"task_ref": taskRef, "volume_id": custody.id, "volume_generation": custody.generation,
+		"node_id": candidate.nodeID, "root_run_id": candidate.rootRunID, "actor_id": actorID,
+		"kind": kind, "frozen_input": raw}).Scan(&storedRef); err != nil || storedRef != taskRef {
+		return errs.ErrConflict
+	}
+	if err := auditWorkspaceVolumeTask(ctx, tx, current, candidate.projectID, taskRef, "Подготавливается рабочая папка"); err != nil {
+		return err
+	}
+	return repository.emitSessionStorageRunChanged(ctx, tx, current, candidate.sessionID)
+}
+
+// prepareWorkspaceVolumeIntentTx advances a known positive Create or grants one read-only recovery after a retained positive preparation fact.
+// Unknown or partial custody receives no init credit, and the same physical origin cannot retry by manufacturing new logical tasks.
+// prepareWorkspaceVolumeIntentTx продвигает known positive Create либо выдаёт один read-only recovery после retained positive preparation fact.
+// Unknown/partial custody не получает init credit; тот же physical origin не обходит retry limit созданием новых logical tasks.
+func (repository *Repository) prepareWorkspaceVolumeIntentTx(ctx context.Context, tx pgx.Tx, current scope, candidate claimableExecution, binding runtimecontract.WorkspaceStorageBinding, custody workspaceVolumeCustody) error {
+	if custody.pvcUID == "" || custody.state != "CREATED" && custody.state != "PREPARE_PENDING" && custody.state != "BLOCKED" {
+		return nil
+	}
+	readOnly := custody.preparationTaskRef != ""
+	if !readOnly && custody.state != "CREATED" {
+		return nil
+	}
+	if readOnly {
+		if custody.readyRecord == "" {
+			// Unknown first preparation waits for a positive exact Job join without creating another initializer.
+			// Unknown первая подготовка ждёт positive exact Job join без нового initializer.
+			return nil
+		}
+		ready, err := runtimecontract.DecodeWorkspaceVolumeReady([]byte(custody.readyRecord))
+		if err != nil {
+			return errs.ErrConflict
+		}
+		if ready.Preparation.Scope != binding.Scope || ready.Preparation.WorkspaceRef != binding.WorkspaceRef ||
+			ready.Preparation.TaskRef != custody.preparationTaskRef || ready.Preparation.PVCUID != custody.pvcUID ||
+			ready.Preparation.VolumeGeneration != custody.generation {
+			return errs.ErrConflict
+		}
+	}
+	actorID, err := repository.authorizeWorkspaceVolumeOrigin(ctx, tx, current, candidate.nodeID, candidate.rootRunID, binding.Scope)
+	if err != nil {
+		return err
+	}
+	var open, repeated bool
+	if err := tx.QueryRow(ctx, queryWorkspaceVolumeIntentEligibility, pgx.StrictNamedArgs{
+		"volume_id": custody.id, "generation": custody.generation, "node_id": candidate.nodeID,
+		"root_run_id": candidate.rootRunID, "actor_id": actorID, "read_only": readOnly}).Scan(&open, &repeated); err != nil {
+		return errs.ErrUnavailable
+	}
+	if open || repeated {
+		return nil
+	}
+	taskRef, err := newRef("svt")
+	if err != nil {
+		return err
+	}
+	preparationRef := custody.preparationTaskRef
+	if preparationRef == "" {
+		preparationRef = taskRef
+	}
+	custody, err = scanWorkspaceVolumeCustody(tx.QueryRow(ctx, queryWorkspaceVolumePrepare, pgx.StrictNamedArgs{
+		"volume_id": custody.id, "generation": custody.generation, "pvc_uid": custody.pvcUID,
+		"preparation_task_ref": preparationRef}))
+	if err != nil {
+		return errs.ErrConflict
+	}
+	logical := runtimecontract.WorkspaceVolumeInput{Profile: runtimecontract.WorkspaceVolumeLocalPathProfile,
+		Scope: binding.Scope, WorkspaceRef: binding.WorkspaceRef, VolumeGeneration: custody.generation,
+		CreateTaskRef: custody.createTaskRef, PreparationTaskRef: preparationRef, PVCUID: custody.pvcUID, ReadOnly: readOnly}
+	return repository.enqueueWorkspaceVolumeIntentTx(ctx, tx, current, candidate, custody, taskRef, actorID, runtimecontract.WorkspaceVolumePrepare, logical)
 }
 
 // auditWorkspaceVolumeTask records one owner mutation without input bytes, secret fences or physical data in the public audit summary.

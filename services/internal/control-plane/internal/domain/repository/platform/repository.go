@@ -1188,6 +1188,9 @@ type Repository interface {
 	// RenewSessionArchiveTask продлевает точный типизированный набор archive task и lease для principal;
 	// ссылка сессии сама чужую задачу не продлевает.
 	RenewSessionArchiveTask(context.Context, value.Principal, command.SessionArchiveTaskInput) (map[string]any, error)
+	// RenewWorkspaceVolumeTask extends only a current physical preparation grant after fresh origin/clock checks, without model concurrency credit.
+	// RenewWorkspaceVolumeTask продлевает только current physical preparation grant после fresh origin/clock checks без model concurrency credit.
+	RenewWorkspaceVolumeTask(context.Context, value.Principal, command.WorkspaceVolumeTaskInput) (map[string]any, error)
 	// ClaimProviderCredentialCleanupTasks is the local cleanup-worker contract for a bounded claimant
 	// batch of exact descriptor/attempt/generation snapshots; absence of a Principal parameter is not
 	// browser-facing delete authority.

@@ -96,6 +96,7 @@ type Client struct {
 	ConfigurationWriteBacks controlplanev1.ManagedConfigurationGitWriteBackWorkServiceClient
 	RepositoryBundles       controlplanev1.RepositoryBundlePublicationServiceClient
 	SessionArchive          controlplanev1.SessionArchiveWorkServiceClient
+	WorkspaceVolumes        controlplanev1.WorkspaceVolumeWorkServiceClient
 	Interaction             controlplanev1.InteractionWorkServiceClient
 	RoleImages              controlplanev1.RoleImageServiceClient
 	Access                  controlplanev1.AccessServiceClient
@@ -209,6 +210,7 @@ func (client *Client) bindServices(protected *grpc.ClientConn) {
 	client.ConfigurationWriteBacks = controlplanev1.NewManagedConfigurationGitWriteBackWorkServiceClient(protected)
 	client.RepositoryBundles = controlplanev1.NewRepositoryBundlePublicationServiceClient(protected)
 	client.SessionArchive = controlplanev1.NewSessionArchiveWorkServiceClient(protected)
+	client.WorkspaceVolumes = controlplanev1.NewWorkspaceVolumeWorkServiceClient(protected)
 	client.Interaction = controlplanev1.NewInteractionWorkServiceClient(protected)
 	client.RoleImages = controlplanev1.NewRoleImageServiceClient(protected)
 	client.Access = controlplanev1.NewAccessServiceClient(protected)

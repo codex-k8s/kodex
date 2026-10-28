@@ -58,6 +58,7 @@ type Server struct {
 	controlplanev1.UnimplementedProviderCredentialRenewalWorkServiceServer
 	controlplanev1.UnimplementedRuntimeSecretDraftWorkServiceServer
 	controlplanev1.UnimplementedSessionArchiveWorkServiceServer
+	controlplanev1.UnimplementedWorkspaceVolumeWorkServiceServer
 	controlplanev1.UnimplementedInteractionWorkServiceServer
 	controlplanev1.UnimplementedAccessServiceServer
 	service    *platformservice.Service

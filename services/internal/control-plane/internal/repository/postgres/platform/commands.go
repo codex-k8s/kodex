@@ -90,7 +90,7 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 	var storedDigest string
 	var storedPayload []byte
 	receiptQuery := queryCommandsExecuteSelectIdempotencyReceiptsOrganizationIdActorIdOperation
-	if input.Kind == command.ObserveWorkspace || input.Kind == command.ClaimWorkspaceVolumeTasks {
+	if input.Kind == command.ObserveWorkspace || command.WorkspaceVolumeCommandPermission(input.Kind) != "" {
 		receiptQuery = queryWorkspaceObservationReceipt
 	}
 	if payload, ok := input.Payload.(command.LeaseInput); input.Kind == command.ReportExecutionProgress && ok && payload.Financial != nil {
@@ -463,6 +463,15 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 			return commandOutcome{}, errs.ErrInvalid
 		}
 		return repository.claimWorkspaceVolumeTasksTx(ctx, tx, scope, payload)
+	case command.CompleteWorkspaceVolumeTask, command.FailWorkspaceVolumeTask:
+		payload, ok := input.Payload.(command.WorkspaceVolumeTaskInput)
+		if !ok {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		if input.Kind == command.CompleteWorkspaceVolumeTask {
+			return repository.completeWorkspaceVolumeTaskTx(ctx, tx, scope, payload)
+		}
+		return repository.failWorkspaceVolumeTaskTx(ctx, tx, scope, payload)
 	case command.MaterializeOccurrence, command.FailScheduleOccurrence:
 		return repository.changeOccurrence(ctx, tx, scope, input)
 	case command.CompleteConnectionTest:

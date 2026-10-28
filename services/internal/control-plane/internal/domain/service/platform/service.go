@@ -1801,6 +1801,7 @@ func knownCommand(kind command.Kind) bool {
 		command.CompleteExecution,
 		command.ObserveWorkspace,
 		command.ClaimWorkspaceVolumeTasks,
+		command.CompleteWorkspaceVolumeTask, command.FailWorkspaceVolumeTask,
 		command.DelegateExecution, command.LaunchWorkflowExecution, command.ProposeAssistantPlan, command.ProposeAssistantMetadata,
 		command.ProposeRunMetadata, command.RecordRunToolCall,
 		command.CompleteSessionSnapshot, command.CompleteSessionRestore,

@@ -62,12 +62,12 @@ var (
 // workspaceVolumeTask is the owner-locked logical origin and physical incarnation, independent of any model revision.
 // workspaceVolumeTask — owner-locked logical origin/physical incarnation, отдельные от model revision.
 type workspaceVolumeTask struct {
-	id, ref, kind, state, nodeID, rootRunID, actorID, volumeID, volumeState string
-	workspaceRef, projectID, sessionID, workspaceState                      string
-	attempt                                                                 int32
-	volumeGeneration, currentVolumeGeneration                               int64
-	noWriter, available, activeGrant                                        bool
-	input                                                                   runtimecontract.WorkspaceVolumeInput
+	id, ref, kind, state, nodeID, rootRunID, runID, actorID, volumeID, volumeState string
+	workspaceRef, projectID, sessionID, workspaceState                             string
+	attempt                                                                        int32
+	volumeGeneration, currentVolumeGeneration                                      int64
+	noWriter, available, activeGrant                                               bool
+	input                                                                          runtimecontract.WorkspaceVolumeInput
 }
 
 // lockWorkspaceVolumeTask acquires session, custody and task after the caller's root lock and rejects a changed logical lineage.
@@ -85,7 +85,7 @@ func lockWorkspaceVolumeTask(ctx context.Context, tx pgx.Tx, current scope, task
 	var task workspaceVolumeTask
 	var raw []byte
 	if err := tx.QueryRow(ctx, queryWorkspaceVolumeTask, args).Scan(&task.id, &task.ref, &task.kind, &task.state, &task.attempt,
-		&raw, &task.nodeID, &task.rootRunID, &task.actorID, &task.volumeID, &task.volumeState, &task.volumeGeneration, &task.currentVolumeGeneration,
+		&raw, &task.nodeID, &task.rootRunID, &task.runID, &task.actorID, &task.volumeID, &task.volumeState, &task.volumeGeneration, &task.currentVolumeGeneration,
 		&task.workspaceRef, &task.projectID, &task.sessionID, &task.workspaceState, &task.noWriter, &task.available, &task.activeGrant); errors.Is(err, pgx.ErrNoRows) {
 		return workspaceVolumeTask{}, errs.ErrNotFound
 	} else if err != nil {
@@ -149,10 +149,6 @@ func (repository *Repository) claimWorkspaceVolumeTasksTx(ctx context.Context, t
 		} else if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		admitted, err := admitServerWorkflowClaimTx(ctx, tx, current, rootID)
-		if err != nil {
-			return commandOutcome{}, err
-		}
 		task, err := lockWorkspaceVolumeTask(ctx, tx, current, candidate.Ref, rootID)
 		if err != nil {
 			return commandOutcome{}, err
@@ -163,23 +159,16 @@ func (repository *Repository) claimWorkspaceVolumeTasksTx(ctx context.Context, t
 		if task.volumeGeneration != task.currentVolumeGeneration {
 			return commandOutcome{}, errs.ErrConflict
 		}
-		if !admitted {
-			if err := repository.closeWorkspaceVolumeTaskTx(ctx, tx, current, task, "CANCELLED", "ORIGIN_CLOSED"); err != nil {
-				return commandOutcome{}, err
-			}
-			changed = true
-			continue
-		}
-		actor, err := repository.authorizeWorkspaceVolumeOrigin(ctx, tx, current, task.nodeID, rootID, task.input.Scope)
-		if errors.Is(err, errs.ErrForbidden) || err == nil && actor != task.actorID || task.workspaceState != "EMPTY" || !task.noWriter {
-			if err := repository.closeWorkspaceVolumeTaskTx(ctx, tx, current, task, "CANCELLED", "ORIGIN_CLOSED"); err != nil {
-				return commandOutcome{}, err
-			}
-			changed = true
-			continue
-		}
+		deadline, allowed, err := repository.authorizeWorkspaceVolumeGrantTx(ctx, tx, current, task)
 		if err != nil {
 			return commandOutcome{}, err
+		}
+		if !allowed {
+			if err := repository.closeWorkspaceVolumeTaskTx(ctx, tx, current, task, "CANCELLED", "ORIGIN_CLOSED"); err != nil {
+				return commandOutcome{}, err
+			}
+			changed = true
+			continue
 		}
 		if task.attempt >= sessionArchiveMaxAttempts {
 			reason := "PREPARE_UNCONFIRMED"
@@ -222,7 +211,7 @@ func (repository *Repository) claimWorkspaceVolumeTasksTx(ctx context.Context, t
 		var expires time.Time
 		if err := tx.QueryRow(ctx, queryWorkspaceVolumeGrant, pgx.StrictNamedArgs{
 			"task_id": task.id, "attempt": attempt, "lease_ref": leaseRef, "fence_digest": hex.EncodeToString(fenceDigest[:]),
-			"workload_instance": input.WorkloadInstance, "input_snapshot": string(snapshot), "input_digest": digest}).Scan(&expires); err != nil {
+			"workload_instance": input.WorkloadInstance, "input_snapshot": string(snapshot), "input_digest": digest, "deadline_at": deadline}).Scan(&expires); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		work.InputDigest = digest

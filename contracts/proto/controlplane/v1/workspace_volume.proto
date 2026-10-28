@@ -119,6 +119,8 @@ message CompleteWorkspaceVolumeTaskRequest {
   string pod_uid = 7;
   // Для PREPARE — типизированный sealed record; для CREATE отсутствует.
   RuntimeWorkspaceVolumeReady ready = 8;
+  // Точный Job UID вместе с Pod UID сохраняет происхождение observation после уборки физических объектов.
+  string job_uid = 9;
 }
 
 // Фиксированный отказ не разрешает cleanup или повтор неопределённого внешнего действия.

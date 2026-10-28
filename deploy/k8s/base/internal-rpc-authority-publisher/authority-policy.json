@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "policy_revision": 99,
+  "policy_revision": 100,
   "policy": {
     "authority_abi_version": 2,
     "trust_domain": "kodex.local",
@@ -15755,41 +15755,6 @@
         }
       },
       {
-        "operation_id": "platform.runtime.workspace.observe",
-        "caller_workload_id": "runtime-controller",
-        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller",
-        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller",
-        "target_workload_id": "control-plane",
-        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
-        "audience": "urn:kodex:internal-rpc:control-plane",
-        "full_method": "/controlplane.v1.RuntimeWorkService/ObserveWorkspace",
-        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
-        "target_trust_bundle_id": "kodex-internal-ca-g1",
-        "permission": "platform.runtime.workspace.observe",
-        "authority_proof_producer_id": "control-plane.runtime-controller",
-        "authority_sources": [
-          "DOMAIN_STATE"
-        ],
-        "project_required": false,
-        "local_caller": {
-          "uid": 10001,
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000
-        },
-        "local_target": {
-          "uid": 10001,
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000
-        },
-        "request_profile": {
-          "mode": "UNARY_PROTO_SHA256",
-          "resource": "FORBIDDEN",
-          "version": "FORBIDDEN",
-          "attempt": "FORBIDDEN",
-          "idempotency": "FORBIDDEN"
-        }
-      },
-      {
         "operation_id": "platform.runtime.execution.renew",
         "caller_workload_id": "runtime-controller",
         "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller",
@@ -16700,6 +16665,41 @@
         }
       },
       {
+        "operation_id": "platform.runtime.workspace.observe",
+        "caller_workload_id": "runtime-controller",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RuntimeWorkService/ObserveWorkspace",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.runtime.workspace.observe",
+        "authority_proof_producer_id": "control-plane.runtime-controller",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
         "operation_id": "platform.session-archive.object-delete.complete",
         "caller_workload_id": "session-archive",
         "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/session-archive",
@@ -17129,6 +17129,146 @@
           "version": "FORBIDDEN",
           "attempt": "FORBIDDEN",
           "idempotency": "REQUIRED"
+        }
+      },
+      {
+        "operation_id": "platform.workspace-volumes.tasks.claim",
+        "caller_workload_id": "session-archive",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/session-archive",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/session-archive",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.WorkspaceVolumeWorkService/ClaimWorkspaceVolumeTasks",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.workspace-volumes.tasks.claim",
+        "authority_proof_producer_id": "control-plane.session-archive",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
+        }
+      },
+      {
+        "operation_id": "platform.workspace-volumes.tasks.complete",
+        "caller_workload_id": "session-archive",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/session-archive",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/session-archive",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.WorkspaceVolumeWorkService/CompleteWorkspaceVolumeTask",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.workspace-volumes.tasks.complete",
+        "authority_proof_producer_id": "control-plane.session-archive",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
+        }
+      },
+      {
+        "operation_id": "platform.workspace-volumes.tasks.fail",
+        "caller_workload_id": "session-archive",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/session-archive",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/session-archive",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.WorkspaceVolumeWorkService/FailWorkspaceVolumeTask",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.workspace-volumes.tasks.fail",
+        "authority_proof_producer_id": "control-plane.session-archive",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
+        }
+      },
+      {
+        "operation_id": "platform.workspace-volumes.tasks.renew",
+        "caller_workload_id": "session-archive",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/session-archive",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/session-archive",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.WorkspaceVolumeWorkService/RenewWorkspaceVolumeTask",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.workspace-volumes.tasks.renew",
+        "authority_proof_producer_id": "control-plane.session-archive",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       }
     ]
