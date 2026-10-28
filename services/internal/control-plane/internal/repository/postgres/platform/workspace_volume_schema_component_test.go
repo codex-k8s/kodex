@@ -11,9 +11,9 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// readWorkspaceVolumeSchemaProof separates the actual017+SSH envelope from its explicitly versioned inverse014 projection.
+// readWorkspaceVolumeSchemaProof separates the exact actual volume or restore envelope from its versioned inverse014 projection.
 // It executes only shipped read-only metadata SQL against an exact disposable loopback clone, never business fixtures or live credentials.
-// readWorkspaceVolumeSchemaProof отделяет actual017+SSH envelope от явно версионированной inverse014 projection.
+// readWorkspaceVolumeSchemaProof отделяет exact actual volume либо restore envelope от versioned inverse014 projection.
 // Исполняет только поставляемый read-only metadata SQL на exact disposable loopback clone, без business fixtures и live credentials.
 func readWorkspaceVolumeSchemaProof(t *testing.T, ctx context.Context, conn *pgx.Conn) (map[string]any, map[string]any) {
 	t.Helper()
@@ -22,7 +22,12 @@ func readWorkspaceVolumeSchemaProof(t *testing.T, ctx context.Context, conn *pgx
 		config.User != "postgres" || !strings.HasPrefix(config.Database, "kodex_assistant_test_") {
 		t.Fatal("schema proof requires an isolated loopback clone")
 	}
-	source, err := os.ReadFile("../../../../../../../tools/release/workspace-volume-ssh-migration-postcondition.sql")
+	version := workspaceComponentSchemaVersion(t, ctx, conn)
+	profile, filename := "WORKSPACE_VOLUME_SSH_V1", "workspace-volume-ssh-migration-postcondition.sql"
+	if version == 20261028000100 {
+		profile, filename = "WORKSPACE_RESTORE_V2", "workspace-restore-migration-postcondition.sql"
+	}
+	source, err := os.ReadFile("../../../../../../../tools/release/" + filename)
 	if err != nil {
 		t.Fatal("read shipped current workspace schema proof")
 	}
@@ -44,12 +49,31 @@ func readWorkspaceVolumeSchemaProof(t *testing.T, ctx context.Context, conn *pgx
 		}
 	}
 	projection, ok := actual["predecessorProjection"].(map[string]any)
-	if !ok || actual["profile"] != "WORKSPACE_VOLUME_SSH_V1" || actual["readOnly"] != "on" ||
-		actual["gooseVersion"] != float64(20261027000100) || projection["database"] != config.Database ||
+	if !ok || actual["profile"] != profile || actual["readOnly"] != "on" ||
+		actual["gooseVersion"] != float64(version) || projection["database"] != config.Database ||
 		projection["gooseVersion"] != float64(20261026001400) || projection["reviewQAEvidenceProfile"] != "GITHUB_REVIEW_QA_V1" {
 		t.Fatal("actual workspace schema or inverse predecessor identity mismatch")
 	}
 	return actual, projection
+}
+
+// workspaceComponentSchemaVersion selects only a registered actual schema in an already isolated administrator fixture.
+// Unknown successors never inherit acceptance from a historical proof or caller-provided version.
+// workspaceComponentSchemaVersion выбирает только зарегистрированную actual schema в уже изолированной admin fixture.
+// Неизвестный successor не наследует допуск historical proof либо caller-provided version.
+func workspaceComponentSchemaVersion(t *testing.T, ctx context.Context, conn *pgx.Conn) int64 {
+	t.Helper()
+	configuration := conn.Config()
+	if (configuration.Host != "127.0.0.1" && configuration.Host != "localhost") || configuration.Port < 1024 ||
+		configuration.User != "postgres" || !strings.HasPrefix(configuration.Database, "kodex_assistant_test_") {
+		t.Fatal("schema version requires an isolated administrator fixture")
+	}
+	var version int64
+	if err := conn.QueryRow(ctx, "SELECT max(version_id) FROM public.goose_db_version WHERE is_applied").Scan(&version); err != nil ||
+		version != 20261027000100 && version != 20261028000100 {
+		t.Fatal("unregistered disposable workspace schema", err)
+	}
+	return version
 }
 
 // assertWorkspaceVolumeSchemaCanonical checks the complete actual envelope without substituting inverse graph counts or versions.
@@ -58,6 +82,9 @@ func readWorkspaceVolumeSchemaProof(t *testing.T, ctx context.Context, conn *pgx
 // Counterfactual callers проверяют свой false predicate до этой проверки исключительно canonical schema.
 func assertWorkspaceVolumeSchemaCanonical(t *testing.T, actual map[string]any) {
 	t.Helper()
+	if actual["profile"] == "WORKSPACE_RESTORE_V2" && actual["restoreCatalog"] != true {
+		t.Error("actual workspace restore catalog is unconfirmed")
+	}
 	for key, expected := range map[string]any{
 		"purgeNodes": float64(109), "purgeEdges": float64(303), "workspacePurgeGuard": true,
 		"workspaceCatalog": true, "checkpointCatalog": true, "volumeCatalog": true,
