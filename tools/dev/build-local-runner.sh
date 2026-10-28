@@ -108,11 +108,13 @@ if [[ ! -s "$archive" ]]; then
   "$source_root/tools/dev/ensure-local-buildx-builder.sh" "$builder"
   next_archive="$archive.next"
   rm -f "$next_archive"
-  # BuildKit получает только закреплённые inputs из Git, без metadata worktree,
-  # локальных env и приватных файлов. Provenance сверяется с исходным worktree.
+  # BuildKit получает только tracked inputs чистого worktree. Сохраняем mode,
+  # входящий в provenance и COPY cache key; metadata Git и private files не входят.
   build_context=$(mktemp -d "$cache_directory/runner-source.XXXXXXXX")
   trap 'rm -rf -- "$build_context"' EXIT
-  git -C "$source_root" archive "$revision" -- services/jobs/agent-runner libs/go | tar -x -C "$build_context"
+  git -C "$source_root" ls-files -z -- services/jobs/agent-runner libs/go \
+    | tar -C "$source_root" --null --no-recursion --files-from=- -cf - \
+    | tar --same-permissions -x -C "$build_context"
   docker buildx build --builder "$builder" \
     --file "$build_context/services/jobs/agent-runner/Dockerfile" \
     --target "$image_target" \

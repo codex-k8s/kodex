@@ -150,8 +150,12 @@ Build ENV не переносится в финальный runtime stage. RAM-m
 финального образа, runtime USER/ENTRYPOINT и флаги версий сохраняются.
 Компиляция самого `agent-runner` использует тот же временный RAM-кэш;
 независимые стадии закреплённых инструментов сохраняют прежние cache keys.
-`tools/dev/build-local-runner.sh` передаёт в BuildKit приватный контекст из
-`git archive` только для `services/jobs/agent-runner` и `libs/go` на exact HEAD.
+`tools/dev/build-local-runner.sh` передаёт в BuildKit приватный контекст только
+tracked inputs `services/jobs/agent-runner` и `libs/go` чистого exact HEAD.
+NUL-список Git и tar без обхода каталогов сохраняют mode исходных файлов,
+который входит в provenance и COPY cache key. Извлечение `git archive` под
+приватным umask меняло эти modes и инвалидировало тяжёлую установку инструментов;
+фактическая сборка была остановлена watchdog до получения образа.
 Рабочие env, `.git` и неотслеживаемые файлы в контекст не входят. Проверка
 бинарного provenance по-прежнему сверяет исходный чистый worktree и весь OCI
 до импорта на узлы; cache hit не пересобирается и проверяется тем же verifier.
