@@ -207,7 +207,7 @@ BEGIN
                                 AND result->>'kind'='INTEGRATION_RECEIPT' AND result->>'repository'=requirement.value->>'Repository'
                                 AND result->>'headSha'=invocation.ssh_compose_snapshot->>'mergedSha'
                                 AND merge_invocation.ref=invocation.ssh_compose_snapshot->>'mergeInvocationRef'
-                        
+
                         ))$deployment$;
         IF (length(v_source)-length(replace(v_source,v_evidence_slot,'')))/length(v_evidence_slot)<>1 THEN
             RAISE EXCEPTION 'SSH evidence slot preimage is ambiguous';
