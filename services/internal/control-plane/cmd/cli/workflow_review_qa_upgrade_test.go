@@ -101,6 +101,8 @@ func readControlPlaneMigrationProof(t *testing.T, ctx context.Context, observer 
 		verifier = "validWorkflowReviewQAEvidenceMigration"
 	case "workspace-restore":
 		verifier = "validWorkspaceRestoreMigration"
+	case "workspace-backup":
+		verifier = "validWorkspaceBackupMigration"
 	case "workspace-volume-ssh":
 		verifier = "validWorkspaceVolumeSSHMigration"
 	default:

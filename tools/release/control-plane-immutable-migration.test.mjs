@@ -35,6 +35,32 @@ test('restore owner profile requires the complete new catalog and does not broad
   assert.equal(validImmutableMigrationPostcondition('workspace-restore',{...proof,...patch}),false);
 });
 
+test('backup maintenance использует отдельные имена Job и единственную закрытую команду',()=>{
+ const config=immutableMigrationProfile('workspace-backup');
+ assert.equal(config.previousVersion,20261026001500);
+ assert.equal(config.requiredMigrations.length,4);
+ const plan=planControlPlaneMigration(base(),source,()=>({revision}),'fixture','workspace-backup',publication());
+ assert.equal(plan.job.metadata.name,'control-plane-migrate-20261028000100-backup');
+ assert.equal(plan.checkJob.metadata.name,'control-plane-migration-check-20261028000100-backup');
+ assert.deepEqual(plan.job.spec.template.spec.containers[0].args,['up-workspace-backup-compatible']);
+ assert.deepEqual(plan.checkJob.spec.template.spec.containers[0].args,['check']);
+ assert.equal(plan.job.spec.template.spec.serviceAccountName,'control-plane-migrator');
+ assert.equal(plan.job.spec.template.spec.automountServiceAccountToken,false);
+});
+
+test('backup proof сохраняет отдельные actual ACL и полный исторический restore proof',()=>{
+ const proof={...workspaceVolumeSSHProof(),profile:'WORKSPACE_RESTORE_BACKUP_V1',gooseVersion:20261028000100,
+  restoreCatalog:true,backupReaderCatalog:true};
+ assert.equal(validImmutableMigrationPostcondition('workspace-backup',proof),true);
+ assert.equal(validImmutableMigrationPostcondition('workspace-restore',proof),false);
+ for(const key of Object.keys(proof)) {
+  const missing={...proof};delete missing[key];
+  assert.equal(validImmutableMigrationPostcondition('workspace-backup',missing),false,key);
+ }
+ assert.equal(validImmutableMigrationPostcondition('workspace-backup',{...proof,backupReaderCatalog:false}),false);
+ assert.equal(validImmutableMigrationPostcondition('workspace-backup',{...proof,restoreCatalog:false}),false);
+});
+
 // Реальный repo-owned immutable Job проверяется без копии его credential boundary в оснастке.
 function base() {
   const job = JSON.parse(execFileSync('yq',['-o=json','.',new URL('../../deploy/k8s/base/control-plane/migration-job.yaml',import.meta.url).pathname],{encoding:'utf8'}));

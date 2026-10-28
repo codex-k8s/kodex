@@ -11,6 +11,7 @@ import { activeDeploymentPods, isProvenStoppedPod } from './stable-archive-trans
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'workspace-backup': {version:'20261028000100',file:'20261028000100_workspace_restore_owner.sql',annotation:'kodex.dev/cp-workspace-backup-migration-plan',previousVersion:20261026001500,emptyField:'workspaceBackupSafeToMigrate',preconditionFile:'workspace-backup-migration-precondition.sql',postconditionFile:'workspace-backup-migration-postcondition.sql',executionCommand:'up-workspace-backup-compatible',jobSuffix:'-backup',requiredMigrations:Object.freeze(['20261026001600_workspace_checkpoint_tasks.sql','20261026001700_workspace_volume_custody.sql','20261027000100_ssh_compose_runtime.sql','20261028000100_workspace_restore_owner.sql'])},
   'workspace-restore': {version:'20261028000100',file:'20261028000100_workspace_restore_owner.sql',annotation:'kodex.dev/cp-workspace-restore-migration-plan',previousVersion:20261026001000,emptyField:'workspaceVolumeSSHAbsent',preconditionFile:'workspace-restore-migration-precondition.sql',postconditionFile:'workspace-restore-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261026001100_legacy_workflow_rework.sql','20261026001200_workflow_exception_context.sql','20261026001300_workflow_upstream_rework.sql','20261026001400_workflow_review_qa_evidence.sql','20261026001500_session_workspace_storage.sql','20261026001600_workspace_checkpoint_tasks.sql','20261026001700_workspace_volume_custody.sql','20261027000100_ssh_compose_runtime.sql','20261028000100_workspace_restore_owner.sql'])},
   'workspace-volume-ssh': {version:'20261027000100',file:'20261027000100_ssh_compose_runtime.sql',annotation:'kodex.dev/cp-workspace-volume-ssh-migration-plan',previousVersion:20261026001000,emptyField:'workspaceVolumeSSHAbsent',preconditionFile:'workspace-volume-ssh-migration-precondition.sql',postconditionFile:'workspace-volume-ssh-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261026001100_legacy_workflow_rework.sql','20261026001200_workflow_exception_context.sql','20261026001300_workflow_upstream_rework.sql','20261026001400_workflow_review_qa_evidence.sql','20261026001500_session_workspace_storage.sql','20261026001600_workspace_checkpoint_tasks.sql','20261026001700_workspace_volume_custody.sql','20261027000100_ssh_compose_runtime.sql'])},
   'workflow-upstream-rework': {version:'20261026001300',file:'20261026001300_workflow_upstream_rework.sql',annotation:'kodex.dev/cp-workflow-upstream-rework-migration-plan',previousVersion:20261026001200,emptyField:'workflowUpstreamReworkAbsent',preconditionFile:'workflow-upstream-rework-migration-precondition.sql',postconditionFile:'workflow-upstream-rework-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261026000300_server_driven_workflow.sql','20261026000400_workflow_attempt_journal.sql','20261026000500_workflow_artifact_visibility_retention.sql','20261026000600_workflow_exception_episodes.sql','20261026000700_workflow_input_guard_binding.sql','20261026000800_workflow_exception_terminal_decision.sql','20261026000900_workflow_effect_rejoin.sql','20261026001000_workflow_effect_execution_rejoin.sql','20261026001100_legacy_workflow_rework.sql','20261026001200_workflow_exception_context.sql','20261026001300_workflow_upstream_rework.sql'])},
@@ -71,7 +72,8 @@ export function immutableMigrationImage(source, evidence) {
 
 // Штатный render задаёт только существующую migrator boundary; executable spec строится закрыто заново.
 export function planImmutableControlPlaneMigration(before, source, inspect, id, evidence, attempt = 1, profile = 'outbox-index') {
-  const {version:migrationVersion} = immutableMigrationProfile(profile);
+  const configuration = immutableMigrationProfile(profile);
+  const {version:migrationVersion} = configuration;
   ensure([1,2].includes(attempt), 'MIGRATION_ATTEMPT_INVALID');
   ensure(before?.kind === 'Job' && before.apiVersion === 'batch/v1' && before.metadata?.name === 'control-plane-migrate' &&
     before.metadata.namespace === namespace && before.metadata.uid && before.metadata.resourceVersion &&
@@ -105,19 +107,19 @@ export function planImmutableControlPlaneMigration(before, source, inspect, id, 
   // Staging overlay не назначает app part-of исходному render. Новая собственная Job
   // получает фиксированную метку; actual CP/SA/Secret проверяются независимо от render.
   const labels = { ...before.metadata.labels, 'app.kubernetes.io/part-of':'kodex' };
-  const job = {apiVersion:'batch/v1',kind:'Job',metadata:{name:`control-plane-migrate-${migrationVersion}${attempt === 2 ? '-attempt2' : ''}`,namespace,labels},spec:{
+    const job = {apiVersion:'batch/v1',kind:'Job',metadata:{name:`control-plane-migrate-${migrationVersion}${configuration.jobSuffix ?? ''}${attempt === 2 ? '-attempt2' : ''}`,namespace,labels},spec:{
     backoffLimit:0,activeDeadlineSeconds:300,ttlSecondsAfterFinished:86400,
     template:{metadata:{labels,annotations:{'kodex.dev/source-revision':source.revision,
       'kodex.dev/image-context-sha256':evidence.publicationPlan.receipt.contextSHA256}},spec:{
       serviceAccountName:'control-plane-migrator',automountServiceAccountToken:false,restartPolicy:'Never',enableServiceLinks:false,
       securityContext:{runAsNonRoot:true,runAsUser:10001,runAsGroup:10001,fsGroup:10001,fsGroupChangePolicy:'OnRootMismatch',seccompProfile:{type:'RuntimeDefault'}},
       initContainers:[structuredClone(waitForPostgres)],
-      containers:[{name:'migrate',image,imagePullPolicy:'Always',command:['/usr/local/bin/control-plane-cli'],args:['up'],
+      containers:[{name:'migrate',image,imagePullPolicy:'Always',command:['/usr/local/bin/control-plane-cli'],args:[configuration.executionCommand ?? 'up'],
         env:[{name:'CONTROL_PLANE_POSTGRES_ADMIN_DSN_FILE',value:dsnPath}],
         securityContext:{runAsNonRoot:true,runAsUser:10001,runAsGroup:10001,readOnlyRootFilesystem:true,allowPrivilegeEscalation:false,capabilities:{drop:['ALL']}},
         resources:{requests:{cpu:'25m',memory:'32Mi'},limits:{cpu:'250m',memory:'128Mi'}},volumeMounts:structuredClone(mounts)}],volumes:structuredClone(volumes)}}}};
   const checkJob = structuredClone(job);
-  checkJob.metadata.name = `control-plane-migration-check-${migrationVersion}${attempt === 2 ? '-attempt2' : ''}`;
+  checkJob.metadata.name = `control-plane-migration-check-${migrationVersion}${configuration.jobSuffix ?? ''}${attempt === 2 ? '-attempt2' : ''}`;
   // Фиксированное имя без TTL сохраняет server-side fence неизвестного create между планами.
   delete checkJob.spec.ttlSecondsAfterFinished;
   checkJob.spec.template.spec.containers[0].args = ['check'];
@@ -206,8 +208,20 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     return {kind,name,uid,resourceVersion};
   };
   const namespaceUID = () => kube(['get','namespace',namespace,'-o','jsonpath={.metadata.uid}']).trim();
-  const dependencies = () => [metadata('serviceaccount','control-plane-migrator'),
-    metadata('secret','control-plane-postgres-migration'),metadata('configmap','control-plane-postgresql-ca')];
+  const dependencies = () => {
+    if (profile==='workspace-backup') {
+      // Пока backup SELECT временно снят, не допускается автоматический backup либо credential reconciler.
+      const controllers=kube(['-n',namespace,'get','deployments,statefulsets,daemonsets,cronjobs',
+        '-l','app.kubernetes.io/name=backup-controller','-o','jsonpath={.items[*].metadata.uid}']).trim();
+      const consumers=kube(['-n',namespace,'get','pods','-l',
+        'app.kubernetes.io/name in (backup-controller,kodex-postgresql-runtime-credentials)',
+        '-o','jsonpath={range .items[*]}{.metadata.uid}{"|"}{.status.phase}{"\\n"}{end}']).trim();
+      ensure(!controllers && (!consumers || consumers.split('\n').every(line=>/^[a-zA-Z0-9-]+\|(Succeeded|Failed)$/.test(line))),
+        'MIGRATION_BACKUP_CONSUMERS_MUST_BE_ABSENT');
+    }
+    return [metadata('serviceaccount','control-plane-migrator'),
+      metadata('secret','control-plane-postgres-migration'),metadata('configmap','control-plane-postgresql-ca')];
+  };
   const deployment = () => {
     const value = get('deployment','control-plane');
     ensure(value.kind === 'Deployment' && value.metadata?.name === 'control-plane' && value.metadata.namespace === namespace &&
@@ -277,6 +291,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(validWorkspaceVolumeSSHMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'workspace-restore')
       ensure(validWorkspaceRestoreMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if (profile === 'workspace-backup')
+      ensure(validWorkspaceBackupMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     return result;
   };
   const terminalJob = (actual, expected, expectedHash, expectedUID) => {
@@ -354,6 +370,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     if (previous) plan.predecessor = previous;
     plan.postgres = postgresIdentity();plan.preconditionSQLSHA256 = createHash('sha256').update(preconditionSQL(source)).digest('hex');
     if(configuration.postconditionFile) plan.postconditionSQLSHA256=createHash('sha256').update(readFileSync(`${source.path}/tools/release/${configuration.postconditionFile}`)).digest('hex');
+    if(profile==='workspace-backup') plan.backupACLReadbackSQLSHA256=createHash('sha256').update(readFileSync(`${source.path}/tools/release/workspace-backup-acl-readback.sql`)).digest('hex');
     precondition(source,plan.postgres,plan.preconditionSQLSHA256);
     writePrivate(options['--plan'],plan);
     process.stdout.write(`${JSON.stringify({status:'PLANNED',jobName:plan.job.metadata.name,sourceRevision:source.revision,planSHA256:fingerprint(plan)})}\n`);
@@ -568,6 +585,14 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
         noActiveMigrations();
         if (attempts.length) readJob(true);
         else ensure(!optionalJob(plan.job.metadata.name) && migrationPods().length === 0, 'MIGRATION_JOB_WITHOUT_INTENT');
+        if(profile==='workspace-backup') {
+          const sql=readFileSync(`${plan.source.path}/tools/release/workspace-backup-acl-readback.sql`);
+          ensure(createHash('sha256').update(sql).digest('hex')===plan.backupACLReadbackSQLSHA256,'MIGRATION_BACKUP_READBACK_SOURCE_CHANGED');
+          const proof=JSON.parse(kube(['-n',namespace,'exec','-i','kodex-postgresql-0','--','psql','-XqAt','-U','postgres','-d','control_plane','-v','ON_ERROR_STOP=1'],sql));
+          ensure(proof.readOnly==='on' && proof.database==='control_plane' && proof.backupReaderCatalog===true &&
+            [20261026001500,20261026001600,20261026001700,20261027000100,20261028000100].includes(proof.gooseVersion),'MIGRATION_BACKUP_ACL_RESTORE_REQUIRED');
+          journal.append({type:'BACKUP_ACL_RESTORED',gooseVersion:proof.gooseVersion,sqlSHA256:plan.backupACLReadbackSQLSHA256});
+        }
         transition('RESUME',state,2);
       }
       state = await waitMigrationMaintenance(observeCP,s => s.stage === 'RESUMED' && s.ready,'MIGRATION_CP_RESUME_TIMEOUT',io.clock);
@@ -779,6 +804,19 @@ export function validWorkspaceRestoreMigrationPostcondition(proof) {
       ...proof, profile:'WORKSPACE_VOLUME_SSH_V1',gooseVersion:20261027000100});
 }
 
+// Actual backup SELECT проверен до metadata projection; прежний015 verifier не расширяется.
+export function validWorkspaceBackupMigrationPrecondition(proof) {
+  return proof?.profile==='WORKSPACE_BACKUP_PREDECESSOR_V1' && proof.backupReaderCatalog===true &&
+    proof.database==='control_plane' && proof.workspaceBackupSafeToMigrate===true &&
+    validSessionWorkspaceMigrationPostcondition({...proof,profile:'SESSION_WORKSPACE_V2'});
+}
+
+// Новый discriminator сохраняет отдельное доказательство actual backup authority и inverse frozen028.
+export function validWorkspaceBackupMigrationPostcondition(proof) {
+  return proof?.profile==='WORKSPACE_RESTORE_BACKUP_V1' && proof.backupReaderCatalog===true &&
+    validWorkspaceRestoreMigrationPostcondition({...proof,profile:'WORKSPACE_RESTORE_V2'});
+}
+
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {
@@ -790,6 +828,7 @@ export function validImmutableMigrationPostcondition(profile, proof) {
     case 'ssh-compose': return validSSHComposeMigrationPostcondition(proof);
     case 'workspace-volume-ssh': return validWorkspaceVolumeSSHMigrationPostcondition(proof);
     case 'workspace-restore': return validWorkspaceRestoreMigrationPostcondition(proof);
+    case 'workspace-backup': return validWorkspaceBackupMigrationPostcondition(proof);
     case 'project-purge-authority': return validProjectPurgeAuthorityMigrationPostcondition(proof);
     case 'owner-gate-expiry': return validOwnerGateExpiryMigrationPostcondition(proof);
     case 'repository-bundle': return validRepositoryBundleMigrationPostcondition(proof);

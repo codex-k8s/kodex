@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"strings"
@@ -66,6 +67,56 @@ ALTER DEFAULT PRIVILEGES FOR ROLE control_plane_owner IN SCHEMA control_plane GR
 			t.Fatal("backup fixture did not reproduce the exact migration boundary")
 		}
 	}
+	readControlPlaneMigrationProof(t, ctx, observer, "workspace-backup", "precondition")
+	assertBackupReadable := func(t *testing.T) {
+		t.Helper()
+		var readable bool
+		if err := observer.QueryRow(ctx, "SELECT has_table_privilege('kodex_backup_reader','control_plane.session_workspace_storage','SELECT')").Scan(&readable); err != nil || !readable {
+			t.Fatal("backup SELECT was not preserved")
+		}
+	}
+	t.Run("backup_write_rejected_without_revoking_select", func(t *testing.T) {
+		if _, err := observer.Exec(ctx, "GRANT UPDATE ON control_plane.session_workspace_storage TO kodex_backup_reader"); err != nil {
+			t.Fatal("prepare disposable extra grant", err)
+		}
+		defer func() {
+			if _, err := observer.Exec(ctx, "REVOKE UPDATE ON control_plane.session_workspace_storage FROM kodex_backup_reader"); err != nil {
+				t.Error("remove disposable extra grant", err)
+			}
+		}()
+		if err := executeWorkspaceBackupStatement(ctx, database, "normalize.sql"); err == nil {
+			t.Fatal("backup UPDATE was accepted")
+		}
+		assertBackupReadable(t)
+	})
+	t.Run("foreign_reader_rejected_with_atomic_rollback", func(t *testing.T) {
+		if _, err := observer.Exec(ctx, "CREATE ROLE qa_workspace_extra_reader NOLOGIN; GRANT SELECT ON control_plane.session_workspace_storage TO qa_workspace_extra_reader"); err != nil {
+			t.Fatal("prepare disposable foreign reader", err)
+		}
+		defer func() {
+			if _, err := observer.Exec(ctx, "REVOKE SELECT ON control_plane.session_workspace_storage FROM qa_workspace_extra_reader; DROP ROLE qa_workspace_extra_reader"); err != nil {
+				t.Error("remove disposable foreign reader", err)
+			}
+		}()
+		if err := executeWorkspaceBackupStatement(ctx, database, "normalize.sql"); err == nil {
+			t.Fatal("foreign reader was accepted")
+		}
+		assertBackupReadable(t)
+	})
+	t.Run("caller_cancellation_restores_with_independent_context", func(t *testing.T) {
+		caller, stop := context.WithCancel(ctx)
+		defer stop()
+		calls := 0
+		err := executeWorkspaceBackupUpgrade(caller, database, func(context.Context, *sql.DB) error {
+			calls++
+			stop()
+			return context.Canceled
+		})
+		if !errors.Is(err, context.Canceled) || calls != 1 {
+			t.Fatal("migration cancellation was retried or hidden")
+		}
+		assertBackupReadable(t)
+	})
 	if err := applyPostgresMigrations(ctx, database, "up-workspace-backup-compatible"); err != nil {
 		t.Fatal("backup-compatible forward upgrade failed", err)
 	}
@@ -73,8 +124,15 @@ ALTER DEFAULT PRIVILEGES FOR ROLE control_plane_owner IN SCHEMA control_plane GR
 	if err := observer.QueryRow(ctx, "SELECT max(version_id) FROM public.goose_db_version WHERE is_applied").Scan(&version); err != nil || version != 20261028000100 {
 		t.Fatal("backup-compatible upgrade did not reach the exact restore schema")
 	}
+	readControlPlaneMigrationProof(t, ctx, observer, "workspace-backup", "postcondition")
 	var readable bool
 	if err := observer.QueryRow(ctx, "SELECT has_table_privilege('kodex_backup_reader','control_plane.session_workspace_storage','SELECT')").Scan(&readable); err != nil || !readable {
 		t.Fatal("backup SELECT was not restored")
+	}
+	for attempt := 0; attempt < 2; attempt++ {
+		if err := applyPostgresMigrations(ctx, database, workspaceBackupRestoreCommand); err != nil {
+			t.Fatal("exact ACL restoration was not idempotent", err)
+		}
+		assertBackupReadable(t)
 	}
 }

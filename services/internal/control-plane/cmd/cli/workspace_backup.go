@@ -89,10 +89,20 @@ func restoreWorkspaceBackupACL(ctx context.Context, database *sql.DB) error {
 // После успешной normalization bounded restoration выполняется даже при ошибке migration или отмене caller.
 // Неизвестный normalization commit останавливает вход в Goose; оператор проверяет outcome и использует exact restore command.
 func upgradeWorkspaceWithBackupCompatibility(ctx context.Context, database *sql.DB) error {
+	return executeWorkspaceBackupUpgrade(ctx, database, func(ctx context.Context, database *sql.DB) error {
+		return goose.UpToContext(ctx, database, "migrations", 20261028000100)
+	})
+}
+
+// executeWorkspaceBackupUpgrade keeps the single migration effect separate from independently cancellable ACL cleanup.
+// Its callback seam permits native cancellation tests without substituting database transactions or catalog assertions.
+// executeWorkspaceBackupUpgrade отделяет единственный migration effect от independently cancellable ACL cleanup.
+// Callback позволяет проверить native cancellation без подмены database transactions или catalog assertions.
+func executeWorkspaceBackupUpgrade(ctx context.Context, database *sql.DB, migrate func(context.Context, *sql.DB) error) error {
 	if err := executeWorkspaceBackupStatement(ctx, database, "normalize.sql"); err != nil {
 		return err
 	}
-	migrationErr := goose.UpToContext(ctx, database, "migrations", 20261028000100)
+	migrationErr := migrate(ctx, database)
 	cleanup, stop := context.WithTimeout(context.WithoutCancel(ctx), workspaceBackupCleanupBudget)
 	defer stop()
 	return errors.Join(migrationErr, restoreWorkspaceBackupACL(cleanup, database))
