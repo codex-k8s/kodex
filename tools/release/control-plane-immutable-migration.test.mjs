@@ -927,7 +927,7 @@ test('combined017 SSH CLI rejects partial schema active work and incomplete sour
  }
  for(const sourceCase of ['future','missing-chain']) {
   const f=cli(t,'workspace-volume-ssh',sourceCase);const result=f.run('plan');
-  assert.notEqual(result.status,0);assert.match(result.stderr,/MIGRATION_NOT_SOURCE_HEAD/);
+  assert.notEqual(result.status,0);assert.match(result.stderr,sourceCase==='future'?/MIGRATION_NOT_SOURCE_HEAD/:/MIGRATION_SOURCE_CHAIN_INVALID/);
   assert.equal(f.read().calls.filter(a=>a.includes('create')||a.includes('patch')).length,0);
  }
 });

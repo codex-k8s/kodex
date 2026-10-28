@@ -8,6 +8,7 @@
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 
 DIRECTORY = Path(__file__).resolve().parent
@@ -72,6 +73,9 @@ END $combined_effect$;
     source = exact(source, " 'workspaceCatalog',true,", " 'workspaceCatalog',true,\n 'volumeCatalog',true,\n 'sshComposeProfile'," + ssh_fields)
     source = exact(source, "'profile','WORKSPACE_CHECKPOINT_V2'", "'profile','WORKSPACE_VOLUME_SSH_V1'")
     source = exact(source, "-- Generated: generate-workspace-checkpoint-proof.py; actual016 и inverse014 не смешиваются.", "-- Generated: generate-workspace-volume-ssh-proof.py; actual017+SSH и inverse014 не смешиваются.")
+    new_functions = sorted({name for path in MIGRATIONS.glob("20261026001[1-7]00_*.sql")
+                            for name in re.findall(r"CREATE FUNCTION control_plane\.(\w+)\(", path.read_text())})
+    assert len(new_functions) >= 20, "combined new function registry changed"
     # Остальные обязательные поля baseline010 и счётчики активной работы сохранены побайтно.
     absent = """ 'workspaceVolumeSSHAbsent',NOT EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
  WHERE n.nspname='control_plane' AND c.relname IN ('session_workspace_storage','session_workspace_volumes','session_workspace_volume_tasks','session_workspace_volume_attempts'))
@@ -83,6 +87,8 @@ END $combined_effect$;
  AND p.proname IN ('legacy_workflow_step_origin','workflow_exception_context_node','workflow_evidence_intent_valid','guard_workspace_volume_custody')),
 """
     pre = exact(pre, " 'sshComposeAbsent',", absent + " 'sshComposeAbsent',")
+    pre = exact(pre, "'legacy_workflow_step_origin','workflow_exception_context_node','workflow_evidence_intent_valid','guard_workspace_volume_custody'",
+                ",".join("'" + name + "'" for name in new_functions))
     return {"workspace-volume-catalog-guard.sql": guard,
             "workspace-volume-ssh-effect-guard.sql": projection.rstrip() + "\n",
             "workspace-volume-ssh-migration-postcondition.sql": source,
