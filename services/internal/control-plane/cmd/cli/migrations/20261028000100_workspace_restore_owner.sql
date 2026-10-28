@@ -1,5 +1,6 @@
 -- +goose Up
 -- Новый профиль расширяет только restore custody; применённые015/016/017/SSH неизменны.
+SET ROLE control_plane_owner;
 -- +goose StatementBegin
 DO $predecessor$
 BEGIN
@@ -19,7 +20,6 @@ BEGIN
  END IF;
 END $predecessor$;
 -- +goose StatementEnd
-SET ROLE control_plane_owner;
 SET LOCAL lock_timeout = '8s';
 SET LOCAL statement_timeout = '30s';
 -- Read-only точный каталог workspace; не читает business rows или секреты.
