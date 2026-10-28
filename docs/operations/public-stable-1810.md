@@ -2018,8 +2018,9 @@ production-бандла и его существующей отдачи Nginx:
 между двумя immutable images. Исходный Deployment и Pod должны иметь профиль
 `stable`, точные прежние source/provenance pins, digest image и каноническую
 команду без source mounts. Для архиватора сохраняется режим `controller`,
-а его worker image обновляется тем же digest. Для runtime-controller init
-подготовки spool использует тот же исходный image и точную команду; оба image
+а его worker image обновляется тем же digest. Для runtime-controller каждый
+прежний main/init digest закрепляется exact spec; init подготовки spool обязан
+принадлежать тому же canonical component и иметь точную команду. Оба image
 обновляются вместе. Runtime env, Secret references и sidecars сохраняются.
 
 | Переход | Полномочия и эффект | Проверка / неизвестный исход |

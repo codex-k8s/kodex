@@ -143,6 +143,29 @@ test("artifact spool init switches to the same compiled controller without losin
   assert.ok(after.template.spec.volumes.some(v => v.name === "artifact-spool"));
 });
 
+test("повторная поставка controller устраняет прежнее различие main и spool image", () => {
+  const hot = fixture("runtime-controller", "services/internal/runtime-controller", []);
+  const oldRelease = { ...release, component: "runtime-controller", image: "registry.local.kodex/kodex/runtime-controller@sha256:" + "a".repeat(64) };
+  const stable = structuredClone(hot);
+  const first = prepareGoCutover(hot, oldRelease);
+  stable.spec = first.patch.at(-1).value;
+  stable.metadata.labels = first.patch.find(p => p.path === "/metadata/labels").value;
+  stable.spec.template.spec.volumes.push({ name: "artifact-spool", emptyDir: { sizeLimit: "1Gi" } });
+  stable.spec.template.spec.initContainers = [{ name: "artifact-spool-init",
+    image: "registry.local.kodex/kodex/runtime-controller@sha256:" + "e".repeat(64),
+    command: ["/usr/local/bin/runtime-controller"],
+    args: ["--prepare-artifact-spool", "/var/lib/kodex/runtime-controller/artifact-spool"],
+    volumeMounts: [{ name: "artifact-spool", mountPath: "/var/lib/kodex/runtime-controller/artifact-spool" }] }];
+  const next = { ...oldRelease, image: oldRelease.image.replace(/a{64}$/, "f".repeat(64)) };
+  const result = prepareGoCutover(stable, next), after = result.patch.at(-1).value;
+  assert.equal(after.template.spec.containers[0].image, next.image);
+  assert.equal(after.template.spec.initContainers[0].image, next.image);
+  assert.deepEqual(applyReverseSpec(after, result.recovery.inverse), stable.spec);
+  const foreign = structuredClone(stable);
+  foreign.spec.template.spec.initContainers[0].image = next.image.replace("runtime-controller@", "control-plane@");
+  assert.throws(() => prepareGoCutover(foreign, next), /STABLE_SPOOL_INIT_INVALID/);
+});
+
 test("Go recovery material roundtrips source without copying unchanged credentials", () => {
   const value = fixture();
   value.spec.template.spec.containers[0].env.push({ name: "PRIVATE", value: "DO_NOT_COPY_PRIVATE_1810" });

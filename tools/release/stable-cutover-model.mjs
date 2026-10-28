@@ -108,7 +108,10 @@ export function prepareGoCutover(deployment, release, { storageClaims = [], sour
   requireValue(app.workingDir === undefined || (!stableSource && app.workingDir === `/workspace/${entry[0]}`), "CUTOVER_SOURCE_WORKDIR_UNSUPPORTED");
   const spoolInit = name === "runtime-controller" ? pod.initContainers?.find(c => c.name === "artifact-spool-init") : undefined;
   if (spoolInit) {
-    if (stableSource) requireValue(spoolInit.image === app.image &&
+    // Прежний адресный main-only rollout мог оставить older init image; exact spec CAS
+    // сохраняет оба прежних digest, а новая поставка синхронизирует их одним image.
+    if (stableSource) requireValue(/^registry\.local\.kodex\/kodex\/runtime-controller@sha256:[a-f0-9]{64}$/.test(spoolInit.image ?? "") &&
+      !spoolInit.image.endsWith("0".repeat(64)) &&
       JSON.stringify(spoolInit.command) === JSON.stringify(["/usr/local/bin/runtime-controller"]) &&
       JSON.stringify(spoolInit.args) === JSON.stringify(["--prepare-artifact-spool", "/var/lib/kodex/runtime-controller/artifact-spool"]),
     "CUTOVER_STABLE_SPOOL_INIT_INVALID");
