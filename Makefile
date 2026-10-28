@@ -499,3 +499,7 @@ test-application-restart:
 .PHONY: test-workspace-restore-owner-postgres
 test-workspace-restore-owner-postgres: check-go-toolchain
 	@timeout --kill-after=10s 300s bash scripts/tests/control-plane-postgres-test.sh --restore-owner
+
+.PHONY: test-workspace-backup-upgrade-postgres
+test-workspace-backup-upgrade-postgres: check-go-toolchain
+	@timeout --kill-after=10s 300s bash scripts/tests/control-plane-postgres-test.sh --workspace-backup-upgrade

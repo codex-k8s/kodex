@@ -19,6 +19,10 @@ test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestBootstrapComponent|T
 # Оба закрытых upgrade-сценария используют одну и ту же отдельную пустую БД.
 upgrade_test='^TestWorkflowReviewQAEvidenceForwardUpgrade$'
 volume_owner=false
+if [[ "$test_pattern" == --workspace-backup-upgrade ]]; then
+  upgrade_test='^TestWorkspaceBackupDefaultACLUpgrade$'
+  test_pattern=--review-qa-upgrade
+fi
 if [[ "$test_pattern" == --restore-owner ]]; then
   volume_owner=true
   upgrade_test='^TestWorkspaceRestoreOwnerMigration$'
