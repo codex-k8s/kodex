@@ -617,7 +617,11 @@ func TestBootstrapComponent(t *testing.T) {
 		testSystemAssistantCorePromptUpgrade(t, ctx, repository, pool)
 	})
 	t.Run("provider credential cleanup is durable fenced and exact", func(t *testing.T) {
-		testProviderCredentialCleanupLifecycle(t, ctx, repository, pool)
+		// Claim обслуживает глобальную очередь; собственная БД не смешивает задачи с прежними subtests.
+		isolated := newIsolatedAssistantComponentPool(t, ctx)
+		defer isolated.Close()
+		isolatedRepository := newSyntheticRuntimeComponentRepository(t, ctx, isolated)
+		testProviderCredentialCleanupLifecycle(t, ctx, isolatedRepository, isolated)
 	})
 	t.Run("interaction identity is owner bound scoped and revocable", func(t *testing.T) { testInteractionIdentity(t, ctx, repository, pool) })
 	t.Run("integration connection tests bind exact workload before replay", func(t *testing.T) { testIntegrationTestAuthority(t, ctx, repository) })

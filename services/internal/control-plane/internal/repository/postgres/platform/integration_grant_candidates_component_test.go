@@ -177,7 +177,12 @@ func testIntegrationGrantRevocation(t *testing.T, ctx context.Context, repositor
 	}
 	projection, err := service.ListIntegrationGrantConnectionCandidates(ctx, owner, query.IntegrationCandidates{Purpose: "GRANT", Filter: query.Filter{Query: unavailable.Connection.Name}})
 	if err != nil || projection.Total != 1 || len(projection.Items) != 1 || projection.Items[0].Grantable || projection.Items[0].Reason != "CONNECTION_UNAVAILABLE" {
-		t.Fatalf("unavailable grant candidate: %+v %v", projection, err)
+		observed, readErr := service.GetIntegrationConnection(ctx, owner, unavailable.Connection.Ref)
+		t.Logf("unavailable candidate metadata: total=%d items=%d read_ok=%t state=%s lifecycle=%s enabled=%t same_ref=%t same_definition=%t same_version=%t signed_project=%t capabilities=%d",
+			projection.Total, len(projection.Items), readErr == nil, observed.State, observed.LifecycleState, observed.Enabled,
+			observed.Ref == unavailable.Connection.Ref, observed.DefinitionDigest == unavailable.Connection.DefinitionDigest,
+			observed.Version == unavailable.Connection.Version, ownerScope.authorityProjectID != "", len(observed.Capabilities))
+		t.Fatalf("unavailable grant candidate: count=%d error_nil=%t", projection.Total, err == nil)
 	}
 }
 
