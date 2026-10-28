@@ -44,6 +44,9 @@ class RunnerBuildContextTests(unittest.TestCase):
                                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
             (source / '.env').write_text('PRIVATE_CANARY=never-send\n')
             (source / 'private.txt').write_text('never-send\n')
+            for path in source.rglob('*'):
+                if path.is_dir() and '.git' not in path.parts:
+                    path.chmod(0o775)
             if dirty:
                 (source / 'libs/go/probe.txt').write_text('changed\n')
             proof = area / 'proof.json'
@@ -57,6 +60,9 @@ context = pathlib.Path(sys.argv[-1])
 assert pathlib.Path(sys.argv[sys.argv.index('--file') + 1]).is_relative_to(context)
 files = {str(p.relative_to(context)): oct(p.stat().st_mode & 0o777)
          for p in context.rglob('*') if p.is_file()}
+assert all((p.stat().st_mode & 0o777) == 0o775
+           for p in context.rglob('*') if p.is_dir())
+assert (context.parent.stat().st_mode & 0o777) == 0o700
 pathlib.Path(os.environ['KODEX_CONTEXT_PROOF']).write_text(json.dumps(files))
 raise SystemExit(77)
 ''')

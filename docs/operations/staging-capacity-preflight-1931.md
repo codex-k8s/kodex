@@ -152,7 +152,8 @@ Build ENV не переносится в финальный runtime stage. RAM-m
 независимые стадии закреплённых инструментов сохраняют прежние cache keys.
 `tools/dev/build-local-runner.sh` передаёт в BuildKit приватный контекст только
 tracked inputs `services/jobs/agent-runner` и `libs/go` чистого exact HEAD.
-NUL-список Git и tar без обхода каталогов сохраняют mode исходных файлов,
+NUL-список Git с точными родительскими каталогами и tar без рекурсивного обхода
+сохраняют mode исходных файлов и каталогов,
 который входит в provenance и COPY cache key. Извлечение `git archive` под
 приватным umask меняло эти modes и инвалидировало тяжёлую установку инструментов;
 фактическая сборка была остановлена watchdog до получения образа.
