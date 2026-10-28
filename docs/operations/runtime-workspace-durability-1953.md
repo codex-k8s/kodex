@@ -4,7 +4,7 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.17
+version: 1.0.18
 updated: 2026-10-28
 ---
 
@@ -694,6 +694,41 @@ block уже известной PVC.
 | Restore | Accepted volume tuple и source checkpoint замораживаются в новом RESTORE intent; model не получает частичное дерево |
 | Purge | Отдельный owner protocol и positive physical cleanup; ledger/task/custody удаляются только через проверенный project purge graph после закрытия grants |
 
+### Физический исполнитель: текущая реализация
+
+В контроллере `session-archive` добавлен отдельный `CreateWorkspaceVolume`:
+только первая owner-selected attempt с заново подтверждённым grant выполняет
+один Create. Qualified profile явно требует `local-path` и прежние20ГиБ;
+существующий кластерный default не выбирает класс неявно. Положительный ответ
+сохраняется по UID и проверенным scope/geometry metadata. `AlreadyExists`,
+неизвестный ответ и reconciliation не запускают GET/adoption, новый Create
+либо удаление. Значения lease/fence в объект не передаются.
+
+Рендер PREPARE требует positive immutable ConfigMap UID и полный effective
+attempt digest. Единственный helper UID10001/GID29000 получает только input,
+точный PVC и временный каталог4МиБ. API token, provider auth, object-storage
+credentials и model revision не монтируются. Initial attempt запрашивает
+FSGroup29000 для EMPTY root; retries и отдельный read-only recovery не получают
+FSGroup и имеют read-only PVC source/mount. Job не получает TTL до owner ACK;
+backoff0, parallelism/completions1 и replacement policy `Failed` не являются
+доказательством однократного исполнения сами по себе.
+
+Отдельный observer проверяет original positive input/Job UID, свежий exact PVC
+UID в Bound, Job/Pod geometry, controller owner reference, все container statuses
+и bounded canonical ready record. Один `Succeeded`, label или termination message
+не даёт READY. Повторное объявление CLEAN-артефакта здесь отсутствует: record
+является внутренним физическим наблюдением, а не проверенным файлом пользователя.
+
+Это всё ещё незавершённый путь. Constructor/observer и fake-client tests
+не заменяют подключение owner-fenced цикла, исключение competing consumers,
+late ACK, cleanup после принятия owner, runtime delivery и native проверку.
+Новый Go-код пока не прошёл исполнение: capacity preflight закрыл тяжёлые
+проверки из-за свободного места. V2 остаётся выключенным.
+
+Для API Create и metadata UID использована актуальная документация Context7
+`/kubernetes/client-go`; семантика `PodReplacementPolicy=Failed` сверена также
+с исходниками закреплённого `k8s.io/api v0.36.3`.
+
 ### Транспорт очереди физического тома
 
 Четыре RPC `WorkspaceVolumeWorkService` зарегистрированы в control-plane;
@@ -742,8 +777,9 @@ rollback. Завершение включает подтверждение ис�
 Это проверка схемы, а не полный owner component или готовность V2. В текущем
 срезе реализованы отдельные таблицы custody/task/attempt, owner enqueue/claim
 и внутренние обработчики renewal/completion/failure; создание модели ждёт
-accepted volume record. RPC registry/transport и физический consumer, свежая
-runtime delivery, restore и protocol удаления должны быть подключены совместно
+accepted volume record. RPC registry/transport подключены в исходниках; физический
+consumer, свежая runtime delivery, restore и protocol удаления должны быть
+подключены совместно
 до включения. До появления положительного
 physical cleanup proof схема закрыто отклоняет `physical_deleted=true`, включая
 обычный CRUD. Наличие `PURGED` в закрытом перечне состояний не разрешает этот

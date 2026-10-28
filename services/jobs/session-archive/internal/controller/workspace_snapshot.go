@@ -35,9 +35,18 @@ func (controller *Controller) validWorkspaceWorkerPod(task model.Task, job *batc
 	if configured == nil {
 		return false
 	}
-	expected := configured.Spec.Template.Spec
-	actual := pod.Spec
-	if actual.SecurityContext == nil || actual.SecurityContext.FSGroup != nil ||
+	return validWorkspaceHelperPod(configured.Spec.Template.Spec, pod.Spec)
+}
+
+// validWorkspaceHelperPod compares the credential-free helper geometry while allowing the
+// existing API defaults outside authority fields. Expected FSGroup remains profile-selected:
+// archive workers have none; only the first empty-volume preparation may request one.
+// validWorkspaceHelperPod сравнивает credential-free helper geometry, сохраняя прежние допустимые
+// API defaults вне authority fields. Expected FSGroup выбирается profile: archive worker не имеет
+// FSGroup; только первая подготовка пустого тома может его запросить.
+func validWorkspaceHelperPod(expected, actual corev1.PodSpec) bool {
+	if actual.SecurityContext == nil || expected.SecurityContext == nil ||
+		!reflect.DeepEqual(actual.SecurityContext.FSGroup, expected.SecurityContext.FSGroup) ||
 		!reflect.DeepEqual(actual.SecurityContext.SupplementalGroups, expected.SecurityContext.SupplementalGroups) ||
 		!reflect.DeepEqual(actual.SecurityContext.SeccompProfile, expected.SecurityContext.SeccompProfile) ||
 		actual.HostNetwork || actual.HostPID || actual.HostIPC || actual.ShareProcessNamespace != nil && *actual.ShareProcessNamespace ||
