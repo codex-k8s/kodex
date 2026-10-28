@@ -111,6 +111,7 @@ func (value WorkspaceWriterAcknowledgement) Matches(input RunnerInput) bool {
 	return input.WorkspaceStorage != nil && input.WorkspaceStorage.ValidateForInput(input) == nil &&
 		value.Schema == WorkspaceWriterAcknowledgementSchema && value.Scope == input.WorkspaceStorage.Scope &&
 		value.WorkspaceRef == input.WorkspaceStorage.WorkspaceRef && value.Generation == input.WorkspaceStorage.Generation &&
+		(input.WorkspaceStorage.VolumeReady == nil || value.Writer.PVCUID == input.WorkspaceStorage.VolumeReady.Preparation.PVCUID) &&
 		validateWorkspaceWriter(value.Writer, false) == nil && workspaceWriterTupleMatches(value.Writer, input)
 }
 

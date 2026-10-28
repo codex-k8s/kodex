@@ -47,6 +47,9 @@ func bindWorkspaceWriter(ctx context.Context, input model.Input) (runtimecontrac
 // prepareBoundWorkspace — первый V2 initializer; запись начинается лишь после exact owner BIND.
 // Здесь PVC root подключён privately; последующие containers получают exact work subPath/proofs.
 func prepareBoundWorkspace(ctx context.Context, input model.Input) error {
+	if err := workspacepolicy.VerifyPreparedVolume(ctx, input); err != nil {
+		return runtimecontract.InitializationError("WORKSPACE_LAYOUT", initializationFilesystemReason(err), err)
+	}
 	ack, err := bindWorkspaceWriter(ctx, input)
 	if err != nil {
 		return runtimecontract.InitializationError("WORKSPACE_LAYOUT", "UNKNOWN", err)

@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.34
+version: 1.7.35
 updated: 2026-10-28
 ---
 
@@ -2018,6 +2018,13 @@ Payload/annotation и успешный mount не доказывают это п
 неподтверждённая custody блокируют data consumer без recursive repair.
 Проверка привязывается к реальному storage class и фактическим правам после
 повторного Pod: Pod Ready или декларации securityContext недостаточно.
+
+Accepted physical tuple сохраняется без потери полей на каждом переходе
+owner snapshot→Proto→immutable runtime input. Unknown nested wire data не
+отбрасываются молча. Consumer читает exact pinned PVC UID без Create/adoption,
+а trusted initializer до BIND/private write проверяет sealed root и record
+через nofollow descriptors. ACK для иного PVC UID не разрешает запись.
+Эта проверка не заменяет положительное завершение связанных процессов.
 
 Подготовка должна закрывать и delayed replay первого initializer после допуска
 private data. Один terminal Pod либо отсутствие Pods не запрещают поздний Create

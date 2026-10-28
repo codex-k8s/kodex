@@ -4,7 +4,7 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.19
+version: 1.0.20
 updated: 2026-10-28
 ---
 
@@ -764,11 +764,40 @@ Grace controller Pod65секунд покрывает bounded physical stop, ter
 budgets. Файлы, history и CLEAN-артефакты остаются разными контурами.
 
 Это по-прежнему незавершённый unit: нужны owner component/native qualification,
-передача принятого volume observation в runtime BIND/RESTORE, paired custody/purge
+полная доставка accepted process provenance в runtime BIND/RESTORE, paired custody/purge
 и общий migration/release profile. Новые Go-тесты, включая fake-client lifecycle
 и неизменность ACK при retry, ещё NOT RUN: capacity preflight закрыл тяжёлые
 проверки из-за свободного места. V2 остаётся выключенным; локальная форма
 конструктора, server dry-run Role и исходники не являются full PDLC acceptance.
+
+### Доставка sealed observation в запуск сотрудника
+
+Устранён статический разрыв: owner записывал `volume_ready` в immutable snapshot,
+но оба runtime caster молча отбрасывали его. Теперь owner→Proto→runtime-controller→
+RunnerInput сохраняет schema, весь preparation scope/task/PVC UID/incarnation и
+device/inode. Unknown nested Proto fields не отбрасываются: assigned storage
+закрыто отклоняется до materialization. Указанная identity не выдаёт новых grants.
+
+| Переход | Actor и проверяемые данные | Исход |
+| --- | --- | --- |
+| Принятое PREPARE → RuntimeRevision | Owner использует свою accepted custody и замороженный snapshot | Exact sealed tuple входит в существующий digest; новый physical effect не выполняется |
+| RuntimeRevision → RunnerInput | Сервисный runtime-controller сохраняет все поля и проверяет scope | Invalid/unknown metadata отклоняется; fallback отсутствует |
+| V2 materialization → PVC read | Controller делает только GET; проверяет accepted UID, Bound/PV, версию, class20GiB, metadata workspace/incarnation | Missing/recycled/changed PVC отклоняется без Create, promotion или repair |
+| Materialization → первый initializer | Runtime сохраняет FSGroup29000/OnRootMismatch для штатной Secret/ConfigMap/emptyDir delivery; actual PVC предварительно подготовлен отдельным EMPTY-only helper | Admission и observer не меняются; sealed root и приватные modes требуют отдельной native qualification |
+| Первый initializer → BIND | До callback и private write descriptor/nofollow read проверяет sealed root device/inode и immutable record | Отсутствующий, writable, linked либо иной record закрыто отклоняется без chmod/chown/create |
+| BIND → private generation | Существующий authenticated owner CAS; ACK содержит тот же accepted PVC UID | Перед записью root повторно читается; другой UID не принимается |
+
+Это передача sealed physical identity, а не полная доставка accepted Job/Pod
+provenance. Для оставшихся гонок consumer release, RESTORE и terminal custody
+нужна отдельная owner-pinned process observation; inode file её не заменяет.
+Прямые Go-тесты caster/RunnerInput, read-only PVC admission, sealed filesystem
+и ACK добавлены, но ещё **NOT RUN**. Выполнены только
+форматирование и `git diff --check`; staging policy/Role/images не менялись.
+
+Для FSGroup отдельный запрос Context7 `/kubernetes/client-go` не нашёл
+релевантных материалов. Проверена [официальная документация Kubernetes о
+volume ownership](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#configure-volume-permission-and-ownership-change-policy-for-pods);
+это проверка API-семантики, не доказательство поведения нашего storage driver.
 
 Для API Create и metadata UID использована актуальная документация Context7
 `/kubernetes/client-go`; семантика `PodReplacementPolicy=Failed` сверена также
