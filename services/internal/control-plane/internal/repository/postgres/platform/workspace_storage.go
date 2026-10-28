@@ -68,7 +68,8 @@ func (repository *Repository) prepareSessionWorkspaceTx(ctx context.Context, tx 
 	err := tx.QueryRow(ctx, queryWorkspaceStorageLock, arguments).Scan(&reference, &generation, &state)
 	if errors.Is(err, pgx.ErrNoRows) {
 		if !activated {
-			return nil, true, nil
+			// Единственный legacy-допуск уже проверил отсутствие любой V2 row.
+			return nil, false, errs.ErrConflict
 		}
 		reference, err = newRef("wks")
 		if err != nil {

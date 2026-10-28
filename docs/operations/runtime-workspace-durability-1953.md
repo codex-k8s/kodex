@@ -4,7 +4,7 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.21
+version: 1.0.22
 updated: 2026-10-28
 ---
 
@@ -28,6 +28,24 @@ group29000/mode2770 после BIND через общий nofollow/exclusive dir
 
 Этот документ фиксирует согласованный контракт. Наличие типов, миграции или
 локального теста само по себе не подтверждает доставку либо полную готовность.
+
+Выключение профиля не разрешает потерять уже существующий V2-каталог.
+Прежний путь допускается только после блокировки доверенной session и
+положительного доказательства отсутствия любой V2 row для неё. Если V2 row
+есть, но exact organization/project/agent lookup её не возвращает, результат —
+`Conflict`, без пустого legacy mount. Соответствующая native-проверка временно
+подменяет agent только в откатываемой транзакции отдельной loopback-БД;
+metadata guard снова включён до runtime admission. Повышенные права этой
+оснастки не предоставляются production worker. Семантика PostgreSQL
+`ALTER TABLE ... ENABLE/DISABLE TRIGGER` проверена через Context7
+`/websites/postgresql`.
+
+| Профиль и данные | Допуск |
+| --- | --- |
+| OFF, V2 row отсутствует | Прежний legacy путь после exact session lock |
+| OFF, V2 row совпадает | Каталог сохранён, нового model claim нет |
+| OFF, V2 row существует, scope не совпадает | `Conflict`, без fallback либо записи нового дерева |
+| ON, данных ещё нет | Прежний CREATE/PREPARE до model claim |
 
 ## Authority и жизненный цикл
 
