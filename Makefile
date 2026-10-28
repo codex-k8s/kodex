@@ -487,3 +487,7 @@ test-static-backup-identity-plan:
 test-static-backup-identity-operator:
 	@timeout 60s python3 -B -m unittest discover -s tools/dev -p 'test_static_backup_identity_*.py'
 	@timeout 60s python3 -B tools/dev/test_scoped_backup_drill.py
+
+.PHONY: test-application-restart
+test-application-restart:
+	@timeout 60s node --test tools/release/application-restart.test.mjs tools/release/scoped-release.test.mjs
