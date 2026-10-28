@@ -177,7 +177,6 @@ func testIntegrationGrantRevocation(t *testing.T, ctx context.Context, repositor
 	if _, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "selector-unavailable-grant", ExpectedVersion: &stale}, Payload: command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: unavailable.Connection.Ref, AgentRef: agent.Ref, CapabilityKey: "synthetic.journal.read", Enabled: true}}); !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("unavailable connection before OCC: %v", err)
 	}
-	testIntegrationCandidatePlanModes(t, ctx, repository, owner, unavailable.Connection.Name)
 	projectionStarted := time.Now()
 	projection, err := service.ListIntegrationGrantConnectionCandidates(ctx, owner, query.IntegrationCandidates{Purpose: "GRANT", Filter: query.Filter{Query: unavailable.Connection.Name}})
 	if err != nil || projection.Total != 1 || len(projection.Items) != 1 || projection.Items[0].Grantable || projection.Items[0].Reason != "CONNECTION_UNAVAILABLE" {
@@ -188,6 +187,7 @@ func testIntegrationGrantRevocation(t *testing.T, ctx context.Context, repositor
 			observed.Version == unavailable.Connection.Version, ownerScope.authorityProjectID != "", len(observed.Capabilities), time.Since(projectionStarted).Milliseconds(), errors.Is(err, errs.ErrUnavailable), errors.Is(err, errs.ErrForbidden))
 		t.Fatalf("unavailable grant candidate: count=%d error_nil=%t", projection.Total, err == nil)
 	}
+	testIntegrationCandidatePlanModes(t, ctx, repository, owner, unavailable.Connection.Name)
 }
 
 // testIntegrationGrantWorkflow checks workflow recipient grants and immutable publication pins do

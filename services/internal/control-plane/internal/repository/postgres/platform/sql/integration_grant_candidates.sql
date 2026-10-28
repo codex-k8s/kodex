@@ -1,5 +1,15 @@
 -- name: integration_grant_candidates :one
-WITH admission_source AS MATERIALIZED (
+WITH admission_inputs AS MATERIALIZED (
+    -- Поиск connection выполняется до разворачивания recipient/capability rows.
+    -- Это только сужение кандидатов; полный авторитетный admission остаётся ниже.
+    SELECT connection.ref AS connection_ref
+    FROM control_plane.integration_connections connection
+    WHERE @stage='CONNECTION' AND connection.organization_id=@organization_id::uuid
+      AND (@connection_ref='' OR connection.ref=@connection_ref)
+      AND (@query='' OR strpos(lower(connection.name || ' ' || connection.ref),lower(@query))>0)
+    UNION ALL
+    SELECT @connection_ref WHERE @stage<>'CONNECTION'
+), admission_source AS MATERIALIZED (
     SELECT admission.*, connection.name AS connection_name, definition.name AS provider_name,
            CASE @stage WHEN 'CONNECTION' THEN 'integration.view'
                        WHEN 'PROJECT' THEN 'project.view'
@@ -15,9 +25,10 @@ WITH admission_source AS MATERIALIZED (
                        WHEN 'PROJECT' THEN project.created_by ELSE recipient.owner_id END AS visibility_owner_id,
            CASE WHEN @stage IN ('CONNECTION','PROJECT') THEN '{}'::jsonb
                 ELSE recipient.related_ids END AS visibility_related_ids
-    FROM control_plane.integration_grant_admission(
+    FROM admission_inputs input
+    CROSS JOIN LATERAL control_plane.integration_grant_admission(
       @organization_id::uuid,@actor_id::uuid,NULLIF(@authority_project_id,'')::uuid,
-      @connection_ref,@project_ref,@recipient_kind,@recipient_ref,@capability_key,
+      input.connection_ref,@project_ref,@recipient_kind,@recipient_ref,@capability_key,
       @purpose,@workflow_capabilities::text[]
     ) admission
     JOIN control_plane.integration_connections connection ON connection.id=admission.connection_id

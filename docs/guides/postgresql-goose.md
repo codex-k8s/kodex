@@ -4,7 +4,7 @@ title: PostgreSQL, именованные SQL-запросы и goose
 type: guide
 status: approved
 owner: developer
-version: 1.2.10
+version: 1.2.11
 updated: 2026-10-28
 ---
 
@@ -349,9 +349,21 @@ graph и catalog assertions. Нельзя назвать inverse version реа�
 Изменившийся CHECK получает отдельный successor query с exact discriminator;
 исходный historical query остаётся неизменным. Пример — expiry с закрытой
 веткой `closure_kind='SUPERSEDED'`, не разрешающей новое решение человека.
-Test-only pgx tracing использует только SQLSTATE, constraint, query digest и
-разобранные function/line frames, без SQL/arguments/Message/Detail/Where.
-API `QueryTracer` проверен через Context7 `/jackc/pgx`.
+Test-only pgx tracing использует только SQLSTATE, constraint, query digest,
+время/признаки отказа и разобранные function/line frames, без
+SQL/arguments/Message/Detail/Where. API `QueryTracer` проверен через Context7
+`/jackc/pgx`.
+
+Selector с общим параметризованным SQL проверяется на наполненной native-базе
+при `force_custom_plan` и `force_generic_plan` в прежнем API deadline. Один
+успешный адресный повтор не исключает деградацию общего prepared plan.
+Буквальный поиск CONNECTION допускается перенести до materialized admission
+только внутри точного organization и без нового лимита: каждый выбранный ref
+всё ещё проходит полный admission и visibility; count/page применяются после
+них. Для остальных стадий исходный контекст сохраняется. До плановых проб
+проверяется обычный публичный read path, чтобы прогрев не скрывал исходный
+отказ. Настройки PostgreSQL не меняются глобально. Семантика PREPARE и
+`plan_cache_mode` проверена через Context7 `/websites/postgresql`.
 
 Для owner-approved web-first reset установка создаётся с нуля. Активный
 control-plane содержит одну baseline migration, которая создаёт только новую
