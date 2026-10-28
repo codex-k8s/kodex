@@ -2,7 +2,6 @@ package platform
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -11,8 +10,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// TestWorkflowExceptionContextMigrationProofComponent executes the shipped read-only012 proof on canonical and independently drifted disposable clones; it never prepares business rows.
-// TestWorkflowExceptionContextMigrationProofComponent исполняет поставляемую read-only012 proof на canonical и отдельно изменённых disposable clones без подготовки business rows.
+// TestWorkflowExceptionContextMigrationProofComponent checks context invariants through the explicit inverse014 projection of the current017+SSH proof.
+// Actual schema version and graph remain separately checked; all original context counterfactuals execute in isolated clones without business rows.
+// TestWorkflowExceptionContextMigrationProofComponent проверяет context invariants через явную inverse014 projection текущего017+SSH proof.
+// Actual schema version и graph проверяются отдельно; все прежние context counterfactuals исполняются в isolated clones без business rows.
 func TestWorkflowExceptionContextMigrationProofComponent(t *testing.T) {
 	for _, fixture := range []struct{ name, rejected string }{
 		{"canonical", ""}, {"public_execute", "workflowContextFunctions"}, {"security_definer", "workflowContextFunctions"},
@@ -49,26 +50,8 @@ func TestWorkflowExceptionContextMigrationProofComponent(t *testing.T) {
 					t.Fatal("apply disposable rework schema drift")
 				}
 			}
-			source, err := os.ReadFile("../../../../../../../tools/release/workflow-upstream-rework-migration-postcondition.sql")
-			if err != nil {
-				t.Fatal("read shipped rework schema proof")
-			}
-			results, err := conn.PgConn().Exec(ctx, string(source)).ReadAll()
-			if err != nil {
-				t.Fatal("execute shipped rework schema proof")
-			}
-			var proof map[string]any
-			for _, result := range results {
-				if result.Err != nil {
-					t.Fatal("rework proof statement failed")
-				}
-				if len(result.Rows) == 1 && len(result.Rows[0]) == 1 {
-					if proof != nil || json.Unmarshal(result.Rows[0][0], &proof) != nil {
-						t.Fatal("decode unique rework schema proof")
-					}
-				}
-			}
-			if proof["readOnly"] != "on" || proof["database"] != runtime.Database || proof["gooseVersion"] != float64(20261026001300) || proof["legacyReworkProfile"] != "LEGACY_OWNER_REWORK_V1" || proof["workflowExceptionContextProfile"] != "SERVER_EXCEPTION_CONTEXT_V1" {
+			actual, proof := readWorkspaceVolumeSchemaProof(t, ctx, conn)
+			if proof["legacyReworkProfile"] != "LEGACY_OWNER_REWORK_V1" || proof["workflowExceptionContextProfile"] != "SERVER_EXCEPTION_CONTEXT_V1" {
 				t.Fatal("rework schema proof identity mismatch")
 			}
 			if fixture.rejected != "" {
@@ -77,6 +60,7 @@ func TestWorkflowExceptionContextMigrationProofComponent(t *testing.T) {
 				}
 				return
 			}
+			assertWorkspaceVolumeSchemaCanonical(t, actual)
 			for _, field := range []string{"schemaOwner", "columns", "constraints", "indexes", "triggers", "functionSources", "functionMetadata", "functionACL",
 				"visibilitySource", "retentionSource", "runtimeColumnAccess", "purgeGraphGuard", "bundleNoBodyColumns", "bundleGuard",
 				"tableOwners", "runtimeRolesUnprivileged", "runtimeRead", "runtimeMutationDenied", "runtimeColumnMutationDenied", "runtimeGrantOptionDenied",

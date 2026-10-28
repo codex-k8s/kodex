@@ -7461,12 +7461,21 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 // завершает тест; helper не запускает run и не выбирает другой claim.
 func claimAndCompleteRun(t *testing.T, ctx context.Context, service *platformservice.Service, worker value.Principal, expectedRunRef, key string, artifact bool) command.Result {
 	t.Helper()
+	return completeClaimedExecution(t, ctx, service, worker, claimComponentExecution(t, ctx, service, worker, expectedRunRef, key), key, artifact)
+}
+
+// claimComponentExecution requires one exact fixture execution and never logs claim bodies, fences or provider metadata.
+// It preserves the original claim key, workload, limit and failure behavior for completion and workflow fixtures.
+// claimComponentExecution требует один exact fixture execution и не логирует claim bodies, fences либо provider metadata.
+// Сохраняет прежние claim key, workload, limit и failure behavior для completion и workflow fixtures.
+func claimComponentExecution(t *testing.T, ctx context.Context, service *platformservice.Service, worker value.Principal, expectedRunRef, key string) map[string]any {
+	t.Helper()
 	claimed, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: key + "-claim"}, Payload: command.LeaseInput{WorkloadInstance: "runtime-test", Limit: 1}})
 	if err != nil || len(claimed.RuntimeItems) != 1 || stringMap(claimed.RuntimeItems[0], "runRef") != expectedRunRef {
-		t.Fatalf("claim %s execution: expected_run=%s claims=%#v err=%v", key, expectedRunRef, claimed.RuntimeItems, err)
+		t.Fatalf("claim %s execution: expected_run=%s count=%d error_nil=%t", key, expectedRunRef, len(claimed.RuntimeItems), err == nil)
 	}
-	return completeClaimedExecution(t, ctx, service, worker, claimed.RuntimeItems[0], key, artifact)
+	return claimed.RuntimeItems[0]
 }
 
 // completeClaimedExecution forwards the supplied fixture lease, context, worker, key and artifact

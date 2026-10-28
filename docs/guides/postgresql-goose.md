@@ -4,8 +4,8 @@ title: PostgreSQL, именованные SQL-запросы и goose
 type: guide
 status: approved
 owner: developer
-version: 1.2.9
-updated: 2026-10-27
+version: 1.2.10
+updated: 2026-10-28
 ---
 
 # PostgreSQL, именованные SQL-запросы и goose
@@ -338,6 +338,20 @@ CREATE TABLE domain_entities (
 имени функции само по себе не доказывает защиту всех UPDATE. Эти отказы
 проверяются исполнением того же read-only запроса на отдельных disposable
 схемах с адресно изменёнными CHECK и trigger, а не только mock boolean.
+
+Component-проверка указывает фактическую схему своего template. Один и тот же
+Goose head не различает010+SSH и017+SSH: выбор closed verifier учитывает
+фактически применённую017. Старый verifier не расширяется ради нового template.
+Проверки прежних workflow-инвариантов могут использовать явно помеченную
+inverse014-проекцию полного017+SSH proof, сохраняя отдельные actual version,
+graph и catalog assertions. Нельзя назвать inverse version реально
+обслуживаемой версией БД. Все прежние DDL counterfactuals сохраняются.
+Изменившийся CHECK получает отдельный successor query с exact discriminator;
+исходный historical query остаётся неизменным. Пример — expiry с закрытой
+веткой `closure_kind='SUPERSEDED'`, не разрешающей новое решение человека.
+Test-only pgx tracing использует только SQLSTATE, constraint, query digest и
+разобранные function/line frames, без SQL/arguments/Message/Detail/Where.
+API `QueryTracer` проверен через Context7 `/jackc/pgx`.
 
 Для owner-approved web-first reset установка создаётся с нуля. Активный
 control-plane содержит одну baseline migration, которая создаёт только новую

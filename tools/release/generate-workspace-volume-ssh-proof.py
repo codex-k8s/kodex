@@ -34,6 +34,14 @@ def generate() -> dict[str, str]:
     source = frozen("workspace-checkpoint-migration-postcondition.sql", "76528e1cd7ef049f89de743094edabc56b06ae5790588938bfb67e4330724b2f")
     ssh = frozen("ssh-compose-migration-postcondition.sql", "ac3f6d6efc5cbf11d2c23941c255623c26599ac8ddff04853515724e897ddc62")
     pre = frozen("ssh-compose-migration-precondition.sql", "ed3df9c1fede8de706b18124db8a7aaaa8b0113032f3420fff142d7404e2dfb9")
+    expiry = frozen("owner-gate-expiry-migration-postcondition.sql", "38ea1e78b72cd9c60d0abfe652b107c5d9f8b7334a760377d45903050b4579e6")
+    old_resolution = re.findall(r"'resolutionConstraint',EXISTS.*?definition=\$expected\$(.*?)\$expected\$", expiry, re.DOTALL)
+    new_resolution = re.findall(r"AND c\.conname='owner_gates_resolution_check'.*?\$expected\$(.*?)\$expected\$", source, re.DOTALL)
+    assert len(old_resolution) == len(new_resolution) == 1, "expiry successor resolution shape changed"
+    expiry = exact(expiry, old_resolution[0], new_resolution[0])
+    expiry = exact(expiry, "'readOnly',", "'profile','OWNER_GATE_EXPIRY_WORKFLOW_V1',\n    'readOnly',")
+    expiry = exact(expiry, "-- name: owner_gate_expiry_migration_postcondition", "-- name: owner_gate_expiry_current_postcondition")
+    expiry = "-- Generated: generate-workspace-volume-ssh-proof.py; exact expiry с закрытым SUPERSEDED discriminator.\n" + expiry
     readback = (ROOT / "services/internal/control-plane/cmd/cli/testdata/sql/volume_catalog_readback.sql").read_text().strip()
     expected = json.loads((DIRECTORY / "workspace-volume-catalog-fingerprints.json").read_text())
     query = exact(readback, "\n);", "\n) INTO v_actual;")
@@ -90,6 +98,7 @@ END $combined_effect$;
     pre = exact(pre, "'legacy_workflow_step_origin','workflow_exception_context_node','workflow_evidence_intent_valid','guard_workspace_volume_custody'",
                 ",".join("'" + name + "'" for name in new_functions))
     return {"workspace-volume-catalog-guard.sql": guard,
+            "owner-gate-expiry-current-postcondition.sql": expiry,
             "workspace-volume-ssh-effect-guard.sql": projection.rstrip() + "\n",
             "workspace-volume-ssh-migration-postcondition.sql": source,
             "workspace-volume-ssh-migration-precondition.sql": pre}

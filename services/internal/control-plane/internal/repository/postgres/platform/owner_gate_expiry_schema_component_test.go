@@ -24,9 +24,9 @@ var ownerGateExpiryWrongGrouping string
 //go:embed testdata/sql/owner_gate_expiry_partial_trigger.sql
 var ownerGateExpiryPartialTrigger string
 
-// TestOwnerGateExpiryMigrationProofComponent executes the shipped read-only schema proof against
+// TestOwnerGateExpiryMigrationProofComponent executes the shipped current read-only schema proof, preserving the exact SUPERSEDED branch, against
 // valid and deliberately drifted disposable databases. No staging or business state is modified.
-// TestOwnerGateExpiryMigrationProofComponent исполняет поставляемый read-only запрос на правильной
+// TestOwnerGateExpiryMigrationProofComponent исполняет текущий поставляемый read-only запрос с сохранением exact SUPERSEDED branch на правильной
 // и намеренно изменённых одноразовых схемах. Staging и бизнес-состояние не изменяются.
 func TestOwnerGateExpiryMigrationProofComponent(t *testing.T) {
 	for _, fixture := range []struct{ name, mutation, rejectedField string }{
@@ -63,7 +63,7 @@ func TestOwnerGateExpiryMigrationProofComponent(t *testing.T) {
 					t.Fatal("apply disposable expiry schema drift")
 				}
 			}
-			source, err := os.ReadFile("../../../../../../../tools/release/owner-gate-expiry-migration-postcondition.sql")
+			source, err := os.ReadFile("../../../../../../../tools/release/owner-gate-expiry-current-postcondition.sql")
 			if err != nil {
 				t.Fatal("read shipped expiry schema proof")
 			}
@@ -82,7 +82,7 @@ func TestOwnerGateExpiryMigrationProofComponent(t *testing.T) {
 					}
 				}
 			}
-			if proof["readOnly"] != "on" || proof["database"] != runtime.Database || proof["gooseVersion"] != float64(20261027000100) || proof["tableOwner"] != "control_plane_owner" {
+			if proof["profile"] != "OWNER_GATE_EXPIRY_WORKFLOW_V1" || proof["readOnly"] != "on" || proof["database"] != runtime.Database || proof["gooseVersion"] != float64(20261027000100) || proof["tableOwner"] != "control_plane_owner" {
 				t.Fatal("expiry schema proof identity mismatch")
 			}
 			for _, field := range []string{"expiryColumn", "stateConstraint", "resolutionConstraint", "expiryConstraint", "dueIndex", "immutableGuard", "runtimeExecute", "publicExecuteRevoked"} {
