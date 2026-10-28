@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"testing"
 
@@ -67,10 +68,14 @@ func TestBuildInputManifestsPreservesValidationOrder(t *testing.T) {
 			if err == nil || err.Error() != want || partial != nil || combined.Bytes != nil {
 				t.Fatalf("validation ordering or partial result changed: %v", err)
 			}
-			for _, err := range []error{materializeInputArtifacts(t.Context(), bad, nil), verifyInputArtifacts(bad)} {
-				if err == nil || err.Error() != want {
-					t.Fatalf("caller validation ordering changed: %v", err)
-				}
+			materializationErr := materializeInputArtifacts(t.Context(), bad, nil)
+			stage, reason := runtimecontract.InitializationErrorDetails(materializationErr)
+			cause := errors.Unwrap(materializationErr)
+			if cause == nil || cause.Error() != want || stage != "INPUT_MANIFEST" || reason != "INPUT_INVALID" || materializationErr.Error() == want {
+				t.Fatal("materialization validation ordering or closed diagnostic changed")
+			}
+			if err := verifyInputArtifacts(bad); err == nil || err.Error() != want {
+				t.Fatalf("verification validation ordering changed: %v", err)
 			}
 			entries, err := os.ReadDir(bad.WorkspaceRoot)
 			if err != nil || len(entries) != 0 {

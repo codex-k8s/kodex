@@ -21,7 +21,6 @@ export function syntheticJourneyProfiles(): SyntheticJourneyProfile[] {
       { width: 2900, height: 1600 },
       { width: 2560, height: 1440 },
       { width: 1920, height: 1080 },
-      { width: 1440, height: 900 },
       { width: 1280, height: 900 },
       { width: 900, height: 1080 },
     ].map(({ width, height }) => ({
@@ -29,6 +28,12 @@ export function syntheticJourneyProfiles(): SyntheticJourneyProfile[] {
       height,
       part: "ALL" as const,
       title: `synthetic: Home и ассистент ${String(width)}px`,
+    })),
+    ...mobileJourneyParts.map((part) => ({
+      width: 1440,
+      height: 900,
+      part,
+      title: `synthetic: desktop1440 ${part}`,
     })),
     ...mobileJourneyParts.map((part) => ({
       width: 390,

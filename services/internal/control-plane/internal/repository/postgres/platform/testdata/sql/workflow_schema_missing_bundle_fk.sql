@@ -1,0 +1,2 @@
+-- name: workflow_schema_missing_bundle_fk :exec
+ALTER TABLE control_plane.repository_bundle_publications DROP CONSTRAINT repository_bundle_publications_approver_id_fkey;

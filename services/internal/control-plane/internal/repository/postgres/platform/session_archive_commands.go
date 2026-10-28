@@ -49,6 +49,9 @@ func (repository *Repository) changeSessionArchive(ctx context.Context, tx pgx.T
 		input.Principal.Permission != sessionArchivePermission(input.Kind) {
 		return commandOutcome{}, errs.ErrForbidden
 	}
+	if outcome, found, err := repository.changeWorkspaceArchive(ctx, tx, scope, input, payload); found || err != nil {
+		return outcome, err
+	}
 	locked, err := repository.lockSessionArchiveTask(ctx, tx, scope, payload)
 	if err != nil {
 		return commandOutcome{}, err
@@ -57,7 +60,7 @@ func (repository *Repository) changeSessionArchive(ctx context.Context, tx pgx.T
 	retryScheduled := false
 	switch input.Kind {
 	case command.CompleteSessionSnapshot:
-		if locked.kind != "SNAPSHOT" || payload.FormatVersion != 1 || payload.ObjectKey != locked.objectKey ||
+		if locked.kind != "SNAPSHOT" || payload.FormatVersion != 1 || payload.SnapshotSourceSHA256 != "" || payload.SourceEntryCount != 0 || payload.ObjectKey != locked.objectKey ||
 			len(payload.ObjectVersion) > 1024 || payload.ObjectETag == "" ||
 			!validSessionArchiveDigest(payload.ObjectDigest) || payload.ObjectSizeBytes < 1 || payload.ObjectSizeBytes > 68<<20 ||
 			payload.SourceSizeBytes != locked.sourceSizeBytes {

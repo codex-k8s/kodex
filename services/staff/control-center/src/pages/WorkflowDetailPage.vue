@@ -12,9 +12,19 @@ import { computed, onBeforeUnmount, reactive, ref, useId, watch } from "vue";
 import { useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useUnsavedChanges } from "@/shared/ui/unsaved-changes";
+import { requestConfirmation } from "@/shared/ui/confirmation";
+import WorkflowReworkPolicyControl from "@/features/workflows/WorkflowReworkPolicyControl.vue";
+import WorkflowResultContractEditor from "@/features/workflows/WorkflowResultContractEditor.vue";
+import {
+  newWorkflowStepKey,
+  validWorkflowDAG,
+  workflowEvidenceProfileSteps,
+  workflowModeSteps,
+} from "@/features/workflows/result-contract";
 import type {
   WorkflowInputFieldInput,
   WorkflowStepInput,
+  WorkflowResultRequirement,
 } from "@/shared/api/generated/openapi/types.gen";
 import { usePlatformStore } from "@/features/platform/store";
 import { workflowLaunchReadiness } from "@/features/platform/workflow-launch";
@@ -144,6 +154,9 @@ const gateDecisionOptions = [
   "CANCEL",
 ] as const;
 const form = reactive({
+  reworkPolicy: "" as "" | "OWNER_APPROVED_UPSTREAM_V1",
+  executionMode: "MANAGER_DRIVEN" as "MANAGER_DRIVEN" | "SERVER_DAG_V1",
+  resultEvidenceProfile: undefined as "GITHUB_REVIEW_QA_V1" | undefined,
   name: "",
   purpose: "",
   coordinatorAgentRef: "",
@@ -154,6 +167,102 @@ const form = reactive({
   steps: [] as WorkflowStepInput[],
 });
 const savedForm = ref("");
+const serverMode = computed(() => form.executionMode === "SERVER_DAG_V1");
+const validDAG = computed(
+  () =>
+    !serverMode.value ||
+    validWorkflowDAG(
+      form.steps,
+      form.maxConcurrency,
+      form.name +
+        form.purpose +
+        form.completionCriteria +
+        form.steps
+          .map((step) => step.name + step.purpose + step.expectedResult)
+          .join(""),
+      "ref",
+      form.reworkPolicy,
+      form.resultEvidenceProfile,
+    ),
+);
+function changeEvidenceProfile(event: Event): void {
+  if (
+    !canEdit.value ||
+    busy.value ||
+    !(event.target instanceof HTMLSelectElement)
+  )
+    return;
+  const value = event.target.value;
+  if (value !== "" && value !== "GITHUB_REVIEW_QA_V1") return;
+  form.resultEvidenceProfile = value || undefined;
+  form.steps = workflowEvidenceProfileSteps(
+    form.steps,
+    form.resultEvidenceProfile,
+  );
+}
+function modeEditable(): boolean {
+  return canEdit.value === true && !busy.value;
+}
+async function changeMode(event: Event): Promise<void> {
+  const target = event.target as HTMLSelectElement;
+  const mode = target.value;
+  target.value = form.executionMode;
+  if (
+    !modeEditable() ||
+    (mode !== "MANAGER_DRIVEN" && mode !== "SERVER_DAG_V1") ||
+    mode === form.executionMode
+  )
+    return;
+  const before = JSON.stringify(form);
+  const generation = loadGeneration;
+  const context = `${projectRef.value}/${workflowRef.value}`;
+  if (
+    !(await requestConfirmation(t("workflowResults.modeChange"))) ||
+    !modeEditable() ||
+    loadGeneration !== generation ||
+    context !== `${projectRef.value}/${workflowRef.value}` ||
+    JSON.stringify(form) !== before
+  )
+    return;
+  form.steps = workflowModeSteps(form.steps, mode, "ref", true);
+  form.executionMode = mode;
+  if (mode !== "SERVER_DAG_V1") form.resultEvidenceProfile = undefined;
+  if (mode !== "SERVER_DAG_V1") form.reworkPolicy = "";
+}
+// Повторный вызов после await читает актуальные режим и разрешение редактирования.
+function reworkModeEditable(): boolean {
+  return modeEditable() && serverMode.value;
+}
+async function changeReworkPolicy(
+  value: "" | "OWNER_APPROVED_UPSTREAM_V1",
+): Promise<void> {
+  if (!reworkModeEditable() || value === form.reworkPolicy) return;
+  const before = JSON.stringify(form),
+    generation = loadGeneration;
+  const context = `${projectRef.value}/${workflowRef.value}`;
+  if (
+    !(await requestConfirmation(t("workflowResults.reworkChange"))) ||
+    !reworkModeEditable() ||
+    loadGeneration !== generation ||
+    context !== `${projectRef.value}/${workflowRef.value}` ||
+    JSON.stringify(form) !== before
+  )
+    return;
+  form.reworkPolicy = value;
+}
+function changeResultStep(
+  step: WorkflowStepInput,
+  field: "ref" | "dependsOn" | "resultRequirements",
+  value: unknown,
+): void {
+  if (!canEdit.value || busy.value || !form.steps.includes(step)) return;
+  if (field === "ref" && typeof value === "string") step.ref = value;
+  else if (field === "dependsOn" && Array.isArray(value))
+    step.dependsOn = value as string[];
+  // Ввод может быть незавершённым; validDAG закрывает сохранение до полной проверки.
+  else if (field === "resultRequirements" && Array.isArray(value))
+    step.resultRequirements = value as WorkflowResultRequirement[];
+}
 const dirty = computed(
   () => savedForm.value !== "" && JSON.stringify(form) !== savedForm.value,
 );
@@ -265,6 +374,12 @@ function toggleCapability(
   if (index >= 0 && !enabled) step.requiredCapabilityKeys.splice(index, 1);
   else if (index < 0 && enabled) step.requiredCapabilityKeys.push(key);
 }
+function setApprovalTimeout(step: WorkflowStepInput, event: Event) {
+  const value = (event.target as HTMLInputElement).value;
+  if (value === "") delete step.approvalTimeoutSeconds;
+  else step.approvalTimeoutSeconds = Number(value);
+}
+
 function toggleDecision(
   step: WorkflowStepInput,
   decision: WorkflowStepInput["gateDecisions"][number],
@@ -274,9 +389,21 @@ function toggleDecision(
   else step.gateDecisions.push(decision);
 }
 function addStep() {
-  if (!canEdit.value) return;
+  if (
+    !canEdit.value ||
+    busy.value ||
+    form.steps.length >= (serverMode.value ? 12 : 200)
+  )
+    return;
   openStepIndex.value = form.steps.length;
   form.steps.push({
+    ...(serverMode.value
+      ? {
+          ref: newWorkflowStepKey(form.steps.map((step) => step.ref)),
+          dependsOn: [],
+          resultRequirements: [],
+        }
+      : {}),
     position: form.steps.length + 1,
     name: "",
     purpose: "",
@@ -331,6 +458,7 @@ async function save() {
     !canEdit.value ||
     busy.value ||
     !validStepText.value ||
+    !validDAG.value ||
     !validCompletionText.value
   )
     return;
@@ -338,7 +466,11 @@ async function save() {
   busy.value = true;
   problem.value = undefined;
   try {
-    await platform.saveWorkflow(projectRef.value, form, workflow.value);
+    await platform.saveWorkflow(
+      projectRef.value,
+      { ...form, reworkPolicy: form.reworkPolicy || undefined },
+      workflow.value,
+    );
     if (current === loadGeneration) await load();
   } catch (error) {
     problem.value = asProblem(error);
@@ -459,11 +591,18 @@ onBeforeUnmount(() => {
           >
             <legend class="sr-only">{{ $t("workflows.steps") }}</legend>
             <div class="form-grid">
+              <WorkflowReworkPolicyControl
+                v-if="serverMode"
+                :value="form.reworkPolicy"
+                :disabled="!canEdit || busy"
+                @change="changeReworkPolicy"
+              />
               <WorkflowOverviewFields
                 v-model:name="form.name"
                 v-model:purpose="form.purpose"
                 v-model:timeout-seconds="form.timeoutSeconds"
                 v-model:max-concurrency="form.maxConcurrency"
+                :concurrency-limit="serverMode ? 2 : 100"
                 v-model:completion-criteria="form.completionCriteria"
                 :coordinator-agent-ref="form.coordinatorAgentRef"
                 :selected-coordinator="selectedAgent(form.coordinatorAgentRef)"
@@ -473,6 +612,45 @@ onBeforeUnmount(() => {
                 @select-coordinator="selectAgent($event.ref)"
                 @clear-coordinator="selectAgent('')"
               />
+              <label class="field">
+                <span>{{ $t("workflowResults.mode") }}</span>
+                <select
+                  :id="`${editorId}-mode`"
+                  :name="`${editorId}-mode`"
+                  :value="form.executionMode"
+                  :disabled="!canEdit || busy"
+                  @change="changeMode"
+                >
+                  <option
+                    v-for="mode in ['MANAGER_DRIVEN', 'SERVER_DAG_V1']"
+                    :key="mode"
+                    :value="mode"
+                  >
+                    {{ $t(`workflowResults.modes.${mode}`) }}
+                  </option>
+                </select>
+              </label>
+              <label v-if="serverMode" class="field">
+                <span>{{ $t("workflowResults.evidenceProfile") }}</span>
+                <select
+                  :value="form.resultEvidenceProfile ?? ''"
+                  @change="changeEvidenceProfile"
+                  :disabled="busy || !canEdit"
+                  :aria-label="$t('workflowResults.evidenceProfile')"
+                >
+                  <option value="">
+                    {{ $t("workflowResults.evidenceLegacy") }}
+                  </option>
+                  <option value="GITHUB_REVIEW_QA_V1">
+                    {{ $t("workflowResults.evidenceNative") }}
+                  </option>
+                </select>
+                <small>{{ $t("workflowResults.evidenceHelp") }}</small>
+              </label>
+              <p v-if="serverMode">{{ $t("workflowResults.bounds") }}</p>
+              <p v-if="!validDAG" class="field-error" role="status">
+                {{ $t("workflowResults.invalid") }}
+              </p>
             </div>
             <section class="editor-section">
               <div class="section-header">
@@ -573,6 +751,7 @@ onBeforeUnmount(() => {
                 class="button"
                 type="button"
                 @click="addStep"
+                :disabled="busy || form.steps.length >= (serverMode ? 12 : 200)"
               >
                 <Plus :size="16" />{{ $t("common.create") }}
               </button>
@@ -601,6 +780,28 @@ onBeforeUnmount(() => {
                 "
                 @toggle="toggleStep(index, $event)"
               >
+                <WorkflowResultContractEditor
+                  v-if="serverMode"
+                  :evidence-profile="form.resultEvidenceProfile"
+                  :step-key="step.ref ?? ''"
+                  :dependencies="step.dependsOn"
+                  :requirements="step.resultRequirements"
+                  :predecessors="
+                    form.steps.slice(0, index).map((prior) => ({
+                      key: prior.ref ?? '',
+                      name: prior.name,
+                      artifactKeys: (prior.resultRequirements ?? [])
+                        .filter((item) => item.kind === 'ARTIFACT')
+                        .map((item) => item.key),
+                    }))
+                  "
+                  :disabled="!canEdit || busy"
+                  @key="changeResultStep(step, 'ref', $event)"
+                  @dependencies="changeResultStep(step, 'dependsOn', $event)"
+                  @requirements="
+                    changeResultStep(step, 'resultRequirements', $event)
+                  "
+                />
                 <div class="form-grid">
                   <label class="field"
                     ><span>{{ $t("workflows.stepName") }}</span
@@ -648,6 +849,9 @@ onBeforeUnmount(() => {
                   ><label class="check-field"
                     ><input
                       v-model="step.humanGate"
+                      @change="
+                        !step.humanGate && delete step.approvalTimeoutSeconds
+                      "
                       :id="stepControlName(index, 'human-gate')"
                       :name="stepControlName(index, 'human-gate')"
                       type="checkbox"
@@ -692,6 +896,23 @@ onBeforeUnmount(() => {
                           >{{ step.expectedResult.length }} / 1000</span
                         >
                       </div>
+                      <label v-if="step.humanGate" class="field">
+                        <span>{{ $t("workflows.approvalTimeout") }}</span>
+                        <input
+                          :id="
+                            stepControlName(index, 'approval-timeout-seconds')
+                          "
+                          :name="
+                            stepControlName(index, 'approval-timeout-seconds')
+                          "
+                          type="number"
+                          min="1"
+                          max="604800"
+                          :value="step.approvalTimeoutSeconds ?? ''"
+                          @input="setApprovalTimeout(step, $event)"
+                        />
+                        <span>{{ $t("workflows.approvalTimeoutHelp") }}</span>
+                      </label>
                       <fieldset
                         v-if="step.humanGate"
                         class="choice-field field--wide"
@@ -773,7 +994,9 @@ onBeforeUnmount(() => {
               v-if="canEdit"
               class="button button--primary workflow-save"
               type="button"
-              :disabled="busy || !validStepText || !validCompletionText"
+              :disabled="
+                busy || !validStepText || !validCompletionText || !validDAG
+              "
               @click="save"
             >
               <Save :size="16" />{{ $t("common.save") }}

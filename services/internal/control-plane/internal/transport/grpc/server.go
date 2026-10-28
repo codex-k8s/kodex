@@ -13,6 +13,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	roleimageservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/roleimage"
+	workflowservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/workflow"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
@@ -52,6 +53,7 @@ type Server struct {
 	controlplanev1.UnimplementedRuntimeWorkServiceServer
 	controlplanev1.UnimplementedManagedConfigurationSourceWorkServiceServer
 	controlplanev1.UnimplementedManagedConfigurationGitWriteBackWorkServiceServer
+	controlplanev1.UnimplementedRepositoryBundlePublicationServiceServer
 	controlplanev1.UnimplementedRuntimeSecretWorkServiceServer
 	controlplanev1.UnimplementedProviderCredentialRenewalWorkServiceServer
 	controlplanev1.UnimplementedRuntimeSecretDraftWorkServiceServer
@@ -173,14 +175,17 @@ func domainWorkflowVersion(input *controlplanev1.WorkflowVersion) *entity.Workfl
 		return nil
 	}
 	result := &entity.WorkflowVersion{
-		Ref:                 input.GetRef(),
-		Name:                input.GetName(),
-		Purpose:             input.GetPurpose(),
-		CoordinatorAgentRef: input.GetCoordinatorAgentRef(),
-		VersionNumber:       input.GetRevision(),
-		Concurrency:         input.GetMaxConcurrency(),
-		TimeoutSeconds:      int64(input.GetTimeoutSeconds()),
-		CompletionCriteria:  input.GetCompletionCriteria(),
+		Ref:                   input.GetRef(),
+		Name:                  input.GetName(),
+		Purpose:               input.GetPurpose(),
+		CoordinatorAgentRef:   input.GetCoordinatorAgentRef(),
+		VersionNumber:         input.GetRevision(),
+		Concurrency:           input.GetMaxConcurrency(),
+		TimeoutSeconds:        int64(input.GetTimeoutSeconds()),
+		CompletionCriteria:    input.GetCompletionCriteria(),
+		ExecutionMode:         input.GetExecutionMode(),
+		ResultEvidenceProfile: input.GetResultEvidenceProfile(),
+		ReworkPolicy:          input.GetReworkPolicy(),
 	}
 	knownInputKeys := make(map[string]struct{}, len(input.GetInputFields()))
 	for _, item := range input.GetInputFields() {
@@ -223,11 +228,18 @@ func domainWorkflowVersion(input *controlplanev1.WorkflowVersion) *entity.Workfl
 			parallelGroupDependencies = map[int32][]string{}
 			frontier = []string{stepKey}
 		}
+		if input.GetExecutionMode() == workflowservice.ServerDAGV1 {
+			dependencies = append([]string(nil), item.GetDependsOn()...)
+		}
 		step := entity.WorkflowStep{
 			Key: stepKey, Position: item.GetPosition(), Name: item.GetName(), AgentRef: item.GetAgentRef(),
 			Instructions: item.GetPurpose(), Parallel: item.GetParallel(), ParallelGroup: item.GetParallelGroup(),
 			TimeoutSeconds: item.GetTimeoutSeconds(), ExpectedResult: item.GetExpectedResult(), HumanGateAfter: item.GetHumanGate(),
 			DependsOn: dependencies, RequiredCapabilityKeys: append([]string(nil), item.GetRequiredCapabilityKeys()...),
+			ApprovalTimeoutSeconds: item.ApprovalTimeoutSeconds,
+		}
+		for _, requirement := range item.GetResultRequirements() {
+			step.ResultRequirements = append(step.ResultRequirements, entity.WorkflowResultRequirement{EvidenceKey: requirement.GetEvidenceKey(), Key: requirement.GetKey(), Kind: requirement.GetKind(), FileName: requirement.GetFileName(), MediaType: requirement.GetMediaType(), Repository: requirement.GetRepository(), SubjectStepKey: requirement.GetSubjectStepKey(), SubjectResultKey: requirement.GetSubjectResultKey(), Operation: requirement.GetOperation(), TargetRef: requirement.GetTargetRef()})
 		}
 		for _, decision := range item.GetGateDecisions() {
 			step.GateDecisions = append(step.GateDecisions, enumSuffix(decision, "OWNER_GATE_DECISION_"))
@@ -301,6 +313,16 @@ func transportError(err error) error {
 		return status.Error(codes.FailedPrecondition, "required capability is not enabled")
 	case errors.Is(err, errs.ErrAlreadyResolved):
 		return status.Error(codes.FailedPrecondition, "resource is already resolved")
+	case errors.Is(err, errs.ErrLegacyReworkScopeUnsupported):
+		return statusErrorWithReason(codes.FailedPrecondition, "legacy rework operation scope is unsupported", "LEGACY_REWORK_SCOPE_UNSUPPORTED")
+	case errors.Is(err, errs.ErrLegacyReworkWrite):
+		return statusErrorWithReason(codes.FailedPrecondition, "legacy rework requires write reconciliation", "LEGACY_REWORK_WRITE_REQUIRES_RECONCILIATION")
+	case errors.Is(err, errs.ErrLegacyReworkParentBusy):
+		return statusErrorWithReason(codes.FailedPrecondition, "legacy rework coordinator is executing", "LEGACY_REWORK_PARENT_BUSY")
+	case errors.Is(err, errs.ErrLegacyReworkDeliveryBlocked):
+		return statusErrorWithReason(codes.FailedPrecondition, "legacy rework delivery is blocked", "LEGACY_REWORK_DELIVERY_BLOCKED")
+	case errors.Is(err, errs.ErrLegacyReworkReadLimit):
+		return statusErrorWithReason(codes.FailedPrecondition, "legacy rework exceeds readable input budget", "LEGACY_REWORK_READ_LIMIT")
 	case errors.Is(err, errs.ErrConflict):
 		return status.Error(codes.Aborted, "resource state changed")
 	case errors.Is(err, errs.ErrProviderCatalogTooLarge):

@@ -25,6 +25,7 @@ import { runPath } from "@/shared/routes";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import WorkflowAttemptResults from "./WorkflowAttemptResults.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -196,6 +197,8 @@ function formatDate(value: string): string {
           <dd><SafeMarkdown :content="node.callbackSummary" /></dd>
         </div>
       </dl>
+
+      <WorkflowAttemptResults :attempts="node.workflowResults ?? []" />
 
       <section
         v-if="node.childRunRefs.length"

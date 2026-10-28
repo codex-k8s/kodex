@@ -12,6 +12,7 @@ import {
 } from "vue";
 import { afterEach, expect, it, vi } from "vitest";
 import { i18n } from "@/app/i18n";
+import { resolveConfirmation } from "@/shared/ui/confirmation";
 import {
   editableOperations,
   operationInputs,
@@ -115,6 +116,8 @@ function stepAt(
 }
 const disposers: Array<() => void> = [];
 afterEach(() => {
+  vi.unstubAllGlobals();
+  resolveConfirmation(false);
   disposers.splice(0).forEach((dispose) => dispose());
 });
 function mount(count = 33) {
@@ -131,6 +134,12 @@ function mount(count = 33) {
     removeStep: (index: number) => void;
     valid: Ref<boolean>;
     validStep: (step: Record<string, unknown>, pending?: boolean) => boolean;
+    changeStep: (index: number, key: string, value: unknown) => void;
+    changeMode: (event: Event) => Promise<void>;
+    changeEvidenceProfile: (event: Event) => void;
+    changeReworkPolicy: (
+      value: "" | "OWNER_APPROVED_UPSTREAM_V1",
+    ) => Promise<void>;
   };
   const renderer = createNoopRenderer();
   const app = renderer
@@ -168,6 +177,100 @@ function toggle(open: boolean): Event {
   Object.defineProperty(event, "currentTarget", { value: { open } });
   return event;
 }
+
+it("смена режима требует подтверждения и не применяется после отзыва редактирования", async () => {
+  const { props, state } = mount(2);
+  await vi.waitFor(() => expect(state.valid.value).toBe(true));
+  const change = () =>
+    state.changeMode({
+      target: { value: "SERVER_DAG_V1" },
+    } as unknown as Event);
+  const before = operationInputs([props.operation]);
+  const rejected = change();
+  resolveConfirmation(false);
+  await rejected;
+  expect(operationInputs([props.operation])).toEqual(before);
+  const stale = change();
+  props.disabled = true;
+  resolveConfirmation(true);
+  await stale;
+  expect(operationInputs([props.operation])).toEqual(before);
+  props.disabled = false;
+  const accepted = change();
+  resolveConfirmation(true);
+  await accepted;
+  expect(operationInputs([props.operation])[0]?.parameters.executionMode).toBe(
+    "SERVER_DAG_V1",
+  );
+  expect(stepAt(stepsOf(props.operation), 0)).toMatchObject({
+    key: "step-1",
+    dependsOn: [],
+    resultRequirements: [],
+  });
+  expect(state.valid.value).toBe(false);
+});
+
+it.each([null, "", "AUTOMATIC"])(
+  "не превращает недопустимый режим %s в прежний",
+  async (mode) => {
+    const { props, state } = mount(2);
+    await vi.waitFor(() => expect(state.valid.value).toBe(true));
+    updateOperationParameter(props.operation, "executionMode", mode);
+    await nextTick();
+    expect(state.valid.value).toBe(false);
+  },
+);
+
+it("план DAG сохраняет условия и TTL; изменение зависимости закрывает применение", async () => {
+  const { props, state } = mount(2);
+  updateOperationParameter(props.operation, "executionMode", "SERVER_DAG_V1");
+  updateOperationParameter(props.operation, "maxConcurrency", 2);
+  updateOperationParameter(
+    props.operation,
+    "steps",
+    stepsOf(props.operation).map((step, index) => ({
+      ...step,
+      key: index === 0 ? "code" : "review",
+      agentRef: index === 0 ? "agt_developer" : "agt_reviewer",
+      dependsOn: index === 0 ? [] : ["code"],
+      resultRequirements:
+        index === 0
+          ? [
+              {
+                key: "pr",
+                kind: "PULL_REQUEST",
+                repository: "codex-k8s/test-repo",
+              },
+            ]
+          : [{ key: "review", kind: "REVIEW", subjectStepKey: "code" }],
+      ...(index === 1
+        ? {
+            humanGate: true,
+            gateDecisions: ["APPROVE"],
+            approvalTimeoutSeconds: 90,
+          }
+        : {}),
+    })),
+  );
+  await vi.waitFor(() => expect(state.valid.value).toBe(true));
+  state.changeStep(1, "name", "Независимое ревью");
+  expect(stepAt(stepsOf(props.operation), 1)).toMatchObject({
+    dependsOn: ["code"],
+    resultRequirements: [
+      { key: "review", kind: "REVIEW", subjectStepKey: "code" },
+    ],
+    approvalTimeoutSeconds: 90,
+  });
+  state.changeStep(0, "key", "renamed");
+  await nextTick();
+  expect(state.valid.value).toBe(false);
+  expect(stepAt(stepsOf(props.operation), 1).dependsOn).toEqual(["code"]);
+  state.changeStep(0, "key", "code");
+  await nextTick();
+  expect(state.valid.value).toBe(true);
+  state.changeStep(1, "agentRef", "agt_developer");
+  await vi.waitFor(() => expect(state.valid.value).toBe(false));
+});
 
 it.each(["ru", "en"] as const)(
   "33 этапа сначала показывают только заголовки без лишних редакторов (%s)",
@@ -240,6 +343,46 @@ it("ожидание каталога нейтрально, но неполны�
   expect(state.validStep({ ...steps[1], purpose: "" }, true)).toBe(false);
 });
 
+it("сохраняет срок согласования при правках и удаляет его при отключении Human Gate", async () => {
+  const { props, state } = mount(2);
+  await vi.waitFor(() => expect(state.valid.value).toBe(true));
+  state.changeStep(0, "humanGate", true);
+  state.changeStep(0, "gateDecisions", ["APPROVE"]);
+  state.changeStep(0, "approvalTimeoutSeconds", 90);
+  state.changeStep(0, "name", "Проверка требований");
+  await nextTick();
+  expect(state.valid.value).toBe(true);
+  expect(stepAt(stepsOf(props.operation), 0).approvalTimeoutSeconds).toBe(90);
+  state.changeStep(0, "approvalTimeoutSeconds", undefined);
+  expect(stepAt(stepsOf(props.operation), 0)).not.toHaveProperty(
+    "approvalTimeoutSeconds",
+  );
+  state.changeStep(0, "approvalTimeoutSeconds", 604800);
+  state.changeStep(0, "humanGate", false);
+  expect(stepAt(stepsOf(props.operation), 0)).not.toHaveProperty(
+    "approvalTimeoutSeconds",
+  );
+  props.disabled = true;
+  state.changeStep(0, "approvalTimeoutSeconds", 5);
+  expect(stepAt(stepsOf(props.operation), 0)).not.toHaveProperty(
+    "approvalTimeoutSeconds",
+  );
+});
+
+it.each([0, -1, 604801, 1.5, "90", null])(
+  "отклоняет недопустимый срок согласования %s",
+  (timeout) => {
+    const { props, state } = mount(2);
+    const step = {
+      ...stepAt(stepsOf(props.operation), 0),
+      humanGate: true,
+      gateDecisions: ["APPROVE"],
+      approvalTimeoutSeconds: timeout,
+    };
+    expect(state.validStep(step, true)).toBe(false);
+  },
+);
+
 it.each(["я", "🧭"])(
   "проверяет критерий завершения по Unicode-символам на границе 2000/2001 (%s)",
   async (character) => {
@@ -296,4 +439,135 @@ it("общий свернутый шаг не монтирует slot, но по
   expect(html).toContain("Требуется решение человека");
   expect(html).toContain("Проверьте поля этапа");
   expect(html).not.toContain("Editor");
+});
+
+it.each(["mode", "permission"])(
+  "не меняет rework policy после изменения %s во время подтверждения",
+  async (fault) => {
+    const { props, state } = mount(2);
+    updateOperationParameter(props.operation, "executionMode", "SERVER_DAG_V1");
+    await nextTick();
+    const pending = state.changeReworkPolicy("OWNER_APPROVED_UPSTREAM_V1");
+    if (fault === "mode")
+      updateOperationParameter(
+        props.operation,
+        "executionMode",
+        "MANAGER_DRIVEN",
+      );
+    else props.disabled = true;
+    resolveConfirmation(true);
+    await pending;
+    expect(
+      operationInputs([props.operation])[0]?.parameters.reworkPolicy,
+    ).toBeUndefined();
+    props.disabled = false;
+    updateOperationParameter(props.operation, "executionMode", "SERVER_DAG_V1");
+    await nextTick();
+    const accepted = state.changeReworkPolicy("OWNER_APPROVED_UPSTREAM_V1");
+    resolveConfirmation(true);
+    await accepted;
+    expect(operationInputs([props.operation])[0]?.parameters.reworkPolicy).toBe(
+      "OWNER_APPROVED_UPSTREAM_V1",
+    );
+  },
+);
+
+function evidenceProfileEvent(value: string): Event {
+  class FixtureSelect {
+    constructor(public value: string) {}
+  }
+  vi.stubGlobal("HTMLSelectElement", FixtureSelect);
+  const target = new FixtureSelect(value);
+  const event = new Event("change");
+  Object.defineProperty(event, "target", { value: target });
+  return event;
+}
+
+it.each(["CREATE_WORKFLOW", "UPDATE_WORKFLOW"] as const)(
+  "сброс SERVER→MANAGER очищает evidence profile только после подтверждения (%s)",
+  async (kind) => {
+    const { props, state } = mount(2);
+    props.operation.value.type = kind;
+    if (kind === "UPDATE_WORKFLOW") {
+      props.operation.value.action = "UPDATE";
+      props.operation.value.target.ref = "wf_fixture";
+      updateOperationParameter(props.operation, "workflowRef", "wf_fixture");
+    }
+    updateOperationParameter(props.operation, "executionMode", "SERVER_DAG_V1");
+    updateOperationParameter(
+      props.operation,
+      "resultEvidenceProfile",
+      "GITHUB_REVIEW_QA_V1",
+    );
+    await nextTick();
+    const change = () =>
+      state.changeMode({
+        target: { value: "MANAGER_DRIVEN" },
+      } as unknown as Event);
+    const before = operationInputs([props.operation]);
+    const rejected = change();
+    resolveConfirmation(false);
+    await rejected;
+    expect(operationInputs([props.operation])).toEqual(before);
+    const revoked = change();
+    props.disabled = true;
+    resolveConfirmation(true);
+    await revoked;
+    expect(operationInputs([props.operation])).toEqual(before);
+    props.disabled = false;
+    const accepted = change();
+    resolveConfirmation(true);
+    await accepted;
+    const parameters = operationInputs([props.operation])[0]?.parameters;
+    expect(parameters?.executionMode).toBe("MANAGER_DRIVEN");
+    if (kind === "UPDATE_WORKFLOW")
+      expect(parameters?.resultEvidenceProfile).toBe("");
+    else expect(parameters).not.toHaveProperty("resultEvidenceProfile");
+  },
+);
+
+it("UPDATE clear сохраняет явное пустое mutation field, но не блокирует local DAG", async () => {
+  const { props, state } = mount(2);
+  props.operation.value.type = "UPDATE_WORKFLOW";
+  props.operation.value.action = "UPDATE";
+  props.operation.value.target.ref = "wf_fixture";
+  updateOperationParameter(props.operation, "workflowRef", "wf_fixture");
+  updateOperationParameter(props.operation, "executionMode", "SERVER_DAG_V1");
+  updateOperationParameter(
+    props.operation,
+    "steps",
+    stepsOf(props.operation).map((step, index) => ({
+      ...step,
+      key: index === 0 ? "code" : "review",
+      agentRef: index === 0 ? "agt_developer" : "agt_reviewer",
+      dependsOn: index === 0 ? [] : ["code"],
+      resultRequirements:
+        index === 0
+          ? [
+              {
+                key: "pr",
+                kind: "PULL_REQUEST",
+                repository: "codex-k8s/test-repo",
+              },
+            ]
+          : [{ key: "review", kind: "REVIEW", subjectStepKey: "code" }],
+    })),
+  );
+  updateOperationParameter(
+    props.operation,
+    "resultEvidenceProfile",
+    "GITHUB_REVIEW_QA_V1",
+  );
+  await vi.waitFor(() => expect(state.valid.value).toBe(true));
+  state.changeEvidenceProfile(evidenceProfileEvent(""));
+  await nextTick();
+  expect(
+    operationInputs([props.operation])[0]?.parameters.resultEvidenceProfile,
+  ).toBe("");
+  expect(state.valid.value).toBe(true);
+  for (const invalid of [null, "UNKNOWN_PROFILE"]) {
+    updateOperationParameter(props.operation, "resultEvidenceProfile", invalid);
+    await nextTick();
+    expect(state.valid.value).toBe(false);
+  }
 });

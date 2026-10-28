@@ -96,6 +96,7 @@ type brokerResponse struct {
 	OK             bool                                       `json:"ok"`
 	RolloutCapture *rolloutCaptureProof                       `json:"rollout_capture,omitempty"`
 	Diagnostic     *runtimecontract.ProviderFailureDiagnostic `json:"diagnostic,omitempty"`
+	WorkspaceJoin  *workspaceJoinProof                        `json:"workspace_join,omitempty"`
 }
 
 // rolloutCaptureProof records exact execution/attempt/session/turn and captured archive metadata.
@@ -755,7 +756,7 @@ func writeProviderBrokerFailureAtStage(connection io.Writer, stage providerExecu
 // факты событий и приватную диагностику. Совпадающий закрытый захват сохраняется без нового чтения файла;
 // slice/pointer не копируются глубоко, а подтверждения credential effect эта проекция не выдаёт.
 func failedProviderResult(result Result) Result {
-	failed := Result{Usage: result.Usage, UsageCompleteness: result.UsageCompleteness, ToolCalls: result.ToolCalls, providerDiagnostic: result.providerDiagnostic}
+	failed := Result{Usage: result.Usage, UsageCompleteness: result.UsageCompleteness, ToolCalls: result.ToolCalls, providerDiagnostic: result.providerDiagnostic, workspaceJoin: result.workspaceJoin}
 	if result.rolloutCapture != nil && result.rolloutCapture.sealed && result.matchesCapture(result.rolloutCapture) {
 		failed = withRolloutCapture(failed, result.rolloutCapture)
 		failed.ArchivePath = result.ArchivePath

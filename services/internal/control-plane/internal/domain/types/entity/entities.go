@@ -712,6 +712,14 @@ type WorkflowStep struct {
 	Position, ParallelGroup, TimeoutSeconds           int32
 	Parallel, HumanGateAfter                          bool
 	DependsOn, GateDecisions, RequiredCapabilityKeys  []string
+	// ResultRequirements pin mandatory evidence for an explicitly server-driven published step.
+	// ResultRequirements закрепляет обязательные доказательства явно серверного опубликованного этапа.
+	ResultRequirements []WorkflowResultRequirement `json:",omitempty"`
+	// ApprovalTimeoutSeconds optionally bounds owner waiting after this step completes; absence
+	// preserves indefinite gate waiting subject to the independent workflow deadline.
+	// ApprovalTimeoutSeconds ограничивает ожидание решения после завершения этапа; отсутствие
+	// сохраняет прежнее ожидание с независимым ограничением общего срока процесса.
+	ApprovalTimeoutSeconds *int32 `json:",omitempty"`
 }
 
 // WorkflowVersion is a numbered executable-definition snapshot containing coordinator/task text,
@@ -721,6 +729,15 @@ type WorkflowStep struct {
 // агентами, входом, схемой результата и настройками параллельности, времени и gate; создание значения
 // процесс не публикует и не запускает.
 type WorkflowVersion struct {
+	// ReworkPolicy explicitly enables owner-approved upstream rework; absence retains old recovery.
+	// ReworkPolicy явно включает owner-approved upstream rework; отсутствие сохраняет старый recovery.
+	ReworkPolicy string `json:",omitempty"`
+	// ResultEvidenceProfile explicitly opts a published SERVER version into owner-verified review/QA evidence.
+	// ResultEvidenceProfile явно включает owner-verified review/QA evidence для опубликованной SERVER версии.
+	ResultEvidenceProfile string `json:",omitempty"`
+	// ExecutionMode is an explicit immutable policy; absence retains historical manager orchestration.
+	// ExecutionMode — явная неизменяемая политика; отсутствие сохраняет прежнюю оркестрацию менеджером.
+	ExecutionMode                                                             string `json:",omitempty"`
 	Ref, Name, Purpose, CoordinatorAgentRef, Instructions, CompletionCriteria string
 	VersionNumber                                                             int32
 	Inputs                                                                    []WorkflowInputField
@@ -787,13 +804,14 @@ type RunTarget struct {
 // reasoning подмножества и заявленную ёмкость контекста модели. Значения не проверены до вызова Valid
 // и не содержат решения о цене или квоте.
 type TokenUsage struct {
-	TotalTokens           int64 `json:"total_tokens"`
-	InputTokens           int64 `json:"input_tokens"`
-	CachedInputTokens     int64 `json:"cached_input_tokens"`
-	CacheWriteInputTokens int64 `json:"cache_write_input_tokens"`
-	OutputTokens          int64 `json:"output_tokens"`
-	ReasoningOutputTokens int64 `json:"reasoning_output_tokens"`
-	ModelContextWindow    int64 `json:"model_context_window"`
+	Completeness          runtimecontract.UsageCompleteness `json:"completeness,omitempty"`
+	TotalTokens           int64                             `json:"total_tokens"`
+	InputTokens           int64                             `json:"input_tokens"`
+	CachedInputTokens     int64                             `json:"cached_input_tokens"`
+	CacheWriteInputTokens int64                             `json:"cache_write_input_tokens"`
+	OutputTokens          int64                             `json:"output_tokens"`
+	ReasoningOutputTokens int64                             `json:"reasoning_output_tokens"`
+	ModelContextWindow    int64                             `json:"model_context_window"`
 }
 
 // Valid requires every count/capacity to be nonnegative, total to equal input plus output, each
@@ -804,7 +822,7 @@ type TokenUsage struct {
 // вместе не ограничивает, использование с context window не сравнивает и доступность кредитов
 // провайдера не решает.
 func (usage TokenUsage) Valid() bool {
-	return usage.TotalTokens >= 0 && usage.InputTokens >= 0 && usage.CachedInputTokens >= 0 &&
+	return usage.Completeness.Valid() && usage.TotalTokens >= 0 && usage.InputTokens >= 0 && usage.CachedInputTokens >= 0 &&
 		usage.CacheWriteInputTokens >= 0 && usage.OutputTokens >= 0 && usage.ReasoningOutputTokens >= 0 &&
 		usage.ModelContextWindow >= 0 && usage.TotalTokens == usage.InputTokens+usage.OutputTokens &&
 		usage.CachedInputTokens <= usage.InputTokens && usage.CacheWriteInputTokens <= usage.InputTokens &&
@@ -852,6 +870,9 @@ type Run struct {
 // материализации и ошибки и ссылками детей и артефактов; отображаемое состояние само terminal-переход
 // не фиксирует.
 type RunNode struct {
+	// WorkflowResults exposes owner-accepted business history, not declarations from model output.
+	// WorkflowResults передаёт проверенную владельцем бизнес-историю, не заявления модели.
+	WorkflowResults                                                      []WorkflowAttemptResult `json:",omitempty"`
 	Ref, RunRef, ParentNodeRef, Type, State, DisplayName, Role, AgentRef string
 	TurnRef, InputSummary, ProgressSummary, CallbackSummary              string
 	SafeErrorCode, SafeErrorMessage, MaterializationState                string
@@ -865,7 +886,19 @@ type RunNode struct {
 // does not prove server-owned delegation or create a child grant.
 // RunEdge — типизированная связь источника и цели графа запуска с меткой; создание записи не
 // доказывает серверное делегирование и не создаёт дочерний grant.
-type RunEdge struct{ Ref, RunRef, SourceNodeRef, TargetNodeRef, Type, Label string }
+type RunEdge struct {
+	Ref, RunRef, SourceNodeRef, TargetNodeRef, Type, Label string
+	ServerWorkflowRetry                                    *WorkflowRetryReadProof `json:",omitempty"`
+}
+
+// WorkflowRetryReadProof exposes only owner-verified historical SERVER step lineage; it neither
+// authorizes another attempt nor carries private execution, grant or input provenance.
+// WorkflowRetryReadProof передаёт лишь проверенную владельцем историю SERVER-этапа; не разрешает
+// новую попытку и не содержит приватного происхождения execution, grant или входных данных.
+type WorkflowRetryReadProof struct {
+	WorkflowVersionRef, WorkflowVersionDigest, OriginNodeRef, StepKey string
+	PreviousBusinessAttempt, BusinessAttempt                          int32
+}
 
 // RunDelta carries a run's changed state/result/error, version/graph/event sequence, usage, references
 // and times for realtime projection; consumers still bind it to their exact run and monotonic version.
@@ -988,6 +1021,10 @@ type RunGraph struct {
 // решениями и последствиями, происхождением вложений и необязательным намерением интеграции. Поля
 // State и Decision сами не являются серверным подтверждением.
 type OwnerGate struct {
+	// ResolutionKind separates supersession from an owner cancellation or expiry.
+	// ResolutionKind отличает supersession от owner cancellation либо expiry.
+	ResolutionKind                                                  string                 `json:",omitempty"`
+	ReworkPlan                                                      *WorkflowReworkPreview `json:",omitempty"`
 	ScopeKind, OrganizationRef                                      string
 	Ref, ProjectRef, RunRef, NodeRef, Title, Prompt, ContextSummary string
 	ResolutionAttachmentSetRef                                      string
@@ -997,6 +1034,7 @@ type OwnerGate struct {
 	Version                                                         int64
 	CreatedAt                                                       time.Time
 	ResolvedAt                                                      *time.Time
+	ExpiresAt                                                       *time.Time `json:",omitempty"`
 	SourceAttachmentSetRef                                          string
 	DecisionConsequences                                            []OwnerGateDecisionConsequence
 	IntegrationIntent                                               *IntegrationIntent
@@ -1483,4 +1521,23 @@ type Incident struct {
 	SafeSummary, SafeNextStep                          string
 	CoreAffected                                       bool
 	CreatedAt                                          time.Time
+}
+
+// WorkflowReworkStepPreview exposes bounded step counters without private execution pins.
+// WorkflowReworkStepPreview показывает bounded step counters без private execution pins.
+type WorkflowReworkStepPreview struct {
+	StepKey         string `json:"stepKey"`
+	PreviousAttempt int32  `json:"previousAttempt"`
+	NextAttempt     int32  `json:"nextAttempt"`
+}
+
+// WorkflowReworkPreview explains an owner-issued upstream plan without granting launch authority.
+// WorkflowReworkPreview объясняет owner-issued upstream plan без выдачи launch authority.
+type WorkflowReworkPreview struct {
+	Schema        string                      `json:"schema"`
+	SourceStepKey string                      `json:"sourceStepKey"`
+	SourceAttempt int32                       `json:"sourceAttempt"`
+	Authors       []WorkflowReworkStepPreview `json:"authors"`
+	Rechecks      []WorkflowReworkStepPreview `json:"rechecks"`
+	BlockReason   string                      `json:"blockReason,omitempty"`
 }

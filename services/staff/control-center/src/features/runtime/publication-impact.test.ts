@@ -76,7 +76,10 @@ it("системный impact допускает только явные ORGANIZ
   ])
     expect(() =>
       checkedPublicationPage(
-        { ...system, items: [{ ...systemRow, ...change }] } as unknown as RevisionImpactPage,
+        {
+          ...system,
+          items: [{ ...systemRow, ...change }],
+        } as unknown as RevisionImpactPage,
         plan,
         undefined,
         "org_synthetic",

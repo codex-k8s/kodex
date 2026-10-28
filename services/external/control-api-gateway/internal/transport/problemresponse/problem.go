@@ -14,12 +14,14 @@ import (
 // Write отправляет переданный статус, использует необязательный метод Localize writer для заголовка и кодирует шесть полей ошибки с новым correlation ID. Заголовки не меняются, ошибочная запись не повторяется; вызывающий передаёт уже классифицированные безопасные коды и признак повтора.
 func Write(writer http.ResponseWriter, statusCode int, code string, retryable bool) {
 	writer.WriteHeader(statusCode)
+	correlation := uuid.NewString()
+	observeProblem(writer, statusCode, code, correlation)
 	title := http.StatusText(statusCode)
 	if localizer, ok := writer.(interface{ Localize(string) string }); ok {
 		title = localizer.Localize(code)
 	}
 	_ = json.NewEncoder(writer).Encode(map[string]any{
 		"type": "urn:kodex:problem:" + strings.ToLower(code), "title": title,
-		"status": statusCode, "code": code, "correlationId": uuid.NewString(), "retryable": retryable,
+		"status": statusCode, "code": code, "correlationId": correlation, "retryable": retryable,
 	})
 }

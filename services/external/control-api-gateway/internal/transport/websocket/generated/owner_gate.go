@@ -3,6 +3,8 @@
 package generated
 
 type OwnerGate struct {
+	ResolutionKind             *string                        `json:"resolutionKind,omitempty"`
+	ReworkPlan                 *WorkflowReworkPreview         `json:"reworkPlan,omitempty"`
 	Ref                        string                         `json:"ref"`
 	Version                    int64                          `json:"version"`
 	ScopeKind                  string                         `json:"scopeKind"`

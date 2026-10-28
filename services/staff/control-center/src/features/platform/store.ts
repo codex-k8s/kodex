@@ -171,6 +171,7 @@ import {
 } from "@/features/platform/run-reducer";
 import { instructionCommandInput } from "@/features/platform/instruction-command";
 import { runBoundedPlatformReload } from "@/features/platform/platform-reload";
+import { assertWorkflowGraphEvidence } from "./workflow-evidence";
 import { validateRunSnapshot } from "@/features/platform/run-snapshot";
 import {
   assertAssistantRetryIdentity,
@@ -183,6 +184,7 @@ export interface RealtimeCatalogSnapshot {
   scopeKey: string;
   total?: number;
   nextPageToken?: string;
+  runRefs?: string[];
 }
 
 const runHistorySupersededMessage = "Run history read superseded";
@@ -845,6 +847,7 @@ export const usePlatformStore = defineStore("platform", () => {
       );
       if (!active()) return;
       const workspace = graphReadback.data;
+      assertWorkflowGraphEvidence(workspace.graph);
       assertOwnerRequest(ownerSignal);
       if (
         requireRuntimeOrganizationRef(bootstrap.value?.organizationRef) !==
@@ -1878,6 +1881,7 @@ export const usePlatformStore = defineStore("platform", () => {
         signal: requestSignal(),
       }),
     );
+    assertWorkflowGraphEvidence(result.data.graph);
     runs[result.data.run.ref] = result.data.run;
     graphs[result.data.graph.runRef] = result.data.graph;
     return result.data.run;
@@ -1915,6 +1919,7 @@ export const usePlatformStore = defineStore("platform", () => {
       !sameAssistantRunPin(run, result.data.run)
     )
       throw new Error("Run mutation owner identity mismatch");
+    assertWorkflowGraphEvidence(result.data.graph);
     runs[result.data.run.ref] = result.data.run;
     graphs[result.data.graph.runRef] = result.data.graph;
     return result.data.run;
@@ -1932,6 +1937,7 @@ export const usePlatformStore = defineStore("platform", () => {
         signal: requestSignal(),
       }),
     );
+    assertWorkflowGraphEvidence(result.data.graph);
     runs[result.data.run.ref] = result.data.run;
     graphs[result.data.graph.runRef] = result.data.graph;
     return result.data.run;
@@ -1961,6 +1967,7 @@ export const usePlatformStore = defineStore("platform", () => {
     )
       throw new Error("Owner gate resolution scope changed");
     gates[result.data.gate.ref] = result.data.gate;
+    assertWorkflowGraphEvidence(result.data.graph);
     runs[result.data.run.ref] = result.data.run;
     graphs[result.data.graph.runRef] = result.data.graph;
     if (gate.state === "OPEN" && result.data.gate.state !== "OPEN") {
@@ -2748,6 +2755,10 @@ export const usePlatformStore = defineStore("platform", () => {
       scopeKey: scopeProjectRef ?? "",
     };
     if (response) {
+      if (kind === "RUN")
+        snapshot.runRefs = snapshotArray<Run>(response, "runs").map(
+          (run) => run.ref,
+        );
       const total = response.total;
       const numericTotal =
         typeof total === "number"
@@ -2793,6 +2804,19 @@ export const usePlatformStore = defineStore("platform", () => {
     scopeProjectRef?: string,
   ): RealtimeCatalogSnapshot | undefined {
     return realtimeCatalogSnapshots[realtimeCatalogKey(kind, scopeProjectRef)];
+  }
+
+  // Членство страницы принадлежит свежему снимку. Подробный кэш может содержать
+  // запуски вне страницы и потому не определяет состав сводных каталогов.
+  function realtimeRuns(scopeProjectRef?: string): Run[] {
+    return (realtimeSnapshot("RUN", scopeProjectRef)?.runRefs ?? []).flatMap(
+      (ref) => {
+        const run = runs[ref];
+        return run && (!scopeProjectRef || run.projectRef === scopeProjectRef)
+          ? [run]
+          : [];
+      },
+    );
   }
 
   function applyRealtimeAvailability(
@@ -3132,6 +3156,7 @@ export const usePlatformStore = defineStore("platform", () => {
   const projectList = computed(() => Object.values(projects));
   const projectTrashList = computed(() => Object.values(trashedProjects));
   const runList = computed(() => Object.values(runs));
+  const realtimeRunList = computed(() => realtimeRuns(selectedProjectRef()));
   const gateList = computed(() => Object.values(gates));
 
   return {
@@ -3200,6 +3225,7 @@ export const usePlatformStore = defineStore("platform", () => {
     projectList,
     projectTrashList,
     runList,
+    realtimeRunList,
     gateList,
     loadBootstrap,
     applyAuthenticatedBootstrap,
@@ -3280,6 +3306,7 @@ export const usePlatformStore = defineStore("platform", () => {
     applyPlatformSnapshot,
     markRealtimeSnapshot,
     realtimeSnapshot,
+    realtimeRuns,
     realtimeAvailableKinds,
     applyRealtimeAvailability,
     applySpeechAvailability,

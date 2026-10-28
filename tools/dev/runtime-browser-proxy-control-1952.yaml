@@ -1,0 +1,187 @@
+# Независимый контроль managed proxy для #1952; без модели, секретов и внешней сети.
+# Перед create обязательны runbook, exact UID, свежая capacity и server dry-run.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: qa-browser-proxy-control-1952
+  namespace: kodex-runtime
+  labels:
+    qa.kodex.dev/issue: "1952"
+spec:
+  podSelector:
+    matchLabels:
+      qa.kodex.dev/browser-control: "1952-proxy"
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress: []
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: qa-browser-proxy-control-1952
+  namespace: kodex-runtime
+  labels:
+    qa.kodex.dev/issue: "1952"
+    qa.kodex.dev/browser-control: "1952-proxy"
+spec:
+  nodeName: k3d-kodex-server-0
+  restartPolicy: Never
+  activeDeadlineSeconds: 45
+  terminationGracePeriodSeconds: 5
+  automountServiceAccountToken: false
+  enableServiceLinks: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10002
+    runAsGroup: 10002
+    fsGroup: 29000
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: browser-control
+      image: pull.kodex.127.0.0.2.nip.io/kodex/roles@sha256:12ef8b1f1e429a8b4458c218553b5e08578de144999c5ec3c63b09697a3d6634
+      imagePullPolicy: Never
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: [ALL]
+        # Та же граница provider-runtime; sandbox внутри Codex остаётся включённым.
+        seccompProfile:
+          type: Unconfined
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+          ephemeral-storage: 64Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+          ephemeral-storage: 256Mi
+      command: [/usr/bin/env, -i, PATH=/usr/local/bin:/usr/bin:/bin, HOME=/tmp, /usr/local/bin/node, -e]
+      args:
+        - |
+          const fs = require('node:fs');
+          const { spawnSync } = require('node:child_process');
+          const root = fs.mkdtempSync('/workspace/browser-proxy-control-');
+          const home = root + '/home';
+          const codexHome = root + '/codex';
+          const marker = root + '/result.json';
+          const canary = root + '/denied-canary';
+          const script = root + '/control.cjs';
+          for (const directory of [home, codexHome]) fs.mkdirSync(directory, {mode:0o700});
+          fs.writeFileSync(canary, 'NON_SECRET_PERMISSION_CANARY', {mode:0o600,flag:'wx'});
+          const config = [
+            'default_permissions = "qa"',
+            'approval_policy = "never"',
+            'allow_login_shell = false',
+            '[features]',
+            'network_proxy = true',
+            '[permissions.qa]',
+            'extends = ":workspace"',
+            '[permissions.qa.filesystem]',
+            '"/workspace" = "write"',
+            '"/tmp" = "write"',
+            '"/run/secrets" = "deny"',
+            '"/proc" = "deny"',
+            JSON.stringify(canary) + ' = "deny"',
+            '[permissions.qa.network]',
+            'enabled = true',
+            'mode = "limited"',
+            'allow_upstream_proxy = false',
+            'enable_socks5 = false',
+            'enable_socks5_udp = false',
+            'allow_local_binding = false',
+            'dangerously_allow_all_unix_sockets = false',
+            '[permissions.qa.network.domains]',
+          ].join('\n');
+          fs.writeFileSync(codexHome + '/config.toml', config, {mode:0o600,flag:'wx'});
+          const child = `
+            const fs = require('node:fs');
+            const http = require('node:http');
+            const record = (value) => fs.writeFileSync(process.argv[2], JSON.stringify(value), {mode:0o600});
+            record({stage:'NODE_STARTED'});
+            const checkDenied = (destination, proxy) => new Promise((resolve) => {
+              // Адрес proxy уже выбран явно: globalAgent с NODE_USE_ENV_PROXY
+              // иначе повторно проксирует запрос и отвергает absolute-form path.
+              const request = http.request(proxy, {method:'GET',path:destination,agent:false,
+                headers:{Host:new URL(destination).host}}, response => {
+                response.resume();
+                response.on('end', () => resolve({status:response.statusCode}));
+              });
+              request.setTimeout(2000, () => request.destroy(new Error('PROXY_TIMEOUT')));
+              request.on('error', error => resolve({errorCode:error.code || 'PROXY_REQUEST_FAILED'}));
+              request.end();
+            });
+            (async () => {
+              let browser;
+              const started = Date.now();
+              try {
+                let privateReadOutcome = 'UNPROVEN';
+                try { privateReadOutcome = fs.readFileSync(process.argv[3]).length === 0 ? 'MASKED_EMPTY' : 'READABLE'; }
+                catch(error) { if(['EACCES','EPERM'].includes(error.code)) privateReadOutcome = 'DENIED'; }
+                const privateReadDenied = ['DENIED','MASKED_EMPTY'].includes(privateReadOutcome);
+                const proxyValue = process.env.HTTP_PROXY || process.env.http_proxy;
+                if (!privateReadDenied || !proxyValue) {
+                  record({stage:'BOUNDARY_FAILED',privateReadDenied,privateReadOutcome,proxyPresent:!!proxyValue});
+                  process.exitCode = 1; return;
+                }
+                const proxy = new URL(proxyValue);
+                if (proxy.protocol !== 'http:' || !['localhost','127.0.0.1','[::1]'].includes(proxy.hostname) || proxy.username || proxy.password) {
+                  record({stage:'PROXY_ADDRESS_REJECTED'}); process.exitCode=1; return;
+                }
+                const publicDenied = await checkDenied('http://example.invalid/', proxy);
+                const localDenied = await checkDenied('http://127.0.0.1:43191/', proxy);
+                if (publicDenied.status !== 403 || localDenied.status !== 403) {
+                  record({stage:'PROXY_DENIAL_UNPROVEN',privateReadDenied,publicDenied,localDenied});
+                  process.exitCode=1; return;
+                }
+                record({stage:'BOUNDARY_PASSED',privateReadDenied,publicDenied,localDenied});
+                const {chromium} = require('/opt/kodex/npm-toolchain/node_modules/playwright');
+                browser = await chromium.launch({executablePath:'/usr/lib/chromium/chromium',headless:true,chromiumSandbox:true,timeout:10000,
+                  env:{PATH:'/usr/bin:/bin',HOME:process.env.HOME,TMPDIR:'/tmp'}});
+                const page = await browser.newPage();
+                await page.setContent('<title>runtime proxy control</title>', {timeout:3000});
+                const titleOK = await page.title() === 'runtime proxy control';
+                await browser.close(); browser=undefined;
+                record({stage:'BROWSER_FINISHED',titleOK,privateReadDenied,privateReadOutcome,publicDenied,localDenied,elapsedMs:Date.now()-started});
+                if (!titleOK) process.exitCode=1;
+              } catch(error) {
+                record({stage:'CONTROL_FAILED',elapsedMs:Date.now()-started,error:String(error.message).slice(0,10000)});
+                process.exitCode=1;
+              } finally { if(browser) await browser.close(); }
+            })().catch(() => {record({stage:'CONTROL_CLEANUP_FAILED'});process.exitCode=1;});
+          `;
+          fs.writeFileSync(script, child, {mode:0o600,flag:'wx'});
+          const result = spawnSync('/usr/local/bin/codex', ['sandbox','-P','qa','-C',root,'/usr/local/bin/node',script,marker,canary], {
+            env:{PATH:'/usr/local/bin:/usr/bin:/bin',HOME:home,CODEX_HOME:codexHome},
+            timeout:25000,killSignal:'SIGKILL',maxBuffer:16384,encoding:'utf8',
+          });
+          let evidence = {stage:'MARKER_ABSENT'};
+          let fd;
+          try {
+            fd=fs.openSync(marker,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW);
+            const info=fs.fstatSync(fd);
+            if(!info.isFile()||info.size>16384) throw new Error('MARKER_INVALID');
+            const bytes=Buffer.alloc(16385);
+            const size=fs.readSync(fd,bytes,0,bytes.length,0);
+            if(size>16384) throw new Error('MARKER_TOO_LARGE');
+            evidence=JSON.parse(bytes.subarray(0,size).toString('utf8'));
+          } catch(error) {evidence={stage:'MARKER_UNREADABLE',code:error.code||'MARKER_INVALID'};}
+          finally {if(fd!==undefined)fs.closeSync(fd);}
+          console.log(JSON.stringify({scope:'CREDENTIAL_FREE_MANAGED_PROXY_CONTROL',exit:result.status,signal:result.signal,
+            errorCode:result.error?.code,evidence,stdout:result.stdout,stderr:result.stderr}));
+          process.exitCode=result.status===0&&!result.error&&evidence.stage==='BROWSER_FINISHED'&&evidence.titleOK===true?0:1;
+          // Временные файлы и возможные дочерние процессы исчезают только вместе с exact Pod UID.
+      volumeMounts:
+        - name: temporary
+          mountPath: /tmp
+        - name: workspace
+          mountPath: /workspace
+  volumes:
+    - name: temporary
+      emptyDir:
+        sizeLimit: 224Mi
+    - name: workspace
+      emptyDir:
+        sizeLimit: 32Mi

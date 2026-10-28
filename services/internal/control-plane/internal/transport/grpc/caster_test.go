@@ -7,6 +7,7 @@ import (
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
@@ -274,12 +275,22 @@ func TestCastRunIncludesTypedTokenUsage(t *testing.T) {
 	t.Parallel()
 
 	usage := entity.TokenUsage{
-		TotalTokens: 120, InputTokens: 100, CachedInputTokens: 40,
+		Completeness: runtimecontract.UsagePartial,
+		TotalTokens:  120, InputTokens: 100, CachedInputTokens: 40,
 		CacheWriteInputTokens: 10, OutputTokens: 20, ReasoningOutputTokens: 5,
 		ModelContextWindow: 200000,
 	}
 	run := castRun(entity.Run{Usage: usage})
 	delta := castRunDelta(&entity.RunDelta{Usage: usage})
+	if run.Usage.GetCompleteness() != controlplanev1.UsageCompleteness_USAGE_COMPLETENESS_PARTIAL ||
+		delta.Usage.GetCompleteness() != run.Usage.GetCompleteness() || usageFromProto(run.Usage) != usage {
+		t.Fatal("run or realtime delta lost usage quality")
+	}
+	for _, invalid := range []controlplanev1.UsageCompleteness{-1, 3, 257} {
+		if usageFromProto(&controlplanev1.TokenUsage{Completeness: invalid}).Valid() {
+			t.Fatal("unknown enum wrapped into a valid domain quality")
+		}
+	}
 
 	if run.GetUsage().GetTotalTokens() != usage.TotalTokens ||
 		run.GetUsage().GetCacheWriteInputTokens() != usage.CacheWriteInputTokens ||

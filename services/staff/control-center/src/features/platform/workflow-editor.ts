@@ -4,11 +4,20 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import type { PromptTarget } from "@/features/agents/detail/prompt-context";
 
-export function workflowEditorInput(
-  workflow: Workflow,
-): Required<WorkflowInput> {
+export type WorkflowEditorInput = Required<
+  Omit<WorkflowInput, "resultEvidenceProfile" | "reworkPolicy">
+> &
+  Pick<WorkflowInput, "resultEvidenceProfile"> & {
+    reworkPolicy: "" | "OWNER_APPROVED_UPSTREAM_V1";
+  };
+export type WorkflowEditorState = WorkflowEditorInput;
+
+export function workflowEditorInput(workflow: Workflow): WorkflowEditorInput {
   const body = workflow.draft ?? workflow;
   return {
+    executionMode: body.executionMode ?? "MANAGER_DRIVEN",
+    reworkPolicy: body.reworkPolicy ?? "",
+    resultEvidenceProfile: body.resultEvidenceProfile,
     name: workflow.name,
     purpose: workflow.purpose,
     coordinatorAgentRef: body.coordinatorAgentRef ?? "",
@@ -24,6 +33,11 @@ export function workflowEditorInput(
       options: [...field.options],
     })),
     steps: body.steps.map((step) => ({
+      ref: step.ref,
+      dependsOn: [...(step.dependsOn ?? [])],
+      resultRequirements: (step.resultRequirements ?? []).map((item) => ({
+        ...item,
+      })),
       position: step.position,
       name: step.name,
       purpose: step.purpose,
@@ -32,6 +46,9 @@ export function workflowEditorInput(
       parallelGroup: step.parallelGroup,
       humanGate: step.humanGate,
       timeoutSeconds: step.timeoutSeconds,
+      ...(step.approvalTimeoutSeconds === undefined
+        ? {}
+        : { approvalTimeoutSeconds: step.approvalTimeoutSeconds }),
       expectedResult: step.expectedResult,
       gateDecisions: [...step.gateDecisions],
       requiredCapabilityKeys: [...step.requiredCapabilityKeys],
@@ -40,12 +57,12 @@ export function workflowEditorInput(
 }
 
 export function workflowEditorAfterAuthoritativeUpdate(
-  current: Required<WorkflowInput>,
+  current: WorkflowEditorInput,
   saved: string,
   projectRef: string,
   workflowRef: string,
   workflow: Workflow,
-): Required<WorkflowInput> | undefined {
+): WorkflowEditorInput | undefined {
   if (
     !saved ||
     JSON.stringify(current) !== saved ||

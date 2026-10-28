@@ -170,7 +170,7 @@ func main() {
 		Operations: controlplaneclient.SecretDraftGatewayOperations(), AuthoritySources: []string{"OIDC_SESSION", "DOMAIN_STATE"},
 		TargetWorkloadID: secretBrokerID, TargetSPIFFEID: secretBrokerPeer, TargetAudience: secretBrokerAudience, TargetTLSServerName: secretBrokerTLS,
 	})
-	value := document{Version: 1, PolicyRevision: 97, Policy: policy{
+	value := document{Version: 1, PolicyRevision: 98, Policy: policy{
 		AuthorityABIVersion: 2,
 		TrustDomain:         "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
@@ -307,7 +307,7 @@ func operationRequestProfile(operationID, fullMethod string) requestProfile {
 	if operationID == "platform.command.provider-accounts.queued-work.cancel" || operationID == "platform.command.provider-accounts.concurrency.set" {
 		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "REQUIRED", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
 	}
-	if strings.HasPrefix(operationID, "platform.runtime-secret-drafts.") || strings.HasPrefix(operationID, "platform.configuration-sources.work.") || strings.HasPrefix(operationID, "platform.configuration-writebacks.work.") {
+	if strings.HasPrefix(operationID, "platform.repository-bundles.") || strings.HasPrefix(operationID, "platform.runtime-secret-drafts.") || strings.HasPrefix(operationID, "platform.configuration-sources.work.") || strings.HasPrefix(operationID, "platform.configuration-writebacks.work.") {
 		return requestProfile{Mode: mode, Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
 	}
 	if operationID == "platform.command.runtime-secret-drafts.save" || operationID == "platform.command.organization.runtime-secret-drafts.create" || operationID == "platform.command.organization.runtime-environment-drafts.create" {

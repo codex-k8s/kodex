@@ -13,6 +13,7 @@ require (
 	github.com/codex-k8s/kodex/libs/go/httpserver v0.0.0
 	github.com/codex-k8s/kodex/libs/go/integrationegresspolicy v0.0.0
 	github.com/codex-k8s/kodex/libs/go/integrationpackage v0.0.0
+	github.com/codex-k8s/kodex/libs/go/repositorybundle v0.0.0
 	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0
 	github.com/codex-k8s/kodex/libs/go/kubernetesadmission v0.0.0
 	github.com/codex-k8s/kodex/libs/go/mailpolicy v0.0.0
@@ -66,6 +67,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.40.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.47.1 // indirect
 	github.com/aws/smithy-go v1.28.1 // indirect
+	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
 	github.com/codex-k8s/kodex/libs/go/oidcidentity v0.0.0 // indirect
 	github.com/codex-k8s/kodex/libs/go/runtimepolicywire v0.0.0
 	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0 // indirect
@@ -189,3 +191,5 @@ replace github.com/codex-k8s/kodex/libs/go/httpserver => ../../../libs/go/httpse
 replace github.com/codex-k8s/kodex/libs/go/kubernetesadmission => ../../../libs/go/kubernetesadmission
 
 replace github.com/codex-k8s/kodex/libs/go/runtimepolicywire => ../../../libs/go/runtimepolicywire
+
+replace github.com/codex-k8s/kodex/libs/go/repositorybundle => ../../../libs/go/repositorybundle

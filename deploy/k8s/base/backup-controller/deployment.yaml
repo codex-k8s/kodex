@@ -96,14 +96,14 @@ spec:
         - name: credentials
           secret:
             secretName: backup-controller-credentials
-            defaultMode: 0440
+            defaultMode: 288
             items:
               - key: credentials.json
                 path: credentials.json
         - name: tls
           configMap:
             name: backup-controller-postgresql-ca
-            defaultMode: 0440
+            defaultMode: 288
             items:
               - key: ca.pem
                 path: ca.pem

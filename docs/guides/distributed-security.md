@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.32
-updated: 2026-10-26
+version: 1.7.33
+updated: 2026-10-28
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -24,6 +24,34 @@ Expected не выводится из фактически проверяемо�
 поля и отказ получения expected; успешное сравнение остальных ресурсов не
 заменяет эту границу. Правило относится к проверке desired state и не доказывает
 фактическую доступность маршрута либо применение policy в кластере.
+
+## Адресный repair служебной PostgreSQL identity
+
+Ошибка аутентификации одного workload не разрешает общую ротацию ролей.
+Оператор закрепляет exact cluster/namespace/workload и revision источника,
+проверяет отсутствие активных consumers затрагиваемого credential и применяет
+закрытый target-only режим. Пароль и канонические grants других ролей не
+меняются. Необходимые реквизиты получают только bounded операторский workload
+через отдельную immutable проекцию, без выдачи модели или записи значений
+в план/журнал. INTENT предшествует первому эффекту; неизвестный исход требует
+readback, а не нового запуска. Успех подтверждает реальная аутентификация
+назначенной identity через тот же exact TLS/SNI/CA путь и чтение каждого
+заявленного источника. Наличие SCRAM verifier или успешная admin session
+не заменяют эту проверку. Конкретный оператор backup reader описан в
+`OPS-DOC-BACKUP-READER-1887`.
+
+Проекция файлового credential повторяет преобразование штатного producer/consumer:
+завершающий LF файла `openssl rand -hex` не является частью PostgreSQL password.
+Нормализация выполняется только в этом типизированном поле, как в native deploy;
+общий Secret decoder и ключи иных интеграций сохраняют исходные bytes. Ошибка
+аутентификации сама по себе не доказывает необходимость ротации роли: сначала
+проверяются формат и равенство проекции штатному пути, без вывода значений.
+
+Создание Pod и наличие декларации NetworkPolicy не доказывают готовности
+фактического канала. Перед одноразовыми restore effects применяется bounded
+read-only startup barrier через тот же exact target/TLS/auth путь. Повторять
+ради готовности можно только проверку соединения; write, restore, cleanup и
+неизвестный внешний эффект повтором такой проверки не разрешаются.
 
 ## Прототипный профиль trusted-cluster
 
@@ -1506,6 +1534,14 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   цепочки. Нижний cache TTL не продлевает этот срок: короткий snapshot не
   кэшируется. Отмена или истечение TTL во время resolution закрывает выдачу;
   producer и consumer используют один resolver и проверку публичных адресов.
+- Ответ NOERROR с отсутствующим семейством адресов и SOA завершается после
+  проверки всей CNAME-цепочки: единственная SOA класса IN должна покрывать
+  конечное имя по границам DNS labels. TTL отрицательного доказательства —
+  минимум TTL SOA, SOA MINIMUM и цепочки CNAME — также ограничивает общий
+  снимок. Кэшированный ответ доверенного recursive resolver не обязан иметь
+  AA=true. SOA из Additional и NS referral без SOA не отменяют следующий
+  ограниченный запрос; SERVFAIL, timeout, NXDOMAIN, чужая/невалидная SOA и
+  непубличный адрес по-прежнему запрещают выдачу частичного A-only результата.
 - Для разрешённого OpenAPI origin смена A/AAAA допускает перекрытие только
   ранее полностью проверенных публичных адресов одного hostname: не более двух
   минут после последнего наблюдения и не более 32 адресов вместе с новым
@@ -1940,6 +1976,36 @@ gate — `make test-runtime-admission-gate`, предел процесса 60 с
 
 ## Полнота deployable
 
+Разделение writable generations должно сохраняться во всех mounts, включая
+служебную историю провайдера. Общий session PVC нельзя повторно открыть через
+`.kodex/state`: private generations и history получают разные exact subPath,
+а весь root доступен только доверенному initializer с owner-issued authority.
+Payload/annotation и успешный mount не доказывают это полномочие.
+`FSGroupChangePolicy=OnRootMismatch` не гарантирует сохранение private modes
+при неподготовленном корне. Его первая нормализация допускается только в
+отдельной owner-fenced подготовке нового пустого exact PVC до private data;
+известный корень затем сохраняет нужные gid/permissions. Неизвестный root либо
+неподтверждённая custody блокируют data consumer без recursive repair.
+Проверка привязывается к реальному storage class и фактическим правам после
+повторного Pod: Pod Ready или декларации securityContext недостаточно.
+Если профиль требует единую shared group новых файлов под восстановленными
+private directories, одной supplemental group недостаточно: отсутствие SGID
+на mode0700 возвращает primary group writer. Профиль закрепляет primary GID
+и проверяет фактический owner/group новой записи без расширения private modes.
+
+Передача regular-file, directory FD и inode metadata использует разные
+закрытые read-only операции. Расширение одного вида не меняет validator
+другого: regular-file операция не принимает directory/O_PATH/writable FD.
+Kernel peer, exact root/task, inode/type/owner/group, actual access flags,
+CLOEXEC, отсутствие extra rights и неизменность before/after обязательны;
+directory дополнительно проверяет начальный cursor. Metadata frame ограничен
+полями и размером, не передаёт FD и не назначает actor/grant. Все unexpected
+SCM_RIGHTS закрываются, включая отказ и усечение frame. Это не основание
+добавить DAC capabilities либо исправлять чужие permissions.
+
+Граница и воспроизводимые native probes:
+[OPS-DOC-RUNTIME-WORKSPACE-1953](../operations/runtime-workspace-durability-1953.md).
+
 Объявленный том runtime-окружения материализуется также в filesystem profile
 провайдера по exact canonical mount path и закреплённому volumes digest.
 `workspace-write` разрешает запись только в эти отдельные тома; `read-only`
@@ -2077,6 +2143,19 @@ values, Secret, команд инструментов, инструкций ил
 не выходит из своего проекта; SYSTEM не обходит eligibility root USER.
 Полные instructions и подтверждаемые изменения сохраняют отдельный current
 server-owned context/OCC gate; metadata read не расширяет их authority.
+
+Подготовка модели обычного сотрудника через помощника использует отдельную
+`PREPARE_AGENT_RUNTIME_CONFIGURATION` (#1841). Источник — действующая PROJECT
+lease; точный проект назначает сервер, `agent.manage` проверяется при подготовке,
+редактировании, validate и apply. Ordinary resolver исключает system agents и
+все `project_assistant_profiles`; существующая самонастройка помощника не
+расширяется. Ни locator, ни прочитанная политика аккаунтов не выдают доступ.
+Безопасный runtime READ возвращает только ссылки профиля/аккаунтов, веса,
+модель, степень рассуждений, режим поиска и pins опубликованного overlay с
+признаком наличия черновика; полные TOML, credentials и ENV отсутствуют.
+Желаемые значения и before/pins фиксируются сервером. Runtime configuration и
+совместимый overlay публикуются одной owner-транзакцией после человеческого
+подтверждения; drift, отзыв доступа и чужой черновик закрывают применение.
 
 Тот же принцип применяется к published Workflow metadata: owner повторяет
 публичный eligibility resolver и `workflow.view`, а PROJECT остаётся в exact
@@ -2335,6 +2414,35 @@ content и превышение лимитов не дают CLEAN. Ограни
 Исторические format-only CLEAN сохраняются как история, но без evidence
 не открывают bytes или capability. AV не заменяет отдельный анализ
 prompt injection и не разрешает внешние действия без их Human Gate.
+
+### Типизированный контейнер с исходными файлами
+
+CLEAN JSON/Base64 либо archive-контейнер не является допуском decoded members.
+Перед любым publication Gate каждый member проходит native format policy с
+настоящим filename/MIME и независимый mandatory scanner по exact decoded bytes.
+Receipt сохраняет каждый path/mode/size/digest и scan policy/engine/evidence;
+extra/missing member, unknown format, quarantine, infected либо unavailable
+scanner закрывает весь набор, не выдаёт partial CLEAN. Изменение имени/MIME,
+перекодирование или omission не снимают quarantine. Новый purpose-context не
+выводится из outer CLEAN и требует явного согласованного policy-контракта.
+
+Для согласованной публикации исходников Git разрешён отдельный server-owned
+`GIT_REPOSITORY_SOURCE_ONLY`: полный UTF-8 без NUL допускает HTML/SVG/XHTML и
+shebang, но только с mandatory exact-byte AV и без preview/исполнения в платформе.
+Обычный upload/capture не принимает purpose от caller и сохраняет карантин.
+Новый profile ID закрепляется в immutable snapshot; reader использует закрытый
+реестр старого и нового ID, не переименовывает старые receipts и отклоняет unknown.
+После появления новых snapshots rollback обязан сохранять совместимый reader.
+Полный manifest Gate показывает назначение исходников и предупреждение о возможной
+автоматизации целевого Git-репозитория. Это не разрешение на произвольный shell.
+
+PostgreSQL хранит metadata/pins/receipts; body остаётся в original immutable
+ArtifactRevision/S3version. Publication удерживает exact source pins до terminal,
+включая UNKNOWN после revoke/expiry/root terminal. Retention pin не даёт права
+чтения: pre-effect content read повторяет fresh owner eligibility до и после
+object read; recovery подтверждает past remote fact по metadata без нового
+source download либо write. Unknown database commit не разрешает cleanup
+existing source objects, новый idempotency key или повтор внешнего эффекта.
 
 ## Очистка объектов после переноса сессии
 

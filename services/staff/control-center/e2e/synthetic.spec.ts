@@ -66,6 +66,7 @@ import type {
   Project,
   SystemAssistant,
   IntegrationDefinition,
+  IntegrationConnection,
   RuntimeEnvironmentSet,
   RevisionImpactPlan,
   RevisionImpactPage,
@@ -223,7 +224,7 @@ for (const { width, height, part, title } of syntheticJourneyProfiles()) {
       releaseInitialHomeCatalogs = resolve;
     });
     if (!includes("CORE_ENV")) releaseInitialHomeCatalogs();
-    if (width === 1440) await page.clock.install();
+    if (width === 1440 && includes("CORE_ENV")) await page.clock.install();
     await page.setViewportSize({ width, height });
     page.on("pageerror", (error) => failures.push(error.message));
     page.on("response", (response) => {
@@ -516,6 +517,12 @@ for (const { width, height, part, title } of syntheticJourneyProfiles()) {
       | ((agents: Agent[], projectRef?: string, workflows?: Workflow[]) => void)
       | undefined;
     let invalidateRuns: ((runs: Run[], projectRef: string) => void) | undefined;
+    let invalidateConnections:
+      | ((connections: IntegrationConnection[]) => void)
+      | undefined;
+    let sendSpeechHeartbeat:
+      | ((speech: BootstrapState["speechTranscription"], now: number) => void)
+      | undefined;
     let managedCatalog: ManagedConfigurationSummary[] = [];
     let integrationCatalogReady = false;
     const integrationDefinitions = {
@@ -562,8 +569,44 @@ for (const { width, height, part, title } of syntheticJourneyProfiles()) {
         if (input.type === "SESSION_RESUME") {
           sessionResumes++;
           let invalidationCursor = 0;
+          sendSpeechHeartbeat = (speechTranscription, now) => {
+            socket.send(
+              JSON.stringify({
+                type: "STREAM_HEARTBEAT",
+                streamKind: "PLATFORM",
+                streamRef: "PLATFORM",
+                cursor: invalidationCursor,
+                serverTime: new Date(now).toISOString(),
+                speechTranscription,
+              }),
+            );
+          };
           const sendSnapshot = (envelope: PlatformSnapshotEnvelope) =>
             socket.send(JSON.stringify(envelope));
+          const integrationSnapshot =
+            (): PlatformSnapshotEnvelope["snapshot"] => {
+              const snapshot: PlatformSnapshotEnvelope["snapshot"] = {
+                definitions: {
+                  definitions: integrationDefinitions.items,
+                  coreReady: integrationDefinitions.coreReady,
+                  nextActions: integrationDefinitions.nextActions,
+                  page: {},
+                },
+                connections: {
+                  connections: integrationConnections.items,
+                  nextActions: integrationConnections.nextActions,
+                  page: {
+                    nextPageToken: integrationConnections.nextPageToken,
+                  },
+                },
+              };
+              for (const read of catalogReaders.get("INTEGRATION_CONNECTION") ??
+                []) {
+                const value = read(input.projectRef);
+                if (value !== undefined) Object.assign(snapshot, value);
+              }
+              return snapshot;
+            };
           invalidateAgents = (agents, projectRef, workflows) => {
             sendSnapshot({
               type: "PLATFORM_SNAPSHOT",
@@ -608,6 +651,22 @@ for (const { width, height, part, title } of syntheticJourneyProfiles()) {
               projectRef,
               mode: "DELTA",
               snapshot: { catalog: { runs, gates: [], gatesPage: {} } },
+            });
+          invalidateConnections = (connections) =>
+            sendSnapshot({
+              type: "PLATFORM_SNAPSHOT",
+              requestRef: input.requestRef,
+              streamKind: "PLATFORM",
+              streamRef: "PLATFORM",
+              cursor: ++invalidationCursor,
+              eventName: "INTEGRATION_CONNECTION_CHANGED",
+              kind: "INTEGRATION_CONNECTION",
+              projectRef: input.projectRef,
+              mode: "DELTA",
+              snapshot: {
+                ...integrationSnapshot(),
+                connections: { connections, nextActions: [], page: {} },
+              },
             });
           const snapshots: Array<
             [
@@ -654,24 +713,7 @@ for (const { width, height, part, title } of syntheticJourneyProfiles()) {
             ],
           ];
           if (integrationCatalogReady)
-            snapshots.push([
-              "INTEGRATION_CONNECTION",
-              {
-                definitions: {
-                  definitions: integrationDefinitions.items,
-                  coreReady: integrationDefinitions.coreReady,
-                  nextActions: integrationDefinitions.nextActions,
-                  page: {},
-                },
-                connections: {
-                  connections: integrationConnections.items,
-                  nextActions: integrationConnections.nextActions,
-                  page: {
-                    nextPageToken: integrationConnections.nextPageToken,
-                  },
-                },
-              },
-            ]);
+            snapshots.push(["INTEGRATION_CONNECTION", integrationSnapshot()]);
           for (const [kind, readers] of catalogReaders) {
             const values = readers
               .map((read) => read(input.projectRef))
@@ -680,7 +722,9 @@ for (const { width, height, part, title } of syntheticJourneyProfiles()) {
             const existing = snapshots.find(([current]) => current === kind);
             const snapshot = Object.assign(
               {},
-              existing?.[1],
+              kind === "INTEGRATION_CONNECTION"
+                ? integrationSnapshot()
+                : existing?.[1],
               ...values,
             ) as PlatformSnapshotEnvelope["snapshot"];
             if (existing) existing[1] = snapshot;
@@ -1720,11 +1764,10 @@ for (const { width, height, part, title } of syntheticJourneyProfiles()) {
         fixture.setInspectorFailure(undefined);
       }
     }
-    if (width === 1440) {
+    if (width === 1440 && includes("CORE_ENV")) {
       let speechAvailable = true;
       let grants = 0;
       let transcriptions = 0;
-      let speechClockOffset = 0;
       await page.route("**/api/v1/bootstrap", async (route) => {
         grants += 1;
         await route.fulfill({
@@ -1735,9 +1778,7 @@ for (const { width, height, part, title } of syntheticJourneyProfiles()) {
               ? {
                   available: true,
                   reason: "READY",
-                  validUntil: new Date(
-                    Date.now() + speechClockOffset + 30_000,
-                  ).toISOString(),
+                  validUntil: new Date(Date.now() + 30_000).toISOString(),
                 }
               : { available: false, reason: "STT_PERMISSION_DENIED" },
           },
@@ -1754,6 +1795,10 @@ for (const { width, height, part, title } of syntheticJourneyProfiles()) {
         await route.fulfill({ json: { text: "Диктовка" } });
       });
       await page.goto("/configurations/PROMPT_TEMPLATE/new");
+      await expect(page.locator("header .realtime-status")).toHaveAttribute(
+        "data-presentation-state",
+        "live",
+      );
       const voice = page.locator(".configuration-editor .voice-input");
       await expect(voice.locator("button")).toHaveCount(1);
       const prompt = page.getByRole("textbox", {
@@ -1764,21 +1809,38 @@ for (const { width, height, part, title } of syntheticJourneyProfiles()) {
       await voice.locator("button").click();
       await expect(voice).toHaveAttribute("data-state", "recording");
       await page.waitForTimeout(350);
-      await voice.locator("button").first().click();
+      await voice
+        .getByRole("button", { name: "Завершить и распознать", exact: true })
+        .click();
       await expect(prompt).toHaveText("Диктовка");
       await prompt.press("Control+z");
       await expect(prompt).toHaveText("");
       await voice.locator("button").click();
       await expect(voice).toHaveAttribute("data-state", "recording");
+      const grantReads = grants;
       for (let renewal = 0; renewal < 3; renewal += 1) {
-        const before = grants;
-        speechClockOffset += 15_000;
         await page.clock.fastForward(15_000);
-        await expect.poll(() => grants).toBeGreaterThan(before);
+        const now = await page.evaluate(() => Date.now());
+        if (!sendSpeechHeartbeat)
+          throw new Error("Missing speech heartbeat fixture");
+        sendSpeechHeartbeat(
+          {
+            available: true,
+            reason: "READY",
+            validUntil: new Date(now + 30_000).toISOString(),
+          },
+          now,
+        );
         await expect(voice).toHaveAttribute("data-state", "recording");
       }
+      expect(grants).toBe(grantReads);
       speechAvailable = false;
-      await page.clock.fastForward(15_000);
+      if (!sendSpeechHeartbeat)
+        throw new Error("Missing speech heartbeat fixture");
+      sendSpeechHeartbeat(
+        { available: false, reason: "STT_PERMISSION_DENIED" },
+        await page.evaluate(() => Date.now()),
+      );
       await expect(voice.locator("button")).toHaveCount(0);
       await expect(voice).toHaveAttribute("data-state", "idle");
       expect(transcriptions).toBe(1);
@@ -2028,7 +2090,16 @@ for (const { width, height, part, title } of syntheticJourneyProfiles()) {
           },
           installSnapshot,
         );
-        await checkGrantCandidates(page, project.ref, installSnapshot);
+        await checkGrantCandidates(
+          page,
+          project.ref,
+          installSnapshot,
+          (connections) => {
+            if (!invalidateConnections)
+              throw new Error("Missing connection invalidation fixture");
+            invalidateConnections(connections);
+          },
+        );
       }
     }
     const catalogProject = projects[0];

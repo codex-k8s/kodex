@@ -1,0 +1,156 @@
+# Одноразовый операторский контроль #1952, отдельно от модели и её credentials.
+# Перед create обязательны exact cluster/namespace/node UID и capacity readback.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: qa-browser-control-1952
+  namespace: kodex-runtime
+  labels:
+    qa.kodex.dev/issue: "1952"
+spec:
+  podSelector:
+    matchLabels:
+      qa.kodex.dev/browser-control: "1952"
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress: []
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: qa-browser-control-1952
+  namespace: kodex-runtime
+  labels:
+    qa.kodex.dev/issue: "1952"
+    qa.kodex.dev/browser-control: "1952"
+spec:
+  nodeName: k3d-kodex-server-0
+  restartPolicy: Never
+  activeDeadlineSeconds: 45
+  terminationGracePeriodSeconds: 5
+  automountServiceAccountToken: false
+  enableServiceLinks: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10002
+    runAsGroup: 10002
+    fsGroup: 29000
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: browser-control
+      image: pull.kodex.127.0.0.2.nip.io/kodex/roles@sha256:12ef8b1f1e429a8b4458c218553b5e08578de144999c5ec3c63b09697a3d6634
+      imagePullPolicy: Never
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: [ALL]
+        # Совпадает с provider-runtime текущего образа; настройки хоста не меняются.
+        seccompProfile:
+          type: Unconfined
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+          ephemeral-storage: 64Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+          ephemeral-storage: 256Mi
+      command: [/usr/bin/env, -i, PATH=/usr/local/bin:/usr/bin:/bin, HOME=/tmp, /usr/local/bin/node, -e]
+      args:
+        - |
+          const fs = require('node:fs');
+          const { spawnSync } = require('node:child_process');
+          const root = fs.mkdtempSync('/workspace/browser-control-');
+          const runner = root + '/browser.cjs';
+          // Дочерний процесс мог завершиться посреди записи; предел чтения жёсткий.
+          const readEvidence = (path) => {
+            let descriptor;
+            try {
+              descriptor = fs.openSync(path, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+              if (!fs.fstatSync(descriptor).isFile()) return {state:'NOT_REGULAR'};
+              const buffer = Buffer.alloc(16385);
+              const length = fs.readSync(descriptor,buffer,0,buffer.length,0);
+              return {state:length>16384?'TRUNCATED':'READ',text:buffer.subarray(0,Math.min(length,16384)).toString('utf8')};
+            } catch(error) {return {state:error.code==='ENOENT'?'ABSENT':'READ_FAILED',code:error.code};}
+            finally {if(descriptor!==undefined)fs.closeSync(descriptor);}
+          };
+          // Только в этом пустом Pod: сравнение /proc не меняет профиль сотрудников.
+          const browserSource = [
+            'const fs=require("node:fs");const record=(v)=>fs.writeFileSync(process.argv[2],JSON.stringify(v),{mode:0o600});record({stage:"NODE_STARTED"});',
+            'const { chromium } = require("/opt/kodex/npm-toolchain/node_modules/playwright");',
+            '(async()=>{let browser; const started=Date.now(); try {',
+            'browser=await chromium.launch({executablePath:"/usr/lib/chromium/chromium",headless:true,chromiumSandbox:true,timeout:10000,env:{PATH:"/usr/bin:/bin",HOME:process.env.HOME,TMPDIR:"/tmp"}});',
+            'const page=await browser.newPage(); await page.setContent("<title>runtime control</title>",{timeout:3000});',
+            'const titleOK=await page.title()==="runtime control";const result={stage:"BROWSER_FINISHED",titleOK,elapsedMs:Date.now()-started};record(result);console.log(JSON.stringify(result));if(!titleOK)process.exitCode=1;',
+            '} catch(error) {const result={stage:"BROWSER_FAILED",failed:true,elapsedMs:Date.now()-started,error:String(error.message).slice(0,10000)};record(result);console.log(JSON.stringify(result));process.exitCode=1;',
+            '} finally {if(browser)await browser.close();}})().catch(()=>{console.error("Browser control cleanup failed");process.exitCode=1;});',
+          ].join('\n');
+          fs.writeFileSync(runner, browserSource, {mode:0o600,flag:'wx'});
+          try {
+            const version = spawnSync('/usr/local/bin/codex', ['--version'], {env:{PATH:'/usr/local/bin:/usr/bin:/bin',HOME:'/tmp'},timeout:1000,maxBuffer:4096,encoding:'utf8'});
+            console.log(JSON.stringify({stage:'CLI_VERSION',exit:version.status,stdout:version.stdout,stderr:version.stderr}));
+            if(version.status!==0)throw new Error('Codex version control failed');
+            for (const access of ['deny', 'read']) {
+              const home = root + '/home-' + access;
+              const codexHome = root + '/codex-' + access;
+              fs.mkdirSync(home, {mode:0o700});
+              fs.mkdirSync(codexHome, {mode:0o700});
+              const config = [
+                'default_permissions = "qa"',
+                'approval_policy = "never"',
+                'allow_login_shell = false',
+                '[permissions.qa]',
+                'extends = ":workspace"',
+                '[permissions.qa.filesystem]',
+                '"/workspace" = "write"',
+                '"/tmp" = "write"',
+                '"/run/secrets" = "deny"',
+                '"/proc" = "' + access + '"',
+              ].join('\n');
+              fs.writeFileSync(codexHome + '/config.toml', config, {mode:0o600,flag:'wx'});
+              const env = {PATH:'/usr/local/bin:/usr/bin:/bin',HOME:home,CODEX_HOME:codexHome};
+              const smokeMarker = root + '/smoke-' + access + '.json';
+              const smoke = spawnSync('/usr/local/bin/codex', ['sandbox','-P','qa','-C',root,'/usr/local/bin/node','-e','require("node:fs").writeFileSync(process.argv[1],"NODE_STARTED",{mode:0o600});process.stdout.write("NODE_STARTED");',smokeMarker], {
+                env,timeout:5000,killSignal:'SIGKILL',maxBuffer:4096,encoding:'utf8',
+              });
+              const markerRead = readEvidence(smokeMarker);
+              const marker = markerRead.state==='READ' ? markerRead.text : null;
+              const logs = ['log/codex-tui.log','logs/codex.log'].flatMap((name)=>{
+                const evidence=readEvidence(codexHome+'/'+name);
+                return evidence.state==='ABSENT' ? [] : [{name,...evidence}];
+              });
+              console.log(JSON.stringify({stage:'SANDBOX_SMOKE',procAccess:access,exit:smoke.status,signal:smoke.signal,errorCode:smoke.error?.code,marker,stdout:smoke.stdout,stderr:smoke.stderr,logs}));
+              if(smoke.error){process.exitCode=1;break;}
+              if(smoke.status!==0||marker!=='NODE_STARTED')continue;
+              const observed = root + '/observed-' + access + '.json';
+              const started = Date.now();
+              const result = spawnSync('/usr/local/bin/codex', ['sandbox','-P','qa','-C',root,'/usr/local/bin/node',runner,observed], {
+                env,timeout:15000,killSignal:'SIGKILL',maxBuffer:16384,encoding:'utf8',
+              });
+              const file=readEvidence(observed);
+              let evidence={state:file.state};
+              if(file.state==='READ'){
+                try {evidence=JSON.parse(file.text);}
+                catch {evidence={state:'FILE_PARTIAL_OR_INVALID'};}
+              }
+              console.log(JSON.stringify({scope:'CREDENTIAL_FREE_CODEX_SANDBOX_CONTROL',procAccess:access,exit:result.status,signal:result.signal,errorCode:result.error?.code,elapsedMs:Date.now()-started,evidence,stdout:result.stdout,stderr:result.stderr}));
+              if (result.error) {process.exitCode=1;break;}
+            }
+          } finally {
+            fs.rmSync(root, {recursive:true,force:true});
+          }
+      volumeMounts:
+        - name: temporary
+          mountPath: /tmp
+        - name: workspace
+          mountPath: /workspace
+  volumes:
+    - name: temporary
+      emptyDir:
+        sizeLimit: 224Mi
+    - name: workspace
+      emptyDir:
+        sizeLimit: 32Mi

@@ -42,7 +42,7 @@ test("application patch preserves sidecars, trust, env, replicas and strategy", 
   assert.deepEqual(result.rollback, { name: "email-bridge", image: image("a"), expectedImage: image("b"), rollbackOf: releaseID });
 });
 
-for (const component of ["runtime-controller", "control-plane", "control-api-gateway"]) test(`stable ${component} image refresh binds source and provenance and preserves rollback metadata`, () => {
+for (const component of ["runtime-controller", "control-plane", "control-api-gateway", "integration-gateway"]) test(`stable ${component} image refresh binds source and provenance and preserves rollback metadata`, () => {
   const current = fixture();
   current.metadata.name = component;
   const app = current.spec.template.spec.containers[0];

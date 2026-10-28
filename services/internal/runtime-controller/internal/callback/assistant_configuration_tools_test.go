@@ -278,3 +278,53 @@ func assertAssistantConfigurationRejected(t *testing.T, scope runtimecontract.As
 		t.Fatal("invalid configuration reached owner draft RPC")
 	}
 }
+
+// TestPreparedAgentRuntimeConfigurationClosedProjectPolicy checks the ordinary-agent schema is PROJECT-only, never aliases self configuration and sends only editable settings to the owner draft RPC.
+// TestPreparedAgentRuntimeConfigurationClosedProjectPolicy проверяет доступность схемы обычного сотрудника лишь в PROJECT, отделение от самонастройки и отправку только редактируемых настроек в RPC черновика владельца.
+func TestPreparedAgentRuntimeConfigurationClosedProjectPolicy(t *testing.T) {
+	const kind = "PREPARE_AGENT_RUNTIME_CONFIGURATION"
+	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
+		input := assistantConfigurationFixture(scope)
+		found := false
+		for _, schema := range assistantPlanOperationSchemas(input) {
+			if assistantSchemaType(schema) != kind {
+				continue
+			}
+			found = true
+			params := schema["properties"].(map[string]any)["parameters"].(map[string]any)
+			if params["additionalProperties"] != false || len(params["properties"].(map[string]any)) != 7 {
+				t.Fatal("ordinary schema exposed authority fields")
+			}
+			if params["properties"].(map[string]any)["agentRef"].(map[string]any)["enum"] != nil {
+				t.Fatal("employee schema pinned the source helper")
+			}
+		}
+		if found != (scope == runtimecontract.AssistantScopeProject) {
+			t.Fatal("ordinary schema escaped project assistant boundary")
+		}
+		params := assistantConfigurationParameters("agt_employee123")
+		if assistantConfigurationParametersAllowed(input, kind, params) != (scope == runtimecontract.AssistantScopeProject) {
+			t.Fatal("ordinary dispatch escaped project scope")
+		}
+		params["agentRef"] = input.AgentRef
+		if assistantConfigurationParametersAllowed(input, kind, params) {
+			t.Fatal("ordinary operation accepted assistant self")
+		}
+		params["agentRef"] = "agt_employee123"
+		for _, field := range []string{"projectRef", "organizationRef", "expectedVersion", "targetKind", "runtimeProfilePin", "configToml"} {
+			params[field] = "synthetic-authority"
+			if assistantConfigurationParametersAllowed(input, kind, params) {
+				t.Fatalf("ordinary parameters accepted %s", field)
+			}
+			delete(params, field)
+		}
+		if scope == runtimecontract.AssistantScopeProject {
+			client := &scopedAssistantPlanClient{}
+			server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}}
+			_, err := server.proposeAssistantPlan(t.Context(), input, map[string]any{"summary": "Configure employee model", "operations": []any{map[string]any{"type": kind, "parameters": params}}}, json.RawMessage(`23`))
+			if err != nil || len(client.requests) != 1 {
+				t.Fatalf("ordinary model never reached owner draft: %v", err)
+			}
+		}
+	}
+}

@@ -93,5 +93,6 @@ SELECT artifact.id::text,
        ), '[]'::jsonb),
        (SELECT COALESCE(sum(control_plane.skill_artifact_reference_count(@organization_id::uuid,artifact.ref,revision.revision,revision.digest)),0)::bigint
         FROM control_plane.artifact_revisions revision WHERE revision.artifact_id=artifact.id),
-       control_plane.artifact_active_binding_count(artifact.id)
+       control_plane.artifact_active_binding_count(artifact.id),
+       control_plane.artifact_has_retained_revisions(artifact.id)
 FROM target_artifact artifact;

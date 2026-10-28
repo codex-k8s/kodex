@@ -43,6 +43,52 @@ async function renderNode(value: RunNode): Promise<string> {
 }
 
 describe("контекст исторического узла без сводки", () => {
+  it("показывает отказ обязательного результата независимо от успешного завершения модели", async () => {
+    const html = await renderNode({
+      ...node,
+      state: "SUCCEEDED",
+      workflowResults: [
+        {
+          attempt: 1,
+          runRef: node.runRef,
+          accepted: false,
+          reason: "MISSING_RESULT",
+          results: [],
+        },
+      ],
+    });
+    expect(html).toContain("Обязательные результаты не приняты");
+    expect(html).toContain("MISSING_RESULT");
+    expect(html).not.toContain("Обязательные результаты приняты");
+  });
+  it("сохраняет exact evidence и не подменяет неподтверждённую проверку состояния успехом", async () => {
+    const digest = "a".repeat(64);
+    const html = await renderNode({
+      ...node,
+      workflowResults: [
+        {
+          attempt: 2,
+          runRef: node.runRef,
+          accepted: true,
+          reason: "",
+          results: [
+            {
+              key: "deploy",
+              kind: "DEPLOYMENT",
+              digest,
+              headSha: "b".repeat(40),
+              repository: "codex-k8s/test-repo",
+              healthOk: false,
+            },
+          ],
+        },
+      ],
+    });
+    expect(html).toContain(digest);
+    expect(html).toContain("b".repeat(40));
+    expect(html).toContain("Проверка состояния не подтверждена");
+    expect(html).not.toContain("Проверка состояния пройдена");
+  });
   it("на mobile отдаёт названию полную строку отдельно от статуса и кнопок", () => {
     const source = readFileSync(
       new URL("./RunNodeInspector.vue", import.meta.url),
@@ -75,4 +121,33 @@ describe("контекст исторического узла без сводк
     expect(html).toContain(inputSummary);
     expect(node.state).toBe("FAILED");
   });
+});
+
+it("показывает отрицательное native evidence отдельно от принятых результатов", async () => {
+  const html = await renderNode({
+    ...node,
+    workflowResults: [
+      {
+        attempt: 1,
+        runRef: node.runRef,
+        accepted: false,
+        reason: "CHANGES_REQUIRED",
+        results: [],
+        evidence: [
+          {
+            key: "review",
+            kind: "REVIEW",
+            digest: "a".repeat(64),
+            headSha: "b".repeat(40),
+            receiptRef: "erc_12345678",
+            verdict: "CHANGES_REQUIRED",
+          },
+        ],
+      },
+    ],
+  });
+  expect(html).toContain("Обязательные результаты не приняты");
+  expect(html).toContain("доказательства отклонённой попытки");
+  expect(html).toContain("erc_12345678");
+  expect(html).not.toContain("Обязательные результаты приняты");
 });

@@ -44,10 +44,35 @@ const page: RoleImageImpactPage = {
 it("system image impact отличает явный ORG от пустого неподтверждённого project", () => {
   const original = page.items[0];
   if (!original) throw new Error("Synthetic impact item is missing");
-  const owned = { ...original, scopeKind: "ORGANIZATION" as const, projectRef: "" };
-  expect(checkedImagePage({ ...page, items: [owned] }, plan, undefined, "org_synthetic").items).toEqual([owned]);
-  expect(() => checkedImagePage({ ...page, items: [{ ...owned, scopeKind: "PROJECT" }] }, plan, undefined, "org_synthetic")).toThrow();
-  expect(() => checkedImagePage({ ...page, items: [{ ...owned, organizationRef: "org_foreign" }] }, plan, undefined, "org_synthetic")).toThrow();
+  const owned = {
+    ...original,
+    scopeKind: "ORGANIZATION" as const,
+    projectRef: "",
+  };
+  expect(
+    checkedImagePage(
+      { ...page, items: [owned] },
+      plan,
+      undefined,
+      "org_synthetic",
+    ).items,
+  ).toEqual([owned]);
+  expect(() =>
+    checkedImagePage(
+      { ...page, items: [{ ...owned, scopeKind: "PROJECT" }] },
+      plan,
+      undefined,
+      "org_synthetic",
+    ),
+  ).toThrow();
+  expect(() =>
+    checkedImagePage(
+      { ...page, items: [{ ...owned, organizationRef: "org_foreign" }] },
+      plan,
+      undefined,
+      "org_synthetic",
+    ),
+  ).toThrow();
 });
 it("сохраняет Environment без Agent и независимый owner count", () => {
   const result = checkedImagePage(page, plan, undefined, "org_synthetic");

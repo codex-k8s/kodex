@@ -8,9 +8,52 @@ fail() {
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 container_name="kodex-control-plane-postgres-${BASHPID}"
-test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestBootstrapComponent|TestWorkerGrantInstancesComponent|TestTrustedWorkloadGenerationComponent|TestAssistantCredentialScopesComponent|TestAssistantParallelLifecycleComponent|TestProjectAssistantProfilesComponent|TestOrganizationRoleImagesComponent|TestOrganizationRuntimeEnvironmentComponent|TestOrganizationRuntimeSecretComponent|TestAssistantSystemRunProjectScopeComponent|TestRuntimeTerminalStorageComponent)$'}}
+upgrade_container_id=""
+test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestBootstrapComponent|TestConcurrentBootstrapComponent|TestWorkerGrantInstancesComponent|TestTrustedWorkloadGenerationComponent|TestAssistantCredentialScopesComponent|TestAssistantParallelLifecycleComponent|TestProjectAssistantProfilesComponent|TestOrganizationRoleImagesComponent|TestOrganizationRuntimeEnvironmentComponent|TestOrganizationRuntimeSecretComponent|TestAssistantSystemRunProjectScopeComponent|TestRuntimeTerminalStorageComponent|TestIntegrationGateFeedbackComponent|TestWorkflowMetadataDraftComponent|TestDeletedEnvironmentSecretRetentionComponent|TestHistoricalEnvironmentSecretAdmissionComponent|TestHistoricalSecretRecoveryConcurrencyComponent|TestWorkflowGateDecisionsComponent|TestCompletionReceiptComponent|TestUsageCompletenessComponent|TestRepositoryBundlePublicationComponent|TestCommitAckArtifactComponent|TestOwnerGateExpiryComponent|TestOwnerGateExpiryMigrationProofComponent|TestProjectPurgeAuthorityComponent|TestProjectPurgeAuthorityMigrationProofComponent|TestServerWorkflowMigrationProofComponent|TestOverviewEligibilityComponent|TestWorkflowExceptionContextComponent|TestWorkflowExceptionContextMigrationProofComponent)$'}}
+
+# Оба закрытых upgrade-сценария используют одну и ту же отдельную пустую БД.
+upgrade_test='^TestWorkflowReviewQAEvidenceForwardUpgrade$'
+if [[ "$test_pattern" == --volume-predecessor ]]; then
+  upgrade_test='^TestWorkspaceVolumeMigrationPredecessor$'
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --checkpoint-predecessor ]]; then
+  upgrade_test='^TestWorkspaceCheckpointMigrationPredecessor$'
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --workspace-predecessor ]]; then
+  upgrade_test='^TestSessionWorkspaceMigrationPredecessor$'
+  test_pattern=--review-qa-upgrade
+fi
+
+# Новый upgrade-контур принимает только созданную ниже пустую disposable БД.
+if [[ "$test_pattern" == --review-qa-upgrade ]]; then
+  for key in KODEX_WORKFLOW_REVIEW_QA_UPGRADE_DSN KODEX_WORKFLOW_REVIEW_QA_UPGRADE_DISPOSABLE; do
+    [[ ! -v "$key" ]] || fail "external fixture configuration is forbidden: $key"
+  done
+  unset PGPASSWORD PGSERVICE PGSERVICEFILE PGOPTIONS PGHOST PGPORT PGUSER PGDATABASE
+  export PGPASSFILE=/dev/null
+fi
 
 cleanup() {
+  if [[ "$test_pattern" == --review-qa-upgrade ]]; then
+    # Новый контур никогда не очищает лишь совпавшее имя после неизвестного create.
+    if [[ "$upgrade_container_id" =~ ^[a-f0-9]{64}$ ]]; then
+      docker stop --time 5 "$upgrade_container_id" >/dev/null 2>&1 || true
+      # stop может вернуться до завершения AutoRemove; проверяем exact ID через
+      # успешную авторитетную выборку, а не считаем ошибку inspect отсутствием.
+      local cleanup_ids
+      for cleanup_attempt in {1..40}; do
+        cleanup_ids=$(docker ps -a --no-trunc --filter "id=$upgrade_container_id" --format '{{.ID}}') ||
+          fail 'disposable PostgreSQL cleanup readback failed'
+        [[ -n "$cleanup_ids" ]] || return 0
+        [[ "$cleanup_ids" == "$upgrade_container_id" ]] || fail 'disposable PostgreSQL cleanup identity changed'
+        sleep 0.25
+      done
+      fail 'disposable PostgreSQL cleanup absence is not confirmed'
+    fi
+    return
+  fi
   docker stop --time 5 "$container_name" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -69,6 +112,11 @@ for attempt in 1 2 3 4; do
   sleep 1
 done
 
+if [[ "$test_pattern" == --review-qa-upgrade ]]; then
+  [[ "$docker_run_output" =~ ^[a-f0-9]{64}$ ]] || fail 'disposable container identity is unconfirmed'
+  upgrade_container_id="$docker_run_output"
+fi
+
 if [[ "$network_mode" == bridge ]]; then
   port=$(docker inspect --format '{{(index (index .NetworkSettings.Ports "5432/tcp") 0).HostPort}}' "$container_name")
 fi
@@ -93,6 +141,17 @@ run_migration() {
     env -u GOFLAGS GOENV=off GOWORK=off go run -p 2 ./cmd/cli "$@"
 }
 
+if [[ "$test_pattern" == --review-qa-upgrade ]]; then
+  (
+    cd -- "$repository_root/services/internal/control-plane"
+    KODEX_WORKFLOW_REVIEW_QA_UPGRADE_DSN="$dsn" \
+      KODEX_WORKFLOW_REVIEW_QA_UPGRADE_DISPOSABLE=dedicated-loopback-container \
+      env -u GOFLAGS GOENV=off GOWORK=off go test -p 2 -v -count=1 -timeout=180s \
+      ./cmd/cli -run "$upgrade_test"
+  )
+  exit
+fi
+
 (
   cd -- "$repository_root/services/internal/control-plane"
   if [[ -n "${KODEX_CONTROL_PLANE_TEST_FILTER:-}" ]]; then
@@ -109,6 +168,32 @@ run_migration() {
   run_migration up
   run_migration status >/dev/null
   run_migration up
+  # Каждый target проверяется собственным закрытым verifier.010 не принимает011;
+  # неизвестная схема не получает обхода либо fallback к старому профилю.
+  schema_version=$(psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" --no-password -X -qAt -v ON_ERROR_STOP=1 \
+    -c 'SELECT max(version_id) FILTER (WHERE is_applied) FROM public.goose_db_version')
+  case "$schema_version" in
+    20261026001600) schema_proof=workspace-checkpoint-migration-postcondition.sql; schema_verifier=validWorkspaceCheckpointMigrationPostcondition ;;
+    20261026001500) schema_proof=session-workspace-migration-postcondition.sql; schema_verifier=validSessionWorkspaceMigrationPostcondition ;;
+    20261026001000) schema_proof=server-workflow-migration-postcondition.sql; schema_verifier=validServerWorkflowMigrationPostcondition ;;
+    20261026001400) schema_proof=workflow-review-qa-evidence-migration-postcondition.sql; schema_verifier=validWorkflowReviewQAEvidenceMigrationPostcondition ;;
+    20261026001100) schema_proof=legacy-workflow-rework-migration-postcondition.sql; schema_verifier=validLegacyWorkflowReworkMigrationPostcondition ;;
+    20261026001200) schema_proof=workflow-exception-context-migration-postcondition.sql; schema_verifier=validWorkflowExceptionContextMigrationPostcondition ;;
+    20261026001300) schema_proof=workflow-upstream-rework-migration-postcondition.sql; schema_verifier=validWorkflowUpstreamReworkMigrationPostcondition ;;
+    *) fail 'unsupported current workflow schema target' ;;
+  esac
+  psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" \
+    --no-password -X -qAt -v ON_ERROR_STOP=1 \
+    --file "$repository_root/tools/release/$schema_proof" | \
+    node --input-type=module -e '
+      const {pathToFileURL} = await import("node:url");
+      const verifiers = await import(pathToFileURL(process.argv[1]));
+      let input = "";
+      for await (const chunk of process.stdin) input += chunk;
+      if (!Object.hasOwn(verifiers, process.argv[2]) || !verifiers[process.argv[2]](JSON.parse(input)))
+        throw new Error("Current workflow schema postcondition failed");
+      process.stdout.write("Current workflow schema read-only query passed\n");
+    ' "$repository_root/tools/release/control-plane-immutable-migration.mjs" "$schema_verifier"
   retention_reference_count=$(psql "$runtime_dsn" --no-password -X -qAt -v ON_ERROR_STOP=1 \
     -c "SELECT control_plane.skill_artifact_reference_count('00000000-0000-4000-8000-000000000001'::uuid,'art_component',1,'sha256:' || repeat('0',64))")
   [[ "$retention_reference_count" == "0" ]] || fail 'artifact retention trigger dependency is unavailable'

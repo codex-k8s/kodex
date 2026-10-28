@@ -155,6 +155,9 @@ func workerDiagnosticAnnotations(task model.Task, uid types.UID) map[string]stri
 // validWorkerJob binds observed Job metadata to the already-authorized task and exact source PVC UID.
 // RU: validWorkerJob связывает наблюдаемые метаданные Job с уже авторизованным заданием и точным UID исходного PVC.
 func validWorkerJob(task model.Task, job *batchv1.Job, uid types.UID) bool {
+	if task.Workspace != nil && string(uid) != task.Workspace.PVCUID {
+		return false
+	}
 	if (task.Kind == "SNAPSHOT" || task.Kind == "RESTORE") && uid == "" {
 		return false
 	}
@@ -232,6 +235,9 @@ func (controller *Controller) readResult(ctx context.Context, task model.Task, j
 	if !validWorkerPod(task, job, pod) {
 		return model.Result{}, errors.New("session archive worker pod binding is invalid")
 	}
+	if task.Workspace != nil && !controller.validWorkspaceWorkerPod(task, job, pod) {
+		return model.Result{}, errors.New("session workspace worker mounts are invalid")
+	}
 	podRef = pod.Name
 	stage = "RESULT_MISSING"
 	for _, status := range pod.Status.ContainerStatuses {
@@ -252,6 +258,11 @@ func (controller *Controller) readResult(ctx context.Context, task model.Task, j
 		stage = "RESULT_STATUS_CONFLICT"
 		if (job.Status.Succeeded > 0) != result.Success {
 			return model.Result{}, errors.New("session archive worker status conflicts")
+		}
+		if task.Workspace != nil && result.Success {
+			if !confirmedWorkspaceWorkerResult(task, pod, result) {
+				return model.Result{}, errors.New("session workspace worker result is unconfirmed")
+			}
 		}
 		stage = "WORKER_REPORTED_FAILURE"
 		if result.Success {

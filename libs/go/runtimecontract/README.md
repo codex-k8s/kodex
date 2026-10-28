@@ -2,8 +2,8 @@
 title: Runtime-контракты Kodex
 status: approved
 owner: developer
-version: 1.1.3
-updated: 2026-10-22
+version: 1.1.4
+updated: 2026-10-28
 ---
 
 # Runtime-контракты Kodex
@@ -12,6 +12,24 @@ updated: 2026-10-22
 инвентаризации образов и безопасных доказательств допуска. Доменные permissions,
 tenant eligibility, PostgreSQL lifecycle и issuer credentials ему не принадлежат.
 Он не выполняет RPC, сетевые запросы, сканирование, подпись или изменение данных.
+
+`WorkspaceArchiveWork` и `WorkspaceArchiveTask` задают один закрытый V2 task
+для control-plane producer и session-archive consumer: exact scope/generation,
+writer quiescence, immutable checkpoint, лимиты и reconciliation-only attempts.
+Проверка не выдаёт lease, writer, CLEAN либо права на restore/delete. Owner
+сопоставляет metadata со своим сохранённым состоянием и полномочиями; worker
+отдельно проверяет PVC/Pod, файлы и exact object versions. Прежний task JSON
+сохраняет поля и отсутствие optional workspace; alias не меняет его tags.
+
+`WorkspaceVolumePreparation` и `WorkspaceVolumeReady` описывают отдельную
+подготовку физической incarnation тома до private data. Logical task/PVC UID и
+volume generation не подменяются model RuntimeRevision, lease либо поколением
+рабочего дерева. Bounded canonical record закрепляет root device/inode; он не
+доказывает пустоту данных при позднем чтении, positive Job/process join или
+owner grant. Неизвестные поля, дубли, alias spelling и noncanonical bytes
+отклоняются. Полный owner create/preparation queue и runtime admission должны
+сопоставлять эти metadata со своим состоянием отдельно; наличие codec не
+означает их поставку либо разрешение V2.
 
 `ValidDNSLabel` задаёт общий лексический разбор одиночной метки имени ресурса:
 1..63 ASCII-байта, строчные буквы, цифры и внутренние дефисы без нормализации.

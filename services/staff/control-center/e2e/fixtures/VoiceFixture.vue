@@ -41,7 +41,7 @@ const managedContent = ref(
     description: "Начало конец",
     stt: {
       parameters: {
-        languages: ["ru"],
+        languages: ["ru", "en"],
         keywords: ["Kodex"],
         prompt: "Контекст",
       },

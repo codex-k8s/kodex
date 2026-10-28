@@ -16,7 +16,7 @@ SELECT gate.ref,
        gate.version,
        gate.created_at,
        gate.resolved_at,
-       COALESCE(attachment_set.ref, ''),gate.scope_kind,organization.ref
+       COALESCE(attachment_set.ref, ''),gate.scope_kind,organization.ref,gate.expires_at
 FROM control_plane.owner_gates gate
 LEFT JOIN control_plane.attachment_sets attachment_set
   ON attachment_set.id = gate.resolution_attachment_set_id

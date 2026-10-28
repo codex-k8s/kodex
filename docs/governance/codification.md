@@ -4,16 +4,32 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 2.2.11
-updated: 2026-10-21
+version: 2.2.22
+updated: 2026-10-27
 ---
 
 # Кодификация документов и задач
+
+- `OPS-DOC-STAGING-CAPACITY-1931` — [Проверка фактической ёмкости staging перед работой](../operations/staging-capacity-preflight-1931.md).
+
+- `OPS-DOC-1859` — [Публикация CLEAN bundle исходников одним commit](../operations/repository-bundle-publication-1859.md).
 
 - `OPS-DOC-1470` — [Независимость служебной идентичности и восстановление readers](../operations/mvp-1470-service-identity.md).
 - `OPS-DOC-1763` — [Совместная отладка прототипа системного помощника](../operations/assistant-prototype-debug-1763.md).
 - `RUN-DOC-1797-STORAGE` — [Перенос хранилища локальной ноды](../runbooks/local-node-storage.md).
 - `OPS-RUNTIME-MEMORY-001` — [Диагностика нехватки памяти исполнителя](../operations/runtime-memory-failure.md).
+- `OPS-OUTBOX-1855` — [Восстановление доставки событий после большой истории](../operations/outbox-claim-stabilization-1855.md).
+- `OPS-DOC-WORKFLOW-DRAFT-1870` — [Создание и чтение черновика процесса без этапов](../operations/workflow-metadata-draft-1870.md).
+- `OPS-DOC-TERMINAL-GATE-1873` — [Окончательный отказ закрытого Gate после deadline](../operations/terminal-gate-deadline-1873.md).
+
+- `OPS-DOC-GATE-CONSEQUENCES-1928` — [Последствия решения Human Gate](../operations/owner-gate-consequences-1928.md).
+- `OPS-DOC-WORKFLOW-GATE-1872` — [Точные решения Gate опубликованного этапа](../operations/workflow-gate-decisions-1872.md).
+- `OPS-DOC-COMPLETION-RECEIPT-1881` — [Согласованное чтение receipt при завершении с артефактами](../operations/completion-receipt-preflight-1881.md).
+- `OPS-DOC-NATS-STARTUP-1895` — [Закрытая диагностика подключения API к NATS](../operations/nats-startup-diagnostic-1895.md).
+- `OPS-DOC-INTEGRATION-COMPLETION-1899` — [Идемпотентность completion при восстановлении интеграции](../operations/integration-completion-generation-1899.md).
+- `OPS-DOC-USAGE-COMPLETENESS-1840` — [Полнота измеренного расхода токенов](../operations/usage-completeness-1840.md).
+- `OPS-DOC-BACKUP-READER-1887` — [Адресное восстановление назначенной backup reader identity](../operations/backup-reader-reconcile-1887.md).
+- `OPS-DOC-ARTIFACT-COMMIT-ACK-1889` — [Сохранность артефакта при неизвестном результате COMMIT](../operations/artifact-commit-ack-1889.md).
 
 Документ задает устойчивые идентификаторы и реестр документации.
 
@@ -75,6 +91,7 @@ updated: 2026-07-28
 
 ## Реестр
 
+- `OPS-CP-IMMUTABLE-MIGRATION-1855` — [Адресная immutable-миграция outbox](../operations/control-plane-immutable-migration-1855.md).
 - `OPS-CODE-QUALITY-1823` — [Подготовка кода к построчному ревью](../operations/code-quality-1823.md).
 - `OPS-PROTOTYPE-HANDOFF-1031` — [Единый прототип перед построчным ревью](../operations/prototype-review-handoff-1031.md).
 
@@ -116,6 +133,7 @@ updated: 2026-07-28
 | `DOM-MC-001`       | `docs/domains/README.md`                                    |
 | `OPS-MC-001`       | `docs/operations/README.md`                                 |
 | `OPS-AUTHORITY-DATABASE-1093` | `docs/operations/authority-database-boundary-1093.md` |
+| `OPS-DOC-OWNER-GATE-EXPIRY-1869` | `docs/operations/owner-gate-expiry-1869.md` |
 | `OPS-DOC-1198` | `docs/operations/mvp-1198-runtime-proof.md` |
 | `OPS-DOC-1229` | `docs/operations/api-release-drain-1229.md` |
 | `OPS-DOC-1242` | `docs/operations/mvp-1242-integrations-proof.md` |
@@ -137,6 +155,8 @@ updated: 2026-07-28
 | `OPS-PUBLIC-STABLE-001` | `docs/operations/public-stable-1810.md` |
 | `QA-DOC-SELFDEV-001` | `docs/qa/full-qa-task.md` |
 | `QA-DOC-SELFDEV-002` | `docs/qa/bootstrap-1797-evidence-ledger.md` |
+| `QA-PDLC-1830` | `docs/qa/staging-pdlc-1830.md` |
+| `RUN-QA-HOST-1837` | `docs/runbooks/qa-test-host-firewall.md` |
 | `ADR-MC-000`       | `docs/decisions/README.md`                                  |
 | `ADR-DOC-004`      | `docs/decisions/0014-domain-events-transactional-outbox.md` |
 | `GUIDE-MC-001`     | `docs/guides/README.md`                                     |

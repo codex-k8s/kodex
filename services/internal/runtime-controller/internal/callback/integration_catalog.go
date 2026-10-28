@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/codex-k8s/kodex/libs/go/repositorybundle"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -190,7 +191,7 @@ func integrationCatalog(input runtimecontract.RunnerInput, arguments map[string]
 // metadata с description до 500 runes,не выдавая full schema до exact selection.
 // Credential values отсутствуют,integration не тестируется и не вызывается.
 func integrationCatalogEntry(grant runtimecontract.RunnerIntegrationGrant) map[string]any {
-	return map[string]any{
+	entry := map[string]any{
 		"grant_ref":      grant.Ref,
 		"connection_ref": grant.ConnectionRef, "connection_name": grant.ConnectionName,
 		"definition_key": grant.DefinitionKey, "definition_version": grant.DefinitionVersion,
@@ -198,4 +199,8 @@ func integrationCatalogEntry(grant runtimecontract.RunnerIntegrationGrant) map[s
 		"capability_name": grant.CapabilityName, "capability_description": truncateRunes(grant.CapabilityDescription, 500),
 		"risk": grant.Risk, "operation": grant.Operation, "input_schema_sha256": grant.InputSchemaSHA256,
 	}
+	if grant.Operation == repositorybundle.Operation {
+		entry["tool_name"] = repositorybundle.ToolName
+	}
+	return entry
 }

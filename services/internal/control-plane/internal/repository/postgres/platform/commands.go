@@ -15,6 +15,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	workflowservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/workflow"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
@@ -44,20 +45,10 @@ type commandOutcome struct {
 // workflows передают собственную ограниченную concurrency.
 const defaultAgentRunConcurrency = 8
 
-// Execute resolves actor scope, prepares object receipts and opens the ReadCommitted owner
-// transaction with project/idempotency locks. Authorized terminal-delete replay is special;
-// ordinary replay follows current command authorization and refreshes selected receipt
-// metadata/actions. Fresh commands apply state, reconcile workflow launches, write
-// audit/outbox/receipt and commit atomically; an empty unchanged runtime poll commits without
-// receipt/audit. Prepared-object retention is set only after successful commit; historical ignored
-// rollback and commit-error mappings remain unchanged.
-// Execute разрешает actor scope, готовит object receipts и открывает ReadCommitted owner
-// transaction с project/idempotency locks. Авторизованный terminal-delete replay выделен отдельно;
-// обычный replay следует после текущей command authorization и обновляет некоторые receipt
-// metadata/actions. Новые команды атомарно применяют state, reconcile workflow launches,
-// записывают audit/outbox/receipt и commit; пустой неизменяющий runtime poll фиксируется без
-// receipt/audit. Prepared objects сохраняются лишь после успешного commit; прежние ignored
-// rollback и commit-error mappings не меняются.
+// Execute authorizes and atomically persists an idempotent owner command; prepared object versions
+// survive ambiguous COMMIT errors without fabricating success or retrying SQL.
+// Execute проверяет полномочия и атомарно сохраняет идемпотентную owner-команду; подготовленные версии
+// переживают неоднозначную ошибку COMMIT без выдуманного успеха либо повтора SQL.
 func (repository *Repository) Execute(ctx context.Context, input command.Command) (command.Result, error) {
 	scope, err := repository.resolveScope(ctx, input.Principal)
 	if err != nil {
@@ -99,6 +90,9 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 	var storedDigest string
 	var storedPayload []byte
 	receiptQuery := queryCommandsExecuteSelectIdempotencyReceiptsOrganizationIdActorIdOperation
+	if input.Kind == command.ObserveWorkspace || input.Kind == command.ClaimWorkspaceVolumeTasks {
+		receiptQuery = queryWorkspaceObservationReceipt
+	}
 	if payload, ok := input.Payload.(command.LeaseInput); input.Kind == command.ReportExecutionProgress && ok && payload.Financial != nil {
 		// Долгий активный execution сохраняет semantic receipt; текущее право
 		// уже проверено bindFinancialCallbackReceipt, TTL не выдаёт authority.
@@ -123,6 +117,9 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 			return command.Result{}, err
 		}
 		if err := repository.refreshCFGReceipt(ctx, tx, scope, &result); err != nil {
+			return command.Result{}, err
+		}
+		if err := repository.refreshWorkspaceObservationReceipt(ctx, tx, scope, input, &result); err != nil {
 			return command.Result{}, err
 		}
 		if exposesActorActions(input.Principal.CallerWorkload) {
@@ -165,7 +162,7 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 	}
 	// Пустой опрос runtime является наблюдением, а не устойчивым доменным действием.
 	// Receipt и аудит для него превращали бы исправный простой в постоянную запись.
-	if input.Kind == command.ClaimExecution && len(outcome.result.RuntimeItems) == 0 && !outcome.runtimeGraphChanged && !outcome.runtimeReadinessChanged {
+	if (input.Kind == command.ClaimExecution || input.Kind == command.ClaimWorkspaceVolumeTasks) && len(outcome.result.RuntimeItems) == 0 && !outcome.runtimeGraphChanged && !outcome.runtimeReadinessChanged {
 		if err := tx.Commit(ctx); err != nil {
 			return command.Result{}, fmt.Errorf("commit empty runtime claim: %w", errs.ErrConflict)
 		}
@@ -198,7 +195,7 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 			return command.Result{}, err
 		}
 	}
-	encoded, err := json.Marshal(memoryReceiptMetadata(outcome.result))
+	encoded, err := json.Marshal(workspaceObservationReceiptMetadata(input.Kind, memoryReceiptMetadata(outcome.result)))
 	if err != nil {
 		return command.Result{}, errs.ErrConflict
 	}
@@ -206,6 +203,9 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 		return command.Result{}, fmt.Errorf("insert command idempotency receipt: %w", errs.ErrConflict)
 	}
 	if err := tx.Commit(ctx); err != nil {
+		// A lost COMMIT acknowledgement can already own every prepared object version.
+		// Потерянный ответ COMMIT уже может закрепить каждую подготовленную версию объекта.
+		keepPrepared = !errors.Is(err, pgx.ErrTxCommitRollback)
 		return command.Result{}, fmt.Errorf("commit command transaction: %w", errs.ErrConflict)
 	}
 	keepPrepared = resultContainsPreparedObjects(outcome.result, prepared)
@@ -381,7 +381,7 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.createAssistantRoleImage(ctx, tx, scope, payload)
 	case command.CreateSystemAssistantRoleImageRecipe, command.UpdateSystemAssistantRoleImageRecipe:
 		return repository.applySystemAssistantImage(ctx, tx, scope, input)
-	case command.PublishAssistantRuntimeConfig:
+	case command.PublishAssistantRuntimeConfig, command.PublishPreparedAgentRuntimeConfig:
 		return repository.publishAssistantRuntimeConfiguration(ctx, tx, scope, input)
 	case command.UpdateAssistantRoleImageRecipe:
 		return repository.updateAssistantRoleImage(ctx, tx, scope, input)
@@ -449,7 +449,7 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		command.UpdateAssistantInstructions, command.RecoverAssistant:
 		return repository.changeAssistant(ctx, tx, scope, input)
 	case command.ClaimExecution, command.RenewExecution, command.ReportExecutionProgress, command.CommitProviderCredentialRefresh,
-		command.CompleteExecution,
+		command.CompleteExecution, command.ObserveWorkspace,
 		command.DelegateExecution, command.LaunchWorkflowExecution, command.ProposeAssistantPlan, command.ProposeAssistantMetadata,
 		command.ProposeRunMetadata, command.RecordRunToolCall:
 		return repository.changeExecution(ctx, tx, scope, input)
@@ -457,6 +457,12 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		command.CompleteSessionPVCDeletion, command.CompleteSessionObjectDeletion,
 		command.FailSessionArchiveTask:
 		return repository.changeSessionArchive(ctx, tx, scope, input)
+	case command.ClaimWorkspaceVolumeTasks:
+		payload, ok := input.Payload.(command.WorkspaceVolumeClaimInput)
+		if !ok {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		return repository.claimWorkspaceVolumeTasksTx(ctx, tx, scope, payload)
 	case command.MaterializeOccurrence, command.FailScheduleOccurrence:
 		return repository.changeOccurrence(ctx, tx, scope, input)
 	case command.CompleteConnectionTest:
@@ -1085,6 +1091,9 @@ func (repository *Repository) changeAgent(ctx context.Context, tx pgx.Tx, scope 
 	}
 	setAgentAvatarReadback(&item)
 	if input.Kind == command.ArchiveAgent || input.Kind == command.SetAgentEnabled && !payload.Enabled {
+		if err := repository.cancelRepositoryBundleDependency(ctx, tx, scope, "AGENT", item.Ref); err != nil {
+			return commandOutcome{}, err
+		}
 		if err := repository.suspendTargetSchedules(ctx, tx, scope, projectID, item.ProjectRef, "AGENT", item.Ref); err != nil {
 			return commandOutcome{}, err
 		}
@@ -1494,15 +1503,34 @@ const (
 	// workflowInvalidInvariants задаёт общую закрытую workflow invariant failure category для
 	// structure, capability и profile checks.
 	workflowInvalidInvariants = "WORKFLOW_INVARIANTS"
+	workflowInvalidTextBudget = "WORKFLOW_TEXT_BUDGET"
 )
 
-// workflowVersionInvalidField returns the first closed structural error, then rejects delegation
-// capability on steps when no distinct-agent delegation is required. It never returns payload text
-// or a step index as diagnostics.
-// workflowVersionInvalidField возвращает первую закрытую structural error, затем отклоняет
-// delegation capability у steps, когда distinct-agent delegation не требуется. Никогда не
-// возвращает payload text либо step index в диагностике.
+// workflowVersionInvalidField validates the explicit execution profile before general workflow
+// semantics, returning only a closed field code without model text or stage indices.
+// workflowVersionInvalidField проверяет явный профиль исполнения до общей семантики процесса,
+// возвращая только закрытый код поля без текста модели либо индексов этапов.
 func workflowVersionInvalidField(version entity.WorkflowVersion) string {
+	if version.ExecutionMode != workflowservice.ServerDAGV1 && version.ResultEvidenceProfile != "" || version.ReworkPolicy != "" && (version.ExecutionMode != workflowservice.ServerDAGV1 || version.ReworkPolicy != workflowservice.OwnerApprovedUpstreamV1) {
+		return workflowInvalidInvariants
+	}
+	if version.ExecutionMode != "" && version.ExecutionMode != "MANAGER_DRIVEN" && version.ExecutionMode != workflowservice.ServerDAGV1 {
+		return workflowInvalidInvariants
+	}
+	if version.ExecutionMode == workflowservice.ServerDAGV1 {
+		if !workflowservice.ValidServerVersion(version) {
+			if workflowservice.ServerTextBytes(version) > workflowservice.MaximumServerTextBytes {
+				return workflowInvalidTextBudget
+			}
+			return workflowInvalidInvariants
+		}
+	} else {
+		for _, step := range version.Steps {
+			if len(step.ResultRequirements) != 0 {
+				return workflowInvalidInvariants
+			}
+		}
+	}
 	if field := workflowVersionStructureInvalidField(version); field != "" {
 		return field
 	}
@@ -1516,22 +1544,27 @@ func workflowVersionInvalidField(version entity.WorkflowVersion) string {
 	return ""
 }
 
-// workflowVersionStructureInvalidField checks Unicode text/rune bounds,
-// coordinator/concurrency/timeouts/input shape, one-to-two-hundred ordered unique steps,
-// backward-only dependencies, gate decisions and capability grammar. It enforces the aggregate
-// byte budget but performs no database eligibility check, allowing structurally repairable catalog
-// profiles to remain distinguishable from executable acceptance.
-// workflowVersionStructureInvalidField проверяет Unicode text/rune bounds,
-// coordinator/concurrency/timeouts/input shape, от одного до двухсот ordered unique steps,
-// зависимости лишь на прежние steps, gate decisions и capability grammar. Ограничивает общий byte
-// budget, но не выполняет database eligibility check, отличая структурное исправление catalog
-// profiles от допуска исполнения.
+// workflowVersionStructureInvalidField keeps published/execution definitions nonempty and bounded;
+// allowing a mutable draft to be inspected does not grant publication or launch eligibility.
+// workflowVersionStructureInvalidField сохраняет непустую bounded структуру published/execution;
+// доступность mutable draft для чтения не даёт права публикации либо запуска.
 func workflowVersionStructureInvalidField(version entity.WorkflowVersion) string {
+	if len(version.Steps) < 1 {
+		return workflowInvalidInvariants
+	}
+	return workflowDraftStructureInvalidField(version)
+}
+
+// workflowDraftStructureInvalidField checks all existing field/step bounds while permitting no steps.
+// Only DRAFT/ARCHIVED readers may omit the strict wrapper's nonempty guard; execution retains it.
+// workflowDraftStructureInvalidField проверяет все прежние bounds полей/этапов, допуская их отсутствие.
+// Только DRAFT/ARCHIVED reader может не применять guard непустоты strict wrapper; execution сохраняет его.
+func workflowDraftStructureInvalidField(version entity.WorkflowVersion) string {
 	// maxLength считается в Unicode-символах, общий бюджет ниже остаётся байтовым.
 	if !validWorkflowText(version.Name, 160) || !validWorkflowText(version.Purpose, 2000) || !validWorkflowText(version.CompletionCriteria, 2000) || !utf8.ValidString(version.Instructions) {
 		return workflowInvalidInvariants
 	}
-	if strings.TrimSpace(version.Name) == "" || strings.TrimSpace(version.CoordinatorAgentRef) == "" || version.Concurrency < 1 || version.Concurrency > 100 || version.TimeoutSeconds < 1 || version.TimeoutSeconds > 7*24*60*60 || len(version.Inputs) > 100 || len(version.Steps) < 1 || len(version.Steps) > 200 || !validWorkflowInputFields(version.Inputs) {
+	if strings.TrimSpace(version.Name) == "" || strings.TrimSpace(version.CoordinatorAgentRef) == "" || version.Concurrency < 1 || version.Concurrency > 100 || version.TimeoutSeconds < 1 || version.TimeoutSeconds > 7*24*60*60 || len(version.Inputs) > 100 || len(version.Steps) > 200 || !validWorkflowInputFields(version.Inputs) {
 		return workflowInvalidInvariants
 	}
 	knownSteps := make(map[string]struct{}, len(version.Steps))
@@ -1560,6 +1593,9 @@ func workflowVersionStructureInvalidField(version entity.WorkflowVersion) string
 			}
 		}
 		if step.HumanGateAfter && len(step.GateDecisions) == 0 {
+			return workflowInvalidInvariants
+		}
+		if step.ApprovalTimeoutSeconds != nil && (!step.HumanGateAfter || *step.ApprovalTimeoutSeconds < 1 || *step.ApprovalTimeoutSeconds > 7*24*60*60) {
 			return workflowInvalidInvariants
 		}
 		for _, capability := range step.RequiredCapabilityKeys {
@@ -1739,11 +1775,16 @@ func validBoundedRunInput(input map[string]any) bool {
 	return err == nil && len(raw) <= 64<<10
 }
 
-// workflowRequiresDelegation reports whether any step agent differs from the coordinator; it does
-// not infer permissions from that relationship.
-// workflowRequiresDelegation показывает, отличается ли agent хотя бы одного step от coordinator;
-// permissions из этой связи не выводит.
+// workflowRequiresDelegation preserves coordinator delegation for manager-driven workflows.
+// Server DAG transitions belong to the owner scheduler and must not require granting the manager
+// a capability that would bypass that scheduler's result checks.
+// workflowRequiresDelegation сохраняет делегирование координатором в manager-driven процессах.
+// Переходами серверного DAG владеет планировщик; для них не нужно выдавать менеджеру возможность
+// обходить проверку обязательных результатов этим планировщиком.
 func workflowRequiresDelegation(version entity.WorkflowVersion) bool {
+	if version.ExecutionMode == workflowservice.ServerDAGV1 {
+		return false
+	}
 	for _, step := range version.Steps {
 		if step.AgentRef != version.CoordinatorAgentRef {
 			return true
@@ -1804,16 +1845,10 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 	return repository.launchRunWithAttachmentPolicy(ctx, tx, scope, input, false)
 }
 
-// launchRunWithAttachmentPolicy validates project/task/source and exact AGENT or published
-// WORKFLOW target, model/runtime contracts and attachment eligibility before binding a new or
-// matching existing session. It inserts root run/turn/process and agent/coordinator/planned
-// workflow lineage, emits RUN_CREATED and returns graph readback in the caller transaction. Reuse
-// changes only attachment snapshot policy; no provider execution or runtime claim occurs here.
-// launchRunWithAttachmentPolicy проверяет project/task/source и точные AGENT либо published
-// WORKFLOW target, model/runtime contracts и attachment eligibility до связи с новой либо
-// совпавшей existing session. Вставляет root run/turn/process и agent/coordinator/planned workflow
-// lineage, создаёт RUN_CREATED и возвращает graph readback в транзакции caller. Reuse меняет лишь
-// attachment snapshot policy; provider execution либо runtime claim здесь нет.
+// launchRunWithAttachmentPolicy pins the published workflow and materializes each step's own gate
+// flag; the coordinator's initial turn does not inherit an additional aggregate approval gate.
+// launchRunWithAttachmentPolicy закрепляет published workflow и флаг Gate каждого этапа;
+// начальный ход координатора не наследует дополнительное aggregate согласование.
 func (repository *Repository) launchRunWithAttachmentPolicy(ctx context.Context, tx pgx.Tx, scope scope, input command.Command, reuseAttachmentSnapshot bool) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.LaunchRunInput)
 	if !ok || payload.ProjectRef == "" || !runtimecontract.ValidAssistantTurnContent(payload.Task) || len([]rune(payload.Title)) > 240 || payload.Target.Ref == "" || !validBoundedRunInput(payload.Input) {
@@ -1962,7 +1997,7 @@ func (repository *Repository) launchRunWithAttachmentPolicy(ctx context.Context,
 		return commandOutcome{}, fmt.Errorf("bind root run lineage: %w", errs.ErrUnavailable)
 	}
 	executionTask := payload.Task
-	if payload.Target.Type == "WORKFLOW" {
+	if payload.Target.Type == "WORKFLOW" && workflowVersion.ExecutionMode != workflowservice.ServerDAGV1 {
 		executionTask = workflowCoordinatorTask(payload.Task, workflowVersionRef, workflowVersionDigest, workflowVersion)
 	}
 	turnRef, _ := newRef("trn")
@@ -1985,13 +2020,16 @@ func (repository *Repository) launchRunWithAttachmentPolicy(ctx context.Context,
 		if _, _, err := repository.insertAgentNode(ctx, tx, scope, runID, runID, rootNodeID, payload.Target.Ref, targetName, turnID, payload.Task); err != nil {
 			return commandOutcome{}, fmt.Errorf("insert direct agent execution node: %w", err)
 		}
+	} else if workflowVersion.ExecutionMode == workflowservice.ServerDAGV1 {
+		if err := repository.insertPlannedWorkflowNodes(ctx, tx, scope, projectID, runID, rootNodeID, workflowVersion); err != nil {
+			return commandOutcome{}, err
+		}
 	} else {
 		nodeID, _, err := repository.insertAgentNode(ctx, tx, scope, runID, runID, rootNodeID, coordinatorRef, coordinatorName, turnID, executionTask)
 		if err != nil {
 			return commandOutcome{}, fmt.Errorf("insert workflow coordinator execution node: %w", err)
 		}
-		initialGate := !workflowRequiresDelegation(workflowVersion) && workflowHasHumanGate(workflowVersion)
-		if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateRunNodesWorkflowStepKeyHumanGateAfter, nodeID, "workflow.coordinator.initial", initialGate); err != nil {
+		if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateRunNodesWorkflowStepKeyHumanGateAfter, nodeID, "workflow.coordinator.initial", false); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		if err := repository.insertPlannedWorkflowNodes(ctx, tx, scope, projectID, runID, nodeID, workflowVersion); err != nil {
@@ -2003,6 +2041,11 @@ func (repository *Repository) launchRunWithAttachmentPolicy(ctx context.Context,
 	}
 	if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, runID, runRef, "RUN_CREATED", rootNodeRef, "", "", "", "i18n:RUN_CREATED", "RUNNING", "RUNNING"); err != nil {
 		return commandOutcome{}, fmt.Errorf("emit launched run event: %w", err)
+	}
+	if workflowVersion.ExecutionMode == workflowservice.ServerDAGV1 {
+		if err := repository.dispatchServerWorkflowTx(ctx, tx, scope, runID); err != nil {
+			return commandOutcome{}, err
+		}
 	}
 	run, graph, err := repository.readRunGraphTx(ctx, tx, scope, runRef)
 	if err != nil {
@@ -2108,19 +2151,6 @@ func workflowCoordinatorTask(task, versionRef, versionDigest string, version ent
 		builder.WriteString(criteria)
 	}
 	return truncate(builder.String(), 96<<10)
-}
-
-// workflowHasHumanGate reports whether any published step requests a human gate, without opening a
-// gate or selecting its decisions.
-// workflowHasHumanGate показывает, требует ли хотя бы один published step human gate, без открытия
-// gate либо выбора decisions.
-func workflowHasHumanGate(version entity.WorkflowVersion) bool {
-	for _, step := range version.Steps {
-		if step.HumanGateAfter {
-			return true
-		}
-	}
-	return false
 }
 
 // insertAgentNode resolves an eligible tenant agent, creates its execution node and parent edge,
@@ -2735,6 +2765,9 @@ func (repository *Repository) readRunGraphTx(ctx context.Context, tx pgx.Tx, sco
 		return entity.Run{}, entity.RunGraph{}, fmt.Errorf("iterate run graph edges: %w", errs.ErrUnavailable)
 	}
 	edgeRows.Close()
+	if err := attachWorkflowRetryProofs(ctx, tx, scope, &graph); err != nil {
+		return entity.Run{}, entity.RunGraph{}, err
+	}
 	return run, graph, nil
 }
 
@@ -3101,6 +3134,9 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 		return commandOutcome{}, err
 	}
 	if integrationInvocationID != "" {
+		if err := repository.applyRepositoryBundleGateDecision(ctx, tx, scope, gateID, integrationInvocationID, rootRunID, projectID, payload.Decision); err != nil {
+			return commandOutcome{}, err
+		}
 		if integrationApprovalPolicy == "HUMAN_SCOPED" && payload.Decision == "APPROVE" {
 			if err := repository.approveIntegrationScope(ctx, tx, scope, gateID, integrationInvocationID, rootRunID, projectID); err != nil {
 				return commandOutcome{}, err
@@ -3161,7 +3197,63 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 	if _, err := tx.Exec(ctx, queryCommandsResolvegateUpdateRunNodesStateFinishedAtVersion, nodeID, nodeState); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	if payload.Decision == "REQUEST_CHANGES" {
+	if outcome, handled, err := repository.resolveServerWorkflowResultGateTx(ctx, tx, scope, input, rootRunID, gateNodeRef, predecessorNodeID, integrationInvocationID); err != nil || handled {
+		return outcome, err
+	}
+	var legacyRework *legacyReworkContext
+	if integrationInvocationID == "" {
+		legacyRework, err = readLegacyReworkContextTx(ctx, tx, scope, rootRunID, gateID, predecessorNodeID)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+	}
+	legacyRootClosed := false
+	if legacyRework != nil {
+		switch payload.Decision {
+		case "REQUEST_CHANGES":
+			predecessorNodeRef, err = repository.createLegacyWorkflowReworkTx(ctx, tx, scope, legacyRework, attachmentSet)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+		case "APPROVE":
+			pendingDelivery, pendingErr := legacyReworkDeliveryPendingTx(ctx, tx, scope, rootRunID)
+			if pendingErr != nil {
+				return commandOutcome{}, pendingErr
+			}
+			if legacyRework.ReworkGateID != "" || pendingDelivery {
+				if err := repository.validateLegacyReworkAuthorityTx(ctx, tx, scope, legacyRework); err != nil {
+					return commandOutcome{}, err
+				}
+				parent, err := lockLegacyReworkParentTx(ctx, tx, scope, legacyRework)
+				if err != nil {
+					return commandOutcome{}, err
+				}
+				continued, err := repository.scheduleLegacyReworkContinuationTx(ctx, tx, scope, parent.ID, projectID)
+				if err != nil {
+					return commandOutcome{}, err
+				}
+				if !continued {
+					var open, active int64
+					if tx.QueryRow(ctx, queryCommandsResolvegateCountOpenGates, pgx.StrictNamedArgs{"organization_id": scope.organizationID, "root_run_id": rootRunID}).Scan(&open) != nil || tx.QueryRow(ctx, queryCommandsResolvegateSelectActiveAgentNodes, rootRunID).Scan(&active) != nil {
+						return commandOutcome{}, errs.ErrUnavailable
+					}
+					pending, err := legacyReworkDeliveryPendingTx(ctx, tx, scope, rootRunID)
+					if err != nil {
+						return commandOutcome{}, err
+					}
+					if open == 0 && (active == 0 || pending && active == 1) {
+						return commandOutcome{}, errs.ErrLegacyReworkDeliveryBlocked
+					}
+				}
+			}
+		case "REJECT", "CANCEL":
+			if err := repository.closeLegacyReworkRootTx(ctx, tx, scope, input, legacyRework, payload.Decision == "REJECT"); err != nil {
+				return commandOutcome{}, err
+			}
+			legacyRootClosed = true
+		}
+	}
+	if payload.Decision == "REQUEST_CHANGES" && legacyRework == nil {
 		comment := strings.TrimSpace(payload.Comment)
 		if comment == "" {
 			return commandOutcome{}, errs.ErrInvalid
@@ -3210,7 +3302,7 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 			}
 		}
 	}
-	if integrationInvocationID != "" {
+	if integrationInvocationID != "" || legacyRework != nil && !legacyRootClosed {
 		var openGates int64
 		if err := tx.QueryRow(ctx, queryCommandsResolvegateCountOpenGates, pgx.StrictNamedArgs{
 			"organization_id": scope.organizationID, "root_run_id": rootRunID,
@@ -3222,14 +3314,17 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 		}
 	}
 	terminalRootNodeRef := ""
-	if runState == "SUCCEEDED" {
+	if legacyRootClosed {
+		// The canonical FAILED or CANCELLED path already closed the complete graph in this owner transaction.
+		// Канонический FAILED либо CANCELLED путь уже закрыл полный граф в этой owner-транзакции.
+	} else if runState == "SUCCEEDED" {
 		if _, err := tx.Exec(ctx, queryCommandsResolvegateCompleteRootRun, rootRunID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 	} else if _, err := tx.Exec(ctx, queryCommandsResolvegateUpdateRunsStateVersionUpdatedAt, rootRunID, runState); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	if contains([]string{"SUCCEEDED", "FAILED", "CANCELLED"}, runState) {
+	if !legacyRootClosed && contains([]string{"SUCCEEDED", "FAILED", "CANCELLED"}, runState) {
 		if err := tx.QueryRow(ctx, queryCommandsResolvegateUpdateRootNodeState, rootRunID, runState).Scan(&terminalRootNodeRef); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}

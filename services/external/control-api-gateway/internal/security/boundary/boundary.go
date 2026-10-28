@@ -15,6 +15,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/libs/go/eventing/browserstate"
 	oidcauth "github.com/codex-k8s/kodex/libs/go/oidcverifier"
+	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/availability"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/ratelimit"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/session"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/problemresponse"
@@ -219,6 +220,7 @@ func New(config Config) (*Boundary, error) {
 func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if boundary.stopping.Load() {
+			problemresponse.MarkFailure(writer, availability.Fixed("gateway_stopping", "unavailable", ErrSessionValidationUnavailable))
 			writeProblem(writer, http.StatusServiceUnavailable, "STOPPING", true)
 			return
 		}
@@ -275,6 +277,7 @@ func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
 			}()
 			if err != nil {
 				statusCode, code, retryable := authenticationProblem(err)
+				problemresponse.MarkFailure(writer, availability.At("auth_oidc_verify", err))
 				writeProblem(writer, statusCode, code, retryable)
 				return
 			}
@@ -304,6 +307,7 @@ func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
 		}()
 		if err != nil {
 			statusCode, code, retryable := authenticationProblem(err)
+			problemresponse.MarkFailure(writer, err)
 			writeProblem(writer, statusCode, code, retryable)
 			return
 		}
@@ -729,7 +733,7 @@ func (boundary *Boundary) authenticate(request *http.Request) (Identity, session
 	}
 	revoked, err := boundary.revocations.Revoked(request.Context(), claims.SessionID)
 	if err != nil {
-		return Identity{}, session.Claims{}, time.Time{}, ErrSessionValidationUnavailable
+		return Identity{}, session.Claims{}, time.Time{}, availability.WithCause("auth_revocation_read", ErrSessionValidationUnavailable, err)
 	}
 	if revoked {
 		return Identity{}, session.Claims{}, time.Time{}, errors.New("owner session is revoked")
@@ -740,7 +744,7 @@ func (boundary *Boundary) authenticate(request *http.Request) (Identity, session
 		}
 		family, err := boundary.families.Read(request.Context(), claims.FamilyID)
 		if err != nil {
-			return Identity{}, session.Claims{}, time.Time{}, err
+			return Identity{}, session.Claims{}, time.Time{}, availability.At("auth_family_read", err)
 		}
 		if family.BrowserSessionID != claims.SessionID || family.CSRFHash != claims.CSRFHash ||
 			family.Principal.Subject != claims.Subject || family.Principal.OrganizationID != claims.OrganizationID ||
@@ -753,7 +757,7 @@ func (boundary *Boundary) authenticate(request *http.Request) (Identity, session
 			}
 			family, err = boundary.families.Renew(request.Context(), claims.FamilyID, claims.SessionID, claims.CSRFHash)
 			if err != nil {
-				return Identity{}, session.Claims{}, time.Time{}, err
+				return Identity{}, session.Claims{}, time.Time{}, availability.At("session_renewal", err)
 			}
 		}
 		claims.Bearer, claims.Elevation = family.AccessToken, family.Elevation
@@ -761,7 +765,7 @@ func (boundary *Boundary) authenticate(request *http.Request) (Identity, session
 	}
 	principal, err := boundary.verifier.VerifyToken(request.Context(), claims.Bearer)
 	if errors.Is(err, oidcauth.ErrSigningKeysUnavailable) {
-		return Identity{}, session.Claims{}, time.Time{}, err
+		return Identity{}, session.Claims{}, time.Time{}, availability.At("auth_oidc_verify", err)
 	}
 	if err != nil || principal.Subject != claims.Subject || principal.OrganizationID != claims.OrganizationID || principal.SessionID != claims.OIDCSessionID ||
 		principal.SessionRevision != claims.SessionRevision {

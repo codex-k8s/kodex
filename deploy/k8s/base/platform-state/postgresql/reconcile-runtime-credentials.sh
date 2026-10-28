@@ -7,6 +7,13 @@ case "$rpc_profile" in
   *) echo 'PostgreSQL runtime security profile is invalid' >&2; exit 1 ;;
 esac
 
+# Адресный repair не меняет прикладные роли и использует уже назначенный ключ.
+credential_scope=${KODEX_RUNTIME_CREDENTIAL_SCOPE:-all}
+case "$credential_scope" in
+  all|backup-reader) ;;
+  *) echo 'PostgreSQL credential scope is invalid' >&2; exit 1 ;;
+esac
+
 PGPASSWORD=$(cat "$PGPASSWORD_FILE")
 export PGPASSWORD
 
@@ -20,6 +27,23 @@ until pg_isready --timeout=2 >/dev/null 2>&1; do
   sleep 2
 done
 
+if [ "$credential_scope" = backup-reader ]; then
+  backup_preflight=$(psql --tuples-only --no-align --set ON_ERROR_STOP=1 --command "
+SELECT count(*) FROM pg_roles
+WHERE rolname = 'kodex_backup_reader' AND rolcanlogin AND rolbypassrls
+  AND NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole
+  AND NOT rolreplication AND NOT rolinherit;
+")
+  [ "$backup_preflight" -eq 1 ] || {
+    echo 'PostgreSQL backup reader preflight failed' >&2
+    exit 1
+  }
+  # Обе заявленные БД должны существовать до первой смены пароля/прав.
+  for database in control_plane internal_rpc_authority; do
+    psql --dbname "$database" --set ON_ERROR_STOP=1 \
+      --command 'SELECT version_id FROM public.goose_db_version LIMIT 0;' >/dev/null
+  done
+else
 psql --set ON_ERROR_STOP=1 --command "
 DO \$\$
 BEGIN
@@ -43,6 +67,7 @@ END
 GRANT artifact_retention_runtime TO artifact_retention_runtime_g1
   WITH INHERIT TRUE, SET TRUE, ADMIN FALSE;
 " >/dev/null
+fi
 
 roles='kodex_backup_reader artifact_retention_runtime_g1 ira_restore_controller_g1 ira_publisher_g4 ira_readback_attestor_g4 ira_role_image_builder_issuer_g1 ira_image_admission_issuer_g1 ira_image_promotion_issuer_g1 ira_automation_scheduler_issuer_g1 ira_session_archive_issuer_g1 ira_secret_broker_issuer_g1 ira_control_api_gateway_issuer_g1 ira_control_plane_issuer_g1 ira_control_plane_verifier_g1 ira_control_plane_resolver_g1 ira_integration_gateway_issuer_g1 ira_interaction_gateway_issuer_g1 ira_email_bridge_issuer_g1 ira_runtime_controller_issuer_g1 ira_secret_broker_verifier_g1 ira_stt_tts_service_issuer_g1 ira_stt_tts_service_verifier_g1'
 
@@ -50,6 +75,10 @@ expected_role_count=22
 if [ "$rpc_profile" = trusted-cluster ]; then
   roles='kodex_backup_reader artifact_retention_runtime_g1'
   expected_role_count=2
+fi
+if [ "$credential_scope" = backup-reader ]; then
+  roles='kodex_backup_reader'
+  expected_role_count=1
 fi
 attempt=0
 until [ "$(psql --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM pg_roles WHERE rolname IN ('$(printf '%s' "$roles" | sed "s/ /','/g")')")" -eq "$expected_role_count" ]; do
@@ -78,7 +107,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE control_plane_owner IN SCHEMA control_plane
   GRANT USAGE, SELECT ON SEQUENCES TO kodex_backup_reader;
 SQL
 
-if [ "$rpc_profile" = protected ]; then
+if [ "$rpc_profile" = protected ] || [ "$credential_scope" = backup-reader ]; then
 psql --dbname internal_rpc_authority --set ON_ERROR_STOP=1 <<'SQL' >/dev/null
 GRANT CONNECT ON DATABASE internal_rpc_authority TO kodex_backup_reader;
 GRANT USAGE ON SCHEMA public, internal_rpc_authority TO kodex_backup_reader;
@@ -109,7 +138,20 @@ WHERE rolname = 'kodex_backup_reader'
   exit 1
 }
 
-if [ "$rpc_profile" = protected ]; then
+if [ "$credential_scope" = backup-reader ]; then
+  # Проверка использует тот же verify-full transport и новую reader identity,
+  # а не успешную административную сессию или наличие SCRAM verifier.
+  backup_password=$(cat /var/run/runtime-credentials/kodex_backup_reader)
+  for database in control_plane internal_rpc_authority; do
+    PGPASSWORD="$backup_password" PGUSER=kodex_backup_reader \
+      psql --dbname "$database" --set ON_ERROR_STOP=1 \
+      --command 'SELECT version_id FROM public.goose_db_version LIMIT 0;' >/dev/null
+  done
+  unset backup_password
+  echo 'PostgreSQL backup reader reconciliation verified'
+fi
+
+if [ "$rpc_profile" = protected ] && [ "$credential_scope" = all ]; then
 authority_verified=$(psql --dbname internal_rpc_authority --tuples-only --no-align \
   --set ON_ERROR_STOP=1 --command "
 SELECT count(*)

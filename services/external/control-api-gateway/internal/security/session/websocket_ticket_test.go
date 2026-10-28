@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/oidcverifier"
+	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/availability"
 )
 
 // TestWebSocketTicketReplicaCASAndIndependentTabs shares memory CAS between two Families values, proves two independent tickets leave family version/sequence unchanged and one concurrent consume wins, then rejects replay. It is not a live multi-Pod or browser handshake test.
@@ -97,6 +98,8 @@ func TestWebSocketTicketExpiryBindingBoundsAndRevocation(t *testing.T) {
 	}
 	if _, _, err := families.IssueWebSocketTicket(t.Context(), family.ID, family.BrowserSessionID, family.CSRFHash); !errors.Is(err, ErrRenewalPending) {
 		t.Fatal("unbounded ticket issuance")
+	} else if stage, class := availability.Describe(err); stage != "ticket_capacity" || class != "pending" {
+		t.Fatal("capacity refusal lost its distinct diagnostic")
 	}
 	next := families.now().Add(websocketTicketLifetime)
 	families.now = func() time.Time { return next }

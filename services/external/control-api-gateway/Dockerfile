@@ -18,6 +18,7 @@ COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
 COPY libs/go/observability/ libs/go/observability/
 COPY libs/go/oidcidentity/ libs/go/oidcidentity/
 COPY libs/go/oidcverifier/ libs/go/oidcverifier/
+COPY libs/go/repositorybundle/ libs/go/repositorybundle/
 COPY libs/go/runtimecontract/ libs/go/runtimecontract/
 COPY libs/go/secretbrokerapi/ libs/go/secretbrokerapi/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/

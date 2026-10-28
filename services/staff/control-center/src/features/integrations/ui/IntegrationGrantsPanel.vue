@@ -140,8 +140,10 @@ let recipientGeneration = 0;
 let capabilityGeneration = 0;
 const connectionLoader = connectionCandidates({ purpose: "GRANT" });
 watch(
-  () =>
-    [props.selectedConnection?.ref, props.selectedConnection?.version] as const,
+  [
+    () => props.selectedConnection?.ref,
+    () => props.selectedConnection?.version,
+  ],
   (_identity, _previous, onCleanup) => {
     const selected = props.selectedConnection;
     if (!selected) return;
@@ -494,25 +496,32 @@ async function loadCapabilities(
   };
 }
 watch(
-  () => [props.selectedConnection?.ref, props.selectedConnection?.version],
+  [
+    () => props.selectedConnection?.ref,
+    () => props.selectedConnection?.version,
+  ],
   () => {
     clearProject();
   },
   { flush: "sync" },
 );
 watch(
-  () => [props.projectRef, props.targetKind, props.selectedConnection?.ref],
+  [
+    () => props.projectRef,
+    () => props.targetKind,
+    () => props.selectedConnection?.ref,
+  ],
   () => {
     clearRecipient();
   },
   { flush: "sync" },
 );
 watch(
-  () => [
-    props.selectedConnection?.version,
-    props.projectRef,
-    props.targetKind,
-    props.targetRef,
+  [
+    () => props.selectedConnection?.version,
+    () => props.projectRef,
+    () => props.targetKind,
+    () => props.targetRef,
   ],
   () => {
     clearCapability();

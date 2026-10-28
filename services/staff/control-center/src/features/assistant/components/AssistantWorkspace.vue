@@ -1468,6 +1468,7 @@ async function applyPlan(): Promise<void> {
       case "CREATE_AGENT":
       case "UPDATE_AGENT":
       case "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":
+      case "PREPARE_AGENT_RUNTIME_CONFIGURATION":
       case "ARCHIVE_AGENT":
       case "CHANGE_CAPABILITY":
       case "BIND_AGENT_RUNTIME_ENVIRONMENT":

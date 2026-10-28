@@ -23,6 +23,12 @@ const (
 	// maximumJWKSBytes bounds the entire remote JWKS response before parsing.
 	// maximumJWKSBytes ограничивает полный ответ удалённого JWKS до разбора.
 	maximumJWKSBytes = 1 << 20
+	// invalidJWKSSnapshotMessage preserves the shared closed diagnostic for parse and key-validation failures.
+	// RU: invalidJWKSSnapshotMessage сохраняет общую закрытую диагностику ошибок разбора и проверки ключей.
+	invalidJWKSSnapshotMessage = "OIDC JWKS is invalid"
+	// invalidJWKSSnapshotClass groups malformed and unsupported key sets without exposing their contents.
+	// RU: invalidJWKSSnapshotClass объединяет некорректные и неподдерживаемые наборы ключей без раскрытия содержимого.
+	invalidJWKSSnapshotClass = "snapshot_invalid"
 )
 
 // boundedKeySet retains the verified signing snapshot and rollback history under a lock; fatal failures block it.
@@ -32,13 +38,14 @@ type boundedKeySet struct {
 	endpoint string
 	now      func() time.Time
 
-	mutex       sync.RWMutex
-	keys        jose.JSONWebKeySet
-	digest      string
-	seenDigests map[string]struct{}
-	lastSuccess time.Time
-	degraded    bool
-	blocked     bool
+	mutex            sync.RWMutex
+	keys             jose.JSONWebKeySet
+	digest           string
+	seenDigests      map[string]struct{}
+	lastSuccess      time.Time
+	degraded         bool
+	blocked          bool
+	lastFailureClass string
 }
 
 // newBoundedKeySet creates an empty, fail-closed snapshot with a fresh digest history.
@@ -58,6 +65,11 @@ func (set *boundedKeySet) Refresh(ctx context.Context) error {
 	}
 	if err != nil {
 		set.degraded = true
+		var failure keyRefreshFailure
+		set.lastFailureClass = "unknown"
+		if errors.As(err, &failure) {
+			set.lastFailureClass = failure.class
+		}
 		if fatal {
 			set.blocked = true
 		}
@@ -67,6 +79,7 @@ func (set *boundedKeySet) Refresh(ctx context.Context) error {
 		if _, rollback := set.seenDigests[digest]; rollback || reusedKeyID(set.keys, keys) {
 			set.blocked = true
 			set.degraded = true
+			set.lastFailureClass = "rollback_or_conflict"
 			return errors.New("OIDC signing-key rollback or conflict rejected")
 		}
 	}
@@ -75,6 +88,7 @@ func (set *boundedKeySet) Refresh(ctx context.Context) error {
 	set.seenDigests[digest] = struct{}{}
 	set.lastSuccess = set.now().UTC()
 	set.degraded = false
+	set.lastFailureClass = ""
 	return nil
 }
 
@@ -83,38 +97,46 @@ func (set *boundedKeySet) Refresh(ctx context.Context) error {
 func (set *boundedKeySet) fetch(ctx context.Context) (jose.JSONWebKeySet, string, bool, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, set.endpoint, nil)
 	if err != nil {
-		return jose.JSONWebKeySet{}, "", true, errors.New("create OIDC JWKS request")
+		return jose.JSONWebKeySet{}, "", true, keyRefreshFailure{message: "create OIDC JWKS request", class: "request_invalid"}
 	}
 	request.Header.Set("Accept", "application/json")
 	response, err := set.client.Do(request)
 	if err != nil {
-		return jose.JSONWebKeySet{}, "", false, errors.New("fetch OIDC JWKS")
+		return jose.JSONWebKeySet{}, "", false, keyRefreshFailure{message: "fetch OIDC JWKS", class: refreshTransportClass(err)}
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
 		fatal := response.StatusCode < 500 && response.StatusCode != http.StatusTooManyRequests
-		return jose.JSONWebKeySet{}, "", fatal, errors.New("OIDC JWKS response status is invalid")
+		class := "http_other"
+		if response.StatusCode == http.StatusTooManyRequests {
+			class = "throttled"
+		} else if response.StatusCode >= 500 && response.StatusCode <= 599 {
+			class = "server"
+		} else if response.StatusCode >= 400 && response.StatusCode <= 499 {
+			class = "client"
+		}
+		return jose.JSONWebKeySet{}, "", fatal, keyRefreshFailure{message: "OIDC JWKS response status is invalid", class: class}
 	}
 	raw, err := io.ReadAll(io.LimitReader(response.Body, maximumJWKSBytes+1))
 	if err != nil {
-		return jose.JSONWebKeySet{}, "", false, errors.New("read OIDC JWKS")
+		return jose.JSONWebKeySet{}, "", false, keyRefreshFailure{message: "read OIDC JWKS", class: "body_read"}
 	}
 	if len(raw) == 0 || len(raw) > maximumJWKSBytes {
-		return jose.JSONWebKeySet{}, "", true, errors.New("OIDC JWKS size is invalid")
+		return jose.JSONWebKeySet{}, "", true, keyRefreshFailure{message: "OIDC JWKS size is invalid", class: "size_invalid"}
 	}
 	var keys jose.JSONWebKeySet
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&keys) != nil || decoder.Decode(&struct{}{}) != io.EOF {
-		return jose.JSONWebKeySet{}, "", true, errors.New("OIDC JWKS is invalid")
+		return jose.JSONWebKeySet{}, "", true, keyRefreshFailure{message: invalidJWKSSnapshotMessage, class: invalidJWKSSnapshotClass}
 	}
 	keys, valid := supportedSigningKeySet(keys, set.now().UTC())
 	if !valid {
-		return jose.JSONWebKeySet{}, "", true, errors.New("OIDC JWKS is invalid")
+		return jose.JSONWebKeySet{}, "", true, keyRefreshFailure{message: invalidJWKSSnapshotMessage, class: invalidJWKSSnapshotClass}
 	}
 	canonical, err := json.Marshal(keys)
 	if err != nil {
-		return jose.JSONWebKeySet{}, "", true, errors.New("canonicalize OIDC JWKS")
+		return jose.JSONWebKeySet{}, "", true, keyRefreshFailure{message: "canonicalize OIDC JWKS", class: "canonicalization"}
 	}
 	digest := sha256.Sum256(canonical)
 	return keys, hex.EncodeToString(digest[:]), false, nil

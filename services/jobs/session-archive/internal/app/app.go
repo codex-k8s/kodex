@@ -197,7 +197,7 @@ func process(ctx context.Context, control *controlplaneclient.Client, kube *cont
 		}
 		return err
 	}
-	result, runErr := kube.Execute(work, task, renew)
+	result, retained, runErr := kube.ExecuteRetained(work, task, renew)
 	if runErr != nil {
 		result = model.Result{Success: false, SafeErrorCode: "SESSION_ARCHIVE_KUBERNETES_UNAVAILABLE"}
 	}
@@ -215,7 +215,11 @@ func process(ctx context.Context, control *controlplaneclient.Client, kube *cont
 		switch task.Kind {
 		case "SNAPSHOT":
 			stage = archiveRPCCompleteSnapshot
-			_, err = control.SessionArchive.CompleteSessionSnapshot(rpc, &controlplanev1.CompleteSessionSnapshotRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, FormatVersion: result.FormatVersion, ObjectKey: result.ObjectKey, ObjectVersion: result.ObjectVersion, ObjectEtag: result.ObjectETag, ObjectDigest: result.ObjectDigest, ObjectSizeBytes: result.ObjectSizeBytes, SourceSizeBytes: result.SourceSizeBytes})
+			request := &controlplanev1.CompleteSessionSnapshotRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, FormatVersion: result.FormatVersion, ObjectKey: result.ObjectKey, ObjectVersion: result.ObjectVersion, ObjectEtag: result.ObjectETag, ObjectDigest: result.ObjectDigest, ObjectSizeBytes: result.ObjectSizeBytes, SourceSizeBytes: result.SourceSizeBytes}
+			if task.Workspace != nil {
+				request.SourceSha256, request.SourceEntryCount = result.SourceSHA256, result.SourceEntryCount
+			}
+			_, err = control.SessionArchive.CompleteSessionSnapshot(rpc, request)
 		case "RESTORE":
 			stage = archiveRPCCompleteRestore
 			_, err = control.SessionArchive.CompleteSessionRestore(rpc, &controlplanev1.CompleteSessionRestoreRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, FormatVersion: result.FormatVersion, ObjectKey: result.ObjectKey, ObjectVersion: result.ObjectVersion, ObjectEtag: result.ObjectETag, ObjectDigest: result.ObjectDigest, ObjectSizeBytes: result.ObjectSizeBytes, RestoredSourceSha256: result.SourceSHA256, RestoredSourceSizeBytes: result.SourceSizeBytes})
@@ -235,6 +239,9 @@ func process(ctx context.Context, control *controlplaneclient.Client, kube *cont
 	metrics.tasks.WithLabelValues(task.Kind, outcome).Inc()
 	if err == nil && result.ObjectSizeBytes > 0 {
 		metrics.bytes.WithLabelValues(task.Kind).Add(float64(result.ObjectSizeBytes))
+	}
+	if err == nil {
+		return retained.ReleaseAfterAcknowledgement(context.WithoutCancel(ctx))
 	}
 	return err
 }

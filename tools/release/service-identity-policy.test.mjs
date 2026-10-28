@@ -34,7 +34,7 @@ test("workflow catalog preserves leased source binding in local service registry
 });
 test("control-plane policy preserves exact bindings and excludes STT continuation",() => {
   const policy=buildServicePolicy(source,classification);
-  assert.equal(policy.bindings.length,417);
+  assert.equal(policy.bindings.length,426);
   for (const operation of ["platform.role-images.admission.recovery-terminal.get", "platform.role-images.supply-work.get"]) {
     const bindings=policy.bindings.filter(value=>value.operation_id===operation);
     assert.equal(bindings.length,1);assert.equal(bindings[0].caller_spiffe_id,"spiffe://kodex.local/ns/kodex-system/sa/image-admission-controller");
@@ -47,7 +47,7 @@ test("control-plane policy preserves exact bindings and excludes STT continuatio
     assert.equal(bindings[0].actor_mode,"SERVICE_OWNER_RESOLVED");
     assert.equal(bindings[0].project_required,false);
   }
-  assert.equal(policy.bindings.filter(b=>b.actor_mode==="USER_CREDENTIAL_REQUIRED").length,321);
+  assert.equal(policy.bindings.filter(b=>b.actor_mode==="USER_CREDENTIAL_REQUIRED").length,322);
   for (const operation of [
     "platform.organization.role-images.recipes.list",
     "platform.organization.role-images.recipes.get",
@@ -113,4 +113,28 @@ test("trusted controller READ pair cannot expand methods, caller or protected au
  const changed=structuredClone(source), record=classification.operations.find(r=>r.trusted_binding);
  changed.policy.operation_bindings.push({...record.trusted_binding,target_spiffe_id:source.policy.operation_bindings.find(b=>b.target_workload_id==="control-plane").target_spiffe_id});
  assert.throws(()=>buildServicePolicy(changed,classification),/protected authority/);
+});
+
+// Новый storage observer сохраняет один exact service-owner путь, без полномочий обычного пользователя.
+test("workspace observation remains an exact controller-only owner binding", () => {
+  const operation = "platform.runtime.workspace.observe";
+  const originals = source.policy.operation_bindings.filter(binding => binding.operation_id === operation);
+  assert.equal(originals.length, 1);
+  const original = originals[0];
+  assert.equal(original.full_method, "/controlplane.v1.RuntimeWorkService/ObserveWorkspace");
+  assert.equal(original.caller_workload_id, "runtime-controller");
+  assert.equal(original.permission, operation);
+  assert.equal(original.authority_proof_producer_id, "control-plane.runtime-controller");
+  assert.deepEqual(original.authority_sources, ["DOMAIN_STATE"]);
+  const records = classification.operations.filter(record => record.operation_id === operation);
+  assert.equal(records.length, 1);
+  assert.equal(records[0].actor_mode, "SERVICE_OWNER_RESOLVED");
+  assert.equal(records[0].source_binding_sha256, bindingDigest(original));
+  const local = buildServicePolicy(source, classification).bindings.filter(binding => binding.operation_id === operation);
+  assert.deepEqual(local, [{caller_spiffe_id: original.caller_spiffe_id,
+    full_method: original.full_method, operation_id: operation, permission: operation,
+    actor_mode: "SERVICE_OWNER_RESOLVED", project_required: false}]);
+  const changed = structuredClone(source);
+  changed.policy.operation_bindings.find(binding => binding.operation_id === operation).caller_workload_id = "control-api-gateway";
+  assert.throws(() => buildServicePolicy(changed, classification), /service operation classification drift/);
 });

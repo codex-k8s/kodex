@@ -70,6 +70,20 @@ const workflow: Workflow = {
     validationMessages: [],
   },
 };
+it("сохраняет отдельный срок согласования и не добавляет срок прежнему этапу", () => {
+  expect(workflowEditorInput(workflow).steps[0]).not.toHaveProperty(
+    "approvalTimeoutSeconds",
+  );
+  const changed = structuredClone(workflow);
+  const changedStep = changed.draft?.steps[0];
+  if (!changedStep) throw new Error("Этап оснастки отсутствует");
+  changedStep.humanGate = true;
+  changedStep.approvalTimeoutSeconds = 90;
+  expect(workflowEditorInput(changed).steps[0]?.approvalTimeoutSeconds).toBe(
+    90,
+  );
+  expect(workflowEditorInput(changed).steps[0]?.timeoutSeconds).toBe(600);
+});
 it("после save и нового GET сохраняет Draft body и exact stage/ref, не подменяет опубликованным", () => {
   const saved = workflowEditorInput(workflow);
   expect(saved.steps[0]?.purpose).toBe("Сохранённое новое назначение");
@@ -145,4 +159,64 @@ it("published-only preview использует только exact displayed rev
     ),
   ).toBeUndefined();
   expect(workflowStagePromptTarget(workflow, 9)).toBeUndefined();
+});
+
+it("сохраняет DAG-поля отдельного черновика без изменения опубликованной версии", () => {
+  const server = structuredClone(workflow);
+  server.executionMode = "MANAGER_DRIVEN";
+  const draft = server.draft;
+  if (!draft) throw new Error("Черновик оснастки отсутствует");
+  draft.executionMode = "SERVER_DAG_V1";
+  const stage = draft.steps[0];
+  if (!stage) throw new Error("Этап оснастки отсутствует");
+  stage.ref = "sre";
+  stage.dependsOn = ["merge", "qa"];
+  stage.humanGate = true;
+  stage.approvalTimeoutSeconds = 300;
+  stage.resultRequirements = [
+    {
+      key: "deployment",
+      kind: "DEPLOYMENT",
+      operation: "ssh.compose.deploy",
+      subjectStepKey: "merge",
+      repository: "codex-k8s/test-repo",
+      targetRef: "ssh_fixture",
+    },
+    {
+      key: "runbook",
+      kind: "ARTIFACT",
+      fileName: "runbook.md",
+      mediaType: "text/markdown",
+    },
+  ];
+  const input = workflowEditorInput(server);
+  expect(input.executionMode).toBe("SERVER_DAG_V1");
+  expect(input.steps[0]?.ref).toBe("sre");
+  expect(input.steps[0]?.dependsOn).toEqual(["merge", "qa"]);
+  expect(input.steps[0]?.approvalTimeoutSeconds).toBe(300);
+  expect(input.steps[0]?.resultRequirements).toEqual(stage.resultRequirements);
+  expect(server.executionMode).toBe("MANAGER_DRIVEN");
+  const dependencies = input.steps[0]?.dependsOn;
+  const result = input.steps[0]?.resultRequirements?.[0];
+  if (!dependencies || !result)
+    throw new Error("Поля графа потеряны в редакторе");
+  dependencies.push("other");
+  result.targetRef = "ssh_changed";
+  expect(stage.dependsOn).toEqual(["merge", "qa"]);
+  expect(stage.resultRequirements[0]?.targetRef).toBe("ssh_fixture");
+  expect(workflowEditorInput(workflow).executionMode).toBe("MANAGER_DRIVEN");
+});
+
+it("сохраняет явный evidence profile при clone и удаляет старый profile при новом legacy readback", () => {
+  const native = structuredClone(workflow);
+  native.executionMode = "SERVER_DAG_V1";
+  native.resultEvidenceProfile = "GITHUB_REVIEW_QA_V1";
+  delete native.draft;
+  expect(workflowEditorInput(native).resultEvidenceProfile).toBe(
+    "GITHUB_REVIEW_QA_V1",
+  );
+  const stale = workflowEditorInput(native);
+  Object.assign(stale, workflowEditorInput(workflow));
+  expect(stale.resultEvidenceProfile).toBeUndefined();
+  expect(native.resultEvidenceProfile).toBe("GITHUB_REVIEW_QA_V1");
 });

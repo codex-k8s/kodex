@@ -683,6 +683,7 @@ const (
 	AssistantContextDescriptorAllowedOperationsCREATESYSTEMASSISTANTROLEIMAGERECIPE         AssistantContextDescriptorAllowedOperations = "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
 	AssistantContextDescriptorAllowedOperationsCREATEWORKFLOW                               AssistantContextDescriptorAllowedOperations = "CREATE_WORKFLOW"
 	AssistantContextDescriptorAllowedOperationsLAUNCHRUN                                    AssistantContextDescriptorAllowedOperations = "LAUNCH_RUN"
+	AssistantContextDescriptorAllowedOperationsPREPAREAGENTRUNTIMECONFIGURATION             AssistantContextDescriptorAllowedOperations = "PREPARE_AGENT_RUNTIME_CONFIGURATION"
 	AssistantContextDescriptorAllowedOperationsPREPAREASSISTANTRUNTIMECONFIGURATION         AssistantContextDescriptorAllowedOperations = "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION"
 	AssistantContextDescriptorAllowedOperationsPREPAREPROJECTASSISTANTINTEGRATIONCONNECTION AssistantContextDescriptorAllowedOperations = "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION"
 	AssistantContextDescriptorAllowedOperationsPREPARERUNTIMEENVIRONMENTREVISION            AssistantContextDescriptorAllowedOperations = "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
@@ -740,6 +741,8 @@ func (e AssistantContextDescriptorAllowedOperations) Valid() bool {
 	case AssistantContextDescriptorAllowedOperationsCREATEWORKFLOW:
 		return true
 	case AssistantContextDescriptorAllowedOperationsLAUNCHRUN:
+		return true
+	case AssistantContextDescriptorAllowedOperationsPREPAREAGENTRUNTIMECONFIGURATION:
 		return true
 	case AssistantContextDescriptorAllowedOperationsPREPAREASSISTANTRUNTIMECONFIGURATION:
 		return true
@@ -890,6 +893,7 @@ const (
 	AssistantPlanOperationTypeCREATESYSTEMASSISTANTROLEIMAGERECIPE         AssistantPlanOperationType = "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
 	AssistantPlanOperationTypeCREATEWORKFLOW                               AssistantPlanOperationType = "CREATE_WORKFLOW"
 	AssistantPlanOperationTypeLAUNCHRUN                                    AssistantPlanOperationType = "LAUNCH_RUN"
+	AssistantPlanOperationTypePREPAREAGENTRUNTIMECONFIGURATION             AssistantPlanOperationType = "PREPARE_AGENT_RUNTIME_CONFIGURATION"
 	AssistantPlanOperationTypePREPAREASSISTANTRUNTIMECONFIGURATION         AssistantPlanOperationType = "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION"
 	AssistantPlanOperationTypePREPAREPROJECTASSISTANTINTEGRATIONCONNECTION AssistantPlanOperationType = "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION"
 	AssistantPlanOperationTypePREPARERUNTIMEENVIRONMENTREVISION            AssistantPlanOperationType = "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
@@ -947,6 +951,8 @@ func (e AssistantPlanOperationType) Valid() bool {
 	case AssistantPlanOperationTypeCREATEWORKFLOW:
 		return true
 	case AssistantPlanOperationTypeLAUNCHRUN:
+		return true
+	case AssistantPlanOperationTypePREPAREAGENTRUNTIMECONFIGURATION:
 		return true
 	case AssistantPlanOperationTypePREPAREASSISTANTRUNTIMECONFIGURATION:
 		return true
@@ -3748,6 +3754,21 @@ func (e OwnerGateDecision) Valid() bool {
 	}
 }
 
+// Defines values for OwnerGateResolutionKind.
+const (
+	SUPERSEDED OwnerGateResolutionKind = "SUPERSEDED"
+)
+
+// Valid indicates whether the value is a known member of the OwnerGateResolutionKind enum.
+func (e OwnerGateResolutionKind) Valid() bool {
+	switch e {
+	case SUPERSEDED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OwnerGateScopeKind.
 const (
 	OwnerGateScopeKindORGANIZATION OwnerGateScopeKind = "ORGANIZATION"
@@ -5212,6 +5233,135 @@ func (e ProviderUsageState) Valid() bool {
 	case ProviderUsageStateREADY:
 		return true
 	case ProviderUsageStateUNKNOWN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RepositoryBundleFileMode.
+const (
+	N100644 RepositoryBundleFileMode = "100644"
+	N100755 RepositoryBundleFileMode = "100755"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryBundleFileMode enum.
+func (e RepositoryBundleFileMode) Valid() bool {
+	switch e {
+	case N100644:
+		return true
+	case N100755:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RepositoryBundlePublicationContinuationCode.
+const (
+	CALLBACKINPUTTOOLARGE        RepositoryBundlePublicationContinuationCode = "CALLBACK_INPUT_TOO_LARGE"
+	CONTINUATIONAUTHORITYCHANGED RepositoryBundlePublicationContinuationCode = "CONTINUATION_AUTHORITY_CHANGED"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryBundlePublicationContinuationCode enum.
+func (e RepositoryBundlePublicationContinuationCode) Valid() bool {
+	switch e {
+	case CALLBACKINPUTTOOLARGE:
+		return true
+	case CONTINUATIONAUTHORITYCHANGED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RepositoryBundlePublicationContinuationState.
+const (
+	RepositoryBundlePublicationContinuationStateBLOCKED   RepositoryBundlePublicationContinuationState = "BLOCKED"
+	RepositoryBundlePublicationContinuationStateCANCELLED RepositoryBundlePublicationContinuationState = "CANCELLED"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryBundlePublicationContinuationState enum.
+func (e RepositoryBundlePublicationContinuationState) Valid() bool {
+	switch e {
+	case RepositoryBundlePublicationContinuationStateBLOCKED:
+		return true
+	case RepositoryBundlePublicationContinuationStateCANCELLED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RepositoryBundlePublicationFailureCode.
+const (
+	AUTHORITYCHANGED   RepositoryBundlePublicationFailureCode = "AUTHORITY_CHANGED"
+	BASEINVALID        RepositoryBundlePublicationFailureCode = "BASE_INVALID"
+	BRANCHCONFLICT     RepositoryBundlePublicationFailureCode = "BRANCH_CONFLICT"
+	CONTENTINVALID     RepositoryBundlePublicationFailureCode = "CONTENT_INVALID"
+	DEADLINEEXCEEDED   RepositoryBundlePublicationFailureCode = "DEADLINE_EXCEEDED"
+	OUTCOMEUNCONFIRMED RepositoryBundlePublicationFailureCode = "OUTCOME_UNCONFIRMED"
+	UNAVAILABLE        RepositoryBundlePublicationFailureCode = "UNAVAILABLE"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryBundlePublicationFailureCode enum.
+func (e RepositoryBundlePublicationFailureCode) Valid() bool {
+	switch e {
+	case AUTHORITYCHANGED:
+		return true
+	case BASEINVALID:
+		return true
+	case BRANCHCONFLICT:
+		return true
+	case CONTENTINVALID:
+		return true
+	case DEADLINEEXCEEDED:
+		return true
+	case OUTCOMEUNCONFIRMED:
+		return true
+	case UNAVAILABLE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RepositoryBundlePublicationState.
+const (
+	RepositoryBundlePublicationStateCANCELLED       RepositoryBundlePublicationState = "CANCELLED"
+	RepositoryBundlePublicationStateCLAIMED         RepositoryBundlePublicationState = "CLAIMED"
+	RepositoryBundlePublicationStateEFFECTSTARTED   RepositoryBundlePublicationState = "EFFECT_STARTED"
+	RepositoryBundlePublicationStateEXPIRED         RepositoryBundlePublicationState = "EXPIRED"
+	RepositoryBundlePublicationStateFAILED          RepositoryBundlePublicationState = "FAILED"
+	RepositoryBundlePublicationStateQUEUED          RepositoryBundlePublicationState = "QUEUED"
+	RepositoryBundlePublicationStateREJECTED        RepositoryBundlePublicationState = "REJECTED"
+	RepositoryBundlePublicationStateSUCCEEDED       RepositoryBundlePublicationState = "SUCCEEDED"
+	RepositoryBundlePublicationStateUNKNOWNOUTCOME  RepositoryBundlePublicationState = "UNKNOWN_OUTCOME"
+	RepositoryBundlePublicationStateWAITINGAPPROVAL RepositoryBundlePublicationState = "WAITING_APPROVAL"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryBundlePublicationState enum.
+func (e RepositoryBundlePublicationState) Valid() bool {
+	switch e {
+	case RepositoryBundlePublicationStateCANCELLED:
+		return true
+	case RepositoryBundlePublicationStateCLAIMED:
+		return true
+	case RepositoryBundlePublicationStateEFFECTSTARTED:
+		return true
+	case RepositoryBundlePublicationStateEXPIRED:
+		return true
+	case RepositoryBundlePublicationStateFAILED:
+		return true
+	case RepositoryBundlePublicationStateQUEUED:
+		return true
+	case RepositoryBundlePublicationStateREJECTED:
+		return true
+	case RepositoryBundlePublicationStateSUCCEEDED:
+		return true
+	case RepositoryBundlePublicationStateUNKNOWNOUTCOME:
+		return true
+	case RepositoryBundlePublicationStateWAITINGAPPROVAL:
 		return true
 	default:
 		return false
@@ -8212,6 +8362,27 @@ func (e TemplateVariableFieldValueType) Valid() bool {
 	}
 }
 
+// Defines values for TokenUsageCompleteness.
+const (
+	TokenUsageCompletenessCOMPLETE TokenUsageCompleteness = "COMPLETE"
+	TokenUsageCompletenessPARTIAL  TokenUsageCompleteness = "PARTIAL"
+	TokenUsageCompletenessUNKNOWN  TokenUsageCompleteness = "UNKNOWN"
+)
+
+// Valid indicates whether the value is a known member of the TokenUsageCompleteness enum.
+func (e TokenUsageCompleteness) Valid() bool {
+	switch e {
+	case TokenUsageCompletenessCOMPLETE:
+		return true
+	case TokenUsageCompletenessPARTIAL:
+		return true
+	case TokenUsageCompletenessUNKNOWN:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for VFSKind.
 const (
 	VFSKindAGENT       VFSKind = "AGENT"
@@ -8367,16 +8538,17 @@ func (e VFSNodeScanState) Valid() bool {
 
 // Defines values for VFSNodeSelectionReason.
 const (
-	VFSNodeSelectionReasonACTIVERUNUSESARTIFACT VFSNodeSelectionReason = "ACTIVE_RUN_USES_ARTIFACT"
-	VFSNodeSelectionReasonARTIFACTHASBINDINGS   VFSNodeSelectionReason = "ARTIFACT_HAS_BINDINGS"
-	VFSNodeSelectionReasonARTIFACTNOTACTIVE     VFSNodeSelectionReason = "ARTIFACT_NOT_ACTIVE"
-	VFSNodeSelectionReasonARTIFACTNOTDELETED    VFSNodeSelectionReason = "ARTIFACT_NOT_DELETED"
-	VFSNodeSelectionReasonARTIFACTUSEDBYSKILL   VFSNodeSelectionReason = "ARTIFACT_USED_BY_SKILL"
-	VFSNodeSelectionReasonAVAILABLE             VFSNodeSelectionReason = "AVAILABLE"
-	VFSNodeSelectionReasonDIRECTORY             VFSNodeSelectionReason = "DIRECTORY"
-	VFSNodeSelectionReasonIMMUTABLECONTEXT      VFSNodeSelectionReason = "IMMUTABLE_CONTEXT"
-	VFSNodeSelectionReasonLIFECYCLEBLOCKED      VFSNodeSelectionReason = "LIFECYCLE_BLOCKED"
-	VFSNodeSelectionReasonPERMISSIONREQUIRED    VFSNodeSelectionReason = "PERMISSION_REQUIRED"
+	VFSNodeSelectionReasonACTIVERUNUSESARTIFACT        VFSNodeSelectionReason = "ACTIVE_RUN_USES_ARTIFACT"
+	VFSNodeSelectionReasonARTIFACTHASBINDINGS          VFSNodeSelectionReason = "ARTIFACT_HAS_BINDINGS"
+	VFSNodeSelectionReasonARTIFACTHASRETAINEDREVISIONS VFSNodeSelectionReason = "ARTIFACT_HAS_RETAINED_REVISIONS"
+	VFSNodeSelectionReasonARTIFACTNOTACTIVE            VFSNodeSelectionReason = "ARTIFACT_NOT_ACTIVE"
+	VFSNodeSelectionReasonARTIFACTNOTDELETED           VFSNodeSelectionReason = "ARTIFACT_NOT_DELETED"
+	VFSNodeSelectionReasonARTIFACTUSEDBYSKILL          VFSNodeSelectionReason = "ARTIFACT_USED_BY_SKILL"
+	VFSNodeSelectionReasonAVAILABLE                    VFSNodeSelectionReason = "AVAILABLE"
+	VFSNodeSelectionReasonDIRECTORY                    VFSNodeSelectionReason = "DIRECTORY"
+	VFSNodeSelectionReasonIMMUTABLECONTEXT             VFSNodeSelectionReason = "IMMUTABLE_CONTEXT"
+	VFSNodeSelectionReasonLIFECYCLEBLOCKED             VFSNodeSelectionReason = "LIFECYCLE_BLOCKED"
+	VFSNodeSelectionReasonPERMISSIONREQUIRED           VFSNodeSelectionReason = "PERMISSION_REQUIRED"
 )
 
 // Valid indicates whether the value is a known member of the VFSNodeSelectionReason enum.
@@ -8385,6 +8557,8 @@ func (e VFSNodeSelectionReason) Valid() bool {
 	case VFSNodeSelectionReasonACTIVERUNUSESARTIFACT:
 		return true
 	case VFSNodeSelectionReasonARTIFACTHASBINDINGS:
+		return true
+	case VFSNodeSelectionReasonARTIFACTHASRETAINEDREVISIONS:
 		return true
 	case VFSNodeSelectionReasonARTIFACTNOTACTIVE:
 		return true
@@ -8401,6 +8575,54 @@ func (e VFSNodeSelectionReason) Valid() bool {
 	case VFSNodeSelectionReasonLIFECYCLEBLOCKED:
 		return true
 	case VFSNodeSelectionReasonPERMISSIONREQUIRED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowExecutionMode.
+const (
+	WorkflowExecutionModeMANAGERDRIVEN WorkflowExecutionMode = "MANAGER_DRIVEN"
+	WorkflowExecutionModeSERVERDAGV1   WorkflowExecutionMode = "SERVER_DAG_V1"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowExecutionMode enum.
+func (e WorkflowExecutionMode) Valid() bool {
+	switch e {
+	case WorkflowExecutionModeMANAGERDRIVEN:
+		return true
+	case WorkflowExecutionModeSERVERDAGV1:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowResultEvidenceProfile.
+const (
+	WorkflowResultEvidenceProfileGITHUBREVIEWQAV1 WorkflowResultEvidenceProfile = "GITHUB_REVIEW_QA_V1"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowResultEvidenceProfile enum.
+func (e WorkflowResultEvidenceProfile) Valid() bool {
+	switch e {
+	case WorkflowResultEvidenceProfileGITHUBREVIEWQAV1:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowReworkPolicy.
+const (
+	WorkflowReworkPolicyOWNERAPPROVEDUPSTREAMV1 WorkflowReworkPolicy = "OWNER_APPROVED_UPSTREAM_V1"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowReworkPolicy enum.
+func (e WorkflowReworkPolicy) Valid() bool {
+	switch e {
+	case WorkflowReworkPolicyOWNERAPPROVEDUPSTREAMV1:
 		return true
 	default:
 		return false
@@ -8431,6 +8653,87 @@ func (e WorkflowState) Valid() bool {
 	}
 }
 
+// Defines values for WorkflowAcceptedResultKind.
+const (
+	WorkflowAcceptedResultKindARTIFACT           WorkflowAcceptedResultKind = "ARTIFACT"
+	WorkflowAcceptedResultKindARTIFACTREVIEW     WorkflowAcceptedResultKind = "ARTIFACT_REVIEW"
+	WorkflowAcceptedResultKindDEPLOYMENT         WorkflowAcceptedResultKind = "DEPLOYMENT"
+	WorkflowAcceptedResultKindINTEGRATIONRECEIPT WorkflowAcceptedResultKind = "INTEGRATION_RECEIPT"
+	WorkflowAcceptedResultKindPULLREQUEST        WorkflowAcceptedResultKind = "PULL_REQUEST"
+	WorkflowAcceptedResultKindQA                 WorkflowAcceptedResultKind = "QA"
+	WorkflowAcceptedResultKindREVIEW             WorkflowAcceptedResultKind = "REVIEW"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowAcceptedResultKind enum.
+func (e WorkflowAcceptedResultKind) Valid() bool {
+	switch e {
+	case WorkflowAcceptedResultKindARTIFACT:
+		return true
+	case WorkflowAcceptedResultKindARTIFACTREVIEW:
+		return true
+	case WorkflowAcceptedResultKindDEPLOYMENT:
+		return true
+	case WorkflowAcceptedResultKindINTEGRATIONRECEIPT:
+		return true
+	case WorkflowAcceptedResultKindPULLREQUEST:
+		return true
+	case WorkflowAcceptedResultKindQA:
+		return true
+	case WorkflowAcceptedResultKindREVIEW:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowAcceptedResultVerdict.
+const (
+	CHANGESREQUIRED WorkflowAcceptedResultVerdict = "CHANGES_REQUIRED"
+	PASS            WorkflowAcceptedResultVerdict = "PASS"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowAcceptedResultVerdict enum.
+func (e WorkflowAcceptedResultVerdict) Valid() bool {
+	switch e {
+	case CHANGESREQUIRED:
+		return true
+	case PASS:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowAttemptResultEffectiveState.
+const (
+	BLOCKED         WorkflowAttemptResultEffectiveState = "BLOCKED"
+	CURRENT         WorkflowAttemptResultEffectiveState = "CURRENT"
+	HISTORICAL      WorkflowAttemptResultEffectiveState = "HISTORICAL"
+	REWORKPENDING   WorkflowAttemptResultEffectiveState = "REWORK_PENDING"
+	STALEDEPENDENCY WorkflowAttemptResultEffectiveState = "STALE_DEPENDENCY"
+	WAITINGOWNER    WorkflowAttemptResultEffectiveState = "WAITING_OWNER"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowAttemptResultEffectiveState enum.
+func (e WorkflowAttemptResultEffectiveState) Valid() bool {
+	switch e {
+	case BLOCKED:
+		return true
+	case CURRENT:
+		return true
+	case HISTORICAL:
+		return true
+	case REWORKPENDING:
+		return true
+	case STALEDEPENDENCY:
+		return true
+	case WAITINGOWNER:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WorkflowCommandAction.
 const (
 	WorkflowCommandActionARCHIVE  WorkflowCommandAction = "ARCHIVE"
@@ -8446,6 +8749,54 @@ func (e WorkflowCommandAction) Valid() bool {
 	case WorkflowCommandActionPUBLISH:
 		return true
 	case WorkflowCommandActionVALIDATE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowDraftSnapshotExecutionMode.
+const (
+	WorkflowDraftSnapshotExecutionModeMANAGERDRIVEN WorkflowDraftSnapshotExecutionMode = "MANAGER_DRIVEN"
+	WorkflowDraftSnapshotExecutionModeSERVERDAGV1   WorkflowDraftSnapshotExecutionMode = "SERVER_DAG_V1"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowDraftSnapshotExecutionMode enum.
+func (e WorkflowDraftSnapshotExecutionMode) Valid() bool {
+	switch e {
+	case WorkflowDraftSnapshotExecutionModeMANAGERDRIVEN:
+		return true
+	case WorkflowDraftSnapshotExecutionModeSERVERDAGV1:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowDraftSnapshotResultEvidenceProfile.
+const (
+	WorkflowDraftSnapshotResultEvidenceProfileGITHUBREVIEWQAV1 WorkflowDraftSnapshotResultEvidenceProfile = "GITHUB_REVIEW_QA_V1"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowDraftSnapshotResultEvidenceProfile enum.
+func (e WorkflowDraftSnapshotResultEvidenceProfile) Valid() bool {
+	switch e {
+	case WorkflowDraftSnapshotResultEvidenceProfileGITHUBREVIEWQAV1:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowDraftSnapshotReworkPolicy.
+const (
+	WorkflowDraftSnapshotReworkPolicyOWNERAPPROVEDUPSTREAMV1 WorkflowDraftSnapshotReworkPolicy = "OWNER_APPROVED_UPSTREAM_V1"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowDraftSnapshotReworkPolicy enum.
+func (e WorkflowDraftSnapshotReworkPolicy) Valid() bool {
+	switch e {
+	case WorkflowDraftSnapshotReworkPolicyOWNERAPPROVEDUPSTREAMV1:
 		return true
 	default:
 		return false
@@ -8470,6 +8821,57 @@ func (e WorkflowDraftSnapshotState) Valid() bool {
 	case WorkflowDraftSnapshotStatePUBLISHED:
 		return true
 	case WorkflowDraftSnapshotStateVALID:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowInputExecutionMode.
+const (
+	MANAGERDRIVEN WorkflowInputExecutionMode = "MANAGER_DRIVEN"
+	SERVERDAGV1   WorkflowInputExecutionMode = "SERVER_DAG_V1"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowInputExecutionMode enum.
+func (e WorkflowInputExecutionMode) Valid() bool {
+	switch e {
+	case MANAGERDRIVEN:
+		return true
+	case SERVERDAGV1:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowInputResultEvidenceProfile.
+const (
+	Empty            WorkflowInputResultEvidenceProfile = ""
+	GITHUBREVIEWQAV1 WorkflowInputResultEvidenceProfile = "GITHUB_REVIEW_QA_V1"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowInputResultEvidenceProfile enum.
+func (e WorkflowInputResultEvidenceProfile) Valid() bool {
+	switch e {
+	case Empty:
+		return true
+	case GITHUBREVIEWQAV1:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowInputReworkPolicy.
+const (
+	OWNERAPPROVEDUPSTREAMV1 WorkflowInputReworkPolicy = "OWNER_APPROVED_UPSTREAM_V1"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowInputReworkPolicy enum.
+func (e WorkflowInputReworkPolicy) Valid() bool {
+	switch e {
+	case OWNERAPPROVEDUPSTREAMV1:
 		return true
 	default:
 		return false
@@ -8575,6 +8977,90 @@ func (e WorkflowLaunchReadinessReason) Valid() bool {
 	case WorkflowLaunchReadinessReasonREADY:
 		return true
 	case WorkflowLaunchReadinessReasonUNPUBLISHED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowResultRequirementKind.
+const (
+	WorkflowResultRequirementKindARTIFACT           WorkflowResultRequirementKind = "ARTIFACT"
+	WorkflowResultRequirementKindARTIFACTREVIEW     WorkflowResultRequirementKind = "ARTIFACT_REVIEW"
+	WorkflowResultRequirementKindDEPLOYMENT         WorkflowResultRequirementKind = "DEPLOYMENT"
+	WorkflowResultRequirementKindINTEGRATIONRECEIPT WorkflowResultRequirementKind = "INTEGRATION_RECEIPT"
+	WorkflowResultRequirementKindPULLREQUEST        WorkflowResultRequirementKind = "PULL_REQUEST"
+	WorkflowResultRequirementKindQA                 WorkflowResultRequirementKind = "QA"
+	WorkflowResultRequirementKindREVIEW             WorkflowResultRequirementKind = "REVIEW"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowResultRequirementKind enum.
+func (e WorkflowResultRequirementKind) Valid() bool {
+	switch e {
+	case WorkflowResultRequirementKindARTIFACT:
+		return true
+	case WorkflowResultRequirementKindARTIFACTREVIEW:
+		return true
+	case WorkflowResultRequirementKindDEPLOYMENT:
+		return true
+	case WorkflowResultRequirementKindINTEGRATIONRECEIPT:
+		return true
+	case WorkflowResultRequirementKindPULLREQUEST:
+		return true
+	case WorkflowResultRequirementKindQA:
+		return true
+	case WorkflowResultRequirementKindREVIEW:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowResultRequirementOperation.
+const (
+	GithubPullRequestMerge WorkflowResultRequirementOperation = "github.pull_request.merge"
+	SshComposeDeploy       WorkflowResultRequirementOperation = "ssh.compose.deploy"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowResultRequirementOperation enum.
+func (e WorkflowResultRequirementOperation) Valid() bool {
+	switch e {
+	case GithubPullRequestMerge:
+		return true
+	case SshComposeDeploy:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowReworkPreviewBlockReason.
+const (
+	WORKFLOWATTEMPTSEXHAUSTED                WorkflowReworkPreviewBlockReason = "WORKFLOW_ATTEMPTS_EXHAUSTED"
+	WORKFLOWIRREVERSIBLEEFFECTREPAIRREQUIRED WorkflowReworkPreviewBlockReason = "WORKFLOW_IRREVERSIBLE_EFFECT_REPAIR_REQUIRED"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowReworkPreviewBlockReason enum.
+func (e WorkflowReworkPreviewBlockReason) Valid() bool {
+	switch e {
+	case WORKFLOWATTEMPTSEXHAUSTED:
+		return true
+	case WORKFLOWIRREVERSIBLEEFFECTREPAIRREQUIRED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowReworkPreviewSchema.
+const (
+	KodexWorkflowUpstreamReworkPreviewV1 WorkflowReworkPreviewSchema = "kodex.workflow-upstream-rework-preview.v1"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowReworkPreviewSchema enum.
+func (e WorkflowReworkPreviewSchema) Valid() bool {
+	switch e {
+	case KodexWorkflowUpstreamReworkPreviewV1:
 		return true
 	default:
 		return false
@@ -9768,16 +10254,16 @@ func (e ListVFSNodesParamsLifecycleState) Valid() bool {
 
 // Defines values for SearchVFSParamsLifecycleState.
 const (
-	SearchVFSParamsLifecycleStateACTIVE  SearchVFSParamsLifecycleState = "ACTIVE"
-	SearchVFSParamsLifecycleStateDELETED SearchVFSParamsLifecycleState = "DELETED"
+	ACTIVE  SearchVFSParamsLifecycleState = "ACTIVE"
+	DELETED SearchVFSParamsLifecycleState = "DELETED"
 )
 
 // Valid indicates whether the value is a known member of the SearchVFSParamsLifecycleState enum.
 func (e SearchVFSParamsLifecycleState) Valid() bool {
 	switch e {
-	case SearchVFSParamsLifecycleStateACTIVE:
+	case ACTIVE:
 		return true
-	case SearchVFSParamsLifecycleStateDELETED:
+	case DELETED:
 		return true
 	default:
 		return false
@@ -12366,6 +12852,8 @@ type OwnerGate struct {
 	Ref                        OpaqueRef                      `json:"ref"`
 	RequestedBy                UserSummary                    `json:"requestedBy"`
 	ResolutionAttachmentSetRef *OpaqueRef                     `json:"resolutionAttachmentSetRef,omitempty"`
+	ResolutionKind             *OwnerGateResolutionKind       `json:"resolutionKind,omitempty"`
+	ReworkPlan                 *WorkflowReworkPreview         `json:"reworkPlan,omitempty"`
 	RunRef                     OpaqueRef                      `json:"runRef"`
 	ScopeKind                  OwnerGateScopeKind             `json:"scopeKind"`
 	SourceAttachmentSetRef     *OpaqueRef                     `json:"sourceAttachmentSetRef,omitempty"`
@@ -12379,6 +12867,9 @@ type OwnerGateAllowedDecisions string
 
 // OwnerGateDecision defines model for OwnerGate.Decision.
 type OwnerGateDecision string
+
+// OwnerGateResolutionKind defines model for OwnerGate.ResolutionKind.
+type OwnerGateResolutionKind string
 
 // OwnerGateScopeKind defines model for OwnerGate.ScopeKind.
 type OwnerGateScopeKind string
@@ -13231,6 +13722,80 @@ type PublicRuntimeRevisionIdentity struct {
 	Version        int64      `json:"version"`
 }
 
+// RepositoryBundleArtifactPin defines model for RepositoryBundleArtifactPin.
+type RepositoryBundleArtifactPin struct {
+	Ref       OpaqueRef `json:"ref"`
+	Revision  int64     `json:"revision"`
+	Sha256    string    `json:"sha256"`
+	SizeBytes int64     `json:"sizeBytes"`
+	Version   int64     `json:"version"`
+}
+
+// RepositoryBundleFile defines model for RepositoryBundleFile.
+type RepositoryBundleFile struct {
+	Bytes  int64                    `json:"bytes"`
+	Mode   RepositoryBundleFileMode `json:"mode"`
+	Path   string                   `json:"path"`
+	Sha256 string                   `json:"sha256"`
+}
+
+// RepositoryBundleFileMode defines model for RepositoryBundleFile.Mode.
+type RepositoryBundleFileMode string
+
+// RepositoryBundleManifestPage defines model for RepositoryBundleManifestPage.
+type RepositoryBundleManifestPage struct {
+	Complete   bool                        `json:"complete"`
+	Files      []RepositoryBundleFile      `json:"files"`
+	NextOffset int                         `json:"nextOffset"`
+	Offset     int                         `json:"offset"`
+	Proposal   RepositoryBundlePublication `json:"proposal"`
+}
+
+// RepositoryBundlePublication defines model for RepositoryBundlePublication.
+type RepositoryBundlePublication struct {
+	ApprovalDigest           string                                        `json:"approvalDigest"`
+	Archive                  RepositoryBundleArtifactPin                   `json:"archive"`
+	BaseCommitSha            string                                        `json:"baseCommitSha"`
+	CandidateCommitSha       *string                                       `json:"candidateCommitSha,omitempty"`
+	CandidateTreeSha         *string                                       `json:"candidateTreeSha,omitempty"`
+	ConfirmedAt              *time.Time                                    `json:"confirmedAt,omitempty"`
+	ConnectionRef            OpaqueRef                                     `json:"connectionRef"`
+	ConnectionVersion        int64                                         `json:"connectionVersion"`
+	ContinuationCode         *RepositoryBundlePublicationContinuationCode  `json:"continuationCode,omitempty"`
+	ContinuationNodeRef      *OpaqueRef                                    `json:"continuationNodeRef,omitempty"`
+	ContinuationState        *RepositoryBundlePublicationContinuationState `json:"continuationState,omitempty"`
+	CreatedAt                time.Time                                     `json:"createdAt"`
+	ExpiresAt                time.Time                                     `json:"expiresAt"`
+	FailureCode              *RepositoryBundlePublicationFailureCode       `json:"failureCode,omitempty"`
+	FileCount                int                                           `json:"fileCount"`
+	GateRef                  OpaqueRef                                     `json:"gateRef"`
+	GrantRef                 OpaqueRef                                     `json:"grantRef"`
+	GrantVersion             int64                                         `json:"grantVersion"`
+	InvocationRef            OpaqueRef                                     `json:"invocationRef"`
+	Manifest                 RepositoryBundleArtifactPin                   `json:"manifest"`
+	OriginRunRef             OpaqueRef                                     `json:"originRunRef"`
+	OriginRuntimeRevisionRef OpaqueRef                                     `json:"originRuntimeRevisionRef"`
+	ProjectRef               OpaqueRef                                     `json:"projectRef"`
+	ProposalBranch           string                                        `json:"proposalBranch"`
+	Ref                      OpaqueRef                                     `json:"ref"`
+	RepositoryRef            string                                        `json:"repositoryRef"`
+	State                    RepositoryBundlePublicationState              `json:"state"`
+	TotalBytes               int64                                         `json:"totalBytes"`
+	Version                  int64                                         `json:"version"`
+}
+
+// RepositoryBundlePublicationContinuationCode defines model for RepositoryBundlePublication.ContinuationCode.
+type RepositoryBundlePublicationContinuationCode string
+
+// RepositoryBundlePublicationContinuationState defines model for RepositoryBundlePublication.ContinuationState.
+type RepositoryBundlePublicationContinuationState string
+
+// RepositoryBundlePublicationFailureCode defines model for RepositoryBundlePublication.FailureCode.
+type RepositoryBundlePublicationFailureCode string
+
+// RepositoryBundlePublicationState defines model for RepositoryBundlePublication.State.
+type RepositoryBundlePublicationState string
+
 // RevisionImpactItem defines model for RevisionImpactItem.
 type RevisionImpactItem struct {
 	BindingRef      OpaqueRef                      `json:"bindingRef"`
@@ -13809,12 +14374,15 @@ type RunDeltaState string
 
 // RunEdge defines model for RunEdge.
 type RunEdge struct {
-	Label         string      `json:"label"`
-	Ref           OpaqueRef   `json:"ref"`
-	RunRef        OpaqueRef   `json:"runRef"`
-	SourceNodeRef OpaqueRef   `json:"sourceNodeRef"`
-	TargetNodeRef OpaqueRef   `json:"targetNodeRef"`
-	Type          RunEdgeType `json:"type"`
+	Label  string    `json:"label"`
+	Ref    OpaqueRef `json:"ref"`
+	RunRef OpaqueRef `json:"runRef"`
+
+	// ServerWorkflowRetry Историческая SERVER lineage, проверенная владельцем; не разрешает retry и не принимает результат.
+	ServerWorkflowRetry *WorkflowRetryReadProof `json:"serverWorkflowRetry,omitempty"`
+	SourceNodeRef       OpaqueRef               `json:"sourceNodeRef"`
+	TargetNodeRef       OpaqueRef               `json:"targetNodeRef"`
+	Type                RunEdgeType             `json:"type"`
 }
 
 // RunEdgeType defines model for RunEdge.Type.
@@ -13935,29 +14503,30 @@ type RunMessagePhase string
 
 // RunNode defines model for RunNode.
 type RunNode struct {
-	AgentRef         *OpaqueRef   `json:"agentRef,omitempty"`
-	ArtifactRefs     []OpaqueRef  `json:"artifactRefs"`
-	Attempt          int          `json:"attempt"`
-	CallbackSummary  *string      `json:"callbackSummary,omitempty"`
-	ChildRunRefs     []OpaqueRef  `json:"childRunRefs"`
-	CreatedAt        Timestamp    `json:"createdAt"`
-	DisplayName      string       `json:"displayName"`
-	FinishedAt       *Timestamp   `json:"finishedAt,omitempty"`
-	InputSummary     *string      `json:"inputSummary,omitempty"`
-	IntegrationNames *[]string    `json:"integrationNames,omitempty"`
-	NextActions      []NextAction `json:"nextActions"`
-	ParentNodeRef    *OpaqueRef   `json:"parentNodeRef,omitempty"`
-	Planned          *bool        `json:"planned,omitempty"`
-	ProgressSummary  *string      `json:"progressSummary,omitempty"`
-	Ref              OpaqueRef    `json:"ref"`
-	Role             *string      `json:"role,omitempty"`
-	RunRef           OpaqueRef    `json:"runRef"`
-	SafeErrorCode    *string      `json:"safeErrorCode,omitempty"`
-	SafeErrorMessage *string      `json:"safeErrorMessage,omitempty"`
-	StartedAt        *Timestamp   `json:"startedAt,omitempty"`
-	State            RunNodeState `json:"state"`
-	TurnRef          *OpaqueRef   `json:"turnRef,omitempty"`
-	Type             RunNodeType  `json:"type"`
+	AgentRef         *OpaqueRef               `json:"agentRef,omitempty"`
+	ArtifactRefs     []OpaqueRef              `json:"artifactRefs"`
+	Attempt          int                      `json:"attempt"`
+	CallbackSummary  *string                  `json:"callbackSummary,omitempty"`
+	ChildRunRefs     []OpaqueRef              `json:"childRunRefs"`
+	CreatedAt        Timestamp                `json:"createdAt"`
+	DisplayName      string                   `json:"displayName"`
+	FinishedAt       *Timestamp               `json:"finishedAt,omitempty"`
+	InputSummary     *string                  `json:"inputSummary,omitempty"`
+	IntegrationNames *[]string                `json:"integrationNames,omitempty"`
+	NextActions      []NextAction             `json:"nextActions"`
+	ParentNodeRef    *OpaqueRef               `json:"parentNodeRef,omitempty"`
+	Planned          *bool                    `json:"planned,omitempty"`
+	ProgressSummary  *string                  `json:"progressSummary,omitempty"`
+	Ref              OpaqueRef                `json:"ref"`
+	Role             *string                  `json:"role,omitempty"`
+	RunRef           OpaqueRef                `json:"runRef"`
+	SafeErrorCode    *string                  `json:"safeErrorCode,omitempty"`
+	SafeErrorMessage *string                  `json:"safeErrorMessage,omitempty"`
+	StartedAt        *Timestamp               `json:"startedAt,omitempty"`
+	State            RunNodeState             `json:"state"`
+	TurnRef          *OpaqueRef               `json:"turnRef,omitempty"`
+	Type             RunNodeType              `json:"type"`
+	WorkflowResults  *[]WorkflowAttemptResult `json:"workflowResults,omitempty"`
 }
 
 // RunNodeState defines model for RunNode.State.
@@ -15313,12 +15882,18 @@ type Timestamp = time.Time
 type TokenUsage struct {
 	CacheWriteInputTokens int64 `json:"cacheWriteInputTokens"`
 	CachedInputTokens     int64 `json:"cachedInputTokens"`
-	InputTokens           int64 `json:"inputTokens"`
-	ModelContextWindow    int64 `json:"modelContextWindow"`
-	OutputTokens          int64 `json:"outputTokens"`
-	ReasoningOutputTokens int64 `json:"reasoningOutputTokens"`
-	TotalTokens           int64 `json:"totalTokens"`
+
+	// Completeness Полнота наблюдений; отсутствие в legacy означает UNKNOWN, не измеренный ноль.
+	Completeness          *TokenUsageCompleteness `json:"completeness,omitempty"`
+	InputTokens           int64                   `json:"inputTokens"`
+	ModelContextWindow    int64                   `json:"modelContextWindow"`
+	OutputTokens          int64                   `json:"outputTokens"`
+	ReasoningOutputTokens int64                   `json:"reasoningOutputTokens"`
+	TotalTokens           int64                   `json:"totalTokens"`
 }
+
+// TokenUsageCompleteness Полнота наблюдений; отсутствие в legacy означает UNKNOWN, не измеренный ноль.
+type TokenUsageCompleteness string
 
 // TrashedProjectPage defines model for TrashedProjectPage.
 type TrashedProjectPage struct {
@@ -15403,6 +15978,7 @@ type Workflow struct {
 
 	// DraftRevisionRef Точная сохранённая draft revision владельца; отсутствует без draft.
 	DraftRevisionRef *OpaqueRef              `json:"draftRevisionRef,omitempty"`
+	ExecutionMode    *WorkflowExecutionMode  `json:"executionMode,omitempty"`
 	InputFields      []WorkflowInputField    `json:"inputFields"`
 	LaunchReadiness  WorkflowLaunchReadiness `json:"launchReadiness"`
 	MaxConcurrency   *int                    `json:"maxConcurrency,omitempty"`
@@ -15414,20 +15990,75 @@ type Workflow struct {
 	PublishedRevisionRef *OpaqueRef `json:"publishedRevisionRef,omitempty"`
 	Purpose              string     `json:"purpose"`
 	Ref                  OpaqueRef  `json:"ref"`
-	Revision             *int       `json:"revision,omitempty"`
+
+	// ResultEvidenceProfile Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
+	ResultEvidenceProfile *WorkflowResultEvidenceProfile `json:"resultEvidenceProfile,omitempty"`
+	Revision              *int                           `json:"revision,omitempty"`
 
 	// RevisionRef Точная owner revision отображаемых steps/inputFields; опубликованная, иначе сохранённый draft. Отсутствует без обеих revisions.
-	RevisionRef        *OpaqueRef     `json:"revisionRef,omitempty"`
-	State              WorkflowState  `json:"state"`
-	Steps              []WorkflowStep `json:"steps"`
-	TimeoutSeconds     *int           `json:"timeoutSeconds,omitempty"`
-	UpdatedAt          Timestamp      `json:"updatedAt"`
-	ValidationMessages []string       `json:"validationMessages"`
-	Version            int64          `json:"version"`
+	RevisionRef *OpaqueRef `json:"revisionRef,omitempty"`
+
+	// ReworkPolicy Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
+	ReworkPolicy       *WorkflowReworkPolicy `json:"reworkPolicy,omitempty"`
+	State              WorkflowState         `json:"state"`
+	Steps              []WorkflowStep        `json:"steps"`
+	TimeoutSeconds     *int                  `json:"timeoutSeconds,omitempty"`
+	UpdatedAt          Timestamp             `json:"updatedAt"`
+	ValidationMessages []string              `json:"validationMessages"`
+	Version            int64                 `json:"version"`
 }
+
+// WorkflowExecutionMode defines model for Workflow.ExecutionMode.
+type WorkflowExecutionMode string
+
+// WorkflowResultEvidenceProfile Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
+type WorkflowResultEvidenceProfile string
+
+// WorkflowReworkPolicy Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
+type WorkflowReworkPolicy string
 
 // WorkflowState defines model for Workflow.State.
 type WorkflowState string
+
+// WorkflowAcceptedResult defines model for WorkflowAcceptedResult.
+type WorkflowAcceptedResult struct {
+	ArtifactRef      *OpaqueRef                     `json:"artifactRef,omitempty"`
+	ArtifactRevision *string                        `json:"artifactRevision,omitempty"`
+	BundleSha256     *string                        `json:"bundleSha256,omitempty"`
+	Digest           string                         `json:"digest"`
+	HeadSha          *string                        `json:"headSha,omitempty"`
+	HealthOk         *bool                          `json:"healthOk,omitempty"`
+	ImageDigest      *string                        `json:"imageDigest,omitempty"`
+	Key              string                         `json:"key"`
+	Kind             WorkflowAcceptedResultKind     `json:"kind"`
+	Number           *int                           `json:"number,omitempty"`
+	ReceiptRef       *OpaqueRef                     `json:"receiptRef,omitempty"`
+	Repository       *string                        `json:"repository,omitempty"`
+	TargetRef        *string                        `json:"targetRef,omitempty"`
+	Verdict          *WorkflowAcceptedResultVerdict `json:"verdict,omitempty"`
+}
+
+// WorkflowAcceptedResultKind defines model for WorkflowAcceptedResult.Kind.
+type WorkflowAcceptedResultKind string
+
+// WorkflowAcceptedResultVerdict defines model for WorkflowAcceptedResult.Verdict.
+type WorkflowAcceptedResultVerdict string
+
+// WorkflowAttemptResult Закрытый typed snapshot. Отношения accepted/results/evidence проверяются общим API validator и каждым PWA graph/event ingress; evidence разрешено только при accepted=false, reason=CHANGES_REQUIRED, results=[] и наличии отрицательного ARTIFACT_REVIEW/REVIEW/QA.
+type WorkflowAttemptResult struct {
+	Accepted       bool                                 `json:"accepted"`
+	Attempt        int                                  `json:"attempt"`
+	EffectiveState *WorkflowAttemptResultEffectiveState `json:"effectiveState,omitempty"`
+
+	// Evidence Проверенные факты отклонённого ARTIFACT_REVIEW/REVIEW/QA; accepted=false, reason=CHANGES_REQUIRED, results остаётся пустым.
+	Evidence *[]WorkflowAcceptedResult `json:"evidence,omitempty"`
+	Reason   string                    `json:"reason"`
+	Results  []WorkflowAcceptedResult  `json:"results"`
+	RunRef   OpaqueRef                 `json:"runRef"`
+}
+
+// WorkflowAttemptResultEffectiveState defines model for WorkflowAttemptResult.EffectiveState.
+type WorkflowAttemptResultEffectiveState string
 
 // WorkflowCardSummary Единая owner projection для get/list/project/global и командного readback. Использует опубликованную revision, иначе draft; HTTP и PWA не пересчитывают значения из steps или частичной страницы.
 type WorkflowCardSummary struct {
@@ -15452,33 +16083,65 @@ type WorkflowCommandAction string
 
 // WorkflowDraftSnapshot Сохранённый draft для редактора; все поля и ref происходят из одной owner revision. Не подменяет опубликованный основной вид Workflow.
 type WorkflowDraftSnapshot struct {
-	CompletionCriteria  *string                    `json:"completionCriteria,omitempty"`
-	CoordinatorAgentRef *OpaqueRef                 `json:"coordinatorAgentRef,omitempty"`
-	InputFields         []WorkflowInputField       `json:"inputFields"`
-	MaxConcurrency      *int                       `json:"maxConcurrency,omitempty"`
-	Ref                 OpaqueRef                  `json:"ref"`
-	Revision            int                        `json:"revision"`
-	State               WorkflowDraftSnapshotState `json:"state"`
-	Steps               []WorkflowStep             `json:"steps"`
-	TimeoutSeconds      *int                       `json:"timeoutSeconds,omitempty"`
-	ValidationMessages  []string                   `json:"validationMessages"`
-	Version             int64                      `json:"version"`
+	CompletionCriteria  *string                             `json:"completionCriteria,omitempty"`
+	CoordinatorAgentRef *OpaqueRef                          `json:"coordinatorAgentRef,omitempty"`
+	ExecutionMode       *WorkflowDraftSnapshotExecutionMode `json:"executionMode,omitempty"`
+	InputFields         []WorkflowInputField                `json:"inputFields"`
+	MaxConcurrency      *int                                `json:"maxConcurrency,omitempty"`
+	Ref                 OpaqueRef                           `json:"ref"`
+
+	// ResultEvidenceProfile Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
+	ResultEvidenceProfile *WorkflowDraftSnapshotResultEvidenceProfile `json:"resultEvidenceProfile,omitempty"`
+	Revision              int                                         `json:"revision"`
+
+	// ReworkPolicy Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
+	ReworkPolicy       *WorkflowDraftSnapshotReworkPolicy `json:"reworkPolicy,omitempty"`
+	State              WorkflowDraftSnapshotState         `json:"state"`
+	Steps              []WorkflowStep                     `json:"steps"`
+	TimeoutSeconds     *int                               `json:"timeoutSeconds,omitempty"`
+	ValidationMessages []string                           `json:"validationMessages"`
+	Version            int64                              `json:"version"`
 }
+
+// WorkflowDraftSnapshotExecutionMode defines model for WorkflowDraftSnapshot.ExecutionMode.
+type WorkflowDraftSnapshotExecutionMode string
+
+// WorkflowDraftSnapshotResultEvidenceProfile Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
+type WorkflowDraftSnapshotResultEvidenceProfile string
+
+// WorkflowDraftSnapshotReworkPolicy Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
+type WorkflowDraftSnapshotReworkPolicy string
 
 // WorkflowDraftSnapshotState defines model for WorkflowDraftSnapshot.State.
 type WorkflowDraftSnapshotState string
 
 // WorkflowInput defines model for WorkflowInput.
 type WorkflowInput struct {
-	CompletionCriteria  *string                    `json:"completionCriteria,omitempty"`
-	CoordinatorAgentRef OpaqueRef                  `json:"coordinatorAgentRef"`
-	InputFields         *[]WorkflowInputFieldInput `json:"inputFields,omitempty"`
-	MaxConcurrency      *int                       `json:"maxConcurrency,omitempty"`
-	Name                string                     `json:"name"`
-	Purpose             string                     `json:"purpose"`
-	Steps               *[]WorkflowStepInput       `json:"steps,omitempty"`
-	TimeoutSeconds      *int                       `json:"timeoutSeconds,omitempty"`
+	CompletionCriteria  *string                     `json:"completionCriteria,omitempty"`
+	CoordinatorAgentRef OpaqueRef                   `json:"coordinatorAgentRef"`
+	ExecutionMode       *WorkflowInputExecutionMode `json:"executionMode,omitempty"`
+	InputFields         *[]WorkflowInputFieldInput  `json:"inputFields,omitempty"`
+	MaxConcurrency      *int                        `json:"maxConcurrency,omitempty"`
+	Name                string                      `json:"name"`
+	Purpose             string                      `json:"purpose"`
+
+	// ResultEvidenceProfile Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия. Пустое значение снимает draft opt-in; весь итоговый граф заново проверяется.
+	ResultEvidenceProfile *WorkflowInputResultEvidenceProfile `json:"resultEvidenceProfile,omitempty"`
+
+	// ReworkPolicy Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
+	ReworkPolicy   *WorkflowInputReworkPolicy `json:"reworkPolicy,omitempty"`
+	Steps          *[]WorkflowStepInput       `json:"steps,omitempty"`
+	TimeoutSeconds *int                       `json:"timeoutSeconds,omitempty"`
 }
+
+// WorkflowInputExecutionMode defines model for WorkflowInput.ExecutionMode.
+type WorkflowInputExecutionMode string
+
+// WorkflowInputResultEvidenceProfile Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия. Пустое значение снимает draft opt-in; весь итоговый граф заново проверяется.
+type WorkflowInputResultEvidenceProfile string
+
+// WorkflowInputReworkPolicy Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
+type WorkflowInputReworkPolicy string
 
 // WorkflowInputField defines model for WorkflowInputField.
 type WorkflowInputField struct {
@@ -15528,9 +16191,71 @@ type WorkflowPage struct {
 	NextPageToken *string    `json:"nextPageToken,omitempty"`
 }
 
+// WorkflowResultRequirement defines model for WorkflowResultRequirement.
+type WorkflowResultRequirement struct {
+	// EvidenceKey Только QA выбранного профиля; ключ ARTIFACT application/json того же шага.
+	EvidenceKey *string                             `json:"evidenceKey,omitempty"`
+	FileName    *string                             `json:"fileName,omitempty"`
+	Key         string                              `json:"key"`
+	Kind        WorkflowResultRequirementKind       `json:"kind"`
+	MediaType   *string                             `json:"mediaType,omitempty"`
+	Operation   *WorkflowResultRequirementOperation `json:"operation,omitempty"`
+	Repository  *string                             `json:"repository,omitempty"`
+
+	// SubjectResultKey Логический ключ шага внутри одной версии процесса; не является ссылкой на ресурс или источником полномочий.
+	SubjectResultKey *WorkflowStepKey `json:"subjectResultKey,omitempty"`
+
+	// SubjectStepKey Логический ключ шага внутри одной версии процесса; не является ссылкой на ресурс или источником полномочий.
+	SubjectStepKey *WorkflowStepKey `json:"subjectStepKey,omitempty"`
+	TargetRef      *string          `json:"targetRef,omitempty"`
+}
+
+// WorkflowResultRequirementKind defines model for WorkflowResultRequirement.Kind.
+type WorkflowResultRequirementKind string
+
+// WorkflowResultRequirementOperation defines model for WorkflowResultRequirement.Operation.
+type WorkflowResultRequirementOperation string
+
+// WorkflowRetryReadProof Историческая SERVER lineage, проверенная владельцем; не разрешает retry и не принимает результат.
+type WorkflowRetryReadProof struct {
+	BusinessAttempt         int32     `json:"businessAttempt"`
+	OriginNodeRef           OpaqueRef `json:"originNodeRef"`
+	PreviousBusinessAttempt int32     `json:"previousBusinessAttempt"`
+	StepKey                 string    `json:"stepKey"`
+	WorkflowVersionDigest   string    `json:"workflowVersionDigest"`
+	WorkflowVersionRef      OpaqueRef `json:"workflowVersionRef"`
+}
+
+// WorkflowReworkPreview defines model for WorkflowReworkPreview.
+type WorkflowReworkPreview struct {
+	Authors       []WorkflowReworkStepPreview       `json:"authors"`
+	BlockReason   *WorkflowReworkPreviewBlockReason `json:"blockReason,omitempty"`
+	Rechecks      []WorkflowReworkStepPreview       `json:"rechecks"`
+	Schema        WorkflowReworkPreviewSchema       `json:"schema"`
+	SourceAttempt int                               `json:"sourceAttempt"`
+	SourceStepKey string                            `json:"sourceStepKey"`
+}
+
+// WorkflowReworkPreviewBlockReason defines model for WorkflowReworkPreview.BlockReason.
+type WorkflowReworkPreviewBlockReason string
+
+// WorkflowReworkPreviewSchema defines model for WorkflowReworkPreview.Schema.
+type WorkflowReworkPreviewSchema string
+
+// WorkflowReworkStepPreview defines model for WorkflowReworkStepPreview.
+type WorkflowReworkStepPreview struct {
+	NextAttempt     int    `json:"nextAttempt"`
+	PreviousAttempt int    `json:"previousAttempt"`
+	StepKey         string `json:"stepKey"`
+}
+
 // WorkflowStep defines model for WorkflowStep.
 type WorkflowStep struct {
-	AgentRef               *OpaqueRef                  `json:"agentRef,omitempty"`
+	AgentRef *OpaqueRef `json:"agentRef,omitempty"`
+
+	// ApprovalTimeoutSeconds Срок ожидания решения после завершения этапа. При отсутствии отдельного срока согласования нет; общий срок процесса действует независимо.
+	ApprovalTimeoutSeconds *int                        `json:"approvalTimeoutSeconds,omitempty"`
+	DependsOn              *[]WorkflowStepKey          `json:"dependsOn,omitempty"`
 	ExpectedResult         string                      `json:"expectedResult"`
 	GateDecisions          []WorkflowStepGateDecisions `json:"gateDecisions"`
 	HumanGate              bool                        `json:"humanGate"`
@@ -15539,9 +16264,12 @@ type WorkflowStep struct {
 	ParallelGroup          int                         `json:"parallelGroup"`
 	Position               int                         `json:"position"`
 	Purpose                string                      `json:"purpose"`
-	Ref                    OpaqueRef                   `json:"ref"`
-	RequiredCapabilityKeys []string                    `json:"requiredCapabilityKeys"`
-	TimeoutSeconds         int                         `json:"timeoutSeconds"`
+
+	// Ref Логический ключ шага внутри одной версии процесса; не является ссылкой на ресурс или источником полномочий.
+	Ref                    WorkflowStepKey              `json:"ref"`
+	RequiredCapabilityKeys []string                     `json:"requiredCapabilityKeys"`
+	ResultRequirements     *[]WorkflowResultRequirement `json:"resultRequirements,omitempty"`
+	TimeoutSeconds         int                          `json:"timeoutSeconds"`
 }
 
 // WorkflowStepGateDecisions defines model for WorkflowStep.GateDecisions.
@@ -15549,7 +16277,11 @@ type WorkflowStepGateDecisions string
 
 // WorkflowStepInput defines model for WorkflowStepInput.
 type WorkflowStepInput struct {
-	AgentRef               OpaqueRef                        `json:"agentRef"`
+	AgentRef OpaqueRef `json:"agentRef"`
+
+	// ApprovalTimeoutSeconds Необязательный срок согласования в секундах, допустимый только при humanGate=true. Отсчёт начинается при открытии согласования сервером.
+	ApprovalTimeoutSeconds *int                             `json:"approvalTimeoutSeconds,omitempty"`
+	DependsOn              *[]WorkflowStepKey               `json:"dependsOn,omitempty"`
 	ExpectedResult         string                           `json:"expectedResult"`
 	GateDecisions          []WorkflowStepInputGateDecisions `json:"gateDecisions"`
 	HumanGate              bool                             `json:"humanGate"`
@@ -15558,12 +16290,19 @@ type WorkflowStepInput struct {
 	ParallelGroup          int                              `json:"parallelGroup"`
 	Position               int                              `json:"position"`
 	Purpose                string                           `json:"purpose"`
-	RequiredCapabilityKeys []string                         `json:"requiredCapabilityKeys"`
-	TimeoutSeconds         int                              `json:"timeoutSeconds"`
+
+	// Ref Логический ключ шага внутри одной версии процесса; не является ссылкой на ресурс или источником полномочий.
+	Ref                    *WorkflowStepKey             `json:"ref,omitempty"`
+	RequiredCapabilityKeys []string                     `json:"requiredCapabilityKeys"`
+	ResultRequirements     *[]WorkflowResultRequirement `json:"resultRequirements,omitempty"`
+	TimeoutSeconds         int                          `json:"timeoutSeconds"`
 }
 
 // WorkflowStepInputGateDecisions defines model for WorkflowStepInput.GateDecisions.
 type WorkflowStepInputGateDecisions string
+
+// WorkflowStepKey Логический ключ шага внутри одной версии процесса; не является ссылкой на ресурс или источником полномочий.
+type WorkflowStepKey = string
 
 // AccessBindingRef defines model for AccessBindingRef.
 type AccessBindingRef = OpaqueRef
@@ -16901,6 +17640,14 @@ type ListOwnerGatesParamsState string
 
 // ListOwnerGatesParamsStates defines parameters for ListOwnerGates.
 type ListOwnerGatesParamsStates string
+
+// GetOwnerGateRepositoryBundleParams defines parameters for GetOwnerGateRepositoryBundle.
+type GetOwnerGateRepositoryBundleParams struct {
+	Offset                 *int    `form:"offset,omitempty" json:"offset,omitempty"`
+	Limit                  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	ExpectedVersion        *int64  `form:"expectedVersion,omitempty" json:"expectedVersion,omitempty"`
+	ExpectedManifestSha256 *string `form:"expectedManifestSha256,omitempty" json:"expectedManifestSha256,omitempty"`
+}
 
 // ResolveOwnerGateParams defines parameters for ResolveOwnerGate.
 type ResolveOwnerGateParams struct {
@@ -20068,6 +20815,9 @@ type ServerInterface interface {
 
 	// (GET /api/v1/owner-gates/{gateRef})
 	GetOwnerGate(w http.ResponseWriter, r *http.Request, gateRef GateRef)
+
+	// (GET /api/v1/owner-gates/{gateRef}/repository-bundle)
+	GetOwnerGateRepositoryBundle(w http.ResponseWriter, r *http.Request, gateRef GateRef, params GetOwnerGateRepositoryBundleParams)
 
 	// (POST /api/v1/owner-gates/{gateRef}/resolution)
 	ResolveOwnerGate(w http.ResponseWriter, r *http.Request, gateRef GateRef, params ResolveOwnerGateParams)
@@ -34429,6 +35179,93 @@ func (siw *ServerInterfaceWrapper) GetOwnerGate(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetOwnerGate(w, r, gateRef)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOwnerGateRepositoryBundle operation middleware
+func (siw *ServerInterfaceWrapper) GetOwnerGateRepositoryBundle(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "gateRef" -------------
+	var gateRef GateRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "gateRef", r.PathValue("gateRef"), &gateRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "gateRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetOwnerGateRepositoryBundleParams
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "expectedVersion" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "expectedVersion", r.URL.Query(), &params.ExpectedVersion, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "expectedVersion"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "expectedVersion", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "expectedManifestSha256" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "expectedManifestSha256", r.URL.Query(), &params.ExpectedManifestSha256, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "expectedManifestSha256"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "expectedManifestSha256", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOwnerGateRepositoryBundle(w, r, gateRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -50477,6 +51314,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/overview", wrapper.GetOverview)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/owner-gates", wrapper.ListOwnerGates)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/owner-gates/{gateRef}", wrapper.GetOwnerGate)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/owner-gates/{gateRef}/repository-bundle", wrapper.GetOwnerGateRepositoryBundle)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/owner-gates/{gateRef}/resolution", wrapper.ResolveOwnerGate)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/platform-capabilities", wrapper.ListPlatformCapabilities)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/project-memberships", wrapper.ListOrganizationProjectMemberships)

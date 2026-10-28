@@ -37,6 +37,20 @@ const node: VfsNode = {
 const page: VfsNodePage = { items: [node], total: 1, nextPageToken: "" };
 const scope = { path: "/projects", query: "" };
 describe("VFS", () => {
+  it("сохраняет причину удержания ревизий без разрешения purge", () => {
+    const retained: VfsNode = {
+      ...node,
+      kind: "INPUT",
+      directory: false,
+      lifecycleState: "DELETED",
+      selectionReason: "ARTIFACT_HAS_RETAINED_REVISIONS",
+      nextActions: ["RESTORE"],
+    };
+    expect(() =>
+      validateVfsPage({ ...page, items: [retained] }, scope),
+    ).not.toThrow();
+    expect(retained.nextActions).toEqual(["RESTORE"]);
+  });
   it("поиск принимает сам каталог и его потомков, но отклоняет соседний путь", () => {
     expect(() =>
       validateVfsPage(page, { path: node.path, query: "Проект" }),

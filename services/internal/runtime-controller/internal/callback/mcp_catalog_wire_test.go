@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/codex-k8s/kodex/libs/go/repositorybundle"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
@@ -26,6 +27,9 @@ func TestRuntimeMCPCatalogWireProducer(t *testing.T) {
 	if path == "" {
 		t.Skip("KODEX_RUNTIME_MCP_CATALOG_FIXTURE is not configured")
 	}
+	if repositorybundle.ToolName != runtimecontract.RepositoryBundlePrepareTool || repositorybundle.Operation != runtimecontract.RepositoryBundlePublishOperation {
+		t.Fatal("repository bundle protocol names diverged from the runtime catalog")
+	}
 	// fixture pairs one named synthetic RunnerInput with its serialized local MCP catalog for the separate consumer harness.
 	// fixture связывает именованный синтетический RunnerInput с сериализованным локальным каталогом MCP для отдельной потребляющей оснастки.
 	type fixture struct {
@@ -38,6 +42,9 @@ func TestRuntimeMCPCatalogWireProducer(t *testing.T) {
 	email.IntegrationGrants = []runtimecontract.RunnerIntegrationGrant{{Ref: "igr_fixture", GrantVersion: 1, ConnectionRef: "int_fixture", ConnectionVersion: 1, ApprovalPolicy: "HUMAN_EACH_EFFECT", DefinitionKey: "email", DefinitionVersion: "1.4.1", DefinitionDigest: strings.Repeat("b", 64), CapabilityKey: "email.message.send", Operation: "SEND", InputSchema: `{"type":"object","properties":{"subject":{"type":"string"}}}`, InputSchemaSHA256: strings.Repeat("c", 64)}}
 	schemaDigest := sha256.Sum256([]byte(email.IntegrationGrants[0].InputSchema))
 	email.IntegrationGrants[0].InputSchemaSHA256 = hex.EncodeToString(schemaDigest[:])
+	bundle := files
+	bundle.AssistantScope = runtimecontract.AssistantScopeNone
+	bundle.IntegrationGrants = []runtimecontract.RunnerIntegrationGrant{{Ref: "igr_bundlefixture", GrantVersion: 1, ConnectionRef: "int_bundlefixture", ConnectionVersion: 1, ApprovalPolicy: "HUMAN_EACH_EFFECT", Risk: "WRITE", DefinitionKey: "github", CapabilityKey: "github.repository.bundle.publish", Operation: "github.repository.bundle.publish"}}
 	delegation := runtimecontract.RunnerInput{}
 	for index := range 128 {
 		delegation.DelegationTargets = append(delegation.DelegationTargets, runtimecontract.RunnerDelegationTarget{
@@ -48,7 +55,7 @@ func TestRuntimeMCPCatalogWireProducer(t *testing.T) {
 	}
 	inputs := []fixture{{Name: "ordinary", Input: runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeNone}}, {Name: "system-assistant", Input: runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem}},
 		{Name: "project-assistant", Input: runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeProject, AssistantProfileRef: "asstprof_fixture123", ProjectRef: "prj_fixture123", AgentRef: "agt_fixture123"}},
-		{Name: "files", Input: files}, {Name: "email-and-files", Input: email}, {Name: "delegation", Input: delegation}}
+		{Name: "files", Input: files}, {Name: "email-and-files", Input: email}, {Name: "delegation", Input: delegation}, {Name: "repository-bundle-and-files", Input: bundle}}
 	for _, launch := range []bool{false, true} {
 		for _, vfs := range []bool{false, true} {
 			for _, delegation := range []bool{false, true} {

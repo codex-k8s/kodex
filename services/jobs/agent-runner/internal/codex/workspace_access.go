@@ -44,7 +44,12 @@ func normalizeProviderWorkspaceAccess(ctx context.Context, input model.Input) er
 		return providerFilesystemDenied(errProviderWorkspaceAccess, filesystemLock)
 	}
 	defer lock.Close()
-	fd, err := openWorkspaceAccessDirectory(int(lock.Fd()), "work")
+	var fd int
+	if input.WorkspaceStorage != nil {
+		fd, err = workspacepolicy.OpenBoundWorkDirectory(int(lock.Fd()), input)
+	} else {
+		fd, err = openWorkspaceAccessDirectory(int(lock.Fd()), "work")
+	}
 	if err != nil {
 		return providerFilesystemDenied(errProviderWorkspaceAccess, filesystemDirectory)
 	}

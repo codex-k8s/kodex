@@ -27,6 +27,7 @@ var queryAssistantConfigurationResolveTarget string
 type assistantConfigurationTarget struct {
 	scopeKind, projectRef, profileRef, name string
 	version                                 int64
+	ordinary                                bool
 }
 
 // assistantConfigurationTarget resolves an assistant through the mutation-oriented target path;

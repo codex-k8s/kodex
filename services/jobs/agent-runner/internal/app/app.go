@@ -71,8 +71,16 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 		return errors.New("agent-runner mode is required")
 	}
 	mode := args[1]
-	if mode != "runtime-prepare-workspace" && mode != "runtime-init-workspace" && mode != "runtime-session" && mode != "runtime-warm" && mode != "runtime-provider" && mode != "runtime-provider-credential-relay" && mode != workspaceCanaryMode {
+	if mode != "runtime-prepare-workspace" && mode != runtimeBindWorkspaceMode && mode != "runtime-init-workspace" && mode != "runtime-session" && mode != "runtime-warm" && mode != "runtime-provider" && mode != "runtime-provider-credential-relay" && mode != workspaceCanaryMode {
 		return errors.New("agent-runner mode is invalid")
+	}
+	var initializationInput model.Input
+	if mode == "runtime-init-workspace" || mode == runtimeBindWorkspaceMode {
+		defer func() {
+			if resultErr != nil {
+				resultErr = publishInitializationFailure(initializationInput, resultErr)
+			}
+		}()
 	}
 	if err := security.VerifyInvocation(args, mode); err != nil {
 		return err
@@ -88,7 +96,14 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 	}
 	input, err := model.DecodeInput(inputPath)
 	if err != nil {
+		if mode == "runtime-init-workspace" || mode == runtimeBindWorkspaceMode {
+			return runtimecontract.InitializationError("INPUT_DECODE", "INPUT_INVALID", err)
+		}
 		return err
+	}
+	initializationInput = input
+	if mode == runtimeBindWorkspaceMode {
+		return prepareBoundWorkspace(lifecycleContext, input)
 	}
 	if mode == workspaceCanaryMode {
 		err := runWorkspaceCanary(lifecycleContext, input)
@@ -103,31 +118,42 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 		return credentialrelay.Serve(lifecycleContext, input)
 	}
 	if mode == "runtime-init-workspace" {
+		if input.WorkspaceStorage != nil {
+			if _, err := bindWorkspaceWriter(lifecycleContext, input); err != nil {
+				return runtimecontract.InitializationError("WORKSPACE_LAYOUT", "UNKNOWN", err)
+			}
+		}
 		if err := materializeRuntimeEgressTrust(); err != nil {
-			return err
+			return runtimecontract.InitializationError("EGRESS_TRUST", initializationFilesystemReason(err), err)
 		}
 		snapshot, err := input.RequiredContextSnapshot(time.Now())
 		if err != nil {
-			return err
+			return runtimecontract.InitializationError("CONTEXT_SNAPSHOT", "INPUT_INVALID", err)
 		}
 		if err := materializeWorkspace(lifecycleContext, input); err != nil {
-			return err
+			return runtimecontract.InitializationError("WORKSPACE_LAYOUT", initializationFilesystemReason(err), err)
 		}
 		if input.Mode == runtimecontract.RunnerModeWarm {
 			if err := materializeInputArtifacts(lifecycleContext, input, nil); err != nil {
 				return err
 			}
-			return contextfiles.Materialize(lifecycleContext, input, snapshot, nil)
+			if err := contextfiles.Materialize(lifecycleContext, input, snapshot, nil); err != nil {
+				return runtimecontract.InitializationError("CONTEXT_FILES", initializationFilesystemReason(err), err)
+			}
+			return nil
 		}
 		client, err := callback.New(input)
 		if err != nil {
-			return err
+			return runtimecontract.InitializationError("CALLBACK_SETUP", "UNKNOWN", err)
 		}
 		defer client.Close()
 		if err := materializeInputArtifacts(lifecycleContext, input, client); err != nil {
 			return err
 		}
-		return contextfiles.Materialize(lifecycleContext, input, snapshot, client)
+		if err := contextfiles.Materialize(lifecycleContext, input, snapshot, client); err != nil {
+			return runtimecontract.InitializationError("CONTEXT_FILES", initializationFilesystemReason(err), err)
+		}
+		return nil
 	}
 	if os.Geteuid() != 10001 {
 		return errors.New("agent-runner runtime UID is invalid")
@@ -328,6 +354,9 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 	if executionErr != nil {
 		logRuntimeExecutionFailure(ctx, runtime.logger, executionErr, activityFailed)
 	}
+	if err := publishWorkspaceQuiescence(input, result); err != nil {
+		return completeMeasuredFailure(ctx, input, client, result, "RUNTIME_UNAVAILABLE")
+	}
 	if input.ExecutionDeadline != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return completeMeasuredFailure(ctx, input, client, result, "RUNTIME_TIMEOUT")
 	}
@@ -344,11 +373,19 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 	return completeExecutedTurn(ctx, input, client, result, runtime.checkWorkspace, runtime.logger)
 }
 
+// completionUsage preserves counters and the parser's closed quality in every executed callback.
+// completionUsage сохраняет счётчики и закрытое качество parser во всех callback после исполнения.
+func completionUsage(result codex.Result) runtimecontract.TokenUsage {
+	usage := result.Usage
+	usage.Completeness = result.UsageCompleteness
+	return usage
+}
+
 // completeMeasuredFailure sends a failed terminal payload with measured usage and safe provider diagnostics; archive pins are included only when the result's private capture proof verifies against this input. Delivery detaches from cancellation without rerunning the provider.
 // completeMeasuredFailure отправляет failed terminal payload с измеренным usage и безопасной provider-диагностикой; archive pins включаются лишь при проверке private capture proof результата против данного входа. Доставка отделена от отмены без повторного провайдера.
 func completeMeasuredFailure(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, code string) error {
 	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt,
-		Success: false, SafeErrorCode: safeFailureCode(code), ResultSummary: "i18n:" + code, Usage: result.Usage}
+		Success: false, SafeErrorCode: safeFailureCode(code), ResultSummary: "i18n:" + code, Usage: completionUsage(result)}
 	payload.ProviderDiagnostic = result.ProviderDiagnostic(input)
 	if result.HasVerifiedRollout(input) {
 		payload.CodexSessionID, payload.ArchiveRelativePath, payload.ArchiveSHA256, payload.ArchiveSizeBytes = result.SessionID, result.ArchiveRelativePath, result.ArchiveSHA256, result.ArchiveSizeBytes
@@ -393,7 +430,7 @@ func completeExecutedTurn(ctx context.Context, input model.Input, client *callba
 		result = result.WithWorkspaceDiagnostic(input, workspaceCompletionPublish, workspaceCompletionDenialReason(err))
 		return completeExecutedFailure(ctx, input, client, result, "RUNTIME_ARTIFACT_INVALID", "i18n:RUNTIME_ARTIFACT_INVALID")
 	}
-	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: true, ResultSummary: result.FinalMessage, Usage: result.Usage, Artifacts: artifacts, CodexSessionID: result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath, ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
+	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: true, ResultSummary: result.FinalMessage, Usage: completionUsage(result), Artifacts: artifacts, CodexSessionID: result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath, ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
 	if payload.Validate() != nil {
 		return completeExecutedFailure(ctx, input, client, result, "RUNTIME_RESULT_INVALID", "i18n:RUNTIME_RESULT_INVALID")
 	}
@@ -409,12 +446,12 @@ func completeExecutedFailure(ctx context.Context, input model.Input, client *cal
 		code, summary = "RUNTIME_ARTIFACT_INVALID", "i18n:RUNTIME_ARTIFACT_INVALID"
 	}
 	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt,
-		Success: false, ResultSummary: summary, SafeErrorCode: safeFailureCode(code), Usage: result.Usage,
+		Success: false, ResultSummary: summary, SafeErrorCode: safeFailureCode(code), Usage: completionUsage(result),
 		CodexSessionID: result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath,
 		ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
 	payload.ProviderDiagnostic = result.ProviderDiagnostic(input)
 	if (result.Outcome != "SUCCEEDED" && result.Outcome != "FAILED") || payload.Validate() != nil {
-		return completeFailureWithSummaryAndUsage(ctx, input, client, code, summary, result.Usage)
+		return completeFailureWithSummaryAndUsage(ctx, input, client, code, summary, completionUsage(result))
 	}
 	return client.Complete(context.WithoutCancel(ctx), input, payload)
 }
@@ -423,7 +460,7 @@ func completeExecutedFailure(ctx context.Context, input model.Input, client *cal
 // completeResultFailure проецирует выполненный failed result в terminal callback с нормализованным отказом, измеренным usage, archive metadata и безопасной diagnostic provenance; callback validation отклоняет неверные tuple или usage.
 func completeResultFailure(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, summary string) error {
 	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: false, ResultSummary: summary,
-		SafeErrorCode: safeFailureCode(result.FailureCode), Usage: result.Usage, CodexSessionID: result.SessionID,
+		SafeErrorCode: safeFailureCode(result.FailureCode), Usage: completionUsage(result), CodexSessionID: result.SessionID,
 		ArchiveRelativePath: result.ArchiveRelativePath, ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
 	payload.ProviderDiagnostic = result.ProviderDiagnostic(input)
 	return client.Complete(context.WithoutCancel(ctx), input, payload)
@@ -757,41 +794,48 @@ func scopedArtifacts(artifacts []runtimecontract.RunnerInputArtifact, scope stri
 func materializeInputArtifacts(ctx context.Context, input model.Input, client *callback.Client) error {
 	setManifests, workspaceManifest, err := buildInputManifests(input)
 	if err != nil {
-		return err
+		return runtimecontract.InitializationError("INPUT_MANIFEST", "INPUT_INVALID", err)
 	}
 	if err := resetWorkspaceDirectory(ctx, input.WorkspaceRoot, "input"); err != nil {
-		return err
+		return runtimecontract.InitializationError("WORKSPACE_LAYOUT", initializationFilesystemReason(err), err)
 	}
 	if err := resetWorkspaceDirectory(ctx, input.WorkspaceRoot, "knowledge"); err != nil {
-		return err
+		return runtimecontract.InitializationError("WORKSPACE_LAYOUT", initializationFilesystemReason(err), err)
 	}
 	if err := resetWorkspaceDirectory(ctx, input.WorkspaceRoot, "session"); err != nil {
-		return err
+		return runtimecontract.InitializationError("WORKSPACE_LAYOUT", initializationFilesystemReason(err), err)
 	}
 	for _, set := range input.AttachmentSets {
 		for _, relative := range []string{filepath.Join("input", set.Ref), filepath.Join("input", set.Ref, "files")} {
 			if err := security.EnsureSharedWorkspaceDirectory(relative); err != nil {
-				return err
+				return runtimecontract.InitializationError("WORKSPACE_LAYOUT", initializationFilesystemReason(err), err)
 			}
 		}
 	}
 	for _, artifact := range input.InputArtifacts {
 		path, pathErr := runtimecontract.ArtifactWorkspacePath(input.AttachmentSetRef, artifact)
 		if pathErr != nil {
-			return pathErr
+			return runtimecontract.InitializationError("INPUT_MANIFEST", "INPUT_INVALID", pathErr)
 		}
 		relative, relativeErr := filepath.Rel(input.WorkspaceRoot, path)
 		if relativeErr != nil || relative == "." || strings.HasPrefix(relative, ".."+string(os.PathSeparator)) {
-			return errors.New("workspace artifact path is invalid")
+			return runtimecontract.InitializationError("INPUT_MANIFEST", "INPUT_INVALID", errors.New("workspace artifact path is invalid"))
 		}
 		if err := writeWorkspaceArtifact(ctx, input, artifact, relative, client); err != nil {
-			return err
+			stage, reason := runtimecontract.InitializationErrorDetails(err)
+			if stage == "UNKNOWN" {
+				stage, reason = "ARTIFACT_TRANSFER", initializationFilesystemReason(err)
+			}
+			return runtimecontract.InitializationError(stage, reason, err)
 		}
 	}
 	if err := writeInputManifests(input, setManifests, workspaceManifest); err != nil {
-		return err
+		return runtimecontract.InitializationError("WORKSPACE_LAYOUT", initializationFilesystemReason(err), err)
 	}
-	return protectReadOnlyWorkspaceTrees(input.WorkspaceRoot, "input", "knowledge")
+	if err := protectReadOnlyWorkspaceTrees(input.WorkspaceRoot, "input", "knowledge"); err != nil {
+		return runtimecontract.InitializationError("INPUT_PROTECTION", initializationFilesystemReason(err), err)
+	}
+	return nil
 }
 
 // verifyInputArtifacts rebuilds the expected catalogs before checking exact on-disk manifests,
@@ -985,7 +1029,7 @@ func writeWorkspaceArtifact(ctx context.Context, input model.Input, artifact run
 	_ = os.Remove(temporary)
 	file, err := os.OpenFile(temporary, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0o440)
 	if err != nil {
-		return errors.New("create workspace artifact")
+		return runtimecontract.InitializationError("ARTIFACT_TRANSFER", initializationFilesystemReason(err), err)
 	}
 	writeErr := client.WriteArtifact(ctx, input, artifact, file)
 	if syncErr := file.Sync(); writeErr == nil {
@@ -996,11 +1040,15 @@ func writeWorkspaceArtifact(ctx context.Context, input model.Input, artifact run
 	}
 	if writeErr != nil {
 		_ = os.Remove(temporary)
-		return writeErr
+		stage, reason := runtimecontract.InitializationErrorDetails(writeErr)
+		if stage == "UNKNOWN" {
+			stage, reason = "ARTIFACT_TRANSFER", initializationFilesystemReason(writeErr)
+		}
+		return runtimecontract.InitializationError(stage, reason, writeErr)
 	}
 	if err := os.Rename(temporary, path); err != nil {
 		_ = os.Remove(temporary)
-		return errors.New("commit workspace artifact")
+		return runtimecontract.InitializationError("ARTIFACT_TRANSFER", initializationFilesystemReason(err), err)
 	}
 	return nil
 }

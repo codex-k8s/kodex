@@ -528,7 +528,11 @@ func (repository *Repository) RestorePlatformObjects(ctx context.Context, value 
 	if err := target.Check(ctx); err != nil {
 		return nil, err
 	}
-	existing, err := target.listVersions(ctx, targetConfig.Prefix)
+	targetPrefix := strings.Trim(targetConfig.Prefix, "/")
+	if targetPrefix != "" {
+		targetPrefix += "/"
+	}
+	existing, err := target.listVersions(ctx, targetPrefix)
 	if err != nil {
 		return nil, err
 	}

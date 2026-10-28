@@ -1,0 +1,176 @@
+---
+id: OPS-DOC-API-AVAILABILITY-1905
+title: Диагностика HTTP503 при обновлении API
+type: operations
+status: approved
+owner: developer
+version: 1.2.0
+updated: 2026-10-26
+---
+
+# Диагностика HTTP503 при обновлении API
+
+Задача [#1905](https://github.com/codex-k8s/kodex/issues/1905), приёмка
+[#1223](https://github.com/codex-k8s/kodex/issues/1223), QA
+[#1830](https://github.com/codex-k8s/kodex/issues/1830).
+Причина наблюдавшихся на a304 HTTP503 сначала была UNKNOWN. Эта диагностика позволяет
+выделить отказавшую границу; само наличие логов не исправляет доступность.
+
+## Карта запроса и полномочий
+
+GET runs проходит прежние cookie → revocation → family → OIDC → verified
+identity → owner RPC → HTTP projection. POST session/ticket проходит ту же
+аутентификацию, затем family → ledger read → bounded CAS. Ticket не вызывает
+control-plane RPC. Payload, trace и correlation не дают полномочий.
+
+Native NATS owners `browserstate` и `sessionrevocation` классифицируют ошибку
+до замены публичным sentinel. Общий небольшой value в существующем eventing
+module сохраняет только закрытый класс и прежнюю публичную ошибку. Исходный
+SDK error, ответ брокера, subject, ciphertext и credentials не сохраняются
+в диагностическом значении. Классификатор не использует текст ошибки.
+
+Gateway добавляет закрытый этап к прежней публичной ошибке; `errors.Is` и
+порядок HTTP mapping сохраняются. Ошибки cookie/CSRF не становятся503.
+В `problemresponse` metadata достигают уже существующего request-local
+localized writer, который выдаёт одну ERROR-запись только для фактического503.
+Correlation назначается один раз сервером и совпадает с публичным Problem.
+Штатный telemetry logger добавляет существующие trace/span ID.
+Flush учитывает неявный HTTP200 после успешной отправки; успешный Hijack
+передаёт соединение и прекращает HTTP-диагностику. Неподдерживаемые операции
+не фиксируют заголовки. После ошибки Flush статус мог уже уйти в сеть,
+поэтому поздний Problem не объявляется доказанным HTTP503.
+
+Зарегистрированные этапы: `auth_revocation_read`, `auth_family_read`,
+`auth_oidc_verify`, `session_renewal`, `ticket_family_read`, `ticket_ledger_read`,
+`ticket_ledger_cas`, `ticket_capacity`, `ticket_cas_exhausted`, `upstream_rpc`,
+`gateway_stopping`. Непокрытый путь остаётся `unknown`.
+`upstream_rpc` не объявляется автоматически отказом CP: общий mapper также
+используется другими owner clients. Точный owner определяется маршрутом и
+соответствующим RPC span. Ticket не получает этот этап без настоящего RPC.
+
+Классы ограничены `canceled`, `deadline`, `connection_closed`, `disconnected`,
+`no_responders`, `timeout`, `authorization`, `cas_conflict`, `record_invalid`,
+`signing_keys_unavailable`, `pending`, `unavailable`, `unknown`.
+Raw errors, URL/query, headers, bodies, actor/session/family IDs в лог не входят.
+Маршрут берётся из существующего нормализатора; method имеет закрытый список.
+Метрики, Sentry observer, runtime grants и deployment env не расширяются.
+
+## Сохранённый жизненный цикл
+
+| Путь | Сохранённая семантика |
+| --- | --- |
+| Нет записи revocation | `false,nil`; запрос проходит следующие прежние проверки |
+| Нет family | Прежний отказ повторной аутентификации, без fabricated503 |
+| Нет ticket ledger | Прежний create с sequence0 |
+| Отказ native read | Прежний закрытый отказ, теперь с классом |
+| Потерянный ACK | Только прежний exact ciphertext readback; совпадение остаётся успехом без диагностической ошибки |
+| Неизвестный publish/readback | Прежний отказ; класс последнего readback не доказывает отсутствие внешней записи |
+| CAS conflict | Прежний лимит3 попытки; исчерпание отделено от capacity16 |
+| HTTP401/403/200 | Availability ERROR не создаётся |
+| HTTP503 | Одна диагностическая запись; body/status/retryable/Retry-After сохраняются |
+| Shutdown/restart | Прежние drain, contexts, deadlines, close/join; лог не добавляет retry |
+
+Новых доменных событий и фоновых задач нет. Авторитетные read paths,
+idempotency receipts и исходы команд сохраняются. Диагностические поля не
+участвуют в решении о повторе или допуске.
+
+## Проверка и поставка
+
+Тесты двух изменённых Go modules проверяют native NATS causes, lost ACK без
+повторной публикации, настоящие HTTP routes с cookie crypto и memory CAS,
+разделение CP refusal и успешного ticket, capacity/CAS, сохранение Problem,
+одну запись при конкурентных отметках, trace/correlation и отсутствие утечки.
+Настоящий локальный TCP-сервер проверяет Flush/Hijack и отсутствие ложного503;
+отдельная проверка сохраняет отказ неподдерживаемых потоковых операций.
+Они не заменяют живой broker либо browser acceptance. Результаты привязываются
+к точному SHA отдельно; наличие теста не означает PASS.
+
+После сборки штатного API-образа оператор собирает bounded logs старых и новых
+API Pod во время одного адресного rollout. Каждое чтение закрепляется точными
+Pod UID/source/image до и после; неизвестная смена UID даёт UNKNOWN. Проба
+сохраняет только status/code/correlation и время. По correlation связываются
+ответ, закрытый этап и конкретная реплика. Ни cookies, ни ticket response,
+ни raw error в отчёт не попадают. Требуются реальные Console/Network и
+сохранность истории/файлов. Повторный WRITE при неизвестном ответе запрещён.
+
+После определения причины исправляется именно подтверждённый failure path.
+Успешный rollout или green Pods не закрывают исторические503. Возврат этой
+диагностики возможен прежним совместимым API-образом a304; миграций и новых
+обязательных env нет. Для включённой политики TTL Gate совместимость a304
+остаётся нижней границей: более старый несовместимый API не допускается.
+
+Через Context7 проверены NATS Go Client `jetstream/stream.go` и
+`jetstream/README.md`; реализация сверена с закреплённым nats.go v1.52.0.
+
+## Первое получение OIDC ключей
+
+На c91c7c74 пять ответов503 при адресном rollout связаны по correlation с
+`auth_oidc_verify / signing_keys_unavailable` новых API Pod. Это доказывает
+отсутствие пригодного снимка ключей, но не причину первоначального отказа fetch.
+Прежний constructor скрывал эту причину, а worker сообщал только общий
+`identity_provider` при отказе последующего refresh.
+
+Verifier теперь сохраняет только закрытый класс последнего отказа. Публичные
+тексты ошибок остаются прежними; исходный transport error не сохраняется и не
+доступен через Unwrap. TLS-классификация использует общий
+`observability/errorclass.TLS`. Классы: `canceled`, `deadline`,
+`tls_verification`, `dns`, `timeout`, `network`, `transport_unknown`,
+`request_invalid`, `throttled`, `server`, `client`, `http_other`, `body_read`,
+`size_invalid`, `snapshot_invalid`, `canonicalization`, `rollback_or_conflict`,
+`unavailable`, `unknown`. Пустой класс означает успешный refresh, а не допуск
+конкретного токена.
+
+| Переход | Диагностика и неизменные ограничения |
+| --- | --- |
+| Первое получение в constructor | Прежний один GET; API однократно пишет закрытый класс уже полученной ошибки |
+| Повторный отказ | Прежний период и timeout; повтор той же деградации не добавляет лог |
+| Восстановление | Класс очищается, worker пишет один переход restored |
+| Fatal snapshot / rollback | Сохраняется блокировка и её закрытая причина до restart; успех следующего HTTP fetch её не снимает |
+| Grace / cancel | Прежний срок last-known-good и прежняя отмена worker; диагностика не продлевает срок |
+
+На диагностической ревизии106728 authority, token verification, readiness,
+HTTP503, число запросов, интервалы и TLS/DNS configuration не менялись.
+Владелец26.10.2026 отдельно согласовал начальный барьер готовности ниже;
+соответствующее правило обновлено в `docs/domains/identity-access.md`.
+В логах нет issuer URL, body, ключей, токенов, сертификатов или исходных ошибок.
+Новые события, metric labels и retry отсутствуют.
+
+Context7: официальная документация Go net/http Client.Do — typed url.Error,
+Timeout и отличие транспортного отказа от неуспешного HTTP status. Регрессия
+проверяет настоящий Client.Do wrapping path, удаление native cause, сохранение
+fatal/transient policy и начальный отказ→восстановление без лишнего fetch.
+
+## Начальная готовность API
+
+Инициатор — kubelet через существующий `/readyz` technical listener; это чтение
+готовности, без пользовательских полномочий. Владелец факта инициализации —
+тот же `oidcverifier`, который проверяет bearer и browser token. После полного
+разбора и проверки первого JWKS его неизменяемый факт доступен под существующим
+mutex. API readiness worker читает его вместе с прежними проверками realtime,
+revocation и browser state. HTTP503 `/readyz` исключает новый Pod из Service
+endpoints; действующие реплики продолжают работу по штатной RollingUpdate.
+RPC, idempotency, доменных событий и новых фоновых задач в этом пути нет.
+
+| Переход | Readiness и сохранённые ограничения |
+| --- | --- |
+| Нет первого снимка, временный fetch отказ | NotReady `signing_keys_starting`; process, `/livez` и `/startupz` живы |
+| Первый полностью проверенный снимок | Ready только при успехе остальных трёх infrastructure checks |
+| Первый повреждённый снимок | NotReady до исправления причины и контролируемого restart; последующий HTTP200 не снимает fatal block |
+| Отказ после инициализации, истечение grace или fatal block | Начальный барьер остаётся пройденным; каждый token проверяется по прежней закрытой политике |
+| Отказ NATS/revocation/browser state | Прежний NotReady `direct_infrastructure_unavailable` |
+| Cancel/shutdown | Worker завершается, readiness и метрика снимаются |
+| Замена Pod | Новый verifier снова требует собственный первый проверенный снимок |
+
+Отдельного retry, изменения timeout, trust, DNS/TLS, token authorization или
+общей инфраструктуры нет. Обычный период worker может задержать включение новой
+реплики; это не разрешает ранний Ready. Внешний outage после прогрева остаётся
+отдельным сценарием с прежним last-known-good, а не обещанием нулевых503 всегда.
+Проверки проходят через настоящий probe mux и worker; библиотечные тесты
+подтверждают parse/fatal/grace без подмены token eligibility фактом инициализации.
+Context7: Kubernetes probes и RollingUpdate (`maxUnavailable`, `maxSurge`),
+официальные страницы `kubernetes.io/docs/concepts/workloads/pods/probes/` и
+`kubernetes.io/docs/tasks/run-application/update-deployment-rolling/`.
+
+Возврат на106728 возможен адресным штатным API rollback без DDL; он вернёт
+известное окно стартовых503. Окончательная live-приёмка относится только к
+новому чистому SHA и повторным rollout/restart с браузерными пробами.

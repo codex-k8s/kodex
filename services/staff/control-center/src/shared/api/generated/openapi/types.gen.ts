@@ -1366,7 +1366,7 @@ export type VfsNode = {
     scanState: '' | 'PENDING' | 'SCANNING' | 'CLEAN' | 'QUARANTINED' | 'FAILED';
     resourceKind: '' | 'ARTIFACT' | 'SKILL_BUNDLE' | 'MEMORY_RECORD';
     selectable: boolean;
-    selectionReason: 'AVAILABLE' | 'DIRECTORY' | 'PERMISSION_REQUIRED' | 'IMMUTABLE_CONTEXT' | 'LIFECYCLE_BLOCKED' | 'ARTIFACT_USED_BY_SKILL' | 'ARTIFACT_NOT_ACTIVE' | 'ARTIFACT_NOT_DELETED' | 'ARTIFACT_HAS_BINDINGS' | 'ACTIVE_RUN_USES_ARTIFACT';
+    selectionReason: 'AVAILABLE' | 'DIRECTORY' | 'PERMISSION_REQUIRED' | 'IMMUTABLE_CONTEXT' | 'LIFECYCLE_BLOCKED' | 'ARTIFACT_USED_BY_SKILL' | 'ARTIFACT_NOT_ACTIVE' | 'ARTIFACT_NOT_DELETED' | 'ARTIFACT_HAS_BINDINGS' | 'ARTIFACT_HAS_RETAINED_REVISIONS' | 'ACTIVE_RUN_USES_ARTIFACT';
     nextActions: Array<'DOWNLOAD' | 'DELETE' | 'RESTORE' | 'PURGE' | 'ARCHIVE' | 'BIND'>;
 };
 
@@ -2969,8 +2969,31 @@ export type WorkflowInputFieldInput = {
     options: Array<string>;
 };
 
+/**
+ * Логический ключ шага внутри одной версии процесса; не является ссылкой на ресурс или источником полномочий.
+ */
+export type WorkflowStepKey = string;
+
+export type WorkflowResultRequirement = {
+    key: string;
+    kind: 'ARTIFACT' | 'ARTIFACT_REVIEW' | 'PULL_REQUEST' | 'REVIEW' | 'QA' | 'INTEGRATION_RECEIPT' | 'DEPLOYMENT';
+    fileName?: string;
+    mediaType?: string;
+    repository?: string;
+    subjectStepKey?: WorkflowStepKey;
+    subjectResultKey?: WorkflowStepKey;
+    /**
+     * Только QA выбранного профиля; ключ ARTIFACT application/json того же шага.
+     */
+    evidenceKey?: string;
+    operation?: 'github.pull_request.merge' | 'ssh.compose.deploy';
+    targetRef?: string;
+};
+
 export type WorkflowStep = {
-    ref: OpaqueRef;
+    dependsOn?: Array<WorkflowStepKey>;
+    resultRequirements?: Array<WorkflowResultRequirement>;
+    ref: WorkflowStepKey;
     position: number;
     name: string;
     purpose: string;
@@ -2980,11 +3003,18 @@ export type WorkflowStep = {
     timeoutSeconds: number;
     expectedResult: string;
     humanGate: boolean;
+    /**
+     * Срок ожидания решения после завершения этапа. При отсутствии отдельного срока согласования нет; общий срок процесса действует независимо.
+     */
+    approvalTimeoutSeconds?: number;
     gateDecisions: Array<'APPROVE' | 'REJECT' | 'REQUEST_CHANGES' | 'CANCEL'>;
     requiredCapabilityKeys: Array<string>;
 };
 
 export type WorkflowStepInput = {
+    ref?: WorkflowStepKey;
+    dependsOn?: Array<WorkflowStepKey>;
+    resultRequirements?: Array<WorkflowResultRequirement>;
     position: number;
     name: string;
     purpose: string;
@@ -2994,11 +3024,24 @@ export type WorkflowStepInput = {
     timeoutSeconds: number;
     expectedResult: string;
     humanGate: boolean;
+    /**
+     * Необязательный срок согласования в секундах, допустимый только при humanGate=true. Отсчёт начинается при открытии согласования сервером.
+     */
+    approvalTimeoutSeconds?: number;
     gateDecisions: Array<'APPROVE' | 'REJECT' | 'REQUEST_CHANGES' | 'CANCEL'>;
     requiredCapabilityKeys: Array<string>;
 };
 
 export type Workflow = {
+    executionMode?: 'MANAGER_DRIVEN' | 'SERVER_DAG_V1';
+    /**
+     * Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
+     */
+    reworkPolicy?: 'OWNER_APPROVED_UPSTREAM_V1';
+    /**
+     * Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
+     */
+    resultEvidenceProfile?: 'GITHUB_REVIEW_QA_V1';
     ref: OpaqueRef;
     version: number;
     projectRef: OpaqueRef;
@@ -3061,6 +3104,15 @@ export type WorkflowLaunchReadiness = {
  * Сохранённый draft для редактора; все поля и ref происходят из одной owner revision. Не подменяет опубликованный основной вид Workflow.
  */
 export type WorkflowDraftSnapshot = {
+    executionMode?: 'MANAGER_DRIVEN' | 'SERVER_DAG_V1';
+    /**
+     * Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
+     */
+    reworkPolicy?: 'OWNER_APPROVED_UPSTREAM_V1';
+    /**
+     * Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
+     */
+    resultEvidenceProfile?: 'GITHUB_REVIEW_QA_V1';
     ref: OpaqueRef;
     version: number;
     revision: number;
@@ -3075,6 +3127,15 @@ export type WorkflowDraftSnapshot = {
 };
 
 export type WorkflowInput = {
+    executionMode?: 'MANAGER_DRIVEN' | 'SERVER_DAG_V1';
+    /**
+     * Явная опубликованная политика upstream rework только для SERVER_DAG_V1; отсутствие сохраняет прежний recovery.
+     */
+    reworkPolicy?: 'OWNER_APPROVED_UPSTREAM_V1';
+    /**
+     * Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия. Пустое значение снимает draft opt-in; весь итоговый граф заново проверяется.
+     */
+    resultEvidenceProfile?: '' | 'GITHUB_REVIEW_QA_V1';
     name: string;
     purpose: string;
     coordinatorAgentRef: OpaqueRef;
@@ -3109,6 +3170,10 @@ export type TokenUsage = {
     outputTokens: number;
     reasoningOutputTokens: number;
     modelContextWindow: number;
+    /**
+     * Полнота наблюдений; отсутствие в legacy означает UNKNOWN, не измеренный ноль.
+     */
+    completeness?: 'UNKNOWN' | 'PARTIAL' | 'COMPLETE';
 };
 
 export type Run = ({
@@ -3169,7 +3234,41 @@ export type AssistantRunPin = ({
     profileRef?: OpaqueRef;
 };
 
+export type WorkflowAcceptedResult = {
+    targetRef?: string;
+    bundleSha256?: string;
+    imageDigest?: string;
+    healthOk?: boolean;
+    key: string;
+    kind: 'ARTIFACT' | 'ARTIFACT_REVIEW' | 'PULL_REQUEST' | 'REVIEW' | 'QA' | 'INTEGRATION_RECEIPT' | 'DEPLOYMENT';
+    artifactRef?: OpaqueRef;
+    artifactRevision?: string;
+    digest: string;
+    receiptRef?: OpaqueRef;
+    repository?: string;
+    number?: number;
+    headSha?: string;
+    verdict?: 'PASS' | 'CHANGES_REQUIRED';
+};
+
+/**
+ * Закрытый typed snapshot. Отношения accepted/results/evidence проверяются общим API validator и каждым PWA graph/event ingress; evidence разрешено только при accepted=false, reason=CHANGES_REQUIRED, results=[] и наличии отрицательного ARTIFACT_REVIEW/REVIEW/QA.
+ */
+export type WorkflowAttemptResult = {
+    effectiveState?: 'CURRENT' | 'HISTORICAL' | 'STALE_DEPENDENCY' | 'REWORK_PENDING' | 'WAITING_OWNER' | 'BLOCKED';
+    attempt: number;
+    runRef: OpaqueRef;
+    accepted: boolean;
+    reason: string;
+    results: Array<WorkflowAcceptedResult>;
+    /**
+     * Проверенные факты отклонённого ARTIFACT_REVIEW/REVIEW/QA; accepted=false, reason=CHANGES_REQUIRED, results остаётся пустым.
+     */
+    evidence?: Array<WorkflowAcceptedResult>;
+};
+
 export type RunNode = {
+    workflowResults?: Array<WorkflowAttemptResult>;
     ref: OpaqueRef;
     runRef: OpaqueRef;
     parentNodeRef?: OpaqueRef;
@@ -3195,6 +3294,18 @@ export type RunNode = {
     nextActions: Array<NextAction>;
 };
 
+/**
+ * Историческая SERVER lineage, проверенная владельцем; не разрешает retry и не принимает результат.
+ */
+export type WorkflowRetryReadProof = {
+    workflowVersionRef: OpaqueRef;
+    workflowVersionDigest: string;
+    originNodeRef: OpaqueRef;
+    stepKey: string;
+    previousBusinessAttempt: number;
+    businessAttempt: number;
+};
+
 export type RunEdge = {
     ref: OpaqueRef;
     runRef: OpaqueRef;
@@ -3202,6 +3313,7 @@ export type RunEdge = {
     targetNodeRef: OpaqueRef;
     type: 'DELEGATED_TO' | 'CALLBACK_TO' | 'RETRY_OF' | 'CONTINUES' | 'WAITING_FOR';
     label: string;
+    serverWorkflowRetry?: WorkflowRetryReadProof;
 };
 
 export type RunDelta = {
@@ -3456,7 +3568,64 @@ export type ProjectAssistantIntegrationGrantCandidates = {
     nextPageToken?: string;
 };
 
+export type RepositoryBundleArtifactPin = {
+    ref: OpaqueRef;
+    revision: number;
+    version: number;
+    sha256: string;
+    sizeBytes: number;
+};
+
+export type RepositoryBundleFile = {
+    path: string;
+    mode: '100644' | '100755';
+    bytes: number;
+    sha256: string;
+};
+
+export type RepositoryBundlePublication = {
+    ref: OpaqueRef;
+    projectRef: OpaqueRef;
+    originRunRef: OpaqueRef;
+    originRuntimeRevisionRef: OpaqueRef;
+    invocationRef: OpaqueRef;
+    gateRef: OpaqueRef;
+    connectionRef: OpaqueRef;
+    grantRef: OpaqueRef;
+    version: number;
+    connectionVersion: number;
+    grantVersion: number;
+    archive: RepositoryBundleArtifactPin;
+    manifest: RepositoryBundleArtifactPin;
+    repositoryRef: string;
+    proposalBranch: string;
+    baseCommitSha: string;
+    approvalDigest: string;
+    fileCount: number;
+    totalBytes: number;
+    state: 'WAITING_APPROVAL' | 'QUEUED' | 'CLAIMED' | 'EFFECT_STARTED' | 'UNKNOWN_OUTCOME' | 'SUCCEEDED' | 'REJECTED' | 'CANCELLED' | 'EXPIRED' | 'FAILED';
+    candidateCommitSha?: string;
+    candidateTreeSha?: string;
+    failureCode?: 'UNAVAILABLE' | 'AUTHORITY_CHANGED' | 'CONTENT_INVALID' | 'BASE_INVALID' | 'DEADLINE_EXCEEDED' | 'BRANCH_CONFLICT' | 'OUTCOME_UNCONFIRMED';
+    continuationState?: 'BLOCKED' | 'CANCELLED';
+    continuationCode?: 'CALLBACK_INPUT_TOO_LARGE' | 'CONTINUATION_AUTHORITY_CHANGED';
+    continuationNodeRef?: OpaqueRef;
+    createdAt: string;
+    expiresAt: string;
+    confirmedAt?: string;
+};
+
+export type RepositoryBundleManifestPage = {
+    proposal: RepositoryBundlePublication;
+    files: Array<RepositoryBundleFile>;
+    offset: number;
+    nextOffset: number;
+    complete: boolean;
+};
+
 export type OwnerGate = {
+    resolutionKind?: 'SUPERSEDED';
+    reworkPlan?: WorkflowReworkPreview;
     ref: OpaqueRef;
     version: number;
     scopeKind: 'ORGANIZATION' | 'PROJECT';
@@ -3481,6 +3650,21 @@ export type OwnerGate = {
     decisionConsequences: Array<OwnerGateDecisionConsequence>;
     integrationIntent?: IntegrationIntent;
     nextActions: Array<NextAction>;
+};
+
+export type WorkflowReworkStepPreview = {
+    stepKey: string;
+    previousAttempt: number;
+    nextAttempt: number;
+};
+
+export type WorkflowReworkPreview = {
+    schema: 'kodex.workflow-upstream-rework-preview.v1';
+    sourceStepKey: string;
+    sourceAttempt: number;
+    authors: Array<WorkflowReworkStepPreview>;
+    rechecks: Array<WorkflowReworkStepPreview>;
+    blockReason?: 'WORKFLOW_ATTEMPTS_EXHAUSTED' | 'WORKFLOW_IRREVERSIBLE_EFFECT_REPAIR_REQUIRED';
 };
 
 export type OwnerGateDecisionConsequence = {
@@ -4478,7 +4662,7 @@ export type IntegrationGrantInput = {
 
 export type AssistantPlanOperation = {
     ref: OpaqueRef;
-    type: 'CREATE_PROJECT' | 'CREATE_PROJECT_FILE' | 'CREATE_PROJECT_FILE_REVISION' | 'CREATE_AGENT' | 'CREATE_PROJECT_ASSISTANT' | 'CREATE_WORKFLOW' | 'UPDATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT' | 'CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT' | 'PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION' | 'CREATE_SCHEDULE' | 'UPDATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'UPDATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'PUBLISH_INTEGRATION_DEFINITION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT' | 'UPDATE_AGENT' | 'CREATE_INSTRUCTION_DRAFT' | 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' | 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' | 'BIND_AGENT_RUNTIME_ENVIRONMENT' | 'CREATE_ROLE_IMAGE_RECIPE' | 'UPDATE_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS' | 'CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION';
+    type: 'CREATE_PROJECT' | 'CREATE_PROJECT_FILE' | 'CREATE_PROJECT_FILE_REVISION' | 'CREATE_AGENT' | 'CREATE_PROJECT_ASSISTANT' | 'CREATE_WORKFLOW' | 'UPDATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT' | 'CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT' | 'PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION' | 'CREATE_SCHEDULE' | 'UPDATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'UPDATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'PUBLISH_INTEGRATION_DEFINITION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT' | 'UPDATE_AGENT' | 'CREATE_INSTRUCTION_DRAFT' | 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' | 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' | 'BIND_AGENT_RUNTIME_ENVIRONMENT' | 'CREATE_ROLE_IMAGE_RECIPE' | 'UPDATE_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS' | 'CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION' | 'PREPARE_AGENT_RUNTIME_CONFIGURATION';
     action: 'CREATE' | 'UPDATE' | 'ARCHIVE' | 'EXECUTE';
     title: string;
     summary: string;
@@ -4578,7 +4762,7 @@ export type AssistantContextDescriptor = {
     entityRef: string;
     entityName: string;
     entityVersion?: number;
-    allowedOperations: Array<'CREATE_PROJECT' | 'CREATE_PROJECT_FILE' | 'CREATE_PROJECT_FILE_REVISION' | 'CREATE_AGENT' | 'CREATE_PROJECT_ASSISTANT' | 'CREATE_WORKFLOW' | 'UPDATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT' | 'CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT' | 'PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION' | 'CREATE_SCHEDULE' | 'UPDATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'UPDATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'PUBLISH_INTEGRATION_DEFINITION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT' | 'UPDATE_AGENT' | 'CREATE_INSTRUCTION_DRAFT' | 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' | 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' | 'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS' | 'BIND_AGENT_RUNTIME_ENVIRONMENT' | 'CREATE_ROLE_IMAGE_RECIPE' | 'UPDATE_ROLE_IMAGE_RECIPE' | 'CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION'>;
+    allowedOperations: Array<'CREATE_PROJECT' | 'CREATE_PROJECT_FILE' | 'CREATE_PROJECT_FILE_REVISION' | 'CREATE_AGENT' | 'CREATE_PROJECT_ASSISTANT' | 'CREATE_WORKFLOW' | 'UPDATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT' | 'CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT' | 'PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION' | 'CREATE_SCHEDULE' | 'UPDATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'UPDATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'PUBLISH_INTEGRATION_DEFINITION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT' | 'UPDATE_AGENT' | 'CREATE_INSTRUCTION_DRAFT' | 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' | 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' | 'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS' | 'BIND_AGENT_RUNTIME_ENVIRONMENT' | 'CREATE_ROLE_IMAGE_RECIPE' | 'UPDATE_ROLE_IMAGE_RECIPE' | 'CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION' | 'PREPARE_AGENT_RUNTIME_CONFIGURATION'>;
 };
 
 export type AssistantPlanReceipt = {
@@ -10413,6 +10597,38 @@ export type GetOwnerGateResponses = {
 };
 
 export type GetOwnerGateResponse = GetOwnerGateResponses[keyof GetOwnerGateResponses];
+
+export type GetOwnerGateRepositoryBundleData = {
+    body?: never;
+    path: {
+        gateRef: OpaqueRef;
+    };
+    query?: {
+        offset?: number;
+        limit?: number;
+        expectedVersion?: number;
+        expectedManifestSha256?: string;
+    };
+    url: '/api/v1/owner-gates/{gateRef}/repository-bundle';
+};
+
+export type GetOwnerGateRepositoryBundleErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetOwnerGateRepositoryBundleError = GetOwnerGateRepositoryBundleErrors[keyof GetOwnerGateRepositoryBundleErrors];
+
+export type GetOwnerGateRepositoryBundleResponses = {
+    /**
+     * Manifest page до 24 КиБ с явной полнотой
+     */
+    200: RepositoryBundleManifestPage;
+};
+
+export type GetOwnerGateRepositoryBundleResponse = GetOwnerGateRepositoryBundleResponses[keyof GetOwnerGateRepositoryBundleResponses];
 
 export type ResolveOwnerGateData = {
     body: GateResolution;

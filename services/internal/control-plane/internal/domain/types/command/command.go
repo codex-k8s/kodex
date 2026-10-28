@@ -354,6 +354,9 @@ const (
 	// PublishAssistantRuntimeConfig выбирает публикацию runtime помощника через границу версионного
 	// owner-плана, не обычный endpoint сотрудника.
 	PublishAssistantRuntimeConfig Kind = "PUBLISH_ASSISTANT_RUNTIME_CONFIGURATION"
+	// PublishPreparedAgentRuntimeConfig atomically publishes reviewed model and overlay settings for an ordinary project employee.
+	// PublishPreparedAgentRuntimeConfig атомарно публикует согласованные настройки модели и overlay обычного сотрудника проекта.
+	PublishPreparedAgentRuntimeConfig Kind = "PUBLISH_PREPARED_AGENT_RUNTIME_CONFIGURATION"
 	// CreateSystemAssistantRoleImageRecipe selects creation of the organization assistant's role-image
 	// recipe inside its explicit system/organization scope.
 	// CreateSystemAssistantRoleImageRecipe выбирает создание рецепта образа общесистемного помощника
@@ -771,6 +774,9 @@ const (
 	// CompleteExecution выбирает фиксацию владельцем точных исхода, использования, артефактов и архива;
 	// поздний результат worker не создаёт полномочий флагом успеха.
 	CompleteExecution Kind = "COMPLETE_EXECUTION"
+	// ObserveWorkspace records a bound writer or its exact past quiescence without execution authority.
+	// ObserveWorkspace сохраняет bound writer либо его past quiescence без execution authority.
+	ObserveWorkspace Kind = "OBSERVE_WORKSPACE"
 	// DelegateExecution selects server-owned child-work delegation from the exact parent lease and target
 	// context, not a child spawned by payload IDs alone.
 	// DelegateExecution выбирает серверное делегирование дочерней работы из точного родительского lease и
@@ -1190,13 +1196,14 @@ type AgentRuntimeConfigurationInput struct {
 	ProviderAccounts                                       []entity.ProviderAccountCandidate
 }
 
-// AssistantRuntimeConfigurationInput is assigned by an owner-versioned assistant plan and adds exact
-// runtime-profile provenance, reasoning/web-search settings and assistant scope lineage; it is not the
-// staff publication endpoint's general payload.
-// AssistantRuntimeConfigurationInput назначается версионным owner-планом помощника и добавляет точное
-// происхождение runtime profile, reasoning, web search и scope lineage; общим payload публикации
-// сотрудника не является.
+// AssistantRuntimeConfigurationInput is assigned by an owner-versioned plan with exact profile,
+// account catalog and overlay pins. Empty TargetKind retains the protected assistant policy;
+// AGENT selects the separate ordinary employee policy and forbids assistant profile lineage.
+// AssistantRuntimeConfigurationInput назначается версионным планом владельца с точными привязками
+// профиля, каталога аккаунтов и overlay. Пустой TargetKind сохраняет защищённую политику помощника;
+// AGENT выбирает отдельную политику обычного сотрудника без профиля помощника.
 type AssistantRuntimeConfigurationInput struct {
+	TargetKind                                                  string
 	RuntimeProfilePin                                           entity.AssistantRuntimeProfilePin
 	Configuration                                               AgentRuntimeConfigurationInput
 	ReasoningEffort                                             string
@@ -1633,6 +1640,18 @@ type CompleteExecutionInput struct {
 	Artifacts                                     []CompletedArtifact
 }
 
+// WorkspaceObservationInput carries trusted controller observations, never model-selected storage scope.
+// Only BIND may acquire a current writer; QUIESCENT must match the already immutable stored writer.
+// WorkspaceObservationInput несёт trusted controller observations, не model-selected storage scope.
+// Только BIND назначает current writer; QUIESCENT совпадает с уже immutable stored writer.
+type WorkspaceObservationInput struct {
+	LeaseRef, Fence, RuntimeRevisionDigest, ExecutionBindingDigest string
+	WorkspaceRef, Phase, PodUID, PVCUID                            string
+	BlockReason                                                    string
+	Generation, WorkspaceGeneration                                int64
+	Quiescence                                                     []byte
+}
+
 // CompletedArtifact describes bytes or a prepared receipt produced by an execution. The owner must
 // bind the artifact to the execution and verify its preparation and scan evidence before treating it
 // as admitted content.
@@ -1729,6 +1748,8 @@ type SessionArchiveTaskInput struct {
 	RestoredSourceSHA256, PVCName                      string
 	Generation, ObjectSizeBytes, SourceSizeBytes       int64
 	FormatVersion                                      uint32
+	SnapshotSourceSHA256                               string `json:",omitempty"`
+	SourceEntryCount                                   int64  `json:",omitempty"`
 }
 
 // WarmRuntimeInput reports the state of a workload instance for one runtime revision. The owner
@@ -1862,7 +1883,10 @@ type Result struct {
 	ProjectPurgeRecovery *entity.ProjectPurgeRecovery
 	// ExecutionDeadlineExpired reports that the owner committed expiry; late effects remain forbidden.
 	// ExecutionDeadlineExpired сообщает о зафиксированном владельцем истечении; поздние эффекты запрещены.
-	ExecutionDeadlineExpired  bool `json:"executionDeadlineExpired,omitempty"`
+	ExecutionDeadlineExpired bool `json:"executionDeadlineExpired,omitempty"`
+	// OwnerGateExpired records a committed server expiry so exact receipt replay still rejects a late effect.
+	// OwnerGateExpired сохраняет серверное истечение, чтобы повтор квитанции также отклонял поздний эффект.
+	OwnerGateExpired          bool `json:"ownerGateExpired,omitempty"`
 	ProviderQueuedWorkResults []entity.ProviderQueuedWorkCancellationResult
 	EmailMailbox              *entity.EmailMailboxConfigurationView
 	EmailPublication          *entity.EmailMailboxPublication

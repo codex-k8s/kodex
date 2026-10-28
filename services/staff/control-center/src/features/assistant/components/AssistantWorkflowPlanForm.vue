@@ -1,5 +1,15 @@
 <script setup lang="ts">
-import { computed, ref, useId, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
+import { useI18n } from "vue-i18n";
+import { requestConfirmation } from "@/shared/ui/confirmation";
+import WorkflowReworkPolicyControl from "@/features/workflows/WorkflowReworkPolicyControl.vue";
+import WorkflowResultContractEditor from "@/features/workflows/WorkflowResultContractEditor.vue";
+import {
+  newWorkflowStepKey,
+  validWorkflowDAG,
+  workflowEvidenceProfileSteps,
+  workflowModeSteps,
+} from "@/features/workflows/result-contract";
 
 import { loadAgentCatalogPage } from "@/features/agents/catalog/api";
 import EffectiveCapabilityCatalog from "@/features/agents/detail/EffectiveCapabilityCatalog.vue";
@@ -26,6 +36,7 @@ const props = defineProps<{
   disabled: boolean;
 }>();
 const fieldPrefix = `assistant-workflow-${useId()}`;
+const { t } = useI18n();
 const inputName = (index: number, field: string) =>
   `${fieldPrefix}-input-${String(index)}-${field}`;
 const stepName = (index: number, field: string) =>
@@ -71,6 +82,9 @@ const stepKeys = new Set([
   "humanGate",
   "gateDecisions",
   "requiredCapabilityKeys",
+  "approvalTimeoutSeconds",
+  "dependsOn",
+  "resultRequirements",
 ]);
 const agentReadback = ref<Record<string, Agent | null>>({});
 const selectableAgents = new Map<string, Agent>();
@@ -104,6 +118,35 @@ const fields = computed(() =>
     : itemArray(parameter("inputFields")),
 );
 const steps = computed(() => itemArray(parameter("steps")));
+const executionMode = computed(() => {
+  const mode = parameter("executionMode");
+  return mode === undefined ? "MANAGER_DRIVEN" : mode;
+});
+const serverMode = computed(() => executionMode.value === "SERVER_DAG_V1");
+const validDAG = computed(() =>
+  validWorkflowDAG(
+    steps.value,
+    parameter("maxConcurrency") ?? 1,
+    [
+      parameter("name"),
+      parameter("purpose"),
+      parameter("instructions"),
+      parameter("completionCriteria"),
+      ...(steps.value ?? []).flatMap((step) => [
+        step.name,
+        step.purpose,
+        step.expectedResult,
+      ]),
+    ]
+      .map(text)
+      .join(""),
+    "key",
+    parameter("reworkPolicy"),
+    parameter("resultEvidenceProfile") === ""
+      ? undefined
+      : parameter("resultEvidenceProfile"),
+  ),
+);
 const coordinatorRef = computed(() => text(parameter("coordinatorAgentRef")));
 const agentRefs = computed(() => [
   ...new Set(
@@ -197,17 +240,102 @@ async function loadAgents(
 }
 
 function change(key: string, value: unknown): void {
+  if (props.disabled) return;
   emit("parameter", key, value);
   emit("dirty");
 }
+let mounted = true;
+onBeforeUnmount(() => {
+  mounted = false;
+});
+function changeEvidenceProfile(event: Event): void {
+  if (
+    props.disabled ||
+    !serverMode.value ||
+    !steps.value ||
+    !(event.target instanceof HTMLSelectElement)
+  )
+    return;
+  const value = event.target.value;
+  if (value !== "" && value !== "GITHUB_REVIEW_QA_V1") return;
+  change("steps", workflowEvidenceProfileSteps(steps.value, value));
+  change(
+    "resultEvidenceProfile",
+    !isUpdate.value && value === "" ? undefined : value,
+  );
+}
+function modeEditable(): boolean {
+  return mounted && !props.disabled && steps.value !== undefined;
+}
+async function changeMode(event: Event): Promise<void> {
+  const target = event.target as HTMLSelectElement;
+  const mode = target.value;
+  target.value = text(executionMode.value);
+  if (
+    !modeEditable() ||
+    (mode !== "MANAGER_DRIVEN" && mode !== "SERVER_DAG_V1") ||
+    mode === executionMode.value
+  )
+    return;
+  const identity = props.operation;
+  const project = props.projectRef;
+  const before = JSON.stringify(props.operation);
+  if (
+    !(await requestConfirmation(t("workflowResults.modeChange"))) ||
+    !modeEditable() ||
+    props.projectRef !== project ||
+    props.operation !== identity ||
+    JSON.stringify(props.operation) !== before ||
+    !steps.value
+  )
+    return;
+  change("steps", workflowModeSteps(steps.value, mode, "key", isUpdate.value));
+  change("executionMode", mode);
+  if (mode !== "SERVER_DAG_V1" && parameter("reworkPolicy") !== undefined)
+    change("reworkPolicy", "");
+  if (
+    mode !== "SERVER_DAG_V1" &&
+    parameter("resultEvidenceProfile") !== undefined
+  )
+    change("resultEvidenceProfile", isUpdate.value ? "" : undefined);
+}
+// Повторный вызов после await читает актуальные режим и разрешение редактирования.
+function reworkModeEditable(): boolean {
+  return modeEditable() && serverMode.value;
+}
+async function changeReworkPolicy(
+  value: "" | "OWNER_APPROVED_UPSTREAM_V1",
+): Promise<void> {
+  if (!reworkModeEditable() || value === text(parameter("reworkPolicy")))
+    return;
+  const identity = props.operation,
+    project = props.projectRef,
+    before = JSON.stringify(props.operation);
+  if (
+    !(await requestConfirmation(t("workflowResults.reworkChange"))) ||
+    !reworkModeEditable() ||
+    props.projectRef !== project ||
+    props.operation !== identity ||
+    JSON.stringify(props.operation) !== before
+  )
+    return;
+  change("reworkPolicy", value);
+}
 function changeStep(index: number, key: string, value: unknown): void {
   const current = steps.value;
-  if (!current?.[index]) return;
+  if (props.disabled || !current?.[index]) return;
   change(
     "steps",
-    current.map((step, position) =>
-      position === index ? { ...step, [key]: value } : step,
-    ),
+    current.map((step, position) => {
+      if (position !== index) return step;
+      const changed = { ...step, [key]: value };
+      if (
+        (key === "humanGate" && value === false) ||
+        (key === "approvalTimeoutSeconds" && value === undefined)
+      )
+        delete changed.approvalTimeoutSeconds;
+      return changed;
+    }),
   );
 }
 function changeField(index: number, key: string, value: unknown): void {
@@ -272,11 +400,23 @@ function toggleCapability(index: number, key: string, enabled: boolean): void {
   );
 }
 function addStep(): void {
-  if (!steps.value || steps.value.length >= 200) return;
+  if (
+    props.disabled ||
+    !steps.value ||
+    steps.value.length >= (serverMode.value ? 12 : 200)
+  )
+    return;
   openStepIndex.value = steps.value.length;
   change("steps", [
     ...steps.value,
     {
+      ...(serverMode.value
+        ? {
+            key: newWorkflowStepKey(steps.value.map((step) => step.key)),
+            dependsOn: [],
+            resultRequirements: [],
+          }
+        : {}),
       name: "",
       purpose: "",
       agentRef: coordinatorRef.value,
@@ -360,7 +500,11 @@ function validStep(step: Item, allowPendingAgent = false): boolean {
   const capabilities = step.requiredCapabilityKeys;
   return (
     Object.keys(step).every(
-      (key) => stepKeys.has(key) && (key !== "key" || isUpdate.value),
+      (key) =>
+        stepKeys.has(key) &&
+        (key !== "key" || isUpdate.value || serverMode.value) &&
+        (!["dependsOn", "resultRequirements"].includes(key) ||
+          serverMode.value),
     ) &&
     (step.key === undefined ||
       (typeof step.key === "string" &&
@@ -387,6 +531,12 @@ function validStep(step: Item, allowPendingAgent = false): boolean {
     step.timeoutSeconds <= 86400 &&
     text(step.expectedResult).length <= 1000 &&
     typeof step.humanGate === "boolean" &&
+    (step.approvalTimeoutSeconds === undefined ||
+      (step.humanGate &&
+        typeof step.approvalTimeoutSeconds === "number" &&
+        Number.isInteger(step.approvalTimeoutSeconds) &&
+        step.approvalTimeoutSeconds >= 1 &&
+        step.approvalTimeoutSeconds <= 604800)) &&
     Array.isArray(decisions) &&
     decisions.length <= 4 &&
     decisions.every(
@@ -408,6 +558,16 @@ function validStep(step: Item, allowPendingAgent = false): boolean {
 const valid = computed(() =>
   Boolean(
     props.projectRef &&
+    (parameter("reworkPolicy") === undefined ||
+      parameter("reworkPolicy") === "" ||
+      (serverMode.value &&
+        parameter("reworkPolicy") === "OWNER_APPROVED_UPSTREAM_V1")) &&
+    (executionMode.value === "MANAGER_DRIVEN" || serverMode.value) &&
+    (parameter("resultEvidenceProfile") === undefined ||
+      (isUpdate.value && parameter("resultEvidenceProfile") === "") ||
+      (serverMode.value &&
+        parameter("resultEvidenceProfile") === "GITHUB_REVIEW_QA_V1")) &&
+    (!serverMode.value || validDAG.value) &&
     (isUpdate.value
       ? text(parameter("workflowRef")) === props.operation.value.target.ref &&
         text(parameter("workflowRef")).length > 0 &&
@@ -424,7 +584,7 @@ const valid = computed(() =>
       typeof parameter("maxConcurrency") === "number") &&
     Number.isInteger(Number(parameter("maxConcurrency") ?? 1)) &&
     Number(parameter("maxConcurrency") ?? 1) >= 1 &&
-    Number(parameter("maxConcurrency") ?? 1) <= 100 &&
+    Number(parameter("maxConcurrency") ?? 1) <= (serverMode.value ? 2 : 100) &&
     (parameter("timeoutSeconds") === undefined ||
       typeof parameter("timeoutSeconds") === "number") &&
     Number.isInteger(Number(parameter("timeoutSeconds") ?? 7200)) &&
@@ -436,7 +596,7 @@ const valid = computed(() =>
     fields.value.every(validField) &&
     steps.value &&
     steps.value.length > 0 &&
-    steps.value.length <= 200 &&
+    steps.value.length <= (serverMode.value ? 12 : 200) &&
     steps.value.every((step) => validStep(step)) &&
     new TextEncoder().encode(
       text(parameter("completionCriteria")) +
@@ -464,6 +624,12 @@ watch(
     <p v-if="isUpdate" class="assistant-plan-friendly__hint">
       {{ $t("assistant.planEditor.workflowUpdateBoundary") }}
     </p>
+    <WorkflowReworkPolicyControl
+      v-if="serverMode"
+      :value="text(parameter('reworkPolicy'))"
+      :disabled="disabled"
+      @change="changeReworkPolicy"
+    />
     <WorkflowOverviewFields
       :name="text(parameter('name'))"
       :purpose="text(parameter('purpose'))"
@@ -473,6 +639,7 @@ watch(
       :project-ref="projectRef || ''"
       :timeout-seconds="Number(parameter('timeoutSeconds') ?? 7200)"
       :max-concurrency="Number(parameter('maxConcurrency') ?? 1)"
+      :concurrency-limit="serverMode ? 2 : 100"
       :completion-criteria="text(parameter('completionCriteria'))"
       :disabled="disabled"
       @update:name="change('name', $event)"
@@ -483,6 +650,43 @@ watch(
       @update:max-concurrency="change('maxConcurrency', $event)"
       @update:completion-criteria="change('completionCriteria', $event)"
     />
+    <label class="field">
+      <span>{{ $t("workflowResults.mode") }}</span>
+      <select
+        :id="`${fieldPrefix}-mode`"
+        :name="`${fieldPrefix}-mode`"
+        :value="executionMode"
+        :disabled="disabled"
+        @change="changeMode"
+      >
+        <option
+          v-for="mode in ['MANAGER_DRIVEN', 'SERVER_DAG_V1']"
+          :key="mode"
+          :value="mode"
+        >
+          {{ $t(`workflowResults.modes.${mode}`) }}
+        </option>
+      </select>
+    </label>
+    <div v-if="serverMode" class="field">
+      <span>{{ $t("workflowResults.evidenceProfile") }}</span>
+      <select
+        :disabled="disabled"
+        :value="text(parameter('resultEvidenceProfile'))"
+        :aria-label="$t('workflowResults.evidenceProfile')"
+        @change="changeEvidenceProfile"
+      >
+        <option value="">{{ $t("workflowResults.evidenceLegacy") }}</option>
+        <option value="GITHUB_REVIEW_QA_V1">
+          {{ $t("workflowResults.evidenceNative") }}
+        </option>
+      </select>
+      <small>{{ $t("workflowResults.evidenceHelp") }}</small>
+    </div>
+    <p v-if="serverMode">{{ $t("workflowResults.bounds") }}</p>
+    <p v-if="serverMode && !validDAG" class="field-error" role="status">
+      {{ $t("workflowResults.invalid") }}
+    </p>
     <div v-if="isUpdate" class="field">
       <span>{{ $t("assistant.planEditor.workflowInstructions") }}</span>
       <TemplateSourceField
@@ -622,7 +826,9 @@ watch(
         ><button
           class="button"
           type="button"
-          :disabled="disabled || !steps || steps.length >= 200"
+          :disabled="
+            disabled || !steps || steps.length >= (serverMode ? 12 : 200)
+          "
           @click="addStep"
         >
           {{ $t("common.create") }}
@@ -656,6 +862,28 @@ watch(
           @toggle="toggleStep(index, $event)"
         >
           <div class="assistant-workflow-form__step-body">
+            <WorkflowResultContractEditor
+              v-if="serverMode"
+              :evidence-profile="
+                text(parameter('resultEvidenceProfile')) || undefined
+              "
+              :step-key="text(step.key)"
+              :dependencies="step.dependsOn"
+              :requirements="step.resultRequirements"
+              :predecessors="
+                (steps ?? []).slice(0, index).map((prior) => ({
+                  key: text(prior.key),
+                  name: text(prior.name),
+                  artifactKeys: (itemArray(prior.resultRequirements) ?? [])
+                    .filter((item) => item.kind === 'ARTIFACT')
+                    .map((item) => text(item.key)),
+                }))
+              "
+              :disabled="disabled"
+              @key="changeStep(index, 'key', $event)"
+              @dependencies="changeStep(index, 'dependsOn', $event)"
+              @requirements="changeStep(index, 'resultRequirements', $event)"
+            />
             <label class="field"
               ><span>{{ $t("workflows.stepName") }}</span
               ><input
@@ -727,6 +955,29 @@ watch(
                 />{{ $t("workflows.humanGate") }}</label
               >
             </div>
+            <label v-if="step.humanGate === true" class="field">
+              <span>{{ $t("workflows.approvalTimeout") }}</span>
+              <input
+                :id="stepName(index, 'approval-timeout')"
+                :name="stepName(index, 'approval-timeout')"
+                type="number"
+                min="1"
+                max="604800"
+                step="1"
+                :value="step.approvalTimeoutSeconds ?? ''"
+                :disabled="disabled"
+                @input="
+                  changeStep(
+                    index,
+                    'approvalTimeoutSeconds',
+                    ($event.target as HTMLInputElement).value === ''
+                      ? undefined
+                      : Number(($event.target as HTMLInputElement).value),
+                  )
+                "
+              />
+              <span>{{ $t("workflows.approvalTimeoutHelp") }}</span>
+            </label>
             <details>
               <summary>{{ $t("common.advanced") }}</summary>
               <div class="assistant-workflow-form__advanced">

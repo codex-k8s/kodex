@@ -58,10 +58,17 @@ func RuntimeExecutionBindingDigests(input RunnerInput) (string, string, error) {
 	// пустых optional collections после encode/decode без второго списка полей.
 	materialization := input
 	materialization.ExecutionBindingDigest, materialization.MCPBindingDigest = "", ""
+	methods := runtimeCallbackMethods[:]
+	if input.WorkspaceStorage != nil {
+		if input.WorkspaceStorage.ValidateForInput(input) != nil {
+			return "", "", errors.New("runtime workspace binding is invalid")
+		}
+		methods = append(append([]string(nil), methods...), "POST workspace")
+	}
 	executionRaw, err := json.Marshal(struct {
 		Materialization RunnerInput `json:"materialization"`
 		Methods         []string    `json:"methods"`
-	}{Materialization: materialization, Methods: runtimeCallbackMethods[:]})
+	}{Materialization: materialization, Methods: methods})
 	if err != nil {
 		return "", "", errors.New("encode runtime execution binding")
 	}

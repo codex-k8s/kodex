@@ -1361,9 +1361,26 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 		return nil, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	result, err := repository.resolveIntegrationInvocationTx(ctx, tx, scope, input, boundedInput, false, nil)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, serializableTransactionError(err, errs.ErrUnavailable)
+	}
+	return result, nil
+}
+
+// resolveIntegrationInvocationTx owns the shared native invocation/gate creation in the caller's transaction. The bundle discriminator is supplied only by the specialized owner after exact artifact/origin admission; generic resolve cannot create a bundle effect.
+// resolveIntegrationInvocationTx создаёт общий native invocation/gate в транзакции caller. Bundle discriminator передаёт только специализированный owner после exact artifact/origin admission; generic resolve не создаёт bundle effect.
+func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context, tx pgx.Tx, scope scope, input map[string]string, boundedInput map[string]any, bundle bool, semanticInput []byte) (map[string]any, error) {
 	encodedInput, err := json.Marshal(boundedInput)
 	if err != nil || len(encodedInput) > 512<<10 {
 		return nil, errs.ErrInvalid
+	}
+	workflowRootID, err := lockWorkflowEffectRootTx(ctx, tx, scope, input)
+	if err != nil {
+		return nil, err
 	}
 	var runID, nodeID, connectionID, grantID, grantRef, projectID, rootRunID, initiatorRef, agentID string
 	var definitionKey, definitionVersion, definitionDigest, connectionName, risk, approvalPolicy, resourceKind, resourceScopeDigest string
@@ -1395,10 +1412,24 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 		capability.Risk != risk || !capability.AllowsApprovalPolicy(approvalPolicy) || capability.ResourceScope.Kind != resourceKind || grantVersion < 1 {
 		return nil, errs.ErrForbidden
 	}
+	legacyRework, reworkErr := isLegacyReworkNodeTx(ctx, tx, scope, nodeID)
+	if reworkErr != nil {
+		return nil, reworkErr
+	} else if legacyRework {
+		if capability.Risk != "READ" {
+			return nil, errs.ErrLegacyReworkScopeUnsupported
+		}
+		if err := repository.validateLegacyReworkNodeAuthorityTx(ctx, tx, scope, nodeID); err != nil {
+			return nil, err
+		}
+	}
 	if definitionKey == "context7" {
 		if err := requireCurrentManagedMCPHealth(ctx, tx, scope.organizationID, nodeID, input["connection_ref"]); err != nil {
 			return nil, err
 		}
+	}
+	if (capability.Operation == repositoryBundleOperation) != bundle {
+		return nil, errs.ErrForbidden
 	}
 	canonicalInput, err := capability.ValidateInput(encodedInput)
 	if err != nil {
@@ -1417,6 +1448,19 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 	invocationRef, _ := newRef("inv")
 	inputDigest := sha256.Sum256(canonicalInput)
 	inputDigestHex := hex.EncodeToString(inputDigest[:])
+	var workflowAdmission *workflowEffectAdmission
+	if risk == "WRITE" {
+		var rejoined map[string]any
+		workflowAdmission, rejoined, err = repository.admitWorkflowEffectTx(ctx, tx, scope, workflowRootID, input, capability.Operation, grantRef, grantVersion, definitionDigest, resourceScopeDigest, approvalPolicy, encodedScope, canonicalInput, semanticInput)
+		if err != nil {
+			return nil, err
+		}
+		if rejoined != nil {
+			rejoined["risk"], rejoined["resourceKind"], rejoined["resourceScope"] = risk, resourceKind, resourceScope
+			rejoined["resourceScopeDigest"], rejoined["projectID"] = resourceScopeDigest, projectID
+			return rejoined, nil
+		}
+	}
 	intentParts := []string{
 		input["node_ref"], input["idempotency_key"], input["connection_ref"], input["capability_key"],
 		inputDigestHex, definitionDigest, resourceScopeDigest, grantRef, strconv.FormatInt(grantVersion, 10), approvalPolicy,
@@ -1477,6 +1521,17 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 		approvalScopeBinding = approvalScopeID
 	}
 	var invocationID, resolvedRef, resolvedState string
+	if legacyRework {
+		// The native owner selector already holds the exact node FOR UPDATE, serializing this slot with concurrent allocations.
+		// Native owner selector уже держит точный node FOR UPDATE, сериализуя slot с конкурентными allocation.
+		var available bool
+		if tx.QueryRow(ctx, queryLegacyReworkReadSlot, pgx.StrictNamedArgs{"organization_id": scope.organizationID, "node_id": nodeID, "idempotency_key": input["idempotency_key"]}).Scan(&available) != nil {
+			return nil, errs.ErrUnavailable
+		}
+		if !available {
+			return nil, errs.ErrLegacyReworkScopeUnsupported
+		}
+	}
 	if err := tx.QueryRow(ctx, queryWorkersResolveintegrationinvocationInsertIntegrationInvocationsRefRunIdConnectionId,
 		invocationRef, scope.organizationID, runID, nodeID, connectionID, grantID, input["capability_key"],
 		capability.Operation, input["idempotency_key"], intentDigestHex, inputDigestHex, canonicalInput, state,
@@ -1497,6 +1552,12 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 		tag, reserveErr := tx.Exec(ctx, queryWorkersResolveintegrationinvocationReserveApprovalScope, approvalScopeID)
 		if reserveErr != nil || tag.RowsAffected() != 1 {
 			return nil, serializableTransactionError(reserveErr, errs.ErrConflict)
+		}
+	}
+	if workflowAdmission != nil {
+		workflowAdmission.Intent.InvocationRef, workflowAdmission.Intent.EffectKey, workflowAdmission.Intent.InputDigest = resolvedRef, effectKey, inputDigestHex
+		if err := appendWorkflowEffectTx(ctx, tx, scope, workflowAdmission.RootID, workflowAdmission.AnchorID, "intent", workflowAdmission.Intent); err != nil {
+			return nil, err
 		}
 	}
 	gateRef := ""
@@ -1536,9 +1597,6 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 		} else if err != nil {
 			return nil, serializableTransactionError(err, errs.ErrUnavailable)
 		}
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, serializableTransactionError(err, errs.ErrUnavailable)
 	}
 	return map[string]any{
 		"invocationRef": resolvedRef, "grantRef": grantRef, "operation": capability.Operation,
@@ -1764,6 +1822,12 @@ func (repository *Repository) GetIntegrationInvocation(ctx context.Context, prin
 // success/failure планирует продолжение, UNKNOWN_OUTCOME — нет; пути возвращают graph readback в
 // транзакции вызывающего без повторной отправки провайдеру.
 func (repository *Repository) completeIntegrationInvocation(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
+	return repository.completeIntegrationInvocationTx(ctx, tx, scope, input, false)
+}
+
+// completeIntegrationInvocationTx preserves native receipt and continuation ownership while allowing only the specialized bundle owner to finalize that closed effect kind.
+// completeIntegrationInvocationTx сохраняет native receipt/continuation ownership, позволяя завершить закрытый bundle effect только специализированному owner.
+func (repository *Repository) completeIntegrationInvocationTx(ctx context.Context, tx pgx.Tx, scope scope, input command.Command, bundle bool) (commandOutcome, error) {
 	if _, err := integrationExecutionRoute(input.Principal.CallerWorkload); err != nil {
 		return commandOutcome{}, err
 	}
@@ -1784,6 +1848,15 @@ func (repository *Repository) completeIntegrationInvocation(ctx context.Context,
 		if hex.EncodeToString(digest[:]) != payload.ResponseDigest {
 			return commandOutcome{}, errs.ErrInvalid
 		}
+	}
+	var operation string
+	if err := tx.QueryRow(ctx, queryRepositoryBundleInvocationOperation, pgx.StrictNamedArgs{"organization_id": scope.organizationID, "invocation_ref": payload.InvocationRef}).Scan(&operation); errors.Is(err, pgx.ErrNoRows) {
+		return commandOutcome{}, errs.ErrNotFound
+	} else if err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if (operation == repositoryBundleOperation) != bundle {
+		return commandOutcome{}, errs.ErrForbidden
 	}
 	var invocationID, invocationRef, runID, rootRunID, projectID, projectRef, nodeRef, storedDigest, state, leaseRef string
 	var effectKey, inputDigest, receiptRef, receiptEffectKey, receiptInputDigest string

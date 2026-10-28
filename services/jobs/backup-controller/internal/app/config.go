@@ -5,6 +5,7 @@ import (
 	"net"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/caarlos0/env/v11"
@@ -32,6 +33,9 @@ type Config struct {
 	RepositoryPrefix          string        `env:"BACKUP_CONTROLLER_REPOSITORY_PREFIX"`
 	ReleaseRevision           string        `env:"BACKUP_CONTROLLER_RELEASE_REVISION"`
 	BackupID                  string        `env:"BACKUP_CONTROLLER_BACKUP_ID"`
+	RestoreID                 string        `env:"BACKUP_CONTROLLER_RESTORE_ID"`
+	ExpectedApprovalID        string        `env:"BACKUP_CONTROLLER_EXPECTED_APPROVAL_ID"`
+	ExpectedTargetSHA256      string        `env:"BACKUP_CONTROLLER_EXPECTED_TARGET_SHA256"`
 	BackupInterval            time.Duration `env:"BACKUP_CONTROLLER_BACKUP_INTERVAL"`
 	BackupTimeout             time.Duration `env:"BACKUP_CONTROLLER_BACKUP_TIMEOUT"`
 	StartupTimeout            time.Duration `env:"BACKUP_CONTROLLER_STARTUP_TIMEOUT"`
@@ -68,7 +72,7 @@ func loadConfig(command string) (Config, error) {
 // RU: validate отклоняет неизвестные команды, небезопасные пути и настройки runtime или retention вне границ.
 func (config Config) validate(command string) error {
 	switch command {
-	case "serve", "backup", "verify", "retain", "restore-drill", "fingerprint-targets":
+	case "serve", "backup", "verify", "retain", "restore-drill", "fingerprint-targets", "list-verified", "inspect-backup", "inspect-restore-drill", "preflight-restore", "inspect-restore-targets", "inspect-restore-cleanup", "cleanup-restore-drill":
 	default:
 		return errors.New("backup-controller command is invalid")
 	}
@@ -85,7 +89,7 @@ func (config Config) validate(command string) error {
 		}
 	}
 	if config.RepositoryPrefix == "" ||
-		(command != "fingerprint-targets" && !regexp.MustCompile(`^sha256:[a-f0-9]{64}$`).MatchString(config.ReleaseRevision)) ||
+		(command != "fingerprint-targets" && (!regexp.MustCompile(`^sha256:[a-f0-9]{64}$`).MatchString(config.ReleaseRevision) || config.ReleaseRevision == "sha256:"+strings.Repeat("0", 64))) ||
 		config.BackupInterval < time.Hour || config.BackupInterval > 7*24*time.Hour ||
 		config.BackupTimeout < 10*time.Minute || config.BackupTimeout > 24*time.Hour ||
 		config.StartupTimeout < 5*time.Second || config.StartupTimeout > 5*time.Minute ||
@@ -97,6 +101,16 @@ func (config Config) validate(command string) error {
 	}
 	if command == "verify" && config.BackupID == "" {
 		return errors.New("backup-controller backup ID is required")
+	}
+	if command == "inspect-backup" || command == "inspect-restore-drill" {
+		if !regexp.MustCompile(`^[0-9]{8}T[0-9]{6}Z-[a-f0-9]{16}$`).MatchString(config.BackupID) {
+			return errors.New("backup metadata locator is invalid")
+		}
+	}
+	if command == "inspect-restore-drill" && (!regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`).MatchString(config.RestoreID) ||
+		!regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`).MatchString(config.ExpectedApprovalID) ||
+		!regexp.MustCompile(`^sha256:[a-f0-9]{64}$`).MatchString(config.ExpectedTargetSHA256)) {
+		return errors.New("restore metadata owner binding is invalid")
 	}
 	return nil
 }

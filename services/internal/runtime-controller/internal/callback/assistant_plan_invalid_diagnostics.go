@@ -82,16 +82,16 @@ func validAssistantPlanInvalidDiagnostic(value assistantPlanInvalidDiagnostic) b
 	}
 }
 
-// validAssistantPlanInvalidField allows only seventeen registered workflow-related
+// validAssistantPlanInvalidField allows only eighteen registered workflow-related
 // failure labels, never arbitrary JSON paths or reflected model/user input.
-// validAssistantPlanInvalidField допускает лишь семнадцать registered workflow-related
+// validAssistantPlanInvalidField допускает лишь восемнадцать registered workflow-related
 // failure labels,не arbitrary JSON paths и не reflected model/user input.
 func validAssistantPlanInvalidField(field string) bool {
 	switch field {
 	case "WORKFLOW_SHAPE", "WORKFLOW_REF", "WORKFLOW_VERSION", "WORKFLOW_BINDING",
 		"MAX_CONCURRENCY", "TIMEOUT_SECONDS", "WORKFLOW_TEXT", "INPUT_FIELDS", "STEPS",
 		"INPUT_FIELD_KEY", "STEP_SHAPE", "STEP_KEY", "STEPS_GRAPH", "WORKFLOW_DRAFT",
-		"STEPS_INSTRUCTIONS", "STEPS_EXPECTED_RESULT", "WORKFLOW_INVARIANTS":
+		"STEPS_INSTRUCTIONS", "STEPS_EXPECTED_RESULT", "WORKFLOW_INVARIANTS", "WORKFLOW_TEXT_BUDGET":
 		return true
 	default:
 		return false

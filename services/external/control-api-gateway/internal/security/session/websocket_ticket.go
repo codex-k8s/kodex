@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/eventing/browserstate"
+	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/availability"
 	"github.com/google/uuid"
 )
 
@@ -51,11 +52,11 @@ func (families *Families) IssueWebSocketTicket(ctx context.Context, familyID, br
 	for range 3 {
 		family, err := families.ticketFamily(ctx, familyID, browserID, csrfHash)
 		if err != nil {
-			return "", time.Time{}, err
+			return "", time.Time{}, availability.At("ticket_family_read", err)
 		}
 		ledger, sequence, err := families.readTicketLedger(ctx, familyID)
 		if err != nil {
-			return "", time.Time{}, err
+			return "", time.Time{}, availability.At("ticket_ledger_read", err)
 		}
 		now := families.now().UTC()
 		for key, ticket := range ledger.Tickets {
@@ -64,7 +65,7 @@ func (families *Families) IssueWebSocketTicket(ctx context.Context, familyID, br
 			}
 		}
 		if len(ledger.Tickets) >= maximumWebSocketTickets {
-			return "", time.Time{}, ErrRenewalPending
+			return "", time.Time{}, availability.Fixed("ticket_capacity", "pending", ErrRenewalPending)
 		}
 		expires := earlier(now.Add(websocketTicketLifetime), earlier(family.IdleExpiresAt, family.Principal.ExpiresAt))
 		ledger.Tickets[ticketDigest(token)] = websocketTicket{BrowserSessionID: browserID, Version: family.Version, ExpiresAt: expires}
@@ -73,11 +74,11 @@ func (families *Families) IssueWebSocketTicket(ctx context.Context, familyID, br
 			continue
 		}
 		if err != nil {
-			return "", time.Time{}, err
+			return "", time.Time{}, availability.At("ticket_ledger_cas", err)
 		}
 		return token, expires, nil
 	}
-	return "", time.Time{}, ErrRenewalPending
+	return "", time.Time{}, availability.Fixed("ticket_cas_exhausted", "cas_conflict", ErrRenewalPending)
 }
 
 // ConsumeWebSocketTicket requires exact token length and current family binding, CAS-deletes its matching live/version-bound digest before a final family recheck, and retries only bounded conflicts. A later refusal still leaves the ticket consumed; no WebSocket is opened by this method.

@@ -21,18 +21,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// UploadArtifact resolves scope and validates/seeks the upload, checks an authorized receipt
-// before external work, scans and stores the object, then repeats receipt resolution under an
-// idempotency lock in ReadCommitted. Fresh uploads retain filename/owner/run checks, persist
-// artifact/content/audit/event/receipt and keep the prepared object only after commit; replay or
-// failures clean that unused object. Existing scan-state inputs, ignored reference/marshal errors
-// and commit mappings remain unchanged.
-// UploadArtifact разрешает область, проверяет и перематывает upload, проверяет авторизованную
-// receipt до внешней работы, сканирует и сохраняет объект, затем повторяет receipt resolution под
-// idempotency lock в ReadCommitted. Новая загрузка сохраняет filename/owner/run checks, атомарно
-// пишет artifact/content/audit/event/receipt, удерживает подготовленный объект лишь после commit;
-// replay и отказы очищают неиспользованный объект. Прежние scan-state inputs, ignored
-// reference/marshal errors и commit mappings не меняются.
+// UploadArtifact scans and stores one authorized upload outside its owner transaction, then binds
+// the exact object version to the artifact/receipt; an unknown COMMIT preserves the version on error.
+// UploadArtifact проверяет и сохраняет одну разрешённую загрузку вне owner transaction, затем связывает
+// exact object version с artifact/receipt; неизвестный COMMIT сохраняет версию при ошибке.
 func (repository *Repository) UploadArtifact(ctx context.Context, principal value.Principal, mutation value.Mutation, input platformrepo.ArtifactUpload) (entity.Artifact, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -174,6 +166,9 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 		return entity.Artifact{}, errs.ErrConflict
 	}
 	if err := tx.Commit(ctx); err != nil {
+		// Only a confirmed rollback permits deleting the version prepared by this upload.
+		// Только подтверждённый rollback разрешает удалить подготовленную этой загрузкой версию.
+		keepObject = !errors.Is(err, pgx.ErrTxCommitRollback)
 		return entity.Artifact{}, errs.ErrConflict
 	}
 	keepObject = true
@@ -1116,6 +1111,11 @@ func (repository *Repository) changeArtifactLifecycle(ctx context.Context, tx pg
 	if tag.RowsAffected() != 1 {
 		return commandOutcome{}, errs.ErrConflict
 	}
+	if input.Kind == command.DeleteArtifact {
+		if err := repository.cancelRepositoryBundleDependency(ctx, tx, scope, "ARTIFACT", payload.ArtifactRef); err != nil {
+			return commandOutcome{}, err
+		}
+	}
 	item, err := scanArtifact(tx.QueryRow(ctx, queryQueriesGetartifactSelectArtifactBindingsArtifactIdIdOrganizationId, scope.organizationID, payload.ArtifactRef, scope.role, scope.actorID))
 	if err != nil {
 		return commandOutcome{}, err
@@ -1186,11 +1186,12 @@ func (repository *Repository) GetArtifactImpact(ctx context.Context, principal v
 func (repository *Repository) artifactImpactTx(ctx context.Context, tx pgx.Tx, current scope, artifactRef, action string) (entity.ArtifactImpact, string, error) {
 	var artifactID, lifecycleState string
 	var activeRunsJSON []byte
+	var retainedRevisions bool
 	var version, bindingCount, attachmentCount, activeRuntimeCount, skillRevisionCount, activeBindingCount int64
 	err := tx.QueryRow(ctx, queryArtifactsImpact, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID,
 		"artifact_ref":    artifactRef,
-	}).Scan(&artifactID, &version, &lifecycleState, &bindingCount, &attachmentCount, &activeRuntimeCount, &activeRunsJSON, &skillRevisionCount, &activeBindingCount)
+	}).Scan(&artifactID, &version, &lifecycleState, &bindingCount, &attachmentCount, &activeRuntimeCount, &activeRunsJSON, &skillRevisionCount, &activeBindingCount, &retainedRevisions)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return entity.ArtifactImpact{}, "", errs.ErrNotFound
 	}
@@ -1226,14 +1227,18 @@ func (repository *Repository) artifactImpactTx(ctx context.Context, tx pgx.Tx, c
 		if activeRuntimeCount > 0 {
 			blockers = append(blockers, "ACTIVE_RUN_USES_ARTIFACT")
 		}
+		if retainedRevisions {
+			blockers = append(blockers, "ARTIFACT_HAS_RETAINED_REVISIONS")
+		}
 	}
 	digestPayload, _ := json.Marshal(struct {
 		ArtifactRef, Action, LifecycleState                                                                        string
 		ArtifactVersion, BindingCount, AttachmentCount, ActiveRuntimeCount, SkillRevisionCount, ActiveBindingCount int64
+		RetainedRevisions                                                                                          bool
 		Blockers                                                                                                   []string
 		ActiveRuns                                                                                                 []entity.ArtifactImpactRun
 		ActiveRunsTruncated                                                                                        bool
-	}{artifactRef, action, lifecycleState, version, bindingCount, attachmentCount, activeRuntimeCount, skillRevisionCount, activeBindingCount, blockers, activeRuns, activeRunsTruncated})
+	}{artifactRef, action, lifecycleState, version, bindingCount, attachmentCount, activeRuntimeCount, skillRevisionCount, activeBindingCount, retainedRevisions, blockers, activeRuns, activeRunsTruncated})
 	digestValue := sha256.Sum256(digestPayload)
 	return entity.ArtifactImpact{
 		ArtifactRef: artifactRef, Action: action, Digest: hex.EncodeToString(digestValue[:]),

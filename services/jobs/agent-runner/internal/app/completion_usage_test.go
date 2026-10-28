@@ -78,7 +78,14 @@ func TestExecutedTurnFailurePreservesUsageInRetriedCallback(t *testing.T) {
 			case "before execution":
 				wantCode = "RUNTIME_INPUT_INVALID"
 			}
+			// Ненулевое качество обязано пройти настоящий TLS callback и byte-identical retry.
+			if mode == "success" {
+				result.UsageCompleteness = codex.UsageComplete
+			} else if mode == "workspace" || mode == "provider failure" {
+				result.UsageCompleteness = codex.UsagePartial
+			}
 			wantUsage := usage
+			wantUsage.Completeness = result.UsageCompleteness
 			wantArchive := mode != "before execution" && mode != "completion archive"
 			if mode == "before execution" {
 				wantUsage = runtimecontract.TokenUsage{}

@@ -22,7 +22,9 @@ WHERE task.organization_id = @organization_id::uuid
   AND task.state = 'READY'
   AND (task.project_id IS NULL OR project.lifecycle <> 'PURGE_PENDING')
   AND task.available_at <= clock_timestamp()
+  AND NOT EXISTS (SELECT 1 FROM control_plane.session_workspace_storage workspace
+                  WHERE workspace.session_id=task.session_id)
 ORDER BY CASE task.kind WHEN 'RESTORE' THEN 0 WHEN 'DELETE_PVC' THEN 1 WHEN 'SNAPSHOT' THEN 2 ELSE 3 END,
          task.created_at
-FOR UPDATE OF task SKIP LOCKED
+FOR UPDATE OF task, session SKIP LOCKED
 LIMIT @limit;

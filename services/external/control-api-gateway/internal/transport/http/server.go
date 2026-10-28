@@ -18,6 +18,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	texti18n "github.com/codex-k8s/kodex/libs/go/i18n"
 	secretbrokerv1 "github.com/codex-k8s/kodex/libs/go/secretbrokerapi/gen/secretbroker/v1"
+	internalobservability "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/observability"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/boundary"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -94,8 +95,9 @@ func (server *Server) Handler() http.Handler {
 // localizedResponseWriter хранит выбранный язык и общий localizer поверх ResponseWriter; Unwrap сохраняет доступ response controllers к исходному writer.
 type localizedResponseWriter struct {
 	http.ResponseWriter
-	texts  *texti18n.Localizer
-	locale string
+	texts      *texti18n.Localizer
+	locale     string
+	diagnostic requestDiagnostic
 }
 
 // Localize resolves a message identifier with the request-selected locale and no template data; it does not expose upstream diagnostic text.
@@ -119,7 +121,9 @@ func (writer *localizedResponseWriter) Unwrap() http.ResponseWriter { return wri
 func (server *Server) localizationMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		locale := texti18n.ResolveAcceptLanguage(request.Header.Get("Accept-Language"))
-		next.ServeHTTP(&localizedResponseWriter{ResponseWriter: writer, texts: server.texts, locale: locale}, request)
+		next.ServeHTTP(&localizedResponseWriter{ResponseWriter: writer, texts: server.texts, locale: locale,
+			diagnostic: requestDiagnostic{ctx: request.Context(), logger: server.logger,
+				route: internalobservability.Route(request.URL.Path), method: diagnosticMethod(request.Method)}}, request)
 	})
 }
 
@@ -503,6 +507,11 @@ func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.Messa
 		current, exists := value[field.JSONName()]
 		if !exists {
 			if field.IsList() {
+				// Empty optional negative evidence is absent; mandatory results and false acceptance remain explicit.
+				// Пустые optional negative evidence отсутствуют; обязательные results и false acceptance остаются явными.
+				if descriptor.FullName() == "controlplane.v1.WorkflowAttemptResult" && field.Name() == "evidence" {
+					continue
+				}
 				value[field.JSONName()] = []any{}
 			} else if field.IsMap() {
 				value[field.JSONName()] = map[string]any{}
@@ -605,8 +614,40 @@ func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.Messa
 // requiredProtoScalarDefault supplies zero/empty defaults only for explicit message-and-field pairs required by the public contract. Other omitted scalars retain absence; financial optional fields deliberately remain omitted rather than inventing data.
 // requiredProtoScalarDefault задаёт нулевые и пустые defaults только для явных пар message/field публичного контракта. Остальные пропущенные scalar сохраняют отсутствие; необязательные финансовые поля намеренно не заполняются выдуманными данными.
 func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field protoreflect.FieldDescriptor) (any, bool) {
+	if descriptor.FullName() == "controlplane.v1.WorkflowReworkStepPreview" && (field.JSONName() == "previousAttempt" || field.JSONName() == "nextAttempt") {
+		return float64(0), true
+	}
+	if descriptor.FullName() == "controlplane.v1.WorkflowAttemptResult" {
+		switch field.JSONName() {
+		case "accepted":
+			return false, true
+		case "reason":
+			return "", true
+		}
+	}
+	if descriptor.FullName() == "controlplane.v1.TokenUsage" && field.JSONName() == "completeness" {
+		return "UNKNOWN", true
+	}
+	if descriptor.FullName() == "controlplane.v1.GetRepositoryBundlePublicationResponse" {
+		if field.Kind() == protoreflect.BoolKind && field.JSONName() == "complete" {
+			return false, true
+		}
+		if field.Kind() == protoreflect.Int32Kind && (field.JSONName() == "offset" || field.JSONName() == "nextOffset") {
+			return float64(0), true
+		}
+	}
+	if (descriptor.FullName() == "controlplane.v1.RepositoryBundleFile" && field.JSONName() == "bytes") || (descriptor.FullName() == "controlplane.v1.RepositoryBundlePublication" && field.JSONName() == "totalBytes") {
+		return float64(0), true
+	}
+
 	if descriptor.FullName() == "controlplane.v1.ProviderFinancialOverview" && isProto64BitInteger(field.Kind()) {
 		return float64(0), true
+	}
+	if descriptor.FullName() == "controlplane.v1.Overview" && field.Kind() == protoreflect.Int32Kind {
+		switch field.JSONName() {
+		case "projectCount", "agentCount", "activeRunCount", "pendingGateCount":
+			return float64(0), true
+		}
 	}
 	if descriptor.FullName() == "controlplane.v1.ListRunEventsResponse" {
 		if field.Kind() == protoreflect.BoolKind && field.JSONName() == "complete" {
@@ -790,6 +831,18 @@ func normalizeProtoField(value any, field protoreflect.FieldDescriptor) (any, er
 	}
 	switch field.Kind() {
 	case protoreflect.EnumKind:
+		if field.Enum().FullName() == "controlplane.v1.UsageCompleteness" {
+			switch value {
+			case "USAGE_COMPLETENESS_UNSPECIFIED":
+				return "UNKNOWN", nil
+			case "USAGE_COMPLETENESS_PARTIAL":
+				return "PARTIAL", nil
+			case "USAGE_COMPLETENESS_COMPLETE":
+				return "COMPLETE", nil
+			default:
+				return nil, errors.New("public usage completeness is invalid")
+			}
+		}
 		if field.Enum().FullName() == "controlplane.v1.MessageOrigin" {
 			switch value {
 			case "MESSAGE_ORIGIN_ORDINARY":
@@ -1226,7 +1279,7 @@ func flattenWorkflow(value map[string]any) {
 	}
 	if draft, ok := value["draftVersion"].(map[string]any); ok {
 		snapshot := map[string]any{}
-		for _, key := range []string{"ref", "version", "revision", "state", "coordinatorAgentRef", "inputFields", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria", "validationMessages"} {
+		for _, key := range []string{"ref", "version", "revision", "state", "coordinatorAgentRef", "inputFields", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria", "executionMode", "resultEvidenceProfile", "validationMessages"} {
 			if item, exists := draft[key]; exists {
 				snapshot[key] = item
 			}
@@ -1240,7 +1293,7 @@ func flattenWorkflow(value map[string]any) {
 	if version != nil {
 		value["revisionRef"] = version["ref"]
 	}
-	for _, key := range []string{"revision", "coordinatorAgentRef", "inputFields", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria", "validationMessages"} {
+	for _, key := range []string{"revision", "coordinatorAgentRef", "inputFields", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria", "executionMode", "resultEvidenceProfile", "validationMessages"} {
 		if item, exists := version[key]; exists {
 			value[key] = item
 		}

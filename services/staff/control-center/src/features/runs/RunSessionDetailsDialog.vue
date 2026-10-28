@@ -25,6 +25,7 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import RuntimeRevisionDiffPanel from "./RuntimeRevisionDiffPanel.vue";
 import RunPromptPreview from "./RunPromptPreview.vue";
 import RunTranscript from "./RunTranscript.vue";
+import { usageCompleteness } from "./token-usage";
 
 const props = withDefaults(
   defineProps<{
@@ -125,9 +126,10 @@ const sessionNode = computed(
   () =>
     props.node.type === "ROOT_PROCESS" || props.node.type === "AGENT_EXECUTION",
 );
+const usageQuality = computed(() => usageCompleteness(props.run.usage));
 const usageItems = computed(() => {
   const usage = props.run.usage;
-  if (usage.totalTokens === 0) {
+  if (usage.totalTokens === 0 && usageQuality.value === "UNKNOWN") {
     return usage.modelContextWindow > 0
       ? ([["contextWindow", usage.modelContextWindow]] as const)
       : [];
@@ -377,8 +379,17 @@ function formatTokenCount(value: number): string {
             </p>
           </section>
 
-          <section v-if="usageItems.length" class="session-details__section">
+          <section class="session-details__section">
             <h3>{{ $t("runs.usage.title") }}</h3>
+            <p v-if="usageQuality !== 'COMPLETE'" role="status">
+              {{
+                $t(
+                  run.usage.completeness === "PARTIAL"
+                    ? "runs.usage.partial"
+                    : "runs.usage.unknown",
+                )
+              }}
+            </p>
             <dl>
               <div v-for="item in usageItems" :key="item[0]">
                 <dt>{{ $t(`runs.usage.${item[0]}`) }}</dt>

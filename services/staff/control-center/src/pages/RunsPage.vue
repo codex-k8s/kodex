@@ -94,9 +94,7 @@ function applyRealtime(): boolean {
       filter: filter.value,
       pageSize: pageSize.value,
     },
-    Object.values(platform.runs).filter(
-      (run) => !projectRef.value || run.projectRef === projectRef.value,
-    ),
+    platform.realtimeRuns(projectRef.value),
     Boolean(snapshot.nextPageToken),
   );
   return true;
@@ -128,12 +126,15 @@ watch(filter, () => {
   void loadRuns();
 });
 watch(
-  () =>
-    Object.values(platform.runs)
-      .filter((run) => !projectRef.value || run.projectRef === projectRef.value)
-      .map((run) => `${run.ref}:${String(run.version)}`)
-      .sort()
-      .join("|"),
+  [
+    () => platform.realtimeSnapshot("RUN", projectRef.value),
+    () =>
+      platform
+        .realtimeRuns(projectRef.value)
+        .map((run) => `${run.ref}:${String(run.version)}`)
+        .sort()
+        .join("|"),
+  ],
   () => {
     if (!query.value && applyRealtime()) return;
     catalog.invalidate({

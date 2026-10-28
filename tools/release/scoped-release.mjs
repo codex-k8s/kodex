@@ -72,7 +72,7 @@ export function validateManifest(value) {
       requireValue(digestImage.test(target.image) && !target.image.endsWith("0".repeat(64)), "INVALID_TARGET_IMAGE");
     if (target.source !== undefined) requireValue(validSource(target.source), "INVALID_APPLICATION_SOURCE");
     if (target.build !== undefined)
-      requireValue(["runtime-controller", "control-plane", "control-api-gateway", "staff-control-center"].includes(target.name) && target.image && !target.source &&
+      requireValue(["runtime-controller", "control-plane", "control-api-gateway", "integration-gateway", "staff-control-center"].includes(target.name) && target.image && !target.source &&
         exactKeys(target.build, ["sourceSHA", "provenanceSHA256"]) &&
         /^[a-f0-9]{40}$/.test(target.build.sourceSHA) && target.build.sourceSHA !== "0".repeat(40) &&
         /^[a-f0-9]{64}$/.test(target.build.provenanceSHA256) && target.build.provenanceSHA256 !== "0".repeat(64) &&

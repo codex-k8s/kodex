@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -29,7 +28,7 @@ func main() {
 	)
 	defer stop()
 	if err := app.Run(lifecycle, root, version); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "control-plane failed: %v\n", err)
+		app.ReportFailure(os.Stderr, err)
 		os.Exit(1)
 	}
 }

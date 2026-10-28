@@ -217,3 +217,55 @@ describe("assistant runtime plan owner", () => {
     ).toBe(false);
   });
 });
+
+describe("ordinary agent runtime plan", () => {
+  function employee(): AssistantPlanOperationInput {
+    const result = operation("PROJECT");
+    result.type = "PREPARE_AGENT_RUNTIME_CONFIGURATION";
+    for (const fields of [result.parameters, result.before, result.after]) {
+      delete fields.assistantScope;
+      delete fields.assistantProfileRef;
+      fields.targetKind = "AGENT";
+    }
+    return result;
+  }
+  it("сохраняет точные owner/version и отдельную политику цели при редактировании", () => {
+    const original = employee();
+    const [editable] = editableOperations([original]);
+    if (!editable) throw new Error("Missing editable operation");
+    updateOperationParameter(editable, "reasoningEffort", "high");
+    const [saved] = operationInputs([editable]);
+    if (!saved) throw new Error("Missing saved operation");
+    expect(assistantRuntimePlanOwner(saved, "org_synthetic")).toBe(true);
+    expect(saved.before).toEqual(original.before);
+    expect(saved.parameters.targetKind).toBe("AGENT");
+    expect(saved.after.reasoningEffort).toBe("high");
+  });
+  it("закрыто отвергает смешанную self policy, чужую организацию, проект и версию", () => {
+    expect(assistantRuntimePlanOwner(employee(), "org_foreign")).toBe(false);
+    for (const mutate of [
+      (op: AssistantPlanOperationInput) => {
+        op.parameters.assistantScope = "PROJECT";
+      },
+      (op: AssistantPlanOperationInput) => {
+        op.parameters.assistantProfileRef = "asstp_synthetic";
+      },
+      (op: AssistantPlanOperationInput) => {
+        op.parameters.projectRef = "prj_foreign";
+      },
+      (op: AssistantPlanOperationInput) => {
+        op.parameters.targetKind = "SYSTEM_ASSISTANT";
+      },
+      (op: AssistantPlanOperationInput) => {
+        op.expectedVersion = 99;
+      },
+      (op: AssistantPlanOperationInput) => {
+        op.type = "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION";
+      },
+    ]) {
+      const bad = employee();
+      mutate(bad);
+      expect(assistantRuntimePlanOwner(bad, "org_synthetic")).toBe(false);
+    }
+  });
+});

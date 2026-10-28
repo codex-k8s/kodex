@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 
+import { usageCompleteness } from "./token-usage";
 import type { TokenUsage } from "@/shared/api/generated/openapi/types.gen";
 
 const props = withDefaults(
@@ -13,8 +14,10 @@ const props = withDefaults(
 );
 const { locale } = useI18n();
 
+const quality = computed(() => usageCompleteness(props.usage));
+
 const items = computed(() => {
-  if (props.usage.totalTokens === 0) {
+  if (props.usage.totalTokens === 0 && quality.value === "UNKNOWN") {
     return !props.compact && props.usage.modelContextWindow > 0
       ? ([["contextWindow", props.usage.modelContextWindow]] as const)
       : [];
@@ -36,6 +39,15 @@ function formatTokenCount(value: number): string {
 </script>
 
 <template>
+  <p v-if="quality !== 'COMPLETE'" role="status">
+    {{
+      $t(
+        usage.completeness === "PARTIAL"
+          ? "runs.usage.partial"
+          : "runs.usage.unknown",
+      )
+    }}
+  </p>
   <dl
     v-if="items.length"
     class="token-usage"

@@ -120,6 +120,11 @@ func (repository *Repository) validateWorkflowLaunchAuthority(ctx context.Contex
 	if err != nil {
 		return errs.ErrUnavailable
 	}
+	if rework, err := isLegacyReworkNodeTx(ctx, tx, machine, nodeID); err != nil {
+		return err
+	} else if rework {
+		return errs.ErrLegacyReworkScopeUnsupported
+	}
 	if tx.QueryRow(ctx, queryRepositoryResolvescopeSelectMembershipsOrganizationIdSubjectIdActive, actor.actorRef, actor.organizationRef).Scan(&actor.organizationID, &actor.organizationRef, &actor.actorID, &actor.actorRef, &actor.actorName, &actor.role) != nil {
 		return errs.ErrForbidden
 	}
@@ -239,6 +244,11 @@ func (repository *Repository) launchWorkflowExecution(ctx context.Context, tx pg
 	}
 	// Root identity и роль разрешаются тем же canonical access registry, не
 	// старой membership-проекцией и не служебным principal.
+	if root, err := readServerWorkflowRootTx(ctx, tx, machine, rootID); err != nil {
+		return commandOutcome{}, err
+	} else if root != nil {
+		return commandOutcome{}, errs.ErrForbidden
+	}
 	if err = tx.QueryRow(ctx, queryRepositoryResolvescopeSelectMembershipsOrganizationIdSubjectIdActive, actor.actorRef, actor.organizationRef).Scan(&actor.organizationID, &actor.organizationRef, &actor.actorID, &actor.actorRef, &actor.actorName, &actor.role); err != nil {
 		return commandOutcome{}, errs.ErrForbidden
 	}

@@ -4,8 +4,8 @@ title: Общие библиотеки Go
 type: guide
 status: approved
 owner: architect
-version: 1.0.6
-updated: 2026-10-25
+version: 1.0.7
+updated: 2026-10-27
 ---
 
 # Общие библиотеки Go
@@ -25,6 +25,15 @@ deployable-компоненте. Структуру сервиса задают 
 `GO-DOC-004`/`GO-DOC-005`.
 
 ## Критерий вынесения
+
+Закрытый каталог MCP является общим исполняемым контрактом producer и runner,
+даже если JSON входа runner не изменился. Новый специализированный инструмент
+получает один общий предикат доступности; producer и readiness используют его
+без ослабления exact equality. Межмодульная проверка передаёт фактический
+tools/list настоящему consumer и включает новую capability, отрицательные
+профили и лишнее/отсутствующее имя. Доставка требует совместимого runner внутри
+допущенного RoleImage до выдачи нового grant. Пример и матрица:
+[#1859](../operations/repository-bundle-publication-1859.md).
 
 Код сразу размещается в `libs/go`, если одновременно выполняется одно из
 условий:
@@ -48,6 +57,14 @@ deployable-компоненте. Структуру сервиса задают 
 
 Бизнесовые entities, permissions, event payloads, cache keys, TTL, SQL,
 provider policy и use cases остаются в сервисе.
+
+Общее извлечение typed TLS certificate failures принадлежит SDK-neutral
+`observability/errorclass.TLS`. PostgreSQL/NATS sentinels, приоритет классов,
+точные этапы и решение о retry остаются у сервиса. Ошибка SDK сохраняется
+приватно для `errors.Is/As`; process output не форматирует её cause или
+содержимое сертификата/пути/credentials. Diagnostic wrapper не меняет
+применение SDK options, startup budgets и lifecycle.
+Матрица: [#1895](../operations/nats-startup-diagnostic-1895.md).
 
 ## Границы модулей
 
@@ -293,6 +310,17 @@ Pod `fsGroup`, как принадлежащий non-root UID/GID процесс
 Библиотека не определяет формат credential и не делает `0444` безопасным вне
 изолированного read-only container mount. Эта граница доказывается итоговым
 Kubernetes render по `GUIDE-DOC-003`.
+
+Owned metadata и directories используют отдельные descriptor-relative API,
+не меняющие projected credential contract. Caller заранее доказывает exact
+parent mount/PVC, task grant и lifecycle barrier; имя и filesystem owner не
+являются authority. Record создаётся write-once0440 с exact UID/GID и durable
+readback. Directory допускает только private0700/shared2770 и закрыто
+отклоняет symlink/mount crossing; существующие entry/mode/owner никогда не
+исправляются автоматически. Partial/unknown bytes сохраняются. Lease retry
+не разрешает overwrite или новый effect без специализированного owner-перехода.
+Grant/JSON-schema/generation semantics остаются у runner/archive, а общий
+syscall/mode/ownership boundary проверяется одной библиотекой.
 
 ### `postgrescredential`
 
