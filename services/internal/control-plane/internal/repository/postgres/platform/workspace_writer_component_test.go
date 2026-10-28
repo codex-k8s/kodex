@@ -79,6 +79,11 @@ func TestWorkspaceWriterOwnerComponent(t *testing.T) {
 	if err != nil || binding == nil {
 		t.Fatal("owner did not assign workspace binding", err)
 	}
+	if !t.Run("profile_off_mismatched_workspace_rejected", func(t *testing.T) {
+		testWorkspaceProfileOffRejectsMismatchedRow(t, ctx, repository, service, owner, project.Ref, binding.WorkspaceRef)
+	}) {
+		return
+	}
 	if binding.Generation != 1 || binding.Scope.AgentRef != agent.Ref || binding.Scope.SessionRef != run.SessionRef {
 		t.Fatal("workspace binding does not match assigned employee session")
 	}
