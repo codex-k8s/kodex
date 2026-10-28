@@ -5,6 +5,7 @@ import (
 	"embed"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -51,7 +52,7 @@ func TestWorkspaceVolumeMigrationPredecessor(t *testing.T) {
 	if err := goose.SetDialect("postgres"); err != nil {
 		t.Fatal("volume upgrade dialect configuration failed")
 	}
-	if err := goose.UpToContext(ctx, database, "migrations", 20261026001600); err != nil {
+	if err := goose.UpToContext(ctx, database, "migrations", 20261026001000); err != nil {
 		t.Fatal("full volume predecessor migration failed", err)
 	}
 	observerConfig := config.Copy()
@@ -65,6 +66,10 @@ func TestWorkspaceVolumeMigrationPredecessor(t *testing.T) {
 		defer stop()
 		_ = observer.Close(cleanup)
 	}()
+	readControlPlaneMigrationProof(t, ctx, observer, "workspace-volume-ssh", "precondition")
+	if err := goose.UpToContext(ctx, database, "migrations", 20261026001600); err != nil {
+		t.Fatal("full volume predecessor migration failed", err)
+	}
 	raw, err := migrations.ReadFile("migrations/20261026001700_workspace_volume_custody.sql")
 	if err != nil {
 		t.Fatal("read exact volume migration")
@@ -193,5 +198,37 @@ func TestWorkspaceVolumeMigrationPredecessor(t *testing.T) {
 			t.Fatal("read frozen volume catalog metadata", err)
 		}
 		t.Log("VOLUME_CATALOG_FINGERPRINTS " + catalog)
+		readControlPlaneMigrationProof(t, ctx, observer, "workspace-volume-ssh", "postcondition")
+		guard, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "..", "tools", "release", "workspace-volume-catalog-guard.sql"))
+		if err != nil {
+			t.Fatal("read shipped volume catalog guard")
+		}
+		for _, name := range []string{"column", "constraint", "index", "table_acl", "column_acl", "function", "function_acl", "function_owner", "trigger", "parent_fk", "origin_trigger", "rls", "policy"} {
+			t.Run("catalog-reject-"+name, func(t *testing.T) {
+				mutation, err := workspaceVolumeFixtures.ReadFile("testdata/sql/volume_catalog_" + name + ".sql")
+				if err != nil {
+					t.Fatal("read volume catalog drift fixture")
+				}
+				tx, err := observer.Begin(ctx)
+				if err != nil {
+					t.Fatal("begin volume catalog drift")
+				}
+				defer func() {
+					cleanup, stop := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+					defer stop()
+					if err := tx.Rollback(cleanup); err != nil {
+						t.Error("rollback volume catalog drift failed")
+					}
+				}()
+				if _, err := tx.Exec(ctx, string(mutation)); err != nil {
+					t.Fatal("apply volume catalog mutation", err)
+				}
+				_, err = tx.Exec(ctx, string(guard))
+				var failure *pgconn.PgError
+				if !errors.As(err, &failure) || failure.Code != "P0001" || failure.Message != "workspace volume catalog changed" {
+					t.Fatal("volume catalog drift did not fail closed", err)
+				}
+			})
+		}
 	})
 }

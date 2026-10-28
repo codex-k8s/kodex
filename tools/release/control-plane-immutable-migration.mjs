@@ -11,6 +11,7 @@ import { activeDeploymentPods, isProvenStoppedPod } from './stable-archive-trans
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'workspace-volume-ssh': {version:'20261027000100',file:'20261027000100_ssh_compose_runtime.sql',annotation:'kodex.dev/cp-workspace-volume-ssh-migration-plan',previousVersion:20261026001000,emptyField:'workspaceVolumeSSHAbsent',preconditionFile:'workspace-volume-ssh-migration-precondition.sql',postconditionFile:'workspace-volume-ssh-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261026001100_legacy_workflow_rework.sql','20261026001200_workflow_exception_context.sql','20261026001300_workflow_upstream_rework.sql','20261026001400_workflow_review_qa_evidence.sql','20261026001500_session_workspace_storage.sql','20261026001600_workspace_checkpoint_tasks.sql','20261026001700_workspace_volume_custody.sql','20261027000100_ssh_compose_runtime.sql'])},
   'workflow-upstream-rework': {version:'20261026001300',file:'20261026001300_workflow_upstream_rework.sql',annotation:'kodex.dev/cp-workflow-upstream-rework-migration-plan',previousVersion:20261026001200,emptyField:'workflowUpstreamReworkAbsent',preconditionFile:'workflow-upstream-rework-migration-precondition.sql',postconditionFile:'workflow-upstream-rework-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261026000300_server_driven_workflow.sql','20261026000400_workflow_attempt_journal.sql','20261026000500_workflow_artifact_visibility_retention.sql','20261026000600_workflow_exception_episodes.sql','20261026000700_workflow_input_guard_binding.sql','20261026000800_workflow_exception_terminal_decision.sql','20261026000900_workflow_effect_rejoin.sql','20261026001000_workflow_effect_execution_rejoin.sql','20261026001100_legacy_workflow_rework.sql','20261026001200_workflow_exception_context.sql','20261026001300_workflow_upstream_rework.sql'])},
   'workflow-exception-context': {version:'20261026001200',file:'20261026001200_workflow_exception_context.sql',annotation:'kodex.dev/cp-workflow-exception-context-migration-plan',previousVersion:20261026001100,emptyField:'workflowExceptionContextAbsent',preconditionFile:'workflow-exception-context-migration-precondition.sql',postconditionFile:'workflow-exception-context-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261026000300_server_driven_workflow.sql','20261026000400_workflow_attempt_journal.sql','20261026000500_workflow_artifact_visibility_retention.sql','20261026000600_workflow_exception_episodes.sql','20261026000700_workflow_input_guard_binding.sql','20261026000800_workflow_exception_terminal_decision.sql','20261026000900_workflow_effect_rejoin.sql','20261026001000_workflow_effect_execution_rejoin.sql','20261026001100_legacy_workflow_rework.sql','20261026001200_workflow_exception_context.sql'])},
   'workflow-review-qa-evidence': {version:'20261026001400',file:'20261026001400_workflow_review_qa_evidence.sql',annotation:'kodex.dev/cp-workflow-review-qa-evidence-migration-plan',previousVersion:20261026001300,emptyField:'reviewQAEvidenceAbsent',preconditionFile:'workflow-review-qa-evidence-migration-precondition.sql',postconditionFile:'workflow-review-qa-evidence-migration-postcondition.sql',requiredMigrations:Object.freeze(["20261026000300_server_driven_workflow.sql", "20261026000400_workflow_attempt_journal.sql", "20261026000500_workflow_artifact_visibility_retention.sql", "20261026000600_workflow_exception_episodes.sql", "20261026000700_workflow_input_guard_binding.sql", "20261026000800_workflow_exception_terminal_decision.sql", "20261026000900_workflow_effect_rejoin.sql", "20261026001000_workflow_effect_execution_rejoin.sql", "20261026001100_legacy_workflow_rework.sql", "20261026001200_workflow_exception_context.sql", "20261026001300_workflow_upstream_rework.sql", "20261026001400_workflow_review_qa_evidence.sql"])},
@@ -271,6 +272,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(validWorkflowExceptionContextMigrationPrecondition(result), 'MIGRATION_OWNER_PRECONDITION_FAILED');
     if (profile === 'workflow-upstream-rework')
       ensure(validWorkflowUpstreamReworkMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if (profile === 'workspace-volume-ssh')
+      ensure(validWorkspaceVolumeSSHMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     return result;
   };
   const terminalJob = (actual, expected, expectedHash, expectedUID) => {
@@ -742,6 +745,25 @@ export function validSSHComposeMigrationPostcondition(proof) {
     ['sshColumns','sshConstraints','sshFunctions','sshTriggers','sshRuntimeColumns'].every(key=>proof[key]===true);
 }
 
+// Combined010→017+SSH сохраняет полный010 predecessor; наличие чужой частичной схемы запрещено.
+export function validWorkspaceVolumeSSHMigrationPrecondition(proof) {
+  return validServerWorkflowMigrationPostcondition(proof) &&
+    proof.workspaceVolumeSSHAbsent===true && proof.sshComposeAbsent===true;
+}
+
+// Полный actual109/304 и каталог017 проверяются отдельно от неизменённого inverse014.
+export function validWorkspaceVolumeSSHMigrationPostcondition(proof) {
+  return proof?.profile==='WORKSPACE_VOLUME_SSH_V1' && proof.readOnly==='on' &&
+    proof.gooseVersion===20261027000100 && proof.workspaceCatalog===true &&
+    proof.checkpointCatalog===true && proof.volumeCatalog===true && proof.workspacePurgeGuard===true &&
+    proof.purgeNodes===109 && proof.purgeEdges===304 &&
+    typeof proof.purgeNodeFingerprint==='string' && /^[a-f0-9]{32}$/.test(proof.purgeNodeFingerprint) &&
+    typeof proof.purgeEdgeFingerprint==='string' && /^[a-f0-9]{32}$/.test(proof.purgeEdgeFingerprint) &&
+    proof.sshComposeProfile==='SSH_COMPOSE_V1' &&
+    ['sshColumns','sshConstraints','sshFunctions','sshTriggers','sshRuntimeColumns'].every(key=>proof[key]===true) &&
+    validWorkflowReviewQAEvidenceMigrationPostcondition(proof.predecessorProjection);
+}
+
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {
@@ -751,6 +773,7 @@ export function validImmutableMigrationPostcondition(profile, proof) {
     case 'server-workflow': return validServerWorkflowMigrationPostcondition(proof);
     case 'legacy-workflow-rework': return validLegacyWorkflowReworkMigrationPostcondition(proof);
     case 'ssh-compose': return validSSHComposeMigrationPostcondition(proof);
+    case 'workspace-volume-ssh': return validWorkspaceVolumeSSHMigrationPostcondition(proof);
     case 'project-purge-authority': return validProjectPurgeAuthorityMigrationPostcondition(proof);
     case 'owner-gate-expiry': return validOwnerGateExpiryMigrationPostcondition(proof);
     case 'repository-bundle': return validRepositoryBundleMigrationPostcondition(proof);

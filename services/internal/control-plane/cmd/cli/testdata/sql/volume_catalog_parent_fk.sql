@@ -1,0 +1,2 @@
+-- Обратимое изменение только disposable schema; business rows не затрагиваются.
+DO $drift$ DECLARE v_table regclass; v_trigger name; BEGIN SELECT t.tgrelid::regclass,t.tgname INTO STRICT v_table,v_trigger FROM pg_trigger t JOIN pg_constraint c ON c.oid=t.tgconstraint WHERE c.conrelid='control_plane.session_workspace_volumes'::regclass AND t.tgrelid<>c.conrelid AND c.contype='f' ORDER BY t.oid LIMIT 1; EXECUTE format('ALTER TABLE %s DISABLE TRIGGER %I',v_table,v_trigger); END $drift$;

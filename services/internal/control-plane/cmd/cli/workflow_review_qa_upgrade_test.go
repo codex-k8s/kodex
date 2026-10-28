@@ -85,14 +85,35 @@ func TestWorkflowReviewQAEvidenceForwardUpgrade(t *testing.T) {
 // единственную неизменённую JSON row тому же exported verifier, который использует release operator.
 func readWorkflowReviewQAUpgradeProof(t *testing.T, ctx context.Context, observer *pgx.Conn, phase string) []byte {
 	t.Helper()
+	return readControlPlaneMigrationProof(t, ctx, observer, "workflow-review-qa-evidence", phase)
+}
+
+// readControlPlaneMigrationProof checks shipped read-only SQL and its closed native verifier without inheriting credentials.
+// readControlPlaneMigrationProof проверяет поставляемый read-only SQL и закрытый verifier без наследования credentials.
+func readControlPlaneMigrationProof(t *testing.T, ctx context.Context, observer *pgx.Conn, profile, phase string) []byte {
+	t.Helper()
 	if phase != "precondition" && phase != "postcondition" {
 		t.Fatal("invalid review QA proof phase")
+	}
+	var verifier string
+	switch profile {
+	case "workflow-review-qa-evidence":
+		verifier = "validWorkflowReviewQAEvidenceMigration"
+	case "workspace-volume-ssh":
+		verifier = "validWorkspaceVolumeSSHMigration"
+	default:
+		t.Fatal("unknown control plane proof profile")
+	}
+	if phase == "precondition" {
+		verifier += "Precondition"
+	} else {
+		verifier += "Postcondition"
 	}
 	release, err := filepath.Abs("../../../../../tools/release")
 	if err != nil {
 		t.Fatal("resolve shipped review QA proof directory")
 	}
-	source, err := os.ReadFile(filepath.Join(release, "workflow-review-qa-evidence-migration-"+phase+".sql"))
+	source, err := os.ReadFile(filepath.Join(release, profile+"-migration-"+phase+".sql"))
 	if err != nil {
 		t.Fatal("read shipped review QA upgrade proof")
 	}
@@ -115,10 +136,6 @@ func readWorkflowReviewQAUpgradeProof(t *testing.T, ctx context.Context, observe
 	}
 	if !json.Valid(proof) {
 		t.Fatal("review QA upgrade proof JSON is invalid")
-	}
-	verifier := "validWorkflowReviewQAEvidenceMigrationPostcondition"
-	if phase == "precondition" {
-		verifier = "validWorkflowReviewQAEvidenceMigrationPrecondition"
 	}
 	check := exec.CommandContext(ctx, "node", "--input-type=module", "-e", `
 import {pathToFileURL} from 'node:url';
