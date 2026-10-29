@@ -100,4 +100,3 @@ SET ROLE control_plane_owner;
 
 if __name__ == "__main__":
     main()
-
