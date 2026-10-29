@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: github
-  version: 6.1.0
+  version: 6.2.0
   origin: SHIPPED
 spec:
   name: GitHub
@@ -70,7 +70,7 @@ spec:
       operation: github.issue.create
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -158,7 +158,7 @@ spec:
       operation: github.issue.update
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -280,7 +280,7 @@ spec:
       operation: github.repository.content.create
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -303,7 +303,7 @@ spec:
       operation: github.repository.content.update
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]

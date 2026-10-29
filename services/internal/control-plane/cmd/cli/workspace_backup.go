@@ -75,7 +75,7 @@ func restoreWorkspaceBackupACL(ctx context.Context, database *sql.DB) error {
 		return err
 	}
 	switch version {
-	case 20261026001500, 20261026001600, 20261026001700, 20261027000100, 20261028000100:
+	case 20261026001500, 20261026001600, 20261026001700, 20261027000100, 20261028000100, 20261029000100:
 		return executeWorkspaceBackupStatement(ctx, database, fmt.Sprintf("restore_%d.sql", version))
 	default:
 		return errors.New("workspace backup restore schema is not registered")

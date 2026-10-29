@@ -39,7 +39,7 @@ func TestInvocationSelectedApprovalPolicyIsClosedBeforeEffects(t *testing.T) {
 			t.Fatal("autonomous approval or request-changes passed invocation validation")
 		}
 	}
-	request := invocationRequest(t, definition, "github.issue.create", map[string]any{"title": "fixture"}, credential)
+	request := invocationRequest(t, definition, "github.pull_request.merge", map[string]any{"pull_request_number": 7, "sha": "fixture-sha", "merge_method": "squash"}, credential)
 	request.ApprovalPolicy = "NONE"
 	if _, _, _, _, err := adapter.validateInvocation(request); err == nil {
 		t.Fatal("unapproved autonomous write passed invocation validation")

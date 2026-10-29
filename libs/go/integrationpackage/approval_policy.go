@@ -33,8 +33,9 @@ func (definition Package) CollaborativeWrite(capability Capability) bool {
 		return false
 	}
 	switch capability.Operation {
-	case "github.issue.comment.create", "github.issue.comment.update", "github.pull_request.create",
-		"github.pull_request.update", "github.pull_request.review.create":
+	case "github.issue.create", "github.issue.update", "github.issue.comment.create", "github.issue.comment.update",
+		"github.pull_request.create", "github.pull_request.update", "github.pull_request.review.create",
+		"github.repository.content.create", "github.repository.content.update":
 		return true
 	default:
 		return false

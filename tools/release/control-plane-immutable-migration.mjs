@@ -11,6 +11,8 @@ import { activeDeploymentPods, isProvenStoppedPod } from './stable-archive-trans
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'github-autonomous': {version:'20261029000100',file:'20261029000100_github_historical_grant_admission.sql',annotation:'kodex.dev/cp-github-autonomous-migration-plan',previousVersion:20261028000100,emptyField:'githubHistoricalAbsent',preconditionFile:'github-autonomous-migration-precondition.sql',postconditionFile:'github-autonomous-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261029000100_github_historical_grant_admission.sql'])},
+  'github-autonomous-backup': {version:'20261029000100',file:'20261029000100_github_historical_grant_admission.sql',annotation:'kodex.dev/cp-github-autonomous-backup-migration-plan',previousVersion:20261028000100,emptyField:'githubHistoricalAbsent',preconditionFile:'github-autonomous-backup-migration-precondition.sql',postconditionFile:'github-autonomous-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261029000100_github_historical_grant_admission.sql'])},
   'workspace-backup': {version:'20261028000100',file:'20261028000100_workspace_restore_owner.sql',annotation:'kodex.dev/cp-workspace-backup-migration-plan',previousVersion:20261026001500,emptyField:'workspaceBackupSafeToMigrate',preconditionFile:'workspace-backup-migration-precondition.sql',postconditionFile:'workspace-backup-migration-postcondition.sql',executionCommand:'up-workspace-backup-compatible',jobSuffix:'-backup',requiredMigrations:Object.freeze(['20261026001600_workspace_checkpoint_tasks.sql','20261026001700_workspace_volume_custody.sql','20261027000100_ssh_compose_runtime.sql','20261028000100_workspace_restore_owner.sql'])},
   'workspace-restore': {version:'20261028000100',file:'20261028000100_workspace_restore_owner.sql',annotation:'kodex.dev/cp-workspace-restore-migration-plan',previousVersion:20261026001000,emptyField:'workspaceVolumeSSHAbsent',preconditionFile:'workspace-restore-migration-precondition.sql',postconditionFile:'workspace-restore-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261026001100_legacy_workflow_rework.sql','20261026001200_workflow_exception_context.sql','20261026001300_workflow_upstream_rework.sql','20261026001400_workflow_review_qa_evidence.sql','20261026001500_session_workspace_storage.sql','20261026001600_workspace_checkpoint_tasks.sql','20261026001700_workspace_volume_custody.sql','20261027000100_ssh_compose_runtime.sql','20261028000100_workspace_restore_owner.sql'])},
   'workspace-volume-ssh': {version:'20261027000100',file:'20261027000100_ssh_compose_runtime.sql',annotation:'kodex.dev/cp-workspace-volume-ssh-migration-plan',previousVersion:20261026001000,emptyField:'workspaceVolumeSSHAbsent',preconditionFile:'workspace-volume-ssh-migration-precondition.sql',postconditionFile:'workspace-volume-ssh-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261026001100_legacy_workflow_rework.sql','20261026001200_workflow_exception_context.sql','20261026001300_workflow_upstream_rework.sql','20261026001400_workflow_review_qa_evidence.sql','20261026001500_session_workspace_storage.sql','20261026001600_workspace_checkpoint_tasks.sql','20261026001700_workspace_volume_custody.sql','20261027000100_ssh_compose_runtime.sql'])},
@@ -293,6 +295,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(validWorkspaceRestoreMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'workspace-backup')
       ensure(validWorkspaceBackupMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if (profile === 'github-autonomous' || profile === 'github-autonomous-backup')
+      ensure(validGitHubAutonomousMigrationPrecondition(result,profile==='github-autonomous-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     return result;
   };
   const terminalJob = (actual, expected, expectedHash, expectedUID) => {
@@ -810,6 +814,33 @@ export function validWorkspaceRestoreMigrationPostcondition(proof) {
       ...proof, profile:'WORKSPACE_VOLUME_SSH_V1',gooseVersion:20261027000100});
 }
 
+// Новый каталог GitHub проверяется до явной обратной проекции неизменённого028.
+export function validGitHubAutonomousMigrationPostcondition(proof) {
+  return proof?.profile==='GITHUB_AUTONOMOUS_PDLC_V1' &&
+    proof.gooseVersion===20261029000100 && proof.githubHistoricalCatalog===true &&
+    validWorkspaceRestoreMigrationPostcondition({
+      ...proof,profile:'WORKSPACE_RESTORE_V2',gooseVersion:20261028000100});
+}
+
+// Backup ACL проверяется отдельно до inverse028; bare-профиль не принимает эту проекцию.
+export function validGitHubAutonomousBackupMigrationPostcondition(proof) {
+  return proof?.profile==='GITHUB_AUTONOMOUS_PDLC_BACKUP_V1' && proof.backupReaderCatalog===true &&
+    validGitHubAutonomousMigrationPostcondition({...proof,profile:'GITHUB_AUTONOMOUS_PDLC_V1'});
+}
+
+// До DDL нужны точный028, прежний admission и отсутствие новой функции; payload не выбирает версию.
+export function validGitHubAutonomousMigrationPrecondition(proof, backup=false) {
+  const expected=backup?'GITHUB_AUTONOMOUS_PDLC_BACKUP_PREDECESSOR_V1':'GITHUB_AUTONOMOUS_PDLC_PREDECESSOR_V1';
+  return proof?.profile===expected && proof.githubHistoricalAbsent===true &&
+    (!backup || proof.backupReaderCatalog===true) &&
+    validWorkspaceRestoreMigrationPostcondition({...proof,profile:'WORKSPACE_RESTORE_V2'});
+}
+
+// Отдельная точка входа сохраняет discriminator backup-профиля для native upgrade-проверки.
+export function validGitHubAutonomousBackupMigrationPrecondition(proof) {
+  return validGitHubAutonomousMigrationPrecondition(proof,true);
+}
+
 // Actual backup SELECT проверен до metadata projection; прежний015 verifier не расширяется.
 export function validWorkspaceBackupMigrationPrecondition(proof) {
   return proof?.profile==='WORKSPACE_BACKUP_PREDECESSOR_V1' && proof.backupReaderCatalog===true &&
@@ -832,6 +863,8 @@ export function validWorkspaceBackupACLReadback(proof) {
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {
+    case 'github-autonomous': return validGitHubAutonomousMigrationPostcondition(proof);
+    case 'github-autonomous-backup': return validGitHubAutonomousBackupMigrationPostcondition(proof);
     case 'workflow-upstream-rework': return validWorkflowUpstreamReworkMigrationPostcondition(proof);
     case 'workflow-exception-context': return validWorkflowExceptionContextMigrationPostcondition(proof);
     case 'workflow-review-qa-evidence': return validWorkflowReviewQAEvidenceMigrationPostcondition(proof);

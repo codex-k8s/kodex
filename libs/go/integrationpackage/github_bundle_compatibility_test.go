@@ -15,7 +15,7 @@ func TestGitHubBundleRollingCompatibility(t *testing.T) {
 		t.Fatal(err)
 	}
 	current := definitions["github"]
-	if current.Metadata.Version != "6.1.0" {
+	if current.Metadata.Version != "6.2.0" {
 		t.Fatal("new bundle release missing from generated shipped catalog")
 	}
 	if _, found := current.Capability("github.repository.bundle.publish"); !found {
@@ -51,5 +51,43 @@ func TestGitHubSixCompatibilityBytes(t *testing.T) {
 	actual := sha256.Sum256(githubSixCompatibility)
 	if hex.EncodeToString(actual[:]) != "433db658d85c257b998cf0baf7135ba499ad3bfc41dcd749b5ca12a7d6f8be99" {
 		t.Fatal("compatibility snapshot differs from the pre-upgrade release")
+	}
+}
+
+// TestGitHubSixOneCompatibilityPreservesApprovalPolicies proves that old file and bundle grants do not inherit the new autonomous choices, including under wrong identity or substituted digest.
+// TestGitHubSixOneCompatibilityPreservesApprovalPolicies доказывает отсутствие новых автономных политик у старых file и bundle grants, включая подмену идентичности или digest.
+func TestGitHubSixOneCompatibilityPreservesApprovalPolicies(t *testing.T) {
+	actual := sha256.Sum256(githubSixOneCompatibility)
+	if hex.EncodeToString(actual[:]) != "75e4a742702ebf1600fb793691407c5db68cd7886d795c3e1ef60a71247afb9d" {
+		t.Fatal("compatibility snapshot differs from the shipped bundle release")
+	}
+	definitions, err := LoadShipped()
+	if err != nil {
+		t.Fatal(err)
+	}
+	current := definitions["github"]
+	previous, err := Parse(githubSixOneCompatibility)
+	if err != nil || previous.Digest != "057959121df2b88db45d9b0dba438a7ff39824992fcf1c13120a44162071c79f" {
+		t.Fatal("historical package identity changed")
+	}
+	resolved, found := ResolveShippedRevision(current, "6.1.0", previous.Digest)
+	if !found || resolved.Digest != previous.Digest {
+		t.Fatal("historical bundle package cannot resolve exact pins")
+	}
+	for _, key := range []string{"github.issue.create", "github.issue.update", "github.repository.content.create", "github.repository.content.update", "github.repository.bundle.publish"} {
+		capability, found := resolved.Capability(key)
+		if !found || capability.AllowsApprovalPolicy("NONE") || capability.ApprovalPolicy != "HUMAN_EACH_EFFECT" {
+			t.Fatal("historical operation inherited autonomous authority")
+		}
+	}
+	for _, origin := range []string{OriginUI, OriginGit} {
+		candidate := current
+		candidate.Metadata.Origin = origin
+		if _, found := ResolveShippedRevision(candidate, "6.1.0", previous.Digest); found {
+			t.Fatal("managed identity acquired shipped compatibility authority")
+		}
+	}
+	if _, found := ResolveShippedRevision(current, "6.1.0", current.Digest); found {
+		t.Fatal("historical version accepted a substituted digest")
 	}
 }

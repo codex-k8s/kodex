@@ -8,13 +8,28 @@ import _ "embed"
 //go:embed compatibility/github-6.0.0.yaml
 var githubSixCompatibility []byte
 
-// resolveGitHubSixCompatibility resolves only the named old version and its own exact digest while the trusted current package is the 6.1 bundle release. The old package has no bulk capability and cannot inherit one through this path.
-// resolveGitHubSixCompatibility разрешает лишь указанную старую version с её собственным exact digest, когда trusted current package является bundle release6.1. В старом package нет bulk capability, наследование новой через этот путь невозможно.
+// githubSixOneCompatibility retains the shipped bundle contract before autonomous file publication was introduced; historical grants keep their original approval policies.
+// githubSixOneCompatibility сохраняет поставленный контракт bundle до автономной публикации файлов; исторические grants сохраняют прежние политики согласования.
+//
+//go:embed compatibility/github-6.1.0.yaml
+var githubSixOneCompatibility []byte
+
+// resolveGitHubSixCompatibility resolves only exact immutable historical releases under the trusted shipped GitHub adapter; it never derives old authority from the current capability set.
+// resolveGitHubSixCompatibility разрешает только точные неизменяемые исторические выпуски доверенного поставленного адаптера GitHub; прежние полномочия не выводятся из текущих возможностей.
 func resolveGitHubSixCompatibility(current Package, version, digest string) (Package, bool) {
-	if current.Metadata.Key != "github" || current.Metadata.Version != "6.1.0" || current.Metadata.Origin != Origin || current.Spec.Adapter != "GITHUB" || version != "6.0.0" {
+	if current.Metadata.Key != "github" || current.Metadata.Version != "6.2.0" || current.Metadata.Origin != Origin || current.Spec.Adapter != "GITHUB" {
 		return Package{}, false
 	}
-	previous, err := Parse(githubSixCompatibility)
+	var snapshot []byte
+	switch version {
+	case "6.0.0":
+		snapshot = githubSixCompatibility
+	case "6.1.0":
+		snapshot = githubSixOneCompatibility
+	default:
+		return Package{}, false
+	}
+	previous, err := Parse(snapshot)
 	if err != nil || previous.Metadata.Key != "github" || previous.Metadata.Version != version || previous.Digest != digest {
 		return Package{}, false
 	}

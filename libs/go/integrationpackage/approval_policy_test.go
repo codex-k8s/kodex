@@ -37,7 +37,7 @@ func TestApprovalPolicyAllowedSetIsRequiredAndClosed(t *testing.T) {
 			t.Fatal("invalid allowed/default policy accepted")
 		}
 	}
-	for _, key := range []string{"github.pull_request.merge", "github.issue.create"} {
+	for _, key := range []string{"github.pull_request.merge", "github.branch.create"} {
 		candidate := github
 		candidate.Spec.Capabilities = append([]Capability{}, github.Spec.Capabilities...)
 		for i := range candidate.Spec.Capabilities {

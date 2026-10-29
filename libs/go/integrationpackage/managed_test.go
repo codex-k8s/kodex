@@ -78,7 +78,7 @@ func TestManagedRevisionRejectsContractExpansionAndStaleDigest(t *testing.T) {
 		"backoff":               func(p *Package) { p.Spec.Capabilities[0].Execution.RetryBackoffMilliseconds-- },
 		"weaken gate": func(p *Package) {
 			for i := range p.Spec.Capabilities {
-				if p.Spec.Capabilities[i].Risk != "READ" {
+				if p.Spec.Capabilities[i].Operation == "github.pull_request.merge" {
 					p.Spec.Capabilities[i].ApprovalPolicy = "NONE"
 					return
 				}
