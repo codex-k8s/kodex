@@ -32,8 +32,8 @@ type WorkflowPublication struct {
 	// ReworkPolicy is explicit opt-in metadata, never implied by historical declarations.
 	// ReworkPolicy — explicit opt-in metadata, не выводимая из historical declarations.
 	ReworkPolicy string `json:"rework_policy,omitempty"`
-	// ResultEvidenceProfile is emitted only by the explicit third-version evidence contract.
-	// ResultEvidenceProfile передаётся только явным evidence контрактом третьей версии.
+	// ResultEvidenceProfile is emitted only by the explicit version-three or version-four contract.
+	// ResultEvidenceProfile передаётся только явным контрактом третьей либо четвёртой версии.
 	ResultEvidenceProfile string `json:"result_evidence_profile,omitempty"`
 	// ExecutionMode is present only in the server-driven version-two wire profile.
 	// ExecutionMode присутствует только в серверном профиле второй версии передачи.
@@ -108,7 +108,10 @@ type WorkflowPublicationRequirement struct {
 	SubjectResultKey string `json:"subject_result_key,omitempty"`
 	// EvidenceKey is a published same-step report selector, not artifact authority.
 	// EvidenceKey — опубликованный selector report того же шага, не artifact authority.
-	EvidenceKey    string `json:"evidence_key,omitempty"`
+	EvidenceKey string `json:"evidence_key,omitempty"`
+	// Branch pins the version-four repository-file target, never a runtime access grant.
+	// Branch закрепляет ветку файла в четвёртой версии, не предоставляя runtime доступ.
+	Branch         string `json:"branch,omitempty"`
 	Key            string `json:"key"`
 	Kind           string `json:"kind"`
 	FileName       string `json:"file_name,omitempty"`
@@ -304,7 +307,7 @@ func workflowPublicationText(v WorkflowPublication) bool {
 		texts = append(texts, s.DependsOn...)
 		texts = append(texts, s.RequiredCapabilityKeys...)
 		for _, r := range s.ResultRequirements {
-			texts = append(texts, r.Key, r.Kind, r.FileName, r.MediaType, r.Repository, r.SubjectStepKey, r.Operation, r.TargetRef, r.EvidenceKey)
+			texts = append(texts, r.Key, r.Kind, r.FileName, r.MediaType, r.Repository, r.SubjectStepKey, r.Operation, r.TargetRef, r.EvidenceKey, r.Branch)
 		}
 	}
 	for _, s := range texts {

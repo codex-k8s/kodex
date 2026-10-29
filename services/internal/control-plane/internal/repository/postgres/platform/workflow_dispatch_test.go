@@ -9,6 +9,32 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestWorkflowPDLCStageTaskPreservesNativeContract proves that the actual dispatcher can assemble
+// a bounded file/comment/artifact task without turning valid PDLC into a manager exception.
+// TestWorkflowPDLCStageTaskPreservesNativeContract доказывает сборку настоящим dispatcher
+// ограниченной file/comment/artifact задачи без превращения допустимого PDLC в manager exception.
+func TestWorkflowPDLCStageTaskPreservesNativeContract(t *testing.T) {
+	root := &serverWorkflowRoot{Task: "Уточнить требования журнала обращений", Version: entity.WorkflowVersion{ExecutionMode: workflowservice.ServerDAGV1, ResultEvidenceProfile: workflowservice.GitHubPDLCV1}}
+	step := entity.WorkflowStep{Key: "author", Instructions: "Сохранить требования в PR и приложить локальный отчёт", ResultRequirements: []entity.WorkflowResultRequirement{
+		{Key: "document", Kind: "REPOSITORY_FILE", Repository: "fixture/repository", TargetRef: "3", Branch: "feature/journal", FileName: "docs/requirements.md"},
+		{Key: "comment", Kind: "PR_COMMENT", Repository: "fixture/repository", TargetRef: "3"},
+		{Key: "report", Kind: "ARTIFACT", FileName: "requirements.md", MediaType: "text/markdown"},
+	}}
+	task, err := workflowStageTask(root, step, nil)
+	if err != nil || len(task) > 64<<10 {
+		t.Fatal("valid PDLC task was rejected before employee materialization", err)
+	}
+	for _, required := range []string{workflowservice.GitHubPDLCV1, "feature/journal", "docs/requirements.md", "headReceiptRef", "contentReceiptRef", "CAPTURE_PROGRESS"} {
+		if !strings.Contains(task, required) {
+			t.Fatal("dispatcher dropped exact PDLC task evidence", required)
+		}
+	}
+	root.Version.ResultEvidenceProfile = workflowservice.GitHubReviewQAV1
+	if task, err := workflowStageTask(root, step, nil); err == nil || task != "" {
+		t.Fatal("historical dispatcher gained PDLC predicates")
+	}
+}
+
 // TestServerWorkflowAcceptanceRequiresLatestEvidence prevents technical success or an older accepted
 // attempt from dispatching dependents, and requires approval of the exact published result gate.
 // TestServerWorkflowAcceptanceRequiresLatestEvidence запрещает dispatch по техническому успеху либо

@@ -11,6 +11,26 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestWorkflowPDLCFileHashContract checks fixed UTF8 framing vectors also executed by native
+// PostgreSQL migration tests; selector, desired bytes and predecessor must agree independently.
+// TestWorkflowPDLCFileHashContract проверяет фиксированные UTF8 vectors, исполняемые и native
+// PostgreSQL tests; selector, желаемые bytes и predecessor должны независимо совпадать.
+func TestWorkflowPDLCFileHashContract(t *testing.T) {
+	step := workflowPDLCEffectStep()
+	request := map[string]any{"path": "docs/требования<&>.md", "branch": "feature/journal", "message": "Уточнить документ", "content_base64": "0KLQvtGH0L3Ri9C1INGC0YDQtdCx0L7QstCw0L3QuNGPCg==", "sha": strings.Repeat("a", 40)}
+	const key = "file_c0fbd812d8c3515c1da2ad37464f07cecfc25039a6e6a1918246b16718fa3b42"
+	actual, handled, err := workflowPDLCAuthorEffectSlot(step, "github.repository.content.update", []byte(`{"owner":"acme","repository":"repo"}`), asJSON(request))
+	if err != nil || !handled || actual != key {
+		t.Fatal("Go file selector differs from fixed SQL/Go contract", err)
+	}
+	desired, err := workflowEffectSemanticDigestForProfile(workflowservice.GitHubPDLCV1, key, "github.repository.content.update", strings.Repeat("b", 64), asJSON(request))
+	if err != nil || desired != "19b0f4c753e3d1609bd0d7323fd408eb295d3faee77ec57d52fb11deca6dbea9" ||
+		workflowPDLCFileEpochDigest(desired, "") != "fc21907c8bd4c92719235120193d9bbb75c071c4384fb7e0894d8bc5e89486e4" ||
+		workflowPDLCFileEpochDigest(desired, "inv_previous0") != "9a6100ed16082a659c0f647f99b8ed3c592d22a33e1fb518f618d36b7e0463f7" {
+		t.Fatal("Go file intent hashes differ from fixed SQL/Go contract", err)
+	}
+}
+
 // workflowPDLCEffectStep pins one existing PR and a published author branch without granting
 // access to arbitrary repositories, branches or merge/deploy operations.
 // workflowPDLCEffectStep закрепляет существующий PR и опубликованную ветку автора без доступа

@@ -146,6 +146,9 @@ func executionWorkflowPublication(item entity.Workflow, digest string) ([]byte, 
 		value.Version, value.ExecutionMode = 2, source.ExecutionMode
 		if source.ResultEvidenceProfile != "" {
 			value.Version, value.ResultEvidenceProfile = 3, source.ResultEvidenceProfile
+			if source.ResultEvidenceProfile == workflowservice.GitHubPDLCV1 {
+				value.Version = 4
+			}
 		}
 	}
 	for _, f := range source.Inputs {
@@ -155,7 +158,7 @@ func executionWorkflowPublication(item entity.Workflow, digest string) ([]byte, 
 		value.Steps = append(value.Steps, controlplaneapi.WorkflowPublicationStep{Key: s.Key, Name: s.Name, AgentRef: s.AgentRef, Instructions: s.Instructions, ExpectedResult: s.ExpectedResult, Position: s.Position, ParallelGroup: s.ParallelGroup, TimeoutSeconds: s.TimeoutSeconds, Parallel: s.Parallel, HumanGateAfter: s.HumanGateAfter, ApprovalTimeoutSeconds: s.ApprovalTimeoutSeconds, DependsOn: s.DependsOn, GateDecisions: s.GateDecisions, RequiredCapabilityKeys: s.RequiredCapabilityKeys})
 		for _, r := range s.ResultRequirements {
 			index := len(value.Steps) - 1
-			value.Steps[index].ResultRequirements = append(value.Steps[index].ResultRequirements, controlplaneapi.WorkflowPublicationRequirement{EvidenceKey: r.EvidenceKey, Key: r.Key, Kind: r.Kind, FileName: r.FileName, MediaType: r.MediaType, Repository: r.Repository, SubjectStepKey: r.SubjectStepKey, SubjectResultKey: r.SubjectResultKey, Operation: r.Operation, TargetRef: r.TargetRef})
+			value.Steps[index].ResultRequirements = append(value.Steps[index].ResultRequirements, controlplaneapi.WorkflowPublicationRequirement{Branch: r.Branch, EvidenceKey: r.EvidenceKey, Key: r.Key, Kind: r.Kind, FileName: r.FileName, MediaType: r.MediaType, Repository: r.Repository, SubjectStepKey: r.SubjectStepKey, SubjectResultKey: r.SubjectResultKey, Operation: r.Operation, TargetRef: r.TargetRef})
 		}
 	}
 	raw, sha, err := controlplaneapi.EncodeWorkflowPublication(value)

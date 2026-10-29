@@ -14,6 +14,41 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// TestExecutionWorkflowPDLCPublicationRead keeps the exact version-four source through the real
+// MCP catalog callback and lease-bound RPC request. The fake owner supplies no execution authority
+// or external GitHub evidence; the callback must preserve the committed branch and existing PR.
+// TestExecutionWorkflowPDLCPublicationRead сохраняет exact source четвёртой версии через настоящий
+// MCP callback и lease-bound RPC request. Fake owner не выдаёт execution authority либо внешние
+// GitHub evidence; callback обязан сохранить закреплённые ветку и существующий PR.
+func TestExecutionWorkflowPDLCPublicationRead(t *testing.T) {
+	server, input, client, raw, digest := publicationReadFixture(t)
+	model, err := controlplaneapi.DecodeWorkflowPublication(raw, digest)
+	if err != nil {
+		t.Fatal("decode owner publication fixture")
+	}
+	model.Version, model.ExecutionMode, model.ResultEvidenceProfile = 4, "SERVER_DAG_V1", "GITHUB_PDLC_V1"
+	model.Instructions = "Уточнить документацию журнала обращений"
+	model.Steps[0].ResultRequirements = []controlplaneapi.WorkflowPublicationRequirement{{Key: "document", Kind: "REPOSITORY_FILE", Repository: "fixture/repository", TargetRef: "3", Branch: "feature/journal", FileName: "docs/requirements.md"}}
+	raw, digest, err = controlplaneapi.EncodeWorkflowPublication(model)
+	if err != nil {
+		t.Fatal("encode owner PDLC publication")
+	}
+	client.response = &cp.GetExecutionWorkflowCatalogResponse{Read: &cp.GetExecutionWorkflowCatalogResponse_Publication{Publication: &cp.ExecutionWorkflowPublication{ConfigurationJson: raw, ConfigurationSha256: digest}}}
+	value, err := server.workflowCatalog(t.Context(), input, map[string]any{"publication_read": publicationPins()})
+	if err != nil {
+		t.Fatal("actual MCP callback rejected PDLC publication", err)
+	}
+	wire := value.(workflowCatalogToolResult).wire
+	page := wire["configuration_page"].(map[string]any)
+	if !page["eof"].(bool) || !bytes.Equal([]byte(page["text"].(string)), raw) || wire["configuration_sha256"] != digest || client.request.LeaseRef != input.LeaseRef || client.request.GetPublicationRead().Pins.WorkflowRef != model.WorkflowRef {
+		t.Fatal("MCP callback changed PDLC source or lease-bound publication identity")
+	}
+	actual, err := controlplaneapi.DecodeWorkflowPublication([]byte(page["text"].(string)), digest)
+	if err != nil || actual.Version != 4 || actual.Steps[0].ResultRequirements[0].Branch != "feature/journal" || actual.Steps[0].ResultRequirements[0].TargetRef != "3" {
+		t.Fatal("MCP publication lost PDLC branch or existing PR")
+	}
+}
+
 // publicationReadFixture creates exact encoded multilingual published source,
 // matching digest, ordinary launch-capable turn input and an isolated catalog fake.
 // No workflow is actually published or executed by this fixture.
