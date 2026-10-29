@@ -66,13 +66,18 @@ func TestServerWorkflowMigrationProofComponent(t *testing.T) {
 					t.Fatal("apply disposable workflow schema drift")
 				}
 			}
-			// Profile031 rejects these drifts before inverse projection; older profiles retain
+			// Profiles031/032 reject these drifts before inverse projection; older profiles retain
 			// their explicit false fields. An unrelated SQL/transport error is not acceptance.
-			// Профиль031 отклоняет эти изменения до inverse projection; старые профили сохраняют
+			// Профили031/032 отклоняют эти изменения до inverse projection; старые профили сохраняют
 			// явные false-поля. Другая ошибка SQL либо transport не считается успехом проверки.
-			if workspaceComponentSchemaVersion(t, ctx, conn) == 20261029000300 &&
+			version := workspaceComponentSchemaVersion(t, ctx, conn)
+			if (version == 20261029000300 || version == 20261030000100) &&
 				(fixture.name == "disabled-workflow-guard" || fixture.name == "public-workflow-execute") {
-				source, err := os.ReadFile("../../../../../../../tools/release/workflow-pdlc-migration-postcondition.sql")
+				filename := "workflow-pdlc-migration-postcondition.sql"
+				if version == 20261030000100 {
+					filename = "workflow-content-page-migration-postcondition.sql"
+				}
+				source, err := os.ReadFile("../../../../../../../tools/release/" + filename)
 				if err != nil {
 					t.Fatal("read shipped PDLC counterfactual proof")
 				}

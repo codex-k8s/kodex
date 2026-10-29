@@ -44,6 +44,9 @@ func TestIntegrationGitHubBackupSchemaProofComponent(t *testing.T) {
 	if version == 20261029000300 {
 		filename, profile, catalogField = "workflow-pdlc-backup-migration-postcondition.sql", "GITHUB_PDLC_BACKUP_V1", "githubPRCatalog"
 	}
+	if version == 20261030000100 {
+		filename, profile, catalogField = "workflow-content-page-backup-migration-postcondition.sql", "WORKFLOW_CONTENT_PAGE_BACKUP_V1", "githubPRCatalog"
+	}
 	source, err := os.ReadFile("../../../../../../../tools/release/" + filename)
 	if err != nil {
 		t.Fatal("read shipped GitHub backup schema proof")
@@ -71,13 +74,16 @@ func TestIntegrationGitHubBackupSchemaProofComponent(t *testing.T) {
 	if err != nil || proof["profile"] != profile || proof["gooseVersion"] != float64(version) || proof[catalogField] != true || proof["backupReaderCatalog"] != true {
 		t.Fatal("native GitHub successor did not preserve the full backup schema", err)
 	}
-	if (version == 20261029000200 || version == 20261029000300) && proof["githubAutonomousWrites"] != true {
+	if (version == 20261029000200 || version == 20261029000300 || version == 20261030000100) && proof["githubAutonomousWrites"] != true {
 		t.Fatal("native GitHub write guards are unconfirmed")
 	}
-	if version == 20261029000300 && (proof["workflowPDLCCatalog"] != true || proof["workflowPDLCFunctions"] != float64(14)) {
+	if (version == 20261029000300 || version == 20261030000100) && (proof["workflowPDLCCatalog"] != true || proof["workflowPDLCFunctions"] != float64(14)) {
 		t.Fatal("native PDLC owner catalog is unconfirmed")
 	}
-	if version == 20261029000200 || version == 20261029000300 {
+	if version == 20261030000100 && proof["workflowContentPageCatalog"] != true {
+		t.Fatal("native content page catalog is unconfirmed")
+	}
+	if version == 20261029000200 || version == 20261029000300 || version == 20261030000100 {
 		if _, err := admin.Exec(ctx, "ALTER TABLE control_plane.integration_invocations DISABLE TRIGGER email_mailbox_gate_valid"); err != nil {
 			t.Fatal("prepare isolated disabled write guard")
 		}
