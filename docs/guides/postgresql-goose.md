@@ -4,7 +4,7 @@ title: PostgreSQL, именованные SQL-запросы и goose
 type: guide
 status: approved
 owner: developer
-version: 1.2.12
+version: 1.2.13
 updated: 2026-10-29
 ---
 
@@ -375,6 +375,16 @@ Selector с общим параметризованным SQL проверяет
 проверяется обычный публичный read path, чтобы прогрев не скрывал исходный
 отказ. Настройки PostgreSQL не меняются глобально. Семантика PREPARE и
 `plan_cache_mode` проверена через Context7 `/websites/postgresql`.
+
+Повторное планирование сложной exact authority function внутри одной выборки
+может исчерпать RPC budget даже при неизменных данных. Адресная оптимизация
+может временно выбрать transaction-local generic plan только для доказанного
+selector, восстановив исходный mode до дальнейших statements и пустого
+результата. Ошибка требует owner rollback; pooled session не меняется.
+Generic plan не кэширует eligibility и не заменяет повторных проверок каждого
+объекта. Регрессия покрывает реальный deadline, custom/generic/auto, replay и
+утечки режима на том же physical connection. Пример:
+[#1972](../operations/workflow-evidence-history-1972.md).
 
 Для owner-approved web-first reset установка создаётся с нуля. Активный
 control-plane содержит одну baseline migration, которая создаёт только новую

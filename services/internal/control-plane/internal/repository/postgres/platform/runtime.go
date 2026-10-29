@@ -2836,8 +2836,10 @@ func (repository *Repository) scheduleIntegrationContinuation(ctx context.Contex
 		&agentRef, &workflowVersionID, &invocationRef, &invocationState, &resultSummary, &safeErrorCode,
 		&decision.GateRef, &decision.GateVersion, &decision.Decision, &decision.Comment, &receiptRef)
 	if errors.Is(err, pgx.ErrNoRows) {
-		err = tx.QueryRow(ctx, queryWorkflowEvidenceContinuation, pgx.StrictNamedArgs{"organization_id": current.organizationID, "invocation_id": invocationID}).Scan(
-			&parentNodeID, &runID, &rootRunID, &agentID, &attempt, &displayName, &role, &sessionID, &agentRef, &workflowVersionID, &evidenceAuthority, &evidenceBudget, &workflowEvidenceSnapshot)
+		err = readWorkflowEvidenceWithGenericPlan(ctx, tx, func() error {
+			return tx.QueryRow(ctx, queryWorkflowEvidenceContinuation, pgx.StrictNamedArgs{"organization_id": current.organizationID, "invocation_id": invocationID}).Scan(
+				&parentNodeID, &runID, &rootRunID, &agentID, &attempt, &displayName, &role, &sessionID, &agentRef, &workflowVersionID, &evidenceAuthority, &evidenceBudget, &workflowEvidenceSnapshot)
+		})
 		if err == nil {
 			_, expired, clockErr := readRuntimeExecutionDeadline(ctx, tx, current.organizationID, runID)
 			if clockErr != nil {

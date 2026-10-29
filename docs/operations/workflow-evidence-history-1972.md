@@ -4,7 +4,7 @@ title: Полная история интеграций в продолжени�
 type: runbook
 status: approved
 owner: architect
-version: 1.0.0
+version: 1.0.1
 updated: 2026-10-29
 ---
 
@@ -58,6 +58,30 @@ rune, не меняя байтов источника. Точный EOF можн
 | Source drift/ошибка транзакции/overflow | Нет частичного успеха; source history и captured files сохраняются прежним owner path |
 
 ## Проверка и поставка
+
+При нескольких обычных WRITE обнаружен отдельный отказ terminal callback:
+`workflow_evidence__continuation` повторно планирует полный
+`workflow_evidence_execution_assigned` и может исчерпать прежний пятисекундный
+owner RPC budget. Свежая маленькая fixture при `auto` сама по себе не доказывает
+отсутствие этого отказа: проверяются также custom и generic prepared plans.
+
+Только два evidence selectors — создание продолжения и чтение его источника —
+временно используют transaction-local `force_generic_plan`. Перед успешным
+результатом либо `ErrNoRows` восстанавливается исходный planning mode;
+остальные ошибки передаются обязательному rollback владельца. Session/global
+настройки, исходные SQL predicates, locks, snapshot/receipt checks и тайм-ауты
+не меняются. Переиспользуется план, а не положительный результат авторизации.
+Каждая запись и каждая страница заново проходят полный owner eligibility.
+
+`TestWorkflowEvidenceCompletionBudgetComponent` создаёт двенадцать revisions
+через настоящий native admission/worker completion и требует завершения в
+пять секунд при `auto`, `force_custom_plan`, `force_generic_plan`, единственного
+продолжения и безопасного callback replay. Это расширенная изолированная
+регрессия живого отказа при восьми WRITE, не заявление о внешней GitHub delivery.
+`TestWorkflowEvidencePlanScopeComponent` держит одно physical connection и
+проверяет восстановление mode после успеха, пустого результата и настоящего
+SQL-отказа/rollback. Контракт PostgreSQL `plan_cache_mode` и transaction-local
+`set_config` проверен через Context7 `/websites/postgresql/17`.
 
 Публичные точки проверки: PostgreSQL script с
 `TestWorkflowPDLCFileResultOwnerComponent/documentation-large-read-history-`

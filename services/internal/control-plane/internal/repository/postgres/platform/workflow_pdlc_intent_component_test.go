@@ -23,9 +23,29 @@ import (
 // и readiness; только credential metadata использует штатную disposable оснастку.
 func newWorkflowPDLCFileOwnerFixture(t *testing.T, extraResults ...entity.WorkflowResultRequirement) (*workflowEvidenceNativeFixture, map[string]any) {
 	t.Helper()
+	return newWorkflowPDLCFileOwnerFixtureWithPlanner(t, "auto", extraResults...)
+}
+
+// newWorkflowPDLCFileOwnerFixtureWithPlanner pins one supported planning profile
+// to a private disposable pool. It changes no live database or shared defaults;
+// query diagnostics retain only hashes, timing and closed failure metadata.
+// newWorkflowPDLCFileOwnerFixtureWithPlanner закрепляет поддерживаемый planning
+// profile в отдельном disposable pool, не меняя живую БД либо общие настройки.
+// Query diagnostics содержат лишь hashes, время и закрытые метаданные отказа.
+func newWorkflowPDLCFileOwnerFixtureWithPlanner(t *testing.T, planner string, extraResults ...entity.WorkflowResultRequirement) (*workflowEvidenceNativeFixture, map[string]any) {
+	t.Helper()
+	if !contains([]string{"auto", "force_custom_plan", "force_generic_plan"}, planner) {
+		t.Fatal("unsupported disposable planner profile")
+	}
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	t.Cleanup(cancel)
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
+	config, err := pgxpool.ParseConfig(isolatedAssistantComponentDSN(t))
+	if err != nil {
+		t.Fatal("parse isolated PDLC database")
+	}
+	config.ConnConfig.RuntimeParams["plan_cache_mode"] = planner
+	config.ConnConfig.Tracer = componentQueryRejectionTracer{t: t}
+	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		t.Fatal("open isolated PDLC database")
 	}
