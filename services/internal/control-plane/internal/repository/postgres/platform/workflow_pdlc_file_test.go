@@ -135,3 +135,52 @@ func TestWorkflowPDLCFileEvidenceRejectsMismatches(t *testing.T) {
 		})
 	}
 }
+
+// TestWorkflowPDLCContentPageParameter checks the shipped adapter's canonical optional page
+// selector, including the live 16501-byte source and rejection of undocumented aliases/types.
+// TestWorkflowPDLCContentPageParameter проверяет канонический optional selector поставляемого
+// adapter, включая живой размер источника16501байт и отказ неизвестным alias/типам.
+func TestWorkflowPDLCContentPageParameter(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		fields map[string]any
+		limit  int
+		valid  bool
+	}{
+		{"omitted", nil, 100, true},
+		{"minimum", map[string]any{"maximum_bytes": 4}, 4, true},
+		{"live", map[string]any{"maximum_bytes": 4096, "offset_bytes": 0}, 4096, true},
+		{"maximum", map[string]any{"maximum_bytes": 16384}, 16384, true},
+		{"zero", map[string]any{"maximum_bytes": 0}, 100, false},
+		{"below_minimum", map[string]any{"maximum_bytes": 3}, 3, false},
+		{"negative", map[string]any{"maximum_bytes": -1}, 100, false},
+		{"too_large", map[string]any{"maximum_bytes": 16385}, 100, false},
+		{"null", map[string]any{"maximum_bytes": nil}, 100, false},
+		{"string", map[string]any{"maximum_bytes": "4096"}, 100, false},
+		{"boolean", map[string]any{"maximum_bytes": true}, 100, false},
+		{"alias", map[string]any{"max_bytes": 4096}, 100, false},
+		{"both", map[string]any{"maximum_bytes": 4096, "max_bytes": 4096}, 100, false},
+		{"page_exceeds_requested_limit", map[string]any{"maximum_bytes": 4}, 5, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			data := []byte(strings.Repeat("x", 16501))
+			requirement, declaration, proofs := workflowPDLCFileFixture(data)
+			var input, output map[string]any
+			if json.Unmarshal(proofs[2].Input, &input) != nil || json.Unmarshal([]byte(proofs[2].Summary), &output) != nil {
+				t.Fatal("decode native content-page fixture")
+			}
+			for key, value := range test.fields {
+				input[key] = value
+			}
+			text := data[:test.limit]
+			output["text"], output["next_offset_bytes"], output["eof"] = string(text), len(text), false
+			output["chunk_digest"] = "sha256:" + workflowResultSHA(text)
+			proofs[2].Input, proofs[2].Summary = asJSON(input), string(asJSON(output))
+			proofs[2].Digest = workflowResultSHA([]byte(proofs[2].Summary))
+			_, reason := acceptWorkflowRepositoryFileResult(requirement, declaration, proofs[0], proofs[1], proofs[2])
+			if (reason == "") != test.valid {
+				t.Fatalf("native optional content-page parameter: accepted=%t reason=%s", reason == "", reason)
+			}
+		})
+	}
+}

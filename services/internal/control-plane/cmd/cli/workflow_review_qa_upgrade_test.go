@@ -100,6 +100,10 @@ func readControlPlaneMigrationProof(t *testing.T, ctx context.Context, observer 
 	}
 	var verifier string
 	switch profile {
+	case "workflow-content-page":
+		verifier = "validWorkflowContentPageMigration"
+	case "workflow-content-page-backup":
+		verifier = "validWorkflowContentPageBackupMigration"
 	case "workflow-pdlc":
 		verifier = "validWorkflowPDLCMigration"
 	case "workflow-pdlc-backup":

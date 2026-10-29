@@ -164,28 +164,28 @@ func acceptWorkflowRepositoryFileResult(requirement entity.WorkflowResultRequire
 		pull.Draft == nil || !workflowservice.CommitPattern.MatchString(pull.SHA) || head.ProviderRef != "github-pull:"+strconv.FormatInt(number, 10) {
 		return entity.WorkflowAcceptedResult{}, workflowRepositoryFileMismatch
 	}
-	fields, validContentInput := workflowResultObject(content.Input, []string{"path", "ref"}, []string{"path", "ref", "expected_sha", "offset_bytes", "max_bytes"})
+	fields, validContentInput := workflowResultObject(content.Input, []string{"path", "ref"}, []string{"path", "ref", "expected_sha", "offset_bytes", "maximum_bytes"})
 	_, validContentOutput := workflowResultObject([]byte(content.Summary), []string{"path", "type", "sha", "size", "text", "commit_sha", "offset_bytes", "next_offset_bytes", "eof", "source_digest", "chunk_digest"},
 		[]string{"path", "type", "sha", "size", "text", "commit_sha", "offset_bytes", "next_offset_bytes", "eof", "source_digest", "chunk_digest"})
 	var contentInput struct {
-		Path, Ref   string
-		ExpectedSHA string `json:"expected_sha"`
-		OffsetBytes int64  `json:"offset_bytes"`
-		MaxBytes    int64  `json:"max_bytes"`
+		Path, Ref    string
+		ExpectedSHA  string `json:"expected_sha"`
+		OffsetBytes  int64  `json:"offset_bytes"`
+		MaximumBytes int64  `json:"maximum_bytes"`
 	}
 	var page workflowPDLCContentPage
 	for _, raw := range fields {
 		validContentInput = validContentInput && !bytes.Equal(bytes.TrimSpace(raw), []byte("null"))
 	}
-	_, hasMaximum := fields["max_bytes"]
+	_, hasMaximum := fields["maximum_bytes"]
 	_, hasExpected := fields["expected_sha"]
 	if content.Operation != "github.repository.content.read" || !validContentInput || !validContentOutput || json.Unmarshal(content.Input, &contentInput) != nil || json.Unmarshal([]byte(content.Summary), &page) != nil ||
 		contentInput.Path != requirement.FileName || contentInput.Ref != pull.SHA || contentInput.OffsetBytes != 0 || page.Path != requirement.FileName || page.Type != "file" ||
-		hasMaximum && (contentInput.MaxBytes < 1 || contentInput.MaxBytes > 16<<10) || hasExpected && contentInput.ExpectedSHA == "" ||
+		hasMaximum && (contentInput.MaximumBytes < 4 || contentInput.MaximumBytes > 16<<10) || hasExpected && contentInput.ExpectedSHA == "" ||
 		page.CommitSHA != pull.SHA || !workflowservice.CommitPattern.MatchString(page.SHA) || content.ProviderRef != "github-content:"+page.SHA ||
 		contentInput.ExpectedSHA != "" && contentInput.ExpectedSHA != page.SHA || page.OffsetBytes != 0 || page.Size != int64(len(data)) ||
 		page.NextOffsetBytes != int64(len(page.Text)) || page.NextOffsetBytes > page.Size || page.EOF != (page.NextOffsetBytes == page.Size) ||
-		len(page.Text) > 16<<10 || hasMaximum && int64(len(page.Text)) > contentInput.MaxBytes ||
+		len(page.Text) > 16<<10 || hasMaximum && int64(len(page.Text)) > contentInput.MaximumBytes ||
 		page.Text == "" && !page.EOF ||
 		page.SourceDigest != "sha256:"+workflowResultSHA(data) || page.ChunkDigest != "sha256:"+workflowResultSHA([]byte(page.Text)) || !bytes.HasPrefix(data, []byte(page.Text)) {
 		return entity.WorkflowAcceptedResult{}, workflowRepositoryFileMismatch

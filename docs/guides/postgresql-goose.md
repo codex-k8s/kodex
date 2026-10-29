@@ -4,7 +4,7 @@ title: PostgreSQL, именованные SQL-запросы и goose
 type: guide
 status: approved
 owner: developer
-version: 1.2.13
+version: 1.2.14
 updated: 2026-10-29
 ---
 
@@ -293,6 +293,17 @@ PostgreSQL проверяются как фактическая семантик
   декларативных атрибутов роли.
 
 ## Миграции goose
+
+Исправление уже применённой функции оформляется новой forward-миграцией.
+При `CREATE OR REPLACE FUNCTION` native проверка сравнивает OID, owner, ACL,
+типы и имена аргументов, volatility, security mode и search_path: сохранение
+owner/ACL само по себе не доказывает сохранение остальных атрибутов.
+Старый exact schema verifier не расширяется до новой версии. Новый профиль
+проверяет actual successor до проекции неизменённых исторических частей;
+ожидаемый manifest отдельно сверяется с настоящим disposable каталогом.
+Необязательные поля producer проверяются в положительных сквозных fixtures:
+default без поля не доказывает совместимость фактически отправляемого поля.
+Пример: `maximum_bytes` в миграции032 и `OPS-DOC-WORKFLOW-REVIEW-QA-1949`.
 
 Native upgrade повторяет фактический bootstrap, включая применённые
 `ALTER DEFAULT PRIVILEGES` backup reader. Создание только owner/runtime ролей

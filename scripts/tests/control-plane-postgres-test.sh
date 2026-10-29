@@ -26,7 +26,7 @@ if [[ "$test_pattern" == --pdlc-owner || "$test_pattern" == --pdlc-owner-legacy 
   if [[ "$test_pattern" == --pdlc-owner-legacy ]]; then
     owner_test='^(TestWorkflowEffectRejoinComponent|TestWorkflowReviewQAEvidenceComponent)$/^(known-success|current-grant-revoked|same-node-new-generation|same-business-continues|review-effect-first|review-model-first)$'
   fi
-  upgrade_test='^TestWorkflowPDLCMigrationFunctions$'
+  upgrade_test='^TestWorkflowContentPageMigration$'
   test_pattern=--review-qa-upgrade
 fi
 if [[ "$test_pattern" == --pdlc-functions ]]; then
@@ -35,6 +35,10 @@ if [[ "$test_pattern" == --pdlc-functions ]]; then
 fi
 if [[ "$test_pattern" == --pdlc-upgrade ]]; then
   upgrade_test='^TestWorkflowPDLCForwardUpgrade$'
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --content-page-upgrade ]]; then
+  upgrade_test='^TestWorkflowContentPageMigration$'
   test_pattern=--review-qa-upgrade
 fi
 if [[ "$test_pattern" == --github-pr-upgrade ]]; then
@@ -282,6 +286,7 @@ fi
   schema_version=$(psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" --no-password -X -qAt -v ON_ERROR_STOP=1 \
     -c 'SELECT max(version_id) FILTER (WHERE is_applied) FROM public.goose_db_version')
   case "$schema_version" in
+    20261030000100) schema_proof=workflow-content-page-migration-postcondition.sql; schema_verifier=validWorkflowContentPageMigrationPostcondition ;;
     20261029000300) schema_proof=workflow-pdlc-migration-postcondition.sql; schema_verifier=validWorkflowPDLCMigrationPostcondition ;;
     20261029000200) schema_proof=github-pr-migration-postcondition.sql; schema_verifier=validGitHubPRMigrationPostcondition ;;
     20261029000100) schema_proof=github-autonomous-migration-postcondition.sql; schema_verifier=validGitHubAutonomousMigrationPostcondition ;;

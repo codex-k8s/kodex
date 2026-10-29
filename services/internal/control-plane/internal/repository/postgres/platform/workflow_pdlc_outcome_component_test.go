@@ -59,7 +59,7 @@ func TestWorkflowPDLCFileResultOwnerComponent(t *testing.T) {
 				readyReceipt := fixture.finishEffect(ready, "github-pull:3", string(asJSON(map[string]any{"number": 3, "sha": head, "state": "open", "draft": false, "url": "https://github.com/fixture/repository/pull/3", "already_ready": false})))
 				declarations = append(declarations, entity.WorkflowDeclaredResult{Key: "response", ReceiptRef: commentReceipt}, entity.WorkflowDeclaredResult{Key: "pr", ReceiptRef: readyReceipt})
 			}
-			read, err := fixture.resolve(lease, "pdlc-result-content", "github.repository.content.read", map[string]any{"path": "docs/requirements.md", "ref": head})
+			read, err := fixture.resolve(lease, "pdlc-result-content", "github.repository.content.read", map[string]any{"path": "docs/requirements.md", "ref": head, "maximum_bytes": int64(4096)})
 			if err != nil {
 				t.Fatal("admit native immutable file read", completionOutcomeClass(err))
 			}

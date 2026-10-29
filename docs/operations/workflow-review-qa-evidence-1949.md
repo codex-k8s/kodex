@@ -4,7 +4,7 @@ title: Native COMMENT и сохранённый QA-отчёт серверног
 type: runbook
 status: approved
 owner: architect
-version: 1.6.1
+version: 1.6.2
 updated: 2026-10-29
 ---
 
@@ -129,6 +129,55 @@ Schema/backup proof, rollout потребителей и живой PDLC ост�
 
 ## Проверка схемы031 и backup ACL
 
+Исправление [#1975](https://github.com/codex-k8s/kodex/issues/1975) поставляется
+отдельной forward-миграцией032 `20261030000100_workflow_content_page.sql`.
+Нативный GitHub producer называет ограничение страницы `maximum_bytes`,
+диапазон4–16384. Go evaluator и SQL journal guard используют тот же закрытый
+набор полей; `max_bytes`, неизвестные поля, null и неверные типы отклоняются.
+Отсутствующее необязательное поле сохраняет прежний default16384.
+
+Карта исправления: сотрудник с exact runtime grant → MCP
+`github.repository.content.read` → integration-gateway → native receipt →
+control-plane owner evaluator → journal guard → принятый результат → готовый
+зависимый этап. Изменение имени поля не выдаёт grants и не меняет authority,
+версии, receipts, lineage, хронологию, CLEAN либо правила полноты результата.
+Прежние WRITE/READ receipts сохраняются; успешный внешний WRITE при повторе
+должен присоединяться как сохранённый факт, а не исполняться заново.
+
+Профили `workflow-content-page` и `workflow-content-page-backup` требуют
+полный exact031 и прежний idle fence, включая отсутствие `WAITING_HUMAN`.
+Оператор сначала штатно завершает либо отменяет активный запуск, сохраняет
+историю и файлы, затем применяет миграцию единственным Job. Изменение
+активного состояния напрямую в БД запрещено. Новый код и новая схема
+доставляются совместно до повторного запуска сотрудников.
+
+Новая миграция проверяет полный каталог031 и заменяет только тело
+`workflow_pdlc_result_valid(jsonb,jsonb,jsonb[])` через `CREATE OR REPLACE`.
+OID, owner, ACL, security mode, volatility и search_path сохраняются.
+`workflow-content-page-schema-manifest.json` — ожидаемый контракт032,
+производный от снятого каталога031, а не заявление о live readback.
+Native upgrade независимо сверяет фактические двадцать функций с контрактом.
+Исторические миграции, manifest и validators031 остаются неизменными.
+
+```bash
+python3 tools/release/generate-workflow-content-page-proof.py --check
+KODEX_TEST_POSTGRES_STORAGE=ram scripts/tests/control-plane-postgres-test.sh --content-page-upgrade
+KODEX_TEST_POSTGRES_STORAGE=ram scripts/tests/control-plane-postgres-test.sh '^TestWorkflowPDLCFileResultOwnerComponent$'
+```
+
+Матрица032: exact031 → штатный CLI up → exact032; повтор up не меняет
+состояние; backup SELECT восстанавливается только после full catalog proof;
+подмена ACL/search_path/security mode/volatility отклоняется; Down запрещён.
+Cancel, retry и owner Gate сохраняют действующий граф без новых переходов.
+Возврат после применения032 выполняется новой forward-миграцией и совместимым
+образом, без Down и без повторного исполнения внешней записи. Неизвестный
+исход Job требует inspect и не разрешает второй DDL.
+
+Официальная документация PostgreSQL по `CREATE OR REPLACE FUNCTION`,
+сохранению owner/ACL и явным атрибутам функции проверена через Context7
+`/websites/postgresql`. Проверка schema/backup ACL не заменяет data restore
+либо успешный внешний PDLC.
+
 Миграция031 имеет отдельные release profiles `workflow-pdlc` и
 `workflow-pdlc-backup`. Precondition читает полный frozen030 proof, отсутствие
 всех14 новых функций и штатные idle counters. Операторский механизм сохраняет
@@ -161,7 +210,7 @@ KODEX_CONTROL_PLANE_TEST_FILTER=--pdlc-upgrade make test-control-plane-postgres
 ```
 
 Первый PostgreSQL режим проверяет bare030→031, no-op replay, закрытые ACL и
-catalog counterfactuals. Второй выполняет штатный CLI `up` с настоящими backup
+catalog counterfactuals. Второй выполняет закреплённый переход030→031 с настоящими backup
 SELECT/defaults, затем дважды `restore-workspace-backup-acl` на exact031.
 Восстановление ACL идёт в одной Serializable transaction и проверяет тот же
 полный031 catalog до возврата grants; ошибка откатывает изменения. Это проверка

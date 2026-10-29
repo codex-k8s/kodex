@@ -8,10 +8,13 @@ import { inspectSource, sourceGitArguments } from './application-source.mjs';
 import { privateJournal } from '../dev/role-image-acceptance.mjs';
 import { activeDeploymentPods, isProvenStoppedPod } from './stable-archive-transition.mjs';
 import { workflowPDLCCatalogDigest } from './workflow-pdlc-catalog.gen.mjs';
+import { workflowContentPageCatalogDigest } from './workflow-content-page-catalog.gen.mjs';
 
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'workflow-content-page': {version:'20261030000100',file:'20261030000100_workflow_content_page.sql',annotation:'kodex.dev/cp-content-page-migration-plan',previousVersion:20261029000300,emptyField:'workflowContentPagePredecessor',preconditionFile:'workflow-content-page-migration-precondition.sql',postconditionFile:'workflow-content-page-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261030000100_workflow_content_page.sql'])},
+  'workflow-content-page-backup': {version:'20261030000100',file:'20261030000100_workflow_content_page.sql',annotation:'kodex.dev/cp-content-page-backup-migration-plan',previousVersion:20261029000300,emptyField:'workflowContentPagePredecessor',preconditionFile:'workflow-content-page-backup-migration-precondition.sql',postconditionFile:'workflow-content-page-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261030000100_workflow_content_page.sql'])},
   'workflow-pdlc': {version:'20261029000300',file:'20261029000300_workflow_pdlc_evidence.sql',annotation:'kodex.dev/cp-workflow-pdlc-migration-plan',previousVersion:20261029000200,emptyField:'workflowPDLCAbsent',preconditionFile:'workflow-pdlc-migration-precondition.sql',postconditionFile:'workflow-pdlc-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261029000300_workflow_pdlc_evidence.sql'])},
   'workflow-pdlc-backup': {version:'20261029000300',file:'20261029000300_workflow_pdlc_evidence.sql',annotation:'kodex.dev/cp-workflow-pdlc-backup-migration-plan',previousVersion:20261029000200,emptyField:'workflowPDLCAbsent',preconditionFile:'workflow-pdlc-backup-migration-precondition.sql',postconditionFile:'workflow-pdlc-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261029000300_workflow_pdlc_evidence.sql'])},
   'github-pr': {version:'20261029000200',file:'20261029000200_github_pr_collaboration_admission.sql',annotation:'kodex.dev/cp-github-pr-migration-plan',previousVersion:20261029000100,emptyField:'githubHistoricalCatalog',preconditionFile:'github-pr-migration-precondition.sql',postconditionFile:'github-pr-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261029000200_github_pr_collaboration_admission.sql'])},
@@ -306,6 +309,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(validGitHubPRMigrationPrecondition(result,profile==='github-pr-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'workflow-pdlc' || profile === 'workflow-pdlc-backup')
       ensure(validWorkflowPDLCMigrationPrecondition(result,profile==='workflow-pdlc-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if (profile === 'workflow-content-page' || profile === 'workflow-content-page-backup')
+      ensure(validWorkflowContentPageMigrationPrecondition(result,profile==='workflow-content-page-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     return result;
   };
   const terminalJob = (actual, expected, expectedHash, expectedUID) => {
@@ -901,6 +906,32 @@ export function validWorkflowPDLCBackupMigrationPrecondition(proof) {
   return validWorkflowPDLCMigrationPrecondition(proof,true);
 }
 
+// Новый exact032 проверяется до исторической проекции; frozen031 не принимает новый digest.
+export function validWorkflowContentPageMigrationPostcondition(proof) {
+  return proof?.profile==='WORKFLOW_CONTENT_PAGE_V1' && proof.gooseVersion===20261030000100 &&
+    proof.workflowContentPageCatalog===true && proof.workflowPDLCCatalogDigest===workflowContentPageCatalogDigest &&
+    validWorkflowPDLCMigrationPostcondition({...proof,profile:'GITHUB_PDLC_V1',gooseVersion:20261029000300,
+      workflowPDLCCatalogDigest});
+}
+
+// Backup authority подтверждается actual032 SQL независимо от голой схемы.
+export function validWorkflowContentPageBackupMigrationPostcondition(proof) {
+  return proof?.profile==='WORKFLOW_CONTENT_PAGE_BACKUP_V1' && proof.backupReaderCatalog===true &&
+    validWorkflowContentPageMigrationPostcondition({...proof,profile:'WORKFLOW_CONTENT_PAGE_V1'});
+}
+
+// Применение допускает только полный actual031 и отдельный штатный idle fence.
+export function validWorkflowContentPageMigrationPrecondition(proof, backup=false) {
+  return proof?.profile==='WORKFLOW_CONTENT_PAGE_'+(backup?'BACKUP_':'')+'PREDECESSOR_V1' &&
+    proof.workflowContentPagePredecessor===true && (!backup || proof.backupReaderCatalog===true) &&
+    validWorkflowPDLCMigrationPostcondition({...proof,profile:'GITHUB_PDLC_V1'});
+}
+
+// Отдельный entrypoint сохраняет discriminator backup профиля.
+export function validWorkflowContentPageBackupMigrationPrecondition(proof) {
+  return validWorkflowContentPageMigrationPrecondition(proof,true);
+}
+
 // Actual backup SELECT проверен до metadata projection; прежний015 verifier не расширяется.
 export function validWorkspaceBackupMigrationPrecondition(proof) {
   return proof?.profile==='WORKSPACE_BACKUP_PREDECESSOR_V1' && proof.backupReaderCatalog===true &&
@@ -923,6 +954,8 @@ export function validWorkspaceBackupACLReadback(proof) {
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {
+    case 'workflow-content-page': return validWorkflowContentPageMigrationPostcondition(proof);
+    case 'workflow-content-page-backup': return validWorkflowContentPageBackupMigrationPostcondition(proof);
     case 'workflow-pdlc': return validWorkflowPDLCMigrationPostcondition(proof);
     case 'workflow-pdlc-backup': return validWorkflowPDLCBackupMigrationPostcondition(proof);
     case 'github-pr': return validGitHubPRMigrationPostcondition(proof);
