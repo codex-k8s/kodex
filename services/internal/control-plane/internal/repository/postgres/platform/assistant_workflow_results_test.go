@@ -10,6 +10,85 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// assistantPDLCWorkflowFixture extends the established JSON proposal with native file/comment
+// targets on one existing PR; no accepted evidence, grants or external effects are fabricated.
+// assistantPDLCWorkflowFixture дополняет штатный JSON proposal native file/comment targets
+// одного существующего PR, не создавая accepted evidence, grants либо внешних effects.
+func assistantPDLCWorkflowFixture(t *testing.T) map[string]any {
+	t.Helper()
+	input := assistantServerWorkflowFixture(t)
+	input["resultEvidenceProfile"] = "GITHUB_PDLC_V1"
+	steps := input["steps"].([]any)
+	steps[0].(map[string]any)["resultRequirements"] = []any{
+		map[string]any{"key": "document", "kind": "REPOSITORY_FILE", "repository": "codex-k8s/test-repo", "targetRef": "3", "branch": "feature/journal", "fileName": "docs/requirements.md"},
+		map[string]any{"key": "comment", "kind": "PR_COMMENT", "repository": "codex-k8s/test-repo", "targetRef": "3"},
+		map[string]any{"key": "spec", "kind": "ARTIFACT", "fileName": "spec.md", "mediaType": "text/markdown"},
+	}
+	steps[1].(map[string]any)["resultRequirements"] = []any{
+		map[string]any{"key": "source", "kind": "REPOSITORY_FILE", "repository": "codex-k8s/test-repo", "targetRef": "3", "branch": "feature/journal", "fileName": "src/server.mjs"},
+		map[string]any{"key": "pr", "kind": "PULL_REQUEST", "repository": "codex-k8s/test-repo", "targetRef": "3"},
+	}
+	return input
+}
+
+// TestAssistantPDLCWorkflowCreateReadUpdate proves the actual assistant producer retains branch,
+// path and existing PR through owner create, configuration readback and sparse/full update plans.
+// TestAssistantPDLCWorkflowCreateReadUpdate проверяет сохранение branch/path/PR настоящим
+// assistant producer через owner create, configuration readback и sparse/full update plans.
+func TestAssistantPDLCWorkflowCreateReadUpdate(t *testing.T) {
+	created, err := assistantWorkflow(assistantPDLCWorkflowFixture(t))
+	if err != nil || created.Draft == nil {
+		t.Fatal("native PDLC assistant proposal rejected", err)
+	}
+	draft := *created.Draft
+	if draft.ResultEvidenceProfile != "GITHUB_PDLC_V1" || draft.Steps[0].ResultRequirements[0].Branch != "feature/journal" {
+		t.Fatal("assistant create dropped explicit file branch/profile")
+	}
+	fields, steps := assistantWorkflowGraphFields(draft)
+	before := map[string]any{"workflowRef": "wfl_fixture123", "projectRef": created.ProjectRef, "executionMode": draft.ExecutionMode, "resultEvidenceProfile": draft.ResultEvidenceProfile,
+		"name": draft.Name, "purpose": draft.Purpose, "instructions": draft.Instructions, "completionCriteria": draft.CompletionCriteria, "coordinatorAgentRef": draft.CoordinatorAgentRef,
+		"inputFields": fields, "steps": steps, "maxConcurrency": float64(draft.Concurrency), "timeoutSeconds": float64(draft.TimeoutSeconds), "draft": draft}
+	for _, full := range []bool{false, true} {
+		parameters := map[string]any{"workflowRef": "wfl_fixture123", "name": "Журнал обращений: уточнённая спецификация"}
+		if full {
+			parameters["steps"] = steps
+		}
+		operation, err := hydrateAssistantWorkflowFields(before, 7, entity.AssistantPlanOperation{Type: "UPDATE_WORKFLOW", Key: "update", Parameters: parameters})
+		if err != nil {
+			t.Fatal("native PDLC assistant update hydration rejected", err)
+		}
+		updated, version, err := assistantUpdateWorkflow(operation)
+		if err != nil || version != 7 || updated.Draft == nil || updated.Draft.ResultEvidenceProfile != draft.ResultEvidenceProfile || !reflect.DeepEqual(updated.Draft.Steps, draft.Steps) {
+			t.Fatal("native PDLC update lost exact branch/path/PR or published graph", err)
+		}
+	}
+	for _, mode := range []string{"old-profile", "unknown-profile", "null-branch", "empty-branch", "receipt-in-config", "foreign-branch", "foreign-pr"} {
+		t.Run(mode, func(t *testing.T) {
+			input := assistantPDLCWorkflowFixture(t)
+			requirement := input["steps"].([]any)[0].(map[string]any)["resultRequirements"].([]any)[0].(map[string]any)
+			switch mode {
+			case "old-profile":
+				input["resultEvidenceProfile"] = "GITHUB_REVIEW_QA_V1"
+			case "unknown-profile":
+				input["resultEvidenceProfile"] = "GITHUB_PDLC_V2"
+			case "null-branch":
+				requirement["branch"] = nil
+			case "empty-branch":
+				requirement["branch"] = ""
+			case "receipt-in-config":
+				requirement["receiptRef"] = "erc_unsupported0"
+			case "foreign-branch":
+				requirement["branch"] = "refs/heads/feature/journal"
+			case "foreign-pr":
+				requirement["targetRef"] = "4"
+			}
+			if _, err := assistantWorkflow(input); err == nil {
+				t.Fatal("invalid PDLC proposal bypassed actual owner parser")
+			}
+		})
+	}
+}
+
 // assistantServerWorkflowFixture builds a fresh three-role editable graph through JSON, so the
 // fixture uses the same map/array/number shapes as a real assistant proposal without live effects.
 // assistantServerWorkflowFixture создаёт через JSON новый редактируемый граф трёх ролей с теми же

@@ -4,7 +4,7 @@ title: Native COMMENT и сохранённый QA-отчёт серверног
 type: runbook
 status: approved
 owner: architect
-version: 1.4.0
+version: 1.4.1
 updated: 2026-10-29
 ---
 
@@ -48,6 +48,16 @@ CP, gateway, runtime-controller и PWA поставляются совместн
 нового профиля. Совместимость старого browser validator с новым видом
 результата не предполагается; локальный generator/SSR не заменяет проверку
 настоящих HTTP/WS snapshots и reconnect в staging.
+
+Managed MCP schema создания/изменения процесса и owner parser сохраняют те же
+`branch/fileName/targetRef` при чтении и подготовке плана. Поля receipt и actor
+не входят в редактируемые условия. Отсутствующий profile в sparse UPDATE
+разрешается по owner readback; явный прежний profile не принимает новые file
+selectors. Настоящая compiled JSON Schema и owner create/read/update проверяются
+отдельно: успешный разбор схемы не заменяет native приёмку результата либо
+активные grants. API `Schema.Resolve`/`Resolved.Validate` и условные схемы
+проверены через Context7 `/google/jsonschema-go`; исполняемые tests используют
+закреплённую версию модуля.
 
 ## Прежний профиль ревью и QA
 
