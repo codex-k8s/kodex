@@ -3550,13 +3550,15 @@ func testInstructionDraftSave(t *testing.T, ctx context.Context, repository *Rep
 	}
 	agent := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "instruction-save-agent", "Instruction editor")
 	firstVersion := agent.Version
-	first, err := service.Execute(ctx, command.Command{Kind: command.CreateInstructions, Principal: owner,
+	firstInput := command.Command{Kind: command.CreateInstructions, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "instruction-save-first", ExpectedVersion: &firstVersion},
 		Payload:  command.AgentInput{Ref: agent.Ref, Instructions: "First mutable instruction draft with enough content."},
-	})
+	}
+	first, err := service.Execute(ctx, firstInput)
 	if err != nil || first.Agent == nil {
 		t.Fatalf("create instruction draft: result=%#v err=%v", first.Agent, err)
 	}
+	assertInstructionCommandProjection(t, ctx, service, owner, first.Agent)
 	secondVersion := first.Agent.Version
 	second, err := service.Execute(ctx, command.Command{Kind: command.CreateInstructions, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "instruction-save-second", ExpectedVersion: &secondVersion},
@@ -3565,6 +3567,11 @@ func testInstructionDraftSave(t *testing.T, ctx context.Context, repository *Rep
 	if err != nil || second.Agent == nil || second.Agent.Version != secondVersion+1 {
 		t.Fatalf("replace instruction draft: result=%#v err=%v", second.Agent, err)
 	}
+	assertInstructionCommandProjection(t, ctx, service, owner, second.Agent)
+	if replay, replayErr := service.Execute(ctx, firstInput); replayErr != nil || !reflect.DeepEqual(replay.Agent, first.Agent) {
+		t.Fatalf("historical instruction replay changed the original projection: %v", replayErr)
+	}
+	assertInstructionCommandProjection(t, ctx, service, owner, second.Agent)
 	var count int
 	var state, content string
 	if err := repository.pool.QueryRow(ctx, bootstrapComponentInstructionDraftReadbackQuery, agent.Ref).Scan(&count, &state, &content); err != nil {

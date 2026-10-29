@@ -116,6 +116,11 @@ func workspaceTaskFromProto(input *controlplanev1.SessionWorkspaceArchiveTask) (
 		CheckpointRef: input.GetCheckpointRef(), Quiescence: input.GetQuiescence(), PVCUID: input.GetPvcUid(), ReconcileOnly: input.GetReconcileOnly(),
 		Policy: runtimecontract.RuntimeWorkspacePolicy{Revision: policy.GetRevision(), Root: policy.GetRoot(),
 			MaximumWritableBytes: policy.GetMaximumWritableBytes(), MaximumFileCount: policy.GetMaximumFileCount(), Digest: policy.GetDigest()}}
+	ready, err := archiveVolumeReadyFromProto(target.GetVolumeReady())
+	if err != nil {
+		return WorkspaceArchiveTask{}, err
+	}
+	value.Target.VolumeReady = ready
 	for _, rule := range policy.GetRules() {
 		if rule == nil {
 			return WorkspaceArchiveTask{}, errWorkspaceTaskInvalid
@@ -154,6 +159,31 @@ func workspaceTaskFromProto(input *controlplanev1.SessionWorkspaceArchiveTask) (
 			Manifest: runtimecontract.WorkspaceObjectCommitment{Key: manifest.GetKey(), Version: manifest.GetVersion(), ETag: manifest.GetEtag(), Digest: manifest.GetDigest(), SizeBytes: manifest.GetSizeBytes()}}
 	}
 	return value, nil
+}
+
+// archiveVolumeReadyFromProto preserves the prepared volume observation through the shared
+// closed JSON contract, rejecting unknown protobuf fields before they can be discarded.
+// This converts metadata only; task ownership and physical readiness remain separately checked.
+// archiveVolumeReadyFromProto сохраняет наблюдение подготовленного тома через общий закрытый
+// JSON-контракт, отклоняя неизвестные protobuf-поля до их потери. Это только преобразование
+// метаданных: владение задачей и физическая готовность проверяются отдельно.
+func archiveVolumeReadyFromProto(input *controlplanev1.RuntimeWorkspaceVolumeReady) (*runtimecontract.WorkspaceVolumeReady, error) {
+	if input == nil {
+		return nil, nil
+	}
+	preparation := input.GetPreparation()
+	if len(input.ProtoReflect().GetUnknown()) != 0 || preparation == nil || len(preparation.ProtoReflect().GetUnknown()) != 0 || preparation.GetScope() == nil || len(preparation.GetScope().ProtoReflect().GetUnknown()) != 0 {
+		return nil, errWorkspaceTaskInvalid
+	}
+	raw, err := json.Marshal(input)
+	var ready runtimecontract.WorkspaceVolumeReady
+	if err != nil || runtimecontract.DecodeWorkspaceStorageTaskJSON(raw, &ready) != nil {
+		return nil, errWorkspaceTaskInvalid
+	}
+	if _, err := runtimecontract.EncodeWorkspaceVolumeReady(ready); err != nil {
+		return nil, errWorkspaceTaskInvalid
+	}
+	return &ready, nil
 }
 
 // workspaceHexDigest checks exact lowercase SHA256 syntax instead of accepting length-only metadata.

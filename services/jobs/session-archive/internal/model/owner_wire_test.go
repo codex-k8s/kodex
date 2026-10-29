@@ -3,6 +3,7 @@ package model
 import (
 	"encoding/json"
 	"os"
+	"reflect"
 	"testing"
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -41,8 +42,7 @@ func TestWorkspaceArchiveOwnerWireConsumer(t *testing.T) {
 			t.Fatal("encode actual worker task", key, err)
 		}
 		decoded, err := DecodeTask(raw)
-		if err != nil || decoded.Workspace == nil || decoded.Workspace.Target.Scope != task.Workspace.Target.Scope ||
-			decoded.Workspace.Policy.Digest != task.Workspace.Policy.Digest || decoded.ContentGeneration != task.ContentGeneration {
+		if err != nil || !reflect.DeepEqual(decoded.Workspace, task.Workspace) || decoded.ContentGeneration != task.ContentGeneration {
 			t.Fatal("worker task codec lost owner commitments", key, err)
 		}
 		changed := proto.Clone(&input).(*cp.SessionArchiveTask)
@@ -59,6 +59,22 @@ func TestWorkspaceArchiveOwnerWireConsumer(t *testing.T) {
 		changed.Workspace = nil
 		if _, err := FromProto(changed); err == nil {
 			t.Fatal("work-only task silently downgraded to legacy", key)
+		}
+		if input.GetWorkspace().GetTarget().GetVolumeReady() != nil {
+			for _, depth := range []string{"ready", "preparation", "scope"} {
+				changed = proto.Clone(&input).(*cp.SessionArchiveTask)
+				ready := changed.GetWorkspace().GetTarget().GetVolumeReady()
+				var message proto.Message = ready
+				if depth == "preparation" {
+					message = ready.GetPreparation()
+				} else if depth == "scope" {
+					message = ready.GetPreparation().GetScope()
+				}
+				message.ProtoReflect().SetUnknown([]byte{0x78, 0x01})
+				if _, err := FromProto(changed); err == nil {
+					t.Fatal("unknown prepared volume metadata was discarded", key, depth)
+				}
+			}
 		}
 	}
 }

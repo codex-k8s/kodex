@@ -274,7 +274,7 @@ func TestProjectAssistantIntegrationGrantsComponent(t *testing.T) {
 			}
 			for _, item := range retired.Items {
 				if item.Grantable || item.Reason != "PACKAGE_UNAVAILABLE" || item.CurrentGrantEnabled {
-					t.Fatal("incompatible package gained enable eligibility")
+					t.Fatalf("incompatible package candidate lost closed diagnostic: capability=%s grantable=%t reason=%s enabled=%t", item.Capability.Key, item.Grantable, item.Reason, item.CurrentGrantEnabled)
 				}
 			}
 			first, err := updatedService.GetProjectAssistantIntegrationGrantCandidates(ctx, owner, project.Ref, old.Ref, "", query.Page{Size: 1})

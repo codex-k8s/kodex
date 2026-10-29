@@ -1131,13 +1131,13 @@ func (repository *Repository) suspendTargetSchedules(ctx context.Context, tx pgx
 // changeInstructions handles ordinary agent draft create/validate/publish/forward rollback with
 // protected-system rejection, agent OCC and prompt-context checks. Publication applies the exact
 // impact plan/binding receipts; rollback creates a new published revision. It increments agent
-// version and returns an event outcome, preserving historical read-error handling rather than
-// silently fixing it.
+// version and resolves the complete agent projection in the same transaction, so its durable
+// command receipt and event identify the actual instruction state without a second snapshot.
 // changeInstructions обрабатывает обычные agent draft create/validate/publish/forward rollback с
 // protected-system rejection, agent OCC и prompt-context checks. Publication применяет точные
 // impact plan/binding receipts; rollback создаёт новую published revision. Увеличивает agent
-// version и возвращает event outcome, сохраняя прежнюю обработку read errors без неявного
-// исправления.
+// version и читает полную проекцию агента в той же транзакции: устойчивый receipt и событие
+// указывают фактическое состояние инструкций без отдельного снимка.
 func (repository *Repository) changeInstructions(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.AgentInput)
 	if !ok || payload.Ref == "" {
@@ -1256,7 +1256,10 @@ func (repository *Repository) changeInstructions(ctx context.Context, tx pgx.Tx,
 	if _, err := tx.Exec(ctx, queryCommandsChangeinstructionsUpdateAgentsVersionUpdatedAt, agentID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	agent := entity.Agent{Ref: payload.Ref, ProjectRef: projectRef, Version: agentVersion + 1}
+	agent, err := repository.getAgentFromTx(ctx, tx, scope, payload.Ref)
+	if err != nil {
+		return commandOutcome{}, err
+	}
 	event := "AGENT_CHANGED"
 	if input.Kind == command.PublishInstructions || input.Kind == command.RollbackInstructions {
 		event = "INSTRUCTIONS_PUBLISHED"

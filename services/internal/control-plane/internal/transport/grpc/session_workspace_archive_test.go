@@ -53,8 +53,16 @@ func workspaceArchiveOwnerFixture(t *testing.T, kind string) runtimecontract.Wor
 		Manifest: runtimecontract.WorkspaceObjectCommitment{Version: "version-fixture", ETag: "etag-fixture", Digest: "sha256:" + strings.Repeat("f", 64), SizeBytes: 2048}}
 	checkpoint.Manifest.Key = checkpoint.ObjectPrefix() + "manifest.json"
 	work.Workspace.Quiescence, work.Workspace.Checkpoint = "", checkpoint
-	if kind == "DELETE_OBJECT" {
+	if kind == "RESTORE" || kind == "DELETE_OBJECT" {
 		work.TargetObjectKey, work.TargetObjectVersion = checkpoint.Manifest.Key, checkpoint.Manifest.Version
+	}
+	if kind == "RESTORE" {
+		work.Workspace.Target.VolumeReady = &runtimecontract.WorkspaceVolumeReady{
+			Schema: runtimecontract.WorkspaceVolumeReadySchema,
+			Preparation: runtimecontract.WorkspaceVolumePreparation{Scope: scope, WorkspaceRef: "wks_fixture000",
+				TaskRef: "svt_fixture000", PVCUID: writer.PVCUID, VolumeGeneration: 1},
+			Device: 1, Inode: 1,
+		}
 	}
 	return work
 }
@@ -111,6 +119,20 @@ func TestWorkspaceArchiveOwnerWire(t *testing.T) {
 		mutate(&work)
 		if castSessionArchiveTask(map[string]any{"workspaceWork": work}) != nil {
 			t.Fatal("mismatched workspace task admitted")
+		}
+	}
+	for _, mutate := range []func(*runtimecontract.WorkspaceArchiveWork){
+		func(w *runtimecontract.WorkspaceArchiveWork) { w.TargetObjectKey = "" },
+		func(w *runtimecontract.WorkspaceArchiveWork) { w.TargetObjectVersion = "" },
+		func(w *runtimecontract.WorkspaceArchiveWork) { w.Workspace.Target.VolumeReady = nil },
+		func(w *runtimecontract.WorkspaceArchiveWork) {
+			w.Workspace.Target.VolumeReady.Preparation.PVCUID = "foreign-pvc"
+		},
+	} {
+		work := workspaceArchiveOwnerFixture(t, "RESTORE")
+		mutate(&work)
+		if castSessionArchiveTask(map[string]any{"workspaceWork": work}) != nil {
+			t.Fatal("restore without exact object or prepared target admitted")
 		}
 	}
 	legacy := castSessionArchiveTask(map[string]any{"taskRef": "sat_legacy000", "kind": "SNAPSHOT", "codexSessionID": "legacy-codex"})

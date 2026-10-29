@@ -4,8 +4,8 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.23
-updated: 2026-10-28
+version: 1.0.24
+updated: 2026-10-29
 ---
 
 # Граница профиля
@@ -14,6 +14,15 @@ updated: 2026-10-28
 неопубликованного рабочего дерева при остановке сотрудника. История модели,
 устойчивый work и принятые CLEAN-артефакты имеют разные контракты. Сохранение
 work не принимает бизнес-результат и не выдаёт новых полномочий.
+
+RESTORE передаёт точные manifest key/version и подтверждение подготовки
+назначенного тома `VolumeReady` через всю цепочку owner → protobuf → archive
+consumer → строгий task codec. Наличие поля только в owner-модели недостаточно:
+consumer сохраняет полный preparation scope/workspace/PVC/generation и
+device/inode, отклоняет неизвестные вложенные wire-поля и повторно проверяет
+общий контракт. Wire-проверка отдельно передаёт фактические bytes owner
+независимому модулю consumer; её успех не доказывает физическое восстановление,
+owner ACK или готовность включить V2 на staging.
 
 Выбранный профиль `SESSION_WORKSPACE_V2` повторно использует существующий
 session PVC20GiB. Только exact writable generation монтируется как

@@ -2,6 +2,7 @@ package platform
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -10,12 +11,17 @@ import (
 	serviceplatform "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// TestIntegrationAutonomousGitHubInvocationComponent proves native NONE grants actually reach durable READY invocations, rather than stopping at a successful grant catalog; replay and cancellation retain exact owner lifecycle without external GitHub requests.
-// TestIntegrationAutonomousGitHubInvocationComponent доказывает создание устойчивых READY invocations по native NONE grants, а не только успешный каталог; replay и cancel сохраняют owner lifecycle без внешних запросов GitHub.
+// TestIntegrationAutonomousGitHubInvocationComponent proves native NONE grants reach durable
+// invocations and actual gateway claims; replay and cancellation retain exact owner lifecycle
+// without performing external GitHub requests or treating a READY queue entry as delivery.
+// TestIntegrationAutonomousGitHubInvocationComponent доказывает создание устойчивых invocations
+// по native NONE grants и их захват gateway; replay и cancel сохраняют owner lifecycle без
+// внешних запросов GitHub и без подмены доставки наличием READY в очереди.
 func TestIntegrationAutonomousGitHubInvocationComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
@@ -80,6 +86,69 @@ func TestIntegrationAutonomousGitHubInvocationComponent(t *testing.T) {
 		if err != nil || stringMap(first, "invocationRef") != stringMap(replayed, "invocationRef") {
 			t.Fatal("native invocation replay created another effect")
 		}
+	}
+	_, _, gateway := resolveIntegrationEffectTestPrincipals(t, ctx, r)
+	work, err := service.ClaimIntegrationInvocations(ctx, gateway, "autonomous-invocation-gateway", int32(len(operations)))
+	if err != nil || len(work) != len(operations) {
+		t.Fatalf("native NONE invocations were not claimed by the gateway: got=%d want=%d err=%v", len(work), len(operations), err)
+	}
+	seen := map[string]bool{}
+	for _, claim := range work {
+		operation := stringMap(claim, "operation")
+		if seen[operation] || stringMap(claim, "approvalPolicy") != "NONE" || stringMap(claim, "leaseRef") == "" {
+			t.Fatalf("gateway claim lost its exact autonomous policy or lease: operation=%s", operation)
+		}
+		seen[operation] = true
+		var output map[string]any
+		provider := "github-issue:1"
+		switch operation {
+		case "github.issue.create", "github.issue.update":
+			output = map[string]any{"number": 1, "title": "Fixture", "state": "open"}
+		case "github.repository.content.create", "github.repository.content.update":
+			output = map[string]any{"sha": strings.Repeat("a", 40), "path": claim["boundedInput"].(map[string]any)["path"]}
+			provider = "github-commit:" + strings.Repeat("a", 40)
+		case "github.pull_request.comment.create", "github.pull_request.comment.update":
+			output = map[string]any{"comment_id": 1, "pull_request_number": 1}
+			provider = "github-comment:1"
+		case "github.pull_request.ready":
+			output = map[string]any{"number": 1, "sha": strings.Repeat("a", 40), "state": "open", "draft": false, "url": "https://github.com/fixture/repository/pull/1", "already_ready": false}
+			provider = "github-pull:1"
+		default:
+			t.Fatalf("unexpected autonomous gateway operation: %s", operation)
+		}
+		summary := string(asJSON(output))
+		completion := command.Command{Kind: command.CompleteIntegrationInvocation, Principal: gateway,
+			Mutation: value.Mutation{IdempotencyKey: "autonomous-worker-complete-" + operation},
+			Payload: command.IntegrationInvocationInput{InvocationRef: stringMap(claim, "invocationRef"), LeaseRef: stringMap(claim, "leaseRef"),
+				Fence: stringMap(claim, "fence"), Generation: runtimeRevisionMapInt64(claim, "generation"), Success: true,
+				EffectKey: stringMap(claim, "effectKey"), InputDigest: stringMap(claim, "inputDigest"),
+				ProviderEffectRef: provider, ResultSummary: summary, ResponseDigest: workflowResultSHA([]byte(summary))}}
+		completed, completeErr := service.Execute(ctx, completion)
+		if completeErr != nil || completed.Event == nil || completed.Event.Delta.IntegrationInvocationRef != stringMap(claim, "invocationRef") {
+			t.Fatalf("autonomous worker completion failed: operation=%s err=%v", operation, completeErr)
+		}
+		stored, readErr := service.GetIntegrationInvocation(ctx, gateway, stringMap(claim, "invocationRef"))
+		if readErr != nil || stringMap(stored, "state") != "SUCCEEDED" || stringMap(stored, "effectReceiptRef") == "" || stringMap(stored, "gateRef") != "" || stringMap(stored, "resultSummary") != summary {
+			t.Fatalf("autonomous completion did not persist an exact ungated receipt: operation=%s err=%v", operation, readErr)
+		}
+		_, beforeReplay, _, eventErr := service.ListRunEvents(ctx, owner, query.Filter{ResourceRef: run.Ref})
+		if eventErr != nil {
+			t.Fatal("read autonomous event sequence before replay", eventErr)
+		}
+		if _, replayErr := service.Execute(ctx, completion); replayErr != nil {
+			t.Fatalf("autonomous completion replay failed: operation=%s err=%v", operation, replayErr)
+		}
+		_, afterReplay, _, eventErr := service.ListRunEvents(ctx, owner, query.Filter{ResourceRef: run.Ref})
+		if eventErr != nil || afterReplay != beforeReplay {
+			t.Fatalf("autonomous completion replay appended another event: operation=%s err=%v", operation, eventErr)
+		}
+		replayed, replayErr := service.GetIntegrationInvocation(ctx, gateway, stringMap(claim, "invocationRef"))
+		if replayErr != nil || !reflect.DeepEqual(replayed, stored) {
+			t.Fatalf("autonomous completion replay changed its stored receipt: operation=%s err=%v", operation, replayErr)
+		}
+	}
+	if remaining, claimErr := service.ClaimIntegrationInvocations(ctx, gateway, "autonomous-invocation-gateway", 10); claimErr != nil || len(remaining) != 0 {
+		t.Fatalf("completed autonomous effects were claimed twice: count=%d err=%v", len(remaining), claimErr)
 	}
 	fresh, err := service.GetRun(ctx, owner, run.Ref)
 	if err != nil {

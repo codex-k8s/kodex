@@ -90,7 +90,11 @@ WHERE i.organization_id=$1::uuid
   AND (((i.risk='READ' OR c.definition_key='email' OR
           (c.definition_key='github' AND i.risk='WRITE' AND i.operation=i.capability_key AND
            i.operation IN ('github.issue.comment.create','github.issue.comment.update','github.pull_request.create',
-                           'github.pull_request.update','github.pull_request.review.create'))) AND i.approval_policy='NONE'
+                           'github.pull_request.update','github.pull_request.review.create',
+                           'github.issue.create','github.issue.update',
+                           'github.repository.content.create','github.repository.content.update',
+                           'github.pull_request.comment.create','github.pull_request.comment.update',
+                           'github.pull_request.ready'))) AND i.approval_policy='NONE'
         AND NOT i.mailbox_gate_required) OR
     (i.approval_policy='HUMAN_SCOPED' AND approval.id IS NOT NULL
       AND i.grant_version=g.version AND i.approval_scope_paths=g.approval_scope_paths

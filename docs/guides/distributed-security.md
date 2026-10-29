@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.39
+version: 1.7.40
 updated: 2026-10-29
 ---
 
@@ -25,6 +25,14 @@ node. При отсутствии provider head CAS обязательны exact
 workflow. Потерянный ответ восстанавливается только чтением. Уже наблюдённый
 Ready не требует повторной мутации и не выдаётся за проверку качества кода.
 См. [операционный контракт #1967](../operations/github-autonomous-pdlc-1967.md).
+
+Новая policy проходит весь путь эффекта: exact каталог и frozen grant,
+invocation CHECK/trigger, worker selection, adapter и durable completion.
+Успешная запись `READY` не доказывает возможность worker claim. Во всех слоях
+сохраняются один закрытый набор операций, exact authority pins и отдельные
+Human Gate для merge/deploy. Неподдержанная exact версия остаётся
+`PACKAGE_UNAVAILABLE`; специальное ограничение получателя не скрывает причину
+и не выдаёт executable fallback.
 
 ## Ожидаемые политики из полного desired render
 

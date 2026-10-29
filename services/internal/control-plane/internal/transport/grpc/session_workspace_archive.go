@@ -27,7 +27,8 @@ func castWorkspaceArchiveWork(work runtimecontract.WorkspaceArchiveWork, lease *
 		ContentGeneration: work.ContentGeneration, PvcName: work.PVCName, InputDigest: work.InputDigest,
 		TargetObjectKey: work.TargetObjectKey, TargetObjectVersion: work.TargetObjectVersion, Attempt: work.Attempt, Lease: lease,
 		Workspace: &cp.SessionWorkspaceArchiveTask{Target: &cp.RuntimeWorkspaceStorage{Profile: value.Target.Profile,
-			Scope: castWorkspaceScope(value.Target.Scope), WorkspaceRef: value.Target.WorkspaceRef, Generation: value.Target.Generation},
+			Scope: castWorkspaceScope(value.Target.Scope), WorkspaceRef: value.Target.WorkspaceRef, Generation: value.Target.Generation,
+			VolumeReady: castWorkspaceVolumeReady(value.Target.VolumeReady)},
 			CheckpointRef: value.CheckpointRef, Quiescence: value.Quiescence, PvcUid: value.PVCUID,
 			ReconcileOnly: value.ReconcileOnly, Policy: policy, Checkpoint: castWorkspaceCheckpoint(value.Checkpoint)}}
 }
