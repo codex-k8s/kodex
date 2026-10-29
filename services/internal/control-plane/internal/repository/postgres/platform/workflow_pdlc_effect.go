@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"strings"
@@ -29,7 +30,7 @@ func parseWorkflowPDLCFileWrite(operation string, raw []byte) (workflowPDLCFileW
 		return workflowPDLCFileWrite{}, nil, errs.ErrConflict
 	}
 	data, err := base64.StdEncoding.Strict().DecodeString(input.Content)
-	if err != nil || len(data) > 256<<10 || !utf8.Valid(data) {
+	if err != nil || len(data) > 256<<10 || !utf8.Valid(data) || bytes.IndexByte(data, 0) >= 0 {
 		return workflowPDLCFileWrite{}, nil, errs.ErrInvalid
 	}
 	return input, data, nil

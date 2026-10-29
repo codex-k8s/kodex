@@ -4,7 +4,7 @@ title: Native COMMENT и сохранённый QA-отчёт серверног
 type: runbook
 status: approved
 owner: architect
-version: 1.4.1
+version: 1.5.0
 updated: 2026-10-29
 ---
 
@@ -58,6 +58,64 @@ selectors. Настоящая compiled JSON Schema и owner create/read/update �
 активные grants. API `Schema.Resolve`/`Resolved.Validate` и условные схемы
 проверены через Context7 `/google/jsonschema-go`; исполняемые tests используют
 закреплённую версию модуля.
+
+## Приёмка и продолжение PDLC
+
+Серверная приёмка нового профиля повторяет native proof через общие owner SQL
+readers: rejoin имеет прежний приоритет, неоднозначный результат не скрывается
+fallback. Readers сохраняют текущие grants, frozen RuntimeRevision, lineage и
+`FOR SHARE ... NOWAIT`; поэтому функции с row locks остаются `VOLATILE`,
+`SECURITY INVOKER`. Новые функции принадлежат `control_plane_owner`, исполняются
+runtime, не предоставляют `PUBLIC` либо backup reader право выполнения.
+
+Файл подтверждается тремя разными receipts: WRITE → PR-read → immutable
+content-read. Общая SQL-хронология используется и Go evaluator, и journal
+guard. Проверяются опубликованные repository/branch/path/PR, полный digest
+decoded bytes, bounded prefix/chunk digest и совпадение immutable head.
+Допустим текст до256КиБ, включая стандартные CRLF-переносы base64; NUL,
+невалидный UTF-8, неканонический padding, пробелы и tab в base64 отклоняются до
+WRITE. Этот профиль текстовых файлов не заменяет загрузку бинарных артефактов.
+
+Composite digests только новых FILE/PR_COMMENT используют SHA256 UTF8-полей с
+NUL-разделителем и закрытой cardinality:12 и7 полей с domain tag. Исторические
+digests не меняются. Фиксированные vectors включают кириллицу и `<&>` в пути,
+чтобы Go JSON escaping и PostgreSQL JSON whitespace не влияли на commitment.
+Comment дополнительно закрепляет digest exact native input в PostgreSQL JSONB
+представлении, которое читает штатный pgx adapter.
+
+`PULL_REQUEST` нового профиля принимается по native `github.pull_request.ready`
+на exact expected head: output обязан сообщить открытый non-draft PR с тем же
+SHA и repository URL. `already_ready=true` допустим; обычный PR-read либо
+неизвестный исход Ready не заменяет этот receipt. Принятый Ready head совпадает
+с принятым файлом того же этапа. Merge и deploy не входят в author delivery
+registry и сохраняют собственные согласования.
+
+| Переход | Проверяемое поведение |
+| --- | --- |
+| Create/publish/launch | Exact owner/project, закрытый профиль, immutable requirements; публикация не выдаёт grant |
+| Claim/renew | Прежние lease/fence/generation и свежий RuntimeRevision, без восстановления закрытой аренды |
+| Native WRITE | Только published author slot и действующий `NONE` grant; immutable intent до внешнего действия |
+| Model complete до native outcome | Capture/lease закрываются, physical run удерживается; принятых результатов ещё нет |
+| Native outcome до model complete | Сохраняется native факт; завершение модели проходит тот же owner join |
+| Все outcomes завершены | Один `CONTINUES` с fresh lease/RR и полным bounded envelope; прежний producer не оживает |
+| Final complete | Прежняя completed provenance плюс SQL-проверка каждого нового результата; только accepted journal допускает зависимость |
+| Technical retry | Совпавший известный WRITE присоединяет receipt; новый ключ не разрешает повтор эффекта |
+| Преднамеренная новая версия файла | Exact predecessor и другой digest bytes назначают новую file epoch; неизвестный предшественник закрывает запись |
+| Revoke/cancel/delete | Прежние owner transitions закрывают grants/leases; сохранённый receipt не восстанавливает разрешение |
+| Lease expiry/dead-letter | Прежние owner closure/recovery; expiry не доказывает успех внешнего эффекта |
+| `WAITING_OWNER`/Gate expiry | Согласование не подменяется model outcome; merge/deploy обрабатываются своими owner-командами |
+| `CHANGES_REQUESTED` | Проверенные отрицательные facts сохраняются отдельно от accepted inputs; новая business attempt требует действующего server rework protocol |
+| Ошибка delivery либо overflow | Durable typed failure без усечения фактов и повторного WRITE; история читается штатным owner path |
+
+`make test-control-plane-postgres` с фильтром `--pdlc-owner` использует отдельную
+пустую loopback-БД, exact predecessor030 и дорабатываемую forward migration031.
+Проверяются native file intent и owner graph для documentation/developer,
+model-first/effect-first, комментария и Ready; gateway в этом контуре доверенный
+fixture, внешние GitHub/модельные действия он не выполняет. Отдельный
+`--pdlc-owner-legacy` выполняет шесть прежних rejoin/review сценариев на том же
+successor. Фактические результаты привязываются к конкретным bytes/SHA отдельно.
+Полное schema/backup proof, rollout потребителей и живой PDLC остаются отдельными
+условиями включения нового профиля на staging.
 
 ## Прежний профиль ревью и QA
 

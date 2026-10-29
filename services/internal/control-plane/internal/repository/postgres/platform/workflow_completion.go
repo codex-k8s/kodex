@@ -73,7 +73,7 @@ func (repository *Repository) completeServerWorkflowTx(ctx context.Context, tx p
 		if err != nil {
 			return commandOutcome{}, true, err
 		}
-		if payload.Success && !pending && root.Version.ResultEvidenceProfile == workflowservice.GitHubReviewQAV1 {
+		if payload.Success && !pending && workflowservice.NativeReviewEvidence(root.Version.ResultEvidenceProfile) {
 			pending, err = repository.joinWorkflowEvidenceTx(ctx, tx, current, lease)
 			if err != nil {
 				return commandOutcome{}, true, err

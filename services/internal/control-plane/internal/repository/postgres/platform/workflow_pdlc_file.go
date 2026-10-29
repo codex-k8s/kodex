@@ -190,8 +190,8 @@ func acceptWorkflowRepositoryFileResult(requirement entity.WorkflowResultRequire
 		page.SourceDigest != "sha256:"+workflowResultSHA(data) || page.ChunkDigest != "sha256:"+workflowResultSHA([]byte(page.Text)) || !bytes.HasPrefix(data, []byte(page.Text)) {
 		return entity.WorkflowAcceptedResult{}, workflowRepositoryFileMismatch
 	}
-	digest := workflowResultSHA(asJSON([]string{"kodex.workflow-repository-file.v1", requirement.Key, requirement.Repository, requirement.Branch, requirement.FileName, requirement.TargetRef,
-		declaration.ReceiptRef, write.Digest, declaration.HeadReceiptRef, head.Digest, declaration.ContentReceiptRef, content.Digest}))
+	digest := workflowPDLCResultDigest("kodex.workflow-repository-file.v1", requirement.Key, requirement.Repository, requirement.Branch, requirement.FileName, requirement.TargetRef,
+		declaration.ReceiptRef, write.Digest, declaration.HeadReceiptRef, head.Digest, declaration.ContentReceiptRef, content.Digest)
 	return entity.WorkflowAcceptedResult{Key: requirement.Key, Kind: requirement.Kind, Repository: requirement.Repository, FileName: requirement.FileName, Branch: requirement.Branch,
 		Number: number, HeadSHA: pull.SHA, ReceiptRef: declaration.ReceiptRef, HeadReceiptRef: declaration.HeadReceiptRef, ContentReceiptRef: declaration.ContentReceiptRef, Digest: digest}, ""
 }

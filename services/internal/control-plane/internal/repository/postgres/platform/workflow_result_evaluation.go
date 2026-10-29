@@ -105,6 +105,8 @@ func (repository *Repository) evaluateWorkflowStepResultDetailedForProfileTx(ctx
 			}
 			if requirement.Kind == "PR_COMMENT" {
 				result, reason = acceptWorkflowPRCommentResult(requirement, declaration, proof)
+			} else if profile == workflowservice.GitHubPDLCV1 && requirement.Kind == "PULL_REQUEST" {
+				result, reason = acceptWorkflowPDLCReadyResult(requirement, declaration, proof)
 			} else {
 				result, reason = acceptWorkflowIntegrationResult(requirement, declaration, proof, inputs)
 			}

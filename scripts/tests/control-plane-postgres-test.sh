@@ -19,6 +19,20 @@ test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestInstructionCommandPr
 # Оба закрытых upgrade-сценария используют одну и ту же отдельную пустую БД.
 upgrade_test='^TestWorkflowReviewQAEvidenceForwardUpgrade$'
 volume_owner=false
+owner_test='^TestWorkspaceWriterOwnerComponent$'
+if [[ "$test_pattern" == --pdlc-owner || "$test_pattern" == --pdlc-owner-legacy ]]; then
+  volume_owner=true
+  owner_test='^TestWorkflowPDLCFile(Intent|Result)OwnerComponent$'
+  if [[ "$test_pattern" == --pdlc-owner-legacy ]]; then
+    owner_test='^(TestWorkflowEffectRejoinComponent|TestWorkflowReviewQAEvidenceComponent)$/^(known-success|current-grant-revoked|same-node-new-generation|same-business-continues|review-effect-first|review-model-first)$'
+  fi
+  upgrade_test='^TestWorkflowPDLCMigrationFunctions$'
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --pdlc-functions ]]; then
+  upgrade_test='^TestWorkflowPDLCMigrationFunctions$'
+  test_pattern=--review-qa-upgrade
+fi
 if [[ "$test_pattern" == --github-pr-upgrade ]]; then
   upgrade_test='^(TestGitHubAutonomousForwardUpgrade|TestGitHubPRForwardUpgrade)$'
   test_pattern=--review-qa-upgrade
@@ -228,7 +242,7 @@ if [[ "$test_pattern" == --review-qa-upgrade ]]; then
       ./cmd/cli -run "$upgrade_test"
   )
   if [[ "$volume_owner" == true ]]; then
-    # Полная native017+SSH уже проверена выше; release-verifiers прежних схем не расширяются.
+    # Native upgrade проверен выше; release-verifiers прежних схем не расширяются.
     psql "$admin_dsn" --no-password -v ON_ERROR_STOP=1 \
       -c 'CREATE DATABASE control_plane_component_template WITH TEMPLATE control_plane OWNER control_plane_owner' >/dev/null
     (
@@ -237,7 +251,7 @@ if [[ "$test_pattern" == --review-qa-upgrade ]]; then
         KODEX_CONTROL_PLANE_TEST_ADMIN_DSN="$admin_dsn" \
         KODEX_CONTROL_PLANE_TEST_TEMPLATE_DATABASE=control_plane_component_template \
         env -u GOFLAGS GOENV=off GOWORK=off go test -p "$go_parallelism" -v -count=1 -timeout=120s \
-        ./internal/repository/postgres/platform -run '^TestWorkspaceWriterOwnerComponent$'
+        ./internal/repository/postgres/platform -run "$owner_test"
     )
   fi
   exit

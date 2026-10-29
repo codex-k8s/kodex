@@ -131,12 +131,17 @@ func TestWorkflowPDLCComposedFileEvidence(t *testing.T) {
 // TestWorkflowPDLCDeveloperHeadMatchesPublishedFile запрещает прежнему Ready PR receipt выбирать
 // устаревший head, когда этот же шаг подтверждает новые bytes файла на другом head.
 func TestWorkflowPDLCDeveloperHeadMatchesPublishedFile(t *testing.T) {
-	for _, mode := range []string{"same-head", "old-head", "old-head-reversed"} {
+	for _, mode := range []string{"same-head", "old-head", "old-head-reversed", "plain-read"} {
 		t.Run(mode, func(t *testing.T) {
 			r, d, proofs := workflowPDLCFileFixture([]byte("Реализация сервиса\n"))
 			ready := proofs[1]
-			ready.Summary = strings.Replace(ready.Summary, `"draft":true`, `"draft":false`, 1)
-			if mode != "same-head" {
+			ready.Operation = "github.pull_request.ready"
+			ready.Input = asJSON(map[string]any{"pull_request_number": 3, "expected_head_sha": strings.Repeat("b", 40)})
+			ready.Summary = string(asJSON(map[string]any{"number": 3, "state": "open", "sha": strings.Repeat("b", 40), "draft": false, "url": "https://github.com/acme/repo/pull/3", "already_ready": false}))
+			if mode == "plain-read" {
+				ready.Operation = "github.pull_request.read"
+				ready.Input = []byte(`{"pull_request_number":3}`)
+			} else if mode != "same-head" {
 				ready.Summary = strings.Replace(ready.Summary, strings.Repeat("b", 40), strings.Repeat("a", 40), 1)
 			}
 			ready.Digest = workflowResultSHA([]byte(ready.Summary))

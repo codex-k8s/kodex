@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.61
+version: 1.1.62
 updated: 2026-10-29
 ---
 
@@ -52,6 +52,18 @@ producing epoch и неизменяемыми source pins. Отрицатель�
 создающего fresh CONTINUES/RR. Outcome overflow сохраняет native fact и закрывает
 граф устойчивым typed failure вместо усечения или повторного внешнего действия.
 Пример закрытого профиля: [native COMMENT и QA report](../operations/workflow-review-qa-evidence-1949.md).
+
+Добавление evidence profile согласованно включает все consumers: приёмку native
+intent и результата, удержание physical run до owner delivery, join при обоих
+порядках completion, исключение из обычного Gate continuation и сохранение
+captured artifacts. Разные списки операций в этих местах могут завершить run
+до доставки подтверждённых фактов. Внутри owner используется один закрытый
+реестр delivery operations; он не заменяет published requirement, current grant,
+frozen RR либо eligibility. SQL guard и Go evaluator разрешают receipt через
+один авторитетный reader с сохранением row locks и их volatility. Hash новых
+доказательств имеет единый byte frame для Go/SQL, не зависит от JSON escaping;
+исторические snapshots/digests не переписываются. Каждый новый профиль отдельно
+проходит model-first/effect-first и проверку фактического downstream claim.
 
 Часы всего SERVER DAG принадлежат его существующему `ROOT_PROCESS`, а не
 первому planned anchor: реальные физические исполнители могут уже находиться
