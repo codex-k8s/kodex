@@ -26,8 +26,12 @@ type declaredResultWire struct {
 	Key        string              `json:"key"`
 	Source     *artifactSourceWire `json:"source,omitempty"`
 	ReceiptRef string              `json:"receiptRef,omitempty"`
-	HeadSHA    string              `json:"headSha,omitempty"`
-	Verdict    string              `json:"verdict,omitempty"`
+	// Read receipt selectors remain untrusted until the owner resolves exact producing lineage.
+	// Селекторы read receipts недоверенные до проверки владельцем точной producing lineage.
+	HeadReceiptRef    string `json:"headReceiptRef,omitempty"`
+	ContentReceiptRef string `json:"contentReceiptRef,omitempty"`
+	HeadSHA           string `json:"headSha,omitempty"`
+	Verdict           string `json:"verdict,omitempty"`
 }
 
 // artifactSourceWire keeps the untrusted revision as JSON bytes, without float64 rounding or
@@ -48,7 +52,7 @@ var revisionNumberPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)(\.[0-9]+)?([eE]
 // declaredResult converts only bounded structurally representable values, never verifying access.
 // declaredResult преобразует лишь ограниченные структурно представимые значения, не проверяя доступ.
 func (wire declaredResultWire) declaredResult() (entity.WorkflowDeclaredResult, bool) {
-	result := entity.WorkflowDeclaredResult{Key: wire.Key, ReceiptRef: wire.ReceiptRef, HeadSHA: wire.HeadSHA, Verdict: wire.Verdict}
+	result := entity.WorkflowDeclaredResult{Key: wire.Key, ReceiptRef: wire.ReceiptRef, HeadReceiptRef: wire.HeadReceiptRef, ContentReceiptRef: wire.ContentReceiptRef, HeadSHA: wire.HeadSHA, Verdict: wire.Verdict}
 	if wire.Source == nil {
 		return result, true
 	}

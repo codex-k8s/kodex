@@ -66,7 +66,7 @@ func ValidRequirements(requirements []entity.WorkflowResultRequirement, dependen
 // ValidRequirementsForProfile проверяет явные evidence selectors, сохраняя прежний словарь без
 // профиля. Функция не разрешает доступ к файлу либо внешний effect.
 func ValidRequirementsForProfile(profile string, requirements []entity.WorkflowResultRequirement, dependencies []string) bool {
-	if profile != "" && profile != GitHubReviewQAV1 {
+	if profile != "" && !NativeReviewEvidence(profile) {
 		return false
 	}
 	if len(requirements) < 1 || len(requirements) > 4 {
@@ -74,11 +74,13 @@ func ValidRequirementsForProfile(profile string, requirements []entity.WorkflowR
 	}
 	seen := map[string]bool{}
 	for _, r := range requirements {
-		if (r.EvidenceKey != "" && (profile != GitHubReviewQAV1 || r.Kind != "QA")) ||
-			(profile == GitHubReviewQAV1 && r.Kind == "QA" && !resultKey.MatchString(r.EvidenceKey)) {
+		if (r.EvidenceKey != "" && (!NativeReviewEvidence(profile) || r.Kind != "QA")) ||
+			(NativeReviewEvidence(profile) && r.Kind == "QA" && !resultKey.MatchString(r.EvidenceKey)) {
 			return false
 		}
-		if r.Kind != "ARTIFACT_REVIEW" && r.SubjectResultKey != "" || len(r.Repository) > 200 || !resultKey.MatchString(r.Key) || seen[r.Key] || (r.Kind != "DEPLOYMENT" && r.TargetRef != "") {
+		if r.Kind != "ARTIFACT_REVIEW" && r.SubjectResultKey != "" || len(r.Repository) > 200 || !resultKey.MatchString(r.Key) || seen[r.Key] ||
+			(r.Kind != "DEPLOYMENT" && r.TargetRef != "" && !(profile == GitHubPDLCV1 && slices.Contains([]string{"REPOSITORY_FILE", "PR_COMMENT", "PULL_REQUEST"}, r.Kind))) ||
+			(r.Branch != "" && (profile != GitHubPDLCV1 || r.Kind != "REPOSITORY_FILE")) {
 			return false
 		}
 		seen[r.Key] = true
@@ -89,6 +91,19 @@ func ValidRequirementsForProfile(profile string, requirements []entity.WorkflowR
 			}
 		case "PULL_REQUEST":
 			if !RepositoryPattern.MatchString(r.Repository) || r.FileName != "" || r.MediaType != "" || r.SubjectStepKey != "" || r.Operation != "" {
+				return false
+			}
+			if profile == GitHubPDLCV1 {
+				if _, valid := RepositoryPullNumber(r.TargetRef); !valid {
+					return false
+				}
+			}
+		case "REPOSITORY_FILE", "PR_COMMENT":
+			_, validNumber := RepositoryPullNumber(r.TargetRef)
+			if profile != GitHubPDLCV1 || !RepositoryPattern.MatchString(r.Repository) || !validNumber || r.MediaType != "" || r.SubjectStepKey != "" || r.Operation != "" {
+				return false
+			}
+			if r.Kind == "REPOSITORY_FILE" && (!ValidRepositoryFilePath(r.FileName) || !ValidRepositoryBranch(r.Branch)) || r.Kind == "PR_COMMENT" && r.FileName != "" {
 				return false
 			}
 		case "ARTIFACT_REVIEW":
@@ -126,7 +141,7 @@ func ValidRequirementsForProfile(profile string, requirements []entity.WorkflowR
 			return false
 		}
 	}
-	return validEvidenceRequirementRefs(profile, requirements)
+	return validEvidenceRequirementRefs(profile, requirements) && validPDLCRequirementRefs(profile, requirements)
 }
 
 // DecodeDeclaration requires one unique result for every predicate and rejects unknown fields,
@@ -142,7 +157,7 @@ func DecodeDeclaration(raw string, requirements []entity.WorkflowResultRequireme
 // DecodeDeclarationForProfile требует native receipt selectors только для нового явного профиля;
 // прежние декларации сохраняют точную закрытую форму и не повышаются неявно.
 func DecodeDeclarationForProfile(raw string, requirements []entity.WorkflowResultRequirement, profile string) (map[string]entity.WorkflowDeclaredResult, error) {
-	if profile != "" && profile != GitHubReviewQAV1 {
+	if profile != "" && !NativeReviewEvidence(profile) {
 		return nil, ErrResultInvalid
 	}
 	if len(requirements) < 1 || len(requirements) > 4 || len(raw) > MaximumResultBytes || !utf8.ValidString(raw) || !uniqueJSON([]byte(raw)) {
@@ -197,13 +212,23 @@ func DecodeDeclarationForProfile(raw string, requirements []entity.WorkflowResul
 			if !exactFields(resultFields, "key", "receiptRef") || !receiptRefPattern.MatchString(r.ReceiptRef) {
 				return nil, ErrResultInvalid
 			}
+		case "REPOSITORY_FILE":
+			if profile != GitHubPDLCV1 || !exactFields(resultFields, "key", "receiptRef", "headReceiptRef", "contentReceiptRef") ||
+				!receiptRefPattern.MatchString(r.ReceiptRef) || !receiptRefPattern.MatchString(r.HeadReceiptRef) || !receiptRefPattern.MatchString(r.ContentReceiptRef) ||
+				r.ReceiptRef == r.HeadReceiptRef || r.ReceiptRef == r.ContentReceiptRef || r.HeadReceiptRef == r.ContentReceiptRef {
+				return nil, ErrResultInvalid
+			}
+		case "PR_COMMENT":
+			if profile != GitHubPDLCV1 || !exactFields(resultFields, "key", "receiptRef") || !receiptRefPattern.MatchString(r.ReceiptRef) {
+				return nil, ErrResultInvalid
+			}
 		case "ARTIFACT_REVIEW":
 			if !exactFields(resultFields, "key", "source", "verdict") || !validArtifactSource(resultFields["source"], r.Source) || r.Source.Kind != "CAPTURED_ARTIFACT" || (r.Verdict != "PASS" && r.Verdict != "CHANGES_REQUIRED") {
 				return nil, ErrResultInvalid
 			}
 		case "REVIEW", "QA":
 			shape := exactFields(resultFields, "key", "headSha", "verdict")
-			if profile == GitHubReviewQAV1 {
+			if NativeReviewEvidence(profile) {
 				withReceipt := exactFields(resultFields, "key", "headSha", "verdict", "receiptRef") && receiptRefPattern.MatchString(r.ReceiptRef)
 				if kind == "REVIEW" {
 					shape = withReceipt

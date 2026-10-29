@@ -44,7 +44,7 @@ func validEvidenceRequirementRefs(profile string, requirements []entity.Workflow
 // validEvidenceSubjects требует direct predecessor с ровно одним published PR для opt-in
 // REVIEW/QA; REVIEW-only evidence не становится источником PR неявно.
 func validEvidenceSubjects(version entity.WorkflowVersion) bool {
-	if version.ResultEvidenceProfile != GitHubReviewQAV1 {
+	if !NativeReviewEvidence(version.ResultEvidenceProfile) {
 		return true
 	}
 	counts := map[string]int{}

@@ -32,7 +32,7 @@ func ServerTextBytes(version entity.WorkflowVersion) int {
 // Прежняя проверка общей формы и свежий допуск БД остаются обязательными; предикат не выдаёт
 // возможностей и не доказывает отсутствие привязок обязательного дочернего процесса.
 func ValidServerVersion(version entity.WorkflowVersion) bool {
-	if version.ExecutionMode != ServerDAGV1 || (version.ReworkPolicy != "" && version.ReworkPolicy != OwnerApprovedUpstreamV1) || (version.ResultEvidenceProfile != "" && version.ResultEvidenceProfile != GitHubReviewQAV1) || len(version.Steps) < 1 || len(version.Steps) > MaximumSteps || version.Concurrency < 1 || version.Concurrency > 2 {
+	if version.ExecutionMode != ServerDAGV1 || (version.ReworkPolicy != "" && version.ReworkPolicy != OwnerApprovedUpstreamV1) || (version.ResultEvidenceProfile != "" && !NativeReviewEvidence(version.ResultEvidenceProfile)) || len(version.Steps) < 1 || len(version.Steps) > MaximumSteps || version.Concurrency < 1 || version.Concurrency > 2 {
 		return false
 	}
 	raw, err := json.Marshal(version)

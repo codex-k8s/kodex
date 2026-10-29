@@ -47,6 +47,12 @@ var queryWorkflowEffectReceipt string
 // workflowEffectIntent indexes an existing native invocation; it neither replaces its receipt nor authorizes another write.
 // workflowEffectIntent индексирует existing invocation, не заменяя receipt и не разрешая новый WRITE.
 type workflowEffectIntent struct {
+	// FileCallKey binds a new-profile file record to its actual native idempotency key.
+	// FileCallKey связывает file record нового профиля с фактическим native idempotency key.
+	FileCallKey string `json:"fileCallKey,omitempty"`
+	// FilePredecessorRef identifies the previous successful native file intent, never caller authority.
+	// FilePredecessorRef обозначает предыдущий успешный native file intent, не полномочия caller.
+	FilePredecessorRef string `json:"filePredecessorRef,omitempty"`
 	// QAReport is assigned only after exact captured report and current log eligibility checks.
 	// QAReport назначает owner после exact captured report и current log eligibility checks.
 	QAReport *workflowQAReportPin `json:"qaReport,omitempty"`
@@ -153,13 +159,18 @@ func workflowEffectSlotForProfile(profile string, step entity.WorkflowStep, depe
 	if json.Unmarshal(resourceScope, &resource) != nil || !workflowservice.ValidRequirementsForProfile(profile, step.ResultRequirements, step.DependsOn) {
 		return "", errs.ErrConflict
 	}
+	if profile == workflowservice.GitHubPDLCV1 {
+		if key, handled, err := workflowPDLCAuthorEffectSlot(step, operation, resourceScope, canonicalInput); handled {
+			return key, err
+		}
+	}
 	repository := resource["owner"] + "/" + resource["repository"]
 	key := ""
 	for _, requirement := range step.ResultRequirements {
-		if requirement.Kind != "DEPLOYMENT" && requirement.Repository != repository && !(profile == workflowservice.GitHubReviewQAV1 && (requirement.Kind == "REVIEW" || requirement.Kind == "QA")) {
+		if requirement.Kind != "DEPLOYMENT" && requirement.Repository != repository && !(workflowservice.NativeReviewEvidence(profile) && (requirement.Kind == "REVIEW" || requirement.Kind == "QA")) {
 			continue
 		}
-		allowed := requirement.Kind == "PULL_REQUEST" && contains([]string{repositoryBundleOperation, "github.pull_request.create"}, operation)
+		allowed := requirement.Kind == "PULL_REQUEST" && profile != workflowservice.GitHubPDLCV1 && contains([]string{repositoryBundleOperation, "github.pull_request.create"}, operation)
 		if requirement.Kind == "INTEGRATION_RECEIPT" && operation == "github.pull_request.merge" && requirement.Operation == operation {
 			subject, found := workflowResultSubject(dependencies, requirement.SubjectStepKey)
 			var target struct {
@@ -168,7 +179,7 @@ func workflowEffectSlotForProfile(profile string, step entity.WorkflowStep, depe
 			}
 			allowed = found && subject.Repository == requirement.Repository && json.Unmarshal(canonicalInput, &target) == nil && target.Number == subject.Number && target.SHA == subject.HeadSHA
 		}
-		if profile == workflowservice.GitHubReviewQAV1 && (requirement.Kind == "REVIEW" || requirement.Kind == "QA") {
+		if workflowservice.NativeReviewEvidence(profile) && (requirement.Kind == "REVIEW" || requirement.Kind == "QA") {
 			subject, found := workflowEvidenceSubject(dependencies, requirement.SubjectStepKey)
 			if found && subject.Repository == repository {
 				if requirement.Kind == "REVIEW" && operation == "github.pull_request.review.create" {
@@ -226,14 +237,15 @@ func (repository *Repository) admitWorkflowEffectTx(ctx context.Context, tx pgx.
 	var dependencies []workflowResultDependency
 	var intents []workflowEffectIntent
 	var rejoins []workflowEffectRejoin
-	if decodeStrict(rawStep, &step) != nil || decodeStrict(rawInputs, &dependencies) != nil || decodeStrict(rawIntents, &intents) != nil || decodeStrict(rawRejoins, &rejoins) != nil || len(intents) > workflowEffectLimit || rejoinCount > workflowEffectLimit {
+	limit := workflowEffectLimitForProfile(evidenceProfile)
+	if decodeStrict(rawStep, &step) != nil || decodeStrict(rawInputs, &dependencies) != nil || decodeStrict(rawIntents, &intents) != nil || decodeStrict(rawRejoins, &rejoins) != nil || len(intents) > limit || rejoinCount > limit {
 		return nil, nil, errs.ErrConflict
 	}
 	intent.ResultKey, err = workflowEffectSlotForProfile(evidenceProfile, step, dependencies, operation, resourceScope, canonicalInput)
 	if err != nil {
 		return nil, nil, err
 	}
-	if evidenceProfile == workflowservice.GitHubReviewQAV1 && operation == "github.issue.create" {
+	if workflowservice.NativeReviewEvidence(evidenceProfile) && operation == "github.issue.create" {
 		intent.QAReport, intent.QALogs, err = repository.workflowIssueEvidenceTx(ctx, tx, current, admission, intent, step, dependencies, canonicalInput)
 		if err != nil {
 			return nil, nil, err
@@ -246,11 +258,14 @@ func (repository *Repository) admitWorkflowEffectTx(ctx context.Context, tx pgx.
 	if semanticInput == nil {
 		semanticInput = canonicalInput
 	}
-	intent.SemanticDigest, err = workflowEffectSemanticDigest(intent.ResultKey, operation, scopeDigest, semanticInput)
+	intent.SemanticDigest, err = workflowEffectSemanticDigestForProfile(evidenceProfile, intent.ResultKey, operation, scopeDigest, semanticInput)
 	if err != nil {
 		return nil, nil, err
 	}
 	admission.Intent = intent
+	if evidenceProfile == workflowservice.GitHubPDLCV1 && workflowPDLCFileOperation(operation) {
+		return repository.admitWorkflowPDLCFileTx(ctx, tx, current, admission, intent, intents, rejoins, rejoinCount, input["idempotency_key"], canonicalInput, sessionRef, turnRef)
+	}
 	for _, old := range intents {
 		if old.ResultKey != intent.ResultKey || old.Operation != operation || workflowEvidenceOperation(evidenceProfile, operation) && old.OriginBusiness != intent.OriginBusiness {
 			continue
@@ -258,21 +273,14 @@ func (repository *Repository) admitWorkflowEffectTx(ctx context.Context, tx pgx.
 		if old.Schema != intent.Schema || old.SemanticDigest != intent.SemanticDigest || old.ConnectionRef != intent.ConnectionRef || old.ConnectionVersion != intent.ConnectionVersion || old.GrantRef != grantRef || old.GrantVersion != grantVersion || old.DefinitionDigest != definitionDigest || old.ScopeDigest != scopeDigest || old.ApprovalPolicy != approvalPolicy {
 			return nil, nil, errs.ErrConflict
 		}
-		var invocationRef, state, effectKey, inputDigest, receiptRef, receiptDigest, publicationRef, originalKey, gateRef string
-		var oldInput, oldManifest []byte
-		var sourcePolicy string
-		err = tx.QueryRow(ctx, queryWorkflowEffectReceipt, pgx.StrictNamedArgs{"organization_id": current.organizationID, "root_run_id": rootID, "anchor_id": admission.AnchorID, "origin_node_id": old.OriginNodeID, "origin_revision_id": old.OriginRevisionID, "origin_lease_id": old.OriginLeaseID, "invocation_ref": old.InvocationRef, "operation": operation, "connection_ref": old.ConnectionRef, "grant_ref": old.GrantRef, "grant_version": old.GrantVersion, "definition_digest": old.DefinitionDigest, "scope_digest": old.ScopeDigest, "approval_policy": old.ApprovalPolicy}).Scan(&invocationRef, &state, &effectKey, &inputDigest, &receiptRef, &receiptDigest, &publicationRef, &originalKey, &gateRef, &oldInput, &oldManifest, &sourcePolicy)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil, errs.ErrConflict
-		}
+		proof, err := readWorkflowEffectNativeTx(ctx, tx, current, admission.RootID, admission.AnchorID, old)
 		if err != nil {
-			return nil, nil, serializableTransactionError(err, errs.ErrUnavailable)
+			return nil, nil, err
 		}
-		if effectKey != old.EffectKey || inputDigest != old.InputDigest {
-			return nil, nil, errs.ErrConflict
-		}
+		invocationRef, state, receiptRef, receiptDigest, publicationRef, originalKey, gateRef := proof.InvocationRef, proof.State, proof.ReceiptRef, proof.ReceiptDigest, proof.PublicationRef, proof.OriginalKey, proof.GateRef
+		oldInput, oldManifest, sourcePolicy := proof.Input, proof.Manifest, proof.SourcePolicy
 		oldSemantic := oldInput
-		if operation == "github.issue.create" && evidenceProfile == workflowservice.GitHubReviewQAV1 {
+		if operation == "github.issue.create" && workflowservice.NativeReviewEvidence(evidenceProfile) {
 			oldSemantic, err = workflowQAIssueSemanticInput(oldInput, old.QAReport, old.QALogs)
 			if err != nil {
 				return nil, nil, err
@@ -317,7 +325,7 @@ func (repository *Repository) admitWorkflowEffectTx(ctx context.Context, tx pgx.
 				}
 			}
 			if !found {
-				if rejoinCount >= workflowEffectLimit {
+				if rejoinCount >= limit {
 					return nil, nil, errs.ErrConflict
 				}
 				if err := appendWorkflowEffectTx(ctx, tx, current, rootID, admission.NodeID, "rejoin", rejoin); err != nil {
@@ -328,7 +336,7 @@ func (repository *Repository) admitWorkflowEffectTx(ctx context.Context, tx pgx.
 		return nil, map[string]any{"invocationRef": invocationRef, "grantRef": grantRef, "operation": operation, "state": state, "gateRef": gateRef, "workflowRejoined": state == "SUCCEEDED", "publicationRef": publicationRef, "receiptRef": receiptRef,
 			"semanticDigest": intent.SemanticDigest, "receiptDigest": receiptDigest, "resultKey": intent.ResultKey, "runtimeAttempt": intent.OriginAttempt, "businessAttempt": intent.OriginBusiness, "sessionRef": sessionRef, "turnRef": turnRef, "connectionVersion": intent.ConnectionVersion}, nil
 	}
-	if len(intents) >= workflowEffectLimit {
+	if len(intents) >= limit {
 		return nil, nil, errs.ErrConflict
 	}
 	return admission, nil, nil

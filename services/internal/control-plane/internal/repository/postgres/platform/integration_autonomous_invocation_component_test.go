@@ -64,12 +64,16 @@ func TestIntegrationAutonomousGitHubInvocationComponent(t *testing.T) {
 		{"github.pull_request.comment.update", map[string]any{"pull_request_number": 1, "comment_id": 4, "body": "Fixture response"}},
 		{"github.pull_request.ready", map[string]any{"pull_request_number": 1, "expected_head_sha": strings.Repeat("a", 40)}},
 	}
+	grantKeys := []string{"github.pull_request.read", "github.repository.content.read"}
 	for _, operation := range operations {
+		grantKeys = append(grantKeys, operation.key)
+	}
+	for _, key := range grantKeys {
 		fresh, err := service.GetIntegrationConnection(ctx, owner, connection.Ref)
 		if err != nil {
 			t.Fatal(err)
 		}
-		execute(command.ChangeIntegrationGrant, owner, operation.key, &fresh.Version, command.IntegrationGrantInput{ConnectionRef: connection.Ref, CapabilityKey: operation.key, AgentRef: agent.Ref, ApprovalPolicy: "NONE", Enabled: true})
+		execute(command.ChangeIntegrationGrant, owner, key, &fresh.Version, command.IntegrationGrantInput{ConnectionRef: connection.Ref, CapabilityKey: key, AgentRef: agent.Ref, ApprovalPolicy: "NONE", Enabled: true})
 	}
 	run := execute(command.LaunchRun, owner, "run", nil, command.LaunchRunInput{ProjectRef: project.Ref, Title: "Autonomous invocation", Task: "Fixture native admission", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}}).Run
 	claimed := execute(command.ClaimExecution, worker, "runtime", nil, command.LeaseInput{WorkloadInstance: "autonomous-invocation-runtime", Limit: 1}).RuntimeItems
@@ -93,6 +97,7 @@ func TestIntegrationAutonomousGitHubInvocationComponent(t *testing.T) {
 		t.Fatalf("native NONE invocations were not claimed by the gateway: got=%d want=%d err=%v", len(work), len(operations), err)
 	}
 	seen := map[string]bool{}
+	receipts := map[string]string{}
 	for _, claim := range work {
 		operation := stringMap(claim, "operation")
 		if seen[operation] || stringMap(claim, "approvalPolicy") != "NONE" || stringMap(claim, "leaseRef") == "" {
@@ -131,6 +136,7 @@ func TestIntegrationAutonomousGitHubInvocationComponent(t *testing.T) {
 		if readErr != nil || stringMap(stored, "state") != "SUCCEEDED" || stringMap(stored, "effectReceiptRef") == "" || stringMap(stored, "gateRef") != "" || stringMap(stored, "resultSummary") != summary {
 			t.Fatalf("autonomous completion did not persist an exact ungated receipt: operation=%s err=%v", operation, readErr)
 		}
+		receipts[operation] = stringMap(stored, "effectReceiptRef")
 		_, beforeReplay, _, eventErr := service.ListRunEvents(ctx, owner, query.Filter{ResourceRef: run.Ref})
 		if eventErr != nil {
 			t.Fatal("read autonomous event sequence before replay", eventErr)
@@ -150,6 +156,8 @@ func TestIntegrationAutonomousGitHubInvocationComponent(t *testing.T) {
 	if remaining, claimErr := service.ClaimIntegrationInvocations(ctx, gateway, "autonomous-invocation-gateway", 10); claimErr != nil || len(remaining) != 0 {
 		t.Fatalf("completed autonomous effects were claimed twice: count=%d err=%v", len(remaining), claimErr)
 	}
+	workflowPDLCReadOrderFixture{ctx: ctx, repository: r, service: service, pool: pool, owner: owner, worker: worker, gateway: gateway,
+		runRef: run.Ref, connectionRef: connection.Ref, lease: claimed[0], writeReceiptRef: receipts["github.repository.content.update"]}.prove(t)
 	fresh, err := service.GetRun(ctx, owner, run.Ref)
 	if err != nil {
 		t.Fatal(err)
