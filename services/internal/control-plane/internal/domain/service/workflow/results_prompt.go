@@ -17,9 +17,9 @@ func ResultDeclarationPrompt(requirements []entity.WorkflowResultRequirement) (s
 }
 
 // ResultDeclarationPromptForProfile discloses the exact opted-in receipt/report contract without
-// creating evidence or authorizing GitHub approval; old profile text remains byte-identical.
+// creating evidence or authorizing GitHub approval; historical receipt shapes remain unchanged.
 // ResultDeclarationPromptForProfile показывает точный выбранный receipt/report контракт без
-// создания evidence либо GitHub approval; текст прежнего профиля остаётся byte-identical.
+// создания evidence либо GitHub approval; прежние формы receipt остаются неизменными.
 func ResultDeclarationPromptForProfile(requirements []entity.WorkflowResultRequirement, profile string) (string, error) {
 	if profile != "" && profile != GitHubReviewQAV1 {
 		return "", ErrResultInvalid
@@ -41,7 +41,7 @@ func ResultDeclarationPromptForProfile(requirements []entity.WorkflowResultRequi
 		case "PULL_REQUEST", "INTEGRATION_RECEIPT", "DEPLOYMENT":
 			result.ReceiptRef = "<receiptRef из результата разрешённой интеграции>"
 		case "ARTIFACT_REVIEW":
-			result.Source = &entity.WorkflowArtifactSource{Kind: "CAPTURED_ARTIFACT", ArtifactRef: "<artifactRef принятого subject/result>", Revision: 1, Digest: "<точный digest принятой ревизии>"}
+			result.Source = &entity.WorkflowArtifactSource{Kind: "CAPTURED_ARTIFACT", ArtifactRef: "<artifactRef принятого subject/result>", Revision: 1, Digest: "sha256:<64 строчные шестнадцатеричные цифры принятой ревизии>"}
 			result.Verdict = "<PASS или CHANGES_REQUIRED по фактической проверке>"
 		case "REVIEW", "QA":
 			result.HeadSHA = "<точный headSha принятого результата предшественника>"
@@ -77,6 +77,7 @@ func ResultDeclarationPromptForProfile(requirements []entity.WorkflowResultRequi
 		"У элемента ARTIFACT разрешены только key и source. kind, fileName и mediaType из resultRequirements описывают проверку сервера и не являются полями элемента results. " +
 		"В source нового файла текущего завершения допустимо только {\"kind\":\"CURRENT_COMPLETION\"}. " +
 		"Для ранее сохранённого файла замени весь source объектом с ровно четырьмя полями: kind со значением CAPTURED_ARTIFACT, artifactRef, revision (целое число) и digest; последние три значения скопируй из свежего неизменяемого каталога RUN_RESULT. " +
+		"source.digest всегда имеет вид sha256: и ровно 64 строчные шестнадцатеричные цифры. Если accepted predecessor evidence показывает только 64 цифры, добавь перед ними sha256:; уже имеющийся префикс не повторяй. Сами цифры дайджеста не изменяй. " +
 		"Не выбирай CURRENT_COMPLETION для файла только из предыдущего технического хода. " +
 		"У ARTIFACT_REVIEW разрешены только key, source и verdict; source всегда CAPTURED_ARTIFACT и совпадает с exact subjectStepKey/subjectResultKey из accepted predecessor evidence. Не выбирай файл отчёта рецензента вместо проверенного результата автора. " +
 		"У PULL_REQUEST, INTEGRATION_RECEIPT и DEPLOYMENT разрешены только key и receiptRef. " + reviewShape +
