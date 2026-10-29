@@ -4,7 +4,7 @@ title: Операторский bootstrap SSH/Compose
 type: runbook
 status: approved
 owner: sre
-version: 1.0.3
+version: 1.0.4
 updated: 2026-10-29
 ---
 
@@ -108,11 +108,16 @@ rootless/systemd/cgroupv2, slice640MiB/90%CPU/256tasks и отсутствие r
 overlay после создания `kodex-ssh-compose-signing` с единственным ключом
 `private-key`: ровно64 бинарных bytes результата owner keygen. Значение не
 попадает в Git, ConfigMap, диагностический архив или модель. Mount read-only,
-mode0440, доступен только основному контейнеру CP с его прежним fsGroup10001;
+mode0440, доступен только основному контейнеру CP с прежним fsGroup контура;
 gateway, runtime, scanner и target не получают signing private key. На target
 доставляется только public trust map. Компонент не создаёт Secret и не расширяет
 RBAC/egress. Без него SSH deploy закрыто недоступен; наличие записи adapter READY
 само по себе не доказывает доступность подписи.
+
+UID основного контейнера и fsGroup Pod проверяются раздельно: в базе fsGroup10001,
+а в обследованном staging overlay fsGroup1001 при UID10001 основного контейнера.
+Компонент не меняет ни одну из этих identity; оператор сверяет сохранённый
+securityContext, а не требует от живого overlay значений базы.
 
 Перед адресным включением оператор сверяет cluster/namespace UID, сохраняет
 приватный снимок exact Deployment и отсутствие прежней настройки, проверяет
