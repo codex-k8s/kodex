@@ -4,11 +4,20 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.63
+version: 1.1.64
 updated: 2026-10-29
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Большая история завершённых интеграций передаётся продолжению целиком через
+server-materialized digest manifest и защищённый reader непосредственного
+`CONTINUES`. Reader заново проверяет live lease/RR, lineage и eligibility,
+сверяет полный digest и исходный materialized task до выдачи страницы.
+Обычные READ и отрицательные outcomes не отбрасываются ради task budget.
+Сохранённый ref/hash не выдаёт authority и не переживает закрытие runtime lease.
+Переполнение полного источника остаётся typed failure. Матрица:
+[#1972](../operations/workflow-evidence-history-1972.md).
 
 Новая конфигурация проверяет уникальность требований внутри каждого этапа до
 подготовки применимого плана, записи и публикации. Повтор capability закрыто

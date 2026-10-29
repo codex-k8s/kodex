@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "policy_revision": 100,
+  "policy_revision": 101,
   "policy": {
     "authority_abi_version": 2,
     "trust_domain": "kodex.local",
@@ -810,6 +810,7 @@
           "platform.runtime.execution.claim",
           "platform.runtime.execution.complete",
           "platform.runtime.execution.delegate",
+          "platform.runtime.execution.integration.outcomes.read",
           "platform.runtime.execution.progress",
           "platform.runtime.execution.renew",
           "platform.runtime.execution.workflow.catalog",
@@ -930,7 +931,11 @@
           "platform.session-archive.snapshot.complete",
           "platform.session-archive.tasks.claim",
           "platform.session-archive.tasks.fail",
-          "platform.session-archive.tasks.renew"
+          "platform.session-archive.tasks.renew",
+          "platform.workspace-volumes.tasks.claim",
+          "platform.workspace-volumes.tasks.complete",
+          "platform.workspace-volumes.tasks.fail",
+          "platform.workspace-volumes.tasks.renew"
         ],
         "server_resolved_fields": [
           "actor",
@@ -15696,6 +15701,41 @@
         "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
         "target_trust_bundle_id": "kodex-internal-ca-g1",
         "permission": "platform.runtime.execution.delegate",
+        "authority_proof_producer_id": "control-plane.runtime-controller",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.runtime.execution.integration.outcomes.read",
+        "caller_workload_id": "runtime-controller",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RuntimeWorkService/GetExecutionIntegrationOutcomes",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.runtime.execution.integration.outcomes.read",
         "authority_proof_producer_id": "control-plane.runtime-controller",
         "authority_sources": [
           "DOMAIN_STATE"

@@ -12863,6 +12863,7 @@ const (
 	RuntimeWorkService_DelegateExecution_FullMethodName                               = "/controlplane.v1.RuntimeWorkService/DelegateExecution"
 	RuntimeWorkService_LaunchWorkflowExecution_FullMethodName                         = "/controlplane.v1.RuntimeWorkService/LaunchWorkflowExecution"
 	RuntimeWorkService_GetExecutionWorkflowCatalog_FullMethodName                     = "/controlplane.v1.RuntimeWorkService/GetExecutionWorkflowCatalog"
+	RuntimeWorkService_GetExecutionIntegrationOutcomes_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/GetExecutionIntegrationOutcomes"
 	RuntimeWorkService_ProposeAssistantPlan_FullMethodName                            = "/controlplane.v1.RuntimeWorkService/ProposeAssistantPlan"
 	RuntimeWorkService_ProposeAssistantMetadata_FullMethodName                        = "/controlplane.v1.RuntimeWorkService/ProposeAssistantMetadata"
 	RuntimeWorkService_ProposeRunMetadata_FullMethodName                              = "/controlplane.v1.RuntimeWorkService/ProposeRunMetadata"
@@ -12921,6 +12922,8 @@ type RuntimeWorkServiceClient interface {
 	// Каталог опубликованных Workflow exact ordinary execution; owner/project
 	// разрешаются из действующей lease, не из аргументов инструмента.
 	GetExecutionWorkflowCatalog(ctx context.Context, in *GetExecutionWorkflowCatalogRequest, opts ...grpc.CallOption) (*GetExecutionWorkflowCatalogResponse, error)
+	// Полная история завершённого producer доступна только его непосредственному CONTINUES.
+	GetExecutionIntegrationOutcomes(ctx context.Context, in *GetExecutionIntegrationOutcomesRequest, opts ...grpc.CallOption) (*GetExecutionIntegrationOutcomesResponse, error)
 	ProposeAssistantPlan(ctx context.Context, in *ProposeAssistantPlanRequest, opts ...grpc.CallOption) (*ProposeAssistantPlanResponse, error)
 	ProposeAssistantMetadata(ctx context.Context, in *ProposeAssistantMetadataRequest, opts ...grpc.CallOption) (*ProposeAssistantMetadataResponse, error)
 	ProposeRunMetadata(ctx context.Context, in *ProposeRunMetadataRequest, opts ...grpc.CallOption) (*ProposeRunMetadataResponse, error)
@@ -13173,6 +13176,16 @@ func (c *runtimeWorkServiceClient) GetExecutionWorkflowCatalog(ctx context.Conte
 	return out, nil
 }
 
+func (c *runtimeWorkServiceClient) GetExecutionIntegrationOutcomes(ctx context.Context, in *GetExecutionIntegrationOutcomesRequest, opts ...grpc.CallOption) (*GetExecutionIntegrationOutcomesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetExecutionIntegrationOutcomesResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_GetExecutionIntegrationOutcomes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *runtimeWorkServiceClient) ProposeAssistantPlan(ctx context.Context, in *ProposeAssistantPlanRequest, opts ...grpc.CallOption) (*ProposeAssistantPlanResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ProposeAssistantPlanResponse)
@@ -13400,6 +13413,8 @@ type RuntimeWorkServiceServer interface {
 	// Каталог опубликованных Workflow exact ordinary execution; owner/project
 	// разрешаются из действующей lease, не из аргументов инструмента.
 	GetExecutionWorkflowCatalog(context.Context, *GetExecutionWorkflowCatalogRequest) (*GetExecutionWorkflowCatalogResponse, error)
+	// Полная история завершённого producer доступна только его непосредственному CONTINUES.
+	GetExecutionIntegrationOutcomes(context.Context, *GetExecutionIntegrationOutcomesRequest) (*GetExecutionIntegrationOutcomesResponse, error)
 	ProposeAssistantPlan(context.Context, *ProposeAssistantPlanRequest) (*ProposeAssistantPlanResponse, error)
 	ProposeAssistantMetadata(context.Context, *ProposeAssistantMetadataRequest) (*ProposeAssistantMetadataResponse, error)
 	ProposeRunMetadata(context.Context, *ProposeRunMetadataRequest) (*ProposeRunMetadataResponse, error)
@@ -13495,6 +13510,9 @@ func (UnimplementedRuntimeWorkServiceServer) LaunchWorkflowExecution(context.Con
 }
 func (UnimplementedRuntimeWorkServiceServer) GetExecutionWorkflowCatalog(context.Context, *GetExecutionWorkflowCatalogRequest) (*GetExecutionWorkflowCatalogResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetExecutionWorkflowCatalog not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) GetExecutionIntegrationOutcomes(context.Context, *GetExecutionIntegrationOutcomesRequest) (*GetExecutionIntegrationOutcomesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetExecutionIntegrationOutcomes not implemented")
 }
 func (UnimplementedRuntimeWorkServiceServer) ProposeAssistantPlan(context.Context, *ProposeAssistantPlanRequest) (*ProposeAssistantPlanResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ProposeAssistantPlan not implemented")
@@ -13945,6 +13963,24 @@ func _RuntimeWorkService_GetExecutionWorkflowCatalog_Handler(srv interface{}, ct
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RuntimeWorkService_GetExecutionIntegrationOutcomes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetExecutionIntegrationOutcomesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).GetExecutionIntegrationOutcomes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_GetExecutionIntegrationOutcomes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).GetExecutionIntegrationOutcomes(ctx, req.(*GetExecutionIntegrationOutcomesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _RuntimeWorkService_ProposeAssistantPlan_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ProposeAssistantPlanRequest)
 	if err := dec(in); err != nil {
@@ -14373,6 +14409,10 @@ var RuntimeWorkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetExecutionWorkflowCatalog",
 			Handler:    _RuntimeWorkService_GetExecutionWorkflowCatalog_Handler,
+		},
+		{
+			MethodName: "GetExecutionIntegrationOutcomes",
+			Handler:    _RuntimeWorkService_GetExecutionIntegrationOutcomes_Handler,
 		},
 		{
 			MethodName: "ProposeAssistantPlan",

@@ -202,7 +202,7 @@ func workflowResultObject(raw []byte, required []string, allowed []string) (map[
 // workflowResultObjectWithLimit сохраняет закрытый decoder и допускает явно ограниченные большие
 // native input snapshots. Прежние callers результатов сохраняют исходный предел64KiB.
 func workflowResultObjectWithLimit(raw []byte, required []string, allowed []string, limit int) (map[string]json.RawMessage, bool) {
-	if limit < 1 || limit > 1<<20 || len(raw) == 0 || len(raw) > limit {
+	if limit < 1 || limit > maximumWorkflowEvidenceSourceBytes || len(raw) == 0 || len(raw) > limit {
 		return nil, false
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))

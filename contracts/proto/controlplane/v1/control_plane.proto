@@ -418,6 +418,8 @@ service RuntimeWorkService {
   // Каталог опубликованных Workflow exact ordinary execution; owner/project
   // разрешаются из действующей lease, не из аргументов инструмента.
   rpc GetExecutionWorkflowCatalog(GetExecutionWorkflowCatalogRequest) returns (GetExecutionWorkflowCatalogResponse);
+  // Полная история завершённого producer доступна только его непосредственному CONTINUES.
+  rpc GetExecutionIntegrationOutcomes(GetExecutionIntegrationOutcomesRequest) returns (GetExecutionIntegrationOutcomesResponse);
   rpc ProposeAssistantPlan(ProposeAssistantPlanRequest) returns (ProposeAssistantPlanResponse);
   rpc ProposeAssistantMetadata(ProposeAssistantMetadataRequest) returns (ProposeAssistantMetadataResponse);
   rpc ProposeRunMetadata(ProposeRunMetadataRequest) returns (ProposeRunMetadataResponse);
@@ -4519,6 +4521,26 @@ message LaunchWorkflowExecutionRequest {
   string expected_published_ref = 9;
   string expected_spec_digest = 10;
   int64 expected_workflow_version = 11;
+}
+message GetExecutionIntegrationOutcomesRequest {
+  string lease_ref = 1;
+  string fence = 2;
+  int64 generation = 3;
+  string source_invocation_ref = 4;
+  string source_sha256 = 5;
+  int64 offset_bytes = 6;
+  int32 maximum_bytes = 7;
+}
+message GetExecutionIntegrationOutcomesResponse {
+  string source_invocation_ref = 1;
+  string source_sha256 = 2;
+  int64 size_bytes = 3;
+  int32 outcomes_count = 4;
+  int64 offset_bytes = 5;
+  int64 next_offset_bytes = 6;
+  bool eof = 7;
+  string page_sha256 = 8;
+  string text = 9;
 }
 message GetExecutionWorkflowCatalogRequest {
   string lease_ref = 1;

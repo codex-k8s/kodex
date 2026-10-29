@@ -828,7 +828,7 @@ func tools(input runtimecontract.RunnerInput) []map[string]any {
 		result = append(result, workflowCatalogTool(), workflowLaunchTool())
 	}
 	if len(input.IntegrationGrants) != 0 {
-		result = append(result, integrationCatalogTool(), integrationTool())
+		result = append(result, integrationCatalogTool(input), integrationTool())
 	}
 	if repositoryBundleAvailable(input) {
 		result = append(result, repositoryBundleTool())
@@ -992,7 +992,11 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 	case "get_configuration_catalog":
 		result, err = server.configurationCatalog(request.Context(), input, params.Arguments)
 	case "get_integration_catalog":
-		result, err = integrationCatalog(input, params.Arguments)
+		if _, selected := params.Arguments["outcomes_read"]; selected {
+			result, err = server.integrationOutcomes(request.Context(), input, params.Arguments)
+		} else {
+			result, err = integrationCatalog(input, params.Arguments)
+		}
 	case "find_platform_resources":
 		result, err = server.findPlatformResources(request.Context(), input, params.Arguments)
 	case "read_task_session":
@@ -2343,6 +2347,14 @@ func (server *Server) recordToolCallPhase(ctx context.Context, input runtimecont
 			return err
 		}
 	}
+	if tool == "get_integration_catalog" && revision == 2 && toolErr == nil {
+		if _, selected := arguments["outcomes_read"]; selected {
+			safeResult, err = safeIntegrationOutcomesReceipt(input, arguments, result)
+			if err != nil {
+				return err
+			}
+		}
+	}
 	if tool == "get_workflow_catalog" && revision == 2 && toolErr == nil {
 		safeResult, err = safeWorkflowCatalogReceipt(input, arguments, result)
 		if err != nil {
@@ -2413,6 +2425,9 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 		}
 		return parameters, "platform.configuration.read", "", input.IsAssistant()
 	case "get_integration_catalog":
+		if _, selected := arguments["outcomes_read"]; selected {
+			return map[string]any{"mode": "OUTCOMES_READ"}, "platform.integration.catalog", "", integrationOutcomesAvailable(input)
+		}
 		return map[string]any{}, "platform.integration.catalog", "", len(input.IntegrationGrants) != 0
 	case "find_platform_resources":
 		return map[string]any{}, "platform.resources.search", "", input.IsAssistant()

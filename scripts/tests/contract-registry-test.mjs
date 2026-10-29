@@ -57,8 +57,8 @@ const riskOperations = [
 ];
 
 function checkRiskContract(api, policy) {
-  // Ревизия100 добавляет owner RPC/replay рабочих томов; четыре risk bindings остаются прежними.
-  assert.equal(policy.policy_revision, 100, 'RISK_POLICY_REVISION');
+  // Ревизия101 добавляет exact history reader; четыре risk bindings остаются прежними.
+  assert.equal(policy.policy_revision, 101, 'RISK_POLICY_REVISION');
   for (const [permission, operation, method] of riskOperations) {
     const bindings = policy.policy.operation_bindings.filter(item => item.operation_id === permission);
     assert.equal(bindings.length, 1, 'RISK_METHOD_EXACT_CALLER');

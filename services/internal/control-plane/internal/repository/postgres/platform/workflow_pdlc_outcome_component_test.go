@@ -86,8 +86,16 @@ func TestWorkflowPDLCFileResultOwnerComponent(t *testing.T) {
 			if early := fixture.history(lease); len(early) != 0 {
 				t.Fatal("native physical run closed before owner outcome delivery", early[0].Accepted, early[0].Reason)
 			}
+			previous := lease
 			lease = fixture.claimOutcome(lease, f.agents["author"])
+			var assertClosed func()
+			if strings.Contains(mode, "large-read-history") {
+				assertClosed = workflowPDLCReadLargeHistory(fixture, previous, lease)
+			}
 			fixture.complete(lease, evidenceDeclaration(declarations...))
+			if assertClosed != nil {
+				assertClosed()
+			}
 			history := fixture.history(lease)
 			if len(history) != 1 || !history[0].Accepted || len(history[0].Results) != 1+len(extras) {
 				reason := "NO_HISTORY"
