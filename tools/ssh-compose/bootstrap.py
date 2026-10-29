@@ -47,7 +47,7 @@ def preflight(plan, helper):
         key, separator, value = line.partition("=")
         if separator and key in ("ID", "VERSION_ID"):
             release[key] = value.strip('"')
-    if release.get("ID") != "ubuntu" or release.get("VERSION_ID") not in ("22.04", "24.04"):
+    if release.get("ID") != "ubuntu" or release.get("VERSION_ID") not in ("22.04", "24.04", "26.04"):
         raise ValueError("supported Ubuntu host required")
     if public_key(" ".join(read_public("/etc/ssh/ssh_host_ed25519_key.pub", 512).decode().split()[:2])) != plan["target"]["hostKey"]:
         raise ValueError("exact SSH host identity rejected")

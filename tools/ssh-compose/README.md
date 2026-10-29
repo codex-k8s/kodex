@@ -4,8 +4,8 @@ title: Операторский bootstrap SSH/Compose
 type: runbook
 status: approved
 owner: sre
-version: 1.0.1
-updated: 2026-10-25
+version: 1.0.2
+updated: 2026-10-29
 ---
 
 # Операторский bootstrap SSH/Compose (#1838)
@@ -39,7 +39,7 @@ signing bytes предназначены исключительно CP Secret
 
 Оператор заранее устанавливает проверенные пакеты Docker/rootless extras,
 Compose plugin, uidmap, slirp4netns и поддерживаемую cgroupv2 конфигурацию на
-Ubuntu22.04/24.04. На Ubuntu24 требуется штатный AppArmor профиль rootlesskit
+Ubuntu22.04/24.04/26.04. На Ubuntu24 и новее требуется штатный AppArmor профиль rootlesskit
 из пакета; глобальный sysctl не ослабляется. Rootful Docker socket должен быть
 выключен. Автоматической загрузки пакетов и `curl|sh` в bootstrap нет.
 
@@ -78,6 +78,16 @@ python3 -m unittest -v test_target.py
 [Ubuntu](https://docs.docker.com/engine/install/ubuntu/).
 Context7 был недоступен из-за отклонённой авторизации; используются официальные
 источники. Команды установки и root credentials модельному SRE не передаются.
+
+Уточнение29.10.2026: фактический выделенный target работает на Ubuntu26.04.
+Context7 `/docker/docs` подтвердил поддержку26.04LTS официальным Docker Engine
+и поставку AppArmor-профиля rootlesskit в deb-пакете `docker-ce-rootless-extras`.
+Bootstrap допускает эту LTS, сохраняя прежние проверки host key/IP, root-owned
+пакетов, cgroup, helper digest и отсутствия rootful socket. Другие новые версии
+не допускаются автоматически. Набор `test_target.py` содержит шесть проверок,
+включая отказ26.04 при чужом host key/доступном для записи пакете и ранний отказ
+неподдержанной26.10. Это проверки preflight без SSH и внешних изменений;
+реальные package/bootstrap/readback на26.04 ещё требуют отдельной квалификации.
 
 Для актуального private Go+SQLite проекта delivery остаётся **BLOCKED**.
 Обязательный root path — `kodex-deploy.json`, schema —
