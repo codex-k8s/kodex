@@ -17,6 +17,12 @@ import (
 //go:embed testdata/sql/integration_github_backup_fixture.sql
 var queryIntegrationGitHubBackupFixture string
 
+// queryIntegrationGitHubOldWriteConstraint restores only the old CHECK in an isolated counterfactual schema, proving the new profile cannot accept a catalog-only upgrade.
+// queryIntegrationGitHubOldWriteConstraint возвращает только старый CHECK в изолированной counterfactual schema, доказывая отказ нового профиля от обновления одного каталога.
+//
+//go:embed testdata/sql/integration_github_old_write_constraint_fixture.sql
+var queryIntegrationGitHubOldWriteConstraint string
+
 // TestIntegrationGitHubBackupSchemaProofComponent proves the native successor with intact backup SELECT, then rejects a public function grant and a missing table grant without weakening the historical validators.
 // TestIntegrationGitHubBackupSchemaProofComponent подтверждает native successor с сохранёнными backup SELECT, затем отклоняет публичное разрешение функции и отсутствие табличного grant, не ослабляя исторические проверки.
 func TestIntegrationGitHubBackupSchemaProofComponent(t *testing.T) {
@@ -30,7 +36,12 @@ func TestIntegrationGitHubBackupSchemaProofComponent(t *testing.T) {
 	if _, err := admin.Exec(ctx, queryIntegrationGitHubBackupFixture); err != nil {
 		t.Fatal("prepare isolated backup SELECT fixture")
 	}
-	source, err := os.ReadFile("../../../../../../../tools/release/github-autonomous-backup-migration-postcondition.sql")
+	version := workspaceComponentSchemaVersion(t, ctx, admin)
+	filename, profile, catalogField := "github-autonomous-backup-migration-postcondition.sql", "GITHUB_AUTONOMOUS_PDLC_BACKUP_V1", "githubHistoricalCatalog"
+	if version == 20261029000200 {
+		filename, profile, catalogField = "github-pr-backup-migration-postcondition.sql", "GITHUB_PR_COLLABORATION_BACKUP_V1", "githubPRCatalog"
+	}
+	source, err := os.ReadFile("../../../../../../../tools/release/" + filename)
 	if err != nil {
 		t.Fatal("read shipped GitHub backup schema proof")
 	}
@@ -54,14 +65,36 @@ func TestIntegrationGitHubBackupSchemaProofComponent(t *testing.T) {
 		return proof, nil
 	}
 	proof, err := read()
-	if err != nil || proof["profile"] != "GITHUB_AUTONOMOUS_PDLC_BACKUP_V1" || proof["gooseVersion"] != float64(20261029000100) || proof["githubHistoricalCatalog"] != true || proof["backupReaderCatalog"] != true {
+	if err != nil || proof["profile"] != profile || proof["gooseVersion"] != float64(version) || proof[catalogField] != true || proof["backupReaderCatalog"] != true {
 		t.Fatal("native GitHub successor did not preserve the full backup schema", err)
+	}
+	if version == 20261029000200 && proof["githubAutonomousWrites"] != true {
+		t.Fatal("native GitHub write guards are unconfirmed")
+	}
+	if version == 20261029000200 {
+		if _, err := admin.Exec(ctx, "ALTER TABLE control_plane.integration_invocations DISABLE TRIGGER email_mailbox_gate_valid"); err != nil {
+			t.Fatal("prepare isolated disabled write guard")
+		}
+		proof, err = read()
+		if err != nil || proof["githubAutonomousWrites"] != false {
+			t.Fatal("disabled autonomous write guard was accepted")
+		}
+		if _, err := admin.Exec(ctx, "ALTER TABLE control_plane.integration_invocations ENABLE TRIGGER email_mailbox_gate_valid"); err != nil {
+			t.Fatal("restore isolated write guard")
+		}
+		if _, err := admin.Exec(ctx, queryIntegrationGitHubOldWriteConstraint); err != nil {
+			t.Fatal("prepare isolated old write CHECK")
+		}
+		proof, err = read()
+		if err != nil || proof["githubAutonomousWrites"] != false {
+			t.Fatal("old write CHECK was accepted as a complete autonomous upgrade")
+		}
 	}
 	if _, err := admin.Exec(ctx, "GRANT EXECUTE ON FUNCTION control_plane.integration_github_legacy_capabilities(text,text,text,text) TO PUBLIC"); err != nil {
 		t.Fatal("prepare isolated public function grant")
 	}
 	proof, err = read()
-	if err != nil || proof["githubHistoricalCatalog"] != false {
+	if err != nil || proof[catalogField] != false {
 		t.Fatal("public historical admission function was accepted")
 	}
 	if _, err := admin.Exec(ctx, "REVOKE EXECUTE ON FUNCTION control_plane.integration_github_legacy_capabilities(text,text,text,text) FROM PUBLIC; REVOKE SELECT ON control_plane.session_workspace_storage FROM kodex_backup_reader"); err != nil {

@@ -15,7 +15,7 @@ func TestGitHubBundleRollingCompatibility(t *testing.T) {
 		t.Fatal(err)
 	}
 	current := definitions["github"]
-	if current.Metadata.Version != "6.2.0" {
+	if current.Metadata.Version != "6.3.0" {
 		t.Fatal("new bundle release missing from generated shipped catalog")
 	}
 	if _, found := current.Capability("github.repository.bundle.publish"); !found {
@@ -32,7 +32,7 @@ func TestGitHubBundleRollingCompatibility(t *testing.T) {
 	if _, found := resolved.Capability("github.repository.bundle.publish"); found {
 		t.Fatal("old grant inherited new bulk authority")
 	}
-	for _, invalid := range []struct{ version, digest string }{{"5.9.0", previous.Digest}, {"6.2.0", previous.Digest}, {"6.0.0", current.Digest}, {"6.0.0", "wrong"}} {
+	for _, invalid := range []struct{ version, digest string }{{"5.9.0", previous.Digest}, {"6.3.0", previous.Digest}, {"6.0.0", current.Digest}, {"6.0.0", "wrong"}} {
 		if _, found := ResolveShippedRevision(current, invalid.version, invalid.digest); found {
 			t.Fatal("unknown shipped revision or substituted digest accepted")
 		}
@@ -89,5 +89,34 @@ func TestGitHubSixOneCompatibilityPreservesApprovalPolicies(t *testing.T) {
 	}
 	if _, found := ResolveShippedRevision(current, "6.1.0", current.Digest); found {
 		t.Fatal("historical version accepted a substituted digest")
+	}
+}
+
+// TestGitHubSixTwoCompatibilityKeepsClosedPRAuthority pins the shipped autonomous release byte-for-byte and prevents new PR-only operations from appearing in historical grants.
+// TestGitHubSixTwoCompatibilityKeepsClosedPRAuthority закрепляет поставленный автономный выпуск побайтно и запрещает появление новых PR-only операций в исторических grants.
+func TestGitHubSixTwoCompatibilityKeepsClosedPRAuthority(t *testing.T) {
+	actual := sha256.Sum256(githubSixTwoCompatibility)
+	if hex.EncodeToString(actual[:]) != "fc21532a268f1474328e1819138bd8686d14aeaaa0fea9c0ff85902b48c5618a" {
+		t.Fatal("historical autonomous package bytes changed")
+	}
+	definitions, err := LoadShipped()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if definitions["github"].Digest != "72833e586647539dc1b33bbefa80605c22c6847cc7689fe0a626e28d64c55af5" {
+		t.Fatal("PR admission release pins changed")
+	}
+	previous, ok := ResolveShippedRevision(definitions["github"], "6.2.0", "96809e1f78320bc5788eb0e39c672818d8b37d03efbf91f1f083936161eb7a13")
+	if !ok {
+		t.Fatal("exact autonomous release cannot resolve")
+	}
+	for _, operation := range []string{"github.pull_request.ready", "github.pull_request.comment.create", "github.pull_request.comment.list", "github.pull_request.comment.read", "github.pull_request.comment.update"} {
+		if _, found := previous.Capability(operation); found {
+			t.Fatal("historical grant inherited PR authority")
+		}
+		capability, found := definitions["github"].Capability(operation)
+		if !found || !capability.AllowsApprovalPolicy("NONE") {
+			t.Fatal("current release lacks explicit autonomous PR capability")
+		}
 	}
 }

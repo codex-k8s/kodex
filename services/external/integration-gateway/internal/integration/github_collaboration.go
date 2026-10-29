@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"strconv"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
@@ -301,6 +302,8 @@ func (adapter *Adapter) executeGitHubCollaboration(ctx context.Context, client *
 			return Result{}, &UnknownOutcomeError{}
 		}
 		return providerResult(request, "github-pull:"+strconv.Itoa(item.GetNumber()), projectGitHubPull(item))
+	case "github.pull_request.ready":
+		return executeGitHubReady(ctx, client, owner, repo, request, capability, in, false)
 	case "github.pull_request.merge":
 		result, response, err := client.PullRequests.Merge(ctx, owner, repo, in.Number, in.Message, &github.PullRequestOptions{SHA: in.SHA, MergeMethod: in.MergeMethod})
 		if err := githubMutationError(response, err); err != nil {
@@ -342,17 +345,22 @@ func (adapter *Adapter) executeGitHubCollaboration(ctx context.Context, client *
 			return Result{}, &UnknownOutcomeError{}
 		}
 		return providerResult(request, "github-review:"+strconv.FormatInt(item.GetID(), 10), projectGitHubReview(item))
-	case "github.issue.comment.list", "github.issue.comment.read", "github.issue.comment.update", "github.issue.comment.delete":
+	case "github.issue.comment.list", "github.issue.comment.read", "github.issue.comment.update", "github.issue.comment.delete",
+		"github.pull_request.comment.list", "github.pull_request.comment.read", "github.pull_request.comment.update":
+		wantsPull := strings.HasPrefix(request.Operation, "github.pull_request.comment.")
+		if wantsPull {
+			in.IssueNumber = in.Number
+		}
 		issue, err := githubRead(ctx, capability, func() (*github.Issue, *github.Response, error) {
 			return client.Issues.Get(ctx, owner, repo, in.IssueNumber)
 		})
 		if err != nil {
 			return Result{}, err
 		}
-		if issue == nil || issue.IsPullRequest() || issue.GetNumber() != in.IssueNumber {
+		if issue == nil || issue.IsPullRequest() != wantsPull || issue.GetNumber() != in.IssueNumber {
 			return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 		}
-		if request.Operation == "github.issue.comment.list" {
+		if request.Operation == "github.issue.comment.list" || request.Operation == "github.pull_request.comment.list" {
 			return githubCatalogPage(ctx, capability, request, in.Limit, in.Cursor, func() ([]githubCommentView, *github.Response, error) {
 				items, response, err := client.Issues.ListComments(ctx, owner, repo, in.IssueNumber, &github.IssueListCommentsOptions{ListOptions: options})
 				views := make([]githubCommentView, 0, len(items))
@@ -373,7 +381,7 @@ func (adapter *Adapter) executeGitHubCollaboration(ctx context.Context, client *
 		if comment == nil || comment.GetID() != in.CommentID || comment.GetIssueURL() != expected.String() {
 			return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 		}
-		if request.Operation == "github.issue.comment.read" {
+		if request.Operation == "github.issue.comment.read" || request.Operation == "github.pull_request.comment.read" {
 			return providerResult(request, "github-comment:"+strconv.FormatInt(in.CommentID, 10), githubCommentView{comment.GetID(), comment.GetBody()})
 		}
 		if request.Operation == "github.issue.comment.delete" {

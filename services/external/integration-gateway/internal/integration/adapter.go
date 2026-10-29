@@ -436,8 +436,8 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, e
 	return validateExecutionResult(capability, request, result, err)
 }
 
-// Recover validates the original invocation and performs only synthetic journal-write readback within the capability deadline.
-// RU: Recover проверяет исходный вызов и выполняет только readback записи синтетического журнала в пределах срока capability.
+// Recover validates the original invocation and performs only synthetic journal-write or GitHub Ready readback within the capability deadline.
+// RU: Recover проверяет исходный вызов и выполняет только readback записи синтетического журнала либо GitHub Ready в пределах срока capability.
 // Every unsupported provider or operation remains UNKNOWN without receiving a repeated mutation; normal output and receipt validation still applies.
 // RU: Любой неподдерживаемый провайдер либо операция остаётся UNKNOWN без повторного изменения; обычная проверка выхода и квитанции сохраняется.
 func (adapter *Adapter) Recover(ctx context.Context, request Request) (Result, error) {
@@ -446,6 +446,12 @@ func (adapter *Adapter) Recover(ctx context.Context, request Request) (Result, e
 		return Result{}, err
 	}
 	if definition.Spec.Adapter != "SYNTHETIC_HTTP" || request.Operation != "synthetic.journal.write" {
+		if definition.Spec.Adapter == "GITHUB" && request.Operation == "github.pull_request.ready" {
+			ctx, cancel := context.WithTimeout(ctx, time.Duration(capability.Execution.TimeoutSeconds)*time.Second)
+			defer cancel()
+			result, err := adapter.recoverGitHubReady(ctx, request, capability, configuration, canonicalInput)
+			return validateExecutionResult(capability, request, result, err)
+		}
 		return Result{}, &UnknownOutcomeError{}
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(capability.Execution.TimeoutSeconds)*time.Second)
@@ -723,7 +729,7 @@ func (adapter *Adapter) executeGitHub(ctx context.Context, request Request, capa
 		return adapter.listGitHubIssues(ctx, client, owner, repository, request, capability, canonicalInput)
 	case "github.issue.read":
 		return adapter.readGitHubIssue(ctx, client, owner, repository, request, capability, canonicalInput)
-	case "github.issue.comment.create":
+	case "github.issue.comment.create", "github.pull_request.comment.create":
 		return adapter.createGitHubIssueComment(ctx, client, owner, repository, request, capability, canonicalInput)
 	case "github.issue.update":
 		return adapter.updateGitHubIssue(ctx, client, owner, repository, request, capability, canonicalInput)

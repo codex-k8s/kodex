@@ -104,6 +104,8 @@ func readControlPlaneMigrationProof(t *testing.T, ctx context.Context, observer 
 		verifier = "validWorkspaceRestoreMigration"
 	case "workspace-backup":
 		verifier = "validWorkspaceBackupMigration"
+	case "github-pr-backup":
+		verifier = "validGitHubPRBackupMigration"
 	case "github-autonomous-backup":
 		verifier = "validGitHubAutonomousBackupMigration"
 	case "workspace-volume-ssh":

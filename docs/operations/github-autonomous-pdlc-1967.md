@@ -4,7 +4,7 @@ title: Промежуточные действия GitHub без повторн�
 type: operations
 status: approved
 owner: reviewer
-version: 1.0.0
+version: 1.1.0
 updated: 2026-10-29
 ---
 
@@ -70,6 +70,71 @@ SSH-деплой не получают автономного допуска и�
 [Repositories](https://docs.github.com/en/rest/repos/repos#get-a-repository) и
 локальный исходный код закреплённого `go-github/v74`. Context7 недоступен:
 сервер отклонил настроенную авторизацию; ключи не выводились и не менялись.
+
+## Работа в существующем PR
+
+Выпуск GitHub6.3 добавляет отдельные `github.pull_request.comment.create`,
+`list`, `read`, `update` и `github.pull_request.ready`. Старые
+`github.issue.comment.*` сохраняют запрет PR. PR-операции проверяют выбранный
+номер через repository-scoped provider read, а отдельный comment — также через
+exact issue URL. Создание комментария использует прежний durable effect marker:
+неопределённый ответ допускает только поиск подтверждённого комментария, без
+второго POST.
+
+`ready` принимает только номер PR и ожидаемый40-символьный head SHA. Входные
+GraphQL, node ID, другой репозиторий, merge или review decision запрещены.
+Node ID назначает свежий GitHub read; операция выполняет один закрытый
+`markPullRequestReadyForReview`, затем читает состояние снова. GitHub не имеет
+head CAS этой mutation, поэтому смена head после запроса сохраняет UNKNOWN.
+Повтор при уже наблюдённом Ready и recovery не выполняют mutation.
+Обязательный результат `PULL_REQUEST` по-прежнему получает свежий native read
+и требует `draft=false`; перевод Ready сам по себе не доказывает качество.
+
+| Инициатор и переход | Полномочия, состояние и результат |
+| --- | --- |
+| Сотрудник → PR comment | Runtime MCP → exact grant/connection/RR → owner durable invocation → integration-gateway → один repository/PR; native receipt и readback |
+| Обычный Issue grant → PR | Закрытый отказ до comment read/write; права не наследуются |
+| PR comment read/update | Exact выбранный PR и comment ID/issue URL; чужой comment закрыто отклоняется |
+| Create retry/неизвестный ACK | Прежний intent/effect marker; read-only rejoin, новый POST не разрешается одним retry |
+| Ready prepare/claim | Прежние owner actor/project/grant/lease/input pins; default Human, явный NONE только для этого WRITE |
+| Ready → подтверждённый переход | Тот же PR/node/head и `open,draft=false` в авторитетном чтении; native receipt, прежний completion/outbox |
+| Ready → отказ до mutation | Неверный head/объект/схема: без внешней записи; авторитетный invocation read |
+| Ready → потеря ACK/drift | Read-only recovery; неподтверждённый результат UNKNOWN, повторного изменения нет |
+| Cancel/revoke/delete | Прежний атомарный owner lifecycle отзывает допуск; подтверждённый внешний факт и история сохраняются |
+| Merge/deploy | Прежние отдельные Human Gate; новые PR-возможности их не подтверждают |
+
+Нативный маршрут остаётся `runtime MCP → runtime-controller → control-plane
+command/owner transaction → integration-gateway claim/Begin → GitHub → owner
+completion → защищённый readback результата`. Source actor приходит из
+проверенного runtime-контекста, refs из payload — только locators. Idempotency
+остаётся прежним intent/effect, версия новой попытки не даёт права на второй
+внешний эффект. Не добавляется новый тип доменного события: invocation и
+receipt используют существующие audit/outbox/response consumers.
+
+Реальный аналитик выявил неполноту прежнего6.2: grant сохранялся, но
+`integration_invocations_approval_check` и trigger `protect_email_mailbox_gate`
+сохранили пять старых операций. Поэтому `ResolveIntegrationInvocation` возвращал
+Unavailable до внешнего запроса, и сотрудник видел `TOOL_UNAVAILABLE`.
+Регрессия проверяет actual durable READY для всех семи добавленных WRITE,
+отсутствие Gate и rejoin прежнего invocation. Forward migration расширяет
+только exact allowlist constraint/trigger, сохраняя COMMENT-only review,
+тип риска, repository, operation=capability, mailbox и immutable grant checks.
+Postcondition отдельно проверяет полный constraint обратной exact проекцией,
+полный trigger body/ACL и включённый trigger. Успешный каталог без этой проверки
+не является успешной миграцией. Прежний CHECK и отключённый trigger — отдельные
+отрицательные native проверки.
+
+Снимок6.2 сохранён побайтно; admission6.3 — отдельная forward migration
+`20261029000200`. Профили `github-pr` и `github-pr-backup` проверяют exact029
+до изменения и exact новый helper после него, сохраняя остальной schema proof.
+Прежние migration/proofs не меняются. Штатная проверка перехода и повторного
+`up`/восстановления backup ACL: `scripts/tests/control-plane-postgres-test.sh
+--github-pr-upgrade`. Это локальная disposable проверка, не staging приёмка.
+
+Context729.10 повторно отклонил авторизацию; использованы официальные
+[PR mutations](https://docs.github.com/en/graphql/reference/pulls#markpullrequestreadyforreview)
+и [общие comment endpoints](https://docs.github.com/en/rest/issues/comments).
+Настройки Context7 и секреты не менялись.
 
 ## Проверка и возврат
 

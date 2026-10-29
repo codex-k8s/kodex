@@ -103,6 +103,11 @@ func githubExtendedResponse(t *testing.T, operation string, r *http.Request) (st
 			t.Error("pull route changed")
 		}
 		return list(pull)
+	case "github.pull_request.ready":
+		if path != "/pulls/3" || r.Method != "GET" {
+			t.Error("ready read route changed")
+		}
+		return strings.Replace(pull, `"number":3`, `"number":3,"node_id":"PR_fixture","draft":false`, 1), true
 	case "github.pull_request.read":
 		if path != "/pulls/3" || r.Method != "GET" {
 			t.Error("pull read changed")
@@ -138,8 +143,23 @@ func githubExtendedResponse(t *testing.T, operation string, r *http.Request) (st
 			t.Error("review create changed")
 		}
 		return review, true
-	case "github.issue.comment.list", "github.issue.comment.read", "github.issue.comment.update", "github.issue.comment.delete":
+	case "github.pull_request.comment.create":
 		if path == "/issues/3" && r.Method == "GET" {
+			return `{"number":3,"pull_request":{}}`, true
+		}
+		if path != "/issues/3/comments" {
+			t.Error("PR comment create route changed")
+		}
+		if r.Method == "GET" {
+			return `[]`, true
+		}
+		return `{"id":4}`, true
+	case "github.issue.comment.list", "github.issue.comment.read", "github.issue.comment.update", "github.issue.comment.delete",
+		"github.pull_request.comment.list", "github.pull_request.comment.read", "github.pull_request.comment.update":
+		if path == "/issues/3" && r.Method == "GET" {
+			if strings.HasPrefix(operation, "github.pull_request.comment.") {
+				return `{"number":3,"title":"Title","pull_request":{}}`, true
+			}
 			return `{"number":3,"title":"Title"}`, true
 		}
 		if strings.HasSuffix(operation, "list") {

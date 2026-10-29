@@ -11,6 +11,8 @@ import { activeDeploymentPods, isProvenStoppedPod } from './stable-archive-trans
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'github-pr': {version:'20261029000200',file:'20261029000200_github_pr_collaboration_admission.sql',annotation:'kodex.dev/cp-github-pr-migration-plan',previousVersion:20261029000100,emptyField:'githubHistoricalCatalog',preconditionFile:'github-pr-migration-precondition.sql',postconditionFile:'github-pr-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261029000200_github_pr_collaboration_admission.sql'])},
+  'github-pr-backup': {version:'20261029000200',file:'20261029000200_github_pr_collaboration_admission.sql',annotation:'kodex.dev/cp-github-pr-backup-migration-plan',previousVersion:20261029000100,emptyField:'githubHistoricalCatalog',preconditionFile:'github-pr-backup-migration-precondition.sql',postconditionFile:'github-pr-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261029000200_github_pr_collaboration_admission.sql'])},
   'github-autonomous': {version:'20261029000100',file:'20261029000100_github_historical_grant_admission.sql',annotation:'kodex.dev/cp-github-autonomous-migration-plan',previousVersion:20261028000100,emptyField:'githubHistoricalAbsent',preconditionFile:'github-autonomous-migration-precondition.sql',postconditionFile:'github-autonomous-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261029000100_github_historical_grant_admission.sql'])},
   'github-autonomous-backup': {version:'20261029000100',file:'20261029000100_github_historical_grant_admission.sql',annotation:'kodex.dev/cp-github-autonomous-backup-migration-plan',previousVersion:20261028000100,emptyField:'githubHistoricalAbsent',preconditionFile:'github-autonomous-backup-migration-precondition.sql',postconditionFile:'github-autonomous-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261029000100_github_historical_grant_admission.sql'])},
   'workspace-backup': {version:'20261028000100',file:'20261028000100_workspace_restore_owner.sql',annotation:'kodex.dev/cp-workspace-backup-migration-plan',previousVersion:20261026001500,emptyField:'workspaceBackupSafeToMigrate',preconditionFile:'workspace-backup-migration-precondition.sql',postconditionFile:'workspace-backup-migration-postcondition.sql',executionCommand:'up-workspace-backup-compatible',jobSuffix:'-backup',requiredMigrations:Object.freeze(['20261026001600_workspace_checkpoint_tasks.sql','20261026001700_workspace_volume_custody.sql','20261027000100_ssh_compose_runtime.sql','20261028000100_workspace_restore_owner.sql'])},
@@ -297,6 +299,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(validWorkspaceBackupMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'github-autonomous' || profile === 'github-autonomous-backup')
       ensure(validGitHubAutonomousMigrationPrecondition(result,profile==='github-autonomous-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if (profile === 'github-pr' || profile === 'github-pr-backup')
+      ensure(validGitHubPRMigrationPrecondition(result,profile==='github-pr-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     return result;
   };
   const terminalJob = (actual, expected, expectedHash, expectedUID) => {
@@ -841,6 +845,31 @@ export function validGitHubAutonomousBackupMigrationPrecondition(proof) {
   return validGitHubAutonomousMigrationPrecondition(proof,true);
 }
 
+// Новый PR-каталог подтверждается exact SQL до обратной проекции frozen029; исторический verifier не расширяется.
+export function validGitHubPRMigrationPostcondition(proof) {
+  return proof?.profile==='GITHUB_PR_COLLABORATION_V1' && proof.gooseVersion===20261029000200 &&
+    proof.githubPRCatalog===true && proof.githubAutonomousWrites===true && validGitHubAutonomousMigrationPostcondition({
+      ...proof,profile:'GITHUB_AUTONOMOUS_PDLC_V1',gooseVersion:20261029000100,githubHistoricalCatalog:true});
+}
+
+// Backup authority проверяется на actual030 независимо от исторических обратных проекций.
+export function validGitHubPRBackupMigrationPostcondition(proof) {
+  return proof?.profile==='GITHUB_PR_COLLABORATION_BACKUP_V1' && proof.backupReaderCatalog===true &&
+    validGitHubPRMigrationPostcondition({...proof,profile:'GITHUB_PR_COLLABORATION_V1'});
+}
+
+// Предшественник обязан пройти полный029 proof с неизменённым helper, а не только иметь нужную Goose version.
+export function validGitHubPRMigrationPrecondition(proof, backup=false) {
+  const expected='GITHUB_PR_COLLABORATION_'+(backup?'BACKUP_':'')+'PREDECESSOR_V1';
+  return proof?.profile===expected && proof.githubPRWritePredecessor===true && (!backup || proof.backupReaderCatalog===true) &&
+    validGitHubAutonomousMigrationPostcondition({...proof,profile:'GITHUB_AUTONOMOUS_PDLC_V1'});
+}
+
+// Отдельная публичная точка входа сохраняет discriminator backup-precondition в native upgrade проверке.
+export function validGitHubPRBackupMigrationPrecondition(proof) {
+  return validGitHubPRMigrationPrecondition(proof,true);
+}
+
 // Actual backup SELECT проверен до metadata projection; прежний015 verifier не расширяется.
 export function validWorkspaceBackupMigrationPrecondition(proof) {
   return proof?.profile==='WORKSPACE_BACKUP_PREDECESSOR_V1' && proof.backupReaderCatalog===true &&
@@ -863,6 +892,8 @@ export function validWorkspaceBackupACLReadback(proof) {
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {
+    case 'github-pr': return validGitHubPRMigrationPostcondition(proof);
+    case 'github-pr-backup': return validGitHubPRBackupMigrationPostcondition(proof);
     case 'github-autonomous': return validGitHubAutonomousMigrationPostcondition(proof);
     case 'github-autonomous-backup': return validGitHubAutonomousBackupMigrationPostcondition(proof);
     case 'workflow-upstream-rework': return validWorkflowUpstreamReworkMigrationPostcondition(proof);

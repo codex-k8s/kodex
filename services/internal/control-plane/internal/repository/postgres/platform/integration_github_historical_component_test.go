@@ -36,6 +36,7 @@ func TestIntegrationGitHubHistoricalAdmissionComponent(t *testing.T) {
 	for _, historical := range []struct{ version, digest string }{
 		{"6.0.0", "537a92f2e304a5d670bf0bacc5dfae7d805b981aba5b262d2eb423b1afaaf44e"},
 		{"6.1.0", "057959121df2b88db45d9b0dba438a7ff39824992fcf1c13120a44162071c79f"},
+		{"6.2.0", "96809e1f78320bc5788eb0e39c672818d8b37d03efbf91f1f083936161eb7a13"},
 		{current.Metadata.Version, current.Digest},
 	} {
 		t.Run(historical.version, func(t *testing.T) {
@@ -104,9 +105,11 @@ func TestIntegrationGitHubHistoricalAdmissionComponent(t *testing.T) {
 			if err != nil || granted.Connection == nil {
 				t.Fatal("historical native read grant was rejected")
 			}
-			for index, key := range []string{"github.issue.create", "github.issue.update", "github.repository.content.create", "github.repository.content.update", "github.repository.bundle.publish", "github.pull_request.merge"} {
+			for index, key := range []string{"github.issue.create", "github.issue.update", "github.repository.content.create", "github.repository.content.update", "github.repository.bundle.publish", "github.pull_request.merge", "github.pull_request.ready", "github.pull_request.comment.create", "github.pull_request.comment.update"} {
 				result, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: fmt.Sprintf("historical-policy-%d", index), ExpectedVersion: &granted.Connection.Version}, Payload: command.IntegrationGrantInput{ConnectionRef: fresh.Ref, AgentRef: agent.Ref, CapabilityKey: key, ApprovalPolicy: "NONE", Enabled: true}})
-				allowed := historical.version == current.Metadata.Version && key != "github.repository.bundle.publish" && key != "github.pull_request.merge"
+				_, present := previous.Capability(key)
+				capability, _ := previous.Capability(key)
+				allowed := present && capability.AllowsApprovalPolicy("NONE")
 				if (err == nil) != allowed {
 					t.Fatalf("native autonomous policy mismatch: operation=%s allowed=%t error_nil=%t", key, allowed, err == nil)
 				}

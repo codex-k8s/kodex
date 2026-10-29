@@ -54,7 +54,7 @@ func TestGitHubAutonomousForwardUpgrade(t *testing.T) {
 	readControlPlaneMigrationProof(t, ctx, observer, "github-autonomous-backup", "precondition")
 	var first []byte
 	for attempt := 0; attempt < 2; attempt++ {
-		if err := applyPostgresMigrations(ctx, database, "up"); err != nil {
+		if err := goose.UpToContext(ctx, database, "migrations", 20261029000100); err != nil {
 			t.Fatal("GitHub native forward upgrade failed", err)
 		}
 		proof := readControlPlaneMigrationProof(t, ctx, observer, "github-autonomous-backup", "postcondition")

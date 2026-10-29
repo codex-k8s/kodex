@@ -14,10 +14,16 @@ var githubSixCompatibility []byte
 //go:embed compatibility/github-6.1.0.yaml
 var githubSixOneCompatibility []byte
 
+// githubSixTwoCompatibility preserves the exact autonomous-write release without future PR comment or Ready authority.
+// githubSixTwoCompatibility сохраняет точный выпуск автономных записей без новых полномочий PR comment или Ready.
+//
+//go:embed compatibility/github-6.2.0.yaml
+var githubSixTwoCompatibility []byte
+
 // resolveGitHubSixCompatibility resolves only exact immutable historical releases under the trusted shipped GitHub adapter; it never derives old authority from the current capability set.
 // resolveGitHubSixCompatibility разрешает только точные неизменяемые исторические выпуски доверенного поставленного адаптера GitHub; прежние полномочия не выводятся из текущих возможностей.
 func resolveGitHubSixCompatibility(current Package, version, digest string) (Package, bool) {
-	if current.Metadata.Key != "github" || current.Metadata.Version != "6.2.0" || current.Metadata.Origin != Origin || current.Spec.Adapter != "GITHUB" {
+	if current.Metadata.Key != "github" || current.Metadata.Version != "6.3.0" || current.Metadata.Origin != Origin || current.Spec.Adapter != "GITHUB" {
 		return Package{}, false
 	}
 	var snapshot []byte
@@ -26,6 +32,8 @@ func resolveGitHubSixCompatibility(current Package, version, digest string) (Pac
 		snapshot = githubSixCompatibility
 	case "6.1.0":
 		snapshot = githubSixOneCompatibility
+	case "6.2.0":
+		snapshot = githubSixTwoCompatibility
 	default:
 		return Package{}, false
 	}

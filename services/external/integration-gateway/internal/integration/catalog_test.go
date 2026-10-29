@@ -89,6 +89,11 @@ func catalogInputs() map[string]string {
 		"github.pull_request.review.list":      `{"pull_request_number":3,"limit":1,"cursor":2}`,
 		"github.pull_request.review.read":      `{"pull_request_number":3,"review_id":4}`,
 		"github.pull_request.review.create":    `{"pull_request_number":3,"sha":"abc","event":"COMMENT","body":"Text"}`,
+		"github.pull_request.ready":            `{"pull_request_number":3,"expected_head_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`,
+		"github.pull_request.comment.create":   `{"pull_request_number":3,"body":"Text"}`,
+		"github.pull_request.comment.list":     `{"pull_request_number":3,"limit":1,"cursor":2}`,
+		"github.pull_request.comment.read":     `{"pull_request_number":3,"comment_id":4}`,
+		"github.pull_request.comment.update":   `{"pull_request_number":3,"comment_id":4,"body":"Text"}`,
 		"github.issue.comment.list":            `{"issue_number":3,"limit":1,"cursor":2}`,
 		"github.issue.comment.read":            `{"issue_number":3,"comment_id":4}`,
 		"github.issue.comment.update":          `{"issue_number":3,"comment_id":4,"body":"Text"}`,
@@ -463,6 +468,9 @@ func TestEveryMutationPreservesUnknownOutcome(t *testing.T) {
 					return nil, errors.New("reconciliation unavailable")
 				}
 				body := catalogResponse(t, provider, operation, r)
+				if operation == "github.pull_request.ready" {
+					body = strings.Replace(body, `"draft":false`, `"draft":true`, 1)
+				}
 				if operation == "github.issue.update" {
 					body = strings.ReplaceAll(body, `"title":"Title"`, `"title":"Before"`)
 				}
@@ -564,7 +572,7 @@ func TestReadOperationsHandleRateLimits(t *testing.T) {
 			if operation == "confluence.attachment.read" {
 				expectedCalls = 4
 			}
-			if operation == "github.issue.comment.list" || operation == "github.issue.comment.read" || operation == "jira.attachment.read" {
+			if operation == "github.issue.comment.list" || operation == "github.issue.comment.read" || operation == "github.pull_request.comment.list" || operation == "github.pull_request.comment.read" || operation == "jira.attachment.read" {
 				expectedCalls = 3
 			}
 			if err != nil || calls != expectedCalls {

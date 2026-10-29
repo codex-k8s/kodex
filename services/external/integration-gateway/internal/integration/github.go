@@ -180,17 +180,22 @@ func (adapter *Adapter) readGitHubIssue(ctx context.Context, client *github.Clie
 	return githubIssueResult(issue, request, true)
 }
 
-// createGitHubIssueComment first verifies the selected ordinary issue, then searches bounded sequential comment pages for the effect marker before creating once.
-// RU: createGitHubIssueComment сначала проверяет выбранный обычный issue, затем ищет effect-маркер на ограниченных последовательных страницах комментариев до единственного создания.
+// createGitHubIssueComment first verifies the selected ordinary issue or explicitly granted pull request, then searches bounded sequential comment pages for the effect marker before creating once.
+// RU: createGitHubIssueComment сначала проверяет выбранный обычный issue либо явно выданный pull request, затем ищет effect-маркер на ограниченных последовательных страницах комментариев до единственного создания.
 // An uncertain create receives read-only marker reconciliation; the result requires a positive comment ID and never triggers a blind second creation.
 // RU: Неопределённое создание получает read-only поиск маркера; результат требует положительного comment ID и не запускает слепое повторное создание.
 func (adapter *Adapter) createGitHubIssueComment(ctx context.Context, client *github.Client, owner, repository string, request Request, capability integrationpackage.Capability, raw []byte) (Result, error) {
 	var input struct {
-		Number int    `json:"issue_number"`
-		Body   string `json:"body"`
+		Number     int    `json:"issue_number"`
+		PullNumber int    `json:"pull_request_number"`
+		Body       string `json:"body"`
 	}
 	if json.Unmarshal(raw, &input) != nil {
 		return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+	}
+	wantsPull := request.Operation == "github.pull_request.comment.create"
+	if wantsPull {
+		input.Number = input.PullNumber
 	}
 	issue, err := githubRead(ctx, capability, func() (*github.Issue, *github.Response, error) {
 		return client.Issues.Get(ctx, owner, repository, input.Number)
@@ -198,7 +203,7 @@ func (adapter *Adapter) createGitHubIssueComment(ctx context.Context, client *gi
 	if err != nil {
 		return Result{}, err
 	}
-	if issue.IsPullRequest() || issue.GetNumber() != input.Number {
+	if issue == nil || issue.IsPullRequest() != wantsPull || issue.GetNumber() != input.Number {
 		return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 	}
 	marker := "<!-- kodex-effect:" + request.EffectKey + " -->"
@@ -243,5 +248,9 @@ func (adapter *Adapter) createGitHubIssueComment(ctx context.Context, client *gi
 	if comment.GetID() < 1 {
 		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 	}
-	return providerResult(request, "github-comment:"+strconv.FormatInt(comment.GetID(), 10), map[string]any{"comment_id": comment.GetID(), "issue_number": input.Number})
+	numberKey := "issue_number"
+	if wantsPull {
+		numberKey = "pull_request_number"
+	}
+	return providerResult(request, "github-comment:"+strconv.FormatInt(comment.GetID(), 10), map[string]any{"comment_id": comment.GetID(), numberKey: input.Number})
 }
