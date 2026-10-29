@@ -1546,6 +1546,17 @@ func workflowVersionInvalidField(version entity.WorkflowVersion) string {
 	if field := workflowVersionStructureInvalidField(version); field != "" {
 		return field
 	}
+	// Mutation rejects duplicate requirements; historical readers retain their prior shape rules.
+	// Изменение отвергает повтор требований; чтение истории сохраняет прежние правила формы.
+	for _, step := range version.Steps {
+		seen := make(map[string]struct{}, len(step.RequiredCapabilityKeys))
+		for _, capability := range step.RequiredCapabilityKeys {
+			if _, duplicate := seen[capability]; duplicate {
+				return workflowInvalidInvariants
+			}
+			seen[capability] = struct{}{}
+		}
+	}
 	if !workflowRequiresDelegation(version) {
 		for _, step := range version.Steps {
 			if contains(step.RequiredCapabilityKeys, "platform.run.delegate") {
