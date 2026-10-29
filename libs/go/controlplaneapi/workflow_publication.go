@@ -257,7 +257,7 @@ func validWorkflowPublication(v WorkflowPublication) bool {
 	}
 	seen := map[string]bool{}
 	for i, step := range v.Steps {
-		if v.Version == 1 && len(step.ResultRequirements) != 0 || v.Version >= 2 && !validWorkflowPublicationServerStepForProfile(step, v.ResultEvidenceProfile) || !validWorkflowPublicationReviews(v, step) {
+		if v.Version == 1 && len(step.ResultRequirements) != 0 || v.Version >= 2 && !ValidWorkflowPublicationServerStepForProfile(step, v.ResultEvidenceProfile) || !validWorkflowPublicationReviews(v, step) {
 			return false
 		}
 		if step.ApprovalTimeoutSeconds != nil && (!step.HumanGateAfter || *step.ApprovalTimeoutSeconds < 1 || *step.ApprovalTimeoutSeconds > 604800) {

@@ -49,14 +49,17 @@ func validWorkflowPublicationMode(value WorkflowPublication) bool {
 // validWorkflowPublicationServerStep проверяет ограниченный структурный контракт до канонического
 // кодирования. Точные grants, независимость сотрудников и приёмка доказательств принадлежат владельцу.
 func validWorkflowPublicationServerStep(step WorkflowPublicationStep) bool {
-	return validWorkflowPublicationServerStepForProfile(step, "")
+	return ValidWorkflowPublicationServerStepForProfile(step, "")
 }
 
-// validWorkflowPublicationServerStepForProfile preserves old predicates and requires the explicit
+// ValidWorkflowPublicationServerStepForProfile preserves old predicates and requires the explicit
 // profile to bind QA to one same-step JSON report; syntax never proves capture or execution.
-// validWorkflowPublicationServerStepForProfile сохраняет прежние условия и связывает QA с одним
+// ValidWorkflowPublicationServerStepForProfile сохраняет прежние условия и связывает QA с одним
 // JSON report того же шага только явного профиля; синтаксис не доказывает capture либо execution.
-func validWorkflowPublicationServerStepForProfile(step WorkflowPublicationStep, profile string) bool {
+func ValidWorkflowPublicationServerStepForProfile(step WorkflowPublicationStep, profile string) bool {
+	if profile != "" && !workflowPublicationNativeEvidence(profile) {
+		return false
+	}
 	if !workflowResultKey.MatchString(step.Key) || len(step.DependsOn) > 8 || len(step.ResultRequirements) < 1 || len(step.ResultRequirements) > 4 {
 		return false
 	}

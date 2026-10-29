@@ -4,11 +4,52 @@ title: Native COMMENT и сохранённый QA-отчёт серверног
 type: runbook
 status: approved
 owner: architect
-version: 1.3.1
-updated: 2026-10-27
+version: 1.4.0
+updated: 2026-10-29
 ---
 
 # Явный профиль результатов
+
+## Контракт PDLC и карта передачи
+
+`GITHUB_PDLC_V1` является отдельным явным профилем `SERVER_DAG_V1` и использует
+публикацию wire4. Прежние wire1/2/3 и опубликованные версии не меняются.
+Контракт не означает завершённую поставку: до native owner, schema/backup и
+живой проверки всех потребителей профиль не считается доступным в staging.
+
+Источник требований — решения владельца в #1830/#1949/#1967: сотрудники
+сохраняют документы и код в ветке существующего PR, отвечают комментариями,
+предоставляют файлы, после принятых результатов сервер допускает следующий
+шаг. Промежуточные записи требуют действующего `NONE` grant; merge/deploy
+сохраняют отдельные Human Gate. Публикация условий не выдаёт grants.
+
+| Сценарий | Инициатор и полномочия | Передача и владелец состояния | Версии, результат и потребители |
+| --- | --- | --- | --- |
+| Создание процесса | Владелец доступного проекта из проверенной SSO-сессии; либо проектный помощник через подтверждённый owner plan | `POST /api/v1/projects/{projectRef}/workflows` → gateway → `CreateWorkflow` → control-plane domain/repository; проект разрешается по actor, не по наличию ref | Idempotency receipt и workflow назначает сервер; draft содержит profile/requirements/Branch. `WORKFLOW_CHANGED` и последующее `GetWorkflow` читают ту же owner boundary |
+| Изменение, проверка, публикация | Текущий actor с разрешением на существующий workflow | `POST /api/v1/workflows/{workflowRef}/commands` → `UpdateWorkflowDraft` / `ValidateWorkflowDraft` / `PublishWorkflowDraft` → control-plane | Exact `If-Match`/idempotency; immutable published version и spec digest. Branch обязателен только у нового `REPOSITORY_FILE`, targetRef — существующий PR. Неполный либо неизвестный профиль отклоняется до публикации |
+| Чтение процесса владельцем | Проверенный текущий actor и project eligibility | `GET /api/v1/workflows/{workflowRef}` → `GetWorkflow` → owner projection → Proto → gateway HTTP/PWA | Query не создаёт receipt/event; точные draft/published поля не смешиваются, чужой ресурс закрыто отклоняется |
+| Чтение публикации сотрудником | Действующая server-owned lease/RR с закреплёнными каталогом и workflow pins | Managed MCP → runtime-controller callback → `GetExecutionWorkflowCatalog` → control-plane → wire4/shared decoder → сотрудник | Exact lease/fence/generation, publishedRef/version/specDigest и configurationSHA256; READ не выдаёт write authority. Branch/PR/fileName сохраняются без defaults либо downgrade |
+| Принятие файла | Назначенный сотрудник выполняет существующие разрешённые MCP operations; штатный integration-gateway подтверждает native outcome | Запись файла → PR-read → immutable content-read; control-plane разрешает три разных receipt в exact owner/root lineage и проверяет порядок, branch/path/head и полный digest bytes | Декларация только key/write/head/content receipt refs. Accepted file хранит fileName/branch/number/headSha/три receipt refs/digest; модель не назначает accepted и не подставляет содержимое вместо proof |
+| Чтение истории | Текущий владелец либо допущенный потребитель exact run | `GET /api/v1/runs/{runRef}/graph` → `GetRunGraph` → control-plane journal → Proto → gateway/PWA; model dependency читает server-owned accepted snapshot | Не меняет state/event. Новые file/comment поля проходят closed whitelist; private IDs, leases и grants не выдаются. RUN event и последующий graph read используют одинаковую типизированную проекцию |
+| Terminal/cancel/retry | Прежний авторитетный owner lifecycle, без новой команды из-за полей API | Control-plane закрывает прежние lease/grant/invocation и удерживает uncertain native fact по действующему протоколу | Добавление полей не создаёт новых lifecycle events. История читается прежним authoritative graph path; retry не превращает известный WRITE в новый эффект. Изменение файла получает server-linked predecessor только после доказанного native success |
+
+Новые Proto tags добавляются без перенумерации прежних. `Branch` требования
+и `fileName`, `branch`, `headReceiptRef`, `contentReceiptRef` принятого файла
+сохраняются во всех направлениях. Неизвестные поля/виды и использование новых
+исполняемых полей в прежнем профиле закрыто отклоняются. `PR_COMMENT` принимает
+только фактический комментарий существующего PR, не Issue comment. Ready
+разработчика должен относиться к тому же head, что принятый файл.
+
+Browser session stream получает ту же публичную проекцию графа через
+authoritative readback gateway: NATS остаётся только сигналом пробуждения.
+Schema browser snapshot3.1.0 добавляет два вида и четыре file-proof поля;
+нового доменного NATS event либо изменения его authority/lifecycle нет.
+CP, gateway, runtime-controller и PWA поставляются совместно до включения
+нового профиля. Совместимость старого browser validator с новым видом
+результата не предполагается; локальный generator/SSR не заменяет проверку
+настоящих HTTP/WS snapshots и reconnect в staging.
+
+## Прежний профиль ревью и QA
 
 Issue #1949 вводит optional `version.resultEvidenceProfile=GITHUB_REVIEW_QA_V1`
 только вместе с `SERVER_DAG_V1`. Отсутствие поля сохраняет прежний verdict/head

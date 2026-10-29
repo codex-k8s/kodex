@@ -9750,9 +9750,9 @@ type WorkflowResultRequirement struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// key уникален в пределах этапа и связывает объявление с опубликованным условием.
 	Key string `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
-	// kind принадлежит закрытому реестру ARTIFACT/ARTIFACT_REVIEW/PULL_REQUEST/REVIEW/QA/INTEGRATION_RECEIPT/DEPLOYMENT.
+	// kind принадлежит закрытому реестру; REPOSITORY_FILE/PR_COMMENT доступны только GITHUB_PDLC_V1.
 	Kind string `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
-	// file_name задаёт имя непосредственного файла outbox только для ARTIFACT.
+	// file_name задаёт имя файла ARTIFACT либо точный repository path нового REPOSITORY_FILE.
 	FileName string `protobuf:"bytes,3,opt,name=file_name,json=fileName,proto3" json:"file_name,omitempty"`
 	// media_type задаёт ожидаемый проверенный MIME файла только для ARTIFACT.
 	MediaType string `protobuf:"bytes,4,opt,name=media_type,json=mediaType,proto3" json:"media_type,omitempty"`
@@ -9762,12 +9762,14 @@ type WorkflowResultRequirement struct {
 	SubjectStepKey string `protobuf:"bytes,6,opt,name=subject_step_key,json=subjectStepKey,proto3" json:"subject_step_key,omitempty"`
 	// operation задаёт закрытую интеграционную операцию проверяемой квитанции.
 	Operation string `protobuf:"bytes,7,opt,name=operation,proto3" json:"operation,omitempty"`
-	// target_ref закрепляет разрешённую цель DEPLOYMENT, без подключения либо секрета.
+	// target_ref закрепляет цель DEPLOYMENT либо номер существующего PR явного PDLC, без credentials.
 	TargetRef string `protobuf:"bytes,8,opt,name=target_ref,json=targetRef,proto3" json:"target_ref,omitempty"`
 	// subject_result_key выбирает exact ARTIFACT predicate published prerequisite только для ARTIFACT_REVIEW.
 	SubjectResultKey string `protobuf:"bytes,9,opt,name=subject_result_key,json=subjectResultKey,proto3" json:"subject_result_key,omitempty"`
 	// evidence_key связывает QA с same-step JSON ARTIFACT только явного профиля.
-	EvidenceKey   string `protobuf:"bytes,10,opt,name=evidence_key,json=evidenceKey,proto3" json:"evidence_key,omitempty"`
+	EvidenceKey string `protobuf:"bytes,10,opt,name=evidence_key,json=evidenceKey,proto3" json:"evidence_key,omitempty"`
+	// branch задаёт точную ветку REPOSITORY_FILE только явного профиля PDLC; не является grant.
+	Branch        string `protobuf:"bytes,11,opt,name=branch,proto3" json:"branch,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -9868,6 +9870,13 @@ func (x *WorkflowResultRequirement) GetSubjectResultKey() string {
 func (x *WorkflowResultRequirement) GetEvidenceKey() string {
 	if x != nil {
 		return x.EvidenceKey
+	}
+	return ""
+}
+
+func (x *WorkflowResultRequirement) GetBranch() string {
+	if x != nil {
+		return x.Branch
 	}
 	return ""
 }
@@ -11172,9 +11181,17 @@ type WorkflowAcceptedResult struct {
 	// image_digest связывает неизменяемый образ развёртывания.
 	ImageDigest string `protobuf:"bytes,13,opt,name=image_digest,json=imageDigest,proto3" json:"image_digest,omitempty"`
 	// health_ok относится к точной проверенной deployment receipt.
-	HealthOk      bool `protobuf:"varint,14,opt,name=health_ok,json=healthOk,proto3" json:"health_ok,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	HealthOk bool `protobuf:"varint,14,opt,name=health_ok,json=healthOk,proto3" json:"health_ok,omitempty"`
+	// file_name — точный принятый путь REPOSITORY_FILE.
+	FileName string `protobuf:"bytes,15,opt,name=file_name,json=fileName,proto3" json:"file_name,omitempty"`
+	// branch — точная опубликованная ветка принятого REPOSITORY_FILE.
+	Branch string `protobuf:"bytes,16,opt,name=branch,proto3" json:"branch,omitempty"`
+	// head_receipt_ref связывает чтение PR после записи принятого файла.
+	HeadReceiptRef string `protobuf:"bytes,17,opt,name=head_receipt_ref,json=headReceiptRef,proto3" json:"head_receipt_ref,omitempty"`
+	// content_receipt_ref связывает чтение принятого файла по immutable head SHA.
+	ContentReceiptRef string `protobuf:"bytes,18,opt,name=content_receipt_ref,json=contentReceiptRef,proto3" json:"content_receipt_ref,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *WorkflowAcceptedResult) Reset() {
@@ -11303,6 +11320,34 @@ func (x *WorkflowAcceptedResult) GetHealthOk() bool {
 		return x.HealthOk
 	}
 	return false
+}
+
+func (x *WorkflowAcceptedResult) GetFileName() string {
+	if x != nil {
+		return x.FileName
+	}
+	return ""
+}
+
+func (x *WorkflowAcceptedResult) GetBranch() string {
+	if x != nil {
+		return x.Branch
+	}
+	return ""
+}
+
+func (x *WorkflowAcceptedResult) GetHeadReceiptRef() string {
+	if x != nil {
+		return x.HeadReceiptRef
+	}
+	return ""
+}
+
+func (x *WorkflowAcceptedResult) GetContentReceiptRef() string {
+	if x != nil {
+		return x.ContentReceiptRef
+	}
+	return ""
 }
 
 // WorkflowAttemptResult хранит один итог бизнес-попытки; технические продолжения не расходуют попытку.
@@ -85512,7 +85557,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\n" +
 	"value_type\x18\x04 \x01(\tR\tvalueType\x12\x1a\n" +
 	"\brequired\x18\x05 \x01(\bR\brequired\x12\x18\n" +
-	"\aoptions\x18\x06 \x03(\tR\aoptions\"\xd5\x02\n" +
+	"\aoptions\x18\x06 \x03(\tR\aoptions\"\xed\x02\n" +
 	"\x19WorkflowResultRequirement\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x1b\n" +
@@ -85528,7 +85573,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"target_ref\x18\b \x01(\tR\ttargetRef\x12,\n" +
 	"\x12subject_result_key\x18\t \x01(\tR\x10subjectResultKey\x12!\n" +
 	"\fevidence_key\x18\n" +
-	" \x01(\tR\vevidenceKey\"\x98\x05\n" +
+	" \x01(\tR\vevidenceKey\x12\x16\n" +
+	"\x06branch\x18\v \x01(\tR\x06branch\"\x98\x05\n" +
 	"\fWorkflowStep\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x1a\n" +
 	"\bposition\x18\x02 \x01(\x05R\bposition\x12\x12\n" +
@@ -85668,7 +85714,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x10activity_summary\x18\x1f \x01(\tR\x0factivitySummary\x127\n" +
 	"\x18input_attachment_set_ref\x18  \x01(\tR\x15inputAttachmentSetRef\x12E\n" +
 	"\rassistant_pin\x18! \x01(\v2 .controlplane.v1.AssistantRunPinR\fassistantPin\x12Q\n" +
-	"\x11session_readiness\x18\" \x01(\v2$.controlplane.v1.RunSessionReadinessR\x10sessionReadinessJ\x04\b\x1b\x10\x1cR\x13input_artifact_refs\"\xb8\x03\n" +
+	"\x11session_readiness\x18\" \x01(\v2$.controlplane.v1.RunSessionReadinessR\x10sessionReadinessJ\x04\b\x1b\x10\x1cR\x13input_artifact_refs\"\xc7\x04\n" +
 	"\x16WorkflowAcceptedResult\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12!\n" +
@@ -85688,7 +85734,11 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"target_ref\x18\v \x01(\tR\ttargetRef\x12#\n" +
 	"\rbundle_sha256\x18\f \x01(\tR\fbundleSha256\x12!\n" +
 	"\fimage_digest\x18\r \x01(\tR\vimageDigest\x12\x1b\n" +
-	"\thealth_ok\x18\x0e \x01(\bR\bhealthOk\"\xaf\x02\n" +
+	"\thealth_ok\x18\x0e \x01(\bR\bhealthOk\x12\x1b\n" +
+	"\tfile_name\x18\x0f \x01(\tR\bfileName\x12\x16\n" +
+	"\x06branch\x18\x10 \x01(\tR\x06branch\x12(\n" +
+	"\x10head_receipt_ref\x18\x11 \x01(\tR\x0eheadReceiptRef\x12.\n" +
+	"\x13content_receipt_ref\x18\x12 \x01(\tR\x11contentReceiptRef\"\xaf\x02\n" +
 	"\x15WorkflowAttemptResult\x12\x18\n" +
 	"\aattempt\x18\x01 \x01(\x05R\aattempt\x12\x17\n" +
 	"\arun_ref\x18\x02 \x01(\tR\x06runRef\x12\x1a\n" +

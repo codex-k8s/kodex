@@ -156,7 +156,10 @@ const gateDecisionOptions = [
 const form = reactive({
   reworkPolicy: "" as "" | "OWNER_APPROVED_UPSTREAM_V1",
   executionMode: "MANAGER_DRIVEN" as "MANAGER_DRIVEN" | "SERVER_DAG_V1",
-  resultEvidenceProfile: undefined as "GITHUB_REVIEW_QA_V1" | undefined,
+  resultEvidenceProfile: undefined as
+    | "GITHUB_REVIEW_QA_V1"
+    | "GITHUB_PDLC_V1"
+    | undefined,
   name: "",
   purpose: "",
   coordinatorAgentRef: "",
@@ -193,7 +196,12 @@ function changeEvidenceProfile(event: Event): void {
   )
     return;
   const value = event.target.value;
-  if (value !== "" && value !== "GITHUB_REVIEW_QA_V1") return;
+  if (
+    value !== "" &&
+    value !== "GITHUB_REVIEW_QA_V1" &&
+    value !== "GITHUB_PDLC_V1"
+  )
+    return;
   form.resultEvidenceProfile = value || undefined;
   form.steps = workflowEvidenceProfileSteps(
     form.steps,
@@ -643,6 +651,9 @@ onBeforeUnmount(() => {
                   </option>
                   <option value="GITHUB_REVIEW_QA_V1">
                     {{ $t("workflowResults.evidenceNative") }}
+                  </option>
+                  <option value="GITHUB_PDLC_V1">
+                    {{ $t("workflowResults.evidencePDLC") }}
                   </option>
                 </select>
                 <small>{{ $t("workflowResults.evidenceHelp") }}</small>

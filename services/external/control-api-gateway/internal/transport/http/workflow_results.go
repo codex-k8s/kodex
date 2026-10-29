@@ -3,9 +3,11 @@ package httptransport
 import (
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/codex-k8s/kodex/libs/go/controlplaneapi"
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 	"google.golang.org/protobuf/proto"
@@ -27,7 +29,7 @@ func workflowResultRequirements(values []generated.WorkflowResultRequirement) []
 			operation = string(*value.Operation)
 		}
 		result = append(result, &controlplanev1.WorkflowResultRequirement{
-			EvidenceKey: stringValue(value.EvidenceKey), Key: value.Key, Kind: string(value.Kind), FileName: stringValue(value.FileName),
+			Branch: stringValue(value.Branch), EvidenceKey: stringValue(value.EvidenceKey), Key: value.Key, Kind: string(value.Kind), FileName: stringValue(value.FileName),
 			MediaType: stringValue(value.MediaType), Repository: stringValue(value.Repository),
 			SubjectStepKey: stringValue(value.SubjectStepKey), SubjectResultKey: stringValue(value.SubjectResultKey), Operation: operation, TargetRef: stringValue(value.TargetRef),
 		})
@@ -44,11 +46,14 @@ func workflowResultRequirements(values []generated.WorkflowResultRequirement) []
 func validWorkflowPublicMessage(message proto.Message) bool {
 	switch value := message.(type) {
 	case *controlplanev1.WorkflowVersion:
-		if value == nil || !(value.ReworkPolicy == "" || value.ExecutionMode == "SERVER_DAG_V1" && value.ReworkPolicy == "OWNER_APPROVED_UPSTREAM_V1") || !(value.ExecutionMode == "" || value.ExecutionMode == "MANAGER_DRIVEN" || value.ExecutionMode == "SERVER_DAG_V1") || !(value.ResultEvidenceProfile == "" || value.ResultEvidenceProfile == "GITHUB_REVIEW_QA_V1" && value.ExecutionMode == "SERVER_DAG_V1") {
+		if value == nil || !(value.ReworkPolicy == "" || value.ExecutionMode == "SERVER_DAG_V1" && value.ReworkPolicy == "OWNER_APPROVED_UPSTREAM_V1") || !(value.ExecutionMode == "" || value.ExecutionMode == "MANAGER_DRIVEN" || value.ExecutionMode == "SERVER_DAG_V1") || !(value.ResultEvidenceProfile == "" || (value.ResultEvidenceProfile == "GITHUB_REVIEW_QA_V1" || value.ResultEvidenceProfile == "GITHUB_PDLC_V1") && value.ExecutionMode == "SERVER_DAG_V1") {
 			return false
 		}
 		for _, step := range value.Steps {
 			if step == nil {
+				return false
+			}
+			if value.ResultEvidenceProfile == "GITHUB_PDLC_V1" && !validPublicPDLCStep(step) {
 				return false
 			}
 			counts := map[string]int{}
@@ -57,10 +62,13 @@ func validWorkflowPublicMessage(message proto.Message) bool {
 					return false
 				}
 				if value.ResultEvidenceProfile == "" {
-					if requirement.EvidenceKey != "" {
+					if requirement.EvidenceKey != "" || requirement.Branch != "" || requirement.Kind == "REPOSITORY_FILE" || requirement.Kind == "PR_COMMENT" {
 						return false
 					}
 					continue
+				}
+				if value.ResultEvidenceProfile != "GITHUB_PDLC_V1" && (requirement.Branch != "" || requirement.Kind == "REPOSITORY_FILE" || requirement.Kind == "PR_COMMENT") {
+					return false
 				}
 				if requirement.Kind == "REVIEW" || requirement.Kind == "QA" {
 					counts[requirement.Kind]++
@@ -80,7 +88,7 @@ func validWorkflowPublicMessage(message proto.Message) bool {
 				}
 			}
 		}
-		if value.ResultEvidenceProfile == "GITHUB_REVIEW_QA_V1" {
+		if value.ResultEvidenceProfile == "GITHUB_REVIEW_QA_V1" || value.ResultEvidenceProfile == "GITHUB_PDLC_V1" {
 			counts := map[string]int{}
 			for _, step := range value.Steps {
 				for _, requirement := range step.ResultRequirements {
@@ -110,8 +118,11 @@ func validWorkflowPublicMessage(message proto.Message) bool {
 			seen[dependency] = true
 		}
 	case *controlplanev1.WorkflowResultRequirement:
+		if value != nil && (value.Kind == "REPOSITORY_FILE" || value.Kind == "PR_COMMENT") {
+			return validPublicPDLCStep(&controlplanev1.WorkflowStep{Ref: value.Key, ResultRequirements: []*controlplanev1.WorkflowResultRequirement{value}})
+		}
 		return value != nil && workflowPredicateKey.MatchString(value.Key) && (value.EvidenceKey == "" || value.Kind == "QA" && workflowPredicateKey.MatchString(value.EvidenceKey)) && workflowPublicResultKind(value.Kind) &&
-			workflowPublicText(value.FileName, 160) && workflowPublicText(value.MediaType, 160) &&
+			value.Branch == "" && workflowPublicText(value.FileName, 160) && workflowPublicText(value.MediaType, 160) &&
 			workflowPublicText(value.Repository, 200) && (value.SubjectStepKey == "" || workflowPredicateKey.MatchString(value.SubjectStepKey)) && workflowPublicText(value.TargetRef, 96) && (value.SubjectResultKey == "" || value.Kind == "ARTIFACT_REVIEW" && workflowPredicateKey.MatchString(value.SubjectResultKey)) &&
 			(value.Operation == "" || value.Operation == "github.pull_request.merge" || value.Operation == "ssh.compose.deploy")
 	case *controlplanev1.RunNode:
@@ -143,6 +154,20 @@ func validWorkflowPublicMessage(message proto.Message) bool {
 		}
 		return len(value.Evidence) == 0 || negative
 	case *controlplanev1.WorkflowAcceptedResult:
+		if value != nil {
+			if value.Kind == "REPOSITORY_FILE" {
+				if !controlplaneapi.ValidWorkflowPublicationRepositoryFileTarget(value.Repository, value.Branch, value.FileName, strconv.FormatInt(value.Number, 10)) || !workflowPublicHead.MatchString(value.HeadSha) ||
+					!fileTargetRef(value.ReceiptRef) || !fileTargetRef(value.HeadReceiptRef) || !fileTargetRef(value.ContentReceiptRef) || value.ReceiptRef == value.HeadReceiptRef || value.ReceiptRef == value.ContentReceiptRef || value.HeadReceiptRef == value.ContentReceiptRef ||
+					value.ArtifactRef != "" || value.ArtifactRevision != "" || value.Verdict != "" || value.TargetRef != "" || value.BundleSha256 != "" || value.ImageDigest != "" || value.HealthOk {
+					return false
+				}
+			} else if value.FileName != "" || value.Branch != "" || value.HeadReceiptRef != "" || value.ContentReceiptRef != "" {
+				return false
+			}
+			if value.Kind == "PR_COMMENT" && (!workflowPublicRepository.MatchString(value.Repository) || value.Number < 1 || value.Number > 2147483647 || !fileTargetRef(value.ReceiptRef) || value.HeadSha != "" || value.Verdict != "" || value.ArtifactRef != "" || value.ArtifactRevision != "" || value.TargetRef != "" || value.BundleSha256 != "" || value.ImageDigest != "" || value.HealthOk) {
+				return false
+			}
+		}
 		return value != nil && workflowPredicateKey.MatchString(value.Key) && workflowPublicResultKind(value.Kind) && validManagedDigest(value.Digest) &&
 			(value.ArtifactRef == "" || fileTargetRef(value.ArtifactRef)) && (value.ReceiptRef == "" || fileTargetRef(value.ReceiptRef)) &&
 			workflowPublicText(value.ArtifactRevision, 96) && workflowPublicText(value.Repository, 200) && workflowPublicText(value.TargetRef, 96) &&
@@ -159,11 +184,30 @@ func validWorkflowPublicMessage(message proto.Message) bool {
 // провайдера и без признания самого вида доказательством существования результата.
 func workflowPublicResultKind(kind string) bool {
 	switch kind {
-	case "ARTIFACT", "ARTIFACT_REVIEW", "PULL_REQUEST", "REVIEW", "QA", "INTEGRATION_RECEIPT", "DEPLOYMENT":
+	case "ARTIFACT", "ARTIFACT_REVIEW", "REPOSITORY_FILE", "PR_COMMENT", "PULL_REQUEST", "REVIEW", "QA", "INTEGRATION_RECEIPT", "DEPLOYMENT":
 		return true
 	default:
 		return false
 	}
+}
+
+// validPublicPDLCStep reuses the canonical closed publication grammar for owner HTTP projection.
+// This checks shape and exact targets only; the owner remains responsible for access and effects.
+// validPublicPDLCStep использует каноническую закрытую грамматику публикации для HTTP projection.
+// Проверяет только форму и exact targets; доступ и effects по-прежнему проверяет owner.
+func validPublicPDLCStep(step *controlplanev1.WorkflowStep) bool {
+	if step == nil {
+		return false
+	}
+	projection := controlplaneapi.WorkflowPublicationStep{Key: step.Ref, DependsOn: step.DependsOn, RequiredCapabilityKeys: step.RequiredCapabilityKeys}
+	for _, requirement := range step.ResultRequirements {
+		if requirement == nil {
+			return false
+		}
+		projection.ResultRequirements = append(projection.ResultRequirements, controlplaneapi.WorkflowPublicationRequirement{Key: requirement.Key, Kind: requirement.Kind, FileName: requirement.FileName, Branch: requirement.Branch, Repository: requirement.Repository, TargetRef: requirement.TargetRef,
+			MediaType: requirement.MediaType, SubjectStepKey: requirement.SubjectStepKey, SubjectResultKey: requirement.SubjectResultKey, EvidenceKey: requirement.EvidenceKey, Operation: requirement.Operation})
+	}
+	return controlplaneapi.ValidWorkflowPublicationServerStepForProfile(projection, "GITHUB_PDLC_V1")
 }
 
 // workflowPublicText applies the OpenAPI code-point bound to valid UTF-8 text without rewriting it.

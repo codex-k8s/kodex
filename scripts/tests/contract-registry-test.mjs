@@ -57,9 +57,8 @@ const riskOperations = [
 ];
 
 function checkRiskContract(api, policy) {
-  // Canonical revision сохраняет risk authority и добавляет только closed workspace observation для RC.
-  // Canonical policygen revision сохраняет risk authority и добавляет отдельные SSH bindings.
-  assert.equal(policy.policy_revision, 99, 'RISK_POLICY_REVISION');
+  // Ревизия100 добавляет owner RPC/replay рабочих томов; четыре risk bindings остаются прежними.
+  assert.equal(policy.policy_revision, 100, 'RISK_POLICY_REVISION');
   for (const [permission, operation, method] of riskOperations) {
     const bindings = policy.policy.operation_bindings.filter(item => item.operation_id === permission);
     assert.equal(bindings.length, 1, 'RISK_METHOD_EXACT_CALLER');
@@ -115,8 +114,8 @@ test('image risk contract has exact human-only methods and full safe report page
 
 test('image risk contract rejects delegated caller, project authority, missing pins and hidden severity', () => {
   for (const mutate of [
-    (api, policy) => { policy.policy_revision = 98; },
-    (api, policy) => { policy.policy_revision = 100; },
+    (api, policy) => { policy.policy_revision -= 1; },
+    (api, policy) => { policy.policy_revision += 1; },
     (api, policy) => { policy.policy.operation_bindings.find(value => value.operation_id === riskOperations[0][0]).caller_workload_id = 'agent-runner'; },
     (api, policy) => { policy.policy.operation_bindings.find(value => value.operation_id === riskOperations[2][0]).project_required = true; },
     (api) => { api.components.schemas.ImageVulnerabilitySeverity.enum.pop(); },

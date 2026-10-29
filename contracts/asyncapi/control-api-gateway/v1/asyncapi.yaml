@@ -1,7 +1,7 @@
 asyncapi: 3.0.0
 info:
   title: Kodex browser session stream
-  version: 3.0.0
+  version: 3.1.0
   description: |
     Один защищённый owner-scoped WebSocket обслуживает bounded platform
     snapshots и набор точных Run subscriptions одной browser session. Gateway
@@ -874,6 +874,8 @@ components:
               [
                 ARTIFACT,
                 ARTIFACT_REVIEW,
+                REPOSITORY_FILE,
+                PR_COMMENT,
                 PULL_REQUEST,
                 REVIEW,
                 QA,
@@ -885,6 +887,10 @@ components:
         artifactRevision: { type: string, maxLength: 96 }
         digest: { type: string, pattern: "^[a-f0-9]{64}$" }
         receiptRef: { $ref: "#/components/schemas/OpaqueRef" }
+        headReceiptRef: { $ref: "#/components/schemas/OpaqueRef" }
+        contentReceiptRef: { $ref: "#/components/schemas/OpaqueRef" }
+        fileName: { type: string, maxLength: 1024 }
+        branch: { type: string, maxLength: 255 }
         repository: { type: string, maxLength: 200 }
         number: { type: integer, minimum: 0, maximum: 9007199254740991 }
         headSha: { type: string, maxLength: 64 }

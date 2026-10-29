@@ -257,7 +257,12 @@ function changeEvidenceProfile(event: Event): void {
   )
     return;
   const value = event.target.value;
-  if (value !== "" && value !== "GITHUB_REVIEW_QA_V1") return;
+  if (
+    value !== "" &&
+    value !== "GITHUB_REVIEW_QA_V1" &&
+    value !== "GITHUB_PDLC_V1"
+  )
+    return;
   change("steps", workflowEvidenceProfileSteps(steps.value, value));
   change(
     "resultEvidenceProfile",
@@ -566,7 +571,8 @@ const valid = computed(() =>
     (parameter("resultEvidenceProfile") === undefined ||
       (isUpdate.value && parameter("resultEvidenceProfile") === "") ||
       (serverMode.value &&
-        parameter("resultEvidenceProfile") === "GITHUB_REVIEW_QA_V1")) &&
+        (parameter("resultEvidenceProfile") === "GITHUB_REVIEW_QA_V1" ||
+          parameter("resultEvidenceProfile") === "GITHUB_PDLC_V1"))) &&
     (!serverMode.value || validDAG.value) &&
     (isUpdate.value
       ? text(parameter("workflowRef")) === props.operation.value.target.ref &&
@@ -679,6 +685,9 @@ watch(
         <option value="">{{ $t("workflowResults.evidenceLegacy") }}</option>
         <option value="GITHUB_REVIEW_QA_V1">
           {{ $t("workflowResults.evidenceNative") }}
+        </option>
+        <option value="GITHUB_PDLC_V1">
+          {{ $t("workflowResults.evidencePDLC") }}
         </option>
       </select>
       <small>{{ $t("workflowResults.evidenceHelp") }}</small>

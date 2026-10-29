@@ -1,8 +1,15 @@
 import type { WorkflowResultRequirement } from "@/shared/api/generated/openapi/types.gen";
+import {
+  nativeWorkflowEvidenceProfile,
+  validPDLCFileTarget,
+  validPDLCPullTarget,
+} from "@/shared/api/workflow-pdlc";
 
 export const workflowResultKinds = [
   "ARTIFACT",
   "ARTIFACT_REVIEW",
+  "REPOSITORY_FILE",
+  "PR_COMMENT",
   "PULL_REQUEST",
   "REVIEW",
   "QA",
@@ -44,7 +51,8 @@ export function validWorkflowRequirements(
   dependencies: string[],
   profile?: unknown,
 ): value is WorkflowResultRequirement[] {
-  if (profile !== undefined && profile !== "GITHUB_REVIEW_QA_V1") return false;
+  if (profile !== undefined && !nativeWorkflowEvidenceProfile(profile))
+    return false;
   if (!Array.isArray(value) || value.length < 1 || value.length > 4)
     return false;
   const seen = new Set<string>();
@@ -77,6 +85,32 @@ export function validWorkflowRequirements(
         break;
       case "PULL_REQUEST":
         keys.push("repository");
+        if (profile === "GITHUB_PDLC_V1") {
+          keys.push("targetRef");
+          if (!validPDLCPullTarget(item.repository, item.targetRef))
+            return false;
+        }
+        break;
+      case "REPOSITORY_FILE":
+        keys.push("repository", "targetRef", "branch", "fileName");
+        if (
+          profile !== "GITHUB_PDLC_V1" ||
+          !validPDLCFileTarget(
+            item.repository,
+            item.branch,
+            item.fileName,
+            item.targetRef,
+          )
+        )
+          return false;
+        break;
+      case "PR_COMMENT":
+        keys.push("repository", "targetRef");
+        if (
+          profile !== "GITHUB_PDLC_V1" ||
+          !validPDLCPullTarget(item.repository, item.targetRef)
+        )
+          return false;
         break;
       case "REVIEW":
       case "QA":
@@ -98,7 +132,7 @@ export function validWorkflowRequirements(
       default:
         return false;
     }
-    if (item.kind === "QA" && profile === "GITHUB_REVIEW_QA_V1")
+    if (item.kind === "QA" && nativeWorkflowEvidenceProfile(profile))
       keys.push("evidenceKey");
     if (
       Object.keys(item).some((key) => !keys.includes(key)) ||
@@ -120,7 +154,7 @@ export function validWorkflowRequirements(
       return false;
     verified.push(item);
   }
-  if (profile === "GITHUB_REVIEW_QA_V1") {
+  if (nativeWorkflowEvidenceProfile(profile)) {
     for (const kind of ["REVIEW", "QA"]) {
       if (verified.filter((item) => item.kind === kind).length > 1)
         return false;
@@ -138,6 +172,28 @@ export function validWorkflowRequirements(
       )
         return false;
     }
+  }
+  if (profile === "GITHUB_PDLC_V1") {
+    const targets = verified.filter((item) =>
+      ["REPOSITORY_FILE", "PR_COMMENT", "PULL_REQUEST"].includes(
+        String(item.kind),
+      ),
+    );
+    for (const kind of ["REPOSITORY_FILE", "PR_COMMENT", "PULL_REQUEST"])
+      if (targets.filter((item) => item.kind === kind).length > 1) return false;
+    if (
+      targets.some(
+        (item) =>
+          item.repository !== targets[0]?.repository ||
+          item.targetRef !== targets[0]?.targetRef,
+      )
+    )
+      return false;
+    if (
+      targets.some((item) => item.kind === "PULL_REQUEST") &&
+      !targets.some((item) => item.kind === "REPOSITORY_FILE")
+    )
+      return false;
   }
   return true;
 }
@@ -197,7 +253,7 @@ export function validWorkflowDAG(
       )
     )
       return false;
-    if (profile === "GITHUB_REVIEW_QA_V1") {
+    if (nativeWorkflowEvidenceProfile(profile)) {
       for (const requirement of step.resultRequirements) {
         if (
           (requirement.kind === "REVIEW" || requirement.kind === "QA") &&
@@ -292,7 +348,8 @@ export function workflowEvidenceProfileSteps<T extends object>(
       next.resultRequirements = next.resultRequirements.map((item: unknown) => {
         if (!workflowItem(item)) return item;
         const requirement = { ...item };
-        if (profile !== "GITHUB_REVIEW_QA_V1") delete requirement.evidenceKey;
+        if (!nativeWorkflowEvidenceProfile(profile))
+          delete requirement.evidenceKey;
         else if (requirement.kind === "QA") requirement.evidenceKey ??= "";
         return requirement;
       });

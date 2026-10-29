@@ -6,6 +6,50 @@ import { i18n } from "@/app/i18n";
 import Editor from "./WorkflowResultContractEditor.vue";
 
 it.each(["ru", "en"] as const)(
+  "показывает обязательные branch/path/PR поля PDLC без изменения props (%s)",
+  async (locale) => {
+    const previous = i18n.global.locale.value;
+    i18n.global.locale.value = locale;
+    const props = {
+      evidenceProfile: "GITHUB_PDLC_V1",
+      stepKey: "author",
+      dependencies: [],
+      requirements: [
+        {
+          key: "document",
+          kind: "REPOSITORY_FILE",
+          repository: "owner/repo",
+          targetRef: "3",
+          branch: "feature/journal",
+          fileName: "docs/requirements.md",
+        },
+        {
+          key: "comment",
+          kind: "PR_COMMENT",
+          repository: "owner/repo",
+          targetRef: "3",
+        },
+      ],
+      predecessors: [],
+      disabled: true,
+    };
+    const original = structuredClone(props);
+    try {
+      const html = await renderToString(createSSRApp(Editor, props).use(i18n));
+      expect(html).toContain("feature/journal");
+      expect(html).toContain("docs/requirements.md");
+      expect(html).toContain('value="3"');
+      expect(html).not.toContain("workflowResults.");
+      expect(html).toContain("REPOSITORY_FILE");
+      expect(html).toContain("PR_COMMENT");
+      expect(props).toEqual(original);
+    } finally {
+      i18n.global.locale.value = previous;
+    }
+  },
+);
+
+it.each(["ru", "en"] as const)(
   "показывает условия PR и сохранённую потерянную зависимость (%s)",
   async (locale) => {
     const previous = i18n.global.locale.value;

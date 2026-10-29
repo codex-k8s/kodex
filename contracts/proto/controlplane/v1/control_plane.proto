@@ -976,9 +976,9 @@ message WorkflowInputField {
 message WorkflowResultRequirement {
   // key уникален в пределах этапа и связывает объявление с опубликованным условием.
   string key = 1;
-  // kind принадлежит закрытому реестру ARTIFACT/ARTIFACT_REVIEW/PULL_REQUEST/REVIEW/QA/INTEGRATION_RECEIPT/DEPLOYMENT.
+  // kind принадлежит закрытому реестру; REPOSITORY_FILE/PR_COMMENT доступны только GITHUB_PDLC_V1.
   string kind = 2;
-  // file_name задаёт имя непосредственного файла outbox только для ARTIFACT.
+  // file_name задаёт имя файла ARTIFACT либо точный repository path нового REPOSITORY_FILE.
   string file_name = 3;
   // media_type задаёт ожидаемый проверенный MIME файла только для ARTIFACT.
   string media_type = 4;
@@ -988,12 +988,14 @@ message WorkflowResultRequirement {
   string subject_step_key = 6;
   // operation задаёт закрытую интеграционную операцию проверяемой квитанции.
   string operation = 7;
-  // target_ref закрепляет разрешённую цель DEPLOYMENT, без подключения либо секрета.
+  // target_ref закрепляет цель DEPLOYMENT либо номер существующего PR явного PDLC, без credentials.
   string target_ref = 8;
   // subject_result_key выбирает exact ARTIFACT predicate published prerequisite только для ARTIFACT_REVIEW.
   string subject_result_key = 9;
   // evidence_key связывает QA с same-step JSON ARTIFACT только явного профиля.
   string evidence_key = 10;
+  // branch задаёт точную ветку REPOSITORY_FILE только явного профиля PDLC; не является grant.
+  string branch = 11;
 }
 
 message WorkflowStep {
@@ -1202,6 +1204,14 @@ message WorkflowAcceptedResult {
   string image_digest = 13;
   // health_ok относится к точной проверенной deployment receipt.
   bool health_ok = 14;
+  // file_name — точный принятый путь REPOSITORY_FILE.
+  string file_name = 15;
+  // branch — точная опубликованная ветка принятого REPOSITORY_FILE.
+  string branch = 16;
+  // head_receipt_ref связывает чтение PR после записи принятого файла.
+  string head_receipt_ref = 17;
+  // content_receipt_ref связывает чтение принятого файла по immutable head SHA.
+  string content_receipt_ref = 18;
 }
 
 // WorkflowAttemptResult хранит один итог бизнес-попытки; технические продолжения не расходуют попытку.

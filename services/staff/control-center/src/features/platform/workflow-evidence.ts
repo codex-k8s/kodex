@@ -2,6 +2,10 @@ import type {
   RunNode,
   RunGraph,
 } from "@/shared/api/generated/openapi/types.gen";
+import {
+  validPDLCFileTarget,
+  validPDLCPullTarget,
+} from "@/shared/api/workflow-pdlc";
 
 const opaque = /^[A-Za-z0-9_-]{8,128}$/u;
 const key = /^[A-Za-z0-9_-]{1,96}$/u;
@@ -11,6 +15,8 @@ const repository = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u;
 const kinds = [
   "ARTIFACT",
   "ARTIFACT_REVIEW",
+  "REPOSITORY_FILE",
+  "PR_COMMENT",
   "PULL_REQUEST",
   "REVIEW",
   "QA",
@@ -42,6 +48,10 @@ function validResult(value: unknown): value is RecordValue {
     "artifactRef",
     "artifactRevision",
     "receiptRef",
+    "headReceiptRef",
+    "contentReceiptRef",
+    "fileName",
+    "branch",
     "repository",
     "number",
     "headSha",
@@ -52,7 +62,12 @@ function validResult(value: unknown): value is RecordValue {
     "healthOk",
   ];
   if (Object.keys(value).some((field) => !fields.includes(field))) return false;
-  for (const field of ["artifactRef", "receiptRef"])
+  for (const field of [
+    "artifactRef",
+    "receiptRef",
+    "headReceiptRef",
+    "contentReceiptRef",
+  ])
     if (
       value[field] !== undefined &&
       (!text(value[field], 128) || !opaque.test(value[field]))
@@ -91,6 +106,54 @@ function validResult(value: unknown): value is RecordValue {
     value.imageDigest !== undefined &&
     (!text(value.imageDigest, 71) ||
       !/^sha256:[a-f0-9]{64}$/u.test(value.imageDigest))
+  )
+    return false;
+  if (value.kind === "REPOSITORY_FILE") {
+    if (
+      !validPDLCFileTarget(
+        value.repository,
+        value.branch,
+        value.fileName,
+        String(value.number),
+      ) ||
+      typeof value.headSha !== "string" ||
+      !head.test(value.headSha) ||
+      typeof value.receiptRef !== "string" ||
+      typeof value.headReceiptRef !== "string" ||
+      typeof value.contentReceiptRef !== "string" ||
+      new Set([value.receiptRef, value.headReceiptRef, value.contentReceiptRef])
+        .size !== 3 ||
+      [
+        "artifactRef",
+        "artifactRevision",
+        "verdict",
+        "targetRef",
+        "bundleSha256",
+        "imageDigest",
+        "healthOk",
+      ].some((field) => value[field] !== undefined)
+    )
+      return false;
+  } else if (
+    ["fileName", "branch", "headReceiptRef", "contentReceiptRef"].some(
+      (field) => value[field] !== undefined,
+    )
+  )
+    return false;
+  if (
+    value.kind === "PR_COMMENT" &&
+    (!validPDLCPullTarget(value.repository, String(value.number)) ||
+      typeof value.receiptRef !== "string" ||
+      [
+        "artifactRef",
+        "artifactRevision",
+        "headSha",
+        "verdict",
+        "targetRef",
+        "bundleSha256",
+        "imageDigest",
+        "healthOk",
+      ].some((field) => value[field] !== undefined))
   )
     return false;
   return true;

@@ -2980,8 +2980,15 @@ export type WorkflowStepKey = string;
 
 export type WorkflowResultRequirement = {
     key: string;
-    kind: 'ARTIFACT' | 'ARTIFACT_REVIEW' | 'PULL_REQUEST' | 'REVIEW' | 'QA' | 'INTEGRATION_RECEIPT' | 'DEPLOYMENT';
+    kind: 'ARTIFACT' | 'ARTIFACT_REVIEW' | 'REPOSITORY_FILE' | 'PR_COMMENT' | 'PULL_REQUEST' | 'REVIEW' | 'QA' | 'INTEGRATION_RECEIPT' | 'DEPLOYMENT';
+    /**
+     * Имя ARTIFACT до160 символов либо точный путь REPOSITORY_FILE до1024 UTF-8 bytes; сервер проверяет вид и профиль.
+     */
     fileName?: string;
+    /**
+     * Только REPOSITORY_FILE явного GITHUB_PDLC_V1; точная ветка без refs aliases и traversal.
+     */
+    branch?: string;
     mediaType?: string;
     repository?: string;
     subjectStepKey?: WorkflowStepKey;
@@ -3045,7 +3052,7 @@ export type Workflow = {
     /**
      * Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
      */
-    resultEvidenceProfile?: 'GITHUB_REVIEW_QA_V1';
+    resultEvidenceProfile?: 'GITHUB_REVIEW_QA_V1' | 'GITHUB_PDLC_V1';
     ref: OpaqueRef;
     version: number;
     projectRef: OpaqueRef;
@@ -3116,7 +3123,7 @@ export type WorkflowDraftSnapshot = {
     /**
      * Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия.
      */
-    resultEvidenceProfile?: 'GITHUB_REVIEW_QA_V1';
+    resultEvidenceProfile?: 'GITHUB_REVIEW_QA_V1' | 'GITHUB_PDLC_V1';
     ref: OpaqueRef;
     version: number;
     revision: number;
@@ -3139,7 +3146,7 @@ export type WorkflowInput = {
     /**
      * Явный SERVER профиль native COMMENT receipt и captured QA report; отсутствие сохраняет прежние условия. Пустое значение снимает draft opt-in; весь итоговый граф заново проверяется.
      */
-    resultEvidenceProfile?: '' | 'GITHUB_REVIEW_QA_V1';
+    resultEvidenceProfile?: '' | 'GITHUB_REVIEW_QA_V1' | 'GITHUB_PDLC_V1';
     name: string;
     purpose: string;
     coordinatorAgentRef: OpaqueRef;
@@ -3244,11 +3251,15 @@ export type WorkflowAcceptedResult = {
     imageDigest?: string;
     healthOk?: boolean;
     key: string;
-    kind: 'ARTIFACT' | 'ARTIFACT_REVIEW' | 'PULL_REQUEST' | 'REVIEW' | 'QA' | 'INTEGRATION_RECEIPT' | 'DEPLOYMENT';
+    kind: 'ARTIFACT' | 'ARTIFACT_REVIEW' | 'REPOSITORY_FILE' | 'PR_COMMENT' | 'PULL_REQUEST' | 'REVIEW' | 'QA' | 'INTEGRATION_RECEIPT' | 'DEPLOYMENT';
     artifactRef?: OpaqueRef;
     artifactRevision?: string;
     digest: string;
     receiptRef?: OpaqueRef;
+    headReceiptRef?: OpaqueRef;
+    contentReceiptRef?: OpaqueRef;
+    fileName?: string;
+    branch?: string;
     repository?: string;
     number?: number;
     headSha?: string;

@@ -15,6 +15,14 @@ const workflowPDLCProfile = "GITHUB_PDLC_V1"
 // workflowPublicationBranchPattern ограничивает имена веток при передаче, не разрешая запись.
 var workflowPublicationBranchPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_./-]{0,254}$`)
 
+// ValidWorkflowPublicationRepositoryFileTarget checks the shared public file locator syntax only.
+// Callers must independently prove the published profile, current authority and native receipts.
+// ValidWorkflowPublicationRepositoryFileTarget проверяет только общий синтаксис public file locator.
+// Вызывающий отдельно доказывает published profile, текущие полномочия и native receipts.
+func ValidWorkflowPublicationRepositoryFileTarget(repository, branch, path, number string) bool {
+	return len(repository) <= 200 && workflowResultRepository.MatchString(repository) && workflowPublicationBranch(branch) && workflowPublicationFilePath(path) && workflowPublicationPullNumber(number)
+}
+
 // workflowPublicationNativeEvidence selects the two closed native-evidence contracts only.
 // workflowPublicationNativeEvidence выбирает только два закрытых контракта native evidence.
 func workflowPublicationNativeEvidence(profile string) bool {

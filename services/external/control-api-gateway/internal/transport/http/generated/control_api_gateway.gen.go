@@ -8625,12 +8625,15 @@ func (e WorkflowExecutionMode) Valid() bool {
 
 // Defines values for WorkflowResultEvidenceProfile.
 const (
+	WorkflowResultEvidenceProfileGITHUBPDLCV1     WorkflowResultEvidenceProfile = "GITHUB_PDLC_V1"
 	WorkflowResultEvidenceProfileGITHUBREVIEWQAV1 WorkflowResultEvidenceProfile = "GITHUB_REVIEW_QA_V1"
 )
 
 // Valid indicates whether the value is a known member of the WorkflowResultEvidenceProfile enum.
 func (e WorkflowResultEvidenceProfile) Valid() bool {
 	switch e {
+	case WorkflowResultEvidenceProfileGITHUBPDLCV1:
+		return true
 	case WorkflowResultEvidenceProfileGITHUBREVIEWQAV1:
 		return true
 	default:
@@ -8683,8 +8686,10 @@ const (
 	WorkflowAcceptedResultKindARTIFACTREVIEW     WorkflowAcceptedResultKind = "ARTIFACT_REVIEW"
 	WorkflowAcceptedResultKindDEPLOYMENT         WorkflowAcceptedResultKind = "DEPLOYMENT"
 	WorkflowAcceptedResultKindINTEGRATIONRECEIPT WorkflowAcceptedResultKind = "INTEGRATION_RECEIPT"
+	WorkflowAcceptedResultKindPRCOMMENT          WorkflowAcceptedResultKind = "PR_COMMENT"
 	WorkflowAcceptedResultKindPULLREQUEST        WorkflowAcceptedResultKind = "PULL_REQUEST"
 	WorkflowAcceptedResultKindQA                 WorkflowAcceptedResultKind = "QA"
+	WorkflowAcceptedResultKindREPOSITORYFILE     WorkflowAcceptedResultKind = "REPOSITORY_FILE"
 	WorkflowAcceptedResultKindREVIEW             WorkflowAcceptedResultKind = "REVIEW"
 )
 
@@ -8699,9 +8704,13 @@ func (e WorkflowAcceptedResultKind) Valid() bool {
 		return true
 	case WorkflowAcceptedResultKindINTEGRATIONRECEIPT:
 		return true
+	case WorkflowAcceptedResultKindPRCOMMENT:
+		return true
 	case WorkflowAcceptedResultKindPULLREQUEST:
 		return true
 	case WorkflowAcceptedResultKindQA:
+		return true
+	case WorkflowAcceptedResultKindREPOSITORYFILE:
 		return true
 	case WorkflowAcceptedResultKindREVIEW:
 		return true
@@ -8799,12 +8808,15 @@ func (e WorkflowDraftSnapshotExecutionMode) Valid() bool {
 
 // Defines values for WorkflowDraftSnapshotResultEvidenceProfile.
 const (
+	WorkflowDraftSnapshotResultEvidenceProfileGITHUBPDLCV1     WorkflowDraftSnapshotResultEvidenceProfile = "GITHUB_PDLC_V1"
 	WorkflowDraftSnapshotResultEvidenceProfileGITHUBREVIEWQAV1 WorkflowDraftSnapshotResultEvidenceProfile = "GITHUB_REVIEW_QA_V1"
 )
 
 // Valid indicates whether the value is a known member of the WorkflowDraftSnapshotResultEvidenceProfile enum.
 func (e WorkflowDraftSnapshotResultEvidenceProfile) Valid() bool {
 	switch e {
+	case WorkflowDraftSnapshotResultEvidenceProfileGITHUBPDLCV1:
+		return true
 	case WorkflowDraftSnapshotResultEvidenceProfileGITHUBREVIEWQAV1:
 		return true
 	default:
@@ -8872,6 +8884,7 @@ func (e WorkflowInputExecutionMode) Valid() bool {
 // Defines values for WorkflowInputResultEvidenceProfile.
 const (
 	Empty            WorkflowInputResultEvidenceProfile = ""
+	GITHUBPDLCV1     WorkflowInputResultEvidenceProfile = "GITHUB_PDLC_V1"
 	GITHUBREVIEWQAV1 WorkflowInputResultEvidenceProfile = "GITHUB_REVIEW_QA_V1"
 )
 
@@ -8879,6 +8892,8 @@ const (
 func (e WorkflowInputResultEvidenceProfile) Valid() bool {
 	switch e {
 	case Empty:
+		return true
+	case GITHUBPDLCV1:
 		return true
 	case GITHUBREVIEWQAV1:
 		return true
@@ -9013,8 +9028,10 @@ const (
 	WorkflowResultRequirementKindARTIFACTREVIEW     WorkflowResultRequirementKind = "ARTIFACT_REVIEW"
 	WorkflowResultRequirementKindDEPLOYMENT         WorkflowResultRequirementKind = "DEPLOYMENT"
 	WorkflowResultRequirementKindINTEGRATIONRECEIPT WorkflowResultRequirementKind = "INTEGRATION_RECEIPT"
+	WorkflowResultRequirementKindPRCOMMENT          WorkflowResultRequirementKind = "PR_COMMENT"
 	WorkflowResultRequirementKindPULLREQUEST        WorkflowResultRequirementKind = "PULL_REQUEST"
 	WorkflowResultRequirementKindQA                 WorkflowResultRequirementKind = "QA"
+	WorkflowResultRequirementKindREPOSITORYFILE     WorkflowResultRequirementKind = "REPOSITORY_FILE"
 	WorkflowResultRequirementKindREVIEW             WorkflowResultRequirementKind = "REVIEW"
 )
 
@@ -9029,9 +9046,13 @@ func (e WorkflowResultRequirementKind) Valid() bool {
 		return true
 	case WorkflowResultRequirementKindINTEGRATIONRECEIPT:
 		return true
+	case WorkflowResultRequirementKindPRCOMMENT:
+		return true
 	case WorkflowResultRequirementKindPULLREQUEST:
 		return true
 	case WorkflowResultRequirementKindQA:
+		return true
+	case WorkflowResultRequirementKindREPOSITORYFILE:
 		return true
 	case WorkflowResultRequirementKindREVIEW:
 		return true
@@ -16064,20 +16085,24 @@ type WorkflowState string
 
 // WorkflowAcceptedResult defines model for WorkflowAcceptedResult.
 type WorkflowAcceptedResult struct {
-	ArtifactRef      *OpaqueRef                     `json:"artifactRef,omitempty"`
-	ArtifactRevision *string                        `json:"artifactRevision,omitempty"`
-	BundleSha256     *string                        `json:"bundleSha256,omitempty"`
-	Digest           string                         `json:"digest"`
-	HeadSha          *string                        `json:"headSha,omitempty"`
-	HealthOk         *bool                          `json:"healthOk,omitempty"`
-	ImageDigest      *string                        `json:"imageDigest,omitempty"`
-	Key              string                         `json:"key"`
-	Kind             WorkflowAcceptedResultKind     `json:"kind"`
-	Number           *int                           `json:"number,omitempty"`
-	ReceiptRef       *OpaqueRef                     `json:"receiptRef,omitempty"`
-	Repository       *string                        `json:"repository,omitempty"`
-	TargetRef        *string                        `json:"targetRef,omitempty"`
-	Verdict          *WorkflowAcceptedResultVerdict `json:"verdict,omitempty"`
+	ArtifactRef       *OpaqueRef                     `json:"artifactRef,omitempty"`
+	ArtifactRevision  *string                        `json:"artifactRevision,omitempty"`
+	Branch            *string                        `json:"branch,omitempty"`
+	BundleSha256      *string                        `json:"bundleSha256,omitempty"`
+	ContentReceiptRef *OpaqueRef                     `json:"contentReceiptRef,omitempty"`
+	Digest            string                         `json:"digest"`
+	FileName          *string                        `json:"fileName,omitempty"`
+	HeadReceiptRef    *OpaqueRef                     `json:"headReceiptRef,omitempty"`
+	HeadSha           *string                        `json:"headSha,omitempty"`
+	HealthOk          *bool                          `json:"healthOk,omitempty"`
+	ImageDigest       *string                        `json:"imageDigest,omitempty"`
+	Key               string                         `json:"key"`
+	Kind              WorkflowAcceptedResultKind     `json:"kind"`
+	Number            *int                           `json:"number,omitempty"`
+	ReceiptRef        *OpaqueRef                     `json:"receiptRef,omitempty"`
+	Repository        *string                        `json:"repository,omitempty"`
+	TargetRef         *string                        `json:"targetRef,omitempty"`
+	Verdict           *WorkflowAcceptedResultVerdict `json:"verdict,omitempty"`
 }
 
 // WorkflowAcceptedResultKind defines model for WorkflowAcceptedResult.Kind.
@@ -16235,14 +16260,19 @@ type WorkflowPage struct {
 
 // WorkflowResultRequirement defines model for WorkflowResultRequirement.
 type WorkflowResultRequirement struct {
+	// Branch Только REPOSITORY_FILE явного GITHUB_PDLC_V1; точная ветка без refs aliases и traversal.
+	Branch *string `json:"branch,omitempty"`
+
 	// EvidenceKey Только QA выбранного профиля; ключ ARTIFACT application/json того же шага.
-	EvidenceKey *string                             `json:"evidenceKey,omitempty"`
-	FileName    *string                             `json:"fileName,omitempty"`
-	Key         string                              `json:"key"`
-	Kind        WorkflowResultRequirementKind       `json:"kind"`
-	MediaType   *string                             `json:"mediaType,omitempty"`
-	Operation   *WorkflowResultRequirementOperation `json:"operation,omitempty"`
-	Repository  *string                             `json:"repository,omitempty"`
+	EvidenceKey *string `json:"evidenceKey,omitempty"`
+
+	// FileName Имя ARTIFACT до160 символов либо точный путь REPOSITORY_FILE до1024 UTF-8 bytes; сервер проверяет вид и профиль.
+	FileName   *string                             `json:"fileName,omitempty"`
+	Key        string                              `json:"key"`
+	Kind       WorkflowResultRequirementKind       `json:"kind"`
+	MediaType  *string                             `json:"mediaType,omitempty"`
+	Operation  *WorkflowResultRequirementOperation `json:"operation,omitempty"`
+	Repository *string                             `json:"repository,omitempty"`
 
 	// SubjectResultKey Логический ключ шага внутри одной версии процесса; не является ссылкой на ресурс или источником полномочий.
 	SubjectResultKey *WorkflowStepKey `json:"subjectResultKey,omitempty"`
