@@ -33,6 +33,9 @@ func readWorkspaceVolumeSchemaProof(t *testing.T, ctx context.Context, conn *pgx
 	if version == 20261029000200 {
 		profile, filename = "GITHUB_PR_COLLABORATION_V1", "github-pr-migration-postcondition.sql"
 	}
+	if version == 20261029000300 {
+		profile, filename = "GITHUB_PDLC_V1", "workflow-pdlc-migration-postcondition.sql"
+	}
 	source, err := os.ReadFile("../../../../../../../tools/release/" + filename)
 	if err != nil {
 		t.Fatal("read shipped current workspace schema proof")
@@ -76,7 +79,7 @@ func workspaceComponentSchemaVersion(t *testing.T, ctx context.Context, conn *pg
 	}
 	var version int64
 	if err := conn.QueryRow(ctx, "SELECT max(version_id) FROM public.goose_db_version WHERE is_applied").Scan(&version); err != nil ||
-		version != 20261027000100 && version != 20261028000100 && version != 20261029000100 && version != 20261029000200 {
+		version != 20261027000100 && version != 20261028000100 && version != 20261029000100 && version != 20261029000200 && version != 20261029000300 {
 		t.Fatal("unregistered disposable workspace schema", err)
 	}
 	return version
@@ -88,14 +91,17 @@ func workspaceComponentSchemaVersion(t *testing.T, ctx context.Context, conn *pg
 // Counterfactual callers проверяют свой false predicate до этой проверки исключительно canonical schema.
 func assertWorkspaceVolumeSchemaCanonical(t *testing.T, actual map[string]any) {
 	t.Helper()
-	if (actual["profile"] == "WORKSPACE_RESTORE_V2" || actual["profile"] == "GITHUB_AUTONOMOUS_PDLC_V1" || actual["profile"] == "GITHUB_PR_COLLABORATION_V1") && actual["restoreCatalog"] != true {
+	if (actual["profile"] == "WORKSPACE_RESTORE_V2" || actual["profile"] == "GITHUB_AUTONOMOUS_PDLC_V1" || actual["profile"] == "GITHUB_PR_COLLABORATION_V1" || actual["profile"] == "GITHUB_PDLC_V1") && actual["restoreCatalog"] != true {
 		t.Error("actual workspace restore catalog is unconfirmed")
 	}
 	if actual["profile"] == "GITHUB_AUTONOMOUS_PDLC_V1" && actual["githubHistoricalCatalog"] != true {
 		t.Error("actual GitHub admission catalog is unconfirmed")
 	}
-	if actual["profile"] == "GITHUB_PR_COLLABORATION_V1" && (actual["githubPRCatalog"] != true || actual["githubAutonomousWrites"] != true) {
+	if (actual["profile"] == "GITHUB_PR_COLLABORATION_V1" || actual["profile"] == "GITHUB_PDLC_V1") && (actual["githubPRCatalog"] != true || actual["githubAutonomousWrites"] != true) {
 		t.Error("actual GitHub PR catalog is unconfirmed")
+	}
+	if actual["profile"] == "GITHUB_PDLC_V1" && (actual["workflowPDLCCatalog"] != true || actual["workflowPDLCFunctions"] != float64(14)) {
+		t.Error("actual PDLC owner catalog is unconfirmed")
 	}
 	for key, expected := range map[string]any{
 		"purgeNodes": float64(109), "purgeEdges": float64(303), "workspacePurgeGuard": true,

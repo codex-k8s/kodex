@@ -33,6 +33,10 @@ if [[ "$test_pattern" == --pdlc-functions ]]; then
   upgrade_test='^TestWorkflowPDLCMigrationFunctions$'
   test_pattern=--review-qa-upgrade
 fi
+if [[ "$test_pattern" == --pdlc-upgrade ]]; then
+  upgrade_test='^TestWorkflowPDLCForwardUpgrade$'
+  test_pattern=--review-qa-upgrade
+fi
 if [[ "$test_pattern" == --github-pr-upgrade ]]; then
   upgrade_test='^(TestGitHubAutonomousForwardUpgrade|TestGitHubPRForwardUpgrade)$'
   test_pattern=--review-qa-upgrade
@@ -278,6 +282,7 @@ fi
   schema_version=$(psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" --no-password -X -qAt -v ON_ERROR_STOP=1 \
     -c 'SELECT max(version_id) FILTER (WHERE is_applied) FROM public.goose_db_version')
   case "$schema_version" in
+    20261029000300) schema_proof=workflow-pdlc-migration-postcondition.sql; schema_verifier=validWorkflowPDLCMigrationPostcondition ;;
     20261029000200) schema_proof=github-pr-migration-postcondition.sql; schema_verifier=validGitHubPRMigrationPostcondition ;;
     20261029000100) schema_proof=github-autonomous-migration-postcondition.sql; schema_verifier=validGitHubAutonomousMigrationPostcondition ;;
     20261028000100) schema_proof=workspace-restore-migration-postcondition.sql; schema_verifier=validWorkspaceRestoreMigrationPostcondition ;;

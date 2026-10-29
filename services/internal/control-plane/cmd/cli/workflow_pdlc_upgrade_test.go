@@ -2,9 +2,13 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -34,6 +38,7 @@ func TestWorkflowPDLCMigrationFunctions(t *testing.T) {
 	if err := goose.UpToContext(ctx, database, "migrations", 20261029000200); err != nil {
 		t.Fatal("prepare PDLC exact predecessor", err)
 	}
+	readControlPlaneMigrationProof(t, ctx, observer, "workflow-pdlc", "precondition")
 	metadata := func() []byte {
 		t.Helper()
 		var raw []byte
@@ -53,6 +58,7 @@ FROM pg_proc WHERE oid IN ('control_plane.guard_workflow_effect_records()'::regp
 			t.Fatal("PDLC migration changed existing function identity or authority")
 		}
 	}
+	readControlPlaneMigrationProof(t, ctx, observer, "workflow-pdlc", "postcondition")
 	var count, applied int
 	var closed bool
 	if err := observer.QueryRow(ctx, `SELECT count(*),bool_and(proowner='control_plane_owner'::regrole AND NOT prosecdef AND proacl IS NOT NULL
@@ -215,6 +221,22 @@ control_plane.workflow_pdlc_file_epoch_digest($6,''),control_plane.workflow_pdlc
 	if err := tx.Rollback(ctx); err != nil {
 		t.Fatal("close readonly PDLC function probe")
 	}
+	assertWorkflowPDLCCatalogMutationsRejected(t, ctx, observer)
+	if os.Getenv("KODEX_PDLC_SCHEMA_CAPTURE") == "1" {
+		source, err := os.ReadFile("../../../../../tools/release/workflow-pdlc-catalog-readback.sql")
+		if err != nil {
+			t.Fatal("read bounded PDLC metadata query")
+		}
+		var catalog json.RawMessage
+		if err := observer.QueryRow(ctx, string(source)).Scan(&catalog); err != nil {
+			t.Fatal("capture disposable PDLC schema metadata", err)
+		}
+		migration, err := migrations.ReadFile("migrations/20261029000300_workflow_pdlc_evidence.sql")
+		if err != nil {
+			t.Fatal("read compiled PDLC migration bytes")
+		}
+		t.Log("PDLC_SCHEMA_CAPTURE=" + workflowPDLCTestJSON(t, map[string]any{"migrationSHA256": fmt.Sprintf("%x", sha256.Sum256(migration)), "catalogQuerySHA256": fmt.Sprintf("%x", sha256.Sum256(source)), "catalog": catalog}))
+	}
 	if err := goose.DownContext(ctx, database, "migrations"); err == nil {
 		t.Fatal("PDLC migration unexpectedly rolled backward")
 	}
@@ -223,4 +245,41 @@ control_plane.workflow_pdlc_file_epoch_digest($6,''),control_plane.workflow_pdlc
 		t.Fatal("rejected PDLC down altered durable migration state")
 	}
 	t.Log("PDLC native helper/ACL/hash/selector proof passed; full guards, backup CLI and wire4 are not qualified by this suite")
+}
+
+// assertWorkflowPDLCCatalogMutationsRejected changes only schema inside independently rolled
+// back disposable transactions and requires the shipped guard to reject authority/shape drift.
+// assertWorkflowPDLCCatalogMutationsRejected меняет только schema в отдельных откатываемых
+// disposable transactions и требует отказа поставляемого guard при authority/shape drift.
+func assertWorkflowPDLCCatalogMutationsRejected(t *testing.T, ctx context.Context, observer *pgx.Conn) {
+	t.Helper()
+	source, err := os.ReadFile("../../../../../tools/release/workflow-pdlc-catalog-guard.sql")
+	if err != nil {
+		t.Fatal("read shipped PDLC catalog guard")
+	}
+	for _, probe := range []struct{ name, statement string }{
+		{"public-execute", `GRANT EXECUTE ON FUNCTION control_plane.workflow_pdlc_file_key(text,text) TO PUBLIC`},
+		{"backup-execute", `GRANT EXECUTE ON FUNCTION control_plane.workflow_pdlc_file_key(text,text) TO kodex_backup_reader`},
+		{"source", `CREATE OR REPLACE FUNCTION control_plane.workflow_pdlc_file_key(p_result_key text,p_path text) RETURNS text LANGUAGE sql IMMUTABLE SECURITY INVOKER SET search_path=pg_catalog AS $$ SELECT 'changed'; $$`},
+		{"definer", `ALTER FUNCTION control_plane.workflow_pdlc_file_key(text,text) SECURITY DEFINER`},
+		{"volatility", `ALTER FUNCTION control_plane.workflow_receipt_effect_proof(uuid,uuid,uuid,uuid,uuid,text) STABLE`},
+		{"search-path", `ALTER FUNCTION control_plane.workflow_pdlc_file_key(text,text) SET search_path=pg_catalog,public`},
+		{"overload", `CREATE FUNCTION control_plane.workflow_pdlc_file_key(p_path text) RETURNS text LANGUAGE sql AS $$ SELECT p_path; $$`},
+		{"effect-bounds", `ALTER TABLE control_plane.run_nodes DROP CONSTRAINT workflow_effect_record_bounds; ALTER TABLE control_plane.run_nodes ADD CONSTRAINT workflow_effect_record_bounds CHECK(jsonb_array_length(workflow_effect_intents)<=65 AND jsonb_array_length(workflow_effect_rejoins)<=65)`},
+		{"trigger-disabled", `ALTER TABLE control_plane.run_nodes DISABLE TRIGGER workflow_effect_records_guard`},
+	} {
+		t.Run("catalog-"+probe.name, func(t *testing.T) {
+			tx, err := observer.Begin(ctx)
+			if err != nil {
+				t.Fatal("begin isolated PDLC catalog counterfactual")
+			}
+			defer func() { _ = tx.Rollback(ctx) }()
+			if _, err := tx.Exec(ctx, probe.statement); err != nil {
+				t.Fatal("prepare isolated PDLC schema mutation", probe.name)
+			}
+			if _, err := tx.Exec(ctx, string(source)); err == nil {
+				t.Fatal("PDLC catalog guard admitted altered authority or schema", probe.name)
+			}
+		})
+	}
 }

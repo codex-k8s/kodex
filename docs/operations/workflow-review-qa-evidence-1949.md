@@ -4,7 +4,7 @@ title: Native COMMENT и сохранённый QA-отчёт серверног
 type: runbook
 status: approved
 owner: architect
-version: 1.5.0
+version: 1.6.0
 updated: 2026-10-29
 ---
 
@@ -114,8 +114,49 @@ model-first/effect-first, комментария и Ready; gateway в этом �
 fixture, внешние GitHub/модельные действия он не выполняет. Отдельный
 `--pdlc-owner-legacy` выполняет шесть прежних rejoin/review сценариев на том же
 successor. Фактические результаты привязываются к конкретным bytes/SHA отдельно.
-Полное schema/backup proof, rollout потребителей и живой PDLC остаются отдельными
+Schema/backup proof, rollout потребителей и живой PDLC остаются отдельными
 условиями включения нового профиля на staging.
+
+## Проверка схемы031 и backup ACL
+
+Миграция031 имеет отдельные release profiles `workflow-pdlc` и
+`workflow-pdlc-backup`. Precondition читает полный frozen030 proof, отсутствие
+всех14 новых функций и штатные idle counters. Операторский механизм сохраняет
+прежний stop/inspect/resume protocol, проверку source SHA и однократность Job;
+неизвестный результат проверки не разрешает второй DDL.
+
+Postcondition проверяет actual031 до проекции неизменённых частей030:14 новых
+и шесть изменённых функций, полные хеши bodies, входные и выходные типы/имена,
+owner, ACL, volatility, security mode, search_path, два триггера и ограничение
+журнала. Каталог не зависит от текущего search_path. Прежние validators030 не
+принимают031; неизвестная версия не получает fallback. Backup profile отдельно
+проверяет прежние точные SELECT/default ACL. Нативные counterfactual проверки
+в одноразовой БД откатывают изменения schema, не создают business state и
+отвергают подмену тела, PUBLIC/backup EXECUTE, SECURITY DEFINER, STABLE вместо
+VOLATILE, другой search_path, перегрузку, ослабление bounds и выключенный trigger.
+
+`workflow-pdlc-schema-manifest.json` содержит только schema metadata, снятые
+public disposable fixture; в нём нет business rows либо credential values.
+Он связан с SHA256 compiled migration031 и запроса каталога. Генератор сверяет
+14 новых bodies с исходником и выпускает самостоятельные SQL snapshots и
+фиксированный digest для release verifier. После изменения031 нужна новая
+native capture, а не ручная подмена хеша.
+
+Воспроизведение в отдельной loopback-БД штатной оснастки:
+
+```bash
+python3 tools/release/generate-workflow-pdlc-proof.py --check
+KODEX_CONTROL_PLANE_TEST_FILTER=--pdlc-functions make test-control-plane-postgres
+KODEX_CONTROL_PLANE_TEST_FILTER=--pdlc-upgrade make test-control-plane-postgres
+```
+
+Первый PostgreSQL режим проверяет bare030→031, no-op replay, закрытые ACL и
+catalog counterfactuals. Второй выполняет штатный CLI `up` с настоящими backup
+SELECT/defaults, затем дважды `restore-workspace-backup-acl` на exact031.
+Восстановление ACL идёт в одной Serializable transaction и проверяет тот же
+полный031 catalog до возврата grants; ошибка откатывает изменения. Это проверка
+прав backup reader, а не восстановление резервной копии данных. Изолированный
+data restore остаётся отдельной обязательной проверкой.
 
 ## Прежний профиль ревью и QA
 

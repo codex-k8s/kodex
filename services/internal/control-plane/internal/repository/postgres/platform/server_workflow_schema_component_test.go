@@ -2,12 +2,14 @@ package platform
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // TestServerWorkflowMigrationProofComponent preserves the complete SERVER inverse014 proof under the current017+SSH successor and executes its release proof on
@@ -63,6 +65,26 @@ func TestServerWorkflowMigrationProofComponent(t *testing.T) {
 				if _, err := conn.Exec(ctx, string(mutation)); err != nil {
 					t.Fatal("apply disposable workflow schema drift")
 				}
+			}
+			// Profile031 rejects these drifts before inverse projection; older profiles retain
+			// their explicit false fields. An unrelated SQL/transport error is not acceptance.
+			// Профиль031 отклоняет эти изменения до inverse projection; старые профили сохраняют
+			// явные false-поля. Другая ошибка SQL либо transport не считается успехом проверки.
+			if workspaceComponentSchemaVersion(t, ctx, conn) == 20261029000300 &&
+				(fixture.name == "disabled-workflow-guard" || fixture.name == "public-workflow-execute") {
+				source, err := os.ReadFile("../../../../../../../tools/release/workflow-pdlc-migration-postcondition.sql")
+				if err != nil {
+					t.Fatal("read shipped PDLC counterfactual proof")
+				}
+				_, err = conn.PgConn().Exec(ctx, string(source)).ReadAll()
+				var rejection *pgconn.PgError
+				if !errors.As(err, &rejection) || rejection.Code != "P0001" || rejection.Message != "workflow PDLC schema catalog changed" {
+					t.Fatal("altered PDLC catalog did not receive its exact closed rejection")
+				}
+				if _, err := conn.Exec(ctx, "ROLLBACK"); err != nil {
+					t.Fatal("close isolated rejected PDLC proof")
+				}
+				return
 			}
 			actual, proof := readWorkspaceVolumeSchemaProof(t, ctx, conn)
 			if proof["serverWorkflowProfile"] != "SERVER_DAG_V1" || actual["sshComposeProfile"] != "SSH_COMPOSE_V1" {

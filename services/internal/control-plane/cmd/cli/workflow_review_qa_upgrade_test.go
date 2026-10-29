@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 )
@@ -98,6 +100,10 @@ func readControlPlaneMigrationProof(t *testing.T, ctx context.Context, observer 
 	}
 	var verifier string
 	switch profile {
+	case "workflow-pdlc":
+		verifier = "validWorkflowPDLCMigration"
+	case "workflow-pdlc-backup":
+		verifier = "validWorkflowPDLCBackupMigration"
 	case "workflow-review-qa-evidence":
 		verifier = "validWorkflowReviewQAEvidenceMigration"
 	case "workspace-restore":
@@ -134,6 +140,10 @@ func readControlPlaneMigrationProof(t *testing.T, ctx context.Context, observer 
 	}
 	results, err := observer.PgConn().Exec(ctx, string(source)).ReadAll()
 	if err != nil {
+		var databaseError *pgconn.PgError
+		if errors.As(err, &databaseError) {
+			t.Fatalf("shipped migration proof failed: SQLSTATE=%s position=%d message=%s", databaseError.Code, databaseError.Position, databaseError.Message)
+		}
 		t.Fatal("execute shipped review QA upgrade proof")
 	}
 	var proof []byte

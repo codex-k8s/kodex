@@ -7,10 +7,13 @@ import { dirname, resolve } from 'node:path';
 import { inspectSource, sourceGitArguments } from './application-source.mjs';
 import { privateJournal } from '../dev/role-image-acceptance.mjs';
 import { activeDeploymentPods, isProvenStoppedPod } from './stable-archive-transition.mjs';
+import { workflowPDLCCatalogDigest } from './workflow-pdlc-catalog.gen.mjs';
 
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'workflow-pdlc': {version:'20261029000300',file:'20261029000300_workflow_pdlc_evidence.sql',annotation:'kodex.dev/cp-workflow-pdlc-migration-plan',previousVersion:20261029000200,emptyField:'workflowPDLCAbsent',preconditionFile:'workflow-pdlc-migration-precondition.sql',postconditionFile:'workflow-pdlc-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261029000300_workflow_pdlc_evidence.sql'])},
+  'workflow-pdlc-backup': {version:'20261029000300',file:'20261029000300_workflow_pdlc_evidence.sql',annotation:'kodex.dev/cp-workflow-pdlc-backup-migration-plan',previousVersion:20261029000200,emptyField:'workflowPDLCAbsent',preconditionFile:'workflow-pdlc-backup-migration-precondition.sql',postconditionFile:'workflow-pdlc-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261029000300_workflow_pdlc_evidence.sql'])},
   'github-pr': {version:'20261029000200',file:'20261029000200_github_pr_collaboration_admission.sql',annotation:'kodex.dev/cp-github-pr-migration-plan',previousVersion:20261029000100,emptyField:'githubHistoricalCatalog',preconditionFile:'github-pr-migration-precondition.sql',postconditionFile:'github-pr-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261029000200_github_pr_collaboration_admission.sql'])},
   'github-pr-backup': {version:'20261029000200',file:'20261029000200_github_pr_collaboration_admission.sql',annotation:'kodex.dev/cp-github-pr-backup-migration-plan',previousVersion:20261029000100,emptyField:'githubHistoricalCatalog',preconditionFile:'github-pr-backup-migration-precondition.sql',postconditionFile:'github-pr-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261029000200_github_pr_collaboration_admission.sql'])},
   'github-autonomous': {version:'20261029000100',file:'20261029000100_github_historical_grant_admission.sql',annotation:'kodex.dev/cp-github-autonomous-migration-plan',previousVersion:20261028000100,emptyField:'githubHistoricalAbsent',preconditionFile:'github-autonomous-migration-precondition.sql',postconditionFile:'github-autonomous-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261029000100_github_historical_grant_admission.sql'])},
@@ -301,6 +304,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(validGitHubAutonomousMigrationPrecondition(result,profile==='github-autonomous-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'github-pr' || profile === 'github-pr-backup')
       ensure(validGitHubPRMigrationPrecondition(result,profile==='github-pr-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if (profile === 'workflow-pdlc' || profile === 'workflow-pdlc-backup')
+      ensure(validWorkflowPDLCMigrationPrecondition(result,profile==='workflow-pdlc-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     return result;
   };
   const terminalJob = (actual, expected, expectedHash, expectedUID) => {
@@ -870,6 +875,32 @@ export function validGitHubPRBackupMigrationPrecondition(proof) {
   return validGitHubPRMigrationPrecondition(proof,true);
 }
 
+// Actual031 catalog проверяется SQL до frozen030 projection; неизвестные версии и digests закрыты.
+export function validWorkflowPDLCMigrationPostcondition(proof) {
+  return proof?.profile==='GITHUB_PDLC_V1' && proof.gooseVersion===20261029000300 &&
+    proof.workflowPDLCCatalog===true && proof.workflowPDLCFunctions===14 &&
+    proof.workflowPDLCCatalogDigest===workflowPDLCCatalogDigest && validGitHubPRMigrationPostcondition({
+      ...proof,profile:'GITHUB_PR_COLLABORATION_V1',gooseVersion:20261029000200});
+}
+
+// Backup031 сохраняет самостоятельный discriminator и actual backup SELECT proof.
+export function validWorkflowPDLCBackupMigrationPostcondition(proof) {
+  return proof?.profile==='GITHUB_PDLC_BACKUP_V1' && proof.backupReaderCatalog===true &&
+    validWorkflowPDLCMigrationPostcondition({...proof,profile:'GITHUB_PDLC_V1'});
+}
+
+// Новый профиль требует весь030 predecessor, отсутствие14 функций031 и штатный idle fence.
+export function validWorkflowPDLCMigrationPrecondition(proof, backup=false) {
+  return proof?.profile==='GITHUB_PDLC_'+(backup?'BACKUP_':'')+'PREDECESSOR_V1' &&
+    proof.workflowPDLCAbsent===true && (!backup || proof.backupReaderCatalog===true) &&
+    validGitHubPRMigrationPostcondition({...proof,profile:'GITHUB_PR_COLLABORATION_V1'});
+}
+
+// Отдельная точка входа не смешивает bare и backup schema admission.
+export function validWorkflowPDLCBackupMigrationPrecondition(proof) {
+  return validWorkflowPDLCMigrationPrecondition(proof,true);
+}
+
 // Actual backup SELECT проверен до metadata projection; прежний015 verifier не расширяется.
 export function validWorkspaceBackupMigrationPrecondition(proof) {
   return proof?.profile==='WORKSPACE_BACKUP_PREDECESSOR_V1' && proof.backupReaderCatalog===true &&
@@ -892,6 +923,8 @@ export function validWorkspaceBackupACLReadback(proof) {
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {
+    case 'workflow-pdlc': return validWorkflowPDLCMigrationPostcondition(proof);
+    case 'workflow-pdlc-backup': return validWorkflowPDLCBackupMigrationPostcondition(proof);
     case 'github-pr': return validGitHubPRMigrationPostcondition(proof);
     case 'github-pr-backup': return validGitHubPRBackupMigrationPostcondition(proof);
     case 'github-autonomous': return validGitHubAutonomousMigrationPostcondition(proof);
