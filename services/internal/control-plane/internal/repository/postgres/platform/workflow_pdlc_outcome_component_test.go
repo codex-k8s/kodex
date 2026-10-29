@@ -16,7 +16,7 @@ import (
 // и автоматический dependent claim через owner commands. Trusted fixture gateway outputs не
 // являются внешней GitHub delivery; полный SQL outcome fence проверяется отдельно.
 func TestWorkflowPDLCFileResultOwnerComponent(t *testing.T) {
-	for _, mode := range []string{"documentation-effect-first", "documentation-model-first", "developer-effect-first", "developer-model-first"} {
+	for _, mode := range []string{"documentation-effect-first", "documentation-model-first", "developer-effect-first", "developer-model-first", "documentation-large-read-history-effect-first", "documentation-large-read-history-model-first"} {
 		t.Run(mode, func(t *testing.T) {
 			developer := strings.HasPrefix(mode, "developer-")
 			modelFirst := strings.HasSuffix(mode, "model-first")
@@ -32,6 +32,9 @@ func TestWorkflowPDLCFileResultOwnerComponent(t *testing.T) {
 			content := []byte("Требования к журналу обращений.\n")
 			head := strings.Repeat("a", 40)
 			blob := strings.Repeat("b", 40)
+			if strings.Contains(mode, "large-read-history") {
+				workflowPDLCSeedLargeReadHistory(fixture, lease, head, blob)
+			}
 			write, err := fixture.resolve(lease, "pdlc-result-write", "github.repository.content.create", map[string]any{"path": "docs/requirements.md", "branch": "feature/journal", "message": "Сохранить требования", "content_base64": base64.StdEncoding.EncodeToString(content)})
 			if err != nil {
 				t.Fatal("admit native file result WRITE", completionOutcomeClass(err))
