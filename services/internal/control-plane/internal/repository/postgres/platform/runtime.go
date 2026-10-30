@@ -2836,7 +2836,7 @@ func (repository *Repository) scheduleIntegrationContinuation(ctx context.Contex
 		&agentRef, &workflowVersionID, &invocationRef, &invocationState, &resultSummary, &safeErrorCode,
 		&decision.GateRef, &decision.GateVersion, &decision.Decision, &decision.Comment, &receiptRef)
 	if errors.Is(err, pgx.ErrNoRows) {
-		err = readWorkflowEvidenceWithGenericPlan(ctx, tx, func() error {
+		err = withWorkflowEvidenceGenericPlan(ctx, tx, func() error {
 			return tx.QueryRow(ctx, queryWorkflowEvidenceContinuation, pgx.StrictNamedArgs{"organization_id": current.organizationID, "invocation_id": invocationID}).Scan(
 				&parentNodeID, &runID, &rootRunID, &agentID, &attempt, &displayName, &role, &sessionID, &agentRef, &workflowVersionID, &evidenceAuthority, &evidenceBudget, &workflowEvidenceSnapshot)
 		})

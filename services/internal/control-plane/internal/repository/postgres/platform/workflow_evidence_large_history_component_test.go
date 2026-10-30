@@ -18,9 +18,20 @@ import (
 // Trusted gateway fixtures воспроизводят отказ размера продолжения, не заявляя
 // внешний GitHub delivery и не подготавливая business rows через SQL.
 func workflowPDLCSeedLargeReadHistory(fixture *workflowEvidenceNativeFixture, lease map[string]any, head, blob string) {
+	workflowPDLCSeedReadHistory(fixture, lease, head, blob, 12)
+}
+
+// workflowPDLCSeedReadHistory admits each bounded READ through the native owner path;
+// the count changes test history size without inserting business rows directly.
+// workflowPDLCSeedReadHistory проводит каждое bounded READ штатным owner путём;
+// число меняет размер тестовой истории без прямой вставки бизнесовых строк.
+func workflowPDLCSeedReadHistory(fixture *workflowEvidenceNativeFixture, lease map[string]any, head, blob string, count int) {
 	fixture.f.t.Helper()
+	if count < 1 || count > 66 {
+		fixture.f.t.Fatal("invalid bounded read history fixture")
+	}
 	text := strings.Repeat("Documentation read result. ", 256)
-	for index := 0; index < 12; index++ {
+	for index := 0; index < count; index++ {
 		invocation, err := fixture.resolve(lease, fixture.key("pdlc-large-read"), "github.repository.content.read", map[string]any{
 			"path": "docs/source.md", "ref": head,
 		})
@@ -44,6 +55,14 @@ func workflowPDLCSeedLargeReadHistory(fixture *workflowEvidenceNativeFixture, le
 // байты и сверяет source/page pins, stale leases, foreign refs и bad digests.
 // Возвращается проверка terminal replay; business state не вставляется и не меняется.
 func workflowPDLCReadLargeHistory(fixture *workflowEvidenceNativeFixture, previous, lease map[string]any) func() {
+	return workflowPDLCReadHistory(fixture, previous, lease, 15)
+}
+
+// workflowPDLCReadHistory checks the complete native snapshot for the selected
+// fixture cardinality, including page integrity and terminal authority revocation.
+// workflowPDLCReadHistory сверяет полный native snapshot заданной cardinality,
+// включая целостность страниц и отзыв полномочий после завершения.
+func workflowPDLCReadHistory(fixture *workflowEvidenceNativeFixture, previous, lease map[string]any, expectedCount int) func() {
 	t := fixture.f.t
 	t.Helper()
 	task := stringMap(lease, "task")
@@ -57,7 +76,7 @@ func workflowPDLCReadLargeHistory(fixture *workflowEvidenceNativeFixture, previo
 		SizeBytes           int64  `json:"sizeBytes"`
 		OutcomesCount       int    `json:"outcomesCount"`
 	}
-	if json.Unmarshal([]byte(task[strings.LastIndex(task, "\n")+1:]), &manifest) != nil || manifest.Schema != "kodex.workflow-evidence-manifest.v1" || manifest.OutcomesCount != 15 {
+	if json.Unmarshal([]byte(task[strings.LastIndex(task, "\n")+1:]), &manifest) != nil || manifest.Schema != "kodex.workflow-evidence-manifest.v1" || manifest.OutcomesCount != expectedCount {
 		t.Fatal("large history has no exact complete manifest", manifest.OutcomesCount)
 	}
 	request := query.ExecutionIntegrationOutcomes{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), SourceInvocationRef: manifest.SourceInvocationRef, SourceSHA256: manifest.SourceSHA256, MaximumBytes: 4096}
@@ -87,7 +106,7 @@ func workflowPDLCReadLargeHistory(fixture *workflowEvidenceNativeFixture, previo
 	var decoded struct {
 		NativeOutcomes []map[string]any `json:"nativeOutcomes"`
 	}
-	if json.Unmarshal([]byte(assembled.String()), &decoded) != nil || len(decoded.NativeOutcomes) != 15 {
+	if json.Unmarshal([]byte(assembled.String()), &decoded) != nil || len(decoded.NativeOutcomes) != expectedCount {
 		t.Fatal("full read omitted settled facts")
 	}
 	for name, mutate := range map[string]func(*query.ExecutionIntegrationOutcomes){

@@ -44,7 +44,7 @@ func TestWorkflowEvidencePlanScopeComponent(t *testing.T) {
 				if err := tx.QueryRow(ctx, queryWorkflowEvidencePlanSet, pgx.StrictNamedArgs{"mode": planner}).Scan(&mode); err != nil || mode != planner {
 					t.Fatal("set disposable caller planner")
 				}
-				err = readWorkflowEvidenceWithGenericPlan(ctx, tx, func() error {
+				err = withWorkflowEvidenceGenericPlan(ctx, tx, func() error {
 					if err := tx.QueryRow(ctx, queryWorkflowEvidencePlanRead).Scan(&mode); err != nil {
 						return err
 					}

@@ -25,15 +25,17 @@ var queryWorkflowEvidencePlanRead string
 //go:embed sql/workflow_evidence__plan_set.sql
 var queryWorkflowEvidencePlanSet string
 
-// readWorkflowEvidenceWithGenericPlan reuses plans for repeated exact authority
-// checks inside a single evidence selector. The original mode is restored before
-// success or an empty result; failures propagate to the caller's mandatory rollback.
-// Neither a cached plan nor this wrapper caches an authorization result.
-// readWorkflowEvidenceWithGenericPlan переиспользует планы повторных exact
-// authority checks внутри одного evidence selector. Прежний mode восстанавливается
-// до успеха либо пустого результата; ошибка передаётся обязательному rollback
-// вызывающего. Cached plan и эта обёртка не кэшируют результат авторизации.
-func readWorkflowEvidenceWithGenericPlan(ctx context.Context, tx pgx.Tx, read func() error) error {
+// withWorkflowEvidenceGenericPlan reuses plans within one bounded owner operation
+// and restores the previous mode before later transaction work or pooled reuse.
+// Read or write statements retain their original predicates and authority checks;
+// only query plans are reused, never eligibility or authorization results.
+// Errors propagate to the caller's mandatory rollback, including an aborted transaction.
+// withWorkflowEvidenceGenericPlan переиспользует планы одной ограниченной owner
+// операции и восстанавливает прежний mode до следующих команд и pooled reuse.
+// Чтения и записи сохраняют predicates и authority checks; кэшируются только
+// планы запросов, не eligibility или решения авторизации. Ошибки передаются
+// обязательному rollback вызывающего, включая уже прерванную транзакцию.
+func withWorkflowEvidenceGenericPlan(ctx context.Context, tx pgx.Tx, read func() error) error {
 	var previous, active string
 	if err := tx.QueryRow(ctx, queryWorkflowEvidencePlanRead).Scan(&previous); err != nil {
 		return err

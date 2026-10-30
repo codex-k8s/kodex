@@ -120,7 +120,7 @@ func (repository *Repository) executionIntegrationOutcomesOnce(ctx context.Conte
 	defer rollbackAssistantLockedRead(ctx, tx, &resultError)
 	fence := sha256.Sum256([]byte(input.Fence))
 	var sourceID, task, currentTask string
-	err = readWorkflowEvidenceWithGenericPlan(ctx, tx, func() error {
+	err = withWorkflowEvidenceGenericPlan(ctx, tx, func() error {
 		return tx.QueryRow(ctx, queryWorkflowEvidenceReadSource, pgx.StrictNamedArgs{"organization_id": current.organizationID, "lease_ref": input.LeaseRef, "fence_digest": hex.EncodeToString(fence[:]), "generation": input.Generation, "source_invocation_ref": input.SourceInvocationRef}).Scan(&sourceID, &task, &currentTask)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {

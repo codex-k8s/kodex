@@ -58,6 +58,13 @@ func newWorkflowPDLCFileOwnerFixtureWithPlanner(t *testing.T, planner string, ex
 	f.projectRef = project.Ref
 	manager := createLifecycleAgent(t, ctx, service, owner, project.Ref, "pdlc-manager", "Менеджер")
 	author := createLifecycleAgent(t, ctx, service, owner, project.Ref, "pdlc-author", "Аналитик")
+	var captures bool
+	for _, requirement := range extraResults {
+		captures = captures || requirement.Kind == "ARTIFACT"
+	}
+	if captures {
+		author = *f.execute(command.ChangeAgentCapability, "pdlc-author-artifact", &author.Version, command.AgentBindingInput{AgentRef: author.Ref, BindingRef: runtimecontract.ArtifactCapability, Enabled: true}).Agent
+	}
 	check := createLifecycleAgent(t, ctx, service, owner, project.Ref, "pdlc-check", "Архитектор")
 	check = *f.execute(command.ChangeAgentCapability, "pdlc-artifact", &check.Version, command.AgentBindingInput{AgentRef: check.Ref, BindingRef: runtimecontract.ArtifactCapability, Enabled: true}).Agent
 	f.managerRef, f.agents["author"], f.agents["check"] = manager.Ref, author.Ref, check.Ref
@@ -92,6 +99,9 @@ func newWorkflowPDLCFileOwnerFixtureWithPlanner(t *testing.T, planner string, ex
 		}}
 	draft.Steps[0].ResultRequirements = append(draft.Steps[0].ResultRequirements, extraResults...)
 	draft.Steps[0].RequiredCapabilityKeys = append([]string{}, operations...)
+	if captures {
+		draft.Steps[0].RequiredCapabilityKeys = append(draft.Steps[0].RequiredCapabilityKeys, runtimecontract.ArtifactCapability)
+	}
 	workflow := f.execute(command.CreateWorkflow, "pdlc-create", nil, command.WorkflowInput{ProjectRef: project.Ref, Name: draft.Name, Purpose: draft.Purpose, CoordinatorAgentRef: manager.Ref, Draft: &draft}).Workflow
 	workflow = f.execute(command.ValidateWorkflow, "pdlc-validate", &workflow.Version, command.WorkflowInput{Ref: workflow.Ref}).Workflow
 	workflow = f.execute(command.PublishWorkflow, "pdlc-publish", &workflow.Version, command.WorkflowInput{Ref: workflow.Ref}).Workflow
