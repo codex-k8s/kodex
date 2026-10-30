@@ -141,3 +141,27 @@ func (value WorkspaceVolumeWork) Preparation() (WorkspaceVolumePreparation, erro
 	return WorkspaceVolumePreparation{Scope: value.Volume.Scope, WorkspaceRef: value.Volume.WorkspaceRef,
 		TaskRef: value.Volume.PreparationTaskRef, PVCUID: value.Volume.PVCUID, VolumeGeneration: value.Volume.VolumeGeneration}, nil
 }
+
+// ValidateWorkspaceVolumeObservation closes the positive report shape against the persisted effective attempt.
+// It proves neither observer authority nor a Kubernetes process join; the owner and physical controller must check those separately.
+// ValidateWorkspaceVolumeObservation замыкает форму positive report на persisted effective attempt.
+// Проверка не доказывает authority наблюдателя либо Kubernetes process join: owner и physical controller проверяют их отдельно.
+func ValidateWorkspaceVolumeObservation(work WorkspaceVolumeWork, pvcUID, jobUID, podUID string, ready *WorkspaceVolumeReady) error {
+	if work.Validate() != nil || !workspaceUID(pvcUID) {
+		return errWorkspaceStorageInvalid
+	}
+	if work.Kind == WorkspaceVolumeCreate {
+		if work.Attempt != 1 || work.ReconcileOnly || jobUID != "" || podUID != "" || ready != nil {
+			return errWorkspaceStorageInvalid
+		}
+		return nil
+	}
+	preparation, err := work.Preparation()
+	if err != nil || pvcUID != preparation.PVCUID || !workspaceUID(jobUID) || !workspaceUID(podUID) || ready == nil || ready.Preparation != preparation {
+		return errWorkspaceStorageInvalid
+	}
+	if _, err := EncodeWorkspaceVolumeReady(*ready); err != nil {
+		return errWorkspaceStorageInvalid
+	}
+	return nil
+}

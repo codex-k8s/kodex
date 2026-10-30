@@ -11,6 +11,10 @@ import (
 )
 
 var (
+	// queryWorkspaceStorageLegacyEligible locks the exact trusted session and proves absence of every V2 row, independent of candidate agent.
+	// queryWorkspaceStorageLegacyEligible блокирует exact trusted session и доказывает отсутствие любых V2 rows независимо от candidate agent.
+	//go:embed sql/workspace_storage__legacy_eligible.sql
+	queryWorkspaceStorageLegacyEligible string
 	// queryWorkspaceStorageSession locks the exact session even before its first work row exists.
 	// queryWorkspaceStorageSession блокирует exact session даже до появления первой work row.
 	//go:embed sql/workspace_storage__session.sql
@@ -38,6 +42,21 @@ func (repository *Repository) prepareSessionWorkspaceTx(ctx context.Context, tx 
 		return nil, true, nil
 	}
 	activated := repository.roleImages.WorkspaceStorageProfile == runtimecontract.WorkspaceStorageProfile
+	if !activated {
+		var legacyEligible bool
+		err := tx.QueryRow(ctx, queryWorkspaceStorageLegacyEligible, pgx.StrictNamedArgs{
+			"organization_id": current.organizationID, "session_id": candidate.sessionID,
+			"project_id": candidate.projectID}).Scan(&legacyEligible)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, false, errs.ErrConflict
+		}
+		if err != nil {
+			return nil, false, errs.ErrUnavailable
+		}
+		if legacyEligible {
+			return nil, true, nil
+		}
+	}
 	arguments := pgx.StrictNamedArgs{"organization_id": current.organizationID, "session_id": candidate.sessionID,
 		"project_id": candidate.projectID, "agent_id": candidate.agentID}
 	var sessionID string
@@ -49,7 +68,8 @@ func (repository *Repository) prepareSessionWorkspaceTx(ctx context.Context, tx 
 	err := tx.QueryRow(ctx, queryWorkspaceStorageLock, arguments).Scan(&reference, &generation, &state)
 	if errors.Is(err, pgx.ErrNoRows) {
 		if !activated {
-			return nil, true, nil
+			// Единственный legacy-допуск уже проверил отсутствие любой V2 row.
+			return nil, false, errs.ErrConflict
 		}
 		reference, err = newRef("wks")
 		if err != nil {
@@ -64,13 +84,28 @@ func (repository *Repository) prepareSessionWorkspaceTx(ctx context.Context, tx 
 	if err != nil {
 		return nil, false, errs.ErrUnavailable
 	}
-	if !activated || state != "EMPTY" {
+	if !activated {
+		return nil, false, nil
+	}
+	if state == "CHECKPOINT_READY" {
+		return nil, false, repository.prepareWorkspaceRestoreTx(ctx, tx, current, candidate, reference, generation)
+	}
+	if state != "EMPTY" && state != "RESTORED" {
 		// Остальные состояния разрешает только owner checkpoint/restore coordinator.
 		return nil, false, nil
 	}
 	binding := &runtimecontract.WorkspaceStorageBinding{Profile: runtimecontract.WorkspaceStorageProfile,
 		Scope: runtimecontract.WorkspaceStorageScope{OrganizationRef: candidate.organizationRef, ProjectRef: candidate.projectRef,
 			SessionRef: candidate.sessionRef, AgentRef: candidate.agentRef}, WorkspaceRef: reference, Generation: generation}
+	if state == "RESTORED" {
+		source, _, err := readWorkspaceRestoreSource(ctx, tx, workspaceArchiveState{
+			organizationID: current.organizationID, ref: reference, generation: generation, scope: binding.Scope,
+		})
+		if err != nil {
+			return nil, false, err
+		}
+		binding.Source = &source
+	}
 	if _, err := binding.GenerationSubPath(); err != nil {
 		return nil, false, errs.ErrConflict
 	}

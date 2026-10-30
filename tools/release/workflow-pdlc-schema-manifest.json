@@ -1,0 +1,1133 @@
+{
+  "catalog": {
+    "triggers": {
+      "control_plane.run_nodes.workflow_effect_records_guard": [
+        "control_plane.guard_workflow_effect_records()",
+        31,
+        "O",
+        false,
+        false,
+        false,
+        0,
+        "",
+        null,
+        "",
+        null,
+        null,
+        false,
+        false
+      ],
+      "control_plane.run_nodes.workflow_attempt_journal_guard": [
+        "control_plane.guard_workflow_attempt_journal()",
+        23,
+        "O",
+        false,
+        false,
+        false,
+        0,
+        "",
+        null,
+        "",
+        null,
+        null,
+        false,
+        false
+      ]
+    },
+    "functions": {
+      "control_plane.guard_workflow_effect_records()": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ]
+        ],
+        "set": false,
+        "kind": "f",
+        "owner": "control_plane_owner",
+        "config": [
+          "search_path=pg_catalog, control_plane"
+        ],
+        "result": "trigger",
+        "strict": false,
+        "support": "-",
+        "allTypes": null,
+        "defaults": 0,
+        "language": "plpgsql",
+        "parallel": "u",
+        "variadic": "-",
+        "leakproof": false,
+        "sourceMD5": "cc1954201904c1193238a5fbacf51c6f",
+        "inputTypes": [],
+        "volatility": "v",
+        "sourceSHA256": "be1b491c6ea33f10c2ea2ffd45d5e61915afebab040667003e7c372e80140ac1",
+        "argumentModes": null,
+        "argumentNames": null,
+        "securityDefiner": false,
+        "resultDefinition": "trigger",
+        "defaultExpression": null
+      },
+      "control_plane.guard_workflow_attempt_journal()": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ]
+        ],
+        "set": false,
+        "kind": "f",
+        "owner": "control_plane_owner",
+        "config": [
+          "search_path=pg_catalog, control_plane"
+        ],
+        "result": "trigger",
+        "strict": false,
+        "support": "-",
+        "allTypes": null,
+        "defaults": 0,
+        "language": "plpgsql",
+        "parallel": "u",
+        "variadic": "-",
+        "leakproof": false,
+        "sourceMD5": "305ca9b25f0d0fa31f59abb0b7b1d7fa",
+        "inputTypes": [],
+        "volatility": "v",
+        "sourceSHA256": "2cf89c7a8e11054480095b07c2e31c69c6ab502b942134c3dc224e1e909bbe08",
+        "argumentModes": null,
+        "argumentNames": null,
+        "securityDefiner": false,
+        "resultDefinition": "trigger",
+        "defaultExpression": null
+      },
+      "control_plane.workflow_pdlc_file_key(text,text)": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ]
+        ],
+        "set": false,
+        "kind": "f",
+        "owner": "control_plane_owner",
+        "config": [
+          "search_path=pg_catalog"
+        ],
+        "result": "text",
+        "strict": false,
+        "support": "-",
+        "allTypes": null,
+        "defaults": 0,
+        "language": "sql",
+        "parallel": "u",
+        "variadic": "-",
+        "leakproof": false,
+        "sourceMD5": "5b57a61050ae5779126623d7693e883c",
+        "inputTypes": [
+          "text",
+          "text"
+        ],
+        "volatility": "i",
+        "sourceSHA256": "5d78e7de495072b90d25b6208eb92eb201c8ae9c13b045674777d42e44dfd640",
+        "argumentModes": null,
+        "argumentNames": [
+          "p_result_key",
+          "p_path"
+        ],
+        "securityDefiner": false,
+        "resultDefinition": "text",
+        "defaultExpression": null
+      },
+      "control_plane.workflow_pdlc_result_digest(text[])": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ]
+        ],
+        "set": false,
+        "kind": "f",
+        "owner": "control_plane_owner",
+        "config": [
+          "search_path=pg_catalog"
+        ],
+        "result": "text",
+        "strict": false,
+        "support": "-",
+        "allTypes": null,
+        "defaults": 0,
+        "language": "plpgsql",
+        "parallel": "u",
+        "variadic": "-",
+        "leakproof": false,
+        "sourceMD5": "f1643ab13f9b11750746a4271223d779",
+        "inputTypes": [
+          "text[]"
+        ],
+        "volatility": "i",
+        "sourceSHA256": "c0733253fac2b7e52cbdfa41e21c5c5b9a0cff0ff08efa0c37ce1a7ffef31926",
+        "argumentModes": null,
+        "argumentNames": [
+          "p_parts"
+        ],
+        "securityDefiner": false,
+        "resultDefinition": "text",
+        "defaultExpression": null
+      },
+      "control_plane.workflow_pdlc_file_epoch_digest(text,text)": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ]
+        ],
+        "set": false,
+        "kind": "f",
+        "owner": "control_plane_owner",
+        "config": [
+          "search_path=pg_catalog"
+        ],
+        "result": "text",
+        "strict": false,
+        "support": "-",
+        "allTypes": null,
+        "defaults": 0,
+        "language": "sql",
+        "parallel": "u",
+        "variadic": "-",
+        "leakproof": false,
+        "sourceMD5": "b0863a78f87ec5bfc70521c9b3d20231",
+        "inputTypes": [
+          "text",
+          "text"
+        ],
+        "volatility": "i",
+        "sourceSHA256": "e9a3d0c1cfb82b8756cc48a30ea93cc4076926aa4eb2758d03cabcb61ded11f1",
+        "argumentModes": null,
+        "argumentNames": [
+          "p_desired",
+          "p_predecessor"
+        ],
+        "securityDefiner": false,
+        "resultDefinition": "text",
+        "defaultExpression": null
+      },
+      "control_plane.workflow_pdlc_read_order(uuid,text,text,text)": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ]
+        ],
+        "set": false,
+        "kind": "f",
+        "owner": "control_plane_owner",
+        "config": [
+          "search_path=pg_catalog, control_plane"
+        ],
+        "result": "boolean",
+        "strict": false,
+        "support": "-",
+        "allTypes": null,
+        "defaults": 0,
+        "language": "sql",
+        "parallel": "u",
+        "variadic": "-",
+        "leakproof": false,
+        "sourceMD5": "9fdff248e9773cc3551afff38df5f599",
+        "inputTypes": [
+          "uuid",
+          "text",
+          "text",
+          "text"
+        ],
+        "volatility": "s",
+        "sourceSHA256": "9569560201e12b79316b4fbaf27fe35075b286cfac5cd41826b6e4bb1103b9cc",
+        "argumentModes": null,
+        "argumentNames": [
+          "p_organization",
+          "p_write",
+          "p_head",
+          "p_content"
+        ],
+        "securityDefiner": false,
+        "resultDefinition": "boolean",
+        "defaultExpression": null
+      },
+      "control_plane.workflow_evidence_delivery_operation(text,text)": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ]
+        ],
+        "set": false,
+        "kind": "f",
+        "owner": "control_plane_owner",
+        "config": [
+          "search_path=pg_catalog"
+        ],
+        "result": "boolean",
+        "strict": false,
+        "support": "-",
+        "allTypes": null,
+        "defaults": 0,
+        "language": "sql",
+        "parallel": "u",
+        "variadic": "-",
+        "leakproof": false,
+        "sourceMD5": "bb5a26aa9776ece834d5aee67768cddf",
+        "inputTypes": [
+          "text",
+          "text"
+        ],
+        "volatility": "i",
+        "sourceSHA256": "2bc2f07db5be45b90b7052da22cbb73cf884605240060916d8754afa5c122523",
+        "argumentModes": null,
+        "argumentNames": [
+          "p_profile",
+          "p_operation"
+        ],
+        "securityDefiner": false,
+        "resultDefinition": "boolean",
+        "defaultExpression": null
+      },
+      "control_plane.workflow_pdlc_result_valid(jsonb,jsonb,jsonb[])": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ]
+        ],
+        "set": false,
+        "kind": "f",
+        "owner": "control_plane_owner",
+        "config": [
+          "search_path=pg_catalog, control_plane"
+        ],
+        "result": "boolean",
+        "strict": false,
+        "support": "-",
+        "allTypes": null,
+        "defaults": 0,
+        "language": "plpgsql",
+        "parallel": "u",
+        "variadic": "-",
+        "leakproof": false,
+        "sourceMD5": "e605964880369802a929370f3cf32eb7",
+        "inputTypes": [
+          "jsonb",
+          "jsonb",
+          "jsonb[]"
+        ],
+        "volatility": "i",
+        "sourceSHA256": "00eb403c68600d4d7e7a6241c2ae6374f4ab4b39e143406e9fa34f38ac9db092",
+        "argumentModes": null,
+        "argumentNames": [
+          "p_requirement",
+          "p_fact",
+          "p_proofs"
+        ],
+        "securityDefiner": false,
+        "resultDefinition": "boolean",
+        "defaultExpression": null
+      },
+      "control_plane.workflow_pdlc_author_slot(jsonb,text,jsonb,jsonb)": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ]
+        ],
+        "set": false,
+        "kind": "f",
+        "owner": "control_plane_owner",
+        "config": [
+          "search_path=pg_catalog"
+        ],
+        "result": "text",
+        "strict": false,
+        "support": "-",
+        "allTypes": null,
+        "defaults": 0,
+        "language": "plpgsql",
+        "parallel": "u",
+        "variadic": "-",
+        "leakproof": false,
+        "sourceMD5": "0b7fdc137f2570b88ba96dd18ee1d510",
+        "inputTypes": [
+          "jsonb",
+          "text",
+          "jsonb",
+          "jsonb"
+        ],
+        "volatility": "i",
+        "sourceSHA256": "5831778199839bd07c7a7a806fab58ceed4833a4b550ee7e8cb48187bc5e097b",
+        "argumentModes": null,
+        "argumentNames": [
+          "p_requirement",
+          "p_operation",
+          "p_scope",
+          "p_input"
+        ],
+        "securityDefiner": false,
+        "resultDefinition": "text",
+        "defaultExpression": null
+      },
+      "control_plane.workflow_evidence_retains_revision(uuid,uuid,uuid)": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ]
+        ],
+        "set": false,
+        "kind": "f",
+        "owner": "control_plane_owner",
+        "config": [
+          "search_path=pg_catalog"
+        ],
+        "result": "boolean",
+        "strict": false,
+        "support": "-",
+        "allTypes": null,
+        "defaults": 0,
+        "language": "sql",
+        "parallel": "u",
+        "variadic": "-",
+        "leakproof": false,
+        "sourceMD5": "695139aadf8ca154b86b5cd7cbac4df1",
+        "inputTypes": [
+          "uuid",
+          "uuid",
+          "uuid"
+        ],
+        "volatility": "s",
+        "sourceSHA256": "cc94d69b52a28fb29f37feab7c2170a286b0194445a013c7f0b14a5c534bde07",
+        "argumentModes": null,
+        "argumentNames": [
+          "p_tenant",
+          "p_artifact",
+          "p_revision"
+        ],
+        "securityDefiner": false,
+        "resultDefinition": "boolean",
+        "defaultExpression": null
+      },
+      "control_plane.workflow_pdlc_file_desired_digest(text,text,jsonb)": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ]
+        ],
+        "set": false,
+        "kind": "f",
+        "owner": "control_plane_owner",
+        "config": [
+          "search_path=pg_catalog"
+        ],
+        "result": "text",
+        "strict": false,
+        "support": "-",
+        "allTypes": null,
+        "defaults": 0,
+        "language": "plpgsql",
+        "parallel": "u",
+        "variadic": "-",
+        "leakproof": false,
+        "sourceMD5": "40873996ea381ba3ff60c608d7cd2011",
+        "inputTypes": [
+          "text",
+          "text",
+          "jsonb"
+        ],
+        "volatility": "i",
+        "sourceSHA256": "9515440e92f8c01d2d75ea48fd37a859c529a706f15da0b34fb11305581d4977",
+        "argumentModes": null,
+        "argumentNames": [
+          "p_result_key",
+          "p_scope_digest",
+          "p_input"
+        ],
+        "securityDefiner": false,
+        "resultDefinition": "text",
+        "defaultExpression": null
+      },
+      "control_plane.workflow_pdlc_outcome_valid(uuid,uuid,jsonb,jsonb)": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ]
+        ],
+        "set": false,
+        "kind": "f",
+        "owner": "control_plane_owner",
+        "config": [
+          "search_path=pg_catalog, control_plane"
+        ],
+        "result": "boolean",
+        "strict": false,
+        "support": "-",
+        "allTypes": null,
+        "defaults": 0,
+        "language": "plpgsql",
+        "parallel": "u",
+        "variadic": "-",
+        "leakproof": false,
+        "sourceMD5": "dafc8c0e1ca57ef52ed42911dde316a5",
+        "inputTypes": [
+          "uuid",
+          "uuid",
+          "jsonb",
+          "jsonb"
+        ],
+        "volatility": "v",
+        "sourceSHA256": "51bcff7b1dbba237ecebe9bcd4f4eb708c28ff498f265f2e3181e9437e779fcf",
+        "argumentModes": null,
+        "argumentNames": [
+          "p_organization",
+          "p_anchor",
+          "p_entry",
+          "p_requirements"
+        ],
+        "securityDefiner": false,
+        "resultDefinition": "boolean",
+        "defaultExpression": null
+      },
+      "control_plane.workflow_evidence_execution_assigned(uuid,uuid,uuid)": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ]
+        ],
+        "set": false,
+        "kind": "f",
+        "owner": "control_plane_owner",
+        "config": [
+          "search_path=pg_catalog, control_plane"
+        ],
+        "result": "boolean",
+        "strict": false,
+        "support": "-",
+        "allTypes": null,
+        "defaults": 0,
+        "language": "sql",
+        "parallel": "u",
+        "variadic": "-",
+        "leakproof": false,
+        "sourceMD5": "f38f1e6f9b6f5d0426b992d169642b13",
+        "inputTypes": [
+          "uuid",
+          "uuid",
+          "uuid"
+        ],
+        "volatility": "s",
+        "sourceSHA256": "485a06162c0644d6c91fcc0ef1da5cb6fa6e2737d4fe8397c3747eff4f9ee591",
+        "argumentModes": null,
+        "argumentNames": [
+          "p_tenant",
+          "p_node",
+          "p_invocation"
+        ],
+        "securityDefiner": false,
+        "resultDefinition": "boolean",
+        "defaultExpression": null
+      },
+      "control_plane.workflow_evidence_outcome_valid(uuid,uuid,jsonb,jsonb)": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ]
+        ],
+        "set": false,
+        "kind": "f",
+        "owner": "control_plane_owner",
+        "config": [
+          "search_path=pg_catalog, control_plane"
+        ],
+        "result": "boolean",
+        "strict": false,
+        "support": "-",
+        "allTypes": null,
+        "defaults": 0,
+        "language": "plpgsql",
+        "parallel": "u",
+        "variadic": "-",
+        "leakproof": false,
+        "sourceMD5": "936275d8c7170cd2057ca1165f84a872",
+        "inputTypes": [
+          "uuid",
+          "uuid",
+          "jsonb",
+          "jsonb"
+        ],
+        "volatility": "s",
+        "sourceSHA256": "b246e2bfb60861fbc12e8dc71c5db351d6ba43303d90e3d8ccc737beaaba01b1",
+        "argumentModes": null,
+        "argumentNames": [
+          "p_tenant",
+          "p_anchor",
+          "p_entry",
+          "p_requirements"
+        ],
+        "securityDefiner": false,
+        "resultDefinition": "boolean",
+        "defaultExpression": null
+      },
+      "control_plane.workflow_pdlc_intent_valid(uuid,uuid,uuid,uuid,jsonb,jsonb)": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ]
+        ],
+        "set": false,
+        "kind": "f",
+        "owner": "control_plane_owner",
+        "config": [
+          "search_path=pg_catalog, control_plane"
+        ],
+        "result": "boolean",
+        "strict": false,
+        "support": "-",
+        "allTypes": null,
+        "defaults": 0,
+        "language": "plpgsql",
+        "parallel": "u",
+        "variadic": "-",
+        "leakproof": false,
+        "sourceMD5": "d8555a79c977cd437dbef29a45472eba",
+        "inputTypes": [
+          "uuid",
+          "uuid",
+          "uuid",
+          "uuid",
+          "jsonb",
+          "jsonb"
+        ],
+        "volatility": "s",
+        "sourceSHA256": "1ee34a451813d9abb5c9fa3fd7fcd80c7bcbb9f00b070164b27fd026610cb338",
+        "argumentModes": null,
+        "argumentNames": [
+          "p_tenant",
+          "p_anchor",
+          "p_origin",
+          "p_invocation",
+          "p_record",
+          "p_requirement"
+        ],
+        "securityDefiner": false,
+        "resultDefinition": "boolean",
+        "defaultExpression": null
+      },
+      "control_plane.workflow_native_receipt_proof(uuid,uuid,uuid,uuid,uuid,text)": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ]
+        ],
+        "set": true,
+        "kind": "f",
+        "owner": "control_plane_owner",
+        "config": [
+          "search_path=pg_catalog, control_plane"
+        ],
+        "result": "record",
+        "strict": false,
+        "support": "-",
+        "allTypes": [
+          "uuid",
+          "uuid",
+          "uuid",
+          "uuid",
+          "uuid",
+          "text",
+          "text",
+          "jsonb",
+          "jsonb",
+          "text",
+          "text",
+          "text",
+          "text"
+        ],
+        "defaults": 0,
+        "language": "plpgsql",
+        "parallel": "u",
+        "variadic": "-",
+        "leakproof": false,
+        "sourceMD5": "0ddc47cbef1ef5594bba792b3dcdfd35",
+        "inputTypes": [
+          "uuid",
+          "uuid",
+          "uuid",
+          "uuid",
+          "uuid",
+          "text"
+        ],
+        "volatility": "v",
+        "sourceSHA256": "f62172cc6c286f0266ba91669b0fcebe0b4be13673f94d49f7127e62c6a7fadd",
+        "argumentModes": [
+          "i",
+          "i",
+          "i",
+          "i",
+          "i",
+          "i",
+          "t",
+          "t",
+          "t",
+          "t",
+          "t",
+          "t",
+          "t"
+        ],
+        "argumentNames": [
+          "p_organization",
+          "p_node",
+          "p_root",
+          "p_revision",
+          "p_lease",
+          "p_receipt",
+          "operation",
+          "bounded_input",
+          "resource_scope",
+          "result_summary",
+          "response_digest",
+          "provider_effect_ref",
+          "lineage_failure"
+        ],
+        "securityDefiner": false,
+        "resultDefinition": "TABLE(operation text, bounded_input jsonb, resource_scope jsonb, result_summary text, response_digest text, provider_effect_ref text, lineage_failure text)",
+        "defaultExpression": null
+      },
+      "control_plane.workflow_receipt_effect_proof(uuid,uuid,uuid,uuid,uuid,text)": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ]
+        ],
+        "set": true,
+        "kind": "f",
+        "owner": "control_plane_owner",
+        "config": [
+          "search_path=pg_catalog, control_plane"
+        ],
+        "result": "record",
+        "strict": false,
+        "support": "-",
+        "allTypes": [
+          "uuid",
+          "uuid",
+          "uuid",
+          "uuid",
+          "uuid",
+          "text",
+          "text",
+          "jsonb",
+          "jsonb",
+          "text",
+          "text",
+          "text",
+          "text"
+        ],
+        "defaults": 0,
+        "language": "sql",
+        "parallel": "u",
+        "variadic": "-",
+        "leakproof": false,
+        "sourceMD5": "2412f777ad7c6486f07b5639444e437c",
+        "inputTypes": [
+          "uuid",
+          "uuid",
+          "uuid",
+          "uuid",
+          "uuid",
+          "text"
+        ],
+        "volatility": "v",
+        "sourceSHA256": "1b8bb38886ee5a2f5bb5d0eb224e89952ec3df449647c82b7f3177d5b2e003a7",
+        "argumentModes": [
+          "i",
+          "i",
+          "i",
+          "i",
+          "i",
+          "i",
+          "t",
+          "t",
+          "t",
+          "t",
+          "t",
+          "t",
+          "t"
+        ],
+        "argumentNames": [
+          "p_organization",
+          "p_node",
+          "p_root",
+          "p_revision",
+          "p_lease",
+          "p_receipt",
+          "operation",
+          "bounded_input",
+          "resource_scope",
+          "result_summary",
+          "response_digest",
+          "provider_effect_ref",
+          "lineage_failure"
+        ],
+        "securityDefiner": false,
+        "resultDefinition": "TABLE(operation text, bounded_input jsonb, resource_scope jsonb, result_summary text, response_digest text, provider_effect_ref text, lineage_failure text)",
+        "defaultExpression": null
+      },
+      "control_plane.workflow_receipt_lineage_proof(uuid,uuid,uuid,uuid,uuid,text)": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ]
+        ],
+        "set": true,
+        "kind": "f",
+        "owner": "control_plane_owner",
+        "config": [
+          "search_path=pg_catalog, control_plane"
+        ],
+        "result": "record",
+        "strict": false,
+        "support": "-",
+        "allTypes": [
+          "uuid",
+          "uuid",
+          "uuid",
+          "uuid",
+          "uuid",
+          "text",
+          "text",
+          "jsonb",
+          "jsonb",
+          "text",
+          "text",
+          "text",
+          "text"
+        ],
+        "defaults": 0,
+        "language": "sql",
+        "parallel": "u",
+        "variadic": "-",
+        "leakproof": false,
+        "sourceMD5": "f3ae4c35bdf3ebbb9f01f4c721fda23a",
+        "inputTypes": [
+          "uuid",
+          "uuid",
+          "uuid",
+          "uuid",
+          "uuid",
+          "text"
+        ],
+        "volatility": "v",
+        "sourceSHA256": "ac51fff3ebcbf1d8ea8cc851b44d7c63b680585669b35930c78d518a1bed2c5a",
+        "argumentModes": [
+          "i",
+          "i",
+          "i",
+          "i",
+          "i",
+          "i",
+          "t",
+          "t",
+          "t",
+          "t",
+          "t",
+          "t",
+          "t"
+        ],
+        "argumentNames": [
+          "p_organization",
+          "p_node",
+          "p_root",
+          "p_revision",
+          "p_lease",
+          "p_receipt",
+          "operation",
+          "bounded_input",
+          "resource_scope",
+          "result_summary",
+          "response_digest",
+          "provider_effect_ref",
+          "lineage_failure"
+        ],
+        "securityDefiner": false,
+        "resultDefinition": "TABLE(operation text, bounded_input jsonb, resource_scope jsonb, result_summary text, response_digest text, provider_effect_ref text, lineage_failure text)",
+        "defaultExpression": null
+      },
+      "control_plane.workflow_pdlc_receipt_fact(uuid,uuid,uuid,uuid,uuid,text,text)": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ]
+        ],
+        "set": false,
+        "kind": "f",
+        "owner": "control_plane_owner",
+        "config": [
+          "search_path=pg_catalog, control_plane"
+        ],
+        "result": "jsonb",
+        "strict": false,
+        "support": "-",
+        "allTypes": null,
+        "defaults": 0,
+        "language": "plpgsql",
+        "parallel": "u",
+        "variadic": "-",
+        "leakproof": false,
+        "sourceMD5": "0f3c2939f9208dcac4784855b88bf371",
+        "inputTypes": [
+          "uuid",
+          "uuid",
+          "uuid",
+          "uuid",
+          "uuid",
+          "text",
+          "text"
+        ],
+        "volatility": "v",
+        "sourceSHA256": "47781d03fc4157d8f69e7fea688716d5df41473047f520971c6564aa446d8575",
+        "argumentModes": null,
+        "argumentNames": [
+          "p_organization",
+          "p_node",
+          "p_root",
+          "p_revision",
+          "p_lease",
+          "p_receipt",
+          "p_repository"
+        ],
+        "securityDefiner": false,
+        "resultDefinition": "jsonb",
+        "defaultExpression": null
+      },
+      "control_plane.workflow_evidence_intent_valid(uuid,uuid,uuid,uuid,jsonb,jsonb)": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ]
+        ],
+        "set": false,
+        "kind": "f",
+        "owner": "control_plane_owner",
+        "config": [
+          "search_path=pg_catalog, control_plane"
+        ],
+        "result": "boolean",
+        "strict": false,
+        "support": "-",
+        "allTypes": null,
+        "defaults": 0,
+        "language": "sql",
+        "parallel": "u",
+        "variadic": "-",
+        "leakproof": false,
+        "sourceMD5": "21e14acf595ce49ec3d447386544a982",
+        "inputTypes": [
+          "uuid",
+          "uuid",
+          "uuid",
+          "uuid",
+          "jsonb",
+          "jsonb"
+        ],
+        "volatility": "s",
+        "sourceSHA256": "f9d46b9aed546087fbb4960231cfb6ffaea8e9da8891f940b5955851c828620a",
+        "argumentModes": null,
+        "argumentNames": [
+          "p_tenant",
+          "p_anchor",
+          "p_origin",
+          "p_invocation",
+          "p_record",
+          "p_requirement"
+        ],
+        "securityDefiner": false,
+        "resultDefinition": "boolean",
+        "defaultExpression": null
+      }
+    },
+    "effectBounds": [
+      "c",
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      0,
+      "CHECK (((jsonb_array_length(workflow_effect_intents) <= 64) AND (jsonb_array_length(workflow_effect_rejoins) <= 64)))"
+    ],
+    "functionCount": 20
+  },
+  "catalogQuerySHA256": "a2107d102e7f3c64a6ef32901a34e5e71e5c5010f9b157e788e95c7fae02653a",
+  "migrationSHA256": "eb4b055c3f7e1350dc3311531214ca1f10453bfec412eb0f9783e49393d0220e"
+}

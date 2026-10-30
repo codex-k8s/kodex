@@ -27,6 +27,13 @@ func restoreTaskFromSnapshotFixture(t *testing.T, task model.Task, result model.
 	task.Workspace = &model.WorkspaceArchiveTask{Target: body.Target, CheckpointRef: checkpoint.CheckpointRef,
 		Checkpoint: &checkpoint, Policy: body.Policy}
 	task.Workspace.Target.Generation++
+	task.Workspace.PVCUID = "pvc-fixture"
+	task.Workspace.Target.VolumeReady = &runtimecontract.WorkspaceVolumeReady{
+		Schema: runtimecontract.WorkspaceVolumeReadySchema,
+		Preparation: runtimecontract.WorkspaceVolumePreparation{Scope: task.Workspace.Target.Scope,
+			WorkspaceRef: task.Workspace.Target.WorkspaceRef, TaskRef: "svt_fixture000", PVCUID: "pvc-fixture", VolumeGeneration: 1},
+		Device: 1, Inode: 1,
+	}
 	task.TargetObjectKey, task.TargetObjectVersion = checkpoint.Manifest.Key, checkpoint.Manifest.Version
 	if task.Validate() != nil {
 		t.Fatal("invalid restore data fixture")

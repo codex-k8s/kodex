@@ -78,6 +78,52 @@ describe("безопасное доказательство естественн
     expect(JSON.stringify(second)).not.toContain("sensitive-sentinel");
   });
   it.each([
+    [65_537, "x", false],
+    [1_048_576, "x", true],
+    [1_048_576, "я", false],
+  ] as const)(
+    "принимает допустимый снимок %i байт без сохранения содержимого",
+    (size, character, binary) => {
+      const first = socketProof();
+      observeFrame(first, ready(9), "received");
+      first.closed = true;
+      const second = socketProof();
+      observeFrame(second, resume(9), "sent");
+      observeFrame(second, ready(9), "received");
+      const base = JSON.stringify({ type: "PLATFORM_SNAPSHOT", payload: "" });
+      const remaining = size - Buffer.byteLength(base);
+      const width = Buffer.byteLength(character);
+      const payload =
+        character.repeat(Math.floor(remaining / width)) +
+        "x".repeat(remaining % width);
+      const frame = JSON.stringify({ type: "PLATFORM_SNAPSHOT", payload });
+      expect(Buffer.byteLength(frame)).toBe(size);
+      observeFrame(second, binary ? Buffer.from(frame) : frame, "received");
+      expect(second.malformed).toBe(0);
+      expect(resumedAfterRenewal([first, second])).toBe(true);
+      expect(JSON.stringify(second)).not.toContain("payload");
+    },
+  );
+  it.each(["x", "я"])(
+    "отклоняет превышение полного UTF-8 envelope на один байт (%s)",
+    (character) => {
+      const proof = socketProof();
+      const base = JSON.stringify({ type: "PLATFORM_SNAPSHOT", payload: "" });
+      const remaining = 1_048_577 - Buffer.byteLength(base);
+      const width = Buffer.byteLength(character);
+      const frame = JSON.stringify({
+        type: "PLATFORM_SNAPSHOT",
+        payload:
+          character.repeat(Math.floor(remaining / width)) +
+          "x".repeat(remaining % width),
+      });
+      expect(Buffer.byteLength(frame)).toBe(1_048_577);
+      observeFrame(proof, frame, "received");
+      expect(proof.malformed).toBe(1);
+      expect(JSON.stringify(proof)).not.toContain("payload");
+    },
+  );
+  it.each([
     "invalid sensitive-sentinel",
     "null",
     ready(-1),

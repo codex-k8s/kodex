@@ -4,11 +4,220 @@ title: Native COMMENT и сохранённый QA-отчёт серверног
 type: runbook
 status: approved
 owner: architect
-version: 1.3.1
-updated: 2026-10-27
+version: 1.6.2
+updated: 2026-10-29
 ---
 
 # Явный профиль результатов
+
+## Контракт PDLC и карта передачи
+
+`GITHUB_PDLC_V1` является отдельным явным профилем `SERVER_DAG_V1` и использует
+публикацию wire4. Прежние wire1/2/3 и опубликованные версии не меняются.
+Контракт не означает завершённую поставку: до native owner, schema/backup и
+живой проверки всех потребителей профиль не считается доступным в staging.
+
+Источник требований — решения владельца в #1830/#1949/#1967: сотрудники
+сохраняют документы и код в ветке существующего PR, отвечают комментариями,
+предоставляют файлы, после принятых результатов сервер допускает следующий
+шаг. Промежуточные записи требуют действующего `NONE` grant; merge/deploy
+сохраняют отдельные Human Gate. Публикация условий не выдаёт grants.
+
+| Сценарий | Инициатор и полномочия | Передача и владелец состояния | Версии, результат и потребители |
+| --- | --- | --- | --- |
+| Создание процесса | Владелец доступного проекта из проверенной SSO-сессии; либо проектный помощник через подтверждённый owner plan | `POST /api/v1/projects/{projectRef}/workflows` → gateway → `CreateWorkflow` → control-plane domain/repository; проект разрешается по actor, не по наличию ref | Idempotency receipt и workflow назначает сервер; draft содержит profile/requirements/Branch. `WORKFLOW_CHANGED` и последующее `GetWorkflow` читают ту же owner boundary |
+| Изменение, проверка, публикация | Текущий actor с разрешением на существующий workflow | `POST /api/v1/workflows/{workflowRef}/commands` → `UpdateWorkflowDraft` / `ValidateWorkflowDraft` / `PublishWorkflowDraft` → control-plane | Exact `If-Match`/idempotency; immutable published version и spec digest. Branch обязателен только у нового `REPOSITORY_FILE`, targetRef — существующий PR. Неполный либо неизвестный профиль отклоняется до публикации |
+| Чтение процесса владельцем | Проверенный текущий actor и project eligibility | `GET /api/v1/workflows/{workflowRef}` → `GetWorkflow` → owner projection → Proto → gateway HTTP/PWA | Query не создаёт receipt/event; точные draft/published поля не смешиваются, чужой ресурс закрыто отклоняется |
+| Чтение публикации сотрудником | Действующая server-owned lease/RR с закреплёнными каталогом и workflow pins | Managed MCP → runtime-controller callback → `GetExecutionWorkflowCatalog` → control-plane → wire4/shared decoder → сотрудник | Exact lease/fence/generation, publishedRef/version/specDigest и configurationSHA256; READ не выдаёт write authority. Branch/PR/fileName сохраняются без defaults либо downgrade |
+| Принятие файла | Назначенный сотрудник выполняет существующие разрешённые MCP operations; штатный integration-gateway подтверждает native outcome | Запись файла → PR-read → immutable content-read; control-plane разрешает три разных receipt в exact owner/root lineage и проверяет порядок, branch/path/head и полный digest bytes | Декларация только key/write/head/content receipt refs. Accepted file хранит fileName/branch/number/headSha/три receipt refs/digest; модель не назначает accepted и не подставляет содержимое вместо proof |
+| Чтение истории | Текущий владелец либо допущенный потребитель exact run | `GET /api/v1/runs/{runRef}/graph` → `GetRunGraph` → control-plane journal → Proto → gateway/PWA; model dependency читает server-owned accepted snapshot | Не меняет state/event. Новые file/comment поля проходят closed whitelist; private IDs, leases и grants не выдаются. RUN event и последующий graph read используют одинаковую типизированную проекцию |
+| Terminal/cancel/retry | Прежний авторитетный owner lifecycle, без новой команды из-за полей API | Control-plane закрывает прежние lease/grant/invocation и удерживает uncertain native fact по действующему протоколу | Добавление полей не создаёт новых lifecycle events. История читается прежним authoritative graph path; retry не превращает известный WRITE в новый эффект. Изменение файла получает server-linked predecessor только после доказанного native success |
+
+Новые Proto tags добавляются без перенумерации прежних. `Branch` требования
+и `fileName`, `branch`, `headReceiptRef`, `contentReceiptRef` принятого файла
+сохраняются во всех направлениях. Неизвестные поля/виды и использование новых
+исполняемых полей в прежнем профиле закрыто отклоняются. `PR_COMMENT` принимает
+только фактический комментарий существующего PR, не Issue comment. Ready
+разработчика должен относиться к тому же head, что принятый файл.
+
+Browser session stream получает ту же публичную проекцию графа через
+authoritative readback gateway: NATS остаётся только сигналом пробуждения.
+Schema browser snapshot3.1.0 добавляет два вида и четыре file-proof поля;
+нового доменного NATS event либо изменения его authority/lifecycle нет.
+CP, gateway, runtime-controller и PWA поставляются совместно до включения
+нового профиля. Совместимость старого browser validator с новым видом
+результата не предполагается; локальный generator/SSR не заменяет проверку
+настоящих HTTP/WS snapshots и reconnect в staging.
+
+Managed MCP schema создания/изменения процесса и owner parser сохраняют те же
+`branch/fileName/targetRef` при чтении и подготовке плана. Поля receipt и actor
+не входят в редактируемые условия. Отсутствующий profile в sparse UPDATE
+разрешается по owner readback; явный прежний profile не принимает новые file
+selectors. Настоящая compiled JSON Schema и owner create/read/update проверяются
+отдельно: успешный разбор схемы не заменяет native приёмку результата либо
+активные grants. API `Schema.Resolve`/`Resolved.Validate` и условные схемы
+проверены через Context7 `/google/jsonschema-go`; исполняемые tests используют
+закреплённую версию модуля.
+
+## Приёмка и продолжение PDLC
+
+Чтение `WORKFLOW_CONFIGURATION` после изменения проходит собственный строгий
+MCP caster. Он сохраняет `resultEvidenceProfile` в редактируемой и внутренней
+проекциях, `branch` файлового условия и `evidenceKey` QA. Значения парных полей
+должны совпасть; новый профиль допустим только в серверном режиме. Чтение
+проверяет ту же схему видов и условий профиля, которую публикует MCP producer,
+отвергая неизвестные поля, nullable selectors и подмену прежним профилем.
+Постраничная выдача сохраняет полный исходный JSON/hash до EOF; она не выдаёт
+grants и не принимает бизнес-результаты. Успешное создание плана не заменяет
+отдельную проверку этого readback после его применения.
+
+Серверная приёмка нового профиля повторяет native proof через общие owner SQL
+readers: rejoin имеет прежний приоритет, неоднозначный результат не скрывается
+fallback. Readers сохраняют текущие grants, frozen RuntimeRevision, lineage и
+`FOR SHARE ... NOWAIT`; поэтому функции с row locks остаются `VOLATILE`,
+`SECURITY INVOKER`. Новые функции принадлежат `control_plane_owner`, исполняются
+runtime, не предоставляют `PUBLIC` либо backup reader право выполнения.
+
+Файл подтверждается тремя разными receipts: WRITE → PR-read → immutable
+content-read. Общая SQL-хронология используется и Go evaluator, и journal
+guard. Проверяются опубликованные repository/branch/path/PR, полный digest
+decoded bytes, bounded prefix/chunk digest и совпадение immutable head.
+Допустим текст до256КиБ, включая стандартные CRLF-переносы base64; NUL,
+невалидный UTF-8, неканонический padding, пробелы и tab в base64 отклоняются до
+WRITE. Этот профиль текстовых файлов не заменяет загрузку бинарных артефактов.
+
+Composite digests только новых FILE/PR_COMMENT используют SHA256 UTF8-полей с
+NUL-разделителем и закрытой cardinality:12 и7 полей с domain tag. Исторические
+digests не меняются. Фиксированные vectors включают кириллицу и `<&>` в пути,
+чтобы Go JSON escaping и PostgreSQL JSON whitespace не влияли на commitment.
+Comment дополнительно закрепляет digest exact native input в PostgreSQL JSONB
+представлении, которое читает штатный pgx adapter.
+
+`PULL_REQUEST` нового профиля принимается по native `github.pull_request.ready`
+на exact expected head: output обязан сообщить открытый non-draft PR с тем же
+SHA и repository URL. `already_ready=true` допустим; обычный PR-read либо
+неизвестный исход Ready не заменяет этот receipt. Принятый Ready head совпадает
+с принятым файлом того же этапа. Merge и deploy не входят в author delivery
+registry и сохраняют собственные согласования.
+
+| Переход | Проверяемое поведение |
+| --- | --- |
+| Create/publish/launch | Exact owner/project, закрытый профиль, immutable requirements; публикация не выдаёт grant |
+| Claim/renew | Прежние lease/fence/generation и свежий RuntimeRevision, без восстановления закрытой аренды |
+| Native WRITE | Только published author slot и действующий `NONE` grant; immutable intent до внешнего действия |
+| Model complete до native outcome | Capture/lease закрываются, physical run удерживается; принятых результатов ещё нет |
+| Native outcome до model complete | Сохраняется native факт; завершение модели проходит тот же owner join |
+| Все outcomes завершены | Один `CONTINUES` с fresh lease/RR и полным bounded envelope; прежний producer не оживает |
+| Final complete | Прежняя completed provenance плюс SQL-проверка каждого нового результата; только accepted journal допускает зависимость |
+| Technical retry | Совпавший известный WRITE присоединяет receipt; новый ключ не разрешает повтор эффекта |
+| Преднамеренная новая версия файла | Exact predecessor и другой digest bytes назначают новую file epoch; неизвестный предшественник закрывает запись |
+| Revoke/cancel/delete | Прежние owner transitions закрывают grants/leases; сохранённый receipt не восстанавливает разрешение |
+| Lease expiry/dead-letter | Прежние owner closure/recovery; expiry не доказывает успех внешнего эффекта |
+| `WAITING_OWNER`/Gate expiry | Согласование не подменяется model outcome; merge/deploy обрабатываются своими owner-командами |
+| `CHANGES_REQUESTED` | Проверенные отрицательные facts сохраняются отдельно от accepted inputs; новая business attempt требует действующего server rework protocol |
+| Ошибка delivery либо overflow | Durable typed failure без усечения фактов и повторного WRITE; история читается штатным owner path |
+
+`make test-control-plane-postgres` с фильтром `--pdlc-owner` использует отдельную
+пустую loopback-БД, exact predecessor030 и дорабатываемую forward migration031.
+Проверяются native file intent и owner graph для documentation/developer,
+model-first/effect-first, комментария и Ready; gateway в этом контуре доверенный
+fixture, внешние GitHub/модельные действия он не выполняет. Отдельный
+`--pdlc-owner-legacy` выполняет шесть прежних rejoin/review сценариев на том же
+successor. Фактические результаты привязываются к конкретным bytes/SHA отдельно.
+Schema/backup proof, rollout потребителей и живой PDLC остаются отдельными
+условиями включения нового профиля на staging.
+
+## Проверка схемы031 и backup ACL
+
+Исправление [#1975](https://github.com/codex-k8s/kodex/issues/1975) поставляется
+отдельной forward-миграцией032 `20261030000100_workflow_content_page.sql`.
+Нативный GitHub producer называет ограничение страницы `maximum_bytes`,
+диапазон4–16384. Go evaluator и SQL journal guard используют тот же закрытый
+набор полей; `max_bytes`, неизвестные поля, null и неверные типы отклоняются.
+Отсутствующее необязательное поле сохраняет прежний default16384.
+
+Карта исправления: сотрудник с exact runtime grant → MCP
+`github.repository.content.read` → integration-gateway → native receipt →
+control-plane owner evaluator → journal guard → принятый результат → готовый
+зависимый этап. Изменение имени поля не выдаёт grants и не меняет authority,
+версии, receipts, lineage, хронологию, CLEAN либо правила полноты результата.
+Прежние WRITE/READ receipts сохраняются; успешный внешний WRITE при повторе
+должен присоединяться как сохранённый факт, а не исполняться заново.
+
+Профили `workflow-content-page` и `workflow-content-page-backup` требуют
+полный exact031 и прежний idle fence, включая отсутствие `WAITING_HUMAN`.
+Оператор сначала штатно завершает либо отменяет активный запуск, сохраняет
+историю и файлы, затем применяет миграцию единственным Job. Изменение
+активного состояния напрямую в БД запрещено. Новый код и новая схема
+доставляются совместно до повторного запуска сотрудников.
+
+Новая миграция проверяет полный каталог031 и заменяет только тело
+`workflow_pdlc_result_valid(jsonb,jsonb,jsonb[])` через `CREATE OR REPLACE`.
+OID, owner, ACL, security mode, volatility и search_path сохраняются.
+`workflow-content-page-schema-manifest.json` — ожидаемый контракт032,
+производный от снятого каталога031, а не заявление о live readback.
+Native upgrade независимо сверяет фактические двадцать функций с контрактом.
+Исторические миграции, manifest и validators031 остаются неизменными.
+
+```bash
+python3 tools/release/generate-workflow-content-page-proof.py --check
+KODEX_TEST_POSTGRES_STORAGE=ram scripts/tests/control-plane-postgres-test.sh --content-page-upgrade
+KODEX_TEST_POSTGRES_STORAGE=ram scripts/tests/control-plane-postgres-test.sh '^TestWorkflowPDLCFileResultOwnerComponent$'
+```
+
+Матрица032: exact031 → штатный CLI up → exact032; повтор up не меняет
+состояние; backup SELECT восстанавливается только после full catalog proof;
+подмена ACL/search_path/security mode/volatility отклоняется; Down запрещён.
+Cancel, retry и owner Gate сохраняют действующий граф без новых переходов.
+Возврат после применения032 выполняется новой forward-миграцией и совместимым
+образом, без Down и без повторного исполнения внешней записи. Неизвестный
+исход Job требует inspect и не разрешает второй DDL.
+
+Официальная документация PostgreSQL по `CREATE OR REPLACE FUNCTION`,
+сохранению owner/ACL и явным атрибутам функции проверена через Context7
+`/websites/postgresql`. Проверка schema/backup ACL не заменяет data restore
+либо успешный внешний PDLC.
+
+Миграция031 имеет отдельные release profiles `workflow-pdlc` и
+`workflow-pdlc-backup`. Precondition читает полный frozen030 proof, отсутствие
+всех14 новых функций и штатные idle counters. Операторский механизм сохраняет
+прежний stop/inspect/resume protocol, проверку source SHA и однократность Job;
+неизвестный результат проверки не разрешает второй DDL.
+
+Postcondition проверяет actual031 до проекции неизменённых частей030:14 новых
+и шесть изменённых функций, полные хеши bodies, входные и выходные типы/имена,
+owner, ACL, volatility, security mode, search_path, два триггера и ограничение
+журнала. Каталог не зависит от текущего search_path. Прежние validators030 не
+принимают031; неизвестная версия не получает fallback. Backup profile отдельно
+проверяет прежние точные SELECT/default ACL. Нативные counterfactual проверки
+в одноразовой БД откатывают изменения schema, не создают business state и
+отвергают подмену тела, PUBLIC/backup EXECUTE, SECURITY DEFINER, STABLE вместо
+VOLATILE, другой search_path, перегрузку, ослабление bounds и выключенный trigger.
+
+`workflow-pdlc-schema-manifest.json` содержит только schema metadata, снятые
+public disposable fixture; в нём нет business rows либо credential values.
+Он связан с SHA256 compiled migration031 и запроса каталога. Генератор сверяет
+14 новых bodies с исходником и выпускает самостоятельные SQL snapshots и
+фиксированный digest для release verifier. После изменения031 нужна новая
+native capture, а не ручная подмена хеша.
+
+Воспроизведение в отдельной loopback-БД штатной оснастки:
+
+```bash
+python3 tools/release/generate-workflow-pdlc-proof.py --check
+KODEX_CONTROL_PLANE_TEST_FILTER=--pdlc-functions make test-control-plane-postgres
+KODEX_CONTROL_PLANE_TEST_FILTER=--pdlc-upgrade make test-control-plane-postgres
+```
+
+Первый PostgreSQL режим проверяет bare030→031, no-op replay, закрытые ACL и
+catalog counterfactuals. Второй выполняет закреплённый переход030→031 с настоящими backup
+SELECT/defaults, затем дважды `restore-workspace-backup-acl` на exact031.
+Восстановление ACL идёт в одной Serializable transaction и проверяет тот же
+полный031 catalog до возврата grants; ошибка откатывает изменения. Это проверка
+прав backup reader, а не восстановление резервной копии данных. Изолированный
+data restore остаётся отдельной обязательной проверкой.
+
+## Прежний профиль ревью и QA
 
 Issue #1949 вводит optional `version.resultEvidenceProfile=GITHUB_REVIEW_QA_V1`
 только вместе с `SERVER_DAG_V1`. Отсутствие поля сохраняет прежний verdict/head

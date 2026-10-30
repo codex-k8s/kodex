@@ -239,8 +239,8 @@ def main():
                    'chown 10001:29000 /source; chmod 2770 /source; '
                    'test "$(stat -c %a:%u:%g /source)" = "2770:10001:29000"')
         if arguments.mode == 'restore':
-            prepare = ('umask 077; chown 0:29000 /source; chmod 2770 /source; '
-                       'test "$(stat -c %a:%u:%g /source)" = "2770:0:29000"')
+            prepare = ('umask 077; chown 0:29000 /source; chmod 2777 /source; '
+                       'test "$(stat -c %a:%u:%g /source)" = "2777:0:29000"')
         if arguments.mode == 'volume':
             prepare = ('umask 077; chown 0:29000 /source; chmod 2777 /source; '
                        'test "$(stat -c %a:%u:%g /source)" = "2777:0:29000"')
@@ -254,15 +254,23 @@ def main():
             result['volumeReadyHelper'] = 'PASS'
         else:
             if arguments.mode == 'restore':
+                outcomes.append(run_container(volume+'-seal', nonce,
+                    ['--entrypoint=/qa-test',
+                     '--mount', 'type=bind,source='+str(binary)+',target=/qa-test,readonly',
+                     '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/session-workspace',
+                     '--tmpfs', '/tmp:rw,nosuid,nodev,noexec,size=4m,mode=1777',
+                     '--env', 'KODEX_WORKSPACE_WRITER_NATIVE=seal', '--env', 'GOMAXPROCS=1'],
+                    ['-test.run=^TestWorkspaceWriterTwoUIDNative$', '-test.timeout=30s', '-test.v'],
+                    identities, user='10001:29000'))
+                outcomes.append(run_container(volume+'-task', nonce,
+                    ['--entrypoint=/qa-test',
+                     '--mount', 'type=bind,source='+str(binary)+',target=/qa-test,readonly',
+                     '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/session-workspace',
+                     '--tmpfs', '/tmp:rw,nosuid,nodev,noexec,size=4m,mode=1777',
+                     '--env', 'KODEX_WORKSPACE_WRITER_NATIVE=task', '--env', 'GOMAXPROCS=1'],
+                    ['-test.run=^TestWorkspaceWriterTwoUIDNative$', '-test.timeout=30s', '-test.v'],
+                    identities, user='10001:29000'))
                 if writer is not None:
-                    outcomes.append(run_container(volume+'-task', nonce,
-                        ['--entrypoint=/qa-test',
-                         '--mount', 'type=bind,source='+str(binary)+',target=/qa-test,readonly',
-                         '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/session-workspace',
-                         '--tmpfs', '/tmp:rw,nosuid,nodev,noexec,size=4m,mode=1777',
-                         '--env', 'KODEX_WORKSPACE_WRITER_NATIVE=task', '--env', 'GOMAXPROCS=1'],
-                        ['-test.run=^TestWorkspaceWriterTwoUIDNative$', '-test.timeout=30s', '-test.v'],
-                        identities, user='10001:29000'))
                     # The helper receives only the fixture's fixed task input, never host credentials.
                     outcomes.append(run_container(volume+'-socket', nonce,
                         ['--entrypoint=/qa-writer',
@@ -298,6 +306,7 @@ def main():
             else:
                 test_name = 'TestWorkspaceWriterTwoUIDNative'
                 consumer_arguments += [
+                    '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/session-archive,volume-subpath=fixture-task,readonly',
                     '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/workspace-restore-generation,volume-subpath='+RESTORE_FIXTURE_PARENT,
                     '--mount', 'type=volume,source='+volume+',target=/workspace/work,volume-subpath='+RESTORE_FIXTURE_PARENT+'/.restore-tree',
                     '--env', 'KODEX_WORKSPACE_WRITER_NATIVE=coordinator']
@@ -306,7 +315,6 @@ def main():
                 else:
                     consumer_arguments += [
                         '--mount', 'type=bind,source='+str(writer)+',target=/qa-writer,readonly',
-                        '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/session-archive,volume-subpath=fixture-task,readonly',
                         '--mount', 'type=volume,source='+volume+',target=/var/run/kodex/work-writer,volume-subpath=fixture-ipc/workspace-writer',
                         '--env', 'KODEX_WORKSPACE_WRITER_EXECUTABLE=/qa-writer']
             outcomes.append(run_container(volume+'-consume', nonce, consumer_arguments,
@@ -318,6 +326,7 @@ def main():
                      '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/workspace-restore-generation,volume-subpath='+RESTORE_FIXTURE_PARENT+',readonly',
                      '--mount', 'type=volume,source='+volume+',target=/workspace/work,volume-subpath='+RESTORE_FIXTURE_PARENT+'/tree,readonly',
                      '--tmpfs', '/tmp:rw,nosuid,nodev,noexec,size=4m,mode=1777',
+                     '--mount', 'type=volume,source='+volume+',target=/var/run/config/kodex/session-archive,volume-subpath=fixture-task,readonly',
                      '--env', 'KODEX_WORKSPACE_WRITER_NATIVE=reconcile', '--env', 'GOMAXPROCS=1'],
                     ['-test.run=^'+test_name+'$', '-test.timeout=30s', '-test.v'],
                     identities, user='10001:29000'))

@@ -417,8 +417,10 @@ func (client *Client) FinancialObservation(ctx context.Context, input model.Inpu
 	return err
 }
 
-// artifactTransferReason preserves only observed typed cancellation/IO classes, never error text.
-// artifactTransferReason сохраняет лишь наблюдаемые typed cancel/IO classes, не error text.
+// artifactTransferReason preserves typed cancellation, socket deadlines and filesystem failures,
+// keeping filesystem precedence and classifying unknown transport causes without reading error text.
+// artifactTransferReason сохраняет typed cancel, socket deadlines и filesystem failures,
+// оставляя приоритет filesystem и классифицируя неизвестный transport без чтения error text.
 func artifactTransferReason(err error) string {
 	switch {
 	case errors.Is(err, context.Canceled):
@@ -433,6 +435,10 @@ func artifactTransferReason(err error) string {
 	var pathError *os.PathError
 	if errors.As(err, &pathError) {
 		return "FILESYSTEM_IO_FAILED"
+	}
+	var networkError net.Error
+	if errors.As(err, &networkError) && networkError.Timeout() {
+		return "DEADLINE_EXCEEDED"
 	}
 	var operation *net.OpError
 	var request *url.Error

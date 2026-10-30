@@ -849,6 +849,10 @@ type RunnerCompletionRequest struct {
 // Validate проверяет согласованность исхода и диагностики, расход токенов, полную необязательную привязку архива,
 // дайджесты и имена артефактов и общий байтовый бюджет завершения.
 func (request RunnerCompletionRequest) Validate() error {
+	if request.SafeErrorCode == ProviderOverloadedFailureCode &&
+		(request.Success || request.ProviderDiagnostic == nil || !request.ProviderDiagnostic.IsOverload()) {
+		return errProviderDiagnostic
+	}
 	if request.ProviderDiagnostic != nil && (request.Success || request.ProviderDiagnostic.Validate() != nil ||
 		request.ProviderDiagnostic.RuntimeRevisionDigest != request.RuntimeRevisionDigest || request.ProviderDiagnostic.Attempt != request.Attempt ||
 		(request.ProviderDiagnostic.Class == "WORKSPACE" && request.SafeErrorCode != "RUNTIME_ARTIFACT_INVALID")) {

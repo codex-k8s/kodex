@@ -4,8 +4,8 @@ title: Возврат замечаний автору в серверном DAG
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.1
-updated: 2026-10-27
+version: 1.0.2
+updated: 2026-10-29
 ---
 
 # Граница профиля
@@ -20,6 +20,41 @@ updated: 2026-10-27
 same-step recovery и прежние canonical published bytes. Старый episode/Gate
 после rollout не получает новые последствия. Изменение policy — обычное новое
 owner-публикуемое workflow version, а не перепривязка действующего Run.
+
+## Регрессии, воспроизведённые в сквозном прогоне
+
+На исходниках `b80edf0910e08a7d63ccf76d48063832076d8312` и доставленных
+CP `4d085b9e8` / API `26c584149` подтверждены два отдельных разрыва:
+
+- После штатного assistant UPDATE_WORKFLOW и APPLIED receipt HTTP GET теряет
+  `reworkPolicy` и в отдельном черновике, и в выбранной опубликованной проекции.
+  Причина — два списка полей `flattenWorkflow`. Потеря HTTP-поля сама по себе
+  не доказывает потерю сохранённой policy владельца.
+- После физического FAILED, разбора менеджером, recovery APPROVE и принятого
+  второго результата зависимый этап остаётся QUEUED при нуле активных исполнений.
+  Общий claim проверяет прежний FAILED anchor ребра WAITING_FOR, хотя dispatcher
+  закрепил принятый результат новой попытки. Исторический FAILED нельзя менять
+  на SUCCEEDED для устранения очереди.
+
+| Переход | Авторитетное доказательство и эффект |
+| --- | --- |
+| Ответ workflow владельцу | Proto владельца содержит собственные published/draft pins; HTTP копирует policy каждой редакции отдельно, отсутствие сохраняет отсутствие |
+| Recovery принят | Прежний Gate создаёт свежую attempt; completion и immutable journal сохраняют exact физический producer. Это не новое согласование бизнес-результата или внешнего WRITE |
+| Зависимый claim после отказавшего anchor | Только SERVER_DAG_V1: immutable input равен последней принятой записи anchor той же organization/root/step; положительный SUCCEEDED producer связан origin, agent, run/project и номером business attempt |
+| Нет точного доказательства | NULL, непринятая либо иная запись не удовлетворяет зависимость; новый lease/RR не выдаётся. Старый физический WAITING_FOR остаётся обязательным для прежних процессов |
+| Cancel/timeout/terminal/replay | Исторические узлы, edges и journal не переписываются; сохраняются прежние закрытие графа/grants, сроки и выдача свежего RuntimeRevision при действительном claim |
+
+Регрессия `TestWorkflowReworkPolicyReadbackPreservesRevisionBoundaries`
+проводит owner Proto через настоящее HTTP JSON и generated OpenAPI reader.
+`TestWorkflowRecoveredPredecessorUnblocksDependencyComponent` использует
+штатные create/publish/launch/failure/manager/Gate/retry/capture/claim в отдельной
+PostgreSQL: зависимый этап не стартует до согласования и принятия повторного
+результата, затем получает ровно одну аренду, сохраняя исходный FAILED.
+Последняя проверка включена в `make test-workflow-server-postgres`.
+
+Изменения не добавляют DDL, API-полей, внешнего эффекта или разрешения.
+Нативные и staging-результаты привязываются отдельно к проверенному SHA;
+описание исправления не является свидетельством поставки или полного PDLC.
 
 ## Отредактированный контракт и authority
 

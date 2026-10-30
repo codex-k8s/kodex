@@ -48,18 +48,16 @@ func gateTestProjectID(t *testing.T, ctx context.Context, repository *Repository
 }
 
 // testGateSourceAndHistoricalConsequences binds a finalized source attachment set to the exact
-// predecessor turn and checks ordinary historical terminal consequences remain stable after node
-// activation.
+// predecessor turn and checks the caller's explicit historical terminal/nonterminal prediction remains stable after node activation.
 // testGateSourceAndHistoricalConsequences связывает финализированный исходный набор вложений с
-// точным turn предшественника и проверяет неизменность исторических последствий обычного
-// подтверждения после активации узлов.
-func testGateSourceAndHistoricalConsequences(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, gate entity.OwnerGate) {
+// точным turn предшественника и проверяет неизменность явно заданного terminal/nonterminal прогноза после активации узлов.
+func testGateSourceAndHistoricalConsequences(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, gate entity.OwnerGate, terminal bool) {
 	t.Helper()
-	artifact, err := service.UploadArtifact(ctx, owner, value.Mutation{IdempotencyKey: "gate-source-artifact"}, platformrepo.ArtifactUpload{ProjectRef: gate.ProjectRef, FileName: "gate-source.txt", MediaType: "text/plain", SizeBytes: 6, Reader: strings.NewReader("source")})
+	artifact, err := service.UploadArtifact(ctx, owner, value.Mutation{IdempotencyKey: "gate-source-artifact-" + gate.Ref}, platformrepo.ArtifactUpload{ProjectRef: gate.ProjectRef, FileName: "gate-source.txt", MediaType: "text/plain", SizeBytes: 6, Reader: strings.NewReader("source")})
 	if err != nil {
 		t.Fatalf("source fixture upload: %v", err)
 	}
-	ref := finalizedAttachmentSetRef(t, ctx, service, owner, gate.ProjectRef, "RUN_INPUT", "gate-source-set", artifact.Ref)
+	ref := finalizedAttachmentSetRef(t, ctx, service, owner, gate.ProjectRef, "RUN_INPUT", "gate-source-set-"+gate.Ref, artifact.Ref)
 	current, tx := openComponentScopeTransaction(t, ctx, repository, owner)
 	defer func() { _ = tx.Rollback(ctx) }()
 	_, target, err := repository.resolveCommandTarget(ctx, tx, current, "project.view", "PROJECT", gate.ProjectRef, gate.ProjectRef)
@@ -82,14 +80,14 @@ func testGateSourceAndHistoricalConsequences(t *testing.T, ctx context.Context, 
 	if err := repository.projectGateIntent(ctx, tx, current, &copy, true); err != nil || copy.SourceAttachmentSetRef != ref {
 		t.Fatalf("exact source attachment lineage lost: %v", err)
 	}
-	if copy.IntegrationIntent != nil || !copy.DecisionConsequences[0].TerminalForRun {
+	if copy.IntegrationIntent != nil || copy.DecisionConsequences[0].TerminalForRun != terminal {
 		t.Fatal("ordinary terminal gate consequences incorrect")
 	}
 	if tag, err := tx.Exec(ctx, gateIntentActiveNodeQuery, current.organizationID, gate.Ref); err != nil || tag.RowsAffected() == 0 {
 		t.Fatalf("materialized active-node fixture: %v", err)
 	}
 	copy.DecisionConsequences = nil
-	if err := repository.projectGateIntent(ctx, tx, current, &copy, true); err != nil || !copy.DecisionConsequences[0].TerminalForRun {
+	if err := repository.projectGateIntent(ctx, tx, current, &copy, true); err != nil || copy.DecisionConsequences[0].TerminalForRun != terminal {
 		t.Fatalf("historical terminal consequence changed with active nodes: %v", err)
 	}
 }

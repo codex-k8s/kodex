@@ -194,7 +194,15 @@ func workflowResultSHA(raw []byte) string {
 // workflowResultObject принимает один flat known-key object, отвергая duplicate/case-folded keys,
 // trailing values и null required values до разбора business projection.
 func workflowResultObject(raw []byte, required []string, allowed []string) (map[string]json.RawMessage, bool) {
-	if len(raw) == 0 || len(raw) > 64<<10 {
+	return workflowResultObjectWithLimit(raw, required, allowed, 64<<10)
+}
+
+// workflowResultObjectWithLimit retains the same closed decoder while admitting explicitly
+// bounded large native input snapshots. Existing result callers keep the original64KiB limit.
+// workflowResultObjectWithLimit сохраняет закрытый decoder и допускает явно ограниченные большие
+// native input snapshots. Прежние callers результатов сохраняют исходный предел64KiB.
+func workflowResultObjectWithLimit(raw []byte, required []string, allowed []string, limit int) (map[string]json.RawMessage, bool) {
+	if limit < 1 || limit > maximumWorkflowEvidenceSourceBytes || len(raw) == 0 || len(raw) > limit {
 		return nil, false
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))

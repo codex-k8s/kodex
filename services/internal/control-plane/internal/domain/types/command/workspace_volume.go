@@ -44,7 +44,7 @@ type WorkspaceVolumeClaimInput struct {
 // WorkspaceVolumeTaskInput адресует exact durable attempt; persisted task kind выбирает форму positive report.
 // Ready содержит observation metadata, не команду присвоить caller-selected owner state.
 type WorkspaceVolumeTaskInput struct {
-	TaskRef, LeaseRef, Fence, ObservedPVCUID, PodUID, SafeErrorCode string
-	Generation                                                      int64
-	Ready                                                           *runtimecontract.WorkspaceVolumeReady
+	TaskRef, LeaseRef, Fence, ObservedPVCUID, JobUID, PodUID, SafeErrorCode string
+	Generation                                                              int64
+	Ready                                                                   *runtimecontract.WorkspaceVolumeReady
 }

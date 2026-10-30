@@ -1,9 +1,17 @@
+-- Полный actual017 граф и отдельно inverse010; никакая actual FK не скрывается.
 WITH RECURSIVE nodes(relation_id) AS (
     SELECT 'control_plane.projects'::regclass::oid
     UNION
     SELECT constraint_row.conrelid FROM nodes
     JOIN pg_constraint constraint_row ON constraint_row.contype='f' AND constraint_row.confrelid=nodes.relation_id
     JOIN pg_namespace namespace_row ON namespace_row.oid=constraint_row.connamespace AND namespace_row.nspname='control_plane'
+), server_nodes(relation_id) AS (
+    SELECT relation_id FROM nodes WHERE relation_id NOT IN (
+        'control_plane.session_workspace_storage'::regclass,
+        'control_plane.session_workspace_volumes'::regclass,
+        'control_plane.session_workspace_volume_tasks'::regclass,
+        'control_plane.session_workspace_volume_attempts'::regclass
+    )
 ), node_digest AS (
     SELECT count(*) AS count, md5(string_agg(namespace_row.nspname || '.' || class_row.relname,
         E'\n' ORDER BY namespace_row.nspname,class_row.relname)) AS digest
@@ -22,15 +30,15 @@ WITH RECURSIVE nodes(relation_id) AS (
       AND constraint_row.conrelid IN (SELECT relation_id FROM nodes)
 )
 SELECT node_digest.count,node_digest.digest,edge_digest.count,edge_digest.digest,
-    (SELECT count(*) FROM pg_constraint fk WHERE fk.contype='f' AND fk.confrelid IN(SELECT relation_id FROM nodes)
-        AND fk.conrelid IN(SELECT relation_id FROM nodes) AND NOT(fk.conrelid='control_plane.run_nodes'::regclass
-            AND fk.conname IN('legacy_rework_gate_fk','legacy_rework_origin_fk'))),
+    (SELECT count(*) FROM pg_constraint fk WHERE fk.contype='f' AND fk.confrelid IN(SELECT relation_id FROM server_nodes)
+        AND fk.conrelid IN(SELECT relation_id FROM server_nodes) AND NOT(fk.conrelid='control_plane.run_nodes'::regclass
+            AND fk.conname IN('legacy_rework_gate_fk','legacy_rework_origin_fk','workflow_rework_gate_fk'))),
     (SELECT md5(string_agg(child_namespace.nspname||'.'||child_class.relname||'|'||fk.conname||'|'
         ||parent_namespace.nspname||'.'||parent_class.relname||'|'||fk.confdeltype::text,E'\n'
         ORDER BY child_namespace.nspname,child_class.relname,fk.conname))
      FROM pg_constraint fk JOIN pg_class child_class ON child_class.oid=fk.conrelid
      JOIN pg_namespace child_namespace ON child_namespace.oid=child_class.relnamespace
      JOIN pg_class parent_class ON parent_class.oid=fk.confrelid JOIN pg_namespace parent_namespace ON parent_namespace.oid=parent_class.relnamespace
-     WHERE fk.contype='f' AND fk.confrelid IN(SELECT relation_id FROM nodes) AND fk.conrelid IN(SELECT relation_id FROM nodes)
-        AND NOT(fk.conrelid='control_plane.run_nodes'::regclass AND fk.conname IN('legacy_rework_gate_fk','legacy_rework_origin_fk')))
+     WHERE fk.contype='f' AND fk.confrelid IN(SELECT relation_id FROM server_nodes) AND fk.conrelid IN(SELECT relation_id FROM server_nodes)
+        AND NOT(fk.conrelid='control_plane.run_nodes'::regclass AND fk.conname IN('legacy_rework_gate_fk','legacy_rework_origin_fk','workflow_rework_gate_fk')))
 FROM node_digest,edge_digest;

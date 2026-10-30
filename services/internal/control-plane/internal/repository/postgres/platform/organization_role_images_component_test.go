@@ -16,8 +16,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // queryOrganizationImageComponentOwner changes only the exact fixture organization/subject
@@ -357,31 +355,4 @@ WHERE convert_from(payload, 'UTF8')::jsonb->>'eventName' = 'ROLE_IMAGE_RECIPE_CH
 	}
 	testRoleImageExpiryOutcome(t, ctx, repository, resolved, owner, worker, "")
 	testRoleImageExpiryOutcome(t, ctx, repository, resolved, owner, worker, project.Project.Ref)
-}
-
-// organizationImageQueryTracer holds the component test logger for PostgreSQL query rejections in
-// the synthetic isolated fixture; tracing records neither SQL text nor query arguments.
-// organizationImageQueryTracer хранит component test logger для PostgreSQL query rejections в
-// synthetic isolated fixture; tracing не записывает SQL text либо query arguments.
-type organizationImageQueryTracer struct{ t *testing.T }
-
-// TraceQueryStart returns the supplied query context unchanged and ignores the connection/query
-// metadata, without creating a span or observing parameters.
-// TraceQueryStart возвращает переданный query context без изменений и игнорирует connection/query
-// metadata без создания span либо чтения parameters.
-func (tracer organizationImageQueryTracer) TraceQueryStart(ctx context.Context, _ *pgx.Conn, _ pgx.TraceQueryStartData) context.Context {
-	return ctx
-}
-
-// TraceQueryEnd logs PostgreSQL error code, constraint name and message only for errors wrapping
-// PgError in the synthetic fixture; other errors produce no trace output and SQL/arguments are not
-// printed.
-// TraceQueryEnd записывает PostgreSQL error code, constraint name и message только для errors с
-// вложенным PgError в synthetic fixture; остальные ошибки не дают trace output, SQL/arguments не
-// печатаются.
-func (tracer organizationImageQueryTracer) TraceQueryEnd(_ context.Context, _ *pgx.Conn, result pgx.TraceQueryEndData) {
-	var failure *pgconn.PgError
-	if errors.As(result.Err, &failure) {
-		tracer.t.Logf("synthetic SQL rejection: code=%s constraint=%s message=%s", failure.Code, failure.ConstraintName, failure.Message)
-	}
 }

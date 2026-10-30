@@ -8,6 +8,47 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestFinalPromptPDLCFileAndCommentUsesClosedParser checks that an employee receives all three
+// native file selectors and that the real result parser accepts only substituted receipt locators.
+// TestFinalPromptPDLCFileAndCommentUsesClosedParser проверяет передачу сотруднику трёх native
+// file selectors и допуск настоящим parser только после подстановки реальных receipt locators.
+func TestFinalPromptPDLCFileAndCommentUsesClosedParser(t *testing.T) {
+	requirements := pdlcAuthorRequirements()
+	prompt, err := ResultDeclarationPromptForProfile(requirements, GitHubPDLCV1)
+	if err != nil {
+		t.Fatal("PDLC employee result contract unavailable", err)
+	}
+	example := finalPromptExample(t, prompt)
+	if _, err := DecodeDeclarationForProfile(example, requirements, GitHubPDLCV1); err == nil {
+		t.Fatal("employee placeholder accepted as native file evidence")
+	}
+	var declaration entity.WorkflowResultDeclaration
+	if json.Unmarshal([]byte(example), &declaration) != nil {
+		t.Fatal("PDLC employee example is not JSON")
+	}
+	declaration.Results[0].ReceiptRef = "erc_file_write000"
+	declaration.Results[0].HeadReceiptRef = "erc_file_head0000"
+	declaration.Results[0].ContentReceiptRef = "erc_file_content0"
+	declaration.Results[2].ReceiptRef = "erc_pr_comment00"
+	raw, err := json.Marshal(declaration)
+	if err != nil {
+		t.Fatal("encode substituted PDLC employee declaration")
+	}
+	if _, err := DecodeDeclarationForProfile(string(raw), requirements, GitHubPDLCV1); err != nil {
+		t.Fatal("employee PDLC declaration rejected by actual parser", err)
+	}
+	for _, required := range []string{GitHubPDLCV1, "headReceiptRef", "contentReceiptRef", "github.pull_request.read", "github.repository.content.read", "source_digest", "PR_COMMENT", "CAPTURE_PROGRESS"} {
+		if !strings.Contains(prompt, required) {
+			t.Fatal("employee PDLC instructions lost native evidence contract", required)
+		}
+	}
+	for _, profile := range []string{"", GitHubReviewQAV1, "GITHUB_PDLC_V2"} {
+		if _, err := ResultDeclarationPromptForProfile(requirements, profile); err == nil {
+			t.Fatal("historical or unknown profile acquired PDLC employee instructions")
+		}
+	}
+}
+
 // finalPromptExample extracts the single final JSON example consumed by the model, rather than
 // rebuilding a test-only declaration which might silently diverge from the actual instructions.
 // finalPromptExample извлекает единственный финальный JSON-пример, доступный модели, вместо

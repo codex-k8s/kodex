@@ -42,10 +42,8 @@ func PrepareBoundGeneration(ctx context.Context, input runtimecontract.RunnerInp
 		return classify(err)
 	}
 	defer unix.Close(root)
-	var volume unix.Stat_t
-	if unix.Fstat(root, &volume) != nil || volume.Mode&unix.S_IFMT != unix.S_IFDIR || volume.Uid != 0 ||
-		volume.Gid != 29000 || volume.Mode&0o070 != 0o070 {
-		return &Denial{Reason: runtimecontract.RuntimeWorkspacePathOutsideWorkspace}
+	if err := verifyPreparedVolumeAt(ctx, root, input.WorkspaceStorage.VolumeReady, securefile.OwnedRecordIdentity{UID: 10001, GID: 29000}, 0); err != nil {
+		return err
 	}
 	return prepareBoundGenerationAt(ctx, root, input, ack, generationFileOwner{uid: 10001, gid: 29000})
 }

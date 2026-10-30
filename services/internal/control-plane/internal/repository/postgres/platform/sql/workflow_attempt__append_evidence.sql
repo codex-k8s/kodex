@@ -36,7 +36,7 @@ WITH completed AS (
     FROM completed
     JOIN control_plane.runs root ON root.id=completed.root_run_id AND root.organization_id=completed.organization_id
     JOIN control_plane.workflow_versions version ON version.id=root.workflow_version_id AND version.organization_id=root.organization_id
-    WHERE version.spec->>'ResultEvidenceProfile'='GITHUB_REVIEW_QA_V1'
+    WHERE version.spec->>'ResultEvidenceProfile' IN ('GITHUB_REVIEW_QA_V1','GITHUB_PDLC_V1')
         AND NOT @accepted::boolean AND @reason::text='CHANGES_REQUIRED'
         AND jsonb_typeof(@review_evidence::jsonb)='array' AND jsonb_array_length(@review_evidence::jsonb) BETWEEN 1 AND 4
 )

@@ -11,6 +11,10 @@ export interface WorkflowAcceptedResult {
   artifactRevision?: string;
   digest: string;
   receiptRef?: string;
+  headReceiptRef?: string;
+  contentReceiptRef?: string;
+  fileName?: string;
+  branch?: string;
   repository?: string;
   number?: number;
   headSha?: string;

@@ -1,5 +1,5 @@
 -- name: workspace_volume__origin :one
-SELECT root.initiated_by::text,root.ref,p.ref,s.ref,a.ref
+SELECT root.initiated_by::text,root.ref,p.ref,s.ref,a.ref,root.target_type,root.target_ref
 FROM control_plane.run_nodes n
 JOIN control_plane.runs r ON r.id=n.run_id AND r.organization_id=n.organization_id
 JOIN control_plane.runs root ON root.id=r.root_run_id AND root.organization_id=r.organization_id

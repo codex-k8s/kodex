@@ -5,6 +5,7 @@ import (
 	"embed"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -51,7 +52,7 @@ func TestWorkspaceVolumeMigrationPredecessor(t *testing.T) {
 	if err := goose.SetDialect("postgres"); err != nil {
 		t.Fatal("volume upgrade dialect configuration failed")
 	}
-	if err := goose.UpToContext(ctx, database, "migrations", 20261026001600); err != nil {
+	if err := goose.UpToContext(ctx, database, "migrations", 20261026001000); err != nil {
 		t.Fatal("full volume predecessor migration failed", err)
 	}
 	observerConfig := config.Copy()
@@ -65,6 +66,10 @@ func TestWorkspaceVolumeMigrationPredecessor(t *testing.T) {
 		defer stop()
 		_ = observer.Close(cleanup)
 	}()
+	readControlPlaneMigrationProof(t, ctx, observer, "workspace-volume-ssh", "precondition")
+	if err := goose.UpToContext(ctx, database, "migrations", 20261026001600); err != nil {
+		t.Fatal("full volume predecessor migration failed", err)
+	}
 	raw, err := migrations.ReadFile("migrations/20261026001700_workspace_volume_custody.sql")
 	if err != nil {
 		t.Fatal("read exact volume migration")
@@ -183,6 +188,55 @@ func TestWorkspaceVolumeMigrationPredecessor(t *testing.T) {
 		version, err := goose.GetDBVersionContext(ctx, database)
 		if err != nil || version != 20261027000100 {
 			t.Fatal("combined migration version readback failed")
+		}
+		catalogSQL, err := workspaceVolumeFixtures.ReadFile("testdata/sql/volume_catalog_readback.sql")
+		if err != nil {
+			t.Fatal("read volume catalog metadata query")
+		}
+		var catalog string
+		if err := observer.QueryRow(ctx, string(catalogSQL)).Scan(&catalog); err != nil {
+			t.Fatal("read frozen volume catalog metadata", err)
+		}
+		t.Log("VOLUME_CATALOG_FINGERPRINTS " + catalog)
+		readControlPlaneMigrationProof(t, ctx, observer, "workspace-volume-ssh", "postcondition")
+		guard, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "..", "tools", "release", "workspace-volume-catalog-guard.sql"))
+		if err != nil {
+			t.Fatal("read shipped volume catalog guard")
+		}
+		effectGuard, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "..", "tools", "release", "workspace-volume-ssh-effect-guard.sql"))
+		if err != nil {
+			t.Fatal("read shipped combined effect guard")
+		}
+		for _, name := range []string{"column", "constraint", "index", "table_acl", "column_acl", "function", "function_acl", "function_owner", "trigger", "parent_fk", "origin_trigger", "rls", "policy", "ssh_evidence", "ssh_deployment"} {
+			t.Run("catalog-reject-"+name, func(t *testing.T) {
+				mutation, err := workspaceVolumeFixtures.ReadFile("testdata/sql/volume_catalog_" + name + ".sql")
+				if err != nil {
+					t.Fatal("read volume catalog drift fixture")
+				}
+				tx, err := observer.Begin(ctx)
+				if err != nil {
+					t.Fatal("begin volume catalog drift")
+				}
+				defer func() {
+					cleanup, stop := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+					defer stop()
+					if err := tx.Rollback(cleanup); err != nil {
+						t.Error("rollback volume catalog drift failed")
+					}
+				}()
+				if _, err := tx.Exec(ctx, string(mutation)); err != nil {
+					t.Fatal("apply volume catalog mutation", err)
+				}
+				selected, message := guard, "workspace volume catalog changed"
+				if strings.HasPrefix(name, "ssh_") {
+					selected, message = effectGuard, "combined SSH evidence guard changed"
+				}
+				_, err = tx.Exec(ctx, string(selected))
+				var failure *pgconn.PgError
+				if !errors.As(err, &failure) || failure.Code != "P0001" || failure.Message != message {
+					t.Fatal("volume catalog drift did not fail closed", err)
+				}
+			})
 		}
 	})
 }

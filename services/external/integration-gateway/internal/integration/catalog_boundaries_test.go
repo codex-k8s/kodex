@@ -52,7 +52,9 @@ func TestCatalogMutationProviderFailuresNeverReplay(t *testing.T) {
 		}
 		adapter := testAdapter(t)
 		capability, ok := adapter.definitions[provider].Capability(operation)
-		if !ok || capability.Risk == "READ" {
+		// Ready has dedicated pre/post-read fault scenarios rather than a single SDK mutation response.
+		// Ready проверяется отдельными pre/post-read сценариями, а не единственным SDK mutation response.
+		if !ok || capability.Risk == "READ" || operation == "github.pull_request.ready" {
 			continue
 		}
 		for _, failure := range []string{"server_error", "denied", "invalid_success"} {

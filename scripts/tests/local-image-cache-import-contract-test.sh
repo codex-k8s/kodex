@@ -19,6 +19,7 @@ for builder in build-local-runner.sh build-local-session-archive.sh build-local-
 done
 
 python3 -B "$root/tools/dev/test_session_archive_seed.py"
+python3 -B "$root/tools/dev/test_runner_build_context.py"
 
 image_import="$root/tools/dev/import-local-image.sh"
 grep -Fq 'docker exec -i "$node" ctr --address "$runtime_socket" -n k8s.io images import' "$image_import" ||

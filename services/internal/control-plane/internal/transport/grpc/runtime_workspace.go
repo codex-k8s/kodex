@@ -48,7 +48,21 @@ func castRuntimeWorkspace(result *cp.RuntimeRevisionSnapshot, values map[string]
 	result.WorkspaceStorage = &cp.RuntimeWorkspaceStorage{Profile: binding.Profile, Scope: castWorkspaceScope(binding.Scope),
 		WorkspaceRef: binding.WorkspaceRef, Generation: binding.Generation}
 	result.WorkspaceStorage.Source = castWorkspaceCheckpoint(binding.Source)
+	result.WorkspaceStorage.VolumeReady = castWorkspaceVolumeReady(binding.VolumeReady)
 	return true
+}
+
+// castWorkspaceVolumeReady preserves the owner's exact sealed preparation without adding execution authority.
+// castWorkspaceVolumeReady сохраняет exact sealed preparation owner без добавления execution authority.
+func castWorkspaceVolumeReady(value *runtimecontract.WorkspaceVolumeReady) *cp.RuntimeWorkspaceVolumeReady {
+	if value == nil {
+		return nil
+	}
+	preparation := value.Preparation
+	return &cp.RuntimeWorkspaceVolumeReady{Schema: value.Schema, Device: value.Device, Inode: value.Inode,
+		Preparation: &cp.RuntimeWorkspaceVolumePreparation{Scope: castWorkspaceScope(preparation.Scope),
+			WorkspaceRef: preparation.WorkspaceRef, TaskRef: preparation.TaskRef, PvcUid: preparation.PVCUID,
+			VolumeGeneration: preparation.VolumeGeneration}}
 }
 
 // castWorkspaceScope copies only already-validated data-owner references into internal transport.

@@ -223,7 +223,7 @@ func workflowQAIssueSemanticInput(input []byte, report *workflowQAReportPin, log
 // workflowEvidenceOperation выделяет только два per-business evidence effects нового профиля;
 // она не меняет identity прежних slots и не допускает другие WRITE.
 func workflowEvidenceOperation(profile, operation string) bool {
-	return profile == workflowservice.GitHubReviewQAV1 && (operation == "github.pull_request.review.create" || operation == "github.issue.create")
+	return workflowservice.NativeReviewEvidence(profile) && (operation == "github.pull_request.review.create" || operation == "github.issue.create")
 }
 
 // workflowIssueEvidenceTx requires a previously captured finding report in the current frozen RR

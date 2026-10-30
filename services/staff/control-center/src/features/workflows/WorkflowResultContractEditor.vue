@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, useId } from "vue";
+import { nativeWorkflowEvidenceProfile } from "@/shared/api/workflow-pdlc";
 import {
   workflowItem,
   workflowResultKinds,
@@ -20,6 +21,13 @@ const emit = defineEmits<{
   requirements: [value: Record<string, unknown>[]];
 }>();
 const prefix = `workflow-results-${useId()}`;
+const availableKinds = computed(() =>
+  workflowResultKinds.filter(
+    (kind) =>
+      props.evidenceProfile === "GITHUB_PDLC_V1" ||
+      !["REPOSITORY_FILE", "PR_COMMENT"].includes(kind),
+  ),
+);
 const control = (index: number, key: string) =>
   `${prefix}-${String(index)}-${key}`;
 const text = (value: unknown): string =>
@@ -52,8 +60,23 @@ function change(index: number, key: string, value: string): void {
       const next: Record<string, unknown> = { key: item.key, kind: value };
       if (value === "ARTIFACT")
         Object.assign(next, { fileName: "", mediaType: "text/markdown" });
-      if (["PULL_REQUEST", "INTEGRATION_RECEIPT", "DEPLOYMENT"].includes(value))
+      if (
+        [
+          "PULL_REQUEST",
+          "INTEGRATION_RECEIPT",
+          "DEPLOYMENT",
+          "REPOSITORY_FILE",
+          "PR_COMMENT",
+        ].includes(value)
+      )
         next.repository = "";
+      if (value === "REPOSITORY_FILE")
+        Object.assign(next, { fileName: "", branch: "" });
+      if (
+        ["REPOSITORY_FILE", "PR_COMMENT"].includes(value) ||
+        (value === "PULL_REQUEST" && props.evidenceProfile === "GITHUB_PDLC_V1")
+      )
+        next.targetRef = "";
       if (
         [
           "ARTIFACT_REVIEW",
@@ -65,7 +88,10 @@ function change(index: number, key: string, value: string): void {
       )
         next.subjectStepKey = "";
       if (value === "ARTIFACT_REVIEW") next.subjectResultKey = "";
-      if (value === "QA" && props.evidenceProfile === "GITHUB_REVIEW_QA_V1")
+      if (
+        value === "QA" &&
+        nativeWorkflowEvidenceProfile(props.evidenceProfile)
+      )
         next.evidenceKey = "";
       if (value === "INTEGRATION_RECEIPT")
         next.operation = "github.pull_request.merge";
@@ -166,7 +192,7 @@ function selectDependencies(event: Event): void {
             change(index, 'kind', ($event.target as HTMLSelectElement).value)
           "
         >
-          <option v-for="kind in workflowResultKinds" :key="kind" :value="kind">
+          <option v-for="kind in availableKinds" :key="kind" :value="kind">
             {{ $t(`workflowResults.kinds.${kind}`) }}
           </option>
         </select></label
@@ -187,11 +213,39 @@ function selectDependencies(event: Event): void {
             "
         /></label>
       </template>
+      <template v-if="item.kind === 'REPOSITORY_FILE'">
+        <label
+          v-for="field in ['fileName', 'branch']"
+          :key="field"
+          class="field"
+        >
+          <span>{{
+            $t(
+              field === "fileName"
+                ? "workflowResults.path"
+                : "workflowResults.branch",
+            )
+          }}</span>
+          <input
+            :id="control(index, field)"
+            :name="control(index, field)"
+            :value="text(item[field])"
+            :maxlength="field === 'fileName' ? 1024 : 255"
+            @input="
+              change(index, field, ($event.target as HTMLInputElement).value)
+            "
+          />
+        </label>
+      </template>
       <label
         v-if="
-          ['PULL_REQUEST', 'INTEGRATION_RECEIPT', 'DEPLOYMENT'].includes(
-            text(item.kind),
-          )
+          [
+            'PULL_REQUEST',
+            'INTEGRATION_RECEIPT',
+            'DEPLOYMENT',
+            'REPOSITORY_FILE',
+            'PR_COMMENT',
+          ].includes(text(item.kind))
         "
         class="field"
         ><span>{{ $t("workflowResults.repository") }}</span
@@ -278,8 +332,22 @@ function selectDependencies(event: Event): void {
           </option>
         </select>
       </label>
-      <label v-if="item.kind === 'DEPLOYMENT'" class="field"
-        ><span>{{ $t("workflowResults.target") }}</span
+      <label
+        v-if="
+          item.kind === 'DEPLOYMENT' ||
+          (evidenceProfile === 'GITHUB_PDLC_V1' &&
+            ['REPOSITORY_FILE', 'PR_COMMENT', 'PULL_REQUEST'].includes(
+              text(item.kind),
+            ))
+        "
+        class="field"
+        ><span>{{
+          $t(
+            item.kind === "DEPLOYMENT"
+              ? "workflowResults.target"
+              : "workflowResults.pullNumber",
+          )
+        }}</span
         ><input
           :id="control(index, 'target')"
           :name="control(index, 'target')"
@@ -294,7 +362,9 @@ function selectDependencies(event: Event): void {
           "
       /></label>
       <label
-        v-if="item.kind === 'QA' && evidenceProfile === 'GITHUB_REVIEW_QA_V1'"
+        v-if="
+          item.kind === 'QA' && nativeWorkflowEvidenceProfile(evidenceProfile)
+        "
         class="field"
       >
         <span>{{ $t("workflowResults.evidenceKey") }}</span>

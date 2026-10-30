@@ -37,7 +37,7 @@ type postgresCLIDependencies struct {
 // runPostgres разбирает выбранный DSN, открывает handle и делает один ограниченный начальный PingContext.
 // Check возвращается до настройки и вызовов Goose; up/status работают однократно с исходным caller context.
 func runPostgres(ctx context.Context, command string, output io.Writer, dependencies postgresCLIDependencies) error {
-	if command != "check" && command != "up" && command != "status" {
+	if !validPostgresCommand(command) {
 		return cliFailure(stageArguments, nil)
 	}
 	if err := ctx.Err(); err != nil {
@@ -97,12 +97,21 @@ func openPostgresDatabase(config *pgx.ConnConfig) *sql.DB { return stdlib.OpenDB
 // applyPostgresMigrations является единственным входом в Goose для up/status после успешного ping.
 // Status может инициализировать состояние версий Goose и намеренно исключён из connection-only check.
 func applyPostgresMigrations(ctx context.Context, database *sql.DB, command string) error {
+	if !validPostgresCommand(command) || command == "check" {
+		return cliFailure(stageArguments, nil)
+	}
+	if command == workspaceBackupRestoreCommand {
+		return restoreWorkspaceBackupACL(ctx, database)
+	}
 	goose.SetBaseFS(migrations)
 	if err := goose.SetDialect("postgres"); err != nil {
 		return cliFailure(stageDialect, err)
 	}
 	if command == "status" {
 		return goose.StatusContext(ctx, database, "migrations")
+	}
+	if command == workspaceBackupUpgradeCommand {
+		return upgradeWorkspaceWithBackupCompatibility(ctx, database)
 	}
 	return goose.UpContext(ctx, database, "migrations")
 }

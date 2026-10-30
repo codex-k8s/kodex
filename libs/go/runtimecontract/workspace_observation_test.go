@@ -6,6 +6,29 @@ import (
 	"testing"
 )
 
+// TestWorkspaceAcknowledgementPinsAcceptedVolume rejects an otherwise current owner ACK for
+// a recycled PVC instead of allowing the writer tuple to substitute physical preparation.
+// TestWorkspaceAcknowledgementPinsAcceptedVolume отклоняет otherwise current owner ACK для
+// recycled PVC, не позволяя writer tuple подменять physical preparation.
+func TestWorkspaceAcknowledgementPinsAcceptedVolume(t *testing.T) {
+	joined, input, binding := workspaceQuiescenceFixture()
+	pvcUID := "30000000-0000-4000-8000-000000000001"
+	binding.VolumeReady = &WorkspaceVolumeReady{Schema: WorkspaceVolumeReadySchema, Device: 31, Inode: 47,
+		Preparation: WorkspaceVolumePreparation{Scope: binding.Scope, WorkspaceRef: binding.WorkspaceRef,
+			TaskRef: "svt_fixture000", PVCUID: pvcUID, VolumeGeneration: 1}}
+	input.WorkspaceStorage = &binding
+	joined.Writer.PVCUID = pvcUID
+	ack := WorkspaceWriterAcknowledgement{Schema: WorkspaceWriterAcknowledgementSchema, Scope: binding.Scope,
+		WorkspaceRef: binding.WorkspaceRef, Generation: binding.Generation, Writer: joined.Writer}
+	if !ack.Matches(input) {
+		t.Fatal("accepted physical volume did not match its exact writer ACK")
+	}
+	ack.Writer.PVCUID = "40000000-0000-4000-8000-000000000001"
+	if ack.Matches(input) {
+		t.Fatal("current writer tuple accepted a different physical volume")
+	}
+}
+
 // TestWorkspaceObservationNeverTurnsQuiescenceIntoFreshAuthority checks the closed two-phase wire.
 // No codec result alone proves owner ACK, terminal containers, PVC ownership or writer permission.
 // TestWorkspaceObservationNeverTurnsQuiescenceIntoFreshAuthority проверяет closed two-phase wire.

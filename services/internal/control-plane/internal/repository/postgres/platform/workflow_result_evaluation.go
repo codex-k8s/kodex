@@ -86,7 +86,16 @@ func (repository *Repository) evaluateWorkflowStepResultDetailedForProfileTx(ctx
 			if !found {
 				return rejectedWorkflowEvaluation(workflowArtifactRequired), nil
 			}
-		case "PULL_REQUEST", "INTEGRATION_RECEIPT":
+		case "REPOSITORY_FILE":
+			var reason string
+			result, reason, err = resolveWorkflowRepositoryFileTx(ctx, tx, current, lease, requirement, declaration)
+			if err != nil {
+				return workflowStepEvaluation{}, err
+			}
+			if reason != "" {
+				return rejectedWorkflowEvaluation(reason), nil
+			}
+		case "PULL_REQUEST", "INTEGRATION_RECEIPT", "PR_COMMENT":
 			proof, reason, lookupErr := readWorkflowIntegrationResultTx(ctx, tx, current, lease, declaration.ReceiptRef)
 			if lookupErr != nil {
 				return workflowStepEvaluation{}, lookupErr
@@ -94,9 +103,21 @@ func (repository *Repository) evaluateWorkflowStepResultDetailedForProfileTx(ctx
 			if reason != "" {
 				return rejectedWorkflowEvaluation(reason), nil
 			}
-			result, reason = acceptWorkflowIntegrationResult(requirement, declaration, proof, inputs)
+			if requirement.Kind == "PR_COMMENT" {
+				result, reason = acceptWorkflowPRCommentResult(requirement, declaration, proof)
+			} else if profile == workflowservice.GitHubPDLCV1 && requirement.Kind == "PULL_REQUEST" {
+				result, reason = acceptWorkflowPDLCReadyResult(requirement, declaration, proof)
+			} else {
+				result, reason = acceptWorkflowIntegrationResult(requirement, declaration, proof, inputs)
+			}
 			if reason != "" {
 				return rejectedWorkflowEvaluation(reason), nil
+			}
+			if profile == workflowservice.GitHubPDLCV1 && requirement.Kind == "PULL_REQUEST" {
+				number, valid := workflowservice.RepositoryPullNumber(requirement.TargetRef)
+				if !valid || result.Number != number {
+					return rejectedWorkflowEvaluation(workflowPullRequestRequired), nil
+				}
 			}
 		case "ARTIFACT_REVIEW":
 			var found bool
@@ -118,7 +139,7 @@ func (repository *Repository) evaluateWorkflowStepResultDetailedForProfileTx(ctx
 				}
 			}
 		case "REVIEW", "QA":
-			if profile == workflowservice.GitHubReviewQAV1 {
+			if workflowservice.NativeReviewEvidence(profile) {
 				var reason string
 				if requirement.Kind == "REVIEW" {
 					proof, why, lookupErr := readWorkflowIntegrationResultTx(ctx, tx, current, lease, declaration.ReceiptRef)
@@ -171,9 +192,12 @@ func (repository *Repository) evaluateWorkflowStepResultDetailedForProfileTx(ctx
 		}
 		results = append(results, result)
 	}
+	if profile == workflowservice.GitHubPDLCV1 && !workflowPDLCResultHeadMatches(results) {
+		return rejectedWorkflowEvaluation(workflowRepositoryFileMismatch), nil
+	}
 	if rejected {
 		evaluation := workflowStepEvaluation{Reason: workflowChangesRequired, Rework: changes}
-		if profile == workflowservice.GitHubReviewQAV1 {
+		if workflowservice.NativeReviewEvidence(profile) {
 			evaluation.ReviewEvidence = results
 		}
 		return evaluation, nil

@@ -2198,6 +2198,12 @@ func (manager *Manager) ensureSessionPVC(ctx context.Context, input runtimecontr
 		Spec: corev1.PersistentVolumeClaimSpec{AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}, StorageClassName: storageClassName,
 			Resources: corev1.VolumeResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceStorage: manager.pvcRequest}}}}
 	existing, err := manager.client.CoreV1().PersistentVolumeClaims(manager.config.RuntimeNamespace).Get(ctx, name, metav1.GetOptions{})
+	if input.WorkspaceStorage != nil {
+		if err != nil || !preparedWorkspacePVCMatches(input, existing, pvc, manager.config.StorageClass) {
+			return errWorkspacePreparedPVC
+		}
+		return nil
+	}
 	if err == nil {
 		if sessionPVCMatches(existing, pvc, manager.config.StorageClass) {
 			return nil

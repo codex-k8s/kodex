@@ -2,19 +2,20 @@ package platform
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// TestServerWorkflowMigrationProofComponent preserves the complete SERVER proof under the current SSH successor and executes its release proof on
+// TestServerWorkflowMigrationProofComponent preserves the complete SERVER inverse014 proof under the current017+SSH successor and executes its release proof on
 // isolated schema clones and proves that concrete DDL drift is rejected. It never
 // changes business rows or connects to a live database.
-// TestServerWorkflowMigrationProofComponent сохраняет полный SERVER proof под текущим SSH successor и исполняет его release proof на
+// TestServerWorkflowMigrationProofComponent сохраняет полный SERVER inverse014 proof под текущим017+SSH successor и исполняет его release proof на
 // отдельных копиях схемы и проверяет обнаружение конкретных изменений DDL.
 // Бизнес-строки и живая БД не изменяются.
 func TestServerWorkflowMigrationProofComponent(t *testing.T) {
@@ -65,38 +66,49 @@ func TestServerWorkflowMigrationProofComponent(t *testing.T) {
 					t.Fatal("apply disposable workflow schema drift")
 				}
 			}
-			source, err := os.ReadFile("../../../../../../../tools/release/ssh-compose-migration-postcondition.sql")
-			if err != nil {
-				t.Fatal("read shipped workflow schema proof")
-			}
-			results, err := conn.PgConn().Exec(ctx, string(source)).ReadAll()
-			if err != nil {
-				t.Fatal("execute read-only workflow schema proof")
-			}
-			var proof map[string]any
-			for _, result := range results {
-				if result.Err != nil {
-					t.Fatal("workflow schema proof statement failed")
+			// Profiles031/032 reject these drifts before inverse projection; older profiles retain
+			// their explicit false fields. An unrelated SQL/transport error is not acceptance.
+			// Профили031/032 отклоняют эти изменения до inverse projection; старые профили сохраняют
+			// явные false-поля. Другая ошибка SQL либо transport не считается успехом проверки.
+			version := workspaceComponentSchemaVersion(t, ctx, conn)
+			if (version == 20261029000300 || version == 20261030000100) &&
+				(fixture.name == "disabled-workflow-guard" || fixture.name == "public-workflow-execute") {
+				filename := "workflow-pdlc-migration-postcondition.sql"
+				if version == 20261030000100 {
+					filename = "workflow-content-page-migration-postcondition.sql"
 				}
-				if len(result.Rows) == 1 && len(result.Rows[0]) == 1 {
-					if proof != nil || json.Unmarshal(result.Rows[0][0], &proof) != nil {
-						t.Fatal("decode unique workflow schema proof")
-					}
+				source, err := os.ReadFile("../../../../../../../tools/release/" + filename)
+				if err != nil {
+					t.Fatal("read shipped PDLC counterfactual proof")
 				}
+				_, err = conn.PgConn().Exec(ctx, string(source)).ReadAll()
+				var rejection *pgconn.PgError
+				if !errors.As(err, &rejection) || rejection.Code != "P0001" || rejection.Message != "workflow PDLC schema catalog changed" {
+					t.Fatal("altered PDLC catalog did not receive its exact closed rejection")
+				}
+				if _, err := conn.Exec(ctx, "ROLLBACK"); err != nil {
+					t.Fatal("close isolated rejected PDLC proof")
+				}
+				return
 			}
-			if proof["readOnly"] != "on" || proof["database"] != runtime.Database || proof["gooseVersion"] != float64(20261027000100) || proof["serverWorkflowProfile"] != "SERVER_DAG_V1" || proof["sshComposeProfile"] != "SSH_COMPOSE_V1" {
+			actual, proof := readWorkspaceVolumeSchemaProof(t, ctx, conn)
+			if proof["serverWorkflowProfile"] != "SERVER_DAG_V1" || actual["sshComposeProfile"] != "SSH_COMPOSE_V1" {
 				t.Fatal("workflow schema proof identity mismatch")
 			}
 			if fixture.rejectedField != "" {
-				if proof[fixture.rejectedField] != fixture.expected {
+				observed := proof[fixture.rejectedField]
+				if strings.HasPrefix(fixture.rejectedField, "ssh") {
+					observed = actual[fixture.rejectedField]
+				}
+				if observed != fixture.expected {
 					t.Errorf("workflow schema drift was not detected: field=%s", fixture.rejectedField)
 				}
 				return
 			}
+			assertWorkspaceVolumeSchemaCanonical(t, actual)
 			for _, field := range []string{
 				"schemaOwner", "columns", "constraints", "indexes", "triggers", "functionSources", "functionMetadata", "functionACL",
 				"visibilitySource", "retentionSource", "runtimeColumnAccess", "purgeGraphGuard", "bundleNoBodyColumns", "bundleGuard",
-				"sshColumns", "sshConstraints", "sshFunctions", "sshTriggers", "sshRuntimeColumns",
 				"tableOwners", "runtimeRolesUnprivileged", "runtimeRead", "runtimeMutationDenied", "runtimeColumnMutationDenied",
 				"runtimeGrantOptionDenied", "publicPrivilegesRevoked", "ownerWrite", "authorizationFunction", "contextsEmpty",
 			} {

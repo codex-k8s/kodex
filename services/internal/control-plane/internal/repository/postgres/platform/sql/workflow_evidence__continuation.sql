@@ -3,7 +3,7 @@ SELECT node.id::text,node.run_id::text,node.root_run_id::text,node.agent_id::tex
     node.display_name,node.role,physical.session_id::text,agent.ref,root.workflow_version_id::text,
     COALESCE((SELECT bool_and(control_plane.workflow_evidence_execution_assigned(node.organization_id,node.id,fact.id))
         FROM control_plane.integration_invocations fact WHERE fact.organization_id=node.organization_id AND fact.node_id=node.id
-            AND fact.run_id=physical.id AND fact.operation IN ('github.pull_request.review.create','github.issue.create')),false),
+            AND fact.run_id=physical.id AND control_plane.workflow_evidence_delivery_operation(version.spec->>'ResultEvidenceProfile',fact.operation)),false),
     (SELECT count(*) FROM control_plane.run_edges edge WHERE edge.organization_id=node.organization_id AND edge.root_run_id=root.id AND edge.type='CONTINUES')<64,
     jsonb_build_object('schema','kodex.workflow-evidence-outcomes.v1','task',physical.task,'nativeOutcomes',(
         SELECT jsonb_agg(jsonb_build_object('invocationRef',fact.ref,'operation',fact.operation,'state',fact.state,
@@ -29,9 +29,9 @@ JOIN control_plane.agents agent ON agent.id=node.agent_id AND agent.organization
 WHERE invocation.id=@invocation_id::uuid AND invocation.organization_id=@organization_id::uuid
     AND node.workflow_business_attempt BETWEEN 1 AND 4 AND node.owner_rework_gate_id IS NULL
     AND node.state='SUCCEEDED' AND node.finished_at IS NOT NULL
-    AND version.spec->>'ExecutionMode'='SERVER_DAG_V1' AND version.spec->>'ResultEvidenceProfile'='GITHUB_REVIEW_QA_V1'
+    AND version.spec->>'ExecutionMode'='SERVER_DAG_V1' AND version.spec->>'ResultEvidenceProfile' IN ('GITHUB_REVIEW_QA_V1','GITHUB_PDLC_V1')
     AND EXISTS(SELECT 1 FROM control_plane.integration_invocations evidence WHERE evidence.organization_id=node.organization_id
-        AND evidence.node_id=node.id AND evidence.run_id=physical.id AND evidence.operation IN ('github.pull_request.review.create','github.issue.create'))
+        AND evidence.node_id=node.id AND evidence.run_id=physical.id AND control_plane.workflow_evidence_delivery_operation(version.spec->>'ResultEvidenceProfile',evidence.operation))
     AND NOT EXISTS(SELECT 1 FROM control_plane.integration_invocations pending WHERE pending.organization_id=node.organization_id
         AND pending.node_id=node.id AND pending.run_id=physical.id AND pending.state NOT IN ('SUCCEEDED','FAILED','REJECTED','CANCELLED'))
     AND NOT EXISTS(SELECT 1 FROM control_plane.integration_invocations succeeded WHERE succeeded.organization_id=node.organization_id

@@ -1,0 +1,2 @@
+-- Обратимое изменение только disposable schema; business rows не затрагиваются.
+DO $drift$ DECLARE v_source text; BEGIN SELECT prosrc INTO STRICT v_source FROM pg_proc WHERE oid='control_plane.guard_workspace_volume_custody()'::regprocedure; EXECUTE format('CREATE OR REPLACE FUNCTION control_plane.guard_workspace_volume_custody() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS %L',v_source||E'\n-- disposable drift\n'); END $drift$;

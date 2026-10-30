@@ -4,8 +4,8 @@ title: PostgreSQL, именованные SQL-запросы и goose
 type: guide
 status: approved
 owner: developer
-version: 1.2.9
-updated: 2026-10-27
+version: 1.2.14
+updated: 2026-10-29
 ---
 
 # PostgreSQL, именованные SQL-запросы и goose
@@ -294,6 +294,28 @@ PostgreSQL проверяются как фактическая семантик
 
 ## Миграции goose
 
+Исправление уже применённой функции оформляется новой forward-миграцией.
+При `CREATE OR REPLACE FUNCTION` native проверка сравнивает OID, owner, ACL,
+типы и имена аргументов, volatility, security mode и search_path: сохранение
+owner/ACL само по себе не доказывает сохранение остальных атрибутов.
+Старый exact schema verifier не расширяется до новой версии. Новый профиль
+проверяет actual successor до проекции неизменённых исторических частей;
+ожидаемый manifest отдельно сверяется с настоящим disposable каталогом.
+Необязательные поля producer проверяются в положительных сквозных fixtures:
+default без поля не доказывает совместимость фактически отправляемого поля.
+Пример: `maximum_bytes` в миграции032 и `OPS-DOC-WORKFLOW-REVIEW-QA-1949`.
+
+Native upgrade повторяет фактический bootstrap, включая применённые
+`ALTER DEFAULT PRIVILEGES` backup reader. Создание только owner/runtime ролей
+может дать ложный PASS: новая relation наследует SELECT другой штатной роли,
+который закрытый catalog guard считает посторонним. Применённые migrations и
+исторические verifiers не меняются ради этого случая. Отдельный maintenance
+profile сначала доказывает exact backup authority и idle owner, затем выполняет
+ограниченный ACL transition с атомарным rollback и подтверждённым возвратом прав.
+Каждый SQL readback, включая возврат после частичного failure, исполняется в
+native проверке; синтаксический анализ файла не заменяет PostgreSQL execution.
+Пример и матрица — `OPS-DOC-WORKSPACE-BACKUP-1966`.
+
 Миграции находятся в `cmd/cli/migrations` и встраиваются в CLI через
 `embed.FS`.
 
@@ -338,6 +360,42 @@ CREATE TABLE domain_entities (
 имени функции само по себе не доказывает защиту всех UPDATE. Эти отказы
 проверяются исполнением того же read-only запроса на отдельных disposable
 схемах с адресно изменёнными CHECK и trigger, а не только mock boolean.
+
+Component-проверка указывает фактическую схему своего template. Один и тот же
+Goose head не различает010+SSH и017+SSH: выбор closed verifier учитывает
+фактически применённую017. Старый verifier не расширяется ради нового template.
+Проверки прежних workflow-инвариантов могут использовать явно помеченную
+inverse014-проекцию полного017+SSH proof, сохраняя отдельные actual version,
+graph и catalog assertions. Нельзя назвать inverse version реально
+обслуживаемой версией БД. Все прежние DDL counterfactuals сохраняются.
+Изменившийся CHECK получает отдельный successor query с exact discriminator;
+исходный historical query остаётся неизменным. Пример — expiry с закрытой
+веткой `closure_kind='SUPERSEDED'`, не разрешающей новое решение человека.
+Test-only pgx tracing использует только SQLSTATE, constraint, query digest,
+время/признаки отказа и разобранные function/line frames, без
+SQL/arguments/Message/Detail/Where. API `QueryTracer` проверен через Context7
+`/jackc/pgx`.
+
+Selector с общим параметризованным SQL проверяется на наполненной native-базе
+при `force_custom_plan` и `force_generic_plan` в прежнем API deadline. Один
+успешный адресный повтор не исключает деградацию общего prepared plan.
+Буквальный поиск CONNECTION допускается перенести до materialized admission
+только внутри точного organization и без нового лимита: каждый выбранный ref
+всё ещё проходит полный admission и visibility; count/page применяются после
+них. Для остальных стадий исходный контекст сохраняется. До плановых проб
+проверяется обычный публичный read path, чтобы прогрев не скрывал исходный
+отказ. Настройки PostgreSQL не меняются глобально. Семантика PREPARE и
+`plan_cache_mode` проверена через Context7 `/websites/postgresql`.
+
+Повторное планирование сложной exact authority function внутри одной выборки
+может исчерпать RPC budget даже при неизменных данных. Адресная оптимизация
+может временно выбрать transaction-local generic plan только для доказанного
+selector, восстановив исходный mode до дальнейших statements и пустого
+результата. Ошибка требует owner rollback; pooled session не меняется.
+Generic plan не кэширует eligibility и не заменяет повторных проверок каждого
+объекта. Регрессия покрывает реальный deadline, custom/generic/auto, replay и
+утечки режима на том же physical connection. Пример:
+[#1972](../operations/workflow-evidence-history-1972.md).
 
 Для owner-approved web-first reset установка создаётся с нуля. Активный
 control-plane содержит одну baseline migration, которая создаёт только новую

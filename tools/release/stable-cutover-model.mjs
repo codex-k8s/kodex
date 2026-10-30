@@ -71,8 +71,9 @@ export function prepareGoCutover(deployment, release, { storageClaims = [], sour
     typeof deployment.metadata.resourceVersion === "string", "CUTOVER_IDENTITY_INVALID");
   validateGoReleaseReference(name, release);
   const before = deployment.spec;
+  const stableSource = deployment.metadata.labels?.["kodex.dev/local-profile"] === "stable";
   requireValue(!Object.hasOwn(deployment.metadata.labels ?? {}, "kodex.dev/local-profile") ||
-    deployment.metadata.labels["kodex.dev/local-profile"] === "hot-reload", "CUTOVER_SOURCE_LABEL_UNSUPPORTED");
+    ["hot-reload", "stable"].includes(deployment.metadata.labels["kodex.dev/local-profile"]), "CUTOVER_SOURCE_LABEL_UNSUPPORTED");
   const after = structuredClone(before);
   requireValue(!Object.hasOwn(after.selector?.matchLabels ?? {}, "kodex.dev/local-profile") &&
     !(after.selector?.matchExpressions ?? []).some(e => e.key === "kodex.dev/local-profile"), "CUTOVER_PROFILE_SELECTOR_BOUND");
@@ -88,20 +89,43 @@ export function prepareGoCutover(deployment, release, { storageClaims = [], sour
   }
   validateStorageProtocol({ metadata: deployment.metadata, spec: { template: { spec: pod } } }, { claims: storageClaims });
   const app = pod.containers.find(c => c.name === name);
-  requireValue(app && app.command?.length === 1 && app.command[0] === "/workspace/tools/dev/run-go-hot-reload.sh" &&
+  if (stableSource) {
+    requireValue(app && app.command?.length === 1 && app.command[0] === `/usr/local/bin/${entry[1]}` &&
+      imagePattern.test(app.image ?? "") && !app.image.endsWith("0".repeat(64)) &&
+      after.template.metadata.labels?.["kodex.dev/local-profile"] === "stable" &&
+      /^[a-f0-9]{40}$/.test(after.template.metadata.annotations?.["kodex.dev/source-sha"] ?? "") &&
+      after.template.metadata.annotations["kodex.dev/source-sha"] !== "0".repeat(40) &&
+      /^[a-f0-9]{64}$/.test(after.template.metadata.annotations?.["kodex.dev/release-provenance-sha256"] ?? "") &&
+      after.template.metadata.annotations["kodex.dev/release-provenance-sha256"] !== "0".repeat(64) &&
+      JSON.stringify(app.args ?? []) === JSON.stringify(name === "session-archive" ? ["controller"] : []) &&
+      !(pod.volumes ?? []).some(v => v.hostPath) &&
+      !(app.volumeMounts ?? []).some(m => m.mountPath === "/workspace" || m.mountPath.startsWith("/workspace/")),
+    "CUTOVER_STABLE_SOURCE_INVALID");
+  } else requireValue(app && app.command?.length === 1 && app.command[0] === "/workspace/tools/dev/run-go-hot-reload.sh" &&
     app.args?.[0] === entry[0] && app.args[1] === `./cmd/${entry[1]}` &&
     // clamav-egress-gateway использует то же бинарное содержимое.
     [name, entry[1]].includes(app.args[2]), "CUTOVER_SOURCE_COMMAND_MISMATCH");
-  requireValue(app.workingDir === undefined || app.workingDir === `/workspace/${entry[0]}`, "CUTOVER_SOURCE_WORKDIR_UNSUPPORTED");
+  requireValue(app.workingDir === undefined || (!stableSource && app.workingDir === `/workspace/${entry[0]}`), "CUTOVER_SOURCE_WORKDIR_UNSUPPORTED");
   const spoolInit = name === "runtime-controller" ? pod.initContainers?.find(c => c.name === "artifact-spool-init") : undefined;
   if (spoolInit) {
-    requireValue(spoolInit.command?.join(" ") === "/bin/sh -ec" && spoolInit.args?.length === 1 &&
-      spoolInit.args[0].includes("go build") && spoolInit.args[0].includes("./cmd/runtime-controller") &&
-      spoolInit.args[0].includes("--prepare-artifact-spool /var/lib/kodex/runtime-controller/artifact-spool") &&
-      spoolInit.volumeMounts?.some(m => m.name === "artifact-spool" && m.mountPath === "/var/lib/kodex/runtime-controller/artifact-spool"),
+    // Прежний адресный main-only rollout мог оставить older init image; exact spec CAS
+    // сохраняет оба прежних digest, а новая поставка синхронизирует их одним image.
+    if (stableSource) requireValue(/^registry\.local\.kodex\/kodex\/runtime-controller@sha256:[a-f0-9]{64}$/.test(spoolInit.image ?? "") &&
+      !spoolInit.image.endsWith("0".repeat(64)) &&
+      JSON.stringify(spoolInit.command) === JSON.stringify(["/usr/local/bin/runtime-controller"]) &&
+      JSON.stringify(spoolInit.args) === JSON.stringify(["--prepare-artifact-spool", "/var/lib/kodex/runtime-controller/artifact-spool"]),
+    "CUTOVER_STABLE_SPOOL_INIT_INVALID");
+    else {
+      requireValue(spoolInit.command?.join(" ") === "/bin/sh -ec" && spoolInit.args?.length === 1 &&
+        spoolInit.args[0].includes("go build") && spoolInit.args[0].includes("./cmd/runtime-controller") &&
+        spoolInit.args[0].includes("--prepare-artifact-spool /var/lib/kodex/runtime-controller/artifact-spool") &&
+        spoolInit.volumeMounts?.some(m => m.name === "artifact-spool" && m.mountPath === "/var/lib/kodex/runtime-controller/artifact-spool"),
+        "CUTOVER_SPOOL_INIT_MISMATCH");
+      requireValue(typeof sourceSpoolScript === "string" && spoolInit.args[0] === sourceSpoolScript,
+        "CUTOVER_SPOOL_SOURCE_UNSUPPORTED");
+    }
+    requireValue(spoolInit.volumeMounts?.some(m => m.name === "artifact-spool" && m.mountPath === "/var/lib/kodex/runtime-controller/artifact-spool"),
       "CUTOVER_SPOOL_INIT_MISMATCH");
-    requireValue(typeof sourceSpoolScript === "string" && spoolInit.args[0] === sourceSpoolScript,
-      "CUTOVER_SPOOL_SOURCE_UNSUPPORTED");
     requireValue(spoolInit.workingDir === undefined || spoolInit.workingDir === `/workspace/${entry[0]}`, "CUTOVER_SOURCE_WORKDIR_UNSUPPORTED");
     validateRemovedEnvironment(spoolInit);
     spoolInit.image = release.image;
@@ -134,7 +158,7 @@ export function prepareGoCutover(deployment, release, { storageClaims = [], sour
   app.image = release.image;
   app.resources = boundedResources(resourceProfile?.main, app.resources);
   app.command = [`/usr/local/bin/${entry[1]}`];
-  app.args = app.args.slice(3);
+  app.args = stableSource ? (app.args ?? []) : app.args.slice(3);
   if (!app.args.length) delete app.args;
   app.env = (app.env ?? []).filter(e => !devEnv.has(e.name));
   if (name === "session-archive") {
@@ -179,6 +203,8 @@ export function prepareGoCutover(deployment, release, { storageClaims = [], sour
       beforeReplicas: before.replicas ?? 1,
       beforeLabelsPresent: Object.hasOwn(deployment.metadata, "labels"),
       beforeProfilePresent: Object.hasOwn(deployment.metadata.labels ?? {}, "kodex.dev/local-profile"),
+      ...(Object.hasOwn(deployment.metadata.labels ?? {}, "kodex.dev/local-profile") ?
+        { beforeProfileValue: deployment.metadata.labels["kodex.dev/local-profile"] } : {}),
       beforeLabelsSHA256: fingerprint(deployment.metadata.labels ?? {}),
       afterLabelsSHA256: fingerprint({ ...deployment.metadata.labels, "kodex.dev/local-profile": "stable" }),
       quiescedAfterSpecSHA256: fingerprint({ ...after, replicas: 0 }),

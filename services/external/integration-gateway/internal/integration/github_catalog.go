@@ -187,6 +187,11 @@ func (adapter *Adapter) executeGitHubCatalog(ctx context.Context, client *github
 		if err != nil || len(content) > maximumContentBytes {
 			return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 		}
+		if request.ApprovalPolicy == "NONE" {
+			if err := requireGitHubAutonomousContentBranch(ctx, client, owner, repo, in.Branch, capability); err != nil {
+				return Result{}, err
+			}
+		}
 		options := &github.RepositoryContentFileOptions{Message: github.Ptr(in.Message), Content: content, Branch: github.Ptr(in.Branch)}
 		if in.SHA != "" {
 			options.SHA = github.Ptr(in.SHA)

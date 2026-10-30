@@ -96,9 +96,14 @@ func testRetryTargetKindAuthority(t *testing.T, ctx context.Context, repository 
 	if err != nil || accepted.Run == nil {
 		t.Fatalf("authorized retry: %v", err)
 	}
+	if kind == "WORKFLOW" {
+		finishRetryAuthorityWorkflow(t, ctx, repository, service, *accepted.Run, agent.Ref)
+	}
 	execute(command.Command{Kind: command.RevokeAccessBinding, Mutation: value.Mutation{IdempotencyKey: "retry-launch-revoke", ExpectedVersion: &launchBinding.Version}, Payload: command.AccessBindingInput{BindingRef: launchBinding.Ref}})
 	denied(retry)
-	execute(command.Command{Kind: command.CancelRun, Mutation: value.Mutation{IdempotencyKey: "retry-fixture-cleanup", ExpectedVersion: &accepted.Run.Version}, Payload: command.RunCommandInput{RunRef: accepted.Run.Ref}})
+	if kind == "AGENT" {
+		execute(command.Command{Kind: command.CancelRun, Mutation: value.Mutation{IdempotencyKey: "retry-fixture-cleanup", ExpectedVersion: &accepted.Run.Version}, Payload: command.RunCommandInput{RunRef: accepted.Run.Ref}})
+	}
 	continuation := command.Command{Kind: command.AddSessionTurn, Principal: reader, Mutation: value.Mutation{IdempotencyKey: kind + "-continuation-exact-authority"}, Payload: command.SessionTurnInput{SessionRef: accepted.Run.SessionRef, RunRef: accepted.Run.Ref, Task: "Continue with fresh target authority."}}
 	denied(continuation)
 	continuationBinding := bind("continuation-launch", permission, entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: kind, ResourceRef: target.Ref, ProjectRef: project.Ref})
@@ -112,4 +117,29 @@ func testRetryTargetKindAuthority(t *testing.T, ctx context.Context, repository 
 	withoutRun.Payload = command.SessionTurnInput{SessionRef: accepted.Run.SessionRef, Task: "A session ref does not confer launch authority."}
 	denied(withoutRun)
 	execute(command.Command{Kind: command.CancelRun, Mutation: value.Mutation{IdempotencyKey: "continuation-fixture-cleanup", ExpectedVersion: &continued.Run.Version}, Payload: command.RunCommandInput{RunRef: continued.Run.Ref}})
+}
+
+// finishRetryAuthorityWorkflow creates a successful exact input source through real coordinator, delegation and callback commands.
+// A cancelled workflow is not eligible for input inheritance; the fixture must not bypass this separate authority boundary.
+// finishRetryAuthorityWorkflow создаёт успешный exact input source через настоящие coordinator, delegation и callback commands.
+// Отменённый workflow не допускается к input inheritance; fixture не обходит эту отдельную authority boundary.
+func finishRetryAuthorityWorkflow(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, run entity.Run, agentRef string) {
+	t.Helper()
+	_, worker := resolveExecutionLifecycleTestPrincipals(t, ctx, repository)
+	coordinator := claimComponentExecution(t, ctx, service, worker, run.Ref, "retry-source-coordinator")
+	child, err := service.Execute(ctx, command.Command{Kind: command.DelegateExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "retry-source-delegate"}, Payload: command.DelegateInput{
+			LeaseRef: stringMap(coordinator, "leaseRef"), Fence: stringMap(coordinator, "fence"),
+			Generation: runtimeRevisionMapInt64(coordinator, "generation"), TargetAgentRef: agentRef,
+			WorkflowStepKey: "step", Task: "Produce the exact successful continuation input source."}})
+	if err != nil || child.Run == nil {
+		t.Fatal("materialize retry authority source step")
+	}
+	childLease := claimComponentExecution(t, ctx, service, worker, child.Run.Ref, "retry-source-child")
+	completeClaimedExecution(t, ctx, service, worker, coordinator, "retry-source-coordinator", false)
+	completeClaimedExecution(t, ctx, service, worker, childLease, "retry-source-child", false)
+	completed := claimAndCompleteRun(t, ctx, service, worker, run.Ref, "retry-source-callback", false)
+	if completed.Run == nil || completed.Run.State != "SUCCEEDED" {
+		t.Fatal("retry authority workflow input source was not completed")
+	}
 }

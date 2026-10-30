@@ -9,6 +9,91 @@ import {
 } from "./result-contract";
 import type { WorkflowResultRequirement } from "@/shared/api/generated/openapi/types.gen";
 
+it("сохраняет native файл и комментарий только в явном PDLC и закрывает смену target", () => {
+  type PDLCRequirements = [
+    WorkflowResultRequirement,
+    WorkflowResultRequirement,
+    WorkflowResultRequirement,
+  ];
+  const requirements: PDLCRequirements = [
+    {
+      key: "document",
+      kind: "REPOSITORY_FILE",
+      repository: "owner/repo",
+      targetRef: "3",
+      branch: "feature/journal",
+      fileName: "docs/requirements.md",
+    },
+    {
+      key: "comment",
+      kind: "PR_COMMENT",
+      repository: "owner/repo",
+      targetRef: "3",
+    },
+    {
+      key: "report",
+      kind: "ARTIFACT",
+      fileName: "requirements.md",
+      mediaType: "text/markdown",
+    },
+  ];
+  expect(validWorkflowRequirements(requirements, [], "GITHUB_PDLC_V1")).toBe(
+    true,
+  );
+  const steps = [
+    {
+      ref: "author",
+      agentRef: "agt_author01",
+      dependsOn: [],
+      requiredCapabilityKeys: [],
+      resultRequirements: requirements,
+    },
+  ];
+  expect(validWorkflowDAG(steps, 2, "", "ref", "", "GITHUB_PDLC_V1")).toBe(
+    true,
+  );
+  for (const profile of [undefined, "GITHUB_REVIEW_QA_V1", "GITHUB_PDLC_V2"])
+    expect(validWorkflowRequirements(requirements, [], profile)).toBe(false);
+  for (const mutate of [
+    (r: PDLCRequirements) => {
+      r[0].branch = "refs/heads/feature/journal";
+    },
+    (r: PDLCRequirements) => {
+      r[0].fileName = "../requirements.md";
+    },
+    (r: PDLCRequirements) => {
+      r[0].targetRef = "03";
+    },
+    (r: PDLCRequirements) => {
+      r[1].targetRef = "4";
+    },
+    (r: PDLCRequirements) => {
+      r[1].repository = "owner/foreign";
+    },
+    (r: PDLCRequirements) => {
+      r[1].branch = "feature/journal";
+    },
+    (r: PDLCRequirements) => {
+      r[1] = { ...r[0], key: "second-file" };
+    },
+  ]) {
+    const changed = structuredClone(requirements);
+    mutate(changed);
+    expect(validWorkflowRequirements(changed, [], "GITHUB_PDLC_V1")).toBe(
+      false,
+    );
+  }
+  const original = structuredClone(steps);
+  const changed = workflowEvidenceProfileSteps(steps, undefined);
+  const changedStep = changed[0];
+  if (!changedStep) throw new Error("PDLC profile copy lost its exact step");
+  expect(changedStep.resultRequirements[0].branch).toBe("feature/journal");
+  expect(
+    validWorkflowRequirements(changedStep.resultRequirements, [], undefined),
+  ).toBe(false);
+  expect(steps).toEqual(original);
+});
+
 function graph() {
   return [
     {

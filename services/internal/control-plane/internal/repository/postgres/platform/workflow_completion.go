@@ -59,24 +59,46 @@ func (repository *Repository) completeServerWorkflowTx(ctx context.Context, tx p
 	if err != nil || root == nil {
 		return commandOutcome{}, false, err
 	}
+	if !workflowservice.NativeReviewEvidence(root.Version.ResultEvidenceProfile) {
+		outcome, err := repository.completeServerWorkflowRootTx(ctx, tx, current, root, lease, payload, artifactRefs)
+		return outcome, true, err
+	}
+	var outcome commandOutcome
+	err = withWorkflowEvidenceGenericPlan(ctx, tx, func() error {
+		var cause error
+		outcome, cause = repository.completeServerWorkflowRootTx(ctx, tx, current, root, lease, payload, artifactRefs)
+		return cause
+	})
+	return outcome, true, err
+}
+
+// completeServerWorkflowRootTx retains the complete owner transition under the
+// caller's transaction. Its native proof readers and SQL journal guard share
+// generic planning only in the explicit evidence profile; all predicates, locks,
+// events, budgets and authorization results remain freshly evaluated.
+// completeServerWorkflowRootTx сохраняет полный owner transition в транзакции
+// вызывающего. Native readers и SQL journal guard используют generic planning
+// лишь в явном evidence profile; predicates, locks, события, бюджеты и результаты
+// авторизации каждый раз проверяются заново.
+func (repository *Repository) completeServerWorkflowRootTx(ctx context.Context, tx pgx.Tx, current scope, root *serverWorkflowRoot, lease map[string]any, payload command.CompleteExecutionInput, artifactRefs []string) (commandOutcome, error) {
 	managerHandled, err := repository.completeWorkflowExceptionManagerTx(ctx, tx, current, root, lease, payload)
 	if err != nil {
-		return commandOutcome{}, true, err
+		return commandOutcome{}, err
 	}
 	if !managerHandled && contains([]string{"RUNNING", "WAITING_HUMAN"}, root.State) {
 		var key, originID string
 		var attempt int32
 		if tx.QueryRow(ctx, queryWorkflowDispatchCompletion, pgx.StrictNamedArgs{"organization_id": current.organizationID, "root_run_id": root.ID, "node_id": stringMap(lease, "nodeID"), "runtime_revision_id": stringMap(lease, "runtimeRevisionID"), "lease_id": stringMap(lease, "leaseID")}).Scan(&key, &attempt, &originID) != nil {
-			return commandOutcome{}, true, errs.ErrConflict
+			return commandOutcome{}, errs.ErrConflict
 		}
 		pending, err := pendingServerWorkflowTx(ctx, tx, current, root.ID, originID, attempt)
 		if err != nil {
-			return commandOutcome{}, true, err
+			return commandOutcome{}, err
 		}
-		if payload.Success && !pending && root.Version.ResultEvidenceProfile == workflowservice.GitHubReviewQAV1 {
+		if payload.Success && !pending && workflowservice.NativeReviewEvidence(root.Version.ResultEvidenceProfile) {
 			pending, err = repository.joinWorkflowEvidenceTx(ctx, tx, current, lease)
 			if err != nil {
-				return commandOutcome{}, true, err
+				return commandOutcome{}, err
 			}
 		}
 		captureBlocked := false
@@ -93,7 +115,7 @@ func (repository *Repository) completeServerWorkflowTx(ctx context.Context, tx p
 						return cause
 					})
 					if err != nil {
-						return commandOutcome{}, true, err
+						return commandOutcome{}, err
 					}
 					captureBlocked, pending = blocked, continued && !blocked
 				}
@@ -107,54 +129,54 @@ func (repository *Repository) completeServerWorkflowTx(ctx context.Context, tx p
 				evaluation, cause = repository.evaluateWorkflowStepResultDetailedForProfileTx(ctx, tx, current, lease, payload, root.Version.ReworkPolicy == workflowservice.OwnerApprovedUpstreamV1, root.Version.ResultEvidenceProfile)
 				reason = evaluation.Reason
 				if cause != nil {
-					return commandOutcome{}, true, cause
+					return commandOutcome{}, cause
 				}
 			}
 			if _, err := appendWorkflowAttemptEvidenceTx(ctx, tx, current, lease, reason == "", reason, evaluation.Results, evaluation.ReviewEvidence, evaluation.Rework); err != nil {
-				return commandOutcome{}, true, err
+				return commandOutcome{}, err
 			}
 			if reason != "" {
 				exception := serverWorkflowException{StepKey: key, Attempt: attempt, Reason: reason, OriginNodeID: originID, FinalNodeID: stringMap(lease, "nodeID")}
 				if len(evaluation.Rework) > 0 {
 					anchors, readErr := readServerWorkflowAnchorsTx(ctx, tx, current, root)
 					if readErr != nil {
-						return commandOutcome{}, true, readErr
+						return commandOutcome{}, readErr
 					}
 					plan, planErr := buildWorkflowUpstreamPlan(root, anchors, key, attempt, evaluation.Rework, false)
 					if planErr != nil {
-						return commandOutcome{}, true, planErr
+						return commandOutcome{}, planErr
 					}
 					exception.Kind, exception.ReworkPlan = workflowUpstreamReworkKind, plan
 				}
 				if err := repository.ensureWorkflowExceptionTx(ctx, tx, current, root, exception); err != nil {
-					return commandOutcome{}, true, err
+					return commandOutcome{}, err
 				}
 			} else {
 				for _, step := range root.Version.Steps {
 					if step.Key == key && step.HumanGateAfter {
 						if err := repository.openServerWorkflowResultGateTx(ctx, tx, current, root, lease, step); err != nil {
-							return commandOutcome{}, true, err
+							return commandOutcome{}, err
 						}
 					}
 				}
 				if err := repository.dispatchServerWorkflowTx(ctx, tx, current, root.ID); err != nil {
-					return commandOutcome{}, true, err
+					return commandOutcome{}, err
 				}
 				if err := repository.finishAcceptedServerWorkflowTx(ctx, tx, current, root.ID); err != nil {
-					return commandOutcome{}, true, err
+					return commandOutcome{}, err
 				}
 			}
 		}
 	}
 	event, err := repository.emitRunEvent(ctx, tx, current, root.ProjectID, root.ID, stringMap(lease, "nodeRef"), "TURN_COMPLETED", stringMap(lease, "nodeRef"), "", "", "", nonEmptyResult(payload), "", "")
 	if err != nil {
-		return commandOutcome{}, true, err
+		return commandOutcome{}, err
 	}
 	run, graph, err := repository.readRunGraphTx(ctx, tx, current, stringMap(lease, "runRef"))
 	if err != nil {
-		return commandOutcome{}, true, err
+		return commandOutcome{}, err
 	}
-	return commandOutcome{result: command.Result{Run: &run, Graph: &graph, Event: &event, CreatedRefs: artifactRefs}, projectID: root.ProjectID, projectRef: root.ProjectRef, resourceKind: "RUN_NODE", resourceRef: stringMap(lease, "nodeRef"), summary: "i18n:RUNTIME_EXECUTION_COMPLETED", runtimeGraphChanged: true}, true, nil
+	return commandOutcome{result: command.Result{Run: &run, Graph: &graph, Event: &event, CreatedRefs: artifactRefs}, projectID: root.ProjectID, projectRef: root.ProjectRef, resourceKind: "RUN_NODE", resourceRef: stringMap(lease, "nodeRef"), summary: "i18n:RUNTIME_EXECUTION_COMPLETED", runtimeGraphChanged: true}, nil
 }
 
 // openServerWorkflowResultGateTx opens the published gate only after its accepted receipt exists.

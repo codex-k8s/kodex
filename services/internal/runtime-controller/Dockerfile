@@ -22,7 +22,10 @@ COPY services/internal/runtime-controller/ services/internal/runtime-controller/
 WORKDIR /workspace/services/internal/runtime-controller
 RUN test "$(go env GOVERSION)" = "go1.26.6"
 RUN go mod download
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
+RUN --mount=type=tmpfs,target=/tmp,size=4294967296 \
+    export GOCACHE=/tmp/go-build-cache GOTMPDIR=/tmp/go-tmp GOMAXPROCS=2 GOMEMLIMIT=768MiB \
+ && mkdir -p "$GOCACHE" "$GOTMPDIR" \
+ && CGO_ENABLED=0 GOOS=linux go build -p=1 -trimpath -buildvcs=false \
     -ldflags="-s -w -X main.version=${VERSION}" \
     -o /out/runtime-controller ./cmd/runtime-controller
 

@@ -467,6 +467,10 @@ test-runtime-checkpoint-predecessor-postgres: check-go-toolchain
 test-workspace-volume-predecessor-postgres: check-go-toolchain
 	@timeout --kill-after=10s 240s bash scripts/tests/control-plane-postgres-test.sh --volume-predecessor
 
+.PHONY: test-workspace-volume-owner-postgres
+test-workspace-volume-owner-postgres: check-go-toolchain
+	@timeout --kill-after=10s 240s bash scripts/tests/control-plane-postgres-test.sh --volume-owner
+
 .PHONY: test-runtime-workspace-predecessor-postgres
 test-runtime-workspace-predecessor-postgres: check-go-toolchain
 	@timeout --kill-after=10s 240s bash scripts/tests/control-plane-postgres-test.sh --workspace-predecessor
@@ -491,3 +495,11 @@ test-static-backup-identity-operator:
 .PHONY: test-application-restart
 test-application-restart:
 	@timeout 60s node --test tools/release/application-restart.test.mjs tools/release/scoped-release.test.mjs
+
+.PHONY: test-workspace-restore-owner-postgres
+test-workspace-restore-owner-postgres: check-go-toolchain
+	@timeout --kill-after=10s 300s bash scripts/tests/control-plane-postgres-test.sh --restore-owner
+
+.PHONY: test-workspace-backup-upgrade-postgres
+test-workspace-backup-upgrade-postgres: check-go-toolchain
+	@timeout --kill-after=10s 300s bash scripts/tests/control-plane-postgres-test.sh --workspace-backup-upgrade

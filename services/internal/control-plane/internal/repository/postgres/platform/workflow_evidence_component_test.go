@@ -122,9 +122,20 @@ func (fixture *workflowEvidenceNativeFixture) finishEffect(invocation map[string
 		}
 		f.execute(command.ResolveOwnerGate, fixture.key("approve-effect"), &gate.Version, command.GateResolutionInput{GateRef: gate.Ref, Decision: "APPROVE", Comment: "Only the exact native fixture effect."})
 	}
-	work := []map[string]any{fixture.claimEffect(invocation)}
-	var err error
-	_, err = f.service.Execute(f.ctx, command.Command{Kind: command.CompleteIntegrationInvocation, Principal: fixture.gateway, Mutation: value.Mutation{IdempotencyKey: fixture.key("native-complete")}, Payload: command.IntegrationInvocationInput{InvocationRef: stringMap(work[0], "invocationRef"), LeaseRef: stringMap(work[0], "leaseRef"), Fence: stringMap(work[0], "fence"), Generation: runtimeRevisionMapInt64(work[0], "generation"), Success: true, EffectKey: stringMap(work[0], "effectKey"), InputDigest: stringMap(work[0], "inputDigest"), ProviderEffectRef: provider, ResultSummary: summary, ResponseDigest: workflowResultSHA([]byte(summary))}})
+	return fixture.completeEffect(invocation, fixture.claimEffect(invocation), provider, summary)
+}
+
+// completeEffect finishes a previously claimed native worker lease so model-first tests
+// preserve real queue order and do not try to reclaim work after the model lease closes.
+// completeEffect завершает ранее полученный native worker lease: model-first tests сохраняют
+// настоящий порядок очереди и не пытаются claim-ить работу после закрытия model lease.
+func (fixture *workflowEvidenceNativeFixture) completeEffect(invocation, work map[string]any, provider, summary string) string {
+	f := fixture.f
+	f.t.Helper()
+	if stringMap(work, "invocationRef") != stringMap(invocation, "invocationRef") {
+		f.t.Fatal("native completion changed its claimed invocation")
+	}
+	_, err := f.service.Execute(f.ctx, command.Command{Kind: command.CompleteIntegrationInvocation, Principal: fixture.gateway, Mutation: value.Mutation{IdempotencyKey: fixture.key("native-complete")}, Payload: command.IntegrationInvocationInput{InvocationRef: stringMap(work, "invocationRef"), LeaseRef: stringMap(work, "leaseRef"), Fence: stringMap(work, "fence"), Generation: runtimeRevisionMapInt64(work, "generation"), Success: true, EffectKey: stringMap(work, "effectKey"), InputDigest: stringMap(work, "inputDigest"), ProviderEffectRef: provider, ResultSummary: summary, ResponseDigest: workflowResultSHA([]byte(summary))}})
 	if err != nil {
 		f.t.Fatal("persist native evidence receipt", completionOutcomeClass(err))
 	}

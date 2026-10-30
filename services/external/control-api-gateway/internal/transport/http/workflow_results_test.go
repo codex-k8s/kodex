@@ -12,6 +12,73 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// TestWorkflowPDLCPublicContract exercises JSON input, actual Proto bytes and the shared HTTP/WS
+// projection. New fields survive closed decoding and cannot be smuggled into an old profile.
+// TestWorkflowPDLCPublicContract проверяет JSON input, actual Proto bytes и общий HTTP/WS projection.
+// Новые поля сохраняются при closed decoding и не переносятся скрыто в прежний профиль.
+func TestWorkflowPDLCPublicContract(t *testing.T) {
+	input := `{"name":"Документы","purpose":"Уточнить журнал обращений","coordinatorAgentRef":"agt_manager1","executionMode":"SERVER_DAG_V1","resultEvidenceProfile":"GITHUB_PDLC_V1","maxConcurrency":2,"steps":[{"ref":"author","position":1,"name":"Требования","purpose":"Сохранить документ","agentRef":"agt_author01","parallel":false,"parallelGroup":0,"timeoutSeconds":120,"expectedResult":"Требования","humanGate":false,"gateDecisions":[],"requiredCapabilityKeys":[],"resultRequirements":[{"key":"document","kind":"REPOSITORY_FILE","repository":"owner/repo","targetRef":"3","branch":"feature/journal","fileName":"docs/requirements.md"},{"key":"comment","kind":"PR_COMMENT","repository":"owner/repo","targetRef":"3"}]}]}`
+	var body generated.WorkflowInput
+	decoder := json.NewDecoder(strings.NewReader(input))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		t.Fatal("PDLC OpenAPI input unavailable", err)
+	}
+	raw, err := proto.Marshal(workflowDraft(body))
+	if err != nil {
+		t.Fatal("marshal PDLC gateway command")
+	}
+	var version cp.WorkflowVersion
+	if err := proto.Unmarshal(raw, &version); err != nil || version.ResultEvidenceProfile != "GITHUB_PDLC_V1" || version.Steps[0].ResultRequirements[0].Branch != "feature/journal" {
+		t.Fatal("gateway dropped exact PDLC branch/profile", err)
+	}
+	version.Ref, version.Version, version.Revision, version.State = "wfv_pdlc0001", 1, 1, cp.WorkflowState_WORKFLOW_STATE_DRAFT
+	if _, err := messageMap(&version); err != nil {
+		t.Fatal("valid PDLC owner version rejected by HTTP/WS projection", err)
+	}
+	for _, old := range []string{"", "GITHUB_REVIEW_QA_V1", "GITHUB_PDLC_V2"} {
+		version.ResultEvidenceProfile = old
+		if _, err := messageMap(&version); err == nil {
+			t.Fatal("old or unknown profile accepted PDLC public predicates")
+		}
+	}
+	proof := &cp.WorkflowAcceptedResult{Key: "document", Kind: "REPOSITORY_FILE", Repository: "owner/repo", Number: 3, HeadSha: strings.Repeat("a", 40), FileName: "docs/requirements.md", Branch: "feature/journal", Digest: strings.Repeat("b", 64), ReceiptRef: "erc_file_write000", HeadReceiptRef: "erc_file_head0000", ContentReceiptRef: "erc_file_content0"}
+	for name, mutate := range map[string]func(*cp.WorkflowAcceptedResult){
+		"valid":             func(*cp.WorkflowAcceptedResult) {},
+		"missing-head":      func(v *cp.WorkflowAcceptedResult) { v.HeadReceiptRef = "" },
+		"duplicate-receipt": func(v *cp.WorkflowAcceptedResult) { v.ContentReceiptRef = v.ReceiptRef },
+		"path-traversal":    func(v *cp.WorkflowAcceptedResult) { v.FileName = "../requirements.md" },
+		"branch-alias":      func(v *cp.WorkflowAcceptedResult) { v.Branch = "refs/heads/feature/journal" },
+		"cross-kind":        func(v *cp.WorkflowAcceptedResult) { v.Kind = "ARTIFACT" },
+		"invented-verdict":  func(v *cp.WorkflowAcceptedResult) { v.Verdict = "PASS" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			current := proto.Clone(proof).(*cp.WorkflowAcceptedResult)
+			mutate(current)
+			view, err := messageMap(current)
+			if name != "valid" {
+				if err == nil || view != nil {
+					t.Fatal("malformed file evidence crossed public projection")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal("valid file proof public projection unavailable", err)
+			}
+			raw, err := json.Marshal(view)
+			if err != nil {
+				t.Fatal("encode public file proof")
+			}
+			var accepted generated.WorkflowAcceptedResult
+			decoder := json.NewDecoder(bytes.NewReader(raw))
+			decoder.DisallowUnknownFields()
+			if err := decoder.Decode(&accepted); err != nil || accepted.Branch == nil || *accepted.Branch != proof.Branch || accepted.HeadReceiptRef == nil || *accepted.HeadReceiptRef != proof.HeadReceiptRef || accepted.ContentReceiptRef == nil || *accepted.ContentReceiptRef != proof.ContentReceiptRef {
+				t.Fatal("OpenAPI model dropped native file proof pins", err)
+			}
+		})
+	}
+}
+
 // TestWorkflowDraftServerContractRoundTrip exercises JSON input, the gateway adapter and actual
 // protobuf encoding together, retaining explicit dependencies, every predicate and optional TTL.
 // TestWorkflowDraftServerContractRoundTrip проверяет JSON-вход, преобразователь шлюза и настоящее
@@ -69,6 +136,67 @@ func TestWorkflowModesFollowPublishedAndDraftPins(t *testing.T) {
 	step := draft["steps"].([]any)[0].(map[string]any)
 	if !reflect.DeepEqual(step["dependsOn"], []any{"review"}) || len(step["resultRequirements"].([]any)) != 1 {
 		t.Fatal("draft predicates lost during public projection")
+	}
+}
+
+// TestWorkflowReworkPolicyReadbackPreservesRevisionBoundaries checks the actual owner-message
+// projection and OpenAPI JSON round trip without inferring policy from another workflow revision.
+// TestWorkflowReworkPolicyReadbackPreservesRevisionBoundaries проверяет проекцию сообщения
+// владельца и JSON OpenAPI без вывода политики из другой редакции процесса.
+func TestWorkflowReworkPolicyReadbackPreservesRevisionBoundaries(t *testing.T) {
+	const upstream = "OWNER_APPROVED_UPSTREAM_V1"
+	for _, scenario := range []struct {
+		name, publishedMode, publishedPolicy, draftMode, draftPolicy string
+	}{
+		{name: "draft only", draftMode: "SERVER_DAG_V1", draftPolicy: upstream},
+		{name: "published only", publishedMode: "SERVER_DAG_V1", publishedPolicy: upstream},
+		{name: "new draft opt in", publishedMode: "MANAGER_DRIVEN", draftMode: "SERVER_DAG_V1", draftPolicy: upstream},
+		{name: "draft leaves policy unset", publishedMode: "SERVER_DAG_V1", publishedPolicy: upstream, draftMode: "SERVER_DAG_V1"},
+		{name: "legacy without policy", publishedMode: "MANAGER_DRIVEN", draftMode: "MANAGER_DRIVEN"},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			workflow := &cp.Workflow{Ref: "wfl_fixture1", Version: 3}
+			if scenario.publishedMode != "" {
+				workflow.PublishedVersion = &cp.WorkflowVersion{Ref: "wfv_published1", Version: 2, Revision: 2,
+					State: cp.WorkflowState_WORKFLOW_STATE_PUBLISHED, ExecutionMode: scenario.publishedMode, ReworkPolicy: scenario.publishedPolicy}
+			}
+			if scenario.draftMode != "" {
+				workflow.DraftVersion = &cp.WorkflowVersion{Ref: "wfv_draft001", Version: 3, Revision: 3,
+					State: cp.WorkflowState_WORKFLOW_STATE_DRAFT, ExecutionMode: scenario.draftMode, ReworkPolicy: scenario.draftPolicy}
+			}
+			workflowReadinessFixture(workflow)
+			view, err := messageMap(&cp.GetWorkflowResponse{Workflow: workflow})
+			if err != nil {
+				t.Fatal(err)
+			}
+			public := view["workflow"].(map[string]any)
+			expected := scenario.publishedPolicy
+			if workflow.PublishedVersion == nil {
+				expected = scenario.draftPolicy
+			}
+			if policy, present := public["reworkPolicy"]; present != (expected != "") || present && policy != expected {
+				t.Fatalf("selected revision policy changed: value=%v present=%t expected=%q", policy, present, expected)
+			}
+			if workflow.DraftVersion != nil {
+				draft := public["draft"].(map[string]any)
+				if policy, present := draft["reworkPolicy"]; present != (scenario.draftPolicy != "") || present && policy != scenario.draftPolicy {
+					t.Fatal("draft policy was lost or copied from the published revision")
+				}
+			}
+			raw, err := json.Marshal(public)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var decoded generated.Workflow
+			decoder := json.NewDecoder(bytes.NewReader(raw))
+			decoder.DisallowUnknownFields()
+			if err := decoder.Decode(&decoded); err != nil {
+				t.Fatal("workflow readback is incompatible with the public contract", err)
+			}
+			if decoded.ReworkPolicy == nil && expected != "" || decoded.ReworkPolicy != nil && string(*decoded.ReworkPolicy) != expected {
+				t.Fatal("public JSON round trip lost the selected policy")
+			}
+		})
 	}
 }
 

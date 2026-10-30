@@ -7,8 +7,7 @@ WITH workflow_evidence AS MATERIALIZED (
     JOIN control_plane.integration_invocations invocation ON invocation.node_id=node.id AND invocation.organization_id=node.organization_id AND invocation.run_id=node.run_id
     WHERE node.run_id=$1::uuid AND node.workflow_business_attempt>0 AND node.owner_rework_gate_id IS NULL
       AND version.spec->>'ExecutionMode'='SERVER_DAG_V1'
-      AND version.spec->>'ResultEvidenceProfile'='GITHUB_REVIEW_QA_V1'
-      AND invocation.operation IN ('github.pull_request.review.create','github.issue.create')
+      AND control_plane.workflow_evidence_delivery_operation(version.spec->>'ResultEvidenceProfile',invocation.operation)
       AND NOT EXISTS (SELECT 1 FROM control_plane.run_edges delivered
         WHERE delivered.organization_id=node.organization_id AND delivered.root_run_id=root.id
           AND delivered.source_node_id=node.id AND delivered.type='CONTINUES')

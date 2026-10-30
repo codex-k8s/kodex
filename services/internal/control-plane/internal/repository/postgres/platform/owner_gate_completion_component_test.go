@@ -77,4 +77,6 @@ func TestOwnerGateServerCompletionComponent(t *testing.T) {
 	again := read(first.Ref)
 	assertOwnerGateApprovalConsequence(t, again, false, false)
 	assertOwnerGateApprovalConsequence(t, read(second.Ref), true, false)
+	testGateSourceAndHistoricalConsequences(t, f.ctx, f.repository, f.service, f.owner, again, false)
+	testGateSourceAndHistoricalConsequences(t, f.ctx, f.repository, f.service, f.owner, read(second.Ref), true)
 }

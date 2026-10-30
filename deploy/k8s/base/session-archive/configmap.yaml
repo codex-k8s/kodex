@@ -16,6 +16,8 @@ data:
   SESSION_ARCHIVE_WORKER_SERVICE_ACCOUNT: "session-archive-worker"
   # Должны совпадать с runtime-controller для одного канонического session PVC.
   SESSION_ARCHIVE_STORAGE_CLASS: ""
+  # V2 включается только совместно с owner, runtime-controller и квалифицированным physical profile.
+  SESSION_WORKSPACE_STORAGE_PROFILE: ""
   SESSION_ARCHIVE_SESSION_PVC_SIZE: "20Gi"
   SESSION_ARCHIVE_OBJECT_STORAGE_SECRET: "kodex-external-s3"
   SESSION_ARCHIVE_OBJECT_STORAGE_REGION: "us-east-1"

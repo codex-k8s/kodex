@@ -2167,6 +2167,31 @@
       "operation_id": "platform.credential-projections.ssh-compose.resolve",
       "source_binding_sha256": "2b65760cfffd688f8dfc34fa8c64b6a6e6e82e6ccff43de039fbbf260aa541a1",
       "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.workspace-volumes.tasks.claim",
+      "source_binding_sha256": "e5a05c41d98a8c5363925f24652931b5b1d4cd33a09be83aa47391252a44b721",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.workspace-volumes.tasks.renew",
+      "source_binding_sha256": "06bb7c271e5bc5188db578a9dd339dadb40126e0e780e3c7db25aa923fa3946d",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.workspace-volumes.tasks.complete",
+      "source_binding_sha256": "1256227c60b01a0bdf5ca4e25ce3bed9a19ad5d6cd0d442c42b0e06e8b61f060",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.workspace-volumes.tasks.fail",
+      "source_binding_sha256": "67a00b8e52016a0a877b608aeecbfbd018f9de2826923e10583da8a361f25317",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.execution.integration.outcomes.read",
+      "source_binding_sha256": "9861398d34b3a3700b5478bac94b4cf9f0cfb8b868cc5e2c8c4819a86110567a",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
     }
   ]
 }

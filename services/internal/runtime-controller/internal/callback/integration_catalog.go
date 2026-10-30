@@ -25,7 +25,7 @@ const maximumIntegrationCatalogPage = 8
 // integrationCatalogTool описывает три отдельных discovery modes:query/offset index,
 // exact grant ref либо exact connection/capability pair. Схема публикует лишь snapshot-
 // bound grants без connection credentials и invocation authority.
-func integrationCatalogTool() map[string]any {
+func integrationCatalogTool(inputs ...runtimecontract.RunnerInput) map[string]any {
 	inputSchema := objectSchema(nil, map[string]any{
 		"query": stringSchema(0, 80), "offset": map[string]any{"type": "integer", "minimum": 0, "maximum": 256},
 		"grant_ref":      opaqueRefSchema(),
@@ -39,7 +39,7 @@ func integrationCatalogTool() map[string]any {
 		{"required": []string{"grant_ref"}, "not": map[string]any{"anyOf": []map[string]any{{"required": []string{"query"}}, {"required": []string{"offset"}}, {"required": []string{"connection_ref"}}, {"required": []string{"capability_key"}}}}},
 		{"required": []string{"connection_ref", "capability_key"}, "not": map[string]any{"anyOf": []map[string]any{{"required": []string{"query"}}, {"required": []string{"offset"}}, {"required": []string{"grant_ref"}}}}},
 	}
-	return map[string]any{
+	tool := map[string]any{
 		"name":        "get_integration_catalog",
 		"description": "Discover only grants bound to this RuntimeRevision. Call with {} or query and offset for a compact index. Copy grant_ref from one index entry and call again with that grant_ref to read its input schema. Pass the same grant_ref to invoke_integration. Do not guess identifiers from names or OpenAPI operationId.",
 		"inputSchema": inputSchema,
@@ -48,6 +48,10 @@ func integrationCatalogTool() map[string]any {
 			"next_offset": map[string]any{"type": "integer", "minimum": 1, "maximum": 256},
 		}),
 	}
+	if len(inputs) == 1 && integrationOutcomesAvailable(inputs[0]) {
+		extendIntegrationOutcomesSchema(tool)
+	}
+	return tool
 }
 
 // integrationCatalogInputError records a local closed selection reason without

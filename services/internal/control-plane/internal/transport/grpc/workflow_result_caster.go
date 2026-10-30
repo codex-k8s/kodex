@@ -10,7 +10,7 @@ import (
 func castWorkflowResultRequirements(values []entity.WorkflowResultRequirement) []*controlplanev1.WorkflowResultRequirement {
 	result := make([]*controlplanev1.WorkflowResultRequirement, 0, len(values))
 	for _, value := range values {
-		result = append(result, &controlplanev1.WorkflowResultRequirement{EvidenceKey: value.EvidenceKey, Key: value.Key, Kind: value.Kind, FileName: value.FileName, MediaType: value.MediaType, Repository: value.Repository, SubjectStepKey: value.SubjectStepKey, SubjectResultKey: value.SubjectResultKey, Operation: value.Operation, TargetRef: value.TargetRef})
+		result = append(result, &controlplanev1.WorkflowResultRequirement{Branch: value.Branch, EvidenceKey: value.EvidenceKey, Key: value.Key, Kind: value.Kind, FileName: value.FileName, MediaType: value.MediaType, Repository: value.Repository, SubjectStepKey: value.SubjectStepKey, SubjectResultKey: value.SubjectResultKey, Operation: value.Operation, TargetRef: value.TargetRef})
 	}
 	return result
 }
@@ -35,7 +35,7 @@ func castWorkflowAttemptResults(values []entity.WorkflowAttemptResult) []*contro
 func castWorkflowEvidence(values []entity.WorkflowAcceptedResult) []*controlplanev1.WorkflowAcceptedResult {
 	result := make([]*controlplanev1.WorkflowAcceptedResult, 0, len(values))
 	for _, evidence := range values {
-		result = append(result, &controlplanev1.WorkflowAcceptedResult{Key: evidence.Key, Kind: evidence.Kind, ArtifactRef: evidence.ArtifactRef, ArtifactRevision: evidence.ArtifactRevision, Digest: evidence.Digest, ReceiptRef: evidence.ReceiptRef, Repository: evidence.Repository, Number: evidence.Number, HeadSha: evidence.HeadSHA, Verdict: evidence.Verdict, TargetRef: evidence.TargetRef, BundleSha256: evidence.BundleSHA256, ImageDigest: evidence.ImageDigest, HealthOk: evidence.HealthOK})
+		result = append(result, &controlplanev1.WorkflowAcceptedResult{FileName: evidence.FileName, Branch: evidence.Branch, HeadReceiptRef: evidence.HeadReceiptRef, ContentReceiptRef: evidence.ContentReceiptRef, Key: evidence.Key, Kind: evidence.Kind, ArtifactRef: evidence.ArtifactRef, ArtifactRevision: evidence.ArtifactRevision, Digest: evidence.Digest, ReceiptRef: evidence.ReceiptRef, Repository: evidence.Repository, Number: evidence.Number, HeadSha: evidence.HeadSHA, Verdict: evidence.Verdict, TargetRef: evidence.TargetRef, BundleSha256: evidence.BundleSHA256, ImageDigest: evidence.ImageDigest, HealthOk: evidence.HealthOK})
 	}
 	return result
 }

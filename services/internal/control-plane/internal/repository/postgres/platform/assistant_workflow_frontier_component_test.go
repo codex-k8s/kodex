@@ -128,6 +128,23 @@ func testAssistantWorkflowFrontier(t *testing.T, ctx context.Context, repository
 		t.Fatal(err)
 	}
 	mapped.Principal, mapped.Mutation.IdempotencyKey = owner, "frontier-apply"
+	invalid := mapped
+	invalid.Mutation.IdempotencyKey = "frontier-duplicate-capability"
+	invalidPayload := mapped.Payload.(command.WorkflowInput)
+	invalidDraft := *invalidPayload.Draft
+	invalidDraft.Steps = append([]entity.WorkflowStep{}, invalidDraft.Steps...)
+	invalidDraft.Steps[0].RequiredCapabilityKeys = []string{"platform.artifact.manage", "platform.artifact.manage"}
+	invalidPayload.Draft = &invalidDraft
+	invalid.Payload = invalidPayload
+	for range 2 {
+		if _, err := service.Execute(ctx, invalid); !errors.Is(err, errs.ErrInvalid) {
+			t.Fatalf("duplicate capability mutation was not rejected before persistence: %v", err)
+		}
+	}
+	unchanged, err := service.GetWorkflow(ctx, owner, workflow.Ref)
+	if err != nil || unchanged.Draft == nil || unchanged.Version != workflow.Version || !assistantJSONEqual(*unchanged.Draft, *workflow.Draft) {
+		t.Fatal("rejected duplicate capability changed workflow state", err)
+	}
 	applied, err := service.Execute(ctx, mapped)
 	if err != nil || applied.Workflow == nil || applied.Workflow.Draft == nil {
 		t.Fatalf("apply normalized workflow: %v", err)

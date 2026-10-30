@@ -19,7 +19,8 @@ export function archiveTransition(role, binding, desiredRole) {
   requireValue(Array.isArray(desiredRole.rules) && desiredRole.rules.length === 4 &&
     desiredRole.rules.every(r => r.apiGroups?.length === 1 && r.resources?.length === 1 &&
       ["/pods", "/configmaps", "/persistentvolumeclaims", "batch/jobs"].includes(`${r.apiGroups[0]}/${r.resources[0]}`) &&
-      Array.isArray(r.verbs) && r.verbs.length > 0 && r.verbs.every(v => ["get", "list", "create", "delete"].includes(v)) &&
+      Array.isArray(r.verbs) && r.verbs.length > 0 && r.verbs.every(v => ["get", "list", "create", "delete"].includes(v) ||
+        (v === "patch" && r.apiGroups[0] === "batch" && r.resources[0] === "jobs")) &&
       Object.keys(r).every(k => ["apiGroups", "resources", "verbs"].includes(k))), "STABLE_ARCHIVE_DESIRED_RULES_INVALID");
   requireValue(new Set(desiredRole.rules.map(r => `${r.apiGroups[0]}/${r.resources[0]}`)).size === 4,
     "STABLE_ARCHIVE_DESIRED_RULES_INVALID");

@@ -7,6 +7,75 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
+// TestWorkflowMCPPDLCProfile validates the actual published MCP CREATE/UPDATE schemas, including
+// native file targets, separate local outputs, old-profile denial and owner-resolved sparse updates.
+// TestWorkflowMCPPDLCProfile проверяет actual MCP CREATE/UPDATE schemas с native file targets,
+// отдельными local outputs, запретом прежнего профиля и owner-resolved sparse updates.
+func TestWorkflowMCPPDLCProfile(t *testing.T) {
+	create := resolvedWorkflowSchema(t, workflowInputSchema(opaqueRefSchema(), opaqueRefSchema()))
+	update := resolvedWorkflowSchema(t, workflowUpdateInputSchema("wfl_fixture123"))
+	fixture := func() map[string]any {
+		value := assistantWorkflowSchemaFixture(t)
+		value["resultEvidenceProfile"] = "GITHUB_PDLC_V1"
+		value["steps"].([]any)[0].(map[string]any)["resultRequirements"] = []any{
+			map[string]any{"key": "document", "kind": "REPOSITORY_FILE", "repository": "owner/repo", "targetRef": "3", "branch": "feature/journal", "fileName": "docs/requirements.md"},
+			map[string]any{"key": "comment", "kind": "PR_COMMENT", "repository": "owner/repo", "targetRef": "3"},
+			map[string]any{"key": "report", "kind": "ARTIFACT", "fileName": "requirements.md", "mediaType": "text/markdown"},
+			map[string]any{"key": "pr", "kind": "PULL_REQUEST", "repository": "owner/repo", "targetRef": "3"},
+		}
+		return value
+	}
+	if err := create.Validate(fixture()); err != nil {
+		t.Fatal("actual MCP create rejected native PDLC targets", err)
+	}
+	for _, mode := range []string{"missing-profile", "old-profile", "unknown-profile", "null-profile", "missing-branch", "null-branch", "receipt-in-config", "missing-pr", "missing-mode", "parallel-overflow"} {
+		t.Run(mode, func(t *testing.T) {
+			value := fixture()
+			results := value["steps"].([]any)[0].(map[string]any)["resultRequirements"].([]any)
+			file := results[0].(map[string]any)
+			switch mode {
+			case "missing-profile":
+				delete(value, "resultEvidenceProfile")
+			case "old-profile":
+				value["resultEvidenceProfile"] = "GITHUB_REVIEW_QA_V1"
+			case "unknown-profile":
+				value["resultEvidenceProfile"] = "GITHUB_PDLC_V2"
+			case "null-profile":
+				value["resultEvidenceProfile"] = nil
+			case "missing-branch":
+				delete(file, "branch")
+			case "null-branch":
+				file["branch"] = nil
+			case "receipt-in-config":
+				file["receiptRef"] = "erc_unsupported0"
+			case "missing-pr":
+				delete(results[3].(map[string]any), "targetRef")
+			case "missing-mode":
+				delete(value, "executionMode")
+			case "parallel-overflow":
+				value["maxConcurrency"] = float64(3)
+			}
+			if create.Validate(value) == nil {
+				t.Fatal("invalid native PDLC configuration crossed MCP schema")
+			}
+		})
+	}
+	value := fixture()
+	delete(value, "projectRef")
+	delete(value, "executionMode")
+	delete(value, "resultEvidenceProfile")
+	value["workflowRef"] = "wfl_fixture123"
+	if err := update.Validate(value); err != nil {
+		t.Fatal("sparse update was rejected before owner resolved existing PDLC profile", err)
+	}
+	for _, profile := range []string{"", "GITHUB_REVIEW_QA_V1"} {
+		value["resultEvidenceProfile"] = profile
+		if update.Validate(value) == nil {
+			t.Fatal("explicit old update profile accepted native file fields")
+		}
+	}
+}
+
 // resolvedWorkflowSchema compiles the actual MCP schema without network references; fixtures
 // exercise JSON Schema validation rather than merely checking selected property names.
 // resolvedWorkflowSchema компилирует настоящую MCP-схему без сетевых ссылок; оснастка проверяет

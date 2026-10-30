@@ -11,7 +11,7 @@ WITH execution AS MATERIALIZED (
     JOIN control_plane.runtime_leases lease ON lease.id=@lease_id::uuid AND lease.runtime_revision_id=revision.id
         AND lease.organization_id=node.organization_id AND lease.node_id=node.id AND lease.run_id=node.run_id AND lease.generation=revision.generation
     WHERE node.organization_id=@organization_id::uuid AND node.id=@node_id::uuid AND node.root_run_id=@root_run_id::uuid
-        AND version.spec->>'ResultEvidenceProfile'='GITHUB_REVIEW_QA_V1'
+        AND version.spec->>'ResultEvidenceProfile' IN ('GITHUB_REVIEW_QA_V1','GITHUB_PDLC_V1')
         AND node.workflow_business_attempt BETWEEN 1 AND 4 AND root.state IN ('RUNNING','WAITING_HUMAN')
         AND ((node.state='RUNNING' AND lease.state='CLAIMED' AND lease.expires_at>clock_timestamp()
             AND control_plane.runtime_execution_before_deadline(node.organization_id,node.run_id))

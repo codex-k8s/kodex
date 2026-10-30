@@ -5,27 +5,29 @@ import "github.com/prometheus/client_golang/prometheus"
 // archiveMetrics groups reconciliation, terminal owner-command, worker-duration and processed-byte collectors.
 // RU: archiveMetrics объединяет метрики сверки, конечных owner-команд, длительности worker и обработанных байтов.
 type archiveMetrics struct {
-	cycles   *prometheus.CounterVec
-	tasks    *prometheus.CounterVec
-	duration *prometheus.HistogramVec
-	active   prometheus.Gauge
-	bytes    *prometheus.CounterVec
+	cycles        *prometheus.CounterVec
+	tasks         *prometheus.CounterVec
+	duration      *prometheus.HistogramVec
+	active        prometheus.Gauge
+	bytes         *prometheus.CounterVec
+	volumeEffects *prometheus.CounterVec
 }
 
 // newArchiveMetrics creates unregistered business collectors for the controller composition root.
 // RU: newArchiveMetrics создаёт незарегистрированные бизнес-метрики для composition root контроллера.
 func newArchiveMetrics() *archiveMetrics {
 	return &archiveMetrics{
-		cycles:   prometheus.NewCounterVec(prometheus.CounterOpts{Namespace: "kodex", Subsystem: "session_archive", Name: "cycles_total", Help: "Total number of session archive reconciliation cycles."}, []string{"outcome"}),
-		tasks:    prometheus.NewCounterVec(prometheus.CounterOpts{Namespace: "kodex", Subsystem: "session_archive", Name: "tasks_total", Help: "Total number of completed session archive tasks."}, []string{"kind", "outcome"}),
-		duration: prometheus.NewHistogramVec(prometheus.HistogramOpts{Namespace: "kodex", Subsystem: "session_archive", Name: "task_duration_seconds", Help: "Duration of session archive tasks in seconds.", Buckets: prometheus.DefBuckets}, []string{"kind"}),
-		active:   prometheus.NewGauge(prometheus.GaugeOpts{Namespace: "kodex", Subsystem: "session_archive", Name: "active_workers", Help: "Current number of active session archive workers."}),
-		bytes:    prometheus.NewCounterVec(prometheus.CounterOpts{Namespace: "kodex", Subsystem: "session_archive", Name: "bytes_total", Help: "Total bytes processed by successful session archive tasks."}, []string{"kind"}),
+		cycles:        prometheus.NewCounterVec(prometheus.CounterOpts{Namespace: "kodex", Subsystem: "session_archive", Name: "cycles_total", Help: "Total number of session archive reconciliation cycles."}, []string{"outcome"}),
+		tasks:         prometheus.NewCounterVec(prometheus.CounterOpts{Namespace: "kodex", Subsystem: "session_archive", Name: "tasks_total", Help: "Total number of completed session archive tasks."}, []string{"kind", "outcome"}),
+		duration:      prometheus.NewHistogramVec(prometheus.HistogramOpts{Namespace: "kodex", Subsystem: "session_archive", Name: "task_duration_seconds", Help: "Duration of session archive tasks in seconds.", Buckets: prometheus.DefBuckets}, []string{"kind"}),
+		active:        prometheus.NewGauge(prometheus.GaugeOpts{Namespace: "kodex", Subsystem: "session_archive", Name: "active_workers", Help: "Current number of active session archive workers."}),
+		bytes:         prometheus.NewCounterVec(prometheus.CounterOpts{Namespace: "kodex", Subsystem: "session_archive", Name: "bytes_total", Help: "Total bytes processed by successful session archive tasks."}, []string{"kind"}),
+		volumeEffects: prometheus.NewCounterVec(prometheus.CounterOpts{Namespace: "kodex", Subsystem: "session_archive", Name: "volume_positive_create_responses_total", Help: "Total positive workspace volume Kubernetes Create responses, independent of owner acknowledgement."}, []string{"effect"}),
 	}
 }
 
 // collectors returns the exact collector set registered once in this controller's shared registry.
 // RU: collectors возвращает точный набор метрик для однократной регистрации в общем реестре этого контроллера.
 func (metrics *archiveMetrics) collectors() []prometheus.Collector {
-	return []prometheus.Collector{metrics.cycles, metrics.tasks, metrics.duration, metrics.active, metrics.bytes}
+	return []prometheus.Collector{metrics.cycles, metrics.tasks, metrics.duration, metrics.active, metrics.bytes, metrics.volumeEffects}
 }

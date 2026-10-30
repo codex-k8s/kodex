@@ -6,6 +6,11 @@ import { join } from 'node:path';
 import { planControlPlaneMigration, migrationReadback } from './control-plane-migration.mjs';
 import { fingerprint } from './scoped-release.mjs';
 import { validateStableReceipt } from './stable-image-publication.mjs';
+import { validGitHubPRMigrationPostcondition, validGitHubPRMigrationPrecondition, validGitHubPRBackupMigrationPostcondition, validGitHubAutonomousMigrationPostcondition, validGitHubAutonomousBackupMigrationPostcondition, validGitHubAutonomousMigrationPrecondition } from './control-plane-immutable-migration.mjs';
+import { validWorkflowPDLCMigrationPrecondition } from './control-plane-immutable-migration.mjs';
+import { workflowPDLCCatalogDigest } from './workflow-pdlc-catalog.gen.mjs';
+import { workflowContentPageCatalogDigest } from './workflow-content-page-catalog.gen.mjs';
+import { validWorkflowContentPageMigrationPrecondition } from './control-plane-immutable-migration.mjs';
 import { waitMigrationMaintenance, immutableMigrationProfile, isImmutableMigrationProfile, validImmutableMigrationPostcondition, validProjectPurgeAuthorityMigrationPostcondition, validOwnerGateExpiryMigrationPostcondition, validRepositoryBundleMigrationPostcondition, validServerWorkflowMigrationPostcondition, validLegacyWorkflowReworkMigrationPostcondition, validWorkflowExceptionContextMigrationPrecondition, validWorkflowExceptionContextMigrationPostcondition, validWorkflowUpstreamReworkMigrationPrecondition, validWorkflowUpstreamReworkMigrationPostcondition, validWorkflowReviewQAEvidenceMigrationPostcondition, validSessionWorkspaceMigrationPostcondition, validWorkspaceCheckpointMigrationPostcondition, validSSHComposeMigrationPostcondition } from './control-plane-immutable-migration.mjs';
 
 const revision = 'a'.repeat(40), digest = `sha256:${'b'.repeat(64)}`;
@@ -14,6 +19,193 @@ const version = '20261025000100', annotation = 'kodex.dev/cp-outbox-index-migrat
 const sqlFile = `${version}_outbox_unpublished_predecessor_index.sql`;
 const read = path => JSON.parse(readFileSync(path,'utf8'));
 const write = (path,value) => writeFileSync(path,JSON.stringify(value),{mode:0o600});
+
+test('Content page032 требует exact031 до применения и отдельный новый catalog после',()=>{
+ for(const backup of [false,true]) {
+  const name='workflow-content-page'+(backup?'-backup':''),config=immutableMigrationProfile(name);
+  assert.equal(config.previousVersion,20261029000300);
+  assert.equal(config.version,'20261030000100');
+  const before=workflowContentPageProof(backup,true),after=workflowContentPageProof(backup,false);
+  assert.equal(validWorkflowContentPageMigrationPrecondition(before,backup),true);
+  assert.equal(validWorkflowContentPageMigrationPrecondition(before,!backup),false);
+  assert.equal(validImmutableMigrationPostcondition(name,after),true);
+  assert.equal(validImmutableMigrationPostcondition('workflow-pdlc',after),false);
+  assert.equal(validImmutableMigrationPostcondition(name,workflowPDLCProof(backup,false)),false);
+  for(const patch of [{workflowContentPagePredecessor:false},{workflowPDLCCatalog:false},
+    {gooseVersion:20261030000100},{workflowPDLCCatalogDigest:workflowContentPageCatalogDigest}])
+   assert.equal(validWorkflowContentPageMigrationPrecondition({...before,...patch},backup),false);
+  for(const patch of [{workflowContentPageCatalog:false},{workflowPDLCCatalog:false},{workflowPDLCFunctions:13},
+    {workflowPDLCCatalogDigest:workflowPDLCCatalogDigest},{gooseVersion:20261029000300},{restoreCatalog:false},{readOnly:'off'}])
+   assert.equal(validImmutableMigrationPostcondition(name,{...after,...patch}),false);
+  if(backup) assert.equal(validImmutableMigrationPostcondition(name,{...after,backupReaderCatalog:false}),false);
+ }
+});
+
+test('Content page CLI блокирует активный runtime и не повторяет уже созданную миграцию',t=>{
+ const f=cli(t,'workflow-content-page-backup');
+ f.edit(s=>s.precondition={activeRuntimeRuns:1});
+ assert.notEqual(f.run('plan').status,0);
+ assert.equal(f.read().calls.filter(a=>a.includes('create')||a.includes('patch')).length,0);
+ f.edit(s=>delete s.precondition);pass(f,'plan','PLANNED');pass(f,'check');pass(f,'stop','STOPPED');
+ f.edit(s=>s.postcondition={workflowContentPageCatalog:false});
+ assert.notEqual(f.run('apply').status,0);
+ f.edit(s=>delete s.postcondition);pass(f,'inspect');pass(f,'resume','RESUMED');
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,2);
+});
+
+test('PDLC031 требует собственный exact catalog и не расширяет frozen030 validators',()=>{
+ for(const backup of [false,true]) {
+  const name=backup?'workflow-pdlc-backup':'workflow-pdlc',config=immutableMigrationProfile(name);
+  assert.equal(config.previousVersion,20261029000200);
+  assert.equal(config.version,'20261029000300');
+  const before=workflowPDLCProof(backup,true),after=workflowPDLCProof(backup,false);
+  assert.equal(validWorkflowPDLCMigrationPrecondition(before,backup),true);
+  assert.equal(validWorkflowPDLCMigrationPrecondition(before,!backup),false);
+  assert.equal(validImmutableMigrationPostcondition(name,after),true);
+  assert.equal(validGitHubPRMigrationPostcondition(after),false);
+  for(const patch of [{workflowPDLCAbsent:false},{githubPRCatalog:false},{gooseVersion:20261029000300},{restoreCatalog:false}])
+   assert.equal(validWorkflowPDLCMigrationPrecondition({...before,...patch},backup),false);
+  for(const patch of [{workflowPDLCCatalog:false},{workflowPDLCFunctions:13},{workflowPDLCFunctions:15},
+   {workflowPDLCCatalogDigest:'0'.repeat(64)},{gooseVersion:20261029000200},{restoreCatalog:false},{readOnly:'off'}])
+   assert.equal(validImmutableMigrationPostcondition(name,{...after,...patch}),false);
+  if(backup) assert.equal(validImmutableMigrationPostcondition(name,{...after,backupReaderCatalog:false}),false);
+ }
+});
+
+test('PDLC CLI сохраняет backup fence и не повторяет миграцию после неизвестной проверки',t=>{
+ const f=cli(t,'workflow-pdlc-backup');
+ f.edit(s=>s.precondition={workflowPDLCAbsent:false});
+ assert.notEqual(f.run('plan').status,0);
+ assert.equal(f.read().calls.filter(a=>a.includes('create')||a.includes('patch')).length,0);
+ f.edit(s=>delete s.precondition);pass(f,'plan','PLANNED');pass(f,'check');pass(f,'stop','STOPPED');
+ f.edit(s=>s.postcondition={workflowPDLCCatalog:false});
+ assert.notEqual(f.run('apply').status,0);
+ f.edit(s=>delete s.postcondition);pass(f,'inspect');pass(f,'resume','RESUMED');
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,2);
+});
+
+test('GitHub PR имеет отдельные exact030 и frozen029 proof без расширения старых validators',()=>{
+ for(const backup of [false,true]) {
+  const name=backup?'github-pr-backup':'github-pr',config=immutableMigrationProfile(name);
+  assert.equal(config.previousVersion,20261029000100);
+  assert.equal(config.version,'20261029000200');
+  const before=githubPRProof(backup,true),after=githubPRProof(backup,false);
+  assert.equal(validGitHubPRMigrationPrecondition(before,backup),true);
+  assert.equal(validGitHubPRMigrationPrecondition(before,!backup),false);
+  assert.equal(validImmutableMigrationPostcondition(name,after),true);
+  assert.equal(validGitHubAutonomousMigrationPostcondition(after),false);
+  for(const patch of [{githubPRWritePredecessor:false},{githubHistoricalCatalog:false},{gooseVersion:20261029000200},{restoreCatalog:false}])
+   assert.equal(validGitHubPRMigrationPrecondition({...before,...patch},backup),false);
+  for(const patch of [{githubAutonomousWrites:false},{githubPRCatalog:false},{gooseVersion:20261029000100},{restoreCatalog:false},{readOnly:'off'}])
+   assert.equal(validImmutableMigrationPostcondition(name,{...after,...patch}),false);
+  if(backup) assert.equal(validGitHubPRBackupMigrationPostcondition({...after,backupReaderCatalog:false}),false);
+ }
+});
+
+test('GitHub PR CLI сохраняет backup SELECT и не повторяет DDL после неизвестного proof',t=>{
+ const f=cli(t,'github-pr-backup');
+ f.edit(s=>s.precondition={githubHistoricalCatalog:false});
+ assert.notEqual(f.run('plan').status,0);
+ assert.equal(f.read().calls.filter(a=>a.includes('create')||a.includes('patch')).length,0);
+ f.edit(s=>delete s.precondition);pass(f,'plan','PLANNED');pass(f,'check');pass(f,'stop','STOPPED');
+ f.edit(s=>s.postcondition={githubPRCatalog:false});
+ assert.notEqual(f.run('apply').status,0);
+ f.edit(s=>delete s.postcondition);pass(f,'inspect');pass(f,'resume','RESUMED');
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,2);
+});
+
+test('каталог GitHub требует собственный exact proof и не расширяет исторические проверки',()=>{
+ const proof={...workspaceVolumeSSHProof(),profile:'GITHUB_AUTONOMOUS_PDLC_V1',
+  gooseVersion:20261029000100,restoreCatalog:true,githubHistoricalCatalog:true};
+ assert.equal(validGitHubAutonomousMigrationPostcondition(proof),true);
+ for(const patch of [{profile:'WORKSPACE_RESTORE_V2'},{gooseVersion:20261028000100},
+  {gooseVersion:20261029000200},{githubHistoricalCatalog:false},{readOnly:'off'},
+  {restoreCatalog:false},{workspaceCatalog:false},{purgeEdges:304}])
+  assert.equal(validGitHubAutonomousMigrationPostcondition({...proof,...patch}),false);
+ const missing={...proof};delete missing.githubHistoricalCatalog;
+ assert.equal(validGitHubAutonomousMigrationPostcondition(missing),false);
+ assert.equal(validImmutableMigrationPostcondition('workspace-restore',proof),false);
+});
+
+test('миграция GitHub различает bare и backup profiles до и после DDL',()=>{
+ for(const backup of [false,true]) {
+  const name=backup?'github-autonomous-backup':'github-autonomous',config=immutableMigrationProfile(name);
+  assert.equal(config.previousVersion,20261028000100);
+  assert.equal(config.version,'20261029000100');
+  assert.deepEqual(config.requiredMigrations,['20261029000100_github_historical_grant_admission.sql']);
+  const before=githubAutonomousProof(backup,true),after=githubAutonomousProof(backup,false);
+  assert.equal(validGitHubAutonomousMigrationPrecondition(before,backup),true);
+  assert.equal(validGitHubAutonomousMigrationPrecondition(before,!backup),false);
+  assert.equal(validImmutableMigrationPostcondition(name,after),true);
+  for(const patch of [{githubHistoricalAbsent:false},{gooseVersion:20261029000100},{restoreCatalog:false}])
+   assert.equal(validGitHubAutonomousMigrationPrecondition({...before,...patch},backup),false);
+  assert.equal(validImmutableMigrationPostcondition(name,{...after,githubHistoricalCatalog:false}),false);
+  if(backup) {
+   assert.equal(validGitHubAutonomousMigrationPrecondition({...before,backupReaderCatalog:false},true),false);
+   assert.equal(validGitHubAutonomousBackupMigrationPostcondition({...after,backupReaderCatalog:false}),false);
+   assert.equal(validGitHubAutonomousMigrationPostcondition(after),false);
+  }
+ }
+});
+
+test('миграция GitHub сохраняет backup SELECT и восстанавливает старый CP без второго DDL после отказа proof',t=>{
+ const f=cli(t,'github-autonomous-backup');
+ f.edit(s=>s.precondition={backupReaderCatalog:false});
+ assert.notEqual(f.run('plan').status,0);
+ assert.equal(f.read().calls.filter(a=>a.includes('create')||a.includes('patch')).length,0);
+ f.edit(s=>delete s.precondition);pass(f,'plan','PLANNED');pass(f,'check');pass(f,'stop','STOPPED');
+ f.edit(s=>s.postcondition={githubHistoricalCatalog:false});
+ assert.notEqual(f.run('apply').status,0);
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,2);
+ f.edit(s=>delete s.postcondition);pass(f,'inspect');pass(f,'resume','RESUMED');
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,2);
+});
+
+test('restore owner profile requires the complete new catalog and does not broaden historical validators',()=>{
+ const config=immutableMigrationProfile('workspace-restore');
+ assert.equal(config.version,'20261028000100');
+ assert.equal(config.previousVersion,20261026001000);
+ assert.equal(config.requiredMigrations.length,9);
+ assert.equal(config.requiredMigrations.at(-1),'20261028000100_workspace_restore_owner.sql');
+ assert.throws(()=>config.requiredMigrations.push('foreign.sql'));
+ const proof={...workspaceVolumeSSHProof(),profile:'WORKSPACE_RESTORE_V2',gooseVersion:20261028000100,restoreCatalog:true};
+ assert.equal(validImmutableMigrationPostcondition('workspace-restore',proof),true);
+ assert.equal(validImmutableMigrationPostcondition('workspace-volume-ssh',proof),false);
+ assert.equal(validImmutableMigrationPostcondition('workspace-restore',workspaceVolumeSSHProof()),false);
+ for(const key of Object.keys(proof)) {
+  const missing={...proof};delete missing[key];
+  assert.equal(validImmutableMigrationPostcondition('workspace-restore',missing),false,key);
+ }
+ for(const patch of [{restoreCatalog:false},{checkpointCatalog:false},{gooseVersion:20261027000100},
+  {readOnly:'off'},{purgeEdges:304},{volumeCatalog:false},{profile:'WORKSPACE_VOLUME_SSH_V1'}])
+  assert.equal(validImmutableMigrationPostcondition('workspace-restore',{...proof,...patch}),false);
+});
+
+test('backup maintenance использует отдельные имена Job и единственную закрытую команду',()=>{
+ const config=immutableMigrationProfile('workspace-backup');
+ assert.equal(config.previousVersion,20261026001500);
+ assert.equal(config.requiredMigrations.length,4);
+ const plan=planControlPlaneMigration(base(),source,()=>({revision}),'fixture','workspace-backup',publication());
+ assert.equal(plan.job.metadata.name,'control-plane-migrate-20261028000100-backup');
+ assert.equal(plan.checkJob.metadata.name,'control-plane-migration-check-20261028000100-backup');
+ assert.deepEqual(plan.job.spec.template.spec.containers[0].args,['up-workspace-backup-compatible']);
+ assert.deepEqual(plan.checkJob.spec.template.spec.containers[0].args,['check']);
+ assert.equal(plan.job.spec.template.spec.serviceAccountName,'control-plane-migrator');
+ assert.equal(plan.job.spec.template.spec.automountServiceAccountToken,false);
+});
+
+test('backup proof сохраняет отдельные actual ACL и полный исторический restore proof',()=>{
+ const proof={...workspaceVolumeSSHProof(),profile:'WORKSPACE_RESTORE_BACKUP_V1',gooseVersion:20261028000100,
+  restoreCatalog:true,backupReaderCatalog:true};
+ assert.equal(validImmutableMigrationPostcondition('workspace-backup',proof),true);
+ assert.equal(validImmutableMigrationPostcondition('workspace-restore',proof),false);
+ for(const key of Object.keys(proof)) {
+  const missing={...proof};delete missing[key];
+  assert.equal(validImmutableMigrationPostcondition('workspace-backup',missing),false,key);
+ }
+ assert.equal(validImmutableMigrationPostcondition('workspace-backup',{...proof,backupReaderCatalog:false}),false);
+ assert.equal(validImmutableMigrationPostcondition('workspace-backup',{...proof,restoreCatalog:false}),false);
+});
 
 // Реальный repo-owned immutable Job проверяется без копии его credential boundary в оснастке.
 function base() {
@@ -158,14 +350,55 @@ function sshComposeProof() {
   sshColumns:true,sshConstraints:true,sshFunctions:true,sshTriggers:true,sshRuntimeColumns:true};
 }
 
+// Combined fixture проверяет только orchestration; реальные metadata исполняются native PostgreSQL suite.
+function workspaceVolumeSSHProof() {
+ return {profile:'WORKSPACE_VOLUME_SSH_V1',readOnly:'on',gooseVersion:20261027000100,
+  workspaceCatalog:true,checkpointCatalog:true,volumeCatalog:true,workspacePurgeGuard:true,
+  purgeNodes:109,purgeEdges:303,purgeNodeFingerprint:'a'.repeat(32),purgeEdgeFingerprint:'b'.repeat(32),
+  sshComposeProfile:'SSH_COMPOSE_V1',sshColumns:true,sshConstraints:true,sshFunctions:true,sshTriggers:true,sshRuntimeColumns:true,
+  predecessorProjection:reviewQAEvidenceProof()};
+}
+
 // Настоящий CLI с отдельным kubectl subprocess доказывает порядок intent/CAS/create и запрет повторов.
+// Оснастка повторяет только безопасные schema metadata; бизнесовые credentials не используются.
+function githubAutonomousProof(backup=false,precondition=false) {
+ return {...workspaceVolumeSSHProof(),profile:'GITHUB_AUTONOMOUS_PDLC_'+(backup?'BACKUP_':'')+(precondition?'PREDECESSOR_V1':'V1'),
+  gooseVersion:precondition?20261028000100:20261029000100,restoreCatalog:true,
+  ...(backup?{backupReaderCatalog:true}:{}),...(precondition?{githubHistoricalAbsent:true,database:'control_plane',oldClaimSessions:0,
+  ...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(k=>[k,0]))}:{githubHistoricalCatalog:true})};
+}
+
+function workflowPDLCProof(backup=false,precondition=false) {
+ return {...githubPRProof(backup,false),profile:'GITHUB_PDLC_'+(backup?'BACKUP_':'')+(precondition?'PREDECESSOR_V1':'V1'),
+  gooseVersion:precondition?20261029000200:20261029000300,
+  ...(precondition?{workflowPDLCAbsent:true,database:'control_plane',oldClaimSessions:0,
+   ...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0]))}
+   :{workflowPDLCCatalog:true,workflowPDLCFunctions:14,workflowPDLCCatalogDigest})};
+}
+
+function workflowContentPageProof(backup=false,precondition=false) {
+ return {...workflowPDLCProof(backup,false),
+  profile:'WORKFLOW_CONTENT_PAGE_'+(backup?'BACKUP_':'')+(precondition?'PREDECESSOR_V1':'V1'),
+  gooseVersion:precondition?20261029000300:20261030000100,
+  ...(precondition?{workflowContentPagePredecessor:true,database:'control_plane',oldClaimSessions:0,
+   ...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0]))}
+   :{workflowContentPageCatalog:true,workflowPDLCCatalogDigest:workflowContentPageCatalogDigest})};
+}
+
+function githubPRProof(backup=false,precondition=false) {
+ return {...githubAutonomousProof(backup,false),
+  profile:'GITHUB_PR_COLLABORATION_'+(backup?'BACKUP_':'')+(precondition?'PREDECESSOR_V1':'V1'),
+  gooseVersion:precondition?20261029000100:20261029000200,
+  ...(precondition?{githubPRWritePredecessor:true,database:'control_plane',oldClaimSessions:0,
+   ...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0]))}:{githubPRCatalog:true,githubAutonomousWrites:true})};
+}
 function cli(t, profile = 'outbox-index', sourceCase = '') {
   const config=immutableMigrationProfile(profile),version=config.version,sqlFile=config.file,annotation=config.annotation;
   const dir=mkdtempSync('/tmp/cp-immutable-migration-');chmodSync(dir,0o700);t.after(()=>rmSync(dir,{recursive:true,force:true}));
   const repo=join(dir,'source'), migrations=join(repo,'services/internal/control-plane/cmd/cli/migrations');
   mkdirSync(migrations,{recursive:true,mode:0o755});chmodSync(repo,0o755);
   for(const name of config.requiredMigrations??[sqlFile]) if(sourceCase!=='missing-chain'||name!==config.requiredMigrations[0]) writeFileSync(join(migrations,name),'-- Синтетический source-only migration fixture\n',{mode:0o644});
-  if(sourceCase==='future') writeFileSync(join(migrations,profile==='ssh-compose'?'20261027000200_future_ssh.sql':'20261027000000_future_workflow.sql'),'-- Будущий неподтверждённый профиль\n',{mode:0o644});
+  if(sourceCase==='future') writeFileSync(join(migrations,['ssh-compose','workspace-volume-ssh'].includes(profile)?'20261027000200_future_ssh.sql':'20261027000000_future_workflow.sql'),'-- Будущий неподтверждённый профиль\n',{mode:0o644});
   const bundleDirectory=join(repo,'deploy/k8s/base/platform-state');mkdirSync(bundleDirectory,{recursive:true,mode:0o755});
   writeFileSync(join(bundleDirectory,'ca-bundles.yaml'),readFileSync(new URL('../../deploy/k8s/base/platform-state/ca-bundles.yaml',import.meta.url)),{mode:0o644});
   const release=join(repo,'tools/release');mkdirSync(release,{recursive:true,mode:0o755});
@@ -214,7 +447,7 @@ if(a.includes('patch')){
  save();if(a.includes('kube-system'))process.stdout.write(JSON.stringify({metadata:{uid:'cluster'}}));else process.stdout.write(s.namespaceUID);
 }else if(a.includes('bundles.trust.cert-manager.io')){save();process.stdout.write('bundle-uid|1|'+JSON.stringify(s.bundleSpec??{sources:[{secret:{name:'kodex-installation-ca',key:'tls.crt'}}],target:{namespaceSelector:{matchLabels:{'kubernetes.io/metadata.name':'kodex-system'}},configMap:{key:'ca.pem'}}}));
 }else if(a.includes('configmap')){save();process.stdout.write('ca-uid|'+s.dependencyVersion+'|'+(s.caLabel??'control-plane-postgresql-ca')+'|'+JSON.stringify([{apiVersion:'trust.cert-manager.io/v1alpha1',kind:'Bundle',name:'control-plane-postgresql-ca',controller:true,uid:s.caOwner??'bundle-uid'}]));
-}else if(a.includes('exec')){const sql=fs.readFileSync(0,'utf8');if(!sql.includes('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;')||!sql.includes('ROLLBACK;'))fail();if(sql.includes('sshComposeAbsent')){out({...${JSON.stringify(serverWorkflowProof())},sshComposeAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,claimedRuntimeLeases:0,openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeArchiveTasks:0,activeModelCatalogTasks:0,activeRenewalTasks:0,...s.precondition});}else if(sql.includes('sshComposeProfile')){out({...${JSON.stringify(sshComposeProof())},...s.postcondition});}else if(sql.includes("'reviewQAEvidenceAbsent'")){out({...${JSON.stringify(reviewQAEvidenceProof())},gooseVersion:20261026001300,reviewQAEvidenceFunctionCount:4,reviewQAEvidenceAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes("'reviewQAEvidenceProfile'")){out({...${JSON.stringify(reviewQAEvidenceProof())},...s.postcondition});}else if(sql.includes('workflowUpstreamReworkAbsent')){out({...${JSON.stringify(workflowExceptionContextProof())},workflowUpstreamReworkAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes('workflowUpstreamReworkProfile')){out({...${JSON.stringify(workflowUpstreamReworkProof())},...s.postcondition});}else if(sql.includes('workflowExceptionContextAbsent')){out({...${JSON.stringify(workflowExceptionSchemaProof(20261026001100))},workflowExceptionContextAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,claimedRuntimeLeases:0,openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeArchiveTasks:0,activeModelCatalogTasks:0,activeRenewalTasks:0,...s.precondition});}else if(sql.includes('workflowExceptionContextProfile')){out({...${JSON.stringify(workflowExceptionContextProof())},...s.postcondition});}else if(sql.includes("'legacyReworkProfile'")){out({...${JSON.stringify(legacyReworkProof())},...s.postcondition});}else if(sql.includes("'legacyReworkAbsent'")){out({...${JSON.stringify(serverWorkflowProof())},legacyPurgeSource:true,legacyReworkAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes('serverWorkflowProfile')){out({...${JSON.stringify(serverWorkflowProof())},...s.postcondition});}else if(sql.includes('runtimeColumnMutationDenied')&&!sql.includes('activeRuntimeRuns')){out({readOnly:'on',database:'control_plane',gooseVersion:20261026000200,tables:2,runtimeRoles:2,runtimeLogins:1,tableOwners:true,runtimeRolesUnprivileged:true,runtimeRead:true,runtimeMutationDenied:true,runtimeColumnMutationDenied:true,runtimeGrantOptionDenied:true,publicPrivilegesRevoked:true,ownerWrite:true,authorizationFunction:true,contextsEmpty:true,...s.postcondition});}else if(sql.includes('expiryColumn')){out({readOnly:'on',database:'control_plane',gooseVersion:20261026000100,tableOwner:'control_plane_owner',expiryColumn:true,stateConstraint:true,resolutionConstraint:true,expiryConstraint:true,dueIndex:true,immutableGuard:true,runtimeExecute:true,publicExecuteRevoked:true,...s.postcondition});}else if(sql.includes('noBodyColumns')){out({readOnly:'on',database:'control_plane',gooseVersion:20261025000200,tableOwner:'control_plane_owner',noBodyColumns:true,foreignKeys:13,deferredForeignKeys:13,guardEnabled:true,retentionConsumer:true,purgeGraphGuard:true,purgeNodes:105,purgeEdges:283,purgeNodeFingerprint:'f51a0de25bd942a250997775617eeaee',purgeEdgeFingerprint:'be6e23d9e894687a69a19e9b5777ab09',...s.postcondition});}else out({readOnly:'on',database:'control_plane',gooseVersion:${config.previousVersion},${config.emptyField}:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,claimedRuntimeLeases:0,openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeArchiveTasks:0,activeModelCatalogTasks:0,activeRenewalTasks:0,...s.precondition});
+}else if(a.includes('exec')){const sql=fs.readFileSync(0,'utf8');if(!sql.includes('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;')||!sql.includes('ROLLBACK;'))fail();if(sql.includes('WORKFLOW_CONTENT_PAGE_')){out({...${JSON.stringify(workflowContentPageProof(profile==='workflow-content-page-backup',true))},...(sql.includes('WORKFLOW_CONTENT_PAGE_BACKUP_PREDECESSOR_V1')||sql.includes('WORKFLOW_CONTENT_PAGE_PREDECESSOR_V1')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(workflowContentPageProof(profile==='workflow-content-page-backup',false))}),...s.postcondition});}else if(sql.includes('GITHUB_PDLC_')){out({...${JSON.stringify(workflowPDLCProof(profile==='workflow-pdlc-backup',true))},...(sql.includes('PREDECESSOR_V1')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(workflowPDLCProof(profile==='workflow-pdlc-backup',false))}),...s.postcondition});}else if(sql.includes('GITHUB_PR_COLLABORATION_')){out({...${JSON.stringify(githubPRProof(profile==='github-pr-backup',true))},...(sql.includes('PREDECESSOR_V1')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(githubPRProof(profile==='github-pr-backup',false))}),...(!sql.includes('PREDECESSOR_V1')?s.postcondition:{})});}else if(sql.includes('GITHUB_AUTONOMOUS_PDLC_')){out({...${JSON.stringify(githubAutonomousProof(profile==='github-autonomous-backup',true))},...(sql.includes('PREDECESSOR_V1')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(githubAutonomousProof(profile==='github-autonomous-backup',false))}),...(!sql.includes('PREDECESSOR_V1')?s.postcondition:{})});}else if(sql.includes('workspaceVolumeSSHAbsent')){out({...${JSON.stringify(serverWorkflowProof())},workspaceVolumeSSHAbsent:true,sshComposeAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes('WORKSPACE_VOLUME_SSH_V1')){out({...${JSON.stringify(workspaceVolumeSSHProof())},...s.postcondition});}else if(sql.includes('sshComposeAbsent')){out({...${JSON.stringify(serverWorkflowProof())},sshComposeAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,claimedRuntimeLeases:0,openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeArchiveTasks:0,activeModelCatalogTasks:0,activeRenewalTasks:0,...s.precondition});}else if(sql.includes('sshComposeProfile')){out({...${JSON.stringify(sshComposeProof())},...s.postcondition});}else if(sql.includes("'reviewQAEvidenceAbsent'")){out({...${JSON.stringify(reviewQAEvidenceProof())},gooseVersion:20261026001300,reviewQAEvidenceFunctionCount:4,reviewQAEvidenceAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes("'reviewQAEvidenceProfile'")){out({...${JSON.stringify(reviewQAEvidenceProof())},...s.postcondition});}else if(sql.includes('workflowUpstreamReworkAbsent')){out({...${JSON.stringify(workflowExceptionContextProof())},workflowUpstreamReworkAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes('workflowUpstreamReworkProfile')){out({...${JSON.stringify(workflowUpstreamReworkProof())},...s.postcondition});}else if(sql.includes('workflowExceptionContextAbsent')){out({...${JSON.stringify(workflowExceptionSchemaProof(20261026001100))},workflowExceptionContextAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,claimedRuntimeLeases:0,openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeArchiveTasks:0,activeModelCatalogTasks:0,activeRenewalTasks:0,...s.precondition});}else if(sql.includes('workflowExceptionContextProfile')){out({...${JSON.stringify(workflowExceptionContextProof())},...s.postcondition});}else if(sql.includes("'legacyReworkProfile'")){out({...${JSON.stringify(legacyReworkProof())},...s.postcondition});}else if(sql.includes("'legacyReworkAbsent'")){out({...${JSON.stringify(serverWorkflowProof())},legacyPurgeSource:true,legacyReworkAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes('serverWorkflowProfile')){out({...${JSON.stringify(serverWorkflowProof())},...s.postcondition});}else if(sql.includes('runtimeColumnMutationDenied')&&!sql.includes('activeRuntimeRuns')){out({readOnly:'on',database:'control_plane',gooseVersion:20261026000200,tables:2,runtimeRoles:2,runtimeLogins:1,tableOwners:true,runtimeRolesUnprivileged:true,runtimeRead:true,runtimeMutationDenied:true,runtimeColumnMutationDenied:true,runtimeGrantOptionDenied:true,publicPrivilegesRevoked:true,ownerWrite:true,authorizationFunction:true,contextsEmpty:true,...s.postcondition});}else if(sql.includes('expiryColumn')){out({readOnly:'on',database:'control_plane',gooseVersion:20261026000100,tableOwner:'control_plane_owner',expiryColumn:true,stateConstraint:true,resolutionConstraint:true,expiryConstraint:true,dueIndex:true,immutableGuard:true,runtimeExecute:true,publicExecuteRevoked:true,...s.postcondition});}else if(sql.includes('noBodyColumns')){out({readOnly:'on',database:'control_plane',gooseVersion:20261025000200,tableOwner:'control_plane_owner',noBodyColumns:true,foreignKeys:13,deferredForeignKeys:13,guardEnabled:true,retentionConsumer:true,purgeGraphGuard:true,purgeNodes:105,purgeEdges:283,purgeNodeFingerprint:'f51a0de25bd942a250997775617eeaee',purgeEdgeFingerprint:'be6e23d9e894687a69a19e9b5777ab09',...s.postcondition});}else out({readOnly:'on',database:'control_plane',gooseVersion:${config.previousVersion},${config.emptyField}:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,claimedRuntimeLeases:0,openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeArchiveTasks:0,activeModelCatalogTasks:0,activeRenewalTasks:0,...s.precondition});
 }else if(a.includes('kodex-postgresql-0')){save();process.stdout.write((s.pgUID??'pg-uid')+'|StatefulSet|kodex-postgresql|sts-uid|kodex-postgresql|Running|');
 }else if(a.some(x=>x.startsWith('jsonpath='))){save();process.stdout.write('dependency-'+a[a.indexOf('get')+1]+'|'+s.dependencyVersion+'|'+(s.applicationOwner??'kodex'));
 }else if(a.includes('deployment'))out(s.deployment);
@@ -879,4 +1112,46 @@ test('SSH CLI rejects drifted 010 or partial SSH schema before all effects',t=>{
   assert.equal(f.read().calls.filter(a=>a.includes('create')||a.includes('patch')).length,0);
  }
  for(const sourceCase of ['future','missing-chain']) { const f=cli(t,'ssh-compose',sourceCase);const result=f.run('plan');assert.notEqual(result.status,0);assert.match(result.stderr,/MIGRATION_NOT_SOURCE_HEAD/);assert.equal(f.read().calls.filter(a=>a.includes('create')||a.includes('patch')).length,0); }
+});
+
+test('combined017 SSH pins complete chain and keeps historical validators closed',()=>{
+ const config=immutableMigrationProfile('workspace-volume-ssh');
+ assert.equal(config.previousVersion,20261026001000);assert.equal(config.requiredMigrations.length,8);
+ assert.equal(config.requiredMigrations.at(-2),'20261026001700_workspace_volume_custody.sql');
+ assert.throws(()=>config.requiredMigrations.push('foreign.sql'));
+ const proof=workspaceVolumeSSHProof();assert.equal(validImmutableMigrationPostcondition('workspace-volume-ssh',proof),true);
+ for(const verify of [validSSHComposeMigrationPostcondition,validWorkspaceCheckpointMigrationPostcondition,
+  validSessionWorkspaceMigrationPostcondition,validWorkflowReviewQAEvidenceMigrationPostcondition]) assert.equal(verify(proof),false);
+ for(const key of Object.keys(proof)) {
+  const missing={...proof};delete missing[key];
+  assert.equal(validImmutableMigrationPostcondition('workspace-volume-ssh',missing),false,key);
+ }
+ for(const patch of [{purgeNodes:106},{purgeEdges:304},{gooseVersion:20261026001700},
+  {volumeCatalog:false},{sshFunctions:false},{readOnly:'off'},
+  {predecessorProjection:{...proof.predecessorProjection,reviewQAEvidenceFunctionSources:false}},
+  {predecessorProjection:{...proof.predecessorProjection,legacyFunctions:false}}])
+  assert.equal(validImmutableMigrationPostcondition('workspace-volume-ssh',{...proof,...patch}),false);
+});
+
+test('combined017 SSH CLI keeps one DDL create across failed readback and explicit resume',t=>{
+ const f=cli(t,'workspace-volume-ssh');pass(f,'plan','PLANNED');pass(f,'check');pass(f,'stop','STOPPED');
+ f.edit(s=>s.postcondition={volumeCatalog:false});const failed=f.run('apply');
+ assert.notEqual(failed.status,0);assert.match(failed.stderr,/POSTCONDITION_FAILED/);
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,2);
+ f.edit(s=>delete s.postcondition);pass(f,'inspect');pass(f,'resume','RESUMED');
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,2);assert.equal(f.read().deployment.spec.replicas,2);
+});
+
+test('combined017 SSH CLI rejects partial schema active work and incomplete source before effects',t=>{
+ for(const proof of [{workspaceVolumeSSHAbsent:false},{sshComposeAbsent:false},{functionACL:false},
+  {bundleGuard:false},{activeRuntimeRuns:1},{activeSessionTurns:1},{claimedRuntimeLeases:1}]) {
+  const f=cli(t,'workspace-volume-ssh');f.edit(s=>s.precondition=proof);const result=f.run('plan');
+  assert.notEqual(result.status,0);assert.match(result.stderr,/PRECONDITION_FAILED|PREDECESSOR_SCHEMA_INVALID/);
+  assert.equal(f.read().calls.filter(a=>a.includes('create')||a.includes('patch')).length,0);
+ }
+ for(const sourceCase of ['future','missing-chain']) {
+  const f=cli(t,'workspace-volume-ssh',sourceCase);const result=f.run('plan');
+  assert.notEqual(result.status,0);assert.match(result.stderr,sourceCase==='future'?/MIGRATION_NOT_SOURCE_HEAD/:/MIGRATION_SOURCE_CHAIN_INVALID/);
+  assert.equal(f.read().calls.filter(a=>a.includes('create')||a.includes('patch')).length,0);
+ }
 });

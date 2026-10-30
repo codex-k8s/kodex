@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 )
@@ -85,19 +87,67 @@ func TestWorkflowReviewQAEvidenceForwardUpgrade(t *testing.T) {
 // единственную неизменённую JSON row тому же exported verifier, который использует release operator.
 func readWorkflowReviewQAUpgradeProof(t *testing.T, ctx context.Context, observer *pgx.Conn, phase string) []byte {
 	t.Helper()
-	if phase != "precondition" && phase != "postcondition" {
+	return readControlPlaneMigrationProof(t, ctx, observer, "workflow-review-qa-evidence", phase)
+}
+
+// readControlPlaneMigrationProof checks shipped read-only SQL and its closed native verifier without inheriting credentials.
+// readControlPlaneMigrationProof проверяет поставляемый read-only SQL и закрытый verifier без наследования credentials.
+func readControlPlaneMigrationProof(t *testing.T, ctx context.Context, observer *pgx.Conn, profile, phase string) []byte {
+	t.Helper()
+	aclReadback := phase == "acl-readback" && profile == "workspace-backup"
+	if phase != "precondition" && phase != "postcondition" && !aclReadback {
 		t.Fatal("invalid review QA proof phase")
+	}
+	var verifier string
+	switch profile {
+	case "workflow-content-page":
+		verifier = "validWorkflowContentPageMigration"
+	case "workflow-content-page-backup":
+		verifier = "validWorkflowContentPageBackupMigration"
+	case "workflow-pdlc":
+		verifier = "validWorkflowPDLCMigration"
+	case "workflow-pdlc-backup":
+		verifier = "validWorkflowPDLCBackupMigration"
+	case "workflow-review-qa-evidence":
+		verifier = "validWorkflowReviewQAEvidenceMigration"
+	case "workspace-restore":
+		verifier = "validWorkspaceRestoreMigration"
+	case "workspace-backup":
+		verifier = "validWorkspaceBackupMigration"
+	case "github-pr-backup":
+		verifier = "validGitHubPRBackupMigration"
+	case "github-autonomous-backup":
+		verifier = "validGitHubAutonomousBackupMigration"
+	case "workspace-volume-ssh":
+		verifier = "validWorkspaceVolumeSSHMigration"
+	default:
+		t.Fatal("unknown control plane proof profile")
+	}
+	if aclReadback {
+		verifier = "validWorkspaceBackupACLReadback"
+	} else if phase == "precondition" {
+		verifier += "Precondition"
+	} else {
+		verifier += "Postcondition"
 	}
 	release, err := filepath.Abs("../../../../../tools/release")
 	if err != nil {
 		t.Fatal("resolve shipped review QA proof directory")
 	}
-	source, err := os.ReadFile(filepath.Join(release, "workflow-review-qa-evidence-migration-"+phase+".sql"))
+	filename := profile + "-migration-" + phase + ".sql"
+	if aclReadback {
+		filename = "workspace-backup-acl-readback.sql"
+	}
+	source, err := os.ReadFile(filepath.Join(release, filename))
 	if err != nil {
 		t.Fatal("read shipped review QA upgrade proof")
 	}
 	results, err := observer.PgConn().Exec(ctx, string(source)).ReadAll()
 	if err != nil {
+		var databaseError *pgconn.PgError
+		if errors.As(err, &databaseError) {
+			t.Fatalf("shipped migration proof failed: SQLSTATE=%s position=%d message=%s", databaseError.Code, databaseError.Position, databaseError.Message)
+		}
 		t.Fatal("execute shipped review QA upgrade proof")
 	}
 	var proof []byte
@@ -116,16 +166,22 @@ func readWorkflowReviewQAUpgradeProof(t *testing.T, ctx context.Context, observe
 	if !json.Valid(proof) {
 		t.Fatal("review QA upgrade proof JSON is invalid")
 	}
-	verifier := "validWorkflowReviewQAEvidenceMigrationPostcondition"
-	if phase == "precondition" {
-		verifier = "validWorkflowReviewQAEvidenceMigrationPrecondition"
-	}
 	check := exec.CommandContext(ctx, "node", "--input-type=module", "-e", `
 import {pathToFileURL} from 'node:url';
 const module = await import(pathToFileURL(process.argv[1]));
 let raw = ''; for await (const chunk of process.stdin) raw += chunk;
 const proof = JSON.parse(raw);
-if (!module[process.argv[2]](proof)) process.exit(1);
+if (!module[process.argv[2]](proof)) {
+  const failed=[];
+  function visit(value,path) {
+    for(const [key,field] of Object.entries(value)) {
+      const name=path?path+'.'+key:key;
+      if(field===false || /^(gooseVersion|purgeNodes|purgeEdges|profile)$/.test(key)) failed.push([name,field]);
+      else if(field && typeof field==='object' && !Array.isArray(field)) visit(field,name);
+    }
+  }
+  visit(proof,''); console.error(JSON.stringify(failed)); process.exit(1);
+}
 if (process.argv[2].endsWith('Precondition')) {
   const fields = ['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases',
     'openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','oldClaimSessions'];
@@ -134,7 +190,7 @@ if (process.argv[2].endsWith('Precondition')) {
 `, filepath.Join(release, "control-plane-immutable-migration.mjs"), verifier)
 	check.Env = []string{"PATH=" + os.Getenv("PATH"), "LANG=C.UTF-8"}
 	check.Stdin = bytes.NewReader(proof)
-	if err := check.Run(); err != nil {
+	if diagnostic, err := check.CombinedOutput(); err != nil {
 		var fields map[string]any
 		_ = json.Unmarshal(proof, &fields)
 		var failed []string
@@ -144,7 +200,7 @@ if (process.argv[2].endsWith('Precondition')) {
 			}
 		}
 		slices.Sort(failed)
-		t.Fatalf("shipped review QA %s verifier rejected actual database proof; false predicates: %v", phase, failed)
+		t.Fatalf("shipped %s %s verifier rejected actual database proof; false predicates: %v; metadata: %s", profile, phase, failed, diagnostic)
 	}
 	t.Logf("review QA %s proof passed: sha256=%x", phase, sha256.Sum256(proof))
 	return proof

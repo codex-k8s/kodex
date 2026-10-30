@@ -4,8 +4,8 @@ title: Проверка фактической ёмкости staging перед
 type: operations
 status: approved
 owner: sre
-version: 1.0.0
-updated: 2026-10-27
+version: 1.1.3
+updated: 2026-10-29
 ---
 
 # Проверка фактической ёмкости staging перед работой
@@ -18,7 +18,8 @@ k3d/containerd и общий Go cache находятся на другой фа�
 
 ## Узкий профиль и наблюдение
 
-`tools/dev/staging-capacity-preflight.py` обслуживает только context
+`tools/dev/staging-capacity-preflight.py` по умолчанию использует профиль
+`recovery` и обслуживает только context
 `k3d-kodex`, namespace `kodex-system` и два узла
 `k3d-kodex-server-0`/`k3d-kodex-agent-0`. Обязательны заранее проверенные
 UID namespace `kube-system` (cluster identity pin), namespace приложения и
@@ -88,6 +89,84 @@ python3 tools/dev/staging-capacity-preflight.py \
 координирует параллельные работы и повторяет чтение после изменения фактов.
 Все существующие owner gates и release readback сохраняются. CLI не подключён
 скрытым образом ко всем build entrypoints и сам ничего не запускает.
+
+## Отдельный ограниченный профиль QA
+
+Для небольшой итерации на уже устойчиво работающем staging предусмотрен явный
+`--profile bounded-qa`. Его результат имеет отдельную schema
+`kodex.dev/staging-capacity-preflight/bounded-qa/v1`, scope
+`BOUNDED_QA_CAPACITY_OBSERVATION` и `coversRecovery=false`.
+Проверка `recovery` и её строгая формула остаются исходными.
+
+Различие расчётов основано на официальном
+[контракте Kubernetes minimum eviction reclaim](https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/#minimum-eviction-reclaim):
+minimum reclaim применяется после обнаружения дефицита ресурса. Ограниченный
+профиль проверяет небольшой будущий рост здорового узла до hard threshold;
+он не объявляет достигнутой цель восстановления после DiskPressure.
+Context7 для этой задачи вернул `Invalid API key`; использована официальная документация.
+
+Допуск ограничен одновременно следующими условиями:
+
+- Те же context/namespace/четыре UID, свежие nodefs/imagefs и десять GET.
+- Ready=True и DiskPressure=False сохраняются минимум шесть часов на каждом
+  узле, также выдержан effective evictionPressureTransitionPeriod. Время
+  последнего перехода не меняется между двумя чтениями conditions. Heartbeat
+  может обновляться; missing/future/unknown transition закрыто отклоняется.
+- Budget строго положителен и не превышает 2 GiB; reserve не меньше 5 GiB.
+  Budget покрывает совокупный рост всей планируемой итерации и одновременно
+  выполняемой разрешённой работы. Нулевой budget не допускается.
+- Для **каждого** nodefs/imagefs:
+  `availableBytes - budgetBytes > ceil(evictionHard) + reserveBytes`.
+- Relevant soft thresholds и отдельный containerfs по-прежнему закрыто
+  отклоняются. Расчёт не подставляет defaults и не меняет kubelet.
+
+В отчёте сохраняются recoveryFloor и фактический запас относительно него,
+включая отрицательное значение, и отдельный `recoveryTargetMetAfterBudget`.
+PASS этого профиля не является recovery PASS, разрешением неограниченной сборки
+или резервированием диска. Отчёт не подходит потребителю schema обычного recovery.
+
+Перед запуском оператор фиксирует состав итерации и верхнюю границу её роста.
+Для сборок промежуточные source/build/cache/OCI outputs размещаются в
+ограниченной RAM-области; дисковый budget включает публикацию и node image pull.
+При модельной проверке budget включает рабочие деревья, checkpoint/restore,
+артефакты и журналы; одновременные исполнения дополнительно ограничиваются
+имеющимся доступным запасом. Если верхняя граница не доказана либо превышает
+2 GiB, этот профиль не подходит. Лимиты аккаунтов и модельные бюджеты не меняются.
+После итерации выполняется readback; перед следующей работой нужен новый preflight.
+
+Штатный Dockerfile control-plane выполняет компиляцию двух бинарей в одном
+`RUN --mount=type=tmpfs,target=/tmp,size=4294967296`. GOCACHE и GOTMPDIR
+направлены в этот временный mount; `-p=1`, GOMAXPROCS=2 и GOMEMLIMIT=768MiB
+ограничивают параллелизм и целевой Go heap во время компиляции. GOMEMLIMIT
+не является жёстким лимитом контейнера: перед сборкой отдельно проверяется RAM,
+а внешний watchdog следит за свободной памятью и ростом файловых систем.
+У завершённого build step сохраняются `/out` и необходимые предыдущие слои.
+Build ENV не переносится в финальный runtime stage. RAM-mount и файлы кэша
+принадлежат одной сборке и не разделяются с runtime-репликами.
+
+Тот же build-only профиль применяется к `runtime-controller`,
+`control-api-gateway`, `integration-gateway` и `session-archive`. Три бинаря
+архивного worker собираются в одном RUN с общим временным кэшем; состав
+финального образа, runtime USER/ENTRYPOINT и флаги версий сохраняются.
+Компиляция самого `agent-runner` использует тот же временный RAM-кэш;
+независимые стадии закреплённых инструментов сохраняют прежние cache keys.
+`tools/dev/build-local-runner.sh` передаёт в BuildKit приватный контекст только
+tracked inputs `services/jobs/agent-runner` и `libs/go` чистого exact HEAD.
+NUL-список Git с точными родительскими каталогами и tar без рекурсивного обхода
+сохраняют mode исходных файлов и каталогов,
+который входит в provenance и COPY cache key. Извлечение `git archive` под
+приватным umask меняло эти modes и инвалидировало тяжёлую установку инструментов;
+фактическая сборка была остановлена watchdog до получения образа.
+Рабочие env, `.git` и неотслеживаемые файлы в контекст не входят. Проверка
+бинарного provenance по-прежнему сверяет исходный чистый worktree и весь OCI
+до импорта на узлы; cache hit не пересобирается и проверяется тем же verifier.
+Проверка каждого штатного образа выполняется последовательно с новым
+preflight; успех сборки control-plane не является успехом остальных образов.
+
+К стандартному вызову с точными UID, reserve и budget добавляется только
+`--profile bounded-qa`. Возврат к стандартной проверке — убрать этот аргумент
+либо явно указать `--profile recovery`; инфраструктурного rollback нет,
+поскольку инструмент выполняет только чтение.
 
 При FAIL сначала сохраняются safe metadata и статус фактически обслуживаемых
 приложений. Для cold reproducible Go outputs применяется существующий

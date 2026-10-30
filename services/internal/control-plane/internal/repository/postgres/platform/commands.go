@@ -90,7 +90,7 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 	var storedDigest string
 	var storedPayload []byte
 	receiptQuery := queryCommandsExecuteSelectIdempotencyReceiptsOrganizationIdActorIdOperation
-	if input.Kind == command.ObserveWorkspace || input.Kind == command.ClaimWorkspaceVolumeTasks {
+	if input.Kind == command.ObserveWorkspace || command.WorkspaceVolumeCommandPermission(input.Kind) != "" {
 		receiptQuery = queryWorkspaceObservationReceipt
 	}
 	if payload, ok := input.Payload.(command.LeaseInput); input.Kind == command.ReportExecutionProgress && ok && payload.Financial != nil {
@@ -463,6 +463,15 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 			return commandOutcome{}, errs.ErrInvalid
 		}
 		return repository.claimWorkspaceVolumeTasksTx(ctx, tx, scope, payload)
+	case command.CompleteWorkspaceVolumeTask, command.FailWorkspaceVolumeTask:
+		payload, ok := input.Payload.(command.WorkspaceVolumeTaskInput)
+		if !ok {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		if input.Kind == command.CompleteWorkspaceVolumeTask {
+			return repository.completeWorkspaceVolumeTaskTx(ctx, tx, scope, payload)
+		}
+		return repository.failWorkspaceVolumeTaskTx(ctx, tx, scope, payload)
 	case command.MaterializeOccurrence, command.FailScheduleOccurrence:
 		return repository.changeOccurrence(ctx, tx, scope, input)
 	case command.CompleteConnectionTest:
@@ -1122,13 +1131,13 @@ func (repository *Repository) suspendTargetSchedules(ctx context.Context, tx pgx
 // changeInstructions handles ordinary agent draft create/validate/publish/forward rollback with
 // protected-system rejection, agent OCC and prompt-context checks. Publication applies the exact
 // impact plan/binding receipts; rollback creates a new published revision. It increments agent
-// version and returns an event outcome, preserving historical read-error handling rather than
-// silently fixing it.
+// version and resolves the complete agent projection in the same transaction, so its durable
+// command receipt and event identify the actual instruction state without a second snapshot.
 // changeInstructions обрабатывает обычные agent draft create/validate/publish/forward rollback с
 // protected-system rejection, agent OCC и prompt-context checks. Publication применяет точные
 // impact plan/binding receipts; rollback создаёт новую published revision. Увеличивает agent
-// version и возвращает event outcome, сохраняя прежнюю обработку read errors без неявного
-// исправления.
+// version и читает полную проекцию агента в той же транзакции: устойчивый receipt и событие
+// указывают фактическое состояние инструкций без отдельного снимка.
 func (repository *Repository) changeInstructions(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.AgentInput)
 	if !ok || payload.Ref == "" {
@@ -1247,7 +1256,10 @@ func (repository *Repository) changeInstructions(ctx context.Context, tx pgx.Tx,
 	if _, err := tx.Exec(ctx, queryCommandsChangeinstructionsUpdateAgentsVersionUpdatedAt, agentID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	agent := entity.Agent{Ref: payload.Ref, ProjectRef: projectRef, Version: agentVersion + 1}
+	agent, err := repository.getAgentFromTx(ctx, tx, scope, payload.Ref)
+	if err != nil {
+		return commandOutcome{}, err
+	}
 	event := "AGENT_CHANGED"
 	if input.Kind == command.PublishInstructions || input.Kind == command.RollbackInstructions {
 		event = "INSTRUCTIONS_PUBLISHED"
@@ -1533,6 +1545,17 @@ func workflowVersionInvalidField(version entity.WorkflowVersion) string {
 	}
 	if field := workflowVersionStructureInvalidField(version); field != "" {
 		return field
+	}
+	// Mutation rejects duplicate requirements; historical readers retain their prior shape rules.
+	// Изменение отвергает повтор требований; чтение истории сохраняет прежние правила формы.
+	for _, step := range version.Steps {
+		seen := make(map[string]struct{}, len(step.RequiredCapabilityKeys))
+		for _, capability := range step.RequiredCapabilityKeys {
+			if _, duplicate := seen[capability]; duplicate {
+				return workflowInvalidInvariants
+			}
+			seen[capability] = struct{}{}
+		}
 	}
 	if !workflowRequiresDelegation(version) {
 		for _, step := range version.Steps {

@@ -10,7 +10,9 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
+	"github.com/jackc/pgx/v5"
 	"testing"
+	"time"
 )
 
 // testIntegrationGrantSelectors checks bounded USE pagination, GRANT project/recipient/capability
@@ -175,10 +177,17 @@ func testIntegrationGrantRevocation(t *testing.T, ctx context.Context, repositor
 	if _, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "selector-unavailable-grant", ExpectedVersion: &stale}, Payload: command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: unavailable.Connection.Ref, AgentRef: agent.Ref, CapabilityKey: "synthetic.journal.read", Enabled: true}}); !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("unavailable connection before OCC: %v", err)
 	}
+	projectionStarted := time.Now()
 	projection, err := service.ListIntegrationGrantConnectionCandidates(ctx, owner, query.IntegrationCandidates{Purpose: "GRANT", Filter: query.Filter{Query: unavailable.Connection.Name}})
 	if err != nil || projection.Total != 1 || len(projection.Items) != 1 || projection.Items[0].Grantable || projection.Items[0].Reason != "CONNECTION_UNAVAILABLE" {
-		t.Fatalf("unavailable grant candidate: %+v %v", projection, err)
+		observed, readErr := service.GetIntegrationConnection(ctx, owner, unavailable.Connection.Ref)
+		t.Logf("unavailable candidate metadata: total=%d items=%d read_ok=%t state=%s lifecycle=%s enabled=%t same_ref=%t same_definition=%t same_version=%t signed_project=%t capabilities=%d elapsed_ms=%d unavailable=%t forbidden=%t",
+			projection.Total, len(projection.Items), readErr == nil, observed.State, observed.LifecycleState, observed.Enabled,
+			observed.Ref == unavailable.Connection.Ref, observed.DefinitionDigest == unavailable.Connection.DefinitionDigest,
+			observed.Version == unavailable.Connection.Version, ownerScope.authorityProjectID != "", len(observed.Capabilities), time.Since(projectionStarted).Milliseconds(), errors.Is(err, errs.ErrUnavailable), errors.Is(err, errs.ErrForbidden))
+		t.Fatalf("unavailable grant candidate: count=%d error_nil=%t", projection.Total, err == nil)
 	}
+	testIntegrationCandidatePlanModes(t, ctx, repository, owner, unavailable.Connection.Name)
 }
 
 // testIntegrationGrantWorkflow checks workflow recipient grants and immutable publication pins do
@@ -223,5 +232,48 @@ func testIntegrationGrantWorkflow(t *testing.T, ctx context.Context, service *pl
 	use.Context.StepKey = "unknown"
 	if _, err := service.ListIntegrationGrantConnectionCandidates(ctx, owner, use); !errors.Is(err, errs.ErrNotFound) {
 		t.Fatalf("unknown stage: %v", err)
+	}
+}
+
+// testIntegrationCandidatePlanModes checks the exact owner query under both PostgreSQL prepared-plan policies within its existing API budget.
+// It uses the full preceding component state, without changing grants, pagination, planner defaults or caller authority.
+// testIntegrationCandidatePlanModes проверяет exact owner query при обоих планах prepared statements в прежнем бюджете API.
+// Используется полное предшествующее component state без изменения grants, пагинации, настроек сервера либо authority caller.
+func testIntegrationCandidatePlanModes(t *testing.T, parent context.Context, repository *Repository, owner value.Principal, name string) {
+	t.Helper()
+	for _, mode := range []string{"force_custom_plan", "force_generic_plan"} {
+		func() {
+			ctx, cancel := context.WithTimeout(parent, 5*time.Second)
+			defer cancel()
+			resolved, err := repository.ResolvePrincipal(ctx, owner)
+			if err != nil {
+				t.Fatal(err)
+			}
+			current, tx, err := repository.beginScopedSnapshotRead(ctx, resolved)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				cleanup, stop := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+				defer stop()
+				_ = tx.Rollback(cleanup)
+			}()
+			if _, err := tx.Exec(ctx, "SELECT pg_catalog.set_config('plan_cache_mode',$1,true)", mode); err != nil {
+				t.Fatal(err)
+			}
+			started := time.Now()
+			var total int64
+			var raw []byte
+			err = tx.QueryRow(ctx, queryIntegrationGrantCandidates, pgx.StrictNamedArgs{
+				"organization_id": current.organizationID, "actor_id": current.actorID, "authority_project_id": current.authorityProjectID,
+				"connection_ref": "", "project_ref": "", "recipient_kind": "", "recipient_ref": "", "capability_key": "",
+				"purpose": "GRANT", "workflow_capabilities": []string(nil), "stage": "CONNECTION", "query": name,
+				"after_ref": "", "page_limit": int64(26),
+			}).Scan(&total, &raw)
+			t.Logf("candidate prepared plan: mode=%s elapsed_ms=%d total=%d failed=%t deadline=%t", mode, time.Since(started).Milliseconds(), total, err != nil, errors.Is(err, context.DeadlineExceeded))
+			if err != nil || total != 1 {
+				t.Fatalf("candidate prepared plan rejected: mode=%s total=%d failed=%t", mode, total, err != nil)
+			}
+		}()
 	}
 }

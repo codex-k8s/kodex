@@ -4,8 +4,8 @@ title: Герметичный и PostgreSQL-контуры Go
 type: guide
 status: approved
 owner: developer
-version: 1.0.0
-updated: 2026-08-23
+version: 1.0.4
+updated: 2026-10-28
 ---
 
 # Герметичный и PostgreSQL-контуры Go
@@ -54,9 +54,60 @@ Component suite использует только созданный этой к
 - integration definitions, connections, grants и отсутствие обязательной
   внешней integration connection.
 
+Legacy Human Gate fixture сначала действительно исполняет обязательный child
+и проверяет его result gate. APPROVE не заменяет отдельный coordinator callback.
+REQUEST_CHANGES создаёт новый physical child; прежний результат и решение не
+переписываются. Дополнительно baseline выполняет
+`TestOwnerGateServerCompletionComponent`: первый из двух SERVER result gates
+не завершает root, последний завершает. Историческая проверка source attachment
+и consequences исполняется для обеих сохранённых terminal/nonterminal оценок.
+
 Если Docker или `pg_isready` отсутствуют, команда завершается ошибкой и в
 отчёте классифицируется `NOT RUN`; это не считается `PASS`. Подключать к этой
 цели внешний DSN запрещено.
+
+## Ограниченная RAM-площадка
+
+Для локального Linux Docker поддерживается отдельный ограниченный профиль
+`KODEX_TEST_POSTGRES_STORAGE=ram` у той же PostgreSQL-оснастки. Он использует
+только уже установленный закреплённый образ18.3 (`--pull never`), read-only root,
+tmpfs512MiB UID/GID70/mode0700 для `/var/lib/postgresql`, два tmpfs16MiB для socket/tmp, hard1GiB без
+swap и1CPU. До bootstrap проверяются actual cgroup, tmpfs, owner/mode и отсутствие bind/volume
+mounts. Сверка не читает container env. Очистка использует положительный exact
+container ID и подтверждает его отсутствие; неизвестный Create не повторяется.
+Прежний disk-профиль остаётся default. Поддерживаются прежние bridge и host
+режимы; host слушает только loopback, firewall не меняется.
+
+Например, `KODEX_TEST_POSTGRES_STORAGE=ram KODEX_TEST_POSTGRES_NETWORK=host
+KODEX_CONTROL_PLANE_TEST_GO_PARALLELISM=1 make test-workspace-volume-predecessor-postgres`
+выполняет настоящий010 predecessor proof, переходы011…017 и SSH-проверки
+в одноразовой RAM-БД. Отдельный release profile `workspace-volume-ssh`
+проверяет полный actual graph109/303, точный каталог custody017 и сохранение
+полной inverse014-проекции с единственной exact DEPLOYMENT-веткой. Исторические
+verifier015/016/SSH не принимают новый профиль. Counterfactual-проверки изменяют
+columns, constraints, indexes, table/column/function ACL, function body/owner,
+RLS/policies, internal parent-side FK и origin-close triggers; отдельно проверяются
+изменения прежнего evidence guard и новой DEPLOYMENT-ветки. Все изменения
+выполняются с rollback в disposable БД. Каталоговые PostgreSQL API проверены
+через Context7 `/websites/postgresql` (`pg_get_triggerdef`, `pg_get_expr`,
+`REPEATABLE READ`). Go build cache и
+временные файлы настраиваются вызывающим процессом отдельно. Это component/
+schema qualification, не staging capacity admission, backup durability либо
+сквозная приёмка. Семантика Docker CLI проверена через Context7
+`/docker/docs`; путь data root сверён с [официальным описанием образа PostgreSQL](https://github.com/docker-library/docs/blob/master/postgres/README.md#pgdata)
+и конфигурацией закреплённого локального образа. Результат относится к фактически
+исполненному SHA; наличие профиля не считается PASS.
+
+`make test-workspace-volume-owner-postgres` в той же оснастке сначала выполняет
+полную native016→017→SSH schema qualification, затем создаёт отдельный template
+для writer component. Сценарий через штатные domain commands проводит pending
+CREATE/PREPARE, claim replay, renew/COMPLETE и ACK replay до допуска model lease
+и BIND. Завершённый physical grant не продлевается; до accepted preparation
+model claim пуст. Physical Job/Pod/PVC observations заданы явными fixtures, без
+настоящего Kubernetes, модели и object store. Старые release-verifiers не
+расширяются: этот контур не заменяет combined staging migration proof и полный
+web-first baseline. Бюджет цели240s, включая схему и component; кэш предварительно
+собирается отдельно при необходимости.
 
 ## Каталог checkpoint рабочего дерева
 

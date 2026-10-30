@@ -4,8 +4,8 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.15
-updated: 2026-10-28
+version: 1.0.24
+updated: 2026-10-29
 ---
 
 # Граница профиля
@@ -14,6 +14,15 @@ updated: 2026-10-28
 неопубликованного рабочего дерева при остановке сотрудника. История модели,
 устойчивый work и принятые CLEAN-артефакты имеют разные контракты. Сохранение
 work не принимает бизнес-результат и не выдаёт новых полномочий.
+
+RESTORE передаёт точные manifest key/version и подтверждение подготовки
+назначенного тома `VolumeReady` через всю цепочку owner → protobuf → archive
+consumer → строгий task codec. Наличие поля только в owner-модели недостаточно:
+consumer сохраняет полный preparation scope/workspace/PVC/generation и
+device/inode, отклоняет неизвестные вложенные wire-поля и повторно проверяет
+общий контракт. Wire-проверка отдельно передаёт фактические bytes owner
+независимому модулю consumer; её успех не доказывает физическое восстановление,
+owner ACK или готовность включить V2 на staging.
 
 Выбранный профиль `SESSION_WORKSPACE_V2` повторно использует существующий
 session PVC20GiB. Только exact writable generation монтируется как
@@ -28,6 +37,24 @@ group29000/mode2770 после BIND через общий nofollow/exclusive dir
 
 Этот документ фиксирует согласованный контракт. Наличие типов, миграции или
 локального теста само по себе не подтверждает доставку либо полную готовность.
+
+Выключение профиля не разрешает потерять уже существующий V2-каталог.
+Прежний путь допускается только после блокировки доверенной session и
+положительного доказательства отсутствия любой V2 row для неё. Если V2 row
+есть, но exact organization/project/agent lookup её не возвращает, результат —
+`Conflict`, без пустого legacy mount. Соответствующая native-проверка временно
+подменяет agent только в откатываемой транзакции отдельной loopback-БД;
+metadata guard снова включён до runtime admission. Повышенные права этой
+оснастки не предоставляются production worker. Семантика PostgreSQL
+`ALTER TABLE ... ENABLE/DISABLE TRIGGER` проверена через Context7
+`/websites/postgresql`.
+
+| Профиль и данные | Допуск |
+| --- | --- |
+| OFF, V2 row отсутствует | Прежний legacy путь после exact session lock |
+| OFF, V2 row совпадает | Каталог сохранён, нового model claim нет |
+| OFF, V2 row существует, scope не совпадает | `Conflict`, без fallback либо записи нового дерева |
+| ON, данных ещё нет | Прежний CREATE/PREPARE до model claim |
 
 ## Authority и жизненный цикл
 
@@ -186,7 +213,17 @@ native-путей других задач. Проверки operator, native, ba
 Поставка приложения требует предварительно подтверждённой schema016 даже
 при выключенном opt-in: claim query читает owner storage eligibility до LIMIT.
 Default legacy означает отсутствие новых bindings, а не разрешение запуска
-нового CP на старой схеме. Первый V2 init использует отдельный protected mode
+нового CP на старой схеме. При выключенном профиле owner сначала блокирует
+exact trusted session и проверяет отсутствие **любого** V2 work этой сессии,
+без фильтра по candidate agent. Только положительное отсутствие сохраняет
+прежний runtime path, включая workflow coordinator с `WORKFLOW`-сессией.
+Наличие work, другой agent, ошибка чтения или неизвестное состояние не
+разрешают fallback. Эта read-only развилка не создаёт событий; авторитетный
+read path — owner workspace row под той же session lock. Native-проверка
+выключения профиля во время CREATE/PREPARE не допускает model lease и сохраняет
+ту же physical task/attempt. Полная поддержка V2 для coordinator требует
+отдельной проверки pinned workflow version и agent; этот отказ не обходится
+при включённом профиле. Первый V2 init использует отдельный protected mode
 `runtime-bind-workspace`; отсутствующий input не включает legacy prepare.
 Только этот init получает private PVC root, остальные containers — exact
 work subPath и отдельные read-only inode/ACK records. Другой live consumer
@@ -655,6 +692,28 @@ root geometry; work quotas не повышаются.
 | FailWorkspaceVolumeTask | Только current granted task и закрытый safe error | Grant закрыт; uncertain Create/init остаётся BLOCKED с PVC/input/Job custody. Не выдаёт повторного WRITE |
 | Runtime claim/BIND | Только accepted exact VolumeReady tuple и свежая owner-selected RR | V2 consumer делает GET pinned PVC UID, не Create/adoption; trusted initializer читает sealed volume record до BIND/private writes |
 
+Physical preparation не занимает model/DAG concurrency slot. Claim и renewal
+проверяют текущие origin/ACL и часы точного run со всеми предками; expiry lease
+ограничивается ближайшим execution deadline. Истёкший origin не получает новых
+storage grants; закрываются его task/grants. Полный graph по deadline закрывает
+существующий owner reconcile, без поддельного model lease. Обычный renewal не
+создаёт отдельного business event: авторитетны durable attempt expiry и ответ
+защищённого owner renewal по exact task/lease/fence/generation.
+
+Positive PREPARE сохраняет Job UID вместе с Pod UID, PVC UID и canonical ready
+record. Одна форма record не доказывает process join: physical consumer отдельно
+проверяет exact Job/Pod provenance, фактическую geometry и terminal всех
+контейнеров. [Kubernetes owner references](https://kubernetes.io/docs/concepts/overview/working-with-objects/owners-dependents/)
+связывают объект с UID владельца; labels не заменяют эту связь.
+
+Поздний PREPARE ACK сохраняет metadata, но не переводит отменённый origin в
+READY. Новый eligible origin может получить read-only recovery прежнего sealed
+preparation. Для exact origin предусмотрены не более одного RW и одного RO
+logical intent; terminal отказ не запускает бесконечную генерацию новых tasks.
+Поздний positive CREATE закрывает оставшиеся read-only attempts того же Create
+и сохраняет первый UID. Повтор этого факта не снимает позднее возникший physical
+block уже известной PVC.
+
 | Переход | Полный owner/physical lifecycle |
 | --- | --- |
 | Create intent | Полная кандидатная authority проверяется до enqueue; EMPTY work и origin root/node назначает сервер. Intent/frozen body сохраняются до любых внешних действий |
@@ -671,6 +730,148 @@ root geometry; work quotas не повышаются.
 | Отказ/DEAD_LETTER | Данные и physical evidence сохранены, execution claim не стартует. Ошибка подготовки не превращается в готовый бизнес-результат |
 | Restore | Accepted volume tuple и source checkpoint замораживаются в новом RESTORE intent; model не получает частичное дерево |
 | Purge | Отдельный owner protocol и positive physical cleanup; ledger/task/custody удаляются только через проверенный project purge graph после закрытия grants |
+
+### Физический исполнитель: текущая реализация
+
+В контроллере `session-archive` добавлен отдельный `CreateWorkspaceVolume`:
+только первая owner-selected attempt с заново подтверждённым grant выполняет
+один Create. Qualified profile явно требует `local-path` и прежние20ГиБ;
+существующий кластерный default не выбирает класс неявно. Положительный ответ
+сохраняется по UID и проверенным scope/geometry metadata. `AlreadyExists`,
+неизвестный ответ и reconciliation не запускают GET/adoption, новый Create
+либо удаление. Значения lease/fence в объект не передаются.
+
+Рендер PREPARE требует positive immutable ConfigMap UID и полный effective
+attempt digest. Единственный helper UID10001/GID29000 получает только input,
+точный PVC и временный каталог4МиБ. API token, provider auth, object-storage
+credentials и model revision не монтируются. Initial attempt запрашивает
+FSGroup29000 для EMPTY root; retries и отдельный read-only recovery не получают
+FSGroup и имеют read-only PVC source/mount. Job не получает TTL;
+backoff0, parallelism/completions1 и replacement policy `Failed` не являются
+доказательством однократного исполнения сами по себе.
+
+Отдельный observer проверяет original positive input/Job UID, свежий exact PVC
+UID в Bound, Job/Pod geometry, controller owner reference, все container statuses
+и bounded canonical ready record. Один `Succeeded`, label или termination message
+не даёт READY. Повторное объявление CLEAN-артефакта здесь отсутствует: record
+является внутренним физическим наблюдением, а не проверенным файлом пользователя.
+
+Owner queue и physical executor теперь соединены в исходниках отдельным worker
+в `session-archive`. Он включается только через тот же explicit
+`SESSION_WORKSPACE_STORAGE_PROFILE`, что и owner; по умолчанию поле пустое.
+Геометрия profile требует `local-path` и20ГиБ. Отдельный cancel/join worker не
+задерживает capture истории. Общая readiness соединяет успешность обоих путей;
+здоровый legacy worker не скрывает недоступность volume RPC/RBAC. Один controller
+Pod исполняет не более одной physical task за раз; лимит модельных исполнений
+и account budgets не изменяются.
+
+Immutable ConfigMap содержит canonical `volume.json` и complete effective
+`work.json`, без lease/fence или model revision. Current grant отдельно
+продлевается перед каждым Create и в ожидании. Unknown claim response повторяется
+с тем же key. Terminal ACK имеет stable key на task/generation/input digest;
+неизвестный ответ допускает максимум два одинаковых RPC, без повторения физического
+действия. Подтверждённые Create responses учитываются независимо от исхода ACK.
+
+Для первого init требуется отсутствие competing consumers. Read-only attempt
+проверяет bounded snapshots прежних attempts, exact volume lineage, неизменяемый
+input, helper geometry и terminal Job/all-container join. Отсутствующий первый
+Job не подтверждает завершение и не даёт новый init credit. Такой путь ждёт
+в пределах существующего бюджета и закрыто завершается без нового Create/init.
+
+После positive owner ACK удаляются только проверенные завершённые Pods по UID/RV.
+Original immutable inputs и completed Jobs сохраняются как tombstones против
+позднего первого Create/FSGroup. Их нельзя удалять обычной сборкой мусора до
+доказанного physical retirement всего PVC. Неподтверждённый Delete читается
+обратно без слепого повтора. При отказе/cancel controller сначала пытается
+сохранить уже завершённый late fact, иначе выполняет UID/RV CAS suspend своего
+положительно созданного Job и ждёт наблюдаемой остановки. Неизвестный Job Create
+не усыновляется для cleanup. Ни одна из этих операций не удаляет PVC/user bytes.
+
+Readiness делает self-review конкретных namespace/resource/verb полномочий
+контроллера и проверяет тот же Job-list API. В Role только controller добавлены
+`get/delete pods` и `patch jobs`; worker Role остаётся без полномочий, helper не
+получает API token. Текущая live Role этих трёх прав ещё не имеет. Подготовленный
+UID/RV CAS patch прошёл server dry-run с подтверждением неизменности Role;
+применения не было. SSA с новым manager обнаружил существующее владение полями:
+его нельзя заменять слепым force. Source rollout должен обновлять адресно Role
+controller, сохраняя фактические отдельные worker Role/Binding.
+
+Grace controller Pod65секунд покрывает bounded physical stop, terminal owner ACK
+и независимые cleanup. Это срок остановки компонента, не расширение account/model
+budgets. Файлы, history и CLEAN-артефакты остаются разными контурами.
+
+Это по-прежнему незавершённый unit: нужны owner component/native qualification,
+полная доставка accepted process provenance в runtime BIND/RESTORE, paired custody/purge
+и общий migration/release profile. Новые Go-тесты, включая fake-client lifecycle
+и неизменность ACK при retry, ещё NOT RUN: capacity preflight закрыл тяжёлые
+проверки из-за свободного места. V2 остаётся выключенным; локальная форма
+конструктора, server dry-run Role и исходники не являются full PDLC acceptance.
+
+### Доставка sealed observation в запуск сотрудника
+
+Устранён статический разрыв: owner записывал `volume_ready` в immutable snapshot,
+но оба runtime caster молча отбрасывали его. Теперь owner→Proto→runtime-controller→
+RunnerInput сохраняет schema, весь preparation scope/task/PVC UID/incarnation и
+device/inode. Unknown nested Proto fields не отбрасываются: assigned storage
+закрыто отклоняется до materialization. Указанная identity не выдаёт новых grants.
+
+| Переход | Actor и проверяемые данные | Исход |
+| --- | --- | --- |
+| Принятое PREPARE → RuntimeRevision | Owner использует свою accepted custody и замороженный snapshot | Exact sealed tuple входит в существующий digest; новый physical effect не выполняется |
+| RuntimeRevision → RunnerInput | Сервисный runtime-controller сохраняет все поля и проверяет scope | Invalid/unknown metadata отклоняется; fallback отсутствует |
+| V2 materialization → PVC read | Controller делает только GET; проверяет accepted UID, Bound/PV, версию, class20GiB, metadata workspace/incarnation | Missing/recycled/changed PVC отклоняется без Create, promotion или repair |
+| Materialization → первый initializer | Runtime сохраняет FSGroup29000/OnRootMismatch для штатной Secret/ConfigMap/emptyDir delivery; actual PVC предварительно подготовлен отдельным EMPTY-only helper | Admission и observer не меняются; sealed root и приватные modes требуют отдельной native qualification |
+| Первый initializer → BIND | До callback и private write descriptor/nofollow read проверяет sealed root device/inode и immutable record | Отсутствующий, writable, linked либо иной record закрыто отклоняется без chmod/chown/create |
+| BIND → private generation | Существующий authenticated owner CAS; ACK содержит тот же accepted PVC UID | Перед записью root повторно читается; другой UID не принимается |
+
+Это передача sealed physical identity, а не полная доставка accepted Job/Pod
+provenance. Для оставшихся гонок consumer release, RESTORE и terminal custody
+нужна отдельная owner-pinned process observation; inode file её не заменяет.
+Прямые Go-тесты caster/RunnerInput, read-only PVC admission, sealed filesystem
+и ACK добавлены, но ещё **NOT RUN**. Выполнены только
+форматирование и `git diff --check`; staging policy/Role/images не менялись.
+
+Для FSGroup отдельный запрос Context7 `/kubernetes/client-go` не нашёл
+релевантных материалов. Проверена [официальная документация Kubernetes о
+volume ownership](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#configure-volume-permission-and-ownership-change-policy-for-pods);
+это проверка API-семантики, не доказательство поведения нашего storage driver.
+
+Для API Create и metadata UID использована актуальная документация Context7
+`/kubernetes/client-go`; семантика `PodReplacementPolicy=Failed` сверена также
+с исходниками закреплённого `k8s.io/api v0.36.3`.
+
+### Транспорт очереди физического тома
+
+Четыре RPC `WorkspaceVolumeWorkService` зарегистрированы в control-plane;
+клиент `session-archive` получает их через отдельный generated interface.
+Реестр authority revision100 и локальная service-identity policy закрепляют
+точные методы и `session-archive` workload. Project scope отсутствует у worker
+batch; owner повторно разрешает конкретную организацию, origin, actor и grants.
+Agent runner, модель и обычный пользователь не получают эти права.
+
+| Инициатор → endpoint → owner | Pins и результат | Событие и потребитель |
+| --- | --- | --- |
+| `session-archive` → `ClaimWorkspaceVolumeTasks` → specialized `CLAIM_WORKSPACE_VOLUME_TASKS` | Явный idempotency key, без OCC; workload instance/limit входят в canonical Proto digest. Owner выбирает immutable task/input/attempt/lease; JSON receipt повторяет исходные pins и срок, не обновляя их | Owner audit/run-changed при изменении; пустой результат не означает готовность хранилища. Physical consumer отдельно проверяет актуальность grant до эффекта |
+| `session-archive` → `RenewWorkspaceVolumeTask` → exact lease repository method | Task/lease/fence/generation входят в digest; нет generic resource/version/attempt headers. Свежие origin/ACL/root deadline проверяются owner; изменяется только срок прежнего grant | Новое бизнес-событие отсутствует; авторитетный read path — exact RPC response и durable attempt ledger |
+| `session-archive` → `CompleteWorkspaceVolumeTask` → specialized `COMPLETE_WORKSPACE_VOLUME_TASK` | Явный idempotency key и exact ledger tuple; положительные PVC/Job/Pod UID и sealed metadata. Неизвестные поля вложенного Proto закрыто отклоняются. Persisted kind выбирает допустимую форму | Fact/receipt/audit/run-changed атомарны; только свежий PREPARE допускает READY. Runtime admission читает owner record, исторический ACK не возрождает execution |
+| `session-archive` → `FailWorkspaceVolumeTask` → specialized `FAIL_WORKSPACE_VOLUME_TASK` | Явный idempotency key, exact current unreported grant и закрытый safe error code. Caller не назначает terminal state или retry credit | Task/grants закрываются owner; custody сохраняется. Run-changed уведомляет зависимые consumers, но не разрешает физическое удаление |
+
+Срок lease в сохранённом JSON receipt представлен строкой RFC3339Nano;
+transport обрабатывает её отдельно от свежего `time.Time`. Пропущенный срок,
+дробное поколение и несовпадение поколения с attempt отклоняются. Повтор
+сохранённого ответа не создаёт fresh grant; physical executor обязан повторно
+проверить его актуальность. Модельные слоты этот путь не занимает.
+
+Для проверки unknown wire fields использована актуальная документация
+[Go Protocol Buffers](https://github.com/protocolbuffers/protobuf-go/blob/master/reflect/protoreflect/value.go)
+через Context7 `/protocolbuffers/protobuf-go`: `GetUnknown` возвращает сохранённые
+wire bytes; обычное protobuf decoding не отклоняет их автоматически.
+
+Для self-review использована [официальная API-документация Kubernetes](https://kubernetes.io/docs/reference/kubernetes-api/definitions/self-subject-access-review-v1-authorization/).
+Scope namespace задаётся явно; self-review проверяет текущую identity и не выдаёт ей
+новых прав. Context7 для этой операции вернул только общую документацию REST client,
+поэтому точные API-типы также сверены с закреплённым `k8s.io/api v0.36.3`.
+
 
 Матрица описывает полный требуемый owner path. До завершения schema017,
 producer/consumer/RPC registry, cancel/late-ACK, runtime admission и native
@@ -691,10 +892,12 @@ rollback. Завершение включает подтверждение ис�
 после асинхронного Docker AutoRemove. Данные staging не используются.
 
 Это проверка схемы, а не полный owner component или готовность V2. В текущем
-срезе реализованы отдельные таблицы custody/task/attempt и owner enqueue/claim;
-создание модели ждёт accepted volume record. RPC renewal/completion/failure,
-физический consumer, свежая runtime delivery, restore и protocol удаления
-должны быть подключены совместно до включения. До появления положительного
+срезе реализованы отдельные таблицы custody/task/attempt, owner enqueue/claim
+и внутренние обработчики renewal/completion/failure; создание модели ждёт
+accepted volume record. RPC registry/transport и physical queue consumer соединены
+в исходниках; свежая runtime delivery, restore и protocol удаления должны быть
+завершены и квалифицированы совместно
+до включения. До появления положительного
 physical cleanup proof схема закрыто отклоняет `physical_deleted=true`, включая
 обычный CRUD. Наличие `PURGED` в закрытом перечне состояний не разрешает этот
 переход. Применённые015/016 не переписываются.
@@ -746,3 +949,30 @@ owner commands в disposable БД: опубликованный ABI4 и V2 claim
 
 Context7: PostgreSQL18 pg_constraint, pg_trigger и ALTER TABLE;
 convalidated/conenforced не заменяют проверку включённых FK triggers.
+
+
+## Восстановление owner-selected поколения в той же сессии
+
+Forward migration `20261028000100` добавляет отдельный `workspace-restore`
+профиль. Historical015/016/017 и SSH verifier не расширяются. Actual guard,
+единственный RESTORE intent поколения и расширение blocked CHECK проверяются
+до полной обратной017+SSH проекции. Профиль V2 на staging остаётся выключенным
+до проверки полного source cohort; исходники не доказывают live acceptance.
+Прежние утверждения этого документа о dormant RESTORE относятся к этапам,
+предшествовавшим этой forward migration.
+
+| Инициатор и переход | Полномочия, состояние и побочные действия | Наблюдение и отказ |
+| --- | --- | --- |
+| Новый `ClaimExecution`, CHECKPOINT_READY → RESTORE_READY | Session lock; accepted AVAILABLE format2 receipt того же workspace/session/agent; старый writer положительно joined/released. Новое поколение, неизменяемые manifest pins, policy и accepted VolumeReady. Model lease не выдаётся | Один intent, audit и run-changed в owner transaction; повтор claim не создаёт вторую запись |
+| Архивный worker, RESTORE_READY → RESTORING | Specialized claim; точные task/workspace/generation/input digest и новый fenced grant. PVC существует и совпадает с положительным UID; CREATE/adoption/FSGroup запрещены | Перед записью initializer только читает реальный прежний seal. API error, неизвестный UID/owner и конкурирующий consumer закрыто отклоняются |
+| Повтор физической попытки | Fresh attempt/input digest не выдают writable credit: только read-only reconciliation опубликованного дерева. Предыдущий Job/Pod имеют точные owner pins и все expected containers положительно завершены | Отсутствие predecessor не считается join proof. После удаления более раннего доказательства поздняя попытка остаётся закрытой; автоматическое восстановление такой неопределённости не заявлено |
+| CompleteSessionRestore, RESTORING → RESTORED | Source manifest version/ETag/digest/размер и tree SHA/байты совпадают с owner-selected receipt; exact lease/version CAS. Source custody сохраняется, grant закрывается атомарно | Повтор ACK использует прежний idempotency key; worker не запускается повторно. Потеря ответа не равна успеху |
+| Следующий model claim | Заново проходит текущие eligibility и policy. Fresh RuntimeRevision содержит новое поколение и source commitment. Старый writer не получает BIND | Частичное дерево не допускается модели; storage completion не возрождает отменённый run |
+| Fail/lease expiry последней попытки | RESTORE task → DEAD_LETTER, workspace → BLOCKED с RESTORE_UNCONFIRMED в одной транзакции; archive/том сохраняются | Нет бесконечного RESTORING и отсутствует право на автоматическую очистку |
+| Cancel business run во время data custody | Storage intent сохраняет право закончить только сохранение/копирование данных; новый model claim требует отдельной актуальной eligibility | Не выдаёт execution grant, human approve, бизнес-результат либо право удалить источник |
+
+Этот срез не завершает передачу файлов между разными session через retry/DAG
+и поддержку workspace координатора WORKFLOW. Эти пути требуют серверного
+происхождения и отдельной полной проверки; fallback к пустому каталогу не разрешён.
+Context7 для PostgreSQL недоступен: возвращён отказ API key; проверена официальная
+[документация PostgreSQL18 о modifying CTE](https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-MODIFYING).

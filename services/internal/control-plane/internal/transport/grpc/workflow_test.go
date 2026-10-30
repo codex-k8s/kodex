@@ -11,6 +11,47 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// TestWorkflowPDLCProtoPins preserves branch/PR requirements and all three accepted file receipt
+// locators through actual Proto encoding and owner casters, without exposing private provenance.
+// TestWorkflowPDLCProtoPins сохраняет branch/PR requirements и три accepted file receipt locators
+// через actual Proto и owner casters, не раскрывая private provenance.
+func TestWorkflowPDLCProtoPins(t *testing.T) {
+	input := &controlplanev1.WorkflowVersion{ExecutionMode: "SERVER_DAG_V1", ResultEvidenceProfile: "GITHUB_PDLC_V1", Steps: []*controlplanev1.WorkflowStep{{Ref: "author", Position: 1,
+		ResultRequirements: []*controlplanev1.WorkflowResultRequirement{{Key: "document", Kind: "REPOSITORY_FILE", Repository: "owner/repo", TargetRef: "3", Branch: "feature/journal", FileName: "docs/requirements.md"}}}}}
+	raw, err := proto.Marshal(input)
+	if err != nil {
+		t.Fatal("marshal PDLC requirements")
+	}
+	var received controlplanev1.WorkflowVersion
+	if err := proto.Unmarshal(raw, &received); err != nil {
+		t.Fatal("unmarshal PDLC requirements")
+	}
+	output := castWorkflowVersion(domainWorkflowVersion(&received), "DRAFT", "")
+	if output.ResultEvidenceProfile != input.ResultEvidenceProfile || !proto.Equal(output.Steps[0].ResultRequirements[0], input.Steps[0].ResultRequirements[0]) || received.Steps[0].ResultRequirements[0].ProtoReflect().Descriptor().Fields().ByName("branch").Number() != 11 {
+		t.Fatal("owner Proto roundtrip lost exact branch/PR requirement")
+	}
+	proof := entity.WorkflowAcceptedResult{Key: "document", Kind: "REPOSITORY_FILE", Repository: "owner/repo", Number: 3, HeadSHA: strings.Repeat("a", 40), FileName: "docs/requirements.md", Branch: "feature/journal",
+		Digest: strings.Repeat("b", 64), ReceiptRef: "erc_file_write000", HeadReceiptRef: "erc_file_head0000", ContentReceiptRef: "erc_file_content0"}
+	node := castNode(entity.RunNode{WorkflowResults: []entity.WorkflowAttemptResult{{Attempt: 1, RunRef: "run_12345678", RuntimeRevisionID: "PRIVATE_REVISION_CANARY", Accepted: true,
+		Provenance: &entity.WorkflowCompletionProvenance{NodeID: "PRIVATE_NODE_CANARY"}, Results: []entity.WorkflowAcceptedResult{proof}}}})
+	raw, err = proto.Marshal(node)
+	if err != nil {
+		t.Fatal("marshal accepted file evidence")
+	}
+	var got controlplanev1.RunNode
+	if proto.Unmarshal(raw, &got) != nil {
+		t.Fatal("unmarshal accepted file evidence")
+	}
+	accepted := got.WorkflowResults[0].Results[0]
+	if accepted.FileName != proof.FileName || accepted.Branch != proof.Branch || accepted.ReceiptRef != proof.ReceiptRef || accepted.HeadReceiptRef != proof.HeadReceiptRef || accepted.ContentReceiptRef != proof.ContentReceiptRef {
+		t.Fatal("owner Proto caster lost native file proof pins")
+	}
+	public, err := protojson.Marshal(&got)
+	if err != nil || strings.Contains(string(public), "PRIVATE_") || strings.Contains(string(public), "provenance") {
+		t.Fatal("accepted file projection exposed private provenance")
+	}
+}
+
 // TestServerWorkflowProtoRoundtrip preserves a nonsequential DAG and typed results through the
 // actual protobuf wire and both casters, retaining the pre-existing field13 owner-gate deadline.
 // TestServerWorkflowProtoRoundtrip сохраняет непоследовательный DAG и типизированные результаты

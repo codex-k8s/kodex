@@ -35,9 +35,18 @@ func (controller *Controller) validWorkspaceWorkerPod(task model.Task, job *batc
 	if configured == nil {
 		return false
 	}
-	expected := configured.Spec.Template.Spec
-	actual := pod.Spec
-	if actual.SecurityContext == nil || actual.SecurityContext.FSGroup != nil ||
+	return validWorkspaceHelperPod(configured.Spec.Template.Spec, pod.Spec)
+}
+
+// validWorkspaceHelperPod compares the credential-free helper geometry while allowing the
+// existing API defaults outside authority fields. Expected FSGroup remains profile-selected:
+// archive workers have none; only the first empty-volume preparation may request one.
+// validWorkspaceHelperPod сравнивает credential-free helper geometry, сохраняя прежние допустимые
+// API defaults вне authority fields. Expected FSGroup выбирается profile: archive worker не имеет
+// FSGroup; только первая подготовка пустого тома может его запросить.
+func validWorkspaceHelperPod(expected, actual corev1.PodSpec) bool {
+	if actual.SecurityContext == nil || expected.SecurityContext == nil ||
+		!reflect.DeepEqual(actual.SecurityContext.FSGroup, expected.SecurityContext.FSGroup) ||
 		!reflect.DeepEqual(actual.SecurityContext.SupplementalGroups, expected.SecurityContext.SupplementalGroups) ||
 		!reflect.DeepEqual(actual.SecurityContext.SeccompProfile, expected.SecurityContext.SeccompProfile) ||
 		actual.HostNetwork || actual.HostPID || actual.HostIPC || actual.ShareProcessNamespace != nil && *actual.ShareProcessNamespace ||
@@ -131,7 +140,7 @@ func (attempt *RetainedAttempt) ReleaseAfterAcknowledgement(ctx context.Context)
 // checkWorkspaceSource связывает exact frozen PVC и исключает все остальные Pod-потребители, включая terminal Pods.
 // Positive owner quiescence record остаётся обязательным; одно отсутствие не разрешает snapshot.
 func (controller *Controller) checkWorkspaceSource(ctx context.Context, task model.Task, uid, workerUID types.UID) error {
-	if task.Workspace == nil || task.Validate() != nil || task.Kind != "SNAPSHOT" || uid == "" || string(uid) != task.Workspace.PVCUID {
+	if task.Workspace == nil || task.Validate() != nil || task.Kind != "SNAPSHOT" && task.Kind != "RESTORE" || uid == "" || string(uid) != task.Workspace.PVCUID {
 		return errors.New("session workspace source binding is invalid")
 	}
 	pvc, err := controller.client.CoreV1().PersistentVolumeClaims(exactWorkerNamespace).Get(ctx, task.PVCName, metav1.GetOptions{})
@@ -152,7 +161,7 @@ func (controller *Controller) checkWorkspaceSource(ctx context.Context, task mod
 				owner := metav1.GetControllerOf(&pod)
 				if workerUID == "" || owner == nil || owner.UID != workerUID || owner.Kind != "Job" || owner.APIVersion != "batch/v1" ||
 					owner.Name != workloadName(task.TaskRef, task.ContentGeneration, task.Attempt) {
-					return errors.New("session workspace source has another consumer")
+					return errWorkspaceOtherConsumer
 				}
 			}
 		}

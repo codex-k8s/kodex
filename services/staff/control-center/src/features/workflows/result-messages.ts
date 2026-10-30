@@ -36,6 +36,10 @@ export const workflowResultMessages = {
     evidenceProfile: "Доказательства ревью и QA",
     evidenceLegacy: "Прежний профиль",
     evidenceNative: "GitHub COMMENT и сохранённый QA-отчёт",
+    evidencePDLC: "Файлы, комментарии и проверки в GitHub",
+    path: "Путь файла в репозитории",
+    branch: "Ветка PR",
+    pullNumber: "Номер существующего PR",
     enableEvidence: "Включить COMMENT и QA-отчёт",
     evidenceHelp:
       "Ревью требует реальный COMMENT на точный PR/commit. QA сохраняет JSON-отчёт и вывод команд; сервер проверяет файлы и происхождение, а не аттестует выполнение тестов. Issue создаётся только для реального дефекта.",
@@ -79,6 +83,8 @@ export const workflowResultMessages = {
     kinds: {
       ARTIFACT: "Файл",
       ARTIFACT_REVIEW: "Независимая проверка файла",
+      REPOSITORY_FILE: "Файл в ветке PR",
+      PR_COMMENT: "Комментарий в PR",
       PULL_REQUEST: "Открытый PR",
       REVIEW: "Независимое ревью PR",
       QA: "Проверка PR",
@@ -123,6 +129,10 @@ export const workflowResultMessages = {
     evidenceProfile: "Review and QA evidence",
     evidenceLegacy: "Previous profile",
     evidenceNative: "GitHub COMMENT and captured QA report",
+    evidencePDLC: "Files, comments and checks in GitHub",
+    path: "Repository file path",
+    branch: "PR branch",
+    pullNumber: "Existing PR number",
     enableEvidence: "Enable COMMENT and QA report",
     evidenceHelp:
       "Review requires a real COMMENT on the exact PR/commit. QA captures its JSON report and command output; the server verifies files and provenance without attesting test execution. Create an Issue only for a real defect.",
@@ -166,6 +176,8 @@ export const workflowResultMessages = {
     kinds: {
       ARTIFACT: "File",
       ARTIFACT_REVIEW: "Independent artifact review",
+      REPOSITORY_FILE: "File in PR branch",
+      PR_COMMENT: "PR comment",
       PULL_REQUEST: "Open PR",
       REVIEW: "Independent PR review",
       QA: "PR verification",

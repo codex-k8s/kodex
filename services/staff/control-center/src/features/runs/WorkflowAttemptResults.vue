@@ -45,6 +45,9 @@ defineProps<{ attempts: WorkflowAttemptResult[] }>();
               #{{ result.number }}</template
             ></span
           >
+          <span v-if="result.kind === 'REPOSITORY_FILE'">
+            · <code>{{ result.branch }}:{{ result.fileName }}</code>
+          </span>
           <span v-if="result.kind === 'DEPLOYMENT'">
             ·
             {{
@@ -68,6 +71,10 @@ defineProps<{ attempts: WorkflowAttemptResult[] }>();
                   'artifactRef',
                   'artifactRevision',
                   'receiptRef',
+                  'headReceiptRef',
+                  'contentReceiptRef',
+                  'fileName',
+                  'branch',
                   'headSha',
                   'targetRef',
                   'bundleSha256',

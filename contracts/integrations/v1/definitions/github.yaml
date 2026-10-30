@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: github
-  version: 6.1.0
+  version: 6.3.0
   origin: SHIPPED
 spec:
   name: GitHub
@@ -70,7 +70,7 @@ spec:
       operation: github.issue.create
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -158,7 +158,7 @@ spec:
       operation: github.issue.update
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -280,7 +280,7 @@ spec:
       operation: github.repository.content.create
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -303,7 +303,7 @@ spec:
       operation: github.repository.content.update
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -1059,3 +1059,113 @@ spec:
         - {key: offset, type: INTEGER, required: true, minimum: 0, maximum: 3000}
         - {key: eof, type: BOOLEAN, required: true}
       execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+
+    - key: github.pull_request.comment.create
+      name: Добавить комментарий к pull request
+      description: Добавить комментарий к pull request только в одном разрешённом репозитории после проверки принадлежности выбранному PR.
+      operation: github.pull_request.comment.create
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {key: pull_request_number, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: body, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      outputFields:
+        - {key: comment_id, type: INTEGER, required: true, minimum: 1, maximum: 9007199254740991}
+        - {key: pull_request_number, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+      execution:
+        idempotency: EFFECT_KEY
+        timeoutSeconds: 30
+        maxAttempts: 1
+        retryBackoffMilliseconds: 500
+
+    - key: github.pull_request.comment.list
+      name: Получить комментарии pull request
+      description: Получить комментарии pull request только в одном разрешённом репозитории после проверки принадлежности выбранному PR.
+      operation: github.pull_request.comment.list
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"pull_request_number","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
+        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 30
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+
+    - key: github.pull_request.comment.read
+      name: Прочитать комментарий pull request
+      description: Прочитать комментарий pull request только в одном разрешённом репозитории после проверки принадлежности выбранному PR.
+      operation: github.pull_request.comment.read
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"pull_request_number","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"comment_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+      outputFields:
+        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 30
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+
+    - key: github.pull_request.comment.update
+      name: Обновить комментарий pull request
+      description: Обновить комментарий pull request только в одном разрешённом репозитории после проверки принадлежности выбранному PR.
+      operation: github.pull_request.comment.update
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {"key":"pull_request_number","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"comment_id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+      outputFields:
+        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":9007199254740991}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+      execution:
+        idempotency: EFFECT_KEY
+        timeoutSeconds: 30
+        maxAttempts: 1
+        retryBackoffMilliseconds: 250
+    - key: github.pull_request.ready
+      name: Передать pull request на ревью
+      description: Переводит существующий Draft PR в Ready на точном head SHA; уже готовый PR только читает. Не сливает PR и не подтверждает ревью.
+      operation: github.pull_request.ready
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT]
+      resourceScope: {kind: GITHUB_REPOSITORY, connectionFields: [owner, repository]}
+      inputFields:
+        - {key: pull_request_number, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: expected_head_sha, type: STRING, format: IDENTIFIER, required: true, maximumLength: 40}
+      outputFields:
+        - {key: number, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: sha, type: STRING, format: IDENTIFIER, required: true, maximumLength: 40}
+        - {key: state, type: STRING, format: IDENTIFIER, required: true, maximumLength: 16}
+        - {key: draft, type: BOOLEAN, required: true}
+        - {key: url, type: STRING, format: PLAIN, required: true, maximumLength: 2048}
+        - {key: already_ready, type: BOOLEAN, required: true}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}

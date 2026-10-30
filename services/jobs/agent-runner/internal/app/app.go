@@ -459,11 +459,29 @@ func completeExecutedFailure(ctx context.Context, input model.Input, client *cal
 // completeResultFailure projects an executed failed result into the terminal callback with normalized failure, measured usage, archive metadata and safe diagnostic provenance; callback validation still rejects an invalid tuple or usage.
 // completeResultFailure проецирует выполненный failed result в terminal callback с нормализованным отказом, измеренным usage, archive metadata и безопасной diagnostic provenance; callback validation отклоняет неверные tuple или usage.
 func completeResultFailure(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, summary string) error {
+	diagnostic := result.ProviderDiagnostic(input)
+	code := providerCompletionFailureCode(result.Outcome, result.FailureCode, diagnostic)
+	if code == runtimecontract.ProviderOverloadedFailureCode {
+		summary = "i18n:" + runtimecontract.ProviderOverloadedFailureCode
+	}
 	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: false, ResultSummary: summary,
-		SafeErrorCode: safeFailureCode(result.FailureCode), Usage: completionUsage(result), CodexSessionID: result.SessionID,
+		SafeErrorCode: code, Usage: completionUsage(result), CodexSessionID: result.SessionID,
 		ArchiveRelativePath: result.ArchiveRelativePath, ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
-	payload.ProviderDiagnostic = result.ProviderDiagnostic(input)
+	payload.ProviderDiagnostic = diagnostic
 	return client.Complete(context.WithoutCancel(ctx), input, payload)
+}
+
+// providerCompletionFailureCode preserves overload only for a failed result and
+// the diagnostic obtained from Result's private exact-input accessor. Unproven
+// codes retain the previous generic mapping and cannot trigger model failover.
+// providerCompletionFailureCode сохраняет перегрузку только для failed result и
+// диагностики из private exact-input accessor Result. Недоказанные коды сохраняют
+// прежнее общее отображение и не запускают замену модели.
+func providerCompletionFailureCode(outcome, code string, diagnostic *runtimecontract.ProviderFailureDiagnostic) string {
+	if outcome == "FAILED" && code == "server_overloaded" && diagnostic != nil && diagnostic.IsOverload() {
+		return runtimecontract.ProviderOverloadedFailureCode
+	}
+	return safeFailureCode(code)
 }
 
 // completionArtifacts returns no project artifacts for assistant scopes or missing artifact capability; otherwise it delegates outbox collection without enlarging capabilities.

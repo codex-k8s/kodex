@@ -1,6 +1,8 @@
 import type { OwnerSessionMetadata } from "../src/shared/api/generated/openapi/types.gen";
 
 const invalidMetadata = "Session proof metadata is invalid";
+// Полный UTF-8 envelope имеет тот же предел, что gateway maximumFrameBytes.
+const maximumFrameBytes = 1 << 20;
 
 export function sessionTiming(
   value: unknown,
@@ -100,7 +102,8 @@ export function observeFrame(
   direction: "sent" | "received",
 ): void {
   try {
-    if (Buffer.byteLength(payload) > 65_536) throw new Error("Invalid frame");
+    if (Buffer.byteLength(payload) > maximumFrameBytes)
+      throw new Error("Invalid frame");
     const parsed: unknown = JSON.parse(payload.toString());
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
       throw new Error("Invalid frame");

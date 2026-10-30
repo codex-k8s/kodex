@@ -75,17 +75,33 @@ func (controller *Controller) cleanupPredecessors(ctx context.Context, task mode
 			}
 		}
 		if apierrors.IsNotFound(err) && apierrors.IsNotFound(jobErr) {
+			if task.Workspace != nil && task.Kind == "RESTORE" {
+				return errors.New("session workspace restore predecessor join is unconfirmed")
+			}
 			continue
 		}
 		if apierrors.IsNotFound(err) || !validPredecessorInput(task, attempt, input) {
 			return errors.New("predecessor session archive binding is invalid")
 		}
 		if apierrors.IsNotFound(jobErr) {
+			if task.Workspace != nil && task.Kind == "RESTORE" {
+				return errors.New("session workspace restore predecessor join is unconfirmed")
+			}
 			job = nil
 		} else {
 			previous, decodeErr := decodeAttemptInput(input)
 			if decodeErr != nil || !validWorkerJob(previous, job, types.UID(job.Annotations[sourcePVCUIDAnnotation])) || !jobUsesInput(job, name) {
 				return errors.New("predecessor session archive job binding is invalid")
+			}
+			if task.Workspace != nil && task.Kind == "RESTORE" {
+				pods, err := controller.client.CoreV1().Pods(exactWorkerNamespace).List(cleanup, metav1.ListOptions{LabelSelector: "job-name=" + name})
+				if err != nil || len(pods.Items) != 1 || !validWorkerPod(previous, job, &pods.Items[0]) ||
+					!controller.validWorkspaceWorkerPod(previous, job, &pods.Items[0]) ||
+					pods.Items[0].Status.Phase != corev1.PodSucceeded ||
+					!workspaceContainersJoined(pods.Items[0].Spec.Containers, pods.Items[0].Status.ContainerStatuses) ||
+					!workspaceContainersJoined(pods.Items[0].Spec.InitContainers, pods.Items[0].Status.InitContainerStatuses) {
+					return errors.New("session workspace restore predecessor join is unconfirmed")
+				}
 			}
 		}
 		if err := controller.cleanupResources(cleanup, input, job, renew, task.Workspace == nil); err != nil {

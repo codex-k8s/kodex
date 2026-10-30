@@ -17,11 +17,11 @@ func ResultDeclarationPrompt(requirements []entity.WorkflowResultRequirement) (s
 }
 
 // ResultDeclarationPromptForProfile discloses the exact opted-in receipt/report contract without
-// creating evidence or authorizing GitHub approval; old profile text remains byte-identical.
+// creating evidence or authorizing GitHub approval; historical receipt shapes remain unchanged.
 // ResultDeclarationPromptForProfile показывает точный выбранный receipt/report контракт без
-// создания evidence либо GitHub approval; текст прежнего профиля остаётся byte-identical.
+// создания evidence либо GitHub approval; прежние формы receipt остаются неизменными.
 func ResultDeclarationPromptForProfile(requirements []entity.WorkflowResultRequirement, profile string) (string, error) {
-	if profile != "" && profile != GitHubReviewQAV1 {
+	if profile != "" && !NativeReviewEvidence(profile) {
 		return "", ErrResultInvalid
 	}
 	if len(requirements) < 1 || len(requirements) > 4 {
@@ -40,13 +40,25 @@ func ResultDeclarationPromptForProfile(requirements []entity.WorkflowResultRequi
 			result.Source = &entity.WorkflowArtifactSource{Kind: "CURRENT_COMPLETION"}
 		case "PULL_REQUEST", "INTEGRATION_RECEIPT", "DEPLOYMENT":
 			result.ReceiptRef = "<receiptRef из результата разрешённой интеграции>"
+		case "REPOSITORY_FILE":
+			if profile != GitHubPDLCV1 {
+				return "", ErrResultInvalid
+			}
+			result.ReceiptRef = "<receiptRef успешной native записи файла>"
+			result.HeadReceiptRef = "<receiptRef чтения PR после записи файла>"
+			result.ContentReceiptRef = "<receiptRef чтения файла по SHA из этого PR>"
+		case "PR_COMMENT":
+			if profile != GitHubPDLCV1 {
+				return "", ErrResultInvalid
+			}
+			result.ReceiptRef = "<receiptRef успешного native комментария назначенного PR>"
 		case "ARTIFACT_REVIEW":
-			result.Source = &entity.WorkflowArtifactSource{Kind: "CAPTURED_ARTIFACT", ArtifactRef: "<artifactRef принятого subject/result>", Revision: 1, Digest: "<точный digest принятой ревизии>"}
+			result.Source = &entity.WorkflowArtifactSource{Kind: "CAPTURED_ARTIFACT", ArtifactRef: "<artifactRef принятого subject/result>", Revision: 1, Digest: "sha256:<64 строчные шестнадцатеричные цифры принятой ревизии>"}
 			result.Verdict = "<PASS или CHANGES_REQUIRED по фактической проверке>"
 		case "REVIEW", "QA":
 			result.HeadSHA = "<точный headSha принятого результата предшественника>"
 			result.Verdict = "<PASS или CHANGES_REQUIRED по фактической проверке>"
-			if profile == GitHubReviewQAV1 && requirement.Kind == "REVIEW" {
+			if NativeReviewEvidence(profile) && requirement.Kind == "REVIEW" {
 				result.ReceiptRef = "<receiptRef native COMMENT на exact accepted PR/head>"
 			}
 		default:
@@ -60,11 +72,14 @@ func ResultDeclarationPromptForProfile(requirements []entity.WorkflowResultRequi
 	}
 	prefix := ""
 	reviewShape := "У REVIEW и QA — только key, headSha и verdict; verdict равен PASS либо CHANGES_REQUIRED. "
-	if profile == GitHubReviewQAV1 {
+	if NativeReviewEvidence(profile) {
 		reviewShape = "У REVIEW — только key, headSha, verdict и receiptRef; у QA — key, headSha, verdict и optional receiptRef только для созданного Issue при CHANGES_REQUIRED. Verdict равен PASS либо CHANGES_REQUIRED. "
-		prefix = "Явный профиль GITHUB_REVIEW_QA_V1. REVIEW требует receiptRef успешного native GitHub COMMENT на точный PR/head принятого subject. COMMENT не является GitHub APPROVE; event APPROVE и REQUEST_CHANGES здесь запрещены. QA всегда связан через evidenceKey с опубликованным ARTIFACT application/json: closed schema kodex.workflow-qa-report.v1 с exact repository/pullRequestNumber/headSha/verdict, tests (name,command,exitCode,log CAPTURED_ARTIFACT pins), findings(key,summary) и optional issue(title,body). Report/logs подтверждают bytes и producing execution, не автоматически факт выполнения тестов. Выполни реальные команды и сохрани полный вывод; если выполнить нельзя, честно сообщи failure, не выдумывай PASS/дефект. Для Issue сначала сохрани report/logs через CAPTURE_PROGRESS и получи fresh RR. Issue разрешён только для CHANGES_REQUIRED с findings и ровно теми title/body, которые сохранены в report; один Issue на business attempt, неизвестный исход только читать, не повторять. У QA receiptRef допустим только при реально созданном Issue и CHANGES_REQUIRED. После UNKNOWN либо pending не публикуй новый effect. У REVIEW поля key/headSha/verdict/receiptRef; у QA key/headSha/verdict и optional receiptRef. \n"
+		prefix = "Явный профиль " + profile + ". REVIEW требует receiptRef успешного native GitHub COMMENT на точный PR/head принятого subject. COMMENT не является GitHub APPROVE; event APPROVE и REQUEST_CHANGES здесь запрещены. QA всегда связан через evidenceKey с опубликованным ARTIFACT application/json: closed schema kodex.workflow-qa-report.v1 с exact repository/pullRequestNumber/headSha/verdict, tests (name,command,exitCode,log CAPTURED_ARTIFACT pins), findings(key,summary) и optional issue(title,body). Report/logs подтверждают bytes и producing execution, не автоматически факт выполнения тестов. Выполни реальные команды и сохрани полный вывод; если выполнить нельзя, честно сообщи failure, не выдумывай PASS/дефект. Для Issue сначала сохрани report/logs через CAPTURE_PROGRESS и получи fresh RR. Issue разрешён только для CHANGES_REQUIRED с findings и ровно теми title/body, которые сохранены в report; один Issue на business attempt, неизвестный исход только читать, не повторять. У QA receiptRef допустим только при реально созданном Issue и CHANGES_REQUIRED. После UNKNOWN либо pending не публикуй новый effect. У REVIEW поля key/headSha/verdict/receiptRef; у QA key/headSha/verdict и optional receiptRef. \n"
 	}
-	if profile == GitHubReviewQAV1 {
+	if profile == GitHubPDLCV1 {
+		prefix += pdlcAuthorGuidance
+	}
+	if NativeReviewEvidence(profile) {
 		for _, requirement := range requirements {
 			if requirement.Kind == "QA" {
 				prefix += qaReportGuidance
@@ -77,12 +92,20 @@ func ResultDeclarationPromptForProfile(requirements []entity.WorkflowResultRequi
 		"У элемента ARTIFACT разрешены только key и source. kind, fileName и mediaType из resultRequirements описывают проверку сервера и не являются полями элемента results. " +
 		"В source нового файла текущего завершения допустимо только {\"kind\":\"CURRENT_COMPLETION\"}. " +
 		"Для ранее сохранённого файла замени весь source объектом с ровно четырьмя полями: kind со значением CAPTURED_ARTIFACT, artifactRef, revision (целое число) и digest; последние три значения скопируй из свежего неизменяемого каталога RUN_RESULT. " +
+		"source.digest всегда имеет вид sha256: и ровно 64 строчные шестнадцатеричные цифры. Если accepted predecessor evidence показывает только 64 цифры, добавь перед ними sha256:; уже имеющийся префикс не повторяй. Сами цифры дайджеста не изменяй. " +
 		"Не выбирай CURRENT_COMPLETION для файла только из предыдущего технического хода. " +
 		"У ARTIFACT_REVIEW разрешены только key, source и verdict; source всегда CAPTURED_ARTIFACT и совпадает с exact subjectStepKey/subjectResultKey из accepted predecessor evidence. Не выбирай файл отчёта рецензента вместо проверенного результата автора. " +
 		"У PULL_REQUEST, INTEGRATION_RECEIPT и DEPLOYMENT разрешены только key и receiptRef. " + reviewShape +
 		"Другие поля, повторные ключи и null запрещены. Ссылки и заявления модели не подтверждают результат: сервер отдельно проверяет capture, доступ, происхождение, сканирование и receipts. " +
 		"После принятия обязательных результатов зависимые шаги запускает сервер.", nil
 }
+
+// pdlcAuthorGuidance describes executable native evidence and genuine local file capture without
+// supplying receipts, bypassing grants or claiming that a model's completion proves delivery.
+// pdlcAuthorGuidance описывает native evidence и сохранение настоящих локальных файлов, не выдавая
+// receipts, не обходя grants и не объявляя завершение модели доказательством доставки.
+const pdlcAuthorGuidance = `REPOSITORY_FILE требует реальную запись документа или кода через разрешённый GitHub MCP в опубликованные repository/branch/fileName. Можно менять другие файлы этой же ветки, но обязательный fileName должен быть сохранён. У REPOSITORY_FILE только key, receiptRef, headReceiptRef, contentReceiptRef. Сначала дождись SUCCEEDED записи и сохрани receiptRef. Затем выполни github.pull_request.read для опубликованного targetRef и сохрани его receiptRef как headReceiptRef. После этого прочитай обязательный файл через github.repository.content.read с ref, равным точному SHA из чтения PR; его receiptRef — contentReceiptRef. Полный source_digest и размер должны соответствовать записанным bytes; не подставляй branch вместо SHA. Все три receiptRef различны и принадлежат текущему разрешённому выполнению. При новом исправлении файла повтори чтения после последней записи. Не используй старые receipts для нового содержимого. Draft PR допустим для промежуточной документации; PULL_REQUEST результата разработчика требует действительный Ready и тот же headSha, что у принятого файла. PR_COMMENT требует настоящего github.pull_request.comment.create на опубликованный PR и только key/receiptRef; комментарий в Issue не подходит. Локальный отчёт или файл сохраняй отдельно через опубликованный ARTIFACT и реальный CURRENT_COMPLETION/CAPTURE_PROGRESS. Не создавай новый PR вместо назначенного. Повтор известного успешного действия читает исходный receipt; UNKNOWN/pending нельзя заменять повторной записью или вымышленным успехом.
+`
 
 // qaReportGuidance makes the closed report and its reachable capture sequence explicit; all
 // external identities remain invalid placeholders and cannot serve as evidence without owner proof.

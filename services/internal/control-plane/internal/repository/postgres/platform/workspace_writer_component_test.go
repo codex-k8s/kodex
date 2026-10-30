@@ -70,7 +70,7 @@ func TestWorkspaceWriterOwnerComponent(t *testing.T) {
 	if run == nil {
 		t.Fatal("workspace run was not returned")
 	}
-	claimed := execute(command.ClaimExecution, worker, "claim", command.LeaseInput{WorkloadInstance: "workspace-owner-controller", Limit: 1})
+	claimed := claimPreparedWorkspaceComponent(t, ctx, repository, service, worker, "workspace-owner-controller", execute)
 	if len(claimed.RuntimeItems) != 1 {
 		t.Fatalf("expected one V2 execution claim, got %d", len(claimed.RuntimeItems))
 	}
@@ -79,8 +79,16 @@ func TestWorkspaceWriterOwnerComponent(t *testing.T) {
 	if err != nil || binding == nil {
 		t.Fatal("owner did not assign workspace binding", err)
 	}
+	if !t.Run("profile_off_mismatched_workspace_rejected", func(t *testing.T) {
+		testWorkspaceProfileOffRejectsMismatchedRow(t, ctx, repository, service, owner, project.Ref, binding.WorkspaceRef)
+	}) {
+		return
+	}
 	if binding.Generation != 1 || binding.Scope.AgentRef != agent.Ref || binding.Scope.SessionRef != run.SessionRef {
 		t.Fatal("workspace binding does not match assigned employee session")
+	}
+	if binding.VolumeReady == nil || binding.VolumeReady.Preparation.PVCUID != "00000000-0000-4000-8000-000000000010" {
+		t.Fatal("model snapshot omitted its accepted physical preparation")
 	}
 	payload := command.WorkspaceObservationInput{LeaseRef: stringMap(item, "leaseRef"), Fence: stringMap(item, "fence"), Generation: runtimeRevisionMapInt64(item, "generation"),
 		RuntimeRevisionDigest: stringMap(item, "revisionDigest"), ExecutionBindingDigest: strings.Repeat("c", 64),
@@ -182,4 +190,18 @@ func TestWorkspaceWriterOwnerComponent(t *testing.T) {
 		}
 	})
 	testWorkspaceCheckpointOwner(t, ctx, repository, service, pool, owner, claimPrincipal, binding, run.Ref)
+	var restoreProfile bool
+	if err := pool.QueryRow(ctx, "SELECT to_regclass('control_plane.session_archive_tasks_workspace_restore') IS NOT NULL").Scan(&restoreProfile); err != nil {
+		t.Fatal("read disposable restore profile", err)
+	}
+	if restoreProfile && !t.Failed() {
+		if !t.Run("restore_owner_generation", func(t *testing.T) {
+			testWorkspaceRestoreOwner(t, ctx, repository, service, pool, owner, worker, observer, binding, payload, execute)
+		}) {
+			return
+		}
+	}
+	t.Run("physical_cancel_and_past_fact", func(t *testing.T) {
+		testWorkspaceVolumeCancellationOwner(t, ctx, repository, service, owner, worker, project.Ref, agent.Ref)
+	})
 }

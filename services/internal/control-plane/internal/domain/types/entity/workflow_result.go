@@ -5,6 +5,9 @@ package entity
 // WorkflowResultRequirement задаёт ограниченное обязательное условие; ссылки выбирают проверенные
 // владельцем доказательства и не предоставляют полномочий, заявленных сотрудником.
 type WorkflowResultRequirement struct {
+	// Branch pins the owner's repository-file intent; it is absent from all historical profiles.
+	// Branch закрепляет намерение владельца для файла репозитория; в прежних профилях отсутствует.
+	Branch string `json:",omitempty"`
 	// SubjectResultKey pins one published ARTIFACT output; omission preserves historical spec bytes.
 	// SubjectResultKey закрепляет published ARTIFACT output; отсутствие сохраняет historical spec bytes.
 	SubjectResultKey string `json:",omitempty"`
@@ -40,8 +43,12 @@ type WorkflowDeclaredResult struct {
 	Key        string                  `json:"key"`
 	Source     *WorkflowArtifactSource `json:"source,omitempty"`
 	ReceiptRef string                  `json:"receiptRef,omitempty"`
-	HeadSHA    string                  `json:"headSha,omitempty"`
-	Verdict    string                  `json:"verdict,omitempty"`
+	// HeadReceiptRef and ContentReceiptRef select owner-verified native reads, never model attestations.
+	// HeadReceiptRef и ContentReceiptRef выбирают проверяемые владельцем native reads, не утверждения модели.
+	HeadReceiptRef    string `json:"headReceiptRef,omitempty"`
+	ContentReceiptRef string `json:"contentReceiptRef,omitempty"`
+	HeadSHA           string `json:"headSha,omitempty"`
+	Verdict           string `json:"verdict,omitempty"`
 }
 
 // WorkflowArtifactSource selects either this completion's exact prepared outputs or an immutable
@@ -60,20 +67,26 @@ type WorkflowArtifactSource struct {
 // WorkflowAcceptedResult закрепляет принятое владельцем доказательство; оно не создаётся
 // непосредственно из заявления модели или URL.
 type WorkflowAcceptedResult struct {
-	TargetRef        string `json:"targetRef,omitempty"`
-	BundleSHA256     string `json:"bundleSha256,omitempty"`
-	ImageDigest      string `json:"imageDigest,omitempty"`
-	HealthOK         bool   `json:"healthOk,omitempty"`
-	Key              string `json:"key"`
-	Kind             string `json:"kind"`
-	ArtifactRef      string `json:"artifactRef,omitempty"`
-	ArtifactRevision string `json:"artifactRevision,omitempty"`
-	Digest           string `json:"digest"`
-	ReceiptRef       string `json:"receiptRef,omitempty"`
-	Repository       string `json:"repository,omitempty"`
-	Number           int64  `json:"number,omitempty"`
-	HeadSHA          string `json:"headSha,omitempty"`
-	Verdict          string `json:"verdict,omitempty"`
+	// FileName, Branch and read receipts retain the exact published-content proof of a repository file.
+	// FileName, Branch и read receipts сохраняют точное доказательство опубликованного файла репозитория.
+	FileName          string `json:"fileName,omitempty"`
+	Branch            string `json:"branch,omitempty"`
+	HeadReceiptRef    string `json:"headReceiptRef,omitempty"`
+	ContentReceiptRef string `json:"contentReceiptRef,omitempty"`
+	TargetRef         string `json:"targetRef,omitempty"`
+	BundleSHA256      string `json:"bundleSha256,omitempty"`
+	ImageDigest       string `json:"imageDigest,omitempty"`
+	HealthOK          bool   `json:"healthOk,omitempty"`
+	Key               string `json:"key"`
+	Kind              string `json:"kind"`
+	ArtifactRef       string `json:"artifactRef,omitempty"`
+	ArtifactRevision  string `json:"artifactRevision,omitempty"`
+	Digest            string `json:"digest"`
+	ReceiptRef        string `json:"receiptRef,omitempty"`
+	Repository        string `json:"repository,omitempty"`
+	Number            int64  `json:"number,omitempty"`
+	HeadSHA           string `json:"headSha,omitempty"`
+	Verdict           string `json:"verdict,omitempty"`
 }
 
 // WorkflowReviewSubject is the closed published cause of a rejected review, not a retry command.

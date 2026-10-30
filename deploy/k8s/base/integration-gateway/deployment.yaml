@@ -61,8 +61,10 @@ spec:
               protocol: TCP
           resources:
             requests:
+              cpu: 50m
               memory: 128Mi
             limits:
+              cpu: "2"
               memory: 512Mi
           volumeMounts:
             - name: configuration-writeback-scratch

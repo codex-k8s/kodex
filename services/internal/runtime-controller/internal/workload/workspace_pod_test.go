@@ -19,12 +19,17 @@ func workspaceStoragePodFixture(t *testing.T) (*Manager, *fake.Clientset, runtim
 	t.Helper()
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
+	manager.config.StorageClass = "local-path"
 	execution := testExecution(false)
 	execution.Revision.SessionRef, execution.Revision.AgentRef = "ses_workspace000", "agt_workspace000"
 	execution.Revision.RoleRuntimeContractRevision = runtimecontract.WorkspaceStorageRuntimeContractRevision
 	execution.Revision.WorkspaceStorage = &controlplanev1.RuntimeWorkspaceStorage{Profile: runtimecontract.WorkspaceStorageProfile,
 		Scope: &controlplanev1.RuntimeWorkspaceScope{OrganizationRef: execution.Revision.OrganizationRef, ProjectRef: execution.Run.ProjectRef,
 			SessionRef: execution.Revision.SessionRef, AgentRef: execution.Revision.AgentRef}, WorkspaceRef: "wks_workspace000", Generation: 1}
+	storage := execution.Revision.WorkspaceStorage
+	storage.VolumeReady = &controlplanev1.RuntimeWorkspaceVolumeReady{Schema: runtimecontract.WorkspaceVolumeReadySchema, Device: 31, Inode: 47,
+		Preparation: &controlplanev1.RuntimeWorkspaceVolumePreparation{Scope: storage.Scope,
+			WorkspaceRef: storage.WorkspaceRef, TaskRef: "svt_workspace000", PvcUid: "30000000-0000-4000-8000-000000000001", VolumeGeneration: 1}}
 	sealTestTurnExecution(execution)
 	manager.config.RoleRuntimeContractRevision = runtimecontract.WorkspaceStorageRuntimeContractRevision
 	input, binding, err := manager.BuildTurnInput(execution)
@@ -33,6 +38,26 @@ func workspaceStoragePodFixture(t *testing.T) (*Manager, *fake.Clientset, runtim
 	}
 	if _, err := runtimecontract.EncodeRunnerInput(input); err != nil {
 		t.Fatalf("V2 fixture is not a valid immutable input: %v", err)
+	}
+	labels, annotations, err := runtimecontract.SessionVolumeMetadata(input.OrganizationRef, input.ProjectRef, input.SessionRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	annotations["workspace.kodex.dev/workspace-ref"] = storage.WorkspaceRef
+	annotations["workspace.kodex.dev/volume-generation"] = "1"
+	pvcName, err := runtimecontract.SessionPVCName(input.SessionRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mode, storageClass := corev1.PersistentVolumeFilesystem, manager.config.StorageClass
+	pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: pvcName, Namespace: manager.config.RuntimeNamespace,
+		UID: "30000000-0000-4000-8000-000000000001", ResourceVersion: "1", Labels: labels, Annotations: annotations},
+		Spec: corev1.PersistentVolumeClaimSpec{StorageClassName: &storageClass, VolumeMode: &mode, VolumeName: "pv-workspace-fixture",
+			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			Resources:   corev1.VolumeResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceStorage: manager.pvcRequest.DeepCopy()}}},
+		Status: corev1.PersistentVolumeClaimStatus{Phase: corev1.ClaimBound}}
+	if _, err := client.CoreV1().PersistentVolumeClaims(manager.config.RuntimeNamespace).Create(t.Context(), pvc, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
 	}
 	credentials := testCredentialProjection(input)
 	pod := manager.runtimePod(input, binding, &credentials, ticketName(input.LeaseRef), runtimecontract.RuntimeTurnPodName(input.LeaseRef), "turn")

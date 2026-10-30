@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"github.com/google/jsonschema-go/jsonschema"
 	"reflect"
 	"strings"
 	"unicode/utf8"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/google/jsonschema-go/jsonschema"
 )
 
 // assistantWorkflowConfigurationAvailable requires assistant scope, a versioned
@@ -39,6 +39,7 @@ func assistantWorkflowConfigurationAvailable(input runtimecontract.RunnerInput) 
 // defaults,ordered dependencies,capability ceilings и result schema. Это не executable
 // grant и не замена owner workflow entity.
 type assistantWorkflowDraft struct {
+	ResultEvidenceProfile                                                     string `json:",omitempty"`
 	ExecutionMode, ReworkPolicy                                               string
 	Ref, Name, Purpose, CoordinatorAgentRef, Instructions, CompletionCriteria string
 	VersionNumber                                                             int32
@@ -83,6 +84,7 @@ type assistantWorkflowDraftStep struct {
 // исходным draft для semantic consistency проверки перед owner-reviewed update;
 // это не running immutable workflow revision.
 type assistantWorkflowReadSnapshot struct {
+	ResultEvidenceProfile                                                                         string `json:",omitempty"`
 	ExecutionMode, ReworkPolicy                                                                   string
 	WorkflowRef, ProjectRef, Name, Purpose, CoordinatorAgentRef, Instructions, CompletionCriteria string
 	MaxConcurrency                                                                                int32
@@ -142,7 +144,7 @@ func castAssistantWorkflowConfiguration(input runtimecontract.RunnerInput, reque
 		return nil, invalid
 	}
 	var snapshot map[string]any
-	if json.Unmarshal(raw, &snapshot) != nil || len(snapshot) < 12 || len(snapshot) > 14 || !onlyKeys(snapshot, "executionMode", "reworkPolicy", "workflowRef", "projectRef", "name", "purpose", "coordinatorAgentRef", "instructions", "completionCriteria", "maxConcurrency", "timeoutSeconds", "inputFields", "steps", "draft") || !closedAssistantWorkflowSnapshot(snapshot) {
+	if json.Unmarshal(raw, &snapshot) != nil || len(snapshot) < 12 || len(snapshot) > 15 || !onlyKeys(snapshot, "executionMode", "reworkPolicy", "resultEvidenceProfile", "workflowRef", "projectRef", "name", "purpose", "coordinatorAgentRef", "instructions", "completionCriteria", "maxConcurrency", "timeoutSeconds", "inputFields", "steps", "draft") || !closedAssistantWorkflowSnapshot(snapshot) {
 		return nil, invalid
 	}
 	canonical, err := json.Marshal(snapshot)
@@ -162,8 +164,18 @@ func castAssistantWorkflowConfiguration(input runtimecontract.RunnerInput, reque
 // допускаются; обязательные cardinality и semantic equality проверяются отдельно.
 func closedAssistantWorkflowSnapshot(snapshot map[string]any) bool {
 	draft, ok := snapshot["draft"].(map[string]any)
-	if !ok || !onlyKeys(draft, "ExecutionMode", "ReworkPolicy", "Ref", "Name", "Purpose", "CoordinatorAgentRef", "Instructions", "CompletionCriteria", "VersionNumber", "Inputs", "Steps", "AgentRefs", "Concurrency", "TimeoutSeconds", "GateDecisions", "ResultSchema") {
+	if !ok || !onlyKeys(draft, "ExecutionMode", "ReworkPolicy", "ResultEvidenceProfile", "Ref", "Name", "Purpose", "CoordinatorAgentRef", "Instructions", "CompletionCriteria", "VersionNumber", "Inputs", "Steps", "AgentRefs", "Concurrency", "TimeoutSeconds", "GateDecisions", "ResultSchema") {
 		return false
+	}
+	for _, field := range []struct {
+		parent map[string]any
+		key    string
+	}{{snapshot, "resultEvidenceProfile"}, {draft, "ResultEvidenceProfile"}} {
+		if value, present := field.parent[field.key]; present {
+			if _, valid := value.(string); !valid {
+				return false
+			}
+		}
 	}
 	for _, collection := range []struct {
 		parent map[string]any
@@ -211,6 +223,10 @@ func closedAssistantWorkflowSnapshot(snapshot map[string]any) bool {
 // не выводится и effective execution permissions не разрешаются.
 func validAssistantWorkflowReadSnapshot(value assistantWorkflowReadSnapshot) bool {
 	draft := value.Draft
+	if value.ResultEvidenceProfile != draft.ResultEvidenceProfile || value.ResultEvidenceProfile != "" &&
+		(value.ExecutionMode != "SERVER_DAG_V1" || value.ResultEvidenceProfile != "GITHUB_REVIEW_QA_V1" && value.ResultEvidenceProfile != "GITHUB_PDLC_V1") {
+		return false
+	}
 	if value.ExecutionMode != draft.ExecutionMode || value.ReworkPolicy != draft.ReworkPolicy || (value.ExecutionMode != "" && value.ExecutionMode != "MANAGER_DRIVEN" && value.ExecutionMode != "SERVER_DAG_V1") || (value.ReworkPolicy != "" && (value.ExecutionMode != "SERVER_DAG_V1" || value.ReworkPolicy != "OWNER_APPROVED_UPSTREAM_V1")) {
 		return false
 	}
@@ -238,7 +254,7 @@ func validAssistantWorkflowReadSnapshot(value assistantWorkflowReadSnapshot) boo
 			return false
 		}
 		if value.ExecutionMode == "SERVER_DAG_V1" {
-			if !reflect.DeepEqual(step.DependsOn, append([]string{}, original.DependsOn...)) || !reflect.DeepEqual(step.ResultRequirements, original.ResultRequirements) || !validAssistantWorkflowReadRequirements(step.ResultRequirements) {
+			if !reflect.DeepEqual(step.DependsOn, append([]string{}, original.DependsOn...)) || !reflect.DeepEqual(step.ResultRequirements, original.ResultRequirements) || !validAssistantWorkflowReadRequirements(value.ResultEvidenceProfile, step.ResultRequirements) {
 				return false
 			}
 		} else if len(step.ResultRequirements) > 0 || len(original.ResultRequirements) > 0 || len(step.DependsOn) > 0 {
@@ -271,24 +287,38 @@ func validAssistantWorkflowReadSnapshot(value assistantWorkflowReadSnapshot) boo
 
 // assistantWorkflowReadRequirement mirrors editable predicates, excluding result evidence and pins.
 // assistantWorkflowReadRequirement отражает editable predicates без result evidence/pins.
-type assistantWorkflowReadRequirement struct{ Key, Kind, FileName, MediaType, Repository, SubjectStepKey, SubjectResultKey, Operation, TargetRef string }
+type assistantWorkflowReadRequirement struct {
+	Key, Kind, FileName, MediaType, Repository, SubjectStepKey, SubjectResultKey, Operation, TargetRef string
+	Branch                                                                                             string `json:",omitempty"`
+	EvidenceKey                                                                                        string `json:",omitempty"`
+}
 
 // validAssistantWorkflowReadRequirements validates actual JSON values with the shared local MCP
 // schema; resolver errors stay closed and raw validation errors never enter public responses.
 // validAssistantWorkflowReadRequirements проверяет actual JSON через shared local MCP schema;
 // resolver errors закрыты, raw validation errors не входят в public responses.
-func validAssistantWorkflowReadRequirements(requirements []assistantWorkflowReadRequirement) bool {
+func validAssistantWorkflowReadRequirements(profile string, requirements []assistantWorkflowReadRequirement) bool {
 	values := make([]any, 0, len(requirements))
 	for _, requirement := range requirements {
+		if profile == "" && requirement.EvidenceKey != "" {
+			return false
+		}
 		item := map[string]any{"key": requirement.Key, "kind": requirement.Kind}
-		for key, value := range map[string]string{"fileName": requirement.FileName, "mediaType": requirement.MediaType, "repository": requirement.Repository, "subjectStepKey": requirement.SubjectStepKey, "subjectResultKey": requirement.SubjectResultKey, "operation": requirement.Operation, "targetRef": requirement.TargetRef} {
+		for key, value := range map[string]string{"fileName": requirement.FileName, "mediaType": requirement.MediaType, "repository": requirement.Repository, "subjectStepKey": requirement.SubjectStepKey, "subjectResultKey": requirement.SubjectResultKey, "operation": requirement.Operation, "targetRef": requirement.TargetRef, "branch": requirement.Branch, "evidenceKey": requirement.EvidenceKey} {
 			if value != "" {
 				item[key] = value
 			}
 		}
 		values = append(values, item)
 	}
-	raw, err := json.Marshal(workflowResultRequirementsSchema())
+	shape := objectSchema([]string{"resultEvidenceProfile", "steps"}, map[string]any{
+		"resultEvidenceProfile": enumSchema("", "GITHUB_REVIEW_QA_V1", "GITHUB_PDLC_V1"),
+		"steps": map[string]any{"type": "array", "items": objectSchema([]string{"resultRequirements"}, map[string]any{
+			"resultRequirements": workflowResultRequirementsSchema(),
+		})},
+	})
+	shape["allOf"] = workflowServerBounds()
+	raw, err := json.Marshal(shape)
 	if err != nil {
 		return false
 	}
@@ -297,5 +327,5 @@ func validAssistantWorkflowReadRequirements(requirements []assistantWorkflowRead
 		return false
 	}
 	resolved, err := schema.Resolve(nil)
-	return err == nil && resolved.Validate(values) == nil
+	return err == nil && resolved.Validate(map[string]any{"resultEvidenceProfile": profile, "steps": []any{map[string]any{"resultRequirements": values}}}) == nil
 }

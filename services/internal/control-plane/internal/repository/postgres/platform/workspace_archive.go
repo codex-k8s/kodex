@@ -56,6 +56,8 @@ type workspaceArchiveState struct {
 	released                                                                     bool
 	scope                                                                        runtimecontract.WorkspaceStorageScope
 	policy                                                                       runtimecontract.RuntimeWorkspacePolicy
+	source                                                                       *runtimecontract.WorkspaceCheckpointBinding
+	sourceArchiveID                                                              string
 }
 
 // workspaceArchiveTask is a stored intent plus its current lease; the task body is immutable across attempts.
@@ -90,9 +92,22 @@ func readWorkspaceArchiveState(ctx context.Context, tx pgx.Tx, organizationID, s
 		return result, errs.ErrConflict
 	}
 	result.policy = runtimeWorkspacePolicyContract(policy)
-	if result.policy.Validate() != nil || result.state != "CHECKPOINT_PENDING" || !result.released || result.joinRaw == "" {
+	if result.policy.Validate() != nil {
 		return result, errs.ErrForbidden
 	}
+	if result.state == "CHECKPOINT_PENDING" && result.released && result.joinRaw != "" {
+		return result, nil
+	}
+	checkpointed := result.state == "CHECKPOINT_READY" && result.released && result.joinRaw != ""
+	restoring := (result.state == "RESTORE_READY" || result.state == "RESTORING") && !result.released && result.joinRaw == ""
+	if !checkpointed && !restoring {
+		return result, errs.ErrForbidden
+	}
+	source, sourceID, err := readWorkspaceRestoreSource(ctx, tx, result)
+	if err != nil {
+		return result, err
+	}
+	result.source, result.sourceArchiveID = &source, sourceID
 	return result, nil
 }
 
@@ -113,7 +128,7 @@ func runtimeWorkspacePolicyContract(policy entity.RuntimeWorkspacePolicy) runtim
 func readWorkspaceArchiveTask(ctx context.Context, tx pgx.Tx, state workspaceArchiveState) (workspaceArchiveTask, error) {
 	var task workspaceArchiveTask
 	err := tx.QueryRow(ctx, queryWorkspaceArchiveTask, pgx.StrictNamedArgs{"organization_id": state.organizationID,
-		"workspace_id": state.id, "workspace_generation": state.generation}).Scan(&task.id, &task.ref, &task.kind, &task.state,
+		"workspace_id": state.id, "workspace_generation": state.generation, "kind": workspaceArchiveTaskKind(state)}).Scan(&task.id, &task.ref, &task.kind, &task.state,
 		&task.contentGeneration, &task.digest, &task.objectKey, &task.objectVersion, &task.attempt, &task.maximumAttempts,
 		&task.generation, &task.workspaceGeneration, &task.body, &task.leaseRef, &task.fenceDigest, &task.expiresAt)
 	return task, err
@@ -127,7 +142,11 @@ func workspaceArchiveWork(state workspaceArchiveState, task workspaceArchiveTask
 	var body runtimecontract.WorkspaceArchiveTask
 	if runtimecontract.DecodeWorkspaceStorageTaskJSON(task.body, &body) != nil || body.ReconcileOnly ||
 		body.Target.Scope != state.scope || body.Target.WorkspaceRef != state.ref || body.Target.Generation != state.generation ||
-		body.Quiescence != state.joinRaw || body.Policy.Digest != state.policy.Digest || task.workspaceGeneration != state.generation {
+		body.Quiescence != state.joinRaw || body.Policy.Digest != state.policy.Digest || task.workspaceGeneration != state.generation ||
+		task.kind != workspaceArchiveTaskKind(state) {
+		return runtimecontract.WorkspaceArchiveWork{}, errs.ErrConflict
+	}
+	if task.kind == "RESTORE" && (body.Checkpoint == nil || state.source == nil || *body.Checkpoint != *state.source) {
 		return runtimecontract.WorkspaceArchiveWork{}, errs.ErrConflict
 	}
 	body.ReconcileOnly = attempt > 1
@@ -242,7 +261,7 @@ func (repository *Repository) claimWorkspaceArchiveTasks(ctx context.Context, tx
 			return nil, err
 		}
 		task, err := readWorkspaceArchiveTask(ctx, tx, state)
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) && state.state == "CHECKPOINT_PENDING" {
 			task, err = createWorkspaceSnapshot(ctx, tx, state)
 		}
 		if err != nil {

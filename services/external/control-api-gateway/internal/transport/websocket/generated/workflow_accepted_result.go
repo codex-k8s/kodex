@@ -3,18 +3,22 @@
 package generated
 
 type WorkflowAcceptedResult struct {
-	TargetRef        *string `json:"targetRef,omitempty"`
-	BundleSha256     *string `json:"bundleSha256,omitempty"`
-	ImageDigest      *string `json:"imageDigest,omitempty"`
-	HealthOk         bool    `json:"healthOk,omitempty"`
-	Key              string  `json:"key"`
-	Kind             string  `json:"kind"`
-	ArtifactRef      *string `json:"artifactRef,omitempty"`
-	ArtifactRevision *string `json:"artifactRevision,omitempty"`
-	Digest           string  `json:"digest"`
-	ReceiptRef       *string `json:"receiptRef,omitempty"`
-	Repository       *string `json:"repository,omitempty"`
-	Number           *int    `json:"number,omitempty"`
-	HeadSha          *string `json:"headSha,omitempty"`
-	Verdict          *string `json:"verdict,omitempty"`
+	TargetRef         *string `json:"targetRef,omitempty"`
+	BundleSha256      *string `json:"bundleSha256,omitempty"`
+	ImageDigest       *string `json:"imageDigest,omitempty"`
+	HealthOk          bool    `json:"healthOk,omitempty"`
+	Key               string  `json:"key"`
+	Kind              string  `json:"kind"`
+	ArtifactRef       *string `json:"artifactRef,omitempty"`
+	ArtifactRevision  *string `json:"artifactRevision,omitempty"`
+	Digest            string  `json:"digest"`
+	ReceiptRef        *string `json:"receiptRef,omitempty"`
+	HeadReceiptRef    *string `json:"headReceiptRef,omitempty"`
+	ContentReceiptRef *string `json:"contentReceiptRef,omitempty"`
+	FileName          *string `json:"fileName,omitempty"`
+	Branch            *string `json:"branch,omitempty"`
+	Repository        *string `json:"repository,omitempty"`
+	Number            *int    `json:"number,omitempty"`
+	HeadSha           *string `json:"headSha,omitempty"`
+	Verdict           *string `json:"verdict,omitempty"`
 }

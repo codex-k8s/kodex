@@ -11,6 +11,25 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// TestExecutionPDLCWorkflowPublicationPreservesBranch exercises the actual owner projection and
+// shared decoder, requiring wire4 and the exact owner-published file branch rather than defaults.
+// TestExecutionPDLCWorkflowPublicationPreservesBranch проверяет actual owner projection и общий
+// decoder, требуя wire4 и точную owner-published ветку файла без подстановки defaults.
+func TestExecutionPDLCWorkflowPublicationPreservesBranch(t *testing.T) {
+	requirement := entity.WorkflowResultRequirement{Key: "document", Kind: "REPOSITORY_FILE", Repository: "fixture/repository", TargetRef: "3", Branch: "feature/journal", FileName: "docs/requirements.md"}
+	item := entity.Workflow{Ref: "wfl_workflow01", ProjectRef: "prj_project001", Version: 7, Published: &entity.WorkflowVersion{Ref: "wfv_workflow01", VersionNumber: 3, ExecutionMode: workflowservice.ServerDAGV1, ResultEvidenceProfile: workflowservice.GitHubPDLCV1,
+		Name: "Документы", Purpose: "Уточнить требования", CoordinatorAgentRef: "agt_coordinator", Concurrency: 1, TimeoutSeconds: 300, ResultSchema: map[string]any{},
+		Steps: []entity.WorkflowStep{{Key: "author", Position: 1, Name: "Требования", AgentRef: "agt_specialist", Instructions: "Сохранить требования в ветке PR", TimeoutSeconds: 120, ResultRequirements: []entity.WorkflowResultRequirement{requirement}}}}}
+	raw, digest, err := executionWorkflowPublication(item, strings.Repeat("a", 64))
+	if err != nil {
+		t.Fatal("owner PDLC publication unavailable", err)
+	}
+	actual, err := controlplaneapi.DecodeWorkflowPublication(raw, digest)
+	if err != nil || actual.Version != 4 || actual.ResultEvidenceProfile != workflowservice.GitHubPDLCV1 || actual.Steps[0].ResultRequirements[0].Branch != requirement.Branch || actual.Steps[0].ResultRequirements[0].TargetRef != requirement.TargetRef {
+		t.Fatal("owner publication lost exact PDLC wire or branch/PR pins")
+	}
+}
+
 // TestExecutionServerWorkflowPublicationPreservesPolicy exercises the real owner producer and
 // shared consumer with DAG requirements and the existing gate deadline, without a database fixture.
 // TestExecutionServerWorkflowPublicationPreservesPolicy проверяет настоящий owner producer и

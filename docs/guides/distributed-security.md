@@ -4,11 +4,35 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.33
-updated: 2026-10-28
+version: 1.7.40
+updated: 2026-10-29
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
+
+## Отдельные полномочия PR и переход Ready
+
+Права обычного Issue не расширяются на pull request при добавлении совместной
+работы: отдельный PR grant проверяет тип выбранного объекта и принадлежность
+комментария exact PR в выданном репозитории. Общий provider endpoint не является
+основанием объединять полномочия. Новая возможность не появляется в старых
+неизменяемых packages; их snapshots, политики и catalog admission сохраняются.
+
+Переход Draft→Ready не является одобрением или слиянием. Node ID разрешает
+адаптер из авторитетного repository/PR read, payload не выбирает GraphQL либо
+node. При отсутствии provider head CAS обязательны exact head до и после
+единственного изменения; drift сохраняет UNKNOWN и не допускает результат
+workflow. Потерянный ответ восстанавливается только чтением. Уже наблюдённый
+Ready не требует повторной мутации и не выдаётся за проверку качества кода.
+См. [операционный контракт #1967](../operations/github-autonomous-pdlc-1967.md).
+
+Новая policy проходит весь путь эффекта: exact каталог и frozen grant,
+invocation CHECK/trigger, worker selection, adapter и durable completion.
+Успешная запись `READY` не доказывает возможность worker claim. Во всех слоях
+сохраняются один закрытый набор операций, exact authority pins и отдельные
+Human Gate для merge/deploy. Неподдержанная exact версия остаётся
+`PACKAGE_UNAVAILABLE`; специальное ограничение получателя не скрывает причину
+и не выдаёт executable fallback.
 
 ## Ожидаемые политики из полного desired render
 
@@ -26,6 +50,16 @@ Expected не выводится из фактически проверяемо�
 фактическую доступность маршрута либо применение policy в кластере.
 
 ## Адресный repair служебной PostgreSQL identity
+
+Backup reader и runtime имеют разные полномочия. Совместимость с backup
+не разрешает скрывать произвольный ACL при проверке схемы: до inverse projection
+проверяются точная зарегистрированная роль, её атрибуты, SELECT без grant option,
+grantor, column ACL и schema-scoped defaults. Неизвестная роль, DML либо EXECUTE
+не становятся допустимыми из-за существования backup. Временное снятие SELECT
+допустимо только в отдельном maintenance-профиле с остановленным owner,
+отсутствующими backup consumers и ограниченным восстановлением прав. Успешная
+migration Job проходит полный pinned postcondition перед resume; неизвестный
+commit не даёт права повторить DDL. См. `OPS-DOC-WORKSPACE-BACKUP-1966`.
 
 Ошибка аутентификации одного workload не разрешает общую ротацию ролей.
 Оператор закрепляет exact cluster/namespace/workload и revision источника,
@@ -2018,6 +2052,32 @@ Payload/annotation и успешный mount не доказывают это п
 неподтверждённая custody блокируют data consumer без recursive repair.
 Проверка привязывается к реальному storage class и фактическим правам после
 повторного Pod: Pod Ready или декларации securityContext недостаточно.
+
+Accepted physical tuple сохраняется без потери полей на каждом переходе
+owner snapshot→Proto→immutable runtime input. Unknown nested wire data не
+отбрасываются молча. Consumer читает exact pinned PVC UID без Create/adoption,
+а trusted initializer до BIND/private write проверяет sealed root и record
+через nofollow descriptors. ACK для иного PVC UID не разрешает запись.
+Эта проверка не заменяет положительное завершение связанных процессов.
+
+Повторная проверка исходного launch использует каноническое право реестра и
+точную серверную root-цель (`agent.launch` для AGENT либо `workflow.launch`
+для WORKFLOW). Capability сотрудника и private RPC permission не заменяют RBAC
+исходного актёра. Выдуманный общий permission недопустим даже при закрытом
+отказе: он блокирует законную подготовку до первого model lease. Положительный
+owner lifecycle проверяется на PostgreSQL вместе с отказами, не только mocks.
+
+Подготовка должна закрывать и delayed replay первого initializer после допуска
+private data. Один terminal Pod либо отсутствие Pods не запрещают поздний Create
+с прежним именем. В ограниченном профиле сохраняются immutable input и completed
+Job исходной инициализации без TTL; после owner ACK удаляется только positively
+joined Pod по UID/RV. Retained Job/input не являются разрешением выполнять старую
+attempt. Их удаление требует отдельного доказанного retirement физического PVC
+и закрытия всех прежних write credits. При reconciliation неизвестный первый
+initializer блокирует successor; нельзя заново назначать init/FSGroup по отсутствию
+ресурса. Альтернативный протокол должен отдельно доказать тот же запрет поздней
+нормализации private tree. Матрица: [#1953](../operations/runtime-workspace-durability-1953.md).
+
 Если профиль требует единую shared group новых файлов под восстановленными
 private directories, одной supplemental group недостаточно: отсутствие SGID
 на mode0700 возвращает primary group writer. Профиль закрепляет primary GID
@@ -2443,7 +2503,13 @@ content и превышение лимитов не дают CLEAN. Ограни
 доверенному сервису, не монтируется агентам и не публикуется наружу.
 Исторические format-only CLEAN сохраняются как история, но без evidence
 не открывают bytes или capability. AV не заменяет отдельный анализ
-prompt injection и не разрешает внешние действия без их Human Gate.
+prompt injection и не выдаёт полномочий на внешние действия. Согласование
+определяется закреплённой policy конкретного grant; `NONE` допускается только
+закрытым контрактом операции и явным выбором владельца. Автономная запись файла
+GitHub проверяет свежие metadata репозитория и точной существующей ветки и
+отклоняет основную, защищённую, неоднозначную либо неизвестную ветку. Это не
+заменяет защиту веток на стороне GitHub. Merge и deploy сохраняют отдельные
+Human Gate. Матрица: [#1967](../operations/github-autonomous-pdlc-1967.md).
 
 ### Типизированный контейнер с исходными файлами
 

@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: control-plane
+spec:
+  template:
+    spec:
+      containers:
+        - name: control-plane
+          env:
+            - name: CONTROL_PLANE_SSH_COMPOSE_SIGNING_KEY_FILE
+              value: /var/run/secrets/kodex/control-plane/ssh-compose/private-key
+          volumeMounts:
+            - name: ssh-compose-signing
+              mountPath: /var/run/secrets/kodex/control-plane/ssh-compose
+              readOnly: true
+      volumes:
+        - name: ssh-compose-signing
+          secret:
+            secretName: kodex-ssh-compose-signing
+            defaultMode: 0440
+            items:
+              - key: private-key
+                path: private-key

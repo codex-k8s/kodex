@@ -729,7 +729,7 @@ LEFT JOIN LATERAL (
     LIMIT 1
 ) role_image ON true
 WHERE n.organization_id = $1::uuid
-  AND (workspace_storage.id IS NULL OR ($5='SESSION_WORKSPACE_V2' AND workspace_storage.state IN ('EMPTY','RESTORED')))
+  AND (workspace_storage.id IS NULL OR ($5='SESSION_WORKSPACE_V2' AND workspace_storage.state IN ('EMPTY','CHECKPOINT_READY','RESTORED')))
   AND n.type = 'AGENT_EXECUTION'
   AND n.state = 'QUEUED'
   AND r.state IN ('RUNNING', 'QUEUED')
@@ -814,6 +814,39 @@ WHERE n.organization_id = $1::uuid
       WHERE edge.target_node_id = n.id
         AND edge.type = 'WAITING_FOR'
         AND dependency.state <> 'SUCCEEDED'
+        -- Ребро SERVER DAG сохраняет логический узел после физического отказа.
+        -- Зависимость удовлетворяет только точный принятый повтор из owner input;
+        -- неизвестное доказательство и прежние физические зависимости закрыты.
+        AND NOT COALESCE((
+            workflow_version.spec->>'ExecutionMode' = 'SERVER_DAG_V1'
+            AND edge.organization_id = n.organization_id
+            AND edge.root_run_id = root.id
+            AND dependency.organization_id = n.organization_id
+            AND dependency.root_run_id = root.id
+            AND dependency.workflow_step_origin_node_id IS NULL
+            AND EXISTS (
+                SELECT 1
+                FROM jsonb_array_elements(n.workflow_inputs) input(value)
+                JOIN control_plane.run_nodes producer
+                  ON producer.id::text = input.value #>> '{receipt,provenance,nodeId}'
+                 AND producer.organization_id = n.organization_id
+                 AND producer.root_run_id = root.id
+                 AND producer.agent_id = dependency.agent_id
+                 AND producer.workflow_step_key = dependency.workflow_step_key
+                 AND COALESCE(producer.workflow_step_origin_node_id,producer.id) = dependency.id
+                 AND producer.state = 'SUCCEEDED'
+                 AND to_jsonb(producer.workflow_business_attempt) = input.value #> '{receipt,attempt}'
+                JOIN control_plane.runs producer_run ON producer_run.id = producer.run_id
+                 AND producer_run.organization_id = n.organization_id
+                 AND producer_run.root_run_id = root.id AND producer_run.project_id = root.project_id
+                 AND producer_run.ref = input.value #>> '{receipt,runRef}'
+                WHERE input.value->>'sourceNodeId' = dependency.id::text
+                  AND input.value->>'stepKey' = dependency.workflow_step_key
+                  AND input.value->'receipt' = (dependency.workflow_attempts->-1)
+                  AND input.value #> '{receipt,accepted}' = 'true'::jsonb
+                  AND input.value #>> '{receipt,provenance,originNodeId}' = dependency.id::text
+            )
+        ),false)
   )
   AND (
       SELECT count(*)

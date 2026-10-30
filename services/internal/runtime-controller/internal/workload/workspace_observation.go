@@ -46,7 +46,7 @@ func (manager *Manager) ObserveWorkspaceBind(ctx context.Context, input runtimec
 		Spec: corev1.PersistentVolumeClaimSpec{AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 			Resources: corev1.VolumeResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceStorage: manager.pvcRequest}}}}
 	if err != nil || metadataErr != nil || !validInitializationPodUID(string(pvc.UID)) ||
-		pvc.Name != pvcName || pvc.Namespace != manager.config.RuntimeNamespace || !sessionPVCMatches(pvc, desired, manager.config.StorageClass) {
+		!preparedWorkspacePVCMatches(input, pvc, desired, manager.config.StorageClass) {
 		return empty, denied
 	}
 	consumers, err := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).List(ctx, metav1.ListOptions{Limit: 128})

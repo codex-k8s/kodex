@@ -4,8 +4,8 @@ title: Backend OIDC renewal и browser session
 type: operations
 status: approved
 owner: developer
-version: 1.0.0
-updated: 2026-09-06
+version: 1.0.1
+updated: 2026-10-30
 ---
 
 # Backend OIDC renewal
@@ -132,3 +132,33 @@ bootstrap companion выполняет CP unit; здесь она пока NOT R
 
 Локальный baseline предыдущего e1e8 не закрывает #1086. Полный новый baseline,
 PWA consumer, общее review и live acceptance — NOT RUN.
+
+## Корреляция отказа загрузки модуля
+
+При проверке reload или повторного входа отказ JS-модуля учитывается отдельно
+от результата backend renewal. Сообщение браузера об отсутствующем MIME
+само по себе не доказывает пустое тело либо источник повреждённого ответа.
+Успешный следующий reload не закрывает [#1868](https://github.com/codex-k8s/kodex/issues/1868).
+
+Nginx PWA добавляет к статическому ответу `X-Kodex-Asset-Response` со своим
+случайным `request_id`; тот же идентификатор записан как `response_ref`.
+Это идентификатор исходного ответа: browser cache может повторить его без
+нового запроса к nginx. Он не удостоверяет пользователя и не выдаёт полномочий.
+В журнале `module=1` обозначает путь JS-модуля, а `module_mime` принимает
+только `NOT_MODULE`, `EMPTY`, `JAVASCRIPT` или `OTHER`. URI, query, cookies,
+authorization headers и исходный неизвестный MIME не записываются.
+
+Диагностика сохраняет status, MIME, размер фактически прочитанного тела,
+признаки cache/service worker и безопасный идентификатор ответа в браузере.
+Отказ чтения тела остаётся `UNKNOWN`, а не нулём байт. При наличии
+`response_ref` оператор сверяет `status/bytes/module_mime` в журнале точной
+PWA-реплики. Отсутствие заголовка и совпадения в журнале ещё не назначает
+причину ingress, SSO, service worker или браузеру. Cookies, bearer и query
+не включаются в диагностический набор; повтор внешней mutation не выполняется.
+
+Это наблюдаемость, не исправление #1868. Перед адресной доставкой проверяются
+штатная сборка PWA, фактический `nginx -t` с одноразовыми fixture TLS без сети
+под UID101 и исходный снимок конфигурации для штатного scoped rollback.
+Текущая живая приёмка остаётся в Issue с точными SHA отдельно от исторических
+результатов выше. Семантика `request_id`, `log_format escape=json` и
+`add_header always` проверена через Context7 `/websites/nginx_en`.

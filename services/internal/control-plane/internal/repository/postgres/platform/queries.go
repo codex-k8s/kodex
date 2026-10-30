@@ -863,9 +863,26 @@ func (repository *Repository) GetAgent(ctx context.Context, principal value.Prin
 		return entity.Agent{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	item, err := repository.getAgentFromTx(ctx, tx, scope, ref)
+	if err != nil {
+		return entity.Agent{}, err
+	}
+	if tx.Commit(ctx) != nil {
+		return entity.Agent{}, errs.ErrUnavailable
+	}
+	return item, nil
+}
+
+// getAgentFromTx builds the canonical actor-scoped projection in the caller's transaction,
+// including instructions, grants and card hints. It neither commits nor starts another snapshot,
+// so a command receipt can preserve precisely the version produced by its own mutation.
+// getAgentFromTx собирает каноническую проекцию в транзакции вызывающего с проверкой субъекта,
+// инструкциями, grants и подсказками карточки. Не выполняет commit и не открывает другой снимок:
+// командный receipt сохраняет именно версию, созданную собственной мутацией.
+func (repository *Repository) getAgentFromTx(ctx context.Context, tx pgx.Tx, scope scope, ref string) (entity.Agent, error) {
 	var item entity.Agent
 	var canManage, canLaunch bool
-	err = tx.QueryRow(ctx, queryQueriesGetagentSelectAgentsOrganizationIdRefSystemKey, scope.organizationID, ref, scope.role, scope.actorID).Scan(
+	err := tx.QueryRow(ctx, queryQueriesGetagentSelectAgentsOrganizationIdRefSystemKey, scope.organizationID, ref, scope.role, scope.actorID).Scan(
 		&item.Ref, &item.ProjectRef, &item.RoleDefinitionRef, &item.RoleDefinitionName, &item.SystemKey, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.Avatar.ArtifactRef, &item.Avatar.ArtifactRevision, &item.State, &item.Enabled, &item.Version, &item.RuntimeKey, &item.RuntimeName, &item.Provider, &item.Model, &item.RuntimeRevision, &item.Capabilities, &item.KnowledgeArtifactRefs, &item.CreatedAt, &item.UpdatedAt, &canManage, &canLaunch)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return entity.Agent{}, errs.ErrNotFound
@@ -890,9 +907,6 @@ func (repository *Repository) GetAgent(ctx context.Context, principal value.Prin
 	}
 	if err := projectAgentCards(ctx, tx, scope, []*entity.Agent{&item}); err != nil {
 		return entity.Agent{}, err
-	}
-	if tx.Commit(ctx) != nil {
-		return entity.Agent{}, errs.ErrUnavailable
 	}
 	return item, nil
 }

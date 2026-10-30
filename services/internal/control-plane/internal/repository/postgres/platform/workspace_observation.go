@@ -133,7 +133,9 @@ func readWorkspaceObservationLease(ctx context.Context, tx pgx.Tx, current scope
 	if payload.Generation < 1 || result.leaseGeneration != payload.Generation || result.fenceDigest != hex.EncodeToString(fence[:]) ||
 		input.RuntimeRevisionDigest != payload.RuntimeRevisionDigest || input.WorkspaceStorage.WorkspaceRef != payload.WorkspaceRef ||
 		input.WorkspaceStorage.Generation != payload.WorkspaceGeneration ||
-		(payload.Phase == runtimecontract.WorkspaceObserveBind || payload.Phase == runtimecontract.WorkspaceObserveQuiescent) && (uuid.Validate(payload.PodUID) != nil || uuid.Validate(payload.PVCUID) != nil) {
+		(payload.Phase == runtimecontract.WorkspaceObserveBind || payload.Phase == runtimecontract.WorkspaceObserveQuiescent) &&
+			(uuid.Validate(payload.PodUID) != nil || uuid.Validate(payload.PVCUID) != nil ||
+				input.WorkspaceStorage.VolumeReady != nil && payload.PVCUID != input.WorkspaceStorage.VolumeReady.Preparation.PVCUID) {
 		return result, errs.ErrForbidden
 	}
 	return result, nil

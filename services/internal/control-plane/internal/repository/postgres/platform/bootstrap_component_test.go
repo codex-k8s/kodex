@@ -366,7 +366,12 @@ func TestBootstrapComponent(t *testing.T) {
 	// Общая расширенная матрица выполняется последовательно; runtime deadlines не меняются.
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, dsn)
+	configuration, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		t.Fatal("parse disposable PostgreSQL configuration")
+	}
+	configuration.ConnConfig.Tracer = componentQueryRejectionTracer{t: t}
+	pool, err := pgxpool.NewWithConfig(ctx, configuration)
 	if err != nil {
 		t.Fatalf("open disposable PostgreSQL: %v", err)
 	}
@@ -612,7 +617,11 @@ func TestBootstrapComponent(t *testing.T) {
 		testSystemAssistantCorePromptUpgrade(t, ctx, repository, pool)
 	})
 	t.Run("provider credential cleanup is durable fenced and exact", func(t *testing.T) {
-		testProviderCredentialCleanupLifecycle(t, ctx, repository, pool)
+		// Claim обслуживает глобальную очередь; собственная БД не смешивает задачи с прежними subtests.
+		isolated := newIsolatedAssistantComponentPool(t, ctx)
+		defer isolated.Close()
+		isolatedRepository := newSyntheticRuntimeComponentRepository(t, ctx, isolated)
+		testProviderCredentialCleanupLifecycle(t, ctx, isolatedRepository, isolated)
 	})
 	t.Run("interaction identity is owner bound scoped and revocable", func(t *testing.T) { testInteractionIdentity(t, ctx, repository, pool) })
 	t.Run("integration connection tests bind exact workload before replay", func(t *testing.T) { testIntegrationTestAuthority(t, ctx, repository) })
@@ -3541,13 +3550,15 @@ func testInstructionDraftSave(t *testing.T, ctx context.Context, repository *Rep
 	}
 	agent := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "instruction-save-agent", "Instruction editor")
 	firstVersion := agent.Version
-	first, err := service.Execute(ctx, command.Command{Kind: command.CreateInstructions, Principal: owner,
+	firstInput := command.Command{Kind: command.CreateInstructions, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "instruction-save-first", ExpectedVersion: &firstVersion},
 		Payload:  command.AgentInput{Ref: agent.Ref, Instructions: "First mutable instruction draft with enough content."},
-	})
+	}
+	first, err := service.Execute(ctx, firstInput)
 	if err != nil || first.Agent == nil {
 		t.Fatalf("create instruction draft: result=%#v err=%v", first.Agent, err)
 	}
+	assertInstructionCommandProjection(t, ctx, service, owner, first.Agent)
 	secondVersion := first.Agent.Version
 	second, err := service.Execute(ctx, command.Command{Kind: command.CreateInstructions, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "instruction-save-second", ExpectedVersion: &secondVersion},
@@ -3556,6 +3567,11 @@ func testInstructionDraftSave(t *testing.T, ctx context.Context, repository *Rep
 	if err != nil || second.Agent == nil || second.Agent.Version != secondVersion+1 {
 		t.Fatalf("replace instruction draft: result=%#v err=%v", second.Agent, err)
 	}
+	assertInstructionCommandProjection(t, ctx, service, owner, second.Agent)
+	if replay, replayErr := service.Execute(ctx, firstInput); replayErr != nil || !reflect.DeepEqual(replay.Agent, first.Agent) {
+		t.Fatalf("historical instruction replay changed the original projection: %v", replayErr)
+	}
+	assertInstructionCommandProjection(t, ctx, service, owner, second.Agent)
 	var count int
 	var state, content string
 	if err := repository.pool.QueryRow(ctx, bootstrapComponentInstructionDraftReadbackQuery, agent.Ref).Scan(&count, &state, &content); err != nil {
@@ -5583,18 +5599,16 @@ func testIdempotencyOCCAndConcurrentRuns(t *testing.T, ctx context.Context, repo
 	}
 }
 
-// testHumanGateLifecycle publishes a one-step gated workflow and requires execution completion to
-// leave one WAITING_HUMAN run/gate with matching project/workflow card counters. APPROVE must
-// close the root graph; a new resolution key on the terminal gate is AlreadyResolved. A separate
-// REQUEST_CHANGES path requeues the agent while keeping the run active, creates a second gate
-// after rework and completes on final approval. It delegates historical-consequence/list checks;
+// testHumanGateLifecycle executes a published step through coordinator/delegation commands before checking its WAITING_HUMAN result gate.
+// APPROVE queues the exact legacy callback; only callback completion closes the root. A new decision key remains AlreadyResolved.
+// REQUEST_CHANGES creates a separate physical child and preserves the first gate, then a new result gate precedes the final callback.
+// Card counters and historical source/consequence checks use actual owner reads;
 // these fixture commands do not represent a human review or running agent.
-// testHumanGateLifecycle публикует одношаговый workflow с gate и требует после completion один
-// WAITING_HUMAN run/gate с соответствующими project/workflow card counters. APPROVE должен закрыть
-// root graph; новый resolution key для terminal gate даёт AlreadyResolved. Отдельный путь
-// REQUEST_CHANGES возвращает агента в очередь при активном run, создаёт второй gate после
-// доработки и завершается после итогового approval. Делегирует проверки исторических последствий и
-// списка; тестовые команды не являются ручным review или работающим агентом.
+// testHumanGateLifecycle исполняет опубликованный этап через coordinator/delegation commands до проверки его WAITING_HUMAN result gate.
+// APPROVE ставит exact legacy callback; только completion callback закрывает root. Новый decision key остаётся AlreadyResolved.
+// REQUEST_CHANGES создаёт отдельный physical child и сохраняет первый gate; новый result gate предшествует final callback.
+// Card counters и исторические source/consequence проверяются по actual owner reads;
+// тестовые команды не являются ручным review или работающим агентом.
 func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repository) {
 	seedObservedCatalogFixture(t, ctx, repository)
 	t.Helper()
@@ -5657,7 +5671,27 @@ func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	if err != nil || launched.Run == nil {
 		t.Fatalf("launch gate workflow: run=%#v err=%v", launched.Run, err)
 	}
-	waiting := claimAndCompleteRun(t, ctx, service, worker, launched.Run.Ref, "gate-review", false)
+	// Выполняется опубликованный этап: model success координатора без delegate не является результатом workflow.
+	openResultGate := func(runRef, key string) command.Result {
+		t.Helper()
+		coordinator := claimComponentExecution(t, ctx, service, worker, runRef, key+"-coordinator")
+		child, err := service.Execute(ctx, command.Command{Kind: command.DelegateExecution, Principal: worker,
+			Mutation: value.Mutation{IdempotencyKey: key + "-delegate"}, Payload: command.DelegateInput{
+				LeaseRef: stringMap(coordinator, "leaseRef"), Fence: stringMap(coordinator, "fence"),
+				Generation: runtimeRevisionMapInt64(coordinator, "generation"), TargetAgentRef: reviewer.Ref,
+				WorkflowStepKey: "review", Task: "Review the exact supplier contract."}})
+		if err != nil || child.Run == nil {
+			t.Fatal("materialize the mandatory gated review step")
+		}
+		completeClaimedExecution(t, ctx, service, worker, coordinator, key+"-coordinator", false)
+		claimAndCompleteRun(t, ctx, service, worker, child.Run.Ref, key+"-child", false)
+		root, graph, err := service.GetRunGraph(ctx, owner, runRef)
+		if err != nil {
+			t.Fatal("read the actual gated root after delegated completion")
+		}
+		return command.Result{Run: &root, Graph: &graph}
+	}
+	waiting := openResultGate(launched.Run.Ref, "gate-review")
 	if waiting.Run == nil || waiting.Run.State != "WAITING_HUMAN" || len(waiting.Run.GateRefs) != 1 {
 		t.Fatalf("open owner gate: run=%#v event=%#v", waiting.Run, waiting.Event)
 	}
@@ -5675,13 +5709,14 @@ func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repos
 		Mutation: value.Mutation{IdempotencyKey: "gate-resolve-approve", ExpectedVersion: &gateVersion},
 		Payload:  command.GateResolutionInput{GateRef: gateRef, Decision: "APPROVE", Comment: "Approved for use"},
 	})
-	if err != nil || resolved.Gate == nil || resolved.Gate.State != "APPROVED" || resolved.Run == nil || resolved.Run.State != "SUCCEEDED" {
+	if err != nil || resolved.Gate == nil || resolved.Gate.State != "APPROVED" || resolved.Run == nil || resolved.Run.State != "RUNNING" {
 		t.Fatalf("resolve terminal owner gate: gate=%#v run=%#v err=%v", resolved.Gate, resolved.Run, err)
 	}
-	if resolved.Graph == nil || graphNodeState(resolved.Graph.Nodes, "ROOT_PROCESS") != "SUCCEEDED" {
-		t.Fatalf("terminal gate did not close the root graph: %#v", resolved.Graph)
+	accepted := claimAndCompleteRun(t, ctx, service, worker, launched.Run.Ref, "gate-accepted-callback", false)
+	if accepted.Run == nil || accepted.Run.State != "SUCCEEDED" || accepted.Graph == nil || graphNodeState(accepted.Graph.Nodes, "ROOT_PROCESS") != "SUCCEEDED" {
+		t.Fatal("accepted result callback did not finish the exact root graph")
 	}
-	testGateSourceAndHistoricalConsequences(t, ctx, repository, service, owner, *resolved.Gate)
+	testGateSourceAndHistoricalConsequences(t, ctx, repository, service, owner, *resolved.Gate, false)
 	_, err = service.Execute(ctx, command.Command{Kind: command.ResolveOwnerGate, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "gate-resolve-replay", ExpectedVersion: &gateVersion},
 		Payload:  command.GateResolutionInput{GateRef: gateRef, Decision: "APPROVE", Comment: "Replay"},
@@ -5697,7 +5732,7 @@ func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	if err != nil || changeRun.Run == nil {
 		t.Fatalf("launch change-request workflow: run=%#v err=%v", changeRun.Run, err)
 	}
-	changeWaiting := claimAndCompleteRun(t, ctx, service, worker, changeRun.Run.Ref, "gate-change-review", false)
+	changeWaiting := openResultGate(changeRun.Run.Ref, "gate-change-review")
 	if changeWaiting.Run == nil || changeWaiting.Run.State != "WAITING_HUMAN" || len(changeWaiting.Run.GateRefs) != 1 {
 		t.Fatalf("open change-request gate: run=%#v", changeWaiting.Run)
 	}
@@ -5710,10 +5745,26 @@ func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	if err != nil || changes.Gate == nil || changes.Gate.State != "CHANGES_REQUESTED" || changes.Run == nil || changes.Run.State != "RUNNING" {
 		t.Fatalf("request workflow changes: gate=%#v run=%#v err=%v", changes.Gate, changes.Run, err)
 	}
-	if changes.Graph == nil || graphNodeState(changes.Graph.Nodes, "AGENT_EXECUTION") != "QUEUED" {
-		t.Fatalf("requested changes did not requeue the agent node: %#v", changes.Graph)
+	var reworkRunRef string
+	if changes.Graph != nil {
+		for _, node := range changes.Graph.Nodes {
+			if node.Type == "AGENT_EXECUTION" && node.State == "QUEUED" {
+				if reworkRunRef != "" {
+					t.Fatal("owner rework created more than one queued execution")
+				}
+				reworkRunRef = node.RunRef
+			}
+		}
 	}
-	reworked := claimAndCompleteRun(t, ctx, service, worker, changes.Run.Ref, "gate-change-rework", false)
+	if reworkRunRef == "" || reworkRunRef == changeRun.Run.Ref {
+		t.Fatal("owner changes did not create an exact separate rework execution")
+	}
+	claimAndCompleteRun(t, ctx, service, worker, reworkRunRef, "gate-change-rework", false)
+	reworkedRoot, err := service.GetRun(ctx, owner, changeRun.Run.Ref)
+	if err != nil {
+		t.Fatal("read exact root after owner rework")
+	}
+	reworked := command.Result{Run: &reworkedRoot}
 	if reworked.Run == nil || reworked.Run.State != "WAITING_HUMAN" || len(reworked.Run.GateRefs) != 2 {
 		t.Fatalf("open gate after requested changes: run=%#v", reworked.Run)
 	}
@@ -5723,8 +5774,12 @@ func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repos
 		Mutation: value.Mutation{IdempotencyKey: "gate-resolve-rework", ExpectedVersion: &secondGateVersion},
 		Payload:  command.GateResolutionInput{GateRef: finalGateRef, Decision: "APPROVE", Comment: "Rework approved"},
 	})
-	if err != nil || final.Run == nil || final.Run.State != "SUCCEEDED" {
+	if err != nil || final.Run == nil || final.Run.State != "RUNNING" {
 		t.Fatalf("approve reworked workflow: run=%#v err=%v", final.Run, err)
+	}
+	finished := claimAndCompleteRun(t, ctx, service, worker, changeRun.Run.Ref, "gate-reworked-callback", false)
+	if finished.Run == nil || finished.Run.State != "SUCCEEDED" {
+		t.Fatal("approved rework callback did not finish the exact workflow")
 	}
 	testOwnerGateList(t, ctx, service, owner, project.Project.Ref)
 }
@@ -7456,12 +7511,21 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 // завершает тест; helper не запускает run и не выбирает другой claim.
 func claimAndCompleteRun(t *testing.T, ctx context.Context, service *platformservice.Service, worker value.Principal, expectedRunRef, key string, artifact bool) command.Result {
 	t.Helper()
+	return completeClaimedExecution(t, ctx, service, worker, claimComponentExecution(t, ctx, service, worker, expectedRunRef, key), key, artifact)
+}
+
+// claimComponentExecution requires one exact fixture execution and never logs claim bodies, fences or provider metadata.
+// It preserves the original claim key, workload, limit and failure behavior for completion and workflow fixtures.
+// claimComponentExecution требует один exact fixture execution и не логирует claim bodies, fences либо provider metadata.
+// Сохраняет прежние claim key, workload, limit и failure behavior для completion и workflow fixtures.
+func claimComponentExecution(t *testing.T, ctx context.Context, service *platformservice.Service, worker value.Principal, expectedRunRef, key string) map[string]any {
+	t.Helper()
 	claimed, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: key + "-claim"}, Payload: command.LeaseInput{WorkloadInstance: "runtime-test", Limit: 1}})
 	if err != nil || len(claimed.RuntimeItems) != 1 || stringMap(claimed.RuntimeItems[0], "runRef") != expectedRunRef {
-		t.Fatalf("claim %s execution: expected_run=%s claims=%#v err=%v", key, expectedRunRef, claimed.RuntimeItems, err)
+		t.Fatalf("claim %s execution: expected_run=%s count=%d error_nil=%t", key, expectedRunRef, len(claimed.RuntimeItems), err == nil)
 	}
-	return completeClaimedExecution(t, ctx, service, worker, claimed.RuntimeItems[0], key, artifact)
+	return claimed.RuntimeItems[0]
 }
 
 // completeClaimedExecution forwards the supplied fixture lease, context, worker, key and artifact

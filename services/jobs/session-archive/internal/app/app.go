@@ -12,6 +12,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/libs/go/httpserver"
 	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/controller"
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
@@ -90,7 +91,13 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 	}
 	readiness.Set(false, "control_plane_unchecked")
 	metrics.SetReady(false)
-	workers := serviceruntime.StartWorkers(lifecycle, technical.Worker(), runLoop(control, kubernetes, readiness, metrics, owned, logger, config))
+	volumeEnabled := config.WorkspaceStorageProfile == runtimecontract.WorkspaceStorageProfile
+	availability := newArchiveWorkerReadiness(readiness, metrics, volumeEnabled)
+	workerSet := []serviceruntime.Worker{technical.Worker(), runLoop(control, kubernetes, availability, owned, logger, config)}
+	if volumeEnabled {
+		workerSet = append(workerSet, runWorkspaceVolumeLoop(control, kubernetes, availability, owned, logger, config))
+	}
+	workers := serviceruntime.StartWorkers(lifecycle, workerSet...)
 	err = workers.Wait(context.WithoutCancel(lifecycle))
 	readiness.Set(false, "stopping")
 	metrics.SetReady(false)
@@ -106,7 +113,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 
 // runLoop checks Kubernetes availability and claims at most one owner task before a bounded polling delay.
 // RU: runLoop проверяет доступность Kubernetes и получает не более одного owner-задания до ограниченной паузы опроса.
-func runLoop(control *controlplaneclient.Client, kube *controller.Controller, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, owned *archiveMetrics, logger *slog.Logger, config Config) serviceruntime.Worker {
+func runLoop(control *controlplaneclient.Client, kube *controller.Controller, availability *archiveWorkerReadiness, owned *archiveMetrics, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		var lastKubernetesCheck time.Time
 		kubernetesReady := true
@@ -118,8 +125,7 @@ func runLoop(control *controlplaneclient.Client, kube *controller.Controller, re
 				lastKubernetesCheck = time.Now()
 				kubernetesReady = err == nil
 				if err != nil {
-					readiness.Set(false, "kubernetes_unavailable")
-					metrics.SetReady(false)
+					availability.setArchive(false, "kubernetes_unavailable")
 					logger.WarnContext(ctx, "session archive Kubernetes check failed", "error_class", "kubernetes_api")
 				}
 			}
@@ -129,7 +135,7 @@ func runLoop(control *controlplaneclient.Client, kube *controller.Controller, re
 				cycle, cancel := context.WithTimeout(ctx, config.RPCDeadline)
 				claimed, err := control.SessionArchive.ClaimSessionArchiveTasks(cycle, &controlplanev1.ClaimSessionArchiveTasksRequest{WorkloadInstance: config.InstanceID, Limit: 1})
 				cancel()
-				setArchiveClaimReadiness(readiness, metrics, err)
+				availability.setArchive(err == nil, "control_plane_unavailable")
 				if err != nil {
 					owned.cycles.WithLabelValues("error").Inc()
 					logger.WarnContext(ctx, archiveClaimFailureMessage, "error_class", "control_plane", archiveRPCCodeAttribute, status.Code(err).String())
@@ -167,9 +173,15 @@ func setArchiveClaimReadiness(readiness *serviceruntime.Readiness, metrics *shar
 	metrics.SetReady(true)
 }
 
-// process validates a leased task, executes its renewing worker and submits one generation-bound terminal owner command.
-// RU: process проверяет задание с lease, выполняет worker с продлением и отправляет конечную owner-команду, связанную с поколением.
-func process(ctx context.Context, control *controlplaneclient.Client, kube *controller.Controller, claim *controlplanev1.SessionArchiveTask, metrics *archiveMetrics, logger *slog.Logger, config Config) error {
+// archiveTaskExecutor keeps physical execution separate from terminal receipt acknowledgement.
+// archiveTaskExecutor отделяет физическое исполнение от подтверждения конечной квитанции.
+type archiveTaskExecutor interface {
+	ExecuteRetained(context.Context, model.Task, func(context.Context) error) (model.Result, *controller.RetainedAttempt, error)
+}
+
+// process validates a leased task, executes its worker once and retries only the identical generation-bound owner ACK.
+// RU: process проверяет задание с lease, исполняет worker один раз и повторяет только идентичное owner ACK того же поколения.
+func process(ctx context.Context, control *controlplaneclient.Client, kube archiveTaskExecutor, claim *controlplanev1.SessionArchiveTask, metrics *archiveMetrics, logger *slog.Logger, config Config) error {
 	if claim == nil || claim.GetLease() == nil {
 		return errors.New("claimed session archive task is incomplete")
 	}
@@ -201,37 +213,38 @@ func process(ctx context.Context, control *controlplaneclient.Client, kube *cont
 	if runErr != nil {
 		result = model.Result{Success: false, SafeErrorCode: "SESSION_ARCHIVE_KUBERNETES_UNAVAILABLE"}
 	}
-	rpc, cancelRPC := context.WithTimeout(context.WithoutCancel(ctx), config.RPCDeadline)
-	defer cancelRPC()
 	mutation := &controlplanev1.MutationContext{IdempotencyKey: uuid.NewSHA1(uuid.NameSpaceOID, []byte(task.TaskRef+"\x00"+fmt.Sprint(lease.GetGeneration())+"\x00complete")).String()}
 	base := func() (string, string, string, int64) {
 		return lease.GetRef(), lease.GetFence(), task.TaskRef, lease.GetGeneration()
 	}
 	lr, lf, tr, g := base()
 	stage := archiveRPCFail
-	if !result.Success {
-		_, err = control.SessionArchive.FailSessionArchiveTask(rpc, &controlplanev1.FailSessionArchiveTaskRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, SafeErrorCode: result.SafeErrorCode})
-	} else {
-		switch task.Kind {
-		case "SNAPSHOT":
-			stage = archiveRPCCompleteSnapshot
-			request := &controlplanev1.CompleteSessionSnapshotRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, FormatVersion: result.FormatVersion, ObjectKey: result.ObjectKey, ObjectVersion: result.ObjectVersion, ObjectEtag: result.ObjectETag, ObjectDigest: result.ObjectDigest, ObjectSizeBytes: result.ObjectSizeBytes, SourceSizeBytes: result.SourceSizeBytes}
-			if task.Workspace != nil {
-				request.SourceSha256, request.SourceEntryCount = result.SourceSHA256, result.SourceEntryCount
+	err = acknowledgeOwner(ctx, config.RPCDeadline, func(rpc context.Context) error {
+		if !result.Success {
+			_, err = control.SessionArchive.FailSessionArchiveTask(rpc, &controlplanev1.FailSessionArchiveTaskRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, SafeErrorCode: result.SafeErrorCode})
+		} else {
+			switch task.Kind {
+			case "SNAPSHOT":
+				stage = archiveRPCCompleteSnapshot
+				request := &controlplanev1.CompleteSessionSnapshotRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, FormatVersion: result.FormatVersion, ObjectKey: result.ObjectKey, ObjectVersion: result.ObjectVersion, ObjectEtag: result.ObjectETag, ObjectDigest: result.ObjectDigest, ObjectSizeBytes: result.ObjectSizeBytes, SourceSizeBytes: result.SourceSizeBytes}
+				if task.Workspace != nil {
+					request.SourceSha256, request.SourceEntryCount = result.SourceSHA256, result.SourceEntryCount
+				}
+				_, err = control.SessionArchive.CompleteSessionSnapshot(rpc, request)
+			case "RESTORE":
+				stage = archiveRPCCompleteRestore
+				_, err = control.SessionArchive.CompleteSessionRestore(rpc, &controlplanev1.CompleteSessionRestoreRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, FormatVersion: result.FormatVersion, ObjectKey: result.ObjectKey, ObjectVersion: result.ObjectVersion, ObjectEtag: result.ObjectETag, ObjectDigest: result.ObjectDigest, ObjectSizeBytes: result.ObjectSizeBytes, RestoredSourceSha256: result.SourceSHA256, RestoredSourceSizeBytes: result.SourceSizeBytes})
+			case "DELETE_PVC":
+				stage = archiveRPCCompletePVCDeletion
+				_, err = control.SessionArchive.CompleteSessionPVCDeletion(rpc, &controlplanev1.CompleteSessionPVCDeletionRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, PvcName: task.PVCName})
+			case "DELETE_OBJECT":
+				stage = archiveRPCCompleteObjectDeletion
+				_, err = control.SessionArchive.CompleteSessionObjectDeletion(rpc, &controlplanev1.CompleteSessionObjectDeletionRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, ObjectKey: task.TargetObjectKey, ObjectVersion: task.TargetObjectVersion})
 			}
-			_, err = control.SessionArchive.CompleteSessionSnapshot(rpc, request)
-		case "RESTORE":
-			stage = archiveRPCCompleteRestore
-			_, err = control.SessionArchive.CompleteSessionRestore(rpc, &controlplanev1.CompleteSessionRestoreRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, FormatVersion: result.FormatVersion, ObjectKey: result.ObjectKey, ObjectVersion: result.ObjectVersion, ObjectEtag: result.ObjectETag, ObjectDigest: result.ObjectDigest, ObjectSizeBytes: result.ObjectSizeBytes, RestoredSourceSha256: result.SourceSHA256, RestoredSourceSizeBytes: result.SourceSizeBytes})
-		case "DELETE_PVC":
-			stage = archiveRPCCompletePVCDeletion
-			_, err = control.SessionArchive.CompleteSessionPVCDeletion(rpc, &controlplanev1.CompleteSessionPVCDeletionRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, PvcName: task.PVCName})
-		case "DELETE_OBJECT":
-			stage = archiveRPCCompleteObjectDeletion
-			_, err = control.SessionArchive.CompleteSessionObjectDeletion(rpc, &controlplanev1.CompleteSessionObjectDeletionRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, ObjectKey: task.TargetObjectKey, ObjectVersion: task.TargetObjectVersion})
 		}
-	}
-	observeArchiveRPC(rpc, logger, task, stage, err)
+		return err
+	})
+	observeArchiveRPC(ctx, logger, task, stage, err)
 	outcome := "success"
 	if err != nil {
 		outcome = "error"

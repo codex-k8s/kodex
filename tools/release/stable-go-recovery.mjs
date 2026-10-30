@@ -19,7 +19,9 @@ export function prepareGoRecovery(current, item) {
   if (compiled) restored = applyReverseSpec(restored, recovery.inverse);
   requireValue(fingerprint(restored) === item.beforeSpecSHA256, "STABLE_RECOVERY_INVERSE_MISMATCH");
   const restoredLabels = { ...labels };
-  if (recovery.beforeProfilePresent) restoredLabels["kodex.dev/local-profile"] = "hot-reload";
+  requireValue(recovery.beforeProfileValue === undefined || ["hot-reload", "stable"].includes(recovery.beforeProfileValue),
+    "STABLE_RECOVERY_PROFILE_INVALID");
+  if (recovery.beforeProfilePresent) restoredLabels["kodex.dev/local-profile"] = recovery.beforeProfileValue ?? "hot-reload";
   else delete restoredLabels["kodex.dev/local-profile"];
   requireValue(fingerprint(restoredLabels) === recovery.beforeLabelsSHA256, "STABLE_RECOVERY_LABELS_MISMATCH");
   const unchanged = source && specHash === item.beforeSpecSHA256;

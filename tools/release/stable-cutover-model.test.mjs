@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { prepareGoCutover as prepareModel, validateStorageProtocol } from "./stable-cutover-model.mjs";
 import { applyReverseSpec } from "./stable-reverse-patch.mjs";
+import { prepareGoRecovery } from "./stable-go-recovery.mjs";
 
 const resources = { requests: { cpu: "100m", memory: "128Mi" }, limits: { cpu: "1", memory: "512Mi" } };
 const prepareGoCutover = (deployment, release, options = {}) => prepareModel(deployment, release,
@@ -19,6 +20,33 @@ function fixture(name = "session-archive", module = "services/jobs/session-archi
 }
 const release = { component: "session-archive", image: "example.invalid/kodex/session-archive@sha256:" + "a".repeat(64),
   sourceSHA: "b".repeat(40), provenanceSHA256: "c".repeat(64) };
+
+test("повторная immutable-поставка сохраняет worker image, секреты и корректный forward-only rollback", () => {
+  const hot = fixture();
+  const first = prepareGoCutover(hot, release);
+  const stable = structuredClone(hot);
+  stable.spec = first.patch.at(-1).value;
+  stable.metadata.labels = first.patch.find(p => p.path === "/metadata/labels").value;
+  const next = { ...release, image: release.image.replace(/a{64}$/, "e".repeat(64)), sourceSHA: "f".repeat(40) };
+  const planned = prepareGoCutover(stable, next);
+  const after = planned.patch.at(-1).value;
+  assert.deepEqual(after.template.spec.containers[0].args, ["controller"]);
+  assert.equal(after.template.spec.containers[0].env.find(e => e.name === "SESSION_ARCHIVE_WORKER_IMAGE").value, next.image);
+  assert.deepEqual(after.template.spec.containers[0].env.find(e => e.name === "TOKEN"), stable.spec.template.spec.containers[0].env.find(e => e.name === "TOKEN"));
+  const current = { ...structuredClone(stable), spec: after };
+  const recovery = prepareGoRecovery(current, planned);
+  assert.equal(recovery.archivePause, true);
+  assert.equal(recovery.restoredSpec.replicas, 0);
+  assert.equal(recovery.restoredLabels["kodex.dev/local-profile"], "stable");
+  assert.equal(recovery.restoredSpec.template.spec.containers[0].image, release.image);
+  for (const mutate of [v => v.spec.template.spec.volumes.push({ name: "private", hostPath: { path: "/private" } }),
+    v => v.spec.template.metadata.annotations["kodex.dev/source-sha"] = "0".repeat(40),
+    v => v.spec.template.spec.containers[0].args = ["worker"],
+    v => delete v.spec.template.metadata.labels["kodex.dev/local-profile"]]) {
+    const bad = structuredClone(stable); mutate(bad);
+    assert.throws(() => prepareGoCutover(bad, next), /STABLE_SOURCE_INVALID/);
+  }
+});
 
 test("normal cutover preserves mode secrets and source input with exact CAS", () => {
   const value = fixture();
@@ -113,6 +141,29 @@ test("artifact spool init switches to the same compiled controller without losin
   assert.deepEqual(init.args, ["--prepare-artifact-spool", "/var/lib/kodex/runtime-controller/artifact-spool"]);
   assert.equal(init.volumeMounts.length, 1);
   assert.ok(after.template.spec.volumes.some(v => v.name === "artifact-spool"));
+});
+
+test("повторная поставка controller устраняет прежнее различие main и spool image", () => {
+  const hot = fixture("runtime-controller", "services/internal/runtime-controller", []);
+  const oldRelease = { ...release, component: "runtime-controller", image: "registry.local.kodex/kodex/runtime-controller@sha256:" + "a".repeat(64) };
+  const stable = structuredClone(hot);
+  const first = prepareGoCutover(hot, oldRelease);
+  stable.spec = first.patch.at(-1).value;
+  stable.metadata.labels = first.patch.find(p => p.path === "/metadata/labels").value;
+  stable.spec.template.spec.volumes.push({ name: "artifact-spool", emptyDir: { sizeLimit: "1Gi" } });
+  stable.spec.template.spec.initContainers = [{ name: "artifact-spool-init",
+    image: "registry.local.kodex/kodex/runtime-controller@sha256:" + "e".repeat(64),
+    command: ["/usr/local/bin/runtime-controller"],
+    args: ["--prepare-artifact-spool", "/var/lib/kodex/runtime-controller/artifact-spool"],
+    volumeMounts: [{ name: "artifact-spool", mountPath: "/var/lib/kodex/runtime-controller/artifact-spool" }] }];
+  const next = { ...oldRelease, image: oldRelease.image.replace(/a{64}$/, "f".repeat(64)) };
+  const result = prepareGoCutover(stable, next), after = result.patch.at(-1).value;
+  assert.equal(after.template.spec.containers[0].image, next.image);
+  assert.equal(after.template.spec.initContainers[0].image, next.image);
+  assert.deepEqual(applyReverseSpec(after, result.recovery.inverse), stable.spec);
+  const foreign = structuredClone(stable);
+  foreign.spec.template.spec.initContainers[0].image = next.image.replace("runtime-controller@", "control-plane@");
+  assert.throws(() => prepareGoCutover(foreign, next), /STABLE_SPOOL_INIT_INVALID/);
 });
 
 test("Go recovery material roundtrips source without copying unchanged credentials", () => {

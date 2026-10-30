@@ -36,12 +36,32 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 	}
 	switch input.Kind {
 	case command.ClaimWorkspaceVolumeTasks:
-		if input.Principal.CallerWorkload != "session-archive" || input.Principal.Permission != command.WorkspaceVolumeCommandPermission(input.Kind) {
+		if current.authorityProjectID != "" || input.Principal.CallerWorkload != "session-archive" || input.Principal.Permission != command.WorkspaceVolumeCommandPermission(input.Kind) {
 			return errs.ErrForbidden
 		}
 		payload, ok := input.Payload.(command.WorkspaceVolumeClaimInput)
-		if !ok || payload.Limit < 1 || payload.Limit > 16 || strings.TrimSpace(payload.WorkloadInstance) == "" || len(payload.WorkloadInstance) > 256 {
+		if !ok || input.Mutation.ExpectedVersion != nil || payload.Limit < 1 || payload.Limit > 16 || strings.TrimSpace(payload.WorkloadInstance) == "" || len(payload.WorkloadInstance) > 256 {
 			return errs.ErrInvalid
+		}
+		return nil
+	case command.CompleteWorkspaceVolumeTask, command.FailWorkspaceVolumeTask:
+		if current.authorityProjectID != "" || input.Principal.CallerWorkload != "session-archive" ||
+			input.Principal.Permission != command.WorkspaceVolumeCommandPermission(input.Kind) {
+			return errs.ErrForbidden
+		}
+		payload, ok := input.Payload.(command.WorkspaceVolumeTaskInput)
+		if !ok || input.Mutation.ExpectedVersion != nil {
+			return errs.ErrInvalid
+		}
+		args, err := workspaceVolumeFenceArgs(current, payload)
+		if err != nil {
+			return err
+		}
+		var rootID string
+		if err := tx.QueryRow(ctx, queryWorkspaceVolumeReportOrigin, args).Scan(&rootID); errors.Is(err, pgx.ErrNoRows) {
+			return errs.ErrForbidden
+		} else if err != nil {
+			return errs.ErrUnavailable
 		}
 		return nil
 	case command.ObserveWorkspace:

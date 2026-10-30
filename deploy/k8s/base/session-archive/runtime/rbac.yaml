@@ -6,7 +6,8 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: [pods]
-    verbs: [list]
+    # Только controller: positive UID/RV join и освобождение завершённых helper Pods.
+    verbs: [get, list, delete]
   - apiGroups: [""]
     resources: [configmaps]
     verbs: [get, create, delete]
@@ -15,7 +16,8 @@ rules:
     verbs: [get, create, delete]
   - apiGroups: [batch]
     resources: [jobs]
-    verbs: [get, list, create, delete]
+    # PATCH используется только для CAS suspend положительно созданной physical attempt.
+    verbs: [get, list, create, delete, patch]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

@@ -30,8 +30,8 @@ func validWorkflowPublicationMode(value WorkflowPublication) bool {
 	switch value.Version {
 	case 1:
 		return value.ExecutionMode == "" && value.ReworkPolicy == "" && value.ResultEvidenceProfile == ""
-	case 2, 3:
-		if value.Version == 2 && value.ResultEvidenceProfile != "" || value.Version == 3 && value.ResultEvidenceProfile != "GITHUB_REVIEW_QA_V1" {
+	case 2, 3, 4:
+		if value.Version == 2 && value.ResultEvidenceProfile != "" || value.Version == 3 && value.ResultEvidenceProfile != "GITHUB_REVIEW_QA_V1" || value.Version == 4 && value.ResultEvidenceProfile != workflowPDLCProfile {
 			return false
 		}
 		textBytes := len(value.Name) + len(value.Purpose) + len(value.Instructions) + len(value.CompletionCriteria)
@@ -49,14 +49,17 @@ func validWorkflowPublicationMode(value WorkflowPublication) bool {
 // validWorkflowPublicationServerStep проверяет ограниченный структурный контракт до канонического
 // кодирования. Точные grants, независимость сотрудников и приёмка доказательств принадлежат владельцу.
 func validWorkflowPublicationServerStep(step WorkflowPublicationStep) bool {
-	return validWorkflowPublicationServerStepForProfile(step, "")
+	return ValidWorkflowPublicationServerStepForProfile(step, "")
 }
 
-// validWorkflowPublicationServerStepForProfile preserves old predicates and requires the explicit
+// ValidWorkflowPublicationServerStepForProfile preserves old predicates and requires the explicit
 // profile to bind QA to one same-step JSON report; syntax never proves capture or execution.
-// validWorkflowPublicationServerStepForProfile сохраняет прежние условия и связывает QA с одним
+// ValidWorkflowPublicationServerStepForProfile сохраняет прежние условия и связывает QA с одним
 // JSON report того же шага только явного профиля; синтаксис не доказывает capture либо execution.
-func validWorkflowPublicationServerStepForProfile(step WorkflowPublicationStep, profile string) bool {
+func ValidWorkflowPublicationServerStepForProfile(step WorkflowPublicationStep, profile string) bool {
+	if profile != "" && !workflowPublicationNativeEvidence(profile) {
+		return false
+	}
 	if !workflowResultKey.MatchString(step.Key) || len(step.DependsOn) > 8 || len(step.ResultRequirements) < 1 || len(step.ResultRequirements) > 4 {
 		return false
 	}
@@ -72,10 +75,12 @@ func validWorkflowPublicationServerStepForProfile(step WorkflowPublicationStep, 
 	}
 	seen := map[string]bool{}
 	for _, requirement := range step.ResultRequirements {
-		if requirement.EvidenceKey != "" && (profile != "GITHUB_REVIEW_QA_V1" || requirement.Kind != "QA") || profile == "GITHUB_REVIEW_QA_V1" && requirement.Kind == "QA" && !workflowResultKey.MatchString(requirement.EvidenceKey) {
+		if requirement.EvidenceKey != "" && (!workflowPublicationNativeEvidence(profile) || requirement.Kind != "QA") || workflowPublicationNativeEvidence(profile) && requirement.Kind == "QA" && !workflowResultKey.MatchString(requirement.EvidenceKey) {
 			return false
 		}
-		if requirement.Kind != "ARTIFACT_REVIEW" && requirement.SubjectResultKey != "" || !workflowResultKey.MatchString(requirement.Key) || seen[requirement.Key] || len(requirement.Repository) > 200 || requirement.Kind != "DEPLOYMENT" && requirement.TargetRef != "" {
+		if requirement.Kind != "ARTIFACT_REVIEW" && requirement.SubjectResultKey != "" || !workflowResultKey.MatchString(requirement.Key) || seen[requirement.Key] || len(requirement.Repository) > 200 ||
+			requirement.Kind != "DEPLOYMENT" && requirement.TargetRef != "" && !(profile == workflowPDLCProfile && slices.Contains([]string{"REPOSITORY_FILE", "PR_COMMENT", "PULL_REQUEST"}, requirement.Kind)) ||
+			requirement.Branch != "" && (profile != workflowPDLCProfile || requirement.Kind != "REPOSITORY_FILE") {
 			return false
 		}
 		seen[requirement.Key] = true
@@ -90,6 +95,16 @@ func validWorkflowPublicationServerStepForProfile(step WorkflowPublicationStep, 
 			}
 		case "PULL_REQUEST":
 			if !workflowResultRepository.MatchString(requirement.Repository) || requirement.FileName != "" || requirement.MediaType != "" || requirement.SubjectStepKey != "" || requirement.Operation != "" {
+				return false
+			}
+			if profile == workflowPDLCProfile && !workflowPublicationPullNumber(requirement.TargetRef) {
+				return false
+			}
+		case "REPOSITORY_FILE", "PR_COMMENT":
+			if profile != workflowPDLCProfile || !workflowResultRepository.MatchString(requirement.Repository) || !workflowPublicationPullNumber(requirement.TargetRef) || requirement.MediaType != "" || requirement.SubjectStepKey != "" || requirement.Operation != "" {
+				return false
+			}
+			if requirement.Kind == "REPOSITORY_FILE" && (!workflowPublicationFilePath(requirement.FileName) || !workflowPublicationBranch(requirement.Branch)) || requirement.Kind == "PR_COMMENT" && requirement.FileName != "" {
 				return false
 			}
 		case "REVIEW", "QA":
@@ -108,7 +123,7 @@ func validWorkflowPublicationServerStepForProfile(step WorkflowPublicationStep, 
 			return false
 		}
 	}
-	if profile == "GITHUB_REVIEW_QA_V1" {
+	if workflowPublicationNativeEvidence(profile) {
 		counts := map[string]int{}
 		for _, requirement := range step.ResultRequirements {
 			if requirement.Kind != "REVIEW" && requirement.Kind != "QA" {
@@ -129,7 +144,7 @@ func validWorkflowPublicationServerStepForProfile(step WorkflowPublicationStep, 
 			}
 		}
 	}
-	return true
+	return profile != workflowPDLCProfile || validWorkflowPublicationPDLCTargets(step.ResultRequirements)
 }
 
 // validWorkflowPublicationEvidenceSubjects mirrors owner graph relations before wire3 encoding
@@ -137,7 +152,7 @@ func validWorkflowPublicationServerStepForProfile(step WorkflowPublicationStep, 
 // validWorkflowPublicationEvidenceSubjects повторяет owner graph relations до encode/decode
 // wire3; синтаксис не доказывает GitHub effect либо будущий accepted PR receipt.
 func validWorkflowPublicationEvidenceSubjects(value WorkflowPublication) bool {
-	if value.ResultEvidenceProfile != "GITHUB_REVIEW_QA_V1" {
+	if !workflowPublicationNativeEvidence(value.ResultEvidenceProfile) {
 		return true
 	}
 	counts := map[string]int{}

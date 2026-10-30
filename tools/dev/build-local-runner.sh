@@ -108,8 +108,30 @@ if [[ ! -s "$archive" ]]; then
   "$source_root/tools/dev/ensure-local-buildx-builder.sh" "$builder"
   next_archive="$archive.next"
   rm -f "$next_archive"
+  # BuildKit получает только tracked inputs чистого worktree. Сохраняем mode,
+  # входящий в provenance и COPY cache key; metadata Git и private files не входят.
+  build_context=$(mktemp -d "$cache_directory/runner-source.XXXXXXXX")
+  trap 'rm -rf -- "$build_context"' EXIT
+  git -C "$source_root" ls-files -z -- services/jobs/agent-runner libs/go \
+    | python3 -c '
+import pathlib, sys
+files = sys.stdin.buffer.read().split(b"\0")
+entries = set()
+for raw in filter(None, files):
+    path = pathlib.PurePosixPath(raw.decode())
+    if path.is_absolute() or ".." in path.parts:
+        raise SystemExit("RUNNER_CONTEXT_PATH_INVALID")
+    entries.add(str(path))
+    entries.update(str(parent) for parent in path.parents if str(parent) != ".")
+sys.stdout.buffer.write(b"".join(entry.encode() + b"\0" for entry in sorted(entries)))
+' \
+    | tar -C "$source_root" --null --no-recursion --files-from=- -cf - \
+    | tar --same-permissions -x -C "$build_context"
+  # Сам контекст находится внутри private cache0700; metadata его корня тоже
+  # сохраняется для COPY checksum. Доступ снаружи закрывает родительский каталог.
+  chmod --reference="$source_root" "$build_context"
   docker buildx build --builder "$builder" \
-    --file "$source_root/services/jobs/agent-runner/Dockerfile" \
+    --file "$build_context/services/jobs/agent-runner/Dockerfile" \
     --target "$image_target" \
     --label "kodex.dev/runner-image-profile=$image_profile" \
     --platform linux/amd64 \
@@ -117,7 +139,9 @@ if [[ ! -s "$archive" ]]; then
     --sbom=false \
     --tag "$tag" \
     --output "type=oci,dest=$next_archive" \
-    "$source_root"
+    "$build_context"
+  rm -rf -- "$build_context"
+  trap - EXIT
   [[ -s "$next_archive" ]] || fail 'runner OCI archive was not produced'
   mv "$next_archive" "$archive"
 fi

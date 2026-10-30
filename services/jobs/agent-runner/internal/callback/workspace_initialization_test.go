@@ -1,17 +1,65 @@
 package callback
 
 import (
+	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
+
+// TestArtifactInitializationPreservesSocketDeadline exercises an actual response read deadline,
+// distinct from context cancellation. One failed GET writes no bytes and exposes no ticket or URL.
+// TestArtifactInitializationPreservesSocketDeadline проверяет настоящий deadline чтения сокета,
+// отличный от отмены context. Единственный отказавший GET не пишет байты и не раскрывает ticket либо URL.
+func TestArtifactInitializationPreservesSocketDeadline(t *testing.T) {
+	var requests atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
+		requests.Add(1)
+		<-request.Context().Done()
+	}))
+	defer upstream.Close()
+	base, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatal("parse local artifact fixture")
+	}
+	transport := &http.Transport{DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+		connection, err := (&net.Dialer{}).DialContext(ctx, network, address)
+		if err != nil {
+			return nil, err
+		}
+		if err := connection.SetReadDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
+			_ = connection.Close()
+			return nil, err
+		}
+		return connection, nil
+	}}
+	defer transport.CloseIdleConnections()
+	client := &Client{files: &http.Client{Transport: transport}, base: base, token: "PRIVATE_EXECUTION_TICKET"}
+	var destination bytes.Buffer
+	err = client.WriteArtifact(t.Context(), runtimecontract.RunnerInput{LeaseRef: "lease_fixture"},
+		runtimecontract.RunnerInputArtifact{Ref: "artifact_fixture", MediaType: "text/plain"}, &destination)
+	stage, reason := runtimecontract.InitializationErrorDetails(err)
+	if !errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) ||
+		stage != "ARTIFACT_TRANSFER" || reason != "DEADLINE_EXCEEDED" {
+		t.Fatalf("socket deadline misclassified: stage=%s reason=%s", stage, reason)
+	}
+	if requests.Load() != 1 || destination.Len() != 0 || strings.Contains(err.Error(), client.token) || strings.Contains(err.Error(), upstream.URL) {
+		t.Fatal("failed download retried, wrote bytes or exposed private transport data")
+	}
+}
 
 // TestArtifactInitializationReasonsFollowActualHTTPAndBytes exercises the production reader.
 // Closed status/pin/digest distinctions never copy a private response body or credential.

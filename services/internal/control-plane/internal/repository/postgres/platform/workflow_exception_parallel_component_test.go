@@ -78,6 +78,15 @@ func newWorkflowRecoveryRegression(t *testing.T, expiry bool) *workflowRecoveryR
 // SQL не создаёт gate, journal или lease; result gates сохраняют опубликованные решения.
 func newWorkflowGateRegression(t *testing.T, expiry, resultGates bool) *workflowRecoveryRegression {
 	t.Helper()
+	return newWorkflowRecoveryGraphRegression(t, expiry, resultGates, false)
+}
+
+// newWorkflowRecoveryGraphRegression publishes independent branches or a real dependent stage
+// through the same owner commands; sequential fixtures do not rewrite an existing graph.
+// newWorkflowRecoveryGraphRegression публикует независимые ветви либо зависимый этап
+// теми же owner-командами; последовательная fixture не переписывает существующий граф.
+func newWorkflowRecoveryGraphRegression(t *testing.T, expiry, resultGates, sequential bool) *workflowRecoveryRegression {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	t.Cleanup(cancel)
 	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
@@ -102,6 +111,12 @@ func newWorkflowGateRegression(t *testing.T, expiry, resultGates bool) *workflow
 		agent = *f.execute(command.ChangeAgentCapability, "capability-"+key, &agent.Version, command.AgentBindingInput{AgentRef: agent.Ref, BindingRef: runtimecontract.ArtifactCapability, Enabled: true}).Agent
 		f.agents[key] = agent.Ref
 		step := entity.WorkflowStep{Key: key, Position: int32(index + 1), Name: key, AgentRef: agent.Ref, Instructions: "Создать обязательный материал и точную декларацию результата.", TimeoutSeconds: 120, Parallel: true, ParallelGroup: 1, RequiredCapabilityKeys: []string{runtimecontract.ArtifactCapability}, ResultRequirements: []entity.WorkflowResultRequirement{{Key: "report", Kind: "ARTIFACT", FileName: key + ".md", MediaType: "text/markdown"}}}
+		if sequential {
+			step.Parallel, step.ParallelGroup = false, 0
+			if index > 0 {
+				step.DependsOn = []string{"a"}
+			}
+		}
 		if expiry || resultGates {
 			step.HumanGateAfter = true
 			step.GateDecisions = []string{"APPROVE", "REJECT", "CANCEL"}

@@ -9,8 +9,8 @@ func (p Package) RequiresConnectionCredential() bool {
 	return p.Spec.Credential != nil && !(p.Metadata.Key == "email" && p.Spec.Adapter == "EMAIL_HTTPS" && p.Spec.AdapterOwner == string(OwnerIntegrationGateway) && p.Spec.ExecutionRoute == string(RouteManagedMCP))
 }
 
-// ResolveShippedRevision accepts current exact pins or the one explicit GitHub 6.0 rolling-read compatibility snapshot. It never substitutes a requested digest, gives an old connection the new bundle capability, or enables arbitrary historical/email revisions.
-// ResolveShippedRevision допускает current exact pins либо один явный GitHub6.0 compatibility snapshot для rolling-read. Запрошенный digest не заменяется, старая connection не получает bundle capability, произвольные historical/email revisions не включаются.
+// ResolveShippedRevision accepts current exact pins or explicitly frozen GitHub releases, preserving each historical policy rather than inheriting current authority.
+// ResolveShippedRevision допускает текущие точные pins либо явно закреплённые выпуски GitHub, сохраняя историческую политику вместо наследования текущих полномочий.
 func ResolveShippedRevision(current Package, version, digest string) (Package, bool) {
 	if current.Metadata.Version == version && current.Digest == digest {
 		return current, true

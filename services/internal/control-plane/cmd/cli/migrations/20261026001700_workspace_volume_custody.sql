@@ -172,6 +172,11 @@ CREATE UNIQUE INDEX session_workspace_volume_task_open
 CREATE INDEX session_workspace_volume_task_candidates
  ON control_plane.session_workspace_volume_tasks(available_at,id)
  WHERE state IN('READY','CLAIMED');
+-- Один RW и один RO intent для exact origin: terminal отказ не порождает бесконечные новые logical tasks.
+CREATE UNIQUE INDEX session_workspace_volume_prepare_origin
+ ON control_plane.session_workspace_volume_tasks(volume_id,volume_generation,origin_node_id,root_run_id,
+   origin_actor_id,(frozen_input->>'read_only'))
+ WHERE kind='PREPARE_WORKSPACE_VOLUME';
 ALTER TABLE control_plane.session_workspace_volumes
  ADD CONSTRAINT session_workspace_volume_create_task
  FOREIGN KEY(create_task_ref) REFERENCES control_plane.session_workspace_volume_tasks(ref) DEFERRABLE INITIALLY DEFERRED,
@@ -191,6 +196,7 @@ CREATE TABLE control_plane.session_workspace_volume_attempts (
  grant_state text NOT NULL DEFAULT 'ACTIVE' CHECK(grant_state IN('ACTIVE','CLOSED')),
  expires_at timestamptz NOT NULL,
  observed_pvc_uid text CHECK(observed_pvc_uid IS NULL OR observed_pvc_uid ~ '^[a-z0-9][a-z0-9-]{0,127}$'),
+ job_uid text CHECK(job_uid IS NULL OR job_uid ~ '^[a-z0-9][a-z0-9-]{0,127}$'),
  pod_uid text CHECK(pod_uid IS NULL OR pod_uid ~ '^[a-z0-9][a-z0-9-]{0,127}$'),
  ready_record text CHECK(ready_record IS NULL OR
    octet_length(ready_record) BETWEEN 1 AND 2048 AND ready_record IS JSON OBJECT WITH UNIQUE KEYS),
@@ -200,7 +206,7 @@ CREATE TABLE control_plane.session_workspace_volume_attempts (
  CONSTRAINT session_workspace_volume_attempt_digest CHECK(input_digest=encode(sha256(convert_to(input_snapshot,'UTF8')),'hex')),
  CONSTRAINT session_workspace_volume_attempt_report CHECK(
    (reported_at IS NOT NULL)=(observed_pvc_uid IS NOT NULL)
-   AND (ready_record IS NULL)=(pod_uid IS NULL))
+   AND (ready_record IS NULL)=(pod_uid IS NULL) AND (job_uid IS NULL)=(pod_uid IS NULL))
 );
 CREATE UNIQUE INDEX session_workspace_volume_attempt_active
  ON control_plane.session_workspace_volume_attempts(task_id) WHERE grant_state='ACTIVE';
@@ -265,7 +271,7 @@ BEGIN
    WHERE t.volume_id=NEW.id AND t.volume_generation=NEW.generation AND t.kind='PREPARE_WORKSPACE_VOLUME'
      AND t.frozen_input->>'preparation_task_ref'=NEW.preparation_task_ref
      AND a.grant_state='CLOSED' AND a.reported_at IS NOT NULL AND a.observed_pvc_uid=NEW.pvc_uid
-     AND a.pod_uid IS NOT NULL AND a.ready_record=NEW.ready_record) THEN
+     AND a.job_uid IS NOT NULL AND a.pod_uid IS NOT NULL AND a.ready_record=NEW.ready_record) THEN
    RAISE EXCEPTION 'workspace volume positive preparation proof is missing';
  END IF;
  -- Отдельный протокол physical cleanup должен быть подключён до включения профиля.
@@ -394,7 +400,7 @@ BEGIN
  FROM control_plane.session_workspace_volume_tasks t WHERE t.id=NEW.task_id;
  IF TG_OP='INSERT' THEN
    IF v_task.state<>'CLAIMED' OR v_task.attempt<>NEW.attempt OR NEW.grant_state<>'ACTIVE'
-      OR NEW.observed_pvc_uid IS NOT NULL OR NEW.pod_uid IS NOT NULL OR NEW.ready_record IS NOT NULL
+      OR NEW.observed_pvc_uid IS NOT NULL OR NEW.job_uid IS NOT NULL OR NEW.pod_uid IS NOT NULL OR NEW.ready_record IS NOT NULL
       OR NEW.reported_at IS NOT NULL OR NEW.expires_at<=statement_timestamp()
       OR NEW.expires_at>statement_timestamp()+interval '3 minutes' THEN
      RAISE EXCEPTION 'workspace volume attempt initial grant is invalid';
@@ -411,8 +417,8 @@ BEGIN
       OR OLD.expires_at<=statement_timestamp() OR NEW.expires_at>statement_timestamp()+interval '3 minutes') THEN
      RAISE EXCEPTION 'workspace volume renewal is invalid';
    END IF;
-   IF OLD.reported_at IS NOT NULL AND ROW(NEW.observed_pvc_uid,NEW.pod_uid,NEW.ready_record,NEW.reported_at)
-      IS DISTINCT FROM ROW(OLD.observed_pvc_uid,OLD.pod_uid,OLD.ready_record,OLD.reported_at) THEN
+   IF OLD.reported_at IS NOT NULL AND ROW(NEW.observed_pvc_uid,NEW.job_uid,NEW.pod_uid,NEW.ready_record,NEW.reported_at)
+      IS DISTINCT FROM ROW(OLD.observed_pvc_uid,OLD.job_uid,OLD.pod_uid,OLD.ready_record,OLD.reported_at) THEN
      RAISE EXCEPTION 'workspace volume positive observation is immutable';
    END IF;
  END IF;
@@ -428,12 +434,12 @@ BEGIN
      RAISE EXCEPTION 'workspace volume observation retained an active grant';
    END IF;
    IF v_task.kind='CREATE_WORKSPACE_VOLUME' THEN
-     IF NEW.pod_uid IS NOT NULL OR NEW.ready_record IS NOT NULL OR NEW.attempt<>1 THEN
+     IF NEW.job_uid IS NOT NULL OR NEW.pod_uid IS NOT NULL OR NEW.ready_record IS NOT NULL OR NEW.attempt<>1 THEN
        RAISE EXCEPTION 'workspace volume create observation is invalid';
      END IF;
    ELSE
      IF NEW.observed_pvc_uid IS DISTINCT FROM v_task.frozen_input->>'pvc_uid'
-        OR NEW.pod_uid IS NULL OR NEW.ready_record IS NULL THEN
+        OR NEW.job_uid IS NULL OR NEW.pod_uid IS NULL OR NEW.ready_record IS NULL THEN
        RAISE EXCEPTION 'workspace volume preparation observation is incomplete';
      END IF;
      v_ready:=NEW.ready_record::jsonb;

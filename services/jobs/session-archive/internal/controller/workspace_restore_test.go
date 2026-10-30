@@ -30,6 +30,13 @@ func workspaceRestoreTaskFixture(t *testing.T, reconcile bool) (model.Task, mode
 	task.Kind, task.TargetObjectVersion = "RESTORE", source.Manifest.Version
 	task.Workspace.Quiescence, task.Workspace.Checkpoint = "", &source
 	task.Workspace.Target.Generation++
+	task.Workspace.PVCUID = "pvc-fixture"
+	task.Workspace.Target.VolumeReady = &runtimecontract.WorkspaceVolumeReady{
+		Schema: runtimecontract.WorkspaceVolumeReadySchema,
+		Preparation: runtimecontract.WorkspaceVolumePreparation{Scope: task.Workspace.Target.Scope,
+			WorkspaceRef: task.Workspace.Target.WorkspaceRef, TaskRef: "svt_fixture000", PVCUID: "pvc-fixture", VolumeGeneration: 1},
+		Device: 1, Inode: 1,
+	}
 	if reconcile {
 		task.Attempt, task.Workspace.ReconcileOnly, task.InputDigest = 2, true, strings.Repeat("e", 64)
 	}
@@ -42,7 +49,7 @@ func workspaceRestoreTaskFixture(t *testing.T, reconcile bool) (model.Task, mode
 // TestWorkspaceRestoreRenderCannotFallBackToLegacy rejects incomplete fixed PVC bindings and malformed tasks before constructing a Pod.
 // TestWorkspaceRestoreRenderCannotFallBackToLegacy отклоняет incomplete fixed PVC bindings и malformed tasks до создания Pod.
 func TestWorkspaceRestoreRenderCannotFallBackToLegacy(t *testing.T) {
-	for _, name := range []string{"missing pvc uid", "replaced pvc uid", "same generation", "foreign source", "unsupported kind"} {
+	for _, name := range []string{"missing pvc uid", "replaced pvc uid", "same generation", "foreign source", "unsupported kind", "missing preparation", "foreign preparation", "replaced preparation"} {
 		t.Run(name, func(t *testing.T) {
 			task, _ := workspaceRestoreTaskFixture(t, false)
 			uid := types.UID(task.Workspace.PVCUID)
@@ -57,6 +64,12 @@ func TestWorkspaceRestoreRenderCannotFallBackToLegacy(t *testing.T) {
 				task.Workspace.Checkpoint.Scope.ProjectRef = "prj_foreign000"
 			case "unsupported kind":
 				task.Kind = "DELETE_OBJECT"
+			case "missing preparation":
+				task.Workspace.Target.VolumeReady = nil
+			case "foreign preparation":
+				task.Workspace.Target.VolumeReady.Preparation.Scope.ProjectRef = "prj_foreign000"
+			case "replaced preparation":
+				task.Workspace.Target.VolumeReady.Preparation.PVCUID = "replacement"
 			}
 			controller, _ := New(newArchiveClient(), testConfig())
 			if controller.job(workloadName(task.TaskRef, task.ContentGeneration, task.Attempt), task, uid) != nil ||
@@ -64,6 +77,23 @@ func TestWorkspaceRestoreRenderCannotFallBackToLegacy(t *testing.T) {
 				t.Fatal("invalid workspace restore reached legacy geometry")
 			}
 		})
+	}
+}
+
+// TestWorkspaceRestoreNeverCreatesOrAdoptsMissingPVC requires the accepted volume before any worker effect.
+// TestWorkspaceRestoreNeverCreatesOrAdoptsMissingPVC требует accepted volume до любого worker effect.
+func TestWorkspaceRestoreNeverCreatesOrAdoptsMissingPVC(t *testing.T) {
+	task, _ := workspaceRestoreTaskFixture(t, false)
+	client := newArchiveClient()
+	controller, _ := New(client, testConfig())
+	result, retained, err := controller.ExecuteRetained(t.Context(), task, func(context.Context) error { return nil })
+	if err != nil || result.Success || result.SafeErrorCode != "SESSION_ARCHIVE_PVC_MISSING" || retained != nil {
+		t.Fatal("restore did not retain closed missing-volume outcome", err)
+	}
+	for _, action := range client.Actions() {
+		if action.GetVerb() != "get" && action.GetVerb() != "list" {
+			t.Fatal("restore created or adopted an unknown volume")
+		}
 	}
 }
 
@@ -155,12 +185,6 @@ func TestWorkspaceRestoreJobSeparatesInitializationWritingAndReconciliation(t *t
 						t.Fatal("changed restore consumer authority accepted")
 					}
 				})
-			}
-			if _, _, err := controller.ExecuteRetained(t.Context(), task, func(context.Context) error {
-				t.Fatal("dormant restore geometry renewed authority")
-				return nil
-			}); err == nil || len(client.Actions()) != 0 {
-				t.Fatal("restore render enabled an incomplete owner lifecycle")
 			}
 		})
 	}

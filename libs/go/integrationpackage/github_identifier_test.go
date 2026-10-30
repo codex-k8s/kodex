@@ -17,7 +17,7 @@ func TestGitHubProviderIdentifiersUseExactJSONIntegerBounds(t *testing.T) {
 		t.Fatal(err)
 	}
 	definition := definitions["github"]
-	if definition.Metadata.Version != "6.1.0" {
+	if definition.Metadata.Version != "6.3.0" {
 		t.Fatal("unexpected GitHub package version")
 	}
 	if _, ok := ResolveShippedRevision(definition, "2.4.0", definition.Digest); ok {
@@ -63,7 +63,7 @@ func TestGitHubProviderIdentifiersUseExactJSONIntegerBounds(t *testing.T) {
 			}
 		}
 	}
-	if count != 24 {
+	if count != 29 {
 		t.Fatalf("provider ID registry incomplete: %d", count)
 	}
 }

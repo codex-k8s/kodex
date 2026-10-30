@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/jackc/pgx/v5"
+	"reflect"
 	"testing"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
@@ -41,10 +42,11 @@ func testInstructionBindingLifecycle(t *testing.T, ctx context.Context, r *Repos
 		before := instructionRealtimeEventCount(t, ctx, r, agentRef)
 		version := agent.Version
 		input := command.Command{Kind: kind, Principal: owner, Mutation: value.Mutation{IdempotencyKey: key, ExpectedVersion: &version}, Payload: payload}
-		_, err = service.Execute(ctx, input)
+		result, err := service.Execute(ctx, input)
 		if err != nil {
 			t.Fatalf("instruction lifecycle %s: %v", key, err)
 		}
+		assertInstructionCommandProjection(t, ctx, service, owner, result.Agent)
 		agent, err = service.GetAgent(ctx, owner, agentRef)
 		if err != nil {
 			t.Fatal(err)
@@ -54,7 +56,7 @@ func testInstructionBindingLifecycle(t *testing.T, ctx context.Context, r *Repos
 			event = "INSTRUCTIONS_PUBLISHED"
 		}
 		assertInstructionRealtimeEvent(t, ctx, r, agent, before, event)
-		if _, err := service.Execute(ctx, input); err != nil {
+		if replay, err := service.Execute(ctx, input); err != nil || !reflect.DeepEqual(replay.Agent, result.Agent) {
 			t.Fatalf("instruction lifecycle replay %s: %v", key, err)
 		}
 		if count := instructionRealtimeEventCount(t, ctx, r, agentRef); count != before+1 {
