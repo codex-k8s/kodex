@@ -11,6 +11,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 )
 
 // integrationOutcomesClient supplies owner wire counterexamples and records the
@@ -91,9 +92,9 @@ func TestIntegrationOutcomesClosedPage(t *testing.T) {
 		"unicode":   func(r *cp.GetExecutionIntegrationOutcomesResponse) { r.Text = string([]byte{0xff}) },
 	} {
 		t.Run(name, func(t *testing.T) {
-			changed := valid
-			mutate(&changed)
-			client.response = &changed
+			changed := proto.Clone(&valid).(*cp.GetExecutionIntegrationOutcomesResponse)
+			mutate(changed)
+			client.response = changed
 			if _, err := server.integrationOutcomes(t.Context(), input, args); err == nil {
 				t.Fatal("malformed owner page accepted")
 			}
