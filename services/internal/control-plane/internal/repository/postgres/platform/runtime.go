@@ -2390,7 +2390,7 @@ func nonEmptyResult(payload command.CompleteExecutionInput) string {
 // runtimeSafeErrorCode принимает лишь закрытое provider/runtime safe-error перечисление и
 // отклоняет неизвестные строки без интерпретации provider payloads.
 func runtimeSafeErrorCode(code string) bool {
-	if code == runtimecontract.InitializationFailureCode {
+	if code == runtimecontract.InitializationFailureCode || code == runtimecontract.ProviderOverloadedFailureCode {
 		return true
 	}
 	switch code {

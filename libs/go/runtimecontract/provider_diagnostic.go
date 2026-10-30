@@ -12,6 +12,12 @@ import (
 // независимо от версии провайдера и успешности исполнения.
 const ProviderFailureDiagnosticSchema = "kodex.provider-failure-diagnostic.v1"
 
+// ProviderOverloadedFailureCode preserves a verified terminal capacity failure across
+// the completion boundary; it neither selects a replacement nor authorizes retry.
+// ProviderOverloadedFailureCode сохраняет проверенный terminal capacity failure при
+// завершении; он не выбирает замену и не разрешает повтор исполнения.
+const ProviderOverloadedFailureCode = "PROVIDER_OVERLOADED"
+
 // errProviderDiagnostic rejects malformed metadata without disclosing its values.
 // errProviderDiagnostic отклоняет неверные метаданные без раскрытия их значений.
 var errProviderDiagnostic = errors.New("provider failure diagnostic is invalid")
@@ -38,6 +44,14 @@ type ProviderFailureDiagnostic struct {
 	NotificationError      string `json:"notification_error"`
 	AccountRead            string `json:"account_read"`
 	TerminalCode           string `json:"terminal_code"`
+}
+
+// IsOverload recognizes only a complete, valid structured terminal overload.
+// Execution provenance must still be checked with Matches against trusted input.
+// IsOverload распознаёт только полную корректную структурированную перегрузку.
+// Происхождение исполнения дополнительно проверяется Matches по доверенному входу.
+func (value ProviderFailureDiagnostic) IsOverload() bool {
+	return value.Validate() == nil && value.Kind == "TERMINAL_FAILURE" && value.TerminalCode == "server_overloaded"
 }
 
 // Validate checks execution pins, reason allowlists and the relationships between

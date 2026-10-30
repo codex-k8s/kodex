@@ -34,6 +34,20 @@ function closedCases(path: string, functionName: string): string[] {
 
 describe("полнота закрытого реестра server tokens", () => {
   it.each([
+    ["ru", "Модель временно перегружена."],
+    ["en", "The model is temporarily overloaded."],
+  ] as const)(
+    "объясняет подтверждённую перегрузку модели в %s",
+    (locale, expected) => {
+      const key = serverMessageKey("i18n:PROVIDER_OVERLOADED");
+      expect(key).toBe("serverMessages.PROVIDER_OVERLOADED");
+      expect(i18n.global.t(key ?? "", {}, { locale })).toBe(expected);
+      expect(
+        serverMessageKey("i18n:PROVIDER_OVERLOADED_PRIVATE_DETAILS"),
+      ).toBeUndefined();
+    },
+  );
+  it.each([
     ["ru", "Превышено время выполнения"],
     ["en", "Execution time limit exceeded"],
   ] as const)(

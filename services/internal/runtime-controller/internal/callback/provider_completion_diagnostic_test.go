@@ -62,7 +62,7 @@ func (client *diagnosticCompletionClient) CompleteExecution(_ context.Context, r
 // локального маршрута: nil от mock владельца допускает одно безопасное наблюдение
 // до очистки; повтор, ошибка, успех и неверные привязки не подделывают его.
 func TestProviderCompletionDiagnosticOwnerCommitBeforeCleanup(t *testing.T) {
-	for _, scenario := range []string{"exact", "interrupted", "workspace", "workspace mismatched code", "missing", "CP error", "replay", "success", "unauthorized", "input", "execution", "session", "turn", "attempt", "private enum"} {
+	for _, scenario := range []string{"exact", "overload", "overload missing", "overload quota", "overload input", "interrupted", "workspace", "workspace mismatched code", "missing", "CP error", "replay", "success", "unauthorized", "input", "execution", "session", "turn", "attempt", "private enum"} {
 		t.Run(scenario, func(t *testing.T) {
 			manager, kube, input, _, ticket := providerCredentialRefreshRouteFixture(t)
 			var logs bytes.Buffer
@@ -82,6 +82,22 @@ func TestProviderCompletionDiagnosticOwnerCommitBeforeCleanup(t *testing.T) {
 				Usage: runtimecontract.TokenUsage{Completeness: runtimecontract.UsagePartial, TotalTokens: 3, InputTokens: 2, OutputTokens: 1}, ProviderDiagnostic: completionDiagnostic(input)}
 			wantStatus, commits := http.StatusNoContent, 1
 			switch scenario {
+			case "overload", "overload missing", "overload quota", "overload input":
+				payload.SafeErrorCode = runtimecontract.ProviderOverloadedFailureCode
+				payload.ProviderDiagnostic.Kind, payload.ProviderDiagnostic.Stage, payload.ProviderDiagnostic.Detail = "TERMINAL_FAILURE", "TERMINAL_RESULT", "NONE"
+				payload.ProviderDiagnostic.Notification, payload.ProviderDiagnostic.NotificationError = "NONE", "NONE"
+				payload.ProviderDiagnostic.TerminalCode = "server_overloaded"
+				if scenario != "overload" {
+					wantStatus, commits = http.StatusBadRequest, 0
+				}
+				switch scenario {
+				case "overload missing":
+					payload.ProviderDiagnostic = nil
+				case "overload quota":
+					payload.ProviderDiagnostic.TerminalCode = "usage_limit_exceeded"
+				case "overload input":
+					payload.ProviderDiagnostic.InputDigest = strings.Repeat("f", 64)
+				}
 			case "interrupted":
 				payload.ProviderDiagnostic.Detail = "CONTEXT_CANCELLED"
 				payload.ProviderDiagnostic.Notification, payload.ProviderDiagnostic.NotificationError = "NONE", "NONE"
@@ -129,7 +145,7 @@ func TestProviderCompletionDiagnosticOwnerCommitBeforeCleanup(t *testing.T) {
 			deleted := false
 			kube.PrependReactor("delete", "pods", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
 				deleted = true
-				if (scenario == "exact" || scenario == "workspace") && !strings.Contains(logs.String(), `"diagnostic_status":"OBSERVED"`) {
+				if (scenario == "exact" || scenario == "overload" || scenario == "workspace") && !strings.Contains(logs.String(), `"diagnostic_status":"OBSERVED"`) {
 					t.Error("cleanup lost failure observation")
 				}
 				return false, nil, nil
@@ -145,7 +161,7 @@ func TestProviderCompletionDiagnosticOwnerCommitBeforeCleanup(t *testing.T) {
 			if response.Code != wantStatus || len(client.requests) != commits {
 				t.Fatalf("status=%d commits=%d", response.Code, len(client.requests))
 			}
-			if scenario == "exact" || scenario == "interrupted" || scenario == "workspace" || scenario == "missing" {
+			if scenario == "exact" || scenario == "overload" || scenario == "interrupted" || scenario == "workspace" || scenario == "missing" {
 				if !deleted || strings.Count(logs.String(), providerCompletionDiagnosticLog) != 1 {
 					t.Fatal("commit did not produce one pre-cleanup observation")
 				}

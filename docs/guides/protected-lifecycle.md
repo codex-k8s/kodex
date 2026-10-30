@@ -4,11 +4,19 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.66
+version: 1.1.67
 updated: 2026-10-30
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Перегрузка модели сохраняется отдельным закрытым кодом только после проверки
+структурированного terminal failure и exact execution binding. Текст модели,
+общая недоступность, timeout, auth и quota не разрешают смену модели. Сам код
+не создаёт successor: автоматическая замена требует опубликованной версии
+политики, свежего RuntimeRevision и подтверждённой остановки прежнего writer.
+Матрица и границы реализации:
+[#1973](../operations/model-capacity-fallback-1973.md).
 
 Бюджет owner completion проверяется на полном опубликованном наборе результатов,
 включая совместные ARTIFACT/FILE/COMMENT и SQL journal guard после доставки
