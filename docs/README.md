@@ -44,6 +44,7 @@ Git history является архивом прежней Mattermost-first ре
   `architecture/installable-applications.md`;
 - профили развертывания: `operations/deployment-profiles.md`;
 - чистая установка: `runbooks/fresh-install.md`;
+- внешний OIDC/TLS и локальный CI/CD: `runbooks/portable-install.md`;
 - identity, OAuth2 Proxy, Grafana и Headlamp:
   `runbooks/identity-and-management-surfaces.md`.
 

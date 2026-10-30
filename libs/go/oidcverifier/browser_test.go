@@ -26,7 +26,7 @@ func TestBrowserCodeExchangeVerifiesBothTokensAndNonce(t *testing.T) {
 		t.Fatal(err)
 	}
 	const issuer = "https://identity.example.test/realms/kodex"
-	const clientID = "kodex-control-center"
+	const clientID = "test-console"
 	nonce := strings.Repeat("n", 43)
 	authenticatedAt := time.Now().Add(-time.Minute).Unix()
 	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: key}, (&jose.SignerOptions{}).WithHeader("kid", "test"))
@@ -84,9 +84,17 @@ func TestBrowserCodeExchangeVerifiesBothTokensAndNonce(t *testing.T) {
 	}
 	verifier := &Verifier{client: server.Client(), keys: set, issuer: issuer,
 		verifier: coreoidc.NewVerifier(issuer, set, &coreoidc.Config{ClientID: "kodex-control-api", SupportedSigningAlgs: []string{"RS256"}})}
-	client, err := verifier.BrowserClient(clientID, "https://app.example.test/auth/callback")
+	client, err := verifier.BrowserClientConfigured(BrowserClientConfig{
+		ClientID: clientID, RedirectURI: "https://app.example.test/auth/callback",
+		AuthorizationURL: "https://identity.example.test/authorize", TokenURL: "https://identity.example.test/token", Scope: "openid profile",
+	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	configuredAuthorization, authErr := client.AuthorizationURL(strings.Repeat("s", 43), nonce, strings.Repeat("c", 43), false)
+	configuredParsed, parseErr := url.Parse(configuredAuthorization)
+	if authErr != nil || parseErr != nil || configuredParsed.Path != "/authorize" || configuredParsed.Query().Get("scope") != "openid profile" || configuredParsed.Query().Get("client_id") != clientID {
+		t.Fatal("configured public client lost its endpoints or scope")
 	}
 	client.tokenURL = server.URL + "/token"
 	tokens, err := client.ExchangeCode(t.Context(), "one-time-code", strings.Repeat("v", 43), nonce)
@@ -108,7 +116,7 @@ func TestBrowserCodeExchangeVerifiesBothTokensAndNonce(t *testing.T) {
 		t.Fatal(err)
 	}
 	parsed, err := url.Parse(authorization)
-	if err != nil || parsed.Query().Get("scope") != "openid kodex.owner" || parsed.Query().Get("code_challenge_method") != "S256" {
+	if err != nil || parsed.Query().Get("scope") != "openid profile" || parsed.Query().Get("code_challenge_method") != "S256" {
 		t.Fatal("authorization changed existing scope or PKCE")
 	}
 }
@@ -136,5 +144,40 @@ func TestBrowserExchangeNeverRetriesProviderFailure(t *testing.T) {
 				t.Fatal("provider failure was retried or misclassified")
 			}
 		})
+	}
+}
+
+// TestBrowserEndpointConfigurationRejectsForeignDestinations checks deployment inputs before any code or refresh token can leave the configured issuer authority.
+// TestBrowserEndpointConfigurationRejectsForeignDestinations проверяет deployment inputs до возможности отправить code или refresh token за пределы issuer authority.
+func TestBrowserEndpointConfigurationRejectsForeignDestinations(t *testing.T) {
+	t.Parallel()
+	verifier := &Verifier{client: &http.Client{}, keys: &boundedKeySet{}, issuer: "https://identity.example.invalid/auth/realms/test"}
+	config := BrowserClientConfig{ClientID: "test-console", RedirectURI: "https://app.example.invalid/auth/callback",
+		AuthorizationURL: "https://identity.example.invalid/authorize", TokenURL: "https://identity.example.invalid/token", Scope: "openid profile"}
+	if _, err := verifier.BrowserClientConfigured(config); err != nil {
+		t.Fatal("valid external configuration rejected")
+	}
+	for _, invalid := range []string{"http://identity.example.invalid/token", "https://other.example.invalid/token", "https://user:fixture@identity.example.invalid/token", "https://identity.example.invalid/token?x=1", "https://identity.example.invalid/token?", "https://identity.example.invalid/token#"} {
+		candidate := config
+		candidate.TokenURL = invalid
+		if _, err := verifier.BrowserClientConfigured(candidate); err == nil {
+			t.Fatal("invalid token endpoint accepted")
+		}
+		candidate = config
+		candidate.AuthorizationURL = invalid
+		if _, err := verifier.BrowserClientConfigured(candidate); err == nil {
+			t.Fatal("invalid authorization endpoint accepted")
+		}
+	}
+	for _, scope := range []string{"profile", "openid openid", "openid\nprofile", "openid  profile", "openid&prompt=none"} {
+		candidate := config
+		candidate.Scope = scope
+		if _, err := verifier.BrowserClientConfigured(candidate); err == nil {
+			t.Fatal("invalid scope accepted")
+		}
+	}
+	bundled, err := verifier.BrowserClient("kodex-control-center", config.RedirectURI)
+	if err != nil || bundled.tokenURL != verifier.issuer+"/protocol/openid-connect/token" || bundled.scope != "openid kodex.owner" {
+		t.Fatal("bundled defaults changed")
 	}
 }

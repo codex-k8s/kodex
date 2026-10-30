@@ -1,3 +1,4 @@
+import { exactOIDCIssuer } from "./oidc-endpoint.mjs";
 import { createHash } from "node:crypto";
 
 const issuerPlaceholder = "__KODEX_OIDC_ISSUER__";
@@ -41,7 +42,7 @@ export function verifyAuthorityPolicyEnvironmentReadback(expected,deployment,con
 export function renderAuthorityPolicyEnvironment(sourceRaw, environment) {
   let issuer;
   try { issuer = new URL(environment?.oidcIssuer); } catch { throw new Error("AUTHORITY_POLICY_OIDC_CONFIG_REQUIRED"); }
-  requireValue(issuer.protocol === "https:" && issuer.hostname !== "" && issuer.username === "" && issuer.password === "" && issuer.search === "" && issuer.hash === "" && issuer.pathname === "/realms/kodex" && issuer.href === environment.oidcIssuer && environment.oidcAudience === "kodex-control-api", "AUTHORITY_POLICY_OIDC_CONFIG_REJECTED");
+  requireValue(issuer.protocol === "https:" && issuer.hostname !== "" && issuer.username === "" && issuer.password === "" && issuer.search === "" && issuer.hash === "" && exactOIDCIssuer(environment.oidcIssuer) && environment.oidcAudience === "kodex-control-api", "AUTHORITY_POLICY_OIDC_CONFIG_REJECTED");
   requireValue(typeof sourceRaw === "string" && Buffer.byteLength(sourceRaw) <= 1 << 20, "AUTHORITY_POLICY_SOURCE_REJECTED");
   const source = JSON.parse(sourceRaw);
   const producers = source?.policy?.authority_proof_producers;

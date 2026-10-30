@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "identity": {"mode": "bundled"},
+  "public_tls": {"mode": "managed"}
+}

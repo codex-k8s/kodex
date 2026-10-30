@@ -107,7 +107,10 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
-	browserOIDC, err := oidc.BrowserClient("kodex-control-center", config.OIDCBrowserOrigin+"/auth/callback")
+	browserOIDC, err := oidc.BrowserClientConfigured(oidcauth.BrowserClientConfig{
+		ClientID: config.OIDCBrowserClientID, RedirectURI: config.OIDCBrowserOrigin + "/auth/callback",
+		AuthorizationURL: config.OIDCAuthorizationURL, TokenURL: config.OIDCTokenURL, Scope: config.OIDCBrowserScope,
+	})
 	if err != nil {
 		return err
 	}

@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "identity": {
+    "mode": "external",
+    "issuer": "https://id.example.invalid/auth/realms/test",
+    "jwks_url": "https://id.example.invalid/auth/realms/test/protocol/openid-connect/certs",
+    "authorization_url": "https://id.example.invalid/auth/realms/test/protocol/openid-connect/auth",
+    "token_url": "https://id.example.invalid/auth/realms/test/protocol/openid-connect/token",
+    "connect_host": "id.example.invalid",
+    "endpoint_cidrs": ["192.0.2.17/32"],
+    "client_id": "test-console",
+    "audience": "kodex-control-api",
+    "scope": "openid profile kodex.owner"
+  },
+  "public_tls": {
+    "mode": "external",
+    "trusted_proxy_cidrs": ["192.0.2.18/32", "2001:db8::18/128"]
+  }
+}

@@ -9,18 +9,21 @@ fail() {
 usage() {
   printf '%s\n' \
     "Usage: $0 --context <exact-context> --mode defer-public-tls|prepare-preflight|preflight|apply|readback" \
-    '  --render <exact-release.yaml> --public-tls-mode deferred|enabled' >&2
+    '  --render <exact-release.yaml> --public-tls-mode deferred|enabled|external' \
+    '  [--oidc-ca-file <pem> --ingress-deployment <name> --ingress-namespace <name>]' >&2
 }
 
 context=""
 mode=""
 render_file=""
 public_tls_mode=enabled
+portable_arguments=()
 while (($# > 0)); do
   case "$1" in
     --context) context="${2:-}"; shift 2 ;;
     --mode) mode="${2:-}"; shift 2 ;;
     --render) render_file="${2:-}"; shift 2 ;;
+    --oidc-ca-file|--ingress-deployment|--ingress-namespace) portable_arguments+=("$1" "${2:-}"); shift 2 ;;
     --public-tls-mode) public_tls_mode="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
@@ -32,7 +35,7 @@ case "$mode" in
   defer-public-tls|prepare-preflight|preflight|apply|readback) ;;
   *) fail 'mode is invalid' ;;
 esac
-case "$public_tls_mode" in deferred|enabled) ;; *) fail 'public TLS mode is invalid' ;; esac
+case "$public_tls_mode" in deferred|enabled|external) ;; *) fail 'public TLS mode is invalid' ;; esac
 [[ -f "$render_file" && -s "$render_file" && ! -L "$render_file" ]] ||
   fail 'release render is invalid'
 for command_name in jq kubectl rg sha256sum sort yq python3; do
@@ -46,6 +49,16 @@ public_certificate_name=staff-control-center-public
 export KODEX_DEPLOY_PUBLIC_TLS_MODE=$public_tls_mode
 export KODEX_DEPLOY_PUBLIC_CERTIFICATE_NAME=$public_certificate_name
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
+profile_mode=$(yq -r 'select(.kind == "ConfigMap" and .metadata.name == "kodex-installation-profile") | .data."profile.json"' "$render_file" | jq -r '.public_tls.mode' 2>/dev/null || true)
+if [[ "$profile_mode" == external || "$public_tls_mode" == external ]]; then
+  [[ "$profile_mode" == external && "$public_tls_mode" == external ]] || fail 'public TLS profile input conflict'
+fi
+if [[ -n "$profile_mode" ]]; then
+  [[ "$mode" != defer-public-tls ]] || fail 'portable profile does not use ACME deferral'
+  timeout 60s python3 "$repository_root/tools/install/portable_preflight.py" \
+    --render "$render_file" --sha256 "$(sha256sum "$render_file" | awk '{print $1}')" \
+    --context "$context" "${portable_arguments[@]}" >/dev/null || fail 'portable dependency preflight rejected'
+fi
 projection_registry="$repository_root/tools/install/secret-projections.json"
 jq -e '
   .version == 1 and .namespace == "kodex-system" and (.secrets | length > 0) and
@@ -718,7 +731,7 @@ fi
 if [[ "$mode" == apply ]]; then
   if [[ "$public_tls_mode" == deferred ]]; then
     defer_public_tls
-  else
+  elif [[ "$public_tls_mode" == enabled ]]; then
     public_tls_preflight
   fi
   apply_render custom-resource-definitions 'select(.kind == "CustomResourceDefinition")'

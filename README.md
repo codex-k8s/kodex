@@ -86,6 +86,11 @@ self-hosted runner contracts. Полный перечень параметров
 secret model и readback приведены в
 [runbook чистой установки](docs/runbooks/fresh-install.md).
 
+Опциональный [переносимый профиль](docs/runbooks/portable-install.md) разделяет
+bundled и external OIDC, собственный TLS и внешний HTTPS proxy. Локальный
+`./install.sh --portable-release` потребляет exact render из CI/CD установки;
+параметры установки не требуется записывать в GitHub.
+
 ## Лицензия
 
 Код распространяется по [лицензии MIT](LICENSE).

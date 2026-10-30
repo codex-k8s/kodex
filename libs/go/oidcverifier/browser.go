@@ -27,11 +27,13 @@ var (
 // BrowserClient exchanges browser grants using the bearer's exact TLS transport and signing keys without automatic retries.
 // BrowserClient обменивает браузерные grants через точный TLS transport и ключи bearer; автоматических повторов нет.
 type BrowserClient struct {
-	verifier    *Verifier
-	idVerifier  *coreoidc.IDTokenVerifier
-	clientID    string
-	redirectURI string
-	tokenURL    string
+	verifier         *Verifier
+	idVerifier       *coreoidc.IDTokenVerifier
+	clientID         string
+	redirectURI      string
+	tokenURL         string
+	authorizationURL string
+	scope            string
 }
 
 // BrowserTokens contains verified access and rotated refresh tokens plus the bounded refresh expiry and principal.
@@ -46,6 +48,23 @@ type BrowserTokens struct {
 // BrowserClient validates the redirect and audience, then binds an ID token verifier to this verifier's issuer and keys.
 // BrowserClient проверяет redirect и audience, затем связывает проверку ID token с issuer и ключами данного verifier.
 func (verifier *Verifier) BrowserClient(clientID, redirectURI string) (*BrowserClient, error) {
+	return verifier.BrowserClientConfigured(BrowserClientConfig{ClientID: clientID, RedirectURI: redirectURI})
+}
+
+// BrowserClientConfig holds public-client metadata and optional same-authority endpoints from trusted deployment configuration, never from a login request. Empty endpoint and scope fields preserve bundled defaults.
+// BrowserClientConfig содержит metadata публичного клиента и необязательные endpoints из доверенной конфигурации, а не запроса входа. Пустые endpoints и scope сохраняют прежние defaults.
+type BrowserClientConfig struct {
+	ClientID         string
+	RedirectURI      string
+	AuthorizationURL string
+	TokenURL         string
+	Scope            string
+}
+
+// BrowserClientConfigured binds configurable endpoints to the existing exact TLS transport, issuer and signing keys without weakening nonce, audience or exchange retry rules.
+// BrowserClientConfigured связывает endpoints с прежним точным TLS transport, issuer и ключами без ослабления проверок nonce, audience или правил повтора обмена.
+func (verifier *Verifier) BrowserClientConfigured(config BrowserClientConfig) (*BrowserClient, error) {
+	clientID, redirectURI := config.ClientID, config.RedirectURI
 	redirect, err := url.Parse(redirectURI)
 	if verifier == nil || verifier.client == nil || verifier.keys == nil || verifier.issuer == "" ||
 		clientID == "" || len(clientID) > 200 || strings.ContainsAny(clientID, " \r\n\t") ||
@@ -53,9 +72,53 @@ func (verifier *Verifier) BrowserClient(clientID, redirectURI string) (*BrowserC
 		redirect.RawQuery != "" || redirect.Fragment != "" || redirect.Path == "" {
 		return nil, errors.New("OIDC browser client configuration is invalid")
 	}
+	if config.AuthorizationURL == "" {
+		config.AuthorizationURL = strings.TrimRight(verifier.issuer, "/") + "/protocol/openid-connect/auth"
+	}
+	if config.TokenURL == "" {
+		config.TokenURL = strings.TrimRight(verifier.issuer, "/") + "/protocol/openid-connect/token"
+	}
+	if config.Scope == "" {
+		config.Scope = "openid kodex.owner"
+	}
+	issuer, issuerErr := url.Parse(verifier.issuer)
+	if issuerErr != nil || !validBrowserEndpoint(issuer, config.AuthorizationURL) || !validBrowserEndpoint(issuer, config.TokenURL) || !validBrowserScope(config.Scope) {
+		return nil, errors.New("OIDC browser endpoint configuration is invalid")
+	}
 	return &BrowserClient{verifier: verifier, clientID: clientID, redirectURI: redirectURI,
-		tokenURL:   strings.TrimRight(verifier.issuer, "/") + "/protocol/openid-connect/token",
+		tokenURL: config.TokenURL, authorizationURL: config.AuthorizationURL, scope: config.Scope,
 		idVerifier: coreoidc.NewVerifier(verifier.issuer, verifier.keys, &coreoidc.Config{ClientID: clientID, SupportedSigningAlgs: []string{"RS256"}})}, nil
+}
+
+// validBrowserEndpoint rejects external authorities, credentials and query parameters before any token exchange can use the configured endpoint.
+// validBrowserEndpoint отклоняет чужой authority, credentials и query до использования endpoint обменом токенов.
+func validBrowserEndpoint(issuer *url.URL, value string) bool {
+	endpoint, err := url.Parse(value)
+	return err == nil && issuer != nil && len(value) <= 2048 && endpoint.Scheme == "https" &&
+		endpoint.Host == issuer.Host && endpoint.User == nil && endpoint.RawQuery == "" && !endpoint.ForceQuery &&
+		endpoint.Fragment == "" && !strings.ContainsAny(value, "#\r\n\t ") && endpoint.Path != ""
+}
+
+// validBrowserScope accepts a bounded unique scope set containing openid; it cannot inject additional authorization query parameters.
+// validBrowserScope принимает ограниченный уникальный набор scopes с openid и не позволяет добавлять параметры запроса авторизации.
+func validBrowserScope(value string) bool {
+	if len(value) == 0 || len(value) > 256 {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, scope := range strings.Split(value, " ") {
+		if scope == "" || seen[scope] {
+			return false
+		}
+		for _, character := range scope {
+			if !((character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') ||
+				(character >= '0' && character <= '9') || strings.ContainsRune("_.:-", character)) {
+				return false
+			}
+		}
+		seen[scope] = true
+	}
+	return seen["openid"]
 }
 
 // AuthorizationURL builds a PKCE S256 authorization request; fresh login additionally forces reauthentication.
@@ -65,12 +128,12 @@ func (client *BrowserClient) AuthorizationURL(state, nonce, challenge string, fr
 		return "", errors.New("OIDC authorization input is invalid")
 	}
 	query := url.Values{"client_id": {client.clientID}, "redirect_uri": {client.redirectURI}, "response_type": {"code"},
-		"scope": {"openid kodex.owner"}, "state": {state}, "nonce": {nonce}, "code_challenge": {challenge}, "code_challenge_method": {"S256"}}
+		"scope": {client.scope}, "state": {state}, "nonce": {nonce}, "code_challenge": {challenge}, "code_challenge_method": {"S256"}}
 	if fresh {
 		query.Set("prompt", "login")
 		query.Set("max_age", "0")
 	}
-	return strings.TrimRight(client.verifier.issuer, "/") + "/protocol/openid-connect/auth?" + query.Encode(), nil
+	return client.authorizationURL + "?" + query.Encode(), nil
 }
 
 // ExchangeCode submits one authorization code with its redirect and verifier, then checks access and ID token identity.
