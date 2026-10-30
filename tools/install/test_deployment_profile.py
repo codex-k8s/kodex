@@ -6,7 +6,7 @@ import subprocess
 import unittest
 
 import yaml
-from deployment_profile import Rejected, transform, validate, verify_proxy_controller, read_render_profile
+from deployment_profile import Rejected, transform, validate, verify_proxy_controller, verify_proxy_pods, read_render_profile
 
 ROOT = Path(__file__).resolve().parents[2]
 BUNDLED = {"version": 1, "identity": {"mode": "bundled"}, "public_tls": {"mode": "managed"}}
@@ -80,7 +80,7 @@ class ProfileTest(unittest.TestCase):
         for key, value in [("issuer", "http://id.example.invalid"), ("issuer", "https://user:fixture@id.example.invalid/realm"),
                            ("issuer", "https://id.example.invalid/realm?x"), ("issuer", "https://id.example.invalid/a/../b"),
                            ("jwks_url", "https://elsewhere.example.invalid/jwks"), ("client_id", "x\nsecret"),
-                           ("audience", "other"), ("scope", "profile"), ("endpoint_cidrs", ["0.0.0.0/0"]),
+                           ("audience", "other"), ("scope", "profile"), ("scope", "openid  profile"), ("scope", " openid"), ("scope", "openid "), ("endpoint_cidrs", ["0.0.0.0/0"]),
                            ("endpoint_cidrs", ["192.0.2.0/24"]), ("endpoint_cidrs", ["127.0.0.1/32"]),
                            ("connect_host", "192.0.2.17")]:
             candidate = copy.deepcopy(EXTERNAL); candidate["identity"][key] = value; cases.append(candidate)
@@ -93,7 +93,7 @@ class ProfileTest(unittest.TestCase):
 
     def test_proxy_controller_must_match_exact_static_trust(self):
         deployment = {"kind": "Deployment", "metadata": {"generation": 2},
-            "status": {"observedGeneration": 2, "availableReplicas": 1},
+            "status": {"observedGeneration": 2, "availableReplicas": 1, "updatedReplicas": 1, "readyReplicas": 1, "replicas": 1},
             "spec": {"template": {"spec": {"containers": [{"name": "traefik", "args": [
                 "--entryPoints.web.address=:80",
                 "--entryPoints.web.forwardedHeaders.trustedIPs=192.0.2.18/32,2001:db8::18/128"]}]}}}}
@@ -104,11 +104,33 @@ class ProfileTest(unittest.TestCase):
             candidate = copy.deepcopy(deployment)
             candidate["spec"]["template"]["spec"]["containers"][0]["args"].append(flag)
             with self.assertRaises(Rejected): verify_proxy_controller(candidate, EXTERNAL)
+        candidate = copy.deepcopy(deployment); candidate["status"]["updatedReplicas"] = 0
+        with self.assertRaises(Rejected): verify_proxy_controller(candidate, EXTERNAL)
         candidate = copy.deepcopy(deployment); candidate["status"]["availableReplicas"] = 0
         with self.assertRaises(Rejected): verify_proxy_controller(candidate, EXTERNAL)
 
+    def test_actual_proxy_endpoints_must_serve_current_owned_pods(self):
+        controller = {"metadata": {"uid": "deployment"}, "spec": {"replicas": 1, "template": {
+            "metadata": {"labels": {"app": "proxy"}}, "spec": {"containers": [
+                {"name": "traefik", "image": "traefik@sha256:" + "1" * 64, "args": ["--entrypoints.web.address=:80"]}]}}}}
+        pod = {"metadata": {"uid": "pod", "ownerReferences": [{"kind": "ReplicaSet", "uid": "rs", "controller": True}]},
+               "spec": copy.deepcopy(controller["spec"]["template"]["spec"]),
+               "status": {"phase": "Running", "conditions": [{"type": "Ready", "status": "True"}]}}
+        rs = {"metadata": {"uid": "rs", "ownerReferences": [{"kind": "Deployment", "uid": "deployment", "controller": True}]}}
+        service = {"metadata": {"name": "proxy"}, "spec": {"selector": {"app": "proxy"}, "ports": [{"port": 80}]}}
+        slices = [{"metadata": {"labels": {"kubernetes.io/service-name": "proxy"}}, "endpoints": [
+            {"conditions": {"ready": True}, "targetRef": {"kind": "Pod", "uid": "pod"}}]}]
+        verify_proxy_pods(controller, [pod], [rs], service, slices)
+        old = copy.deepcopy(pod); old["spec"]["containers"][0]["args"] += ["--entrypoints.web.proxyprotocol.insecure=true"]
+        with self.assertRaises(Rejected): verify_proxy_pods(controller, [old], [rs], service, slices)
+        foreign = copy.deepcopy(slices); foreign[0]["endpoints"][0]["targetRef"]["uid"] = "foreign"
+        with self.assertRaises(Rejected): verify_proxy_pods(controller, [pod], [rs], service, foreign)
+        with self.assertRaises(Rejected): verify_proxy_pods(controller, [pod], [], service, slices)
+
     def test_profile_is_sealed_in_render(self):
         result = transform(self.renders["web-only"], EXTERNAL, "app.example.invalid")
+        result[-1]["data"].update({"source.sha": "1" * 40, "release-lock.sha256": "1" * 64,
+            "schema-heads.json": json.dumps({"control-plane": 1, "internal-rpc-authority": 2, "email-bridge": 3})})
         self.assertEqual(read_render_profile(result), EXTERNAL)
         result[-1]["data"]["profile.sha256"] = "a" * 64
         with self.assertRaises(Rejected): read_render_profile(result)

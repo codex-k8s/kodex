@@ -93,7 +93,8 @@ def validate(profile):
         require(identity["audience"] == "kodex-control-api", "OIDC_AUDIENCE_REJECTED")
         scope = identity["scope"]
         require(isinstance(scope, str) and re.fullmatch(r"[A-Za-z0-9_.: -]{1,256}", scope)
-                and "openid" in scope.split() and len(scope.split()) == len(set(scope.split())),
+                and "openid" in scope.split() and scope == " ".join(scope.split())
+                and len(scope.split()) == len(set(scope.split())),
                 "OIDC_SCOPE_REJECTED")
     tls = profile["public_tls"]
     require(isinstance(tls, dict), "PUBLIC_TLS_MODE_REJECTED")
@@ -202,7 +203,8 @@ def transform(resources, profile, public_host):
             require(not any(r.get("kind") == "Middleware" and r["metadata"]["name"] == name
                             for r in result), "PROXY_MIDDLEWARE_COLLISION")
             result.append({"apiVersion": "traefik.io/v1alpha1", "kind": "Middleware",
-                           "metadata": {"name": name, "namespace": "kodex-system"}, "spec": spec})
+                           "metadata": {"name": name, "namespace": "kodex-system",
+                                        "labels": {"app.kubernetes.io/part-of": "kodex"}}, "spec": spec})
         for route in routes:
             annotations = route["metadata"].setdefault("annotations", {})
             require(annotations.get("traefik.ingress.kubernetes.io/router.tls") == "true",
@@ -228,6 +230,14 @@ def read_render_profile(resources):
                r.get("metadata", {}).get("name") == "kodex-installation-profile"]
     require(len(matches) == 1 and matches[0]["metadata"].get("namespace") == "kodex-system",
             "INSTALLATION_PROFILE_REQUIRED")
+    data = matches[0]["data"]
+    require(set(data) == {"profile.json", "profile.sha256", "source.sha", "release-lock.sha256", "schema-heads.json"},
+            "INSTALLATION_PINS_REQUIRED")
+    require(re.fullmatch(r"[a-f0-9]{40}", data["source.sha"]) and
+            re.fullmatch(r"[a-f0-9]{64}", data["release-lock.sha256"]), "INSTALLATION_PINS_REJECTED")
+    heads = json.loads(data["schema-heads.json"])
+    require(isinstance(heads, dict) and set(heads) == {"control-plane", "internal-rpc-authority", "email-bridge"}
+            and all(type(v) is int and v > 0 for v in heads.values()), "SCHEMA_PIN_SET_REJECTED")
     profile = validate(json.loads(matches[0]["data"]["profile.json"]))
     require(fingerprint(profile) == matches[0]["data"].get("profile.sha256"), "INSTALLATION_PROFILE_DRIFT")
     return profile
@@ -260,8 +270,51 @@ def verify_proxy_controller(deployment, profile):
                 require(value == "false", "INSECURE_FORWARDED_HEADERS_REJECTED")
     trusted = options.get("entrypoints.web.forwardedheaders.trustedips", "").split(",")
     require(set(exact_hosts(trusted)) == set(tls["trusted_proxy_cidrs"]), "TRUSTED_PROXY_CONFIG_DRIFT")
-    require(deployment.get("status", {}).get("observedGeneration", 0) >= deployment.get("metadata", {}).get("generation", 1)
-            and deployment.get("status", {}).get("availableReplicas", 0) >= 1, "PROXY_CONTROLLER_NOT_READY")
+    desired = deployment["spec"].get("replicas", 1)
+    status = deployment.get("status", {})
+    require(type(desired) is int and desired >= 1 and
+            status.get("observedGeneration", 0) >= deployment.get("metadata", {}).get("generation", 1) and
+            all(status.get(field, 0) == desired for field in
+                ("replicas", "updatedReplicas", "readyReplicas", "availableReplicas")) and
+            status.get("unavailableReplicas", 0) == 0, "PROXY_CONTROLLER_NOT_READY")
+
+
+def verify_proxy_pods(deployment, pods, replica_sets, service, slices):
+    """Проверяется реально обслуживающий состав, а не только новый Deployment spec."""
+    desired = deployment["spec"].get("replicas", 1)
+    uid = deployment["metadata"]["uid"]
+    current = deployment["spec"]["template"]["spec"]["containers"]
+    selectors = service.get("spec", {}).get("selector", {})
+    require(selectors and all(deployment["spec"]["template"]["metadata"]["labels"].get(k) == v
+                              for k, v in selectors.items()), "PROXY_SERVICE_SELECTOR_REJECTED")
+    require(any(p.get("port") == 80 and p.get("protocol", "TCP") == "TCP"
+                for p in service["spec"].get("ports", [])), "PROXY_SERVICE_HTTP_80_REQUIRED")
+    require(len(pods) == desired, "PROXY_SERVING_POD_SET_REJECTED")
+    rs_uids = {r["metadata"]["uid"] for r in replica_sets if any(
+        o.get("uid") == uid and o.get("kind") == "Deployment" and o.get("controller") is True
+        for o in r["metadata"].get("ownerReferences", []))}
+    pod_uids = set()
+    for pod in pods:
+        require(not pod["metadata"].get("deletionTimestamp") and pod.get("status", {}).get("phase") == "Running"
+                and any(c.get("type") == "Ready" and c.get("status") == "True" for c in pod["status"].get("conditions", []))
+                and any(o.get("kind") == "ReplicaSet" and o.get("uid") in rs_uids and o.get("controller") is True
+                        for o in pod["metadata"].get("ownerReferences", [])), "PROXY_POD_OWNER_OR_READINESS_REJECTED")
+        actual = pod["spec"]["containers"]
+        require(len(actual) == len(current), "PROXY_POD_CONFIG_DRIFT")
+        for expected, live in zip(current, actual):
+            require(all(live.get(k, []) == expected.get(k, []) for k in ("name", "image", "args", "env", "envFrom")),
+                    "PROXY_POD_CONFIG_DRIFT")
+        pod_uids.add(pod["metadata"]["uid"])
+    endpoints = set()
+    for group in slices:
+        require(group["metadata"].get("labels", {}).get("kubernetes.io/service-name") == service["metadata"]["name"],
+                "PROXY_ENDPOINT_SERVICE_DRIFT")
+        for endpoint in group.get("endpoints", []):
+            ref = endpoint.get("targetRef", {})
+            require(endpoint.get("conditions", {}).get("ready") is True and
+                    ref.get("kind") == "Pod" and ref.get("uid") in pod_uids, "PROXY_ENDPOINT_POD_DRIFT")
+            endpoints.add(ref["uid"])
+    require(endpoints == pod_uids and endpoints, "PROXY_ENDPOINT_SET_DRIFT")
 
 
 def main():
@@ -271,6 +324,7 @@ def main():
     parser.add_argument("--input")
     parser.add_argument("--output")
     parser.add_argument("--public-host")
+    parser.add_argument("--release-lock")
     args = parser.parse_args()
     try:
         raw = Path(args.profile).read_bytes()
@@ -287,6 +341,14 @@ def main():
             require(args.input and args.output and args.public_host, "RENDER_ARGUMENTS_REQUIRED")
             resources = list(filter(None, yaml.safe_load_all(Path(args.input).read_text())))
             result = transform(resources, profile, args.public_host)
+            require(args.release_lock, "RELEASE_LOCK_REQUIRED")
+            lock = json.loads(Path(args.release_lock).read_text())
+            require(isinstance(lock.get("schema_heads"), dict) and
+                    set(lock["schema_heads"]) == {"control-plane", "internal-rpc-authority", "email-bridge"} and
+                    all(type(v) is int and v > 0 for v in lock["schema_heads"].values()), "SCHEMA_PIN_SET_REJECTED")
+            result[-1]["data"]["source.sha"] = lock["source_sha"]
+            result[-1]["data"]["schema-heads.json"] = json.dumps(lock["schema_heads"], sort_keys=True)
+            result[-1]["data"]["release-lock.sha256"] = hashlib.sha256(Path(args.release_lock).read_bytes()).hexdigest()
             Path(args.output).write_text(yaml.safe_dump_all(result, sort_keys=False))
     except (Rejected, OSError, ValueError, KeyError, TypeError):
         raise SystemExit("Deployment profile rejected") from None

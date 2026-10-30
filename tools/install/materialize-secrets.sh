@@ -102,8 +102,12 @@ trap 'rm -rf -- "$temporary_directory"' EXIT
 umask 077
 
 for namespace_name in kodex-system kodex-runtime kodex-trust kodex-secret-drafts; do
-  kubectl create namespace "$namespace_name" --dry-run=client -o yaml |
-    kubectl apply --server-side --field-manager=kodex-install -f - >/dev/null
+  existing_namespace=$(kubectl get namespace "$namespace_name" --ignore-not-found -o name)
+  if [[ -z "$existing_namespace" ]]; then
+    kubectl create namespace "$namespace_name" --dry-run=client -o json |
+      jq '.metadata.labels["app.kubernetes.io/part-of"]="kodex"' |
+      kubectl create --field-manager=kodex-install -f - >/dev/null
+  fi
 done
 
 apply_secret_from_directory() {

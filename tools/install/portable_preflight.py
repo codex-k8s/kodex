@@ -10,7 +10,7 @@ import ssl
 import subprocess
 
 import yaml
-from deployment_profile import Rejected, require, https_endpoint, read_render_profile, verify_proxy_controller
+from deployment_profile import Rejected, require, https_endpoint, read_render_profile, verify_proxy_controller, verify_proxy_pods
 
 
 def resolve_exact(host):
@@ -64,6 +64,7 @@ def main():
     parser.add_argument("--oidc-ca-file")
     parser.add_argument("--ingress-deployment")
     parser.add_argument("--ingress-namespace")
+    parser.add_argument("--ingress-service")
     parser.add_argument("--plan", action="store_true")
     args = parser.parse_args()
     try:
@@ -103,6 +104,14 @@ def main():
             require(args.ingress_deployment and args.ingress_namespace, "EXACT_INGRESS_DEPLOYMENT_REQUIRED")
             controller = json.loads(kube(["-n", args.ingress_namespace, "get", "deployment", args.ingress_deployment, "-o", "json"]))
             verify_proxy_controller(controller, profile)
+            require(args.ingress_service, "EXACT_INGRESS_SERVICE_REQUIRED")
+            service = json.loads(kube(["-n", args.ingress_namespace, "get", "service", args.ingress_service, "-o", "json"]))
+            selector = ",".join(k + "=" + v for k, v in service.get("spec", {}).get("selector", {}).items())
+            require(selector, "PROXY_SERVICE_SELECTOR_REQUIRED")
+            pods = json.loads(kube(["-n", args.ingress_namespace, "get", "pods", "-l", selector, "-o", "json"]))["items"]
+            replica_sets = json.loads(kube(["-n", args.ingress_namespace, "get", "replicasets", "-l", selector, "-o", "json"]))["items"]
+            slices = json.loads(kube(["-n", args.ingress_namespace, "get", "endpointslices", "-l", "kubernetes.io/service-name=" + args.ingress_service, "-o", "json"]))["items"]
+            verify_proxy_pods(controller, pods, replica_sets, service, slices)
             # Этот путь не удаляет старые Certificate и не меняет shared ingress.
             current = kube(["-n", "kodex-system", "get", "certificate", "staff-control-center-public", "--ignore-not-found", "-o", "name"])
             require(not current.strip(), "EXISTING_PUBLIC_CERTIFICATE_REQUIRES_SEPARATE_MIGRATION")

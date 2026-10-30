@@ -74,7 +74,8 @@ S3 и IdP сохраняются. Все три app маршрута испол�
 включается. Смена IP proxy требует нового проверенного render.
 
 Оператор передаёт readback точного Traefik Deployment. В нём должны быть
-`--entryPoints.web.address=:80`, точный `forwardedHeaders.trustedIPs`, отсутствие
+`--entryPoints.web.address=:80`, точный `forwardedHeaders.trustedIPs`, полный завершённый rollout, точные текущие Pod и
+EndpointSlice выбранного Service, отсутствие
 insecure trust, редиректа на websecure и неоднозначного static config. Этот код
 общий ingress controller не перенастраивает. Сетевая граница и фактический source
 после NAT должны быть проверены оператором; middleware — дополнительная защита,
@@ -85,6 +86,10 @@ API authorization, CSRF/Origin и server-side revocation остаются в gat
 Защита API не заменяется доступностью HTML shell или health endpoint.
 
 ## Render и применение
+
+Сборка записывает `schema_heads` трёх БД в release lock. Portable render требует
+их совпадения с исходным деревом и exact checkout SHA из lock. Старый lock без
+этих pins остаётся допустим для legacy пути; для portable требуется новый lock.
 
 Вызвать `tools/release/render-web-only.sh` с прежними lock/digest, публичным
 origin, ingress и Kubernetes API inputs, добавив `--deployment-profile`.
@@ -100,7 +105,7 @@ revision согласуется с readiness. Профиль и его digest с
 ./install.sh --portable-release --mode preflight \
   --context <exact-context> --render /private/release/render.yaml \
   --render-sha256 <sha256> --oidc-ca-file /private/oidc-ca.pem \
-  --ingress-namespace <namespace> --ingress-deployment <deployment>
+  --ingress-namespace <namespace> --ingress-deployment <deployment> --ingress-service <service>
 ```
 
 `plan` не вызывает Kubernetes или сеть. `preflight` выполняет только чтение и
@@ -113,11 +118,27 @@ HTTPS подключение использует проверенный IP бе
 Render копируется и сверяется с переданным digest, preimage сохраняется с правами
 0700/0600. Он содержит candidate render и metadata/image pins существующих
 workloads; он не является backup БД или полным rollback artifact. Перед обновлением
-нужны отдельные проверенные backup и совместимость миграций. Затем вызываются
+нужны отдельные проверенные backup и совместимость миграций. Перед первой записью читается полный inventory выбранных ресурсов. Совпавшее имя
+без `app.kubernetes.io/part-of=kodex` закрыто отклоняется, включая Jobs и namespaces.
+Профиль не присваивает чужие namespaces: подготовить их ownership нужно своим
+инфраструктурным кодом. Новые namespaces secret materializer создаёт с этим label.
+Inventory связан с exact context и render digest, содержит UID и hash исходного
+состояния. Create не заменяется SSA upsert; update передаёт текущий resourceVersion,
+а delete — атомарные UID/resourceVersion preconditions. Drift требует readback,
+а не слепого повтора. Старые immutable catalogs сохраняются; их GC и legacy repair
+устаревших admission objects не выполняются этим portable путём.
+
+Затем вызываются
 прежние prepare-preflight, preflight, apply и readback; preflight prerequisites
 повторно проверяются перед каждой стадией. Prepare-preflight изменяет принадлежащие
 установке ресурсы и поэтому выполняется только внутри явно выбранного apply.
-`--mode readback` использует тот же digest и bounded dependency checks.
+`--mode readback` использует тот же digest и bounded dependency checks. После
+проверок готовности каждый выбранный ресурс сравнивается с candidate: images,
+env/config references, ConfigMap data, Ingress/NetworkPolicy/Middleware/transport,
+labels и исходные pins. Только документированные Kubernetes defaults нормализуются;
+лишние security rules и изменённые config values закрывают результат. Дополнительно
+через локальный PostgreSQL socket читается migration head трёх БД, без DSN/password,
+SQL repair или downgrade. Это SRE readback, не полномочие сотрудников платформы.
 
 Переход существующего public Certificate в external TLS автоматически не
 выполняется: требуется отдельная миграция с preimage и проверкой ownership.

@@ -18,12 +18,14 @@ mode=""
 render_file=""
 public_tls_mode=enabled
 portable_arguments=()
+portable_inventory=""
 while (($# > 0)); do
   case "$1" in
+    --portable-inventory) portable_inventory="${2:-}"; shift 2 ;;
     --context) context="${2:-}"; shift 2 ;;
     --mode) mode="${2:-}"; shift 2 ;;
     --render) render_file="${2:-}"; shift 2 ;;
-    --oidc-ca-file|--ingress-deployment|--ingress-namespace) portable_arguments+=("$1" "${2:-}"); shift 2 ;;
+    --oidc-ca-file|--ingress-deployment|--ingress-namespace|--ingress-service) portable_arguments+=("$1" "${2:-}"); shift 2 ;;
     --public-tls-mode) public_tls_mode="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
@@ -53,7 +55,11 @@ profile_mode=$(yq -r 'select(.kind == "ConfigMap" and .metadata.name == "kodex-i
 if [[ "$profile_mode" == external || "$public_tls_mode" == external ]]; then
   [[ "$profile_mode" == external && "$public_tls_mode" == external ]] || fail 'public TLS profile input conflict'
 fi
-if [[ -n "$profile_mode" ]]; then
+if [[ -n "${profile_mode:-}" ]]; then
+  [[ "$profile_mode" != managed || "$public_tls_mode" == enabled ]] || fail 'portable managed TLS requires enabled mode'
+  if [[ "$mode" == apply || "$mode" == prepare-preflight ]]; then
+    [[ -f "$portable_inventory" && ! -L "$portable_inventory" ]] || fail 'portable inventory is required before mutation'
+  fi
   [[ "$mode" != defer-public-tls ]] || fail 'portable profile does not use ACME deferral'
   timeout 60s python3 "$repository_root/tools/install/portable_preflight.py" \
     --render "$render_file" --sha256 "$(sha256sum "$render_file" | awk '{print $1}')" \
@@ -114,11 +120,26 @@ render_filter() {
   printf '%s' "$output"
 }
 
+portable_apply_file() {
+  python3 "$repository_root/tools/install/portable_state.py" apply \
+    --context "$context" --render "$render_file" --inventory "$portable_inventory" --manifest "$1"
+}
+
+portable_delete() {
+  python3 "$repository_root/tools/install/portable_state.py" delete \
+    --context "$context" --render "$render_file" --inventory "$portable_inventory" \
+    --kind "$1" --name "$2" --namespace "${3:-kodex-system}"
+}
+
 apply_render() {
   local name=$1 expression=$2 output
   output=$(render_filter "$name" "$expression")
-  kubectl --context "$context" apply --server-side --field-manager=kodex-install \
-    -f "$output" >/dev/null
+  if [[ -n "${profile_mode:-}" ]]; then
+    portable_apply_file "$output"
+  else
+    kubectl --context "$context" apply --server-side --field-manager=kodex-install \
+      -f "$output" >/dev/null
+  fi
 }
 
 wait_statefulset() {
@@ -131,10 +152,15 @@ apply_job() {
   JOB_NAME="$name" yq 'select(.kind == "Job" and .metadata.name == strenv(JOB_NAME))' \
     "$render_file" >"$job_file"
   [[ -s "$job_file" ]] || fail "release Job is absent: $name"
-  kubectl --context "$context" -n "$namespace" delete "job/$name" \
-    --ignore-not-found --wait=true --timeout=5m >/dev/null
-  kubectl --context "$context" apply --server-side --field-manager=kodex-install \
-    -f "$job_file" >/dev/null
+  if [[ -n "${profile_mode:-}" ]]; then
+    portable_delete Job "$name"
+    portable_apply_file "$job_file"
+  else
+    kubectl --context "$context" -n "$namespace" delete "job/$name" \
+      --ignore-not-found --wait=true --timeout=5m >/dev/null
+    kubectl --context "$context" apply --server-side --field-manager=kodex-install \
+      -f "$job_file" >/dev/null
+  fi
   wait_job_terminal "$name"
 }
 
@@ -224,8 +250,12 @@ reconcile_immutable_configmaps() {
       .metadata.labels["kodex.dev/owner-intent"] == "true"
     ' <<<"$current" >/dev/null ||
       fail "immutable ConfigMap is not owned by Kodex: $name"
-    kubectl --context "$context" -n "$namespace" delete "configmap/$name" \
-      --wait=true --timeout=3m >/dev/null
+    if [[ -n "${profile_mode:-}" ]]; then
+      portable_delete ConfigMap "$name"
+    else
+      kubectl --context "$context" -n "$namespace" delete "configmap/$name" \
+        --wait=true --timeout=3m >/dev/null
+    fi
   done < <(yq -N -r '
     select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
       .immutable == true) | .metadata.name
@@ -233,6 +263,7 @@ reconcile_immutable_configmaps() {
 }
 
 prune_role_environment_configmaps() {
+  [[ -z "${profile_mode:-}" ]] || return 0
   local expected name current referenced
   expected=$(yq -N -r '
     select(.kind == "ConfigMap" and
@@ -258,13 +289,18 @@ prune_role_environment_configmaps() {
       .metadata.labels["app.kubernetes.io/name"] == "kodex-role-environments"
     ' <<<"$current" >/dev/null ||
       fail "role environment catalog is not owned by Kodex: $name"
-    kubectl --context "$context" -n "$namespace" delete "configmap/$name" \
-      --wait=true --timeout=3m >/dev/null
+    if [[ -n "${profile_mode:-}" ]]; then
+      portable_delete ConfigMap "$name"
+    else
+      kubectl --context "$context" -n "$namespace" delete "configmap/$name" \
+        --wait=true --timeout=3m >/dev/null
+    fi
   done < <(kubectl --context "$context" -n "$namespace" get configmaps \
     -l app.kubernetes.io/name=kodex-role-environments -o json | jq -r '.items[].metadata.name')
 }
 
 reconcile_image_admission_policy_parameters() {
+  [[ -z "${profile_mode:-}" ]] || return 0
   local name=kodex-image-admission-policy current expected current_spec expected_spec
   if ! current=$(kubectl --context "$context" -n "$namespace" get \
     "imageadmissionpolicyparameters.supplychain.kodex.dev/$name" -o json 2>/dev/null); then
@@ -293,6 +329,7 @@ reconcile_image_admission_policy_parameters() {
 }
 
 prepare_image_admission_preflight() {
+  [[ -z "${profile_mode:-}" ]] || return 0
   local parameters=kodex-image-admission-policy
   local binding=kodex-image-admission-controller-jobs
   local current expected current_identity expected_identity
@@ -436,7 +473,8 @@ PY
 source "${BASH_SOURCE[0]%"${BASH_SOURCE[0]##*/}"}dns-address-normalization.sh"
 
 public_tls_http_probe() {
-  local san=$1 address=$2 timeout_seconds=$3 resolve_address=$address http_code
+  local san=$1 address=$2 timeout_seconds=$3 resolve_address http_code
+  resolve_address=$address
   [[ "$address" != *:* ]] || resolve_address="[$address]"
   http_code=$(timeout "${timeout_seconds}s" curl --silent --show-error \
     --output /dev/null --write-out '%{http_code}' --noproxy '*' \
@@ -705,6 +743,8 @@ if [[ "$mode" == preflight ]]; then
      .metadata.name != strenv(KODEX_DEPLOY_PUBLIC_CERTIFICATE_NAME)) and
     .kind != "CustomResourceDefinition" and .kind != "Secret" and
     .kind != "Job" and (.kind != "ConfigMap" or .immutable != true)'
+  # Переменные ниже принадлежат yq, не Bash.
+  # shellcheck disable=SC2016
   while IFS= read -r api_version; do
     [[ "$api_version" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?/v[0-9][a-z0-9]*$ ]] ||
       fail "rendered CustomResourceDefinition API version is invalid: $api_version"

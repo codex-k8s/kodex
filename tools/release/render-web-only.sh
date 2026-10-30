@@ -621,9 +621,17 @@ yq -i '
 ' "$rendered"
 
 if [[ -n "$deployment_profile" ]]; then
+  expected_schema_heads=$(python3 "$repository_root/tools/release/schema-heads.py")
+  jq -e --argjson expected "$expected_schema_heads" '.schema_heads == $expected' "$lock_file" >/dev/null ||
+    fail 'portable release lock schema pins differ from source'
+  [[ "$(git -C "$repository_root" rev-parse HEAD)" == "$source_sha" ]] ||
+    fail 'portable release lock differs from source checkout'
+fi
+
+if [[ -n "$deployment_profile" ]]; then
   python3 "$repository_root/tools/install/deployment_profile.py" render \
     --profile "$deployment_profile" --input "$rendered" \
-    --output "$temporary_directory/profile.yaml" --public-host "$public_host" ||
+    --output "$temporary_directory/profile.yaml" --public-host "$public_host" --release-lock "$lock_file" ||
     fail 'deployment profile render rejected'
   mv -- "$temporary_directory/profile.yaml" "$rendered"
 fi

@@ -17,7 +17,7 @@ while (($#)); do
     --render) render="${2:-}"; shift 2 ;;
     --render-sha256) expected_sha="${2:-}"; shift 2 ;;
     --preimage-directory) preimage="${2:-}"; shift 2 ;;
-    --oidc-ca-file|--ingress-deployment|--ingress-namespace) arguments+=("$1" "${2:-}"); shift 2 ;;
+    --oidc-ca-file|--ingress-deployment|--ingress-namespace|--ingress-service) arguments+=("$1" "${2:-}"); shift 2 ;;
     --help)
       printf '%s\n' 'Usage: portable-release.sh --mode plan|preflight|apply|readback --render <yaml> --render-sha256 <64-hex> [--context <exact-context>]' \
         '  [--oidc-ca-file <pem>] [--ingress-deployment <name> --ingress-namespace <name>]' \
@@ -58,11 +58,19 @@ if [[ "$mode" == apply ]]; then
         jq '{items:[.items[] | {kind,metadata:{name:.metadata.name,uid:.metadata.uid,resourceVersion:.metadata.resourceVersion},images:[.spec.template.spec.containers[]?.image]}]}' >"$preimage/$namespace-metadata.json"
     fi
   done
+  timeout 180s python3 "$root/tools/install/portable_state.py" inventory \
+    --context "$context" --render "$temporary/render.yaml" --inventory "$preimage/resource-inventory.json"
   # Preimage metadata не заменяет backup данных или разрешение на schema downgrade.
   for phase in prepare-preflight preflight apply; do
     "$root/tools/install/deploy-platform.sh" --context "$context" --mode "$phase" \
-      --render "$temporary/render.yaml" --public-tls-mode "$tls_mode" "${arguments[@]}"
+      --render "$temporary/render.yaml" --public-tls-mode "$tls_mode" \
+      --portable-inventory "$preimage/resource-inventory.json" "${arguments[@]}"
   done
 fi
+timeout 180s python3 "$root/tools/install/portable_state.py" readback \
+  --context "$context" --render "$temporary/render.yaml"
 "$root/tools/install/deploy-platform.sh" --context "$context" --mode readback \
   --render "$temporary/render.yaml" --public-tls-mode "$tls_mode" "${arguments[@]}"
+
+timeout 180s python3 "$root/tools/install/portable_state.py" readback \
+  --context "$context" --render "$temporary/render.yaml"
