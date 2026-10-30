@@ -404,6 +404,7 @@ public_tls_descendant_count() {
 }
 
 retire_owner_managed_public_certificate() {
+  [[ -z "${profile_mode:-}" ]] || fail 'portable TLS repair requires a separate fenced operation'
   local certificate_json deadline
   if certificate_json=$(kubectl --context "$context" -n "$namespace" get \
     "certificate/$public_certificate_name" -o json 2>/dev/null); then
@@ -863,5 +864,9 @@ failing_runtime_pods=$(kubectl --context "$context" -n "$runtime_namespace" get 
     .metadata.name] | join(",")
 ')
 [[ -z "$failing_runtime_pods" ]] || fail "failing runtime Pods remain: $failing_runtime_pods"
+if [[ -n "${profile_mode:-}" ]]; then
+  timeout 180s python3 "$repository_root/tools/install/portable_state.py" readback \
+    --context "$context" --render "$render_file"
+fi
 printf 'Kodex platform deployment completed: %s render_sha256=%s\n' \
   "$mode" "$(sha256sum "$render_file" | awk '{print $1}')"

@@ -71,6 +71,3 @@ timeout 180s python3 "$root/tools/install/portable_state.py" readback \
   --context "$context" --render "$temporary/render.yaml"
 "$root/tools/install/deploy-platform.sh" --context "$context" --mode readback \
   --render "$temporary/render.yaml" --public-tls-mode "$tls_mode" "${arguments[@]}"
-
-timeout 180s python3 "$root/tools/install/portable_state.py" readback \
-  --context "$context" --render "$temporary/render.yaml"

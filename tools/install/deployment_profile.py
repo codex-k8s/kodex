@@ -252,6 +252,8 @@ def verify_proxy_controller(deployment, profile):
     controllers = [c for c in containers if c.get("name") == "traefik"]
     require(len(controllers) == 1, "EXACT_TRAEFIK_CONTAINER_REQUIRED")
     controller = controllers[0]
+    require(controller.get("command", []) in ([], ["traefik"], ["/usr/local/bin/traefik"]),
+            "AMBIGUOUS_TRAEFIK_COMMAND")
     require(not any(e.get("name", "").startswith("TRAEFIK_") for e in controller.get("env", []))
             and not controller.get("envFrom"), "AMBIGUOUS_TRAEFIK_CONFIGURATION")
     options = {}
@@ -287,8 +289,14 @@ def verify_proxy_pods(deployment, pods, replica_sets, service, slices):
     selectors = service.get("spec", {}).get("selector", {})
     require(selectors and all(deployment["spec"]["template"]["metadata"]["labels"].get(k) == v
                               for k, v in selectors.items()), "PROXY_SERVICE_SELECTOR_REJECTED")
-    require(any(p.get("port") == 80 and p.get("protocol", "TCP") == "TCP"
-                for p in service["spec"].get("ports", [])), "PROXY_SERVICE_HTTP_80_REQUIRED")
+    web_ports = [p for p in service["spec"].get("ports", []) if p.get("port") == 80 and p.get("protocol", "TCP") == "TCP"]
+    require(len(web_ports) == 1, "PROXY_SERVICE_HTTP_80_REQUIRED")
+    target = web_ports[0].get("targetPort", 80)
+    traefik = [c for c in current if c.get("name") == "traefik"]
+    require(len(traefik) == 1 and (type(target) is int and target == 80 or
+            isinstance(target, str) and any(p.get("name") == target and p.get("containerPort") == 80 and
+                p.get("protocol", "TCP") == "TCP" for p in traefik[0].get("ports", []))),
+            "PROXY_SERVICE_TARGET_PORT_REJECTED")
     require(len(pods) == desired, "PROXY_SERVING_POD_SET_REJECTED")
     rs_uids = {r["metadata"]["uid"] for r in replica_sets if any(
         o.get("uid") == uid and o.get("kind") == "Deployment" and o.get("controller") is True
@@ -302,13 +310,16 @@ def verify_proxy_pods(deployment, pods, replica_sets, service, slices):
         actual = pod["spec"]["containers"]
         require(len(actual) == len(current), "PROXY_POD_CONFIG_DRIFT")
         for expected, live in zip(current, actual):
-            require(all(live.get(k, []) == expected.get(k, []) for k in ("name", "image", "args", "env", "envFrom")),
+            require(all(live.get(k, []) == expected.get(k, []) for k in ("name", "image", "command", "args", "env", "envFrom")),
                     "PROXY_POD_CONFIG_DRIFT")
         pod_uids.add(pod["metadata"]["uid"])
     endpoints = set()
     for group in slices:
         require(group["metadata"].get("labels", {}).get("kubernetes.io/service-name") == service["metadata"]["name"],
                 "PROXY_ENDPOINT_SERVICE_DRIFT")
+        mapped = [p for p in group.get("ports", []) if p.get("name") == web_ports[0].get("name")]
+        require(len(mapped) == 1 and mapped[0].get("port") == 80 and mapped[0].get("protocol", "TCP") == "TCP",
+                "PROXY_ENDPOINT_PORT_REJECTED")
         for endpoint in group.get("endpoints", []):
             ref = endpoint.get("targetRef", {})
             require(endpoint.get("conditions", {}).get("ready") is True and

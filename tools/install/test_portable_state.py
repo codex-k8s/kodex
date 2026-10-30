@@ -1,6 +1,8 @@
 """Доказательства отказа при drift, чужом объекте и гонке, без Kubernetes/БД."""
 import copy
 import json
+from pathlib import Path
+import subprocess
 import unittest
 
 from deployment_profile import Rejected
@@ -95,6 +97,60 @@ class StateTest(unittest.TestCase):
                   'spec': {'podSelector': {}, 'policyTypes': ['Ingress'], 'ingress': []}}
         current = live(policy); current['spec']['ingress'] = [{}]
         with self.assertRaises(Rejected): verify_resource(policy, current)
+
+    def test_readback_accepts_only_closed_defaults_not_new_executable_fields(self):
+        desired = resource(kind='Deployment', name='control-plane')
+        desired['spec']['template']['spec']['volumes'] = [{'name': 'config', 'configMap': {'name': 'test'}}]
+        current = live(desired)
+        current['spec']['template']['spec']['volumes'][0]['configMap']['defaultMode'] = 420
+        current['spec'].update(replicas=1, revisionHistoryLimit=10, progressDeadlineSeconds=600)
+        current['spec']['template']['metadata'] = {'creationTimestamp': None}
+        pod = current['spec']['template']['spec']
+        pod['dnsPolicy'] = 'ClusterFirst'
+        pod['containers'][0].update(terminationMessagePath='/dev/termination-log', terminationMessagePolicy='File', imagePullPolicy='IfNotPresent')
+        verify_resource(desired, current)
+        for field, value in [('hostNetwork', True), ('hostPID', True), ('initContainers', [{'name': 'foreign'}])]:
+            bad = live(desired); bad['spec']['template']['spec'][field] = value
+            with self.assertRaises(Rejected): verify_resource(desired, bad)
+        for field, value in [('command', ['foreign']), ('envFrom', [{'secretRef': {'name': 'foreign'}}])]:
+            bad = live(desired); bad['spec']['template']['spec']['containers'][0][field] = value
+            with self.assertRaises(Rejected): verify_resource(desired, bad)
+
+    def test_job_generated_selector_is_bound_to_actual_uid(self):
+        desired = resource()
+        current = live(desired)
+        current['spec'].update(parallelism=1, completions=1, backoffLimit=6, completionMode='NonIndexed',
+            selector={'matchLabels': {'batch.kubernetes.io/controller-uid': 'test-uid'}})
+        current['spec']['template']['metadata'] = {'creationTimestamp': None, 'labels': {
+            'batch.kubernetes.io/controller-uid': 'test-uid', 'controller-uid': 'test-uid',
+            'batch.kubernetes.io/job-name': 'control-plane-migrate', 'job-name': 'control-plane-migrate'}}
+        verify_resource(desired, current)
+        current['spec']['template']['spec']['containers'][0]['command'] = ['foreign']
+        with self.assertRaises(Rejected): verify_resource(desired, current)
+
+    def test_empty_network_policy_arrays_may_be_omitted_by_api(self):
+        desired = {'apiVersion': 'networking.k8s.io/v1', 'kind': 'NetworkPolicy',
+            'metadata': resource()['metadata'], 'spec': {'podSelector': {}, 'policyTypes': ['Ingress', 'Egress'], 'ingress': [], 'egress': []}}
+        current = live(desired); current['spec'].pop('ingress'); current['spec'].pop('egress')
+        verify_resource(desired, current)
+
+    def test_controller_owned_lease_heartbeat_is_preserved(self):
+        desired = {'apiVersion': 'coordination.k8s.io/v1', 'kind': 'Lease', 'metadata': resource()['metadata'] | {'name': 'image-admission-controller-leader'}, 'spec': {}}
+        current = live(desired); current['spec'] = {'holderIdentity': 'controller', 'renewTime': '2026-01-01T00:00:00Z'}
+        state = FixtureState([current]); inventory = state.inventory([desired])
+        state.objects[key(desired)]['spec']['renewTime'] = '2026-01-01T00:00:05Z'
+        state.apply(desired, inventory)
+        self.assertEqual(state.writes, [])
+        verify_resource(desired, state.get(desired))
+
+    def test_portable_readback_cannot_delete_public_certificate(self):
+        root = Path(__file__).resolve().parents[2]
+        source = (root / 'tools/install/deploy-platform.sh').read_text()
+        body = source.split('retire_owner_managed_public_certificate() {', 1)[1].split('\n}\n', 1)[0]
+        script = "profile_mode=managed; fail() { exit 19; }; kubectl() { echo MUTATION; }; retire() {" + body + "\n}; retire"
+        result = subprocess.run(['bash', '-c', script], capture_output=True, text=True, timeout=5)
+        self.assertEqual(result.returncode, 19)
+        self.assertNotIn('MUTATION', result.stdout)
 
     def test_schema_readback_is_read_only_and_exact(self):
         resources = [{'kind': 'ConfigMap', 'metadata': {'name': 'kodex-installation-profile'}, 'data': {

@@ -88,7 +88,8 @@ API authorization, CSRF/Origin и server-side revocation остаются в gat
 ## Render и применение
 
 Сборка записывает `schema_heads` трёх БД в release lock. Portable render требует
-их совпадения с исходным деревом и exact checkout SHA из lock. Старый lock без
+их совпадения с исходным деревом и exact checkout SHA из lock; tracked дерево
+должно быть чистым. Старый lock без
 этих pins остаётся допустим для legacy пути; для portable требуется новый lock.
 
 Вызвать `tools/release/render-web-only.sh` с прежними lock/digest, публичным
@@ -122,6 +123,8 @@ workloads; он не является backup БД или полным rollback a
 без `app.kubernetes.io/part-of=kodex` закрыто отклоняется, включая Jobs и namespaces.
 Профиль не присваивает чужие namespaces: подготовить их ownership нужно своим
 инфраструктурным кодом. Новые namespaces secret materializer создаёт с этим label.
+Heartbeat зарегистрированного controller-owned Lease сохраняется и не считается
+изменением install intent; installer не переписывает его holder/renewTime.
 Inventory связан с exact context и render digest, содержит UID и hash исходного
 состояния. Create не заменяется SSA upsert; update передаёт текущий resourceVersion,
 а delete — атомарные UID/resourceVersion preconditions. Drift требует readback,
@@ -136,7 +139,11 @@ Inventory связан с exact context и render digest, содержит UID �
 проверок готовности каждый выбранный ресурс сравнивается с candidate: images,
 env/config references, ConfigMap data, Ingress/NetworkPolicy/Middleware/transport,
 labels и исходные pins. Только документированные Kubernetes defaults нормализуются;
-лишние security rules и изменённые config values закрывают результат. Дополнительно
+лишние исполняемые/security поля и изменённые config values закрывают результат.
+Pod spec сравнивается с закрытым набором defaults, включая volume defaultMode;
+произвольные command/envFrom/initContainers/hostNetwork не считаются defaults.
+Portable readback при неготовом Certificate завершает проверку ошибкой и не
+запускает legacy auto-repair или удаление сертификата. Дополнительно
 через локальный PostgreSQL socket читается migration head трёх БД, без DSN/password,
 SQL repair или downgrade. Это SRE readback, не полномочие сотрудников платформы.
 

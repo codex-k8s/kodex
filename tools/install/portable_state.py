@@ -25,6 +25,8 @@ def descriptor(resource):
 def seal(resource):
     metadata = resource.get('metadata', {})
     value = {k: v for k, v in resource.items() if k not in ('metadata', 'status')}
+    if resource.get('kind') == 'Lease' and metadata.get('name') == 'image-admission-controller-leader':
+        value.pop('spec', None)
     annotations = {k: v for k, v in metadata.get('annotations', {}).items()
                    if k != 'kubectl.kubernetes.io/last-applied-configuration'}
     value['labels'] = metadata.get('labels', {})
@@ -48,31 +50,163 @@ def subset(expected, actual):
     return expected == actual
 
 
+def strip_defaults(expected, actual, defaults):
+    value = copy.deepcopy(actual)
+    if not isinstance(expected, dict) or not isinstance(value, dict):
+        return value
+    for name, default in defaults.items():
+        if name not in expected:
+            if isinstance(default, dict) and isinstance(value.get(name), dict):
+                value[name] = strip_defaults({}, value[name], default)
+                if value[name] == {}:
+                    value.pop(name)
+            elif value.get(name) == default:
+                value.pop(name, None)
+        elif name not in value and expected[name] == default:
+            value[name] = copy.deepcopy(default)
+        elif isinstance(default, dict) and name in value:
+            value[name] = strip_defaults(expected[name], value[name], default)
+    return value
+
+
+def normalized_pod(expected, actual):
+    pod_defaults = {'dnsPolicy': 'ClusterFirst', 'restartPolicy': 'Always', 'schedulerName': 'default-scheduler',
+        'terminationGracePeriodSeconds': 30, 'enableServiceLinks': True,
+        'securityContext': {'fsGroupChangePolicy': 'Always', 'supplementalGroupsPolicy': 'Merge'},
+        'serviceAccount': 'default', 'serviceAccountName': 'default', 'hostNetwork': False,
+        'hostPID': False, 'hostIPC': False, 'shareProcessNamespace': False, 'preemptionPolicy': 'PreemptLowerPriority'}
+    value = strip_defaults(expected, actual, pod_defaults)
+    require(isinstance(value, dict), 'LIVE_POD_SPEC_REJECTED')
+    for field in ('containers', 'initContainers', 'ephemeralContainers'):
+        require(len(value.get(field, [])) == len(expected.get(field, [])), 'LIVE_CONTAINER_SET_DRIFT')
+        for index, container in enumerate(value.get(field, [])):
+            wanted = expected[field][index]
+            defaults = {'terminationMessagePath': '/dev/termination-log', 'terminationMessagePolicy': 'File',
+                'imagePullPolicy': 'IfNotPresent', 'resources': {},
+                'securityContext': {'procMount': 'Default', 'privileged': False, 'capabilities': {}}, 'stdin': False, 'stdinOnce': False, 'tty': False}
+            for probe in ('livenessProbe', 'readinessProbe', 'startupProbe'):
+                defaults[probe] = {'timeoutSeconds': 1, 'periodSeconds': 10, 'successThreshold': 1,
+                                   'failureThreshold': 3, 'httpGet': {'scheme': 'HTTP'}}
+            result = strip_defaults(wanted, container, defaults)
+            for port_index, port in enumerate(result.get('ports', [])):
+                wanted_ports = wanted.get('ports', [])
+                require(port_index < len(wanted_ports), 'LIVE_CONTAINER_PORT_DRIFT')
+                result['ports'][port_index] = strip_defaults(wanted_ports[port_index], port, {'protocol': 'TCP'})
+            value[field][index] = result
+    for index, volume in enumerate(value.get('volumes', [])):
+        wanted = expected.get('volumes', [])
+        require(index < len(wanted), 'LIVE_POD_VOLUME_DRIFT')
+        value['volumes'][index] = strip_defaults(wanted[index], volume, {
+            'configMap': {'defaultMode': 420}, 'secret': {'defaultMode': 420},
+            'projected': {'defaultMode': 420}, 'downwardAPI': {'defaultMode': 420}, 'hostPath': {'type': ''}})
+    return value
+
+
+def workload_spec(expected, actual, kind, uid=None, name=None):
+    defaults = {'replicas': 1, 'revisionHistoryLimit': 10, 'minReadySeconds': 0}
+    if kind == 'Deployment':
+        defaults.update(progressDeadlineSeconds=600, strategy={
+            'type': 'RollingUpdate', 'rollingUpdate': {'maxSurge': '25%', 'maxUnavailable': '25%'}})
+    elif kind == 'StatefulSet':
+        defaults.update(podManagementPolicy='OrderedReady', updateStrategy={'type': 'RollingUpdate', 'rollingUpdate': {'partition': 0}},
+            persistentVolumeClaimRetentionPolicy={'whenDeleted': 'Retain', 'whenScaled': 'Retain'}, ordinals={'start': 0})
+    elif kind == 'DaemonSet':
+        defaults.update(updateStrategy={'type': 'RollingUpdate', 'rollingUpdate': {'maxUnavailable': 1, 'maxSurge': 0}})
+    if kind in ('Job', 'CronTemplate'):
+        defaults = {'parallelism': 1, 'completions': 1, 'backoffLimit': 6, 'completionMode': 'NonIndexed',
+                    'suspend': False, 'manualSelector': False, 'podReplacementPolicy': 'TerminatingOrFailed'}
+    value = strip_defaults(expected, actual, defaults)
+    if kind == 'Job':
+        generated_labels = {'controller-uid': uid, 'batch.kubernetes.io/controller-uid': uid,
+                            'job-name': name, 'batch.kubernetes.io/job-name': name}
+        labels = value.get('template', {}).get('metadata', {}).get('labels', {})
+        wanted_labels = expected.get('template', {}).get('metadata', {}).get('labels', {})
+        for field, content in generated_labels.items():
+            if field not in wanted_labels and field in labels:
+                require(labels[field] == content, 'LIVE_JOB_CONTROLLER_LABEL_DRIFT')
+                labels.pop(field)
+        if 'selector' not in expected:
+            actual_selector = value.get('selector', {}).get('matchLabels', {})
+            require(set(value.get('selector', {})) == {'matchLabels'} and actual_selector and all(k in ('controller-uid', 'batch.kubernetes.io/controller-uid') and v == uid
+                                            for k, v in actual_selector.items()), 'LIVE_JOB_SELECTOR_DRIFT')
+            value.pop('selector', None)
+    require(isinstance(value, dict) and 'template' in value, 'LIVE_WORKLOAD_TEMPLATE_REQUIRED')
+    value['template']['spec'] = normalized_pod(expected['template']['spec'], value['template']['spec'])
+    # server timestamps не являются конфигурацией запуска.
+    template_defaults = {'creationTimestamp': None, 'labels': {}, 'annotations': {}}
+    if 'metadata' in value['template']:
+        metadata = strip_defaults(expected['template'].get('metadata', {}), value['template']['metadata'], template_defaults)
+        if 'metadata' not in expected['template'] and metadata == {}:
+            value['template'].pop('metadata')
+        else:
+            value['template']['metadata'] = metadata
+    if kind == 'StatefulSet':
+        for index, template in enumerate(value.get('volumeClaimTemplates', [])):
+            wanted = expected.get('volumeClaimTemplates', [])
+            require(index < len(wanted), 'LIVE_CLAIM_TEMPLATE_DRIFT')
+            template['metadata'] = strip_defaults(wanted[index].get('metadata', {}), template.get('metadata', {}), {'creationTimestamp': None})
+            template['spec'] = strip_defaults(wanted[index]['spec'], template['spec'], {'volumeMode': 'Filesystem'})
+            if 'status' not in wanted[index] and template.get('status') in ({}, {'phase': 'Pending'}):
+                template.pop('status', None)
+    return value
+
+
+def policy_spec(resource):
+    spec = copy.deepcopy(resource.get('spec'))
+    if resource['kind'] == 'NetworkPolicy':
+        for direction in ('ingress', 'egress'):
+            if spec.get(direction) == []:
+                spec.pop(direction)
+            for rule in spec.get(direction, []):
+                for port in rule.get('ports', []):
+                    port.setdefault('protocol', 'TCP')
+    return spec
+
+
 def verify_resource(expected, actual):
     require(key(expected) == key(actual) and owner(actual), 'LIVE_RESOURCE_IDENTITY_REJECTED')
     require(actual['metadata'].get('ownerReferences', []) == expected['metadata'].get('ownerReferences', []), 'LIVE_OWNER_REFERENCE_DRIFT')
     require(subset(expected['metadata'].get('labels', {}), actual['metadata'].get('labels', {})), 'LIVE_LABEL_DRIFT')
     require(subset(expected['metadata'].get('annotations', {}), actual['metadata'].get('annotations', {})), 'LIVE_ANNOTATION_DRIFT')
-    for field in ('spec', 'data', 'binaryData', 'immutable', 'rules', 'roleRef', 'subjects'):
+    for field in ('data', 'binaryData', 'immutable', 'roleRef', 'subjects'):
         if field in expected:
             require(subset(expected[field], actual.get(field)), 'LIVE_RESOURCE_DRIFT')
-    # Дополнительное правило/annotation не должно расширить security boundary.
-    if expected['kind'] in ('NetworkPolicy', 'Ingress', 'Middleware', 'ServersTransport'):
-        def normalized_spec(resource):
-            spec = copy.deepcopy(resource.get('spec'))
-            if resource['kind'] == 'NetworkPolicy':
-                for direction in ('ingress', 'egress'):
-                    if spec.get(direction) == []:
-                        spec.pop(direction)
-                    for rule in spec.get(direction, []):
-                        for port in rule.get('ports', []):
-                            port.setdefault('protocol', 'TCP')
-            return spec
-        require(normalized_spec(actual) == normalized_spec(expected), 'LIVE_SECURITY_SPEC_DRIFT')
+    kind = expected['kind']
+    if kind in ('NetworkPolicy', 'Ingress', 'Middleware', 'ServersTransport'):
+        require(policy_spec(actual) == policy_spec(expected), 'LIVE_SECURITY_SPEC_DRIFT')
         annotations = {k: v for k, v in actual['metadata'].get('annotations', {}).items()
                        if k != 'kubectl.kubernetes.io/last-applied-configuration'}
         require(annotations == expected['metadata'].get('annotations', {}), 'LIVE_SECURITY_ANNOTATION_DRIFT')
-    if expected['kind'] == 'ConfigMap':
+    elif kind in ('Deployment', 'StatefulSet', 'DaemonSet', 'Job'):
+        require(workload_spec(expected['spec'], actual.get('spec'), kind, actual['metadata'].get('uid'), actual['metadata']['name']) == expected['spec'], 'LIVE_EXECUTABLE_SPEC_DRIFT')
+    elif kind == 'CronJob':
+        value = strip_defaults(expected['spec'], actual.get('spec'), {'concurrencyPolicy': 'Allow', 'successfulJobsHistoryLimit': 3,
+                              'failedJobsHistoryLimit': 1, 'suspend': False})
+        value['jobTemplate']['spec'] = workload_spec(expected['spec']['jobTemplate']['spec'], value['jobTemplate']['spec'], 'CronTemplate')
+        actual_meta = value['jobTemplate'].get('metadata', {})
+        wanted_meta = expected['spec']['jobTemplate'].get('metadata', {})
+        meta = strip_defaults(wanted_meta, actual_meta, {'creationTimestamp': None, 'labels': {}, 'annotations': {}})
+        if 'metadata' not in expected['spec']['jobTemplate'] and not meta:
+            value['jobTemplate'].pop('metadata', None)
+        else:
+            value['jobTemplate']['metadata'] = meta
+        require(value == expected['spec'], 'LIVE_CRONJOB_SPEC_DRIFT')
+    elif kind == 'Service':
+        value = strip_defaults(expected['spec'], actual.get('spec'), {'type': 'ClusterIP', 'sessionAffinity': 'None',
+            'internalTrafficPolicy': 'Cluster', 'publishNotReadyAddresses': False})
+        for field in ('clusterIP', 'clusterIPs', 'ipFamilies', 'ipFamilyPolicy'):
+            if field not in expected['spec']:
+                value.pop(field, None)
+        for index, port in enumerate(value.get('ports', [])):
+            wanted = expected['spec'].get('ports', [])
+            require(index < len(wanted), 'LIVE_SERVICE_PORT_DRIFT')
+            value['ports'][index] = strip_defaults(wanted[index], port, {'protocol': 'TCP', 'targetPort': port['port']})
+        require(value == expected['spec'], 'LIVE_SERVICE_SPEC_DRIFT')
+    elif 'spec' in expected:
+        require(subset(expected['spec'], actual.get('spec')), 'LIVE_RESOURCE_DRIFT')
+    if 'rules' in expected:
+        require(actual.get('rules') == expected['rules'], 'LIVE_RBAC_RULE_DRIFT')
+    if kind == 'ConfigMap':
         require(actual.get('data', {}) == expected.get('data', {}) and
                 actual.get('binaryData', {}) == expected.get('binaryData', {}), 'LIVE_CONFIG_DRIFT')
 
@@ -153,6 +287,11 @@ class State:
 
     def apply(self, resource, inventory):
         actual = self.fenced_current(resource, inventory)
+        if resource['kind'] == 'Lease':
+            require(resource['metadata']['name'] == 'image-admission-controller-leader' and resource.get('spec') == {},
+                    'UNREGISTERED_CONTROLLER_OWNED_LEASE')
+            if actual is not None:
+                return
         desired = copy.deepcopy(resource)
         if actual is None:
             # Create, а не SSA upsert: появившийся после inventory объект не перезапишется.

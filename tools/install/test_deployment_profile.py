@@ -98,6 +98,9 @@ class ProfileTest(unittest.TestCase):
                 "--entryPoints.web.address=:80",
                 "--entryPoints.web.forwardedHeaders.trustedIPs=192.0.2.18/32,2001:db8::18/128"]}]}}}}
         verify_proxy_controller(deployment, EXTERNAL)
+        wrong = copy.deepcopy(deployment)
+        wrong["spec"]["template"]["spec"]["containers"][0]["command"] = ["traefik", "--entrypoints.web.proxyprotocol.insecure=true"]
+        with self.assertRaises(Rejected): verify_proxy_controller(wrong, EXTERNAL)
         for flag in ("--entryPoints.web.forwardedHeaders.insecure=true", "--configFile=/tmp/fixture",
                      "--entryPoints.web.http.redirections.entryPoint.to=websecure",
                      "--entryPoints.web.proxyProtocol.insecure=true"):
@@ -118,7 +121,7 @@ class ProfileTest(unittest.TestCase):
                "status": {"phase": "Running", "conditions": [{"type": "Ready", "status": "True"}]}}
         rs = {"metadata": {"uid": "rs", "ownerReferences": [{"kind": "Deployment", "uid": "deployment", "controller": True}]}}
         service = {"metadata": {"name": "proxy"}, "spec": {"selector": {"app": "proxy"}, "ports": [{"port": 80}]}}
-        slices = [{"metadata": {"labels": {"kubernetes.io/service-name": "proxy"}}, "endpoints": [
+        slices = [{"metadata": {"labels": {"kubernetes.io/service-name": "proxy"}}, "ports": [{"port": 80}], "endpoints": [
             {"conditions": {"ready": True}, "targetRef": {"kind": "Pod", "uid": "pod"}}]}]
         verify_proxy_pods(controller, [pod], [rs], service, slices)
         old = copy.deepcopy(pod); old["spec"]["containers"][0]["args"] += ["--entrypoints.web.proxyprotocol.insecure=true"]
@@ -126,6 +129,10 @@ class ProfileTest(unittest.TestCase):
         foreign = copy.deepcopy(slices); foreign[0]["endpoints"][0]["targetRef"]["uid"] = "foreign"
         with self.assertRaises(Rejected): verify_proxy_pods(controller, [pod], [rs], service, foreign)
         with self.assertRaises(Rejected): verify_proxy_pods(controller, [pod], [], service, slices)
+        wrong = copy.deepcopy(service); wrong["spec"]["ports"][0]["targetPort"] = 443
+        with self.assertRaises(Rejected): verify_proxy_pods(controller, [pod], [rs], wrong, slices)
+        wrong = copy.deepcopy(slices); wrong[0]["ports"][0]["port"] = 443
+        with self.assertRaises(Rejected): verify_proxy_pods(controller, [pod], [rs], service, wrong)
 
     def test_profile_is_sealed_in_render(self):
         result = transform(self.renders["web-only"], EXTERNAL, "app.example.invalid")

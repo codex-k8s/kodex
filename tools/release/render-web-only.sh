@@ -626,6 +626,8 @@ if [[ -n "$deployment_profile" ]]; then
     fail 'portable release lock schema pins differ from source'
   [[ "$(git -C "$repository_root" rev-parse HEAD)" == "$source_sha" ]] ||
     fail 'portable release lock differs from source checkout'
+  [[ -z "$(git -C "$repository_root" status --porcelain --untracked-files=no)" ]] ||
+    fail 'portable release requires a clean tracked source checkout'
 fi
 
 if [[ -n "$deployment_profile" ]]; then
