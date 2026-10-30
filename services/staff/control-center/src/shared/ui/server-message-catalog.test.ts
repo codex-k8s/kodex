@@ -34,8 +34,8 @@ function closedCases(path: string, functionName: string): string[] {
 
 describe("полнота закрытого реестра server tokens", () => {
   it.each([
-    ["ru", "Модель временно перегружена."],
-    ["en", "The model is temporarily overloaded."],
+    ["ru", "Модель временно перегружена. Повторите запрос позже."],
+    ["en", "The model is temporarily overloaded. Try again later."],
   ] as const)(
     "объясняет подтверждённую перегрузку модели в %s",
     (locale, expected) => {

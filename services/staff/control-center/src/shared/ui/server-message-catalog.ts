@@ -241,10 +241,6 @@ export const serverTokenTranslations = {
     "Provider rejected authorization",
   ],
   PROVIDER_UNAVAILABLE: ["Провайдер недоступен", "Provider unavailable"],
-  PROVIDER_OVERLOADED: [
-    "Модель временно перегружена.",
-    "The model is temporarily overloaded.",
-  ],
   PROVIDER_RATE_LIMITED: [
     "Достигнут лимит запросов провайдера",
     "Provider rate limit reached",
