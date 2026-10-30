@@ -47,6 +47,10 @@ type Config struct {
 	OIDCIssuer                        string        `env:"CONTROL_API_GATEWAY_OIDC_ISSUER"`
 	OIDCAudience                      string        `env:"CONTROL_API_GATEWAY_OIDC_AUDIENCE"`
 	OIDCBrowserOrigin                 string        `env:"CONTROL_API_GATEWAY_OIDC_BROWSER_ORIGIN"`
+	OIDCBrowserClientID               string        `env:"CONTROL_API_GATEWAY_OIDC_BROWSER_CLIENT_ID" envDefault:"kodex-control-center"`
+	OIDCAuthorizationURL              string        `env:"CONTROL_API_GATEWAY_OIDC_AUTHORIZATION_URL"`
+	OIDCTokenURL                      string        `env:"CONTROL_API_GATEWAY_OIDC_TOKEN_URL"`
+	OIDCBrowserScope                  string        `env:"CONTROL_API_GATEWAY_OIDC_BROWSER_SCOPE"`
 	OIDCJWKSURL                       string        `env:"CONTROL_API_GATEWAY_OIDC_JWKS_URL"`
 	OIDCConnectAddress                string        `env:"CONTROL_API_GATEWAY_OIDC_CONNECT_ADDRESS"`
 	OIDCTLSServerName                 string        `env:"CONTROL_API_GATEWAY_OIDC_TLS_SERVER_NAME"`

@@ -9,10 +9,16 @@ fail() {
 usage() {
   printf '%s\n' \
     "Usage: $0 [--env-file <path>] [--components <comma-list|all>] [--non-interactive]" \
-    'Components: host,cert-manager,identity,trust,management,registry,arc,secrets,platform' >&2
+    'Components: host,cert-manager,identity,trust,management,registry,arc,secrets,platform' \
+    'Local delivery: install.sh --portable-release --help' >&2
 }
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+# Явно выбранный локальный delivery path не читает legacy GitHub bootstrap env.
+if [[ "${1:-}" == --portable-release ]]; then
+  shift
+  exec "$repository_root/tools/install/portable-release.sh" "$@"
+fi
 env_file="$repository_root/.kodex-env"
 components=""
 non_interactive=false

@@ -189,6 +189,7 @@ updated: 2026-07-28
 | `RUN-MC-013`       | `docs/runbooks/control-api-gateway.md`                      |
 | `RUN-MC-001`       | `docs/runbooks/README.md`                                   |
 | `RUN-MC-002`       | `docs/runbooks/fresh-install.md`                            |
+| `RUN-DEPLOY-1979` | `docs/runbooks/portable-install.md` |
 | `RUN-MC-007`       | `docs/runbooks/control-plane.md`                            |
 | `RUN-MC-012`       | `docs/runbooks/integration-gateway.md`                      |
 | `OPS-INT-1028`     | `docs/operations/integration-gateway-1028.md`               |

@@ -31,12 +31,14 @@ kodex_load_env() {
     if [[ "$value" =~ ^\'(.*)\'$ || "$value" =~ ^\"(.*)\"$ ]]; then
       value=${BASH_REMATCH[1]}
     fi
+    # Проверяются буквальные маркеры shell, их нельзя интерполировать.
+    # shellcheck disable=SC2016
     [[ "$value" != *'`'* && "$value" != *'$('* && "$value" != *$'\n'* ]] || {
       printf 'Kodex env loading failed: unsafe value for %s\n' "$key" >&2
       return 1
     }
     printf -v "$key" '%s' "$value"
-    export "$key"
+    export "${key?}"
   done <"$env_file"
 }
 

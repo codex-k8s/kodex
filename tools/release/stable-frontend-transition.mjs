@@ -1,3 +1,4 @@
+import { exactOIDCIssuer, publicOIDCClient } from "./oidc-endpoint.mjs";
 import { createHash } from "node:crypto";
 import { fingerprint } from "./stable-inventory.mjs";
 import { reverseSpecPatch } from "./stable-reverse-patch.mjs";
@@ -19,11 +20,11 @@ export function frontendRuntimeSnapshot(source, headersTemplate, publicAssets) {
     config.apiBaseUrl === "/" && config.realtimeUrl === "/api/v1" && Number.isSafeInteger(config.requestTimeoutMs) &&
     config.requestTimeoutMs >= 1000 && config.requestTimeoutMs <= 120000 &&
     keys(config.oidc, ["authority", "clientId", "redirectUri", "postLogoutRedirectUri", "scope"]) &&
-    config.oidc.clientId === "kodex-control-center" && config.oidc.redirectUri === "/auth/callback" &&
+    publicOIDCClient(config.oidc.clientId) && config.oidc.redirectUri === "/auth/callback" &&
     config.oidc.postLogoutRedirectUri === "/" && /^[a-zA-Z0-9_.: -]{1,256}$/.test(config.oidc.scope), "FRONTEND_RUNTIME_CONFIGURATION_INVALID");
   const authority = new URL(config.oidc.authority);
   requireValue(authority.protocol === "https:" && authority.hostname.includes(".") && !authority.username && !authority.password &&
-    !authority.search && !authority.hash && authority.pathname === "/realms/kodex" && ["", "443"].includes(authority.port),
+    !authority.search && !authority.hash && exactOIDCIssuer(config.oidc.authority) && ["", "443"].includes(authority.port),
     "FRONTEND_RUNTIME_AUTHORITY_INVALID");
   const headers = headersTemplate.replaceAll("__KODEX_OIDC_ORIGIN__", authority.origin).trimEnd() + "\n";
   requireValue(source.data["security-headers.conf"].trimEnd() + "\n" === headers &&

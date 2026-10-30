@@ -14,6 +14,10 @@ Runbook предназначен для новой установки без п�
 bare-metal узла уничтожает все Kubernetes workloads, PVC и containerd state.
 Для production reset обязательно отдельное решение владельца.
 
+Опциональные внешние OIDC и TLS termination, независимые режимы и локальный
+CI/CD delivery описаны в [отдельном профиле](portable-install.md). Прежние
+режимы этого runbook сохраняют defaults и собственное управление TLS/IdP.
+
 ## 1. Два поддержанных сценария
 
 ### Пустой bare-metal сервер

@@ -241,7 +241,9 @@ while IFS= read -r component; do
   mv "$images_json.next" "$images_json"
 done < <(jq -r '.images[].component' "$manifest")
 
+schema_heads=$(python3 "$repository_root/tools/release/schema-heads.py")
 jq -n \
+  --argjson schema_heads "$schema_heads" \
   --arg profile "$profile" \
   --arg source_sha "$source_sha" \
   --arg build_run_id "$build_run_id" \
@@ -256,7 +258,7 @@ jq -n \
   --arg role_input_source_sha256 "$role_image_input_source_sha256" \
   --arg role_input_pull_ref "$node_pull/$repository_prefix/role-image-inputs@$role_image_input_manifest_digest" \
   --slurpfile images "$images_json" \
-  '{schema_version:2,profile:$profile,source_sha:$source_sha,build_run_id:$build_run_id,
+  '{schema_version:2,profile:$profile,source_sha:$source_sha,build_run_id:$build_run_id,schema_heads:$schema_heads,
     registry:{push:$registry_push,node_pull:$node_pull,repository_prefix:$repository_prefix},
     external_images:[{component:"admission-tools",pull_ref:$admission_tools_ref,digest:$admission_tools_digest}],
     role_image_input:{repository:$role_input_repository,manifest_digest:$role_input_manifest_digest,

@@ -21,12 +21,14 @@ usage() {
     '  --ingress-namespace <name> --ingress-pod-name <label-value>' \
     '  --oidc-namespace <name> --oidc-pod-name <label-value>' \
     '  --oidc-pod-component <label-value> --oidc-target-port <port>' \
+    '  [--deployment-profile <deployment-profile.json>]' \
     '  [--disable-observability]' \
     '  [--profile <web-only|web-with-mattermost>]' \
     '  [--ssh-compose-connection <public-connection.json>; repeatable]' \
     '  [--mattermost-host <dns>; required for web-with-mattermost]' >&2
 }
 
+deployment_profile=""
 lock_file=""
 lock_sha256=""
 output=""
@@ -56,6 +58,7 @@ ssh_compose_connections=()
 
 while (($# > 0)); do
   case "$1" in
+    --deployment-profile) deployment_profile="${2:-}"; shift 2 ;;
     --lock) lock_file="${2:-}"; shift 2 ;;
     --lock-sha256) lock_sha256="${2:-}"; shift 2 ;;
     --output) output="${2:-}"; shift 2 ;;
@@ -86,6 +89,35 @@ while (($# > 0)); do
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
+
+script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+repository_root=$(cd -- "$script_directory/../.." && pwd -P)
+if [[ -n "$deployment_profile" ]]; then
+  python3 "$repository_root/tools/install/deployment_profile.py" validate --profile "$deployment_profile" ||
+    fail 'deployment profile is invalid'
+  if [[ "$(jq -r '.identity.mode' "$deployment_profile")" == external ]]; then
+    # Профиль владеет exact OIDC inputs; противоречащие CLI значения отклоняются.
+    profile_issuer=$(jq -r '.identity.issuer' "$deployment_profile")
+    profile_jwks=$(jq -r '.identity.jwks_url' "$deployment_profile")
+    profile_connect="$(jq -r '.identity.connect_host' "$deployment_profile"):443"
+    profile_sni=$(python3 -c 'import sys,urllib.parse;print(urllib.parse.urlsplit(sys.argv[1]).hostname)' "$profile_issuer")
+    [[ -z "$oidc_issuer" || "$oidc_issuer" == "$profile_issuer" ]] || fail 'OIDC issuer input conflict'
+    [[ -z "$oidc_jwks_url" || "$oidc_jwks_url" == "$profile_jwks" ]] || fail 'OIDC JWKS input conflict'
+    [[ -z "$oidc_connect_address" || "$oidc_connect_address" == "$profile_connect" ]] || fail 'OIDC connect input conflict'
+    [[ -z "$oidc_tls_server_name" || "$oidc_tls_server_name" == "$profile_sni" ]] || fail 'OIDC SNI input conflict'
+    [[ -z "$oidc_namespace$oidc_pod_name$oidc_pod_component$oidc_target_port" ]] ||
+      fail 'external OIDC forbids bundled workload selectors'
+    oidc_issuer=$profile_issuer
+    oidc_jwks_url=$profile_jwks
+    oidc_connect_address=$profile_connect
+    oidc_tls_server_name=$profile_sni
+    # Только промежуточная форма; оба edges заменяются exact ipBlocks до output.
+    oidc_namespace=external-oidc-not-installed
+    oidc_pod_name=external-oidc-not-installed
+    oidc_pod_component=identity-provider
+    oidc_target_port=443
+  fi
+fi
 
 [[ -r "$lock_file" ]] || fail 'release lock is not readable'
 [[ "$profile" == "web-only" || "$profile" == "web-with-mattermost" ]] || fail 'release profile is invalid'
@@ -587,6 +619,24 @@ yq -i '
     .kind == "Bundle"
   ); del(.metadata.namespace))
 ' "$rendered"
+
+if [[ -n "$deployment_profile" ]]; then
+  expected_schema_heads=$(python3 "$repository_root/tools/release/schema-heads.py")
+  jq -e --argjson expected "$expected_schema_heads" '.schema_heads == $expected' "$lock_file" >/dev/null ||
+    fail 'portable release lock schema pins differ from source'
+  [[ "$(git -C "$repository_root" rev-parse HEAD)" == "$source_sha" ]] ||
+    fail 'portable release lock differs from source checkout'
+  [[ -z "$(git -C "$repository_root" status --porcelain --untracked-files=no)" ]] ||
+    fail 'portable release requires a clean tracked source checkout'
+fi
+
+if [[ -n "$deployment_profile" ]]; then
+  python3 "$repository_root/tools/install/deployment_profile.py" render \
+    --profile "$deployment_profile" --input "$rendered" \
+    --output "$temporary_directory/profile.yaml" --public-host "$public_host" --release-lock "$lock_file" ||
+    fail 'deployment profile render rejected'
+  mv -- "$temporary_directory/profile.yaml" "$rendered"
+fi
 
 # Canonicalize duplicate resources before validation. The web-only aggregate may
 # include a shared ConfigMap through more than one component base, but the bytes
