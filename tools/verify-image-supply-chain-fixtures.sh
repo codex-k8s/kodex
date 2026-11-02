@@ -30,8 +30,8 @@ builder_identity=spiffe://kodex.local/ns/kodex-system/sa/role-image-builder
 build_type=https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md
 tools_digest=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 policy_revision=7
-grype_database_url=https://grype.anchore.io/databases/v6/vulnerability-db_v6.1.9_2026-10-02T00:35:12Z_1790922713.tar.zst
-grype_database_sha256=3c368df5c3624fe083ad646ca3be59525739dfe9caa4b6d14c7f252d155fbd98
+grype_database_url=https://grype.anchore.io/databases/v6/vulnerability-db_v6.1.10_2026-11-02T00:22:47Z_1793600812.tar.zst
+grype_database_sha256=68063965a3a023acd330a65a0740976c81f8e13902824134b447deee97a0d838
 jq -n --arg image "$image_hex" --arg base "$base_hex" --arg frontend "$frontend_hex" \
   --arg subject "$subject" \
   --arg builder "$builder_identity" --arg build_type "$build_type" \
@@ -115,7 +115,12 @@ yq -o=json '
   select(.kind == "Role" and .metadata.name == "image-admission-controller")
 ' "$temporary_directory/supply.yaml" | jq -e '
   ([.rules[].resources[]] | sort | join(",")) ==
-    "configmaps,imageadmissionpolicyparameters,jobs,persistentvolumeclaims" and
+    "configmaps,imageadmissionpolicyparameters,jobs,leases,persistentvolumeclaims" and
+  any(.rules[];
+    .apiGroups == ["coordination.k8s.io"] and
+    .resources == ["leases"] and
+    .resourceNames == ["image-admission-controller-leader"] and
+    .verbs == ["get", "update"]) and
   any(.rules[];
     .apiGroups == ["supplychain.kodex.dev"] and
     .resources == ["imageadmissionpolicyparameters"] and
@@ -187,11 +192,15 @@ grep -Fq 'app.kubernetes.io/name: __KODEX_INGRESS_POD_NAME__' \
   "$temporary_directory/supply.yaml"
 [[ $(grep -F -c "$render_tools_image" "$temporary_directory/supply.yaml") -ge 5 ]]
 for binary in registry-pull-authorizer registry-write-authorizer; do
+  expected_binary_image="$render_admission_image"
+  if [[ "$binary" == registry-pull-authorizer ]]; then
+    expected_binary_image=kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/registry-pull-authorizer@sha256:0000000000000000000000000000000000000000000000000000000000000000
+  fi
   binary_images=$(MC195_BINARY="/usr/local/bin/$binary" yq eval-all '
     select(.kind == "Deployment" or .kind == "DaemonSet") |
     .spec.template.spec.containers[] | select(.command[]? == strenv(MC195_BINARY)) | .image' \
     "$temporary_directory/supply.yaml" | grep -v '^---$')
-  if [[ -z $binary_images ]] || grep -Fvx "$render_admission_image" <<<"$binary_images" >/dev/null; then
+  if [[ -z $binary_images ]] || grep -Fvx "$expected_binary_image" <<<"$binary_images" >/dev/null; then
     echo "$binary does not use the image that contains the compiled binary" >&2
     exit 1
   fi

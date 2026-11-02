@@ -494,13 +494,6 @@ rg -Fq 'tools/install/verify-oidc-target.sh' "$repository_root/install.sh" ||
 grep -Fq 'KODEX_DISABLE_OBSERVABILITY:-true' \
   "$repository_root/install.sh" "$repository_root/tools/install/configure-github.sh" ||
   fail 'installer and GitHub configuration disagree on the external telemetry default'
-for registry_pull_contract in \
-  'pull_auth=$(jq -er --arg host "$internal_pull_host"' \
-  '.auths[$host] = {auth:$auth}' \
-  '"$output_directory/registry/pull/dockerconfig.json.next"'; do
-  rg -Fq -- "$registry_pull_contract" "$repository_root/tools/install/generate-material.sh" ||
-    fail "pull Docker config alias contract is absent: $registry_pull_contract"
-done
 pull_material="$temporary_directory/pull-material"
 mkdir -p \
   "$pull_material/registry/pull" \

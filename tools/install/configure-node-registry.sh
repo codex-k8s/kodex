@@ -67,18 +67,22 @@ promoted_pull_password=$(<"$promoted_pull_password_file")
   "$promoted_pull_password" != *$'\r'* && ${#promoted_pull_password} -ge 32 ]] ||
   fail 'promoted pull password is invalid'
 
-expected=$(mktemp)
-trap 'rm -f -- "$expected"' EXIT
-jq -n --arg host "$registry_host" --arg username "$username" --arg password "$password" \
-  --arg pull_host "$promoted_pull_host" --arg pull_username "$promoted_pull_username" \
-  --arg pull_password "$promoted_pull_password" '{
+temporary_directory=$(mktemp -d)
+trap 'rm -rf -- "$temporary_directory"' EXIT
+umask 077
+expected="$temporary_directory/registries.yaml"
+jq -n --arg host "$registry_host" --rawfile username "$username_file" --rawfile password "$password_file" \
+  --arg pull_host "$promoted_pull_host" --rawfile pull_username "$promoted_pull_username_file" \
+  --rawfile pull_password "$promoted_pull_password_file" '
+  def trim_lf: sub("\\n+$";"");
+  {
   mirrors:{
     ($host):{endpoint:[("https://" + $host)]},
     ($pull_host):{endpoint:[("https://" + $pull_host)]}
   },
   configs:{
-    ($host):{auth:{username:$username,password:$password}},
-    ($pull_host):{auth:{username:$pull_username,password:$pull_password}}
+    ($host):{auth:{username:($username|trim_lf),password:($password|trim_lf)}},
+    ($pull_host):{auth:{username:($pull_username|trim_lf),password:($pull_password|trim_lf)}}
   }
 }' | yq -P >"$expected"
 chmod 0600 "$expected"

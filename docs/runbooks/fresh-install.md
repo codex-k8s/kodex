@@ -491,3 +491,24 @@ labels и затем воссоздаётся из exact render. Такой же
 - отсутствуют `CrashLoopBackOff`, `ImagePullBackOff`, `ErrImagePull` и
   `CreateContainerConfigError`;
 - API/OIDC и browser E2E пройдены без раскрытия credentials.
+
+
+## Обновление offline базы admission и credential files
+
+Admission tools содержат закреплённый официальный Grype archive с SHA256.
+Новая сборка останавливается после истечения допустимых720h; нельзя отключать
+`GRYPE_DB_VALIDATE_AGE`, увеличивать срок ради запуска или включать runtime
+auto-update. Перед выпуском сверить metadata из официального
+`https://grype.anchore.io/databases/v6/latest.json`, скачать exact archive,
+проверить SHA256 и обновить оба Dockerfile, fixture contract и каталог зависимостей.
+`grype db status -o json` в собранном образе от штатного UID без сети должен
+подтвердить schema/built/valid. Это проверка базы, а не успешный vulnerability scan
+каждого выпускаемого образа. Проверена официальная документация Grype через
+Context7: checksum archive, offline import и ограничение возраста.
+
+Bootstrap registry/material generator и reconciliation передают пароль и
+Docker auth в jq через private files/JSON stdin, а не `--arg` со значением.
+Установщик проецирует S3 keys и Sentry DSN через `kubectl --from-file`; значения
+не появляются в argv. Временные файлы имеют0600 внутри0700. При обновлении
+node registry сохраняется прежнее удаление завершающих LF из credential files.
+Это не меняет auth scopes, CA/TLS policy или существующие secret refs.

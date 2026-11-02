@@ -86,9 +86,10 @@ if [[ "$mode" == apply ]]; then
 
   if [[ -n "$docker_config_output" ]]; then
     umask 077
-    auth=$(printf '%s:%s' "$username" "$password" | base64 | tr -d '\n')
-    jq -n --arg host "$registry_host" --arg auth "$auth" \
-      '{auths:{($host):{auth:$auth}}}' >"$docker_config_output"
+    jq -n --arg host "$registry_host" --rawfile username "$username_file" \
+      --rawfile password "$password_file" \
+      '{auths:{($host):{auth:((($username|gsub("[\\r\\n]";""))+":"+($password|gsub("[\\r\\n]";"")))|@base64)}}}' \
+      >"$docker_config_output"
   fi
 fi
 
