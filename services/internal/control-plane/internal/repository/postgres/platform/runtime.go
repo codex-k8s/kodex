@@ -771,6 +771,9 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			environmentTools, err := runtimecontract.DecodeRuntimeEnvironmentTools(candidate.rawEnvironmentTools)
 			if err != nil {
 				return commandOutcome{}, errs.ErrConflict
+				if modelProvider != nil && (candidate.configOverlay != "" || len(environmentTools) != 0) {
+					return commandOutcome{}, errs.ErrConflict
+				}
 			}
 			environmentPolicy, err := decodeRuntimeEnvironmentPolicy(candidate.rawResourcePolicy, candidate.rawVolumePolicy,
 				candidate.rawNetworkPolicy, candidate.rawKubernetesAccessProfile, candidate.resourcesDigest,

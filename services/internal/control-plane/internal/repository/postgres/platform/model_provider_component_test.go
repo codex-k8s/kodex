@@ -50,6 +50,19 @@ func TestModelProviderBootstrapComponent(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT provider,model FROM control_plane.runtime_profiles WHERE stable_key=$1`, repository.defaultRuntimeProfileKey()).Scan(&provider, &model); err != nil || provider != config.DefinitionKey() || model != "test-model" {
 		t.Fatal("default runtime profile affinity changed")
 	}
+	var organizationID, agentRef string
+	if err := pool.QueryRow(ctx, `SELECT organization_id::text,ref FROM control_plane.agents WHERE system_key='system-assistant'`).Scan(&organizationID, &agentRef); err != nil {
+		t.Fatal("system assistant lookup failed")
+	}
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agents, readErr := readProviderUsageAgents(ctx, tx, organizationID, []string{agentRef})
+	rollbackErr := tx.Rollback(ctx)
+	if readErr != nil || rollbackErr != nil || agents[agentRef].Provider != config.DefinitionKey() || agents[agentRef].NativeToolCount != 0 {
+		t.Fatal("managed assistant preflight snapshot failed", readErr)
+	}
 	changed := config
 	changed.BaseURL = "https://other.example.invalid/v1"
 	if err := repository.ConfigureModelProvider(changed, "test-model"); err != nil {
