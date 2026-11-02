@@ -405,25 +405,29 @@ if component_selected secrets; then
     --oidc-ca-file /etc/ssl/certs/ca-certificates.crt \
     --provider-auth-file "$provider_auth_file"
   if [[ -n "${KODEX_SENTRY_DSN:-}" ]]; then
+    write_env_input KODEX_SENTRY_DSN "$installer_temporary_directory/sentry-dsn"
     for sentry_secret in kodex-sentry internal-rpc-authority-sentry; do
       kubectl -n kodex-system create secret generic "$sentry_secret" \
-        --from-literal="dsn=$KODEX_SENTRY_DSN" --dry-run=client -o yaml |
+        --from-file="dsn=$installer_temporary_directory/sentry-dsn" --dry-run=client -o yaml |
         kubectl apply --server-side --force-conflicts \
           --field-manager=kodex-install -f - >/dev/null
     done
   fi
+  for input in ENDPOINT REGION BUCKET ACCESS_KEY SECRET_KEY; do
+    write_env_input "KODEX_S3_$input" "$installer_temporary_directory/s3-$input"
+  done
   kubectl -n kodex-system create secret generic kodex-external-s3 \
-    --from-literal=endpoint="$KODEX_S3_ENDPOINT" \
-    --from-literal=region="$KODEX_S3_REGION" \
-    --from-literal=bucket="$KODEX_S3_BUCKET" \
-    --from-literal=access-key="$KODEX_S3_ACCESS_KEY" \
-    --from-literal=secret-key="$KODEX_S3_SECRET_KEY" \
+    --from-file=endpoint="$installer_temporary_directory/s3-ENDPOINT" \
+    --from-file=region="$installer_temporary_directory/s3-REGION" \
+    --from-file=bucket="$installer_temporary_directory/s3-BUCKET" \
+    --from-file=access-key="$installer_temporary_directory/s3-ACCESS_KEY" \
+    --from-file=secret-key="$installer_temporary_directory/s3-SECRET_KEY" \
     --dry-run=client -o yaml |
     kubectl apply --server-side --force-conflicts \
       --field-manager=kodex-install -f - >/dev/null
   kubectl -n kodex-runtime create secret generic kodex-external-s3 \
-    --from-literal=access-key="$KODEX_S3_ACCESS_KEY" \
-    --from-literal=secret-key="$KODEX_S3_SECRET_KEY" \
+    --from-file=access-key="$installer_temporary_directory/s3-ACCESS_KEY" \
+    --from-file=secret-key="$installer_temporary_directory/s3-SECRET_KEY" \
     --dry-run=client -o yaml |
     kubectl apply --server-side --force-conflicts \
       --field-manager=kodex-install -f - >/dev/null

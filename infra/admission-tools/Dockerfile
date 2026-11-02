@@ -37,8 +37,8 @@ COPY --from=cosign --chmod=0555 /ko-app/cosign /usr/local/bin/cosign
 COPY --from=syft --chmod=0555 /syft /usr/local/bin/syft
 COPY --from=grype --chmod=0555 /grype /usr/local/bin/grype
 COPY --from=regctl --chmod=0555 /regctl /usr/local/bin/regctl
-ADD --checksum=sha256:3c368df5c3624fe083ad646ca3be59525739dfe9caa4b6d14c7f252d155fbd98 \
-    https://grype.anchore.io/databases/v6/vulnerability-db_v6.1.9_2026-10-02T00:35:12Z_1790922713.tar.zst \
+ADD --checksum=sha256:68063965a3a023acd330a65a0740976c81f8e13902824134b447deee97a0d838 \
+    https://grype.anchore.io/databases/v6/vulnerability-db_v6.1.10_2026-11-02T00:22:47Z_1793600812.tar.zst \
     /tmp/grype-db.tar.zst
 RUN install -d -m 0755 "$GRYPE_DB_CACHE_DIR" \
     && grype db import /tmp/grype-db.tar.zst \

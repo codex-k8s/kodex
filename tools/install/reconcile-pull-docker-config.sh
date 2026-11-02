@@ -43,18 +43,18 @@ for target in "${targets[@]}"; do
     fail 'pull Docker config material is incomplete'
 done
 
-auth=$(jq -er --arg host "$internal_pull_host" '
+jq -e --arg host "$internal_pull_host" '
   .auths[$host].auth |
   select(type == "string" and length > 0 and length <= 1024)
-' "$source_file") || fail 'internal pull identity is absent'
+' "$source_file" >/dev/null || fail 'internal pull identity is absent'
 
 temporary_file=$(mktemp "$material_directory/.pull-dockerconfig.XXXXXX")
 cleanup() { rm -f -- "$temporary_file"; }
 trap cleanup EXIT
 umask 077
-jq -n --arg internal "$internal_pull_host" --arg promoted "$promoted_pull_host" \
-  --arg auth "$auth" \
-  '{auths:{($internal):{auth:$auth},($promoted):{auth:$auth}}}' >"$temporary_file"
+jq --arg internal "$internal_pull_host" --arg promoted "$promoted_pull_host" \
+  '.auths[$internal].auth as $auth | {auths:{($internal):{auth:$auth},($promoted):{auth:$auth}}}' \
+  "$source_file" >"$temporary_file"
 chmod 0600 "$temporary_file"
 for target in "${targets[@]}"; do
   install -m 0600 "$temporary_file" "$target"

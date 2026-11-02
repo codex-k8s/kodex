@@ -293,7 +293,7 @@ put_material kodex/runtime-execution-client/tls ca.crt \
 
 create_registry_credential() {
   local name=$1 host=$2 username_file=${3:-} password_file=${4:-}
-  local directory="$output_directory/registry/$1" username password auth
+  local directory="$output_directory/registry/$1" username password
   mkdir -p "$directory"
   if [[ -n "$username_file" ]]; then
     username=$(<"$username_file")
@@ -312,8 +312,9 @@ create_registry_credential() {
   password=$(<"$directory/password")
   htpasswd -i -B -C 12 -c "$directory/htpasswd" "$username" \
     <"$directory/password" >/dev/null 2>&1
-  auth=$(printf '%s:%s' "$username" "$password" | base64 | tr -d '\n')
-  jq -n --arg host "$host" --arg auth "$auth" '{auths:{($host):{auth:$auth}}}' \
+  jq -n --arg host "$host" --rawfile username "$directory/username" \
+    --rawfile password "$directory/password" \
+    '{auths:{($host):{auth:(($username+":"+$password)|@base64)}}}' \
     >"$directory/dockerconfig.json"
   chmod 0600 "$directory"/*
 }
@@ -327,10 +328,8 @@ done
 # kubelet обращается к promoted registry по публичному имени, а внутренние
 # readiness-проверки используют Service DNS. Оба endpoint принадлежат одной
 # pull identity и должны присутствовать в одном Docker config.
-pull_auth=$(jq -er --arg host "$internal_pull_host" '.auths[$host].auth' \
-  "$output_directory/registry/pull/dockerconfig.json")
-jq --arg host "$promoted_pull_host" --arg auth "$pull_auth" \
-  '.auths[$host] = {auth:$auth}' \
+jq --arg internal "$internal_pull_host" --arg host "$promoted_pull_host" \
+  '.auths[$host] = {auth:.auths[$internal].auth}' \
   "$output_directory/registry/pull/dockerconfig.json" \
   >"$output_directory/registry/pull/dockerconfig.json.next"
 mv -- "$output_directory/registry/pull/dockerconfig.json.next" \
