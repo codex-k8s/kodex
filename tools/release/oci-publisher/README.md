@@ -74,8 +74,10 @@ Unit не подписывает неподтверждённую provenance, н
 не устанавливает runtime images. Publisher/tool/source SHA, binary digests,
 release lock и результаты admission фиксируются раздельно. После успеха archive
 очищается только из собственного temporary directory. При failure/timeout этот
-каталог0700 сохраняет archive, metadata и failure.json0600 со стадией и digest
+каталог0700 рядом с private config сохраняет archive, metadata и failure.json0600 со стадией и digest
 для readback; оператор учитывает занимаемое место и удаляет его после сверки.
+Родитель config должен принадлежать caller и иметь mode0700. Evidence находится
+вне временного metadata directory release builder и переживает его EXIT cleanup.
 Созданная Buildctl metadata ограничивается до0600 после проверки владельца,
 regular file и одной hardlink; требования к входным secret/config не ослабляются.
 PVC/registry data не удаляются.

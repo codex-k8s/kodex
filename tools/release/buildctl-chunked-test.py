@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import shutil
 import sys
 import tempfile
 import unittest
@@ -103,6 +104,20 @@ print(json.dumps({'digest':args[args.index('--expected-digest')+1],'reused':Fals
         result = self.invoke()
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(self.target.exists())
+
+    def test_failed_evidence_survives_caller_metadata_cleanup(self):
+        metadata_root = self.root / "caller-temporary-metadata"
+        metadata_root.mkdir(mode=0o700)
+        self.target = metadata_root / "result.json"
+        self.publisher.write_text("#!/usr/bin/env python3\nimport sys\nsys.exit(1)\n")
+        self.refresh_config()
+        result = self.invoke()
+        self.assertNotEqual(result.returncode, 0)
+        shutil.rmtree(metadata_root)
+        evidence = list(self.root.glob(".chunked-oci-*"))
+        self.assertEqual(len(evidence), 1)
+        self.assertTrue((evidence[0] / "image.tar").is_file())
+        self.assertTrue((evidence[0] / "failure.json").is_file())
 
     def test_changed_tool_binary_is_rejected_before_execution(self):
         self.buildctl.write_text(self.buildctl.read_text() + "\n# changed source\n")
