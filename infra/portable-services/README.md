@@ -106,3 +106,10 @@ Smoke создаёт только свои контейнеры с synthetic cre
 CPU/memory, затем останавливает их. Порты bind только127.0.0.1; занятые порты
 закрывают запуск. Kubernetes, внешние endpoints и credentials не принимаются.
 Квитанция и synthetic данные остаются в новом каталоге0700 для диагностики.
+
+Helm включает digest bootstrap и serving config в Pod template. Смена UI
+origin, registry repository allowlist или валидатора credentials вызывает
+controlled rollout, чтобы nginx/init действительно применили новую ревизию.
+Повтор неизменённого apply сохраняет template. PVC, CA и Secret refs при этом
+не удаляются. Обновление leaf Secret по-прежнему требует отдельного
+контролируемого restart до истечения прежнего сертификата.
