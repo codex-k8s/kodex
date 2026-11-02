@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"strings"
 	"sync"
 	"time"
@@ -183,10 +184,12 @@ type deviceWorker struct {
 // учитывая только local device workers под mutex. Он не владеет account полномочиями; lifecycle и
 // порядок shutdown обеспечивает composition.
 type Service struct {
-	lifecycle context.Context
-	store     Store
-	appServer AppServer
-	deviceTTL time.Duration
+	modelProvider *runtimecontract.ModelProviderConfiguration
+	gatewayHTTP   modelCatalogHTTPClient
+	lifecycle     context.Context
+	store         Store
+	appServer     AppServer
+	deviceTTL     time.Duration
 
 	mu       sync.Mutex
 	sessions map[string]*deviceWorker

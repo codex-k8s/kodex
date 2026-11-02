@@ -361,43 +361,54 @@ func (server *Server) handle(client net.Conn) {
 		server.metrics.Connection("rejected", "connect", "not_ready")
 		return
 	}
-	snapshot, err := server.resolver.Resolve(server.context, target.Hostname)
-	if err != nil {
-		server.metrics.Connection("rejected", "dns", dnsReason(err))
-		return
-	}
-	if err := dnsresolver.ValidateAddresses(snapshot.Addresses); err != nil {
-		server.metrics.Connection("rejected", "dns", dnsReason(err))
-		return
-	}
-	if !time.Now().Before(snapshot.ExpiresAt) {
-		server.metrics.Connection("rejected", "dns", "timeout")
-		return
-	}
-	if pinned, ok := server.policy.(literalAccess); ok {
-		permitted := make([]netip.Addr, 0, len(snapshot.Addresses))
-		for _, address := range snapshot.Addresses {
-			if pinned.AllowsLiteral(target.Hostname, target.Port, address) {
-				permitted = append(permitted, address)
-			}
-		}
-		// Mail сохраняет полный DNS snapshot; динамический OpenAPI-origin
-		// может использовать только пересечение свежего DNS с ранее
-		// проверенными публичными адресами immutable policy.
-		if len(permitted) == 0 || isMail && len(permitted) != len(snapshot.Addresses) {
-			server.metrics.Connection("rejected", "connect", "policy")
+	var upstream net.Conn
+	var snapshot dnsresolver.Snapshot
+	route := server.modelProviderRoute(target.Hostname)
+	if route != nil {
+		upstream, err = server.dialModelProvider(server.context, *route, duration(limits.DialTimeoutMilliseconds))
+		if err != nil {
+			server.metrics.Connection("failed", "dial", "unreachable")
 			return
 		}
-		snapshot.Addresses = permitted
-	}
-	if !server.readyFor(target.Hostname) || server.draining.Load() {
-		server.metrics.Connection("rejected", "connect", "not_ready")
-		return
-	}
-	upstream, err := server.dial(snapshot, target.Port, duration(limits.DialTimeoutMilliseconds))
-	if err != nil {
-		server.metrics.Connection("failed", "dial", "dial_failure")
-		return
+	} else {
+		snapshot, err = server.resolver.Resolve(server.context, target.Hostname)
+		if err != nil {
+			server.metrics.Connection("rejected", "dns", dnsReason(err))
+			return
+		}
+		if err := dnsresolver.ValidateAddresses(snapshot.Addresses); err != nil {
+			server.metrics.Connection("rejected", "dns", dnsReason(err))
+			return
+		}
+		if !time.Now().Before(snapshot.ExpiresAt) {
+			server.metrics.Connection("rejected", "dns", "timeout")
+			return
+		}
+		if pinned, ok := server.policy.(literalAccess); ok {
+			permitted := make([]netip.Addr, 0, len(snapshot.Addresses))
+			for _, address := range snapshot.Addresses {
+				if pinned.AllowsLiteral(target.Hostname, target.Port, address) {
+					permitted = append(permitted, address)
+				}
+			}
+			// Mail сохраняет полный DNS snapshot; динамический OpenAPI-origin
+			// может использовать только пересечение свежего DNS с ранее
+			// проверенными публичными адресами immutable policy.
+			if len(permitted) == 0 || isMail && len(permitted) != len(snapshot.Addresses) {
+				server.metrics.Connection("rejected", "connect", "policy")
+				return
+			}
+			snapshot.Addresses = permitted
+		}
+		if !server.readyFor(target.Hostname) || server.draining.Load() {
+			server.metrics.Connection("rejected", "connect", "not_ready")
+			return
+		}
+		upstream, err = server.dial(snapshot, target.Port, duration(limits.DialTimeoutMilliseconds))
+		if err != nil {
+			server.metrics.Connection("failed", "dial", "dial_failure")
+			return
+		}
 	}
 	defer upstream.Close()
 	if err := upstream.SetWriteDeadline(time.Now().Add(duration(limits.WriteTimeoutMilliseconds))); err != nil {

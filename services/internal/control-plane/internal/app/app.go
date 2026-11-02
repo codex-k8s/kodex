@@ -98,6 +98,9 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err != nil {
 		return startupFailure(stageConstructPlatformRepository, err)
 	}
+	if err := configureModelProvider(repository, config); err != nil {
+		return err
+	}
 	if err := repository.ConfigureProjectPurgeStorage(config.ObjectStorageEndpoint, config.ObjectStorageRegion, config.ObjectStorageBucket, config.ObjectStorageUsePathStyle); err != nil {
 		return startupFailure(stageConfigureProjectPurgeStorage, err)
 	}

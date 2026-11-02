@@ -155,12 +155,13 @@ build_component() {
     fail "invalid Dockerfile path for $component"
   [[ -f "$repository_root/$dockerfile" ]] || fail "Dockerfile is missing for $component"
   case "$component:$target" in
-    role-image-builder:runtime|image-admission:admission-runtime|image-admission-controller:admission-controller-runtime|registry-pull-authorizer:registry-pull-runtime|email-bridge:runtime|email-bridge-migration:migration|integration-synthetic:synthetic|*:) ;;
+    agent-runner-opencode:opencode-runtime|role-image-builder:runtime|image-admission:admission-runtime|image-admission-controller:admission-controller-runtime|registry-pull-authorizer:registry-pull-runtime|email-bridge:runtime|email-bridge-migration:migration|integration-synthetic:synthetic|*:) ;;
     *) fail "unexpected Dockerfile target for $component" ;;
   esac
 
   destination="$registry_push/$repository_prefix/$component:$source_sha"
-  if [[ "$component" == agent-runner ]]; then
+  if [[ "$component" == agent-runner || "$component" == agent-runner-opencode ]]; then
+    [[ -z "$target" ]] || target_options=(--target "$target")
     env -u BASH_ENV -u ENV \
       PATH="$repository_root/tools/release/shims:$PATH" \
       BUILDCTL_PATH="$buildctl_path" BUILDKIT_HOST="$buildkit_host" \
@@ -170,7 +171,7 @@ build_component() {
       KODEX_RELEASE_BUILD_NO_PROXY="$build_no_proxy" \
       "$repository_root/scripts/build-agent-runner-image.sh" \
         --builder docker --context "$source_context" --dockerfile "$source_context/$dockerfile" \
-        --tag "$destination" --network host
+        --tag "$destination" --network host "${target_options[@]}"
     return
   fi
 
@@ -197,7 +198,7 @@ build_component() {
 }
 
 while IFS=$'\t' read -r component dockerfile target; do
-  if [[ "$component" == agent-runner ]]; then
+  if [[ "$component" == agent-runner || "$component" == agent-runner-opencode ]]; then
     # Специализированная сборка runner владеет собственной цепочкой процессов.
     # Она не входит в параллельный пул обычных buildctl процессов.
     wait_build_batch

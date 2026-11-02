@@ -68,7 +68,7 @@ func TestAPIModelCatalogRequiresAccountIntersection(t *testing.T) {
 				}
 				return &http.Response{StatusCode: test.status, Body: io.NopCloser(strings.NewReader(test.body))}, nil
 			})
-			models, err := readAPIModelCatalog(t.Context(), client, []byte("synthetic-catalog-key"))
+			models, err := readAPIModelCatalogAt(t.Context(), client, []byte("synthetic-catalog-key"), catalogSourceFixtureTime)
 			if (err != nil) != test.rejected || !test.rejected && len(models) != test.want || test.rejected && len(models) != 0 {
 				t.Fatal("account catalog outcome changed")
 			}
@@ -190,6 +190,7 @@ func TestModelCatalogProcessIsolatedCredentialAndCleanup(t *testing.T) {
 				t.Fatal(err)
 			}
 			calls := 0
+			process.catalogNow = catalogSourceFixtureTime
 			process.catalogHTTP = catalogHTTPFunc(func(*http.Request) (*http.Response, error) {
 				calls++
 				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"object":"list","data":[{"id":"gpt-6-astra","object":"model"}]}`))}, nil
@@ -416,5 +417,20 @@ func TestCatalogAuthenticationRejectsMismatchedAndUnconfiguredMaterial(t *testin
 		if _, err := catalogAuthentication([]byte(raw), CatalogMethodAPIKey); !errors.Is(err, errModelCatalogAuthorization) {
 			t.Fatal("unconfigured credential accepted")
 		}
+	}
+}
+
+// catalogSourceFixtureTime pins synthetic legacy parser tests inside the separately dated source validity window.
+// catalogSourceFixtureTime закрепляет synthetic legacy parser tests внутри dated source validity window.
+func catalogSourceFixtureTime() time.Time { return time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC) }
+
+// TestAPICatalogExpiryRejectsBeforeCredentialTransmission preserves the fail-closed source lifetime independently of wall time.
+// TestAPICatalogExpiryRejectsBeforeCredentialTransmission сохраняет fail-closed source lifetime независимо от wall time.
+func TestAPICatalogExpiryRejectsBeforeCredentialTransmission(t *testing.T) {
+	calls := 0
+	client := catalogHTTPFunc(func(*http.Request) (*http.Response, error) { calls++; return nil, errors.New("unexpected request") })
+	_, err := readAPIModelCatalogAt(t.Context(), client, []byte("synthetic-catalog-key"), func() time.Time { return time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC) })
+	if !errors.Is(err, errModelCatalogUnverified) || calls != 0 {
+		t.Fatal("expired source transmitted credential")
 	}
 }

@@ -24,11 +24,12 @@ const (
 // RuntimeWebAccessGrant связывает доступ proxy с точной нагрузкой и неизменным дайджестом сетевой политики;
 // подписанное значение передаётся лишь в Proxy-Authorization, не в логах или событиях пользователя.
 type RuntimeWebAccessGrant struct {
-	Version       int              `json:"v"`
-	Audience      string           `json:"aud"`
-	WorkloadRef   string           `json:"workload_ref"`
-	NetworkDigest string           `json:"network_digest"`
-	WebAccess     RuntimeWebAccess `json:"web_access"`
+	Version       int                 `json:"v"`
+	Audience      string              `json:"aud"`
+	WorkloadRef   string              `json:"workload_ref"`
+	NetworkDigest string              `json:"network_digest"`
+	WebAccess     RuntimeWebAccess    `json:"web_access"`
+	ModelProvider *ModelProviderRoute `json:"model_provider,omitempty"`
 }
 
 // SignRuntimeWebAccessGrant validates bounded claims and signs their JSON bytes with HMAC-SHA256.
@@ -36,6 +37,29 @@ type RuntimeWebAccessGrant struct {
 func SignRuntimeWebAccessGrant(key []byte, workloadRef, networkDigest string, access RuntimeWebAccess) (string, error) {
 	claims := RuntimeWebAccessGrant{Version: runtimeWebAccessGrantVersion, Audience: "kodex-runtime-egress",
 		WorkloadRef: workloadRef, NetworkDigest: networkDigest, WebAccess: access}
+	return signRuntimeProxyClaims(key, claims)
+}
+
+// SignRuntimeProxyAccessGrant adds exact model-gateway pins to the existing workload/web grant.
+// A nil provider preserves the original payload bytes and built-in Codex transport behavior.
+// SignRuntimeProxyAccessGrant добавляет exact model-gateway pins к прежнему workload/web grant.
+// Nil provider сохраняет прежние payload bytes и встроенный transport Codex.
+func SignRuntimeProxyAccessGrant(key []byte, workloadRef, networkDigest string, access RuntimeWebAccess, provider *ModelProviderConfiguration) (string, error) {
+	if provider == nil {
+		return SignRuntimeWebAccessGrant(key, workloadRef, networkDigest, access)
+	}
+	route, err := provider.Route()
+	if err != nil {
+		return "", err
+	}
+	claims := RuntimeWebAccessGrant{Version: runtimeWebAccessGrantVersion, Audience: "kodex-runtime-egress",
+		WorkloadRef: workloadRef, NetworkDigest: networkDigest, WebAccess: access, ModelProvider: &route}
+	return signRuntimeProxyClaims(key, claims)
+}
+
+// signRuntimeProxyClaims validates the complete bounded claim before signing canonical typed JSON.
+// signRuntimeProxyClaims проверяет bounded claim целиком до подписи canonical typed JSON.
+func signRuntimeProxyClaims(key []byte, claims RuntimeWebAccessGrant) (string, error) {
 	if err := validateRuntimeWebAccessGrant(claims); err != nil || len(key) < 32 {
 		return "", errors.New("runtime web access grant input is invalid")
 	}
@@ -83,7 +107,7 @@ func validateRuntimeWebAccessGrant(claims RuntimeWebAccessGrant) error {
 	if claims.Version != runtimeWebAccessGrantVersion || claims.Audience != "kodex-runtime-egress" ||
 		claims.WorkloadRef == "" || len(claims.WorkloadRef) > 512 ||
 		len(claims.NetworkDigest) != sha256.Size*2 || strings.ToLower(claims.NetworkDigest) != claims.NetworkDigest ||
-		validateRuntimeWebAccess(claims.WebAccess) != nil {
+		validateRuntimeWebAccess(claims.WebAccess) != nil || claims.ModelProvider != nil && claims.ModelProvider.Validate() != nil {
 		return errors.New("runtime web access grant claims are invalid")
 	}
 	if _, err := hex.DecodeString(claims.NetworkDigest); err != nil {

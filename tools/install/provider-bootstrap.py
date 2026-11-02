@@ -31,11 +31,28 @@ def digest(raw):
     return hashlib.sha256(raw).hexdigest()
 
 
+def gateway_definition(value):
+    definition = value.get("provider_definition_key", "")
+    require(re.fullmatch(r"opencode-[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", definition))
+    return definition
+
+
+def bootstrap_key(raw):
+    value = json.loads(auth_valid(raw))
+    return "default-" + gateway_definition(value) if value.get("auth_mode") == "gateway-api-key" else "default-openai-codex"
+
+
 def auth_valid(raw):
     require(0 < len(raw) <= 1048576)
     value = json.loads(raw)
     require(isinstance(value, dict))
     mode = value.get("auth_mode")
+    if mode == "gateway-api-key":
+        gateway_definition(value)
+        key = value.get("API_KEY")
+        require(set(value) == {"auth_mode", "provider_definition_key", "API_KEY"} and isinstance(key, str)
+                and 8 <= len(key.encode()) <= 16384 and not any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in key))
+        return raw
     require((mode in ("apikey", "api-key") and isinstance(value.get("OPENAI_API_KEY"), str)
              and bool(value["OPENAI_API_KEY"])) or
             (mode in ("chatgpt", "chatgptAuthTokens") and isinstance(value.get("tokens"), dict)
@@ -120,15 +137,16 @@ def seed_manifest(epoch, raw):
     return {"apiVersion": "v1", "kind": "Secret", "immutable": True, "type": "Opaque",
             "metadata": {"name": name, "namespace": "kodex-runtime", "labels": {
                 "app.kubernetes.io/managed-by": "kodex-install", "app.kubernetes.io/part-of": "kodex"},
-                "annotations": {"kodex.dev/provider-account-key": "default-openai-codex",
+                "annotations": {"kodex.dev/provider-account-key": bootstrap_key(raw),
                                 PREFIX + "seed": "v1", SEED_EPOCH: epoch}},
             "data": {"auth.json": base64.b64encode(raw).decode(),
                      "auth.sha256": base64.b64encode(sha.encode()).decode()}}
 
 
 class Operator:
-    def __init__(self, context):
+    def __init__(self, context, bootstrap_account_key="default-openai-codex"):
         self.context = context
+        self.bootstrap_account_key = bootstrap_account_key
 
     def call(self, argv, payload=None):
         # Никаких raw diagnostics, body, DSN и credentials в выводе исключения.
@@ -187,9 +205,10 @@ class Operator:
         epoch = self.namespace_epoch()
         if self.owner_state() == "CURRENT":
             # Существующий current важнее input и случайно уцелевшей ConfigMap.
-            self.reconcile("default-openai-codex")
+            self.reconcile(self.bootstrap_account_key)
             return
         raw = read_private_auth(auth_file)
+        require(bootstrap_key(raw) == self.bootstrap_account_key)
         wanted = seed_manifest(epoch, raw)
 
         def fresh():
@@ -201,7 +220,7 @@ class Operator:
             self.call(["create", "--field-manager=kodex-install", "-f", "-"], json.dumps(wanted).encode())
             created = self.get("secret", wanted["metadata"]["name"])
         pins = descriptor(created)
-        validate(created, pins, "", "default-openai-codex", legacy=True)
+        validate(created, pins, "", self.bootstrap_account_key, legacy=True)
         require(created["metadata"].get("annotations", {}).get(SEED_EPOCH) == epoch and
                 created["metadata"]["annotations"].get(PREFIX + "seed") == "v1" and
                 pins["contentSHA256"] == digest(raw) and
@@ -212,12 +231,12 @@ class Operator:
 
     def metadata(self, snapshot):
         # Проверка владельца повторяется непосредственно перед metadata CAS.
-        fresh = self.snapshot("default-openai-codex")
+        fresh = self.snapshot(self.bootstrap_account_key)
         require(fresh["credential"] == snapshot["credential"])
         self.write_metadata(fresh["credential"])
 
     def write_metadata(self, pins, annotations=None):
-        annotations = {"kodex.dev/provider-account-key": "default-openai-codex", **(annotations or {})}
+        annotations = {"kodex.dev/provider-account-key": self.bootstrap_account_key, **(annotations or {})}
         existing = self.get("configmap", META, "kodex-system", absent=True)
         if existing and existing.get("data") == pins and all(
                 existing["metadata"].get("annotations", {}).get(key) == value for key, value in annotations.items()):
@@ -273,7 +292,7 @@ class Operator:
             after = self.snapshot(key)
             require(after["credential"] == new_pins)
             validate(self.get("secret", new_pins["secretName"]), new_pins, after["accountRef"], key)
-        if key == "default-openai-codex":
+        if key == self.bootstrap_account_key:
             self.metadata(after)
 
     def verify_metadata(self):
@@ -281,12 +300,12 @@ class Operator:
         if metadata is None:
             return False
         require(metadata["metadata"].get("annotations", {}).get("kodex.dev/provider-account-key") ==
-                "default-openai-codex")
+                self.bootstrap_account_key)
         pins = metadata["data"]
         secret = self.get("secret", pins["secretName"])
         annotations = secret["metadata"].get("annotations", {})
         account = annotations.get(PREFIX + "account-ref", annotations.get("runtime.kodex.dev/provider-account-ref", ""))
-        validate(secret, pins, account, "default-openai-codex", legacy=True)
+        validate(secret, pins, account, self.bootstrap_account_key, legacy=True)
         return True
 
 
@@ -294,16 +313,22 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("mode", choices=("seed", "recover", "import", "verify-metadata"))
     parser.add_argument("--context", required=True)
-    parser.add_argument("--account-key", default="default-openai-codex")
+    parser.add_argument("--account-key")
     parser.add_argument("--auth-file")
     parser.add_argument("--preserve-current", action="store_true")
     args = parser.parse_args()
+    if args.account_key is None:
+        probe = Operator(args.context)
+        metadata = probe.get("configmap", META, "kodex-system", absent=True)
+        if args.mode == "seed" and probe.owner_state() == "FRESH":
+            args.account_key = bootstrap_key(read_private_auth(args.auth_file))
+        else:
+            args.account_key = (metadata or {}).get("metadata", {}).get("annotations", {}).get("kodex.dev/provider-account-key", "default-openai-codex")
     require(args.context and re.fullmatch(r"[a-z][a-z0-9_-]{1,95}", args.account_key))
     require((args.mode in ("seed", "import")) == bool(args.auth_file))
-    operator = Operator(args.context)
+    operator = Operator(args.context, args.account_key)
     require(operator.call(["config", "current-context"]).decode().strip() == args.context)
     if args.mode == "seed":
-        require(args.account_key == "default-openai-codex")
         operator.seed(args.auth_file)
     elif args.mode == "verify-metadata":
         if not operator.verify_metadata():

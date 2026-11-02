@@ -13,5 +13,5 @@ JOIN control_plane.provider_accounts account
 JOIN control_plane.provider_credential_revisions credential
   ON credential.id = account.current_credential_revision_id
 WHERE installation_owner.stable_key = 'installation-owner'
-  AND account.stable_key = 'default-openai-codex'
+  AND account.stable_key = $1
 FOR UPDATE OF account;

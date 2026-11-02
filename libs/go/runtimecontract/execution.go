@@ -192,107 +192,108 @@ type RunnerInputArtifact struct {
 // RunnerInput — неизменная материализация хода или warm runtime со связями конфигурации, контекста,
 // окружения, провайдера и callback; ссылки ресурсов не являются bearer-полномочиями или значениями секретов.
 type RunnerInput struct {
-	Schema                            string                    `json:"schema"`
-	Mode                              string                    `json:"mode"`
-	WorkloadInstance                  string                    `json:"workload_instance"`
-	OrganizationRef                   string                    `json:"organization_ref"`
-	RunRef                            string                    `json:"run_ref,omitempty"`
-	ProjectRef                        string                    `json:"project_ref,omitempty"`
-	NodeRef                           string                    `json:"node_ref,omitempty"`
-	SessionRef                        string                    `json:"session_ref"`
-	TurnRef                           string                    `json:"turn_ref,omitempty"`
-	AgentRef                          string                    `json:"agent_ref"`
-	Attempt                           int32                     `json:"attempt,omitempty"`
-	LeaseRef                          string                    `json:"lease_ref,omitempty"`
-	LeaseFence                        string                    `json:"lease_fence,omitempty"`
-	LeaseGeneration                   int64                     `json:"lease_generation,omitempty"`
-	InputDigest                       string                    `json:"input_digest,omitempty"`
-	RuntimeRevisionRef                string                    `json:"runtime_revision_ref"`
-	RuntimeRevisionVersion            int64                     `json:"runtime_revision_version"`
-	RuntimeRevisionDigest             string                    `json:"runtime_revision_digest"`
-	ImageReference                    string                    `json:"image_reference"`
-	ImageManifestDigest               string                    `json:"image_manifest_digest"`
-	EnvironmentImage                  RuntimeEnvironmentImage   `json:"environment_image"`
-	EnvironmentTools                  []RuntimeEnvironmentTool  `json:"environment_tools,omitempty"`
-	RoleRuntimeContractRevision       uint64                    `json:"role_runtime_contract_revision"`
-	RoleRuntimeContractSHA256         string                    `json:"role_runtime_contract_sha256"`
-	RoleDefinitionRef                 string                    `json:"role_definition_ref"`
-	RuntimeProfileRef                 string                    `json:"runtime_profile_ref"`
-	RuntimeProfileRevision            string                    `json:"runtime_profile_revision"`
-	InstructionRef                    string                    `json:"instruction_ref"`
-	InstructionDigest                 string                    `json:"instruction_digest"`
-	PromptTemplateRef                 string                    `json:"prompt_template_ref"`
-	PromptTemplateDigest              string                    `json:"prompt_template_digest"`
-	PromptMaterializationDigest       string                    `json:"prompt_materialization_digest"`
-	PromptServiceTemplateRevision     string                    `json:"prompt_service_template_revision,omitempty"`
-	PromptServiceTemplateDigest       string                    `json:"prompt_service_template_digest,omitempty"`
-	PromptTargetKind                  string                    `json:"prompt_target_kind,omitempty"`
-	SystemSTTConfigurationRef         string                    `json:"system_stt_configuration_ref,omitempty"`
-	SystemSTTConfigurationRevisionRef string                    `json:"system_stt_configuration_revision_ref,omitempty"`
-	SystemSTTConfigurationVersion     int64                     `json:"system_stt_configuration_version,omitempty"`
-	SystemSTTConfigurationDigest      string                    `json:"system_stt_configuration_digest,omitempty"`
-	ExecutionBindingDigest            string                    `json:"execution_binding_digest,omitempty"`
-	MCPBindingDigest                  string                    `json:"mcp_binding_digest,omitempty"`
-	AssistantScope                    AssistantScope            `json:"assistant_scope"`
-	AssistantProfileRef               string                    `json:"assistant_profile_ref,omitempty"`
-	Instructions                      string                    `json:"instructions"`
-	Task                              string                    `json:"task,omitempty"`
-	BoundedInput                      map[string]any            `json:"bounded_input,omitempty"`
-	SessionContext                    []RunnerSessionMessage    `json:"session_context,omitempty"`
-	DelegationTargets                 []RunnerDelegationTarget  `json:"delegation_targets,omitempty"`
-	IntegrationGrants                 []RunnerIntegrationGrant  `json:"integration_grants,omitempty"`
-	ManagedMCPProfiles                []ManagedMCPProfile       `json:"managed_mcp_profiles,omitempty"`
-	AssistantContext                  *RunnerAssistantContext   `json:"assistant_context,omitempty"`
-	AttachmentSetRef                  string                    `json:"attachment_set_ref,omitempty"`
-	AttachmentSetManifestDigest       string                    `json:"attachment_set_manifest_digest,omitempty"`
-	AttachmentContext                 string                    `json:"attachment_context,omitempty"`
-	AttachmentSets                    []RunnerAttachmentSet     `json:"attachment_sets,omitempty"`
-	InputArtifacts                    []RunnerInputArtifact     `json:"input_artifacts,omitempty"`
-	ContextSnapshot                   *RuntimeContextSnapshot   `json:"context_snapshot,omitempty"`
-	FileCatalog                       *RuntimeFileCatalog       `json:"file_catalog,omitempty"`
-	Capabilities                      []string                  `json:"capabilities,omitempty"`
-	Provider                          string                    `json:"provider"`
-	Model                             string                    `json:"model"`
-	ProviderAccountRef                string                    `json:"provider_account_ref"`
-	ProviderCredentialRef             string                    `json:"provider_credential_revision_ref"`
-	ProviderCredentialRevision        int64                     `json:"provider_credential_revision"`
-	ProviderCredentialSHA256          string                    `json:"provider_credential_sha256"`
-	RuntimeConfigRef                  string                    `json:"runtime_config_ref"`
-	RuntimeConfigVersion              int64                     `json:"runtime_config_version"`
-	RuntimeConfigDigest               string                    `json:"runtime_config_digest"`
-	ProviderPolicyRef                 string                    `json:"provider_policy_ref"`
-	ProviderPolicyVersion             int64                     `json:"provider_policy_version"`
-	ProviderPolicyDigest              string                    `json:"provider_policy_digest"`
-	ConfigOverlayRef                  string                    `json:"config_overlay_ref"`
-	ConfigOverlayVersion              int64                     `json:"config_overlay_version"`
-	ConfigOverlayDigest               string                    `json:"config_overlay_digest"`
-	ConfigOverlay                     string                    `json:"config_overlay"`
-	EffectiveReasoningEffort          string                    `json:"effective_reasoning_effort"`
-	ReasoningMode                     string                    `json:"reasoning_mode"`
-	RuntimeEnvironmentRef             string                    `json:"runtime_environment_ref"`
-	RuntimeEnvironmentVersion         int64                     `json:"runtime_environment_version"`
-	RuntimeEnvironmentDigest          string                    `json:"runtime_environment_digest"`
-	EnvironmentBindingRef             string                    `json:"environment_binding_ref"`
-	EnvironmentBindingVersion         int64                     `json:"environment_binding_version"`
-	EnvironmentBindingDigest          string                    `json:"environment_binding_digest"`
-	EnvironmentValues                 []RuntimeEnvironmentValue `json:"environment_values,omitempty"`
-	SecretProjections                 []RuntimeSecretProjection `json:"secret_projections,omitempty"`
-	EnvironmentPolicy                 RuntimeEnvironmentPolicy  `json:"environment_policy"`
-	WorkspacePolicy                   RuntimeWorkspacePolicy    `json:"workspace_policy"`
-	WorkspaceStorage                  *WorkspaceStorageBinding  `json:"workspace_storage,omitempty"`
-	ExecutionDeadline                 *RuntimeExecutionDeadline `json:"execution_deadline,omitempty"`
-	EffectiveKubernetesAccess         RuntimeKubernetesAccess   `json:"effective_kubernetes_access"`
-	CodexSandbox                      string                    `json:"codex_sandbox"`
-	CodexApprovalPolicy               string                    `json:"codex_approval_policy"`
-	CodexSessionID                    string                    `json:"codex_session_id,omitempty"`
-	CallbackURL                       string                    `json:"callback_url"`
-	CallbackTLS                       RuntimeTLSBinding         `json:"callback_tls"`
-	ExecutionTicketFile               string                    `json:"execution_ticket_file"`
-	ProviderAuthFile                  string                    `json:"provider_auth_file"`
-	ProviderAuthSHA256File            string                    `json:"provider_auth_sha256_file"`
-	WorkspaceRoot                     string                    `json:"workspace_root"`
-	OutboxRoot                        string                    `json:"outbox_root"`
-	CodexHome                         string                    `json:"codex_home"`
+	Schema                            string                      `json:"schema"`
+	Mode                              string                      `json:"mode"`
+	WorkloadInstance                  string                      `json:"workload_instance"`
+	OrganizationRef                   string                      `json:"organization_ref"`
+	RunRef                            string                      `json:"run_ref,omitempty"`
+	ProjectRef                        string                      `json:"project_ref,omitempty"`
+	NodeRef                           string                      `json:"node_ref,omitempty"`
+	SessionRef                        string                      `json:"session_ref"`
+	TurnRef                           string                      `json:"turn_ref,omitempty"`
+	AgentRef                          string                      `json:"agent_ref"`
+	Attempt                           int32                       `json:"attempt,omitempty"`
+	LeaseRef                          string                      `json:"lease_ref,omitempty"`
+	LeaseFence                        string                      `json:"lease_fence,omitempty"`
+	LeaseGeneration                   int64                       `json:"lease_generation,omitempty"`
+	InputDigest                       string                      `json:"input_digest,omitempty"`
+	RuntimeRevisionRef                string                      `json:"runtime_revision_ref"`
+	RuntimeRevisionVersion            int64                       `json:"runtime_revision_version"`
+	RuntimeRevisionDigest             string                      `json:"runtime_revision_digest"`
+	ImageReference                    string                      `json:"image_reference"`
+	ImageManifestDigest               string                      `json:"image_manifest_digest"`
+	EnvironmentImage                  RuntimeEnvironmentImage     `json:"environment_image"`
+	EnvironmentTools                  []RuntimeEnvironmentTool    `json:"environment_tools,omitempty"`
+	RoleRuntimeContractRevision       uint64                      `json:"role_runtime_contract_revision"`
+	RoleRuntimeContractSHA256         string                      `json:"role_runtime_contract_sha256"`
+	RoleDefinitionRef                 string                      `json:"role_definition_ref"`
+	RuntimeProfileRef                 string                      `json:"runtime_profile_ref"`
+	RuntimeProfileRevision            string                      `json:"runtime_profile_revision"`
+	InstructionRef                    string                      `json:"instruction_ref"`
+	InstructionDigest                 string                      `json:"instruction_digest"`
+	PromptTemplateRef                 string                      `json:"prompt_template_ref"`
+	PromptTemplateDigest              string                      `json:"prompt_template_digest"`
+	PromptMaterializationDigest       string                      `json:"prompt_materialization_digest"`
+	PromptServiceTemplateRevision     string                      `json:"prompt_service_template_revision,omitempty"`
+	PromptServiceTemplateDigest       string                      `json:"prompt_service_template_digest,omitempty"`
+	PromptTargetKind                  string                      `json:"prompt_target_kind,omitempty"`
+	SystemSTTConfigurationRef         string                      `json:"system_stt_configuration_ref,omitempty"`
+	SystemSTTConfigurationRevisionRef string                      `json:"system_stt_configuration_revision_ref,omitempty"`
+	SystemSTTConfigurationVersion     int64                       `json:"system_stt_configuration_version,omitempty"`
+	SystemSTTConfigurationDigest      string                      `json:"system_stt_configuration_digest,omitempty"`
+	ExecutionBindingDigest            string                      `json:"execution_binding_digest,omitempty"`
+	MCPBindingDigest                  string                      `json:"mcp_binding_digest,omitempty"`
+	AssistantScope                    AssistantScope              `json:"assistant_scope"`
+	AssistantProfileRef               string                      `json:"assistant_profile_ref,omitempty"`
+	Instructions                      string                      `json:"instructions"`
+	Task                              string                      `json:"task,omitempty"`
+	BoundedInput                      map[string]any              `json:"bounded_input,omitempty"`
+	SessionContext                    []RunnerSessionMessage      `json:"session_context,omitempty"`
+	DelegationTargets                 []RunnerDelegationTarget    `json:"delegation_targets,omitempty"`
+	IntegrationGrants                 []RunnerIntegrationGrant    `json:"integration_grants,omitempty"`
+	ManagedMCPProfiles                []ManagedMCPProfile         `json:"managed_mcp_profiles,omitempty"`
+	AssistantContext                  *RunnerAssistantContext     `json:"assistant_context,omitempty"`
+	AttachmentSetRef                  string                      `json:"attachment_set_ref,omitempty"`
+	AttachmentSetManifestDigest       string                      `json:"attachment_set_manifest_digest,omitempty"`
+	AttachmentContext                 string                      `json:"attachment_context,omitempty"`
+	AttachmentSets                    []RunnerAttachmentSet       `json:"attachment_sets,omitempty"`
+	InputArtifacts                    []RunnerInputArtifact       `json:"input_artifacts,omitempty"`
+	ContextSnapshot                   *RuntimeContextSnapshot     `json:"context_snapshot,omitempty"`
+	FileCatalog                       *RuntimeFileCatalog         `json:"file_catalog,omitempty"`
+	Capabilities                      []string                    `json:"capabilities,omitempty"`
+	Provider                          string                      `json:"provider"`
+	Model                             string                      `json:"model"`
+	ModelProvider                     *ModelProviderConfiguration `json:"model_provider,omitempty"`
+	ProviderAccountRef                string                      `json:"provider_account_ref"`
+	ProviderCredentialRef             string                      `json:"provider_credential_revision_ref"`
+	ProviderCredentialRevision        int64                       `json:"provider_credential_revision"`
+	ProviderCredentialSHA256          string                      `json:"provider_credential_sha256"`
+	RuntimeConfigRef                  string                      `json:"runtime_config_ref"`
+	RuntimeConfigVersion              int64                       `json:"runtime_config_version"`
+	RuntimeConfigDigest               string                      `json:"runtime_config_digest"`
+	ProviderPolicyRef                 string                      `json:"provider_policy_ref"`
+	ProviderPolicyVersion             int64                       `json:"provider_policy_version"`
+	ProviderPolicyDigest              string                      `json:"provider_policy_digest"`
+	ConfigOverlayRef                  string                      `json:"config_overlay_ref"`
+	ConfigOverlayVersion              int64                       `json:"config_overlay_version"`
+	ConfigOverlayDigest               string                      `json:"config_overlay_digest"`
+	ConfigOverlay                     string                      `json:"config_overlay"`
+	EffectiveReasoningEffort          string                      `json:"effective_reasoning_effort"`
+	ReasoningMode                     string                      `json:"reasoning_mode"`
+	RuntimeEnvironmentRef             string                      `json:"runtime_environment_ref"`
+	RuntimeEnvironmentVersion         int64                       `json:"runtime_environment_version"`
+	RuntimeEnvironmentDigest          string                      `json:"runtime_environment_digest"`
+	EnvironmentBindingRef             string                      `json:"environment_binding_ref"`
+	EnvironmentBindingVersion         int64                       `json:"environment_binding_version"`
+	EnvironmentBindingDigest          string                      `json:"environment_binding_digest"`
+	EnvironmentValues                 []RuntimeEnvironmentValue   `json:"environment_values,omitempty"`
+	SecretProjections                 []RuntimeSecretProjection   `json:"secret_projections,omitempty"`
+	EnvironmentPolicy                 RuntimeEnvironmentPolicy    `json:"environment_policy"`
+	WorkspacePolicy                   RuntimeWorkspacePolicy      `json:"workspace_policy"`
+	WorkspaceStorage                  *WorkspaceStorageBinding    `json:"workspace_storage,omitempty"`
+	ExecutionDeadline                 *RuntimeExecutionDeadline   `json:"execution_deadline,omitempty"`
+	EffectiveKubernetesAccess         RuntimeKubernetesAccess     `json:"effective_kubernetes_access"`
+	CodexSandbox                      string                      `json:"codex_sandbox"`
+	CodexApprovalPolicy               string                      `json:"codex_approval_policy"`
+	CodexSessionID                    string                      `json:"codex_session_id,omitempty"`
+	CallbackURL                       string                      `json:"callback_url"`
+	CallbackTLS                       RuntimeTLSBinding           `json:"callback_tls"`
+	ExecutionTicketFile               string                      `json:"execution_ticket_file"`
+	ProviderAuthFile                  string                      `json:"provider_auth_file"`
+	ProviderAuthSHA256File            string                      `json:"provider_auth_sha256_file"`
+	WorkspaceRoot                     string                      `json:"workspace_root"`
+	OutboxRoot                        string                      `json:"outbox_root"`
+	CodexHome                         string                      `json:"codex_home"`
 }
 
 // RunnerProviderCredentialRefreshRequest carries refreshed managed authentication through the isolated
@@ -351,6 +352,7 @@ func (input RunnerInput) Validate() error {
 		!sha256Pattern.MatchString(input.PromptMaterializationDigest) ||
 		strings.TrimSpace(input.Instructions) == "" || len(input.Instructions) > 1<<20 ||
 		input.Provider == "" || len(input.Provider) > 64 || input.Model == "" || len(input.Model) > 128 ||
+		input.validateModelProvider() != nil ||
 		!opaqueReferencePattern.MatchString(input.ProviderAccountRef) ||
 		!opaqueReferencePattern.MatchString(input.ProviderCredentialRef) ||
 		input.ProviderCredentialRevision < 1 || !sha256Pattern.MatchString(input.ProviderCredentialSHA256) ||
@@ -663,6 +665,7 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 		SystemSTTDigest               string
 		Provider                      string
 		Model                         string
+		ModelProvider                 *ModelProviderConfiguration `json:",omitempty"`
 		ProviderAccountRef            string
 		ProviderCredentialRef         string
 		ProviderCredentialRevision    int64
@@ -711,7 +714,7 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 		PromptTargetKind:              input.PromptTargetKind,
 		SystemSTTConfigurationRef:     input.SystemSTTConfigurationRef, SystemSTTRevisionRef: input.SystemSTTConfigurationRevisionRef,
 		SystemSTTVersion: input.SystemSTTConfigurationVersion, SystemSTTDigest: input.SystemSTTConfigurationDigest,
-		Provider: input.Provider, Model: input.Model,
+		Provider: input.Provider, Model: input.Model, ModelProvider: input.ModelProvider,
 		ProviderAccountRef: input.ProviderAccountRef, ProviderCredentialRef: input.ProviderCredentialRef,
 		ProviderCredentialRevision: input.ProviderCredentialRevision,
 		ProviderCredentialSHA256:   input.ProviderCredentialSHA256,

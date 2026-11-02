@@ -906,6 +906,10 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		input.CallbackURL = "http://" + net.JoinHostPort(manager.config.ControllerPodIP, "8444")
 		input.CallbackTLS = runtimecontract.RuntimeTLSBinding{Profile: runtimecontract.CallbackProfileTrustedCluster}
 	}
+	input.ModelProvider, err = runtimeModelProvider(revision.GetRuntime().GetModelProvider())
+	if err != nil {
+		return runtimecontract.RunnerInput{}, err
+	}
 	workspacePolicy, err := runtimeWorkspacePolicyFromProto(revision.GetWorkspacePolicy())
 	if err != nil {
 		return runtimecontract.RunnerInput{}, err
@@ -2541,7 +2545,7 @@ func (manager *Manager) runtimeProxyURL(input runtimecontract.RunnerInput) (stri
 	if workloadRef == "" && input.Mode == runtimecontract.RunnerModeWarm {
 		workloadRef = "warm:" + input.OrganizationRef + ":" + input.SessionRef + ":" + input.RuntimeRevisionRef + ":" + input.RuntimeRevisionDigest
 	}
-	grant, err := runtimecontract.SignRuntimeWebAccessGrant(manager.config.RuntimeEgressSigningKey, workloadRef, input.EnvironmentPolicy.NetworkDigest, input.EnvironmentPolicy.Network.WebAccess)
+	grant, err := runtimecontract.SignRuntimeProxyAccessGrant(manager.config.RuntimeEgressSigningKey, workloadRef, input.EnvironmentPolicy.NetworkDigest, input.EnvironmentPolicy.Network.WebAccess, input.ModelProvider)
 	if err != nil {
 		return "", errors.New("sign runtime egress grant")
 	}

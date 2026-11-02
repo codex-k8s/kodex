@@ -297,3 +297,24 @@ func validBoundedSafeText(value string, maximumBytes int) bool {
 	}
 	return true
 }
+
+// MaterializeGatewayAPIKey sends owner-derived provider affinity with the distinct secret request.
+// MaterializeGatewayAPIKey передаёт owner-derived provider affinity с отдельным secret request.
+func (client *Client) MaterializeGatewayAPIKey(
+	ctx context.Context,
+	attemptRef, accountRef, definitionKey string,
+	apiKey []byte,
+) (entity.ProviderCredentialDescriptor, string, error) {
+	response, err := client.client.ProviderCredentials.MaterializeAPIKey(ctx,
+		&controlplanev1.ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest{
+			AttemptRef: attemptRef, AccountRef: accountRef, ApiKey: apiKey, ProviderDefinitionKey: definitionKey,
+		})
+	if err != nil {
+		return entity.ProviderCredentialDescriptor{}, "", err
+	}
+	descriptor := credentialDescriptor(response.GetCredential())
+	if descriptor == nil {
+		return entity.ProviderCredentialDescriptor{}, "", errors.New("provider credential descriptor is missing")
+	}
+	return *descriptor, response.GetExternalAccountMasked(), nil
+}

@@ -81,7 +81,13 @@ func newModelCatalogHTTPClient() *http.Client {
 // pagination и повреждённые записи; после запроса срок источника проверяется снова, сам API список не
 // задаёт reasoning defaults.
 func readAPIModelCatalog(ctx context.Context, client modelCatalogHTTPClient, apiKey []byte) ([]CatalogModel, error) {
-	capabilities, err := readAPICapabilities(apiCatalogSource, apiCatalogDigest, time.Now().UTC())
+	return readAPIModelCatalogAt(ctx, client, apiKey, time.Now)
+}
+
+// readAPIModelCatalogAt keeps source expiry checks deterministic while rechecking real time in production.
+// readAPIModelCatalogAt делает source expiry checks детерминированными с повторной проверкой real time в production.
+func readAPIModelCatalogAt(ctx context.Context, client modelCatalogHTTPClient, apiKey []byte, now func() time.Time) ([]CatalogModel, error) {
+	capabilities, err := readAPICapabilities(apiCatalogSource, apiCatalogDigest, now().UTC())
 	if err != nil || client == nil || len(apiKey) < minimumAPIKeyBytes || len(apiKey) > maximumAPIKeyBytes {
 		return nil, errModelCatalogUnverified
 	}
@@ -142,7 +148,7 @@ func readAPIModelCatalog(ctx context.Context, client modelCatalogHTTPClient, api
 		return nil, ctx.Err()
 	}
 	// Медленный ответ не продлевает срок проверенного источника возможностей.
-	if _, err := readAPICapabilities(apiCatalogSource, apiCatalogDigest, time.Now().UTC()); err != nil {
+	if _, err := readAPICapabilities(apiCatalogSource, apiCatalogDigest, now().UTC()); err != nil {
 		return nil, err
 	}
 	return models, nil

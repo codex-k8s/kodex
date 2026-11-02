@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"errors"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -83,6 +84,7 @@ type providerUsageAccount struct {
 // runtime с хешем, провайдера, модель, overlay, закреплённых кандидатов и выбранный аккаунт.
 // Зависимости чтения требуют отдельного права субъекта на запуск или настройку.
 type providerUsageAgent struct {
+	NativeToolCount                                                                            int32 `json:"nativeToolCount,omitempty"`
 	Ref, State, ProjectRef, ConfigRef, ConfigDigest, Provider, Model, Overlay, SelectedAccount string
 	Version                                                                                    int64
 	Enabled                                                                                    bool
@@ -167,7 +169,7 @@ func readProviderUsageAgents(ctx context.Context, tx pgx.Tx, organization string
 	for rows.Next() {
 		var item providerUsageAgent
 		var candidates []byte
-		if rows.Scan(&item.Ref, &item.Version, &item.Enabled, &item.State, &item.ProjectRef, &item.ConfigRef, &item.ConfigDigest, &item.Provider, &item.Model, &candidates, &item.Overlay, &item.SelectedAccount) != nil || len(candidates) > 131072 || decodeStrict(candidates, &item.Candidates) != nil {
+		if rows.Scan(&item.Ref, &item.Version, &item.Enabled, &item.State, &item.ProjectRef, &item.ConfigRef, &item.ConfigDigest, &item.Provider, &item.Model, &candidates, &item.Overlay, &item.SelectedAccount, &item.NativeToolCount) != nil || len(candidates) > 131072 || decodeStrict(candidates, &item.Candidates) != nil {
 			return nil, errs.ErrUnavailable
 		}
 		result[item.Ref] = item
@@ -360,6 +362,9 @@ func providerModelCompatibility(item providerUsageAccount, context providerUsage
 			return blocked("RUNTIME_CONFIGURATION_MISSING", "REPUBLISH_CONFIGURATION")
 		}
 		provider, model = context.Agent.Provider, context.Agent.Model
+		if strings.HasPrefix(provider, "opencode-") && (context.Agent.Overlay != "" || context.Agent.NativeToolCount != 0) {
+			return blocked("RUNTIME_PROFILE_UNAVAILABLE", "REPUBLISH_CONFIGURATION")
+		}
 		for _, candidate := range context.Agent.Candidates {
 			if candidate.AccountRef == item.Ref {
 				if selected != nil {

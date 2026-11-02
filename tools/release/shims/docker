@@ -6,6 +6,12 @@ fail() { printf 'Protected BuildKit shim failed: %s\n' "$*" >&2; exit 1; }
 shift
 [[ "${1:-}" == --network=host ]] || fail "exact network option is required"
 shift
+target_options=()
+if [[ "${1:-}" == --target ]]; then
+  [[ "${2:-}" == opencode-runtime ]] || fail "unsupported runner target"
+  target_options=(--opt target=opencode-runtime)
+  shift 2
+fi
 [[ "${1:-}" == -f && -n "${2:-}" ]] || fail "exact Dockerfile option is required"
 dockerfile=$2
 shift 2
@@ -44,5 +50,6 @@ exec "$buildctl_path" --addr "$buildkit_host" build \
   --opt filename=Dockerfile \
   --opt network=host \
   "${proxy_options[@]}" \
+  "${target_options[@]}" \
   --output "type=image,name=$destination,push=true" \
   --metadata-file "$KODEX_BUILDKIT_METADATA_FILE"

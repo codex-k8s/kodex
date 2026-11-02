@@ -221,3 +221,21 @@ func TestSessionContextRejectsStaleNoticeAndInvalidHistory(t *testing.T) {
 		})
 	}
 }
+
+// TestOpenCodeContinuationUsesCanonicalHistoryWithoutNativeResume preserves the two-turn owner history in the next isolated process prompt.
+// TestOpenCodeContinuationUsesCanonicalHistoryWithoutNativeResume сохраняет two-turn owner history в prompt следующего isolated process.
+func TestOpenCodeContinuationUsesCanonicalHistoryWithoutNativeResume(t *testing.T) {
+	input := semanticRunnerFixture("AGENT")
+	input.Provider = "opencode"
+	input.CodexSessionID = ""
+	input.SessionContext = []runtimecontract.RunnerSessionMessage{{Role: "USER", Content: "Remember SYNTHETIC_CONTEXT"}, {Role: "ASSISTANT", Content: "SYNTHETIC_CONTEXT remembered"}}
+	var builder strings.Builder
+	_, err := appendSessionContext(&builder, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	messages := promptSessionMessages(t, []byte(builder.String()))
+	if len(messages) != 2 || messages[0].Content != input.SessionContext[0].Content || messages[1].Content != input.SessionContext[1].Content {
+		t.Fatal("canonical continuation history changed")
+	}
+}

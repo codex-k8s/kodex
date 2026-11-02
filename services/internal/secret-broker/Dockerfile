@@ -9,6 +9,7 @@ COPY libs/go/controlplaneclient/ libs/go/controlplaneclient/
 COPY libs/go/grpcserver/ libs/go/grpcserver/
 COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
 COPY libs/go/observability/ libs/go/observability/
+COPY libs/go/runtimecontract/ libs/go/runtimecontract/
 COPY libs/go/runtimesecret/ libs/go/runtimesecret/
 COPY libs/go/secretbrokerapi/ libs/go/secretbrokerapi/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/

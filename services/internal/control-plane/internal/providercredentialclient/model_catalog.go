@@ -30,7 +30,7 @@ func modelCatalogRequest(task platformrepo.ProviderModelCatalogTask) (*controlpl
 		return nil, errors.New(invalidModelCatalog)
 	}
 	return &controlplanev1.ObserveProviderModelCatalogRequest{
-		TaskRef: task.Ref, ClaimantId: task.ClaimantID, ClaimGeneration: task.ClaimGeneration, Fence: task.Fence,
+		TaskRef: task.Ref, ProviderDefinitionKey: task.ProviderDefinitionKey, ClaimantId: task.ClaimantID, ClaimGeneration: task.ClaimGeneration, Fence: task.Fence,
 		AccountRef: task.AccountRef, AccountVersion: task.AccountVersion, CredentialRevisionRef: task.CredentialRef, CredentialRevision: task.CredentialRevision,
 		Credential:          &controlplanev1.ProviderCredentialDescriptor{SecretName: task.Credential.SecretName, SecretUid: task.Credential.SecretUID, SecretResourceVersion: task.Credential.SecretResourceVersion, ContentSha256: task.Credential.ContentSHA256},
 		AuthorizationMethod: controlplanev1.ProviderAuthorizationMethod(method), ExpiresAt: expires,

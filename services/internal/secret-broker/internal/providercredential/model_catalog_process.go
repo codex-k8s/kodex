@@ -49,7 +49,7 @@ func (process *AppServerProcess) ObserveModelCatalog(ctx context.Context, authJS
 		return catalogFailure(ctx, atCatalogStage(catalogStageRuntime, err))
 	}
 	if method == CatalogMethodAPIKey {
-		models, err := readAPIModelCatalog(ctx, process.catalogHTTP, auth.apiKey)
+		models, err := readAPIModelCatalogAt(ctx, process.catalogHTTP, auth.apiKey, process.catalogNow)
 		if err != nil {
 			return catalogFailure(ctx, atCatalogStage(catalogStageAPI, err))
 		}

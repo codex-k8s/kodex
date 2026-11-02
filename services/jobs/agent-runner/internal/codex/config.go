@@ -36,7 +36,21 @@ func ValidateRuntimeProfile(input model.Input) error {
 // validateRuntimeSelection accepts the pinned openai provider and bounded nonblank model, validates effective reasoning against the overlay and requires each declared tool to resolve to an executable regular file. It does not impose a local model catalog or execute the tools.
 // validateRuntimeSelection принимает pinned openai provider и ограниченную непустую модель, сверяет effective reasoning с overlay и требует разрешения каждого tool в исполняемый обычный файл. Не навязывает локальный model catalog и не запускает tools.
 func validateRuntimeSelection(input model.Input) error {
-	if runtimecontract.ValidateEffectiveReasoningEffort(input.ConfigOverlay, input.EffectiveReasoningEffort, input.ReasoningMode) != nil || input.Provider != "openai" || input.Model == "" || len(input.Model) > 128 || strings.TrimSpace(input.Model) != input.Model {
+	if runtimecontract.ValidateEffectiveReasoningEffort(input.ConfigOverlay, input.EffectiveReasoningEffort, input.ReasoningMode) != nil || input.Model == "" || len(input.Model) > 128 || strings.TrimSpace(input.Model) != input.Model {
+		return ErrRuntimeProfile
+	}
+	if input.Provider == "opencode" {
+		if input.ModelProvider == nil || input.ModelProvider.Validate() != nil || input.ConfigOverlay != "" ||
+			input.CodexSessionID != "" || len(input.EnvironmentTools) != 0 || input.EffectiveReasoningEffort != "" ||
+			input.ReasoningMode != runtimecontract.ReasoningUnsupported {
+			return ErrRuntimeProfile
+		}
+		if _, found := input.ModelProvider.Model(input.Model); !found {
+			return ErrRuntimeProfile
+		}
+		return nil
+	}
+	if input.Provider != "openai" || input.ModelProvider != nil {
 		return ErrRuntimeProfile
 	}
 	for _, tool := range input.EnvironmentTools {
@@ -140,6 +154,9 @@ type mcpServerConfig struct {
 // PrepareHomeWithAuth validates reasoning, volume pins, home containment and the authentication digest before publishing auth.json, then materializes and round-trip checks the typed TOML profile. It persists only approved nonsecret environment values, not projected secret values. Later failures can leave the already published auth snapshot: this is not an atomic whole-home transaction, and callers supply the trusted input/MCP endpoint.
 // PrepareHomeWithAuth проверяет reasoning, volume pins, home containment и auth digest до публикации auth.json, затем материализует и сверяет typed TOML profile обратным разбором. Сохраняет лишь approved nonsecret environment values, не secret projection values. Поздний отказ может оставить уже опубликованный auth snapshot: это не атомарная whole-home transaction, trusted input/MCP endpoint задаёт вызывающий.
 func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
+	if input.Provider != "" && input.Provider != "openai" || input.ModelProvider != nil {
+		return ErrRuntimeProfile
+	}
 	if input.WorkspaceStorage != nil && input.WorkspaceStorage.ValidateForInput(input) != nil {
 		return ErrRuntimeProfile
 	}

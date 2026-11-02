@@ -125,6 +125,7 @@ type AppServerProcess struct {
 	root                         string
 	allowProtocolCatalogFallback bool
 	catalogHTTP                  modelCatalogHTTPClient
+	catalogNow                   func() time.Time
 }
 
 // NewAppServerProcess requires absolute clean executable/root paths, creates the root when missing and
@@ -144,6 +145,7 @@ func NewAppServerProcess(binary, root string, allowProtocolCatalogFallback bool)
 		binary: binary, root: root,
 		allowProtocolCatalogFallback: allowProtocolCatalogFallback,
 		catalogHTTP:                  newModelCatalogHTTPClient(),
+		catalogNow:                   time.Now,
 	}, nil
 }
 

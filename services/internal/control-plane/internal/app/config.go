@@ -74,6 +74,8 @@ type Config struct {
 	InstanceID                      string        `env:"POD_UID"`
 	DefaultRuntimeProvider          string        `env:"CONTROL_PLANE_DEFAULT_RUNTIME_PROVIDER"`
 	DefaultRuntimeModel             string        `env:"CONTROL_PLANE_DEFAULT_RUNTIME_MODEL"`
+	ModelProviderConfigurationFile  string        `env:"CONTROL_PLANE_MODEL_PROVIDER_CONFIGURATION_FILE"`
+	ModelProviderDefaultModel       string        `env:"CONTROL_PLANE_MODEL_PROVIDER_DEFAULT_MODEL"`
 	DefaultProviderSecretName       string        `env:"CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_NAME"`
 	DefaultProviderSecretUID        string        `env:"CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_UID"`
 	DefaultProviderSecretVersion    string        `env:"CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_RESOURCE_VERSION"`
@@ -268,6 +270,9 @@ func (config Config) validate() error {
 	}
 	if config.EmailConfigurationFile != "" && (!filepath.IsAbs(config.EmailConfigurationFile) || filepath.Clean(config.EmailConfigurationFile) != config.EmailConfigurationFile) {
 		return startupFailure(stageControlPlaneEmailConfigurationPathIsInvalid, nil)
+	}
+	if !validModelProviderInput(config) {
+		return errors.New("model provider configuration input is invalid")
 	}
 	if config.PostgresTLSServerName == "" || net.ParseIP(config.PostgresTLSServerName) != nil ||
 		config.NATSTLSServerName == "" || net.ParseIP(config.NATSTLSServerName) != nil || config.NATSURL == "" ||

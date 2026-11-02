@@ -33,9 +33,15 @@ network=""
 frontend_attrs_json='{}'
 frontend_attrs_seen=false
 build_args=()
+target=""
 
 while (($# > 0)); do
   case "$1" in
+    --target)
+      (($# >= 2)) || fail "target value is required"
+      target="$2"
+      shift 2
+      ;;
     --builder)
       (($# >= 2)) || fail "для --builder нужно значение"
       builder="$2"
@@ -82,6 +88,7 @@ while (($# > 0)); do
   esac
 done
 
+[[ -z "$target" || "$target" == opencode-runtime ]] || fail "unsupported agent runner target"
 [[ "$builder" == docker || "$builder" == nerdctl ]] || fail "builder должен быть docker или nerdctl"
 [[ -n "$context" ]] || fail "build context не задан"
 [[ "$context" != -* ]] || fail "build context не должен интерпретироваться как builder option"
@@ -122,6 +129,7 @@ command+=(build)
 if [[ -n "$network" ]]; then
   command+=("--network=$network")
 fi
+[[ -z "$target" ]] || command+=(--target "$target")
 for build_arg in "${build_args[@]}"; do
   command+=(--build-arg "$build_arg")
 done
