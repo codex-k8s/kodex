@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	platformrepository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/repository/postgres/platform"
@@ -35,4 +36,12 @@ func configureModelProvider(repository *platformrepository.Repository, config Co
 		return err
 	}
 	return repository.ConfigureModelProvider(provider, config.ModelProviderDefaultModel)
+}
+
+// validModelProviderInput keeps optional file/default selection independent of legacy Codex model spelling.
+// validModelProviderInput отделяет optional file/default selection от legacy Codex model spelling.
+func validModelProviderInput(config Config) bool {
+	path := config.ModelProviderConfigurationFile
+	return (path == "" || filepath.IsAbs(path) && filepath.Clean(path) == path) &&
+		(config.ModelProviderDefaultModel == "" || path != "" && runtimecontract.ValidModelProviderModelID(config.ModelProviderDefaultModel))
 }

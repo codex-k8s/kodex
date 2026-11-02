@@ -176,9 +176,6 @@ func openCodeEnvironment(home string, config []byte, key, mcpToken string) ([]st
 	for _, name := range runtimeTransportEnvironmentNames {
 		values = append(values, name+"="+transport[name])
 	}
-	if ca := transport["SSL_CERT_FILE"]; ca != "" {
-		values = append(values, "NODE_EXTRA_CA_CERTS="+ca)
-	}
 	return values, nil
 }
 

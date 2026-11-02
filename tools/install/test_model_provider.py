@@ -19,7 +19,7 @@ def fixture():
     return dict(schema='kodex.model-provider/v1', managed_by='git', source_revision='a' * 40, engine='opencode',
                 engine_version='1.19.5', tool_mode='managed_mcp', provider_id='test-gateway',
                 base_url='https://gateway.example.invalid/v1', address_cidrs=['192.0.2.4/32'],
-                models=[dict(id='test-model', context_window_tokens=32768, maximum_output_tokens=1024)])
+                models=[dict(id='vendor/model-v1', context_window_tokens=32768, maximum_output_tokens=1024)])
 
 
 class ModelProviderTests(unittest.TestCase):
@@ -69,7 +69,7 @@ class ModelProviderTests(unittest.TestCase):
                     '--kubernetes-api-endpoint-cidrs', '192.0.2.11/32', '--kubernetes-api-endpoint-ports', '6443', '--ingress-class', 'nginx',
                     '--cluster-issuer', 'test-issuer', '--ingress-namespace', 'ingress-nginx', '--ingress-pod-name', 'ingress-nginx',
                     '--oidc-namespace', 'kodex-identity', '--oidc-pod-name', 'keycloak', '--oidc-pod-component', 'identity', '--oidc-target-port', '8443',
-                    '--model-provider-configuration', str(config), '--model-provider-default-model', 'test-model']
+                    '--model-provider-configuration', str(config), '--model-provider-default-model', 'vendor/model-v1']
             result = subprocess.run(args, cwd=ROOT, capture_output=True, timeout=150,
                                     env={**os.environ, 'GOMAXPROCS': '2', 'GOFLAGS': '-p=1', 'GOWORK': 'off'})
             self.assertEqual(result.returncode, 0, (result.stdout + result.stderr).decode()[-3000:])

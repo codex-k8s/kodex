@@ -10,8 +10,8 @@ import (
 	"net"
 	"net/netip"
 	"net/url"
+	"regexp"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 )
 
@@ -108,8 +108,7 @@ func (config ModelProviderConfiguration) Validate() error {
 	}
 	models := map[string]bool{}
 	for _, model := range config.Models {
-		if model.ID == "" || len(model.ID) > 128 || strings.TrimSpace(model.ID) != model.ID ||
-			strings.IndexFunc(model.ID, unicode.IsControl) >= 0 || !utf8.ValidString(model.ID) || models[model.ID] ||
+		if !ValidModelProviderModelID(model.ID) || models[model.ID] ||
 			model.ContextWindowTokens < 1 || model.ContextWindowTokens > 2_000_000 ||
 			model.MaximumOutputTokens < 1 || model.MaximumOutputTokens > model.ContextWindowTokens {
 			return ErrModelProviderConfiguration
@@ -290,4 +289,14 @@ func lowerHex(value string) bool {
 		}
 	}
 	return true
+}
+
+// modelProviderModelIDPattern matches the bounded catalog alphabet while retaining namespace slashes as data.
+// modelProviderModelIDPattern соответствует bounded catalog alphabet, сохраняя namespace slashes как данные.
+var modelProviderModelIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$`)
+
+// ValidModelProviderModelID validates one opaque namespaced alias without claiming remote model availability.
+// ValidModelProviderModelID проверяет один opaque namespaced alias без утверждения о remote model availability.
+func ValidModelProviderModelID(value string) bool {
+	return modelProviderModelIDPattern.MatchString(value)
 }

@@ -178,3 +178,35 @@ func TestOpenCodeAuthenticationFailureNeedsNoNativeSession(t *testing.T) {
 		t.Fatal("early rejected key lost authentication classification")
 	}
 }
+
+// TestOpenCodeEnvironmentRetainsManagedTransportOnly excludes unrelated secrets/config while keeping exact proxy and CA values unique.
+// TestOpenCodeEnvironmentRetainsManagedTransportOnly исключает unrelated secrets/config, сохраняя unique exact proxy и CA values.
+func TestOpenCodeEnvironmentRetainsManagedTransportOnly(t *testing.T) {
+	setRuntimeTransportFixture(t)
+	t.Setenv("UNRELATED_ROLE_SECRET", "synthetic-unrelated")
+	t.Setenv("OPENCODE_CONFIG", "/untrusted/config.json")
+	env, err := openCodeEnvironment("/private/home", []byte(`{}`), "synthetic-model-key", "synthetic-mcp-key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := map[string]string{}
+	for _, entry := range env {
+		key, value, ok := strings.Cut(entry, "=")
+		if !ok {
+			t.Fatal("malformed environment")
+		}
+		if _, exists := values[key]; exists {
+			t.Fatal("duplicate environment key")
+		}
+		values[key] = value
+	}
+	if _, ok := values["UNRELATED_ROLE_SECRET"]; ok {
+		t.Fatal("unrelated credential inherited")
+	}
+	if _, ok := values["OPENCODE_CONFIG"]; ok {
+		t.Fatal("foreign configuration inherited")
+	}
+	if values["HTTPS_PROXY"] != syntheticRuntimeProxy || values["NODE_EXTRA_CA_CERTS"] != runtimeTrustBundle || values[openCodeAPIKeyEnvironment] != "synthetic-model-key" {
+		t.Fatal("managed environment boundary changed")
+	}
+}

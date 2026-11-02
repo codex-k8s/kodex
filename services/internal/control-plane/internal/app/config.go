@@ -271,8 +271,7 @@ func (config Config) validate() error {
 	if config.EmailConfigurationFile != "" && (!filepath.IsAbs(config.EmailConfigurationFile) || filepath.Clean(config.EmailConfigurationFile) != config.EmailConfigurationFile) {
 		return startupFailure(stageControlPlaneEmailConfigurationPathIsInvalid, nil)
 	}
-	if config.ModelProviderConfigurationFile != "" && (!filepath.IsAbs(config.ModelProviderConfigurationFile) || filepath.Clean(config.ModelProviderConfigurationFile) != config.ModelProviderConfigurationFile) ||
-		config.ModelProviderDefaultModel != "" && (config.ModelProviderConfigurationFile == "" || !validRuntimeIdentifier(config.ModelProviderDefaultModel)) {
+	if !validModelProviderInput(config) {
 		return errors.New("model provider configuration input is invalid")
 	}
 	if config.PostgresTLSServerName == "" || net.ParseIP(config.PostgresTLSServerName) != nil ||
