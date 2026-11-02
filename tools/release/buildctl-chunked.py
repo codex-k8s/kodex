@@ -202,7 +202,18 @@ def main():
         proof = json.loads(published.stdout, object_pairs_hook=unique_object)
         require(proof.get("digest") == digest)
         require(metadata.read_bytes() == raw)
-        os.link(metadata, target, follow_symlinks=False)
+        stage = "metadata-handoff"
+        # Evidence и caller metadata могут находиться на разных файловых системах.
+        fd, temporary_name = tempfile.mkstemp(prefix=".chunked-metadata-", dir=target.parent)
+        temporary_metadata = Path(temporary_name)
+        try:
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(raw)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.link(temporary_metadata, target, follow_symlinks=False)
+        finally:
+            temporary_metadata.unlink(missing_ok=True)
         print("Chunked OCI publication verified: " + digest)
     except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
         receipt = {"state": "RECONCILIATION_REQUIRED", "stage": stage,

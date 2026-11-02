@@ -119,6 +119,20 @@ print(json.dumps({'digest':args[args.index('--expected-digest')+1],'reused':Fals
         self.assertTrue((evidence[0] / "image.tar").is_file())
         self.assertTrue((evidence[0] / "failure.json").is_file())
 
+    def test_metadata_handoff_across_filesystems_preserves_bytes(self):
+        if not Path('/dev/shm').is_dir():
+            self.skipTest('separate writable filesystem unavailable')
+        with tempfile.TemporaryDirectory(prefix='kodex-metadata-', dir='/dev/shm') as directory:
+            parent = Path(directory)
+            if parent.stat().st_dev == self.root.stat().st_dev:
+                self.skipTest('separate filesystem unavailable')
+            self.target = parent / 'metadata.json'
+            result = self.invoke()
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(self.target.read_text())['containerimage.digest'], DIGEST)
+            self.assertEqual(self.target.stat().st_mode & 0o777, 0o600)
+            self.assertFalse(list(parent.glob('.chunked-metadata-*')))
+
     def test_changed_tool_binary_is_rejected_before_execution(self):
         self.buildctl.write_text(self.buildctl.read_text() + "\n# changed source\n")
         result = self.invoke()
