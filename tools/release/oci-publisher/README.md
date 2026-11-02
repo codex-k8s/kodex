@@ -57,7 +57,9 @@ manifest/index descriptor; его descendants, включая attestations, не
 переписываться. Неизвестный/different digest закрывает результат.
 
 Metadata появляется у caller только после registry readback и остаётся побайтно
-исходной BuildKit metadata. Failure/timeout не является разрешением повторить
+исходной BuildKit metadata. Handoff создаёт новый private temporary file на
+файловой системе caller, выполняет fsync и atomic no-replace link; evidence
+может находиться на другом filesystem. Failure/timeout не является разрешением повторить
 весь import: следующий запуск сначала читает destination digest. Совпадение
 подтверждает прежний publish; другой digest даёт conflict. Ответ, потерянный
 после commit manifest, сверяется чтением. CLI не выводит upstream payload или
