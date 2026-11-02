@@ -377,6 +377,7 @@ func validProviderCredentialBoundary(config Config) bool {
 // RU: Флаг явного разрешения передаёт вызывающая сторона; этот предикат не выбирает среду и не обращается к хранилищу или сети.
 func validObjectStorageBoundary(config Config) bool {
 	return objectstorage.ValidEndpoint(config.ObjectStorageEndpoint, objectstorage.EndpointPolicy{
+		UsePathStyle:      config.ObjectStorageUsePathStyle,
 		AllowPlaintext:    config.ObjectStorageAllowInsecureLocal,
 		PlaintextHostname: "seaweedfs-s3.kodex-system.svc.cluster.local", PlaintextPort: "8333",
 	}) &&

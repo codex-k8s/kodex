@@ -1,0 +1,50 @@
+{
+  "images": {
+    "storage": "docker.io/chrislusf/seaweedfs:dev@sha256:9f3bb1fdd6605b85e7bbacf8fb64a5590116bb7003faba78355ac41f2817f715",
+    "registry": "docker.io/library/registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373",
+    "nginx": "docker.io/library/nginx:stable-alpine@sha256:0e52bd054126cdc040b1276c0af347aeb02a41b9cfe305d6094767ac30e97949",
+    "preparer": "docker.io/library/python:3.14-alpine@sha256:eb2c62658b8d51bff0acc408504b76521d02030de56a8a3c1e830083e89b89d2"
+  },
+  "storage": {
+    "enabled": false,
+    "authSecret": "",
+    "size": "20Gi",
+    "storageClass": "",
+    "ui": {
+      "enabled": false
+    },
+    "trustedProxyCIDRs": []
+  },
+  "registry": {
+    "enabled": false,
+    "authSecret": "",
+    "size": "30Gi",
+    "storageClass": "",
+    "writerUsername": "release-writer",
+    "readerUsername": "release-reader",
+    "repositoryPrefix": "kodex"
+  },
+  "pki": {
+    "mode": "existing",
+    "issuerName": "",
+    "issuerKind": "Issuer"
+  },
+  "exposure": {
+    "mode": "disabled",
+    "tlsMode": "managed",
+    "tlsSecret": "",
+    "sharedHost": "",
+    "s3Host": "",
+    "storageHost": "",
+    "registryHost": "",
+    "s3Prefix": "/s3",
+    "storagePrefix": "/storage",
+    "trustedProxyCIDRs": []
+  },
+  "ingress": {
+    "class": "traefik",
+    "namespace": "kube-system",
+    "podName": "traefik"
+  },
+  "credentialsRevision": "initial"
+}

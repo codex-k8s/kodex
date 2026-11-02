@@ -120,6 +120,7 @@ func validateConfig(value config) error {
 // RU: validObjectStorageBoundary допускает HTTPS либо явно включённый точный staging-адрес SeaweedFS.
 func validObjectStorageBoundary(value config) bool {
 	return objectstorage.ValidEndpoint(value.Endpoint, objectstorage.EndpointPolicy{
+		UsePathStyle:      value.UsePathStyle,
 		AllowPlaintext:    value.AllowInsecureLocal && value.Environment == "staging",
 		PlaintextHostname: "seaweedfs-s3.kodex-system.svc.cluster.local", PlaintextPort: "8333",
 	})

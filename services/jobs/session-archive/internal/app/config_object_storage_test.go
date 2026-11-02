@@ -22,7 +22,9 @@ func TestValidObjectStorageBoundary(t *testing.T) {
 		{name: "external plaintext", endpoint: "http://s3.example.test", local: true},
 		{name: "local plaintext without opt in", endpoint: "http://seaweedfs-s3.kodex-system.svc.cluster.local:8333"},
 		{name: "credential in endpoint", endpoint: "https://user:secret@s3.example.test"},
-		{name: "path in endpoint", endpoint: "https://s3.example.test/bucket"},
+		{name: "https path-style mount", endpoint: "https://s3.example.invalid/s3", valid: true},
+		{name: "noncanonical mount", endpoint: "https://s3.example.invalid/s3/../api"},
+		{name: "encoded mount", endpoint: "https://s3.example.invalid/%73%33"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

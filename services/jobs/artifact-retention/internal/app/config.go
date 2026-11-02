@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
+
+	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 )
 
 const (
@@ -97,7 +99,7 @@ func (config Config) validate() error {
 		return errors.New("artifact-retention identity is invalid")
 	}
 	endpoint, err := url.Parse(config.ObjectStorageEndpoint)
-	if err != nil || endpoint.Host == "" || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" || (endpoint.Path != "" && endpoint.Path != "/") {
+	if err != nil || endpoint.Host == "" || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" || !objectstorage.ValidEndpointPath(endpoint, config.ObjectStorageUsePathStyle) {
 		return errors.New("artifact-retention object storage endpoint is invalid")
 	}
 	if endpoint.Scheme != "https" && !(endpoint.Scheme == "http" && config.ObjectStorageAllowInsecureHTTP) {

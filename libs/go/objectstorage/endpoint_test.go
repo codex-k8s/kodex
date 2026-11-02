@@ -65,3 +65,33 @@ func TestValidEndpointRequiresCompletePlaintextOptIn(t *testing.T) {
 		}
 	}
 }
+
+// TestHTTPSMountPrefixRequiresPathStyle accepts only a canonical TLS mount chosen by deployment configuration.
+// RU: TestHTTPSMountPrefixRequiresPathStyle допускает лишь канонический TLS mount из конфигурации установки.
+func TestHTTPSMountPrefixRequiresPathStyle(t *testing.T) {
+	t.Parallel()
+	for _, value := range []struct {
+		name, endpoint  string
+		pathStyle, want bool
+	}{
+		{"single segment", "https://s3.example.invalid/s3", true, true},
+		{"nested mount", "https://s3.example.invalid/services/object-store", true, true},
+		{"root remains valid", "https://s3.example.invalid/", false, true},
+		{"explicit path style required", "https://s3.example.invalid/s3", false, false},
+		{"plaintext mount forbidden", "http://storage.example.invalid:8333/s3", true, false},
+		{"encoded mount", "https://s3.example.invalid/%73%33", true, false},
+		{"dot traversal", "https://s3.example.invalid/s3/../api", true, false},
+		{"encoded traversal", "https://s3.example.invalid/s3/%2e%2e/api", true, false},
+		{"duplicate slash", "https://s3.example.invalid/s3//api", true, false},
+		{"trailing slash", "https://s3.example.invalid/s3/", true, false},
+		{"query", "https://s3.example.invalid/s3?token=synthetic", true, false},
+		{"fragment", "https://s3.example.invalid/s3#fragment", true, false},
+	} {
+		t.Run(value.name, func(t *testing.T) {
+			policy := EndpointPolicy{UsePathStyle: value.pathStyle, AllowPlaintext: true, PlaintextHostname: "storage.example.invalid", PlaintextPort: "8333"}
+			if got := ValidEndpoint(value.endpoint, policy); got != value.want {
+				t.Fatalf("endpoint accepted=%v, want %v", got, value.want)
+			}
+		})
+	}
+}

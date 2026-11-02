@@ -117,6 +117,7 @@ func (value Config) validate() error {
 // RU: validObjectStorageBoundary проверяет форму адреса и допускает открытый транспорт лишь для явно выбранного точного локального сервиса.
 func validObjectStorageBoundary(config Config) bool {
 	return objectstorage.ValidEndpoint(config.ObjectStorageEndpoint, objectstorage.EndpointPolicy{
+		UsePathStyle:      true,
 		AllowPlaintext:    config.ObjectStorageAllowInsecureLocal,
 		PlaintextHostname: "seaweedfs-s3.kodex-system.svc.cluster.local", PlaintextPort: "8333",
 	})

@@ -28,10 +28,13 @@ const digestMetadataKey = "kodex-sha256"
 // used by one S3 adapter; validation forbids credentials embedded in the URL.
 // RU: Config содержит точный узел, бакет, регион и учётные данные одного
 // адаптера S3; проверка запрещает учётные данные внутри URL.
+// HTTPClient optionally supplies a caller-owned CA/transport policy; nil preserves the SDK default, and the caller owns cleanup.
+// RU: HTTPClient при необходимости задаёт CA/transport policy caller; nil сохраняет SDK default, cleanup принадлежит caller.
 type Config struct {
 	Endpoint, Region, Bucket string
 	AccessKeyID, SecretKey   string
 	UsePathStyle             bool
+	HTTPClient               aws.HTTPClient
 }
 
 // api narrows the SDK surface so store behavior can be tested without S3 IO.
@@ -71,10 +74,14 @@ func New(ctx context.Context, config Config) (*Store, error) {
 	if err := validateConfig(config); err != nil {
 		return nil, err
 	}
-	loaded, err := awsconfig.LoadDefaultConfig(ctx,
+	options := []func(*awsconfig.LoadOptions) error{
 		awsconfig.WithRegion(config.Region),
 		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(config.AccessKeyID, config.SecretKey, "")),
-	)
+	}
+	if config.HTTPClient != nil {
+		options = append(options, awsconfig.WithHTTPClient(config.HTTPClient))
+	}
+	loaded, err := awsconfig.LoadDefaultConfig(ctx, options...)
 	if err != nil {
 		return nil, objectstorage.ErrUnavailable
 	}
@@ -86,13 +93,13 @@ func New(ctx context.Context, config Config) (*Store, error) {
 }
 
 // validateConfig rejects missing credentials and endpoints with userinfo,
-// query, fragment or unexpected path before passing the URL to the SDK.
+// query, fragment or noncanonical/non-path-style mount before passing the URL to the SDK.
 // RU: validateConfig отклоняет отсутствие учётных данных и URL с userinfo,
-// query, fragment или лишним путём до передачи адреса в SDK.
+// query, fragment или неканоническим mount без HTTPS path-style до передачи в SDK.
 func validateConfig(config Config) error {
 	endpoint, err := url.Parse(config.Endpoint)
 	if err != nil || (endpoint.Scheme != "https" && endpoint.Scheme != "http") || endpoint.Host == "" ||
-		endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" || (endpoint.Path != "" && endpoint.Path != "/") ||
+		endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" || !objectstorage.ValidEndpointPath(endpoint, config.UsePathStyle) ||
 		config.Region == "" || config.Bucket == "" || config.AccessKeyID == "" || config.SecretKey == "" {
 		return objectstorage.ErrInvalid
 	}

@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/securefile"
+
+	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 )
 
 // maximumSpecBytes bounds each protected JSON specification before decoding.
@@ -288,7 +290,7 @@ func (value S3) Validate(environment string) error {
 	endpoint, err := url.Parse(value.Endpoint)
 	if err != nil || !namePattern.MatchString(value.Name) || value.Region == "" || value.Bucket == "" ||
 		value.AccessKeyID == "" || value.SecretAccessKey == "" || endpoint.User != nil || endpoint.Host == "" ||
-		(endpoint.Path != "" && endpoint.Path != "/") || endpoint.RawQuery != "" || endpoint.Fragment != "" {
+		!objectstorage.ValidEndpointPath(endpoint, value.UsePathStyle) || endpoint.RawQuery != "" || endpoint.Fragment != "" {
 		return errors.New("S3 credential configuration is invalid")
 	}
 	if endpoint.Scheme == "https" {
