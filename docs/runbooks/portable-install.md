@@ -4,8 +4,8 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.0.0
-updated: 2026-10-30
+version: 1.1.0
+updated: 2026-11-02
 ---
 
 # Опциональный профиль внешней инфраструктуры
@@ -73,13 +73,37 @@ S3 и IdP сохраняются. Все три app маршрута испол�
 точных /32 и /128, затем фиксирует forwarded scheme/host. IP strategy по XFF не
 включается. Смена IP proxy требует нового проверенного render.
 
-Оператор передаёт readback точного Traefik Deployment. В нём должны быть
-`--entryPoints.web.address=:80`, точный `forwardedHeaders.trustedIPs`, полный завершённый rollout, точные текущие Pod и
-EndpointSlice выбранного Service, отсутствие
-insecure trust, редиректа на websecure и неоднозначного static config. Этот код
-общий ingress controller не перенастраивает. Сетевая граница и фактический source
-после NAT должны быть проверены оператором; middleware — дополнительная защита,
-а не доказательство ограничения VM:80 firewall. SSH и сетевые маршруты не меняются.
+По умолчанию оператор передаёт readback точного Traefik Deployment с
+`--entryPoints.web.address=:80`, завершённым rollout и точным
+`forwardedHeaders.trustedIPs`. Опциональный `public_tls.ingress` допускает
+DaemonSet и отдельный container/backend port при прежнем HTTP Service port80:
+
+```json
+{
+  "controller_kind": "DaemonSet",
+  "entrypoint_port": 8000,
+  "proxy_protocol_trusted_cidrs": ["192.0.2.19/32"]
+}
+```
+
+Объект содержит ровно эти три поля. Без него прежний контракт сохраняется;
+пустой `proxy_protocol_trusted_cidrs` запрещает PROXY protocol. Непустой список
+задаёт точные transport peers отдельно от `trusted_proxy_cidrs` HTTPS proxy.
+Traefik принимает PROXY v1/v2 только от этих peers; insecure trust запрещён.
+Оператор обязан ограничить доступ к доверенному transport hop: общий relay,
+которому посторонние могут отправлять собственный PROXY header, не доказывает
+источник. Это отдельная сетевая проверка, не свойство JSON профиля.
+
+`--ingress-controller <name>` выбирает имя ресурса; его kind берётся из профиля.
+Прежний `--ingress-deployment` сохранён как alias. Проверка сверяет controller
+status, владельцев текущих Pod (Deployment→ReplicaSet→Pod либо DaemonSet→Pod),
+их исполняемую конфигурацию и полный EndpointSlice состав выбранного Service.
+Service port80 должен вести на закреплённый backend port. Не допускаются
+insecure trust, редирект на websecure или неоднозначный static config.
+Этот код общий ingress controller не перенастраивает. Сетевая граница и
+фактический source после NAT должны быть проверены оператором; middleware —
+дополнительная защита, а не доказательство ограничения VM:80 firewall.
+SSH и сетевые маршруты не меняются.
 
 External identity не зависит от bundled OAuth2 Proxy middleware. Browser session,
 API authorization, CSRF/Origin и server-side revocation остаются в gateway.
@@ -177,3 +201,9 @@ API/WS/SSE/upload, обход proxy, spoofed headers и restart. Наличие 
 Context7 проверен для Traefik и go-oidc; наличие документации более новой версии
 не подтверждает возможности установленного controller. Версию controller и
 совместимость нужно закрепить в release lock конкретной установки.
+
+Дополнительно проверены через Context7 официальные
+[Traefik v3.7.15 entrypoints](https://github.com/traefik/traefik/blob/v3.7.15/docs/content/reference/install-configuration/entrypoints.md)
+и [ipAllowList](https://github.com/traefik/traefik/blob/v3.7.15/docs/content/reference/routing-configuration/http/middlewares/ipallowlist.md):
+раздельные trustedIPs для forwarded headers и PROXY protocol, RemoteAddr без XFF
+ipStrategy. Локальные synthetic проверки не доказывают live source restrictions.

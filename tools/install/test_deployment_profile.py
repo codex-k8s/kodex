@@ -134,6 +134,48 @@ class ProfileTest(unittest.TestCase):
         wrong = copy.deepcopy(slices); wrong[0]["ports"][0]["port"] = 443
         with self.assertRaises(Rejected): verify_proxy_pods(controller, [pod], [rs], service, wrong)
 
+    def test_daemonset_backend_and_transport_are_explicit_and_fail_closed(self):
+        profile=copy.deepcopy(EXTERNAL)
+        profile["public_tls"]["ingress"]={"controller_kind":"DaemonSet","entrypoint_port":8000,
+            "proxy_protocol_trusted_cidrs":["192.0.2.19/32"]}
+        controller={"kind":"DaemonSet","metadata":{"uid":"daemon","generation":2},
+            "status":{"observedGeneration":2,"desiredNumberScheduled":2,"currentNumberScheduled":2,
+                      "updatedNumberScheduled":2,"numberReady":2,"numberAvailable":2},
+            "spec":{"template":{"metadata":{"labels":{"app":"proxy"}},"spec":{"containers":[{
+                "name":"traefik","image":"traefik@sha256:"+"1"*64,
+                "ports":[{"name":"web","containerPort":8000}],"args":["--entryPoints.web.address=:8000/tcp",
+                    "--entryPoints.web.forwardedHeaders.trustedIPs=192.0.2.18/32,2001:db8::18/128",
+                    "--entryPoints.web.proxyProtocol.trustedIPs=192.0.2.19/32"]}]}}}}
+        verify_proxy_controller(controller,profile)
+        pods=[{"metadata":{"uid":"pod"+str(i),"ownerReferences":[{"kind":"DaemonSet","uid":"daemon","controller":True}]},
+            "spec":copy.deepcopy(controller["spec"]["template"]["spec"]),
+            "status":{"phase":"Running","conditions":[{"type":"Ready","status":"True"}]}}for i in range(2)]
+        service={"metadata":{"name":"proxy"},"spec":{"selector":{"app":"proxy"},
+            "ports":[{"name":"web","port":80,"targetPort":"web"}]}}
+        slices=[{"metadata":{"labels":{"kubernetes.io/service-name":"proxy"}},"ports":[{"name":"web","port":8000}],
+            "endpoints":[{"conditions":{"ready":True},"targetRef":{"kind":"Pod","uid":p["metadata"]["uid"]}}for p in pods]}]
+        verify_proxy_pods(controller,pods,[],service,slices,profile)
+        with self.assertRaises(Rejected):verify_proxy_controller(controller,EXTERNAL)
+        for status_key in ("updatedNumberScheduled","numberReady","numberAvailable","desiredNumberScheduled"):
+            wrong=copy.deepcopy(controller);wrong["status"][status_key]=0
+            with self.subTest(status_key=status_key),self.assertRaises(Rejected):verify_proxy_controller(wrong,profile)
+        for flag in ("--entryPoints.web.proxyProtocol.insecure=true","--entryPoints.web.proxyProtocol=true"):
+            wrong=copy.deepcopy(controller);wrong["spec"]["template"]["spec"]["containers"][0]["args"].append(flag)
+            with self.subTest(flag=flag),self.assertRaises(Rejected):verify_proxy_controller(wrong,profile)
+        wrong=copy.deepcopy(profile);wrong["public_tls"]["ingress"]["proxy_protocol_trusted_cidrs"]=["192.0.2.20/32"]
+        with self.assertRaises(Rejected):verify_proxy_controller(controller,wrong)
+        wrong=copy.deepcopy(pods);wrong[0]["metadata"]["ownerReferences"][0]["uid"]="foreign"
+        with self.assertRaises(Rejected):verify_proxy_pods(controller,wrong,[],service,slices,profile)
+        wrong=copy.deepcopy(pods);wrong[0]["spec"]["containers"][0]["args"]=["--entryPoints.web.proxyProtocol.insecure=true"]
+        with self.assertRaises(Rejected):verify_proxy_pods(controller,wrong,[],service,slices,profile)
+        wrong=copy.deepcopy(slices);wrong[0]["ports"][0]["port"]=80
+        with self.assertRaises(Rejected):verify_proxy_pods(controller,pods,[],service,wrong,profile)
+        for key,value in (("controller_kind","StatefulSet"),("entrypoint_port",False),("entrypoint_port",0),
+                          ("proxy_protocol_trusted_cidrs",["192.0.2.0/24"]),
+                          ("proxy_protocol_trusted_cidrs",["192.0.2.19/32"]*2)):
+            wrong=copy.deepcopy(profile);wrong["public_tls"]["ingress"][key]=value
+            with self.subTest(key=key,value=value),self.assertRaises(Rejected):validate(wrong)
+
     def test_profile_is_sealed_in_render(self):
         result = transform(self.renders["web-only"], EXTERNAL, "app.example.invalid")
         result[-1]["data"].update({"source.sha": "1" * 40, "release-lock.sha256": "1" * 64,
