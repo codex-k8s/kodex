@@ -164,7 +164,12 @@ def main():
     environment = {key: value for key, value in os.environ.items() if key in (
         "PATH", "HOME", "TMPDIR", "DOCKER_CONFIG", "SSL_CERT_FILE", "SSL_CERT_DIR",
         "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy")}
-    root = Path(tempfile.mkdtemp(prefix=".chunked-oci-", dir=target.parent))
+    # Caller может удалить build metadata directory в EXIT trap: evidence живёт отдельно.
+    evidence = Path(os.environ["KODEX_RELEASE_CHUNKED_CONFIG"]).parent
+    info = evidence.lstat()
+    require(stat.S_ISDIR(info.st_mode) and info.st_uid == os.getuid()
+            and stat.S_IMODE(info.st_mode) == 0o700)
+    root = Path(tempfile.mkdtemp(prefix=".chunked-oci-", dir=evidence))
     stage = "build"
     digest = None
     try:
