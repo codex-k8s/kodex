@@ -34,6 +34,15 @@ check-openapi-toolchain:
 test-go-toolchain-contract: check-go-toolchain
 	@./scripts/tests/go-toolchain-contract-test.sh
 
+test-portable-services:
+	@timeout 90s python3 -B scripts/tests/portable-services-test.py
+
+.PHONY: test-portable-services
+
+.PHONY: test-portable-services-native
+test-portable-services-native:
+	@timeout 300s python3 -B scripts/tests/portable-services-native-test.py
+
 test-web-only-release:
 	@timeout 180s python3 -B tools/install/test_model_provider.py
 	@timeout 30s node --test tools/release/build-release-inventory.test.mjs tools/release/build-release-pool.test.mjs

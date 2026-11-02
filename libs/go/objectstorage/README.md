@@ -43,3 +43,10 @@ HTTPS и не является сетевым разрешением или пр
 Unit-тесты не требуют сети. Проверки реального S3/SeaweedFS используют
 отдельный явно настроенный disposable-контур и не считаются выполненными
 по одному успешному unit-запуску.
+
+Для отдельного HTTPS mount, например `https://storage.example.invalid/s3`,
+явно выбирается `EndpointPolicy.UsePathStyle=true` и `s3store.Config.UsePathStyle=true`.
+Корневые endpoints сохраняют прежнее поведение; HTTP prefix, virtual-hosted
+режим с prefix и неканонические/encoded segments отвергаются до I/O.
+Необязательный `s3store.Config.HTTPClient` задаёт transport/CA caller; nil
+сохраняет стандартный клиент AWS SDK. Проверка адреса не выдаёт сетевые права.

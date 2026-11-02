@@ -1,0 +1,65 @@
+{{- include "portable.validate" . -}}
+{{- if or .Values.storage.enabled .Values.registry.enabled }}
+{{- if eq .Values.pki.mode "isolated" }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ .Release.Name }}-selfsigned
+  labels: {{- include "portable.labels" . | nindent 4 }}
+spec: {selfSigned: {}}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Release.Name }}-root
+  labels: {{- include "portable.labels" . | nindent 4 }}
+spec:
+  isCA: true
+  commonName: Kodex isolated portable services
+  secretName: {{ .Release.Name }}-root
+  duration: 8760h
+  renewBefore: 720h
+  privateKey: {algorithm: ECDSA, size: 256}
+  issuerRef: {name: {{ .Release.Name }}-selfsigned, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ .Release.Name }}-ca
+  labels: {{- include "portable.labels" . | nindent 4 }}
+spec:
+  ca: {secretName: {{ .Release.Name }}-root}
+---
+{{- end }}
+{{- range $component, $enabled := dict "storage" .Values.storage.enabled "registry" .Values.registry.enabled }}
+{{- if $enabled }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $.Release.Name }}-{{ $component }}-tls
+  labels: {{- include "portable.labels" $ | nindent 4 }}
+spec:
+  secretName: {{ $.Release.Name }}-{{ $component }}-tls
+  duration: 720h
+  renewBefore: 168h
+  privateKey: {algorithm: ECDSA, size: 256}
+  dnsNames:
+    - {{ $.Release.Name }}-{{ $component }}.{{ $.Release.Namespace }}.svc.cluster.local
+  issuerRef:
+    {{- if eq $.Values.pki.mode "isolated" }}
+    name: {{ $.Release.Name }}-ca
+    kind: Issuer
+    {{- else }}
+    name: {{ $.Values.pki.issuerName }}
+    kind: {{ $.Values.pki.issuerKind }}
+    {{- end }}
+---
+{{- end }}
+{{- end }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}
+  labels: {{- include "portable.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+{{- end }}

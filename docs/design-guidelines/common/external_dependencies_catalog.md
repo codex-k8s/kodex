@@ -112,3 +112,11 @@ direct-production prototype registry и hardcoded installation domain не вх�
 Версии developer tools для role images закрепляются в Dockerfile и release
 lock. Их наличие в образе конкретной роли не превращает соответствующую внешнюю
 систему в core dependency Kodex.
+
+## Опциональные portable services (#1986)
+
+Самостоятельный Helm unit `infra/portable-services` использует pinned upstream candidate SeaweedFS4.51/54777d7fb,
+Distribution2.8.3, nginx1.30.6 и Python3.14.10. Все четыре образа закреплены
+по OCI digest в chart values; проверки TLS/auth/prefix описаны в README unit.
+Storage/registry выключены по умолчанию, существующие внешние зависимости
+и registry admission/promotion identities сохраняются.

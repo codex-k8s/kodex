@@ -207,3 +207,11 @@ Context7 проверен для Traefik и go-oidc; наличие докуме
 и [ipAllowList](https://github.com/traefik/traefik/blob/v3.7.15/docs/content/reference/routing-configuration/http/middlewares/ipallowlist.md):
 раздельные trustedIPs для forwarded headers и PROXY protocol, RemoteAddr без XFF
 ipStrategy. Локальные synthetic проверки не доказывают live source restrictions.
+
+### Один внешний адрес для optional services
+
+[Helm unit portable services](../../infra/portable-services/README.md) (#1986)
+размещает S3 API и storage UI на явных отдельных prefixes, OCI на `/v2/`.
+Он применяется отдельным infrastructure prerequisite до платформы. Для S3
+нужны HTTPS endpoint с prefix и path-style; отдельные hostname и внешние
+службы остаются штатной альтернативой. Secret values не входят в Helm values.

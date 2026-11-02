@@ -1,0 +1,14 @@
+{
+  "storage": {
+    "image": "docker.io/chrislusf/seaweedfs:dev@sha256:9f3bb1fdd6605b85e7bbacf8fb64a5590116bb7003faba78355ac41f2817f715",
+    "upstream_source_sha": "54777d7fb91c0ad9d63ae3d7c521f193f0c8c638",
+    "upstream_fix_sha": "ab204a03e60f61c7293ba62ae939c9a7d540deb1",
+    "state": "PINNED_UNRELEASED_UPSTREAM_CANDIDATE",
+    "reported_version": "4.51"
+  },
+  "other_images": {
+    "registry": "docker.io/library/registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373",
+    "nginx": "docker.io/library/nginx:stable-alpine@sha256:0e52bd054126cdc040b1276c0af347aeb02a41b9cfe305d6094767ac30e97949",
+    "preparer": "docker.io/library/python:3.14-alpine@sha256:eb2c62658b8d51bff0acc408504b76521d02030de56a8a3c1e830083e89b89d2"
+  }
+}

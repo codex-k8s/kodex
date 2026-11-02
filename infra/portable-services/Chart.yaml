@@ -1,0 +1,6 @@
+apiVersion: v2
+name: kodex-portable-services
+description: Optional isolated storage and bootstrap registry with exact HTTPS routes
+type: application
+version: 0.1.0
+appVersion: "4.51-54777d7fb"

@@ -1,0 +1,96 @@
+{{- if and (ne .Values.exposure.mode "disabled") (or .Values.storage.enabled .Values.registry.enabled) }}
+{{- $root := . -}}
+{{- $external := eq .Values.exposure.tlsMode "external" -}}
+{{- if $external }}
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ .Release.Name }}-source
+  labels: {{- include "portable.labels" . | nindent 4 }}
+spec:
+  ipAllowList:
+    sourceRange: {{ .Values.exposure.trustedProxyCIDRs | toJson }}
+---
+{{- end }}
+{{- $routes := list -}}
+{{- if .Values.storage.enabled -}}
+{{- $routes = append $routes (dict "name" "s3" "component" "storage" "port" 443 "host" .Values.exposure.s3Host "prefix" .Values.exposure.s3Prefix "strip" true) -}}
+{{- end -}}
+{{- if .Values.storage.ui.enabled -}}
+{{- $routes = append $routes (dict "name" "console" "component" "storage" "port" 23646 "host" .Values.exposure.storageHost "prefix" .Values.exposure.storagePrefix "strip" false) -}}
+{{- end -}}
+{{- if .Values.registry.enabled -}}
+{{- $routes = append $routes (dict "name" "registry" "component" "registry" "port" 443 "host" .Values.exposure.registryHost "prefix" "/v2" "strip" false) -}}
+{{- end -}}
+{{- range $route := $routes }}
+{{- $host := $route.host -}}
+{{- $shared := eq $root.Values.exposure.mode "shared_host" -}}
+{{- if $shared -}}{{- $host = $root.Values.exposure.sharedHost -}}{{- end }}
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ $root.Release.Name }}-{{ $route.name }}-origin
+  labels: {{- include "portable.labels" $root | nindent 4 }}
+spec:
+  headers:
+    customRequestHeaders:
+      X-Forwarded-Proto: https
+      X-Forwarded-Host: {{ $host | quote }}
+      X-Forwarded-Port: "443"
+      X-Forwarded-Prefix: {{ if and $shared (eq $route.name "s3") }}{{ $route.prefix | quote }}{{ else }}""{{ end }}
+      {{- if ne $route.name "console" }}
+      Cookie: ""
+      {{- end }}
+---
+{{- if and $shared $route.strip }}
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ $root.Release.Name }}-{{ $route.name }}-strip
+  labels: {{- include "portable.labels" $root | nindent 4 }}
+spec:
+  stripPrefix: {prefixes: [{{ $route.prefix | quote }}]}
+---
+{{- end }}
+apiVersion: traefik.io/v1alpha1
+kind: ServersTransport
+metadata:
+  name: {{ $root.Release.Name }}-{{ $route.name }}
+  labels: {{- include "portable.labels" $root | nindent 4 }}
+spec:
+  serverName: {{ $root.Release.Name }}-{{ $route.component }}.{{ $root.Release.Namespace }}.svc.cluster.local
+  rootCAsSecrets: [{{ $root.Release.Name }}-{{ $route.component }}-tls]
+  forwardingTimeouts: {dialTimeout: 5s, responseHeaderTimeout: 60s, idleConnTimeout: 90s}
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: {{ $root.Release.Name }}-{{ $route.name }}
+  labels: {{- include "portable.labels" $root | nindent 4 }}
+  annotations: {kubernetes.io/ingress.class: {{ $root.Values.ingress.class | quote }}}
+spec:
+  entryPoints: [{{ if $external }}web{{ else }}websecure{{ end }}]
+  {{- if not $external }}
+  tls: {secretName: {{ $root.Values.exposure.tlsSecret }}}
+  {{- end }}
+  routes:
+    - kind: Rule
+      priority: 1000
+      match: Host(`{{ $host }}`){{ if or $shared (eq $route.name "registry") }} && (Path(`{{ $route.prefix }}`) || PathPrefix(`{{ $route.prefix }}/`)){{ end }}
+      middlewares:
+        {{- if $external }}
+        - {name: {{ $root.Release.Name }}-source}
+        {{- end }}
+        {{- if and $shared $route.strip }}
+        - {name: {{ $root.Release.Name }}-{{ $route.name }}-strip}
+        {{- end }}
+        - {name: {{ $root.Release.Name }}-{{ $route.name }}-origin}
+      services:
+        - name: {{ $root.Release.Name }}-{{ $route.component }}
+          port: {{ $route.port }}
+          scheme: https
+          passHostHeader: true
+          serversTransport: {{ $root.Release.Name }}-{{ $route.name }}
+---
+{{- end }}
+{{- end }}
