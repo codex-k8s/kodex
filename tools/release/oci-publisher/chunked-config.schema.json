@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "buildctl", "publisher", "chunk_bytes", "max_archive_bytes", "timeout_seconds", "ca_file"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "buildctl": {"$ref": "#/definitions/tool"},
+    "publisher": {"$ref": "#/definitions/tool"},
+    "chunk_bytes": {"type": "integer", "minimum": 65536, "maximum": 16777216},
+    "max_archive_bytes": {"type": "integer", "minimum": 1048576, "maximum": 8589934592},
+    "timeout_seconds": {"type": "integer", "minimum": 5, "maximum": 600},
+    "ca_file": {"type": "string", "pattern": "^$|^/"}
+  },
+  "definitions": {
+    "tool": {
+      "type": "object", "additionalProperties": false, "required": ["path", "sha256"],
+      "properties": {"path": {"type": "string", "pattern": "^/"}, "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}
+    }
+  }
+}

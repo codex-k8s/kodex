@@ -34,6 +34,11 @@ check-openapi-toolchain:
 test-go-toolchain-contract: check-go-toolchain
 	@./scripts/tests/go-toolchain-contract-test.sh
 
+.PHONY: test-oci-publisher
+test-oci-publisher:
+	@cd tools/release/oci-publisher && env -u GOFLAGS GOENV=off GOWORK=off timeout 120s go test -count=1 -timeout=90s ./...
+	@timeout 60s python3 -B tools/release/buildctl-chunked-test.py
+
 test-portable-services:
 	@timeout 90s python3 -B scripts/tests/portable-services-test.py
 
