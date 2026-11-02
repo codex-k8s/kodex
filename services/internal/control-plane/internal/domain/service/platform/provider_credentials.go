@@ -231,7 +231,15 @@ func (service *Service) AuthorizeProviderAccountAPIKey(
 	attemptRef := reservation.AttemptRef
 	credentialCopy := append([]byte(nil), apiKey...)
 	defer clear(credentialCopy)
-	descriptor, masked, err := service.providerCredentialMaterializer.MaterializeAPIKey(ctx, attemptRef, accountRef, credentialCopy)
+	var descriptor entity.ProviderCredentialDescriptor
+	var masked string
+	if reservation.DefinitionKey == "" || reservation.DefinitionKey == "openai-codex" {
+		descriptor, masked, err = service.providerCredentialMaterializer.MaterializeAPIKey(ctx, attemptRef, accountRef, credentialCopy)
+	} else if gateway, ok := service.providerCredentialMaterializer.(gatewayCredentialMaterializer); ok {
+		descriptor, masked, err = gateway.MaterializeGatewayAPIKey(ctx, attemptRef, accountRef, reservation.DefinitionKey, credentialCopy)
+	} else {
+		err = errs.ErrUnavailable
+	}
 	if err != nil {
 		return entity.ProviderAccount{}, errors.Join(errs.ErrUnavailable, err)
 	}
@@ -381,4 +389,12 @@ func providerAccountResult(result command.Result, err error) (entity.ProviderAcc
 		return entity.ProviderAccount{}, errs.ErrUnavailable
 	}
 	return *result.ProviderAccount, nil
+}
+
+// gatewayCredentialMaterializer keeps the optional gateway secret kind distinct from legacy credentials.
+// gatewayCredentialMaterializer отделяет optional gateway secret kind от legacy credentials.
+type gatewayCredentialMaterializer interface {
+	// MaterializeGatewayAPIKey binds key material to an owner-selected provider definition.
+	// MaterializeGatewayAPIKey связывает ключ с owner-selected provider definition.
+	MaterializeGatewayAPIKey(context.Context, string, string, string, []byte) (entity.ProviderCredentialDescriptor, string, error)
 }

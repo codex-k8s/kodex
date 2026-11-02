@@ -5,6 +5,19 @@ package runtimecontract
 type RuntimeProxyAccess struct {
 	WebAccess      RuntimeWebAccess
 	ProviderAccess bool
+	ModelProvider  *ModelProviderRoute
+}
+
+// ProviderAllowsRequest applies the configured gateway route or the unchanged built-in provider registry.
+// ProviderAllowsRequest применяет configured gateway route либо прежний встроенный реестр провайдера.
+func (access RuntimeProxyAccess) ProviderAllowsRequest(host, path, method string) bool {
+	if !access.ProviderAccess {
+		return false
+	}
+	if access.ModelProvider != nil {
+		return access.ModelProvider.AllowsRequest(host, path, method)
+	}
+	return RuntimeProviderAllowsRequest(host, path, method)
 }
 
 // RuntimeProviderAllowsHost matches only the three canonical provider hostnames; it performs no DNS resolution and grants no user web access.

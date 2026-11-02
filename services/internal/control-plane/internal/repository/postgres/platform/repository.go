@@ -55,6 +55,8 @@ type Repository struct {
 	trustedCluster                  bool
 	defaultRuntimeProvider          string
 	defaultRuntimeModel             string
+	modelProvider                   *runtimecontract.ModelProviderConfiguration
+	modelProviderDefaultModel       string
 	providerCredential              ProviderCredentialConfig
 	roleImages                      RoleImageConfig
 	objects                         objectstorage.Store
@@ -236,6 +238,9 @@ func (repository *Repository) bootstrapOnce(ctx context.Context) (failure error)
 	if err := tx.QueryRow(ctx, queryRepositoryBootstrapSelectInstallationSingleton).Scan(&bootstrappedAt); err != nil {
 		return bootstrapFailure("lock installation bootstrap", err)
 	}
+	if err := repository.reconcileModelProvider(ctx, tx); err != nil {
+		return err
+	}
 	if bootstrappedAt != nil {
 		if repository.providerCredential.SecretName != "" {
 			if err := repository.reconcileProviderCredential(ctx, tx); err != nil {
@@ -311,7 +316,7 @@ func (repository *Repository) bootstrapOnce(ctx context.Context) (failure error)
 			return err
 		}
 		if err := tx.QueryRow(ctx, queryRepositoryBootstrapInsertProviderAccount,
-			providerAccountRef, organizationID, systemSubjectID).Scan(&providerAccountID); err != nil {
+			providerAccountRef, organizationID, systemSubjectID, repository.defaultProviderDefinitionKey(), "default-"+repository.defaultProviderDefinitionKey()).Scan(&providerAccountID); err != nil {
 			return bootstrapFailure("seed provider account", err)
 		}
 		providerCredentialRef, err := newRef("pcr")
@@ -349,10 +354,10 @@ func (repository *Repository) bootstrapOnce(ctx context.Context) (failure error)
 	}
 	var agentID string
 	if err := tx.QueryRow(ctx, queryRepositoryBootstrapInsertAgentsRefSystemKeyPurpose,
-		agentRef, organizationID, systemRoleID, defaultRuntimeKey).Scan(&agentID); err != nil {
+		agentRef, organizationID, systemRoleID, repository.defaultRuntimeProfileKey()).Scan(&agentID); err != nil {
 		return bootstrapFailure("create system assistant", err)
 	}
-	defaultRuntime, err := resolveEnabledRuntime(ctx, tx, defaultRuntimeKey)
+	defaultRuntime, err := resolveEnabledRuntime(ctx, tx, repository.defaultRuntimeProfileKey())
 	if err != nil {
 		return bootstrapFailure("resolve system assistant runtime", err)
 	}
@@ -537,7 +542,7 @@ func compareIntegrationDefinitionVersions(left, right string) (int, error) {
 func (repository *Repository) reconcileProviderCredential(ctx context.Context, tx pgx.Tx) error {
 	var organizationID, accountID, currentCredentialID, secretName, secretUID, secretResourceVersion, contentSHA256 string
 	var revisionNumber int64
-	if err := tx.QueryRow(ctx, queryProviderCredentialGetCurrentForReconcile).Scan(
+	if err := tx.QueryRow(ctx, queryProviderCredentialGetCurrentForReconcile, "default-"+repository.defaultProviderDefinitionKey()).Scan(
 		&organizationID,
 		&accountID,
 		&currentCredentialID,

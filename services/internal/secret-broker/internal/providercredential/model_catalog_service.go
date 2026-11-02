@@ -3,6 +3,7 @@ package providercredential
 import (
 	"context"
 	"errors"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"time"
 
 	kubernetesstore "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/kubernetes"
@@ -16,7 +17,9 @@ import (
 // владельцем credential и обнуляет копию, затем проверяет время и согласованность
 // method/source/failure/capabilities. Доступ account и token refresh не выдаются; неверный или частичный
 // результат становится безопасным отказом только с metadata.
-func (service *Service) ObserveModelCatalog(ctx context.Context, accountRef string, descriptor kubernetesstore.ProviderCredentialDescriptor, method string) (ModelCatalog, error) {
+// ObserveModelCatalogForDefinition verifies owner-selected engine affinity before reading or dispatching secret material.
+// ObserveModelCatalogForDefinition проверяет owner-selected engine affinity до чтения и dispatch secret material.
+func (service *Service) ObserveModelCatalogForDefinition(ctx context.Context, accountRef string, descriptor kubernetesstore.ProviderCredentialDescriptor, method, definitionKey string) (ModelCatalog, error) {
 	if ctx == nil || service == nil || service.lifecycle.Err() != nil || ctx.Err() != nil {
 		return ModelCatalog{}, errors.New("provider model catalog lifecycle is unavailable")
 	}
@@ -33,7 +36,20 @@ func (service *Service) ObserveModelCatalog(ctx context.Context, accountRef stri
 		return catalogFailure(ctx, atCatalogStage(catalogStageCredential, err))
 	}
 	defer clear(raw)
-	result, err := service.appServer.ObserveModelCatalog(ctx, raw, method)
+	var result ModelCatalog
+	if definitionKey != "" && definitionKey != "openai-codex" {
+		if method != CatalogMethodAPIKey || service.modelProvider == nil || definitionKey != service.modelProvider.DefinitionKey() {
+			return catalogFailure(ctx, errModelCatalogUnverified)
+		}
+		key, decodeErr := runtimecontract.DecodeGatewayProviderAuthentication(raw, definitionKey)
+		clear(key)
+		if decodeErr != nil {
+			return catalogFailure(ctx, errModelCatalogUnverified)
+		}
+		result, err = service.observeGatewayCatalog(ctx, raw)
+	} else {
+		result, err = service.appServer.ObserveModelCatalog(ctx, raw, method)
+	}
 	if err != nil {
 		return catalogFailure(ctx, err)
 	}
@@ -61,4 +77,10 @@ func (service *Service) ObserveModelCatalog(ctx context.Context, accountRef stri
 		}
 	}
 	return result, nil
+}
+
+// ObserveModelCatalog preserves the legacy definition boundary for callers without gateway support.
+// ObserveModelCatalog сохраняет legacy definition boundary для callers без gateway support.
+func (service *Service) ObserveModelCatalog(ctx context.Context, accountRef string, descriptor kubernetesstore.ProviderCredentialDescriptor, method string) (ModelCatalog, error) {
+	return service.ObserveModelCatalogForDefinition(ctx, accountRef, descriptor, method, "openai-codex")
 }

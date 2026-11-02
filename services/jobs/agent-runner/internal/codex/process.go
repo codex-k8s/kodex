@@ -834,6 +834,9 @@ func RequiredMCPToolNames(input model.Input) []string {
 // и parent-death TERM, затем передаёт владение stdio и запуском. Отменой context управляет окружающий
 // pipeline, а не CommandContext в этом конструкторе.
 func startAppServer(input model.Input, mcpProxyToken string) (*appServer, error) {
+	if input.Provider != "openai" || input.ModelProvider != nil {
+		return nil, ErrRuntimeProfile
+	}
 	command := exec.Command("/usr/local/bin/codex", "app-server", "--strict-config", "--listen", "stdio://")
 	command.Dir = workingDirectory(input)
 	command.Env = appServerEnvironment(input, mcpProxyToken)

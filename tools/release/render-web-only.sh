@@ -22,6 +22,7 @@ usage() {
     '  --oidc-namespace <name> --oidc-pod-name <label-value>' \
     '  --oidc-pod-component <label-value> --oidc-target-port <port>' \
     '  [--deployment-profile <deployment-profile.json>]' \
+    '  [--model-provider-configuration <json> --model-provider-default-model <model>]'  \
     '  [--disable-observability]' \
     '  [--profile <web-only|web-with-mattermost>]' \
     '  [--ssh-compose-connection <public-connection.json>; repeatable]' \
@@ -29,6 +30,9 @@ usage() {
 }
 
 deployment_profile=""
+model_provider_configuration=""
+model_provider_default_model=""
+agent_runner_component=agent-runner
 lock_file=""
 lock_sha256=""
 output=""
@@ -58,6 +62,8 @@ ssh_compose_connections=()
 
 while (($# > 0)); do
   case "$1" in
+    --model-provider-configuration) model_provider_configuration="${2:-}"; shift 2 ;;
+    --model-provider-default-model) model_provider_default_model="${2:-}"; shift 2 ;;
     --deployment-profile) deployment_profile="${2:-}"; shift 2 ;;
     --lock) lock_file="${2:-}"; shift 2 ;;
     --lock-sha256) lock_sha256="${2:-}"; shift 2 ;;
@@ -92,6 +98,12 @@ done
 
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 repository_root=$(cd -- "$script_directory/../.." && pwd -P)
+if [[ -n "$model_provider_configuration" ]]; then
+  python3 "$repository_root/tools/install/model-provider.py" validate --configuration "$model_provider_configuration" >/dev/null || fail 'model provider configuration is invalid'
+  agent_runner_component=agent-runner-opencode
+elif [[ -n "$model_provider_default_model" ]]; then
+  fail 'model provider default requires configuration'
+fi
 if [[ -n "$deployment_profile" ]]; then
   python3 "$repository_root/tools/install/deployment_profile.py" validate --profile "$deployment_profile" ||
     fail 'deployment profile is invalid'
@@ -246,8 +258,8 @@ node_pull=$(jq -er '.registry.node_pull' "$lock_file")
 repository_prefix=$(jq -er '.registry.repository_prefix' "$lock_file")
 release_source_registry=${registry_push%%/*}
 release_source_hostname=${release_source_registry%:443}
-agent_runner_ref=$(jq -er '.images[] | select(.component == "agent-runner") | .pull_ref' "$lock_file")
-agent_runner_digest=$(jq -er '.images[] | select(.component == "agent-runner") | .digest' "$lock_file")
+agent_runner_ref=$(jq -er --arg component "$agent_runner_component" '.images[] | select(.component == $component) | .pull_ref' "$lock_file")
+agent_runner_digest=$(jq -er --arg component "$agent_runner_component" '.images[] | select(.component == $component) | .digest' "$lock_file")
 control_plane_digest=$(jq -er '.images[] | select(.component == "control-plane") | .digest' "$lock_file")
 role_base_documents_digest=$(jq -er '.images[] | select(.component == "role-base-documents") | .digest' "$lock_file")
 frontend_digest=$(jq -er '.images[] | select(.component == "dockerfile") | .digest' "$lock_file")
@@ -398,6 +410,7 @@ LOCK_DIGEST="$lock_sha256" \
 REGISTRY_PUSH="$registry_push" \
 NODE_PULL="$node_pull" \
 REPOSITORY_PREFIX="$repository_prefix" \
+AGENT_RUNNER_COMPONENT="$agent_runner_component" \
 PULL_REGISTRY_HOST="$promoted_pull_host" \
 AGENT_RUNNER_REF="$agent_runner_ref" \
 AGENT_RUNNER_DIGEST="$agent_runner_digest" \
@@ -408,7 +421,7 @@ ADMISSION_TOOLS_REF="$admission_tools_ref" \
 ADMISSION_TOOLS_DIGEST="$admission_tools_digest" \
 SOURCE_SHA="$source_sha" \
 RUNTIME_CONTRACT_DIGEST="$runtime_contract_digest" \
-TRUSTED_ROLE_BASE_REPOSITORY="kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/agent-runner" \
+TRUSTED_ROLE_BASE_REPOSITORY="kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/$agent_runner_component" \
 FRONTEND_SHA256="$frontend_sha256" yq -i '
   (.. | select(tag == "!!str")) |= sub(
     "[A-Za-z0-9._:/-]+/image-admission-tools@sha256:[a-f0-9]{64}";
@@ -423,7 +436,7 @@ FRONTEND_SHA256="$frontend_sha256" yq -i '
     .data.promotedPullRepository = (strenv(NODE_PULL) + "/" + strenv(REPOSITORY_PREFIX) + "/roles") |
     .data.pullRegistryHost = strenv(PULL_REGISTRY_HOST) |
     .data.pullCredentialGeneration = "1" |
-    .data.nodeReadbackImage = (strenv(PULL_REGISTRY_HOST) + "/" + strenv(REPOSITORY_PREFIX) + "/agent-runner@" + strenv(AGENT_RUNNER_DIGEST)) |
+    .data.nodeReadbackImage = (strenv(PULL_REGISTRY_HOST) + "/" + strenv(REPOSITORY_PREFIX) + "/" + strenv(AGENT_RUNNER_COMPONENT) + "@" + strenv(AGENT_RUNNER_DIGEST)) |
     .data.roleImageInputRepository = "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/role-image-inputs" |
     .data.policyRevision = "1" |
     .data.policySHA256 = "0000000000000000000000000000000000000000000000000000000000000000" |
@@ -499,6 +512,8 @@ role_environment_catalog=$(jq -cn \
   --arg manifest_digest "$role_input_manifest_digest" \
   --arg payload_sha256 "$role_input_payload_sha256" \
   --arg agent_runner_digest "$agent_runner_digest" \
+  --arg agent_runner_repository "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/$agent_runner_component" \
+  --argjson documents_available "$([[ "$agent_runner_component" == agent-runner ]] && printf true || printf false)" \
   --arg documents_digest "$role_base_documents_digest" '
   {schemaVersion:1,
    context:{sourceRef:"urn:kodex:release-source",sourceRevision:$source_revision,
@@ -510,12 +525,12 @@ role_environment_catalog=$(jq -cn \
       descriptionMessageKey:"role-environments.standard.description",unavailableMessageKey:"",
       softwareMessageKeys:["role-environments.software.base"],recommended:true,available:true,
       customInstallationAllowed:false,
-      baseImageReference:"kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/agent-runner",
+      baseImageReference:$agent_runner_repository,
       baseImageDigest:$agent_runner_digest,platforms:[{os:"linux",architecture:"amd64",variant:""}],packages:[],tools:[]},
      {key:"documents",nameMessageKey:"role-environments.documents.name",
       descriptionMessageKey:"role-environments.documents.description",unavailableMessageKey:"",
       softwareMessageKeys:["role-environments.software.base","role-environments.software.pdf",
-        "role-environments.software.ocr","role-environments.software.office"],recommended:false,available:true,
+        "role-environments.software.ocr","role-environments.software.office"],recommended:false,available:$documents_available,
       customInstallationAllowed:false,
       baseImageReference:"kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/role-base-documents",
       baseImageDigest:$documents_digest,platforms:[{os:"linux",architecture:"amd64",variant:""}],packages:[],tools:[]}]}')
@@ -538,7 +553,7 @@ ROLE_ENVIRONMENT_CATALOG_NAME="$role_environment_catalog_name" yq -i '
   )
 ' "$rendered"
 
-agent_runner_source_ref="$registry_push/$repository_prefix/agent-runner@$agent_runner_digest"
+agent_runner_source_ref="$registry_push/$repository_prefix/$agent_runner_component@$agent_runner_digest"
 control_plane_source_ref="$registry_push/$repository_prefix/control-plane@$control_plane_digest"
 role_base_documents_source_ref="$registry_push/$repository_prefix/role-base-documents@$role_base_documents_digest"
 role_image_input_source_ref="$registry_push/$repository_prefix/role-image-inputs@$role_input_manifest_digest"
@@ -570,6 +585,11 @@ ROLE_IMAGE_INPUT_MANIFEST_DIGEST="$role_input_manifest_digest" yq -i '
     (.spec.template.spec.containers[0].env[] | select(.name == "ROLE_IMAGE_INPUT_MANIFEST_DIGEST").value) = strenv(ROLE_IMAGE_INPUT_MANIFEST_DIGEST)
   )
 ' "$rendered"
+
+if [[ -n "$model_provider_configuration" ]]; then
+  python3 "$repository_root/tools/install/model-provider.py" render --configuration "$model_provider_configuration" \
+    --render "$rendered" --default-model "$model_provider_default_model" >/dev/null || fail 'model provider projection failed'
+fi
 
 egress_revision="release-${source_sha:0:12}"
 egress_policy=$(yq -r 'select(.kind == "ConfigMap" and (.metadata.name | test("^egress-gateway-policy-"))) | .data."policy.json"' "$rendered" |

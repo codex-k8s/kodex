@@ -905,6 +905,7 @@ message RuntimeSelection {
   bool ready = 4;
   string provider = 5;
   string model = 6;
+  RuntimeModelProviderConfiguration model_provider = 7;
 }
 
 message InstructionVersion {
@@ -8567,6 +8568,7 @@ message ObserveProviderModelCatalogRequest {
   ProviderCredentialDescriptor credential = 9;
   ProviderAuthorizationMethod authorization_method = 10;
   google.protobuf.Timestamp expires_at = 11;
+  string provider_definition_key = 12;
 }
 
 message ObserveProviderModelCatalogResponse {
@@ -8640,6 +8642,7 @@ message ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest {
   string attempt_ref = 1;
   string account_ref = 2;
   bytes api_key = 3;
+  string provider_definition_key = 4;
 }
 message ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse {
   ProviderCredentialDescriptor credential = 1;
@@ -9346,4 +9349,23 @@ message ResolveSSHComposeCredentialProjectionResponse {
   // Подписанный owner permit связывает descriptor и transport-bound lease.
   bytes permit = 4;
   string secret_ref = 5;
+}
+
+message RuntimeModelProviderConfiguration {
+  string schema = 1;
+  string managed_by = 2;
+  string source_revision = 3;
+  string engine = 4;
+  string engine_version = 5;
+  string provider_id = 6;
+  string base_url = 7;
+  repeated string address_cidrs = 8;
+  repeated RuntimeModelProviderModel models = 9;
+  string tool_mode = 10;
+}
+
+message RuntimeModelProviderModel {
+  string id = 1;
+  int64 context_window_tokens = 2;
+  int64 maximum_output_tokens = 3;
 }

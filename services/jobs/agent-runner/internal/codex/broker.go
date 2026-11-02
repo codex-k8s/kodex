@@ -258,6 +258,18 @@ func readProviderAuthentication(input model.Input) ([]byte, error) {
 	}
 	auth, err := os.ReadFile(input.ProviderAuthFile)
 	expectedDigest, digestErr := pinnedProviderDigest(input)
+	if input.Provider == "opencode" {
+		if err != nil || digestErr != nil || input.ModelProvider == nil {
+			return nil, ErrProviderAuthentication
+		}
+		key, decodeErr := runtimecontract.DecodeGatewayProviderAuthentication(auth, input.ModelProvider.DefinitionKey())
+		clear(key)
+		digest := sha256.Sum256(auth)
+		if decodeErr != nil || hex.EncodeToString(digest[:]) != expectedDigest {
+			return nil, ErrProviderAuthentication
+		}
+		return auth, nil
+	}
 	if err != nil || digestErr != nil || validateProviderAuthenticationPayload(auth, expectedDigest) != nil {
 		return nil, ErrProviderAuthentication
 	}
@@ -709,16 +721,21 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn, proofObserver 
 		return writeProviderBrokerFailureAtStage(frames, providerStageMCPBridge, err)
 	}
 	defer bridge.Close()
-	if err := PrepareHomeWithAuth(request.Input, bridge.URL(), auth); err != nil {
-		return writeProviderBrokerFailureAtStage(frames, providerStageHomePrepare, err)
-	}
-	execute := func(ctx context.Context, input model.Input, prompt []byte, token string) (Result, error) {
-		if err := prepareWorkingDirectory(ctx, input); err != nil {
-			return Result{}, atProviderStage(providerStageHomePrepare, err)
+	var result Result
+	if request.Input.Provider == "opencode" {
+		result, err = executeOpenCodeTurn(ctx, request.Input, request.Prompt, bridge.URL(), request.MCPProxyToken, auth, frames.activity)
+	} else {
+		if err := PrepareHomeWithAuth(request.Input, bridge.URL(), auth); err != nil {
+			return writeProviderBrokerFailureAtStage(frames, providerStageHomePrepare, err)
 		}
-		return executeLocalWithInputProof(ctx, input, prompt, token, frames.activity, proofObserver)
+		execute := func(ctx context.Context, input model.Input, prompt []byte, token string) (Result, error) {
+			if err := prepareWorkingDirectory(ctx, input); err != nil {
+				return Result{}, atProviderStage(providerStageHomePrepare, err)
+			}
+			return executeLocalWithInputProof(ctx, input, prompt, token, frames.activity, proofObserver)
+		}
+		result, err = executeProviderTurn(ctx, request.Input, request.Prompt, request.MCPProxyToken, execute, credentialrelay.Commit)
 	}
-	result, err := executeProviderTurn(ctx, request.Input, request.Prompt, request.MCPProxyToken, execute, credentialrelay.Commit)
 	if err != nil {
 		logProviderSafeFailure(providerStageOf(err), err)
 		return writeProviderBrokerResultFailure(frames, result, err)

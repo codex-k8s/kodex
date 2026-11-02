@@ -100,9 +100,16 @@ func (server *Server) ObserveProviderModelCatalog(ctx context.Context, request *
 		method = providercredential.CatalogMethodAPIKey
 	}
 	descriptor := request.GetCredential()
-	result, err := server.providerCredentials.ObserveModelCatalog(ctx, request.GetAccountRef(), kubernetesstore.ProviderCredentialDescriptor{
-		SecretName: descriptor.GetSecretName(), SecretUID: descriptor.GetSecretUid(), SecretResourceVersion: descriptor.GetSecretResourceVersion(), ContentSHA256: descriptor.GetContentSha256(),
-	}, method)
+	var result providercredential.ModelCatalog
+	exact := kubernetesstore.ProviderCredentialDescriptor{SecretName: descriptor.GetSecretName(), SecretUID: descriptor.GetSecretUid(), SecretResourceVersion: descriptor.GetSecretResourceVersion(), ContentSHA256: descriptor.GetContentSha256()}
+	if request.GetProviderDefinitionKey() == "" || request.GetProviderDefinitionKey() == "openai-codex" {
+		result, err = server.providerCredentials.ObserveModelCatalog(ctx, request.GetAccountRef(), exact, method)
+	} else if gateway, ok := server.providerCredentials.(gatewayCatalogObserver); ok {
+		result, err = gateway.ObserveModelCatalogForDefinition(ctx, request.GetAccountRef(), exact, method, request.GetProviderDefinitionKey())
+	} else {
+		return nil, status.Error(codes.InvalidArgument, "provider catalog definition is unsupported")
+	}
+
 	if ctx.Err() != nil {
 		return nil, status.FromContextError(ctx.Err()).Err()
 	}
@@ -199,4 +206,12 @@ func minCatalogDeadline(values ...time.Time) time.Time {
 		}
 	}
 	return result
+}
+
+// gatewayCatalogObserver receives provider affinity covered by the exact task request digest.
+// gatewayCatalogObserver получает provider affinity, покрытую exact task request digest.
+type gatewayCatalogObserver interface {
+	// ObserveModelCatalogForDefinition checks the exact task-selected provider affinity.
+	// ObserveModelCatalogForDefinition проверяет exact task-selected provider affinity.
+	ObserveModelCatalogForDefinition(context.Context, string, kubernetesstore.ProviderCredentialDescriptor, string, string) (providercredential.ModelCatalog, error)
 }

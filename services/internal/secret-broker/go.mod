@@ -9,6 +9,7 @@ require (
 	github.com/codex-k8s/kodex/libs/go/grpcserver v0.0.0
 	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
+	github.com/codex-k8s/kodex/libs/go/runtimecontract v0.0.0
 	github.com/codex-k8s/kodex/libs/go/runtimesecret v0.0.0
 	github.com/codex-k8s/kodex/libs/go/secretbrokerapi v0.0.0
 	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0
@@ -25,6 +26,7 @@ require (
 )
 
 require (
+	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -109,3 +111,5 @@ replace github.com/codex-k8s/kodex/libs/go/serviceruntime => ../../../libs/go/se
 replace github.com/codex-k8s/kodex/libs/go/sttapi => ../../../libs/go/sttapi
 
 replace github.com/codex-k8s/kodex/libs/go/securefile => ../../../libs/go/securefile
+
+replace github.com/codex-k8s/kodex/libs/go/runtimecontract => ../../../libs/go/runtimecontract

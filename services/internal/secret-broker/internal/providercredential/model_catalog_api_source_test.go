@@ -55,7 +55,7 @@ func TestAPIExactNineCapabilitiesAndAccountSubsets(t *testing.T) {
 		client := catalogHTTPFunc(func(*http.Request) (*http.Response, error) {
 			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(string(raw)))}, nil
 		})
-		got, err := readAPIModelCatalog(t.Context(), client, []byte("synthetic-catalog-key"))
+		got, err := readAPIModelCatalogAt(t.Context(), client, []byte("synthetic-catalog-key"), catalogSourceFixtureTime)
 		if err != nil || !reflect.DeepEqual(got, subset) {
 			t.Fatalf("account subset changed API efforts/defaults: %v", err)
 		}

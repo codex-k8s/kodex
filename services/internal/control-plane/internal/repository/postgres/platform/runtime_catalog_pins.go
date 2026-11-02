@@ -144,6 +144,9 @@ func validateRuntimeCatalogCandidates(ctx context.Context, tx pgx.Tx, current sc
 // устаревшие pins, сбой чтения и неверная форма сохраняют разные ошибки. Частичные результаты
 // отбрасываются; значения credential и резерв ёмкости не создаются.
 func validateRuntimeCatalogCandidatesSnapshot(ctx context.Context, tx pgx.Tx, current scope, provider, model, overlay string, candidates []entity.ProviderAccountCandidate, input, lock bool) ([]entity.ProviderAccountCandidate, []string, error) {
+	if strings.HasPrefix(provider, "opencode-") && overlay != "" {
+		return nil, nil, errs.ErrInvalid
+	}
 	if len(candidates) == 0 {
 		return nil, nil, errs.ErrConflict
 	}

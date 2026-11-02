@@ -428,6 +428,9 @@ func (repository *Repository) publishAgentRuntimeConfigurationWithOverlay(ctx co
 	if preparedOverlay != nil {
 		overlay = *preparedOverlay
 	}
+	if _, _, err := repository.runtimeProviderSelection(provider, payload.Model); err != nil {
+		return commandOutcome{}, err
+	}
 	accounts, _, err = validateRuntimeCatalogCandidates(ctx, tx, scope, provider, payload.Model, overlay, accounts, true)
 	if err != nil {
 		return commandOutcome{}, err

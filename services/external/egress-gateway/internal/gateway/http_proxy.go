@@ -274,7 +274,7 @@ func (server *Server) proxyTLS(client net.Conn, reader *bufio.Reader, target con
 		}))
 	}
 	websocket := hasWebSocketUpgrade(request.Header)
-	transport := server.proxyTransport(target, limits)
+	transport := server.proxyTransportForAccess(target, limits, access)
 	// RFC 6455 Upgrade требует HTTP/1.1, а не HTTP/2 extended CONNECT.
 	transport.ForceAttemptHTTP2 = !websocket
 	defer transport.CloseIdleConnections()
@@ -423,9 +423,9 @@ func proxyRequestAllowed(request *http.Request, target connect.Target, access ru
 		return false
 	}
 	if hasWebSocketUpgrade(request.Header) {
-		return request.URL.RawPath == "" && access.ProviderAccess && runtimecontract.RuntimeProviderAllowsWebSocket(host, request.URL.Path, request.Method) && validWebSocketRequest(request)
+		return request.URL.RawPath == "" && access.ProviderAccess && access.ModelProvider == nil && runtimecontract.RuntimeProviderAllowsWebSocket(host, request.URL.Path, request.Method) && validWebSocketRequest(request)
 	}
-	if request.URL.RawPath == "" && access.ProviderAccess && runtimecontract.RuntimeProviderAllowsRequest(host, request.URL.Path, request.Method) {
+	if request.URL.RawPath == "" && access.ProviderAllowsRequest(host, request.URL.Path, request.Method) {
 		return true
 	}
 	return runtimecontract.RuntimeWebAccessAllowsRequest(access.WebAccess, host, request.Method) && validProxyWebPath(request.URL)
@@ -498,9 +498,21 @@ func stripHopByHop(header http.Header) {
 // proxyTransport resolves and validates fresh DNS, dials only literals, and verifies upstream TLS for the exact host.
 // proxyTransport проверяет свежий DNS, соединяется только по IP и проверяет upstream TLS для точного хоста.
 func (server *Server) proxyTransport(target connect.Target, limits policy.Limits) *http.Transport {
+	return server.proxyTransportForAccess(target, limits, runtimecontract.RuntimeProxyAccess{})
+}
+
+// proxyTransportForAccess permits configured literal routing only with the matching signed provider grant.
+// proxyTransportForAccess допускает configured literal routing только с matching signed provider grant.
+func (server *Server) proxyTransportForAccess(target connect.Target, limits policy.Limits, access runtimecontract.RuntimeProxyAccess) *http.Transport {
 	return &http.Transport{
 		Proxy: nil,
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			if access.ModelProvider != nil {
+				if !access.ProviderAccess || !access.ModelProvider.AllowsHost(target.Hostname) || target.Port != 443 {
+					return nil, proxyUpstreamDialFailure
+				}
+				return server.dialModelProvider(ctx, *access.ModelProvider, duration(limits.DialTimeoutMilliseconds))
+			}
 			snapshot, err := server.resolver.Resolve(ctx, target.Hostname)
 			if err != nil || dnsresolver.ValidateAddresses(snapshot.Addresses) != nil || !time.Now().Before(snapshot.ExpiresAt) {
 				return nil, proxyUpstreamDNSFailure

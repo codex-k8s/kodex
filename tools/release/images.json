@@ -24,6 +24,7 @@
     {"component":"image-admission-controller","dockerfile":"services/jobs/role-image-builder/Dockerfile","target":"admission-controller-runtime"},
     {"component":"registry-pull-authorizer","dockerfile":"services/jobs/role-image-builder/Dockerfile","target":"registry-pull-runtime"},
     {"component":"agent-runner","dockerfile":"services/jobs/agent-runner/Dockerfile"},
+    {"component":"agent-runner-opencode","dockerfile":"services/jobs/agent-runner/Dockerfile","target":"opencode-runtime"},
     {"component":"role-base-documents","dockerfile":"services/jobs/agent-runner/role-base-documents.Dockerfile"}
   ]
 }

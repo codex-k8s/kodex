@@ -23,6 +23,12 @@ import (
 //go:embed sql/provider_authorization_reservation_read.sql
 var queryProviderAuthorizationReservationRead string
 
+// queryProviderAuthorizationDefinition reads immutable provider affinity under the account lock.
+// queryProviderAuthorizationDefinition читает immutable provider affinity под account lock.
+//
+//go:embed sql/provider_authorization_definition.sql
+var queryProviderAuthorizationDefinition string
+
 // queryProviderAuthorizationReservationInsert embeds a RESERVED authorization attempt with a
 // fifteen-minute deadline, pinned versions and request digest. Initial FAILED authorization state
 // does not mean preparation failed; external materialization has not happened here.
@@ -151,6 +157,12 @@ func (repository *Repository) ReserveProviderAuthorization(ctx context.Context, 
 			return result, errs.ErrNotFound
 		}
 		return result, errs.ErrUnavailable
+	}
+	if err := tx.QueryRow(ctx, queryProviderAuthorizationDefinition, pgx.StrictNamedArgs{"account_id": accountID}).Scan(&result.DefinitionKey); err != nil {
+		return result, errs.ErrConflict
+	}
+	if method == "DEVICE_CODE" && result.DefinitionKey != "openai-codex" {
+		return result, errs.ErrInvalid
 	}
 	var storedDigest, preparation string
 	var originalVersion int64

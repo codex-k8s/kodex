@@ -889,7 +889,7 @@ func (repository *Repository) createAgent(ctx context.Context, tx pgx.Tx, scope 
 	input.AvatarURL = avatarURL
 	runtimeKey := input.RuntimeRef
 	if runtimeKey == "" {
-		runtimeKey = defaultRuntimeKey
+		runtimeKey = repository.defaultRuntimeProfileKey()
 	}
 	runtime, err := resolveEnabledRuntime(ctx, tx, runtimeKey)
 	if err != nil {

@@ -257,6 +257,11 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 		profileRevision = mapString(values, "runtimeRevision")
 	}
 	result.Runtime = &controlplanev1.RuntimeSelection{Ref: mapString(values, "runtimeKey"), Revision: profileRevision, Provider: mapString(values, "runtimeProvider"), Model: mapString(values, "runtimeModel"), Ready: true}
+	modelProvider, validModelProvider := castSnapshotModelProvider(values)
+	if !validModelProvider {
+		return nil
+	}
+	result.Runtime.ModelProvider = modelProvider
 	for _, key := range mapStrings(values, "capabilities") {
 		result.Capabilities = append(result.Capabilities, &controlplanev1.PlatformCapability{Key: key, Name: key})
 	}

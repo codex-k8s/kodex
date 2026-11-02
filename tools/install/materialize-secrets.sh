@@ -81,6 +81,7 @@ jq -e '
   type == "object" and
   ((.auth_mode == "chatgpt" and (.tokens | type == "object")) or
    (.auth_mode == "chatgptAuthTokens" and (.tokens | type == "object")) or
+   (.auth_mode == "gateway-api-key" and (.provider_definition_key | type == "string") and (.API_KEY | type == "string" and length >= 8)) or
    (.auth_mode == "apikey" and
      (.OPENAI_API_KEY | type == "string" and length > 0)))
 ' "$provider_auth_file" >/dev/null ||

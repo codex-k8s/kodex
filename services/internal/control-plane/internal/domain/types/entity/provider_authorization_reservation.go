@@ -8,6 +8,7 @@ package entity
 // резервирования, а не успешную авторизацию провайдера или разрешение повторить эффект.
 type ProviderAuthorizationReservation struct {
 	AttemptRef      string
+	DefinitionKey   string
 	ReservedVersion int64
 	Applied         bool
 }

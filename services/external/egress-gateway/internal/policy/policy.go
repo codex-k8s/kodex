@@ -17,6 +17,7 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/dnsresolver"
 	shared "github.com/codex-k8s/kodex/libs/go/mailpolicy"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
 // Policy constants pin the API shape, file bound, and closed STT profile.
@@ -49,10 +50,11 @@ type Metadata struct {
 // Spec binds DNS rules, runtime limits, destinations, and optional profiles.
 // Spec задаёт DNS, лимиты выполнения, адреса назначения и профили.
 type Spec struct {
-	DNS          DNSConfig     `json:"dns"`
-	Limits       Limits        `json:"limits"`
-	Destinations []Destination `json:"destinations"`
-	Profiles     []Profile     `json:"profiles,omitempty"`
+	ModelProvider *runtimecontract.ModelProviderConfiguration `json:"modelProvider,omitempty"`
+	DNS           DNSConfig                                   `json:"dns"`
+	Limits        Limits                                      `json:"limits"`
+	Destinations  []Destination                               `json:"destinations"`
+	Profiles      []Profile                                   `json:"profiles,omitempty"`
 }
 
 // Profile binds a separate listener to a closed workload and operation.
@@ -293,6 +295,21 @@ func validate(document *Document) error {
 	sort.Slice(document.Spec.Destinations, func(left, right int) bool {
 		return document.Spec.Destinations[left].Hostname < document.Spec.Destinations[right].Hostname
 	})
+	if document.Spec.ModelProvider != nil {
+		route, err := document.Spec.ModelProvider.Route()
+		if err != nil {
+			return errors.New("policy model provider is invalid")
+		}
+		found := false
+		for _, destination := range document.Spec.Destinations {
+			if destination.Port == 443 && route.AllowsHost(destination.Hostname) {
+				found = true
+			}
+		}
+		if !found {
+			return errors.New("policy model provider destination is missing")
+		}
+	}
 	if len(document.Spec.Profiles) > 1 {
 		return errors.New("policy profiles are invalid")
 	}
@@ -356,6 +373,9 @@ func canonicalJSON(document Document) ([]byte, error) {
 			})
 		}
 		canonical["spec"].(map[string]any)["profiles"] = profiles
+	}
+	if document.Spec.ModelProvider != nil {
+		canonical["spec"].(map[string]any)["modelProvider"] = document.Spec.ModelProvider
 	}
 	return json.Marshal(canonical)
 }
@@ -454,4 +474,17 @@ func inspectJSONValue(decoder *json.Decoder) error {
 		return errors.New("policy JSON delimiter is invalid")
 	}
 	return nil
+}
+
+// ModelProviderRoute returns a copy of the explicitly approved literal route for one exact host.
+// ModelProviderRoute возвращает копию явно одобренного literal route одного exact host.
+func (active *Active) ModelProviderRoute(host string) *runtimecontract.ModelProviderRoute {
+	if active.profile != nil || active.document.Spec.ModelProvider == nil {
+		return nil
+	}
+	route, err := active.document.Spec.ModelProvider.Route()
+	if err != nil || !route.AllowsHost(host) || !active.Allows(host, 443) {
+		return nil
+	}
+	return &route
 }

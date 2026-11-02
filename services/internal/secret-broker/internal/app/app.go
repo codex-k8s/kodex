@@ -165,6 +165,9 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, providerCredentials.Close()) }()
+	if err := configureModelProvider(providerCredentials, config.ModelProviderConfigurationFile); err != nil {
+		return err
+	}
 	var admission grpc.UnaryServerInterceptor
 	var transportOptions []grpc.ServerOption
 	var securityCheckers []checker

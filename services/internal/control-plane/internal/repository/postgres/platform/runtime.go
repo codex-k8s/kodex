@@ -641,7 +641,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			if err := repository.validateRequiredWorkflowAuthorities(ctx, tx, scope, candidate.rootRunID); err != nil {
 				return commandOutcome{}, err
 			}
-			runtimeProvider, err := runtimeExecutionProvider(candidate.provider)
+			runtimeProvider, modelProvider, err := repository.runtimeProviderSelection(candidate.provider, candidate.model)
 			if err != nil {
 				return commandOutcome{}, err
 			}
@@ -1063,6 +1063,9 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 				"environmentPolicy": environmentPolicy, "effectiveKubernetesAccess": effectiveKubernetesAccess,
 				"workspacePolicy": workspacePolicy,
 				"codexSessionID":  codexSessionID,
+			}
+			if modelProvider != nil {
+				snapshot["modelProvider"] = modelProvider
 			}
 			if executionDeadline != nil {
 				snapshot["executionDeadline"] = executionDeadline
@@ -1532,6 +1535,17 @@ func runtimeRevisionDigestFromSnapshot(values map[string]any) (string, error) {
 	}
 	if value, ok := values["input"].(map[string]any); ok {
 		input.BoundedInput = value
+	}
+	if value := values["modelProvider"]; value != nil {
+		raw, err := json.Marshal(value)
+		if err != nil {
+			return "", runtimecontract.ErrModelProviderConfiguration
+		}
+		config, err := runtimecontract.DecodeModelProviderConfiguration(raw)
+		if err != nil {
+			return "", err
+		}
+		input.ModelProvider = &config
 	}
 	if value := values["executionDeadline"]; value != nil {
 		deadline, err := runtimecontract.DecodeRuntimeExecutionDeadline(value)
