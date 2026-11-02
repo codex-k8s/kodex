@@ -35,6 +35,7 @@ test-go-toolchain-contract: check-go-toolchain
 	@./scripts/tests/go-toolchain-contract-test.sh
 
 test-web-only-release:
+	@timeout 30s node --test tools/release/build-release-inventory.test.mjs tools/release/build-release-pool.test.mjs
 	@timeout 120s python3 -B tools/install/test_deployment_profile.py
 	@timeout 60s python3 -B tools/install/test_portable_state.py
 	@timeout 60s node --test tools/release/oidc-endpoint.test.mjs tools/release/authority-policy-environment.test.mjs
