@@ -17,10 +17,10 @@ while (($#)); do
     --render) render="${2:-}"; shift 2 ;;
     --render-sha256) expected_sha="${2:-}"; shift 2 ;;
     --preimage-directory) preimage="${2:-}"; shift 2 ;;
-    --oidc-ca-file|--ingress-deployment|--ingress-namespace|--ingress-service) arguments+=("$1" "${2:-}"); shift 2 ;;
+    --oidc-ca-file|--ingress-deployment|--ingress-controller|--ingress-namespace|--ingress-service) arguments+=("$1" "${2:-}"); shift 2 ;;
     --help)
       printf '%s\n' 'Usage: portable-release.sh --mode plan|preflight|apply|readback --render <yaml> --render-sha256 <64-hex> [--context <exact-context>]' \
-        '  [--oidc-ca-file <pem>] [--ingress-deployment <name> --ingress-namespace <name>]' \
+        '  [--oidc-ca-file <pem>] [--ingress-controller <name> --ingress-namespace <name>]' \
         '  [--preimage-directory <new-private-directory>; required for apply]'
       exit 0 ;;
     *) fail 'unsupported argument' ;;

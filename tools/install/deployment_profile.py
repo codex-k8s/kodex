@@ -101,9 +101,20 @@ def validate(profile):
     if tls.get("mode") == "managed":
         exact_keys(tls, ("mode",))
     else:
-        exact_keys(tls, ("mode", "trusted_proxy_cidrs"))
+        keys = ("mode", "trusted_proxy_cidrs")
+        exact_keys(tls, keys + ("ingress",) if "ingress" in tls else keys)
         require(tls["mode"] == "external", "PUBLIC_TLS_MODE_REJECTED")
         exact_hosts(tls["trusted_proxy_cidrs"])
+        if "ingress" in tls:
+            ingress = tls["ingress"]
+            exact_keys(ingress, ("controller_kind", "entrypoint_port", "proxy_protocol_trusted_cidrs"))
+            require(ingress["controller_kind"] in ("Deployment", "DaemonSet"), "PROXY_CONTROLLER_KIND_REJECTED")
+            require(type(ingress["entrypoint_port"]) is int and 1 <= ingress["entrypoint_port"] <= 65535,
+                    "PROXY_ENTRYPOINT_PORT_REJECTED")
+            transport = ingress["proxy_protocol_trusted_cidrs"]
+            require(isinstance(transport, list), "PROXY_TRANSPORT_CIDRS_REJECTED")
+            if transport:
+                exact_hosts(transport)
     return copy.deepcopy(profile)
 
 
@@ -247,7 +258,8 @@ def verify_proxy_controller(deployment, profile):
     """Read-only проверка выделенного Traefik; общий controller не изменяется."""
     tls = validate(profile)["public_tls"]
     require(tls["mode"] == "external", "EXTERNAL_PROXY_PROFILE_REQUIRED")
-    require(deployment.get("kind") == "Deployment", "PROXY_CONTROLLER_REQUIRED")
+    ingress = tls.get("ingress", {})
+    require(deployment.get("kind") == ingress.get("controller_kind", "Deployment"), "PROXY_CONTROLLER_REQUIRED")
     containers = deployment["spec"]["template"]["spec"]["containers"]
     controllers = [c for c in containers if c.get("name") == "traefik"]
     require(len(controllers) == 1, "EXACT_TRAEFIK_CONTAINER_REQUIRED")
@@ -264,26 +276,49 @@ def verify_proxy_controller(deployment, profile):
         require(key not in options, "DUPLICATE_TRAEFIK_OPTION")
         options[key] = value
     require("configfile" not in options, "AMBIGUOUS_TRAEFIK_CONFIGURATION")
-    require(options.get("entrypoints.web.address") == ":80", "HTTP_80_ENTRYPOINT_REQUIRED")
+    port = ingress.get("entrypoint_port", 80)
+    require(options.get("entrypoints.web.address") in (":"+str(port),":"+str(port)+"/tcp"), "HTTP_ENTRYPOINT_PORT_REQUIRED")
+    transport = ingress.get("proxy_protocol_trusted_cidrs", [])
+    for key in options:
+        if key.startswith("entrypoints.web.proxyprotocol"):
+            require(transport and key in ("entrypoints.web.proxyprotocol.trustedips","entrypoints.web.proxyprotocol.insecure"),
+                    "PROXY_TRANSPORT_REJECTED")
+    require(options.get("entrypoints.web.proxyprotocol.insecure","false")=="false","INSECURE_PROXY_PROTOCOL_REJECTED")
+    actual_transport = options.get("entrypoints.web.proxyprotocol.trustedips","")
+    require(set(exact_hosts(actual_transport.split(",")) if actual_transport else [])==set(transport),
+            "PROXY_TRANSPORT_CONFIG_DRIFT")
     for key, value in options.items():
         if key.startswith("entrypoints.web."):
-            require("redirections" not in key and "proxyprotocol" not in key, "PROXY_ENTRYPOINT_REJECTED")
+            require("redirections" not in key, "PROXY_ENTRYPOINT_REJECTED")
             if key.endswith("forwardedheaders.insecure"):
                 require(value == "false", "INSECURE_FORWARDED_HEADERS_REJECTED")
     trusted = options.get("entrypoints.web.forwardedheaders.trustedips", "").split(",")
     require(set(exact_hosts(trusted)) == set(tls["trusted_proxy_cidrs"]), "TRUSTED_PROXY_CONFIG_DRIFT")
-    desired = deployment["spec"].get("replicas", 1)
     status = deployment.get("status", {})
+    desired = proxy_replica_count(deployment)
+    if deployment["kind"] == "DaemonSet":
+        fields = ("desiredNumberScheduled", "currentNumberScheduled", "updatedNumberScheduled", "numberReady", "numberAvailable")
+        unavailable = "numberUnavailable"
+    else:
+        fields = ("replicas", "updatedReplicas", "readyReplicas", "availableReplicas")
+        unavailable = "unavailableReplicas"
     require(type(desired) is int and desired >= 1 and
             status.get("observedGeneration", 0) >= deployment.get("metadata", {}).get("generation", 1) and
-            all(status.get(field, 0) == desired for field in
-                ("replicas", "updatedReplicas", "readyReplicas", "availableReplicas")) and
-            status.get("unavailableReplicas", 0) == 0, "PROXY_CONTROLLER_NOT_READY")
+            all(status.get(field, 0) == desired for field in fields) and
+            status.get(unavailable, 0) == 0 and status.get("numberMisscheduled", 0) == 0, "PROXY_CONTROLLER_NOT_READY")
 
 
-def verify_proxy_pods(deployment, pods, replica_sets, service, slices):
+def proxy_replica_count(controller):
+    """Желаемый serving состав берётся из controller, а не из числа найденных Pod."""
+    if controller.get("kind") == "DaemonSet":
+        return controller.get("status", {}).get("desiredNumberScheduled", 0)
+    return controller["spec"].get("replicas", 1)
+
+
+def verify_proxy_pods(deployment, pods, replica_sets, service, slices, profile=None):
     """Проверяется реально обслуживающий состав, а не только новый Deployment spec."""
-    desired = deployment["spec"].get("replicas", 1)
+    desired = proxy_replica_count(deployment)
+    port = validate(profile)["public_tls"].get("ingress", {}).get("entrypoint_port", 80) if profile else 80
     uid = deployment["metadata"]["uid"]
     current = deployment["spec"]["template"]["spec"]["containers"]
     selectors = service.get("spec", {}).get("selector", {})
@@ -293,8 +328,8 @@ def verify_proxy_pods(deployment, pods, replica_sets, service, slices):
     require(len(web_ports) == 1, "PROXY_SERVICE_HTTP_80_REQUIRED")
     target = web_ports[0].get("targetPort", 80)
     traefik = [c for c in current if c.get("name") == "traefik"]
-    require(len(traefik) == 1 and (type(target) is int and target == 80 or
-            isinstance(target, str) and any(p.get("name") == target and p.get("containerPort") == 80 and
+    require(len(traefik) == 1 and (type(target) is int and target == port or
+            isinstance(target, str) and any(p.get("name") == target and p.get("containerPort") == port and
                 p.get("protocol", "TCP") == "TCP" for p in traefik[0].get("ports", []))),
             "PROXY_SERVICE_TARGET_PORT_REJECTED")
     require(len(pods) == desired, "PROXY_SERVING_POD_SET_REJECTED")
@@ -305,7 +340,8 @@ def verify_proxy_pods(deployment, pods, replica_sets, service, slices):
     for pod in pods:
         require(not pod["metadata"].get("deletionTimestamp") and pod.get("status", {}).get("phase") == "Running"
                 and any(c.get("type") == "Ready" and c.get("status") == "True" for c in pod["status"].get("conditions", []))
-                and any(o.get("kind") == "ReplicaSet" and o.get("uid") in rs_uids and o.get("controller") is True
+                and any(((o.get("kind") == "ReplicaSet" and o.get("uid") in rs_uids and deployment.get("kind","Deployment")=="Deployment") or
+                         (o.get("kind")=="DaemonSet" and o.get("uid")==uid and deployment.get("kind")=="DaemonSet"))and o.get("controller") is True
                         for o in pod["metadata"].get("ownerReferences", [])), "PROXY_POD_OWNER_OR_READINESS_REJECTED")
         actual = pod["spec"]["containers"]
         require(len(actual) == len(current), "PROXY_POD_CONFIG_DRIFT")
@@ -318,7 +354,7 @@ def verify_proxy_pods(deployment, pods, replica_sets, service, slices):
         require(group["metadata"].get("labels", {}).get("kubernetes.io/service-name") == service["metadata"]["name"],
                 "PROXY_ENDPOINT_SERVICE_DRIFT")
         mapped = [p for p in group.get("ports", []) if p.get("name") == web_ports[0].get("name")]
-        require(len(mapped) == 1 and mapped[0].get("port") == 80 and mapped[0].get("protocol", "TCP") == "TCP",
+        require(len(mapped) == 1 and mapped[0].get("port") == port and mapped[0].get("protocol", "TCP") == "TCP",
                 "PROXY_ENDPOINT_PORT_REJECTED")
         for endpoint in group.get("endpoints", []):
             ref = endpoint.get("targetRef", {})
