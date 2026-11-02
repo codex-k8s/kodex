@@ -120,3 +120,8 @@ Distribution2.8.3, nginx1.30.6 и Python3.14.10. Все четыре образ�
 по OCI digest в chart values; проверки TLS/auth/prefix описаны в README unit.
 Storage/registry выключены по умолчанию, существующие внешние зависимости
 и registry admission/promotion identities сохраняются.
+
+Опциональный OCI archive publisher (#1989) использует regclient Go APIv0.11.5.
+Test-only disposable registry —olareg0.2.1. Версии и module checksums закреплены
+в `tools/release/oci-publisher/go.mod`/`go.sum`; buildctl binary задаётся явным
+file/SHA pin, а direct release build остаётся прежним default.
