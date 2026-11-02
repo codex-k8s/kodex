@@ -4,6 +4,7 @@ import copy
 import importlib.util
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -40,11 +41,11 @@ def profile(mode="shared_host", tls="external"):
     return value
 
 
-def render(value):
+def render(value, chart=CHART):
     with tempfile.TemporaryDirectory(prefix="kodex-services-render-") as directory:
         path = Path(directory) / "values.json"
         path.write_text(json.dumps(value))
-        result = subprocess.run(["helm", "template", "synthetic", str(CHART), "--namespace", "synthetic-infra",
+        result = subprocess.run(["helm", "template", "synthetic", str(chart), "--namespace", "synthetic-infra",
                                  "--values", str(path)], capture_output=True, text=True, timeout=30)
     return result
 
@@ -181,6 +182,35 @@ class PortableServices(unittest.TestCase):
                 PREPARE.proxy_config(peers)
         value = profile(); value["storage"]["trustedProxyCIDRs"] = []
         self.assertNotEqual(render(value).returncode, 0)
+
+    def test_changed_serving_config_requests_kubernetes_rollout(self):
+        def templates(value):
+            result = render(value)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return {r["metadata"]["name"]: r["spec"]["template"]
+                    for r in yaml.safe_load_all(result.stdout) if r and r["kind"] == "StatefulSet"}
+        before = templates(profile())
+        storage = profile(); storage["exposure"]["sharedHost"] = "changed.example.invalid"
+        registry = profile(); registry["registry"]["repositoryPrefix"] = "changed"
+        self.assertNotEqual(before["synthetic-storage"], templates(storage)["synthetic-storage"])
+        self.assertNotEqual(before["synthetic-registry"], templates(registry)["synthetic-registry"])
+        self.assertEqual(before, templates(profile()))
+
+    def test_changed_bootstrap_validation_rolls_both_owned_pods(self):
+        before = {r["metadata"]["name"]: r["spec"]["template"]
+                  for r in yaml.safe_load_all(render(profile()).stdout) if r and r["kind"] == "StatefulSet"}
+        with tempfile.TemporaryDirectory(prefix="kodex-bootstrap-revision-") as directory:
+            chart = Path(directory) / "chart"
+            shutil.copytree(CHART, chart, ignore=shutil.ignore_patterns("__pycache__"))
+            script = chart / "files/prepare.py"
+            script.write_text(script.read_text() + "\n# Синтетическая новая ревизия bootstrap.\n")
+            result = render(profile(), chart)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            after = {r["metadata"]["name"]: r["spec"]["template"]
+                     for r in yaml.safe_load_all(result.stdout) if r and r["kind"] == "StatefulSet"}
+        self.assertEqual(set(before), set(after))
+        for name in before:
+            self.assertNotEqual(before[name], after[name])
 
     def test_registry_requires_exact_distinct_bcrypt_identities(self):
         digest = "$2y$12$" + "a" * 53

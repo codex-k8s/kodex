@@ -1,0 +1,93 @@
+{{- if .Values.registry.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-registry
+  labels: {{- include "portable.labels" . | nindent 4 }}
+data:
+  registry.json: |
+    {
+      "version": 0.1,
+      "log": {"level": "warn", "accesslog": {"disabled": true}},
+      "storage": {"filesystem": {"rootdirectory": "/data"}, "delete": {"enabled": false}},
+      "http": {
+        "addr": "127.0.0.1:5443", "relativeurls": true,
+        "tls": {"certificate": "/tls/tls.crt", "key": "/tls/tls.key", "minimumtls": "tls1.3"},
+        "headers": {"X-Content-Type-Options": ["nosniff"]}
+      }
+    }
+  nginx.conf: |
+    pid /tmp/nginx.pid;
+    error_log /dev/stderr crit;
+    events { worker_connections 256; }
+    http {
+      access_log off;
+      client_body_temp_path /tmp/body;
+      proxy_temp_path /tmp/proxy;
+      fastcgi_temp_path /tmp/fastcgi;
+      uwsgi_temp_path /tmp/uwsgi;
+      scgi_temp_path /tmp/scgi;
+      client_max_body_size 4g;
+      client_header_timeout 15s;
+      client_body_timeout 180s;
+      send_timeout 180s;
+      map "$remote_user:$request_method" $registry_method_allowed {
+        default 1;
+        ~^{{ .Values.registry.readerUsername }}:(GET|HEAD)$ 1;
+        ~^{{ .Values.registry.readerUsername }}: 0;
+        ~^{{ .Values.registry.writerUsername }}:(GET|HEAD|POST|PUT|PATCH|DELETE)$ 1;
+      }
+      map $request_method $unsupported_method {
+        default 1;
+        GET 0; HEAD 0; POST 0; PUT 0; PATCH 0; DELETE 0;
+      }
+      upstream source_registry { server 127.0.0.1:5443; keepalive 8; }
+      server {
+        listen 8443 ssl;
+        server_name _;
+        ssl_protocols TLSv1.3;
+        ssl_certificate /tls/tls.crt;
+        ssl_certificate_key /tls/tls.key;
+        auth_basic "Kodex release source";
+        auth_basic_user_file /prepared/htpasswd;
+        proxy_ssl_verify on;
+        proxy_ssl_trusted_certificate /tls/ca.crt;
+        proxy_ssl_server_name on;
+        proxy_ssl_name {{ .Release.Name }}-registry.{{ .Release.Namespace }}.svc.cluster.local;
+        proxy_ssl_protocols TLSv1.3;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Authorization "";
+        proxy_set_header Cookie "";
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 180s;
+        proxy_send_timeout 180s;
+        if ($unsupported_method = 1) { return 405; }
+        location = /v2/ {
+          if ($registry_method_allowed = 0) { return 403; }
+          proxy_pass https://source_registry;
+        }
+        location /v2/{{ .Values.registry.repositoryPrefix }}/ {
+          if ($registry_method_allowed = 0) { return 403; }
+          proxy_pass https://source_registry;
+        }
+        location / { return 404; }
+      }
+      server {
+        listen 127.0.0.1:8081;
+        location = /ready {
+          proxy_ssl_verify on;
+          proxy_ssl_trusted_certificate /tls/ca.crt;
+          proxy_ssl_server_name on;
+          proxy_ssl_name {{ .Release.Name }}-registry.{{ .Release.Namespace }}.svc.cluster.local;
+          proxy_ssl_protocols TLSv1.3;
+          proxy_connect_timeout 2s;
+          proxy_read_timeout 2s;
+          proxy_pass https://source_registry/v2/;
+        }
+        location / { return 404; }
+      }
+    }
+{{- end }}

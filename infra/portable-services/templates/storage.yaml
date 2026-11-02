@@ -26,7 +26,10 @@ spec:
   template:
     metadata:
       labels: {app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: portable-storage}
-      annotations: {kodex.io/credentials-revision: {{ .Values.credentialsRevision | quote }}}
+      annotations:
+        kodex.io/credentials-revision: {{ .Values.credentialsRevision | quote }}
+        kodex.io/bootstrap-revision: {{ .Files.Get "files/prepare.py" | sha256sum | quote }}
+        kodex.io/config-revision: {{ include (print .Template.BasePath "/config.yaml") . | sha256sum | quote }}
     spec:
       serviceAccountName: {{ .Release.Name }}
       automountServiceAccountToken: false
