@@ -77,6 +77,8 @@ def normalized_pod(expected, actual):
         'hostPID': False, 'hostIPC': False, 'shareProcessNamespace': False, 'preemptionPolicy': 'PreemptLowerPriority'}
     value = strip_defaults(expected, actual, pod_defaults)
     require(isinstance(value, dict), 'LIVE_POD_SPEC_REJECTED')
+    if 'serviceAccount' not in expected and value.get('serviceAccount') == expected.get('serviceAccountName'):
+        value.pop('serviceAccount', None)
     for field in ('containers', 'initContainers', 'ephemeralContainers'):
         require(len(value.get(field, [])) == len(expected.get(field, [])), 'LIVE_CONTAINER_SET_DRIFT')
         for index, container in enumerate(value.get(field, [])):
@@ -92,6 +94,12 @@ def normalized_pod(expected, actual):
                 wanted_ports = wanted.get('ports', [])
                 require(port_index < len(wanted_ports), 'LIVE_CONTAINER_PORT_DRIFT')
                 result['ports'][port_index] = strip_defaults(wanted_ports[port_index], port, {'protocol': 'TCP'})
+            require(isinstance(result.get('env', []), list) and len(result.get('env', [])) == len(wanted.get('env', [])), 'LIVE_ENV_SET_DRIFT')
+            for env_index, env in enumerate(result.get('env', [])):
+                wanted_env = wanted.get('env', [])
+                require(env_index < len(wanted_env), 'LIVE_ENV_SET_DRIFT')
+                result['env'][env_index] = strip_defaults(wanted_env[env_index], env, {
+                    'valueFrom': {'fieldRef': {'apiVersion': 'v1'}, 'resourceFieldRef': {'divisor': '1'}}})
             value[field][index] = result
     for index, volume in enumerate(value.get('volumes', [])):
         wanted = expected.get('volumes', [])
@@ -315,6 +323,44 @@ class State:
                     and seal(actual) == before['seal'], 'RESOURCE_PREIMAGE_DRIFT')
         return actual
 
+    def cas_update(self, desired, actual, dry_run=False):
+        kind = (desired['apiVersion'], desired['kind'])
+        require(kind in (('v1', 'ConfigMap'), ('apps/v1', 'Deployment')), 'EXACT_CAS_KIND_REQUIRED')
+        require(owner(desired) and owner(actual) and key(desired) == key(actual) and actual['metadata'].get('ownerReferences', []) == desired['metadata'].get('ownerReferences', []), 'FOREIGN_RESOURCE_COLLISION')
+        metadata = actual['metadata']
+        patch = [{'op': 'test', 'path': '/metadata/uid', 'value': metadata['uid']},
+                 {'op': 'test', 'path': '/metadata/resourceVersion', 'value': metadata['resourceVersion']}]
+        for field in ('labels', 'annotations'):
+            wanted = copy.deepcopy(desired['metadata'].get(field, {}))
+            if field == 'annotations':
+                for server_field in ('kubectl.kubernetes.io/last-applied-configuration', 'deployment.kubernetes.io/revision'):
+                    if server_field in metadata.get(field, {}):
+                        wanted[server_field] = metadata[field][server_field]
+            if wanted != metadata.get(field, {}):
+                patch.append({'op': 'add', 'path': '/metadata/' + field, 'value': wanted})
+        fields = ('data', 'binaryData', 'immutable') if kind[1] == 'ConfigMap' else ('spec',)
+        for field in fields:
+            if field in desired:
+                if field not in actual or desired[field] != actual[field]:
+                    patch.append({'op': 'add', 'path': '/' + field, 'value': copy.deepcopy(desired[field])})
+            elif field in actual:
+                patch.append({'op': 'remove', 'path': '/' + field})
+        target = 'configmaps' if kind[1] == 'ConfigMap' else 'deployments.apps'
+        arguments = ['-n', desired['metadata']['namespace'], 'patch', target, desired['metadata']['name'],
+                     '--type=json', '--field-manager=kodex-install', '--patch-file=/dev/stdin']
+        if dry_run:arguments.append('--dry-run=server')
+        self.call(arguments, patch)
+
+    def preflight_apply(self, resource):
+        require(owner(resource) and resource['kind'] != 'Secret', 'UNOWNED_RENDER_RESOURCE_REJECTED')
+        actual = self.get(resource)
+        if actual is not None:
+            require(owner(actual) and not actual['metadata'].get('deletionTimestamp') and actual['metadata'].get('ownerReferences', []) == resource['metadata'].get('ownerReferences', []), 'FOREIGN_RESOURCE_COLLISION')
+        if actual is not None and (resource['apiVersion'], resource['kind']) in (('v1', 'ConfigMap'), ('apps/v1', 'Deployment')):
+            self.cas_update(api_write_resource(resource), actual, dry_run=True)
+        else:
+            self.call(['apply', '--server-side', '--dry-run=server', '--field-manager=kodex-install', '-f', '-'], api_write_resource(resource))
+
     def apply(self, resource, inventory):
         require(owner(resource), 'UNOWNED_RENDER_RESOURCE_REJECTED')
         actual = self.fenced_current(resource, inventory)
@@ -327,11 +373,15 @@ class State:
         if actual is None:
             # Create, а не SSA upsert: появившийся после inventory объект не перезапишется.
             self.call(['create', '--field-manager=kodex-install', '-f', '-'], desired)
+        elif (desired['apiVersion'], desired['kind']) in (('v1', 'ConfigMap'), ('apps/v1', 'Deployment')):
+            self.cas_update(desired, actual)
         else:
             desired['metadata']['resourceVersion'] = actual['metadata']['resourceVersion']
             self.call(['apply', '--server-side', '--field-manager=kodex-install', '-f', '-'], desired)
         current = self.get(resource)
         require(current is not None and owner(current), 'WRITE_READBACK_REQUIRED')
+        if actual is not None and (resource['apiVersion'], resource['kind']) in (('v1', 'ConfigMap'), ('apps/v1', 'Deployment')):
+            verify_resource(resource, current)
         inventory[key(resource)] = {'uid': current['metadata']['uid'], 'seal': seal(current)}
 
     def delete(self, resource, inventory):
@@ -367,7 +417,7 @@ def verify_schemas(state, resources):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=('inventory', 'apply', 'delete', 'readback', 'prepare-api-write'))
+    parser.add_argument('mode', choices=('inventory', 'apply', 'delete', 'readback', 'prepare-api-write', 'preflight-apply'))
     parser.add_argument('--context', required=True)
     parser.add_argument('--render', required=True)
     parser.add_argument('--inventory')
@@ -391,6 +441,13 @@ def main():
             return
         state = State(args.context)
         state.discover(resources)
+        if args.mode == 'preflight-apply':
+            require(args.manifest, 'MANIFEST_REQUIRED')
+            selected = list(filter(None, yaml.safe_load_all(Path(args.manifest).read_bytes())))
+            registered = {key(r): r for r in resources}
+            require(all(r == registered.get(key(r)) for r in selected), 'MANIFEST_OUTSIDE_PINNED_RENDER')
+            for resource in selected:state.preflight_apply(resource)
+            return
         if args.mode == 'inventory':
             value = state.inventory(resources)
             require(args.inventory and not Path(args.inventory).exists(), 'NEW_INVENTORY_PATH_REQUIRED')
