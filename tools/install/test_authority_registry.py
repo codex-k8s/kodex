@@ -1,0 +1,83 @@
+"""Initial registry projection и postmigration resume без обхода history/schema/identity."""
+import copy
+import json
+from pathlib import Path
+import unittest
+from unittest.mock import patch
+import yaml
+import authority_registry as registry
+from deployment_profile import Rejected
+
+
+def fixture():
+    cm={'apiVersion':'v1','kind':'ConfigMap','metadata':{'name':registry.REGISTRY,'namespace':'kodex-system','labels':{'app.kubernetes.io/part-of':'kodex'}},'data':{'key-delivery-targets.yaml':yaml.safe_dump({'version':1,'source_revision':7,'targets':[{'workload_id':'synthetic','role':'AUTHORIZATION_ISSUER'}]})}}
+    def workload(kind,name):
+        return {'apiVersion':'batch/v1'if kind=='Job'else'apps/v1','kind':kind,'metadata':{'name':name,'namespace':'kodex-system','labels':{'app.kubernetes.io/part-of':'kodex'}},'spec':{'replicas':2,'template':{'spec':{'containers':[{'name':'synthetic','image':'images.example.invalid/app@sha256:'+'a'*64}]}}}}
+    resources=[cm,*[workload('Job',name)for name in registry.MIGRATION_JOBS],workload('Deployment','internal-rpc-authority-publisher')]
+    return resources
+
+
+class FakeState:
+    def __init__(self,resources):
+        self.current={v['metadata']['name']:copy.deepcopy(v)for v in resources}
+        self.current[registry.REGISTRY].pop('status',None)
+        for name in registry.MIGRATION_JOBS:self.current[name]['status']={'succeeded':1}
+        p=self.current['internal-rpc-authority-publisher'];p['metadata']['uid']='synthetic-publisher';p['spec']['replicas']=0
+        self.state={'rotation_count':0,'snapshot_count':0,'fence_allows':True};self.publisher_pods=[];self.runtime_pods=[];self.other_deployment=False;self.calls=[]
+    def get(self,value):return copy.deepcopy(self.current.get(value['metadata']['name']))
+    def call(self,args):
+        self.calls.append(args)
+        if 'exec'in args:
+            assert args[-1]==registry.STATE_SQL and args[-1].startswith('SELECT ')
+            return json.dumps(self.state).encode()
+        if 'deployments'in args:
+            values=[self.current['internal-rpc-authority-publisher']]
+            if self.other_deployment:values.append({'metadata':{'uid':'foreign'}})
+        elif '-l'in args:values=self.publisher_pods
+        elif 'kodex-runtime'in args:values=self.runtime_pods
+        else:raise AssertionError('Unexpected or mutating operation')
+        return json.dumps({'items':values}).encode()
+
+
+class AuthorityRegistry(unittest.TestCase):
+    def test_projection_changes_only_revision_and_provenance_preserves_target_graph(self):
+        resources=fixture();before=copy.deepcopy(resources);config={'schema':'kodex.authority-registry/v1','source_revision':1}
+        result=registry.transform(resources,config);self.assertEqual(resources,before)
+        self.assertEqual(result[1:],before[1:]);cm=result[0]
+        self.assertEqual(cm['metadata']['annotations'],{registry.ANNOTATION:'1'})
+        document=yaml.safe_load(cm['data']['key-delivery-targets.yaml']);self.assertEqual(document['source_revision'],1)
+        self.assertEqual(document['targets'],yaml.safe_load(before[0]['data']['key-delivery-targets.yaml'])['targets'])
+        self.assertEqual(registry.transform(result,config),result)
+        for revision in [True,0,-1,9007199254740992]:
+            with self.assertRaises(Rejected):registry.transform(resources,{**config,'source_revision':revision})
+        with self.assertRaises(Rejected):registry.transform(resources,{**config,'ignore_history':True})
+
+    def test_resume_reads_exact_completed_jobs_schema_and_empty_history_without_mutation(self):
+        resources=fixture();state=FakeState(resources);desired=registry.transform(resources,{'schema':'kodex.authority-registry/v1','source_revision':1})
+        with patch.object(registry,'verify_schemas')as schemas,patch.object(registry,'verify_resource')as exact:
+            result=registry.verify_resume(state,desired)
+        schemas.assert_called_once_with(state,desired);self.assertEqual(exact.call_count,6)
+        self.assertEqual(result['migrations'],'VERIFIED_NOT_REPEATED');self.assertTrue(all('get'in a or 'exec'in a for a in state.calls))
+
+    def test_nonempty_history_wrong_targets_pending_job_or_live_workload_refuses_resume(self):
+        resources=fixture();desired=registry.transform(resources,{'schema':'kodex.authority-registry/v1','source_revision':1})
+        mutations=[lambda s:s.state.update(rotation_count=1),lambda s:s.state.update(snapshot_count=1),lambda s:s.state.update(fence_allows=False),
+            lambda s:s.current[registry.MIGRATION_JOBS[0]].update(status={'active':1}),
+            lambda s:s.current['internal-rpc-authority-publisher']['spec'].update(replicas=2),
+            lambda s:s.publisher_pods.append({'status':{'phase':'Running'}}),lambda s:s.runtime_pods.append({'metadata':{'name':'synthetic'}}),
+            lambda s:setattr(s,'other_deployment',True),lambda s:s.current[registry.REGISTRY]['metadata']['labels'].clear(),
+            lambda s:s.current[registry.REGISTRY]['data'].update({'key-delivery-targets.yaml':yaml.safe_dump({'version':1,'source_revision':7,'targets':[]})})]
+        for mutate in mutations:
+            state=FakeState(resources);mutate(state)
+            with self.subTest(mutate=mutate),patch.object(registry,'verify_schemas'),patch.object(registry,'verify_resource'),self.assertRaises(Rejected):registry.verify_resume(state,desired)
+
+    def test_default_and_resume_deploy_share_remaining_workloads_without_repeating_migrations(self):
+        root=Path(__file__).resolve().parents[2]
+        text=(root/'tools/install/deploy-platform.sh').read_text()
+        resume=text.split('if [[ "$mode" == resume-authority-bootstrap ]]; then',1)[1].split('\nfi',1)[0]
+        self.assertIn('preflight-resume',resume);self.assertIn('apply_workloads_after_authority',resume)
+        for forbidden in ['-migrate','-migration','broker-bootstrap','runtime-credentials','goose','force-conflicts']:
+            self.assertNotIn(forbidden,resume)
+
+
+if __name__=='__main__':unittest.main()

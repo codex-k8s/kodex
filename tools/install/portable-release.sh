@@ -19,14 +19,14 @@ while (($#)); do
     --preimage-directory) preimage="${2:-}"; shift 2 ;;
     --oidc-ca-file|--ingress-deployment|--ingress-controller|--ingress-namespace|--ingress-service) arguments+=("$1" "${2:-}"); shift 2 ;;
     --help)
-      printf '%s\n' 'Usage: portable-release.sh --mode plan|preflight|apply|readback --render <yaml> --render-sha256 <64-hex> [--context <exact-context>]' \
+      printf '%s\n' 'Usage: portable-release.sh --mode plan|preflight|apply|resume-authority-bootstrap|readback --render <yaml> --render-sha256 <64-hex> [--context <exact-context>]' \
         '  [--oidc-ca-file <pem>] [--ingress-controller <name> --ingress-namespace <name>]' \
         '  [--preimage-directory <new-private-directory>; required for apply]'
       exit 0 ;;
     *) fail 'unsupported argument' ;;
   esac
 done
-case "$mode" in plan|preflight|apply|readback) ;; *) fail 'mode is invalid' ;; esac
+case "$mode" in plan|preflight|apply|resume-authority-bootstrap|readback) ;; *) fail 'mode is invalid' ;; esac
 [[ "$expected_sha" =~ ^[a-f0-9]{64}$ ]] || fail 'exact render digest is required'
 [[ -f "$render" && ! -L "$render" ]] || fail 'regular render file is required'
 [[ "$mode" == plan || -n "$context" ]] || fail 'exact context is required'
@@ -45,7 +45,10 @@ timeout 60s python3 "$root/tools/install/portable_preflight.py" \
 [[ "$mode" != preflight ]] || exit 0
 tls_mode=$(yq -r 'select(.kind == "ConfigMap" and .metadata.name == "kodex-installation-profile") | .data."profile.json"' "$temporary/render.yaml" | jq -r '.public_tls.mode')
 [[ "$tls_mode" != managed ]] || tls_mode=enabled
-if [[ "$mode" == apply ]]; then
+if [[ "$mode" == resume-authority-bootstrap ]]; then
+  timeout 180s python3 "$root/tools/install/authority_registry.py" preflight-resume --render "$temporary/render.yaml" --context "$context"
+fi
+if [[ "$mode" == apply || "$mode" == resume-authority-bootstrap ]]; then
   [[ -n "$preimage" && "$preimage" == /* && ! -e "$preimage" ]] || fail 'new absolute preimage directory is required'
   mkdir -m 0700 -- "$preimage"
   cp -- "$temporary/render.yaml" "$preimage/candidate-render.yaml"
@@ -61,7 +64,9 @@ if [[ "$mode" == apply ]]; then
   timeout 180s python3 "$root/tools/install/portable_state.py" inventory \
     --context "$context" --render "$temporary/render.yaml" --inventory "$preimage/resource-inventory.json"
   # Preimage metadata не заменяет backup данных или разрешение на schema downgrade.
-  for phase in prepare-preflight preflight apply; do
+  phases=(prepare-preflight preflight apply)
+  [[ "$mode" != resume-authority-bootstrap ]] || phases=(prepare-preflight preflight resume-authority-bootstrap)
+  for phase in "${phases[@]}"; do
     "$root/tools/install/deploy-platform.sh" --context "$context" --mode "$phase" \
       --render "$temporary/render.yaml" --public-tls-mode "$tls_mode" \
       --portable-inventory "$preimage/resource-inventory.json" "${arguments[@]}"

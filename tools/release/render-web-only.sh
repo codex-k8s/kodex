@@ -23,12 +23,14 @@ usage() {
     '  --oidc-pod-component <label-value> --oidc-target-port <port>' \
     '  [--deployment-profile <deployment-profile.json>]' \
     '  [--model-provider-configuration <json> --model-provider-default-model <model>]'  \
+    '  [--authority-registry-configuration <json>]' \
     '  [--disable-observability]' \
     '  [--profile <web-only|web-with-mattermost>]' \
     '  [--ssh-compose-connection <public-connection.json>; repeatable]' \
     '  [--mattermost-host <dns>; required for web-with-mattermost]' >&2
 }
 
+authority_registry_configuration=""
 deployment_profile=""
 model_provider_configuration=""
 model_provider_default_model=""
@@ -62,6 +64,7 @@ ssh_compose_connections=()
 
 while (($# > 0)); do
   case "$1" in
+    --authority-registry-configuration) authority_registry_configuration="${2:-}"; shift 2 ;;
     --model-provider-configuration) model_provider_configuration="${2:-}"; shift 2 ;;
     --model-provider-default-model) model_provider_default_model="${2:-}"; shift 2 ;;
     --deployment-profile) deployment_profile="${2:-}"; shift 2 ;;
@@ -761,6 +764,10 @@ done
 # Проверки общих security/lifecycle contracts выше выполняются до удаления monitors.
 if [[ "$disable_observability" == true ]]; then
   python3 "$repository_root/tools/install/observability_profile.py" --render "$output" --disabled
+fi
+
+if [[ -n "$authority_registry_configuration" ]]; then
+  python3 "$repository_root/tools/install/authority_registry.py" render --render "$output" --configuration "$authority_registry_configuration"
 fi
 
 printf 'Web-only render created: %s\n' "$output"
