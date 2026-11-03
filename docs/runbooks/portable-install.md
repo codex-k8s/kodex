@@ -346,3 +346,10 @@ Inventory/readback совместимы с ответом `kubectl get -f - -o j
 запрошенным descriptor. Пустой ответ/List означает отсутствие; несколько или
 чужой объект отклоняются. Это не основание менять ownership labels существующих
 ресурсов: UID/seal fencing и запрет чужих объектов продолжают действовать.
+
+Git-managed model-provider projection получает `app.kubernetes.io/part-of=kodex`
+при генерации. Portable inventory до discovery/mutations проверяет ownership
+всех non-Secret ресурсов render; apply повторяет проверку desired resource.
+Непомеченные ресурсы и реальные чужие объекты не принимаются автоматически.
+При частичном прежнем apply сначала сверить точные intent, UID, spec и preimage;
+не добавлять labels посторонним объектам для обхода защиты.

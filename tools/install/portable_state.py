@@ -267,6 +267,7 @@ class State:
         return actual
 
     def inventory(self, resources):
+        require(all(owner(r) for r in resources if r['kind'] != 'Secret'), 'UNOWNED_RENDER_RESOURCE_REJECTED')
         self.discover(resources)
         result = {}
         # Выполняется весь inventory до первой mutation. Secret seeds не обновляются.
@@ -299,6 +300,7 @@ class State:
         return actual
 
     def apply(self, resource, inventory):
+        require(owner(resource), 'UNOWNED_RENDER_RESOURCE_REJECTED')
         actual = self.fenced_current(resource, inventory)
         if resource['kind'] == 'Lease':
             require(resource['metadata']['name'] == 'image-admission-controller-leader' and resource.get('spec') == {},

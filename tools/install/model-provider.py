@@ -74,7 +74,7 @@ def render(config, path, default_model):
     resources = [r for r in yaml.safe_load_all(Path(path).read_text()) if r]
     raw = json.dumps(config, ensure_ascii=False, separators=(',', ':'))
     name = 'kodex-model-provider-' + hashlib.sha256(raw.encode()).hexdigest()[:16]
-    resources.append({'apiVersion': 'v1', 'kind': 'ConfigMap', 'metadata': {'name': name, 'namespace': 'kodex-system'},
+    resources.append({'apiVersion': 'v1', 'kind': 'ConfigMap', 'metadata': {'name': name, 'namespace': 'kodex-system', 'labels': {'app.kubernetes.io/part-of': 'kodex'}},
                       'immutable': True, 'data': {'provider.json': raw}})
     seen = set()
     for resource in resources:
