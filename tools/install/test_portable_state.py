@@ -74,6 +74,38 @@ class FixtureState(State):
 
 
 class StateTest(unittest.TestCase):
+    def test_cronjob_preflight_and_update_use_same_fenced_cas_and_keep_schedule_suspended(self):
+        desired = {'apiVersion': 'batch/v1', 'kind': 'CronJob',
+            'metadata': {'name': 'synthetic-operator', 'namespace': 'kodex-system', 'labels': {'app.kubernetes.io/part-of': 'kodex'}},
+            'spec': {'schedule': '0 0 * * *', 'suspend': True, 'concurrencyPolicy': 'Forbid',
+                     'jobTemplate': {'spec': {'template': resource()['spec']['template']}}}}
+        env = desired['spec']['jobTemplate']['spec']['template']['spec']['containers'][0]['env']
+        env[:] = [{'name': 'DEPLOYMENT_ENVIRONMENT', 'valueFrom': {'fieldRef': {'fieldPath': 'metadata.namespace'}}}]
+        actual = live(desired)
+        actual['spec']['jobTemplate']['spec']['template']['spec']['containers'][0]['env'][0]['valueFrom']['fieldRef']['apiVersion'] = 'v1'
+        verify_resource(desired, actual)
+        env.append({'name': 'OTEL_SDK_DISABLED', 'value': 'true'})
+        state = FixtureState([actual]);inventory = state.inventory([desired])
+        state.preflight_apply(desired)
+        self.assertFalse(state.writes);self.assertIn('cronjobs.batch', state.probes[0][0])
+        self.assertIn('--dry-run=server', state.probes[0][0])
+        state.apply(desired, inventory)
+        self.assertIn('cronjobs.batch', state.writes[0][0]);self.assertIn('-n', state.writes[0][0])
+        self.assertEqual(state.writes[0][1][:2], [dict(op='test', path='/metadata/uid', value='test-uid'), dict(op='test', path='/metadata/resourceVersion', value='1')])
+        current = state.get(desired);verify_resource(desired, current)
+        self.assertTrue(current['spec']['suspend']);self.assertEqual(current['spec']['schedule'], '0 0 * * *')
+        self.assertEqual(current['metadata']['uid'], 'test-uid');self.assertNotIn('--force-conflicts', state.writes[0][0])
+        self.assertNotIn('delete', state.writes[0][0]);self.assertNotIn('create', state.writes[0][0])
+        with self.assertRaises(Rejected):state.cas_update(desired, actual)
+        foreign = copy.deepcopy(actual);foreign['metadata']['ownerReferences'] = [{'uid': 'foreign'}]
+        with self.assertRaises(Rejected):state.cas_update(desired, foreign)
+
+    def test_cronjob_cas_does_not_accept_other_api_versions(self):
+        desired = resource(kind='CronJob', name='synthetic');desired['apiVersion'] = 'batch/v1beta1'
+        state = FixtureState([live(desired)])
+        with self.assertRaises(Rejected):state.cas_update(desired, live(desired))
+        self.assertFalse(state.writes)
+
     def test_api_defaults_empty_arguments_emptydir_and_projected_downward_api_are_closed(self):
         desired = resource('Deployment', 'synthetic-defaults');desired['apiVersion'] = 'apps/v1'
         pod = desired['spec']['template']['spec'];pod['containers'][0]['args'] = []

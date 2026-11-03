@@ -4,7 +4,7 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.3.0
+version: 1.3.1
 updated: 2026-11-03
 ---
 
@@ -546,3 +546,11 @@ readonly sysfs, Pod cgroup limits, отсутствие credentials/сети. Э
 RoleImage и restart. Не использовать `hostUsers: true` или `noProcessSandbox`
 как запасной путь. Для partial bootstrap дополнительно передать явный профиль
 в resume-workloads; одного label в candidate недостаточно для допуска delta.
+
+Существующий `batch/v1 CronJob` обновляется через тот же закрытый реестр typed
+UID/resourceVersion CAS, что и прочие поддержанные mutable resources. Это сохраняет
+exact template при atomic fieldRef defaults и прежнем Update field manager,
+не требуя force-conflicts. До dry-run и apply проверяются owner и inventory seal;
+после записи — полный CronJob spec с закрытой нормализацией defaults. Schedule,
+suspend, concurrency/history policy и service identity входят в проверку.
+CronJob не удаляется/не пересоздаётся; существующие Jobs и их effects не меняются.
