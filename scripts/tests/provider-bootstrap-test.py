@@ -27,7 +27,7 @@ class Memory(p.Operator):
     def __init__(self, secret):
         super().__init__("synthetic")
         self.secrets = {secret["metadata"]["name"]: copy.deepcopy(secret)}
-        self.state = dict(accountRef=ACCOUNT, version=1, state="AUTHORIZED", enabled=True,
+        self.state = dict(accountRef=ACCOUNT, definitionKey="openai-codex", version=1, state="AUTHORIZED", enabled=True,
                           credentialRef="pcr_initialfixture", credential=p.descriptor(secret))
         self.effects = []
         self.conflict = False
@@ -58,6 +58,7 @@ class Memory(p.Operator):
         if self.conflict:
             raise p.Rejected("stale")
         assert values["expected_version"] == self.state["version"]
+        assert values["definition_key"] == self.state["definitionKey"]
         self.state.update(version=self.state["version"] + 1, credentialRef=values["credential_ref"], credential={
             "secretName": values["secret_name"], "secretUID": values["secret_uid"],
             "secretResourceVersion": values["secret_resource_version"], "contentSHA256": values["content_sha256"]})
@@ -140,6 +141,51 @@ class Tests(unittest.TestCase):
             file.chmod(0o600)
             operator.reconcile(KEY, str(file))
             self.assertEqual(operator.state["version"], 2)
+
+    def test_gateway_recovery_and_import_bind_exact_definition(self):
+        key = "default-opencode-test-gateway"
+        raw = b'{"auth_mode":"gateway-api-key","provider_definition_key":"opencode-test-gateway","API_KEY":"synthetic-gateway-key"}'
+        secret = p.seed_manifest("30000000-0000-4000-8000-000000000001", raw)
+        secret["metadata"].update(uid="10000000-0000-4000-8000-000000000001", resourceVersion="7")
+        operator = Memory(secret)
+        operator.bootstrap_account_key = key
+        operator.state["definitionKey"] = "opencode-test-gateway"
+        operator.reconcile(key)
+        self.assertEqual(operator.effects, ["create", "cas", "metadata"])
+        operator.effects.clear()
+        operator.reconcile(key)
+        self.assertEqual(operator.effects, ["metadata"])
+        with tempfile.TemporaryDirectory() as directory:
+            file = Path(directory) / "auth.json"
+            file.write_bytes(raw.replace(b"gateway-key", b"new-gateway-key"))
+            file.chmod(0o600)
+            operator.reconcile(key, str(file))
+            self.assertEqual(operator.state["version"], 3)
+
+    def test_cross_provider_auth_rejected_before_effects(self):
+        for definition in ("opencode-other-gateway", "opencode-test-gateway"):
+            operator = Memory(stored())
+            operator.state["definitionKey"] = definition
+            with self.assertRaises(p.Rejected):
+                operator.reconcile(KEY)
+            self.assertEqual(operator.effects, [])
+        with self.assertRaises(p.Rejected):
+            p.require_definition(b'{"auth_mode":"gateway-api-key","provider_definition_key":"opencode-test-gateway","API_KEY":"synthetic-gateway-key"}', "openai-codex")
+
+    def test_snapshot_reads_selected_definition_and_rejects_unsupported(self):
+        class Snapshot(p.Operator):
+            def sql(self, name, values):
+                self.last = (name, values)
+                return self.rows
+        operator = Snapshot("synthetic")
+        operator.rows = [Memory(stored()).state]
+        for definition in ("openai-codex", "opencode-test-gateway"):
+            operator.rows[0]["definitionKey"] = definition
+            self.assertEqual(operator.snapshot(KEY)["definitionKey"], definition)
+        for rows in ([], operator.rows * 2, [{**operator.rows[0], "definitionKey": "unsupported"}]):
+            operator.rows = rows
+            with self.assertRaises(p.Rejected):
+                operator.snapshot(KEY)
 
 
 class SeedMemory(p.Operator):

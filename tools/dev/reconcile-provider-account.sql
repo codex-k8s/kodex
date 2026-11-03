@@ -1,4 +1,8 @@
 \set ON_ERROR_STOP on
+\if :{?definition_key}
+\else
+\set definition_key openai-codex
+\endif
 BEGIN;
 SET LOCAL statement_timeout = '10s';
 SET LOCAL lock_timeout = '5s';
@@ -14,7 +18,7 @@ JOIN control_plane.subjects actor ON actor.organization_id = account.organizatio
 LEFT JOIN control_plane.provider_credential_revisions revision ON revision.id = account.current_credential_revision_id
 WHERE installation_owner.stable_key = 'installation-owner'
   AND account.ref = :'account_ref' AND account.stable_key = :'stable_key'
-  AND account.definition_key = 'openai-codex' AND account.enabled
+  AND account.definition_key = :'definition_key' AND account.enabled
   AND account.state IN ('AUTHORIZED', 'REAUTHORIZATION_REQUIRED', 'PENDING_AUTHORIZATION')
 FOR UPDATE OF account
 \gset

@@ -113,7 +113,34 @@ def test():
     current = values("c" if results[0] else "d", 3, second["credentialRef"])
     current.update(account_ref="pacc_disabled_fixture", stable_key="disabled-fixture")
     assert not apply(current, False)
-    print("Provider bootstrap PostgreSQL passed: fresh/partial/current/initial/replay/stale/concurrent/foreign/rollback/retained/disabled")
+    # Та же owner/CAS/audit вертикаль для optional gateway, без live API/credentials.
+    run(cli, data=b"""
+INSERT INTO control_plane.provider_definitions(stable_key,name,adapter_key)
+VALUES ('opencode-test-gateway','Synthetic gateway','opencode-test-gateway');
+INSERT INTO control_plane.provider_accounts(ref,organization_id,definition_key,stable_key,name,state,created_by)
+SELECT 'pacc_gateway_fixture',organization_id,'opencode-test-gateway','default-opencode-test-gateway',
+       'Synthetic gateway','PENDING_AUTHORIZATION',id FROM control_plane.subjects WHERE ref='sys_platform';
+""")
+
+    def gateway_snapshot():
+        return json.loads(run(cli + ["-v", "stable_key=default-opencode-test-gateway"],
+                              data=(ROOT / "tools/dev/provider-account-snapshot.sql").read_bytes()).stdout)[0]
+
+    gateway = values("a", 1, "")
+    gateway.update(account_ref="pacc_gateway_fixture", stable_key="default-opencode-test-gateway",
+                   definition_key="opencode-test-gateway", credential_ref="pcr_gateway_fixture_a")
+    assert gateway_snapshot()["definitionKey"] == "opencode-test-gateway"
+    assert not apply({**gateway, "definition_key": "openai-codex"}, False)
+    apply(gateway)
+    accepted = gateway_snapshot()
+    assert accepted["version"] == 2
+    apply(gateway)
+    assert gateway_snapshot() == accepted
+    assert not apply({**gateway, "credential_ref": "pcr_gateway_fixture_b", "content_sha256": "b" * 64}, False)
+    assert not apply({**gateway, "account_ref": "pacc_foreign_fixture"}, False)
+    audits = run(cli, data=b"SELECT count(*) FROM control_plane.audit_events WHERE resource_ref='pacc_gateway_fixture' AND action='provider_account.bootstrap_credential_imported';").stdout.strip()
+    assert audits == b"1"
+    print("Provider bootstrap PostgreSQL passed: fresh/partial/current/initial/replay/stale/concurrent/foreign/rollback/retained/disabled/gateway/definition-isolation")
 
 
 if __name__ == "__main__":
