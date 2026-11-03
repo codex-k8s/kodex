@@ -4,7 +4,7 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.3.1
+version: 1.3.2
 updated: 2026-11-03
 ---
 
@@ -554,3 +554,29 @@ exact template при atomic fieldRef defaults и прежнем Update field ma
 после записи — полный CronJob spec с закрытой нормализацией defaults. Schedule,
 suspend, concurrency/history policy и service identity входят в проверку.
 CronJob не удаляется/не пересоздаётся; существующие Jobs и их effects не меняются.
+
+### Kubernetes API до и после DNAT
+
+Переносимый render сохраняет точный Service host CIDR/TCP443 и endpoint host CIDRs/
+ports для девяти зарегистрированных API clients. Control plane и secret broker
+тоже читают/публикуют Kubernetes resources. Default Service route publisher
+заменяется согласованным Service route из остальных clients. Выход на весь CIDR
+или произвольный порт не используется; CA/hostname, RBAC и service identity прежние.
+Семь endpoint anchors должны совпадать, шесть Service anchors — также; неизвестный
+selector/policy, неоднозначность, subnet/except/UDP/дубликаты закрывают repair.
+
+Для точного partial initial bootstrap опциональный флаг
+`--repair-kubernetes-api-endpoints` добавляется только к `resume-workloads`.
+`kubernetes_api_profile.py --render <protected-file>` воспроизводит тот же delta:
+endpoint rule двух clients и Service rule publisher; остальные ресурсы неизменны.
+Guard сравнивает весь candidate с предыдущим render, штатными optional SDK/BuildKit
+transformations и этим явным repair. History/schema/completed Jobs, UID/inventory
+fencing, preimage и empty runtime по-прежнему обязательны. Три NetworkPolicy
+применяются до ожидания control plane; typed CAS сохраняет UID/resourceVersion и
+проверяет весь policy/annotations после записи, без force-conflicts/пересоздания.
+Это не общий произвольный network patch или разрешение повтора unknown effects.
+
+При прежнем ProgressDeadlineExceeded сначала подтвердить причину и фактическое
+состояние всех consumers. Новый guarded resume требует отдельной сверки частичной
+попытки и свежего backup/preimage. HTTP401 unauthenticated probe подтверждает лишь
+TLS/маршрут; это не проверка application permissions или успешный вход.

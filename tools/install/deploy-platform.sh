@@ -21,6 +21,7 @@ public_tls_mode=enabled
 portable_arguments=()
 portable_inventory=""
 previous_arguments=()
+repair_api_endpoints=false
 while (($# > 0)); do
   case "$1" in
     --portable-inventory) portable_inventory="${2:-}"; shift 2 ;;
@@ -29,6 +30,7 @@ while (($# > 0)); do
     --render) render_file="${2:-}"; shift 2 ;;
     --oidc-ca-file|--ingress-deployment|--ingress-controller|--ingress-namespace|--ingress-service) portable_arguments+=("$1" "${2:-}"); shift 2 ;;
     --public-tls-mode) public_tls_mode="${2:-}"; shift 2 ;;
+    --repair-kubernetes-api-endpoints) repair_api_endpoints=true; previous_arguments+=("$1"); shift ;;
     --previous-render|--previous-render-sha256|--buildkit-runtime-profile) previous_arguments+=("$1" "${2:-}"); shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
@@ -41,6 +43,9 @@ case "$mode" in
   *) fail 'mode is invalid' ;;
 esac
 case "$public_tls_mode" in deferred|enabled|external) ;; *) fail 'public TLS mode is invalid' ;; esac
+if [[ "$repair_api_endpoints" == true ]]; then
+  case "$mode" in prepare-preflight|preflight|resume-workloads) ;; *) fail 'API endpoint repair requires workload resume' ;; esac
+fi
 [[ -f "$render_file" && -s "$render_file" && ! -L "$render_file" ]] ||
   fail 'release render is invalid'
 for command_name in jq kubectl rg sha256sum sort yq python3; do
@@ -892,6 +897,14 @@ if [[ "$mode" == resume-workloads ]]; then
       (.kind == "ConfigMap" or .kind == "ValidatingAdmissionPolicy" or
        .kind == "ImageAdmissionPolicyParameters"))
   '
+  if [[ "$repair_api_endpoints" == true ]]; then
+    apply_render bootstrap-api-endpoint-repair '
+      select(.kind == "NetworkPolicy" and
+        (.metadata.name == "control-plane-exact-runtime-paths" or
+         .metadata.name == "secret-broker-exact-runtime-paths" or
+         .metadata.name == "internal-rpc-authority-publisher-exact-paths"))
+    '
+  fi
   wait_authority_projections bootstrap
   apply_workloads_after_authority
 fi

@@ -74,6 +74,22 @@ class FixtureState(State):
 
 
 class StateTest(unittest.TestCase):
+    def test_network_policy_update_keeps_uid_and_fences_resource_version_before_exact_readback(self):
+        desired = {'apiVersion': 'networking.k8s.io/v1', 'kind': 'NetworkPolicy',
+            'metadata': {'name': 'synthetic-api-client', 'namespace': 'kodex-system', 'labels': {'app.kubernetes.io/part-of': 'kodex'}},
+            'spec': {'podSelector': {'matchLabels': {'app': 'synthetic'}}, 'policyTypes': ['Egress'], 'egress': []}}
+        actual = live(desired);state = FixtureState([actual]);inventory = state.inventory([desired])
+        desired['spec']['egress'] = [{'to': [{'ipBlock': {'cidr': '192.0.2.11/32'}}], 'ports': [{'protocol': 'TCP', 'port': 6443}]}]
+        state.preflight_apply(desired);self.assertFalse(state.writes)
+        self.assertIn('networkpolicies.networking.k8s.io', state.probes[0][0])
+        state.apply(desired, inventory);current = state.get(desired);verify_resource(desired, current)
+        self.assertEqual(current['metadata']['uid'], 'test-uid')
+        self.assertEqual(state.writes[0][1][:2], [dict(op='test', path='/metadata/uid', value='test-uid'), dict(op='test', path='/metadata/resourceVersion', value='1')])
+        with self.assertRaises(Rejected):state.cas_update(desired, actual)
+        wrong = copy.deepcopy(current);wrong['spec']['podSelector'] = {}
+        with self.assertRaises(Rejected):verify_resource(desired, wrong)
+        self.assertNotIn('--force-conflicts', state.writes[0][0]);self.assertNotIn('delete', state.writes[0][0])
+
     def test_cronjob_preflight_and_update_use_same_fenced_cas_and_keep_schedule_suspended(self):
         desired = {'apiVersion': 'batch/v1', 'kind': 'CronJob',
             'metadata': {'name': 'synthetic-operator', 'namespace': 'kodex-system', 'labels': {'app.kubernetes.io/part-of': 'kodex'}},

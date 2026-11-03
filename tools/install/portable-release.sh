@@ -12,6 +12,7 @@ preimage=""
 previous_render=""
 previous_sha=""
 buildkit_profile=standard
+repair_api_endpoints=false
 previous_arguments=()
 arguments=()
 while (($#)); do
@@ -23,6 +24,7 @@ while (($#)); do
     --preimage-directory) preimage="${2:-}"; shift 2 ;;
     --previous-render) previous_render="${2:-}"; shift 2 ;;
     --previous-render-sha256) previous_sha="${2:-}"; shift 2 ;;
+    --repair-kubernetes-api-endpoints) repair_api_endpoints=true; shift ;;
     --buildkit-runtime-profile) buildkit_profile="${2:-}"; shift 2 ;;
     --oidc-ca-file|--ingress-deployment|--ingress-controller|--ingress-namespace|--ingress-service) arguments+=("$1" "${2:-}"); shift 2 ;;
     --help)
@@ -30,6 +32,7 @@ while (($#)); do
         '  [--oidc-ca-file <pem>] [--ingress-controller <name> --ingress-namespace <name>]' \
         '  [--preimage-directory <new-private-directory>; required for apply]'
       printf '%s\n' '  [--previous-render <yaml> --previous-render-sha256 <64-hex> --buildkit-runtime-profile standard|nested-userns; resume-workloads only]'
+      printf '%s\n' '  [--repair-kubernetes-api-endpoints; explicit workload resume repair from pinned endpoint anchors]'
       exit 0 ;;
     *) fail 'unsupported argument' ;;
   esac
@@ -50,7 +53,9 @@ if [[ "$mode" == resume-workloads ]]; then
   [[ "$(sha256sum "$temporary/previous.yaml" | awk '{print $1}')" == "$previous_sha" ]] || fail 'previous render digest mismatch'
   case "$buildkit_profile" in standard|nested-userns) ;; *) fail 'BuildKit runtime profile is invalid' ;; esac
   previous_arguments=(--previous-render "$temporary/previous.yaml" --previous-render-sha256 "$previous_sha" --buildkit-runtime-profile "$buildkit_profile")
+  [[ "$repair_api_endpoints" != true ]] || previous_arguments+=(--repair-kubernetes-api-endpoints)
 else
+  [[ "$repair_api_endpoints" == false ]] || fail 'API endpoint repair only applies to workload resume'
   [[ -z "$previous_render" && -z "$previous_sha" ]] || fail 'previous render only applies to workload resume'
   [[ "$buildkit_profile" == standard ]] || fail 'BuildKit profile must be materialized in the pinned render before fresh apply'
 fi

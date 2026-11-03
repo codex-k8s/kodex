@@ -167,9 +167,14 @@ class RegistrySource(unittest.TestCase):
             self.assertEqual(result.returncode, 0, (result.stdout + result.stderr).decode()[-3000:])
             resources = [item for item in registry.yaml.safe_load_all(render.read_text()) if item]
             self.assertTrue(any(item['apiVersion'] == 'monitoring.coreos.com/v1' for item in resources))
+            for name in ['control-plane-exact-runtime-paths','secret-broker-exact-runtime-paths']:
+                policy=registry.one(resources,'NetworkPolicy',name)
+                self.assertIn({'to':[{'ipBlock':{'cidr':'192.0.2.11/32'}}],'ports':[{'protocol':'TCP','port':6443}]},policy['spec']['egress'])
             control=registry.one(resources,'Deployment','control-plane')['spec']['template']['spec']['containers'][0]
             self.assertIn({'name':'OTEL_SDK_DISABLED','value':'true'},control['env'])
             self.assertEqual(registry.yaml.safe_load(registry.one(resources,'ConfigMap','internal-rpc-authority-publisher-target-registry')['data']['key-delivery-targets.yaml'])['source_revision'],7)
+            publisher=registry.one(resources,'NetworkPolicy','internal-rpc-authority-publisher-exact-paths')
+            self.assertIn({'to':[{'ipBlock':{'cidr':'192.0.2.10/32'}}],'ports':[{'protocol':'TCP','port':443}]},publisher['spec']['egress'])
             projected = registry.transform(resources, config, lock)
             self.assertEqual(registry.transform(projected, config, lock), projected)
             self.assertTrue(any((item['kind'] == 'Deployment' and item['metadata']['name'] == 'control-plane' for item in projected)))
