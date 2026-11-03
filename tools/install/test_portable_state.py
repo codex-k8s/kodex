@@ -118,6 +118,39 @@ class StateTest(unittest.TestCase):
             self.assertFalse(bad.probes);self.assertFalse(bad.writes)
             with self.assertRaises(Rejected):verify_resource(desired, drift)
 
+    def test_admission_defaults_roundtrip_without_weakening_security_fields(self):
+        for kind, field in [('ValidatingAdmissionPolicy', 'matchConstraints'), ('ValidatingAdmissionPolicyBinding', 'matchResources')]:
+            desired = {'apiVersion': 'admissionregistration.k8s.io/v1', 'kind': kind,
+                'metadata': {'name': 'synthetic-policy', 'labels': {'app.kubernetes.io/part-of': 'kodex'}},
+                'spec': {field: {'resourceRules': [{'apiGroups': [''], 'apiVersions': ['v1'], 'operations': ['CREATE'], 'resources': ['pods']}]}}}
+            if kind == 'ValidatingAdmissionPolicy':desired['spec'].update(failurePolicy='Fail', validations=[{'expression': 'object != null'}])
+            else:desired['spec'].update(policyName='synthetic-policy', validationActions=['Deny'])
+            actual = live(api_write_resource(desired));verify_resource(desired, actual)
+            state = FixtureState([actual]);inventory = state.inventory([desired]);state.preflight_apply(desired)
+            self.assertEqual(state.probes[0][1]['spec'], actual['spec'])
+            self.assertFalse(state.writes);state.apply(desired, inventory);verify_resource(desired, state.get(desired))
+            for change in ['selector', 'scope', 'matchPolicy', 'unknown', 'authority']:
+                drift = copy.deepcopy(actual)
+                if change == 'selector':drift['spec'][field]['namespaceSelector'] = {'matchLabels': {'bypass': 'true'}}
+                elif change == 'scope':drift['spec'][field]['resourceRules'][0]['scope'] = 'Namespaced'
+                elif change == 'matchPolicy':drift['spec'][field]['matchPolicy'] = 'Exact'
+                elif change == 'unknown':drift['spec']['foreign'] = True
+                elif kind == 'ValidatingAdmissionPolicy':drift['spec']['failurePolicy'] = 'Ignore'
+                else:drift['spec']['validationActions'] = ['Audit']
+                with self.assertRaises(Rejected):verify_resource(desired, drift)
+            self.assertNotIn('--force-conflicts', state.writes[0][0])
+
+    def test_cli_rejection_exposes_only_closed_reason_code(self):
+        import portable_state
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary)/'render.yaml';path.write_text(yaml.safe_dump(resource()))
+            for message, expected in [('FOREIGN_RESOURCE_COLLISION', 'FOREIGN_RESOURCE_COLLISION'), ('synthetic-secret=value', 'REJECTED')]:
+                fixture = FixtureState([])
+                with patch.object(fixture, 'inventory', side_effect=Rejected(message)), patch.object(portable_state, 'State', return_value=fixture), patch.object(sys, 'argv', ['portable_state.py', 'inventory', '--context', 'test-context', '--render', str(path), '--inventory', str(Path(temporary)/'new.json')]):
+                    with self.assertRaises(SystemExit) as caught:portable_state.main()
+                self.assertEqual(str(caught.exception), 'Portable state operation rejected: '+expected+'; readback required')
+                self.assertFalse(fixture.writes)
+
     def test_owned_preflight_uses_same_cas_protocol_without_writing(self):
         desired=resource(kind='Deployment',name='synthetic');desired['apiVersion']='apps/v1'
         actual=live(desired);actual['spec']['replicas']=0;desired['spec']['replicas']=2
