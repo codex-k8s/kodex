@@ -123,6 +123,61 @@ class PortableServices(unittest.TestCase):
             with self.subTest(candidate=candidate):
                 self.assertNotEqual(render(candidate).returncode, 0)
 
+    def test_internal_registry_keeps_tls_and_closes_public_route(self):
+        value = profile()
+        value['registry'].update(expose=False, internalClients=[{'namespace':'synthetic-build', 'podLabels':{'app.kubernetes.io/name':'release-builder'}}])
+        result = render(value)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        resources = list(filter(None, yaml.safe_load_all(result.stdout)))
+        self.assertEqual({r['metadata']['name'] for r in resources if r['kind']=='IngressRoute'}, {'synthetic-s3','synthetic-console'})
+        service = next(r for r in resources if r['kind']=='Service' and r['metadata']['name']=='synthetic-registry')
+        self.assertEqual(service['spec']['type'], 'ClusterIP')
+        self.assertEqual(service['spec']['ports'][0]['port'],443)
+        policy = next(r for r in resources if r['kind']=='NetworkPolicy')
+        registry_rules = [r for r in policy['spec']['ingress'] if any(p['port']==8443 for p in r['ports'])]
+        self.assertEqual(registry_rules,[{'from':[{'namespaceSelector':{'matchLabels':{'kubernetes.io/metadata.name':'synthetic-build'}},'podSelector':{'matchLabels':{'app.kubernetes.io/name':'release-builder'}}}],'ports':[{'protocol':'TCP','port':8443}]}])
+        registry = next(r for r in resources if r['kind']=='ConfigMap' and r['metadata']['name']=='synthetic-registry')
+        self.assertIn('ssl_protocols TLSv1.3',registry['data']['nginx.conf'])
+        self.assertIn('auth_basic_user_file /prepared/htpasswd',registry['data']['nginx.conf'])
+
+    def test_internal_only_registry_without_clients_denies_ingress(self):
+        value = profile()
+        value['storage']['enabled']=False
+        value['storage']['ui']['enabled']=False
+        value['registry']['expose']=False
+        value['exposure']['mode']='disabled'
+        result=render(value)
+        self.assertEqual(result.returncode,0,result.stderr)
+        policy=next(r for r in yaml.safe_load_all(result.stdout) if r and r['kind']=='NetworkPolicy')
+        self.assertEqual(policy['spec']['ingress'],[])
+
+    def test_internal_client_requires_exact_namespace_and_nonempty_pod_selector(self):
+        for client in [{'namespace':'*','podLabels':{'app':'synthetic'}},{'namespace':'synthetic-build','podLabels':{}},{'namespace':'synthetic-build','podLabels':{'app':'*'}}]:
+            value=profile();value['registry']['internalClients']=[client]
+            with self.subTest(client=client):self.assertNotEqual(render(value).returncode,0)
+
+    def test_node_pull_allows_only_explicit_host_cidrs(self):
+        value=profile();value['registry'].update(expose=False,nodeCIDRs=['192.0.2.21/32'])
+        result=render(value)
+        self.assertEqual(result.returncode,0,result.stderr)
+        policy=next(r for r in yaml.safe_load_all(result.stdout)if r and r['kind']=='NetworkPolicy')
+        self.assertIn({'from':[{'ipBlock':{'cidr':'192.0.2.21/32'}}],'ports':[{'protocol':'TCP','port':8443}]},policy['spec']['ingress'])
+        value['registry']['nodeCIDRs']=['192.0.2.0/24']
+        self.assertNotEqual(render(value).returncode,0)
+        for cidr in ['999.0.0.1/32','127.0.0.1/32','0.0.0.0/32']:
+            value['registry']['nodeCIDRs']=[cidr]
+            with self.subTest(cidr=cidr), self.assertRaises(ValueError):PLAN.validate_values(value)
+
+    def test_opt_in_public_ca_bundle_has_exact_namespace_scope(self):
+        value=profile();value['trustBundle']={'enabled':True,'namespaces':['synthetic-build','synthetic-system']}
+        result=render(value)
+        self.assertEqual(result.returncode,0,result.stderr)
+        bundle=next(r for r in yaml.safe_load_all(result.stdout)if r and r['kind']=='Bundle')
+        self.assertEqual(bundle['spec']['sources'],[{'secret':{'name':'synthetic-root','key':'tls.crt'}}])
+        self.assertEqual(bundle['spec']['target'],{'configMap':{'key':'ca.crt'},'namespaceSelector':{'matchExpressions':[{'key':'kubernetes.io/metadata.name','operator':'In','values':['synthetic-build','synthetic-system']}]}})
+        value['trustBundle']['namespaces']=[]
+        self.assertNotEqual(render(value).returncode,0)
+
     def test_plan_validates_real_cidr_and_creates_private_render_once(self):
         for invalid in ("0.0.0.0/32", "127.0.0.1/32", "192.0.2.0/24", "999.0.0.1/32", "::1/128"):
             candidate = profile(); candidate["exposure"]["trustedProxyCIDRs"] = [invalid]

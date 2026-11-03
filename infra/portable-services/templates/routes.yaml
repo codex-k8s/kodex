@@ -19,7 +19,7 @@ spec:
 {{- if .Values.storage.ui.enabled -}}
 {{- $routes = append $routes (dict "name" "console" "component" "storage" "port" 23646 "host" .Values.exposure.storageHost "prefix" .Values.exposure.storagePrefix "strip" false) -}}
 {{- end -}}
-{{- if .Values.registry.enabled -}}
+{{- if and .Values.registry.enabled .Values.registry.expose -}}
 {{- $routes = append $routes (dict "name" "registry" "component" "registry" "port" 443 "host" .Values.exposure.registryHost "prefix" "/v2" "strip" false) -}}
 {{- end -}}
 {{- range $route := $routes }}

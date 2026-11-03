@@ -22,7 +22,10 @@
     "storageClass": "",
     "writerUsername": "release-writer",
     "readerUsername": "release-reader",
-    "repositoryPrefix": "kodex"
+    "repositoryPrefix": "kodex",
+    "expose": true,
+    "internalClients": [],
+    "nodeCIDRs": []
   },
   "pki": {
     "mode": "existing",
@@ -46,5 +49,9 @@
     "namespace": "kube-system",
     "podName": "traefik"
   },
-  "credentialsRevision": "initial"
+  "credentialsRevision": "initial",
+  "trustBundle": {
+    "enabled": false,
+    "namespaces": []
+  }
 }

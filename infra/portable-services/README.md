@@ -113,3 +113,40 @@ controlled rollout, чтобы nginx/init действительно приме�
 Повтор неизменённого apply сохраняет template. PVC, CA и Secret refs при этом
 не удаляются. Обновление leaf Secret по-прежнему требует отдельного
 контролируемого restart до истечения прежнего сертификата.
+
+### Внутренний registry без публичного маршрута
+
+`registry.expose: false` отключает только публичный `/v2` route. HTTPS
+ClusterIP Service, backend TLS1.3, writer/reader identities и PVC сохраняются.
+По умолчанию `expose: true` оставляет прежний профиль. Запросы сборки могут
+использовать DNS `<release>-registry.<namespace>.svc.cluster.local` на443.
+
+`registry.internalClients` разрешает только указанные namespace+Pod labels на
+backend8443; пустой список не открывает внутренний доступ. Обе части selector
+находятся в одном peer и объединяются AND. Например:
+
+```yaml
+registry:
+  expose: false
+  internalClients:
+    - namespace: synthetic-build
+      podLabels:
+        app.kubernetes.io/name: release-builder
+trustBundle:
+  enabled: true
+  namespaces: [synthetic-build, synthetic-system]
+```
+
+Опциональный `trustBundle` требует установленный trust-manager и isolated PKI.
+Chart namespace должен совпадать с настроенным trust namespace trust-manager.
+Bundle `<release>-ca` экспортирует только публичный root `tls.crt` в ConfigMap
+`ca.crt` выбранных namespaces. Private key не экспортируется. Пустой selector,
+wildcard namespaces и selector всех Pod не поддерживаются. При existing PKI
+оператор передаёт public trust bundle внешним поддержанным механизмом.
+
+Внешний origin приложения и доступ к storage UI не определяют адрес registry
+для Kubernetes workloads. До установки проверить DNS/CA, положительный
+writer/read-only reader и отрицательный доступ неразрешённого Pod/namespace.
+Смена source policy не меняет credential и не ослабляет image admission.
+
+Для containerd/kubelet допустимы отдельные `registry.nodeCIDRs`: только exact /32 или /128 проверенных узлов на8443. Они не заменяют TLS/auth и не дают доступ к S3/UI. Подсети и loopback закрыты plan validation. Адреса и UID узлов сверяются инфраструктурным исполнителем до apply.
