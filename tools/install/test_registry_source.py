@@ -166,6 +166,7 @@ class RegistrySource(unittest.TestCase):
             result = subprocess.run(command, cwd=root, capture_output=True, timeout=150, env={**os.environ, 'GOMAXPROCS': '2', 'GOFLAGS': '-p=1', 'GOWORK': 'off'})
             self.assertEqual(result.returncode, 0, (result.stdout + result.stderr).decode()[-3000:])
             resources = [item for item in registry.yaml.safe_load_all(render.read_text()) if item]
+            self.assertTrue(any(item['apiVersion'] == 'monitoring.coreos.com/v1' for item in resources))
             projected = registry.transform(resources, config, lock)
             self.assertEqual(registry.transform(projected, config, lock), projected)
             self.assertTrue(any((item['kind'] == 'Deployment' and item['metadata']['name'] == 'control-plane' for item in projected)))

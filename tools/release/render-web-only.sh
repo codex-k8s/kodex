@@ -758,4 +758,9 @@ yq -N -r '.. | select(has("image")) | .image' "$output" | while IFS= read -r ima
   [[ "$image_ref" == *@sha256:* ]] || fail "mutable image reference is forbidden: $image_ref"
 done
 
+# Проверки общих security/lifecycle contracts выше выполняются до удаления monitors.
+if [[ "$disable_observability" == true ]]; then
+  python3 "$repository_root/tools/install/observability_profile.py" --render "$output" --disabled
+fi
+
 printf 'Web-only render created: %s\n' "$output"

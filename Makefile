@@ -49,6 +49,7 @@ test-portable-services-native:
 	@timeout 300s python3 -B scripts/tests/portable-services-native-test.py
 
 test-web-only-release:
+	@timeout 30s python3 -B tools/install/test_observability_profile.py
 	timeout 60 python3 -B tools/release/build-recipe-test.py
 	timeout 180 python3 -B tools/install/test_registry_source.py
 	@timeout 180s python3 -B tools/install/test_model_provider.py

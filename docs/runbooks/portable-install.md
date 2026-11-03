@@ -324,3 +324,19 @@ checkout вместе с каноническим materializer script. Script SH
 разрешение hot patch уже действующей immutable admission policy. TLS/mTLS,
 подписи, provenance, SBOM, scanner и разделение source/promotion credentials
 сохраняются.
+
+## Установка без Prometheus Operator
+
+`render-web-only.sh --disable-observability` отключает экспорт OpenTelemetry
+через `OTEL_SDK_DISABLED=true` и исключает ServiceMonitor, PodMonitor и
+PrometheusRule из итогового render. Prometheus Operator/его CRD для такого
+профиля не нужны. По умолчанию monitors и alerts сохраняются. Неизвестные
+ресурсы monitoring API отклоняются, а не удаляются молча. Security policies,
+RBAC, подписи образов, lifecycle gates и readiness probes не отключаются.
+Установленные operator/CRD и чужие ресурсы команда не удаляет.
+
+Для уже закреплённого render того же контракта доступен эквивалентный
+postprocessor `python3 tools/install/observability_profile.py --render <yaml>
+--disabled`. Версию tools закрепить отдельно, сохранить прежний render и
+снова выполнить plan/preflight с новым SHA до apply. Это не миграция
+application/schema и не разрешение пропустить inventory существующих ресурсов.
