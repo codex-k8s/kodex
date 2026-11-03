@@ -86,6 +86,7 @@ def normalized_pod(expected, actual):
             wanted = expected[field][index]
             defaults = {'terminationMessagePath': '/dev/termination-log', 'terminationMessagePolicy': 'File',
                 'imagePullPolicy': 'IfNotPresent', 'resources': {},
+                'command': [], 'args': [],
                 'securityContext': {'procMount': 'Default', 'privileged': False, 'capabilities': {}}, 'stdin': False, 'stdinOnce': False, 'tty': False}
             for probe in ('livenessProbe', 'readinessProbe', 'startupProbe'):
                 defaults[probe] = {'timeoutSeconds': 1, 'periodSeconds': 10, 'successThreshold': 1,
@@ -108,7 +109,28 @@ def normalized_pod(expected, actual):
         value['volumes'][index] = strip_defaults(wanted[index], volume, {
             'configMap': {'defaultMode': 420}, 'secret': {'defaultMode': 420},
             'projected': {'defaultMode': 420}, 'downwardAPI': {'defaultMode': 420}, 'hostPath': {'type': ''}})
+        normalized = value['volumes'][index]
+        if 'emptyDir' in wanted[index] and 'emptyDir' in normalized:
+            normalized['emptyDir'] = strip_defaults(wanted[index]['emptyDir'], normalized['emptyDir'], {'medium': ''})
+        if 'downwardAPI' in normalized:
+            normalized['downwardAPI'] = normalized_downward_api(wanted[index].get('downwardAPI', {}), normalized['downwardAPI'])
+        sources = normalized.get('projected', {}).get('sources', [])
+        wanted_sources = wanted[index].get('projected', {}).get('sources', [])
+        require(len(sources) == len(wanted_sources), 'LIVE_PROJECTED_SOURCE_SET_DRIFT')
+        for source_index, source in enumerate(sources):
+            if 'downwardAPI' in source:
+                source['downwardAPI'] = normalized_downward_api(wanted_sources[source_index].get('downwardAPI', {}), source['downwardAPI'])
     return value
+
+
+def normalized_downward_api(expected, actual):
+    """Канонизирует только fieldRef.apiVersion=v1, сохраняя состав и все пути."""
+    result = copy.deepcopy(actual)
+    wanted_items = expected.get('items', [])
+    require(len(result.get('items', [])) == len(wanted_items), 'LIVE_DOWNWARD_API_ITEM_SET_DRIFT')
+    for index, item in enumerate(result.get('items', [])):
+        result['items'][index] = strip_defaults(wanted_items[index], item, {'fieldRef': {'apiVersion': 'v1'}})
+    return result
 
 
 def normalized_claim_templates(expected, actual):
@@ -355,7 +377,10 @@ class State:
 
     def cas_update(self, desired, actual, dry_run=False):
         kind = (desired['apiVersion'], desired['kind'])
-        require(kind in (('v1', 'ConfigMap'), ('apps/v1', 'Deployment')), 'EXACT_CAS_KIND_REQUIRED')
+        targets = {('v1', 'ConfigMap'): 'configmaps', ('apps/v1', 'Deployment'): 'deployments.apps',
+                   ('admissionregistration.k8s.io/v1', 'ValidatingAdmissionPolicy'): 'validatingadmissionpolicies.admissionregistration.k8s.io',
+                   ('admissionregistration.k8s.io/v1', 'ValidatingAdmissionPolicyBinding'): 'validatingadmissionpolicybindings.admissionregistration.k8s.io'}
+        require(kind in targets, 'EXACT_CAS_KIND_REQUIRED')
         require(owner(desired) and owner(actual) and key(desired) == key(actual) and actual['metadata'].get('ownerReferences', []) == desired['metadata'].get('ownerReferences', []), 'FOREIGN_RESOURCE_COLLISION')
         metadata = actual['metadata']
         patch = [{'op': 'test', 'path': '/metadata/uid', 'value': metadata['uid']},
@@ -375,8 +400,8 @@ class State:
                     patch.append({'op': 'add', 'path': '/' + field, 'value': copy.deepcopy(desired[field])})
             elif field in actual:
                 patch.append({'op': 'remove', 'path': '/' + field})
-        target = 'configmaps' if kind[1] == 'ConfigMap' else 'deployments.apps'
-        arguments = ['-n', desired['metadata']['namespace'], 'patch', target, desired['metadata']['name'],
+        target = targets[kind]
+        arguments = (['-n', desired['metadata']['namespace']] if desired['metadata'].get('namespace') else []) + ['patch', target, desired['metadata']['name'],
                      '--type=json', '--field-manager=kodex-install', '--patch-file=/dev/stdin']
         if dry_run:arguments.append('--dry-run=server')
         self.call(arguments, patch)
@@ -386,7 +411,7 @@ class State:
         actual = self.get(resource)
         if actual is not None:
             require(owner(actual) and not actual['metadata'].get('deletionTimestamp') and actual['metadata'].get('ownerReferences', []) == resource['metadata'].get('ownerReferences', []), 'FOREIGN_RESOURCE_COLLISION')
-        if actual is not None and (resource['apiVersion'], resource['kind']) in (('v1', 'ConfigMap'), ('apps/v1', 'Deployment')):
+        if actual is not None and (resource['apiVersion'], resource['kind']) in (('v1', 'ConfigMap'), ('apps/v1', 'Deployment'), ('admissionregistration.k8s.io/v1', 'ValidatingAdmissionPolicy'), ('admissionregistration.k8s.io/v1', 'ValidatingAdmissionPolicyBinding')):
             self.cas_update(api_write_resource(resource, actual), actual, dry_run=True)
         else:
             self.call(['apply', '--server-side', '--dry-run=server', '--field-manager=kodex-install', '-f', '-'], api_write_resource(resource, actual))
@@ -403,7 +428,7 @@ class State:
         if actual is None:
             # Create, а не SSA upsert: появившийся после inventory объект не перезапишется.
             self.call(['create', '--field-manager=kodex-install', '-f', '-'], desired)
-        elif (desired['apiVersion'], desired['kind']) in (('v1', 'ConfigMap'), ('apps/v1', 'Deployment')):
+        elif (desired['apiVersion'], desired['kind']) in (('v1', 'ConfigMap'), ('apps/v1', 'Deployment'), ('admissionregistration.k8s.io/v1', 'ValidatingAdmissionPolicy'), ('admissionregistration.k8s.io/v1', 'ValidatingAdmissionPolicyBinding')):
             self.cas_update(desired, actual)
         else:
             desired['metadata']['resourceVersion'] = actual['metadata']['resourceVersion']

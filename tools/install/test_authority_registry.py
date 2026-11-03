@@ -29,6 +29,7 @@ class FakeState:
         for name in registry.MIGRATION_JOBS:self.current[name]['status']={'succeeded':1}
         p=self.current['internal-rpc-authority-publisher'];p['metadata']['uid']='synthetic-publisher';p['spec']['replicas']=0
         self.state={'rotation_count':0,'snapshot_count':0,'fence_allows':True};self.publisher_pods=[];self.runtime_pods=[];self.other_deployment=False;self.calls=[]
+        self.live_deployments = None
     def get(self,value):return copy.deepcopy(self.current.get(value['metadata']['name']))
     def call(self,args):
         self.calls.append(args)
@@ -39,7 +40,7 @@ class FakeState:
             assert args[-1] == registry.published_state_sql(digest)
             return json.dumps(self.published_state).encode()
         if 'deployments'in args:
-            values=[self.current['internal-rpc-authority-publisher']]
+            values=self.live_deployments if self.live_deployments is not None else [self.current['internal-rpc-authority-publisher']]
             if self.other_deployment:values.append({'metadata':{'uid':'foreign'}})
         elif '-l'in args:values=self.publisher_pods
         elif 'kodex-runtime'in args:values=self.runtime_pods
@@ -48,6 +49,61 @@ class FakeState:
 
 
 class AuthorityRegistry(unittest.TestCase):
+    def test_nested_buildkit_resume_requires_exact_named_profile_not_arbitrary_security_delta(self):
+        previous = registry.observability_profile.transform(registry.transform(fixture(), {'schema': 'kodex.authority-registry/v1', 'source_revision': 1}), True)
+        builder = copy.deepcopy(previous[-1]);builder['metadata']['name'] = 'kodex-buildkit'
+        pod = builder['spec']['template']['spec'];pod.update(hostUsers=False, automountServiceAccountToken=False, serviceAccountName='kodex-buildkit')
+        pod['containers'][0].update(name='buildkitd', securityContext=copy.deepcopy(registry.buildkit_runtime_profile.STANDARD))
+        previous.append(builder)
+        desired = registry.buildkit_runtime_profile.transform(previous, 'nested-userns')
+        state = FakeState(previous);state.current['internal-rpc-authority-publisher']['spec']['replicas'] = 2
+        state.published_state = dict(rotation_count=1, snapshot_count=1, fence_allows=True, matching_count=1)
+        state.live_deployments = [state.current['internal-rpc-authority-publisher'], state.current['kodex-buildkit']]
+        with patch.object(registry, 'verify_schemas'):
+            self.assertEqual(registry.verify_workload_resume(state, desired, previous, 'nested-userns')['deployments'], 2)
+            with self.assertRaises(Rejected):registry.verify_workload_resume(state, desired, previous)
+            wrong = copy.deepcopy(desired);wrong[-1]['spec']['template']['spec']['hostUsers'] = True
+            with self.assertRaises(Rejected):registry.verify_workload_resume(state, wrong, previous, 'nested-userns')
+
+    def test_workload_resume_accepts_only_exact_before_or_after_profile_and_preserves_history(self):
+        previous = registry.observability_profile.transform(registry.transform(fixture(), {'schema': 'kodex.authority-registry/v1', 'source_revision': 1}), True)
+        worker = copy.deepcopy(previous[-1]);worker['metadata']['name'] = 'synthetic-worker'
+        worker['spec']['template']['spec']['initContainers'] = [dict(name='issuer', restartPolicy='Always')]
+        previous.append(worker)
+        desired = registry.observability_profile.transform(previous, True)
+        def state_for(values):
+            state = FakeState(values);state.current['internal-rpc-authority-publisher']['spec']['replicas'] = 2
+            state.published_state = dict(rotation_count=1, snapshot_count=1, fence_allows=True, matching_count=1)
+            state.live_deployments = [state.current['internal-rpc-authority-publisher'], copy.deepcopy(values[-1])]
+            return state
+        for values in [previous, desired]:
+            state = state_for(values)
+            with patch.object(registry, 'verify_schemas'):
+                result = registry.verify_workload_resume(state, desired, previous)
+            self.assertEqual(result['deployments'], 2)
+            self.assertTrue(all('get' in call or 'exec' in call for call in state.calls))
+        for change in ['image', 'unknown-deployment', 'runtime', 'history', 'job', 'target-image']:
+            state = state_for(previous);target = copy.deepcopy(desired)
+            if change == 'image': state.live_deployments[-1]['spec']['template']['spec']['containers'][0]['image'] = 'images.example.invalid/foreign'
+            elif change == 'unknown-deployment': state.live_deployments[-1]['metadata']['name'] = 'foreign'
+            elif change == 'runtime': state.runtime_pods = [dict(metadata=dict(name='synthetic'))]
+            elif change == 'history': state.published_state['snapshot_count'] = 2
+            elif change == 'job': state.current[registry.MIGRATION_JOBS[0]]['status'] = dict(active=1)
+            else: target[-1]['spec']['template']['spec']['containers'][0]['image'] = 'images.example.invalid/new'
+            with self.subTest(change=change), patch.object(registry, 'verify_schemas'), self.assertRaises(Rejected):
+                registry.verify_workload_resume(state, target, previous)
+
+    def test_existing_job_preserves_active_completed_and_unknown_effects(self):
+        resources = fixture();state = FakeState(resources);name = registry.MIGRATION_JOBS[0]
+        self.assertTrue(registry.existing_job(state, resources, name))
+        state.current[name]['status'] = dict(active=1)
+        self.assertTrue(registry.existing_job(state, resources, name))
+        state.current[name]['status'] = dict(conditions=[dict(type='Failed', status='True')])
+        with self.assertRaises(Rejected): registry.existing_job(state, resources, name)
+        state.current.pop(name)
+        self.assertFalse(registry.existing_job(state, resources, name))
+        self.assertFalse(state.calls)
+
     def test_projection_plan_scopes_dynamic_keys_to_real_pod_references(self):
         catalog={'version':1,'namespace':'kodex-system','secrets':[{'name':name,'dynamic':dynamic,'items':[{'key':'private.jwk'}]}for name,dynamic in [('active',True),('projected',True),('environment',True),('unused',True),('static',False)]]}
         pod={'containers':[{'name':'app','env':[{'name':'TOKEN','valueFrom':{'secretKeyRef':{'name':'environment','key':'token'}}}]}],
@@ -132,6 +188,13 @@ class AuthorityRegistry(unittest.TestCase):
         self.assertIn('preflight-resume',resume);self.assertIn('apply_workloads_after_authority',resume)
         for forbidden in ['-migrate','-migration','broker-bootstrap','runtime-credentials','goose','force-conflicts']:
             self.assertNotIn(forbidden,resume)
+        workload_resume = text.split('if [[ "$mode" == resume-workloads ]]; then\n  [[ -n "$profile_mode"', 1)[1].split('\nfi', 1)[0]
+        self.assertIn('preflight-workloads', workload_resume)
+        self.assertIn('apply_workloads_after_authority', workload_resume)
+        self.assertNotIn('apply_job', workload_resume)
+        workloads = text.split('apply_workloads_after_authority() {', 1)[1].split('\n}', 1)[0]
+        self.assertNotIn('.metadata.name != "role-image-builder"', workloads)
+        self.assertLess(workloads.index('ensure_email_projection_secret'), workloads.index('rollout status deployment/control-plane'))
 
 
 if __name__=='__main__':unittest.main()

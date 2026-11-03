@@ -9,6 +9,10 @@ context=""
 render=""
 expected_sha=""
 preimage=""
+previous_render=""
+previous_sha=""
+buildkit_profile=standard
+previous_arguments=()
 arguments=()
 while (($#)); do
   case "$1" in
@@ -17,16 +21,20 @@ while (($#)); do
     --render) render="${2:-}"; shift 2 ;;
     --render-sha256) expected_sha="${2:-}"; shift 2 ;;
     --preimage-directory) preimage="${2:-}"; shift 2 ;;
+    --previous-render) previous_render="${2:-}"; shift 2 ;;
+    --previous-render-sha256) previous_sha="${2:-}"; shift 2 ;;
+    --buildkit-runtime-profile) buildkit_profile="${2:-}"; shift 2 ;;
     --oidc-ca-file|--ingress-deployment|--ingress-controller|--ingress-namespace|--ingress-service) arguments+=("$1" "${2:-}"); shift 2 ;;
     --help)
-      printf '%s\n' 'Usage: portable-release.sh --mode plan|preflight|apply|resume-authority-bootstrap|resume-authority-published|readback --render <yaml> --render-sha256 <64-hex> [--context <exact-context>]' \
+      printf '%s\n' 'Usage: portable-release.sh --mode plan|preflight|apply|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback --render <yaml> --render-sha256 <64-hex> [--context <exact-context>]' \
         '  [--oidc-ca-file <pem>] [--ingress-controller <name> --ingress-namespace <name>]' \
         '  [--preimage-directory <new-private-directory>; required for apply]'
+      printf '%s\n' '  [--previous-render <yaml> --previous-render-sha256 <64-hex> --buildkit-runtime-profile standard|nested-userns; resume-workloads only]'
       exit 0 ;;
     *) fail 'unsupported argument' ;;
   esac
 done
-case "$mode" in plan|preflight|apply|resume-authority-bootstrap|resume-authority-published|readback) ;; *) fail 'mode is invalid' ;; esac
+case "$mode" in plan|preflight|apply|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback) ;; *) fail 'mode is invalid' ;; esac
 [[ "$expected_sha" =~ ^[a-f0-9]{64}$ ]] || fail 'exact render digest is required'
 [[ -f "$render" && ! -L "$render" ]] || fail 'regular render file is required'
 [[ "$mode" == plan || -n "$context" ]] || fail 'exact context is required'
@@ -36,6 +44,16 @@ temporary=$(mktemp -d)
 trap 'rm -rf -- "$temporary"' EXIT
 cp -- "$render" "$temporary/render.yaml"
 [[ "$(sha256sum "$temporary/render.yaml" | awk '{print $1}')" == "$expected_sha" ]] || fail 'render digest mismatch'
+if [[ "$mode" == resume-workloads ]]; then
+  [[ -f "$previous_render" && ! -L "$previous_render" && "$previous_sha" =~ ^[a-f0-9]{64}$ ]] || fail 'exact previous render is required'
+  cp -- "$previous_render" "$temporary/previous.yaml"
+  [[ "$(sha256sum "$temporary/previous.yaml" | awk '{print $1}')" == "$previous_sha" ]] || fail 'previous render digest mismatch'
+  case "$buildkit_profile" in standard|nested-userns) ;; *) fail 'BuildKit runtime profile is invalid' ;; esac
+  previous_arguments=(--previous-render "$temporary/previous.yaml" --previous-render-sha256 "$previous_sha" --buildkit-runtime-profile "$buildkit_profile")
+else
+  [[ -z "$previous_render" && -z "$previous_sha" ]] || fail 'previous render only applies to workload resume'
+  [[ "$buildkit_profile" == standard ]] || fail 'BuildKit profile must be materialized in the pinned render before fresh apply'
+fi
 timeout 60s python3 "$root/tools/install/portable_preflight.py" --plan \
   --render "$temporary/render.yaml" --sha256 "$expected_sha"
 [[ "$mode" != plan ]] || exit 0
@@ -51,7 +69,11 @@ fi
 if [[ "$mode" == resume-authority-published ]]; then
   timeout 180s python3 "$root/tools/install/authority_registry.py" preflight-published --render "$temporary/render.yaml" --context "$context"
 fi
-if [[ "$mode" == apply || "$mode" == resume-authority-bootstrap || "$mode" == resume-authority-published ]]; then
+if [[ "$mode" == resume-workloads ]]; then
+  timeout 180s python3 "$root/tools/install/authority_registry.py" preflight-workloads \
+    --render "$temporary/render.yaml" --context "$context" "${previous_arguments[@]}"
+fi
+if [[ "$mode" == apply || "$mode" == resume-authority-bootstrap || "$mode" == resume-authority-published || "$mode" == resume-workloads ]]; then
   [[ -n "$preimage" && "$preimage" == /* && ! -e "$preimage" ]] || fail 'new absolute preimage directory is required'
   mkdir -m 0700 -- "$preimage"
   cp -- "$temporary/render.yaml" "$preimage/candidate-render.yaml"
@@ -70,10 +92,11 @@ if [[ "$mode" == apply || "$mode" == resume-authority-bootstrap || "$mode" == re
   phases=(prepare-preflight preflight apply)
   [[ "$mode" != resume-authority-bootstrap ]] || phases=(prepare-preflight preflight resume-authority-bootstrap)
   [[ "$mode" != resume-authority-published ]] || phases=(prepare-preflight preflight resume-authority-published)
+  [[ "$mode" != resume-workloads ]] || phases=(prepare-preflight preflight resume-workloads)
   for phase in "${phases[@]}"; do
     "$root/tools/install/deploy-platform.sh" --context "$context" --mode "$phase" \
       --render "$temporary/render.yaml" --public-tls-mode "$tls_mode" \
-      --portable-inventory "$preimage/resource-inventory.json" "${arguments[@]}"
+      --portable-inventory "$preimage/resource-inventory.json" "${arguments[@]}" "${previous_arguments[@]}"
   done
 fi
 timeout 180s python3 "$root/tools/install/portable_state.py" readback \

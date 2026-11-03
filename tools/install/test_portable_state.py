@@ -74,6 +74,26 @@ class FixtureState(State):
 
 
 class StateTest(unittest.TestCase):
+    def test_api_defaults_empty_arguments_emptydir_and_projected_downward_api_are_closed(self):
+        desired = resource('Deployment', 'synthetic-defaults');desired['apiVersion'] = 'apps/v1'
+        pod = desired['spec']['template']['spec'];pod['containers'][0]['args'] = []
+        pod['volumes'] = [dict(name='cache', emptyDir={}), dict(name='identity', projected=dict(sources=[dict(downwardAPI=dict(items=[dict(path='namespace', fieldRef=dict(fieldPath='metadata.namespace'))]))])),
+                          dict(name='direct', downwardAPI=dict(items=[dict(path='name', fieldRef=dict(fieldPath='metadata.name'))]))]
+        actual = live(desired);observed = actual['spec']['template']['spec'];observed['containers'][0].pop('args')
+        observed['volumes'][0]['emptyDir']['medium'] = ''
+        observed['volumes'][1]['projected']['sources'][0]['downwardAPI']['items'][0]['fieldRef']['apiVersion'] = 'v1'
+        observed['volumes'][2]['downwardAPI']['items'][0]['fieldRef']['apiVersion'] = 'v1'
+        verify_resource(desired, actual)
+        for change in ['medium', 'args', 'version', 'path', 'source', 'unknown']:
+            wrong = copy.deepcopy(actual);spec = wrong['spec']['template']['spec']
+            if change == 'medium':spec['volumes'][0]['emptyDir']['medium'] = 'Memory'
+            elif change == 'args':spec['containers'][0]['args'] = ['unexpected']
+            elif change == 'version':spec['volumes'][1]['projected']['sources'][0]['downwardAPI']['items'][0]['fieldRef']['apiVersion'] = 'v2'
+            elif change == 'path':spec['volumes'][1]['projected']['sources'][0]['downwardAPI']['items'][0]['fieldRef']['fieldPath'] = 'metadata.name'
+            elif change == 'source':spec['volumes'][1]['projected']['sources'].append(dict(secret=dict(name='foreign')))
+            else:spec['volumes'][0]['emptyDir']['unknown'] = True
+            with self.subTest(change=change), self.assertRaises(Rejected):verify_resource(desired, wrong)
+
     def test_real_get_accepts_exact_object_or_singleton_list_and_empty_absence(self):
         desired=resource();current=live(desired);state=State('test-context')
         state.routes={(desired['apiVersion'],desired['kind']):('/apis/batch/v1','jobs',True)}
@@ -127,7 +147,12 @@ class StateTest(unittest.TestCase):
             else:desired['spec'].update(policyName='synthetic-policy', validationActions=['Deny'])
             actual = live(api_write_resource(desired));verify_resource(desired, actual)
             state = FixtureState([actual]);inventory = state.inventory([desired]);state.preflight_apply(desired)
-            self.assertEqual(state.probes[0][1]['spec'], actual['spec'])
+            self.assertEqual(api_write_resource(desired, actual)['spec'], actual['spec'])
+            self.assertIn('patch', state.probes[0][0])
+            self.assertNotIn('-n', state.probes[0][0])
+            self.assertEqual(state.probes[0][1][:2], [
+                dict(op='test', path='/metadata/uid', value='test-uid'),
+                dict(op='test', path='/metadata/resourceVersion', value='1')])
             self.assertFalse(state.writes);state.apply(desired, inventory);verify_resource(desired, state.get(desired))
             for change in ['selector', 'scope', 'matchPolicy', 'unknown', 'authority']:
                 drift = copy.deepcopy(actual)
@@ -150,6 +175,21 @@ class StateTest(unittest.TestCase):
                     with self.assertRaises(SystemExit) as caught:portable_state.main()
                 self.assertEqual(str(caught.exception), 'Portable state operation rejected: '+expected+'; readback required')
                 self.assertFalse(fixture.writes)
+
+    def test_policy_cas_updates_exact_spec_and_rejects_stale_or_foreign_owner(self):
+        for kind in ['ValidatingAdmissionPolicy', 'ValidatingAdmissionPolicyBinding']:
+            desired = dict(apiVersion='admissionregistration.k8s.io/v1', kind=kind,
+                metadata=dict(name='synthetic-policy', labels={'app.kubernetes.io/part-of': 'kodex'}),
+                spec=dict(failurePolicy='Fail', validations=[dict(expression='object != null')]) if kind == 'ValidatingAdmissionPolicy' else dict(policyName='synthetic-policy', validationActions=['Deny']))
+            actual = live(api_write_resource(desired));actual['spec']['syntheticPredecessor'] = True
+            state = FixtureState([actual]);inventory = state.inventory([desired]);state.apply(desired, inventory)
+            self.assertNotIn('syntheticPredecessor', state.get(desired)['spec'])
+            self.assertIn('patch', state.writes[0][0]);self.assertNotIn('-n', state.writes[0][0])
+            verify_resource(desired, state.get(desired))
+            stale = copy.deepcopy(actual);stale['metadata']['resourceVersion'] = '0'
+            with self.assertRaises(Rejected): state.cas_update(desired, stale)
+            foreign = copy.deepcopy(actual);foreign['metadata']['labels'] = {}
+            with self.assertRaises(Rejected): state.cas_update(desired, foreign)
 
     def test_owned_preflight_uses_same_cas_protocol_without_writing(self):
         desired=resource(kind='Deployment',name='synthetic');desired['apiVersion']='apps/v1'

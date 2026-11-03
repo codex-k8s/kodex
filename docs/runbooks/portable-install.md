@@ -4,7 +4,7 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.2.0
+version: 1.3.0
 updated: 2026-11-03
 ---
 
@@ -452,3 +452,97 @@ Publisher Ready ещё может ждать consumer readbacks. Resume не п�
 других Deployments этот initial resume закрыт: требуется отдельная reconciliation,
 а не обнуление history или слепой повтор. Резервная копия данных обязательна отдельно;
 metadata preimage не является rollback БД. Default protected профиль сохраняется.
+
+## Продолжение частично запущенного initial graph
+
+Все startup consumers, включая `role-image-builder`, создаются до ожидания
+готовности control-plane. Их issuer/readback не зависит от готовности main
+контейнера. Готовность builder по-прежнему требует его настоящие зависимости;
+успешный readback не означает готовность сборки. До запуска email-bridge
+установщик создаёт каноническую пустую `email-bridge-mailbox-projection`, только
+если её ещё нет. Существующая mutable проекция принадлежит control-plane и
+никогда не заменяется пустым bootstrap. Пустой список не означает настройку почты.
+
+Опциональный `observability_profile.py --disabled` устанавливает
+`OTEL_SDK_DISABLED=true` также для native sidecars (`initContainers` с
+`restartPolicy: Always`); одноразовые init templates сохраняются. Для будущих
+managed image-admission Jobs профиль монтирует content-addressed immutable
+ConfigMap с производным canonical renderer через поддержанный
+`IMAGE_ADMISSION_CONTROLLER_RENDERER_PATH`. Генератор меняет ровно SDK block
+native authority issuer; остальные Job/PVC, identities, grants и security
+context сохраняются. Перед выдачей YAML script проверяет SHA256 настоящего
+штатного renderer в immutable image. Неизвестная версия закрыто отклоняется,
+скрытого выполнения другой ревизии нет. Используются имеющиеся Bash/jq/awk/
+sha256sum/cat; дополнительные parser/runtime пакеты в controller не требуются.
+Parameter-owned label `kodex.dev/observability-profile: disabled` в
+`ImageAdmissionPolicyParameters` разрешает ровно этот SDK env в CEL; label
+самого Job не даёт такого разрешения. Подписи, mTLS, admission, probes и остальные
+проверки остаются обязательными. Custom renderer нельзя молча заменить.
+Без явного отключения observability исходный render полностью сохраняется.
+
+Если initial graph уже частично запущен, `resume-authority-published` закрыт.
+Узкий `portable-release.sh --mode resume-workloads` требует `--previous-render`
+и `--previous-render-sha256`, exact desired render SHA/context и новый private
+preimage. Разрешённое отличие candidate — результат публичного
+`observability_profile.transform(previous, disabled=True)` и, только при явном
+`--buildkit-runtime-profile nested-userns`, соответствующий BuildKit transform: прежние images,
+schema, registry и прочие настройки неизменны. Readonly preflight проверяет
+начальную signed publication, registry revision1/digest, OPEN fence, все пять
+завершённых bootstrap Jobs/schema heads и пустой runtime. Каждый существующий
+Deployment обязан точно соответствовать predecessor либо successor; неизвестный
+workload или executable drift закрывает продолжение. Для policy update применяются
+UID/resourceVersion CAS и полный readback, без force или ослабления CEL.
+
+Resume не повторяет migrations, bootstrap credentials, broker setup либо authority
+publication. Если materializer Job уже существует, проверяются его exact spec и
+результат; active Job дожидаются, completed используют, failed требует отдельной
+reconciliation. Неизвестный внешний эффект не разрешает delete/recreate/retry.
+Перед продолжением обязателен отдельный актуальный backup данных. Старый image
+и metadata preimage не гарантируют безопасного отката схемы. После restart снова
+проверить API/login и настоящий runtime turn/tool/resume; Ready Pod этого не доказывает.
+
+Закрытая нормализация API defaults допускает только пустые `command/args`,
+пустой `emptyDir.medium` и `fieldRef.apiVersion=v1` в обычном и projected downward
+API. Непустой аргумент, другой medium/fieldPath/version, дополнительный source
+или неизвестное поле не являются defaults и закрывают exact readback.
+
+| Этап / actor | Авторитетное состояние и допуск | Эффект и потерянный ответ |
+|---|---|---|
+| Operator: plan/preflight | Exact render SHA/context, initial signed history, schema/jobs, before/after executable | Только SELECT/get/server dry-run; отказ не разрешает apply |
+| Installer: bootstrap seed | Named CP-owned mutable Secret, канонический пустой payload только при отсутствии | Create-only; после ошибки readback; существующее поколение не обновляется |
+| Installer: profile assets/workloads | Git-owned exact render, fenced inventory UID/seal/RV, parameter-owned opt-in | Exact CAS/create, readback; неизвестный исход требует reconciliation |
+| Issuer/publisher: activation | Настоящие consumer attestations, signed snapshot и OPEN fence | Штатный durable authority protocol; установщик не подделывает readback/activation |
+| Installer: materializer | Exact Job spec и его Kubernetes status | Existing active/completed не пересоздаётся; Failed/UNKNOWN требует разбора receipt |
+| Operator: restart/приёмка | Images/schema/config pins, role/API/runtime receipts и данные | Адресный restart и реальная проверка; старый image не откатывает migration |
+
+Installer repair не создаёт бизнес-событий от имени приложения: его журнал —
+private preimage/inventory и readback. Прикладные consumers сохраняют собственные
+штатные events, grants и lifecycle receipts; repair не переигрывает их операции.
+
+## Опциональный BuildKit в nested user namespace
+
+По умолчанию `buildkit_runtime_profile.py --profile standard` ничего не меняет.
+В некоторых nested Kubernetes/runc средах `privileged: true` заставляет sandbox
+создать sysfs в network namespace, которым его user namespace не владеет.
+Ошибка возникает до запуска прикладного контейнера; bind `/sys` в нём не исправляет
+создание sandbox. Обсуждение runtime:
+[runc #5309](https://github.com/opencontainers/runc/issues/5309).
+
+Для такого контура отдельно материализовать
+`python3 tools/install/buildkit_runtime_profile.py --render <yaml> --profile nested-userns`
+и закрепить новый render SHA. Изменяется только точный `kodex-buildkit/buildkitd`
+с прежним pinned image и `hostUsers: false`: вместо privileged назначаются
+namespace capabilities ALL, `procMount: Unmasked`, Unconfined seccomp/AppArmor и
+разрешённый privilege escalation внутри mapped namespace. Это доверенный build
+daemon, чей стандартный privileged режим уже снимает эти ограничения; профиль
+не предназначен для сотрудников, agent runtime или произвольных workload.
+Неподдержанная custom security context закрыто отклоняется. Host namespaces,
+Kubernetes token, доступ к чужим credentials, сетевые политики, mTLS и image
+admission не расширяются. Дополнительных hostPath/volumes профиль не создаёт.
+
+До применения проверить bounded synthetic sandbox на целевых nodes: mapped UID,
+readonly sysfs, Pod cgroup limits, отсутствие credentials/сети. Это не заменяет
+проверку настоящего buildkitd, Dockerfile RUN, push, materialization/admission,
+RoleImage и restart. Не использовать `hostUsers: true` или `noProcessSandbox`
+как запасной путь. Для partial bootstrap дополнительно передать явный профиль
+в resume-workloads; одного label в candidate недостаточно для допуска delta.

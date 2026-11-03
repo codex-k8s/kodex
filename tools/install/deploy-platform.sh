@@ -8,9 +8,10 @@ fail() {
 
 usage() {
   printf '%s\n' \
-    "Usage: $0 --context <exact-context> --mode defer-public-tls|prepare-preflight|preflight|apply|resume-authority-bootstrap|resume-authority-published|readback" \
+    "Usage: $0 --context <exact-context> --mode defer-public-tls|prepare-preflight|preflight|apply|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback" \
     '  --render <exact-release.yaml> --public-tls-mode deferred|enabled|external' \
     '  [--oidc-ca-file <pem> --ingress-controller <name> --ingress-namespace <name>]' >&2
+  printf '%s\n' '  [--previous-render <yaml> --previous-render-sha256 <64-hex> --buildkit-runtime-profile standard|nested-userns; resume-workloads only]' >&2
 }
 
 context=""
@@ -19,6 +20,7 @@ render_file=""
 public_tls_mode=enabled
 portable_arguments=()
 portable_inventory=""
+previous_arguments=()
 while (($# > 0)); do
   case "$1" in
     --portable-inventory) portable_inventory="${2:-}"; shift 2 ;;
@@ -27,6 +29,7 @@ while (($# > 0)); do
     --render) render_file="${2:-}"; shift 2 ;;
     --oidc-ca-file|--ingress-deployment|--ingress-controller|--ingress-namespace|--ingress-service) portable_arguments+=("$1" "${2:-}"); shift 2 ;;
     --public-tls-mode) public_tls_mode="${2:-}"; shift 2 ;;
+    --previous-render|--previous-render-sha256|--buildkit-runtime-profile) previous_arguments+=("$1" "${2:-}"); shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -34,7 +37,7 @@ done
 
 [[ -n "$context" ]] || fail 'exact Kubernetes context is required'
 case "$mode" in
-  defer-public-tls|prepare-preflight|preflight|apply|resume-authority-bootstrap|resume-authority-published|readback) ;;
+  defer-public-tls|prepare-preflight|preflight|apply|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback) ;;
   *) fail 'mode is invalid' ;;
 esac
 case "$public_tls_mode" in deferred|enabled|external) ;; *) fail 'public TLS mode is invalid' ;; esac
@@ -57,7 +60,7 @@ if [[ "$profile_mode" == external || "$public_tls_mode" == external ]]; then
 fi
 if [[ -n "${profile_mode:-}" ]]; then
   [[ "$profile_mode" != managed || "$public_tls_mode" == enabled ]] || fail 'portable managed TLS requires enabled mode'
-  if [[ "$mode" == apply || "$mode" == resume-authority-bootstrap || "$mode" == resume-authority-published || "$mode" == prepare-preflight ]]; then
+  if [[ "$mode" == apply || "$mode" == resume-authority-bootstrap || "$mode" == resume-authority-published || "$mode" == resume-workloads || "$mode" == prepare-preflight ]]; then
     [[ -f "$portable_inventory" && ! -L "$portable_inventory" ]] || fail 'portable inventory is required before mutation'
   fi
   [[ "$mode" != defer-public-tls ]] || fail 'portable profile does not use ACME deferral'
@@ -152,6 +155,19 @@ apply_job() {
   JOB_NAME="$name" yq 'select(.kind == "Job" and .metadata.name == strenv(JOB_NAME))' \
     "$render_file" >"$job_file"
   [[ -s "$job_file" ]] || fail "release Job is absent: $name"
+  if [[ "$mode" == resume-workloads ]]; then
+    local presence
+    presence=$(python3 "$repository_root/tools/install/authority_registry.py" existing-job \
+      --context "$context" --render "$render_file" --job-name "$name") || fail 'existing bootstrap Job rejected'
+    if [[ "$presence" == PRESENT ]]; then
+      wait_job_terminal "$name"
+      return
+    fi
+    [[ "$presence" == ABSENT ]] || fail 'bootstrap Job state is unknown'
+    portable_apply_file "$job_file"
+    wait_job_terminal "$name"
+    return
+  fi
   if [[ -n "${profile_mode:-}" ]]; then
     portable_delete Job "$name"
     portable_apply_file "$job_file"
@@ -196,6 +212,11 @@ ensure_seed_secret() {
   ' "$render_file" >"$seed"
   [[ -s "$seed" ]] || fail "release seed Secret is absent: $name"
   kubectl --context "$context" create --field-manager=kodex-install -f "$seed" >/dev/null
+}
+
+ensure_email_projection_secret() {
+  python3 "$repository_root/tools/install/email_projection.py" \
+    --render "$render_file" --context "$context" "$@" || fail 'email projection bootstrap rejected'
 }
 
 preflight_seed_secret() {
@@ -727,8 +748,11 @@ EOF
 }
 
 apply_workloads_after_authority() {
-	apply_render workloads-before-role-image-builder '
-    select((.kind == "Deployment" and .metadata.name != "role-image-builder") or
+  ensure_email_projection_secret
+  # Все startup consumers начинают readback до ожидания активации control-plane.
+  # Main role-image-builder сохраняет собственные readiness gates зависимостей.
+	apply_render workloads '
+    select(.kind == "Deployment" or
       .kind == "DaemonSet" or .kind == "CronJob")
   '
   kubectl --context "$context" -n "$namespace" rollout status deployment/control-plane --timeout=15m >/dev/null ||
@@ -743,9 +767,6 @@ apply_workloads_after_authority() {
     kubectl --context "$context" -n "$namespace" rollout status "deployment/$dependency" \
       --timeout=15m >/dev/null || fail "role image builder dependency failed: $dependency"
   done
-  apply_render role-image-builder '
-    select(.kind == "Deployment" and .metadata.name == "role-image-builder")
-  '
   wait_workloads
   prune_role_environment_configmaps
 }
@@ -792,6 +813,7 @@ if [[ "$mode" == preflight ]]; then
   preflight_recreated_resources jobs 'select(.kind == "Job")'
   preflight_seed_secret internal-rpc-authority-restore-evidence
   preflight_seed_secret internal-rpc-authority-snapshot
+  ensure_email_projection_secret --dry-run
   printf 'Kodex platform deployment preflight completed\n'
   exit 0
 fi
@@ -856,6 +878,20 @@ fi
 if [[ "$mode" == resume-authority-published ]]; then
   [[ -n "$profile_mode" ]] || fail 'published authority resume requires a portable profile'
   python3 "$repository_root/tools/install/authority_registry.py" preflight-published --render "$render_file" --context "$context"
+  wait_authority_projections bootstrap
+  apply_workloads_after_authority
+fi
+
+if [[ "$mode" == resume-workloads ]]; then
+  [[ -n "$profile_mode" ]] || fail 'workload resume requires a portable profile'
+  python3 "$repository_root/tools/install/authority_registry.py" preflight-workloads \
+    --render "$render_file" --context "$context" "${previous_arguments[@]}"
+  # Только profile assets/parameters/policy; authority registry и publisher history прежние.
+  apply_render bootstrap-observability '
+    select(.metadata.labels."kodex.dev/observability-profile" == "disabled" and
+      (.kind == "ConfigMap" or .kind == "ValidatingAdmissionPolicy" or
+       .kind == "ImageAdmissionPolicyParameters"))
+  '
   wait_authority_projections bootstrap
   apply_workloads_after_authority
 fi
