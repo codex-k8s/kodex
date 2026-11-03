@@ -4,6 +4,7 @@ import copy
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import urllib.parse
@@ -185,10 +186,24 @@ def api_write_resource(resource, actual=None):
         # Список immutable/atomic: после exact проверки сохраняем только его API defaults.
         if 'volumeClaimTemplates' in actual['spec']:
             result['spec']['volumeClaimTemplates'] = copy.deepcopy(observed)
+    if result.get('apiVersion') == 'admissionregistration.k8s.io/v1' and result.get('kind') in ('ValidatingAdmissionPolicy', 'ValidatingAdmissionPolicyBinding'):
+        field = 'matchConstraints' if result['kind'] == 'ValidatingAdmissionPolicy' else 'matchResources'
+        match = result.get('spec', {}).get(field)
+        if match is not None:
+            require(isinstance(match, dict), 'ADMISSION_MATCH_CONFIGURATION_REJECTED')
+            for name, value in (('matchPolicy', 'Equivalent'), ('namespaceSelector', {}), ('objectSelector', {})):
+                match.setdefault(name, value)
+            for name in ('resourceRules', 'excludeResourceRules'):
+                require(isinstance(match.get(name, []), list), 'ADMISSION_MATCH_RULES_REJECTED')
+                for rule in match.get(name, []):
+                    require(isinstance(rule, dict), 'ADMISSION_MATCH_RULES_REJECTED')
+                    rule.setdefault('scope', '*')
     return result
 
 
 def policy_spec(resource):
+    if resource.get('apiVersion') == 'admissionregistration.k8s.io/v1' and resource['kind'] in ('ValidatingAdmissionPolicy', 'ValidatingAdmissionPolicyBinding'):
+        return api_write_resource(resource)['spec']
     spec = copy.deepcopy(resource.get('spec'))
     if resource['kind'] == 'NetworkPolicy':
         for direction in ('ingress', 'egress'):
@@ -209,7 +224,7 @@ def verify_resource(expected, actual):
         if field in expected:
             require(subset(expected[field], actual.get(field)), 'LIVE_RESOURCE_DRIFT')
     kind = expected['kind']
-    if kind in ('NetworkPolicy', 'Ingress', 'Middleware', 'ServersTransport'):
+    if kind in ('NetworkPolicy', 'Ingress', 'Middleware', 'ServersTransport', 'ValidatingAdmissionPolicy', 'ValidatingAdmissionPolicyBinding'):
         require(policy_spec(actual) == policy_spec(expected), 'LIVE_SECURITY_SPEC_DRIFT')
         annotations = {k: v for k, v in actual['metadata'].get('annotations', {}).items()
                        if k != 'kubectl.kubernetes.io/last-applied-configuration'}
@@ -395,7 +410,7 @@ class State:
             self.call(['apply', '--server-side', '--field-manager=kodex-install', '-f', '-'], desired)
         current = self.get(resource)
         require(current is not None and owner(current), 'WRITE_READBACK_REQUIRED')
-        if actual is not None and (resource['apiVersion'], resource['kind']) in (('v1', 'ConfigMap'), ('apps/v1', 'Deployment'), ('apps/v1', 'StatefulSet')):
+        if actual is not None and (resource['apiVersion'], resource['kind']) in (('v1', 'ConfigMap'), ('apps/v1', 'Deployment'), ('apps/v1', 'StatefulSet'), ('admissionregistration.k8s.io/v1', 'ValidatingAdmissionPolicy'), ('admissionregistration.k8s.io/v1', 'ValidatingAdmissionPolicyBinding')):
             verify_resource(resource, current)
         inventory[key(resource)] = {'uid': current['metadata']['uid'], 'seal': seal(current)}
 
@@ -497,7 +512,10 @@ def main():
             require(len(selected) == 1, 'EXACT_DELETE_RESOURCE_REQUIRED')
             state.delete(selected[0], inventory)
             Path(args.inventory).write_text(json.dumps(record))
-    except (Rejected, OSError, ValueError, TypeError, KeyError, subprocess.SubprocessError):
+    except Rejected as error:
+        code = str(error) if re.fullmatch(r'[A-Z][A-Z0-9_]{0,95}', str(error)) else 'REJECTED'
+        raise SystemExit('Portable state operation rejected: ' + code + '; readback required') from None
+    except (OSError, ValueError, TypeError, KeyError, subprocess.SubprocessError):
         raise SystemExit('Portable state operation rejected; readback required') from None
 
 

@@ -419,3 +419,15 @@ StatefulSet PVC templates при повторном apply сохраняются
 таким продолжением нельзя. Dry-run и apply используют одну проверку, write сохраняет
 UID/seal inventory fencing и resourceVersion. PVC/StatefulSet не пересоздаются,
 force-conflicts не применяется. Изменения данных/хранилища требуют отдельной миграции.
+
+
+Для admissionregistration.k8s.io/v1 ValidatingAdmissionPolicy/Binding write и
+readback явно учитывают только defaults matchPolicy=Equivalent, пустые
+namespaceSelector/objectSelector и resourceRules/excludeResourceRules.scope=*.
+Это сохраняет atomic matchConstraints/matchResources при create→SSA без
+force-conflicts. Полный spec и security annotations сравниваются закрыто:
+другие selectors/scope, CEL, failurePolicy, validationActions и неизвестные поля
+не считаются defaults. UID/seal/resourceVersion guards остаются обязательными.
+CLI при отказе выводит только закрытый reason code; произвольный текст исключения,
+payload и credentials не выводятся. Перед повтором apply сначала проверить весь
+набор server-side dry-run, а не только первый ранее сломанный ресурс.
