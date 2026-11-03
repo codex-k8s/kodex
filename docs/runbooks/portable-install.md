@@ -431,3 +431,24 @@ force-conflicts. Полный spec и security annotations сравнивают�
 CLI при отказе выводит только закрытый reason code; произвольный текст исключения,
 payload и credentials не выводятся. Перед повтором apply сначала проверить весь
 набор server-side dry-run, а не только первый ранее сломанный ресурс.
+
+
+Authority projections ожидаются только для Secret references настоящих Pod specs
+выбранного render: volumes/projected sources, env/envFrom, init containers и
+imagePullSecrets. Глобальный catalog включает optional services; существование
+seed Secret не означает наличие consumer. Неиспользуемый ключ optional component
+не блокирует web-only. Для выбранных projections сохраняются все owner/generation/
+required-key/allowed-key проверки; bootstrap и event-scoped фазы не объединяются.
+
+Если initial authority snapshot уже опубликован, после остановленного failed apply
+использовать отдельный `portable-release.sh --mode resume-authority-published` с
+новым preimage. Readonly preflight требует точный registry revision1, тот же publisher
+executable, пять завершённых bootstrap Jobs и schema heads, единственный publisher
+Deployment и пустой runtime. В БД должны быть ровно одна rotation и один подписанный
+снимок, связанные intent/source/predecessor и SHA registry, restore fence OPEN.
+Publisher Ready ещё может ждать consumer readbacks. Resume не переписывает registry,
+не перезапускает publisher, migrations или broker/credentials bootstrap; он проверяет
+выбранные projections и продолжает workloads/materializer. После частичного старта
+других Deployments этот initial resume закрыт: требуется отдельная reconciliation,
+а не обнуление history или слепой повтор. Резервная копия данных обязательна отдельно;
+metadata preimage не является rollback БД. Default protected профиль сохраняется.
