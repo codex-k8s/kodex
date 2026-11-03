@@ -11,6 +11,7 @@ import yaml
 from deployment_profile import require, Rejected
 from portable_state import State, verify_resource, verify_schemas, key
 import observability_profile
+import buildkit_runtime_profile
 
 REGISTRY = 'internal-rpc-authority-publisher-target-registry'
 ANNOTATION = 'kodex.dev/authority-registry-source-revision'
@@ -119,9 +120,10 @@ def verify_published_resume(state, resources, startup_only=True):
     return {'status': 'PUBLISHED_AUTHORITY_RESUME_PREFLIGHT_PASSED', 'sourceRevision': 1, 'migrations': 'VERIFIED_NOT_REPEATED', 'authorityHistory': 'PRESERVED_NOT_REPLAYED'}
 
 
-def verify_workload_resume(state, resources, previous):
+def verify_workload_resume(state, resources, previous, buildkit_profile='standard'):
     """Продолжение initial graph допускает только точный observability profile delta."""
-    require(resources == observability_profile.transform(previous, disabled=True), 'EXACT_BOOTSTRAP_PROFILE_DELTA_REQUIRED')
+    expected = buildkit_runtime_profile.transform(observability_profile.transform(previous, disabled=True), buildkit_profile)
+    require(resources == expected, 'EXACT_BOOTSTRAP_PROFILE_DELTA_REQUIRED')
     verify_published_resume(state, resources, startup_only=False)
     before = {key(r): r for r in previous if r.get('kind') == 'Deployment'}
     after = {key(r): r for r in resources if r.get('kind') == 'Deployment'}
@@ -187,6 +189,7 @@ def main():
     parser.add_argument('--previous-render', type=Path)
     parser.add_argument('--previous-render-sha256')
     parser.add_argument('--job-name')
+    parser.add_argument('--buildkit-runtime-profile', choices=['standard', 'nested-userns'], default='standard')
     args = parser.parse_args()
     require(args.render.is_file() and not args.render.is_symlink(), 'REGULAR_RENDER_REQUIRED')
     raw = args.render.read_bytes();require(len(raw) <= 16 << 20, 'RENDER_SIZE_REJECTED')
@@ -210,7 +213,7 @@ def main():
             raw = args.previous_render.read_bytes()
             require(len(raw) <= 16 << 20 and hashlib.sha256(raw).hexdigest() == args.previous_render_sha256, 'PREVIOUS_RENDER_DIGEST_REQUIRED')
             previous = list(filter(None, yaml.safe_load_all(raw)))
-            print(json.dumps(verify_workload_resume(state, resources, previous)))
+            print(json.dumps(verify_workload_resume(state, resources, previous, args.buildkit_runtime_profile)))
         elif args.mode == 'existing-job':
             require(args.job_name, 'EXACT_JOB_NAME_REQUIRED')
             print('PRESENT' if existing_job(state, resources, args.job_name) else 'ABSENT')

@@ -479,8 +479,9 @@ context. Parameter-owned label `kodex.dev/observability-profile: disabled` в
 Если initial graph уже частично запущен, `resume-authority-published` закрыт.
 Узкий `portable-release.sh --mode resume-workloads` требует `--previous-render`
 и `--previous-render-sha256`, exact desired render SHA/context и новый private
-preimage. Единственное разрешённое отличие candidate — результат публичного
-`observability_profile.transform(previous, disabled=True)`: прежние images,
+preimage. Разрешённое отличие candidate — результат публичного
+`observability_profile.transform(previous, disabled=True)` и, только при явном
+`--buildkit-runtime-profile nested-userns`, соответствующий BuildKit transform: прежние images,
 schema, registry и прочие настройки неизменны. Readonly preflight проверяет
 начальную signed publication, registry revision1/digest, OPEN fence, все пять
 завершённых bootstrap Jobs/schema heads и пустой runtime. Каждый существующий
@@ -513,3 +514,31 @@ API. Непустой аргумент, другой medium/fieldPath/version, �
 Installer repair не создаёт бизнес-событий от имени приложения: его журнал —
 private preimage/inventory и readback. Прикладные consumers сохраняют собственные
 штатные events, grants и lifecycle receipts; repair не переигрывает их операции.
+
+## Опциональный BuildKit в nested user namespace
+
+По умолчанию `buildkit_runtime_profile.py --profile standard` ничего не меняет.
+В некоторых nested Kubernetes/runc средах `privileged: true` заставляет sandbox
+создать sysfs в network namespace, которым его user namespace не владеет.
+Ошибка возникает до запуска прикладного контейнера; bind `/sys` в нём не исправляет
+создание sandbox. Обсуждение runtime:
+[runc #5309](https://github.com/opencontainers/runc/issues/5309).
+
+Для такого контура отдельно материализовать
+`python3 tools/install/buildkit_runtime_profile.py --render <yaml> --profile nested-userns`
+и закрепить новый render SHA. Изменяется только точный `kodex-buildkit/buildkitd`
+с прежним pinned image и `hostUsers: false`: вместо privileged назначаются
+namespace capabilities ALL, `procMount: Unmasked`, Unconfined seccomp/AppArmor и
+разрешённый privilege escalation внутри mapped namespace. Это доверенный build
+daemon, чей стандартный privileged режим уже снимает эти ограничения; профиль
+не предназначен для сотрудников, agent runtime или произвольных workload.
+Неподдержанная custom security context закрыто отклоняется. Host namespaces,
+Kubernetes token, доступ к чужим credentials, сетевые политики, mTLS и image
+admission не расширяются. Дополнительных hostPath/volumes профиль не создаёт.
+
+До применения проверить bounded synthetic sandbox на целевых nodes: mapped UID,
+readonly sysfs, Pod cgroup limits, отсутствие credentials/сети. Это не заменяет
+проверку настоящего buildkitd, Dockerfile RUN, push, materialization/admission,
+RoleImage и restart. Не использовать `hostUsers: true` или `noProcessSandbox`
+как запасной путь. Для partial bootstrap дополнительно передать явный профиль
+в resume-workloads; одного label в candidate недостаточно для допуска delta.

@@ -11,6 +11,7 @@ expected_sha=""
 preimage=""
 previous_render=""
 previous_sha=""
+buildkit_profile=standard
 previous_arguments=()
 arguments=()
 while (($#)); do
@@ -22,11 +23,13 @@ while (($#)); do
     --preimage-directory) preimage="${2:-}"; shift 2 ;;
     --previous-render) previous_render="${2:-}"; shift 2 ;;
     --previous-render-sha256) previous_sha="${2:-}"; shift 2 ;;
+    --buildkit-runtime-profile) buildkit_profile="${2:-}"; shift 2 ;;
     --oidc-ca-file|--ingress-deployment|--ingress-controller|--ingress-namespace|--ingress-service) arguments+=("$1" "${2:-}"); shift 2 ;;
     --help)
       printf '%s\n' 'Usage: portable-release.sh --mode plan|preflight|apply|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback --render <yaml> --render-sha256 <64-hex> [--context <exact-context>]' \
         '  [--oidc-ca-file <pem>] [--ingress-controller <name> --ingress-namespace <name>]' \
         '  [--preimage-directory <new-private-directory>; required for apply]'
+      printf '%s\n' '  [--previous-render <yaml> --previous-render-sha256 <64-hex> --buildkit-runtime-profile standard|nested-userns; resume-workloads only]'
       exit 0 ;;
     *) fail 'unsupported argument' ;;
   esac
@@ -45,9 +48,11 @@ if [[ "$mode" == resume-workloads ]]; then
   [[ -f "$previous_render" && ! -L "$previous_render" && "$previous_sha" =~ ^[a-f0-9]{64}$ ]] || fail 'exact previous render is required'
   cp -- "$previous_render" "$temporary/previous.yaml"
   [[ "$(sha256sum "$temporary/previous.yaml" | awk '{print $1}')" == "$previous_sha" ]] || fail 'previous render digest mismatch'
-  previous_arguments=(--previous-render "$temporary/previous.yaml" --previous-render-sha256 "$previous_sha")
+  case "$buildkit_profile" in standard|nested-userns) ;; *) fail 'BuildKit runtime profile is invalid' ;; esac
+  previous_arguments=(--previous-render "$temporary/previous.yaml" --previous-render-sha256 "$previous_sha" --buildkit-runtime-profile "$buildkit_profile")
 else
   [[ -z "$previous_render" && -z "$previous_sha" ]] || fail 'previous render only applies to workload resume'
+  [[ "$buildkit_profile" == standard ]] || fail 'BuildKit profile must be materialized in the pinned render before fresh apply'
 fi
 timeout 60s python3 "$root/tools/install/portable_preflight.py" --plan \
   --render "$temporary/render.yaml" --sha256 "$expected_sha"

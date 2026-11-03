@@ -28,6 +28,12 @@ renderer меняет только этот env; остальные executable �
 Известный либо неизвестный эффект существующего Job не разрешает его пересоздать.
 Профиль, порядок и recovery описаны в [portable install](../runbooks/portable-install.md).
 
+Nested BuildKit профиль отделён от agent runtime и не отключает user namespace.
+Явные namespace capabilities вместо privileged допустимы только для точного
+доверенного build daemon с pinned image; custom context закрывается. Отсутствие
+sandbox error не доказывает build/push или image admission. Default не меняется,
+host namespaces и `noProcessSandbox` не являются fallback.
+
 ## Отдельные полномочия PR и переход Ready
 
 Права обычного Issue не расширяются на pull request при добавлении совместной

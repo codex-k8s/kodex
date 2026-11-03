@@ -49,6 +49,22 @@ class FakeState:
 
 
 class AuthorityRegistry(unittest.TestCase):
+    def test_nested_buildkit_resume_requires_exact_named_profile_not_arbitrary_security_delta(self):
+        previous = registry.observability_profile.transform(registry.transform(fixture(), {'schema': 'kodex.authority-registry/v1', 'source_revision': 1}), True)
+        builder = copy.deepcopy(previous[-1]);builder['metadata']['name'] = 'kodex-buildkit'
+        pod = builder['spec']['template']['spec'];pod.update(hostUsers=False, automountServiceAccountToken=False, serviceAccountName='kodex-buildkit')
+        pod['containers'][0].update(name='buildkitd', securityContext=copy.deepcopy(registry.buildkit_runtime_profile.STANDARD))
+        previous.append(builder)
+        desired = registry.buildkit_runtime_profile.transform(previous, 'nested-userns')
+        state = FakeState(previous);state.current['internal-rpc-authority-publisher']['spec']['replicas'] = 2
+        state.published_state = dict(rotation_count=1, snapshot_count=1, fence_allows=True, matching_count=1)
+        state.live_deployments = [state.current['internal-rpc-authority-publisher'], state.current['kodex-buildkit']]
+        with patch.object(registry, 'verify_schemas'):
+            self.assertEqual(registry.verify_workload_resume(state, desired, previous, 'nested-userns')['deployments'], 2)
+            with self.assertRaises(Rejected):registry.verify_workload_resume(state, desired, previous)
+            wrong = copy.deepcopy(desired);wrong[-1]['spec']['template']['spec']['hostUsers'] = True
+            with self.assertRaises(Rejected):registry.verify_workload_resume(state, wrong, previous, 'nested-userns')
+
     def test_workload_resume_accepts_only_exact_before_or_after_profile_and_preserves_history(self):
         previous = registry.observability_profile.transform(registry.transform(fixture(), {'schema': 'kodex.authority-registry/v1', 'source_revision': 1}), True)
         worker = copy.deepcopy(previous[-1]);worker['metadata']['name'] = 'synthetic-worker'
