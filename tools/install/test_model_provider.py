@@ -44,11 +44,20 @@ class ModelProviderTests(unittest.TestCase):
             with self.assertRaises(Exception):
                 MODULE.configuration(config)
 
+    def test_missing_opencode_role_base_profile_is_rejected_before_render(self):
+        with tempfile.TemporaryDirectory()as temporary:
+            directory=Path(temporary);lock=directory/'lock.json';lock.write_text('{}')
+            config=directory/'provider.json';config.write_text(json.dumps(fixture()))
+            value=subprocess.run([str(ROOT/'tools/release/render-web-only.sh'),'--lock',str(lock),'--lock-sha256',hashlib.sha256(lock.read_bytes()).hexdigest(),
+                '--output',str(directory/'render.yaml'),'--model-provider-configuration',str(config),'--model-provider-default-model','vendor/model-v1'],capture_output=True,timeout=15)
+            self.assertNotEqual(value.returncode,0)
+            self.assertIn(b'OpenCode requires a matching role-base runtime profile',value.stderr)
+
     def test_complete_optional_render_binds_images_provider_and_egress(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             inventory = json.loads((ROOT / 'tools/release/images.json').read_text())['images']
-            lock = {'schema_version': 2, 'profile': 'web-only', 'source_sha': 'b' * 40, 'build_run_id': 'local',
+            lock = {'role_base_runtime_engine': 'opencode', 'schema_version': 2, 'profile': 'web-only', 'source_sha': 'b' * 40, 'build_run_id': 'local',
                     'registry': {'push': 'push.example.invalid', 'node_pull': 'pull.example.invalid', 'repository_prefix': 'kodex'},
                     'images': [{'component': item['component'], 'repository': 'kodex/' + item['component'],
                                 'digest': 'sha256:' + 'c' * 64,

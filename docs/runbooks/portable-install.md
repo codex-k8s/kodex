@@ -299,3 +299,28 @@ manifest digests; после него сравниваются сохранён�
 checksum и проверку версии. Повторная установка APT для этого stage не требуется.
 Тест: `python3 -B tools/release/build-recipe-test.py`, включён в общий release
 target. Git fixtures синтетические, внешнего registry и credentials нет.
+
+## Общий runtime profile и promoted namespace
+
+`--role-base-runtime-engine opencode` при full release build выбирает
+`agent-runner-opencode` также для documents base. По умолчанию остаётся `codex`;
+оба runner образа сохраняются в inventory. Явный OpenCode profile фиксируется в
+lock как `role_base_runtime_engine: opencode`. Render с Git-managed OpenCode
+отклоняет lock без соответствующего profile до materialization/apply. Один
+успешно собранный optional runner не подтверждает совместимость documents base.
+
+`promoted_registry.py` согласует producer и consumers по итоговому lock:
+source prefix принадлежит только публикации source artifacts, внутренние
+promotion repositories сохраняют канонический `kodex/`. Materializer выбирает
+строго `kodex/agent-runner` либо `kodex/agent-runner-opencode`; прочие targets
+отклоняются. `promotedPullRepository`, node readback, certificate-guard readback
+и `ImageAdmissionPolicyParameters` указывают на действительно материализованные
+repositories с exact digest. Policy hash пересчитывается вместе с projection.
+
+Штатный render вызывает этот шаг самостоятельно. Optional registry-source
+overlay использует тот же helper; запускать его нужно из полного pinned tools
+checkout вместе с каноническим materializer script. Script SHA256 фиксируется
+в аннотации ConfigMap. Изменение script/inputs выполняется до apply; это не
+разрешение hot patch уже действующей immutable admission policy. TLS/mTLS,
+подписи, provenance, SBOM, scanner и разделение source/promotion credentials
+сохраняются.

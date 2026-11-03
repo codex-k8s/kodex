@@ -132,6 +132,9 @@ if [[ -n "$deployment_profile" ]]; then
 fi
 
 [[ -r "$lock_file" ]] || fail 'release lock is not readable'
+if [[ -n "$model_provider_configuration" ]]; then
+  [[ "$(jq -r '.role_base_runtime_engine // "codex"' "$lock_file")" == opencode ]] || fail 'OpenCode requires a matching role-base runtime profile'
+fi
 [[ "$profile" == "web-only" || "$profile" == "web-with-mattermost" ]] || fail 'release profile is invalid'
 [[ "$lock_sha256" =~ ^[a-f0-9]{64}$ && "$lock_sha256" != 0000000000000000000000000000000000000000000000000000000000000000 ]] ||
   fail 'release lock SHA-256 is invalid'
@@ -585,6 +588,8 @@ ROLE_IMAGE_INPUT_MANIFEST_DIGEST="$role_input_manifest_digest" yq -i '
     (.spec.template.spec.containers[0].env[] | select(.name == "ROLE_IMAGE_INPUT_MANIFEST_DIGEST").value) = strenv(ROLE_IMAGE_INPUT_MANIFEST_DIGEST)
   )
 ' "$rendered"
+
+python3 "$repository_root/tools/install/promoted_registry.py" --render "$rendered" --lock "$lock_file" || fail 'promoted registry projection failed'
 
 if [[ -n "$model_provider_configuration" ]]; then
   python3 "$repository_root/tools/install/model-provider.py" render --configuration "$model_provider_configuration" \

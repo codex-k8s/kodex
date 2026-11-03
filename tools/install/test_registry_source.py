@@ -21,14 +21,44 @@ def fixture():
     policy = resource('NetworkPolicy', 'release-artifact-materializer-exact-paths', {'egress': [{'ports': [{'protocol': 'TCP', 'port': 8080}]}]})
     admission = resource('ConfigMap', 'kodex-image-admission-policy', {})
     admission.pop('spec')
-    admission['data'] = {'pullRegistryHost': 'kodex-image-registry-pull.kodex-system.svc.cluster.local', 'promotedPullRepository': host + '/synthetic/roles', 'policySHA256': '0' * 64, 'orchestrationRevision': '2' * 40, 'policyRevision': '1'}
+    admission['data'] = {'pullRegistryHost': 'kodex-image-registry-pull.kodex-system.svc.cluster.local', 'promotedPullRepository': host + '/kodex/roles', 'policySHA256': '0' * 64, 'orchestrationRevision': '2' * 40, 'policyRevision': '1'}
     parameters = resource('ImageAdmissionPolicyParameters', 'kodex-image-admission-policy', {})
     parameters['apiVersion'] = 'supplychain.kodex.dev/v1alpha1'
     service = resource('Service', 'kodex-image-registry-pull', {'ports': [{'name': 'https', 'port': 5000, 'targetPort': 'registry'}]})
     route = resource('IngressRouteTCP', 'kodex-image-registry-pull', {'tls': {'passthrough': True}})
-    return (config, lock, [job, policy, admission, parameters, service, route])
+    lock['images'] = [{'component': 'control-plane', 'digest': 'sha256:' + 'c' * 64}, {'component': 'agent-runner', 'digest': 'sha256:' + 'b' * 64}]
+    admission['data'].update(promotionRepository='kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003/kodex/roles', trustedRoleBaseRepository='kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/agent-runner', trustedRoleBaseDigest='sha256:' + 'b' * 64)
+    job['spec']['template']['spec']['containers'][0]['env'].append({'name': 'AGENT_RUNNER_SOURCE_REF', 'value': host + '/synthetic/agent-runner@sha256:' + 'b' * 64})
+    script = resource('ConfigMap', 'kodex-release-artifact-materializer', {})
+    script.pop('spec')
+    script['data'] = {'release-artifact-materializer.sh': 'synthetic-old-script'}
+    deployment = resource('Deployment', 'kodex-image-registry-pull', {'template': {'spec': {'containers': [{'name': 'certificate-guard', 'env': [{'name': 'READBACK_IMAGE', 'value': 'synthetic-old-path'}]}]}}})
+    return (config, lock, [job, policy, admission, parameters, service, route, script, deployment])
 
 class RegistrySource(unittest.TestCase):
+
+    def test_opencode_materializer_and_promoted_readback_use_destination_namespace(self):
+        config, lock, resources = fixture()
+        data = next((v['data'] for v in resources if v['kind'] == 'ConfigMap' and v['metadata']['name'] == 'kodex-image-admission-policy'))
+        data['trustedRoleBaseRepository'] = data['trustedRoleBaseRepository'].replace('/agent-runner', '/agent-runner-opencode')
+        lock['images'][1]['component'] = 'agent-runner-opencode'
+        job = next((v for v in resources if v['kind'] == 'Job'))
+        for item in job['spec']['template']['spec']['containers'][0]['env']:
+            if item['name'] == 'AGENT_RUNNER_SOURCE_REF':
+                item['value'] = item['value'].replace('/agent-runner@', '/agent-runner-opencode@')
+        with self.assertRaises(ValueError):
+            registry.transform(resources, config, lock)
+        lock['role_base_runtime_engine'] = 'opencode'
+        result = registry.transform(resources, config, lock)
+        data = registry.one(result, 'ConfigMap', 'kodex-image-admission-policy')['data']
+        self.assertEqual(data['nodeReadbackImage'], 'kodex-image-registry-pull.kodex-system.svc.cluster.local/kodex/agent-runner-opencode@sha256:' + 'b' * 64)
+        env = registry.one(result, 'Job', 'release-artifact-materializer')['spec']['template']['spec']['containers'][0]['env']
+        self.assertIn({'name': 'AGENT_RUNNER_DESTINATION_REPOSITORY', 'value': 'kodex/agent-runner-opencode'}, env)
+        guard = registry.one(result, 'Deployment', 'kodex-image-registry-pull')['spec']['template']['spec']['containers'][0]
+        self.assertEqual(guard['env'][0]['value'], 'kodex-image-registry-pull.kodex-system.svc.cluster.local/kodex/control-plane@sha256:' + 'c' * 64)
+        script = registry.one(result, 'ConfigMap', 'kodex-release-artifact-materializer')
+        self.assertIn('AGENT_RUNNER_DESTINATION_REPOSITORY', script['data']['release-artifact-materializer.sh'])
+        self.assertEqual(registry.transform(result, config, lock), result)
 
     def test_preflight_rejects_forged_endpoint_owner_pod_or_address(self):
         config, lock, _ = fixture()
@@ -81,7 +111,7 @@ class RegistrySource(unittest.TestCase):
         config, lock, resources = fixture()
         result = registry.transform(resources, config, lock)
         data = next((r['data'] for r in result if r['kind'] == 'ConfigMap' and r['metadata']['name'] == 'kodex-image-admission-policy'))
-        self.assertEqual(data['promotedPullRepository'], 'kodex-image-registry-pull.kodex-system.svc.cluster.local/synthetic/roles')
+        self.assertEqual(data['promotedPullRepository'], 'kodex-image-registry-pull.kodex-system.svc.cluster.local/kodex/roles')
         payload = {k: v for k, v in data.items() if k not in ('orchestrationRevision', 'policySHA256')}
         self.assertEqual(data['policySHA256'], hashlib.sha256((json.dumps(payload, sort_keys=True, separators=(',', ':'), ensure_ascii=False) + '\n').encode()).hexdigest())
         self.assertEqual(next((r['spec'] for r in result if r['kind'] == 'ImageAdmissionPolicyParameters')), data)
@@ -140,7 +170,7 @@ class RegistrySource(unittest.TestCase):
             self.assertEqual(registry.transform(projected, config, lock), projected)
             self.assertTrue(any((item['kind'] == 'Deployment' and item['metadata']['name'] == 'control-plane' for item in projected)))
             data = registry.one(projected, 'ConfigMap', 'kodex-image-admission-policy')['data']
-            self.assertEqual(data['promotedPullRepository'], 'kodex-image-registry-pull.kodex-system.svc.cluster.local/synthetic/roles')
+            self.assertEqual(data['promotedPullRepository'], 'kodex-image-registry-pull.kodex-system.svc.cluster.local/kodex/roles')
             self.assertFalse(any((item['kind'] == 'IngressRouteTCP' and item['metadata']['name'] == 'kodex-image-registry-pull' for item in projected)))
 if __name__ == '__main__':
     unittest.main()

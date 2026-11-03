@@ -12,7 +12,7 @@ usage() {
     '  --registry-push <host[:port][/prefix]> --node-pull <host[:port][/prefix]>' \
     '  [--repository-prefix <path>] [--build-proxy <url> --build-no-proxy <list>]' \
     '  [--profile <web-only|web-with-mattermost>] [--build-run-id <digits>]' \
-    '  [--parallelism <1..4>] [--build-recipe-source-sha <40-hex>]' >&2
+    '  [--parallelism <1..4>] [--build-recipe-source-sha <40-hex>] [--role-base-runtime-engine codex|opencode]' >&2
 }
 
 source_sha=""
@@ -27,9 +27,11 @@ build_no_proxy=""
 build_run_id="${GITHUB_RUN_ID:-local}"
 profile="web-only"
 parallelism=2
+role_base_runtime_engine=codex
 
 while (($# > 0)); do
   case "$1" in
+    --role-base-runtime-engine) role_base_runtime_engine="${2:-}"; shift 2 ;;
     --source-sha) source_sha="${2:-}"; shift 2 ;;
     --build-recipe-source-sha) build_recipe_source_sha="${2:-}"; shift 2 ;;
     --output) output="${2:-}"; shift 2 ;;
@@ -45,6 +47,10 @@ while (($# > 0)); do
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
+
+[[ "$role_base_runtime_engine" == codex || "$role_base_runtime_engine" == opencode ]] || fail 'unsupported role base runtime engine'
+role_base_component=agent-runner
+[[ "$role_base_runtime_engine" != opencode ]] || role_base_component=agent-runner-opencode
 
 valid_registry_path() {
   [[ "$1" =~ ^[a-z0-9][a-z0-9.:-]*(/[a-z0-9][a-z0-9._/-]*)?$ ]] &&
@@ -190,9 +196,9 @@ build_component() {
   if [[ "$component" == image-admission ]]; then
     component_options=(--opt "build-arg:ADMISSION_TOOLS_IMAGE=$admission_tools_build_ref")
   elif [[ "$component" == role-base-documents ]]; then
-    agent_runner_digest=$(jq -r '."containerimage.digest" // empty' "$metadata_directory/agent-runner.json")
+    agent_runner_digest=$(jq -r '."containerimage.digest" // empty' "$metadata_directory/$role_base_component.json")
     [[ "$agent_runner_digest" =~ ^sha256:[a-f0-9]{64}$ ]] || fail 'agent-runner digest is unavailable for role base'
-    component_options=(--opt "build-arg:AGENT_RUNNER_IMAGE=$registry_push/$repository_prefix/agent-runner@$agent_runner_digest")
+    component_options=(--opt "build-arg:AGENT_RUNNER_IMAGE=$registry_push/$repository_prefix/$role_base_component@$agent_runner_digest")
   fi
   exec "$buildctl_path" --addr "$buildkit_host" build \
     --frontend dockerfile.v0 \
@@ -257,6 +263,7 @@ schema_heads=$(python3 "$repository_root/tools/release/schema-heads.py")
 jq -n \
   --argjson schema_heads "$schema_heads" \
   --argjson build_recipe "$build_recipe" \
+  --arg role_base_runtime_engine "$role_base_runtime_engine" \
   --arg profile "$profile" \
   --arg source_sha "$source_sha" \
   --arg build_run_id "$build_run_id" \
@@ -276,5 +283,6 @@ jq -n \
     external_images:[{component:"admission-tools",pull_ref:$admission_tools_ref,digest:$admission_tools_digest}],
     role_image_input:{repository:$role_input_repository,manifest_digest:$role_input_manifest_digest,
       payload_sha256:$role_input_payload_sha256,source_sha256:$role_input_source_sha256,pull_ref:$role_input_pull_ref},
-    images:$images[0]} + (if $build_recipe == null then {} else {build_recipe:$build_recipe} end)' | jq -S . >"$output"
+    images:$images[0]} + (if $build_recipe == null then {} else {build_recipe:$build_recipe} end) +
+    (if $role_base_runtime_engine == "codex" then {} else {role_base_runtime_engine:$role_base_runtime_engine} end)' | jq -S . >"$output"
 printf 'Release lock created: %s\n' "$output"
