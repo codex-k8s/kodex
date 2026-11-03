@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import subprocess
 import yaml
+import promoted_registry
 
 class Rejected(ValueError):
     pass
@@ -69,16 +70,9 @@ def transform(resources, config, lock):
     edge = {'to': [{'namespaceSelector': {'matchLabels': {'kubernetes.io/metadata.name': config['namespace']}}, 'podSelector': {'matchLabels': config['pod_labels']}}], 'ports': [{'protocol': 'TCP', 'port': config['target_port']}]}
     if edge not in policy['spec']['egress']:
         policy['spec']['egress'].append(edge)
+    promoted_registry.bind(result, lock)
     admission = one(result, 'ConfigMap', 'kodex-image-admission-policy')
     pull_host = admission['data']['pullRegistryHost']
-    require(isinstance(pull_host, str) and re.fullmatch('[a-z0-9][a-z0-9.-]*[a-z0-9]', pull_host))
-    admission['data']['promotedPullRepository'] = pull_host + '/' + lock['registry']['repository_prefix'] + '/roles'
-    payload = {k: v for k, v in admission['data'].items() if k not in ('orchestrationRevision', 'policySHA256')}
-    encoded_policy = json.dumps(payload, sort_keys=True, separators=(',', ':'), ensure_ascii=False) + '\n'
-    admission['data']['policySHA256'] = hashlib.sha256(encoded_policy.encode()).hexdigest()
-    parameters = [r for r in result if r.get('apiVersion') == 'supplychain.kodex.dev/v1alpha1' and r.get('kind') == 'ImageAdmissionPolicyParameters' and (r.get('metadata', {}).get('name') == 'kodex-image-admission-policy')]
-    require(len(parameters) == 1)
-    parameters[0]['spec'] = copy.deepcopy(admission['data'])
     internal = 'kodex-image-registry-pull.kodex-system.svc.cluster.local'
     if pull_host.endswith('.svc.cluster.local'):
         require(pull_host == internal)
@@ -133,8 +127,7 @@ def preflight(config, lock, context):
         require(all((workload['metadata'].get('labels', {}).get(key) == value for key, value in config['pod_labels'].items())))
         addresses = {item['ip'] for item in workload['status'].get('podIPs', [])}
         require(endpoint.get('addresses') and set(endpoint['addresses']) <= addresses)
-    return {'phase': 'KUBERNETES_SOURCE_METADATA_VERIFIED', 'registry': host,
-            'ca_sha256': hashlib.sha256(ca.encode()).hexdigest(), 'workload_tls_and_auth': 'NOT_RUN'}
+    return {'phase': 'KUBERNETES_SOURCE_METADATA_VERIFIED', 'registry': host, 'ca_sha256': hashlib.sha256(ca.encode()).hexdigest(), 'workload_tls_and_auth': 'NOT_RUN'}
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)

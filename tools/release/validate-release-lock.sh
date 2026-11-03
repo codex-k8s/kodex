@@ -46,6 +46,7 @@ jq -e --arg source_sha "$source_sha" --arg profile "$profile" --slurpfile manife
      (.build_recipe.files | length == 1) and
      .build_recipe.files[0].path == "services/jobs/agent-runner/Dockerfile" and
      (.build_recipe.files[0].sha256 | type == "string" and test("^[a-f0-9]{64}$") and . != ("0" * 64)))) and
+  ((has("role_base_runtime_engine") | not) or .role_base_runtime_engine == "opencode") and
   .schema_version == 2 and
   .profile == $profile and
   .source_sha == $source_sha and

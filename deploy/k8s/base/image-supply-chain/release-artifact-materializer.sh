@@ -106,7 +106,11 @@ copy_exact() {
 
 copy_exact "$CONTROL_PLANE_SOURCE_REF" kodex/control-plane "$CONTROL_PLANE_DIGEST"
 copy_exact "$DOCKERFILE_SOURCE_REF" kodex/dockerfile "$DOCKERFILE_DIGEST"
-copy_exact "$AGENT_RUNNER_SOURCE_REF" kodex/agent-runner "$AGENT_RUNNER_DIGEST"
+case "${AGENT_RUNNER_DESTINATION_REPOSITORY:-kodex/agent-runner}" in
+  kodex/agent-runner|kodex/agent-runner-opencode) ;;
+  *) fail 'agent runner destination repository is invalid' ;;
+esac
+copy_exact "$AGENT_RUNNER_SOURCE_REF" "${AGENT_RUNNER_DESTINATION_REPOSITORY:-kodex/agent-runner}" "$AGENT_RUNNER_DIGEST"
 copy_exact "$ROLE_BASE_DOCUMENTS_SOURCE_REF" kodex/role-base-documents "$ROLE_BASE_DOCUMENTS_DIGEST"
 copy_exact "$ROLE_IMAGE_INPUT_SOURCE_REF" kodex/role-image-inputs "$ROLE_IMAGE_INPUT_MANIFEST_DIGEST"
 
