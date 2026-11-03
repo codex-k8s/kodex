@@ -17,6 +17,26 @@ PARAMETERS = 'kodex-image-admission-policy'
 RENDERER_DIRECTORY = '/opt/kodex/disabled-observability'
 ORIGINAL_RENDERER = '/opt/kodex/render-image-admission-job.sh'
 DISABLED_EXPRESSION = "has(params.metadata.labels) && 'kodex.dev/observability-profile' in params.metadata.labels && params.metadata.labels['kodex.dev/observability-profile'] == 'disabled'"
+SDK_BLOCK = '''    if [[ $local_profile == hot-reload ]]; then
+      cat <<EOF
+            - {name: OTEL_SDK_DISABLED, value: "true"}
+EOF
+    fi
+'''
+
+
+def managed_renderer_script(source=None):
+    """Производный immutable renderer проверяет digest baked source и меняет ровно SDK block."""
+    raw = (Path(__file__).resolve().parents[1]/'render-image-admission-job.sh').read_bytes() if source is None else source
+    text = raw.decode('utf-8')
+    if text.count(SDK_BLOCK) != 1:
+        raise ValueError('Canonical admission renderer SDK contract drift')
+    header = Path(__file__).with_name('render-image-admission-no-observability.sh').read_text()
+    if header.count('__RENDERER_SOURCE_SHA256__') != 1:
+        raise ValueError('Admission renderer source guard drift')
+    header = header.replace('__RENDERER_SOURCE_SHA256__', hashlib.sha256(raw).hexdigest())
+    replacement = '    cat <<EOF\n            - {name: OTEL_SDK_DISABLED, value: "true"}\nEOF\n'
+    return header + '\n' + text.replace(SDK_BLOCK, replacement)
 
 
 def admission_profile(resources):
@@ -56,7 +76,7 @@ def admission_profile(resources):
     for resource in resources:
         if resource.get('kind') == 'ConfigMap' and resource['metadata']['name'] == PARAMETERS and resource['metadata'].get('namespace') == namespace:
             resource['metadata'].setdefault('labels', {})[PROFILE_LABEL] = 'disabled'
-    script = Path(__file__).with_name('render-image-admission-no-observability.sh').read_text()
+    script = managed_renderer_script()
     digest = hashlib.sha256(script.encode()).hexdigest()
     name = 'image-admission-renderer-no-otel-' + digest[:16]
     asset = dict(apiVersion='v1', kind='ConfigMap', metadata=dict(name=name, namespace=namespace,

@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Штатный renderer остаётся владельцем Job/PVC. Меняется только SDK native issuer.
-/opt/kodex/render-image-admission-job.sh "$@" |
-  yq 'with(select(.kind == "Job");
-    with(.spec.template.spec.initContainers[]? |
-      select(.name == "internal-rpc-authority-issuer" and .restartPolicy == "Always");
-      .env = ([.env[] | select(.name == "DEPLOYMENT_ENVIRONMENT")] +
-        [{"name": "OTEL_SDK_DISABLED", "value": "true"}] +
-        [.env[] | select(.name != "DEPLOYMENT_ENVIRONMENT" and .name != "OTEL_SDK_DISABLED")])
-    ))'
+# Ни нового parser, ни установки утилит в controller image. Ниже генератор
+# добавляет canonical renderer с одним изменённым SDK block; digest связывает
+# его с настоящим штатным renderer этого immutable image до выдачи Job/PVC.
+read -r kodex_renderer_source_sha256 _ < <(sha256sum /opt/kodex/render-image-admission-job.sh)
+if [[ "$kodex_renderer_source_sha256" != __RENDERER_SOURCE_SHA256__ ]]; then
+  printf '%s\n' 'Managed renderer source digest mismatch' >&2
+  exit 78
+fi

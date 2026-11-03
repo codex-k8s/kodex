@@ -1,5 +1,7 @@
 """Synthetic профиль: operator optional, security и исполняемые спецификации неизменны."""
 import copy
+import json
+import shutil
 from pathlib import Path
 import subprocess
 import tempfile
@@ -15,6 +17,25 @@ def fixture():
     monitors = [dict(apiVersion=profile.MONITORING_API, kind=kind, metadata=dict(name='synthetic')) for kind in profile.MONITORING_KINDS]
     policy = dict(apiVersion='networking.k8s.io/v1', kind='NetworkPolicy', metadata=dict(name='synthetic'), spec=dict(podSelector={},policyTypes=['Ingress','Egress'], ingress=[], egress=[]))
     return [deployment, policy, *monitors]
+
+
+def renderer_fixture():
+    return dict(apiVersion='v1', kind='ConfigMap', immutable=True,
+        metadata=dict(name='synthetic-intent', namespace='kodex-system', labels={'kodex.dev/owner-intent': 'true'},
+            annotations={'kodex.dev/admission-tools-sha256': 'sha256:'+'e'*64}),
+        data=dict(toolsImage='images.example.invalid/kodex/tools@sha256:'+'e'*64,
+            admissionImage='images.example.invalid/kodex/admission@sha256:'+'f'*64,
+            authorityImage='images.example.invalid/kodex/authority@sha256:'+'b'*64,
+            authorityIssuerImage='images.example.invalid/kodex/issuer@sha256:'+'c'*64,
+            promotionRepository='kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003/kodex/roles',
+            promotionEvidenceRepository='kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003/kodex/evidence',
+            evidenceRepository='kodex-image-registry-evidence.kodex-system.svc.cluster.local:5007/evidence/role-image-admission',
+            promotedPullRepository='images.example.invalid/kodex/roles', policyRevision='7', policySHA256='c'*64,
+            requiredTools='base64,cmp,cosign,grype,image-admission-bridge,image-tool-inventory-validator,image-vulnerability-report-validator,jq,regctl,sha256sum,syft,tr,wc',
+            builderIdentity='spiffe://kodex.local/ns/kodex-system/sa/role-image-builder',
+            buildType='https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md',
+            trustedRoleBaseRepository='images.example.invalid/kodex/agent-runner', trustedRoleBaseDigest='sha256:'+'a'*64,
+            roleRuntimeContractRevision='1', roleRuntimeContractSHA256='d'*64))
 
 
 class OptionalObservability(unittest.TestCase):
@@ -58,25 +79,37 @@ class OptionalObservability(unittest.TestCase):
             else: bad[0]['spec']['template']['spec']['containers'][0]['env'] = [dict(name='IMAGE_ADMISSION_CONTROLLER_RENDERER_PATH', value='/custom/renderer.sh')]
             with self.subTest(mutate=mutate), self.assertRaises(ValueError): profile.transform(bad, True)
 
-    def test_actual_wrapper_preserves_job_security_and_pvc_and_places_sdk_in_contract_order(self):
-        issuer = dict(name='internal-rpc-authority-issuer', restartPolicy='Always', env=[dict(name='DEPLOYMENT_ENVIRONMENT', value='synthetic'), dict(name='EXACT_AUTHORITY', value='required')], securityContext=dict(readOnlyRootFilesystem=True))
-        job = dict(apiVersion='batch/v1', kind='Job', metadata=dict(name='synthetic'), spec=dict(template=dict(spec=dict(hostUsers=False, containers=[dict(name='admission')], initContainers=[issuer]))))
-        pvc = dict(apiVersion='v1', kind='PersistentVolumeClaim', metadata=dict(name='synthetic'), spec=dict(accessModes=['ReadWriteOnce']))
-        text = Path(__file__).with_name('render-image-admission-no-observability.sh').read_text()
-        with tempfile.TemporaryDirectory() as directory:
-            directory = Path(directory)
-            original = directory/'original.sh'
-            fixture_file = directory/'fixture.yaml'
-            original.write_text('#!/usr/bin/env bash\ncat "'+str(fixture_file)+'"\n'); original.chmod(0o700)
-            wrapper = directory/'wrapper.sh';wrapper.write_text(text.replace(profile.ORIGINAL_RENDERER, str(original)))
-            for documents in [[job, pvc], [pvc]]:
-                fixture_file.write_text(yaml.safe_dump_all(documents))
-                response = subprocess.run(['bash', str(wrapper)], capture_output=True, timeout=10, check=True)
-                actual = list(yaml.safe_load_all(response.stdout))
-                expected = copy.deepcopy(documents)
-                if len(expected) == 2:
-                    expected[0]['spec']['template']['spec']['initContainers'][0]['env'].insert(1, dict(name='OTEL_SDK_DISABLED', value='true'))
-                self.assertEqual(actual, expected)
+    def test_real_canonical_renderer_with_baked_dependency_set_preserves_everything_except_sdk(self):
+        original_source = Path(__file__).resolve().parents[1]/'render-image-admission-job.sh'
+        with tempfile.TemporaryDirectory() as name:
+            directory = Path(name); original = directory/'original.sh';original.write_bytes(original_source.read_bytes())
+            binary = directory/'bin';binary.mkdir()
+            # Точный runtime contract: yq/python/kubectl недоступны, HTTP вызов невозможен.
+            for command in ['bash', 'cat', 'jq', 'awk', 'sha256sum']:
+                (binary/command).symlink_to(shutil.which(command))
+            wrapper = directory/'wrapper.sh';wrapper.write_text(profile.managed_renderer_script().replace(profile.ORIGINAL_RENDERER, str(original)))
+            for security in ['protected', 'trusted-cluster']:
+                intent = renderer_fixture();intent['metadata']['labels']['kodex.dev/security-profile'] = security
+                environment = dict(PATH=str(binary), IMAGE_ADMISSION_POLICY_JSON=json.dumps(intent))
+                for phase in ['claim', 'scan', 'sign', 'admit', 'promote']:
+                    arguments = ['staging', 'v20260101000000-'+'a'*40, phase]
+                    before = subprocess.run(['/bin/bash', str(original), *arguments], env=environment, capture_output=True, timeout=10, check=True)
+                    response = subprocess.run(['/bin/bash', str(wrapper), *arguments], env=environment, capture_output=True, timeout=10, check=True)
+                    expected = list(yaml.safe_load_all(before.stdout))
+                    for resource in expected:
+                        if resource and resource.get('kind') == 'Job':
+                            for container in resource['spec']['template']['spec'].get('initContainers', []):
+                                if container['name'] == 'internal-rpc-authority-issuer':
+                                    container['env'].insert(1, dict(name='OTEL_SDK_DISABLED', value='true'))
+                    self.assertEqual(list(yaml.safe_load_all(response.stdout)), expected)
+            original.write_text(original.read_text()+'\n# synthetic changed source\n')
+            rejected = subprocess.run(['/bin/bash', str(wrapper), 'staging', 'v20260101000000-'+'a'*40, 'claim'], env=environment, capture_output=True, timeout=10)
+            self.assertEqual(rejected.returncode, 78);self.assertEqual(rejected.stdout, b'')
+
+    def test_renderer_source_drift_is_rejected_instead_of_guessing_a_patch(self):
+        source = (Path(__file__).resolve().parents[1]/'render-image-admission-job.sh').read_bytes()
+        for raw in [source.replace(profile.SDK_BLOCK.encode(), b''), source+profile.SDK_BLOCK.encode()]:
+            with self.assertRaises(ValueError):profile.managed_renderer_script(raw)
 
     def test_default_preserves_full_profile_without_mutating_input(self):
         resources=fixture();before=copy.deepcopy(resources)

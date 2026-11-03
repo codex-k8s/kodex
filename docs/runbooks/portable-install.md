@@ -467,10 +467,14 @@ metadata preimage не является rollback БД. Default protected про�
 `OTEL_SDK_DISABLED=true` также для native sidecars (`initContainers` с
 `restartPolicy: Always`); одноразовые init templates сохраняются. Для будущих
 managed image-admission Jobs профиль монтирует content-addressed immutable
-ConfigMap с wrapper штатного renderer через поддержанный
-`IMAGE_ADMISSION_CONTROLLER_RENDERER_PATH`. Wrapper меняет только SDK env
-native authority issuer и сохраняет Job/PVC, identities, grants и security
-context. Parameter-owned label `kodex.dev/observability-profile: disabled` в
+ConfigMap с производным canonical renderer через поддержанный
+`IMAGE_ADMISSION_CONTROLLER_RENDERER_PATH`. Генератор меняет ровно SDK block
+native authority issuer; остальные Job/PVC, identities, grants и security
+context сохраняются. Перед выдачей YAML script проверяет SHA256 настоящего
+штатного renderer в immutable image. Неизвестная версия закрыто отклоняется,
+скрытого выполнения другой ревизии нет. Используются имеющиеся Bash/jq/awk/
+sha256sum/cat; дополнительные parser/runtime пакеты в controller не требуются.
+Parameter-owned label `kodex.dev/observability-profile: disabled` в
 `ImageAdmissionPolicyParameters` разрешает ровно этот SDK env в CEL; label
 самого Job не даёт такого разрешения. Подписи, mTLS, admission, probes и остальные
 проверки остаются обязательными. Custom renderer нельзя молча заменить.
