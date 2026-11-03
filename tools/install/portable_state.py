@@ -110,6 +110,19 @@ def normalized_pod(expected, actual):
     return value
 
 
+def normalized_claim_templates(expected, actual):
+    require(isinstance(expected, list) and isinstance(actual, list) and len(expected) == len(actual), 'LIVE_CLAIM_TEMPLATE_DRIFT')
+    result = []
+    for wanted, template in zip(expected, actual):
+        value = strip_defaults(wanted, template, {'apiVersion': 'v1', 'kind': 'PersistentVolumeClaim'})
+        value['metadata'] = strip_defaults(wanted.get('metadata', {}), value.get('metadata', {}), {'creationTimestamp': None})
+        value['spec'] = strip_defaults(wanted['spec'], value['spec'], {'volumeMode': 'Filesystem'})
+        if 'status' not in wanted and value.get('status') in ({}, {'phase': 'Pending'}):
+            value.pop('status', None)
+        result.append(value)
+    return result
+
+
 def workload_spec(expected, actual, kind, uid=None, name=None):
     defaults = {'replicas': 1, 'revisionHistoryLimit': 10, 'minReadySeconds': 0}
     if kind == 'Deployment':
@@ -148,14 +161,8 @@ def workload_spec(expected, actual, kind, uid=None, name=None):
             value['template'].pop('metadata')
         else:
             value['template']['metadata'] = metadata
-    if kind == 'StatefulSet':
-        for index, template in enumerate(value.get('volumeClaimTemplates', [])):
-            wanted = expected.get('volumeClaimTemplates', [])
-            require(index < len(wanted), 'LIVE_CLAIM_TEMPLATE_DRIFT')
-            template['metadata'] = strip_defaults(wanted[index].get('metadata', {}), template.get('metadata', {}), {'creationTimestamp': None})
-            template['spec'] = strip_defaults(wanted[index]['spec'], template['spec'], {'volumeMode': 'Filesystem'})
-            if 'status' not in wanted[index] and template.get('status') in ({}, {'phase': 'Pending'}):
-                template.pop('status', None)
+    if kind == 'StatefulSet' and 'volumeClaimTemplates' in value:
+        value['volumeClaimTemplates'] = normalized_claim_templates(expected.get('volumeClaimTemplates', []), value['volumeClaimTemplates'])
     return value
 
 
@@ -165,11 +172,19 @@ def rbac_rules(resource):
     return [] if value is None else value
 
 
-def api_write_resource(resource):
+def api_write_resource(resource, actual=None):
     result = copy.deepcopy(resource)
     # API канонизирует deny-all [] в null. Другие правила не меняются.
     if result.get('kind') in ('Role', 'ClusterRole') and rbac_rules(result) == []:
         result['rules'] = None
+    if (result.get('apiVersion'), result.get('kind')) == ('apps/v1', 'StatefulSet') and actual is not None:
+        require(owner(result) and owner(actual) and key(result) == key(actual) and actual['metadata'].get('ownerReferences', []) == result['metadata'].get('ownerReferences', []), 'FOREIGN_RESOURCE_COLLISION')
+        wanted = result['spec'].get('volumeClaimTemplates', [])
+        observed = actual['spec'].get('volumeClaimTemplates', [])
+        require(normalized_claim_templates(wanted, observed) == wanted, 'IMMUTABLE_CLAIM_TEMPLATE_DRIFT')
+        # Список immutable/atomic: после exact проверки сохраняем только его API defaults.
+        if 'volumeClaimTemplates' in actual['spec']:
+            result['spec']['volumeClaimTemplates'] = copy.deepcopy(observed)
     return result
 
 
@@ -357,9 +372,9 @@ class State:
         if actual is not None:
             require(owner(actual) and not actual['metadata'].get('deletionTimestamp') and actual['metadata'].get('ownerReferences', []) == resource['metadata'].get('ownerReferences', []), 'FOREIGN_RESOURCE_COLLISION')
         if actual is not None and (resource['apiVersion'], resource['kind']) in (('v1', 'ConfigMap'), ('apps/v1', 'Deployment')):
-            self.cas_update(api_write_resource(resource), actual, dry_run=True)
+            self.cas_update(api_write_resource(resource, actual), actual, dry_run=True)
         else:
-            self.call(['apply', '--server-side', '--dry-run=server', '--field-manager=kodex-install', '-f', '-'], api_write_resource(resource))
+            self.call(['apply', '--server-side', '--dry-run=server', '--field-manager=kodex-install', '-f', '-'], api_write_resource(resource, actual))
 
     def apply(self, resource, inventory):
         require(owner(resource), 'UNOWNED_RENDER_RESOURCE_REJECTED')
@@ -369,7 +384,7 @@ class State:
                     'UNREGISTERED_CONTROLLER_OWNED_LEASE')
             if actual is not None:
                 return
-        desired = api_write_resource(resource)
+        desired = api_write_resource(resource, actual)
         if actual is None:
             # Create, а не SSA upsert: появившийся после inventory объект не перезапишется.
             self.call(['create', '--field-manager=kodex-install', '-f', '-'], desired)
@@ -380,7 +395,7 @@ class State:
             self.call(['apply', '--server-side', '--field-manager=kodex-install', '-f', '-'], desired)
         current = self.get(resource)
         require(current is not None and owner(current), 'WRITE_READBACK_REQUIRED')
-        if actual is not None and (resource['apiVersion'], resource['kind']) in (('v1', 'ConfigMap'), ('apps/v1', 'Deployment')):
+        if actual is not None and (resource['apiVersion'], resource['kind']) in (('v1', 'ConfigMap'), ('apps/v1', 'Deployment'), ('apps/v1', 'StatefulSet')):
             verify_resource(resource, current)
         inventory[key(resource)] = {'uid': current['metadata']['uid'], 'seal': seal(current)}
 

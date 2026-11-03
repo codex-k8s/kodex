@@ -91,6 +91,33 @@ class StateTest(unittest.TestCase):
         for value in invalid:
             with self.subTest(value=value),patch.object(state,'call',return_value=json.dumps(value).encode()),self.assertRaises(Rejected):state.get(desired)
 
+    def test_stateful_claim_api_defaults_preserved_with_exact_preflight_and_write(self):
+        desired = resource('StatefulSet', 'synthetic-database');desired['apiVersion'] = 'apps/v1'
+        desired['spec']['volumeClaimTemplates'] = [{'metadata': {'name': 'data'}, 'spec': {'accessModes': ['ReadWriteOnce'], 'resources': {'requests': {'storage': '1Gi'}}}}]
+        actual = live(desired)
+        claim = actual['spec']['volumeClaimTemplates'][0]
+        claim.update(apiVersion='v1', kind='PersistentVolumeClaim', status={'phase': 'Pending'})
+        claim['spec']['volumeMode'] = 'Filesystem'
+        verify_resource(desired, actual)
+        state = FixtureState([actual]);inventory = state.inventory([desired])
+        state.preflight_apply(desired)
+        self.assertFalse(state.writes)
+        self.assertEqual(state.probes[0][1]['spec']['volumeClaimTemplates'], actual['spec']['volumeClaimTemplates'])
+        state.apply(desired, inventory)
+        self.assertEqual(state.writes[0][1]['spec']['volumeClaimTemplates'], actual['spec']['volumeClaimTemplates'])
+        verify_resource(desired, state.get(desired))
+        self.assertNotIn('--force-conflicts', state.writes[0][0])
+        for field, value in [('kind', 'ConfigMap'), ('apiVersion', 'v2'), ('dataSource', {'name': 'foreign'}), ('storage', '2Gi')]:
+            drift = copy.deepcopy(actual);changed = drift['spec']['volumeClaimTemplates'][0]
+            if field == 'storage':changed['spec']['resources']['requests']['storage'] = value
+            elif field == 'dataSource':changed['spec'][field] = value
+            else:changed[field] = value
+            bad = FixtureState([drift]);approved = bad.inventory([desired])
+            with self.assertRaises(Rejected):bad.preflight_apply(desired)
+            with self.assertRaises(Rejected):bad.apply(desired, approved)
+            self.assertFalse(bad.probes);self.assertFalse(bad.writes)
+            with self.assertRaises(Rejected):verify_resource(desired, drift)
+
     def test_owned_preflight_uses_same_cas_protocol_without_writing(self):
         desired=resource(kind='Deployment',name='synthetic');desired['apiVersion']='apps/v1'
         actual=live(desired);actual['spec']['replicas']=0;desired['spec']['replicas']=2

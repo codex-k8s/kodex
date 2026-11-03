@@ -408,3 +408,14 @@ ConfigMap/Deployment, а не несовместимый SSA preview. API defaul
 семантику bundled KODEX_DISABLE_OBSERVABILITY=true. Новый отдельный opt-in
 `--disable-monitoring-resources` выбирается только установкой без Prometheus
 Operator; установленные operator/CRD он не удаляет. Default профиль не меняется.
+
+
+StatefulSet PVC templates при повторном apply сохраняются в точном API
+представлении только после закрытой проверки всех исходных полей. API defaults
+`apiVersion: v1`, `kind: PersistentVolumeClaim`, `volumeMode: Filesystem` и
+`status.phase: Pending` учитываются при readback; другие значения не маскируются.
+Это предотвращает SSA конфликт immutable/atomic volumeClaimTemplates после create.
+Размер, storageClass, dataSource, accessModes, labels и неизвестные поля менять
+таким продолжением нельзя. Dry-run и apply используют одну проверку, write сохраняет
+UID/seal inventory fencing и resourceVersion. PVC/StatefulSet не пересоздаются,
+force-conflicts не применяется. Изменения данных/хранилища требуют отдельной миграции.
