@@ -4,7 +4,7 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.3.4
+version: 1.3.5
 updated: 2026-11-03
 ---
 
@@ -369,6 +369,15 @@ optional OpenCode gateway. Тип credential и gateway definition обязан�
 
 Этот шаг не обращается к модельному API и не доказывает успешный runtime turn.
 Без параметра definition прежние Codex SQL operator callers сохраняют свой тип.
+
+Egress gateway читает runtime signing и proxy CA Secrets с mode0440 через свою
+группу10001: Pod задаёт `fsGroup: 10001` и `OnRootMismatch`. UID остаётся non-root,
+mounts read-only, capabilities ALL отброшены. Secret bytes/mode/rotation не меняются.
+Для закреплённого partial render без этой группы выполнить публичный
+`tools/install/egress_secret_access.py --render <yaml>`, сохранить новый digest и
+preimage, затем передать `--repair-egress-secret-access` в `resume-workloads`.
+Без флага дополнительный delta отклоняется; произвольная группа, Secret или
+расширение привилегий отклоняются. Этот флаг не разрешает replay bootstrap Jobs.
 
 Пустой Role/ClusterRole (`rules: []`) API может сохранить как `rules: null`.
 Preflight и фактическая запись используют одну закрытую нормализацию []→null;

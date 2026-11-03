@@ -16,6 +16,8 @@ repair_api_endpoints=false
 clamav_mode=enabled
 previous_arguments=()
 arguments=()
+repair_egress_secret_access=false
+
 while (($#)); do
   case "$1" in
     --mode) mode="${2:-}"; shift 2 ;;
@@ -27,6 +29,7 @@ while (($#)); do
     --previous-render-sha256) previous_sha="${2:-}"; shift 2 ;;
     --clamav-mode) clamav_mode="${2:-}"; shift 2 ;;
     --repair-kubernetes-api-endpoints) repair_api_endpoints=true; shift ;;
+    --repair-egress-secret-access) repair_egress_secret_access=true; shift ;;
     --buildkit-runtime-profile) buildkit_profile="${2:-}"; shift 2 ;;
     --oidc-ca-file|--ingress-deployment|--ingress-controller|--ingress-namespace|--ingress-service) arguments+=("$1" "${2:-}"); shift 2 ;;
     --help)
@@ -36,6 +39,7 @@ while (($#)); do
       printf '%s\n' '  [--previous-render <yaml> --previous-render-sha256 <64-hex> --buildkit-runtime-profile standard|nested-userns; resume-workloads only]'
       printf '%s\n' '  [--clamav-mode enabled|disabled; default enabled]'
       printf '%s\n' '  [--repair-kubernetes-api-endpoints; explicit workload resume repair from pinned endpoint anchors]'
+      printf '%s\n' '  [--repair-egress-secret-access; explicit workload resume repair]'
       exit 0 ;;
     *) fail 'unsupported argument' ;;
   esac
@@ -58,7 +62,9 @@ if [[ "$mode" == resume-workloads ]]; then
   case "$buildkit_profile" in standard|nested-userns) ;; *) fail 'BuildKit runtime profile is invalid' ;; esac
   previous_arguments=(--previous-render "$temporary/previous.yaml" --previous-render-sha256 "$previous_sha" --buildkit-runtime-profile "$buildkit_profile")
   [[ "$repair_api_endpoints" != true ]] || previous_arguments+=(--repair-kubernetes-api-endpoints)
+  [[ "$repair_egress_secret_access" != true ]] || previous_arguments+=(--repair-egress-secret-access)
 else
+  [[ "$repair_egress_secret_access" == false ]] || fail 'egress secret repair only applies to workload resume'
   [[ "$repair_api_endpoints" == false ]] || fail 'API endpoint repair only applies to workload resume'
   [[ -z "$previous_render" && -z "$previous_sha" ]] || fail 'previous render only applies to workload resume'
   [[ "$buildkit_profile" == standard ]] || fail 'BuildKit profile must be materialized in the pinned render before fresh apply'
