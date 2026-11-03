@@ -151,6 +151,20 @@ def workload_spec(expected, actual, kind, uid=None, name=None):
     return value
 
 
+def rbac_rules(resource):
+    value = resource.get('rules')
+    require(value is None or isinstance(value, list), 'RBAC_RULES_SHAPE_REJECTED')
+    return [] if value is None else value
+
+
+def api_write_resource(resource):
+    result = copy.deepcopy(resource)
+    # API канонизирует deny-all [] в null. Другие правила не меняются.
+    if result.get('kind') in ('Role', 'ClusterRole') and rbac_rules(result) == []:
+        result['rules'] = None
+    return result
+
+
 def policy_spec(resource):
     spec = copy.deepcopy(resource.get('spec'))
     if resource['kind'] == 'NetworkPolicy':
@@ -204,7 +218,9 @@ def verify_resource(expected, actual):
         require(value == expected['spec'], 'LIVE_SERVICE_SPEC_DRIFT')
     elif 'spec' in expected:
         require(subset(expected['spec'], actual.get('spec')), 'LIVE_RESOURCE_DRIFT')
-    if 'rules' in expected:
+    if kind in ('Role', 'ClusterRole'):
+        require(rbac_rules(actual) == rbac_rules(expected), 'LIVE_RBAC_RULE_DRIFT')
+    elif 'rules' in expected:
         require(actual.get('rules') == expected['rules'], 'LIVE_RBAC_RULE_DRIFT')
     if kind == 'ConfigMap':
         require(actual.get('data', {}) == expected.get('data', {}) and
@@ -307,7 +323,7 @@ class State:
                     'UNREGISTERED_CONTROLLER_OWNED_LEASE')
             if actual is not None:
                 return
-        desired = copy.deepcopy(resource)
+        desired = api_write_resource(resource)
         if actual is None:
             # Create, а не SSA upsert: появившийся после inventory объект не перезапишется.
             self.call(['create', '--field-manager=kodex-install', '-f', '-'], desired)
@@ -351,11 +367,12 @@ def verify_schemas(state, resources):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=('inventory', 'apply', 'delete', 'readback'))
+    parser.add_argument('mode', choices=('inventory', 'apply', 'delete', 'readback', 'prepare-api-write'))
     parser.add_argument('--context', required=True)
     parser.add_argument('--render', required=True)
     parser.add_argument('--inventory')
     parser.add_argument('--manifest')
+    parser.add_argument('--output')
     parser.add_argument('--kind')
     parser.add_argument('--name')
     parser.add_argument('--namespace', default='kodex-system')
@@ -364,6 +381,14 @@ def main():
         raw = Path(args.render).read_bytes()
         resources = list(filter(None, yaml.safe_load_all(raw)))
         render_digest = hashlib.sha256(raw).hexdigest()
+        if args.mode == 'prepare-api-write':
+            require(args.manifest and args.output, 'MANIFEST_AND_OUTPUT_REQUIRED')
+            selected = list(filter(None, yaml.safe_load_all(Path(args.manifest).read_bytes())))
+            registered = {key(r): r for r in resources}
+            require(all(r == registered.get(key(r)) and r['kind'] != 'Secret' and owner(r) for r in selected), 'MANIFEST_OUTSIDE_PINNED_RENDER')
+            with open(args.output, 'x', opener=lambda p, f: os.open(p, f, 0o600)) as stream:
+                yaml.safe_dump_all([api_write_resource(r) for r in selected], stream, sort_keys=False)
+            return
         state = State(args.context)
         state.discover(resources)
         if args.mode == 'inventory':
