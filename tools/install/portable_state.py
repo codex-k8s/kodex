@@ -12,6 +12,14 @@ import urllib.parse
 import yaml
 from deployment_profile import require, Rejected
 
+CAS_TARGETS = {
+    ('v1', 'ConfigMap'): 'configmaps',
+    ('apps/v1', 'Deployment'): 'deployments.apps',
+    ('batch/v1', 'CronJob'): 'cronjobs.batch',
+    ('admissionregistration.k8s.io/v1', 'ValidatingAdmissionPolicy'): 'validatingadmissionpolicies.admissionregistration.k8s.io',
+    ('admissionregistration.k8s.io/v1', 'ValidatingAdmissionPolicyBinding'): 'validatingadmissionpolicybindings.admissionregistration.k8s.io',
+}
+
 
 def key(resource):
     m = resource['metadata']
@@ -377,10 +385,7 @@ class State:
 
     def cas_update(self, desired, actual, dry_run=False):
         kind = (desired['apiVersion'], desired['kind'])
-        targets = {('v1', 'ConfigMap'): 'configmaps', ('apps/v1', 'Deployment'): 'deployments.apps',
-                   ('admissionregistration.k8s.io/v1', 'ValidatingAdmissionPolicy'): 'validatingadmissionpolicies.admissionregistration.k8s.io',
-                   ('admissionregistration.k8s.io/v1', 'ValidatingAdmissionPolicyBinding'): 'validatingadmissionpolicybindings.admissionregistration.k8s.io'}
-        require(kind in targets, 'EXACT_CAS_KIND_REQUIRED')
+        require(kind in CAS_TARGETS, 'EXACT_CAS_KIND_REQUIRED')
         require(owner(desired) and owner(actual) and key(desired) == key(actual) and actual['metadata'].get('ownerReferences', []) == desired['metadata'].get('ownerReferences', []), 'FOREIGN_RESOURCE_COLLISION')
         metadata = actual['metadata']
         patch = [{'op': 'test', 'path': '/metadata/uid', 'value': metadata['uid']},
@@ -400,7 +405,7 @@ class State:
                     patch.append({'op': 'add', 'path': '/' + field, 'value': copy.deepcopy(desired[field])})
             elif field in actual:
                 patch.append({'op': 'remove', 'path': '/' + field})
-        target = targets[kind]
+        target = CAS_TARGETS[kind]
         arguments = (['-n', desired['metadata']['namespace']] if desired['metadata'].get('namespace') else []) + ['patch', target, desired['metadata']['name'],
                      '--type=json', '--field-manager=kodex-install', '--patch-file=/dev/stdin']
         if dry_run:arguments.append('--dry-run=server')
@@ -411,7 +416,7 @@ class State:
         actual = self.get(resource)
         if actual is not None:
             require(owner(actual) and not actual['metadata'].get('deletionTimestamp') and actual['metadata'].get('ownerReferences', []) == resource['metadata'].get('ownerReferences', []), 'FOREIGN_RESOURCE_COLLISION')
-        if actual is not None and (resource['apiVersion'], resource['kind']) in (('v1', 'ConfigMap'), ('apps/v1', 'Deployment'), ('admissionregistration.k8s.io/v1', 'ValidatingAdmissionPolicy'), ('admissionregistration.k8s.io/v1', 'ValidatingAdmissionPolicyBinding')):
+        if actual is not None and (resource['apiVersion'], resource['kind']) in CAS_TARGETS:
             self.cas_update(api_write_resource(resource, actual), actual, dry_run=True)
         else:
             self.call(['apply', '--server-side', '--dry-run=server', '--field-manager=kodex-install', '-f', '-'], api_write_resource(resource, actual))
@@ -428,14 +433,14 @@ class State:
         if actual is None:
             # Create, а не SSA upsert: появившийся после inventory объект не перезапишется.
             self.call(['create', '--field-manager=kodex-install', '-f', '-'], desired)
-        elif (desired['apiVersion'], desired['kind']) in (('v1', 'ConfigMap'), ('apps/v1', 'Deployment'), ('admissionregistration.k8s.io/v1', 'ValidatingAdmissionPolicy'), ('admissionregistration.k8s.io/v1', 'ValidatingAdmissionPolicyBinding')):
+        elif (desired['apiVersion'], desired['kind']) in CAS_TARGETS:
             self.cas_update(desired, actual)
         else:
             desired['metadata']['resourceVersion'] = actual['metadata']['resourceVersion']
             self.call(['apply', '--server-side', '--field-manager=kodex-install', '-f', '-'], desired)
         current = self.get(resource)
         require(current is not None and owner(current), 'WRITE_READBACK_REQUIRED')
-        if actual is not None and (resource['apiVersion'], resource['kind']) in (('v1', 'ConfigMap'), ('apps/v1', 'Deployment'), ('apps/v1', 'StatefulSet'), ('admissionregistration.k8s.io/v1', 'ValidatingAdmissionPolicy'), ('admissionregistration.k8s.io/v1', 'ValidatingAdmissionPolicyBinding')):
+        if actual is not None and ((resource['apiVersion'], resource['kind']) in CAS_TARGETS or (resource['apiVersion'], resource['kind']) == ('apps/v1', 'StatefulSet')):
             verify_resource(resource, current)
         inventory[key(resource)] = {'uid': current['metadata']['uid'], 'seal': seal(current)}
 
