@@ -12,6 +12,7 @@ usage() {
     '  --render <exact-release.yaml> --public-tls-mode deferred|enabled|external' \
     '  [--oidc-ca-file <pem> --ingress-controller <name> --ingress-namespace <name>]' >&2
   printf '%s\n' '  [--previous-render <yaml> --previous-render-sha256 <64-hex> --buildkit-runtime-profile standard|nested-userns; resume-workloads only]' >&2
+  printf '%s\n' '  [--repair-egress-secret-access; explicit workload resume repair]' >&2
 }
 
 context=""
@@ -23,6 +24,8 @@ portable_inventory=""
 previous_arguments=()
 repair_api_endpoints=false
 clamav_mode=enabled
+repair_egress_secret_access=false
+
 while (($# > 0)); do
   case "$1" in
     --portable-inventory) portable_inventory="${2:-}"; shift 2 ;;
@@ -33,6 +36,7 @@ while (($# > 0)); do
     --public-tls-mode) public_tls_mode="${2:-}"; shift 2 ;;
     --clamav-mode) clamav_mode="${2:-}"; shift 2 ;;
     --repair-kubernetes-api-endpoints) repair_api_endpoints=true; previous_arguments+=("$1"); shift ;;
+    --repair-egress-secret-access) repair_egress_secret_access=true; previous_arguments+=("$1"); shift ;;
     --previous-render|--previous-render-sha256|--buildkit-runtime-profile) previous_arguments+=("$1" "${2:-}"); shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
@@ -46,6 +50,9 @@ case "$mode" in
 esac
 case "$clamav_mode" in enabled|disabled) ;; *) fail 'ClamAV mode is invalid' ;; esac
 case "$public_tls_mode" in deferred|enabled|external) ;; *) fail 'public TLS mode is invalid' ;; esac
+if [[ "$repair_egress_secret_access" == true ]]; then
+  case "$mode" in prepare-preflight|preflight|resume-workloads) ;; *) fail 'egress secret repair requires workload resume' ;; esac
+fi
 if [[ "$repair_api_endpoints" == true ]]; then
   case "$mode" in prepare-preflight|preflight|resume-workloads) ;; *) fail 'API endpoint repair requires workload resume' ;; esac
 fi

@@ -49,6 +49,22 @@ class FakeState:
 
 
 class AuthorityRegistry(unittest.TestCase):
+    def test_egress_secret_repair_requires_explicit_exact_delta(self):
+        import test_egress_secret_access
+        previous = registry.observability_profile.transform(registry.transform(fixture(), {'schema': 'kodex.authority-registry/v1', 'source_revision': 1}), True)
+        previous.append(test_egress_secret_access.fixture()[0])
+        previous = registry.observability_profile.transform(previous, True)
+        desired = registry.egress_secret_access.transform(previous)
+        for values in [previous, desired]:
+            state = FakeState(values);state.current['internal-rpc-authority-publisher']['spec']['replicas'] = 2
+            state.published_state = dict(rotation_count=1, snapshot_count=1, fence_allows=True, matching_count=1)
+            state.live_deployments = [state.current['internal-rpc-authority-publisher'], state.current['egress-gateway']]
+            with patch.object(registry, 'verify_schemas'):
+                self.assertEqual(registry.verify_workload_resume(state, desired, previous, repair_egress_secret_access=True)['deployments'], 2)
+                with self.assertRaises(Rejected): registry.verify_workload_resume(state, desired, previous)
+                wrong = copy.deepcopy(desired);wrong[-1]['spec']['template']['spec']['securityContext']['fsGroup'] = 0
+                with self.assertRaises(Rejected): registry.verify_workload_resume(state, wrong, previous, repair_egress_secret_access=True)
+
     def test_nested_buildkit_resume_requires_exact_named_profile_not_arbitrary_security_delta(self):
         previous = registry.observability_profile.transform(registry.transform(fixture(), {'schema': 'kodex.authority-registry/v1', 'source_revision': 1}), True)
         builder = copy.deepcopy(previous[-1]);builder['metadata']['name'] = 'kodex-buildkit'
