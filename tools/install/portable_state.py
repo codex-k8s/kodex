@@ -16,6 +16,7 @@ CAS_TARGETS = {
     ('v1', 'ConfigMap'): 'configmaps',
     ('apps/v1', 'Deployment'): 'deployments.apps',
     ('batch/v1', 'CronJob'): 'cronjobs.batch',
+    ('networking.k8s.io/v1', 'NetworkPolicy'): 'networkpolicies.networking.k8s.io',
     ('admissionregistration.k8s.io/v1', 'ValidatingAdmissionPolicy'): 'validatingadmissionpolicies.admissionregistration.k8s.io',
     ('admissionregistration.k8s.io/v1', 'ValidatingAdmissionPolicyBinding'): 'validatingadmissionpolicybindings.admissionregistration.k8s.io',
 }

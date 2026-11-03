@@ -357,6 +357,8 @@ KUBERNETES_API_ENDPOINT_RULE="$api_endpoint_rule" yq -i '
   )
 ' "$rendered"
 
+python3 "$repository_root/tools/install/kubernetes_api_profile.py" --render "$rendered"
+
 if [[ "$disable_observability" == true ]]; then
   yq -i '
     with(select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "DaemonSet" or .kind == "Job");
