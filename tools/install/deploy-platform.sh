@@ -8,7 +8,7 @@ fail() {
 
 usage() {
   printf '%s\n' \
-    "Usage: $0 --context <exact-context> --mode defer-public-tls|prepare-preflight|preflight|apply|readback" \
+    "Usage: $0 --context <exact-context> --mode defer-public-tls|prepare-preflight|preflight|apply|resume-authority-bootstrap|readback" \
     '  --render <exact-release.yaml> --public-tls-mode deferred|enabled|external' \
     '  [--oidc-ca-file <pem> --ingress-controller <name> --ingress-namespace <name>]' >&2
 }
@@ -34,7 +34,7 @@ done
 
 [[ -n "$context" ]] || fail 'exact Kubernetes context is required'
 case "$mode" in
-  defer-public-tls|prepare-preflight|preflight|apply|readback) ;;
+  defer-public-tls|prepare-preflight|preflight|apply|resume-authority-bootstrap|readback) ;;
   *) fail 'mode is invalid' ;;
 esac
 case "$public_tls_mode" in deferred|enabled|external) ;; *) fail 'public TLS mode is invalid' ;; esac
@@ -57,7 +57,7 @@ if [[ "$profile_mode" == external || "$public_tls_mode" == external ]]; then
 fi
 if [[ -n "${profile_mode:-}" ]]; then
   [[ "$profile_mode" != managed || "$public_tls_mode" == enabled ]] || fail 'portable managed TLS requires enabled mode'
-  if [[ "$mode" == apply || "$mode" == prepare-preflight ]]; then
+  if [[ "$mode" == apply || "$mode" == resume-authority-bootstrap || "$mode" == prepare-preflight ]]; then
     [[ -f "$portable_inventory" && ! -L "$portable_inventory" ]] || fail 'portable inventory is required before mutation'
   fi
   [[ "$mode" != defer-public-tls ]] || fail 'portable profile does not use ACME deferral'
@@ -722,6 +722,30 @@ no|create|pods|$runtime_namespace|$runner
 EOF
 }
 
+apply_workloads_after_authority() {
+	apply_render workloads-before-role-image-builder '
+    select((.kind == "Deployment" and .metadata.name != "role-image-builder") or
+      .kind == "DaemonSet" or .kind == "CronJob")
+  '
+  kubectl --context "$context" -n "$namespace" rollout status deployment/control-plane --timeout=15m >/dev/null ||
+    fail 'control plane is unavailable before provider bootstrap'
+  python3 "$repository_root/tools/install/provider-bootstrap.py" recover --context "$context"
+  for dependency in egress-gateway kodex-image-registry-promotion; do
+    kubectl --context "$context" -n "$namespace" rollout status "deployment/$dependency" \
+      --timeout=15m >/dev/null || fail "release materializer dependency failed: $dependency"
+  done
+  apply_job release-artifact-materializer
+  for dependency in kodex-image-registry-pull kodex-buildkit; do
+    kubectl --context "$context" -n "$namespace" rollout status "deployment/$dependency" \
+      --timeout=15m >/dev/null || fail "role image builder dependency failed: $dependency"
+  done
+  apply_render role-image-builder '
+    select(.kind == "Deployment" and .metadata.name == "role-image-builder")
+  '
+  wait_workloads
+  prune_role_environment_configmaps
+}
+
 if [[ "$mode" == prepare-preflight ]]; then
   prepare_image_admission_preflight
   printf 'Kodex platform preflight preparation completed\n'
@@ -816,27 +840,17 @@ if [[ "$mode" == apply ]]; then
 	# readiness requires readbacks from workloads applied in the next phase.
 	wait_authority_projections bootstrap
 
-	apply_render workloads-before-role-image-builder '
-    select((.kind == "Deployment" and .metadata.name != "role-image-builder") or
-      .kind == "DaemonSet" or .kind == "CronJob")
-  '
-  kubectl --context "$context" -n "$namespace" rollout status deployment/control-plane --timeout=15m >/dev/null ||
-    fail 'control plane is unavailable before provider bootstrap'
-  python3 "$repository_root/tools/install/provider-bootstrap.py" recover --context "$context"
-  for dependency in egress-gateway kodex-image-registry-promotion; do
-    kubectl --context "$context" -n "$namespace" rollout status "deployment/$dependency" \
-      --timeout=15m >/dev/null || fail "release materializer dependency failed: $dependency"
-  done
-  apply_job release-artifact-materializer
-  for dependency in kodex-image-registry-pull kodex-buildkit; do
-    kubectl --context "$context" -n "$namespace" rollout status "deployment/$dependency" \
-      --timeout=15m >/dev/null || fail "role image builder dependency failed: $dependency"
-  done
-  apply_render role-image-builder '
-    select(.kind == "Deployment" and .metadata.name == "role-image-builder")
-  '
-  wait_workloads
-  prune_role_environment_configmaps
+  apply_workloads_after_authority
+
+fi
+
+if [[ "$mode" == resume-authority-bootstrap ]]; then
+  [[ -n "$profile_mode" ]] || fail 'authority resume requires a portable profile'
+  python3 "$repository_root/tools/install/authority_registry.py" preflight-resume --render "$render_file" --context "$context"
+  apply_render authority-registry 'select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-publisher-target-registry")'
+  apply_render authority-publisher 'select(.kind == "Deployment" and .metadata.name == "internal-rpc-authority-publisher")'
+  wait_authority_projections bootstrap
+  apply_workloads_after_authority
 fi
 
 if [[ "$public_tls_mode" == deferred ]]; then

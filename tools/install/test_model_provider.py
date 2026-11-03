@@ -70,6 +70,7 @@ class ModelProviderTests(unittest.TestCase):
             lock_path, output, config = directory / 'lock.json', directory / 'render.yaml', directory / 'provider.json'
             lock_path.write_text(json.dumps(lock))
             config.write_text(json.dumps(fixture()))
+            authority=directory/'authority.json';authority.write_text(json.dumps({'schema':'kodex.authority-registry/v1','source_revision':1}))
             args = [str(ROOT / 'tools/release/render-web-only.sh'), '--lock', str(lock_path), '--lock-sha256', hashlib.sha256(lock_path.read_bytes()).hexdigest(),
                     '--output', str(output), '--public-host', 'console.example.invalid', '--public-origin', 'https://console.example.invalid',
                     '--oidc-issuer', 'https://sso.example.invalid/realms/test', '--oidc-jwks-url', 'https://sso.example.invalid/realms/test/protocol/openid-connect/certs',
@@ -78,12 +79,14 @@ class ModelProviderTests(unittest.TestCase):
                     '--kubernetes-api-endpoint-cidrs', '192.0.2.11/32', '--kubernetes-api-endpoint-ports', '6443', '--ingress-class', 'nginx',
                     '--cluster-issuer', 'test-issuer', '--ingress-namespace', 'ingress-nginx', '--ingress-pod-name', 'ingress-nginx',
                     '--oidc-namespace', 'kodex-identity', '--oidc-pod-name', 'keycloak', '--oidc-pod-component', 'identity', '--oidc-target-port', '8443',
-                    '--model-provider-configuration', str(config), '--model-provider-default-model', 'vendor/model-v1', '--disable-observability']
+                    '--model-provider-configuration', str(config), '--model-provider-default-model', 'vendor/model-v1', '--disable-observability', '--authority-registry-configuration', str(authority)]
             result = subprocess.run(args, cwd=ROOT, capture_output=True, timeout=150,
                                     env={**os.environ, 'GOMAXPROCS': '2', 'GOFLAGS': '-p=1', 'GOWORK': 'off'})
             self.assertEqual(result.returncode, 0, (result.stdout + result.stderr).decode()[-3000:])
             resources = [item for item in MODULE.yaml.safe_load_all(output.read_text()) if item]
             self.assertFalse(any(item['apiVersion'] == 'monitoring.coreos.com/v1' for item in resources))
+            authority_cm=next(item for item in resources if item['kind']=='ConfigMap'and item['metadata']['name']=='internal-rpc-authority-publisher-target-registry')
+            self.assertEqual(MODULE.yaml.safe_load(authority_cm['data']['key-delivery-targets.yaml'])['source_revision'],1)
             for item in resources:
                 if item['kind'] in ('Deployment', 'StatefulSet', 'DaemonSet', 'Job'):
                     for container in item['spec']['template']['spec']['containers']:

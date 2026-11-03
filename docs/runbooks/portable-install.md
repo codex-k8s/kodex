@@ -359,3 +359,32 @@ Preflight и фактическая запись используют одну �
 readback принимает только эквивалентные пустые формы (null/absence/[]). Непустые
 правила сравниваются полностью, добавление любого разрешения отклоняется.
 Нормализация не включает force-conflicts и не изменяет image/schema contract.
+
+## Registry authority при первой установке и после частичного bootstrap
+
+Историческая ревизия каталога в исходниках не является ревизией конкретной
+установки. Для новой БД её первая публикация должна иметь revision1.
+Опциональный `--authority-registry-configuration <json>` у renderer принимает
+`{"schema":"kodex.authority-registry/v1","source_revision":1}`. Профиль меняет
+только эту ревизию и provenance annotation, сохраняет targets/roles/generations.
+Без опции прежняя ревизия каталога сохраняется. Deployment inputs владеют
+ревизией: повтор сохраняет значение, последующие изменения каталога должны
+проходить штатную монотонную rotation. Нельзя сбрасывать revision активной БД.
+Для frozen application render доступен тот же pinned postprocessor:
+`authority_registry.py render --render <yaml> --configuration <json>`.
+
+Если миграции уже завершены, а первый publisher остановился до любого durable
+authority effect, допускается отдельный `portable-release.sh --mode
+resume-authority-bootstrap` с новым render SHA/context/private preimage.
+До записи проверяются точные schema heads и completed job executable specs,
+единственный owned publisher с replicas0 и завершёнными Pod, пустой runtime,
+неизменные targets и0snapshot/0rotation при OPEN fence. Любое частичное durable
+состояние требует отдельного существующего recovery protocol; этот режим его
+не удаляет и не обходит. Publisher предварительно quiesce адресным решением
+оператора с UID/RV/preimage, без удаления БД/PVC/keys.
+
+Resume применяет только ConfigMap registry и publisher, ждёт bootstrap
+projections и продолжает обычную цепь workloads/provider/materializer/RoleImage.
+Миграции, database credentials и broker bootstrap повторно не запускаются.
+Сохраняются UID/seal fencing, immutable images, подписи/mTLS и полный конечный
+readback. После изменения schemas старый image не считается rollback.

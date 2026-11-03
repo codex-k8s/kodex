@@ -167,6 +167,7 @@ class RegistrySource(unittest.TestCase):
             self.assertEqual(result.returncode, 0, (result.stdout + result.stderr).decode()[-3000:])
             resources = [item for item in registry.yaml.safe_load_all(render.read_text()) if item]
             self.assertTrue(any(item['apiVersion'] == 'monitoring.coreos.com/v1' for item in resources))
+            self.assertEqual(registry.yaml.safe_load(registry.one(resources,'ConfigMap','internal-rpc-authority-publisher-target-registry')['data']['key-delivery-targets.yaml'])['source_revision'],7)
             projected = registry.transform(resources, config, lock)
             self.assertEqual(registry.transform(projected, config, lock), projected)
             self.assertTrue(any((item['kind'] == 'Deployment' and item['metadata']['name'] == 'control-plane' for item in projected)))
