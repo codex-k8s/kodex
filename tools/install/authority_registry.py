@@ -9,7 +9,8 @@ import os
 from pathlib import Path
 import yaml
 from deployment_profile import require, Rejected
-from portable_state import State, verify_resource, verify_schemas
+from portable_state import State, verify_resource, verify_schemas, key
+import observability_profile
 
 REGISTRY = 'internal-rpc-authority-publisher-target-registry'
 ANNOTATION = 'kodex.dev/authority-registry-source-revision'
@@ -98,7 +99,7 @@ def published_state_sql(registry_digest):
     return "SELECT json_build_object('rotation_count',(SELECT count(*) FROM internal_rpc_authority.authority_rotation_intents),'snapshot_count',(SELECT count(*) FROM internal_rpc_authority.authority_snapshot_history),'fence_allows',internal_rpc_authority.runtime_restore_fence_allows_work(),'matching_count',(SELECT count(*) FROM internal_rpc_authority.authority_rotation_intents r JOIN internal_rpc_authority.authority_snapshot_history h ON h.publication_intent_id=r.intent_id WHERE r.protocol_version=2 AND r.source_revision=1 AND r.registry_source_digest_sha256='" + registry_digest + "' AND r.status IN ('DELIVERED','PROMOTED') AND h.source_revision=r.source_revision AND h.source_digest_sha256=r.source_digest_sha256 AND h.predecessor_revision=0 AND h.predecessor_digest_sha256=repeat('0',64) AND h.snapshot_compact_jws IS NOT NULL AND h.published_at<=now()+interval '5 seconds' AND h.published_at>now()-interval '180 days'));"
 
 
-def verify_published_resume(state, resources):
+def verify_published_resume(state, resources, startup_only=True):
     desired = one(resources, 'ConfigMap', REGISTRY)
     document = yaml.safe_load(desired['data']['key-delivery-targets.yaml'])
     require(desired['metadata'].get('annotations', {}).get(ANNOTATION) == '1' and document.get('source_revision') == 1, 'INITIAL_AUTHORITY_REVISION_ONE_REQUIRED')
@@ -110,11 +111,46 @@ def verify_published_resume(state, resources):
     observed = state.get(publisher)
     require(observed is not None and type(publisher['spec'].get('replicas')) is int and publisher['spec']['replicas'] > 0, 'STARTED_AUTHORITY_PUBLISHER_REQUIRED')
     verify_resource(publisher, observed)
-    verify_startup_only(state, observed)
+    if startup_only:
+        verify_startup_only(state, observed)
     digest = hashlib.sha256(desired['data']['key-delivery-targets.yaml'].encode()).hexdigest()
     raw = state.call(['-n', 'kodex-system', 'exec', 'kodex-postgresql-0', '--', 'psql', '-XqAt', '-U', 'postgres', '-d', 'internal_rpc_authority', '-v', 'ON_ERROR_STOP=1', '-c', published_state_sql(digest)])
     require(json.loads(raw) == {'rotation_count': 1, 'snapshot_count': 1, 'fence_allows': True, 'matching_count': 1}, 'EXACT_PUBLISHED_INITIAL_AUTHORITY_REQUIRED')
     return {'status': 'PUBLISHED_AUTHORITY_RESUME_PREFLIGHT_PASSED', 'sourceRevision': 1, 'migrations': 'VERIFIED_NOT_REPEATED', 'authorityHistory': 'PRESERVED_NOT_REPLAYED'}
+
+
+def verify_workload_resume(state, resources, previous):
+    """Продолжение initial graph допускает только точный observability profile delta."""
+    require(resources == observability_profile.transform(previous, disabled=True), 'EXACT_BOOTSTRAP_PROFILE_DELTA_REQUIRED')
+    verify_published_resume(state, resources, startup_only=False)
+    before = {key(r): r for r in previous if r.get('kind') == 'Deployment'}
+    after = {key(r): r for r in resources if r.get('kind') == 'Deployment'}
+    require(len(before) == sum(r.get('kind') == 'Deployment' for r in previous) and set(before) == set(after), 'EXACT_BOOTSTRAP_DEPLOYMENT_SET_REQUIRED')
+    live = json.loads(state.call(['-n', 'kodex-system', 'get', 'deployments', '-o', 'json']))['items']
+    require(bool(live), 'STARTED_BOOTSTRAP_DEPLOYMENTS_REQUIRED')
+    for deployment in live:
+        identity = key(deployment)
+        require(identity in before, 'UNKNOWN_BOOTSTRAP_DEPLOYMENT_REJECTED')
+        try:
+            verify_resource(before[identity], deployment)
+        except Rejected:
+            # Interrupted repair допускает только уже применённый exact successor.
+            verify_resource(after[identity], deployment)
+    runtime = json.loads(state.call(['-n', 'kodex-runtime', 'get', 'pods', '-o', 'json']))['items']
+    require(not runtime, 'EMPTY_RUNTIME_REQUIRED_FOR_INITIAL_RESUME')
+    return dict(status='WORKLOAD_BOOTSTRAP_RESUME_PREFLIGHT_PASSED', deployments=len(live),
+                migrations='VERIFIED_NOT_REPEATED', authorityHistory='PRESERVED_NOT_REPLAYED')
+
+
+def existing_job(state, resources, name):
+    """Проверяет существующий Job, не повторяя его известный либо неизвестный эффект."""
+    desired = one(resources, 'Job', name)
+    actual = state.get(desired)
+    if actual is None:
+        return False
+    verify_resource(desired, actual)
+    require(not any(c.get('type') == 'Failed' and c.get('status') == 'True' for c in actual.get('status', {}).get('conditions', [])), 'FAILED_JOB_REQUIRES_RECONCILIATION')
+    return True
 
 
 def verify_resume(state, resources):
@@ -142,12 +178,15 @@ def verify_resume(state, resources):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=('render', 'preflight-resume', 'preflight-published', 'projection-plan'))
+    parser.add_argument('mode', choices=('render', 'preflight-resume', 'preflight-published', 'preflight-workloads', 'existing-job', 'projection-plan'))
     parser.add_argument('--render', type=Path, required=True)
     parser.add_argument('--configuration', type=Path)
     parser.add_argument('--context')
     parser.add_argument('--projection-registry', type=Path)
     parser.add_argument('--output', type=Path)
+    parser.add_argument('--previous-render', type=Path)
+    parser.add_argument('--previous-render-sha256')
+    parser.add_argument('--job-name')
     args = parser.parse_args()
     require(args.render.is_file() and not args.render.is_symlink(), 'REGULAR_RENDER_REQUIRED')
     raw = args.render.read_bytes();require(len(raw) <= 16 << 20, 'RENDER_SIZE_REJECTED')
@@ -166,7 +205,17 @@ def main():
     else:
         require(args.context, 'EXACT_CONTEXT_REQUIRED')
         state = State(args.context);state.discover(resources)
-        print(json.dumps(verify_published_resume(state, resources) if args.mode == 'preflight-published' else verify_resume(state, resources)))
+        if args.mode == 'preflight-workloads':
+            require(args.previous_render is not None and args.previous_render.is_file() and not args.previous_render.is_symlink(), 'PREVIOUS_RENDER_REQUIRED')
+            raw = args.previous_render.read_bytes()
+            require(len(raw) <= 16 << 20 and hashlib.sha256(raw).hexdigest() == args.previous_render_sha256, 'PREVIOUS_RENDER_DIGEST_REQUIRED')
+            previous = list(filter(None, yaml.safe_load_all(raw)))
+            print(json.dumps(verify_workload_resume(state, resources, previous)))
+        elif args.mode == 'existing-job':
+            require(args.job_name, 'EXACT_JOB_NAME_REQUIRED')
+            print('PRESENT' if existing_job(state, resources, args.job_name) else 'ABSENT')
+        else:
+            print(json.dumps(verify_published_resume(state, resources) if args.mode == 'preflight-published' else verify_resume(state, resources)))
 
 
 if __name__ == '__main__':

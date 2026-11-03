@@ -318,9 +318,15 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
       .name == "DOCKERFILE_DIGEST" and
       .value == "sha256:0000000000000000000000000000000000000000000000000000000000000000"))
 ' >/dev/null || fail 'release bootstrap artifacts are absent from materialization'
-grep -Fq 'select(.kind == "Deployment" and .metadata.name == "role-image-builder")' \
-  "$repository_root/tools/install/deploy-platform.sh" ||
-  fail 'role image builder is not applied after its release dependencies'
+python3 - "$repository_root/tools/install/deploy-platform.sh" <<'PY'
+import pathlib, sys
+text = pathlib.Path(sys.argv[1]).read_text()
+phase = text.split('apply_workloads_after_authority() {', 1)[1].split('\n}', 1)[0]
+assert 'select(.kind == "Deployment" or' in phase
+assert '.metadata.name != "role-image-builder"' not in phase
+assert phase.index('apply_render workloads') < phase.index('rollout status deployment/control-plane')
+assert phase.index('apply_job release-artifact-materializer') < phase.index('for dependency in kodex-image-registry-pull kodex-buildkit') < phase.index('wait_workloads')
+PY
 
 yq -e 'select(.kind == "ValidatingAdmissionPolicy" and
     .metadata.name == "internal-rpc-authority-restore-anchor-forward-only") |

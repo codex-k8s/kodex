@@ -4,11 +4,29 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.40
-updated: 2026-10-29
+version: 1.7.41
+updated: 2026-11-03
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
+
+## Bootstrap consumers и опциональная observability
+
+Глобальная активация initial authority snapshot не может предшествовать запуску
+issuer/readback каждого обязательного startup consumer. Readiness прикладного
+контейнера, image materialization и builder dependencies остаются самостоятельными
+gates; порядок установщика не должен создавать цикл между ними и активацией ключей.
+Пустая начальная проекция конфигурации создаётся только при отсутствии объекта,
+проверяет авторитетного владельца и не затирает опубликованное поколение.
+
+Отключение SDK observability независимо от security profile и охватывает native
+sidecars и будущие managed Jobs. Разрешение такого env в admission выводится из
+параметров владельца, а не из label создаваемого Job. Immutable wrapper штатного
+renderer меняет только этот env; остальные executable и authority проверки
+сохраняются. Profile repair допускает лишь exact публичное преобразование
+закреплённого predecessor, UID/resourceVersion CAS, preimage и полный readback.
+Известный либо неизвестный эффект существующего Job не разрешает его пересоздать.
+Профиль, порядок и recovery описаны в [portable install](../runbooks/portable-install.md).
 
 ## Отдельные полномочия PR и переход Ready
 

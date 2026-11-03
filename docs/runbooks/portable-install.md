@@ -4,7 +4,7 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.2.0
+version: 1.3.0
 updated: 2026-11-03
 ---
 
@@ -452,3 +452,64 @@ Publisher Ready ещё может ждать consumer readbacks. Resume не п�
 других Deployments этот initial resume закрыт: требуется отдельная reconciliation,
 а не обнуление history или слепой повтор. Резервная копия данных обязательна отдельно;
 metadata preimage не является rollback БД. Default protected профиль сохраняется.
+
+## Продолжение частично запущенного initial graph
+
+Все startup consumers, включая `role-image-builder`, создаются до ожидания
+готовности control-plane. Их issuer/readback не зависит от готовности main
+контейнера. Готовность builder по-прежнему требует его настоящие зависимости;
+успешный readback не означает готовность сборки. До запуска email-bridge
+установщик создаёт каноническую пустую `email-bridge-mailbox-projection`, только
+если её ещё нет. Существующая mutable проекция принадлежит control-plane и
+никогда не заменяется пустым bootstrap. Пустой список не означает настройку почты.
+
+Опциональный `observability_profile.py --disabled` устанавливает
+`OTEL_SDK_DISABLED=true` также для native sidecars (`initContainers` с
+`restartPolicy: Always`); одноразовые init templates сохраняются. Для будущих
+managed image-admission Jobs профиль монтирует content-addressed immutable
+ConfigMap с wrapper штатного renderer через поддержанный
+`IMAGE_ADMISSION_CONTROLLER_RENDERER_PATH`. Wrapper меняет только SDK env
+native authority issuer и сохраняет Job/PVC, identities, grants и security
+context. Parameter-owned label `kodex.dev/observability-profile: disabled` в
+`ImageAdmissionPolicyParameters` разрешает ровно этот SDK env в CEL; label
+самого Job не даёт такого разрешения. Подписи, mTLS, admission, probes и остальные
+проверки остаются обязательными. Custom renderer нельзя молча заменить.
+Без явного отключения observability исходный render полностью сохраняется.
+
+Если initial graph уже частично запущен, `resume-authority-published` закрыт.
+Узкий `portable-release.sh --mode resume-workloads` требует `--previous-render`
+и `--previous-render-sha256`, exact desired render SHA/context и новый private
+preimage. Единственное разрешённое отличие candidate — результат публичного
+`observability_profile.transform(previous, disabled=True)`: прежние images,
+schema, registry и прочие настройки неизменны. Readonly preflight проверяет
+начальную signed publication, registry revision1/digest, OPEN fence, все пять
+завершённых bootstrap Jobs/schema heads и пустой runtime. Каждый существующий
+Deployment обязан точно соответствовать predecessor либо successor; неизвестный
+workload или executable drift закрывает продолжение. Для policy update применяются
+UID/resourceVersion CAS и полный readback, без force или ослабления CEL.
+
+Resume не повторяет migrations, bootstrap credentials, broker setup либо authority
+publication. Если materializer Job уже существует, проверяются его exact spec и
+результат; active Job дожидаются, completed используют, failed требует отдельной
+reconciliation. Неизвестный внешний эффект не разрешает delete/recreate/retry.
+Перед продолжением обязателен отдельный актуальный backup данных. Старый image
+и metadata preimage не гарантируют безопасного отката схемы. После restart снова
+проверить API/login и настоящий runtime turn/tool/resume; Ready Pod этого не доказывает.
+
+Закрытая нормализация API defaults допускает только пустые `command/args`,
+пустой `emptyDir.medium` и `fieldRef.apiVersion=v1` в обычном и projected downward
+API. Непустой аргумент, другой medium/fieldPath/version, дополнительный source
+или неизвестное поле не являются defaults и закрывают exact readback.
+
+| Этап / actor | Авторитетное состояние и допуск | Эффект и потерянный ответ |
+|---|---|---|
+| Operator: plan/preflight | Exact render SHA/context, initial signed history, schema/jobs, before/after executable | Только SELECT/get/server dry-run; отказ не разрешает apply |
+| Installer: bootstrap seed | Named CP-owned mutable Secret, канонический пустой payload только при отсутствии | Create-only; после ошибки readback; существующее поколение не обновляется |
+| Installer: profile assets/workloads | Git-owned exact render, fenced inventory UID/seal/RV, parameter-owned opt-in | Exact CAS/create, readback; неизвестный исход требует reconciliation |
+| Issuer/publisher: activation | Настоящие consumer attestations, signed snapshot и OPEN fence | Штатный durable authority protocol; установщик не подделывает readback/activation |
+| Installer: materializer | Exact Job spec и его Kubernetes status | Existing active/completed не пересоздаётся; Failed/UNKNOWN требует разбора receipt |
+| Operator: restart/приёмка | Images/schema/config pins, role/API/runtime receipts и данные | Адресный restart и реальная проверка; старый image не откатывает migration |
+
+Installer repair не создаёт бизнес-событий от имени приложения: его журнал —
+private preimage/inventory и readback. Прикладные consumers сохраняют собственные
+штатные events, grants и lifecycle receipts; repair не переигрывает их операции.
