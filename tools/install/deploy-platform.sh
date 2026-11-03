@@ -22,6 +22,7 @@ portable_arguments=()
 portable_inventory=""
 previous_arguments=()
 repair_api_endpoints=false
+clamav_mode=enabled
 while (($# > 0)); do
   case "$1" in
     --portable-inventory) portable_inventory="${2:-}"; shift 2 ;;
@@ -30,6 +31,7 @@ while (($# > 0)); do
     --render) render_file="${2:-}"; shift 2 ;;
     --oidc-ca-file|--ingress-deployment|--ingress-controller|--ingress-namespace|--ingress-service) portable_arguments+=("$1" "${2:-}"); shift 2 ;;
     --public-tls-mode) public_tls_mode="${2:-}"; shift 2 ;;
+    --clamav-mode) clamav_mode="${2:-}"; shift 2 ;;
     --repair-kubernetes-api-endpoints) repair_api_endpoints=true; previous_arguments+=("$1"); shift ;;
     --previous-render|--previous-render-sha256|--buildkit-runtime-profile) previous_arguments+=("$1" "${2:-}"); shift 2 ;;
     --help) usage; exit 0 ;;
@@ -42,6 +44,7 @@ case "$mode" in
   defer-public-tls|prepare-preflight|preflight|apply|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback) ;;
   *) fail 'mode is invalid' ;;
 esac
+case "$clamav_mode" in enabled|disabled) ;; *) fail 'ClamAV mode is invalid' ;; esac
 case "$public_tls_mode" in deferred|enabled|external) ;; *) fail 'public TLS mode is invalid' ;; esac
 if [[ "$repair_api_endpoints" == true ]]; then
   case "$mode" in prepare-preflight|preflight|resume-workloads) ;; *) fail 'API endpoint repair requires workload resume' ;; esac
@@ -59,6 +62,7 @@ public_certificate_name=staff-control-center-public
 export KODEX_DEPLOY_PUBLIC_TLS_MODE=$public_tls_mode
 export KODEX_DEPLOY_PUBLIC_CERTIFICATE_NAME=$public_certificate_name
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
+python3 "$repository_root/tools/install/clamav_profile.py" --check --mode "$clamav_mode" --render "$render_file"
 profile_mode=$(yq -r 'select(.kind == "ConfigMap" and .metadata.name == "kodex-installation-profile") | .data."profile.json"' "$render_file" | jq -r '.public_tls.mode' 2>/dev/null || true)
 if [[ "$profile_mode" == external || "$public_tls_mode" == external ]]; then
   [[ "$profile_mode" == external && "$public_tls_mode" == external ]] || fail 'public TLS profile input conflict'
@@ -890,7 +894,7 @@ fi
 if [[ "$mode" == resume-workloads ]]; then
   [[ -n "$profile_mode" ]] || fail 'workload resume requires a portable profile'
   python3 "$repository_root/tools/install/authority_registry.py" preflight-workloads \
-    --render "$render_file" --context "$context" "${previous_arguments[@]}"
+    --render "$render_file" --context "$context" "${previous_arguments[@]}" --clamav-mode "$clamav_mode"
   # Только profile assets/parameters/policy; authority registry и publisher history прежние.
   apply_render bootstrap-observability '
     select(.metadata.labels."kodex.dev/observability-profile" == "disabled" and

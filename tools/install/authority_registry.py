@@ -10,6 +10,7 @@ from pathlib import Path
 import yaml
 from deployment_profile import require, Rejected
 from portable_state import State, verify_resource, verify_schemas, key
+import clamav_profile
 import observability_profile
 import kubernetes_api_profile
 import buildkit_runtime_profile
@@ -121,11 +122,12 @@ def verify_published_resume(state, resources, startup_only=True):
     return {'status': 'PUBLISHED_AUTHORITY_RESUME_PREFLIGHT_PASSED', 'sourceRevision': 1, 'migrations': 'VERIFIED_NOT_REPEATED', 'authorityHistory': 'PRESERVED_NOT_REPLAYED'}
 
 
-def verify_workload_resume(state, resources, previous, buildkit_profile='standard', repair_api_endpoints=False):
+def verify_workload_resume(state, resources, previous, buildkit_profile='standard', repair_api_endpoints=False, clamav_mode='enabled'):
     """Продолжение initial graph допускает только точные явно выбранные profile deltas."""
     expected = buildkit_runtime_profile.transform(observability_profile.transform(previous, disabled=True), buildkit_profile)
     require(type(repair_api_endpoints) is bool, 'EXPLICIT_API_ENDPOINT_REPAIR_REQUIRED')
     if repair_api_endpoints:expected = kubernetes_api_profile.transform(expected)
+    if clamav_mode != 'enabled':expected = clamav_profile.transform(expected, clamav_mode)
     require(resources == expected, 'EXACT_BOOTSTRAP_PROFILE_DELTA_REQUIRED')
     verify_published_resume(state, resources, startup_only=False)
     before = {key(r): r for r in previous if r.get('kind') == 'Deployment'}
@@ -193,9 +195,11 @@ def main():
     parser.add_argument('--previous-render-sha256')
     parser.add_argument('--job-name')
     parser.add_argument('--repair-kubernetes-api-endpoints', action='store_true')
+    parser.add_argument('--clamav-mode', choices=['enabled','disabled'], default='enabled')
     parser.add_argument('--buildkit-runtime-profile', choices=['standard', 'nested-userns'], default='standard')
     args = parser.parse_args()
     require(not args.repair_kubernetes_api_endpoints or args.mode == 'preflight-workloads', 'API_ENDPOINT_REPAIR_MODE_REJECTED')
+    require(args.clamav_mode == 'enabled' or args.mode == 'preflight-workloads', 'CLAMAV_MODE_OPERATION_REJECTED')
     require(args.render.is_file() and not args.render.is_symlink(), 'REGULAR_RENDER_REQUIRED')
     raw = args.render.read_bytes();require(len(raw) <= 16 << 20, 'RENDER_SIZE_REJECTED')
     resources = list(filter(None, yaml.safe_load_all(raw)));require(len(resources) <= 10000, 'RESOURCE_COUNT_REJECTED')
@@ -218,7 +222,7 @@ def main():
             raw = args.previous_render.read_bytes()
             require(len(raw) <= 16 << 20 and hashlib.sha256(raw).hexdigest() == args.previous_render_sha256, 'PREVIOUS_RENDER_DIGEST_REQUIRED')
             previous = list(filter(None, yaml.safe_load_all(raw)))
-            print(json.dumps(verify_workload_resume(state, resources, previous, args.buildkit_runtime_profile, args.repair_kubernetes_api_endpoints)))
+            print(json.dumps(verify_workload_resume(state, resources, previous, args.buildkit_runtime_profile, args.repair_kubernetes_api_endpoints, args.clamav_mode)))
         elif args.mode == 'existing-job':
             require(args.job_name, 'EXACT_JOB_NAME_REQUIRED')
             print('PRESENT' if existing_job(state, resources, args.job_name) else 'ABSENT')

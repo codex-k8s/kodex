@@ -13,6 +13,7 @@ previous_render=""
 previous_sha=""
 buildkit_profile=standard
 repair_api_endpoints=false
+clamav_mode=enabled
 previous_arguments=()
 arguments=()
 while (($#)); do
@@ -24,6 +25,7 @@ while (($#)); do
     --preimage-directory) preimage="${2:-}"; shift 2 ;;
     --previous-render) previous_render="${2:-}"; shift 2 ;;
     --previous-render-sha256) previous_sha="${2:-}"; shift 2 ;;
+    --clamav-mode) clamav_mode="${2:-}"; shift 2 ;;
     --repair-kubernetes-api-endpoints) repair_api_endpoints=true; shift ;;
     --buildkit-runtime-profile) buildkit_profile="${2:-}"; shift 2 ;;
     --oidc-ca-file|--ingress-deployment|--ingress-controller|--ingress-namespace|--ingress-service) arguments+=("$1" "${2:-}"); shift 2 ;;
@@ -32,12 +34,14 @@ while (($#)); do
         '  [--oidc-ca-file <pem>] [--ingress-controller <name> --ingress-namespace <name>]' \
         '  [--preimage-directory <new-private-directory>; required for apply]'
       printf '%s\n' '  [--previous-render <yaml> --previous-render-sha256 <64-hex> --buildkit-runtime-profile standard|nested-userns; resume-workloads only]'
+      printf '%s\n' '  [--clamav-mode enabled|disabled; default enabled]'
       printf '%s\n' '  [--repair-kubernetes-api-endpoints; explicit workload resume repair from pinned endpoint anchors]'
       exit 0 ;;
     *) fail 'unsupported argument' ;;
   esac
 done
 case "$mode" in plan|preflight|apply|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback) ;; *) fail 'mode is invalid' ;; esac
+case "$clamav_mode" in enabled|disabled) ;; *) fail 'ClamAV mode is invalid' ;; esac
 [[ "$expected_sha" =~ ^[a-f0-9]{64}$ ]] || fail 'exact render digest is required'
 [[ -f "$render" && ! -L "$render" ]] || fail 'regular render file is required'
 [[ "$mode" == plan || -n "$context" ]] || fail 'exact context is required'
@@ -61,6 +65,7 @@ else
 fi
 timeout 60s python3 "$root/tools/install/portable_preflight.py" --plan \
   --render "$temporary/render.yaml" --sha256 "$expected_sha"
+python3 "$root/tools/install/clamav_profile.py" --check --mode "$clamav_mode" --render "$temporary/render.yaml"
 [[ "$mode" != plan ]] || exit 0
 [[ "$(kubectl config current-context)" == "$context" ]] || fail 'current Kubernetes context mismatch'
 timeout 60s python3 "$root/tools/install/portable_preflight.py" \
@@ -76,7 +81,7 @@ if [[ "$mode" == resume-authority-published ]]; then
 fi
 if [[ "$mode" == resume-workloads ]]; then
   timeout 180s python3 "$root/tools/install/authority_registry.py" preflight-workloads \
-    --render "$temporary/render.yaml" --context "$context" "${previous_arguments[@]}"
+    --render "$temporary/render.yaml" --context "$context" "${previous_arguments[@]}" --clamav-mode "$clamav_mode"
 fi
 if [[ "$mode" == apply || "$mode" == resume-authority-bootstrap || "$mode" == resume-authority-published || "$mode" == resume-workloads ]]; then
   [[ -n "$preimage" && "$preimage" == /* && ! -e "$preimage" ]] || fail 'new absolute preimage directory is required'
@@ -101,10 +106,10 @@ if [[ "$mode" == apply || "$mode" == resume-authority-bootstrap || "$mode" == re
   for phase in "${phases[@]}"; do
     "$root/tools/install/deploy-platform.sh" --context "$context" --mode "$phase" \
       --render "$temporary/render.yaml" --public-tls-mode "$tls_mode" \
-      --portable-inventory "$preimage/resource-inventory.json" "${arguments[@]}" "${previous_arguments[@]}"
+      --portable-inventory "$preimage/resource-inventory.json" --clamav-mode "$clamav_mode" "${arguments[@]}" "${previous_arguments[@]}"
   done
 fi
 timeout 180s python3 "$root/tools/install/portable_state.py" readback \
   --context "$context" --render "$temporary/render.yaml"
 "$root/tools/install/deploy-platform.sh" --context "$context" --mode readback \
-  --render "$temporary/render.yaml" --public-tls-mode "$tls_mode" "${arguments[@]}"
+  --render "$temporary/render.yaml" --public-tls-mode "$tls_mode" --clamav-mode "$clamav_mode" "${arguments[@]}"
