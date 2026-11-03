@@ -175,6 +175,19 @@ class RegistrySource(unittest.TestCase):
             self.assertEqual(registry.yaml.safe_load(registry.one(resources,'ConfigMap','internal-rpc-authority-publisher-target-registry')['data']['key-delivery-targets.yaml'])['source_revision'],7)
             publisher=registry.one(resources,'NetworkPolicy','internal-rpc-authority-publisher-exact-paths')
             self.assertIn({'to':[{'ipBlock':{'cidr':'192.0.2.10/32'}}],'ports':[{'protocol':'TCP','port':443}]},publisher['spec']['egress'])
+            self.assertTrue(any(c['name']=='skill-scanner'for c in registry.one(resources,'Deployment','control-plane')['spec']['template']['spec']['containers']))
+            self.assertFalse(registry.one(resources,'CronJob','clamav-db-updater')['spec'].get('suspend',False))
+            disabled=directory/'disabled.yaml'
+            disabled_command=[str(disabled)if arg==str(render)else arg for arg in command]+['--clamav-mode','disabled']
+            disabled_result=subprocess.run(disabled_command,cwd=root,capture_output=True,timeout=150,env={**os.environ,'GOMAXPROCS':'2','GOFLAGS':'-p=1','GOWORK':'off'})
+            self.assertEqual(disabled_result.returncode,0,(disabled_result.stdout+disabled_result.stderr).decode()[-1000:])
+            disabled_resources=[item for item in registry.yaml.safe_load_all(disabled.read_text())if item]
+            disabled_cp=registry.one(disabled_resources,'Deployment','control-plane')
+            self.assertFalse(any(c['name']=='skill-scanner'for c in disabled_cp['spec']['template']['spec']['containers']))
+            self.assertEqual(disabled_cp['metadata']['annotations']['kodex.dev/clamav-mode'],'disabled')
+            self.assertTrue(registry.one(disabled_resources,'CronJob','clamav-db-updater')['spec']['suspend'])
+            self.assertEqual(registry.one(disabled_resources,'Deployment','clamav-egress-gateway')['spec']['replicas'],0)
+            self.assertFalse(any(item['kind']=='PersistentVolumeClaim'and item['metadata']['name']=='clamav-database'for item in disabled_resources))
             projected = registry.transform(resources, config, lock)
             self.assertEqual(registry.transform(projected, config, lock), projected)
             self.assertTrue(any((item['kind'] == 'Deployment' and item['metadata']['name'] == 'control-plane' for item in projected)))

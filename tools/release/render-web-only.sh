@@ -25,6 +25,7 @@ usage() {
     '  [--model-provider-configuration <json> --model-provider-default-model <model>]'  \
     '  [--authority-registry-configuration <json>]' \
     '  [--disable-observability; exporters only]' \
+    '  [--clamav-mode enabled|disabled; default enabled, disabled blocks scan-required operations]' \
     '  [--disable-monitoring-resources; no Prometheus Operator resources]' \
     '  [--profile <web-only|web-with-mattermost>]' \
     '  [--ssh-compose-connection <public-connection.json>; repeatable]' \
@@ -59,6 +60,7 @@ oidc_pod_name=""
 oidc_pod_component=""
 oidc_target_port=""
 disable_observability=false
+clamav_mode=enabled
 disable_monitoring_resources=false
 mattermost_host=""
 profile="web-only"
@@ -93,6 +95,7 @@ while (($# > 0)); do
     --oidc-pod-component) oidc_pod_component="${2:-}"; shift 2 ;;
     --oidc-target-port) oidc_target_port="${2:-}"; shift 2 ;;
     --disable-observability) disable_observability=true; shift ;;
+    --clamav-mode) clamav_mode="${2:-}"; shift 2 ;;
     --disable-monitoring-resources) disable_monitoring_resources=true; shift ;;
     --mattermost-host) mattermost_host="${2:-}"; shift 2 ;;
     --profile) profile="${2:-}"; shift 2 ;;
@@ -358,6 +361,10 @@ KUBERNETES_API_ENDPOINT_RULE="$api_endpoint_rule" yq -i '
 ' "$rendered"
 
 python3 "$repository_root/tools/install/kubernetes_api_profile.py" --render "$rendered"
+case "$clamav_mode" in enabled|disabled) ;; *) fail 'ClamAV mode is invalid' ;; esac
+if [[ "$clamav_mode" == disabled ]]; then
+  python3 "$repository_root/tools/install/clamav_profile.py" --render "$rendered" --mode disabled
+fi
 
 if [[ "$disable_observability" == true ]]; then
   yq -i '

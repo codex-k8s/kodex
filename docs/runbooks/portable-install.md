@@ -4,7 +4,7 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.3.2
+version: 1.3.3
 updated: 2026-11-03
 ---
 
@@ -580,3 +580,31 @@ fencing, preimage и empty runtime по-прежнему обязательны.
 состояние всех consumers. Новый guarded resume требует отдельной сверки частичной
 попытки и свежего backup/preimage. HTTP401 unauthenticated probe подтверждает лишь
 TLS/маршрут; это не проверка application permissions или успешный вход.
+
+### Опциональный ClamAV
+
+`render-web-only.sh --clamav-mode enabled|disabled` сохраняет enabled по умолчанию.
+При enabled прежние scanner/updater, freshness check и поведение scan-required
+операций не меняются. Значение явно передаётся также в portable-release/deploy-platform
+и resume-workloads; несогласованный flag/render закрыто отклоняется.
+
+Disabled снимает только CP sidecar skill-scanner и его четыре volume dependencies,
+приостанавливает clamav-db-updater и устанавливает replicas0 у clamav-egress-gateway.
+ConfigMap/ServiceAccount/network configuration остаются неактивной конфигурацией для
+повторного включения. Новый disabled install не создаёт clamav-database PVC. Уже
+существующие PVC/PV и файлы не удаляются: installer не выполняет prune этих данных.
+Текущая короткая updater Job не пересоздаётся/не повторяется; suspend не обещает
+отмену уже начатого эффекта. Режим виден в annotation kodex.dev/clamav-mode.
+
+Это отключение scanner dependency, а не разрешающий scanner stub: существующие
+artifact upload/skill validation paths при недоступном socket возвращают
+Unavailable/ERROR. CLEAN и malware verdict не создаются без проверки. Для сценариев
+с файлами требуется включённый исправный scanner; в disabled пилоте их приёмка
+BLOCKED. SBOM, image vulnerability admission, подписи, mTLS/JWS и остальные gates
+не отключаются этим профилем. Не называть disabled успешным antivirus smoke.
+
+Для включения заново отрендерить canonical source с enabled, обеспечить актуальные
+подписанные базы и пройти штатную проверку scanner freshness/clean/infected. Попытка
+включить уже обрезанный disabled render без canonical source отклоняется. При
+partial initial bootstrap explicit disabled mode допускает только этот typed delta
+поверх прежних SDK/BuildKit/API profiles; images/schema/history/Job guards прежние.
