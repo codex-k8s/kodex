@@ -24,7 +24,8 @@ usage() {
     '  [--deployment-profile <deployment-profile.json>]' \
     '  [--model-provider-configuration <json> --model-provider-default-model <model>]'  \
     '  [--authority-registry-configuration <json>]' \
-    '  [--disable-observability]' \
+    '  [--disable-observability; exporters only]' \
+    '  [--disable-monitoring-resources; no Prometheus Operator resources]' \
     '  [--profile <web-only|web-with-mattermost>]' \
     '  [--ssh-compose-connection <public-connection.json>; repeatable]' \
     '  [--mattermost-host <dns>; required for web-with-mattermost]' >&2
@@ -58,6 +59,7 @@ oidc_pod_name=""
 oidc_pod_component=""
 oidc_target_port=""
 disable_observability=false
+disable_monitoring_resources=false
 mattermost_host=""
 profile="web-only"
 ssh_compose_connections=()
@@ -91,6 +93,7 @@ while (($# > 0)); do
     --oidc-pod-component) oidc_pod_component="${2:-}"; shift 2 ;;
     --oidc-target-port) oidc_target_port="${2:-}"; shift 2 ;;
     --disable-observability) disable_observability=true; shift ;;
+    --disable-monitoring-resources) disable_monitoring_resources=true; shift ;;
     --mattermost-host) mattermost_host="${2:-}"; shift 2 ;;
     --profile) profile="${2:-}"; shift 2 ;;
     --ssh-compose-connection) ssh_compose_connections+=("${2:-}"); shift 2 ;;
@@ -762,7 +765,7 @@ yq -N -r '.. | select(has("image")) | .image' "$output" | while IFS= read -r ima
 done
 
 # Проверки общих security/lifecycle contracts выше выполняются до удаления monitors.
-if [[ "$disable_observability" == true ]]; then
+if [[ "$disable_monitoring_resources" == true ]]; then
   python3 "$repository_root/tools/install/observability_profile.py" --render "$output" --disabled
 fi
 
