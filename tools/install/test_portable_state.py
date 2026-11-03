@@ -74,6 +74,13 @@ class StateTest(unittest.TestCase):
         for value in invalid:
             with self.subTest(value=value),patch.object(state,'call',return_value=json.dumps(value).encode()),self.assertRaises(Rejected):state.get(desired)
 
+    def test_unowned_desired_resource_rejected_before_discovery_or_write(self):
+        desired=resource();desired['metadata'].pop('labels');state=FixtureState([])
+        with patch.object(state,'discover')as discover,self.assertRaises(Rejected):state.inventory([desired])
+        discover.assert_not_called()
+        with self.assertRaises(Rejected):state.apply(desired,{key(desired):None})
+        self.assertEqual(state.writes,[])
+
     def test_foreign_job_collision_is_rejected_before_any_write(self):
         desired = resource(); current = live(desired)
         current['metadata']['labels'] = {'app.kubernetes.io/part-of': 'other'}

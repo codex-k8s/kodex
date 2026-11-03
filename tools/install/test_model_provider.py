@@ -92,6 +92,7 @@ class ModelProviderTests(unittest.TestCase):
             self.assertEqual(len(projections), 1)
             self.assertEqual(json.loads(projections[0]['data']['provider.json']), fixture())
             self.assertTrue(projections[0]['immutable'])
+            self.assertTrue(all(item['metadata'].get('labels',{}).get('app.kubernetes.io/part-of')=='kodex' for item in resources if item['kind']!='Secret'))
             for identity in ('control-plane', 'secret-broker'):
                 deployment = next(item for item in resources if item['kind'] == 'Deployment' and item['metadata']['name'] == identity)
                 pod = deployment['spec']['template']['spec']
