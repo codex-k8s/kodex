@@ -1,5 +1,6 @@
 """Initial registry projection и postmigration resume без обхода history/schema/identity."""
 import copy
+import hashlib
 import json
 from pathlib import Path
 import unittest
@@ -12,7 +13,11 @@ from deployment_profile import Rejected
 def fixture():
     cm={'apiVersion':'v1','kind':'ConfigMap','metadata':{'name':registry.REGISTRY,'namespace':'kodex-system','labels':{'app.kubernetes.io/part-of':'kodex'}},'data':{'key-delivery-targets.yaml':yaml.safe_dump({'version':1,'source_revision':7,'targets':[{'workload_id':'synthetic','role':'AUTHORIZATION_ISSUER'}]})}}
     def workload(kind,name):
-        return {'apiVersion':'batch/v1'if kind=='Job'else'apps/v1','kind':kind,'metadata':{'name':name,'namespace':'kodex-system','labels':{'app.kubernetes.io/part-of':'kodex'}},'spec':{'replicas':2,'template':{'spec':{'containers':[{'name':'synthetic','image':'images.example.invalid/app@sha256:'+'a'*64}]}}}}
+        spec={'template':{'spec':{'containers':[{'name':'synthetic','image':'images.example.invalid/app@sha256:'+'a'*64}]}}}
+        if kind=='Job':
+            spec.update(manualSelector=True,selector={'matchLabels':{'synthetic-job':name}});spec['template']['metadata']={'labels':{'synthetic-job':name}}
+        else:spec['replicas']=2
+        return {'apiVersion':'batch/v1'if kind=='Job'else'apps/v1','kind':kind,'metadata':{'name':name,'namespace':'kodex-system','labels':{'app.kubernetes.io/part-of':'kodex'}},'spec':spec}
     resources=[cm,*[workload('Job',name)for name in registry.MIGRATION_JOBS],workload('Deployment','internal-rpc-authority-publisher')]
     return resources
 
@@ -28,8 +33,11 @@ class FakeState:
     def call(self,args):
         self.calls.append(args)
         if 'exec'in args:
-            assert args[-1]==registry.STATE_SQL and args[-1].startswith('SELECT ')
-            return json.dumps(self.state).encode()
+            assert args[-1].startswith('SELECT ')
+            if args[-1] == registry.STATE_SQL:return json.dumps(self.state).encode()
+            digest=hashlib.sha256(self.current[registry.REGISTRY]['data']['key-delivery-targets.yaml'].encode()).hexdigest()
+            assert args[-1] == registry.published_state_sql(digest)
+            return json.dumps(self.published_state).encode()
         if 'deployments'in args:
             values=[self.current['internal-rpc-authority-publisher']]
             if self.other_deployment:values.append({'metadata':{'uid':'foreign'}})
@@ -40,6 +48,52 @@ class FakeState:
 
 
 class AuthorityRegistry(unittest.TestCase):
+    def test_projection_plan_scopes_dynamic_keys_to_real_pod_references(self):
+        catalog={'version':1,'namespace':'kodex-system','secrets':[{'name':name,'dynamic':dynamic,'items':[{'key':'private.jwk'}]}for name,dynamic in [('active',True),('projected',True),('environment',True),('unused',True),('static',False)]]}
+        pod={'containers':[{'name':'app','env':[{'name':'TOKEN','valueFrom':{'secretKeyRef':{'name':'environment','key':'token'}}}]}],
+             'volumes':[{'name':'key','secret':{'secretName':'active'}},{'name':'bundle','projected':{'sources':[{'secret':{'name':'projected'}}]}}]}
+        workload={'apiVersion':'apps/v1','kind':'Deployment','metadata':{'name':'synthetic','namespace':'kodex-system'},'spec':{'template':{'spec':pod}}}
+        unused={'apiVersion':'v1','kind':'Secret','metadata':{'name':'unused','namespace':'kodex-system'}}
+        foreign=copy.deepcopy(workload);foreign['metadata']['namespace']='other';foreign['spec']['template']['spec']['containers'][0]['env'][0]['valueFrom']['secretKeyRef']['name']='unused'
+        result=registry.projection_plan([workload,unused,foreign],catalog)
+        self.assertEqual([row['name']for row in result['secrets']],['active','projected','environment'])
+        self.assertEqual(result['secrets'][0],catalog['secrets'][0]);self.assertEqual(len(catalog['secrets']),5)
+        with self.assertRaises(Rejected):registry.projection_plan([workload],{**catalog,'secrets':catalog['secrets']+[catalog['secrets'][0]]})
+
+    def test_projection_plan_handles_pod_job_cronjob_init_and_pull_references(self):
+        catalog={'version':1,'namespace':'kodex-system','secrets':[{'name':'active','dynamic':True,'items':[{'key':'private.jwk'}]}]}
+        pod={'containers':[{'name':'app'}],'initContainers':[{'name':'prepare','envFrom':[{'secretRef':{'name':'active'}}]}],'imagePullSecrets':[{'name':'active'}]}
+        for kind in ['Pod','Job','CronJob','StatefulSet','DaemonSet']:
+            spec=pod if kind=='Pod'else {'jobTemplate':{'spec':{'template':{'spec':pod}}}}if kind=='CronJob'else{'template':{'spec':pod}}
+            value={'kind':kind,'metadata':{'name':'synthetic','namespace':'kodex-system'},'spec':spec}
+            self.assertEqual(len(registry.projection_plan([value],catalog)['secrets']),1)
+        self.assertEqual(registry.projection_plan([],catalog)['secrets'],[])
+
+    def test_published_resume_preserves_exact_registry_history_and_bootstrap(self):
+        desired=registry.transform(fixture(),{'schema':'kodex.authority-registry/v1','source_revision':1})
+        state=FakeState(desired);state.current['internal-rpc-authority-publisher']['spec']['replicas']=2
+        state.published_state={'rotation_count':1,'snapshot_count':1,'fence_allows':True,'matching_count':1}
+        with patch.object(registry,'verify_schemas')as schemas,patch.object(registry,'verify_resource',wraps=registry.verify_resource)as exact:
+            result=registry.verify_published_resume(state,desired)
+        self.assertEqual(exact.call_count,7);schemas.assert_called_once_with(state,desired)
+        self.assertEqual(result['authorityHistory'],'PRESERVED_NOT_REPLAYED')
+        self.assertTrue(all('get'in a or 'exec'in a for a in state.calls))
+        for field,value in [('rotation_count',0),('snapshot_count',2),('fence_allows',False),('matching_count',0)]:
+            state.published_state={'rotation_count':1,'snapshot_count':1,'fence_allows':True,'matching_count':1};state.published_state[field]=value
+            with patch.object(registry,'verify_schemas'),patch.object(registry,'verify_resource'),self.assertRaises(Rejected):registry.verify_published_resume(state,desired)
+
+    def test_published_resume_refuses_foreign_phase_and_changed_executable(self):
+        desired=registry.transform(fixture(),{'schema':'kodex.authority-registry/v1','source_revision':1})
+        for change in ['registry','publisher','job','runtime','deployment']:
+            state=FakeState(desired);state.current['internal-rpc-authority-publisher']['spec']['replicas']=2
+            state.published_state={'rotation_count':1,'snapshot_count':1,'fence_allows':True,'matching_count':1}
+            if change=='registry':state.current[registry.REGISTRY]['data']['key-delivery-targets.yaml']='foreign'
+            elif change=='publisher':state.current['internal-rpc-authority-publisher']['spec']['template']['spec']['containers'][0]['image']='images.example.invalid/foreign'
+            elif change=='job':state.current[registry.MIGRATION_JOBS[0]]['status']={'active':1}
+            elif change=='runtime':state.runtime_pods=[{'metadata':{'name':'active'}}]
+            else:state.other_deployment=True
+            with patch.object(registry,'verify_schemas'),self.assertRaises(Rejected):registry.verify_published_resume(state,desired)
+
     def test_projection_changes_only_revision_and_provenance_preserves_target_graph(self):
         resources=fixture();before=copy.deepcopy(resources);config={'schema':'kodex.authority-registry/v1','source_revision':1}
         result=registry.transform(resources,config);self.assertEqual(resources,before)
@@ -54,7 +108,7 @@ class AuthorityRegistry(unittest.TestCase):
 
     def test_resume_reads_exact_completed_jobs_schema_and_empty_history_without_mutation(self):
         resources=fixture();state=FakeState(resources);desired=registry.transform(resources,{'schema':'kodex.authority-registry/v1','source_revision':1})
-        with patch.object(registry,'verify_schemas')as schemas,patch.object(registry,'verify_resource')as exact:
+        with patch.object(registry,'verify_schemas')as schemas,patch.object(registry,'verify_resource',wraps=registry.verify_resource)as exact:
             result=registry.verify_resume(state,desired)
         schemas.assert_called_once_with(state,desired);self.assertEqual(exact.call_count,6)
         self.assertEqual(result['migrations'],'VERIFIED_NOT_REPEATED');self.assertTrue(all('get'in a or 'exec'in a for a in state.calls))

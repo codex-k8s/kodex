@@ -8,7 +8,7 @@ fail() {
 
 usage() {
   printf '%s\n' \
-    "Usage: $0 --context <exact-context> --mode defer-public-tls|prepare-preflight|preflight|apply|resume-authority-bootstrap|readback" \
+    "Usage: $0 --context <exact-context> --mode defer-public-tls|prepare-preflight|preflight|apply|resume-authority-bootstrap|resume-authority-published|readback" \
     '  --render <exact-release.yaml> --public-tls-mode deferred|enabled|external' \
     '  [--oidc-ca-file <pem> --ingress-controller <name> --ingress-namespace <name>]' >&2
 }
@@ -34,7 +34,7 @@ done
 
 [[ -n "$context" ]] || fail 'exact Kubernetes context is required'
 case "$mode" in
-  defer-public-tls|prepare-preflight|preflight|apply|resume-authority-bootstrap|readback) ;;
+  defer-public-tls|prepare-preflight|preflight|apply|resume-authority-bootstrap|resume-authority-published|readback) ;;
   *) fail 'mode is invalid' ;;
 esac
 case "$public_tls_mode" in deferred|enabled|external) ;; *) fail 'public TLS mode is invalid' ;; esac
@@ -57,7 +57,7 @@ if [[ "$profile_mode" == external || "$public_tls_mode" == external ]]; then
 fi
 if [[ -n "${profile_mode:-}" ]]; then
   [[ "$profile_mode" != managed || "$public_tls_mode" == enabled ]] || fail 'portable managed TLS requires enabled mode'
-  if [[ "$mode" == apply || "$mode" == resume-authority-bootstrap || "$mode" == prepare-preflight ]]; then
+  if [[ "$mode" == apply || "$mode" == resume-authority-bootstrap || "$mode" == resume-authority-published || "$mode" == prepare-preflight ]]; then
     [[ -f "$portable_inventory" && ! -L "$portable_inventory" ]] || fail 'portable inventory is required before mutation'
   fi
   [[ "$mode" != defer-public-tls ]] || fail 'portable profile does not use ACME deferral'
@@ -597,9 +597,13 @@ if [[ "$mode" == defer-public-tls ]]; then
 fi
 
 wait_authority_projections() {
-	local phase=${1:-all} name required_keys allowed_keys event_scoped deadline secret_json
+	local phase=${1:-all} name required_keys allowed_keys event_scoped deadline secret_json scoped_registry
 	[[ "$phase" == bootstrap || "$phase" == all ]] ||
 		fail "authority projection phase is invalid: $phase"
+	scoped_registry="$temporary_directory/authority-projections-$phase.json"
+  python3 "$repository_root/tools/install/authority_registry.py" projection-plan \
+    --render "$render_file" --projection-registry "$projection_registry" --output "$scoped_registry"
+  jq -e '(.secrets | length) > 0' "$scoped_registry" >/dev/null || fail 'rendered authority projections are absent'
 	while IFS=$'\t' read -r name required_keys allowed_keys event_scoped; do
 		[[ -n "$name" ]] || continue
 		deadline=$((SECONDS + 600))
@@ -641,7 +645,7 @@ wait_authority_projections() {
 			([.items[] | select(.required != false) | .key] | sort | @json),
 			([.items[].key] | sort | @json),
 			(any(.items[]; .key == "issuance_directive_jti") | tostring)] | @tsv' \
-			"$projection_registry")
+			"$scoped_registry")
 }
 
 wait_workloads() {
@@ -845,6 +849,13 @@ if [[ "$mode" == resume-authority-bootstrap ]]; then
   python3 "$repository_root/tools/install/authority_registry.py" preflight-resume --render "$render_file" --context "$context"
   apply_render authority-registry 'select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-publisher-target-registry")'
   apply_render authority-publisher 'select(.kind == "Deployment" and .metadata.name == "internal-rpc-authority-publisher")'
+  wait_authority_projections bootstrap
+  apply_workloads_after_authority
+fi
+
+if [[ "$mode" == resume-authority-published ]]; then
+  [[ -n "$profile_mode" ]] || fail 'published authority resume requires a portable profile'
+  python3 "$repository_root/tools/install/authority_registry.py" preflight-published --render "$render_file" --context "$context"
   wait_authority_projections bootstrap
   apply_workloads_after_authority
 fi
