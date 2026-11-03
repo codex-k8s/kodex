@@ -7,6 +7,10 @@ app.kubernetes.io/managed-by: Helm
 {{- define "portable.validate" -}}
 {{- $v := .Values -}}
 {{- if and $v.storage.ui.enabled (not $v.storage.enabled) -}}{{ fail "storage UI requires storage" }}{{- end -}}
+{{- if $v.trustBundle.enabled -}}
+{{- if or (ne $v.pki.mode "isolated") (not $v.trustBundle.namespaces) -}}{{ fail "trust bundle requires isolated PKI and exact namespaces" }}{{- end -}}
+{{- if not (or $v.storage.enabled $v.registry.enabled) -}}{{ fail "trust bundle requires an enabled service" }}{{- end -}}
+{{- end -}}
 {{- if or $v.storage.enabled $v.registry.enabled -}}
 {{- if eq $v.pki.mode "existing" -}}{{- $_ := required "existing issuerName required" $v.pki.issuerName -}}{{- end -}}
 {{- if $v.storage.enabled -}}{{- $_ := required "storage authSecret required" $v.storage.authSecret -}}{{- end -}}
@@ -27,11 +31,11 @@ app.kubernetes.io/managed-by: Helm
 {{- else -}}
 {{- if $v.storage.enabled -}}{{- $_ := required "s3Host required" $v.exposure.s3Host -}}{{- end -}}
 {{- if $v.storage.ui.enabled -}}{{- $_ := required "storageHost required" $v.exposure.storageHost -}}{{- end -}}
-{{- if $v.registry.enabled -}}{{- $_ := required "registryHost required" $v.exposure.registryHost -}}{{- end -}}
+{{- if and $v.registry.enabled $v.registry.expose -}}{{- $_ := required "registryHost required" $v.exposure.registryHost -}}{{- end -}}
 {{- $hosts := list -}}
 {{- if $v.storage.enabled -}}{{- $hosts = append $hosts $v.exposure.s3Host -}}{{- end -}}
 {{- if $v.storage.ui.enabled -}}{{- $hosts = append $hosts $v.exposure.storageHost -}}{{- end -}}
-{{- if $v.registry.enabled -}}{{- $hosts = append $hosts $v.exposure.registryHost -}}{{- end -}}
+{{- if and $v.registry.enabled $v.registry.expose -}}{{- $hosts = append $hosts $v.exposure.registryHost -}}{{- end -}}
 {{- if ne (len $hosts) (len (uniq $hosts)) -}}{{ fail "separate hosts must differ" }}{{- end -}}
 {{- end -}}
 {{- end -}}

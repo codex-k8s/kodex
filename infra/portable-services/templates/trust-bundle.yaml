@@ -1,0 +1,17 @@
+{{- if .Values.trustBundle.enabled }}
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: {{ .Release.Name }}-ca
+  labels: {{- include "portable.labels" . | nindent 4 }}
+spec:
+  sources:
+    - secret: {name: {{ .Release.Name }}-root, key: tls.crt}
+  target:
+    configMap: {key: ca.crt}
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values: {{ .Values.trustBundle.namespaces | toJson }}
+{{- end }}

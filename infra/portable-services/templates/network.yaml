@@ -1,4 +1,5 @@
 {{- if or .Values.storage.enabled .Values.registry.enabled }}
+{{- $exposedRegistry := and .Values.registry.enabled .Values.registry.expose (ne .Values.exposure.mode "disabled") }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -7,20 +8,39 @@ metadata:
 spec:
   podSelector: {matchLabels: {app.kubernetes.io/instance: {{ .Release.Name }}}}
   policyTypes: [Ingress, Egress]
+  {{- if or .Values.storage.enabled $exposedRegistry .Values.registry.internalClients .Values.registry.nodeCIDRs }}
   ingress:
+    {{- if .Values.storage.enabled }}
     - from:
         - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: {{ .Values.ingress.namespace }}}}
           podSelector: {matchLabels: {app.kubernetes.io/name: {{ .Values.ingress.podName }}}}
       ports:
-        {{- if .Values.storage.enabled }}
         - {protocol: TCP, port: 8333}
-        {{- end }}
         {{- if .Values.storage.ui.enabled }}
         - {protocol: TCP, port: 23647}
         {{- end }}
-        {{- if .Values.registry.enabled }}
-        - {protocol: TCP, port: 8443}
-        {{- end }}
+    {{- end }}
+    {{- if $exposedRegistry }}
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: {{ .Values.ingress.namespace }}}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: {{ .Values.ingress.podName }}}}
+      ports: [{protocol: TCP, port: 8443}]
+    {{- end }}
+    {{- if .Values.registry.enabled }}
+    {{- range .Values.registry.nodeCIDRs }}
+    - from: [{ipBlock: {cidr: {{ . | quote }}}}]
+      ports: [{protocol: TCP, port: 8443}]
+    {{- end }}
+    {{- range .Values.registry.internalClients }}
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: {{ .namespace }}}}
+          podSelector: {matchLabels: {{ .podLabels | toJson }}}
+      ports: [{protocol: TCP, port: 8443}]
+    {{- end }}
+    {{- end }}
+  {{- else }}
+  ingress: []
+  {{- end }}
   egress:
     - to:
         - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}

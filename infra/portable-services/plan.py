@@ -32,6 +32,8 @@ def unique_object(pairs):
 
 def validate_values(value):
     exposure = value["exposure"]
+    if value["registry"].get("nodeCIDRs"):
+        exact_hosts(value["registry"]["nodeCIDRs"])
     if value["storage"]["trustedProxyCIDRs"]:
         exact_hosts(value["storage"]["trustedProxyCIDRs"])
     if exposure["trustedProxyCIDRs"]:
