@@ -4,7 +4,7 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.3.3
+version: 1.3.4
 updated: 2026-11-03
 ---
 
@@ -353,6 +353,22 @@ Git-managed model-provider projection получает `app.kubernetes.io/part-o
 Непомеченные ресурсы и реальные чужие объекты не принимаются автоматически.
 При частичном прежнем apply сначала сверить точные intent, UID, spec и preimage;
 не добавлять labels посторонним объектам для обхода защиты.
+
+Provider credential recovery выбирает account по installation owner и точному
+stable key, читает definition из авторитетной записи и допускает только Codex либо
+optional OpenCode gateway. Тип credential и gateway definition обязаны совпадать
+с account до создания Secret и CAS. Имя account не подменяет тип provider; fallback
+между Codex и gateway или между двумя gateway отсутствует.
+
+| Этап | Полномочия и переход | Отказ и восстановление |
+|---|---|---|
+| Seed → recovery | Operator после Ready control-plane; owner-scoped account и текущая credential revision | Неизвестный/неоднозначный account либо неподдержанный provider закрыто отклоняется |
+| Credential import | Exact definition, account ref, version и credential ref; immutable Secret → SQL CAS с audit | Другой gateway, Codex auth для gateway, foreign owner, stale version не меняют account |
+| Lost create / SQL response | Deterministic Secret identity и readback current revision | Не удалять прежний Secret; следующий запуск сначала читает сохранённый результат |
+| Canonical recovery | Проверка descriptor и свежей owner projection, затем metadata CAS | Exact replay не добавляет revision/audit; token values не публикуются |
+
+Этот шаг не обращается к модельному API и не доказывает успешный runtime turn.
+Без параметра definition прежние Codex SQL operator callers сохраняют свой тип.
 
 Пустой Role/ClusterRole (`rules: []`) API может сохранить как `rules: null`.
 Preflight и фактическая запись используют одну закрытую нормализацию []→null;

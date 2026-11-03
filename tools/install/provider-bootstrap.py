@@ -42,6 +42,13 @@ def bootstrap_key(raw):
     return "default-" + gateway_definition(value) if value.get("auth_mode") == "gateway-api-key" else "default-openai-codex"
 
 
+def require_definition(raw, definition):
+    # Тип credential проверяется до любого create/CAS; имя account не выбирает provider.
+    value = json.loads(auth_valid(raw))
+    selected = gateway_definition(value) if value.get("auth_mode") == "gateway-api-key" else "openai-codex"
+    require(selected == definition)
+
+
 def auth_valid(raw):
     require(0 < len(raw) <= 1048576)
     value = json.loads(raw)
@@ -177,6 +184,9 @@ class Operator:
         require(re.fullmatch(r"pacc_[A-Za-z0-9_-]{8,88}", row["accountRef"]) and
                 row["state"] in ("AUTHORIZED", "REAUTHORIZATION_REQUIRED", "PENDING_AUTHORIZATION") and
                 row["enabled"] is True and row["version"] >= 1)
+        definition = row["definitionKey"]
+        require(definition == "openai-codex" or
+                re.fullmatch(r"opencode-[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", definition))
         return row
 
     def owner_state(self):
@@ -232,7 +242,7 @@ class Operator:
     def metadata(self, snapshot):
         # Проверка владельца повторяется непосредственно перед metadata CAS.
         fresh = self.snapshot(self.bootstrap_account_key)
-        require(fresh["credential"] == snapshot["credential"])
+        require(all(fresh[field] == snapshot[field] for field in ("accountRef", "definitionKey", "credential")))
         self.write_metadata(fresh["credential"])
 
     def write_metadata(self, pins, annotations=None):
@@ -265,9 +275,10 @@ class Operator:
             canonical = False
             if selected and pins["contentSHA256"] == digest(raw):
                 _, canonical = validate(selected, pins, before["accountRef"], key, legacy=True)
+        require_definition(raw, before["definitionKey"])
         if canonical:
             after = self.snapshot(key)
-            require(after["credential"] == pins)
+            require(after["credential"] == pins and after["definitionKey"] == before["definitionKey"])
         else:
             wanted = manifest(before["accountRef"], key, raw,
                               str(before["version"]) + ":" + before["credentialRef"])
@@ -281,6 +292,7 @@ class Operator:
             require(new_pins["contentSHA256"] == digest(raw))
             validate(created, new_pins, before["accountRef"], key)
             values = {"account_ref": before["accountRef"], "stable_key": key,
+                      "definition_key": before["definitionKey"],
                       "expected_version": before["version"], "expected_credential_ref": before["credentialRef"],
                       "credential_ref": "pcr_" + digest((created["metadata"]["uid"] + ":" +
                                                         created["metadata"]["resourceVersion"] + ":" +
