@@ -2,6 +2,7 @@
 import copy
 import json
 from pathlib import Path
+from unittest.mock import patch
 import subprocess
 import unittest
 
@@ -56,6 +57,23 @@ class FixtureState(State):
 
 
 class StateTest(unittest.TestCase):
+    def test_real_get_accepts_exact_object_or_singleton_list_and_empty_absence(self):
+        desired=resource();current=live(desired);state=State('test-context')
+        state.routes={(desired['apiVersion'],desired['kind']):('/apis/batch/v1','jobs',True)}
+        for value in [current,dict(apiVersion='v1',kind='List',items=[current])]:
+            with patch.object(state,'call',return_value=json.dumps(value).encode()) as call:
+                self.assertEqual(state.get(desired),current)
+                self.assertEqual(call.call_args.args[0],['get','-f','-','--ignore-not-found','-o','json'])
+        for raw in [b'',b'{"apiVersion":"v1","kind":"List","items":[]}']:
+            with patch.object(state,'call',return_value=raw):self.assertIsNone(state.get(desired))
+
+    def test_real_get_rejects_multiple_malformed_and_foreign_objects(self):
+        desired=resource();current=live(desired);foreign=live(resource(name='other'))
+        state=State('test-context');state.routes={(desired['apiVersion'],desired['kind']):('/apis/batch/v1','jobs',True)}
+        invalid=[foreign,dict(kind='List',items=[foreign]),dict(kind='List',items=[current,current]),dict(kind='List',items={}),[],None]
+        for value in invalid:
+            with self.subTest(value=value),patch.object(state,'call',return_value=json.dumps(value).encode()),self.assertRaises(Rejected):state.get(desired)
+
     def test_foreign_job_collision_is_rejected_before_any_write(self):
         desired = resource(); current = live(desired)
         current['metadata']['labels'] = {'app.kubernetes.io/part-of': 'other'}

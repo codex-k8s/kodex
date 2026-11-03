@@ -340,3 +340,9 @@ postprocessor `python3 tools/install/observability_profile.py --render <yaml>
 --disabled`. Версию tools закрепить отдельно, сохранить прежний render и
 снова выполнить plan/preflight с новым SHA до apply. Это не миграция
 application/schema и не разрешение пропустить inventory существующих ресурсов.
+
+Inventory/readback совместимы с ответом `kubectl get -f - -o json` как объектом
+либо `List` из одного объекта. GVK/namespace/name обязаны точно совпасть с
+запрошенным descriptor. Пустой ответ/List означает отсутствие; несколько или
+чужой объект отклоняются. Это не основание менять ownership labels существующих
+ресурсов: UID/seal fencing и запрет чужих объектов продолжают действовать.

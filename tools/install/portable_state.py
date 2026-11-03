@@ -251,7 +251,20 @@ class State:
         if (resource['apiVersion'], resource['kind']) not in self.routes:
             return None
         raw = self.call(['get', '-f', '-', '--ignore-not-found', '-o', 'json'], descriptor(resource))
-        return json.loads(raw) if raw.strip() else None
+        if not raw.strip():
+            return None
+        actual = json.loads(raw)
+        require(isinstance(actual, dict), 'KUBERNETES_READBACK_SHAPE_REJECTED')
+        # kubectl get -f - может оборачивать единственный объект в List.
+        # Пустой список означает absence; иной набор не выбирается по порядку.
+        if actual.get('kind') == 'List':
+            items = actual.get('items')
+            require(isinstance(items, list) and len(items) <= 1, 'KUBERNETES_READBACK_CARDINALITY_REJECTED')
+            if not items:
+                return None
+            actual = items[0]
+        require(isinstance(actual, dict) and key(actual) == key(resource), 'KUBERNETES_READBACK_IDENTITY_REJECTED')
+        return actual
 
     def inventory(self, resources):
         self.discover(resources)
