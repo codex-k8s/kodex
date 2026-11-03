@@ -327,7 +327,7 @@ checkout вместе с каноническим materializer script. Script SH
 
 ## Установка без Prometheus Operator
 
-`render-web-only.sh --disable-observability` отключает экспорт OpenTelemetry
+`render-web-only.sh --disable-monitoring-resources` отключает экспорт OpenTelemetry
 через `OTEL_SDK_DISABLED=true` и исключает ServiceMonitor, PodMonitor и
 PrometheusRule из итогового render. Prometheus Operator/его CRD для такого
 профиля не нужны. По умолчанию monitors и alerts сохраняются. Неизвестные
@@ -402,3 +402,9 @@ Server-side dry-run использует тот же CAS patch для сущес
 ConfigMap/Deployment, а не несовместимый SSA preview. API defaults
 `serviceAccount` принимаются только при точном совпадении serviceAccountName.
 Неизвестные identities/поля или другой executable spec не становятся defaults.
+
+Прежний `--disable-observability` сохраняет контракт exporters-only: он
+выставляет OTEL_SDK_DISABLED, сохраняя monitors/alerts. Это также сохраняет
+семантику bundled KODEX_DISABLE_OBSERVABILITY=true. Новый отдельный opt-in
+`--disable-monitoring-resources` выбирается только установкой без Prometheus
+Operator; установленные operator/CRD он не удаляет. Default профиль не меняется.

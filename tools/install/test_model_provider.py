@@ -79,7 +79,7 @@ class ModelProviderTests(unittest.TestCase):
                     '--kubernetes-api-endpoint-cidrs', '192.0.2.11/32', '--kubernetes-api-endpoint-ports', '6443', '--ingress-class', 'nginx',
                     '--cluster-issuer', 'test-issuer', '--ingress-namespace', 'ingress-nginx', '--ingress-pod-name', 'ingress-nginx',
                     '--oidc-namespace', 'kodex-identity', '--oidc-pod-name', 'keycloak', '--oidc-pod-component', 'identity', '--oidc-target-port', '8443',
-                    '--model-provider-configuration', str(config), '--model-provider-default-model', 'vendor/model-v1', '--disable-observability', '--authority-registry-configuration', str(authority)]
+                    '--model-provider-configuration', str(config), '--model-provider-default-model', 'vendor/model-v1', '--disable-observability', '--disable-monitoring-resources', '--authority-registry-configuration', str(authority)]
             result = subprocess.run(args, cwd=ROOT, capture_output=True, timeout=150,
                                     env={**os.environ, 'GOMAXPROCS': '2', 'GOFLAGS': '-p=1', 'GOWORK': 'off'})
             self.assertEqual(result.returncode, 0, (result.stdout + result.stderr).decode()[-3000:])
