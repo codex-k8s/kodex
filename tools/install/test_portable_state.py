@@ -4,10 +4,13 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 import subprocess
+import tempfile
+import sys
+import yaml
 import unittest
 
 from deployment_profile import Rejected
-from portable_state import State, key, seal, verify_resource, verify_schemas
+from portable_state import State, key, seal, verify_resource, verify_schemas, api_write_resource
 
 
 def resource(kind='Job', name='control-plane-migrate'):
@@ -73,6 +76,32 @@ class StateTest(unittest.TestCase):
         invalid=[foreign,dict(kind='List',items=[foreign]),dict(kind='List',items=[current,current]),dict(kind='List',items={}),[],None]
         for value in invalid:
             with self.subTest(value=value),patch.object(state,'call',return_value=json.dumps(value).encode()),self.assertRaises(Rejected):state.get(desired)
+
+    def test_prepare_api_write_cli_is_exact_and_performs_no_discovery(self):
+        desired={'apiVersion':'rbac.authorization.k8s.io/v1','kind':'Role','metadata':resource()['metadata'],'rules':[]}
+        with tempfile.TemporaryDirectory()as temporary:
+            directory=Path(temporary);render=directory/'render.yaml';manifest=directory/'manifest.yaml';output=directory/'output.yaml'
+            render.write_text(yaml.safe_dump_all([desired]));manifest.write_bytes(render.read_bytes())
+            command=[sys.executable,str(Path(__file__).with_name('portable_state.py')),'prepare-api-write','--context','synthetic-context','--render',str(render),'--manifest',str(manifest),'--output',str(output)]
+            result=subprocess.run(command,capture_output=True,timeout=5,env={'PATH':''})
+            self.assertEqual(result.returncode,0,result.stderr.decode());self.assertIsNone(yaml.safe_load(output.read_text())['rules'])
+            self.assertEqual(output.stat().st_mode&0o777,0o600)
+            desired['rules']=[{'verbs':['get'],'apiGroups':[''],'resources':['secrets']}];manifest.write_text(yaml.safe_dump_all([desired]))
+            command[-1]=str(directory/'rejected.yaml');result=subprocess.run(command,capture_output=True,timeout=5,env={'PATH':''})
+            self.assertNotEqual(result.returncode,0);self.assertFalse((directory/'rejected.yaml').exists())
+
+    def test_empty_rbac_roundtrip_normalizes_only_closed_deny_all_forms(self):
+        for kind in ['Role','ClusterRole']:
+            desired={'apiVersion':'rbac.authorization.k8s.io/v1','kind':kind,'metadata':resource()['metadata'],'rules':[]}
+            before=copy.deepcopy(desired);written=api_write_resource(desired)
+            self.assertIsNone(written['rules']);self.assertEqual(desired,before)
+            actual=live(written);verify_resource(desired,actual)
+            actual.pop('rules');verify_resource(desired,actual)
+            for rules in [[{'verbs':['get'],'apiGroups':[''],'resources':['secrets']}],{}]:
+                actual['rules']=rules
+                with self.assertRaises(Rejected):verify_resource(desired,actual)
+            desired['rules']=[{'verbs':['get'],'apiGroups':[''],'resources':['configmaps']}]
+            self.assertEqual(api_write_resource(desired),desired)
 
     def test_unowned_desired_resource_rejected_before_discovery_or_write(self):
         desired=resource();desired['metadata'].pop('labels');state=FixtureState([])
