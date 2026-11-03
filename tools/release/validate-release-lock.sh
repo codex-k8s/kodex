@@ -39,6 +39,13 @@ jq -e --arg source_sha "$source_sha" --arg profile "$profile" --slurpfile manife
     type == "string" and test("^sha256:[a-f0-9]{64}$") and
     . != "sha256:0000000000000000000000000000000000000000000000000000000000000000";
   . as $root |
+  ((has("build_recipe") | not) or
+    (.build_recipe.schema == "kodex.build-recipe/v1" and
+     .build_recipe.application_source_sha == $source_sha and
+     (.build_recipe.source_sha | type == "string" and test("^[a-f0-9]{40}$")) and
+     (.build_recipe.files | length == 1) and
+     .build_recipe.files[0].path == "services/jobs/agent-runner/Dockerfile" and
+     (.build_recipe.files[0].sha256 | type == "string" and test("^[a-f0-9]{64}$") and . != ("0" * 64)))) and
   .schema_version == 2 and
   .profile == $profile and
   .source_sha == $source_sha and
