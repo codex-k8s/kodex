@@ -4,8 +4,8 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.1.0
-updated: 2026-11-02
+version: 1.2.0
+updated: 2026-11-03
 ---
 
 # Опциональный профиль внешней инфраструктуры
@@ -215,3 +215,58 @@ ipStrategy. Локальные synthetic проверки не доказыва�
 Он применяется отдельным infrastructure prerequisite до платформы. Для S3
 нужны HTTPS endpoint с prefix и path-style; отдельные hostname и внешние
 службы остаются штатной альтернативой. Secret values не входят в Helm values.
+
+## Опциональный source registry внутри Kubernetes
+
+Для новой установки #1977 `tools/install/registry_source.py` принимает закрытый
+контракт `kodex.registry-source/v1`. Этот дополнительный шаг вызывается явно
+после штатного release render; без него поведение прежнего установщика сохраняется.
+Он не изменяет образы, release lock, bundled/external OIDC или публичный TLS.
+
+Синтетический пример конфигурации:
+
+```json
+{
+  "schema": "kodex.registry-source/v1",
+  "namespace": "synthetic-infra",
+  "service": "synthetic-registry",
+  "service_uid": "11111111-1111-1111-1111-111111111111",
+  "pod_labels": {"app.kubernetes.io/name": "synthetic-registry"},
+  "target_port": 8443,
+  "ca_configmap": "synthetic-ca"
+}
+```
+
+`registry.push` и `registry.node_pull` в проверенном release lock должны точно
+совпадать с `<service>.<namespace>.svc.cluster.local`. Service предоставляет
+HTTPS/443, endpoint — указанный TCP target port. CA ConfigMap в `kodex-system`
+содержит только публичный сертификат `ca.crt`. Пароли и private keys в контракте
+запрещены; source credential по-прежнему материализуется штатным Secret backend.
+
+В owned каталоге0700 выполнить `registry_source.py render --configuration
+<profile.json> --release-lock <lock.json> --lock-sha256 <sha256> --input
+<fresh-render.yaml> --output <absolute-new-render.yaml>`. Выход создаётся0600
+без перезаписи. В apply передаётся именно этот окончательный render и его digest.
+Это контракт новой установки, а не live patch immutable admission policy.
+
+Materializer получает read-only CA, `SSL_CERT_FILE`, точный `NO_PROXY` и
+NetworkPolicy с namespace+Pod selectors в одном peer. TLS hostname verification
+сохраняется. Source registry не становится адресом допуска: promoted RoleImage
+repository выводится из отдельного `pullRegistryHost`, admission hash и его
+параметры пересчитываются согласованно. Для штатного внутреннего pull gateway
+добавляется HTTPS/443 alias к прежнему Service/5000, а внешний TCP route убирается.
+Подпись, provenance, SBOM, scanner и mTLS не обходятся.
+
+До apply выполнить режим `preflight` с теми же configuration/lock/digest и
+`--context <exact-context>`. Он проверяет Service UID, selector, target port,
+публичную CA и принадлежность ready EndpointSlice/Pod. Это read-only проверка
+метаданных; TLS/auth реального workload и exact node pull проверяются отдельно.
+Kubelet/containerd находятся вне Pod DNS: оператор адресно настраивает разрешение
+имени, доверие CA и read-only pull credential на каждом целевом узле. Импорт
+прикладных образов не заменяет эту проверку. Смена Service UID/IP требует нового
+проверенного плана; trust-all, plaintext и внешнего fallback нет.
+
+Проверки: `python3 -B tools/install/test_registry_source.py` (также в
+`make test-web-only-release`). Fixtures синтетические; live cluster не используется.
+Документация K3s private registry через Context7 проверена; конкретная настройка
+узлов зависит от закреплённой версии дистрибутива и не выполняется этим overlay.
