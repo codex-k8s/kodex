@@ -78,11 +78,16 @@ class ModelProviderTests(unittest.TestCase):
                     '--kubernetes-api-endpoint-cidrs', '192.0.2.11/32', '--kubernetes-api-endpoint-ports', '6443', '--ingress-class', 'nginx',
                     '--cluster-issuer', 'test-issuer', '--ingress-namespace', 'ingress-nginx', '--ingress-pod-name', 'ingress-nginx',
                     '--oidc-namespace', 'kodex-identity', '--oidc-pod-name', 'keycloak', '--oidc-pod-component', 'identity', '--oidc-target-port', '8443',
-                    '--model-provider-configuration', str(config), '--model-provider-default-model', 'vendor/model-v1']
+                    '--model-provider-configuration', str(config), '--model-provider-default-model', 'vendor/model-v1', '--disable-observability']
             result = subprocess.run(args, cwd=ROOT, capture_output=True, timeout=150,
                                     env={**os.environ, 'GOMAXPROCS': '2', 'GOFLAGS': '-p=1', 'GOWORK': 'off'})
             self.assertEqual(result.returncode, 0, (result.stdout + result.stderr).decode()[-3000:])
             resources = [item for item in MODULE.yaml.safe_load_all(output.read_text()) if item]
+            self.assertFalse(any(item['apiVersion'] == 'monitoring.coreos.com/v1' for item in resources))
+            for item in resources:
+                if item['kind'] in ('Deployment', 'StatefulSet', 'DaemonSet', 'Job'):
+                    for container in item['spec']['template']['spec']['containers']:
+                        self.assertIn(dict(name='OTEL_SDK_DISABLED', value='true'), container['env'])
             projections = [item for item in resources if item['kind'] == 'ConfigMap' and item['metadata']['name'].startswith('kodex-model-provider-')]
             self.assertEqual(len(projections), 1)
             self.assertEqual(json.loads(projections[0]['data']['provider.json']), fixture())
