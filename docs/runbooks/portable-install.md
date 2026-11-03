@@ -388,3 +388,17 @@ projections и продолжает обычную цепь workloads/provider/m
 Миграции, database credentials и broker bootstrap повторно не запускаются.
 Сохраняются UID/seal fencing, immutable images, подписи/mTLS и полный конечный
 readback. После изменения schemas старый image не считается rollback.
+
+Изменение уже owned ConfigMap/Deployment выполняется JSONPatch с обязательными
+UID/resourceVersion tests после preimage seal check. Это позволяет продолжить
+первый install после create/quiesce без принудительного захвата SSA fields.
+Patch передаётся только через stdin; Secret этим путём не обновляется. Поля
+data/spec заменяются точно по manifest, controller revision annotation
+сохраняется; image/security/readback инварианты остаются прежними.
+Downward API `fieldRef.apiVersion=v1` считается только закрытым API default,
+изменённый fieldPath/API version не принимаются.
+
+Server-side dry-run использует тот же CAS patch для существующих owned
+ConfigMap/Deployment, а не несовместимый SSA preview. API defaults
+`serviceAccount` принимаются только при точном совпадении serviceAccountName.
+Неизвестные identities/поля или другой executable spec не становятся defaults.

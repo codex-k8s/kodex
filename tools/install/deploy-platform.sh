@@ -781,12 +781,8 @@ if [[ "$mode" == preflight ]]; then
   ' "$render_file" | sort -u)
   preflight_expression+=')'
   known_resources_file=$(render_filter preflight-known-resources "$preflight_expression")
-  api_write_file="$temporary_directory/preflight-api-write.yaml"
-  python3 "$repository_root/tools/install/portable_state.py" prepare-api-write \
-    --context "$context" --render "$render_file" --manifest "$known_resources_file" --output "$api_write_file"
-  kubectl --context "$context" apply --server-side --dry-run=server \
-    --field-manager=kodex-install \
-    -f "$api_write_file" >/dev/null
+  python3 "$repository_root/tools/install/portable_state.py" preflight-apply \
+    --context "$context" --render "$render_file" --manifest "$known_resources_file"
   preflight_recreated_resources immutable-configmaps \
     'select(.kind == "ConfigMap" and .immutable == true)'
   preflight_recreated_resources jobs 'select(.kind == "Job")'

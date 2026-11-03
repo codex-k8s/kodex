@@ -32,6 +32,7 @@ class FixtureState(State):
         super().__init__('test-context')
         self.objects = {key(r): copy.deepcopy(r) for r in objects}
         self.writes = []
+        self.probes = []
 
     def discover(self, resources):
         self.routes = {(r['apiVersion'], r['kind']): ('/apis/batch/v1', 'jobs', True) for r in resources}
@@ -40,6 +41,8 @@ class FixtureState(State):
         return copy.deepcopy(self.objects.get(key(resource)))
 
     def call(self, args, value=None):
+        if '--dry-run=server'in args:
+            self.probes.append((args,value));return b'{}'
         if args[0] == 'create':
             if key(value) in self.objects: raise Rejected('COLLISION')
             self.objects[key(value)] = live(value)
@@ -47,6 +50,17 @@ class FixtureState(State):
             current = self.objects[key(value)]
             if value['metadata']['resourceVersion'] != current['metadata']['resourceVersion']: raise Rejected('CONFLICT')
             self.objects[key(value)] = live(value)
+        elif 'patch' in args:
+            current=next(iter(self.objects.values()))
+            for entry in value:
+                if entry['op']=='test':
+                    field=entry['path'].split('/')[-1]
+                    if current['metadata'][field]!=entry['value']:raise Rejected('CONFLICT')
+                elif entry['path'].startswith('/metadata/'):
+                    current['metadata'][entry['path'].split('/')[-1]]=entry['value']
+                elif entry['op']=='add':current[entry['path'][1:]]=entry['value']
+                elif entry['op']=='remove':current.pop(entry['path'][1:])
+            current['metadata']['resourceVersion']='2'
         elif args[0] == 'delete':
             current = next(iter(self.objects.values()))
             assert value['preconditions'] == {'uid': current['metadata']['uid'], 'resourceVersion': current['metadata']['resourceVersion']}
@@ -76,6 +90,41 @@ class StateTest(unittest.TestCase):
         invalid=[foreign,dict(kind='List',items=[foreign]),dict(kind='List',items=[current,current]),dict(kind='List',items={}),[],None]
         for value in invalid:
             with self.subTest(value=value),patch.object(state,'call',return_value=json.dumps(value).encode()),self.assertRaises(Rejected):state.get(desired)
+
+    def test_owned_preflight_uses_same_cas_protocol_without_writing(self):
+        desired=resource(kind='Deployment',name='synthetic');desired['apiVersion']='apps/v1'
+        actual=live(desired);actual['spec']['replicas']=0;desired['spec']['replicas']=2
+        state=FixtureState([actual]);before=copy.deepcopy(state.objects)
+        state.preflight_apply(desired)
+        self.assertEqual(state.objects,before);self.assertEqual(state.writes,[])
+        self.assertIn('patch',state.probes[0][0]);self.assertIn('--dry-run=server',state.probes[0][0])
+        actual['metadata']['labels']={};state=FixtureState([actual])
+        with self.assertRaises(Rejected):state.preflight_apply(desired)
+        self.assertEqual(state.probes,[])
+
+    def test_owned_config_and_deployment_updates_use_uid_rv_cas_without_force(self):
+        for kind in ['ConfigMap','Deployment']:
+            desired=resource(kind=kind,name='synthetic-update');desired['apiVersion']='v1'if kind=='ConfigMap'else'apps/v1'
+            if kind=='ConfigMap':desired.pop('spec');desired['data']={'revision':'new'}
+            current=live(desired);current['metadata']['annotations']={'deployment.kubernetes.io/revision':'1'}
+            if kind=='ConfigMap':current['data']={'revision':'old','retired':'remove'}
+            else:current['spec']['replicas']=0;desired['spec']['replicas']=2
+            state=FixtureState([current]);inventory=state.inventory([desired]);state.apply(desired,inventory)
+            self.assertIn('patch',state.writes[0][0]);self.assertNotIn('--force-conflicts',state.writes[0][0])
+            self.assertEqual(state.writes[0][1][:2],[{'op':'test','path':'/metadata/uid','value':'test-uid'},{'op':'test','path':'/metadata/resourceVersion','value':'1'}])
+            verify_resource(desired,state.get(desired))
+
+    def test_downward_api_default_v1_is_accepted_but_changed_field_path_is_rejected(self):
+        desired=resource(kind='Deployment',name='synthetic')
+        desired['spec']['template']['spec']['containers'][0]['env']=[{'name':'POD_NAME','valueFrom':{'fieldRef':{'fieldPath':'metadata.name'}}}]
+        desired['spec']['template']['spec']['serviceAccountName']='synthetic-account'
+        current=live(desired);current['spec']['template']['spec']['serviceAccount']='synthetic-account'
+        env=current['spec']['template']['spec']['containers'][0]['env'][0]
+        env['valueFrom']['fieldRef']['apiVersion']='v1';verify_resource(desired,current)
+        wrong=copy.deepcopy(current);wrong['spec']['template']['spec']['serviceAccount']='foreign-account'
+        with self.assertRaises(Rejected):verify_resource(desired,wrong)
+        env['valueFrom']['fieldRef']['fieldPath']='metadata.namespace'
+        with self.assertRaises(Rejected):verify_resource(desired,current)
 
     def test_prepare_api_write_cli_is_exact_and_performs_no_discovery(self):
         desired={'apiVersion':'rbac.authorization.k8s.io/v1','kind':'Role','metadata':resource()['metadata'],'rules':[]}
