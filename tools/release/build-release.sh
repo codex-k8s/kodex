@@ -12,10 +12,12 @@ usage() {
     '  --registry-push <host[:port][/prefix]> --node-pull <host[:port][/prefix]>' \
     '  [--repository-prefix <path>] [--build-proxy <url> --build-no-proxy <list>]' \
     '  [--profile <web-only|web-with-mattermost>] [--build-run-id <digits>]' \
-    '  [--parallelism <1..4>]' >&2
+    '  [--parallelism <1..4>] [--build-recipe-source-sha <40-hex>]' >&2
 }
 
 source_sha=""
+build_recipe_source_sha=""
+build_recipe=null
 output=""
 registry_push=""
 node_pull=""
@@ -29,6 +31,7 @@ parallelism=2
 while (($# > 0)); do
   case "$1" in
     --source-sha) source_sha="${2:-}"; shift 2 ;;
+    --build-recipe-source-sha) build_recipe_source_sha="${2:-}"; shift 2 ;;
     --output) output="${2:-}"; shift 2 ;;
     --registry-push) registry_push="${2:-}"; shift 2 ;;
     --node-pull) node_pull="${2:-}"; shift 2 ;;
@@ -115,6 +118,14 @@ metadata_directory="$temporary_directory/metadata"
 source_context="$temporary_directory/source"
 mkdir -p "$metadata_directory" "$source_context"
 git -C "$repository_root" archive "$source_sha" | tar -x -C "$source_context"
+if [[ -n "$build_recipe_source_sha" ]]; then
+  release_tools_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+  release_tools_root=$(git -C "$release_tools_directory" rev-parse --show-toplevel)
+  build_recipe=$(python3 "$release_tools_directory/build-recipe.py" \
+    --repository "$repository_root" --tooling-root "$release_tools_root" \
+    --source-sha "$source_sha" --recipe-sha "$build_recipe_source_sha" --context "$source_context") ||
+    fail 'explicit build recipe compatibility failed'
+fi
 
 admission_tools_component=image-admission-tools
 admission_tools_destination="$registry_push/$repository_prefix/$admission_tools_component:$source_sha"
@@ -245,6 +256,7 @@ done < <(jq -r '.images[].component' "$manifest")
 schema_heads=$(python3 "$repository_root/tools/release/schema-heads.py")
 jq -n \
   --argjson schema_heads "$schema_heads" \
+  --argjson build_recipe "$build_recipe" \
   --arg profile "$profile" \
   --arg source_sha "$source_sha" \
   --arg build_run_id "$build_run_id" \
@@ -264,5 +276,5 @@ jq -n \
     external_images:[{component:"admission-tools",pull_ref:$admission_tools_ref,digest:$admission_tools_digest}],
     role_image_input:{repository:$role_input_repository,manifest_digest:$role_input_manifest_digest,
       payload_sha256:$role_input_payload_sha256,source_sha256:$role_input_source_sha256,pull_ref:$role_input_pull_ref},
-    images:$images[0]}' | jq -S . >"$output"
+    images:$images[0]} + (if $build_recipe == null then {} else {build_recipe:$build_recipe} end)' | jq -S . >"$output"
 printf 'Release lock created: %s\n' "$output"

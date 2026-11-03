@@ -270,3 +270,32 @@ Kubelet/containerd находятся вне Pod DNS: оператор адре�
 `make test-web-only-release`). Fixtures синтетические; live cluster не используется.
 Документация K3s private registry через Context7 проверена; конкретная настройка
 узлов зависит от закреплённой версии дистрибутива и не выполняется этим overlay.
+
+## Закреплённый OpenCode build-рецепт без смены приложения
+
+В #1977 возможна отдельная packaging-коррекция OpenCode download stage при
+сохранении frozen application source. `build-release.sh` принимает явный
+`--build-recipe-source-sha <exact40hex>`. Скрипт запускается из чистого tooling
+checkout этого SHA, cwd остаётся чистым application checkout `--source-sha`.
+Оба commit должны быть доступны application Git object database.
+
+Опция разрешает заменить только stage `opencode-binary` в
+`services/jobs/agent-runner/Dockerfile` внутри одноразового build context.
+Другие stages должны совпадать byte-for-byte; изменения любых других
+`services/`, `libs/` или `contracts/` отклоняются. Artifact checksum и native
+version probe сохраняются. Живое редактирование исходников не допускается.
+Без опции контекст и формат прежнего release lock сохраняются.
+
+Полный lock дополнительно содержит `build_recipe`: schema
+`kodex.build-recipe/v1`, отдельные recipe/application SHA и SHA256 Dockerfile.
+`source_sha` продолжает обозначать application source, а не выдаёт packaging
+commit за версию работающих сервисов. В итоговом отчёте нужны оба pin.
+Повторный build после частичной публикации предваряется readback опубликованных
+manifest digests; после него сравниваются сохранённые компоненты. Cache hit и
+повторный push одинаковых bytes не заменяют image admission/node pull.
+
+Штатный OpenCode download stage использует тот же pinned Node/Debian base,
+что full runtime: готовые curl/CA, HTTPS-only redirects, ограниченные timeouts,
+checksum и проверку версии. Повторная установка APT для этого stage не требуется.
+Тест: `python3 -B tools/release/build-recipe-test.py`, включён в общий release
+target. Git fixtures синтетические, внешнего registry и credentials нет.

@@ -150,12 +150,13 @@ RUN --mount=type=cache,id=kodex-public-go-mod,target=/go/pkg/mod,sharing=shared 
 	test "$(printf '%s\n' "$client_version" | sed -n 's/.*"gitVersion": "\([^"]*\)".*/\1/p')" = "${KUBECTL_VERSION}"; \
 	test "$("${GOBIN}/helm" version --template '{{.Version}} {{.GoVersion}}')" = "${HELM_VERSION} go1.26.6"
 
-FROM docker.io/library/debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171 AS opencode-binary
+FROM docker.io/library/node:24-bookworm@sha256:934240a162082fd8b8a2f90cd5114446443f1eba1c5378f6687167ca405e6584 AS opencode-binary
 
 # Версия и checksum принадлежат source; private configuration не попадает в build.
-RUN apt-get update \
-	&& apt-get install -y --no-install-recommends ca-certificates curl \
-	&& curl --fail --show-error --silent --location --proto '=https' \
+RUN command -v curl \
+	&& test -s /etc/ssl/certs/ca-certificates.crt \
+	&& curl --fail --show-error --silent --location --proto '=https' --proto-redir '=https' \
+		--connect-timeout 15 --max-time 180 \
 		--output /tmp/opencode.tar.gz \
 		https://github.com/anomalyco/opencode/releases/download/v1.19.5/opencode-linux-x64-baseline.tar.gz \
 	&& echo '17c200fd4b2289954cc01552559f9b6d03ec157b2ddfb5eb54144f491656333d  /tmp/opencode.tar.gz' | sha256sum -c - \
@@ -163,8 +164,7 @@ RUN apt-get update \
 	&& tar -xzf /tmp/opencode.tar.gz -C /out -- opencode \
 	&& chmod 0555 /out/opencode \
 	&& test "$(/out/opencode --version)" = '1.19.5' \
-	&& rm -f /tmp/opencode.tar.gz \
-	&& rm -rf /var/lib/apt/lists/*
+	&& rm -f /tmp/opencode.tar.gz
 
 FROM docker.io/library/node:24-bookworm@sha256:934240a162082fd8b8a2f90cd5114446443f1eba1c5378f6687167ca405e6584 AS full-runtime
 
