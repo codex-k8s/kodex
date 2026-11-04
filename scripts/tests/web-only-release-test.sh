@@ -3,6 +3,7 @@ set -euo pipefail
 
 fail() { printf 'Web-only release test failed: %s\n' "$*" >&2; exit 1; }
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
+python3 -B "$repository_root/scripts/tests/portable-rbac-test.py"
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 render="$temporary_directory/render.yaml"
