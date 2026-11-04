@@ -14,10 +14,14 @@ import (
 // current credentials and authorization method. Pending verification or absence of a recent
 // matching completion makes an account due; existing pending/claimed tasks exclude it. It returns
 // metadata, not credential values.
+// An absent interactive attempt uses API_KEY only for the exact active deployment gateway;
+// other providers retain DEVICE_CODE and a saved authorized method always takes precedence.
 // queryModelCatalogClaimAccounts встраивает bounded SKIP LOCKED enabled authorized accounts с
 // точными current credentials и authorization method. Pending verification либо отсутствие свежего
 // matching completion делает account кандидатом; прежняя pending/claimed task его исключает.
 // Возвращает metadata, а не значения credentials.
+// При отсутствии interactive attempt API_KEY выбирается лишь для точного active deployment
+// gateway; прочие providers сохраняют DEVICE_CODE, сохранённый authorized method приоритетен.
 //
 //go:embed sql/model_catalog__claim_accounts.sql
 var queryModelCatalogClaimAccounts string
@@ -81,7 +85,11 @@ func (repository *Repository) ClaimProviderModelCatalogTasks(ctx context.Context
 	if err := repository.expireProviderVerifications(ctx, tx, "", true); err != nil {
 		return nil, err
 	}
-	rows, err := tx.Query(ctx, queryModelCatalogClaimAccounts, limit)
+	gatewayDefinition := ""
+	if repository.modelProvider != nil {
+		gatewayDefinition = repository.modelProvider.DefinitionKey()
+	}
+	rows, err := tx.Query(ctx, queryModelCatalogClaimAccounts, limit, gatewayDefinition)
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
