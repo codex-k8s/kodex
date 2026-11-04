@@ -4,7 +4,7 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.3.7
+version: 1.3.8
 updated: 2026-11-04
 ---
 
@@ -481,6 +481,36 @@ component image profile; произвольные комбинации не пр
 остаётся пустым, пять bootstrap Jobs проверяются, не переигрываются, schema и
 опубликованная authority history сохраняют прежние проверки. Без опции новый
 image отклоняется. `--check` у profile CLI проверяет render без его изменения.
+
+### Следующий исправленный component profile
+
+Refs #2025, #1977. Если прежний исправленный image уже установлен, optional
+`--previous-component-image-profile previous-components.json` и
+`--previous-component-image-profile-sha256 "$previous_component_profile_sha256"`
+задают ровно один допустимый predecessor. Оба параметра требуют target component
+profile и тот же full base release lock. Старый профиль проходит прежние byte,
+immutable image/source, registry и schema checks; его components входят в target
+set, а base source/image, schema heads и runtime engine совпадают.
+
+`portable-release.sh`, `deploy-platform.sh` и `authority_registry.py
+preflight-workloads` передают одинаковые pinned inputs. Wrapper копирует старый
+JSON до первой проверки, повторно сверяет hash и использует snapshot при
+последующих preflight/apply; после создания preimage сохраняет target profile,
+base lock и predecessor profile рядом с render. Изменение исходного файла
+не меняет snapshot. Private backup данных по-прежнему нужен отдельно.
+
+Desired render строится только из target profile. Для live-readback разрешён
+ещё exact predecessor, полученный штатным transform того же initial render.
+Допустимы baseline/previous/target по целым Deployment при partial rollout;
+смесь containers/annotations/env внутри одного Deployment не принимается.
+Неизвестный image, sidecar/spec/provenance drift, неверные pins либо неполный
+набор flags закрыто останавливают продолжение. Старая authority history и Jobs
+не переигрываются, runtime должен оставаться пустым. Без этих опций прежний
+контракт сохраняется: иной исправленный image не считается baseline.
+
+Это допуск точного предыдущего состояния для продвижения к новой цели, а не
+разрешение downgrade. Rollback всё ещё требует проверки schema/data compatibility
+и отдельного pin. Preflight PASS не доказывает serving, warm или real turn.
 
 Не применять к Job с неизвестным внешним эффектом; сначала reconciliation.
 Rollback старого image допустим только после отдельной проверки схем/состояния,

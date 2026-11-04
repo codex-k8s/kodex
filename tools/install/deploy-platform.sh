@@ -15,6 +15,7 @@ usage() {
   printf '%s\n' '  [--bootstrap-completion-receipt <json> --bootstrap-completion-sha256 <64-hex> [--allow-reconciled-bootstrap-completion]; continuation/readback]' >&2
   printf '%s\n' '  [--repair-egress-secret-access; explicit workload resume repair]' >&2
   printf '%s\n' '  [--component-image-profile <json> --component-image-profile-sha256 <64-hex> --base-release-lock <json>; workload resume only]' >&2
+  printf '%s\n' '  [--previous-component-image-profile <json> --previous-component-image-profile-sha256 <64-hex>; exact component predecessor]' >&2
 }
 
 context=""
@@ -28,6 +29,7 @@ repair_api_endpoints=false
 clamav_mode=enabled
 repair_egress_secret_access=false
 component_image_requested=false
+previous_component_image_requested=false
 component_arguments=()
 completion_arguments=()
 completion_output=""
@@ -47,6 +49,7 @@ while (($# > 0)); do
     --repair-kubernetes-api-endpoints) repair_api_endpoints=true; previous_arguments+=("$1"); shift ;;
     --repair-egress-secret-access) repair_egress_secret_access=true; previous_arguments+=("$1"); shift ;;
     --component-image-profile|--component-image-profile-sha256|--base-release-lock) component_image_requested=true; component_arguments+=("$1" "${2:-}"); previous_arguments+=("$1" "${2:-}"); shift 2 ;;
+    --previous-component-image-profile|--previous-component-image-profile-sha256) previous_component_image_requested=true; component_arguments+=("$1" "${2:-}"); previous_arguments+=("$1" "${2:-}"); shift 2 ;;
     --previous-render|--previous-render-sha256|--buildkit-runtime-profile) previous_arguments+=("$1" "${2:-}"); shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
@@ -67,6 +70,7 @@ case "$public_tls_mode" in deferred|enabled|external) ;; *) fail 'public TLS mod
 if [[ "$component_image_requested" == true ]]; then
   case "$mode" in prepare-preflight|preflight|resume-workloads) ;; *) fail 'component image override requires workload resume' ;; esac
 fi
+[[ "$previous_component_image_requested" != true || "$component_image_requested" == true ]] || fail 'component predecessor requires target profile and base lock'
 if [[ "$repair_egress_secret_access" == true ]]; then
   case "$mode" in prepare-preflight|preflight|resume-workloads) ;; *) fail 'egress secret repair requires workload resume' ;; esac
 fi

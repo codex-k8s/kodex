@@ -121,7 +121,7 @@ def verify_published_resume(state, resources, startup_only=True, completion=None
     return {'status': 'PUBLISHED_AUTHORITY_RESUME_PREFLIGHT_PASSED', 'sourceRevision': 1, 'migrations': 'VERIFIED_NOT_REPEATED', 'authorityHistory': 'PRESERVED_NOT_REPLAYED'}
 
 
-def verify_workload_resume(state, resources, previous, buildkit_profile='standard', repair_api_endpoints=False, clamav_mode='enabled', repair_egress_secret_access=False, component_image=None, completion=None):
+def verify_workload_resume(state, resources, previous, buildkit_profile='standard', repair_api_endpoints=False, clamav_mode='enabled', repair_egress_secret_access=False, component_image=None, completion=None, previous_component_image=None):
     """Продолжение initial graph допускает только точные явно выбранные profile deltas."""
     expected = buildkit_runtime_profile.transform(observability_profile.transform(previous, disabled=True), buildkit_profile)
     require(type(repair_api_endpoints) is bool, 'EXPLICIT_API_ENDPOINT_REPAIR_REQUIRED')
@@ -131,11 +131,17 @@ def verify_workload_resume(state, resources, previous, buildkit_profile='standar
     if repair_egress_secret_access:expected = egress_secret_access.transform(expected)
     profiled = expected
     if component_image is not None:expected = component_image_profile.transform(expected, *component_image)
+    predecessor = None
+    if previous_component_image is not None:
+        require(component_image is not None, 'EXPLICIT_COMPONENT_PREDECESSOR_REQUIRED')
+        component_image_profile.validate_predecessor(component_image[0], previous_component_image[0])
+        predecessor = component_image_profile.transform(profiled, *previous_component_image)
     require(resources == expected, 'EXACT_BOOTSTRAP_PROFILE_DELTA_REQUIRED')
     verify_published_resume(state, resources, startup_only=False, completion=completion)
     before = {key(r): r for r in previous if r.get('kind') == 'Deployment'}
     after = {key(r): r for r in resources if r.get('kind') == 'Deployment'}
     intermediate = {key(r): r for r in profiled if r.get('kind') == 'Deployment'}
+    predecessor = {key(r): r for r in predecessor if r.get('kind') == 'Deployment'} if predecessor is not None else None
     require(len(before) == sum(r.get('kind') == 'Deployment' for r in previous) and set(before) == set(after), 'EXACT_BOOTSTRAP_DEPLOYMENT_SET_REQUIRED')
     live = json.loads(state.call(['-n', 'kodex-system', 'get', 'deployments', '-o', 'json']))['items']
     require(bool(live), 'STARTED_BOOTSTRAP_DEPLOYMENTS_REQUIRED')
@@ -150,6 +156,12 @@ def verify_workload_resume(state, resources, previous, buildkit_profile='standar
             if component_image is not None:
                 try:
                     verify_resource(intermediate[identity], deployment)
+                    continue
+                except Rejected:
+                    pass
+            if predecessor is not None:
+                try:
+                    verify_resource(predecessor[identity], deployment)
                     continue
                 except Rejected:
                     pass
@@ -212,6 +224,8 @@ def main():
     parser.add_argument('--component-image-profile', type=Path)
     parser.add_argument('--component-image-profile-sha256')
     parser.add_argument('--base-release-lock', type=Path)
+    parser.add_argument('--previous-component-image-profile', type=Path)
+    parser.add_argument('--previous-component-image-profile-sha256')
     bootstrap_completion.add_arguments(parser)
     args = parser.parse_args()
     completion = bootstrap_completion.from_arguments(args)
@@ -220,6 +234,9 @@ def main():
     if any((args.component_image_profile, args.component_image_profile_sha256, args.base_release_lock)):
         require(args.mode == 'preflight-workloads' and all((args.component_image_profile, args.component_image_profile_sha256, args.base_release_lock)), 'EXPLICIT_COMPONENT_WORKLOAD_PROFILE_REQUIRED')
         component_image = component_image_profile.load(args.component_image_profile, args.component_image_profile_sha256, args.base_release_lock)
+    previous_component_image = component_image_profile.load_predecessor(
+        component_image[0] if component_image is not None else None,
+        args.previous_component_image_profile, args.previous_component_image_profile_sha256, args.base_release_lock)
     require(not args.repair_egress_secret_access or args.mode == 'preflight-workloads', 'EGRESS_SECRET_REPAIR_MODE_REJECTED')
     require(not args.repair_kubernetes_api_endpoints or args.mode == 'preflight-workloads', 'API_ENDPOINT_REPAIR_MODE_REJECTED')
     require(args.clamav_mode == 'enabled' or args.mode == 'preflight-workloads', 'CLAMAV_MODE_OPERATION_REJECTED')
@@ -245,7 +262,7 @@ def main():
             raw = args.previous_render.read_bytes()
             require(len(raw) <= 16 << 20 and hashlib.sha256(raw).hexdigest() == args.previous_render_sha256, 'PREVIOUS_RENDER_DIGEST_REQUIRED')
             previous = list(filter(None, yaml.safe_load_all(raw)))
-            print(json.dumps(verify_workload_resume(state, resources, previous, args.buildkit_runtime_profile, args.repair_kubernetes_api_endpoints, args.clamav_mode, args.repair_egress_secret_access, component_image, completion)))
+            print(json.dumps(verify_workload_resume(state, resources, previous, args.buildkit_runtime_profile, args.repair_kubernetes_api_endpoints, args.clamav_mode, args.repair_egress_secret_access, component_image, completion, previous_component_image)))
         elif args.mode == 'verify-bootstrap':
             verify_completed_bootstrap(state, resources, completion)
             print(json.dumps({'status':'BOOTSTRAP_COMPLETION_VERIFIED','effects_replayed':False}))
