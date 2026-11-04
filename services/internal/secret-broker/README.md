@@ -19,6 +19,13 @@ immutable значения находятся в `kodex-runtime`, зашифро
 
 ## Интерфейсы
 
+Для optional OpenCode gateway каталог сначала пересекает remote `/models` с
+exact deployment allowlist. Посторонний alias не возвращается и не отклоняет
+допустимую выбранную модель. Повтор approved ID, partial/oversized/malformed
+response и неверная credential/definition affinity закрывают observation.
+Нет fallback на Codex либо другую модель; availability не заменяет turn/tool
+проверки и не выдумывает reasoning/token capabilities. Подробности — #2021.
+
 - `SecretBrokerService` выполняет create/rotate/reveal/revoke по одноразовой
   operation grant;
 - его save/validate/publish/discard draft команды используют полный protected

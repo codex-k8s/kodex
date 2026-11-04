@@ -14,7 +14,8 @@ SCHEMA = 'kodex.bootstrap-component-image/v1'
 BUNDLE_SCHEMA = 'kodex.bootstrap-component-images/v1'
 COMPONENTS = {'egress-gateway': ('egress-gateway', 'egress-gateway'),
               'registry-pull-authorizer': ('kodex-image-registry-pull', 'pull-authorizer'),
-              'control-plane': ('control-plane', 'control-plane')}
+              'control-plane': ('control-plane', 'control-plane'),
+              'secret-broker': ('secret-broker', 'secret-broker')}
 RUNTIME_ENV = 'REGISTRY_PULL_RUNTIME_ENGINE'
 SOURCE = 'kodex.dev/component-source-sha'
 BASE = 'kodex.dev/component-base-lock-sha256'
@@ -57,13 +58,13 @@ def validate(value, lock, lock_sha256):
     fields = {'schema', 'component', 'base_release_lock_sha256', 'base_source_sha',
               'source_sha', 'expected_image_ref', 'image_ref'}
     if value.get('component') == 'registry-pull-authorizer':fields.add('runtime_engine')
-    if value.get('component') == 'control-plane':fields.add('schema_heads')
+    if value.get('component') in ('control-plane', 'secret-broker'):fields.add('schema_heads')
     require(set(value) == fields, 'EXACT_COMPONENT_IMAGE_FIELDS_REQUIRED')
     require(value['schema'] == SCHEMA and value['component'] in COMPONENTS, 'SUPPORTED_STATELESS_COMPONENT_REQUIRED')
     if value['component'] == 'registry-pull-authorizer':
         require(value['runtime_engine'] in ('codex', 'opencode') and
                 value['runtime_engine'] == lock.get('role_base_runtime_engine', 'codex'), 'EXACT_COMPONENT_RUNTIME_REQUIRED')
-    if value['component'] == 'control-plane':
+    if value['component'] in ('control-plane', 'secret-broker'):
         require(isinstance(value['schema_heads'], dict) and bool(value['schema_heads']) and
                 value['schema_heads'] == lock.get('schema_heads') and
                 all(type(v) is int and v > 0 for v in value['schema_heads'].values()), 'UNCHANGED_COMPONENT_SCHEMA_HEADS_REQUIRED')

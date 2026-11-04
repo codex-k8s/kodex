@@ -66,8 +66,10 @@ func newGatewayCatalogHTTPClient(config runtimecontract.ModelProviderConfigurati
 
 // observeGatewayCatalog intersects bounded remote availability with deployment-approved model IDs.
 // Operator token ceilings are not advertised as remotely verified capabilities; reasoning stays unsupported.
+// Unselected remote aliases are discarded before validating matching IDs; approved duplicates still reject the complete observation.
 // observeGatewayCatalog пересекает bounded remote availability с deployment-approved model IDs.
 // Operator token ceilings не выдаются за remote capabilities; reasoning остаётся unsupported.
+// Невыбранные remote aliases отбрасываются до проверки совпавших IDs; повторы разрешённой модели отклоняют всё наблюдение.
 func (service *Service) observeGatewayCatalog(ctx context.Context, raw []byte) (ModelCatalog, error) {
 	config := service.modelProvider
 	if config == nil {
@@ -112,8 +114,15 @@ func (service *Service) observeGatewayCatalog(ctx context.Context, raw []byte) (
 	if json.Unmarshal(body, &listing) != nil || listing.Data == nil || listing.HasMore || len(*listing.Data) > maximumAPIModelRecords {
 		return catalogFailure(ctx, errModelCatalogUnverified)
 	}
-	ids := make(map[string]bool)
+	approved := make(map[string]bool, len(config.Models))
+	for _, model := range config.Models {
+		approved[model.ID] = true
+	}
+	ids := make(map[string]bool, len(config.Models))
 	for _, item := range *listing.Data {
+		if !approved[item.ID] {
+			continue
+		}
 		if !modelCatalogIDPattern.MatchString(item.ID) || ids[item.ID] {
 			return catalogFailure(ctx, errModelCatalogUnverified)
 		}
