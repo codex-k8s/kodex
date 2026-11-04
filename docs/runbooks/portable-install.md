@@ -421,16 +421,16 @@ component source/image. При разных source SHA сохранить оба
 Deployment `kodex-image-registry-pull`, его image/provenance и env
 `REGISTRY_PULL_RUNTIME_ENGINE`; соседние registry и certificate-guard сохраняются.
 
-Для `control-plane` обязательно поле `schema_heads`, полностью совпадающее с
+Для `control-plane` и `secret-broker` обязательно поле `schema_heads`, полностью совпадающее с
 исходным полным lock (все имена и положительные integer heads). Profile разрешает
-только основной контейнер Deployment `control-plane`; sidecars, конфигурация,
+только одноимённый основной контейнер соответствующего Deployment; sidecars, конфигурация,
 replicas и bootstrap/migration Jobs сохраняются. Operator отдельно подтверждает
 неизменность схемы и общих библиотек/контрактов; наличие поля этого не доказывает.
 Профиль не позволяет применить изменение схемы либо откатить миграции.
 
 Для нескольких компонентов тот же CLI принимает оболочку
 `{"schema":"kodex.bootstrap-component-images/v1","profiles":[{"profile":{...},"sha256":"<64-hex>"}]}`.
-Массив содержит от одного до трёх уникальных одиночных v1 profiles; вложенные
+Массив содержит от одного до четырёх уникальных одиночных v1 profiles; вложенные
 оболочки и неизвестные цели запрещены. Child SHA вычисляется по UTF-8 bytes
 `json.dumps(profile, indent=2, ensure_ascii=True) + '\n'`, с сохранением порядка
 ключей JSON. Он остаётся provenance отдельного компонента; внешний SHA закрепляет

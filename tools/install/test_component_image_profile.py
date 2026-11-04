@@ -47,6 +47,37 @@ def bundle_fixture():
 
 
 class Tests(unittest.TestCase):
+    def test_four_component_bundle_preserves_sidecars_and_requires_broker_schema_heads(self):
+        resources,bundle,_,lock_raw,_=bundle_fixture();lock=json.loads(lock_raw)
+        lock['schema_heads']={'control-plane':1,'internal-rpc-authority':2,'email-bridge':3}
+        for index,name in enumerate(('control-plane','secret-broker'),5):
+            base='images.example.invalid/base/'+name+'@sha256:'+str(index)*64
+            lock['images'].append({'component':name,'pull_ref':base})
+            config={**bundle['profiles'][0]['profile'],'component':name,'expected_image_ref':base,
+                'image_ref':'images.example.invalid/fixed/'+name+'@sha256:'+str(index+1)*64,'schema_heads':lock['schema_heads']}
+            bundle['profiles'].append({'profile':config,'sha256':''})
+            resources.append({'apiVersion':'apps/v1','kind':'Deployment','metadata':{'name':name,'namespace':'kodex-system','labels':{'app.kubernetes.io/part-of':'kodex'}},
+                'spec':{'replicas':2,'template':{'spec':{'containers':[{'name':name,'image':base,'env':[{'name':'SYNTHETIC_SETTING','value':'preserved'}]},
+                    {'name':'authority','image':'images.example.invalid/authority@sha256:'+'a'*64}]}}}})
+        lock_sha=hashlib.sha256(json.dumps(lock).encode()).hexdigest()
+        for entry in bundle['profiles']:
+            entry['profile']['base_release_lock_sha256']=lock_sha
+            entry['sha256']=hashlib.sha256((json.dumps(entry['profile'],indent=2)+'\n').encode()).hexdigest()
+        profile.validate(bundle,lock,lock_sha);before=copy.deepcopy(resources)
+        digest=hashlib.sha256(json.dumps(bundle).encode()).hexdigest();after=profile.transform(resources,bundle,digest)
+        self.assertEqual(resources,before);self.assertEqual(profile.transform(after,bundle,digest),after)
+        for index in (-2,-1):
+            self.assertEqual(after[index]['spec']['replicas'],before[index]['spec']['replicas'])
+            self.assertEqual(after[index]['spec']['template']['spec']['containers'][1],before[index]['spec']['template']['spec']['containers'][1])
+            self.assertEqual(after[index]['spec']['template']['spec']['containers'][0]['env'],before[index]['spec']['template']['spec']['containers'][0]['env'])
+            self.assertEqual(after[index]['spec']['template']['spec']['containers'][0]['image'],bundle['profiles'][index]['profile']['image_ref'])
+        broker=bundle['profiles'][-1]['profile']
+        for heads in ({'control-plane':4},{'control-plane':True},{},None):
+            with self.subTest(heads=heads),self.assertRaises(Rejected):profile.validate({**broker,'schema_heads':heads},lock,lock_sha)
+        with self.assertRaises(Rejected):profile.validate({k:v for k,v in broker.items()if k!='schema_heads'},lock,lock_sha)
+        bundle['profiles'].append(copy.deepcopy(bundle['profiles'][0]))
+        with self.assertRaisesRegex(Rejected,'BOUNDED_COMPONENT_PROFILES_REQUIRED'):profile.validate(bundle,lock,lock_sha)
+
     def test_control_plane_correction_preserves_other_components_and_requires_unchanged_schemas(self):
         resources,bundle,_,lock_raw,_=bundle_fixture();lock=json.loads(lock_raw)
         base='images.example.invalid/base/control-plane@sha256:'+'e'*64
