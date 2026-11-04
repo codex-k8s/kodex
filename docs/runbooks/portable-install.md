@@ -4,8 +4,8 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.3.5
-updated: 2026-11-03
+version: 1.3.6
+updated: 2026-11-04
 ---
 
 # Опциональный профиль внешней инфраструктуры
@@ -384,6 +384,76 @@ Preflight и фактическая запись используют одну �
 readback принимает только эквивалентные пустые формы (null/absence/[]). Непустые
 правила сравниваются полностью, добавление любого разрешения отклоняется.
 Нормализация не включает force-conflicts и не изменяет image/schema contract.
+
+### Адресная замена immutable bootstrap image
+
+В рамках #1977 доступен **опциональный** профиль одного stateless компонента
+`egress-gateway`. По умолчанию он отсутствует; bundled/external identity и TLS
+выбираются независимо. Stateful компоненты, миграции, RoleImage, admission policy,
+authority history и credentials этот профиль не меняет. Это продолжение частичного
+bootstrap, а не квалификация полного нового релиза или общий production upgrade.
+
+Operator сначала собирает stock image и проверяет его source/provenance, тесты,
+неизменность общих контрактов/библиотек и schema heads, затем exact digest через
+node CRI. Требуются полный прежний release lock и отдельная запись нового
+component source/image. При разных source SHA сохранить оба набора pins; не
+переписывать source всего базового lock ради одного нового образа. Совместимость
+кода и node pull не доказываются самим параметром установщика.
+
+Синтетический профиль (hex-строки должны быть заменены проверенными значениями):
+
+```json
+{
+  "schema": "kodex.bootstrap-component-image/v1",
+  "component": "egress-gateway",
+  "base_release_lock_sha256": "<64-hex exact baseline lock bytes>",
+  "base_source_sha": "<40-hex baseline source>",
+  "source_sha": "<40-hex component source>",
+  "expected_image_ref": "images.example.invalid/base/egress-gateway@sha256:<64-hex>",
+  "image_ref": "images.example.invalid/fixed/egress-gateway@sha256:<64-hex>"
+}
+```
+
+| Путь | Полномочия / результат | При отказе |
+|---|---|---|
+| Operator → profile CLI | Exact profile SHA и base-lock bytes → render image/provenance | Никаких обращений к внешнему API; неизвестный image/host отклоняется |
+| CI/operator → resume wrapper → preflight | Exact renders и before/profiled/after workload spec; schema/history остаются авторитетными | Нет записи при несовпадении; runtime должен оставаться пустым |
+| Apply → Deployment controller → node runtime | Только закреплённый image; обычные registry/admission/readiness gates | Сохранить preimage/receipt; reconcile прерванный apply до повторного действия |
+
+Профиль привязан к точным байтам base lock и своему SHA256. Старый image обязан
+совпасть с `pull_ref` компонента в этом lock; новый — другой digest того же registry
+authority. Mutable tags, другой host, дополнительные поля, чужой Deployment,
+неизвестный predecessor и конфликтующие provenance annotations закрыто отклоняются.
+Поддерживается только явно перечисленный компонент; расширение набора требует
+отдельного проверенного контракта, а не произвольного имени workload из параметра.
+
+Материализовать новый render до apply:
+
+```bash
+python3 tools/install/component_image_profile.py \
+  --render candidate.yaml --configuration component-image.json \
+  --configuration-sha256 "$component_profile_sha256" --base-release-lock release-lock.json
+```
+
+Сохранить новый render digest, свежий preimage/backup и точный предыдущий render.
+В `portable-release.sh --mode resume-workloads` явно передать
+`--component-image-profile component-image.json`,
+`--component-image-profile-sha256 "$component_profile_sha256"` и
+`--base-release-lock release-lock.json`, а также прежние параметры continuation.
+Wrapper делает snapshot обоих JSON, проверяет pins и материализованный render до
+записи в Kubernetes. `authority_registry.py preflight-workloads` получает те же
+три параметра; допустим только полный exact delta image/provenance относительно
+предыдущего render. Live workload обязан совпасть с before, результатом точных именованных profiles
+до замены image либо after. Промежуточный вариант допускается только при явном
+component image profile; произвольные комбинации не принимаются. Runtime
+остаётся пустым, пять bootstrap Jobs проверяются, не переигрываются, schema и
+опубликованная authority history сохраняют прежние проверки. Без опции новый
+image отклоняется. `--check` у profile CLI проверяет render без его изменения.
+
+Не применять к Job с неизвестным внешним эффектом; сначала reconciliation.
+Rollback старого image допустим только после отдельной проверки схем/состояния,
+не означает разрешения на schema downgrade. В приёмке отдельно записать build,
+node pull, rollout/readiness и реальный функциональный прогон.
 
 ## Registry authority при первой установке и после частичного bootstrap
 
