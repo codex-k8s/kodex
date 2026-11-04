@@ -198,11 +198,22 @@ func NewReadinessOnly(parent context.Context, address string, readiness Readines
 }
 
 // ShareConnectionLimit makes two idle listeners share one connection budget before either starts.
+// A closed readiness-only listener inherits the primary capacity; executable policies
+// must already agree. No destination or readiness authority is inherited.
 // ShareConnectionLimit задаёт двум ещё не запущенным listener общий лимит соединений.
+// Закрытый readiness-only listener наследует ёмкость основного; исполняемые политики
+// обязаны уже совпадать. Полномочия на назначения и готовность не наследуются.
 func (server *Server) ShareConnectionLimit(primary *Server) error {
+	closed, readinessOnly := server.policy.(readinessOnlyPolicy)
 	if primary == nil || primary == server || server.listener != nil || primary.listener != nil ||
-		cap(server.global) != cap(primary.global) || server.draining.Load() || primary.draining.Load() {
+		(!readinessOnly && cap(server.global) != cap(primary.global)) ||
+		(readinessOnly && (cap(primary.global) < 8 || cap(primary.global) > 4096)) ||
+		server.draining.Load() || primary.draining.Load() {
 		return errors.New("gateway shared connection budget is invalid")
+	}
+	if readinessOnly {
+		closed.maximumConnections = cap(primary.global)
+		server.policy = closed
 	}
 	server.global = primary.global
 	return nil
@@ -738,7 +749,9 @@ func (dialer *NetDialer) DialContext(ctx context.Context, target netip.AddrPort)
 
 // readinessOnlyPolicy provides finite listener budgets while denying every CONNECT destination.
 // readinessOnlyPolicy задаёт конечные лимиты listener, запрещая любое CONNECT-назначение.
-type readinessOnlyPolicy struct{}
+type readinessOnlyPolicy struct {
+	maximumConnections int
+}
 
 // Allows always denies proxy access on the compatibility readiness listener.
 // Allows всегда запрещает доступ прокси через совместимый listener готовности.
@@ -746,10 +759,14 @@ func (readinessOnlyPolicy) Allows(string, int) bool { return false }
 
 // Limits bounds parsing, connections, and shutdown even on the readiness-only listener.
 // Limits ограничивает парсинг, соединения и остановку даже для listener только с готовностью.
-func (readinessOnlyPolicy) Limits() policy.Limits {
+func (closed readinessOnlyPolicy) Limits() policy.Limits {
+	maximumConnections := closed.maximumConnections
+	if maximumConnections == 0 {
+		maximumConnections = 64
+	}
 	return policy.Limits{
 		MaximumHeaderBytes: 16 << 10, MaximumClientHelloBytes: 16 << 10,
-		MaximumConnections: 64, MaximumConnectionsPerSource: 16,
+		MaximumConnections: maximumConnections, MaximumConnectionsPerSource: min(16, maximumConnections),
 		HeaderTimeoutMilliseconds: 5_000, ClientHelloTimeoutMilliseconds: 5_000,
 		DialTimeoutMilliseconds: 1_000, IdleTimeoutMilliseconds: 1_000,
 		WriteTimeoutMilliseconds: 5_000, ShutdownTimeoutMilliseconds: 5_000,

@@ -96,6 +96,78 @@ func TestListenersShareOneConnectionBudget(t *testing.T) {
 	}
 }
 
+// TestClosedFallbackInheritsPrimaryBudget keeps an unavailable optional listener
+// inside the owner's global capacity while still denying every CONNECT.
+// TestClosedFallbackInheritsPrimaryBudget сохраняет закрытый optional listener
+// внутри общего бюджета владельца и не разрешает ни одного CONNECT.
+func TestClosedFallbackInheritsPrimaryBudget(t *testing.T) {
+	active := loadSTTProfile(t)
+	primary, err := New(context.Background(), "unused", active, &fakeResolver{}, &fakeDialer{}, readyStub(true), newTestMetrics(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fallback, err := NewReadinessOnly(context.Background(), "unused", readyStub(false), newTestMetrics(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cap(primary.global) == cap(fallback.global) {
+		t.Fatal("fixture must exercise different capacities")
+	}
+	if err := fallback.ShareConnectionLimit(primary); err != nil {
+		t.Fatal(err)
+	}
+	if fallback.global != primary.global || fallback.policy.Limits().MaximumConnections != cap(primary.global) ||
+		fallback.policy.Limits().MaximumConnectionsPerSource > cap(primary.global) {
+		t.Fatal("closed fallback did not inherit the bounded primary capacity")
+	}
+	response := exchangeProfileRequest(t, fallback, "GET /readyz HTTP/1.1\r\nHost: egress-gateway.kodex-system.svc.cluster.local:8080\r\n\r\n")
+	if response.StatusCode != http.StatusServiceUnavailable || fallback.policy.Allows("api.openai.com", 443) {
+		t.Fatal("closed fallback authorized an external effect")
+	}
+	serverSide, clientSide := net.Pipe()
+	done := make(chan struct{})
+	go func() { fallback.handle(serverSide); _ = serverSide.Close(); close(done) }()
+	_, _ = io.WriteString(clientSide, "CONNECT api.openai.com:443 HTTP/1.1\r\nHost: api.openai.com:443\r\n\r\n")
+	denied, err := io.ReadAll(clientSide)
+	_ = clientSide.Close()
+	<-done
+	if err != nil || len(denied) != 0 {
+		t.Fatal("closed fallback accepted CONNECT after sharing")
+	}
+	other, err := New(context.Background(), "unused", fakePolicy{}, &fakeResolver{}, &fakeDialer{}, readyStub(true), newTestMetrics(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := other.ShareConnectionLimit(primary); err == nil {
+		t.Fatal("different executable budgets were accepted")
+	}
+	small, err := NewReadinessOnly(context.Background(), "unused", readyStub(false), newTestMetrics(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := small.ShareConnectionLimit(other); err != nil {
+		t.Fatal(err)
+	}
+	if small.policy.Limits().MaximumConnections != 8 || small.policy.Limits().MaximumConnectionsPerSource > 8 {
+		t.Fatal("small primary budget was expanded")
+	}
+	for _, invalid := range []int{0, 7, 4097} {
+		other.global = make(chan struct{}, invalid)
+		if err := small.ShareConnectionLimit(other); err == nil {
+			t.Fatal("invalid primary budget was accepted")
+		}
+	}
+	for range cap(primary.global) {
+		primary.global <- struct{}{}
+	}
+	connection, peer := net.Pipe()
+	defer connection.Close()
+	defer peer.Close()
+	if fallback.acquire(connection) {
+		t.Fatal("fallback multiplied the global capacity")
+	}
+}
+
 // TestSTTListenerRejectsOtherDestinationsAndCallerProfile rejects caller-supplied profile and foreign targets.
 // TestSTTListenerRejectsOtherDestinationsAndCallerProfile отклоняет профиль клиента и посторонние адресаты.
 func TestSTTListenerRejectsOtherDestinationsAndCallerProfile(t *testing.T) {

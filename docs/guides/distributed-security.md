@@ -4,11 +4,19 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.41
-updated: 2026-11-03
+version: 1.7.42
+updated: 2026-11-04
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
+
+Закрытый fallback необязательной integration/mail projection не должен останавливать
+остальные egress listeners из-за собственного default connection budget. Только
+readiness-only policy может наследовать ёмкость общего бюджета до начала приёма
+подключений. Она сохраняет запрет всех CONNECT и самостоятельную readiness; права
+основной policy не наследуются. Несогласованные бюджеты исполняемых policies
+отклоняются. Проверяется полный startup/drain с недоступными optional projections,
+отрицательный CONNECT и отсутствие умножения глобальной ёмкости.
 
 ## Bootstrap consumers и опциональная observability
 
