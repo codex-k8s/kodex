@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.43
+version: 1.7.44
 updated: 2026-11-04
 ---
 
@@ -26,6 +26,17 @@ Provenance фиксируется в Pod template annotations. Без явног
 не допускается. Проверки пустого runtime, schema, завершённых bootstrap Jobs и
 опубликованной authority history обязательны до и после продолжения. Этот механизм
 не объявляет новый полный release квалифицированным и не разрешает schema rollback.
+
+Завершённые bootstrap Jobs могут исчезнуть по Kubernetes TTL. Portable installer
+сохраняет private operator-owned completion receipt с cluster/namespace UID,
+точными Job UID/spec fingerprints и observed seals до долгих следующих фаз.
+Continuation/readback могут принять отсутствие лишь пяти уже завершённых bootstrap
+Jobs при явно закреплённом receipt. Live schema/history/fence проверки сохраняются;
+другой UID, active/Failed либо новый Job spec закрыто отклоняются. Receipt не даёт
+права повторить migration/bootstrap effect. Исторический импорт требует сохранённого
+успешного preflight, preimage/namespace identities, source/archive pins и отдельного
+opt-in reconciled origin. Доверенный install operator отвечает за происхождение
+исторического evidence; неподтверждённый completion остаётся блокером.
 
 ## Bootstrap consumers и опциональная observability
 

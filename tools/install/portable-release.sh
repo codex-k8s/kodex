@@ -20,6 +20,10 @@ repair_egress_secret_access=false
 component_image_profile=""
 component_image_sha=""
 base_release_lock=""
+completion_receipt=""
+completion_sha=""
+allow_reconciled_completion=false
+completion_arguments=()
 
 while (($#)); do
   case "$1" in
@@ -33,6 +37,9 @@ while (($#)); do
     --clamav-mode) clamav_mode="${2:-}"; shift 2 ;;
     --repair-kubernetes-api-endpoints) repair_api_endpoints=true; shift ;;
     --repair-egress-secret-access) repair_egress_secret_access=true; shift ;;
+    --bootstrap-completion-receipt) completion_receipt="${2:-}"; shift 2 ;;
+    --bootstrap-completion-sha256) completion_sha="${2:-}"; shift 2 ;;
+    --allow-reconciled-bootstrap-completion) allow_reconciled_completion=true; shift ;;
     --component-image-profile) component_image_profile="${2:-}"; shift 2 ;;
     --component-image-profile-sha256) component_image_sha="${2:-}"; shift 2 ;;
     --base-release-lock) base_release_lock="${2:-}"; shift 2 ;;
@@ -45,6 +52,7 @@ while (($#)); do
       printf '%s\n' '  [--previous-render <yaml> --previous-render-sha256 <64-hex> --buildkit-runtime-profile standard|nested-userns; resume-workloads only]'
       printf '%s\n' '  [--clamav-mode enabled|disabled; default enabled]'
       printf '%s\n' '  [--repair-kubernetes-api-endpoints; explicit workload resume repair from pinned endpoint anchors]'
+      printf '%s\n' '  [--bootstrap-completion-receipt <json> --bootstrap-completion-sha256 <64-hex> [--allow-reconciled-bootstrap-completion]; continuation/readback]'
       printf '%s\n' '  [--repair-egress-secret-access; explicit workload resume repair]'
       printf '%s\n' '  [--component-image-profile <json> --component-image-profile-sha256 <64-hex> --base-release-lock <json>; workload resume only]'
       exit 0 ;;
@@ -85,6 +93,20 @@ if [[ -n "$component_image_profile$component_image_sha$base_release_lock" ]]; th
   python3 "$root/tools/install/component_image_profile.py" --check --render "$temporary/render.yaml" --configuration "$temporary/component-image.json" --configuration-sha256 "$component_image_sha" --base-release-lock "$temporary/base-release-lock.json"
   previous_arguments+=(--component-image-profile "$temporary/component-image.json" --component-image-profile-sha256 "$component_image_sha" --base-release-lock "$temporary/base-release-lock.json")
 fi
+if [[ -n "$completion_receipt$completion_sha" || "$allow_reconciled_completion" == true ]]; then
+  case "$mode" in preflight|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback) ;; *) fail 'completion receipt requires continuation or readback' ;; esac
+  [[ -n "$completion_receipt" && "$completion_sha" =~ ^[a-f0-9]{64}$ ]] || fail 'exact completion receipt is required'
+  # Проверка private mode/owner/hash до snapshot: cp не должен легализовать открытый input.
+  python3 - "$root/tools/install" "$completion_receipt" "$completion_sha" "$allow_reconciled_completion" <<'PYLOAD'
+import sys
+sys.path.insert(0,sys.argv[1])
+import bootstrap_completion
+bootstrap_completion.load(sys.argv[2],sys.argv[3],sys.argv[4]=='true')
+PYLOAD
+  cp -- "$completion_receipt" "$temporary/bootstrap-completion.json"
+  completion_arguments=(--bootstrap-completion-receipt "$temporary/bootstrap-completion.json" --bootstrap-completion-sha256 "$completion_sha")
+  [[ "$allow_reconciled_completion" != true ]] || completion_arguments+=(--allow-reconciled-bootstrap-completion)
+fi
 timeout 60s python3 "$root/tools/install/portable_preflight.py" --plan \
   --render "$temporary/render.yaml" --sha256 "$expected_sha"
 python3 "$root/tools/install/clamav_profile.py" --check --mode "$clamav_mode" --render "$temporary/render.yaml"
@@ -96,14 +118,14 @@ timeout 60s python3 "$root/tools/install/portable_preflight.py" \
 tls_mode=$(yq -r 'select(.kind == "ConfigMap" and .metadata.name == "kodex-installation-profile") | .data."profile.json"' "$temporary/render.yaml" | jq -r '.public_tls.mode')
 [[ "$tls_mode" != managed ]] || tls_mode=enabled
 if [[ "$mode" == resume-authority-bootstrap ]]; then
-  timeout 180s python3 "$root/tools/install/authority_registry.py" preflight-resume --render "$temporary/render.yaml" --context "$context"
+  timeout 180s python3 "$root/tools/install/authority_registry.py" preflight-resume --render "$temporary/render.yaml" --context "$context" "${completion_arguments[@]}"
 fi
 if [[ "$mode" == resume-authority-published ]]; then
-  timeout 180s python3 "$root/tools/install/authority_registry.py" preflight-published --render "$temporary/render.yaml" --context "$context"
+  timeout 180s python3 "$root/tools/install/authority_registry.py" preflight-published --render "$temporary/render.yaml" --context "$context" "${completion_arguments[@]}"
 fi
 if [[ "$mode" == resume-workloads ]]; then
   timeout 180s python3 "$root/tools/install/authority_registry.py" preflight-workloads \
-    --render "$temporary/render.yaml" --context "$context" "${previous_arguments[@]}" --clamav-mode "$clamav_mode"
+    --render "$temporary/render.yaml" --context "$context" "${previous_arguments[@]}" --clamav-mode "$clamav_mode" "${completion_arguments[@]}"
 fi
 if [[ "$mode" == apply || "$mode" == resume-authority-bootstrap || "$mode" == resume-authority-published || "$mode" == resume-workloads ]]; then
   [[ -n "$preimage" && "$preimage" == /* && ! -e "$preimage" ]] || fail 'new absolute preimage directory is required'
@@ -120,18 +142,31 @@ if [[ "$mode" == apply || "$mode" == resume-authority-bootstrap || "$mode" == re
   done
   timeout 180s python3 "$root/tools/install/portable_state.py" inventory \
     --context "$context" --render "$temporary/render.yaml" --inventory "$preimage/resource-inventory.json"
+  if [[ "$mode" != apply ]] && ((${#completion_arguments[@]} == 0)); then
+    python3 "$root/tools/install/bootstrap_completion.py" capture --render "$temporary/render.yaml" --context "$context" --output "$preimage/bootstrap-completion.json"
+    completion_sha=$(sha256sum "$preimage/bootstrap-completion.json" | awk '{print $1}')
+    completion_arguments=(--bootstrap-completion-receipt "$preimage/bootstrap-completion.json" --bootstrap-completion-sha256 "$completion_sha")
+  elif ((${#completion_arguments[@]})); then
+    cp -- "$temporary/bootstrap-completion.json" "$preimage/bootstrap-completion-input.json"
+  fi
   # Preimage metadata не заменяет backup данных или разрешение на schema downgrade.
   phases=(prepare-preflight preflight apply)
   [[ "$mode" != resume-authority-bootstrap ]] || phases=(prepare-preflight preflight resume-authority-bootstrap)
   [[ "$mode" != resume-authority-published ]] || phases=(prepare-preflight preflight resume-authority-published)
   [[ "$mode" != resume-workloads ]] || phases=(prepare-preflight preflight resume-workloads)
   for phase in "${phases[@]}"; do
+    phase_arguments=()
+    if [[ "$phase" == apply ]]; then phase_arguments=(--bootstrap-completion-output "$preimage/bootstrap-completion.json"); fi
     "$root/tools/install/deploy-platform.sh" --context "$context" --mode "$phase" \
       --render "$temporary/render.yaml" --public-tls-mode "$tls_mode" \
-      --portable-inventory "$preimage/resource-inventory.json" --clamav-mode "$clamav_mode" "${arguments[@]}" "${previous_arguments[@]}"
+      --portable-inventory "$preimage/resource-inventory.json" --clamav-mode "$clamav_mode" "${arguments[@]}" "${previous_arguments[@]}" "${completion_arguments[@]}" "${phase_arguments[@]}"
   done
 fi
+if [[ "$mode" == apply && -f "$preimage/bootstrap-completion.json" ]]; then
+  completion_sha=$(sha256sum "$preimage/bootstrap-completion.json" | awk '{print $1}')
+  completion_arguments=(--bootstrap-completion-receipt "$preimage/bootstrap-completion.json" --bootstrap-completion-sha256 "$completion_sha")
+fi
 timeout 180s python3 "$root/tools/install/portable_state.py" readback \
-  --context "$context" --render "$temporary/render.yaml"
+  --context "$context" --render "$temporary/render.yaml" "${completion_arguments[@]}"
 "$root/tools/install/deploy-platform.sh" --context "$context" --mode readback \
-  --render "$temporary/render.yaml" --public-tls-mode "$tls_mode" --clamav-mode "$clamav_mode" "${arguments[@]}"
+  --render "$temporary/render.yaml" --public-tls-mode "$tls_mode" --clamav-mode "$clamav_mode" "${arguments[@]}" "${completion_arguments[@]}"

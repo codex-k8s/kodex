@@ -476,6 +476,19 @@ def verify_schemas(state, resources):
         require(raw.strip().isdigit() and int(raw.strip()) == expected[component], 'LIVE_SCHEMA_DRIFT')
 
 
+def verify_readback(state, resources, completion=None):
+    import bootstrap_completion
+    if completion is not None:bootstrap_completion.verify(state, resources, completion)
+    for expected in resources:
+        if expected['kind'] == 'Secret':continue
+        actual = state.get(expected)
+        if actual is None and completion is not None and expected['kind'] == 'Job' and expected['metadata']['name'] in bootstrap_completion.JOBS:
+            continue
+        require(actual is not None, 'LIVE_RESOURCE_MISSING')
+        verify_resource(expected, actual)
+    if completion is None:verify_schemas(state, resources)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('mode', choices=('inventory', 'apply', 'delete', 'readback', 'prepare-api-write', 'preflight-apply'))
@@ -487,8 +500,12 @@ def main():
     parser.add_argument('--kind')
     parser.add_argument('--name')
     parser.add_argument('--namespace', default='kodex-system')
+    import bootstrap_completion
+    bootstrap_completion.add_arguments(parser)
     args = parser.parse_args()
     try:
+        completion = bootstrap_completion.from_arguments(args)
+        require(completion is None or args.mode == 'readback', 'BOOTSTRAP_COMPLETION_READBACK_ONLY')
         raw = Path(args.render).read_bytes()
         resources = list(filter(None, yaml.safe_load_all(raw)))
         render_digest = hashlib.sha256(raw).hexdigest()
@@ -516,13 +533,7 @@ def main():
                 json.dump({'version': 1, 'context': args.context, 'renderSHA256': render_digest, 'resources': value}, stream)
             return
         if args.mode == 'readback':
-            for expected in resources:
-                if expected['kind'] == 'Secret':
-                    continue
-                actual = state.get(expected)
-                require(actual is not None, 'LIVE_RESOURCE_MISSING')
-                verify_resource(expected, actual)
-            verify_schemas(state, resources)
+            verify_readback(state, resources, completion)
             return
         require(args.inventory, 'INVENTORY_REQUIRED')
         record = json.loads(Path(args.inventory).read_text())

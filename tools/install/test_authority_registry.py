@@ -145,7 +145,7 @@ class AuthorityRegistry(unittest.TestCase):
         desired=registry.transform(fixture(),{'schema':'kodex.authority-registry/v1','source_revision':1})
         state=FakeState(desired);state.current['internal-rpc-authority-publisher']['spec']['replicas']=2
         state.published_state={'rotation_count':1,'snapshot_count':1,'fence_allows':True,'matching_count':1}
-        with patch.object(registry,'verify_schemas')as schemas,patch.object(registry,'verify_resource',wraps=registry.verify_resource)as exact:
+        with patch.object(registry,'verify_schemas')as schemas,patch.object(registry,'verify_resource',wraps=registry.verify_resource)as exact,patch.object(registry.bootstrap_completion,'verify_resource',side_effect=exact):
             result=registry.verify_published_resume(state,desired)
         self.assertEqual(exact.call_count,7);schemas.assert_called_once_with(state,desired)
         self.assertEqual(result['authorityHistory'],'PRESERVED_NOT_REPLAYED')
@@ -180,7 +180,7 @@ class AuthorityRegistry(unittest.TestCase):
 
     def test_resume_reads_exact_completed_jobs_schema_and_empty_history_without_mutation(self):
         resources=fixture();state=FakeState(resources);desired=registry.transform(resources,{'schema':'kodex.authority-registry/v1','source_revision':1})
-        with patch.object(registry,'verify_schemas')as schemas,patch.object(registry,'verify_resource',wraps=registry.verify_resource)as exact:
+        with patch.object(registry,'verify_schemas')as schemas,patch.object(registry,'verify_resource',wraps=registry.verify_resource)as exact,patch.object(registry.bootstrap_completion,'verify_resource',side_effect=exact):
             result=registry.verify_resume(state,desired)
         schemas.assert_called_once_with(state,desired);self.assertEqual(exact.call_count,6)
         self.assertEqual(result['migrations'],'VERIFIED_NOT_REPEATED');self.assertTrue(all('get'in a or 'exec'in a for a in state.calls))

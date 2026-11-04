@@ -10,6 +10,7 @@ from pathlib import Path
 import yaml
 from deployment_profile import require, Rejected
 from portable_state import State, verify_resource, verify_schemas, key
+import bootstrap_completion
 import component_image_profile
 import clamav_profile
 import egress_secret_access
@@ -19,8 +20,8 @@ import buildkit_runtime_profile
 
 REGISTRY = 'internal-rpc-authority-publisher-target-registry'
 ANNOTATION = 'kodex.dev/authority-registry-source-revision'
-MIGRATION_JOBS = ('email-bridge-migration', 'internal-rpc-authority-migrate', 'control-plane-migrate',
-                  'kodex-postgresql-runtime-credentials', 'control-plane-broker-bootstrap')
+MIGRATION_JOBS = bootstrap_completion.JOBS
+
 STATE_SQL = "SELECT json_build_object('rotation_count',(SELECT count(*) FROM internal_rpc_authority.authority_rotation_intents),'snapshot_count',(SELECT count(*) FROM internal_rpc_authority.authority_snapshot_history),'fence_allows',internal_rpc_authority.runtime_restore_fence_allows_work());"
 
 
@@ -83,13 +84,9 @@ def projection_plan(resources, registry):
     return {'version': 1, 'namespace': registry['namespace'], 'secrets': selected}
 
 
-def verify_completed_bootstrap(state, resources):
+def verify_completed_bootstrap(state, resources, completion=None):
     verify_schemas(state, resources)
-    for name in MIGRATION_JOBS:
-        job = one(resources, 'Job', name)
-        observed = state.get(job)
-        require(observed is not None and observed.get('status', {}).get('succeeded') == 1 and not observed.get('status', {}).get('active'), 'COMPLETED_BOOTSTRAP_JOB_REQUIRED')
-        verify_resource(job, observed)
+    bootstrap_completion.verify_jobs(state, resources, completion)
 
 
 def verify_startup_only(state, observed):
@@ -104,14 +101,14 @@ def published_state_sql(registry_digest):
     return "SELECT json_build_object('rotation_count',(SELECT count(*) FROM internal_rpc_authority.authority_rotation_intents),'snapshot_count',(SELECT count(*) FROM internal_rpc_authority.authority_snapshot_history),'fence_allows',internal_rpc_authority.runtime_restore_fence_allows_work(),'matching_count',(SELECT count(*) FROM internal_rpc_authority.authority_rotation_intents r JOIN internal_rpc_authority.authority_snapshot_history h ON h.publication_intent_id=r.intent_id WHERE r.protocol_version=2 AND r.source_revision=1 AND r.registry_source_digest_sha256='" + registry_digest + "' AND r.status IN ('DELIVERED','PROMOTED') AND h.source_revision=r.source_revision AND h.source_digest_sha256=r.source_digest_sha256 AND h.predecessor_revision=0 AND h.predecessor_digest_sha256=repeat('0',64) AND h.snapshot_compact_jws IS NOT NULL AND h.published_at<=now()+interval '5 seconds' AND h.published_at>now()-interval '180 days'));"
 
 
-def verify_published_resume(state, resources, startup_only=True):
+def verify_published_resume(state, resources, startup_only=True, completion=None):
     desired = one(resources, 'ConfigMap', REGISTRY)
     document = yaml.safe_load(desired['data']['key-delivery-targets.yaml'])
     require(desired['metadata'].get('annotations', {}).get(ANNOTATION) == '1' and document.get('source_revision') == 1, 'INITIAL_AUTHORITY_REVISION_ONE_REQUIRED')
     current = state.get(desired)
     require(current is not None, 'OWNED_AUTHORITY_REGISTRY_REQUIRED')
     verify_resource(desired, current)
-    verify_completed_bootstrap(state, resources)
+    verify_completed_bootstrap(state, resources, completion)
     publisher = one(resources, 'Deployment', 'internal-rpc-authority-publisher')
     observed = state.get(publisher)
     require(observed is not None and type(publisher['spec'].get('replicas')) is int and publisher['spec']['replicas'] > 0, 'STARTED_AUTHORITY_PUBLISHER_REQUIRED')
@@ -124,7 +121,7 @@ def verify_published_resume(state, resources, startup_only=True):
     return {'status': 'PUBLISHED_AUTHORITY_RESUME_PREFLIGHT_PASSED', 'sourceRevision': 1, 'migrations': 'VERIFIED_NOT_REPEATED', 'authorityHistory': 'PRESERVED_NOT_REPLAYED'}
 
 
-def verify_workload_resume(state, resources, previous, buildkit_profile='standard', repair_api_endpoints=False, clamav_mode='enabled', repair_egress_secret_access=False, component_image=None):
+def verify_workload_resume(state, resources, previous, buildkit_profile='standard', repair_api_endpoints=False, clamav_mode='enabled', repair_egress_secret_access=False, component_image=None, completion=None):
     """Продолжение initial graph допускает только точные явно выбранные profile deltas."""
     expected = buildkit_runtime_profile.transform(observability_profile.transform(previous, disabled=True), buildkit_profile)
     require(type(repair_api_endpoints) is bool, 'EXPLICIT_API_ENDPOINT_REPAIR_REQUIRED')
@@ -135,7 +132,7 @@ def verify_workload_resume(state, resources, previous, buildkit_profile='standar
     profiled = expected
     if component_image is not None:expected = component_image_profile.transform(expected, *component_image)
     require(resources == expected, 'EXACT_BOOTSTRAP_PROFILE_DELTA_REQUIRED')
-    verify_published_resume(state, resources, startup_only=False)
+    verify_published_resume(state, resources, startup_only=False, completion=completion)
     before = {key(r): r for r in previous if r.get('kind') == 'Deployment'}
     after = {key(r): r for r in resources if r.get('kind') == 'Deployment'}
     intermediate = {key(r): r for r in profiled if r.get('kind') == 'Deployment'}
@@ -174,7 +171,7 @@ def existing_job(state, resources, name):
     return True
 
 
-def verify_resume(state, resources):
+def verify_resume(state, resources, completion=None):
     desired = one(resources, 'ConfigMap', REGISTRY)
     document = yaml.safe_load(desired['data']['key-delivery-targets.yaml'])
     require(desired['metadata'].get('annotations', {}).get(ANNOTATION) == '1' and document.get('source_revision') == 1, 'INITIAL_AUTHORITY_REVISION_ONE_REQUIRED')
@@ -183,7 +180,7 @@ def verify_resume(state, resources):
     actual = yaml.safe_load(current['data']['key-delivery-targets.yaml'])
     predecessor = copy.deepcopy(document);predecessor['source_revision'] = actual.get('source_revision')
     require(type(actual.get('source_revision')) is int and actual['source_revision'] >= 1 and predecessor == actual, 'AUTHORITY_REGISTRY_TARGET_DRIFT')
-    verify_completed_bootstrap(state, resources)
+    verify_completed_bootstrap(state, resources, completion)
     publisher = one(resources, 'Deployment', 'internal-rpc-authority-publisher')
     observed = state.get(publisher)
     require(observed is not None and observed['spec'].get('replicas') == 0, 'QUIESCED_AUTHORITY_PUBLISHER_REQUIRED')
@@ -199,7 +196,7 @@ def verify_resume(state, resources):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=('render', 'preflight-resume', 'preflight-published', 'preflight-workloads', 'existing-job', 'projection-plan'))
+    parser.add_argument('mode', choices=('render', 'preflight-resume', 'preflight-published', 'preflight-workloads', 'existing-job', 'projection-plan', 'verify-bootstrap'))
     parser.add_argument('--render', type=Path, required=True)
     parser.add_argument('--configuration', type=Path)
     parser.add_argument('--context')
@@ -215,7 +212,10 @@ def main():
     parser.add_argument('--component-image-profile', type=Path)
     parser.add_argument('--component-image-profile-sha256')
     parser.add_argument('--base-release-lock', type=Path)
+    bootstrap_completion.add_arguments(parser)
     args = parser.parse_args()
+    completion = bootstrap_completion.from_arguments(args)
+    require(completion is None or args.mode in ('preflight-resume', 'preflight-published', 'preflight-workloads', 'verify-bootstrap'), 'BOOTSTRAP_COMPLETION_MODE_REJECTED')
     component_image = None
     if any((args.component_image_profile, args.component_image_profile_sha256, args.base_release_lock)):
         require(args.mode == 'preflight-workloads' and all((args.component_image_profile, args.component_image_profile_sha256, args.base_release_lock)), 'EXPLICIT_COMPONENT_WORKLOAD_PROFILE_REQUIRED')
@@ -245,12 +245,15 @@ def main():
             raw = args.previous_render.read_bytes()
             require(len(raw) <= 16 << 20 and hashlib.sha256(raw).hexdigest() == args.previous_render_sha256, 'PREVIOUS_RENDER_DIGEST_REQUIRED')
             previous = list(filter(None, yaml.safe_load_all(raw)))
-            print(json.dumps(verify_workload_resume(state, resources, previous, args.buildkit_runtime_profile, args.repair_kubernetes_api_endpoints, args.clamav_mode, args.repair_egress_secret_access, component_image)))
+            print(json.dumps(verify_workload_resume(state, resources, previous, args.buildkit_runtime_profile, args.repair_kubernetes_api_endpoints, args.clamav_mode, args.repair_egress_secret_access, component_image, completion)))
+        elif args.mode == 'verify-bootstrap':
+            verify_completed_bootstrap(state, resources, completion)
+            print(json.dumps({'status':'BOOTSTRAP_COMPLETION_VERIFIED','effects_replayed':False}))
         elif args.mode == 'existing-job':
             require(args.job_name, 'EXACT_JOB_NAME_REQUIRED')
             print('PRESENT' if existing_job(state, resources, args.job_name) else 'ABSENT')
         else:
-            print(json.dumps(verify_published_resume(state, resources) if args.mode == 'preflight-published' else verify_resume(state, resources)))
+            print(json.dumps(verify_published_resume(state, resources, completion=completion) if args.mode == 'preflight-published' else verify_resume(state, resources, completion)))
 
 
 if __name__ == '__main__':
