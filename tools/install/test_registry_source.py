@@ -32,10 +32,24 @@ def fixture():
     script = resource('ConfigMap', 'kodex-release-artifact-materializer', {})
     script.pop('spec')
     script['data'] = {'release-artifact-materializer.sh': 'synthetic-old-script'}
-    deployment = resource('Deployment', 'kodex-image-registry-pull', {'template': {'spec': {'containers': [{'name': 'certificate-guard', 'env': [{'name': 'READBACK_IMAGE', 'value': 'synthetic-old-path'}]}]}}})
+    deployment = resource('Deployment', 'kodex-image-registry-pull', {'template': {'spec': {'containers': [{'name': 'certificate-guard', 'env': [{'name': 'READBACK_IMAGE', 'value': 'synthetic-old-path'}]}, {'name': 'pull-authorizer', 'env': []}]}}})
     return (config, lock, [job, policy, admission, parameters, service, route, script, deployment])
 
 class RegistrySource(unittest.TestCase):
+
+    def test_runtime_pull_policy_is_opt_in_and_rejects_lock_or_environment_conflict(self):
+        config,lock,resources=fixture()
+        result=registry.transform(resources,config,lock)
+        authorizer=registry.one(result,'Deployment','kodex-image-registry-pull')['spec']['template']['spec']['containers'][1]
+        self.assertEqual(authorizer['env'],[])
+        for engine in ('opencode','unknown'):
+            with self.subTest(engine=engine),self.assertRaises(ValueError):registry.transform(resources,config,{**lock,'role_base_runtime_engine':engine})
+        for env in ([{'name':'REGISTRY_PULL_RUNTIME_ENGINE','value':'opencode'}],
+                    [{'name':'REGISTRY_PULL_RUNTIME_ENGINE','value':'codex'}]*2,
+                    [{'name':'REGISTRY_PULL_RUNTIME_ENGINE','valueFrom':{'configMapKeyRef':{'name':'synthetic','key':'engine'}}}]):
+            altered=copy.deepcopy(resources)
+            registry.one(altered,'Deployment','kodex-image-registry-pull')['spec']['template']['spec']['containers'][1]['env']=env
+            with self.subTest(env=env),self.assertRaises(ValueError):registry.transform(altered,config,lock)
 
     def test_opencode_materializer_and_promoted_readback_use_destination_namespace(self):
         config, lock, resources = fixture()
@@ -54,6 +68,8 @@ class RegistrySource(unittest.TestCase):
         self.assertEqual(data['nodeReadbackImage'], 'kodex-image-registry-pull.kodex-system.svc.cluster.local/kodex/agent-runner-opencode@sha256:' + 'b' * 64)
         env = registry.one(result, 'Job', 'release-artifact-materializer')['spec']['template']['spec']['containers'][0]['env']
         self.assertIn({'name': 'AGENT_RUNNER_DESTINATION_REPOSITORY', 'value': 'kodex/agent-runner-opencode'}, env)
+        authorizer = registry.one(result, 'Deployment', 'kodex-image-registry-pull')['spec']['template']['spec']['containers'][1]
+        self.assertEqual(authorizer['env'], [{'name': 'REGISTRY_PULL_RUNTIME_ENGINE', 'value': 'opencode'}])
         guard = registry.one(result, 'Deployment', 'kodex-image-registry-pull')['spec']['template']['spec']['containers'][0]
         self.assertEqual(guard['env'][0]['value'], 'kodex-image-registry-pull.kodex-system.svc.cluster.local/kodex/control-plane@sha256:' + 'c' * 64)
         script = registry.one(result, 'ConfigMap', 'kodex-release-artifact-materializer')

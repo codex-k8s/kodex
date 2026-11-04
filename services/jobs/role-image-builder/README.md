@@ -10,6 +10,16 @@ updated: 2026-10-15
 
 # role-image-builder
 
+Опциональный runtime `opencode` включает ровно один дополнительный pull repository
+`kodex/agent-runner-opencode` у BuildKit base reader и installer/node reader.
+Portable renderer назначает `REGISTRY_PULL_RUNTIME_ENGINE=opencode` pull-authorizer
+из явного `role_base_runtime_engine` release lock. Пустое значение и `codex`
+сохраняют прежние списки; неизвестное значение останавливает процесс.
+Probe и input-reader своих прав не расширяют. Сохраняются mTLS, фиксированные
+profile credentials либо node signature/IP binding, только GET/HEAD manifests/blobs
+и штатные digest/admission/readiness gates. Этот параметр не выдаёт push либо
+доступ к произвольному repository. См. [portable install](../../../docs/runbooks/portable-install.md).
+
 `role-image-builder` — единственный исполнитель одной fenced attempt сборки
 ролевого образа. `control-plane` владеет рецептами, очередью сборок,
 артефактами и eligibility, а отдельные `image-admission` и `image-promotion`

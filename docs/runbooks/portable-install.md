@@ -387,8 +387,8 @@ readback принимает только эквивалентные пустые
 
 ### Адресная замена immutable bootstrap image
 
-В рамках #1977 доступен **опциональный** профиль одного stateless компонента
-`egress-gateway`. По умолчанию он отсутствует; bundled/external identity и TLS
+В рамках #1977 доступен **опциональный** профиль stateless компонента
+`egress-gateway` либо `registry-pull-authorizer`. По умолчанию он отсутствует; bundled/external identity и TLS
 выбираются независимо. Stateful компоненты, миграции, RoleImage, admission policy,
 authority history и credentials этот профиль не меняет. Это продолжение частичного
 bootstrap, а не квалификация полного нового релиза или общий production upgrade.
@@ -413,6 +413,31 @@ component source/image. При разных source SHA сохранить оба
   "image_ref": "images.example.invalid/fixed/egress-gateway@sha256:<64-hex>"
 }
 ```
+
+Для `registry-pull-authorizer` используются соответствующие refs/source и
+дополнительное обязательное поле `"runtime_engine": "codex"` либо `"opencode"`.
+Значение должно совпасть с `role_base_runtime_engine` исходного lock (при отсутствии
+поля lock подразумевается Codex). Меняется только контейнер `pull-authorizer`
+Deployment `kodex-image-registry-pull`, его image/provenance и env
+`REGISTRY_PULL_RUNTIME_ENGINE`; соседние registry и certificate-guard сохраняются.
+
+Для двух компонентов тот же CLI принимает оболочку
+`{"schema":"kodex.bootstrap-component-images/v1","profiles":[{"profile":{...},"sha256":"<64-hex>"}]}`.
+Массив содержит от одного до двух уникальных одиночных v1 profiles; вложенные
+оболочки и неизвестные цели запрещены. Child SHA вычисляется по UTF-8 bytes
+`json.dumps(profile, indent=2, ensure_ascii=True) + '\n'`, с сохранением порядка
+ключей JSON. Он остаётся provenance отдельного компонента; внешний SHA закрепляет
+весь bundle. Уже установленный одиночный profile с теми же canonical bytes не
+меняет provenance при добавлении второй цели. Не совпадающий прежний SHA требует
+разбора происхождения, а не перезаписи annotations. Оба profiles связаны с одним
+полным base lock. Оболочка не отменяет source compatibility и CRI pull checks.
+
+При новой установке renderer сам назначает authorizer runtime из явного release
+lock и проверяет соответствие выбранной trusted role base. OpenCode разрешает
+только дополнительный `kodex/agent-runner-opencode` для BuildKit base reader и
+installer/node reader. Другие identities, методы, credentials и admission gates
+сохраняются. Нельзя включать этот env у старого образа authorizer как замену
+проверенному executable image. У Codex прежний env и разрешения не меняются.
 
 | Путь | Полномочия / результат | При отказе |
 |---|---|---|

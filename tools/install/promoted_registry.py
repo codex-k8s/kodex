@@ -30,6 +30,8 @@ def bind(resources, lock):
     destination = data['trustedRoleBaseRepository'].removeprefix(base)
     require(destination in ['kodex/agent-runner', 'kodex/agent-runner-opencode'])
     component = destination.split('/')[-1]
+    engine = lock.get('role_base_runtime_engine', 'codex')
+    require(engine in ('codex', 'opencode') and (component == 'agent-runner-opencode') == (engine == 'opencode'))
     if component == 'agent-runner-opencode':
         require(lock.get('role_base_runtime_engine') == 'opencode')
     agents = [v for v in lock['images'] if v['component'] == component]
@@ -56,6 +58,14 @@ def bind(resources, lock):
     script['data']['release-artifact-materializer.sh'] = payload
     script['metadata'].setdefault('annotations', {})['kodex.dev/materializer-script-sha256'] = hashlib.sha256(payload.encode()).hexdigest()
     registry = one(resources, 'Deployment', 'kodex-image-registry-pull')
+    authorizer = [v for v in registry['spec']['template']['spec']['containers'] if v['name'] == 'pull-authorizer']
+    require(len(authorizer) == 1)
+    from component_image_profile import select_runtime, RUNTIME_ENV
+    if engine == 'opencode':
+        select_runtime(authorizer[0], engine)
+    else:
+        existing = [v for v in authorizer[0].get('env', []) if v.get('name') == RUNTIME_ENV]
+        require(not existing or existing == [{'name': RUNTIME_ENV, 'value': 'codex'}])
     guard = next((v for v in registry['spec']['template']['spec']['containers'] if v['name'] == 'certificate-guard'))
     readback = [v for v in guard['env'] if v['name'] == 'READBACK_IMAGE']
     require(len(readback) == 1)
