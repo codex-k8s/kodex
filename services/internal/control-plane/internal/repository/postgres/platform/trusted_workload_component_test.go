@@ -29,8 +29,8 @@ func TestTrustedWorkloadGenerationComponent(t *testing.T) {
 	if err := repository.ConfigureRPCProfile("implicit"); err == nil {
 		t.Fatal("unknown profile accepted")
 	}
-	if _, err := repository.ResolveServiceCredentialGeneration(ctx, "secret-broker"); !errors.Is(err, errs.ErrForbidden) {
-		t.Fatal("protected reader used trusted registration")
+	if generation, err := repository.ResolveServiceCredentialGeneration(ctx, "secret-broker"); err != nil || generation != 1 {
+		t.Fatal("protected reader did not use explicit owner registration")
 	}
 	if err := repository.ConfigureRPCProfile(transportprofile.TrustedCluster); err != nil {
 		t.Fatal(err)

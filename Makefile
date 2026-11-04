@@ -68,6 +68,10 @@ test-web-only-release:
 	@python3 scripts/tests/pwa-public-assets-test.py
 	@./scripts/tests/web-only-release-test.sh
 
+.PHONY: test-service-generation-postgres
+test-service-generation-postgres: check-go-toolchain
+	@./scripts/tests/control-plane-postgres-test.sh '^(TestServiceCredentialColdStartComponent|TestWorkerGrantInstancesComponent|TestTrustedWorkloadGenerationComponent)$$'
+
 .PHONY: test-workspace-policy-contract
 test-workspace-policy-contract: check-go-toolchain
 	@cd tools/dev/workspace-policy-contract && env -u GOFLAGS GOENV=off GOWORK=off timeout 120s go test -count=1 -timeout=60s ./...

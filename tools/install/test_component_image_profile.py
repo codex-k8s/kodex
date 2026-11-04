@@ -47,6 +47,31 @@ def bundle_fixture():
 
 
 class Tests(unittest.TestCase):
+    def test_control_plane_correction_preserves_other_components_and_requires_unchanged_schemas(self):
+        resources,bundle,_,lock_raw,_=bundle_fixture();lock=json.loads(lock_raw)
+        base='images.example.invalid/base/control-plane@sha256:'+'e'*64
+        lock['images'].append({'component':'control-plane','pull_ref':base})
+        lock['schema_heads']={'control-plane':1,'internal-rpc-authority':2,'email-bridge':3}
+        lock_raw=json.dumps(lock).encode();lock_sha=hashlib.sha256(lock_raw).hexdigest()
+        for entry in bundle['profiles']:
+            entry['profile']['base_release_lock_sha256']=lock_sha
+            entry['sha256']=hashlib.sha256((json.dumps(entry['profile'],indent=2)+'\n').encode()).hexdigest()
+        config={**bundle['profiles'][0]['profile'],'component':'control-plane','expected_image_ref':base,
+            'image_ref':'images.example.invalid/fixed/control-plane@sha256:'+'f'*64,'schema_heads':lock['schema_heads']}
+        bundle['profiles'].append({'profile':config,'sha256':hashlib.sha256((json.dumps(config,indent=2)+'\n').encode()).hexdigest()})
+        resources.append({'apiVersion':'apps/v1','kind':'Deployment','metadata':{'name':'control-plane','namespace':'kodex-system','labels':{'app.kubernetes.io/part-of':'kodex'}},
+            'spec':{'replicas':3,'template':{'spec':{'containers':[{'name':'control-plane','image':base}, {'name':'authority','image':'images.example.invalid/authority@sha256:'+'d'*64}]}}}})
+        before=copy.deepcopy(resources);profile.validate(bundle,lock,lock_sha)
+        digest=hashlib.sha256(json.dumps(bundle).encode()).hexdigest()
+        after=profile.transform(resources,bundle,digest)
+        self.assertEqual(resources,before);self.assertEqual(after[-1]['spec']['replicas'],3)
+        self.assertEqual(after[-1]['spec']['template']['spec']['containers'][1],before[-1]['spec']['template']['spec']['containers'][1])
+        self.assertEqual(after[-1]['spec']['template']['spec']['containers'][0]['image'],config['image_ref'])
+        self.assertEqual(profile.transform(after,bundle,digest),after)
+        for heads in ({'control-plane':4},{'control-plane':True},{},None):
+            with self.subTest(heads=heads),self.assertRaises(Rejected):profile.validate({**config,'schema_heads':heads},lock,lock_sha)
+        with self.assertRaises(Rejected):profile.validate({k:v for k,v in config.items()if k!='schema_heads'},lock,lock_sha)
+
     def test_bundle_preserves_previously_applied_child_and_only_authorizer_image_env(self):
         resources,bundle,digest,lock_raw,raw=bundle_fixture();before=copy.deepcopy(resources)
         with tempfile.TemporaryDirectory()as directory:

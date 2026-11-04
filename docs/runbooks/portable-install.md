@@ -388,7 +388,7 @@ readback принимает только эквивалентные пустые
 ### Адресная замена immutable bootstrap image
 
 В рамках #1977 доступен **опциональный** профиль stateless компонента
-`egress-gateway` либо `registry-pull-authorizer`. По умолчанию он отсутствует; bundled/external identity и TLS
+`egress-gateway`, `registry-pull-authorizer` либо `control-plane`. По умолчанию он отсутствует; bundled/external identity и TLS
 выбираются независимо. Stateful компоненты, миграции, RoleImage, admission policy,
 authority history и credentials этот профиль не меняет. Это продолжение частичного
 bootstrap, а не квалификация полного нового релиза или общий production upgrade.
@@ -421,15 +421,22 @@ component source/image. При разных source SHA сохранить оба
 Deployment `kodex-image-registry-pull`, его image/provenance и env
 `REGISTRY_PULL_RUNTIME_ENGINE`; соседние registry и certificate-guard сохраняются.
 
-Для двух компонентов тот же CLI принимает оболочку
+Для `control-plane` обязательно поле `schema_heads`, полностью совпадающее с
+исходным полным lock (все имена и положительные integer heads). Profile разрешает
+только основной контейнер Deployment `control-plane`; sidecars, конфигурация,
+replicas и bootstrap/migration Jobs сохраняются. Operator отдельно подтверждает
+неизменность схемы и общих библиотек/контрактов; наличие поля этого не доказывает.
+Профиль не позволяет применить изменение схемы либо откатить миграции.
+
+Для нескольких компонентов тот же CLI принимает оболочку
 `{"schema":"kodex.bootstrap-component-images/v1","profiles":[{"profile":{...},"sha256":"<64-hex>"}]}`.
-Массив содержит от одного до двух уникальных одиночных v1 profiles; вложенные
+Массив содержит от одного до трёх уникальных одиночных v1 profiles; вложенные
 оболочки и неизвестные цели запрещены. Child SHA вычисляется по UTF-8 bytes
 `json.dumps(profile, indent=2, ensure_ascii=True) + '\n'`, с сохранением порядка
 ключей JSON. Он остаётся provenance отдельного компонента; внешний SHA закрепляет
 весь bundle. Уже установленный одиночный profile с теми же canonical bytes не
 меняет provenance при добавлении второй цели. Не совпадающий прежний SHA требует
-разбора происхождения, а не перезаписи annotations. Оба profiles связаны с одним
+разбора происхождения, а не перезаписи annotations. Все profiles связаны с одним
 полным base lock. Оболочка не отменяет source compatibility и CRI pull checks.
 
 При новой установке renderer сам назначает authorizer runtime из явного release

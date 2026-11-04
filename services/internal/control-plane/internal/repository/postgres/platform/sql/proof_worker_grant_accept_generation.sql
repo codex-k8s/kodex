@@ -2,7 +2,10 @@
 INSERT INTO control_plane.worker_grant_high_watermarks AS current
     (workload_id, credential_generation, revision, issued_at, expires_at)
 SELECT $1, $2, 1, $3::timestamptz, $4::timestamptz
-WHERE $3::timestamptz <= clock_timestamp() + interval '5 seconds'
+FROM control_plane.trusted_workload_generations AS registry
+WHERE registry.workload_id = $1 AND registry.enabled
+  AND $2 >= registry.credential_generation
+  AND $3::timestamptz <= clock_timestamp() + interval '5 seconds'
   AND $4::timestamptz > clock_timestamp()
   AND $4::timestamptz <= $3::timestamptz + interval '4 minutes'
 ON CONFLICT (workload_id) DO UPDATE
