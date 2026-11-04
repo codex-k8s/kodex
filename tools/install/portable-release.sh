@@ -20,6 +20,8 @@ repair_egress_secret_access=false
 component_image_profile=""
 component_image_sha=""
 base_release_lock=""
+previous_component_image_profile=""
+previous_component_image_sha=""
 completion_receipt=""
 completion_sha=""
 allow_reconciled_completion=false
@@ -43,6 +45,8 @@ while (($#)); do
     --component-image-profile) component_image_profile="${2:-}"; shift 2 ;;
     --component-image-profile-sha256) component_image_sha="${2:-}"; shift 2 ;;
     --base-release-lock) base_release_lock="${2:-}"; shift 2 ;;
+    --previous-component-image-profile) previous_component_image_profile="${2:-}"; shift 2 ;;
+    --previous-component-image-profile-sha256) previous_component_image_sha="${2:-}"; shift 2 ;;
     --buildkit-runtime-profile) buildkit_profile="${2:-}"; shift 2 ;;
     --oidc-ca-file|--ingress-deployment|--ingress-controller|--ingress-namespace|--ingress-service) arguments+=("$1" "${2:-}"); shift 2 ;;
     --help)
@@ -55,6 +59,7 @@ while (($#)); do
       printf '%s\n' '  [--bootstrap-completion-receipt <json> --bootstrap-completion-sha256 <64-hex> [--allow-reconciled-bootstrap-completion]; continuation/readback]'
       printf '%s\n' '  [--repair-egress-secret-access; explicit workload resume repair]'
       printf '%s\n' '  [--component-image-profile <json> --component-image-profile-sha256 <64-hex> --base-release-lock <json>; workload resume only]'
+      printf '%s\n' '  [--previous-component-image-profile <json> --previous-component-image-profile-sha256 <64-hex>; exact component predecessor]'
       exit 0 ;;
     *) fail 'unsupported argument' ;;
   esac
@@ -84,13 +89,21 @@ else
   [[ -z "$previous_render" && -z "$previous_sha" ]] || fail 'previous render only applies to workload resume'
   [[ "$buildkit_profile" == standard ]] || fail 'BuildKit profile must be materialized in the pinned render before fresh apply'
 fi
+if [[ -n "$previous_component_image_profile$previous_component_image_sha" ]]; then
+  [[ "$mode" == resume-workloads && -n "$component_image_profile" && -f "$previous_component_image_profile" && ! -L "$previous_component_image_profile" && "$previous_component_image_sha" =~ ^[a-f0-9]{64}$ ]] || fail 'exact component predecessor requires workload target profile'
+  cp -- "$previous_component_image_profile" "$temporary/previous-component-image.json"
+  [[ "$(sha256sum "$temporary/previous-component-image.json" | awk '{print $1}')" == "$previous_component_image_sha" ]] || fail 'component predecessor digest mismatch'
+  previous_arguments+=(--previous-component-image-profile "$temporary/previous-component-image.json" --previous-component-image-profile-sha256 "$previous_component_image_sha")
+fi
 if [[ -n "$component_image_profile$component_image_sha$base_release_lock" ]]; then
   [[ "$mode" == resume-workloads ]] || fail 'component image profile requires workload resume'
   [[ -f "$component_image_profile" && ! -L "$component_image_profile" && -f "$base_release_lock" && ! -L "$base_release_lock" && "$component_image_sha" =~ ^[a-f0-9]{64}$ ]] || fail 'exact component image profile and base lock are required'
   cp -- "$component_image_profile" "$temporary/component-image.json"
   cp -- "$base_release_lock" "$temporary/base-release-lock.json"
   [[ "$(sha256sum "$temporary/component-image.json" | awk '{print $1}')" == "$component_image_sha" ]] || fail 'component image profile digest mismatch'
-  python3 "$root/tools/install/component_image_profile.py" --check --render "$temporary/render.yaml" --configuration "$temporary/component-image.json" --configuration-sha256 "$component_image_sha" --base-release-lock "$temporary/base-release-lock.json"
+  predecessor_arguments=()
+  [[ -z "$previous_component_image_profile$previous_component_image_sha" ]] || predecessor_arguments=(--previous-component-image-profile "$temporary/previous-component-image.json" --previous-component-image-profile-sha256 "$previous_component_image_sha")
+  python3 "$root/tools/install/component_image_profile.py" --check --render "$temporary/render.yaml" --configuration "$temporary/component-image.json" --configuration-sha256 "$component_image_sha" --base-release-lock "$temporary/base-release-lock.json" "${predecessor_arguments[@]}"
   previous_arguments+=(--component-image-profile "$temporary/component-image.json" --component-image-profile-sha256 "$component_image_sha" --base-release-lock "$temporary/base-release-lock.json")
 fi
 if [[ -n "$completion_receipt$completion_sha" || "$allow_reconciled_completion" == true ]]; then
@@ -131,6 +144,11 @@ if [[ "$mode" == apply || "$mode" == resume-authority-bootstrap || "$mode" == re
   [[ -n "$preimage" && "$preimage" == /* && ! -e "$preimage" ]] || fail 'new absolute preimage directory is required'
   mkdir -m 0700 -- "$preimage"
   cp -- "$temporary/render.yaml" "$preimage/candidate-render.yaml"
+  if [[ -n "$component_image_profile" ]]; then
+    cp -- "$temporary/component-image.json" "$preimage/component-image.json"
+    cp -- "$temporary/base-release-lock.json" "$preimage/base-release-lock.json"
+    [[ -z "$previous_component_image_profile" ]] || cp -- "$temporary/previous-component-image.json" "$preimage/previous-component-image.json"
+  fi
   # Только metadata и image pins: никаких Secret, env values или DB dumps.
   kubectl --context "$context" --request-timeout=15s get namespace kodex-system kodex-runtime --ignore-not-found -o json |
     jq '{items:[.items[] | select(.metadata.name == "kodex-system" or .metadata.name == "kodex-runtime") | {metadata:{name:.metadata.name,uid:.metadata.uid,resourceVersion:.metadata.resourceVersion}}]}' >"$preimage/namespaces.json"

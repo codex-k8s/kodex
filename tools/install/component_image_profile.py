@@ -98,6 +98,31 @@ def bundle_entries(value):
     return result
 
 
+def validate_predecessor(configuration, predecessor):
+    """Прежний профиль меняет только допустимый live image того же baseline, не desired spec."""
+    def entries(value):
+        return bundle_entries(value) if value['schema'] == BUNDLE_SCHEMA else [(value, None)]
+    selected = {child['component']: child for child, _ in entries(configuration)}
+    previous = {child['component']: child for child, _ in entries(predecessor)}
+    require(previous.keys() <= selected.keys(), 'PREDECESSOR_COMPONENT_SET_REJECTED')
+    for name, old in previous.items():
+        target = selected[name]
+        require(all(old.get(key) == target.get(key) for key in
+                    ('base_release_lock_sha256', 'base_source_sha', 'expected_image_ref', 'schema_heads', 'runtime_engine')),
+                'PREDECESSOR_COMPONENT_BASE_MISMATCH')
+
+
+def load_predecessor(configuration, path, digest, base_release_lock):
+    """Опциональный прежний JSON проходит те же byte pins, schema и base lock checks."""
+    if path is None and digest is None:
+        return None
+    require(configuration is not None and path is not None and digest is not None,
+            'EXPLICIT_COMPONENT_PREDECESSOR_REQUIRED')
+    result = load(path, digest, base_release_lock)
+    validate_predecessor(configuration, result[0])
+    return result
+
+
 def select_runtime(container, engine):
     """Выбор процесса не перезаписывает конфликтующий env или valueFrom."""
     require(engine in ('codex', 'opencode'), 'EXACT_COMPONENT_RUNTIME_REQUIRED')
@@ -140,9 +165,13 @@ def main():
     parser.add_argument('--configuration', '--component-image-profile', type=Path, required=True)
     parser.add_argument('--configuration-sha256', '--component-image-profile-sha256', required=True)
     parser.add_argument('--base-release-lock', type=Path, required=True)
+    parser.add_argument('--previous-component-image-profile', type=Path)
+    parser.add_argument('--previous-component-image-profile-sha256')
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
     configuration, digest = load(args.configuration, args.configuration_sha256, args.base_release_lock)
+    load_predecessor(configuration, args.previous_component_image_profile,
+                     args.previous_component_image_profile_sha256, args.base_release_lock)
     require(args.render.is_file() and not args.render.is_symlink(), 'REGULAR_RENDER_REQUIRED')
     raw = args.render.read_bytes();require(len(raw) <= 16 << 20, 'RENDER_SIZE_REJECTED')
     resources = list(filter(None, yaml.safe_load_all(raw))); require(len(resources) <= 10000, 'RESOURCE_COUNT_REJECTED')

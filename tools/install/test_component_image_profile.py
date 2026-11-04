@@ -2,6 +2,7 @@
 import copy
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -47,6 +48,102 @@ def bundle_fixture():
 
 
 class Tests(unittest.TestCase):
+    def test_pinned_predecessor_allows_only_whole_exact_deployment_states(self):
+        registry=test_authority_registry.registry
+        previous=registry.observability_profile.transform(registry.transform(test_authority_registry.fixture(),{'schema':'kodex.authority-registry/v1','source_revision':1}),True)
+        extras,old,old_digest,_,_=bundle_fixture();previous += [extras[0],extras[-1]]
+        previous=registry.observability_profile.transform(previous,True)
+        new=copy.deepcopy(old)
+        for index,entry in enumerate(new['profiles']):
+            entry['profile']['source_sha']=str(index+1)*40
+            entry['profile']['image_ref']='images.example.invalid/next/'+entry['profile']['component']+'@sha256:'+str(index+1)*64
+            entry['sha256']=hashlib.sha256((json.dumps(entry['profile'],indent=2)+'\n').encode()).hexdigest()
+        new_digest=hashlib.sha256(json.dumps(new).encode()).hexdigest()
+        old_live=profile.transform(previous,old,old_digest);desired=profile.transform(previous,new,new_digest)
+        for phase in ('baseline','old','new','partial','foreign-image','sidecar','replicas','env','provenance','host-network','runtime'):
+            live=copy.deepcopy(previous if phase=='baseline'else desired if phase=='new'else old_live)
+            if phase=='partial':live[-1]=copy.deepcopy(desired[-1])
+            target=live[-1]['spec']['template']
+            if phase=='foreign-image':target['spec']['containers'][1]['image']='images.example.invalid/unknown@sha256:'+'f'*64
+            elif phase=='sidecar':target['spec']['containers'][2]['image']='images.example.invalid/unknown@sha256:'+'f'*64
+            elif phase=='replicas':live[-1]['spec']['replicas']=3
+            elif phase=='env':target['spec']['containers'][1]['env'].append({'name':'UNEXPECTED','value':'synthetic'})
+            elif phase=='provenance':target['metadata']['annotations'][profile.SOURCE]='f'*40
+            elif phase=='host-network':target['spec']['hostNetwork']=True
+            state=test_authority_registry.FakeState(live)
+            state.current['internal-rpc-authority-publisher']['spec']['replicas']=2
+            state.published_state=dict(rotation_count=1,snapshot_count=1,fence_allows=True,matching_count=1)
+            state.live_deployments=[v for v in state.current.values()if v.get('kind')=='Deployment']
+            if phase=='runtime':state.runtime_pods=[{'metadata':{'name':'synthetic-runtime'}}]
+            with self.subTest(phase=phase),patch.object(registry,'verify_schemas'):
+                if phase in ('baseline','old','new','partial'):
+                    self.assertEqual(registry.verify_workload_resume(state,desired,previous,component_image=(new,new_digest),previous_component_image=(old,old_digest))['deployments'],3)
+                    if phase in ('old','partial'):
+                        with self.assertRaises(Rejected):registry.verify_workload_resume(state,desired,previous,component_image=(new,new_digest))
+                else:
+                    with self.assertRaises(Rejected):registry.verify_workload_resume(state,desired,previous,component_image=(new,new_digest),previous_component_image=(old,old_digest))
+            self.assertTrue(all('get'in call or 'exec'in call for call in state.calls))
+
+    def test_predecessor_requires_complete_pins_same_base_and_target_set(self):
+        resources,value,digest,lock_raw,raw=fixture()
+        with tempfile.TemporaryDirectory()as directory:
+            root=Path(directory);path=root/'previous.json';path.write_bytes(raw);lock=root/'lock.json';lock.write_bytes(lock_raw)
+            self.assertEqual(profile.load_predecessor(value,path,digest,lock),(value,digest))
+            self.assertIsNone(profile.load_predecessor(value,None,None,lock))
+            for config,pin_path,pin in [(None,path,digest),(value,None,digest),(value,path,None),(value,path,'0'*64)]:
+                with self.assertRaises(Rejected):profile.load_predecessor(config,pin_path,pin,lock)
+            for field in ('base_release_lock_sha256','base_source_sha','expected_image_ref','schema_heads','runtime_engine','component'):
+                wrong=copy.deepcopy(value);wrong[field]='different'
+                with self.subTest(field=field),self.assertRaises(Rejected):profile.validate_predecessor(value,wrong)
+            rendered=profile.transform(resources,value,digest);render=root/'render.yaml';render.write_text(yaml.safe_dump_all(rendered))
+            command=['python3',str(Path(profile.__file__)),'--check','--render',str(render),'--configuration',str(path),'--configuration-sha256',digest,'--base-release-lock',str(lock),'--previous-component-image-profile',str(path),'--previous-component-image-profile-sha256',digest]
+            self.assertEqual(subprocess.run(command,capture_output=True).returncode,0)
+            command[-1]='0'*64
+            self.assertNotEqual(subprocess.run(command,capture_output=True).returncode,0)
+
+    def test_deploy_parser_forwards_predecessor_to_checker_and_authority(self):
+        root=Path(__file__).resolve().parents[2]
+        text=(root/'tools/install/deploy-platform.sh').read_text()
+        parser=text.split('context=""',1)[1].split('[[ -f "$render_file"',1)[0]
+        program='set -euo pipefail\nfail(){ exit 71; }\ncontext=""'+parser+'\nprintf "%s\\0" CHECK "${component_arguments[@]}" AUTHORITY "${previous_arguments[@]}"\n'
+        flags=['--context','synthetic','--mode','resume-workloads','--render','synthetic.yaml','--component-image-profile','next.json','--component-image-profile-sha256','a'*64,'--base-release-lock','base.json','--previous-component-image-profile','old.json','--previous-component-image-profile-sha256','b'*64]
+        result=subprocess.run(['bash','-c',program,'synthetic',*flags],capture_output=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        check,authority=result.stdout.decode().split('AUTHORITY\0')
+        for output in (check,authority):
+            self.assertIn('--previous-component-image-profile\0old.json\0',output)
+            self.assertIn('--previous-component-image-profile-sha256\0'+'b'*64+'\0',output)
+        self.assertEqual(subprocess.run(['bash','-c',program,'synthetic','--context','synthetic','--mode','resume-workloads','--previous-component-image-profile','old.json'],capture_output=True).returncode,71)
+
+    def test_portable_wrapper_snapshots_predecessor_before_authority_preflight(self):
+        resources,value,digest,lock_raw,raw=fixture()
+        from test_clamav_profile import fixture as scanner_fixture
+        resources += scanner_fixture()
+        with tempfile.TemporaryDirectory()as directory:
+            root=Path(directory);binary=root/'bin';binary.mkdir()
+            previous=root/'old.json';previous.write_bytes(raw);target=root/'target.json';target.write_bytes(raw)
+            lock=root/'lock.json';lock.write_bytes(lock_raw)
+            initial=root/'initial.yaml';initial.write_text(yaml.safe_dump_all(resources))
+            render=root/'render.yaml';render.write_text(yaml.safe_dump_all(profile.transform(resources,value,digest)))
+            probe=root/'probe.json'
+            timeout=binary/'timeout';timeout.write_text('#!/usr/bin/env python3\n'+'''import sys,os,pathlib,json,hashlib
+args=sys.argv[2:]
+if any(v.endswith('authority_registry.py')for v in args):
+    path=pathlib.Path(args[args.index('--previous-component-image-profile')+1])
+    pin=args[args.index('--previous-component-image-profile-sha256')+1]
+    pathlib.Path(os.environ['PROBE_RESULT']).write_text(json.dumps({'snapshot':str(path)!=os.environ['PROBE_ORIGINAL'],'hash_matches':hashlib.sha256(path.read_bytes()).hexdigest()==pin,'source_changed':pathlib.Path(os.environ['PROBE_ORIGINAL']).read_bytes()==b'changed'}))
+    sys.exit(77)
+pathlib.Path(os.environ['PROBE_ORIGINAL']).write_bytes(b'changed')
+''');timeout.chmod(0o700)
+            kubectl=binary/'kubectl';kubectl.write_text('#!/bin/sh\n[ "$*" = "config current-context" ] || exit 84\nprintf "%s\\n" synthetic\n');kubectl.chmod(0o700)
+            yq=binary/'yq';yq.write_text('#!/bin/sh\nprintf \'%s\\n\' \'{"public_tls":{"mode":"external"}}\'\n');yq.chmod(0o700)
+            env={**os.environ,'PATH':str(binary)+os.pathsep+os.environ['PATH'],'PROBE_RESULT':str(probe),'PROBE_ORIGINAL':str(previous)}
+            script=Path(__file__).resolve().parent/'portable-release.sh'
+            command=['bash',str(script),'--context','synthetic','--mode','resume-workloads','--render',str(render),'--render-sha256',hashlib.sha256(render.read_bytes()).hexdigest(),'--previous-render',str(initial),'--previous-render-sha256',hashlib.sha256(initial.read_bytes()).hexdigest(),'--component-image-profile',str(target),'--component-image-profile-sha256',digest,'--base-release-lock',str(lock),'--previous-component-image-profile',str(previous),'--previous-component-image-profile-sha256',digest]
+            result=subprocess.run(command,env=env,capture_output=True)
+            self.assertEqual(result.returncode,77,result.stderr)
+            self.assertEqual(json.loads(probe.read_text()),{'snapshot':True,'hash_matches':True,'source_changed':True})
+
     def test_four_component_bundle_preserves_sidecars_and_requires_broker_schema_heads(self):
         resources,bundle,_,lock_raw,_=bundle_fixture();lock=json.loads(lock_raw)
         lock['schema_heads']={'control-plane':1,'internal-rpc-authority':2,'email-bridge':3}
