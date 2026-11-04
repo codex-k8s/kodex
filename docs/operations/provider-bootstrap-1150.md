@@ -4,8 +4,8 @@ title: Канонический bootstrap provider credential
 type: operations
 status: approved
 owner: developer
-version: 1.1.0
-updated: 2026-09-07
+version: 1.1.1
+updated: 2026-11-04
 ---
 
 # Канонический bootstrap provider credential
@@ -67,6 +67,33 @@ preconditions; generic discovery не получает право удалять
 Restart CP со старым exact историческим bootstrap pin требует companion #1151.
 Сначала сливается #1151, затем #1150. Неизвестные конфигурационные descriptors
 по-прежнему не разрешают rotation.
+
+## Метод catalog после API-key bootstrap
+
+Refs #2023, #1977. Bootstrap credential не создаёт фиктивную interactive
+`provider_authorization_attempt`. При отсутствии сохранённого `AUTHORIZED`
+метода scheduler выбирает `API_KEY` только для exact definition активного,
+проверенного deployment model provider. Источник — immutable конфигурация
+владельца, не endpoint/model prefix, prompt или содержимое Secret.
+
+Сохранённая authorized attempt того же account/organization имеет приоритет.
+Для остальных definitions сохраняется legacy `DEVICE_CODE`. Disabled definition,
+неавторизованный account и неактуальная credential по-прежнему не допускаются.
+Схема, credential material и права не меняются; existing completed observations
+не переписываются. Следующий штатный опрос создаёт новую task и observation.
+
+Путь: bootstrap current → scheduler owner transaction → immutable task method/
+account/credential/digest → protected broker proof → bounded remote catalog →
+matching `REMOTE_API` completion → runtime policy/warm. Уточнение метода не
+подтверждает доступность модели: положительный remote observation обязателен.
+Неверный source, чужой tuple, stale claim и изменённый replay отклоняются.
+API-key inference не разрешает model/account fallback и не авторизует пользователя.
+
+Возврат старого CP image сохраняет данные, но возвращает ошибку выбора метода;
+`goose down` и ручная вставка authorization/catalog records не нужны. Применение
+проверяется новым immutable CP image с теми же schema heads и exact component
+profile; после rollout отдельно проверяются новый `REMOTE_API` observation,
+warm и реальный turn/tool/resume. Ready CP не заменяет эту приёмку.
 
 ## Проверки и ручная приёмка
 

@@ -318,3 +318,7 @@ Canonical application render создаётся только через
 `tools/release/render-web-only.sh` из immutable release lock. Скрипт не
 выполняет apply. Диагностика migration, bootstrap, authority и outbox описана
 в `docs/runbooks/control-plane.md`.
+
+Bootstrap API-key gateway без interactive attempt использует exact active deployment definition
+для catalog method `API_KEY`; explicit authorized method и legacy Codex сохраняются.
+Контракт, отрицательные случаи и installed readback: [provider bootstrap](../../../docs/operations/provider-bootstrap-1150.md#метод-catalog-после-api-key-bootstrap).

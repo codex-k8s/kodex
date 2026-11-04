@@ -4,9 +4,11 @@ SELECT account.id::text, account.ref, account.organization_id::text, account.ver
        credential.secret_name, credential.secret_uid::text, credential.secret_resource_version,
        credential.content_sha256, COALESCE((
            SELECT attempt.method FROM control_plane.provider_authorization_attempts attempt
-           WHERE attempt.provider_account_id = account.id AND attempt.state = 'AUTHORIZED'
+           WHERE attempt.provider_account_id = account.id AND attempt.organization_id = account.organization_id
+             AND attempt.state = 'AUTHORIZED'
            ORDER BY attempt.updated_at DESC, attempt.ref DESC LIMIT 1
-       ), 'DEVICE_CODE')
+       ), CASE WHEN $2::text <> '' AND account.definition_key = $2::text
+               THEN 'API_KEY' ELSE 'DEVICE_CODE' END)
 FROM control_plane.provider_accounts account
 JOIN control_plane.provider_credential_revisions credential ON credential.id = account.current_credential_revision_id
   AND credential.provider_account_id = account.id AND credential.organization_id = account.organization_id
