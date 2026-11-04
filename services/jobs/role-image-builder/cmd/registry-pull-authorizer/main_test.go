@@ -202,7 +202,11 @@ func TestNodeRepositoriesMatchShippedPodImagesWithoutBuildInputs(t *testing.T) {
 		}
 	}
 	actual := make(map[string]bool)
-	for _, repository := range nodePullRepositories() {
+	profiles, valid := pullProfilesForRuntime("opencode")
+	if !valid {
+		t.Fatal("optional runtime inventory rejected")
+	}
+	for _, repository := range profiles["kodex-node-pull-installer"].repositories {
 		if actual[repository] {
 			t.Fatal("duplicate node repository")
 		}

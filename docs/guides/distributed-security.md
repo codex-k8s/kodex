@@ -19,13 +19,22 @@ readiness-only policy может наследовать ёмкость обще�
 отрицательный CONNECT и отсутствие умножения глобальной ёмкости.
 
 Опциональный bootstrap component image profile допускает адресный переход только
-stateless egress Deployment по exact source/digest с привязкой к исходному полному
+stateless egress Deployment либо registry pull-authorizer по exact source/digest с привязкой к исходному полному
 release lock. Registry authority сохраняется; mutable tag, неизвестный predecessor,
 произвольный workload и любые дополнительные resource/security deltas отклоняются.
 Provenance фиксируется в Pod template annotations. Без явного профиля image delta
 не допускается. Проверки пустого runtime, schema, завершённых bootstrap Jobs и
 опубликованной authority history обязательны до и после продолжения. Этот механизм
 не объявляет новый полный release квалифицированным и не разрешает schema rollback.
+
+Набор component profiles ограничен этими двумя явно зарегистрированными целями;
+child profile сохраняет собственный canonical JSON SHA и прежнюю provenance при
+добавлении второй цели. У authorizer меняется только его image и явно проверенный
+runtime env; registry/guard containers, credentials и transport остаются прежними.
+Runtime совпадает с base lock: OpenCode добавляет один известный repository только
+BuildKit base и installer/node readers. Остальные identities не расширяются,
+default Codex сохраняется. Неизвестный runtime, конфликт env/valueFrom, повтор
+компонента, другой registry и дополнительные resource/security deltas закрыты.
 
 Завершённые bootstrap Jobs могут исчезнуть по Kubernetes TTL. Portable installer
 сохраняет private operator-owned completion receipt с cluster/namespace UID,

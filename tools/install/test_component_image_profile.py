@@ -27,7 +27,92 @@ def fixture():
     return resources,value,hashlib.sha256(raw).hexdigest(),lock_raw,raw
 
 
+def bundle_fixture():
+    resources,egress,_,lock_raw,_=fixture();lock=json.loads(lock_raw)
+    base='images.example.invalid/base/registry-pull-authorizer@sha256:'+'c'*64
+    lock['images'].append({'component':'registry-pull-authorizer','pull_ref':base})
+    lock['role_base_runtime_engine']='opencode';lock_raw=json.dumps(lock).encode()
+    egress['base_release_lock_sha256']=hashlib.sha256(lock_raw).hexdigest()
+    authorizer={**egress,'component':'registry-pull-authorizer','expected_image_ref':base,
+        'image_ref':'images.example.invalid/fixed/registry-pull-authorizer@sha256:'+'d'*64,'runtime_engine':'opencode'}
+    resources.append({'apiVersion':'apps/v1','kind':'Deployment',
+        'metadata':{'name':'kodex-image-registry-pull','namespace':'kodex-system','labels':{'app.kubernetes.io/part-of':'kodex'}},
+        'spec':{'replicas':2,'template':{'spec':{'containers':[
+            {'name':'registry','image':'registry.example.invalid/base@sha256:'+'e'*64},
+            {'name':'pull-authorizer','image':base,'env':[{'name':'REGISTRY_PULL_HOST','value':'images.example.invalid'}]},
+            {'name':'certificate-guard','image':'registry.example.invalid/guard@sha256:'+'f'*64}]}}}})
+    entries=[{'profile':v,'sha256':hashlib.sha256((json.dumps(v,indent=2)+'\n').encode()).hexdigest()}for v in (egress,authorizer)]
+    bundle={'schema':profile.BUNDLE_SCHEMA,'profiles':entries};raw=json.dumps(bundle).encode()
+    return resources,bundle,hashlib.sha256(raw).hexdigest(),lock_raw,raw
+
+
 class Tests(unittest.TestCase):
+    def test_bundle_preserves_previously_applied_child_and_only_authorizer_image_env(self):
+        resources,bundle,digest,lock_raw,raw=bundle_fixture();before=copy.deepcopy(resources)
+        with tempfile.TemporaryDirectory()as directory:
+            path=Path(directory);(path/'profile').write_bytes(raw);(path/'lock').write_bytes(lock_raw)
+            self.assertEqual(profile.load(path/'profile',digest,path/'lock'),(bundle,digest))
+        first=bundle['profiles'][0]
+        previous=profile.transform(resources,first['profile'],first['sha256'])
+        after=profile.transform(previous,bundle,digest)
+        self.assertEqual(after[0],previous[0]);self.assertEqual(resources,before)
+        self.assertEqual(after,profile.transform(resources,bundle,digest))
+        self.assertEqual(profile.transform(after,bundle,digest),after)
+        self.assertEqual(after[1:-1],resources[1:-1])
+        pod=after[-1]['spec']['template'];old=resources[-1]['spec']['template']
+        self.assertEqual(pod['spec']['containers'][0],old['spec']['containers'][0])
+        self.assertEqual(pod['spec']['containers'][2],old['spec']['containers'][2])
+        target=pod['spec']['containers'][1];config=bundle['profiles'][1]['profile']
+        self.assertEqual(target['image'],config['image_ref'])
+        self.assertEqual(target['env'],old['spec']['containers'][1]['env']+[{'name':profile.RUNTIME_ENV,'value':'opencode'}])
+        target['image']=config['expected_image_ref'];target['env'].pop();del pod['metadata']
+        self.assertEqual(after[-1],resources[-1])
+
+    def test_bundle_rejects_unknown_duplicate_nested_digest_and_runtime_drift(self):
+        _,bundle,_,lock_raw,_=bundle_fixture();lock=json.loads(lock_raw);sha=hashlib.sha256(lock_raw).hexdigest()
+        for change in ('unknown','duplicate','nested','digest','unbounded','extra','runtime','source'):
+            value=copy.deepcopy(bundle)
+            if change=='unknown':value['profiles'][1]['profile']['component']='control-plane'
+            elif change=='duplicate':value['profiles'][1]=value['profiles'][0]
+            elif change=='nested':value['profiles'][1]['profile']=bundle
+            elif change=='digest':value['profiles'][0]['sha256']='0'*64
+            elif change=='unbounded':value['profiles']*=2
+            elif change=='extra':value['profiles'][0]['unexpected']=True
+            else:
+                child=value['profiles'][1];child['profile']['runtime_engine'if change=='runtime'else'source_sha']='unknown'
+                child['sha256']=hashlib.sha256((json.dumps(child['profile'],indent=2)+'\n').encode()).hexdigest()
+            with self.subTest(change=change),self.assertRaises(Rejected):profile.validate(value,lock,sha)
+        for change in ('duplicate-env','valueFrom','wrong-engine','foreign-image','duplicate-target','provenance'):
+            resources,bundle,digest,_,_=bundle_fixture();target=resources[-1]['spec']['template']['spec']['containers'][1]
+            if change=='duplicate-env':target['env'] += [{'name':profile.RUNTIME_ENV,'value':'opencode'}]*2
+            elif change=='valueFrom':target['env'].append({'name':profile.RUNTIME_ENV,'valueFrom':{'secretKeyRef':{'name':'synthetic','key':'engine'}}})
+            elif change=='wrong-engine':target['env'].append({'name':profile.RUNTIME_ENV,'value':'codex'})
+            elif change=='foreign-image':target['image']='images.example.invalid/unknown:latest'
+            elif change=='duplicate-target':resources[-1]['spec']['template']['spec']['containers'].append(copy.deepcopy(target))
+            else:resources[-1]['spec']['template']['metadata']={'annotations':{profile.PROFILE:'0'*64}}
+            with self.subTest(change=change),self.assertRaises(Rejected):profile.transform(resources,bundle,digest)
+
+    def test_bundle_resume_accepts_mixed_completed_components_and_rejects_security_delta(self):
+        registry=test_authority_registry.registry
+        previous=registry.observability_profile.transform(registry.transform(test_authority_registry.fixture(),{'schema':'kodex.authority-registry/v1','source_revision':1}),True)
+        extras,bundle,digest,_,_=bundle_fixture();previous += [extras[0],extras[-1]]
+        previous=registry.observability_profile.transform(previous,True)
+        # Один image уже исправлен, второй остаётся exact baseline: это штатный partial rollout.
+        first=bundle['profiles'][0];previous=profile.transform(previous,first['profile'],first['sha256'])
+        desired=profile.transform(previous,bundle,digest)
+        state=test_authority_registry.FakeState(previous)
+        state.current['internal-rpc-authority-publisher']['spec']['replicas']=2
+        state.published_state=dict(rotation_count=1,snapshot_count=1,fence_allows=True,matching_count=1)
+        state.live_deployments=[v for v in state.current.values()if v.get('kind')=='Deployment']
+        with patch.object(registry,'verify_schemas'):
+            self.assertEqual(registry.verify_workload_resume(state,desired,previous,component_image=(bundle,digest))['deployments'],3)
+            with self.assertRaises(Rejected):registry.verify_workload_resume(state,desired,previous)
+            bad=copy.deepcopy(desired);bad[-1]['spec']['template']['spec']['hostNetwork']=True
+            with self.assertRaises(Rejected):registry.verify_workload_resume(state,bad,previous,component_image=(bundle,digest))
+            state.runtime_pods=[{'metadata':{'name':'synthetic-runtime'}}]
+            with self.assertRaises(Rejected):registry.verify_workload_resume(state,desired,previous,component_image=(bundle,digest))
+        self.assertTrue(all('get'in call or 'exec'in call for call in state.calls))
+
     def test_exact_load_and_only_image_provenance_change(self):
         before,config,digest,lock_raw,raw=fixture();original=copy.deepcopy(before)
         with tempfile.TemporaryDirectory()as directory:

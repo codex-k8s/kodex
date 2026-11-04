@@ -68,6 +68,10 @@ func main() {
 	if !strings.Contains(registryHost, ".") || strings.ContainsAny(registryHost, "/:@?# \\\r\n\t") {
 		log.Fatal(pullServerError)
 	}
+	profiles, valid := pullProfilesForRuntime(os.Getenv("REGISTRY_PULL_RUNTIME_ENGINE"))
+	if !valid {
+		log.Fatal(pullServerError)
+	}
 	pool := x509.NewCertPool()
 	for _, path := range []string{"/identity/client-ca.pem", "/identity/node-client-ca.pem"} {
 		value, err := os.ReadFile(path)
@@ -81,7 +85,7 @@ func main() {
 		certificate, failure := pullClientCertificate(request)
 		decision := denyPullRequest(failure)
 		if failure == "" {
-			decision = decidePullAuthorization(request, certificate, registryHost)
+			decision = decidePullAuthorizationForProfiles(request, certificate, registryHost, profiles)
 		}
 		if decision.failure != "" {
 			log.Printf("%s: request denied reason=%s", pullServerError, decision.failure)
@@ -123,18 +127,29 @@ func decidePullAuthorization(
 	certificate *x509.Certificate,
 	registryHost string,
 ) pullAuthorizationDecision {
+	return decidePullAuthorizationForProfiles(request, certificate, registryHost, pullProfiles())
+}
+
+// decidePullAuthorizationForProfiles applies a process-owned runtime policy, never request-supplied grants.
+// decidePullAuthorizationForProfiles применяет политику процесса, а не права из пользовательского запроса.
+func decidePullAuthorizationForProfiles(
+	request *http.Request,
+	certificate *x509.Certificate,
+	registryHost string,
+	profiles map[string]pullProfile,
+) pullAuthorizationDecision {
 	if request.Method != http.MethodGet && request.Method != http.MethodHead || strings.ContainsAny(request.URL.Path, "\r\n\\") {
 		return denyPullRequest("request_shape")
 	}
 	cn := certificate.Subject.CommonName
-	profiles := pullProfiles()
 	if profile, ok := profiles[cn]; ok {
 		return decidePullProfileAuthorization(request, profile, registryHost)
 	}
 	if !authorizedNodePull(request, certificate, registryHost) {
 		return denyPullRequest("node_identity")
 	}
-	if !pathInRepositories(request.URL.Path, nodePullRepositories()) {
+	nodeProfile, ok := profiles["kodex-node-pull-installer"]
+	if !ok || !pathInRepositories(request.URL.Path, nodeProfile.repositories) {
 		return denyPullRequest("node_repository")
 	}
 	return pullAuthorizationDecision{}
@@ -151,6 +166,23 @@ func pullProfiles() map[string]pullProfile {
 		"role-image-builder-input-read":   {"/identity/input-dockerconfig.json", []string{"kodex/role-image-inputs"}},
 		"kodex-node-pull-installer":       {"/identity/pull-dockerconfigjson", nodePullRepositories()},
 	}
+}
+
+// pullProfilesForRuntime opts the base reader and installer/node pull policy into one shipped runtime repository; other identities retain their scopes.
+// pullProfilesForRuntime добавляет один штатный runtime-репозиторий читателю базы и политике installer/node pull; остальные права сохраняются.
+func pullProfilesForRuntime(engine string) (map[string]pullProfile, bool) {
+	if engine != "" && engine != "codex" && engine != "opencode" {
+		return nil, false
+	}
+	profiles := pullProfiles()
+	if engine == "opencode" {
+		for _, name := range []string{"kodex-buildkit-base-pull", "kodex-node-pull-installer"} {
+			profile := profiles[name]
+			profile.repositories = append(profile.repositories, "kodex/agent-runner-opencode")
+			profiles[name] = profile
+		}
+	}
+	return profiles, true
 }
 
 // nodePullRepositories returns a fresh closed list of shipped platform images;
