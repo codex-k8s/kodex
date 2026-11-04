@@ -767,10 +767,18 @@ verify_runtime_namespace_boundary() {
   local controller=system:serviceaccount:kodex-system:runtime-controller
   local broker=system:serviceaccount:kodex-system:secret-broker
   local runner=system:serviceaccount:kodex-runtime:agent-runner
-  local actual verb resource target_namespace expected principal
+  local actual verb resource target_namespace expected principal status
+  local diagnostic="$temporary_directory/runtime-rbac.stderr"
   while IFS='|' read -r expected verb resource target_namespace principal; do
+    status=0
     actual=$(kubectl --context "$context" auth can-i "$verb" "$resource" \
-      --namespace "$target_namespace" --as "$principal")
+      --namespace "$target_namespace" --as "$principal" 2>"$diagnostic") || status=$?
+    # Ожидаемый запрет CLI возвращает exit1; ошибка проверки не считается запретом.
+    [[ ! -s "$diagnostic" ]] || fail 'runtime namespace RBAC check unavailable'
+    case "$status:$actual" in
+      0:yes|1:no) ;;
+      *) fail 'runtime namespace RBAC response is invalid' ;;
+    esac
     [[ "$actual" == "$expected" ]] ||
       fail "runtime namespace RBAC mismatch: $verb $resource $target_namespace expected=$expected"
   done <<EOF
