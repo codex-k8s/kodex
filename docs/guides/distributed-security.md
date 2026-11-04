@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.42
+version: 1.7.43
 updated: 2026-11-04
 ---
 
@@ -17,6 +17,15 @@ readiness-only policy может наследовать ёмкость обще�
 основной policy не наследуются. Несогласованные бюджеты исполняемых policies
 отклоняются. Проверяется полный startup/drain с недоступными optional projections,
 отрицательный CONNECT и отсутствие умножения глобальной ёмкости.
+
+Опциональный bootstrap component image profile допускает адресный переход только
+stateless egress Deployment по exact source/digest с привязкой к исходному полному
+release lock. Registry authority сохраняется; mutable tag, неизвестный predecessor,
+произвольный workload и любые дополнительные resource/security deltas отклоняются.
+Provenance фиксируется в Pod template annotations. Без явного профиля image delta
+не допускается. Проверки пустого runtime, schema, завершённых bootstrap Jobs и
+опубликованной authority history обязательны до и после продолжения. Этот механизм
+не объявляет новый полный release квалифицированным и не разрешает schema rollback.
 
 ## Bootstrap consumers и опциональная observability
 

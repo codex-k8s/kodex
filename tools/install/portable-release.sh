@@ -17,6 +17,9 @@ clamav_mode=enabled
 previous_arguments=()
 arguments=()
 repair_egress_secret_access=false
+component_image_profile=""
+component_image_sha=""
+base_release_lock=""
 
 while (($#)); do
   case "$1" in
@@ -30,6 +33,9 @@ while (($#)); do
     --clamav-mode) clamav_mode="${2:-}"; shift 2 ;;
     --repair-kubernetes-api-endpoints) repair_api_endpoints=true; shift ;;
     --repair-egress-secret-access) repair_egress_secret_access=true; shift ;;
+    --component-image-profile) component_image_profile="${2:-}"; shift 2 ;;
+    --component-image-profile-sha256) component_image_sha="${2:-}"; shift 2 ;;
+    --base-release-lock) base_release_lock="${2:-}"; shift 2 ;;
     --buildkit-runtime-profile) buildkit_profile="${2:-}"; shift 2 ;;
     --oidc-ca-file|--ingress-deployment|--ingress-controller|--ingress-namespace|--ingress-service) arguments+=("$1" "${2:-}"); shift 2 ;;
     --help)
@@ -40,6 +46,7 @@ while (($#)); do
       printf '%s\n' '  [--clamav-mode enabled|disabled; default enabled]'
       printf '%s\n' '  [--repair-kubernetes-api-endpoints; explicit workload resume repair from pinned endpoint anchors]'
       printf '%s\n' '  [--repair-egress-secret-access; explicit workload resume repair]'
+      printf '%s\n' '  [--component-image-profile <json> --component-image-profile-sha256 <64-hex> --base-release-lock <json>; workload resume only]'
       exit 0 ;;
     *) fail 'unsupported argument' ;;
   esac
@@ -68,6 +75,15 @@ else
   [[ "$repair_api_endpoints" == false ]] || fail 'API endpoint repair only applies to workload resume'
   [[ -z "$previous_render" && -z "$previous_sha" ]] || fail 'previous render only applies to workload resume'
   [[ "$buildkit_profile" == standard ]] || fail 'BuildKit profile must be materialized in the pinned render before fresh apply'
+fi
+if [[ -n "$component_image_profile$component_image_sha$base_release_lock" ]]; then
+  [[ "$mode" == resume-workloads ]] || fail 'component image profile requires workload resume'
+  [[ -f "$component_image_profile" && ! -L "$component_image_profile" && -f "$base_release_lock" && ! -L "$base_release_lock" && "$component_image_sha" =~ ^[a-f0-9]{64}$ ]] || fail 'exact component image profile and base lock are required'
+  cp -- "$component_image_profile" "$temporary/component-image.json"
+  cp -- "$base_release_lock" "$temporary/base-release-lock.json"
+  [[ "$(sha256sum "$temporary/component-image.json" | awk '{print $1}')" == "$component_image_sha" ]] || fail 'component image profile digest mismatch'
+  python3 "$root/tools/install/component_image_profile.py" --check --render "$temporary/render.yaml" --configuration "$temporary/component-image.json" --configuration-sha256 "$component_image_sha" --base-release-lock "$temporary/base-release-lock.json"
+  previous_arguments+=(--component-image-profile "$temporary/component-image.json" --component-image-profile-sha256 "$component_image_sha" --base-release-lock "$temporary/base-release-lock.json")
 fi
 timeout 60s python3 "$root/tools/install/portable_preflight.py" --plan \
   --render "$temporary/render.yaml" --sha256 "$expected_sha"

@@ -13,6 +13,7 @@ usage() {
     '  [--oidc-ca-file <pem> --ingress-controller <name> --ingress-namespace <name>]' >&2
   printf '%s\n' '  [--previous-render <yaml> --previous-render-sha256 <64-hex> --buildkit-runtime-profile standard|nested-userns; resume-workloads only]' >&2
   printf '%s\n' '  [--repair-egress-secret-access; explicit workload resume repair]' >&2
+  printf '%s\n' '  [--component-image-profile <json> --component-image-profile-sha256 <64-hex> --base-release-lock <json>; workload resume only]' >&2
 }
 
 context=""
@@ -25,6 +26,8 @@ previous_arguments=()
 repair_api_endpoints=false
 clamav_mode=enabled
 repair_egress_secret_access=false
+component_image_requested=false
+component_arguments=()
 
 while (($# > 0)); do
   case "$1" in
@@ -37,6 +40,7 @@ while (($# > 0)); do
     --clamav-mode) clamav_mode="${2:-}"; shift 2 ;;
     --repair-kubernetes-api-endpoints) repair_api_endpoints=true; previous_arguments+=("$1"); shift ;;
     --repair-egress-secret-access) repair_egress_secret_access=true; previous_arguments+=("$1"); shift ;;
+    --component-image-profile|--component-image-profile-sha256|--base-release-lock) component_image_requested=true; component_arguments+=("$1" "${2:-}"); previous_arguments+=("$1" "${2:-}"); shift 2 ;;
     --previous-render|--previous-render-sha256|--buildkit-runtime-profile) previous_arguments+=("$1" "${2:-}"); shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
@@ -50,6 +54,9 @@ case "$mode" in
 esac
 case "$clamav_mode" in enabled|disabled) ;; *) fail 'ClamAV mode is invalid' ;; esac
 case "$public_tls_mode" in deferred|enabled|external) ;; *) fail 'public TLS mode is invalid' ;; esac
+if [[ "$component_image_requested" == true ]]; then
+  case "$mode" in prepare-preflight|preflight|resume-workloads) ;; *) fail 'component image override requires workload resume' ;; esac
+fi
 if [[ "$repair_egress_secret_access" == true ]]; then
   case "$mode" in prepare-preflight|preflight|resume-workloads) ;; *) fail 'egress secret repair requires workload resume' ;; esac
 fi
@@ -69,6 +76,9 @@ public_certificate_name=staff-control-center-public
 export KODEX_DEPLOY_PUBLIC_TLS_MODE=$public_tls_mode
 export KODEX_DEPLOY_PUBLIC_CERTIFICATE_NAME=$public_certificate_name
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
+if [[ "$component_image_requested" == true ]]; then
+  python3 "$repository_root/tools/install/component_image_profile.py" --check --render "$render_file" "${component_arguments[@]}"
+fi
 python3 "$repository_root/tools/install/clamav_profile.py" --check --mode "$clamav_mode" --render "$render_file"
 profile_mode=$(yq -r 'select(.kind == "ConfigMap" and .metadata.name == "kodex-installation-profile") | .data."profile.json"' "$render_file" | jq -r '.public_tls.mode' 2>/dev/null || true)
 if [[ "$profile_mode" == external || "$public_tls_mode" == external ]]; then
