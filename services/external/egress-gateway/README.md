@@ -4,11 +4,31 @@ title: Egress gateway
 type: service
 status: approved
 owner: security
-version: 1.2.0
-updated: 2026-09-05
+version: 1.2.1
+updated: 2026-11-04
 ---
 
 # Egress gateway
+
+## Startup с необязательными projections
+
+Отсутствующая или неподходящая mail/integration projection оставляет соответствующий
+listener закрытым: readiness503, CONNECT не авторизуется, DNS/dial не выполняются.
+Такой listener получает ёмкость общего connection budget от основного listener;
+новый независимый бюджет не создаётся. Его parsing/timeouts и закрытая policy
+сохраняются. Для двух исполняемых policies разные ёмкости по-прежнему отклоняются.
+
+| Этап | Результат |
+|---|---|
+| Нет optional projection | Закрытый listener, общий бюджет активного gateway; остальные listeners запускаются |
+| Валидная optional projection | Её policy и readiness проверяются независимо; бюджет остаётся общим |
+| Startup с неверной основной policy | Все совместимые listeners остаются закрытыми |
+| Cancel/restart | Общий bounded drain/join; новый процесс заново проверяет projections и полномочия |
+
+Регрессия `go test ./...` включает полный active startup с каноническим бюджетом256,
+синтетическими ключами и отсутствующими optional projections, cancel/join, отказ
+CONNECT после наследования бюджета и запрет разных бюджетов исполняемых policies.
+Изменение требует нового immutable gateway image; живой rollout проверяется отдельно.
 
 `egress-gateway` — самостоятельный platform deployable для ограниченного
 исходящего HTTPS-трафика. Он принимает только bodyless HTTP `CONNECT` к
