@@ -15,12 +15,8 @@ import (
 )
 
 var (
-	// queryServiceCredentialGeneration embeds the protected workload credential generation read from
-	// the durable high-watermark row. No caller-provided generation is accepted and the lookup does
-	// not renew or revoke a grant.
-	// queryServiceCredentialGeneration встраивает чтение protected credential generation workload из
-	// устойчивой high-watermark строки. Поколение клиента не принимается, чтение не продлевает и не
-	// отзывает grant.
+	// queryServiceCredentialGeneration reads an enabled owner registration with the durable signed-grant floor; a cold ordinary reader never depends on first redeeming a grant.
+	// queryServiceCredentialGeneration читает включённую регистрацию владельца с устойчивым signed-grant floor; ordinary reader не зависит от первого предъявления grant.
 	//go:embed sql/service_credential_generation.sql
 	queryServiceCredentialGeneration string
 	// queryTrustedWorkloadGeneration embeds enabled trusted workload generation combined with the
@@ -32,11 +28,11 @@ var (
 	//go:embed sql/trusted_workload__generation.sql
 	queryTrustedWorkloadGeneration string
 	// queryWorkerGrantAcceptGeneration embeds the shared workload generation-floor insert/lock with
-	// database-time validity, at most five seconds future issue time and a four-minute lifetime. Lower
+	// database-time validity, enabled registration, its generation floor, at most five seconds future issue time and a four-minute lifetime. Lower
 	// generations are rejected; an advance resets the generation-local legacy revision without
 	// invalidating sibling instance revisions.
 	// queryWorkerGrantAcceptGeneration встраивает вставку и блокировку общего generation floor
-	// workload с проверкой времени БД, выпуском максимум на пять секунд в будущем и lifetime четыре
+	// workload с проверкой включённой регистрации и её floor, времени БД, выпуском максимум на пять секунд в будущем и lifetime четыре
 	// минуты. Меньшие поколения отклоняются; продвижение сбрасывает legacy revision поколения без
 	// инвалидации ревизий соседних instances.
 	//go:embed sql/proof_worker_grant_accept_generation.sql
@@ -73,12 +69,12 @@ func (repository *Repository) ConfigureRPCProfile(profile string) error {
 }
 
 // ResolveServiceCredentialGeneration loads generation from the profile-specific durable owner
-// registry, rejecting unknown workloads and disabled trusted registrations and values
+// registration, rejecting unknown or disabled workloads and values
 // outside1..2^53-1. It never accepts caller generation or changes grant history; certificate
 // lifetime and revocation policy remain with admission/consumers, while the retained generation
 // serves domain lease fences.
 // ResolveServiceCredentialGeneration читает поколение из соответствующего профилю устойчивого
-// реестра владельца, отклоняя неизвестный workload либо выключенную trusted-регистрацию и значения
+// регистрации владельца, отклоняя неизвестный либо выключенный workload и значения
 // вне1..2^53-1. Не принимает поколение клиента и не меняет историю grants; lifetime сертификата и
 // отзыв остаются у допуска и потребителей, сохранённое поколение используется доменными lease
 // fences.

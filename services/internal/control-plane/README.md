@@ -10,6 +10,14 @@ updated: 2026-09-07
 
 # Control-plane
 
+Service-v1 читает настоящее поколение включённого workload из owner registry
+`trusted_workload_generations`, сохраняя большее прежнее значение signed-grant
+floor. Поэтому cold ordinary RPC не требует предварительного legacy-вызова.
+Название таблицы историческое: транспорт и полномочия не выбираются из записи.
+Signed acceptance также отклоняет disabled и более низкое registered generation;
+runtime не получает прав изменять registry. Схема и форматы grants не меняются.
+См. [контракт #2017](../../../docs/operations/service-generation-cold-start-2017.md).
+
 Повторный bootstrap признаёт прежний provider descriptor только при полном
 совпадении name/UID/resourceVersion/digest с immutable revision того же
 authoritative account и organization. Проверка выполняется в owner transaction
