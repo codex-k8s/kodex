@@ -4,7 +4,7 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.3.6
+version: 1.3.7
 updated: 2026-11-04
 ---
 
@@ -454,6 +454,86 @@ image отклоняется. `--check` у profile CLI проверяет render
 Rollback старого image допустим только после отдельной проверки схем/состояния,
 не означает разрешения на schema downgrade. В приёмке отдельно записать build,
 node pull, rollout/readiness и реальный функциональный прогон.
+
+## Завершённые bootstrap Jobs после TTL
+
+`ttlSecondsAfterFinished` может удалить завершённый Job вместе с Pod. Продолжение
+частичного initial bootstrap сохраняет результат завершённых пяти Jobs: нельзя
+создавать их заново только потому, что объекты исчезли из API. Точный список —
+email migration, authority migration, control-plane migration, PostgreSQL runtime
+credentials и broker bootstrap. Materializer и любые другие Jobs проверяются live.
+
+Portable wrapper сохраняет `bootstrap-completion.json` в private preimage после
+завершения пяти Jobs, до дальнейших зависимостей. Snapshot выполняет только чтение
+Kubernetes и migration heads; receipt содержит cluster/namespace UID, Job UID,
+точный fingerprint desired Job, seal observed spec и observed completion time.
+Он не содержит Secret values и не выполняет SQL/bootstrap повторно. Без явно
+выбранного receipt прежний preflight требует живые завершённые Jobs.
+
+Для continuation/readback передать одинаковые параметры:
+
+```bash
+--bootstrap-completion-receipt "$receipt_file" \
+--bootstrap-completion-sha256 "$receipt_sha256"
+```
+
+Wrapper проверяет private400/600 mode, владельца, единственную hardlink и exact
+hash до snapshot. Receipt применяется только к этим пяти Jobs. Живой Job обязан
+сохранить UID/spec и успешный terminal state; новый UID, active/Failed, другой
+кластер/namespace, изменённый desired spec, неполный список либо неверный hash
+закрыто отклоняются. Схемы БД читаются заново; authority history, fences, runtime
+isolation и остальные readback/readiness проверки сохраняются.
+
+| Этап | Источник полномочий / проверка | Результат |
+|---|---|---|
+| Install operator → capture | Kube context, пять live completed Jobs, exact spec и schema heads | Новый private receipt; повторный output не перезаписывается |
+| Operator/CI → continuation | Exact receipt bytes, context/namespace UID, current schemas и live remnants | Только отсутствие уже завершённых пяти Jobs допускается без replay |
+| Continuation → readback | Те же pins, обязательные остальные объекты/Jobs | Реальная готовность компонентов проверяется отдельно |
+
+### Историческая сверка, если TTL уже сработал
+
+Если live snapshot не был сохранён, нужен аудируемый импорт **доверенным install
+operator**. Он отвечает за происхождение сохранённого успешного preflight report;
+обычные пользователи платформы не управляют install state. SHA256 защищает
+выбранные bytes от подмены, а не заменяет доверие к исполнителю исторической
+проверки. При отсутствии доказанного прежнего completion оставить continuation
+закрытым. Не генерировать success status и не восстанавливать Kubernetes Job.
+
+`bootstrap_completion.py reconcile` требует exact private inputs: прежний
+`resource-inventory.json` с пятью UID/seals, соответствующий `--inventory-render`,
+`namespaces.json` из того же preimage и envelope сохранённого успешного preflight.
+Для каждого JSON требуется отдельный SHA256. У envelope проверяются
+`preflight_exit: 0`, `candidate_render_sha256` текущего render, закреплённые
+`source_sha`/`source_archive_sha256` и `readback` со штатным
+`WORKLOAD_BOOTSTRAP_RESUME_PREFLIGHT_PASSED`, `VERIFIED_NOT_REPEATED`,
+`PRESERVED_NOT_REPLAYED`. Operator задаёт source/archive pins проверенного verifier.
+При несовпадении source, report, context, namespace UID или Job spec импорт закрыт.
+Текущие migration heads и сохранившиеся live Job UID/spec/status проверяются заново.
+
+Команда имеет вид (все файлы private; SHA — точные 64-hex, source — 40-hex):
+
+```bash
+python3 tools/install/bootstrap_completion.py reconcile \
+  --context "$context" --render candidate.yaml --output reconciled-completion.json \
+  --inventory resource-inventory.json --inventory-sha256 "$inventory_sha256" \
+  --inventory-render previous.yaml \
+  --namespace-inventory namespaces.json --namespace-inventory-sha256 "$namespaces_sha256" \
+  --verification verified-preflight.json --verification-sha256 "$verification_sha256" \
+  --verification-source-sha "$verifier_source_sha" \
+  --verification-archive-sha256 "$verifier_archive_sha256"
+```
+
+Результат помечен `RECONCILED_VERIFIED_PREFLIGHT`; прежнее completion time остаётся
+`null`, поскольку оно не наблюдалось в этом импорте. Для его использования нужно
+дополнительно явно передать `--allow-reconciled-bootstrap-completion` во все
+continuation/readback callers. Полный набор исходных evidence хранится приватно;
+receipt фиксирует их hashes. Это operator reconciliation прежней проверки и не
+доказательство нового запуска Jobs или текущей готовности приложения. Capture
+такого receipt требует privileged install workflow; доступ агента к project tools
+не предоставляет доступ к install state.
+
+Официальное поведение TTL: [Kubernetes Job TTL controller](https://kubernetes.io/docs/concepts/workloads/controllers/ttlafterfinished/),
+[API v1.35 JobSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/).
 
 ## Registry authority при первой установке и после частичного bootstrap
 

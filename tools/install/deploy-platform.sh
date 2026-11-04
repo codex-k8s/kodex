@@ -12,6 +12,7 @@ usage() {
     '  --render <exact-release.yaml> --public-tls-mode deferred|enabled|external' \
     '  [--oidc-ca-file <pem> --ingress-controller <name> --ingress-namespace <name>]' >&2
   printf '%s\n' '  [--previous-render <yaml> --previous-render-sha256 <64-hex> --buildkit-runtime-profile standard|nested-userns; resume-workloads only]' >&2
+  printf '%s\n' '  [--bootstrap-completion-receipt <json> --bootstrap-completion-sha256 <64-hex> [--allow-reconciled-bootstrap-completion]; continuation/readback]' >&2
   printf '%s\n' '  [--repair-egress-secret-access; explicit workload resume repair]' >&2
   printf '%s\n' '  [--component-image-profile <json> --component-image-profile-sha256 <64-hex> --base-release-lock <json>; workload resume only]' >&2
 }
@@ -28,9 +29,14 @@ clamav_mode=enabled
 repair_egress_secret_access=false
 component_image_requested=false
 component_arguments=()
+completion_arguments=()
+completion_output=""
 
 while (($# > 0)); do
   case "$1" in
+    --bootstrap-completion-receipt|--bootstrap-completion-sha256) completion_arguments+=("$1" "${2:-}"); shift 2 ;;
+    --allow-reconciled-bootstrap-completion) completion_arguments+=("$1"); shift ;;
+    --bootstrap-completion-output) completion_output="${2:-}"; shift 2 ;;
     --portable-inventory) portable_inventory="${2:-}"; shift 2 ;;
     --context) context="${2:-}"; shift 2 ;;
     --mode) mode="${2:-}"; shift 2 ;;
@@ -47,6 +53,10 @@ while (($# > 0)); do
   esac
 done
 
+if ((${#completion_arguments[@]})); then
+  case "$mode" in prepare-preflight|preflight|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback) ;; *) fail 'completion receipt only applies to continuation or readback' ;; esac
+fi
+[[ -z "$completion_output" || "$mode" == apply ]] || fail 'completion capture output requires fresh apply'
 [[ -n "$context" ]] || fail 'exact Kubernetes context is required'
 case "$mode" in
   defer-public-tls|prepare-preflight|preflight|apply|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback) ;;
@@ -76,6 +86,10 @@ public_certificate_name=staff-control-center-public
 export KODEX_DEPLOY_PUBLIC_TLS_MODE=$public_tls_mode
 export KODEX_DEPLOY_PUBLIC_CERTIFICATE_NAME=$public_certificate_name
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
+if ((${#completion_arguments[@]})); then
+  python3 "$repository_root/tools/install/authority_registry.py" verify-bootstrap \
+    --render "$render_file" --context "$context" "${completion_arguments[@]}"
+fi
 if [[ "$component_image_requested" == true ]]; then
   python3 "$repository_root/tools/install/component_image_profile.py" --check --render "$render_file" "${component_arguments[@]}"
 fi
@@ -880,6 +894,12 @@ if [[ "$mode" == apply ]]; then
   apply_job control-plane-migrate
   apply_job kodex-postgresql-runtime-credentials
   apply_job control-plane-broker-bootstrap
+  if [[ -n "$completion_output" ]]; then
+    python3 "$repository_root/tools/install/bootstrap_completion.py" capture \
+      --render "$render_file" --context "$context" --output "$completion_output"
+    completion_sha=$(sha256sum "$completion_output" | awk '{print $1}')
+    completion_arguments=(--bootstrap-completion-receipt "$completion_output" --bootstrap-completion-sha256 "$completion_sha")
+  fi
 
 	apply_render authority-publisher '
 		select(.kind == "Deployment" and .metadata.name == "internal-rpc-authority-publisher")
@@ -894,7 +914,7 @@ fi
 
 if [[ "$mode" == resume-authority-bootstrap ]]; then
   [[ -n "$profile_mode" ]] || fail 'authority resume requires a portable profile'
-  python3 "$repository_root/tools/install/authority_registry.py" preflight-resume --render "$render_file" --context "$context"
+  python3 "$repository_root/tools/install/authority_registry.py" preflight-resume --render "$render_file" --context "$context" "${completion_arguments[@]}"
   apply_render authority-registry 'select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-publisher-target-registry")'
   apply_render authority-publisher 'select(.kind == "Deployment" and .metadata.name == "internal-rpc-authority-publisher")'
   wait_authority_projections bootstrap
@@ -903,7 +923,7 @@ fi
 
 if [[ "$mode" == resume-authority-published ]]; then
   [[ -n "$profile_mode" ]] || fail 'published authority resume requires a portable profile'
-  python3 "$repository_root/tools/install/authority_registry.py" preflight-published --render "$render_file" --context "$context"
+  python3 "$repository_root/tools/install/authority_registry.py" preflight-published --render "$render_file" --context "$context" "${completion_arguments[@]}"
   wait_authority_projections bootstrap
   apply_workloads_after_authority
 fi
@@ -911,7 +931,7 @@ fi
 if [[ "$mode" == resume-workloads ]]; then
   [[ -n "$profile_mode" ]] || fail 'workload resume requires a portable profile'
   python3 "$repository_root/tools/install/authority_registry.py" preflight-workloads \
-    --render "$render_file" --context "$context" "${previous_arguments[@]}" --clamav-mode "$clamav_mode"
+    --render "$render_file" --context "$context" "${previous_arguments[@]}" --clamav-mode "$clamav_mode" "${completion_arguments[@]}"
   # Только profile assets/parameters/policy; authority registry и publisher history прежние.
   apply_render bootstrap-observability '
     select(.metadata.labels."kodex.dev/observability-profile" == "disabled" and
@@ -938,9 +958,17 @@ wait_authority_projections all
 wait_workloads
 verify_runtime_namespace_boundary
 wait_system_assistant
+if ((${#completion_arguments[@]})); then
+  python3 "$repository_root/tools/install/authority_registry.py" verify-bootstrap \
+    --render "$render_file" --context "$context" "${completion_arguments[@]}"
+fi
 for job_name in kodex-postgresql-runtime-credentials internal-rpc-authority-migrate \
   control-plane-migrate control-plane-broker-bootstrap release-artifact-materializer \
   email-bridge-migration; do
+  if ((${#completion_arguments[@]})) && [[ "$job_name" != release-artifact-materializer ]]; then
+    # Только пять bootstrap Jobs уже проверены по receipt; другие Jobs обязательны live.
+    continue
+  fi
   [[ "$(kubectl --context "$context" -n "$namespace" get "job/$job_name" \
     -o jsonpath='{.status.succeeded}')" == 1 ]] || fail "Job readback failed: $job_name"
 done
