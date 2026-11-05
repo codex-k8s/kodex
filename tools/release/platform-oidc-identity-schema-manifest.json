@@ -2,9 +2,9 @@
   "kind": "EXPECTED_SCHEMA_CONTRACT",
   "version": "20261105000100",
   "source": "Disposable PostgreSQL 18.3; exact authored migration and frozen predecessor; no business rows or deployment data",
-  "migrationSHA256": "44624b911093d62a9bd63c78c824209ee3230a126229d545bd52b406404203a3",
+  "migrationSHA256": "82f0f3084640845e5d2cd4502db303216a27d5a2ce502d7689a37dd9d121b11d",
   "predecessorPostconditionSHA256": "f7f9d68e1ede37b275b12b6e41d7a2fbf0b883a81910564b41589170b5d96766",
-  "catalogReaderSHA256": "597034f08abd1082d2372dcdf01cdabed0c60f084f7825357ad5d8a63218de6c",
+  "catalogReaderSHA256": "ff775041efad3bfb1ce2086b289f1fd7720c130a005d7edf6a9c3727009f49d0",
   "catalog": {
     "tables": {
       "oidc_identity_policies": {
@@ -81,7 +81,8 @@
             false,
             null,
             "",
-            ""
+            "",
+            null
           ],
           [
             "organization_id",
@@ -90,7 +91,8 @@
             false,
             null,
             "",
-            ""
+            "",
+            null
           ],
           [
             "issuer",
@@ -99,7 +101,8 @@
             false,
             null,
             "",
-            ""
+            "",
+            null
           ],
           [
             "digest",
@@ -108,7 +111,8 @@
             false,
             null,
             "",
-            ""
+            "",
+            null
           ],
           [
             "document",
@@ -117,7 +121,8 @@
             false,
             null,
             "",
-            ""
+            "",
+            null
           ],
           [
             "created_at",
@@ -126,7 +131,8 @@
             true,
             "clock_timestamp()",
             "",
-            ""
+            "",
+            null
           ]
         ],
         "indexes": {
@@ -334,7 +340,8 @@
             false,
             null,
             "",
-            ""
+            "",
+            null
           ],
           [
             "organization_id",
@@ -343,7 +350,8 @@
             false,
             null,
             "",
-            ""
+            "",
+            null
           ],
           [
             "subject_id",
@@ -352,7 +360,8 @@
             false,
             null,
             "",
-            ""
+            "",
+            null
           ],
           [
             "issuer",
@@ -361,7 +370,8 @@
             false,
             null,
             "",
-            ""
+            "",
+            null
           ],
           [
             "external_subject",
@@ -370,7 +380,8 @@
             false,
             null,
             "",
-            ""
+            "",
+            null
           ],
           [
             "provider_session_id",
@@ -379,7 +390,8 @@
             false,
             null,
             "",
-            ""
+            "",
+            null
           ],
           [
             "authenticated_at",
@@ -388,7 +400,8 @@
             false,
             null,
             "",
-            ""
+            "",
+            null
           ],
           [
             "absolute_expires_at",
@@ -397,7 +410,8 @@
             false,
             null,
             "",
-            ""
+            "",
+            null
           ],
           [
             "last_issued_at",
@@ -406,7 +420,8 @@
             false,
             null,
             "",
-            ""
+            "",
+            null
           ],
           [
             "policy_revision",
@@ -415,7 +430,8 @@
             false,
             null,
             "",
-            ""
+            "",
+            null
           ],
           [
             "policy_digest",
@@ -424,7 +440,8 @@
             false,
             null,
             "",
-            ""
+            "",
+            null
           ],
           [
             "state",
@@ -433,7 +450,8 @@
             true,
             "'ACTIVE'::text",
             "",
-            ""
+            "",
+            null
           ],
           [
             "revoked_at",
@@ -442,7 +460,8 @@
             false,
             null,
             "",
-            ""
+            "",
+            null
           ],
           [
             "created_at",
@@ -451,7 +470,8 @@
             true,
             "clock_timestamp()",
             "",
-            ""
+            "",
+            null
           ]
         ],
         "indexes": {
@@ -762,7 +782,8 @@
             false,
             null,
             "",
-            ""
+            "",
+            null
           ],
           [
             "subject_id",
@@ -771,7 +792,8 @@
             false,
             null,
             "",
-            ""
+            "",
+            null
           ],
           [
             "last_issued_at",
@@ -780,7 +802,8 @@
             false,
             null,
             "",
-            ""
+            "",
+            null
           ],
           [
             "groups_digest",
@@ -789,7 +812,8 @@
             false,
             null,
             "",
-            ""
+            "",
+            null
           ],
           [
             "session_revision",
@@ -798,7 +822,8 @@
             false,
             null,
             "",
-            ""
+            "",
+            null
           ],
           [
             "observed_at",
@@ -807,7 +832,8 @@
             true,
             "clock_timestamp()",
             "",
-            ""
+            "",
+            null
           ]
         ],
         "indexes": {
@@ -984,7 +1010,8 @@
             true,
             "true",
             "",
-            ""
+            "",
+            null
           ],
           [
             "revision",
@@ -993,7 +1020,8 @@
             false,
             null,
             "",
-            ""
+            "",
+            null
           ]
         ],
         "indexes": {
@@ -1253,5 +1281,8 @@
       true,
       "UNIQUE (organization_id, id)"
     ]
-  }
+  },
+  "backupPredecessorPostconditionSHA256": "3ff645db2dba203578746f5a24c0a7081fd5bf9e93104022f3e9665a91e7775c",
+  "restorePredecessorSHA256": "c30ba874bf110cf901ecead00e4387e65c8b520157939a66ccb97f0b195a17d9",
+  "idlePredecessorSHA256": "1e5b7087a39caa79f8008f1c6502e1226c04abc9ddb1034b25dc014f37669cb3"
 }

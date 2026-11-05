@@ -110,6 +110,17 @@ UI не редактирует эту policy. CP хранит immutable revision
 revision закрыто отклоняются. Прежние sessions после policy advancement требуют
 свежего входа. Generated ConfigMap не является вторым источником настройки.
 
+Forward migration `20261105000100` добавляет durable OIDC policy/session state
+независимо от выбранного authority mode. Для обновления exact032 используется
+immutable migration profile `platform-oidc-identity`, а при настроенном штатном
+backup reader — `platform-oidc-identity-backup`. Оба требуют exact032 catalog,
+отсутствия частичных объектов033 и прежнего idle/claim fence до остановки owner.
+После применения сверяются полный033 catalog и frozen032 predecessor. Backup
+вариант отдельно проверяет ровно SELECT новых четырёх таблиц; права на sequence
+не расширяются. Команда `restore-workspace-backup-acl` поддерживает exact033,
+восстанавливает этот закрытый набор атомарно и откатывает всю операцию при drift.
+Goose Down для033 запрещён: возврат старого image не отменяет schema/revocation.
+
 Подпись и provider expiry проверяются при каждом native admission. Типизированные
 `OIDCSessionService` requests пусты: actor, organization и revision выбираются
 по verified credential и owner state. Обычные HTTP/WS требуют current eligibility.

@@ -147,4 +147,6 @@ RESET ROLE;
 -- Forward-only: policy history, session revisions, revocations и high-watermarks
 -- не удаляются и не понижаются при возврате application image.
 -- +goose Down
-SELECT 1;
+-- +goose StatementBegin
+DO $$ BEGIN RAISE EXCEPTION 'platform OIDC identity migration is forward-only'; END $$;
+-- +goose StatementEnd

@@ -13,7 +13,7 @@ WITH relations AS (
     'kind', r.relkind, 'persistence', r.relpersistence, 'owner', pg_get_userbyid(r.relowner),
     'rls',r.relrowsecurity,'forceRls',r.relforcerowsecurity,
     'columns',(SELECT jsonb_agg(jsonb_build_array(a.attname,format_type(a.atttypid,a.atttypmod),a.attnotnull,
-      a.atthasdef,pg_get_expr(d.adbin,d.adrelid),a.attidentity,a.attgenerated) ORDER BY a.attnum)
+      a.atthasdef,pg_get_expr(d.adbin,d.adrelid),a.attidentity,a.attgenerated,a.attacl::text) ORDER BY a.attnum)
       FROM pg_catalog.pg_attribute a LEFT JOIN pg_catalog.pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
       WHERE a.attrelid=r.oid AND a.attnum>0 AND NOT a.attisdropped),
     'constraints',(SELECT jsonb_object_agg(c.conname,jsonb_build_array(c.contype,c.convalidated,c.conenforced,c.condeferrable,

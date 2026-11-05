@@ -41,6 +41,10 @@ if [[ "$test_pattern" == --content-page-upgrade ]]; then
   upgrade_test='^TestWorkflowContentPageMigration$'
   test_pattern=--review-qa-upgrade
 fi
+if [[ "$test_pattern" == --platform-oidc-upgrade ]]; then
+  upgrade_test='^TestPlatformOIDCIdentityMigration$'
+  test_pattern=--review-qa-upgrade
+fi
 if [[ "$test_pattern" == --github-pr-upgrade ]]; then
   upgrade_test='^(TestGitHubAutonomousForwardUpgrade|TestGitHubPRForwardUpgrade)$'
   test_pattern=--review-qa-upgrade
