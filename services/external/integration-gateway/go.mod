@@ -3,26 +3,26 @@ module github.com/codex-k8s/kodex/services/external/integration-gateway
 go 1.26.6
 
 require (
-	github.com/codex-k8s/kodex/libs/go/secretbrokerapi v0.0.0
-	github.com/codex-k8s/kodex/libs/go/sshcompose v0.0.0
-	golang.org/x/crypto v0.54.0
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/codex-k8s/kodex/libs/go/controlplaneapi v0.0.0
 	github.com/codex-k8s/kodex/libs/go/controlplaneclient v0.0.0
 	github.com/codex-k8s/kodex/libs/go/credentialfs v0.0.0
 	github.com/codex-k8s/kodex/libs/go/httpserver v0.0.0
 	github.com/codex-k8s/kodex/libs/go/integrationpackage v0.0.0
-	github.com/codex-k8s/kodex/libs/go/repositorybundle v0.0.0
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
+	github.com/codex-k8s/kodex/libs/go/repositorybundle v0.0.0
+	github.com/codex-k8s/kodex/libs/go/secretbrokerapi v0.0.0
 	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0
+	github.com/codex-k8s/kodex/libs/go/sshcompose v0.0.0
+	github.com/getkin/kin-openapi v0.149.0
 	github.com/google/go-github/v74 v74.0.0
 	github.com/google/uuid v1.6.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
+	golang.org/x/crypto v0.54.0
 )
 
 require (
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
-	github.com/getkin/kin-openapi v0.149.0 // indirect
 	github.com/go-openapi/jsonpointer v0.22.5 // indirect
 	github.com/go-openapi/swag/jsonname v0.25.5 // indirect
 	github.com/google/jsonschema-go v0.4.3 // indirect

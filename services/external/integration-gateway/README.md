@@ -4,8 +4,8 @@ title: Integration gateway
 type: service
 status: approved
 owner: backend
-version: 2.6.0
-updated: 2026-10-08
+version: 2.7.0
+updated: 2026-11-05
 ---
 
 # integration-gateway
@@ -31,21 +31,28 @@ UI/Git-managed packages передаются внутри каждой protected
 Git write-back и итоговый owner/profile цикл требуют отдельного завершения
 в этом же unit; наличие read consumer не означает готовность всего CFG.
 
-Поставляются семь schema-versioned packages:
+Поставляются schema-versioned packages, в том числе:
 
 - synthetic HTTP journal: read и идемпотентный write по exact effect key;
 - GitHub: 41 операция repository content, branches/commits, issues/comments,
   PR/reviews/checks и Actions только в exact `owner/repository` scope;
 - GitLab: 37 операций project/repository, branches/commits, issues/notes,
   MR/discussions, pipelines/jobs в exact `base_url/project_path` scope;
-- Jira: 22 операции project/users, JQL/issues, transitions/comments/links и
+- Jira Cloud: 22 операции project/users, JQL/issues, transitions/comments/links и
   attachments в exact `base_url/project_key` scope;
-- Confluence: 16 операций space/pages/descendants, footer comments и attachments
+- Confluence Cloud: 16 операций space/pages/descendants, footer comments и attachments
   в exact `base_url/space_id` scope;
 - электронная почта: 21 операция health/status, папок, сообщений, threads,
   вложений, флагов, перемещения, черновиков и SMTP-отправки через типизированный
   HTTPS bridge; POP3 предоставляет только ограниченный compatibility mode;
 - Mattermost остаётся за отдельным необязательным `interaction-gateway`.
+
+Server/DC выбирается отдельными packages `jira-server-dc@1.0.0` (8 операций)
+и `confluence-server-dc@1.0.0` (6 операций). Они используют Jira REST v2 и
+Confluence REST v1, явный `context_path` и точный project/space key. Старые Cloud
+definitions и закреплённые revisions не меняются. Ограниченные OpenAPI,
+provenance, lifecycle, доставка и ручная проверка описаны в
+[профиле Server/DC](../../../docs/operations/atlassian-server-profiles-2029.md).
 
 Package также объявляет типизированные output fields, exact network
 destinations и health operation. Универсального HTTP passthrough нет: неизвестная
