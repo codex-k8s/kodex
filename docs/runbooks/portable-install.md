@@ -138,6 +138,11 @@ render. Их commands/arguments/env/volumes и остальные поля об�
 изменение bootstrap effect как обновление image. Результат содержит отдельный
 immutable ConfigMap с hash выбранного upgrade profile.
 
+Secret seeds из canonical render исключаются при чтении предыдущего и целевого
+render, как в штатном apply. Upgrade output не переносит их payload и не
+перезаписывает работающие проекции; отдельный secret/material lifecycle остаётся
+владельцем этих ресурсов.
+
 Operator lifecycle отдельно проверяет target/namespace, provenance полного
 release lock/images и отсутствие активной работы, сохраняет preimage/backup,
 останавливает writers, выполняет exact migration precondition и единственный

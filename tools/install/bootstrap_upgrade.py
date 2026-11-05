@@ -91,12 +91,12 @@ def immutable_job(job):
 
 
 def decode_render(raw):
-    """Принимает ограниченный несекретный canonical render, не подгружая внешние ссылки."""
+    """Читает bounded render; Secret seeds исключены, как в штатном apply, и никогда не переносятся в upgrade."""
     require(0 < len(raw) <= 8 << 20, 'UPGRADE_RENDER_SIZE_REJECTED')
     resources = [r for r in yaml.safe_load_all(raw) if r is not None]
-    require(0 < len(resources) <= 2000 and all(isinstance(r, dict) and r.get('kind') != 'Secret' for r in resources),
+    require(0 < len(resources) <= 2000 and all(isinstance(r, dict) for r in resources),
             'UPGRADE_RENDER_REJECTED')
-    return resources
+    return [r for r in resources if r.get('kind') != 'Secret']
 
 
 def prepare(previous_raw, target_raw, profile):

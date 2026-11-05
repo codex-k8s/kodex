@@ -65,6 +65,20 @@ class UpgradeState(State):
 
 
 class UpgradeTests(unittest.TestCase):
+    def test_prepare_excludes_secret_seeds_without_replaying_or_copying_their_values(self):
+        old, target, _, _, profile = fixture()
+        seed = {'apiVersion': 'v1', 'kind': 'Secret', 'metadata': {'name': 'synthetic-projection',
+                'namespace': 'kodex-system'}, 'type': 'Opaque', 'stringData': {'synthetic': 'synthetic-value'}}
+        before = yaml.safe_dump_all(old + [seed]).encode()
+        after = yaml.safe_dump_all(target + [{**seed, 'stringData': {'synthetic': 'synthetic-replacement'}}]).encode()
+        profile.update(previous_render_sha256=upgrade.sha(before), target_render_sha256=upgrade.sha(after))
+        prepared = upgrade.prepare(before, after, profile)
+        self.assertFalse(any(r.get('kind') == 'Secret' for r in prepared))
+        self.assertNotIn('synthetic-value', yaml.safe_dump_all(prepared))
+        self.assertNotIn('synthetic-replacement', yaml.safe_dump_all(prepared))
+        for name in upgrade.PRESERVED:
+            self.assertEqual(completion.desired_jobs(prepared)[name], completion.desired_jobs(old)[name])
+
     def prepared(self):
         old, _, before, after, profile = fixture()
         target = upgrade.prepare(before, after, profile)
