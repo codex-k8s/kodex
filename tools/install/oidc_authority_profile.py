@@ -58,6 +58,28 @@ def policy_bytes(policy):
     return raw.encode()
 
 
+def issuer_value(resources, namespace, entry):
+    """Разрешает issuer из literal либо точного локального ConfigMap; не читает Secrets и не меняет env ownership."""
+    if set(entry) == {"name", "value"}:
+        require(isinstance(entry["value"], str), "OIDC_POLICY_ISSUER_MISMATCH")
+        return entry["value"]
+    require(set(entry) == {"name", "valueFrom"}, "OIDC_POLICY_ISSUER_MISMATCH")
+    source = entry["valueFrom"]
+    require(isinstance(source, dict) and set(source) == {"configMapKeyRef"}, "OIDC_POLICY_ISSUER_MISMATCH")
+    reference = source["configMapKeyRef"]
+    require(isinstance(reference, dict) and set(reference) == {"name", "key"} and
+            all(isinstance(reference[key], str) and reference[key] for key in ("name", "key")),
+            "OIDC_POLICY_ISSUER_MISMATCH")
+    matches = [r for r in resources if r.get("kind") == "ConfigMap" and
+               r.get("metadata", {}).get("namespace") == namespace and
+               r["metadata"].get("name") == reference["name"]]
+    # Агрегированный render может содержать одинаковые shared ConfigMap до canonical dedup.
+    require(bool(matches) and all(value == matches[0] for value in matches), "OIDC_POLICY_ISSUER_MISMATCH")
+    value = matches[0].get("data", {}).get(reference["key"])
+    require(isinstance(value, str), "OIDC_POLICY_ISSUER_MISMATCH")
+    return value
+
+
 def transform(resources, profile):
     """Проецирует policy только в CP и mode в CP/gateway, не меняя credentials, CA, proxy или другие workloads."""
     profile = validate(profile)
@@ -81,7 +103,8 @@ def transform(resources, profile):
         container = containers[0]
         env = container.setdefault("env", [])
         issuer = [v for v in env if v.get("name") == prefix + "_OIDC_ISSUER"]
-        require(len(issuer) == 1 and issuer[0].get("value") == profile["policy"]["issuer"], "OIDC_POLICY_ISSUER_MISMATCH")
+        require(len(issuer) == 1 and issuer_value(result, "kodex-system", issuer[0]) == profile["policy"]["issuer"],
+                "OIDC_POLICY_ISSUER_MISMATCH")
         additions = {prefix + "_OIDC_AUTHORITY_MODE": "platform-managed"}
         if component == "control-plane":
             additions[prefix + "_OIDC_IDENTITY_POLICY_FILE"] = "/etc/kodex/oidc-identity-policy/policy.json"

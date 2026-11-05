@@ -29,11 +29,8 @@ class OIDCAuthorityProfileTests(unittest.TestCase):
             raw = subprocess.check_output(["kubectl", "kustomize", str(ROOT / "deploy/k8s/profiles" / name)], text=True, timeout=60)
             resources = [v for v in yaml.safe_load_all(raw) if v]
             for resource in resources:
-                if resource.get("kind") == "Deployment" and resource.get("metadata", {}).get("name") in ("control-plane", "control-api-gateway"):
-                    for container in resource["spec"]["template"]["spec"]["containers"]:
-                        for item in container.get("env", []):
-                            if item["name"] in ("CONTROL_PLANE_OIDC_ISSUER", "CONTROL_API_GATEWAY_OIDC_ISSUER"):
-                                item["value"] = fixture()["policy"]["issuer"]
+                if resource.get("kind") == "ConfigMap" and resource.get("metadata", {}).get("name") == "kodex-platform-endpoints":
+                    resource["data"]["oidcIssuer"] = fixture()["policy"]["issuer"]
             cls.renders[name] = resources
 
     def test_claims_is_unchanged_in_both_overlays(self):
@@ -109,6 +106,44 @@ class OIDCAuthorityProfileTests(unittest.TestCase):
         document = json.loads((ROOT / "services/internal/control-plane/internal/domain/types/value/testdata/oidc-identity-policy.json").read_text())
         canonical = validate({"schema": "kodex.oidc-authority-profile/v1", "managed_by": "git", "mode": "platform-managed", "policy": document["policy"]})["policy"]
         self.assertEqual(hashlib.sha256(policy_bytes(canonical)).hexdigest(), document["sha256"])
+
+    def test_issuer_source_is_resolved_without_changing_ownership(self):
+        for original in self.renders.values():
+            resources = copy.deepcopy(original)
+            for resource in resources:
+                if resource.get("kind") == "Deployment" and resource["metadata"]["name"] in ("control-plane", "control-api-gateway"):
+                    for container in resource["spec"]["template"]["spec"]["containers"]:
+                        for entry in container.get("env", []):
+                            if entry["name"].endswith("_OIDC_ISSUER"):
+                                entry.pop("valueFrom")
+                                entry["value"] = fixture()["policy"]["issuer"]
+            transform(resources, fixture())
+            transform(original, fixture())
+
+    def test_missing_ambiguous_or_secret_issuer_sources_fail_closed(self):
+        original = self.renders["web-only"]
+        variants = []
+        resources = copy.deepcopy(original)
+        resources[:] = [r for r in resources if not (r.get("kind") == "ConfigMap" and r["metadata"]["name"] == "kodex-platform-endpoints")]
+        variants.append(resources)
+        resources = copy.deepcopy(original)
+        conflicting = copy.deepcopy(next(r for r in resources if r.get("kind") == "ConfigMap" and r["metadata"]["name"] == "kodex-platform-endpoints"))
+        conflicting["data"]["oidcIssuer"] = "https://other.example.invalid"
+        resources.append(conflicting)
+        variants.append(resources)
+        for source in ("both", "secret"):
+            resources = copy.deepcopy(original)
+            deployment = next(r for r in resources if r.get("kind") == "Deployment" and r["metadata"]["name"] == "control-plane")
+            container = next(c for c in deployment["spec"]["template"]["spec"]["containers"] if c["name"] == "control-plane")
+            entry = next(e for e in container["env"] if e["name"] == "CONTROL_PLANE_OIDC_ISSUER")
+            if source == "both":
+                entry["value"] = fixture()["policy"]["issuer"]
+            else:
+                entry["valueFrom"] = {"secretKeyRef": {"name": "synthetic-secret", "key": "issuer"}}
+            variants.append(resources)
+        for resources in variants:
+            with self.assertRaises(Rejected):
+                transform(resources, fixture())
 
     def test_cli_reports_fixed_rejection_code_without_input_values(self):
         with tempfile.TemporaryDirectory() as temporary:
