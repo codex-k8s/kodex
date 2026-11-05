@@ -31,18 +31,22 @@ func canonicalOIDCIdentifier(raw string) bool {
 func (repository *Repository) validateStandardOIDCIdentity(input platformrepo.StandardOIDCIdentity) error {
 	policy := repository.standardOIDCPolicy
 	now := time.Now().UTC()
+	closure := platformrepo.StandardOIDCClosureOperationAllowed(input.Operation)
 	if policy == nil || input.Issuer != policy.Issuer || input.CallerWorkload == "" || input.Operation == "" ||
 		!canonicalOIDCIdentifier(input.Subject) || !canonicalOIDCIdentifier(input.SessionID) || !canonicalOIDCIdentifier(input.TokenID) ||
 		input.AuthenticatedAt.IsZero() || input.AuthenticatedAt.Unix() <= 0 || input.IssuedAt.Before(input.AuthenticatedAt) ||
 		input.IssuedAt.After(now.Add(30*time.Second)) || !input.ExpiresAt.After(now) || !input.ExpiresAt.After(input.IssuedAt) ||
-		!input.AuthenticatedAt.Add(time.Duration(policy.SessionLifetimeSeconds)*time.Second).After(now) ||
-		!input.AuthenticatedAt.Add(time.Duration(policy.SessionLifetimeSeconds)*time.Second).After(input.IssuedAt) ||
+		!closure && (!input.AuthenticatedAt.Add(time.Duration(policy.SessionLifetimeSeconds)*time.Second).After(now) ||
+			!input.AuthenticatedAt.Add(time.Duration(policy.SessionLifetimeSeconds)*time.Second).After(input.IssuedAt)) ||
 		utf8.RuneCountInString(strings.TrimSpace(input.DisplayName)) > 160 || len(input.EmailHint) > 200 ||
 		strings.TrimSpace(input.EmailHint) != input.EmailHint || strings.ContainsAny(input.DisplayName+input.EmailHint, "\r\n\x00") {
 		return errs.ErrForbidden
 	}
 	_, trusted := platformrepo.TrustedSTTAuthorityPermission(input.CallerWorkload, input.Operation)
 	if input.CallerWorkload != "control-api-gateway" && !(trusted && repository.trustedCluster && input.RPCProfile == "trusted-cluster") {
+		return errs.ErrForbidden
+	}
+	if closure && input.CallerWorkload != "control-api-gateway" {
 		return errs.ErrForbidden
 	}
 	if _, err := normalizedOIDCGroups(platformrepo.ProofPrincipalInput{ExternalIssuer: input.Issuer, ExternalGroups: input.Groups}); err != nil {
@@ -80,9 +84,73 @@ func (repository *Repository) ResolveStandardOIDCIdentity(ctx context.Context, i
 	if err := repository.validateStandardOIDCIdentity(input); err != nil {
 		return platformrepo.StandardOIDCBinding{}, err
 	}
+	if platformrepo.StandardOIDCClosureOperationAllowed(input.Operation) {
+		return repository.resolveStandardOIDCClosureIdentity(ctx, input)
+	}
 	return retrySerializableTransaction(ctx, func() (platformrepo.StandardOIDCBinding, error) {
 		return repository.resolveStandardOIDCIdentityOnce(ctx, input)
 	})
+}
+
+// resolveStandardOIDCClosureIdentity reads one existing signed identity tuple without creating users/sessions, changing observations or granting application membership.
+// Revoked, disabled or application-expired sessions remain closable while the real provider credential is still valid.
+// resolveStandardOIDCClosureIdentity читает один существующий signed identity tuple без создания users/sessions, изменения observations и выдачи application membership.
+// Revoked, disabled и application-expired sessions допускают лишь закрытие, пока реальный provider credential остаётся действительным.
+func (repository *Repository) resolveStandardOIDCClosureIdentity(ctx context.Context, input platformrepo.StandardOIDCIdentity) (platformrepo.StandardOIDCBinding, error) {
+	binding, _, err := scanStandardOIDCSession(repository.pool.QueryRow(ctx, queryStandardOIDCSessionRead, pgx.StrictNamedArgs{
+		"issuer": input.Issuer, "subject": input.Subject, "session_id": input.SessionID, "authenticated_at": input.AuthenticatedAt,
+	}))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return platformrepo.StandardOIDCBinding{}, errs.ErrForbidden
+	}
+	if err != nil {
+		return platformrepo.StandardOIDCBinding{}, errs.ErrUnavailable
+	}
+	return binding, nil
+}
+
+// ReadStandardOIDCSession returns one owner-resolved tuple, distinguishing ordinary active access from the explicitly selected self-closure read.
+// The closure flag originates only in the exact domain command, never in a browser or RPC payload.
+// ReadStandardOIDCSession возвращает один owner-resolved tuple, разделяя обычный active access и явно выбранное self-closure чтение.
+// Closure flag происходит лишь из точной domain command, а не browser или RPC payload.
+func (repository *Repository) ReadStandardOIDCSession(ctx context.Context, organizationID, actorID string, revision uint64, closure bool) (platformrepo.StandardOIDCBinding, error) {
+	var zero platformrepo.StandardOIDCBinding
+	if repository.standardOIDCPolicy == nil || !canonicalOIDCIdentifier(organizationID) || !canonicalOIDCIdentifier(actorID) || revision == 0 || revision > 1<<53-1 {
+		return zero, errs.ErrForbidden
+	}
+	binding, active, err := scanStandardOIDCSession(repository.pool.QueryRow(ctx, queryStandardOIDCSessionRevisionRead, pgx.StrictNamedArgs{
+		"organization_id": organizationID, "subject_id": actorID, "revision": revision,
+	}))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return zero, errs.ErrForbidden
+	}
+	if err != nil {
+		return zero, errs.ErrUnavailable
+	}
+	if binding.Issuer != repository.standardOIDCPolicy.Issuer {
+		return zero, errs.ErrForbidden
+	}
+	if closure {
+		return binding, nil
+	}
+	if !active || binding.State != "ACTIVE" || !binding.AbsoluteExpiry.After(time.Now()) {
+		return zero, errs.ErrForbidden
+	}
+	if err := repository.standardOIDCPolicyReady(ctx); err != nil {
+		return zero, errs.ErrUnavailable
+	}
+	digest, err := repository.standardOIDCPolicy.Digest()
+	if err != nil || binding.PolicyRevision != repository.standardOIDCPolicy.Revision || binding.PolicyDigest != digest {
+		return zero, errs.ErrForbidden
+	}
+	var allowed bool
+	if err := repository.pool.QueryRow(ctx, queryProofSubjectHasActiveBinding, organizationID, actorID).Scan(&allowed); err != nil {
+		return zero, errs.ErrUnavailable
+	}
+	if !allowed {
+		return zero, errs.ErrForbidden
+	}
+	return binding, nil
 }
 
 // resolveStandardOIDCIdentityOnce owns the whole serializable database-only state transition and completes cleanup before any retry marker escapes.
@@ -194,16 +262,51 @@ func (repository *Repository) RevokeStandardOIDCSession(ctx context.Context, org
 	if !canonicalOIDCIdentifier(organizationID) || !canonicalOIDCIdentifier(actorID) || revision == 0 || revision > 1<<53-1 {
 		return errs.ErrForbidden
 	}
-	updated, err := repository.pool.Exec(ctx, queryStandardOIDCSessionRevoke, pgx.StrictNamedArgs{
+	var revoked bool
+	err := repository.pool.QueryRow(ctx, queryStandardOIDCSessionRevoke, pgx.StrictNamedArgs{
 		"organization_id": organizationID, "subject_id": actorID, "revision": revision,
-	})
+	}).Scan(&revoked)
 	if err != nil {
 		return errs.ErrUnavailable
 	}
-	if updated.RowsAffected() != 1 {
+	if !revoked {
 		return errs.ErrForbidden
 	}
 	return nil
+}
+
+// resolveStandardOIDCClosureProof binds the exact self-lifecycle operation to an existing verified identity session even after revoke or loss of application eligibility.
+// It returns no project and cannot serve ordinary application operations; missing or foreign tuples never create authority.
+// resolveStandardOIDCClosureProof связывает точную self-lifecycle operation с существующей verified identity session даже после revoke и утраты application eligibility.
+// Project не возвращается, обычные application operations не обслуживаются; отсутствующий или чужой tuple не создаёт authority.
+func (repository *Repository) resolveStandardOIDCClosureProof(ctx context.Context, input platformrepo.ProofPrincipalInput) (platformrepo.ProofAuthority, error) {
+	var zero platformrepo.ProofAuthority
+	if !platformrepo.StandardOIDCClosureOperationAllowed(input.Operation) || !input.PlatformManagedOIDC || input.CallerWorkload != "control-api-gateway" || input.ProjectRef != "" ||
+		repository.standardOIDCPolicy == nil || input.ExternalIssuer != repository.standardOIDCPolicy.Issuer ||
+		!canonicalOIDCIdentifier(input.ExternalActorID) || !canonicalOIDCIdentifier(input.ExternalTenantID) || !canonicalOIDCIdentifier(input.ExternalSessionID) ||
+		input.ExternalSessionRevision == 0 || input.ExternalSessionRevision > 1<<53-1 || input.ExternalIssuedAt.IsZero() {
+		return zero, errs.ErrForbidden
+	}
+	binding, _, err := scanStandardOIDCSession(repository.pool.QueryRow(ctx, queryStandardOIDCSessionSubjectRead, pgx.StrictNamedArgs{
+		"revision": input.ExternalSessionRevision, "issuer": input.ExternalIssuer, "external_subject": input.ExternalActorID,
+	}))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return zero, errs.ErrForbidden
+	}
+	if err != nil {
+		return zero, errs.ErrUnavailable
+	}
+	if binding.OrganizationID != input.ExternalTenantID || binding.SessionID != input.ExternalSessionID || !binding.AuthenticatedAt.Equal(input.ExternalAuthenticatedAt) || input.ExternalIssuedAt.Before(binding.AuthenticatedAt) {
+		return zero, errs.ErrForbidden
+	}
+	authority := platformrepo.ProofAuthority{ActorID: binding.ActorID, OrganizationID: binding.OrganizationID, ActorVersion: 1}
+	if err := repository.pool.QueryRow(ctx, queryStandardOIDCOrganizationVersion, pgx.StrictNamedArgs{"organization_id": binding.OrganizationID}).Scan(&authority.OrganizationVersion); err != nil {
+		return zero, errs.ErrUnavailable
+	}
+	if authority.OrganizationVersion == 0 {
+		return zero, errs.ErrForbidden
+	}
+	return authority, nil
 }
 
 // standardOIDCProofBinding rechecks the durable session and current policy before an already mapped principal enters the application-proof path.

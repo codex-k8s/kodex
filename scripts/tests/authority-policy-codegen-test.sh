@@ -34,7 +34,12 @@ jq -e '
     "platform.provider-credentials.readiness.check"
   ];
   .v == 1 and .policy.default_decision == "DENY" and
-	.policy_revision == 101 and .policy.authority_abi_version == 2 and
+	.policy_revision == 102 and .policy.authority_abi_version == 2 and
+	([.policy.operation_bindings[] | select(.operation_id == "platform.oidc.session.resolve" or
+	  .operation_id == "platform.oidc.session.closure.get" or .operation_id == "platform.oidc.session.revoke") |
+	  select(.caller_workload_id == "control-api-gateway" and .target_workload_id == "control-plane" and
+	    .authority_proof_producer_id == "control-plane.oidc" and .project_required == false and .permission == .operation_id and
+	    .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"FORBIDDEN","version":"FORBIDDEN","attempt":"FORBIDDEN","idempotency":"FORBIDDEN"})] | length) == 3 and
   ([.policy.operation_bindings[] | select(.operation_id == "platform.provider-accounts.credential.renewal.work.check" or
       .operation_id == "platform.provider-accounts.credential.renewal.authorize" or .operation_id == "platform.provider-accounts.credential.renewal.validate") |
     select(.caller_workload_id == "secret-broker" and .target_workload_id == "control-plane" and

@@ -78,21 +78,22 @@ type Config struct {
 // Principal содержит verified identity и application authority из legacy signed claims либо явно выбранного durable platform owner.
 // Одна standard signature verification возвращает VerifiedIdentity; PlatformManagedOIDC задаётся лишь после current owner/session resolution.
 type Principal struct {
-	Subject             string
-	OrganizationID      string
-	Issuer              string
-	SessionID           string
-	DisplayName         string
-	EmailHint           string
-	Groups              []string
-	OwnerClaim          bool
-	SessionRevision     uint64
-	AuthenticatedAt     time.Time
-	ACR                 string
-	AMR                 []string
-	ExpiresAt           time.Time
-	PlatformManagedOIDC bool
-	IssuedAt            time.Time
+	Subject                  string
+	OrganizationID           string
+	Issuer                   string
+	SessionID                string
+	DisplayName              string
+	EmailHint                string
+	Groups                   []string
+	OwnerClaim               bool
+	SessionRevision          uint64
+	AuthenticatedAt          time.Time
+	ACR                      string
+	AMR                      []string
+	ExpiresAt                time.Time
+	PlatformManagedOIDC      bool
+	IssuedAt                 time.Time
+	PlatformSessionExpiresAt time.Time
 }
 
 // Verifier owns the exact OIDC transport and last verified signing-key snapshot used by bearer and browser flows.

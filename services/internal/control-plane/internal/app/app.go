@@ -328,6 +328,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	controlplanev1.RegisterWorkspaceVolumeWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterInteractionWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterAccessServiceServer(grpcServer, transport)
+	controlplanev1.RegisterOIDCSessionServiceServer(grpcServer, transport)
 	controlplanev1.RegisterRoleImageServiceServer(grpcServer, roleImageTransport)
 	if proofService != nil {
 		proofTransport, err := platformgrpc.NewAuthorityProofServer(proofService)

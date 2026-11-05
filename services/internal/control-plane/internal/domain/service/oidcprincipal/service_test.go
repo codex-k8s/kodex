@@ -116,3 +116,22 @@ func TestStandardPrincipalVerificationAndOwnerFailures(t *testing.T) {
 		}
 	}
 }
+
+// TestStandardPrincipalClosureIsExactOperationScoped permits an existing tombstone only for the two self-lifecycle operations, never ordinary application proof issuance.
+// TestStandardPrincipalClosureIsExactOperationScoped допускает existing tombstone лишь для двух self-lifecycle operations, а не ordinary application proof issuance.
+func TestStandardPrincipalClosureIsExactOperationScoped(t *testing.T) {
+	for _, operation := range []string{platformrepo.StandardOIDCClosureOperation, platformrepo.StandardOIDCRevokeOperation} {
+		verifier, owner, caller := standardPrincipalFixture()
+		owner.binding.State = "REVOKED"
+		owner.binding.AbsoluteExpiry = time.Now().Add(-time.Second)
+		caller.Operation = operation
+		principal, err := Resolve(t.Context(), verifier, owner, caller, "synthetic-verified-credential")
+		if err != nil || principal.OwnerClaim || principal.SessionRevision != owner.binding.Revision || !principal.ExpiresAt.Equal(verifier.identity.ExpiresAt) {
+			t.Fatal("exact self-closure lost its existing tuple or bypassed provider credential lifetime")
+		}
+		caller.Operation = "platform.query.bootstrap.get"
+		if _, err := Resolve(t.Context(), verifier, owner, caller, "synthetic-verified-credential"); !errors.Is(err, errs.ErrForbidden) {
+			t.Fatal("closure tombstone authorized an ordinary application operation")
+		}
+	}
+}

@@ -45,6 +45,7 @@ const (
 // Server адаптирует generated control-plane RPC к platform и role-image domain services;
 // встроенные unimplemented servers сохраняют поведение неподдержанных RPC.
 type Server struct {
+	controlplanev1.UnimplementedOIDCSessionServiceServer
 	sttv1.UnimplementedTranscriptionAuthorityServiceServer
 	sttv1.UnimplementedTranscriptionPolicyProjectionServiceServer
 	controlplanev1.UnimplementedPlatformQueryServiceServer

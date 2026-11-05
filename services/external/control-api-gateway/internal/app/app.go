@@ -25,6 +25,7 @@ import (
 	internalobservability "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/observability"
 	secretbrokerclient "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/secretbroker"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/boundary"
+	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/oidcplatform"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/ratelimit"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/session"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/sttclient"
@@ -114,15 +115,25 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
-	families, err := session.NewFamilies(lifecycle, browserState, browserOIDC, sessions)
+	var browserProvider browserIdentityProvider = browserOIDC
+	var credentialVerifier boundary.OIDCVerifier = oidc
+	mode, _ := oidcauth.ParseAuthorityMode(config.OIDCAuthorityMode)
+	if mode == oidcauth.PlatformManagedAuthorityMode {
+		provider, providerErr := oidcplatform.New(oidc, browserOIDC, control.OIDCSessions, config.RPCTimeout)
+		if providerErr != nil {
+			return providerErr
+		}
+		browserProvider, credentialVerifier = provider, provider
+	}
+	families, err := session.NewFamilies(lifecycle, browserState, browserProvider, sessions)
 	if err != nil {
 		return err
 	}
-	logins, err := session.NewLogins(lifecycle, browserState, browserOIDC, sessions)
+	logins, err := session.NewLogins(lifecycle, browserState, browserProvider, sessions)
 	if err != nil {
 		return err
 	}
-	security, err := boundary.New(boundary.Config{BrowserOrigin: config.OIDCBrowserOrigin, Logins: logins, Families: families, Origins: config.origins(), Verifier: oidc, Sessions: sessions, Revocations: revocations, Limiter: limiter, Timeout: config.RequestTimeout})
+	security, err := boundary.New(boundary.Config{BrowserOrigin: config.OIDCBrowserOrigin, Logins: logins, Families: families, Origins: config.origins(), Verifier: credentialVerifier, Sessions: sessions, Revocations: revocations, Limiter: limiter, Timeout: config.RequestTimeout})
 	if err != nil {
 		return err
 	}

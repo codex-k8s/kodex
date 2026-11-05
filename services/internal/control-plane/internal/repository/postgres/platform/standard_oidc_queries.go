@@ -2,6 +2,12 @@ package platform
 
 import _ "embed"
 
+// queryStandardOIDCOrganizationVersion reads the current version for the already owner-bound closure tenant, without choosing a tenant from payload.
+// queryStandardOIDCOrganizationVersion читает current version уже owner-bound closure tenant без выбора tenant из payload.
+//
+//go:embed sql/standard_oidc__organization_version.sql
+var queryStandardOIDCOrganizationVersion string
+
 // queryStandardOIDCSessionSubjectRead binds the claimed revision to the verified issuer-qualified external subject before resolving actor authority.
 // queryStandardOIDCSessionSubjectRead связывает заявленную revision с verified issuer-qualified external subject до разрешения actor authority.
 //

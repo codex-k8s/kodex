@@ -84,6 +84,7 @@ type Config struct {
 // Client owns generated service clients and their authority-bearing connections.
 // Client владеет типизированными клиентами сервисов и их полномочными соединениями.
 type Client struct {
+	OIDCSessions            controlplanev1.OIDCSessionServiceClient
 	trustedCluster          bool
 	serviceIdentity         bool
 	Query                   controlplanev1.PlatformQueryServiceClient
@@ -201,6 +202,7 @@ func (client *Client) bindServices(protected *grpc.ClientConn) {
 	// Намеренно явные конструкторы разных generated-интерфейсов; эти вызовы
 	// не взаимозаменяемы и не являются повтором одной исполняемой операции.
 	client.Query = controlplanev1.NewPlatformQueryServiceClient(protected)
+	client.OIDCSessions = controlplanev1.NewOIDCSessionServiceClient(protected)
 	client.Command = controlplanev1.NewPlatformCommandServiceClient(protected)
 	client.Assistant = controlplanev1.NewSystemAssistantServiceClient(protected)
 	client.Runtime = controlplanev1.NewRuntimeWorkServiceClient(protected)

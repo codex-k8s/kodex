@@ -24,6 +24,9 @@ const (
 	// familyRefreshing marks the CAS-reserved external refresh attempt. Another caller may observe pending state but must not reuse its refresh token after an uncertain or expired attempt.
 	// familyRefreshing обозначает зарезервированную через CAS external refresh attempt. Другой caller может наблюдать pending state, но не должен повторять refresh token после uncertain либо expired attempt.
 	familyRefreshing = "REFRESHING"
+	// familyRevoking fences application reads and provider refresh while the exact self-revoke command awaits authoritative confirmation.
+	// familyRevoking блокирует application reads и provider refresh, пока exact self-revoke command ожидает authoritative confirmation.
+	familyRevoking = "REVOKING"
 	// familyTerminal is the persisted closed family state with access/refresh credentials cleared; reads reject it rather than rebuilding a live family from a cookie.
 	// familyTerminal — сохранённое закрытое family state с очищенными access и refresh credentials; чтения отклоняют его без восстановления живого family из cookie.
 	familyTerminal = "TERMINAL"
@@ -69,22 +72,24 @@ type TokenRefresher interface {
 // Family holds server-side identity/tokens, immutable absolute and idle bounds, attempt state and optional elevation inside an encrypted owner record. It is never a public cookie payload; Version tracks logical changes and Sequence tracks storage CAS.
 // Family хранит server-side identity и tokens, immutable absolute и idle bounds, attempt state и optional elevation в encrypted owner record. Это не публичный cookie payload; Version отражает логические изменения, Sequence — storage CAS.
 type Family struct {
-	ID                string
-	BrowserSessionID  string
-	Version           uint64
-	State             string
-	Principal         oidcverifier.Principal
-	AccessToken       string
-	RefreshToken      string
-	CSRFHash          string
-	CreatedAt         time.Time
-	IdleExpiresAt     time.Time
-	AbsoluteExpiresAt time.Time
-	RefreshExpiresAt  time.Time
-	AttemptID         string
-	RefreshDeadline   time.Time
-	Elevation         *Elevation
-	Sequence          uint64 `json:"-"`
+	ID                   string
+	BrowserSessionID     string
+	Version              uint64
+	State                string
+	Principal            oidcverifier.Principal
+	AccessToken          string
+	RefreshToken         string
+	BearerOnly           bool
+	OwnerRevokeConfirmed bool
+	CSRFHash             string
+	CreatedAt            time.Time
+	IdleExpiresAt        time.Time
+	AbsoluteExpiresAt    time.Time
+	RefreshExpiresAt     time.Time
+	AttemptID            string
+	RefreshDeadline      time.Time
+	Elevation            *Elevation
+	Sequence             uint64 `json:"-"`
 }
 
 // Families coordinates encrypted owner records with the token adapter and process lifecycle, using a replaceable clock. It creates no background worker and relies on CAS rather than process-local serialization across replicas.
@@ -117,6 +122,12 @@ func (families *Families) Create(ctx context.Context, tokens oidcverifier.Browse
 	}
 	if tokens.RefreshExpiresAt.Before(absolute) {
 		absolute = tokens.RefreshExpiresAt
+	}
+	if tokens.Principal.PlatformManagedOIDC {
+		if !tokens.Principal.PlatformSessionExpiresAt.After(now) || tokens.Principal.PlatformSessionExpiresAt.After(tokens.Principal.AuthenticatedAt.Add(absoluteSSOLifetime)) {
+			return Family{}, ErrReauthentication
+		}
+		absolute = earlier(absolute, tokens.Principal.PlatformSessionExpiresAt)
 	}
 	family := Family{ID: uuid.NewString(), BrowserSessionID: uuid.NewString(), Version: 1, State: familyActive, Principal: tokens.Principal,
 		AccessToken: tokens.AccessToken, RefreshToken: tokens.RefreshToken, CSRFHash: csrfHash,
@@ -170,7 +181,7 @@ func (families *Families) Read(ctx context.Context, id string) (Family, error) {
 		return Family{}, err
 	}
 	now := families.now()
-	if family.State == familyTerminal || !family.IdleExpiresAt.After(now) || !family.AbsoluteExpiresAt.After(now) {
+	if family.State == familyTerminal || family.State == familyRevoking || !family.IdleExpiresAt.After(now) || !family.AbsoluteExpiresAt.After(now) {
 		return Family{}, ErrReauthentication
 	}
 	return family, nil
@@ -188,7 +199,8 @@ func (families *Families) Cookie(family Family) (Claims, string, error) {
 		elevation = nil
 	}
 	claims := Claims{Subject: family.Principal.Subject, OrganizationID: family.Principal.OrganizationID,
-		OIDCSessionID: family.Principal.SessionID, SessionRevision: family.Principal.SessionRevision,
+		PlatformManagedOIDC: family.Principal.PlatformManagedOIDC,
+		OIDCSessionID:       family.Principal.SessionID, SessionRevision: family.Principal.SessionRevision,
 		SessionID: family.BrowserSessionID, FamilyID: family.ID, CSRFHash: family.CSRFHash,
 		IssuedAt: now.Unix(), ExpiresAt: family.IdleExpiresAt.Unix(), Elevation: elevation}
 	encoded, err := families.keys.seal(claims)
@@ -306,6 +318,9 @@ func (families *Families) Revoke(ctx context.Context, id string) error {
 		if err != nil {
 			return err
 		}
+		if family.Principal.PlatformManagedOIDC && !family.OwnerRevokeConfirmed {
+			return ErrReauthentication
+		}
 		if family.State == familyTerminal {
 			return nil
 		}
@@ -376,11 +391,17 @@ func validFamily(f Family) bool {
 		f.AbsoluteExpiresAt.After(f.Principal.AuthenticatedAt.Add(absoluteSSOLifetime)) || f.IdleExpiresAt.After(f.AbsoluteExpiresAt) {
 		return false
 	}
+	if f.Principal.PlatformManagedOIDC && (f.Principal.PlatformSessionExpiresAt.IsZero() || f.AbsoluteExpiresAt.After(f.Principal.PlatformSessionExpiresAt)) ||
+		f.BearerOnly && !f.Principal.PlatformManagedOIDC || f.OwnerRevokeConfirmed && (!f.Principal.PlatformManagedOIDC || f.State != familyTerminal) {
+		return false
+	}
 	switch f.State {
 	case familyActive:
-		return f.AccessToken != "" && f.RefreshToken != "" && f.AttemptID == "" && f.RefreshDeadline.IsZero()
+		return f.AccessToken != "" && ((f.BearerOnly && f.RefreshToken == "") || (!f.BearerOnly && f.RefreshToken != "")) && f.AttemptID == "" && f.RefreshDeadline.IsZero()
 	case familyRefreshing:
-		return f.AccessToken != "" && f.RefreshToken != "" && uuid.Validate(f.AttemptID) == nil && !f.RefreshDeadline.IsZero()
+		return !f.BearerOnly && f.AccessToken != "" && f.RefreshToken != "" && uuid.Validate(f.AttemptID) == nil && !f.RefreshDeadline.IsZero()
+	case familyRevoking:
+		return f.Principal.PlatformManagedOIDC && !f.OwnerRevokeConfirmed && f.AccessToken != "" && f.RefreshToken == "" && f.AttemptID == "" && f.RefreshDeadline.IsZero()
 	case familyTerminal:
 		return f.AccessToken == "" && f.RefreshToken == "" && f.AttemptID == "" && f.RefreshDeadline.IsZero()
 	default:
@@ -393,7 +414,7 @@ func validFamily(f Family) bool {
 func sameSession(old, fresh oidcverifier.Principal) bool {
 	return old.Issuer == fresh.Issuer && old.Subject == fresh.Subject && old.OrganizationID == fresh.OrganizationID &&
 		old.SessionID == fresh.SessionID && old.SessionRevision == fresh.SessionRevision && old.AuthenticatedAt.Equal(fresh.AuthenticatedAt) &&
-		old.PlatformManagedOIDC == fresh.PlatformManagedOIDC
+		old.PlatformManagedOIDC == fresh.PlatformManagedOIDC && old.PlatformSessionExpiresAt.Equal(fresh.PlatformSessionExpiresAt)
 }
 
 // earlier returns the earlier timestamp without normalization; equal instants return the second value, preserving its representation.

@@ -42,17 +42,20 @@ func Resolve(ctx context.Context, verifier IdentityVerifier, owner platformrepo.
 	}
 	organization, orgErr := uuid.Parse(binding.OrganizationID)
 	actor, actorErr := uuid.Parse(binding.ActorID)
+	closure := platformrepo.StandardOIDCClosureOperationAllowed(caller.Operation) && caller.CallerWorkload == "control-api-gateway" && caller.ProjectRef == ""
 	if orgErr != nil || actorErr != nil || organization == uuid.Nil || actor == uuid.Nil || binding.Revision == 0 || binding.Revision > 1<<53-1 ||
 		binding.Issuer != identity.Issuer || binding.Subject != identity.Subject || binding.SessionID != identity.SessionID ||
-		!binding.AuthenticatedAt.Equal(identity.AuthenticatedAt) || binding.State != "ACTIVE" || !binding.AbsoluteExpiry.After(time.Now()) {
+		!binding.AuthenticatedAt.Equal(identity.AuthenticatedAt) ||
+		!closure && (binding.State != "ACTIVE" || !binding.AbsoluteExpiry.After(time.Now())) ||
+		closure && binding.State != "ACTIVE" && binding.State != "REVOKED" {
 		return oidcverifier.Principal{}, errs.ErrForbidden
 	}
 	expiresAt := identity.ExpiresAt
-	if binding.AbsoluteExpiry.Before(expiresAt) {
+	if !closure && binding.AbsoluteExpiry.Before(expiresAt) {
 		expiresAt = binding.AbsoluteExpiry
 	}
 	return oidcverifier.Principal{Subject: identity.Subject, OrganizationID: binding.OrganizationID, Issuer: identity.Issuer,
-		SessionID: identity.SessionID, SessionRevision: binding.Revision, PlatformManagedOIDC: true, IssuedAt: identity.IssuedAt,
+		SessionID: identity.SessionID, SessionRevision: binding.Revision, PlatformManagedOIDC: true, IssuedAt: identity.IssuedAt, PlatformSessionExpiresAt: binding.AbsoluteExpiry,
 		AuthenticatedAt: identity.AuthenticatedAt, ExpiresAt: expiresAt, DisplayName: identity.DisplayName, EmailHint: identity.EmailHint,
 		Groups: slices.Clone(identity.Groups), ACR: identity.ACR, AMR: slices.Clone(identity.AMR)}, nil
 }

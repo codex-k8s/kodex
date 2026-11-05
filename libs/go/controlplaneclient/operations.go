@@ -44,6 +44,9 @@ func STTPolicyProjectionOperations() map[string]string {
 // ControlAPIGatewayOperations возвращает закрытое соответствие операций владельца и RPC для control API gateway.
 func ControlAPIGatewayOperations() map[string]string {
 	return map[string]string{
+		"platform.oidc.session.resolve":                                     controlplanev1.OIDCSessionService_ResolveOIDCSession_FullMethodName,
+		"platform.oidc.session.closure.get":                                 controlplanev1.OIDCSessionService_GetOIDCSessionClosure_FullMethodName,
+		"platform.oidc.session.revoke":                                      controlplanev1.OIDCSessionService_RevokeOIDCSession_FullMethodName,
 		"platform.command.role-image-impact-plans.prepare":                  controlplanev1.PlatformCommandService_PrepareRoleImageImpactPlan_FullMethodName,
 		"platform.command.environment-draft-impact.prepare":                 controlplanev1.PlatformCommandService_PrepareEnvironmentDraftImpact_FullMethodName,
 		"platform.command.instructions-impact.prepare":                      controlplanev1.PlatformCommandService_PrepareInstructionsImpact_FullMethodName,

@@ -1,6 +1,30 @@
 package value
 
-import "testing"
+import (
+	"encoding/json"
+	"os"
+	"testing"
+)
+
+// TestOIDCIdentityPolicyMatchesRendererDigest binds Go canonical policy encoding to the installer's independently exercised synthetic fixture.
+// TestOIDCIdentityPolicyMatchesRendererDigest связывает Go canonical policy encoding с независимо проверяемым synthetic fixture installer.
+func TestOIDCIdentityPolicyMatchesRendererDigest(t *testing.T) {
+	raw, err := os.ReadFile("testdata/oidc-identity-policy.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Policy OIDCIdentityPolicy `json:"policy"`
+		SHA256 string             `json:"sha256"`
+	}
+	if err := json.Unmarshal(raw, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	digest, err := fixture.Policy.Digest()
+	if err != nil || digest != fixture.SHA256 {
+		t.Fatal("domain policy digest differs from the installer contract")
+	}
+}
 
 // TestOIDCIdentityPolicyPinsIssuerAndOwner rejects ambiguous policy inputs and keeps canonical owner ordering independent of authority digest.
 // TestOIDCIdentityPolicyPinsIssuerAndOwner отклоняет неоднозначные policy inputs и исключает порядок owners из authority digest.

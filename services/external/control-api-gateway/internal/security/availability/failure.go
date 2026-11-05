@@ -112,6 +112,8 @@ func classify(err error) string {
 		return "cas_conflict"
 	case errors.Is(err, browserstate.ErrUnavailable):
 		return "unavailable"
+	case errors.Is(err, oidcauth.ErrIdentityStateUnavailable):
+		return "unavailable"
 	default:
 		return "unknown"
 	}
