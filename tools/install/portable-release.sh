@@ -14,6 +14,7 @@ previous_sha=""
 buildkit_profile=standard
 repair_api_endpoints=false
 clamav_mode=enabled
+provider_profile_arguments=()
 previous_arguments=()
 arguments=()
 repair_egress_secret_access=false
@@ -47,6 +48,7 @@ while (($#)); do
     --base-release-lock) base_release_lock="${2:-}"; shift 2 ;;
     --previous-component-image-profile) previous_component_image_profile="${2:-}"; shift 2 ;;
     --previous-component-image-profile-sha256) previous_component_image_sha="${2:-}"; shift 2 ;;
+    --provider-apparmor-profile) provider_profile_arguments=(--provider-apparmor-profile "${2-}"); shift 2 ;;
     --buildkit-runtime-profile) buildkit_profile="${2:-}"; shift 2 ;;
     --oidc-ca-file|--ingress-deployment|--ingress-controller|--ingress-namespace|--ingress-service) arguments+=("$1" "${2:-}"); shift 2 ;;
     --help)
@@ -60,6 +62,7 @@ while (($#)); do
       printf '%s\n' '  [--repair-egress-secret-access; explicit workload resume repair]'
       printf '%s\n' '  [--component-image-profile <json> --component-image-profile-sha256 <64-hex> --base-release-lock <json>; workload resume only]'
       printf '%s\n' '  [--previous-component-image-profile <json> --previous-component-image-profile-sha256 <64-hex>; exact component predecessor]'
+      printf '%s\n' '  [--provider-apparmor-profile <empty|kodex-provider-runtime>; explicit runtime-only projection]'
       exit 0 ;;
     *) fail 'unsupported argument' ;;
   esac
@@ -80,7 +83,7 @@ if [[ "$mode" == resume-workloads ]]; then
   cp -- "$previous_render" "$temporary/previous.yaml"
   [[ "$(sha256sum "$temporary/previous.yaml" | awk '{print $1}')" == "$previous_sha" ]] || fail 'previous render digest mismatch'
   case "$buildkit_profile" in standard|nested-userns) ;; *) fail 'BuildKit runtime profile is invalid' ;; esac
-  previous_arguments=(--previous-render "$temporary/previous.yaml" --previous-render-sha256 "$previous_sha" --buildkit-runtime-profile "$buildkit_profile")
+  previous_arguments=("${provider_profile_arguments[@]}" --previous-render "$temporary/previous.yaml" --previous-render-sha256 "$previous_sha" --buildkit-runtime-profile "$buildkit_profile")
   [[ "$repair_api_endpoints" != true ]] || previous_arguments+=(--repair-kubernetes-api-endpoints)
   [[ "$repair_egress_secret_access" != true ]] || previous_arguments+=(--repair-egress-secret-access)
 else
@@ -119,6 +122,9 @@ PYLOAD
   cp -- "$completion_receipt" "$temporary/bootstrap-completion.json"
   completion_arguments=(--bootstrap-completion-receipt "$temporary/bootstrap-completion.json" --bootstrap-completion-sha256 "$completion_sha")
   [[ "$allow_reconciled_completion" != true ]] || completion_arguments+=(--allow-reconciled-bootstrap-completion)
+fi
+if ((${#provider_profile_arguments[@]})); then
+  python3 "$root/tools/install/provider_sandbox_profile.py" --check --render "$temporary/render.yaml" --profile "${provider_profile_arguments[1]}"
 fi
 timeout 60s python3 "$root/tools/install/portable_preflight.py" --plan \
   --render "$temporary/render.yaml" --sha256 "$expected_sha"

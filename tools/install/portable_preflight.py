@@ -10,6 +10,7 @@ import ssl
 import subprocess
 
 import yaml
+import provider_sandbox_profile
 from deployment_profile import Rejected, require, https_endpoint, read_render_profile, verify_proxy_controller, verify_proxy_pods
 
 
@@ -72,6 +73,7 @@ def main():
         require(len(raw) <= 32 * 1024 * 1024 and hashlib.sha256(raw).hexdigest() == args.sha256,
                 "RENDER_DIGEST_MISMATCH")
         resources = list(filter(None, yaml.safe_load_all(raw)))
+        provider_sandbox_profile.validate_render(resources)
         profile = read_render_profile(resources)
         if args.plan:
             print(json.dumps({"status": "PLANNED", "renderSHA256": args.sha256,

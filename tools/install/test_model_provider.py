@@ -108,6 +108,14 @@ class ModelProviderTests(unittest.TestCase):
             catalog = next(json.loads(item['data']['catalog.json']) for item in resources if item['kind'] == 'ConfigMap' and item['metadata']['name'].startswith('kodex-role-environments-'))
             standard = next(item for item in catalog['environments'] if item['key'] == 'standard')
             self.assertTrue(standard['baseImageReference'].endswith('/agent-runner-opencode'))
+            import provider_sandbox_profile
+            for selected in (provider_sandbox_profile.PROFILE, ''):
+                rendered = subprocess.run(args + ['--provider-apparmor-profile', selected], cwd=ROOT, capture_output=True, timeout=150,
+                                          env={**os.environ, 'GOMAXPROCS': '2', 'GOFLAGS': '-p=1', 'GOWORK': 'off'})
+                self.assertEqual(rendered.returncode, 0, 'optional provider sandbox render failed')
+                actual = list(filter(None, MODULE.yaml.safe_load_all(output.read_text())))
+                self.assertEqual(actual, provider_sandbox_profile.transform(resources, selected))
+                self.assertEqual(provider_sandbox_profile.active(actual), selected)
 
 
 if __name__ == '__main__':

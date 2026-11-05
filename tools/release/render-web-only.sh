@@ -29,9 +29,12 @@ usage() {
     '  [--disable-monitoring-resources; no Prometheus Operator resources]' \
     '  [--profile <web-only|web-with-mattermost>]' \
     '  [--ssh-compose-connection <public-connection.json>; repeatable]' \
+    '  [--provider-apparmor-profile <empty|kodex-provider-runtime>; optional runtime-only projection]' \
     '  [--mattermost-host <dns>; required for web-with-mattermost]' >&2
 }
 
+provider_apparmor_profile=""
+provider_apparmor_profile_selected=false
 authority_registry_configuration=""
 deployment_profile=""
 model_provider_configuration=""
@@ -68,6 +71,7 @@ ssh_compose_connections=()
 
 while (($# > 0)); do
   case "$1" in
+    --provider-apparmor-profile) provider_apparmor_profile="${2-}"; provider_apparmor_profile_selected=true; shift 2 ;;
     --authority-registry-configuration) authority_registry_configuration="${2:-}"; shift 2 ;;
     --model-provider-configuration) model_provider_configuration="${2:-}"; shift 2 ;;
     --model-provider-default-model) model_provider_default_model="${2:-}"; shift 2 ;;
@@ -780,6 +784,11 @@ fi
 
 if [[ -n "$authority_registry_configuration" ]]; then
   python3 "$repository_root/tools/install/authority_registry.py" render --render "$output" --configuration "$authority_registry_configuration"
+fi
+
+if [[ "$provider_apparmor_profile_selected" == true ]]; then
+  python3 "$repository_root/tools/install/provider_sandbox_profile.py" --render "$output" --profile "$provider_apparmor_profile" ||
+    fail 'provider sandbox profile render rejected'
 fi
 
 printf 'Web-only render created: %s\n' "$output"

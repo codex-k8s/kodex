@@ -48,7 +48,13 @@ test-portable-services:
 test-portable-services-native:
 	@timeout 300s python3 -B scripts/tests/portable-services-native-test.py
 
+.PHONY: test-provider-sandbox-native
+test-provider-sandbox-native:
+	@timeout 90s python3 -B tools/install/test_provider_sandbox_fence_native.py
+
 test-web-only-release:
+	@timeout 30s python3 -B tools/install/test_provider_sandbox_profile.py
+	@timeout 30s python3 -B tools/install/test_provider_sandbox_transition.py
 	@timeout 30s python3 -B tools/install/test_bootstrap_completion.py
 	@timeout 30s python3 -B tools/install/test_component_image_profile.py
 	@timeout 30s python3 -B tools/install/test_egress_secret_access.py
