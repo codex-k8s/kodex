@@ -38,6 +38,10 @@ func (adapter *Adapter) testJira(ctx context.Context, request Request, configura
 		return err
 	}
 	capability, _ := definition.Capability(definition.Spec.HealthCheck.Operation)
+	if definition.Metadata.Key == jiraServerDefinition {
+		_, err := adapter.jiraServerProject(ctx, request, capability, configuration)
+		return err
+	}
 	_, err = adapter.configuredProviderJSON(ctx, request, capability, configuration, http.MethodGet,
 		"/rest/api/3/project/"+url.PathEscape(configuration["project_key"]), nil, nil, "")
 	return err
@@ -48,6 +52,9 @@ func (adapter *Adapter) testJira(ctx context.Context, request Request, configura
 // executeJira направляет чтение проекта и задач, ограниченный проектом JQL и выбранные записи, передавая прочие операции закрытому каталогу.
 // Вызывающий уже проверяет полномочия package, capability и входа; локальные проверки связывают ключи выдаваемых задач с настроенным проектом.
 func (adapter *Adapter) executeJira(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, canonicalInput []byte) (Result, error) {
+	if request.DefinitionKey == jiraServerDefinition {
+		return adapter.executeJiraServer(ctx, request, capability, configuration, canonicalInput)
+	}
 	projectKey := configuration["project_key"]
 	switch request.Operation {
 	case "jira.project.read":

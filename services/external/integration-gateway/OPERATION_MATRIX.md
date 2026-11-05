@@ -4,8 +4,8 @@ title: Закрытый каталог integration-gateway MVP-UI-42
 type: contract-matrix
 status: approved
 owner: backend
-version: 1.0.0
-updated: 2026-09-05
+version: 1.1.0
+updated: 2026-11-05
 ---
 
 # Закрытая матрица MVP-UI-42 / #1028
@@ -46,6 +46,8 @@ control-plane. Отмена/отзыв запрещают новый claim, а �
 | GitLab / origin + project_path | project.metadata.read; repository.file.read; repository.tree.list; branch.list/read/create/delete; commit.list/read/diff/create; issue.list/read/create/update; issue.note.list/read/create/update/delete; merge_request.list/read/create/update/merge; merge_request.discussion.list/create; merge_request.diff.list; pipeline.list/read/retry/cancel; job.list/read/retry/cancel/trace.read |
 | Jira / origin + project_key | project.read; project.user.search/read; issue.search/read/create/update_limited; issue.transition.list/apply; issue.comment.list/read/write/update/delete; issue.link.list/read/write/delete; attachment.list/read/upload/delete |
 | Confluence / origin + space_id | space.list/read; page.search/read/create/update; page.descendant.list; page.comment.list/read/create/update/delete; attachment.list/read/upload/delete |
+| Jira Server/DC / origin + context_path + project_key | identity.read; project.read; issue.search/read/create; issue.comment.write; issue.transition.list/apply |
+| Confluence Server/DC / origin + context_path + space_key | identity.read; space.read; page.search/read/create/update |
 | Synthetic / закреплённый внутренний origin | journal.read/write |
 
 ## Протокольные ограничения
@@ -61,6 +63,11 @@ control-plane. Отмена/отзыв запрещают новый claim, а �
   через принадлежность точному issue/page/space, не по одному ID из payload.
 - Confluence comments: footer comments; inline-редактирование не объявляется.
 - Mattermost и email принадлежат отдельным текущим unit и здесь не меняются.
+- Server/DC — отдельные definitions, без определения API по ответу сервера и
+  без fallback на Cloud. Jira search принимает текст для фиксированного
+  project-bound JQL; Confluence search — точный заголовок current page.
+  Пагинация использует ограниченный offset. Дополнительные ограничения и
+  recovery описаны в [профиле Server/DC](../../../docs/operations/atlassian-server-profiles-2029.md).
 
 ## Доказательство готовности
 

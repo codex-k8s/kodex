@@ -168,6 +168,10 @@ func TestEveryAdvertisedOperation(t *testing.T) {
 		if !definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) {
 			continue
 		}
+		if key == jiraServerDefinition || key == confluenceServerDefinition {
+			t.Run(key, func(t *testing.T) { testAtlassianServerCapabilities(t, key) })
+			continue
+		}
 		for _, capability := range definition.Spec.Capabilities {
 			t.Run(capability.Operation, func(t *testing.T) {
 				if definition.Spec.Adapter == "SSH_COMPOSE" {

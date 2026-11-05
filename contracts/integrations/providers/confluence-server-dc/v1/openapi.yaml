@@ -1,0 +1,596 @@
+openapi: 3.0.3
+info:
+  version: 1.0.0
+  description: Самостоятельно описанный ограниченный контракт по официальной документации;
+    это не полный официальный OpenAPI и не grant.
+  title: Confluence Server / Data Center — ограниченный REST v1
+security:
+- bearerAuth: []
+- basicAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    basicAuth:
+      type: http
+      scheme: basic
+  schemas:
+    Identity:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+          - known
+        userKey:
+          type: string
+          minLength: 1
+          maxLength: 64
+        username:
+          type: string
+        displayName:
+          type: string
+      additionalProperties: true
+      required:
+      - type
+      - userKey
+      - username
+      - displayName
+    Space:
+      type: object
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        key:
+          type: string
+        name:
+          type: string
+      additionalProperties: true
+      required:
+      - id
+      - key
+      - name
+    Storage:
+      type: object
+      properties:
+        value:
+          type: string
+        representation:
+          type: string
+          enum:
+          - storage
+      additionalProperties: true
+      required:
+      - value
+      - representation
+    Page:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        type:
+          type: string
+          enum:
+          - page
+        title:
+          type: string
+        status:
+          type: string
+          enum:
+          - current
+        space:
+          type: object
+          properties:
+            key:
+              type: string
+          additionalProperties: true
+          required:
+          - key
+        version:
+          type: object
+          properties:
+            number:
+              type: integer
+              minimum: 1
+              maximum: 2147483647
+          additionalProperties: true
+          required:
+          - number
+        ancestors:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                minLength: 1
+                maxLength: 64
+            additionalProperties: true
+            required:
+            - id
+        body:
+          type: object
+          properties:
+            storage:
+              $ref: '#/components/schemas/Storage'
+          additionalProperties: true
+          required:
+          - storage
+      additionalProperties: true
+      required:
+      - id
+      - type
+      - title
+      - status
+      - space
+      - version
+    PageList:
+      type: object
+      properties:
+        start:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 50
+        size:
+          type: integer
+          minimum: 0
+          maximum: 50
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Page'
+        _links:
+          type: object
+          properties:
+            next:
+              type: string
+          additionalProperties: true
+      additionalProperties: true
+      required:
+      - start
+      - limit
+      - size
+      - results
+      - _links
+paths:
+  /rest/api/user/current:
+    get:
+      operationId: confluence.identity.read
+      parameters: []
+      responses:
+        '200':
+          description: Ограниченный успешный ответ провайдера.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Identity'
+        '400':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '401':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '403':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '404':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '409':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '429':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '500':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '502':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '503':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '504':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+  /rest/api/space/{spaceKey}:
+    get:
+      operationId: confluence.space.read
+      parameters:
+      - name: spaceKey
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Ограниченный успешный ответ провайдера.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Space'
+        '400':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '401':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '403':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '404':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '409':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '429':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '500':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '502':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '503':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '504':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+  /rest/api/content:
+    get:
+      operationId: confluence.page.search
+      parameters:
+      - name: spaceKey
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - page
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - current
+      - name: title
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 512
+      - name: start
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          maximum: 10000
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+      - name: expand
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Ограниченный успешный ответ провайдера.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageList'
+        '400':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '401':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '403':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '404':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '409':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '429':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '500':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '502':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '503':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '504':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+    post:
+      operationId: confluence.page.create
+      parameters:
+      - name: expand
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '201':
+          description: Ограниченный успешный ответ провайдера.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+        '400':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '401':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '403':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '404':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '409':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '429':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '500':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '502':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '503':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '504':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum:
+                  - page
+                status:
+                  type: string
+                  enum:
+                  - current
+                title:
+                  type: string
+                  maxLength: 512
+                body:
+                  type: object
+                  properties:
+                    storage:
+                      $ref: '#/components/schemas/Storage'
+                  additionalProperties: false
+                  required:
+                  - storage
+                space:
+                  type: object
+                  properties:
+                    key:
+                      type: string
+                  additionalProperties: false
+                  required:
+                  - key
+                ancestors:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        minLength: 1
+                        maxLength: 64
+                    additionalProperties: false
+                    required:
+                    - id
+              additionalProperties: false
+              required:
+              - type
+              - status
+              - title
+              - space
+              - body
+  /rest/api/content/{pageId}:
+    get:
+      operationId: confluence.page.read
+      parameters:
+      - name: pageId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[0-9]+$
+      - name: expand
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Ограниченный успешный ответ провайдера.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+        '400':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '401':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '403':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '404':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '409':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '429':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '500':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '502':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '503':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '504':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+    put:
+      operationId: confluence.page.update
+      parameters:
+      - name: pageId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[0-9]+$
+      - name: expand
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Ограниченный успешный ответ провайдера.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+        '400':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '401':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '403':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '404':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '409':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '429':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '500':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '502':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '503':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '504':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum:
+                  - page
+                status:
+                  type: string
+                  enum:
+                  - current
+                title:
+                  type: string
+                  maxLength: 512
+                body:
+                  type: object
+                  properties:
+                    storage:
+                      $ref: '#/components/schemas/Storage'
+                  additionalProperties: false
+                  required:
+                  - storage
+                id:
+                  type: string
+                  minLength: 1
+                  maxLength: 64
+                version:
+                  type: object
+                  properties:
+                    number:
+                      type: integer
+                      minimum: 1
+                      maximum: 2147483647
+                    message:
+                      type: string
+                  additionalProperties: false
+                  required:
+                  - number
+              additionalProperties: false
+              required:
+              - id
+              - type
+              - status
+              - title
+              - body
+              - version
+x-kodex-context: Runtime добавляет только проверенный context_path из Connection;
+  / означает корень. Контекст входит в resource scope.
+servers:
+- url: https://confluence.example.invalid
+externalDocs:
+  url: https://docs.atlassian.com/ConfluenceServer/rest/8.5.9/
+x-kodex-provenance:
+  kind: AUTHORED_DOCUMENTED_SUBSET
+  documented_version: 8.5.9
+  tested_scope: Только current pages в exact space; synthetic REST v1 first vertical.

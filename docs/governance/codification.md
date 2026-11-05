@@ -4,11 +4,13 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 2.2.22
-updated: 2026-10-27
+version: 2.2.23
+updated: 2026-11-05
 ---
 
 # Кодификация документов и задач
+
+- `RUN-INT-SERVER-2029` — [Опциональные Server/DC-профили Jira и Confluence](../operations/atlassian-server-profiles-2029.md).
 
 - `OPS-DOC-STAGING-CAPACITY-1931` — [Проверка фактической ёмкости staging перед работой](../operations/staging-capacity-preflight-1931.md).
 

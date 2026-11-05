@@ -43,6 +43,10 @@ func (adapter *Adapter) testConfluence(ctx context.Context, request Request, con
 		return err
 	}
 	capability, _ := definition.Capability(definition.Spec.HealthCheck.Operation)
+	if definition.Metadata.Key == confluenceServerDefinition {
+		_, err := adapter.confluenceServerSpace(ctx, request, capability, configuration)
+		return err
+	}
 	_, err = adapter.configuredProviderJSON(ctx, request, capability, configuration, http.MethodGet,
 		"/wiki/api/v2/spaces/"+url.PathEscape(configuration["space_id"]), nil, nil, "")
 	return err
@@ -53,6 +57,9 @@ func (adapter *Adapter) testConfluence(ctx context.Context, request Request, con
 // executeConfluence направляет типизированные операции пространства и страниц и загрузку вложений, отдельно передавая остальной закрытый каталог.
 // Поиск проверяет возвращённые space IDs и извлекает только курсор, не используя next URL провайдера как сетевое назначение.
 func (adapter *Adapter) executeConfluence(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, canonicalInput []byte) (Result, error) {
+	if request.DefinitionKey == confluenceServerDefinition {
+		return adapter.executeConfluenceServer(ctx, request, capability, configuration, canonicalInput)
+	}
 	switch request.Operation {
 	case "confluence.attachment.upload":
 		return adapter.uploadConfluenceAttachment(ctx, request, capability, configuration, canonicalInput)

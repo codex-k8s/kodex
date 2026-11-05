@@ -1,0 +1,623 @@
+openapi: 3.0.3
+info:
+  version: 1.0.0
+  description: Самостоятельно описанный ограниченный контракт по официальной документации;
+    это не полный официальный OpenAPI и не grant.
+  title: Jira Server / Data Center — ограниченный REST v2
+security:
+- bearerAuth: []
+- basicAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    basicAuth:
+      type: http
+      scheme: basic
+  schemas:
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        key:
+          type: string
+        name:
+          type: string
+      additionalProperties: true
+      required:
+      - id
+      - key
+      - name
+    Identity:
+      type: object
+      properties:
+        key:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+        displayName:
+          type: string
+      additionalProperties: true
+      required:
+      - key
+      - name
+      - displayName
+    Issue:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        key:
+          type: string
+        fields:
+          type: object
+          properties:
+            project:
+              type: object
+              properties:
+                key:
+                  type: string
+              additionalProperties: true
+              required:
+              - key
+            summary:
+              type: string
+            description:
+              type: string
+              nullable: true
+            labels:
+              type: array
+              items:
+                type: string
+            status:
+              type: object
+              properties:
+                name:
+                  type: string
+              additionalProperties: true
+              required:
+              - name
+          additionalProperties: true
+          required:
+          - project
+          - summary
+          - status
+      additionalProperties: true
+      required:
+      - id
+      - key
+      - fields
+    SearchPage:
+      type: object
+      properties:
+        startAt:
+          type: integer
+          minimum: 0
+        maxResults:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+        total:
+          type: integer
+          minimum: 0
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/Issue'
+      additionalProperties: true
+      required:
+      - startAt
+      - maxResults
+      - total
+      - issues
+    CreatedIssue:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        key:
+          type: string
+      additionalProperties: true
+      required:
+      - id
+      - key
+    CreatedComment:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 64
+      additionalProperties: true
+      required:
+      - id
+    Transitions:
+      type: object
+      properties:
+        transitions:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                minLength: 1
+                maxLength: 64
+              name:
+                type: string
+              fields:
+                type: object
+                additionalProperties:
+                  type: object
+                  properties:
+                    required:
+                      type: boolean
+                  additionalProperties: true
+                  required:
+                  - required
+            additionalProperties: true
+            required:
+            - id
+            - name
+            - fields
+      additionalProperties: true
+      required:
+      - transitions
+paths:
+  /rest/api/2/myself:
+    get:
+      operationId: jira.identity.read
+      parameters: []
+      responses:
+        '200':
+          description: Ограниченный успешный ответ провайдера.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Identity'
+        '400':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '401':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '403':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '404':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '409':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '429':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '500':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '502':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '503':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '504':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+  /rest/api/2/project/{projectKey}:
+    get:
+      operationId: jira.project.read
+      parameters:
+      - name: projectKey
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Ограниченный успешный ответ провайдера.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '401':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '403':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '404':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '409':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '429':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '500':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '502':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '503':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '504':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+  /rest/api/2/search:
+    get:
+      operationId: jira.issue.search
+      parameters:
+      - name: jql
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 4096
+      - name: startAt
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          maximum: 10000
+      - name: maxResults
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+      - name: fields
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Ограниченный успешный ответ провайдера.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchPage'
+        '400':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '401':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '403':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '404':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '409':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '429':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '500':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '502':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '503':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '504':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+  /rest/api/2/issue/{issueKey}:
+    get:
+      operationId: jira.issue.read
+      parameters:
+      - name: issueKey
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Z][A-Z0-9_]*-[0-9]+$
+      - name: fields
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Ограниченный успешный ответ провайдера.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
+        '400':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '401':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '403':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '404':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '409':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '429':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '500':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '502':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '503':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '504':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+  /rest/api/2/issue:
+    post:
+      operationId: jira.issue.create
+      parameters: []
+      responses:
+        '201':
+          description: Ограниченный успешный ответ провайдера.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedIssue'
+        '400':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '401':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '403':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '404':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '409':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '429':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '500':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '502':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '503':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '504':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fields:
+                  type: object
+                  properties:
+                    project:
+                      type: object
+                      properties:
+                        key:
+                          type: string
+                      additionalProperties: false
+                      required:
+                      - key
+                    issuetype:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                      additionalProperties: false
+                      required:
+                      - name
+                    summary:
+                      type: string
+                      maxLength: 512
+                    description:
+                      type: string
+                      maxLength: 65536
+                    labels:
+                      type: array
+                      minItems: 1
+                      maxItems: 1
+                      items:
+                        type: string
+                        maxLength: 255
+                  additionalProperties: false
+                  required:
+                  - project
+                  - issuetype
+                  - summary
+                  - labels
+              additionalProperties: false
+              required:
+              - fields
+  /rest/api/2/issue/{issueKey}/comment:
+    post:
+      operationId: jira.issue.comment.write
+      parameters:
+      - name: issueKey
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Z][A-Z0-9_]*-[0-9]+$
+      responses:
+        '201':
+          description: Ограниченный успешный ответ провайдера.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedComment'
+        '400':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '401':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '403':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '404':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '409':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '429':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '500':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '502':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '503':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '504':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                body:
+                  type: string
+              additionalProperties: false
+              required:
+              - body
+  /rest/api/2/issue/{issueKey}/transitions:
+    get:
+      operationId: jira.issue.transition.list
+      parameters:
+      - name: issueKey
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Z][A-Z0-9_]*-[0-9]+$
+      - name: expand
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Ограниченный успешный ответ провайдера.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transitions'
+        '400':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '401':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '403':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '404':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '409':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '429':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '500':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '502':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '503':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '504':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+    post:
+      operationId: jira.issue.transition.apply
+      parameters:
+      - name: issueKey
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Z][A-Z0-9_]*-[0-9]+$
+      responses:
+        '204':
+          description: Эффект принят без тела ответа.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                transition:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      minLength: 1
+                      maxLength: 64
+                  additionalProperties: false
+                  required:
+                  - id
+              additionalProperties: false
+              required:
+              - transition
+x-kodex-context: Runtime добавляет только проверенный context_path из Connection;
+  / означает корень. Контекст входит в resource scope.
+servers:
+- url: https://jira.example.invalid
+externalDocs:
+  url: https://docs.atlassian.com/software/jira/docs/api/REST/9.12.8/
+x-kodex-provenance:
+  kind: AUTHORED_DOCUMENTED_SUBSET
+  documented_version: 9.12.8
+  tested_scope: Synthetic REST v2 first vertical; не заявляется полное покрытие Server/DC.

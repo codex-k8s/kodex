@@ -50,8 +50,8 @@ func TestLoadShippedDefinitions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(definitions) != 11 {
-		t.Fatalf("LoadShipped() returned %d definitions; want 11", len(definitions))
+	if len(definitions) != 13 {
+		t.Fatalf("LoadShipped() returned %d definitions; want 13", len(definitions))
 	}
 	github := definitions["github"]
 	if github.Digest == "" || github.Metadata.Version != "6.3.0" || github.Spec.Credential.SecretKey != "token" {
@@ -66,7 +66,7 @@ func TestLoadShippedDefinitions(t *testing.T) {
 	if write.Risk != "WRITE" || write.ApprovalPolicy != "HUMAN_EACH_EFFECT" {
 		t.Fatalf("synthetic write policy = %s/%s", write.Risk, write.ApprovalPolicy)
 	}
-	for _, key := range []string{"gitlab", "jira", "confluence", "email", "https-json", "mattermost", "synthetic", "openapi-mcp"} {
+	for _, key := range []string{"gitlab", "jira", "confluence", "jira-server-dc", "confluence-server-dc", "email", "https-json", "mattermost", "synthetic", "openapi-mcp"} {
 		definition := definitions[key]
 		if definition.Digest == "" || definition.Spec.HealthCheck.Operation == "" || len(definition.Spec.NetworkDestinations) == 0 {
 			t.Fatalf("definition %q does not have an executable boundary: %#v", key, definition.Spec)
