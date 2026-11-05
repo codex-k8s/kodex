@@ -4,7 +4,7 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.4.0
+version: 1.5.0
 updated: 2026-11-05
 ---
 
@@ -120,6 +120,62 @@ backup reader — `platform-oidc-identity-backup`. Оба требуют exact03
 не расширяются. Команда `restore-workspace-backup-acl` поддерживает exact033,
 восстанавливает этот закрытый набор атомарно и откатывает всю операцию при drift.
 Goose Down для033 запрещён: возврат старого image не отменяет schema/revocation.
+
+### Обновление bootstrap receipts при переходе032→033
+
+`tools/install/bootstrap_upgrade.py` задаёт отдельный optional profile
+`kodex.bootstrap-upgrade/v1`, `managed_by: git`. Он закрепляет SHA предыдущего и
+целевого raw render, оба source SHA, `from_schema_heads`/`to_schema_heads` и
+`schema_profile: plain|backup`. Поддержан exact032→033 при неизменных heads
+internal-rpc-authority/email-bridge. Прежние install/resume modes и receipts
+сохраняют поведение без выбора этого профиля.
+
+`prepare` выполняется offline на operator host: читает private0400/0600 inputs,
+проверяет byte pins и сохраняет четыре уже исполненных bootstrap Job из прежнего
+render. Их commands/arguments/env/volumes и остальные поля обязаны совпадать с
+целевыми; различаться могут только immutable images. Новая CP migration остаётся
+в target render с `backoffLimit=0`. Операция не запускает Jobs и не принимает
+изменение bootstrap effect как обновление image. Результат содержит отдельный
+immutable ConfigMap с hash выбранного upgrade profile.
+
+Operator lifecycle отдельно проверяет target/namespace, provenance полного
+release lock/images и отсутствие активной работы, сохраняет preimage/backup,
+останавливает writers, выполняет exact migration precondition и единственный
+forward-up Job. Перед create нужно проверить, что прежний CP migration Job уже
+отсутствует; существующий Job требует reconciliation. При неизвестном результате
+create/up выполняется readback того же UID, без автоматического повторного apply.
+
+После успешной миграции `capture` на operator host с `kubectl` и `node` проверяет
+cluster/namespace UID, прежний pinned completion receipt и четыре сохранённых
+Job. Для новой CP migration нужны новый Job UID, terminal `Complete`, отсутствие
+предыдущих failures, один Job-owned Pod с неизменённым executable spec,
+действительный image digest и exit0 всех containers. Затем проверяются heads всех
+трёх БД и полный033 catalog штатным plain/backup verifier. Смена UID/spec либо
+неуспешная проверка закрывает capture; schema version сама по себе недостаточна.
+
+Результат — receipt `FORWARD_MIGRATION_UPGRADE`: исторические rows сохраняются,
+новая row получает только реально наблюдённые UID/seal/completion time. Значения
+Secret/DSN и business rows не читаются. Для последующего readback нужен явный
+`--allow-reconciled-bootstrap-completion`; receipt привязан к immutable profile
+целевого render. TTL-удаление подтверждённого Job не запускает его заново.
+Capture не изменяет Kubernetes status и не означает завершения rollout.
+
+| Состояние | Проверяемое действие | Результат/восстановление |
+|---|---|---|
+| PLANNED | Raw render/source/schema pins; неизменность четырёх effects | Offline `prepare`; никаких mutations |
+| QUIESCED | Exact target, preimage/backup и idle fence | Выполняет operator lifecycle перед migration |
+| MIGRATION UNKNOWN | Тот же Job/Pod UID и actual schema | Readback; новый create не выполняется |
+| MIGRATION COMPLETE | Terminal Job, actual Pod/image и полный033 catalog | Read-only `capture`, новый composite receipt |
+| ROLLOUT/REJOIN | Новый render, profile и pinned receipt | Existing readback проверяет live UID/spec; отсутствующие known Jobs не повторяются |
+| FAILED/DRIFT | Неизвестный effect, extra Pod/privilege либо несовпадение pins | Закрытый отказ; backup/schema compatibility определяют дальнейший operator plan |
+
+Проверки: `test_bootstrap_upgrade.py` и прежние `test_bootstrap_completion.py`,
+включая missing TTL Jobs, foreign UID, mutated command/env/image, nonterminal Job,
+прошлый failure и schema rejection. Native033 schema/backup proof проверяется
+отдельно на disposable PostgreSQL. Семантика terminal conditions сверена с
+[Kubernetes Job API v1.35](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/)
+и [Job controller](https://kubernetes.io/docs/concepts/workloads/controllers/job/):
+`Complete` после завершения Pods, отдельно от `SuccessCriteriaMet`.
 
 Подпись и provider expiry проверяются при каждом native admission. Типизированные
 `OIDCSessionService` requests пусты: actor, organization и revision выбираются
