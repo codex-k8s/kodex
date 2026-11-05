@@ -110,6 +110,19 @@ class OIDCAuthorityProfileTests(unittest.TestCase):
         canonical = validate({"schema": "kodex.oidc-authority-profile/v1", "managed_by": "git", "mode": "platform-managed", "policy": document["policy"]})["policy"]
         self.assertEqual(hashlib.sha256(policy_bytes(canonical)).hexdigest(), document["sha256"])
 
+    def test_cli_reports_fixed_rejection_code_without_input_values(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "profile.json"
+            document = fixture()
+            document["policy"]["bootstrap_subjects"] = ["synthetic-sensitive-input"]
+            path.write_text(json.dumps(document))
+            result = subprocess.run(
+                ["python3", "-B", str(ROOT / "tools/install/oidc_authority_profile.py"),
+                 "validate", "--profile", str(path)], capture_output=True, text=True, timeout=15)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(result.stderr.strip(), "OIDC authority profile rejected: OIDC_BOOTSTRAP_MAPPING_REJECTED")
+            self.assertNotIn("synthetic-sensitive-input", result.stdout + result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

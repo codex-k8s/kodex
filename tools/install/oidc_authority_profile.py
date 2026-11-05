@@ -139,7 +139,9 @@ def main():
                 raise Rejected("OIDC_RENDER_REJECTED") from None
             rendered = transform(resources, profile)
             Path(args.output).write_text(yaml.safe_dump_all(rendered, sort_keys=False))
-    except (Rejected, ValueError, OSError, TypeError, KeyError, RecursionError):
+    except Rejected as error:
+        raise SystemExit("OIDC authority profile rejected: " + str(error)) from None
+    except (ValueError, OSError, TypeError, KeyError, RecursionError):
         raise SystemExit("OIDC authority profile rejected") from None
 
 
