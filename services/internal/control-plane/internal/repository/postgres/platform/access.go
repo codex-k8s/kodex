@@ -37,6 +37,9 @@ func (repository *Repository) syncOIDCGroups(ctx context.Context, tx pgx.Tx, org
 	if err != nil {
 		return err
 	}
+	if input.PlatformManagedOIDC {
+		return repository.syncStandardOIDCGroups(ctx, tx, organizationID, subjectID, input, desiredGroups)
+	}
 	matches, err := repository.oidcGroupsMatch(ctx, tx, organizationID, subjectID, input.ExternalSessionRevision, desiredGroups)
 	if err != nil || matches {
 		return err
@@ -53,10 +56,18 @@ func (repository *Repository) syncOIDCGroups(ctx context.Context, tx pgx.Tx, org
 	if err != nil || matches {
 		return err
 	}
+	return repository.replaceOIDCGroupsTx(ctx, tx, organizationID, subjectID, input, desiredGroups)
+}
+
+// replaceOIDCGroupsTx replaces bounded normalized observations after its caller has acquired the subject lock and checked the identity watermark.
+// It owns no commit and assigns no application permissions; legacy callers retain their existing observation semantics.
+// replaceOIDCGroupsTx заменяет bounded normalized observations после subject lock и проверки identity watermark вызывающей стороной.
+// Helper не коммитит и не назначает application permissions; legacy callers сохраняют прежнюю семантику observations.
+func (repository *Repository) replaceOIDCGroupsTx(ctx context.Context, tx pgx.Tx, organizationID, subjectID string, input platformrepo.ProofPrincipalInput, desiredGroups []string) error {
 	if _, err := tx.Exec(ctx, queryAccessSyncReplaceMemberships, pgx.NamedArgs{
 		"organization_id": organizationID, "subject_id": subjectID,
 	}); err != nil {
-		return errs.ErrUnavailable
+		return humanIdentityDatabaseError(input, err)
 	}
 	observedAt := time.Now().UTC()
 	for _, groupName := range desiredGroups {
@@ -70,13 +81,13 @@ func (repository *Repository) syncOIDCGroups(ctx context.Context, tx pgx.Tx, org
 			"ref": groupRef, "organization_id": organizationID, "issuer": input.ExternalIssuer,
 			"external_group_digest": hex.EncodeToString(digest[:]), "display_name": groupName, "observed_at": observedAt,
 		}).Scan(&groupID, &returnedRef); err != nil {
-			return errs.ErrUnavailable
+			return humanIdentityDatabaseError(input, err)
 		}
 		if _, err := tx.Exec(ctx, queryAccessSyncInsertMembership, pgx.NamedArgs{
 			"organization_id": organizationID, "group_id": groupID, "subject_id": subjectID,
 			"session_revision": input.ExternalSessionRevision, "observed_at": observedAt,
 		}); err != nil {
-			return errs.ErrUnavailable
+			return humanIdentityDatabaseError(input, err)
 		}
 	}
 	return nil

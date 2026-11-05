@@ -126,6 +126,9 @@ type ProofPrincipalInput struct {
 	ExternalGroups          []string
 	ExternalSessionRevision uint64
 	ExternalAuthenticatedAt time.Time
+	PlatformManagedOIDC     bool
+	ExternalIssuedAt        time.Time
+	ExternalSessionID       string
 	ExternalACR             string
 	ExternalAMR             []string
 	OwnerClaim              bool

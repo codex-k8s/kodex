@@ -5,6 +5,7 @@ import (
 	_ "embed"
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/serviceidentity"
+	"github.com/codex-k8s/kodex/libs/go/oidcverifier"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/authorization"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/rpcprincipal"
 	"google.golang.org/grpc"
@@ -28,12 +29,18 @@ var serviceIdentityPolicy []byte
 // legacy только отсутствие profile metadata; дубли, неизвестные profiles и service-v1 отказы не
 // запускают legacy retry.
 func serviceIdentityReader(owner rpcprincipal.Owner, credentials rpcprincipal.CredentialVerifier, legacy grpc.UnaryServerInterceptor, legacyStream grpc.StreamServerInterceptor) (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor, error) {
+	return serviceIdentityReaderWithOIDCMode(owner, credentials, legacy, legacyStream, oidcverifier.ClaimsAuthorityMode)
+}
+
+// serviceIdentityReaderWithOIDCMode binds the configured identity mode to service-v1 resolution while keeping absent-profile legacy routing explicit.
+// serviceIdentityReaderWithOIDCMode связывает настроенный identity mode с service-v1 resolution, сохраняя явный legacy routing при отсутствии profile.
+func serviceIdentityReaderWithOIDCMode(owner rpcprincipal.Owner, credentials rpcprincipal.CredentialVerifier, legacy grpc.UnaryServerInterceptor, legacyStream grpc.StreamServerInterceptor, mode oidcverifier.AuthorityMode) (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor, error) {
 	const target = "spiffe://kodex.local/ns/kodex-system/sa/control-plane"
 	authorizer, _, err := serviceidentity.FromPolicy(serviceIdentityPolicy, target, serviceidentity.CertificateLifetimeBoundary{})
 	if err != nil {
 		return nil, nil, err
 	}
-	resolver, err := rpcprincipal.New(owner, credentials)
+	resolver, err := rpcprincipal.NewWithAuthorityMode(owner, credentials, mode)
 	if err != nil {
 		return nil, nil, err
 	}

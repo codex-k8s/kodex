@@ -1,6 +1,9 @@
 package oidcidentity
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // TestCanonicalIdentity requires deterministic opaque mapping and distinct
 // derived UUIDs for another issuer or identity kind, without external OIDC calls.
@@ -54,6 +57,36 @@ func TestCanonicalIdentityRejectsInvalidInput(t *testing.T) {
 	for _, value := range []string{"", "short", "contains whitespace", "opaque/session/identifier"} {
 		if _, err := SessionID("https://sso.example.test/realms/example", value); err == nil {
 			t.Fatalf("invalid value %q was accepted", value)
+		}
+	}
+}
+
+// TestScopedSubjectPreservesExactIssuerAndSubject isolates UUID subjects across issuers and preserves standard subject case and spaces.
+// TestScopedSubjectPreservesExactIssuerAndSubject разделяет UUID subjects по issuer и сохраняет регистр и пробелы standard subject.
+func TestScopedSubjectPreservesExactIssuerAndSubject(t *testing.T) {
+	const issuer = "https://identity.example.invalid/realm/test"
+	const subject = "20000000-0000-4000-8000-000000000001"
+	first, err := ScopedSubject(issuer, subject)
+	second, otherErr := ScopedSubject(issuer+"-other", subject)
+	if err != nil || otherErr != nil || first == subject || first == second {
+		t.Fatal("UUID subject escaped exact issuer binding")
+	}
+	for _, raw := range []string{"alice", "Alice", " alice ", strings.Repeat("x", 255)} {
+		a, err := ScopedSubject(issuer, raw)
+		b, repeatErr := ScopedSubject(issuer, raw)
+		if err != nil || repeatErr != nil || a != b || a == first {
+			t.Fatal("bounded standard subject mapping was not stable")
+		}
+		if raw != "alice" {
+			plain, _ := ScopedSubject(issuer, "alice")
+			if plain == a {
+				t.Fatal("distinct exact subjects were normalized into one identity")
+			}
+		}
+	}
+	for _, raw := range []string{"", "line\nbreak", "zero\x00byte", "non-ascii-☃", strings.Repeat("x", 256)} {
+		if _, err := ScopedSubject(issuer, raw); err == nil {
+			t.Fatal("invalid scoped subject was accepted")
 		}
 	}
 }

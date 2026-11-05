@@ -143,6 +143,9 @@ func TestBrowserExchangeNeverRetriesProviderFailure(t *testing.T) {
 			if !errors.Is(err, want) || calls.Load() != 1 {
 				t.Fatal("provider failure was retried or misclassified")
 			}
+			if _, err := client.RefreshIdentity(t.Context(), "refresh"); !errors.Is(err, want) || calls.Load() != 2 {
+				t.Fatal("standard provider failure was retried or misclassified")
+			}
 		})
 	}
 }

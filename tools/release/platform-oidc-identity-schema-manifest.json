@@ -1,0 +1,1257 @@
+{
+  "kind": "EXPECTED_SCHEMA_CONTRACT",
+  "version": "20261105000100",
+  "source": "Disposable PostgreSQL 18.3; exact authored migration and frozen predecessor; no business rows or deployment data",
+  "migrationSHA256": "44624b911093d62a9bd63c78c824209ee3230a126229d545bd52b406404203a3",
+  "predecessorPostconditionSHA256": "f7f9d68e1ede37b275b12b6e41d7a2fbf0b883a81910564b41589170b5d96766",
+  "catalogReaderSHA256": "597034f08abd1082d2372dcdf01cdabed0c60f084f7825357ad5d8a63218de6c",
+  "catalog": {
+    "tables": {
+      "oidc_identity_policies": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "DELETE",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "INSERT",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "MAINTAIN",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "REFERENCES",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "SELECT",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "TRIGGER",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "TRUNCATE",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "UPDATE",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "INSERT",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "SELECT",
+            false
+          ]
+        ],
+        "rls": false,
+        "kind": "r",
+        "owner": "control_plane_owner",
+        "columns": [
+          [
+            "revision",
+            "bigint",
+            true,
+            false,
+            null,
+            "",
+            ""
+          ],
+          [
+            "organization_id",
+            "uuid",
+            true,
+            false,
+            null,
+            "",
+            ""
+          ],
+          [
+            "issuer",
+            "text",
+            true,
+            false,
+            null,
+            "",
+            ""
+          ],
+          [
+            "digest",
+            "text",
+            true,
+            false,
+            null,
+            "",
+            ""
+          ],
+          [
+            "document",
+            "jsonb",
+            true,
+            false,
+            null,
+            "",
+            ""
+          ],
+          [
+            "created_at",
+            "timestamp with time zone",
+            true,
+            true,
+            "clock_timestamp()",
+            "",
+            ""
+          ]
+        ],
+        "indexes": {
+          "control_plane.oidc_identity_policies_pkey": [
+            true,
+            true,
+            true,
+            true,
+            "CREATE UNIQUE INDEX oidc_identity_policies_pkey ON control_plane.oidc_identity_policies USING btree (revision)"
+          ],
+          "control_plane.oidc_identity_policies_organization_id_revision_digest_issu_key": [
+            true,
+            true,
+            true,
+            true,
+            "CREATE UNIQUE INDEX oidc_identity_policies_organization_id_revision_digest_issu_key ON control_plane.oidc_identity_policies USING btree (organization_id, revision, digest, issuer)"
+          ]
+        },
+        "forceRls": false,
+        "constraints": {
+          "oidc_identity_policies_pkey": [
+            "p",
+            true,
+            true,
+            false,
+            false,
+            "PRIMARY KEY (revision)"
+          ],
+          "oidc_identity_policies_digest_check": [
+            "c",
+            true,
+            true,
+            false,
+            false,
+            "CHECK ((digest ~ '^[a-f0-9]{64}$'::text))"
+          ],
+          "oidc_identity_policies_issuer_check": [
+            "c",
+            true,
+            true,
+            false,
+            false,
+            "CHECK (((octet_length(issuer) >= 1) AND (octet_length(issuer) <= 2048)))"
+          ],
+          "oidc_identity_policies_document_check": [
+            "c",
+            true,
+            true,
+            false,
+            false,
+            "CHECK (((jsonb_typeof(document) = 'object'::text) AND (octet_length((document)::text) <= 16384)))"
+          ],
+          "oidc_identity_policies_revision_check": [
+            "c",
+            true,
+            true,
+            false,
+            false,
+            "CHECK (((revision >= 1) AND (revision <= '9007199254740991'::bigint)))"
+          ],
+          "oidc_identity_policies_digest_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL digest"
+          ],
+          "oidc_identity_policies_issuer_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL issuer"
+          ],
+          "oidc_identity_policies_document_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL document"
+          ],
+          "oidc_identity_policies_revision_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL revision"
+          ],
+          "oidc_identity_policies_created_at_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL created_at"
+          ],
+          "oidc_identity_policies_organization_id_fkey": [
+            "f",
+            true,
+            true,
+            false,
+            false,
+            "FOREIGN KEY (organization_id) REFERENCES control_plane.organizations(id)"
+          ],
+          "oidc_identity_policies_organization_id_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL organization_id"
+          ],
+          "oidc_identity_policies_organization_id_revision_digest_issu_key": [
+            "u",
+            true,
+            true,
+            false,
+            false,
+            "UNIQUE (organization_id, revision, digest, issuer)"
+          ]
+        },
+        "persistence": "p"
+      },
+      "oidc_identity_sessions": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "DELETE",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "INSERT",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "MAINTAIN",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "REFERENCES",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "SELECT",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "TRIGGER",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "TRUNCATE",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "UPDATE",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "INSERT",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "SELECT",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "UPDATE",
+            false
+          ]
+        ],
+        "rls": false,
+        "kind": "r",
+        "owner": "control_plane_owner",
+        "columns": [
+          [
+            "revision",
+            "bigint",
+            true,
+            false,
+            null,
+            "",
+            ""
+          ],
+          [
+            "organization_id",
+            "uuid",
+            true,
+            false,
+            null,
+            "",
+            ""
+          ],
+          [
+            "subject_id",
+            "uuid",
+            true,
+            false,
+            null,
+            "",
+            ""
+          ],
+          [
+            "issuer",
+            "text",
+            true,
+            false,
+            null,
+            "",
+            ""
+          ],
+          [
+            "external_subject",
+            "uuid",
+            true,
+            false,
+            null,
+            "",
+            ""
+          ],
+          [
+            "provider_session_id",
+            "uuid",
+            true,
+            false,
+            null,
+            "",
+            ""
+          ],
+          [
+            "authenticated_at",
+            "timestamp with time zone",
+            true,
+            false,
+            null,
+            "",
+            ""
+          ],
+          [
+            "absolute_expires_at",
+            "timestamp with time zone",
+            true,
+            false,
+            null,
+            "",
+            ""
+          ],
+          [
+            "last_issued_at",
+            "timestamp with time zone",
+            true,
+            false,
+            null,
+            "",
+            ""
+          ],
+          [
+            "policy_revision",
+            "bigint",
+            true,
+            false,
+            null,
+            "",
+            ""
+          ],
+          [
+            "policy_digest",
+            "text",
+            true,
+            false,
+            null,
+            "",
+            ""
+          ],
+          [
+            "state",
+            "text",
+            true,
+            true,
+            "'ACTIVE'::text",
+            "",
+            ""
+          ],
+          [
+            "revoked_at",
+            "timestamp with time zone",
+            false,
+            false,
+            null,
+            "",
+            ""
+          ],
+          [
+            "created_at",
+            "timestamp with time zone",
+            true,
+            true,
+            "clock_timestamp()",
+            "",
+            ""
+          ]
+        ],
+        "indexes": {
+          "control_plane.oidc_identity_sessions_pkey": [
+            true,
+            true,
+            true,
+            true,
+            "CREATE UNIQUE INDEX oidc_identity_sessions_pkey ON control_plane.oidc_identity_sessions USING btree (revision)"
+          ],
+          "control_plane.oidc_identity_sessions_owner": [
+            false,
+            true,
+            true,
+            true,
+            "CREATE INDEX oidc_identity_sessions_owner ON control_plane.oidc_identity_sessions USING btree (organization_id, subject_id, revision)"
+          ],
+          "control_plane.oidc_identity_sessions_issuer_external_subject_provider_ses_key": [
+            true,
+            true,
+            true,
+            true,
+            "CREATE UNIQUE INDEX oidc_identity_sessions_issuer_external_subject_provider_ses_key ON control_plane.oidc_identity_sessions USING btree (issuer, external_subject, provider_session_id, authenticated_at)"
+          ]
+        },
+        "forceRls": false,
+        "constraints": {
+          "oidc_identity_sessions_pkey": [
+            "p",
+            true,
+            true,
+            false,
+            false,
+            "PRIMARY KEY (revision)"
+          ],
+          "oidc_identity_sessions_check": [
+            "c",
+            true,
+            true,
+            false,
+            false,
+            "CHECK (((absolute_expires_at > authenticated_at) AND (absolute_expires_at <= (authenticated_at + '12:00:00'::interval))))"
+          ],
+          "oidc_identity_sessions_check1": [
+            "c",
+            true,
+            true,
+            false,
+            false,
+            "CHECK (((last_issued_at >= authenticated_at) AND (last_issued_at < absolute_expires_at)))"
+          ],
+          "oidc_identity_sessions_check2": [
+            "c",
+            true,
+            true,
+            false,
+            false,
+            "CHECK ((((state = 'ACTIVE'::text) AND (revoked_at IS NULL)) OR ((state = 'REVOKED'::text) AND (revoked_at IS NOT NULL))))"
+          ],
+          "oidc_identity_sessions_state_check": [
+            "c",
+            true,
+            true,
+            false,
+            false,
+            "CHECK ((state = ANY (ARRAY['ACTIVE'::text, 'REVOKED'::text])))"
+          ],
+          "oidc_identity_sessions_issuer_check": [
+            "c",
+            true,
+            true,
+            false,
+            false,
+            "CHECK (((octet_length(issuer) >= 1) AND (octet_length(issuer) <= 2048)))"
+          ],
+          "oidc_identity_sessions_revision_check": [
+            "c",
+            true,
+            true,
+            false,
+            false,
+            "CHECK (((revision >= 1) AND (revision <= '9007199254740991'::bigint)))"
+          ],
+          "oidc_identity_sessions_state_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL state"
+          ],
+          "oidc_identity_sessions_issuer_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL issuer"
+          ],
+          "oidc_identity_sessions_revision_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL revision"
+          ],
+          "oidc_identity_sessions_created_at_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL created_at"
+          ],
+          "oidc_identity_sessions_policy_digest_check": [
+            "c",
+            true,
+            true,
+            false,
+            false,
+            "CHECK ((policy_digest ~ '^[a-f0-9]{64}$'::text))"
+          ],
+          "oidc_identity_sessions_subject_id_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL subject_id"
+          ],
+          "oidc_identity_sessions_organization_id_fkey": [
+            "f",
+            true,
+            true,
+            false,
+            false,
+            "FOREIGN KEY (organization_id) REFERENCES control_plane.organizations(id)"
+          ],
+          "oidc_identity_sessions_policy_digest_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL policy_digest"
+          ],
+          "oidc_identity_sessions_last_issued_at_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL last_issued_at"
+          ],
+          "oidc_identity_sessions_organization_id_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL organization_id"
+          ],
+          "oidc_identity_sessions_policy_revision_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL policy_revision"
+          ],
+          "oidc_identity_sessions_authenticated_at_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL authenticated_at"
+          ],
+          "oidc_identity_sessions_external_subject_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL external_subject"
+          ],
+          "oidc_identity_sessions_absolute_expires_at_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL absolute_expires_at"
+          ],
+          "oidc_identity_sessions_provider_session_id_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL provider_session_id"
+          ],
+          "oidc_identity_sessions_organization_id_subject_id_fkey": [
+            "f",
+            true,
+            true,
+            false,
+            false,
+            "FOREIGN KEY (organization_id, subject_id) REFERENCES control_plane.subjects(organization_id, id)"
+          ],
+          "oidc_identity_sessions_issuer_external_subject_provider_ses_key": [
+            "u",
+            true,
+            true,
+            false,
+            false,
+            "UNIQUE (issuer, external_subject, provider_session_id, authenticated_at)"
+          ],
+          "oidc_identity_sessions_organization_id_policy_revision_pol_fkey": [
+            "f",
+            true,
+            true,
+            false,
+            false,
+            "FOREIGN KEY (organization_id, policy_revision, policy_digest, issuer) REFERENCES control_plane.oidc_identity_policies(organization_id, revision, digest, issuer)"
+          ]
+        },
+        "persistence": "p"
+      },
+      "oidc_identity_observations": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "DELETE",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "INSERT",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "MAINTAIN",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "REFERENCES",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "SELECT",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "TRIGGER",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "TRUNCATE",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "UPDATE",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "INSERT",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "SELECT",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "UPDATE",
+            false
+          ]
+        ],
+        "rls": false,
+        "kind": "r",
+        "owner": "control_plane_owner",
+        "columns": [
+          [
+            "organization_id",
+            "uuid",
+            true,
+            false,
+            null,
+            "",
+            ""
+          ],
+          [
+            "subject_id",
+            "uuid",
+            true,
+            false,
+            null,
+            "",
+            ""
+          ],
+          [
+            "last_issued_at",
+            "timestamp with time zone",
+            true,
+            false,
+            null,
+            "",
+            ""
+          ],
+          [
+            "groups_digest",
+            "text",
+            true,
+            false,
+            null,
+            "",
+            ""
+          ],
+          [
+            "session_revision",
+            "bigint",
+            true,
+            false,
+            null,
+            "",
+            ""
+          ],
+          [
+            "observed_at",
+            "timestamp with time zone",
+            true,
+            true,
+            "clock_timestamp()",
+            "",
+            ""
+          ]
+        ],
+        "indexes": {
+          "control_plane.oidc_identity_observations_pkey": [
+            true,
+            true,
+            true,
+            true,
+            "CREATE UNIQUE INDEX oidc_identity_observations_pkey ON control_plane.oidc_identity_observations USING btree (organization_id, subject_id)"
+          ]
+        },
+        "forceRls": false,
+        "constraints": {
+          "oidc_identity_observations_pkey": [
+            "p",
+            true,
+            true,
+            false,
+            false,
+            "PRIMARY KEY (organization_id, subject_id)"
+          ],
+          "oidc_identity_observations_groups_digest_check": [
+            "c",
+            true,
+            true,
+            false,
+            false,
+            "CHECK ((groups_digest ~ '^[a-f0-9]{64}$'::text))"
+          ],
+          "oidc_identity_observations_subject_id_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL subject_id"
+          ],
+          "oidc_identity_observations_observed_at_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL observed_at"
+          ],
+          "oidc_identity_observations_groups_digest_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL groups_digest"
+          ],
+          "oidc_identity_observations_session_revision_check": [
+            "c",
+            true,
+            true,
+            false,
+            false,
+            "CHECK (((session_revision >= 1) AND (session_revision <= '9007199254740991'::bigint)))"
+          ],
+          "oidc_identity_observations_last_issued_at_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL last_issued_at"
+          ],
+          "oidc_identity_observations_organization_id_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL organization_id"
+          ],
+          "oidc_identity_observations_session_revision_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL session_revision"
+          ],
+          "oidc_identity_observations_organization_id_subject_id_fkey": [
+            "f",
+            true,
+            true,
+            false,
+            false,
+            "FOREIGN KEY (organization_id, subject_id) REFERENCES control_plane.subjects(organization_id, id)"
+          ]
+        },
+        "persistence": "p"
+      },
+      "oidc_identity_policy_current": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "DELETE",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "INSERT",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "MAINTAIN",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "REFERENCES",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "SELECT",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "TRIGGER",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "TRUNCATE",
+            false
+          ],
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "UPDATE",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "INSERT",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "SELECT",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "UPDATE",
+            false
+          ]
+        ],
+        "rls": false,
+        "kind": "r",
+        "owner": "control_plane_owner",
+        "columns": [
+          [
+            "singleton",
+            "boolean",
+            true,
+            true,
+            "true",
+            "",
+            ""
+          ],
+          [
+            "revision",
+            "bigint",
+            true,
+            false,
+            null,
+            "",
+            ""
+          ]
+        ],
+        "indexes": {
+          "control_plane.oidc_identity_policy_current_pkey": [
+            true,
+            true,
+            true,
+            true,
+            "CREATE UNIQUE INDEX oidc_identity_policy_current_pkey ON control_plane.oidc_identity_policy_current USING btree (singleton)"
+          ]
+        },
+        "forceRls": false,
+        "constraints": {
+          "oidc_identity_policy_current_pkey": [
+            "p",
+            true,
+            true,
+            false,
+            false,
+            "PRIMARY KEY (singleton)"
+          ],
+          "oidc_identity_policy_current_revision_fkey": [
+            "f",
+            true,
+            true,
+            false,
+            false,
+            "FOREIGN KEY (revision) REFERENCES control_plane.oidc_identity_policies(revision)"
+          ],
+          "oidc_identity_policy_current_singleton_check": [
+            "c",
+            true,
+            true,
+            false,
+            false,
+            "CHECK (singleton)"
+          ],
+          "oidc_identity_policy_current_revision_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL revision"
+          ],
+          "oidc_identity_policy_current_singleton_not_null": [
+            "n",
+            true,
+            true,
+            false,
+            false,
+            "NOT NULL singleton"
+          ]
+        },
+        "persistence": "p"
+      }
+    },
+    "sequence": {
+      "acl": [
+        [
+          "control_plane_owner",
+          "control_plane_owner",
+          "SELECT",
+          false
+        ],
+        [
+          "control_plane_owner",
+          "control_plane_owner",
+          "UPDATE",
+          false
+        ],
+        [
+          "control_plane_owner",
+          "control_plane_owner",
+          "USAGE",
+          false
+        ],
+        [
+          "control_plane_runtime",
+          "control_plane_owner",
+          "SELECT",
+          false
+        ],
+        [
+          "control_plane_runtime",
+          "control_plane_owner",
+          "USAGE",
+          false
+        ]
+      ],
+      "max": 9007199254740991,
+      "min": 1,
+      "type": "bigint",
+      "cache": 1,
+      "cycle": false,
+      "owner": "control_plane_owner",
+      "start": 1,
+      "increment": 1
+    },
+    "triggers": {
+      "oidc_identity_policies.oidc_identity_policy_immutable": [
+        "CREATE TRIGGER oidc_identity_policy_immutable BEFORE DELETE OR UPDATE ON control_plane.oidc_identity_policies FOR EACH ROW EXECUTE FUNCTION control_plane.guard_oidc_identity_policy()",
+        27,
+        "O",
+        false,
+        false,
+        false,
+        ""
+      ],
+      "oidc_identity_sessions.oidc_identity_session_monotonic": [
+        "CREATE TRIGGER oidc_identity_session_monotonic BEFORE DELETE OR UPDATE ON control_plane.oidc_identity_sessions FOR EACH ROW EXECUTE FUNCTION control_plane.guard_oidc_identity_session()",
+        27,
+        "O",
+        false,
+        false,
+        false,
+        ""
+      ],
+      "oidc_identity_policy_current.oidc_identity_policy_monotonic": [
+        "CREATE TRIGGER oidc_identity_policy_monotonic BEFORE DELETE OR UPDATE ON control_plane.oidc_identity_policy_current FOR EACH ROW EXECUTE FUNCTION control_plane.guard_oidc_identity_policy()",
+        27,
+        "O",
+        false,
+        false,
+        false,
+        ""
+      ],
+      "oidc_identity_observations.oidc_identity_observation_monotonic": [
+        "CREATE TRIGGER oidc_identity_observation_monotonic BEFORE DELETE OR UPDATE ON control_plane.oidc_identity_observations FOR EACH ROW EXECUTE FUNCTION control_plane.guard_oidc_identity_observation()",
+        27,
+        "O",
+        false,
+        false,
+        false,
+        ""
+      ]
+    },
+    "functions": {
+      "control_plane.guard_oidc_identity_policy()": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ],
+          [
+            "PUBLIC",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ]
+        ],
+        "set": false,
+        "kind": "f",
+        "owner": "control_plane_owner",
+        "result": "trigger",
+        "strict": false,
+        "definer": false,
+        "defaults": 0,
+        "language": "plpgsql",
+        "parallel": "u",
+        "leakproof": false,
+        "definition": "CREATE OR REPLACE FUNCTION control_plane.guard_oidc_identity_policy()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'control_plane'\nAS $function$\nBEGIN\n    IF TG_TABLE_NAME = 'oidc_identity_policy_current' AND TG_OP = 'UPDATE' THEN\n        IF NEW.singleton IS DISTINCT FROM OLD.singleton OR NEW.revision <= OLD.revision THEN\n            RAISE EXCEPTION 'OIDC policy revision must advance' USING ERRCODE = '23514';\n        END IF;\n        RETURN NEW;\n    END IF;\n    RAISE EXCEPTION 'OIDC policy history cannot be rewritten' USING ERRCODE = '23514';\nEND;\n$function$\n",
+        "volatility": "v",
+        "argumentNames": null,
+        "configuration": [
+          "search_path=pg_catalog, control_plane"
+        ]
+      },
+      "control_plane.guard_oidc_identity_session()": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ],
+          [
+            "PUBLIC",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ]
+        ],
+        "set": false,
+        "kind": "f",
+        "owner": "control_plane_owner",
+        "result": "trigger",
+        "strict": false,
+        "definer": false,
+        "defaults": 0,
+        "language": "plpgsql",
+        "parallel": "u",
+        "leakproof": false,
+        "definition": "CREATE OR REPLACE FUNCTION control_plane.guard_oidc_identity_session()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'control_plane'\nAS $function$\nBEGIN\n    IF TG_OP = 'DELETE' THEN\n        RAISE EXCEPTION 'OIDC session tombstone cannot be deleted' USING ERRCODE = '23514';\n    END IF;\n    IF (NEW.revision, NEW.organization_id, NEW.subject_id, NEW.issuer,\n        NEW.external_subject, NEW.provider_session_id, NEW.authenticated_at,\n        NEW.absolute_expires_at, NEW.policy_revision, NEW.policy_digest, NEW.created_at)\n       IS DISTINCT FROM\n       (OLD.revision, OLD.organization_id, OLD.subject_id, OLD.issuer,\n        OLD.external_subject, OLD.provider_session_id, OLD.authenticated_at,\n        OLD.absolute_expires_at, OLD.policy_revision, OLD.policy_digest, OLD.created_at)\n       OR NEW.last_issued_at < OLD.last_issued_at\n       OR (OLD.state = 'REVOKED' AND (NEW.state <> 'REVOKED' OR NEW.revoked_at IS DISTINCT FROM OLD.revoked_at)) THEN\n        RAISE EXCEPTION 'OIDC session transition is invalid' USING ERRCODE = '23514';\n    END IF;\n    RETURN NEW;\nEND;\n$function$\n",
+        "volatility": "v",
+        "argumentNames": null,
+        "configuration": [
+          "search_path=pg_catalog, control_plane"
+        ]
+      },
+      "control_plane.guard_oidc_identity_observation()": {
+        "acl": [
+          [
+            "control_plane_owner",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ],
+          [
+            "control_plane_runtime",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ],
+          [
+            "PUBLIC",
+            "control_plane_owner",
+            "EXECUTE",
+            false
+          ]
+        ],
+        "set": false,
+        "kind": "f",
+        "owner": "control_plane_owner",
+        "result": "trigger",
+        "strict": false,
+        "definer": false,
+        "defaults": 0,
+        "language": "plpgsql",
+        "parallel": "u",
+        "leakproof": false,
+        "definition": "CREATE OR REPLACE FUNCTION control_plane.guard_oidc_identity_observation()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'control_plane'\nAS $function$\nBEGIN\n    IF TG_OP = 'DELETE' THEN\n        RAISE EXCEPTION 'OIDC identity high-watermark cannot be deleted' USING ERRCODE = '23514';\n    END IF;\n    IF (NEW.organization_id, NEW.subject_id) IS DISTINCT FROM (OLD.organization_id, OLD.subject_id)\n       OR NEW.last_issued_at < OLD.last_issued_at OR NEW.session_revision < OLD.session_revision\n       OR (NEW.last_issued_at = OLD.last_issued_at AND NEW.groups_digest <> OLD.groups_digest) THEN\n        RAISE EXCEPTION 'OIDC identity observation cannot move backwards' USING ERRCODE = '23514';\n    END IF;\n    RETURN NEW;\nEND;\n$function$\n",
+        "volatility": "v",
+        "argumentNames": null,
+        "configuration": [
+          "search_path=pg_catalog, control_plane"
+        ]
+      }
+    },
+    "subjectOwnerKey": [
+      "u",
+      true,
+      true,
+      "UNIQUE (organization_id, id)"
+    ]
+  }
+}

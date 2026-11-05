@@ -10,6 +10,8 @@ import { validGitHubPRMigrationPostcondition, validGitHubPRMigrationPrecondition
 import { validWorkflowPDLCMigrationPrecondition } from './control-plane-immutable-migration.mjs';
 import { workflowPDLCCatalogDigest } from './workflow-pdlc-catalog.gen.mjs';
 import { workflowContentPageCatalogDigest } from './workflow-content-page-catalog.gen.mjs';
+import { platformOIDCIdentityCatalogDigest } from './platform-oidc-identity-catalog.gen.mjs';
+import { validPlatformOIDCIdentityMigrationPostcondition } from './control-plane-immutable-migration.mjs';
 import { validWorkflowContentPageMigrationPrecondition } from './control-plane-immutable-migration.mjs';
 import { waitMigrationMaintenance, immutableMigrationProfile, isImmutableMigrationProfile, validImmutableMigrationPostcondition, validProjectPurgeAuthorityMigrationPostcondition, validOwnerGateExpiryMigrationPostcondition, validRepositoryBundleMigrationPostcondition, validServerWorkflowMigrationPostcondition, validLegacyWorkflowReworkMigrationPostcondition, validWorkflowExceptionContextMigrationPrecondition, validWorkflowExceptionContextMigrationPostcondition, validWorkflowUpstreamReworkMigrationPrecondition, validWorkflowUpstreamReworkMigrationPostcondition, validWorkflowReviewQAEvidenceMigrationPostcondition, validSessionWorkspaceMigrationPostcondition, validWorkspaceCheckpointMigrationPostcondition, validSSHComposeMigrationPostcondition } from './control-plane-immutable-migration.mjs';
 
@@ -19,6 +21,19 @@ const version = '20261025000100', annotation = 'kodex.dev/cp-outbox-index-migrat
 const sqlFile = `${version}_outbox_unpublished_predecessor_index.sql`;
 const read = path => JSON.parse(readFileSync(path,'utf8'));
 const write = (path,value) => writeFileSync(path,JSON.stringify(value),{mode:0o600});
+
+test('Platform OIDC033 требует собственный exact catalog и сохраняет frozen032',()=>{
+ const previous=workflowContentPageProof(),proof={...previous,profile:'PLATFORM_OIDC_IDENTITY_V1',
+  gooseVersion:20261105000100,platformOIDCCatalog:true,platformOIDCCatalogDigest:platformOIDCIdentityCatalogDigest};
+ assert.equal(validPlatformOIDCIdentityMigrationPostcondition(proof),true);
+ assert.equal(validPlatformOIDCIdentityMigrationPostcondition(previous),false);
+ assert.equal(validImmutableMigrationPostcondition('workflow-content-page',proof),false);
+ for(const patch of [{platformOIDCCatalog:false},{platformOIDCCatalogDigest:'0'.repeat(64)},
+  {platformOIDCCatalogDigest:workflowContentPageCatalogDigest},{gooseVersion:20261030000100},
+  {profile:'WORKFLOW_CONTENT_PAGE_V1'},{workflowContentPageCatalog:false},
+  {workflowPDLCCatalogDigest:'0'.repeat(64)},{readOnly:'off'},{restoreCatalog:false}])
+  assert.equal(validPlatformOIDCIdentityMigrationPostcondition({...proof,...patch}),false);
+});
 
 test('Content page032 требует exact031 до применения и отдельный новый catalog после',()=>{
  for(const backup of [false,true]) {

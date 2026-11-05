@@ -64,6 +64,7 @@ type Repository struct {
 	skillScanner                    skillpolicy.Scanner
 	artifactScanner                 artifactpolicy.Scanner
 	integrationDefinitions          map[string]integrationpackage.Package
+	standardOIDCPolicy              *value.OIDCIdentityPolicy
 	roleImageCatalogResolver        func(entity.RoleEnvironmentSelection) (entity.RoleImageRecipeInput, error)
 	roleImageRecommendedSelection   func() (entity.RoleEnvironmentSelection, error)
 	roleImageCatalogEntries         func() []roleimageservice.Environment
@@ -212,7 +213,7 @@ func (repository *Repository) Ready(ctx context.Context) error {
 	if repository.pool.QueryRow(ctx, queryProjectPurgeRecoveryReadiness).Scan(&recoveryReady) != nil || !recoveryReady {
 		return errors.New("project purge recovery schema is unavailable")
 	}
-	return nil
+	return repository.standardOIDCPolicyReady(ctx)
 }
 
 // Bootstrap completes one owner bootstrap before readiness, retrying only proven transaction
@@ -259,6 +260,9 @@ func (repository *Repository) bootstrapOnce(ctx context.Context) (failure error)
 			return err
 		}
 		if err := repository.reconcileIntegrationDefinitions(ctx, tx); err != nil {
+			return err
+		}
+		if err := repository.reconcileStandardOIDCPolicy(ctx, tx); err != nil {
 			return err
 		}
 		if err := tx.Commit(ctx); err != nil {
@@ -346,6 +350,9 @@ func (repository *Repository) bootstrapOnce(ctx context.Context) (failure error)
 		return bootstrapFailure("seed system assistant role definition", err)
 	}
 	if err := repository.reconcileIntegrationDefinitions(ctx, tx); err != nil {
+		return err
+	}
+	if err := repository.reconcileStandardOIDCPolicy(ctx, tx); err != nil {
 		return err
 	}
 	agentRef, err := newRef("agt")
@@ -846,6 +853,16 @@ func (repository *Repository) resolveProofIdentity(ctx context.Context, input pl
 	if uuid.Validate(input.ExternalActorID) != nil || uuid.Validate(input.ExternalTenantID) != nil {
 		return platformrepo.ProofAuthority{}, errs.ErrForbidden
 	}
+	var standardBinding platformrepo.StandardOIDCBinding
+	if input.PlatformManagedOIDC {
+		var err error
+		standardBinding, err = repository.standardOIDCProofBinding(ctx, input)
+		if err != nil {
+			return platformrepo.ProofAuthority{}, err
+		}
+	} else if repository.standardOIDCPolicy != nil {
+		return platformrepo.ProofAuthority{}, errs.ErrForbidden
+	}
 	displayName := strings.TrimSpace(input.ExternalDisplayName)
 	if displayName == "" {
 		displayName = "i18n:OIDC_USER_NAME"
@@ -866,6 +883,9 @@ func (repository *Repository) resolveProofIdentity(ctx context.Context, input pl
 		return platformrepo.ProofAuthority{}, err
 	}
 	if found {
+		if input.PlatformManagedOIDC && (standardBinding.ActorID != authority.ActorID || standardBinding.OrganizationID != authority.OrganizationID) {
+			return platformrepo.ProofAuthority{}, errs.ErrForbidden
+		}
 		tx, err := repository.pool.Begin(ctx)
 		if err != nil {
 			return platformrepo.ProofAuthority{}, errs.ErrUnavailable
@@ -880,7 +900,7 @@ func (repository *Repository) resolveProofIdentity(ctx context.Context, input pl
 		return repository.finishProofIdentityResolution(ctx, tx, input.ProjectRef, authority)
 	}
 	// Впервые назначить владельца установки может только публичный gateway.
-	if trustedSTT {
+	if trustedSTT || input.PlatformManagedOIDC {
 		return platformrepo.ProofAuthority{}, errs.ErrForbidden
 	}
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
@@ -888,52 +908,8 @@ func (repository *Repository) resolveProofIdentity(ctx context.Context, input pl
 		return platformrepo.ProofAuthority{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	authority = platformrepo.ProofAuthority{}
-	var authorityTenant, claimState string
-	if err := tx.QueryRow(ctx, queryLockInstallationOwnerClaim).Scan(
-		&authority.OrganizationID, &authority.OrganizationVersion, &authorityTenant, &claimState,
-	); err != nil {
-		return platformrepo.ProofAuthority{}, errs.ErrUnavailable
-	}
-	if authorityTenant != "" && authorityTenant != input.ExternalTenantID {
-		return platformrepo.ProofAuthority{}, errs.ErrForbidden
-	}
-	if claimState == "PENDING_CLAIM" && !input.OwnerClaim {
-		return platformrepo.ProofAuthority{}, errs.ErrForbidden
-	}
-	err = tx.QueryRow(ctx, queryFindInstallationOwnerSubject, authority.OrganizationID, hex.EncodeToString(actorDigest[:])).Scan(&authority.ActorID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		actorRef, refErr := newRef("usr")
-		if refErr != nil {
-			return platformrepo.ProofAuthority{}, refErr
-		}
-		if err := tx.QueryRow(ctx, queryCreateInstallationOwnerSubject,
-			actorRef, authority.OrganizationID, hex.EncodeToString(actorDigest[:]), displayName, input.ExternalEmailHint).Scan(&authority.ActorID); err != nil {
-			return platformrepo.ProofAuthority{}, errs.ErrUnavailable
-		}
-		if claimState == "PENDING_CLAIM" {
-			if _, err := tx.Exec(ctx, queryClaimInstallationOwnership,
-				authority.OrganizationID, authority.ActorID, input.ExternalTenantID); err != nil {
-				return platformrepo.ProofAuthority{}, errs.ErrUnavailable
-			}
-			bindingRef, refErr := newRef("abnd")
-			if refErr != nil {
-				return platformrepo.ProofAuthority{}, refErr
-			}
-			if _, err := tx.Exec(ctx, queryAccessInsertOwnerBinding, pgx.NamedArgs{
-				"ref": bindingRef, "organization_id": authority.OrganizationID, "subject_id": authority.ActorID,
-			}); err != nil {
-				return platformrepo.ProofAuthority{}, errs.ErrUnavailable
-			}
-			authority.OrganizationVersion++
-		}
-	} else if err != nil {
-		return platformrepo.ProofAuthority{}, errs.ErrUnavailable
-	}
-	if _, err := tx.Exec(ctx, queryUpdateOIDCSubjectProfile, authority.OrganizationID, authority.ActorID, displayName, input.ExternalEmailHint); err != nil {
-		return platformrepo.ProofAuthority{}, errs.ErrUnavailable
-	}
-	if err := repository.syncOIDCGroups(ctx, tx, authority.OrganizationID, authority.ActorID, input); err != nil {
+	authority, err = repository.resolveHumanIdentityTx(ctx, tx, input, hex.EncodeToString(actorDigest[:]), displayName)
+	if err != nil {
 		return platformrepo.ProofAuthority{}, err
 	}
 	return repository.finishProofIdentityResolution(ctx, tx, input.ProjectRef, authority)

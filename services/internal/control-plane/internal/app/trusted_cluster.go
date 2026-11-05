@@ -33,7 +33,7 @@ func trustedClusterReader(ctx context.Context, config Config, owner rpcprincipal
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	resolver, err := rpcprincipal.New(owner, verifier)
+	resolver, err := rpcprincipal.NewWithAuthorityMode(owner, verifier, oidcverifier.AuthorityMode(config.OIDCAuthorityMode))
 	if err != nil {
 		verifier.Close()
 		return nil, nil, nil, err

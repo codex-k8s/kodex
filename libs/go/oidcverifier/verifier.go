@@ -73,22 +73,26 @@ type Config struct {
 	Timeout        time.Duration
 }
 
-// Principal is the validated issuer-scoped identity and bounded presentation metadata derived from a bearer token.
-// Principal содержит проверенную привязанную к issuer личность и ограниченные данные показа из bearer token.
+// Principal contains verified identity and application authority obtained either from the legacy signed claims or an explicitly selected durable platform owner.
+// Standard signature verification alone returns VerifiedIdentity instead; PlatformManagedOIDC may be set only after current owner/session resolution.
+// Principal содержит verified identity и application authority из legacy signed claims либо явно выбранного durable platform owner.
+// Одна standard signature verification возвращает VerifiedIdentity; PlatformManagedOIDC задаётся лишь после current owner/session resolution.
 type Principal struct {
-	Subject         string
-	OrganizationID  string
-	Issuer          string
-	SessionID       string
-	DisplayName     string
-	EmailHint       string
-	Groups          []string
-	OwnerClaim      bool
-	SessionRevision uint64
-	AuthenticatedAt time.Time
-	ACR             string
-	AMR             []string
-	ExpiresAt       time.Time
+	Subject             string
+	OrganizationID      string
+	Issuer              string
+	SessionID           string
+	DisplayName         string
+	EmailHint           string
+	Groups              []string
+	OwnerClaim          bool
+	SessionRevision     uint64
+	AuthenticatedAt     time.Time
+	ACR                 string
+	AMR                 []string
+	ExpiresAt           time.Time
+	PlatformManagedOIDC bool
+	IssuedAt            time.Time
 }
 
 // Verifier owns the exact OIDC transport and last verified signing-key snapshot used by bearer and browser flows.
@@ -123,19 +127,10 @@ func (transport exactTransport) RoundTrip(request *http.Request) (*http.Response
 // claims holds untrusted token fields until signature, audience, issuer and semantic checks succeed.
 // claims содержит недоверенные поля токена до успешной проверки подписи, audience, issuer и смысла.
 type claims struct {
-	SessionID       string   `json:"sid"`
-	OrganizationID  string   `json:"organization_id"`
-	SessionRevision uint64   `json:"session_revision"`
-	TokenID         string   `json:"jti"`
-	Scope           string   `json:"scope"`
-	Name            string   `json:"name"`
-	PreferredName   string   `json:"preferred_username"`
-	Email           string   `json:"email"`
-	EmailVerified   bool     `json:"email_verified"`
-	Groups          []string `json:"groups"`
-	AuthTime        int64    `json:"auth_time"`
-	ACR             string   `json:"acr"`
-	AMR             []string `json:"amr"`
+	standardClaims
+	OrganizationID  string `json:"organization_id"`
+	SessionRevision uint64 `json:"session_revision"`
+	Scope           string `json:"scope"`
 	RealmAccess     struct {
 		Roles []string `json:"roles"`
 	} `json:"realm_access"`
@@ -213,7 +208,7 @@ func New(ctx context.Context, config Config) (*Verifier, error) {
 func (verifier *Verifier) VerifyAuthorization(ctx context.Context, authorization string) (Principal, string, error) {
 	parts := strings.Fields(authorization)
 	if len(parts) != 2 || parts[0] != "Bearer" {
-		return Principal{}, "", errors.New("OIDC bearer is invalid")
+		return Principal{}, "", errors.New(invalidBearerMessage)
 	}
 	principal, err := verifier.VerifyToken(ctx, parts[1])
 	return principal, parts[1], err
@@ -222,56 +217,27 @@ func (verifier *Verifier) VerifyAuthorization(ctx context.Context, authorization
 // VerifyToken checks the bounded signed token and claims, including session lineage and degraded-key expiry.
 // VerifyToken проверяет ограниченный подписанный токен и claims, включая происхождение сессии и срок ключей при деградации.
 func (verifier *Verifier) VerifyToken(ctx context.Context, raw string) (Principal, error) {
-	if verifier == nil || raw == "" || len(raw) > maximumBearerBytes || strings.TrimSpace(raw) != raw {
-		return Principal{}, errors.New("OIDC bearer is invalid")
-	}
-	if err := verifier.keys.verificationError(); err != nil {
-		return Principal{}, err
-	}
-	token, err := verifier.verifier.Verify(ctx, raw)
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		return Principal{}, err
-	}
+	token, err := verifier.verifiedToken(ctx, raw)
 	if err != nil {
-		if availabilityErr := verifier.keys.verificationError(); availabilityErr != nil {
-			return Principal{}, availabilityErr
-		}
-		return Principal{}, errors.New("OIDC bearer is invalid")
-	}
-	if token.Expiry.IsZero() {
-		return Principal{}, errors.New("OIDC bearer is invalid")
-	}
-	if deadline, degraded := verifier.keys.DegradedDeadline(); degraded && token.Expiry.After(deadline) {
-		return Principal{}, errors.New("OIDC bearer exceeds the signing-key grace window")
+		return Principal{}, err
 	}
 	var values claims
 	if token.Claims(&values) != nil || uuid.Validate(values.OrganizationID) != nil || values.SessionRevision == 0 {
-		return Principal{}, errors.New("OIDC session claims are invalid")
+		return Principal{}, errors.New(invalidSessionClaimsMessage)
 	}
-	groups, groupsErr := normalizeGroups(values.Groups)
-	amr, amrErr := normalizeBoundedStrings(values.AMR, maximumAMRValues, maximumAMRRunes)
-	acr := strings.TrimSpace(values.ACR)
-	if groupsErr != nil || amrErr != nil || utf8.RuneCountInString(acr) > maximumACRRunes || strings.ContainsAny(acr, "\r\n\x00") ||
-		values.AuthTime < 0 || values.AuthTime > token.Expiry.Unix() {
-		return Principal{}, errors.New("OIDC session claims are invalid")
+	subject, err := oidcidentity.Subject(token.Issuer, token.Subject)
+	if err != nil {
+		return Principal{}, errors.New(invalidSessionClaimsMessage)
 	}
-	subject, subjectErr := oidcidentity.Subject(token.Issuer, token.Subject)
-	sessionID, sessionErr := oidcidentity.SessionID(token.Issuer, values.SessionID)
-	if subjectErr != nil || sessionErr != nil {
-		return Principal{}, errors.New("OIDC session claims are invalid")
-	}
-	if _, tokenIDErr := oidcidentity.TokenID(token.Issuer, values.TokenID); tokenIDErr != nil {
-		return Principal{}, errors.New("OIDC session claims are invalid")
-	}
-	var authenticatedAt time.Time
-	if values.AuthTime > 0 {
-		authenticatedAt = time.Unix(values.AuthTime, 0).UTC()
+	identity, err := standardIdentityFromToken(token, subject)
+	if err != nil {
+		return Principal{}, err
 	}
 	return Principal{
-		Subject: subject, OrganizationID: values.OrganizationID, Issuer: token.Issuer, SessionID: sessionID,
-		DisplayName: safeDisplayName(values.Name, values.PreferredName), EmailHint: maskedVerifiedEmail(values.Email, values.EmailVerified),
-		Groups: groups, OwnerClaim: containsWord(values.Scope, ownerScope) && contains(values.RealmAccess.Roles, ownerRealmRole),
-		SessionRevision: values.SessionRevision, AuthenticatedAt: authenticatedAt, ACR: acr, AMR: amr, ExpiresAt: token.Expiry,
+		Subject: identity.Subject, OrganizationID: values.OrganizationID, Issuer: identity.Issuer, SessionID: identity.SessionID,
+		DisplayName: identity.DisplayName, EmailHint: identity.EmailHint,
+		Groups: identity.Groups, OwnerClaim: containsWord(values.Scope, ownerScope) && contains(values.RealmAccess.Roles, ownerRealmRole),
+		SessionRevision: values.SessionRevision, AuthenticatedAt: identity.AuthenticatedAt, ACR: identity.ACR, AMR: identity.AMR, ExpiresAt: identity.ExpiresAt,
 	}, nil
 }
 

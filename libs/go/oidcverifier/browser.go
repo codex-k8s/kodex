@@ -154,46 +154,52 @@ func (client *BrowserClient) Refresh(ctx context.Context, refreshToken string) (
 	return client.exchange(ctx, url.Values{"grant_type": {"refresh_token"}, "refresh_token": {refreshToken}}, "")
 }
 
-// exchange bounds the provider response and distinguishes explicit invalid_grant from every uncertain failure.
-// exchange ограничивает ответ провайдера и отличает явный invalid_grant от любого неопределённого отказа.
-func (client *BrowserClient) exchange(ctx context.Context, form url.Values, nonce string) (BrowserTokens, error) {
+// exchangeResponse submits exactly one bounded code/refresh request and distinguishes explicit invalid_grant from uncertainty.
+// No identity or application authority is established by this transport response, and mutation replay is disabled.
+// exchangeResponse однократно отправляет ограниченный code/refresh request и отличает явный invalid_grant от uncertainty.
+// Transport response не устанавливает identity или application authority; mutation replay отключён.
+func (client *BrowserClient) exchangeResponse(ctx context.Context, form url.Values) (browserTokenResponse, error) {
 	form.Set("client_id", client.clientID)
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, client.tokenURL, strings.NewReader(form.Encode()))
 	if err != nil {
-		return BrowserTokens{}, ErrExchangeUncertain
+		return browserTokenResponse{}, ErrExchangeUncertain
 	}
+	request.GetBody = nil
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("Accept", "application/json")
 	response, err := client.verifier.client.Do(request)
 	if err != nil {
-		return BrowserTokens{}, ErrExchangeUncertain
+		return browserTokenResponse{}, ErrExchangeUncertain
 	}
 	defer response.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(response.Body, 64<<10+1))
 	if err != nil || len(raw) > 64<<10 {
-		return BrowserTokens{}, ErrExchangeUncertain
+		return browserTokenResponse{}, ErrExchangeUncertain
 	}
 	if response.StatusCode != http.StatusOK {
 		var failure struct {
 			Error string `json:"error"`
 		}
 		if response.StatusCode == http.StatusBadRequest && json.Unmarshal(raw, &failure) == nil && failure.Error == "invalid_grant" {
-			return BrowserTokens{}, ErrGrantRejected
+			return browserTokenResponse{}, ErrGrantRejected
 		}
-		return BrowserTokens{}, ErrExchangeUncertain
+		return browserTokenResponse{}, ErrExchangeUncertain
 	}
-	var result struct {
-		AccessToken      string `json:"access_token"`
-		RefreshToken     string `json:"refresh_token"`
-		IDToken          string `json:"id_token"`
-		TokenType        string `json:"token_type"`
-		ExpiresIn        int64  `json:"expires_in"`
-		RefreshExpiresIn int64  `json:"refresh_expires_in"`
-	}
+	var result browserTokenResponse
 	if json.Unmarshal(raw, &result) != nil || !strings.EqualFold(result.TokenType, "Bearer") ||
 		!boundedOpaque(result.AccessToken, 1, maximumBearerBytes) || !boundedOpaque(result.RefreshToken, 1, maximumBearerBytes) ||
 		result.ExpiresIn <= 0 || result.RefreshExpiresIn <= 0 || result.RefreshExpiresIn > 12*60*60 {
-		return BrowserTokens{}, ErrExchangeUncertain
+		return browserTokenResponse{}, ErrExchangeUncertain
+	}
+	return result, nil
+}
+
+// exchange verifies legacy application claims after one bounded provider exchange.
+// exchange проверяет legacy application claims после одного ограниченного provider exchange.
+func (client *BrowserClient) exchange(ctx context.Context, form url.Values, nonce string) (BrowserTokens, error) {
+	result, err := client.exchangeResponse(ctx, form)
+	if err != nil {
+		return BrowserTokens{}, err
 	}
 	principal, err := client.verifier.VerifyToken(ctx, result.AccessToken)
 	if err != nil || principal.AuthenticatedAt.IsZero() {

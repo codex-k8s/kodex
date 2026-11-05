@@ -388,11 +388,12 @@ func validFamily(f Family) bool {
 	}
 }
 
-// sameSession requires exact issuer, subject, organization, OIDC session ID/revision and original authentication time across refresh. Access-token expiry is intentionally allowed to change.
-// sameSession требует exact issuer, subject, organization, OIDC session ID и revision и исходное authentication time при refresh. Access-token expiry намеренно может меняться.
+// sameSession requires exact authority mode, issuer, subject, organization, OIDC session ID/revision and original authentication time across refresh. Access-token expiry is intentionally allowed to change.
+// sameSession требует exact authority mode, issuer, subject, organization, OIDC session ID и revision и исходное authentication time при refresh. Access-token expiry намеренно может меняться.
 func sameSession(old, fresh oidcverifier.Principal) bool {
 	return old.Issuer == fresh.Issuer && old.Subject == fresh.Subject && old.OrganizationID == fresh.OrganizationID &&
-		old.SessionID == fresh.SessionID && old.SessionRevision == fresh.SessionRevision && old.AuthenticatedAt.Equal(fresh.AuthenticatedAt)
+		old.SessionID == fresh.SessionID && old.SessionRevision == fresh.SessionRevision && old.AuthenticatedAt.Equal(fresh.AuthenticatedAt) &&
+		old.PlatformManagedOIDC == fresh.PlatformManagedOIDC
 }
 
 // earlier returns the earlier timestamp without normalization; equal instants return the second value, preserving its representation.

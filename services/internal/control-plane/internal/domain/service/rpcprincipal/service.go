@@ -13,6 +13,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/oidcverifier"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/oidcprincipal"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/google/uuid"
 )
@@ -63,9 +64,10 @@ type CredentialVerifier interface {
 // Service объединяет допущенную transport identity, проверенные пользовательские credentials и
 // авторитетное разрешение владельца в проверенный доменный principal.
 type Service struct {
-	owner       Owner
-	credentials CredentialVerifier
-	now         func() time.Time
+	owner        Owner
+	credentials  CredentialVerifier
+	now          func() time.Time
+	identityMode oidcverifier.AuthorityMode
 }
 
 // Input carries server-cast admission and the actual protobuf digest; ProjectRef is a locator
@@ -86,6 +88,38 @@ func New(owner Owner, credentials CredentialVerifier) (*Service, error) {
 		return nil, errors.New("RPC principal dependencies required")
 	}
 	return &Service{owner: owner, credentials: credentials, now: time.Now}, nil
+}
+
+// NewWithAuthorityMode selects the explicit OIDC authority contract and requires its native verification and durable owner ports before serving.
+// NewWithAuthorityMode явно выбирает OIDC authority contract и требует native verification и durable owner ports до обслуживания.
+func NewWithAuthorityMode(owner Owner, credentials CredentialVerifier, mode oidcverifier.AuthorityMode) (*Service, error) {
+	resolved, valid := oidcverifier.ParseAuthorityMode(string(mode))
+	if !valid {
+		return nil, errors.New("OIDC authority mode is invalid")
+	}
+	service, err := New(owner, credentials)
+	if err != nil {
+		return nil, err
+	}
+	if resolved == oidcverifier.PlatformManagedAuthorityMode {
+		if _, ok := owner.(platformrepo.StandardOIDCIdentityOwner); !ok {
+			return nil, errors.New("OIDC identity owner is unavailable")
+		}
+		if _, ok := credentials.(oidcprincipal.IdentityVerifier); !ok {
+			return nil, errors.New("OIDC identity verifier is unavailable")
+		}
+	}
+	service.identityMode = resolved
+	return service, nil
+}
+
+// verifyCredential uses the selected contract only; standard-mode failures never retry through the legacy custom-claims verifier.
+// verifyCredential использует лишь выбранный contract; отказ standard mode не повторяется через legacy custom-claims verifier.
+func (service *Service) verifyCredential(ctx context.Context, token string, caller platformrepo.ProofPrincipalInput) (oidcverifier.Principal, error) {
+	if service.identityMode == oidcverifier.PlatformManagedAuthorityMode {
+		return oidcprincipal.Resolve(ctx, service.credentials.(oidcprincipal.IdentityVerifier), service.owner.(platformrepo.StandardOIDCIdentityOwner), caller, token)
+	}
+	return service.credentials.VerifyToken(ctx, token)
 }
 
 // Resolve validates admitted target, request digest and project presence, verifies user or owner
@@ -129,9 +163,12 @@ func (service *Service) Resolve(ctx context.Context, input Input) (value.Princip
 		if token == input.Authorization || token == "" || strings.TrimSpace(token) != token {
 			return value.Principal{}, errs.ErrUnauthorized
 		}
-		verified, err := service.credentials.VerifyToken(ctx, token)
-		if errors.Is(err, oidcverifier.ErrSigningKeysUnavailable) {
+		verified, err := service.verifyCredential(ctx, token, principalInput)
+		if errors.Is(err, oidcverifier.ErrSigningKeysUnavailable) || errors.Is(err, errs.ErrUnavailable) {
 			return value.Principal{}, errs.ErrUnavailable
+		}
+		if errors.Is(err, errs.ErrForbidden) {
+			return value.Principal{}, errs.ErrForbidden
 		}
 		if err != nil {
 			return value.Principal{}, errs.ErrUnauthorized
@@ -141,6 +178,7 @@ func (service *Service) Resolve(ctx context.Context, input Input) (value.Princip
 		principalInput.ExternalDisplayName, principalInput.ExternalEmailHint = verified.DisplayName, verified.EmailHint
 		principalInput.ExternalIssuer, principalInput.ExternalGroups = verified.Issuer, append([]string(nil), verified.Groups...)
 		principalInput.ExternalSessionRevision, principalInput.OwnerClaim = verified.SessionRevision, verified.OwnerClaim
+		principalInput.PlatformManagedOIDC, principalInput.ExternalIssuedAt, principalInput.ExternalSessionID = verified.PlatformManagedOIDC, verified.IssuedAt, verified.SessionID
 		principalInput.ExternalAuthenticatedAt, principalInput.ExternalACR, principalInput.ExternalAMR = verified.AuthenticatedAt, verified.ACR, append([]string(nil), verified.AMR...)
 		generation = verified.SessionRevision
 	case serviceidentity.ServiceActor:

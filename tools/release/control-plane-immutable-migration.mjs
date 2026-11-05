@@ -9,6 +9,7 @@ import { privateJournal } from '../dev/role-image-acceptance.mjs';
 import { activeDeploymentPods, isProvenStoppedPod } from './stable-archive-transition.mjs';
 import { workflowPDLCCatalogDigest } from './workflow-pdlc-catalog.gen.mjs';
 import { workflowContentPageCatalogDigest } from './workflow-content-page-catalog.gen.mjs';
+import { platformOIDCIdentityCatalogDigest } from './platform-oidc-identity-catalog.gen.mjs';
 
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
@@ -976,4 +977,12 @@ export function validImmutableMigrationPostcondition(profile, proof) {
     case 'repository-bundle': return validRepositoryBundleMigrationPostcondition(proof);
     default: return false;
   }
+}
+
+// Exact033 сверяет собственные tables/constraints/ACL/guards и полный неизменный predecessor032.
+// Только проверенный новый catalog позволяет историческую проекцию Goose version; старые verifiers не расширяются.
+export function validPlatformOIDCIdentityMigrationPostcondition(proof) {
+  return proof?.profile==='PLATFORM_OIDC_IDENTITY_V1' && proof.gooseVersion===20261105000100 &&
+    proof.platformOIDCCatalog===true && proof.platformOIDCCatalogDigest===platformOIDCIdentityCatalogDigest &&
+    validWorkflowContentPageMigrationPostcondition({...proof,profile:'WORKFLOW_CONTENT_PAGE_V1',gooseVersion:20261030000100});
 }
