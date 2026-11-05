@@ -9,6 +9,7 @@ from unittest.mock import patch
 import yaml
 import bootstrap_completion as completion
 import bootstrap_upgrade as upgrade
+import observability_profile
 from deployment_profile import Rejected
 from test_bootstrap_completion import State, uuid, write
 
@@ -65,6 +66,24 @@ class UpgradeState(State):
 
 
 class UpgradeTests(unittest.TestCase):
+    def test_disabled_observability_profile_keeps_canonical_migration_contract(self):
+        old, target, _, _, profile = fixture()
+        old = observability_profile.transform(old, disabled=True)
+        target = observability_profile.transform(target, disabled=True)
+        before, after = yaml.safe_dump_all(old).encode(), yaml.safe_dump_all(target).encode()
+        profile.update(previous_render_sha256=upgrade.sha(before), target_render_sha256=upgrade.sha(after))
+        prepared = upgrade.prepare(before, after, profile)
+        job = completion.desired_jobs(prepared)[upgrade.MIGRATION]
+        upgrade.migration_contract(job)
+        for value in ('false', '1'):
+            changed = copy.deepcopy(job)
+            changed['spec']['template']['spec']['containers'][0]['env'][-1]['value'] = value
+            with self.assertRaises(Rejected): upgrade.migration_contract(changed)
+        for entry in ({'name': 'FOREIGN', 'value': 'synthetic'}, {'name': 'OTEL_SDK_DISABLED', 'value': 'true'}):
+            changed = copy.deepcopy(job)
+            changed['spec']['template']['spec']['containers'][0]['env'].append(entry)
+            with self.assertRaises(Rejected): upgrade.migration_contract(changed)
+
     def test_prepare_excludes_secret_seeds_without_replaying_or_copying_their_values(self):
         old, target, _, _, profile = fixture()
         seed = {'apiVersion': 'v1', 'kind': 'Secret', 'metadata': {'name': 'synthetic-projection',

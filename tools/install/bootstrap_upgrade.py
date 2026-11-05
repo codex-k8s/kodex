@@ -74,9 +74,11 @@ def migration_contract(job):
             pod.get('serviceAccountName') == 'control-plane-migrator' and pod.get('automountServiceAccountToken') is False and
             pod.get('restartPolicy') == 'Never' and len(containers) == 1, 'UPGRADE_MIGRATION_CONTRACT_REJECTED')
     container = containers[0]
+    environment = [{'name': 'CONTROL_PLANE_POSTGRES_ADMIN_DSN_FILE',
+                    'value': '/var/run/secrets/kodex/control-plane/postgres-migration/dsn'}]
+    environments = (environment, environment + [{'name': 'OTEL_SDK_DISABLED', 'value': 'true'}])
     require(container.get('name') == 'migrate' and container.get('command') == ['/usr/local/bin/control-plane-cli'] and
-            container.get('args') == ['up'] and container.get('env') == [{'name': 'CONTROL_PLANE_POSTGRES_ADMIN_DSN_FILE',
-            'value': '/var/run/secrets/kodex/control-plane/postgres-migration/dsn'}] and not container.get('envFrom') and
+            container.get('args') == ['up'] and container.get('env') in environments and not container.get('envFrom') and
             re.fullmatch(r'[^\s@]+@sha256:[a-f0-9]{64}', container.get('image', '')),
             'UPGRADE_MIGRATION_COMMAND_REJECTED')
 

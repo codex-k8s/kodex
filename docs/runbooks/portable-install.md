@@ -141,7 +141,9 @@ immutable ConfigMap с hash выбранного upgrade profile.
 Secret seeds из canonical render исключаются при чтении предыдущего и целевого
 render, как в штатном apply. Upgrade output не переносит их payload и не
 перезаписывает работающие проекции; отдельный secret/material lifecycle остаётся
-владельцем этих ресурсов.
+владельцем этих ресурсов. Отключённая observability допускает только штатный
+`OTEL_SDK_DISABLED=true` рядом с DSN file reference; произвольные env/envFrom,
+дубликаты и другие значения отклоняются.
 
 Operator lifecycle отдельно проверяет target/namespace, provenance полного
 release lock/images и отсутствие активной работы, сохраняет preimage/backup,
