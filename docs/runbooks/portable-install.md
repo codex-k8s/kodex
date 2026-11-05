@@ -4,8 +4,8 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.3.8
-updated: 2026-11-04
+version: 1.3.9
+updated: 2026-11-05
 ---
 
 # Опциональный профиль внешней инфраструктуры
@@ -845,3 +845,96 @@ BLOCKED. SBOM, image vulnerability admission, подписи, mTLS/JWS и ост
 включить уже обрезанный disabled render без canonical source отклоняется. При
 partial initial bootstrap explicit disabled mode допускает только этот typed delta
 поверх прежних SDK/BuildKit/API profiles; images/schema/history/Job guards прежние.
+
+### Опциональный AppArmor-профиль provider runtime (#2027)
+
+На узлах, где unprivileged user namespace требует именованного AppArmor-профиля,
+renderer принимает `--provider-apparmor-profile kodex-provider-runtime`. Профиль
+`infra/apparmor/kodex-provider-runtime` должен быть установлен штатным способом
+на каждом допустимом runtime-узле; container runtime и kubelet должны подтвердить
+поддержку AppArmor. Предварительно проверить именно UID/provider image и user
+namespace выбранного выпуска, без credentials и внешней сети. Этот флаг не
+устанавливает профиль на хост и не исправляет node prerequisites.
+
+Опция независима от Codex/OpenCode. Без флага render сохраняет прежнее поведение.
+Явный пустой аргумент `--provider-apparmor-profile ''` выбирает прежнее отсутствие
+именованного профиля через новую runtime-проекцию; это не отключение bubblewrap,
+user namespace, image admission, mTLS/JWS или остальных security boundaries.
+Произвольные имена профилей, `Unconfined` и `RuntimeDefault` здесь не принимаются.
+
+Источник image admission остаётся неизменным: immutable ConfigMap
+`kodex-image-admission-policy`, его hash, typed parameters, image Jobs и authority
+history не переписываются. Renderer создаёт отдельный immutable ConfigMap с тремя
+полями `nodeReadbackImage`, `roleRuntimeContractRevision`, `providerAppArmorProfile`.
+Имя/hash связывают эти данные с исходным image-policy SHA. Только runtime admission
+binding и существующий env runtime-controller ссылаются на новую проекцию.
+Registry overlay пересчитывает её anchors после изменения source registry.
+Общие image/tag, replicas, sidecars и admission expressions этим флагом не меняются.
+
+Для fresh install передать опцию renderer и тот же явный аргумент установщику.
+Для initial `resume-workloads` она также входит в exact predecessor comparison.
+После опубликованного bootstrap не запускать заново прежнюю failed install:
+адресный maintenance-переход выполняется отдельной точкой входа:
+
+```bash
+python3 tools/install/provider_sandbox_profile.py \
+  --render /protected/candidate.yaml --profile kodex-provider-runtime
+python3 tools/install/provider_sandbox_transition.py plan \
+  --context example-context \
+  --previous-render /protected/previous.yaml --previous-render-sha256 <sha256> \
+  --render /protected/candidate.yaml --render-sha256 <sha256> \
+  --state-directory /protected/profile-operation
+```
+
+Сначала скопировать предыдущий pinned render в candidate; преобразователь меняет
+только candidate. Закрепить оба SHA после преобразования. Для завершённых bootstrap
+Jobs, удалённых TTL, передать предусмотренный completion receipt с SHA; исторический
+reconciled receipt требует отдельного существующего opt-in. У оператора должны быть
+штатные Kubernetes/DB полномочия и защищённый каталог0700; receipts/preimage0600.
+Не передавать пароль PostgreSQL или provider token в командной строке.
+
+После backup и проверки плана назначить короткое окно без запусков, расписаний и
+webhooks. Смена Pod UID runtime-controller может пересоздать installation warm Pod;
+проверять отсутствие активных turns/leases, а не только Ready Deployments.
+`apply` с теми же аргументами и `--maintenance-confirmed` допускает только три
+объекта, сохраняет preimage и сверяет UID/resourceVersion. Обычные runtime Pods,
+active/unknown leases, queued/running/cancelling runs и running nodes закрывают
+переход. Никакие пользовательские runs или credentials оператор не создаёт.
+
+SQL maintenance transaction берёт фиксированные SHARE locks на runs/run_nodes/
+runtime_leases и transaction advisory lock. Новые claims/записи ждут окончания
+окна либо получают свой штатный timeout. Обновление блокировки идёт каждые2s,
+SQL statement ограничен5s, ожидание idle-сессии30s, продление — максимум240s.
+Перед каждой Kubernetes mutation проверяется живая сессия и запас25s для HTTP CAS
+с пределом20s. Controller rollout ожидается максимум120s. Нельзя бесконечно
+продлевать maintenance или повышать бюджеты для обхода неизвестной причины.
+
+PostgreSQL и Kubernetes не образуют атомарную транзакцию. Уже отправленный API
+write может завершиться после потери SQL-соединения; обещания отмены такого эффекта
+нет. Любая ошибка оставляет `RECONCILIATION_REQUIRED`, не запускает rollback и не
+повторяет create. Сначала вызвать `readback` с прежними pins/state-directory,
+проверить UID/spec и состояние controller, затем при необходимости отдельно
+`apply --resume --maintenance-confirmed`. Readback desired resources после потери
+ответа не объявляет непрерывность прежней блокировки доказанной; receipt сохраняет
+все attempts. Новый resume заново получает maintenance lock. Успешный повтор apply
+не меняет ресурсы и не перезапускает controller.
+
+| Сценарий | Владелец состояния / переход | Ожидаемый результат |
+| --- | --- | --- |
+| Опция не задана; Codex/OpenCode | Renderer → прежний manifest | Побайтово прежние resource values |
+| Явный профиль | Operator → projection → runtime binding/RC → provider Pod | Exact три объекта; image policy/history прежние |
+| Активный/чужой workload, drift/другой UID | Live cluster/DB → preflight/fence | Отказ до нового write |
+| Потеря fence между чтением и записью | SQL backend → per-write gate | Новая mutation запрещена |
+| Потерян ответ create/последнего patch | API effect → private receipt → readback | Unknown outcome; без слепого повтора |
+| Resume/deadline/отмена | Operator → fresh fence или закрытый отказ | History сохраняется; timeout не даёт authority |
+| Повтор успешного apply | Cluster + завершённый receipt | Без новых эффектов |
+| Возврат к пустому профилю | Новый pinned candidate + отдельный maintenance | Forward config change; прежняя projection не удаляется |
+
+Проверки: `make test-web-only-release` включает pure transform и synthetic CAS/
+recovery; `make test-provider-sandbox-native` запускает одноразовый pinned
+PostgreSQL18 в Docker без сети и проверяет реальные lock/heartbeat/backend-loss.
+Эти проверки не доказывают работоспособность AppArmor на целевых узлах или turn
+установленного provider. После apply отдельно подтвердить именованный профиль
+provider-runtime, прежние security contexts остальных двух контейнеров warm Pod,
+readiness, настоящий turn/tool/resume и отрицательный путь.
+Откат приложения/схемы не входит в этот профиль; migrations не повторяются.

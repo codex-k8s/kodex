@@ -16,6 +16,7 @@ usage() {
   printf '%s\n' '  [--repair-egress-secret-access; explicit workload resume repair]' >&2
   printf '%s\n' '  [--component-image-profile <json> --component-image-profile-sha256 <64-hex> --base-release-lock <json>; workload resume only]' >&2
   printf '%s\n' '  [--previous-component-image-profile <json> --previous-component-image-profile-sha256 <64-hex>; exact component predecessor]' >&2
+  printf '%s\n' '  [--provider-apparmor-profile <empty|kodex-provider-runtime>; explicit runtime-only projection]' >&2
 }
 
 context=""
@@ -24,6 +25,7 @@ render_file=""
 public_tls_mode=enabled
 portable_arguments=()
 portable_inventory=""
+provider_profile_arguments=()
 previous_arguments=()
 repair_api_endpoints=false
 clamav_mode=enabled
@@ -50,6 +52,7 @@ while (($# > 0)); do
     --repair-egress-secret-access) repair_egress_secret_access=true; previous_arguments+=("$1"); shift ;;
     --component-image-profile|--component-image-profile-sha256|--base-release-lock) component_image_requested=true; component_arguments+=("$1" "${2:-}"); previous_arguments+=("$1" "${2:-}"); shift 2 ;;
     --previous-component-image-profile|--previous-component-image-profile-sha256) previous_component_image_requested=true; component_arguments+=("$1" "${2:-}"); previous_arguments+=("$1" "${2:-}"); shift 2 ;;
+    --provider-apparmor-profile) provider_profile_arguments=(--profile "${2-}"); previous_arguments+=("$1" "${2-}"); shift 2 ;;
     --previous-render|--previous-render-sha256|--buildkit-runtime-profile) previous_arguments+=("$1" "${2:-}"); shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
@@ -97,6 +100,7 @@ fi
 if [[ "$component_image_requested" == true ]]; then
   python3 "$repository_root/tools/install/component_image_profile.py" --check --render "$render_file" "${component_arguments[@]}"
 fi
+python3 "$repository_root/tools/install/provider_sandbox_profile.py" --check --render "$render_file" "${provider_profile_arguments[@]}"
 python3 "$repository_root/tools/install/clamav_profile.py" --check --mode "$clamav_mode" --render "$render_file"
 profile_mode=$(yq -r 'select(.kind == "ConfigMap" and .metadata.name == "kodex-installation-profile") | .data."profile.json"' "$render_file" | jq -r '.public_tls.mode' 2>/dev/null || true)
 if [[ "$profile_mode" == external || "$public_tls_mode" == external ]]; then
@@ -956,6 +960,12 @@ if [[ "$mode" == resume-workloads ]]; then
         (.metadata.name == "control-plane-exact-runtime-paths" or
          .metadata.name == "secret-broker-exact-runtime-paths" or
          .metadata.name == "internal-rpc-authority-publisher-exact-paths"))
+    '
+  fi
+  if yq -e 'select(.kind == "ConfigMap" and .metadata.labels."kodex.dev/provider-sandbox-profile" == "v1")' "$render_file" >/dev/null; then
+    apply_render bootstrap-provider-sandbox '
+      select((.kind == "ConfigMap" and .metadata.labels."kodex.dev/provider-sandbox-profile" == "v1") or
+        (.kind == "ValidatingAdmissionPolicyBinding" and .metadata.name == "runtime-role-pod-exact-secret-projection"))
     '
   fi
   wait_authority_projections bootstrap

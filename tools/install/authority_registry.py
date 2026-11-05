@@ -17,6 +17,7 @@ import egress_secret_access
 import observability_profile
 import kubernetes_api_profile
 import buildkit_runtime_profile
+import provider_sandbox_profile
 
 REGISTRY = 'internal-rpc-authority-publisher-target-registry'
 ANNOTATION = 'kodex.dev/authority-registry-source-revision'
@@ -121,7 +122,7 @@ def verify_published_resume(state, resources, startup_only=True, completion=None
     return {'status': 'PUBLISHED_AUTHORITY_RESUME_PREFLIGHT_PASSED', 'sourceRevision': 1, 'migrations': 'VERIFIED_NOT_REPEATED', 'authorityHistory': 'PRESERVED_NOT_REPLAYED'}
 
 
-def verify_workload_resume(state, resources, previous, buildkit_profile='standard', repair_api_endpoints=False, clamav_mode='enabled', repair_egress_secret_access=False, component_image=None, completion=None, previous_component_image=None):
+def verify_workload_resume(state, resources, previous, buildkit_profile='standard', repair_api_endpoints=False, clamav_mode='enabled', repair_egress_secret_access=False, component_image=None, completion=None, previous_component_image=None, provider_apparmor_profile=None):
     """Продолжение initial graph допускает только точные явно выбранные profile deltas."""
     expected = buildkit_runtime_profile.transform(observability_profile.transform(previous, disabled=True), buildkit_profile)
     require(type(repair_api_endpoints) is bool, 'EXPLICIT_API_ENDPOINT_REPAIR_REQUIRED')
@@ -129,6 +130,7 @@ def verify_workload_resume(state, resources, previous, buildkit_profile='standar
     if clamav_mode != 'enabled':expected = clamav_profile.transform(expected, clamav_mode)
     require(type(repair_egress_secret_access) is bool, 'EXPLICIT_EGRESS_SECRET_REPAIR_REQUIRED')
     if repair_egress_secret_access:expected = egress_secret_access.transform(expected)
+    expected = provider_sandbox_profile.transform(expected, provider_apparmor_profile)
     profiled = expected
     if component_image is not None:expected = component_image_profile.transform(expected, *component_image)
     predecessor = None
@@ -220,6 +222,7 @@ def main():
     parser.add_argument('--repair-kubernetes-api-endpoints', action='store_true')
     parser.add_argument('--repair-egress-secret-access', action='store_true')
     parser.add_argument('--clamav-mode', choices=['enabled','disabled'], default='enabled')
+    parser.add_argument('--provider-apparmor-profile', choices=('', provider_sandbox_profile.PROFILE))
     parser.add_argument('--buildkit-runtime-profile', choices=['standard', 'nested-userns'], default='standard')
     parser.add_argument('--component-image-profile', type=Path)
     parser.add_argument('--component-image-profile-sha256')
@@ -262,7 +265,7 @@ def main():
             raw = args.previous_render.read_bytes()
             require(len(raw) <= 16 << 20 and hashlib.sha256(raw).hexdigest() == args.previous_render_sha256, 'PREVIOUS_RENDER_DIGEST_REQUIRED')
             previous = list(filter(None, yaml.safe_load_all(raw)))
-            print(json.dumps(verify_workload_resume(state, resources, previous, args.buildkit_runtime_profile, args.repair_kubernetes_api_endpoints, args.clamav_mode, args.repair_egress_secret_access, component_image, completion, previous_component_image)))
+            print(json.dumps(verify_workload_resume(state, resources, previous, args.buildkit_runtime_profile, args.repair_kubernetes_api_endpoints, args.clamav_mode, args.repair_egress_secret_access, component_image, completion, previous_component_image, args.provider_apparmor_profile)))
         elif args.mode == 'verify-bootstrap':
             verify_completed_bootstrap(state, resources, completion)
             print(json.dumps({'status':'BOOTSTRAP_COMPLETION_VERIFIED','effects_replayed':False}))

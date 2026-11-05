@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import re
 import yaml
+import provider_sandbox_profile
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / 'deploy/k8s/base/image-supply-chain/release-artifact-materializer.sh'
 
@@ -20,6 +21,7 @@ def one(resources, kind, name):
     return found[0]
 
 def bind(resources, lock):
+    previous_runtime_profile = copy.deepcopy(resources)
     policy = one(resources, 'ConfigMap', 'kodex-image-admission-policy')
     data = policy['data']
     host = data['pullRegistryHost']
@@ -75,6 +77,7 @@ def bind(resources, lock):
     parameters = one(resources, 'ImageAdmissionPolicyParameters', 'kodex-image-admission-policy')
     require(parameters['apiVersion'] == 'supplychain.kodex.dev/v1alpha1')
     parameters['spec'] = copy.deepcopy(data)
+    resources[:] = provider_sandbox_profile.rebase(resources, previous_runtime_profile)
     return resources
 
 def main():

@@ -477,6 +477,13 @@ def verify_schemas(state, resources):
 
 
 def verify_readback(state, resources, completion=None):
+    import provider_sandbox_profile
+    provider_sandbox_profile.validate_render(resources)
+    verify_resource_set(state, resources, completion)
+
+
+def verify_resource_set(state, resources, completion=None):
+    """Читает заданный набор объектов; coherence полного render проверяет вызывающий."""
     import bootstrap_completion
     if completion is not None:bootstrap_completion.verify(state, resources, completion)
     for expected in resources:
