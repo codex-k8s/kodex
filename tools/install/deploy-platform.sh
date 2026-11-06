@@ -778,7 +778,7 @@ wait_system_assistant() {
 			-l app.kubernetes.io/name=runtime-controller -o json 2>/dev/null || true)
 		leader_pod=$(jq -r --arg uid "$leader_uid" \
 			'[.items[]? | select(.metadata.uid == $uid) | .metadata.name] | first // ""' \
-			<<<"${pods_json:-{}}")
+			<<<"$pods_json")
 		if [[ -n "$leader_pod" ]]; then
 			endpoint="/api/v1/namespaces/$namespace/pods/${leader_pod}:9090/proxy/assistant/readyz"
 			if kubectl --context "$context" get --raw "$endpoint" >/dev/null 2>&1; then

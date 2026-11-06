@@ -14,6 +14,50 @@ FUNCTION = 'apply_job() {' + TEXT.split('apply_job() {',1)[1].split('\nwait_job_
 
 
 class Tests(unittest.TestCase):
+    def test_system_assistant_readback_uses_exact_leader_without_corrupting_json(self):
+        function='wait_system_assistant() {'+TEXT.split('wait_system_assistant() {',1)[1].split('\n}',1)[0]+'\n}'
+        for scenario in ('ready','empty-first','foreign-first','invalid'):
+            with self.subTest(scenario=scenario),tempfile.TemporaryDirectory()as directory:
+                script=r'''
+set -euo pipefail
+context=synthetic
+namespace=kodex-system
+runtime_namespace=kodex-runtime
+fail(){ printf '%s\n' "$*" >&2; exit 42; }
+sleep(){ printf 'wait\n' >>"$HOME/calls"; }
+kubectl(){
+  case "$*" in
+    *'get pod/system-assistant-warm -o json')
+      printf '%s\n' '{"status":{"conditions":[{"type":"Ready","status":"True"}]},"spec":{"volumes":[{"name":"session","persistentVolumeClaim":{"claimName":"synthetic-session"}}]}}' ;;
+    *'get pvc/synthetic-session -o json')
+      printf '%s\n' '{"status":{"phase":"Bound"},"spec":{"storageClassName":"synthetic"}}' ;;
+    *'get lease/runtime-controller-leader -o jsonpath='*) printf '%s' synthetic-leader ;;
+    *'get pods -l app.kubernetes.io/name=runtime-controller -o json')
+      if [[ ! -e "$HOME/first-list" ]]; then
+        : >"$HOME/first-list"
+        case "$scenario" in
+          empty-first) return 1 ;;
+          foreign-first) printf '%s\n' '{"items":[{"metadata":{"uid":"foreign","name":"foreign"}}]}'; return ;;
+          invalid) printf '%s\n' '{invalid'; return ;;
+        esac
+      fi
+      printf '%s\n' '{"items":[{"metadata":{"uid":"foreign","name":"foreign"}},{"metadata":{"uid":"synthetic-leader","name":"synthetic-controller"}}]}' ;;
+    *'get --raw /api/v1/namespaces/kodex-system/pods/synthetic-controller:9090/proxy/assistant/readyz')
+      printf 'leader-ready\n' >>"$HOME/calls" ;;
+    *) printf 'unexpected-command\n' >>"$HOME/calls"; return 23 ;;
+  esac
+}
+'''
+                result=subprocess.run(['bash'],input=script+'\n'+function+'\nwait_system_assistant\n',
+                    text=True,capture_output=True,timeout=10,
+                    env={'PATH':os.environ['PATH'],'HOME':directory,'LANG':'C','scenario':scenario})
+                path=Path(directory)/'calls';calls=path.read_text().splitlines()if path.exists()else[]
+                if scenario=='invalid':
+                    self.assertNotEqual(result.returncode,0);self.assertNotIn('leader-ready',calls)
+                else:
+                    self.assertEqual(result.returncode,0,result.stderr)
+                    self.assertEqual(calls,['wait','leader-ready']if scenario.endswith('-first')else['leader-ready'])
+
     def test_email_projection_upgrade_and_preflight_require_existing_without_seed(self):
         function='ensure_email_projection_secret() {'+TEXT.split('ensure_email_projection_secret() {',1)[1].split('\n}',1)[0]+'\n}'
         for mode,arguments in [('upgrade','()'),('preflight','(--existing-only)'),('apply','()')]:
