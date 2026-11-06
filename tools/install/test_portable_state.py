@@ -74,6 +74,27 @@ class FixtureState(State):
 
 
 class StateTest(unittest.TestCase):
+    def test_admission_parameters_use_same_uid_rv_cas_for_preflight_and_update(self):
+        desired={'apiVersion':'supplychain.kodex.dev/v1alpha1','kind':'ImageAdmissionPolicyParameters',
+            'metadata':{'name':'synthetic-policy','namespace':'kodex-system','labels':{'app.kubernetes.io/part-of':'kodex'}},
+            'spec':{'admissionImage':'registry.example.invalid/admission@sha256:'+'a'*64,'orchestrationRevision':'synthetic-v2'}}
+        actual=live(desired);actual['spec']['orchestrationRevision']='synthetic-v1'
+        actual['metadata']['managedFields']=[{'manager':'kodex-install','operation':'Update'}]
+        state=FixtureState([actual]);inventory=state.inventory([desired]);state.preflight_apply(desired)
+        self.assertFalse(state.writes);self.assertIn('patch',state.probes[0][0]);self.assertIn('--dry-run=server',state.probes[0][0])
+        state.apply(desired,inventory);current=state.get(desired);verify_resource(desired,current)
+        self.assertEqual(current['metadata']['uid'],actual['metadata']['uid'])
+        self.assertEqual(state.writes[0][1][:2],[dict(op='test',path='/metadata/uid',value='test-uid'),dict(op='test',path='/metadata/resourceVersion',value='1')])
+        self.assertNotIn('--force-conflicts',state.writes[0][0]);self.assertNotIn('delete',state.writes[0][0])
+        for change in ('uid','spec'):
+            stale=FixtureState([actual]);approved=stale.inventory([desired])
+            if change=='uid':stale.objects[key(desired)]['metadata']['uid']='foreign'
+            else:stale.objects[key(desired)]['spec']['orchestrationRevision']='foreign'
+            with self.assertRaises(Rejected):stale.apply(desired,approved)
+            self.assertFalse(stale.writes)
+        current['spec']['unexpected']='foreign'
+        with self.assertRaises(Rejected):verify_resource(desired,current)
+
     def test_network_policy_update_keeps_uid_and_fences_resource_version_before_exact_readback(self):
         desired = {'apiVersion': 'networking.k8s.io/v1', 'kind': 'NetworkPolicy',
             'metadata': {'name': 'synthetic-api-client', 'namespace': 'kodex-system', 'labels': {'app.kubernetes.io/part-of': 'kodex'}},

@@ -1116,3 +1116,8 @@ readiness, настоящий turn/tool/resume и отрицательный п�
 payload не изменяется. Отсутствующая, immutable либо чужая проекция блокирует
 upgrade без create/write. Штатная новая установка по-прежнему требует canonical
 empty seed и использует create-only bootstrap с readback после потерянного ответа.
+
+Existing ImageAdmissionPolicyParameters обновляется через тот же fenced
+UID/resourceVersion CAS, что и остальные security resources: без delete и
+force-conflicts, с exact spec readback. Server preflight проверяет custom
+resources уже обслуживаемых API; исключаются только ещё не установленные API.

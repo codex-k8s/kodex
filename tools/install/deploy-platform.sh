@@ -865,12 +865,15 @@ if [[ "$mode" == preflight ]]; then
      .metadata.name != strenv(KODEX_DEPLOY_PUBLIC_CERTIFICATE_NAME)) and
     .kind != "CustomResourceDefinition" and .kind != "Secret" and
     .kind != "Job" and (.kind != "ConfigMap" or .immutable != true)'
+  served_api_versions=$(kubectl --context "$context" --request-timeout=15s api-versions)
   # Переменные ниже принадлежат yq, не Bash.
   # shellcheck disable=SC2016
   while IFS= read -r api_version; do
     [[ "$api_version" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?/v[0-9][a-z0-9]*$ ]] ||
       fail "rendered CustomResourceDefinition API version is invalid: $api_version"
-    preflight_expression+=" and .apiVersion != \"$api_version\""
+    if ! rg -Fx -- "$api_version" <<<"$served_api_versions" >/dev/null; then
+      preflight_expression+=" and .apiVersion != \"$api_version\""
+    fi
   done < <(yq -N -r '
     select(.kind == "CustomResourceDefinition") |
     .spec.group as $group | .spec.versions[] | select(.served == true) |

@@ -13,6 +13,7 @@ import yaml
 from deployment_profile import require, Rejected
 
 CAS_TARGETS = {
+    ('supplychain.kodex.dev/v1alpha1', 'ImageAdmissionPolicyParameters'): 'imageadmissionpolicyparameters.supplychain.kodex.dev',
     ('v1', 'ConfigMap'): 'configmaps',
     ('apps/v1', 'Deployment'): 'deployments.apps',
     ('batch/v1', 'CronJob'): 'cronjobs.batch',
@@ -255,7 +256,7 @@ def verify_resource(expected, actual):
         if field in expected:
             require(subset(expected[field], actual.get(field)), 'LIVE_RESOURCE_DRIFT')
     kind = expected['kind']
-    if kind in ('NetworkPolicy', 'Ingress', 'Middleware', 'ServersTransport', 'ValidatingAdmissionPolicy', 'ValidatingAdmissionPolicyBinding'):
+    if kind in ('NetworkPolicy', 'Ingress', 'Middleware', 'ServersTransport', 'ValidatingAdmissionPolicy', 'ValidatingAdmissionPolicyBinding', 'ImageAdmissionPolicyParameters'):
         require(policy_spec(actual) == policy_spec(expected), 'LIVE_SECURITY_SPEC_DRIFT')
         annotations = {k: v for k, v in actual['metadata'].get('annotations', {}).items()
                        if k != 'kubectl.kubernetes.io/last-applied-configuration'}
