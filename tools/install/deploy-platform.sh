@@ -7,6 +7,7 @@ fail() {
 }
 
 usage() {
+  printf '%s\n' '  [--assistant-readback-transport api-proxy|port-forward; default api-proxy]' >&2
   printf '%s\n' \
     "Usage: $0 --context <exact-context> --mode defer-public-tls|prepare-preflight|preflight|apply|upgrade|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback" \
     '  --render <exact-release.yaml> --public-tls-mode deferred|enabled|external' \
@@ -35,11 +36,13 @@ previous_component_image_requested=false
 component_arguments=()
 completion_arguments=()
 completion_output=""
+assistant_readback_transport=api-proxy
 # Upgrade и его preflight сохраняют опубликованную проекцию без seed Secret.
 email_projection_arguments=()
 
 while (($# > 0)); do
   case "$1" in
+    --assistant-readback-transport) assistant_readback_transport="${2:-}"; shift 2 ;;
     --bootstrap-completion-receipt|--bootstrap-completion-sha256) completion_arguments+=("$1" "${2:-}"); shift 2 ;;
     --allow-reconciled-bootstrap-completion) completion_arguments+=("$1"); shift ;;
     --bootstrap-completion-output) completion_output="${2:-}"; shift 2 ;;
@@ -68,6 +71,7 @@ fi
 [[ "$mode" != upgrade || ${#completion_arguments[@]} -gt 0 ]] || fail 'upgrade requires forward migration completion receipt'
 [[ -z "$completion_output" || "$mode" == apply ]] || fail 'completion capture output requires fresh apply'
 [[ -n "$context" ]] || fail 'exact Kubernetes context is required'
+case "$assistant_readback_transport" in api-proxy|port-forward) ;; *) fail 'assistant readback transport is invalid' ;; esac
 case "$mode" in
   defer-public-tls|prepare-preflight|preflight|apply|upgrade|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback) ;;
   *) fail 'mode is invalid' ;;
@@ -780,9 +784,16 @@ wait_system_assistant() {
 			'[.items[]? | select(.metadata.uid == $uid) | .metadata.name] | first // ""' \
 			<<<"$pods_json")
 		if [[ -n "$leader_pod" ]]; then
-			endpoint="/api/v1/namespaces/$namespace/pods/${leader_pod}:9090/proxy/assistant/readyz"
-			if kubectl --context "$context" get --raw "$endpoint" >/dev/null 2>&1; then
-				return
+			if [[ "${assistant_readback_transport:-api-proxy}" == port-forward ]]; then
+				if python3 "$repository_root/tools/install/assistant_readback.py" --context "$context" \
+					--pod "$leader_pod" --pod-uid "$leader_uid" >/dev/null 2>&1; then
+					return
+				fi
+			else
+				endpoint="/api/v1/namespaces/$namespace/pods/${leader_pod}:9090/proxy/assistant/readyz"
+				if kubectl --context "$context" get --raw "$endpoint" >/dev/null 2>&1; then
+					return
+				fi
 			fi
 		fi
 		sleep 2

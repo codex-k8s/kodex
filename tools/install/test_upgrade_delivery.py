@@ -16,15 +16,24 @@ FUNCTION = 'apply_job() {' + TEXT.split('apply_job() {',1)[1].split('\nwait_job_
 class Tests(unittest.TestCase):
     def test_system_assistant_readback_uses_exact_leader_without_corrupting_json(self):
         function='wait_system_assistant() {'+TEXT.split('wait_system_assistant() {',1)[1].split('\n}',1)[0]+'\n}'
-        for scenario in ('ready','empty-first','foreign-first','invalid'):
+        for scenario in ('ready','empty-first','foreign-first','invalid','forward-ready','forward-retry'):
             with self.subTest(scenario=scenario),tempfile.TemporaryDirectory()as directory:
                 script=r'''
 set -euo pipefail
 context=synthetic
 namespace=kodex-system
 runtime_namespace=kodex-runtime
+repository_root=/synthetic
 fail(){ printf '%s\n' "$*" >&2; exit 42; }
 sleep(){ printf 'wait\n' >>"$HOME/calls"; }
+python3(){
+  [[ "$*" == '/synthetic/tools/install/assistant_readback.py --context synthetic --pod synthetic-controller --pod-uid synthetic-leader' ]] || return 23
+  printf 'forward\n' >>"$HOME/calls"
+  if [[ "$scenario" == forward-retry && ! -e "$HOME/first-forward" ]]; then
+    : >"$HOME/first-forward"; return 1
+  fi
+  printf 'leader-ready\n' >>"$HOME/calls"
+}
 kubectl(){
   case "$*" in
     *'get pod/system-assistant-warm -o json')
@@ -50,13 +59,24 @@ kubectl(){
 '''
                 result=subprocess.run(['bash'],input=script+'\n'+function+'\nwait_system_assistant\n',
                     text=True,capture_output=True,timeout=10,
-                    env={'PATH':os.environ['PATH'],'HOME':directory,'LANG':'C','scenario':scenario})
+                    env={'PATH':os.environ['PATH'],'HOME':directory,'LANG':'C','scenario':scenario,
+                         'assistant_readback_transport':'port-forward'if scenario.startswith('forward-')else'api-proxy'})
                 path=Path(directory)/'calls';calls=path.read_text().splitlines()if path.exists()else[]
                 if scenario=='invalid':
                     self.assertNotEqual(result.returncode,0);self.assertNotIn('leader-ready',calls)
                 else:
                     self.assertEqual(result.returncode,0,result.stderr)
-                    self.assertEqual(calls,['wait','leader-ready']if scenario.endswith('-first')else['leader-ready'])
+                    expected={'forward-ready':['forward','leader-ready'],
+                              'forward-retry':['forward','wait','forward','leader-ready']}
+                    self.assertEqual(calls,expected.get(scenario,['wait','leader-ready']if scenario.endswith('-first')else['leader-ready']))
+
+    def test_unknown_assistant_transport_is_rejected_before_cluster_access(self):
+        for name in ('portable-release.sh','deploy-platform.sh'):
+            result=subprocess.run(['bash',str(ROOT/'tools/install'/name),'--mode','readback',
+                '--context','synthetic','--assistant-readback-transport','unsafe'],
+                capture_output=True,text=True,timeout=5)
+            self.assertNotEqual(result.returncode,0)
+            self.assertIn('assistant readback transport is invalid',result.stderr)
 
     def test_email_projection_upgrade_and_preflight_require_existing_without_seed(self):
         function='ensure_email_projection_secret() {'+TEXT.split('ensure_email_projection_secret() {',1)[1].split('\n}',1)[0]+'\n}'

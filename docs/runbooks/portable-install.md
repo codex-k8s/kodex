@@ -4,8 +4,8 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.5.0
-updated: 2026-11-05
+version: 1.5.1
+updated: 2026-11-06
 ---
 
 # Опциональный профиль внешней инфраструктуры
@@ -1128,3 +1128,15 @@ Deny и validationActions Deny на протяжении замены. Преж�
 immutable spec. При неизменном spec metadata сохраняются через fenced CAS.
 Server preflight проверяет custom resources уже served API, исключая только
 ещё не установленные API.
+
+Для проверки `/assistant/readyz` текущего runtime-controller leader доступен
+явный флаг `--assistant-readback-transport api-proxy|port-forward` у
+`portable-release.sh` и `deploy-platform.sh`. По умолчанию используется прежний
+Kubernetes API Pod proxy. Если этот маршрут недоступен в выбранном CNI/egress
+профиле, `port-forward` проверяет тот же endpoint через кратковременный
+операторский канал Kubernetes с bind только `127.0.0.1` и случайным локальным
+портом. Нужны штатные права оператора на чтение Pod/Lease и `pods/portforward`;
+RBAC, NetworkPolicy и TLS Kubernetes не изменяются. Автоматического fallback нет.
+До и после HTTP204 проверяются точный UID готового Pod и текущий holder Lease.
+Redirect, чужой leader, неизвестный ответ и отказ канала закрывают проверку;
+процесс всегда завершается и join-ится. Готовность не заменяет turn/tool/resume.

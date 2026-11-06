@@ -58,6 +58,7 @@ test-web-only-release:
 	@timeout 30s python3 -B tools/install/test_bootstrap_completion.py
 	@timeout 30s python3 -B tools/install/test_bootstrap_upgrade.py
 	@timeout 30s python3 -B tools/install/test_upgrade_delivery.py
+	@timeout 30s python3 -B tools/install/test_assistant_readback.py
 	@timeout 30s python3 -B tools/install/test_oidc_authority_profile.py
 	@timeout 30s python3 -B tools/install/test_component_image_profile.py
 	@timeout 30s python3 -B tools/install/test_egress_secret_access.py

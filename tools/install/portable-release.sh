@@ -27,9 +27,12 @@ completion_receipt=""
 completion_sha=""
 allow_reconciled_completion=false
 completion_arguments=()
+assistant_readback_transport=api-proxy
+assistant_readback_arguments=()
 
 while (($#)); do
   case "$1" in
+    --assistant-readback-transport) assistant_readback_transport="${2:-}"; shift 2 ;;
     --mode) mode="${2:-}"; shift 2 ;;
     --context) context="${2:-}"; shift 2 ;;
     --render) render="${2:-}"; shift 2 ;;
@@ -52,6 +55,7 @@ while (($#)); do
     --buildkit-runtime-profile) buildkit_profile="${2:-}"; shift 2 ;;
     --oidc-ca-file|--ingress-deployment|--ingress-controller|--ingress-namespace|--ingress-service) arguments+=("$1" "${2:-}"); shift 2 ;;
     --help)
+      printf '%s\n' '  [--assistant-readback-transport api-proxy|port-forward; default api-proxy]'
       printf '%s\n' 'Usage: portable-release.sh --mode plan|preflight|apply|upgrade|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback --render <yaml> --render-sha256 <64-hex> [--context <exact-context>]' \
         '  [--oidc-ca-file <pem>] [--ingress-controller <name> --ingress-namespace <name>]' \
         '  [--preimage-directory <new-private-directory>; required for apply/upgrade]'
@@ -68,6 +72,8 @@ while (($#)); do
   esac
 done
 case "$mode" in plan|preflight|apply|upgrade|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback) ;; *) fail 'mode is invalid' ;; esac
+case "$assistant_readback_transport" in api-proxy|port-forward) ;; *) fail 'assistant readback transport is invalid' ;; esac
+assistant_readback_arguments=(--assistant-readback-transport "$assistant_readback_transport")
 if [[ "$mode" == upgrade ]]; then
   [[ -n "$completion_receipt" && "$completion_sha" =~ ^[a-f0-9]{64}$ && "$allow_reconciled_completion" == true ]] || fail 'upgrade requires an explicit forward migration completion receipt'
 fi
@@ -191,7 +197,7 @@ if [[ "$mode" == apply || "$mode" == upgrade || "$mode" == resume-authority-boot
     if [[ "$phase" == apply ]]; then phase_arguments=(--bootstrap-completion-output "$preimage/bootstrap-completion.json"); fi
     "$root/tools/install/deploy-platform.sh" --context "$context" --mode "$phase" \
       --render "$temporary/render.yaml" --public-tls-mode "$tls_mode" \
-      --portable-inventory "$preimage/resource-inventory.json" --clamav-mode "$clamav_mode" "${arguments[@]}" "${previous_arguments[@]}" "${completion_arguments[@]}" "${phase_arguments[@]}"
+      --portable-inventory "$preimage/resource-inventory.json" --clamav-mode "$clamav_mode" "${arguments[@]}" "${previous_arguments[@]}" "${completion_arguments[@]}" "${phase_arguments[@]}" "${assistant_readback_arguments[@]}"
   done
 fi
 if [[ "$mode" == apply && -f "$preimage/bootstrap-completion.json" ]]; then
@@ -201,4 +207,4 @@ fi
 timeout 180s python3 "$root/tools/install/portable_state.py" readback \
   --context "$context" --render "$temporary/render.yaml" "${completion_arguments[@]}"
 "$root/tools/install/deploy-platform.sh" --context "$context" --mode readback \
-  --render "$temporary/render.yaml" --public-tls-mode "$tls_mode" --clamav-mode "$clamav_mode" "${arguments[@]}" "${completion_arguments[@]}"
+  --render "$temporary/render.yaml" --public-tls-mode "$tls_mode" --clamav-mode "$clamav_mode" "${arguments[@]}" "${completion_arguments[@]}" "${assistant_readback_arguments[@]}"
