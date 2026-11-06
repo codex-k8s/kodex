@@ -1110,3 +1110,9 @@ PostgreSQL18 в Docker без сети и проверяет реальные lo
 provider-runtime, прежние security contexts остальных двух контейнеров warm Pod,
 readiness, настоящий turn/tool/resume и отрицательный путь.
 Откат приложения/схемы не входит в этот профиль; migrations не повторяются.
+
+Для forward upgrade существующая mailbox projection проверяется через
+`email_projection.py --existing-only`: seed Secret не нужен, опубликованный
+payload не изменяется. Отсутствующая, immutable либо чужая проекция блокирует
+upgrade без create/write. Штатная новая установка по-прежнему требует canonical
+empty seed и использует create-only bootstrap с readback после потерянного ответа.

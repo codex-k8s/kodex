@@ -14,6 +14,15 @@ FUNCTION = 'apply_job() {' + TEXT.split('apply_job() {',1)[1].split('\nwait_job_
 
 
 class Tests(unittest.TestCase):
+    def test_email_projection_upgrade_and_preflight_require_existing_without_seed(self):
+        function='ensure_email_projection_secret() {'+TEXT.split('ensure_email_projection_secret() {',1)[1].split('\n}',1)[0]+'\n}'
+        for mode,arguments in [('upgrade','()'),('preflight','(--existing-only)'),('apply','()')]:
+            script='set -euo pipefail\nrepository_root=/synthetic\nrender_file=/synthetic/render.yaml\ncontext=synthetic\nmode='+mode+'\nemail_projection_arguments='+arguments+'\npython3(){ printf "%s\\n" "$@"; }\nfail(){ exit 42; }\n'+function+'\nensure_email_projection_secret --dry-run\n'
+            value=subprocess.run(['bash'],input=script,text=True,capture_output=True,timeout=10)
+            self.assertEqual(value.returncode,0,value.stderr)
+            self.assertEqual('--existing-only'in value.stdout.splitlines(),mode!='apply')
+            self.assertIn('--dry-run',value.stdout.splitlines())
+
     def test_actual_prepare_cli_and_receipt_gate_never_access_cluster(self):
         with tempfile.TemporaryDirectory()as directory:
             root=Path(directory);_,_,previous,target,profile=fixture()

@@ -187,6 +187,7 @@ if [[ "$mode" == apply || "$mode" == upgrade || "$mode" == resume-authority-boot
   [[ "$mode" != resume-workloads ]] || phases=(prepare-preflight preflight resume-workloads)
   for phase in "${phases[@]}"; do
     phase_arguments=()
+    [[ "$mode" != upgrade ]] || phase_arguments+=(--existing-email-projection-only)
     if [[ "$phase" == apply ]]; then phase_arguments=(--bootstrap-completion-output "$preimage/bootstrap-completion.json"); fi
     "$root/tools/install/deploy-platform.sh" --context "$context" --mode "$phase" \
       --render "$temporary/render.yaml" --public-tls-mode "$tls_mode" \

@@ -35,12 +35,15 @@ previous_component_image_requested=false
 component_arguments=()
 completion_arguments=()
 completion_output=""
+# Upgrade и его preflight сохраняют опубликованную проекцию без seed Secret.
+email_projection_arguments=()
 
 while (($# > 0)); do
   case "$1" in
     --bootstrap-completion-receipt|--bootstrap-completion-sha256) completion_arguments+=("$1" "${2:-}"); shift 2 ;;
     --allow-reconciled-bootstrap-completion) completion_arguments+=("$1"); shift ;;
     --bootstrap-completion-output) completion_output="${2:-}"; shift 2 ;;
+    --existing-email-projection-only) email_projection_arguments=(--existing-only); shift ;;
     --portable-inventory) portable_inventory="${2:-}"; shift 2 ;;
     --context) context="${2:-}"; shift 2 ;;
     --mode) mode="${2:-}"; shift 2 ;;
@@ -274,8 +277,10 @@ ensure_seed_secret() {
 }
 
 ensure_email_projection_secret() {
+  local projection_arguments=("${email_projection_arguments[@]}")
+  [[ "$mode" != upgrade ]] || projection_arguments=(--existing-only)
   python3 "$repository_root/tools/install/email_projection.py" \
-    --render "$render_file" --context "$context" "$@" || fail 'email projection bootstrap rejected'
+    --render "$render_file" --context "$context" "${projection_arguments[@]}" "$@" || fail 'email projection bootstrap rejected'
 }
 
 preflight_seed_secret() {
