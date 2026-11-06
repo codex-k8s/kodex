@@ -4,7 +4,7 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.5.1
+version: 1.5.2
 updated: 2026-11-06
 ---
 
@@ -1140,3 +1140,8 @@ RBAC, NetworkPolicy и TLS Kubernetes не изменяются. Автомат�
 До и после HTTP204 проверяются точный UID готового Pod и текущий holder Lease.
 Redirect, чужой leader, неизвестный ответ и отказ канала закрывают проверку;
 процесс всегда завершается и join-ится. Готовность не заменяет turn/tool/resume.
+
+Composite bootstrap completion receipt передаётся во все вложенные readback
+вызовы. После штатного TTL старые completed bootstrap Jobs могут отсутствовать:
+точные исторические эффекты и актуальная schema подтверждаются квитанцией.
+Заключительная проверка не должна терять её или повторно создавать bootstrap.

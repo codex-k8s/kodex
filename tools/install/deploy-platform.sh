@@ -1043,7 +1043,7 @@ failing_runtime_pods=$(kubectl --context "$context" -n "$runtime_namespace" get 
 [[ -z "$failing_runtime_pods" ]] || fail "failing runtime Pods remain: $failing_runtime_pods"
 if [[ -n "${profile_mode:-}" ]]; then
   timeout 180s python3 "$repository_root/tools/install/portable_state.py" readback \
-    --context "$context" --render "$render_file"
+    --context "$context" --render "$render_file" "${completion_arguments[@]}"
 fi
 printf 'Kodex platform deployment completed: %s render_sha256=%s\n' \
   "$mode" "$(sha256sum "$render_file" | awk '{print $1}')"

@@ -14,6 +14,17 @@ FUNCTION = 'apply_job() {' + TEXT.split('apply_job() {',1)[1].split('\nwait_job_
 
 
 class Tests(unittest.TestCase):
+    def test_final_readback_retains_the_verified_upgrade_completion_receipt(self):
+        block=TEXT.rsplit('if [[ -n "${profile_mode:-}" ]]; then',1)[1].split('\nfi',1)[0]
+        expected=['--bootstrap-completion-receipt','/synthetic/composite.json',
+                  '--bootstrap-completion-sha256','a'*64,'--allow-reconciled-bootstrap-completion']
+        for arguments in ([],expected):
+            setup='set -euo pipefail\nrepository_root=/synthetic\ncontext=synthetic\nrender_file=/synthetic/render.yaml\ncompletion_arguments=('+ ' '.join(arguments)+')\ntimeout(){ shift; "$@"; }\npython3(){ printf "%s\\n" "$@"; }\n'
+            result=subprocess.run(['bash'],input=setup+block,text=True,capture_output=True,timeout=5)
+            self.assertEqual(result.returncode,0,result.stderr)
+            self.assertEqual(result.stdout.splitlines(),['/synthetic/tools/install/portable_state.py','readback',
+                '--context','synthetic','--render','/synthetic/render.yaml']+arguments)
+
     def test_system_assistant_readback_uses_exact_leader_without_corrupting_json(self):
         function='wait_system_assistant() {'+TEXT.split('wait_system_assistant() {',1)[1].split('\n}',1)[0]+'\n}'
         for scenario in ('ready','empty-first','foreign-first','invalid','forward-ready','forward-retry'):
