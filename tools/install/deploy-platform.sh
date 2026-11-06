@@ -385,7 +385,6 @@ prune_role_environment_configmaps() {
 }
 
 reconcile_image_admission_policy_parameters() {
-  [[ -z "${profile_mode:-}" ]] || return 0
   local name=kodex-image-admission-policy current expected current_spec expected_spec
   if ! current=$(kubectl --context "$context" -n "$namespace" get \
     "imageadmissionpolicyparameters.supplychain.kodex.dev/$name" -o json 2>/dev/null); then
@@ -408,9 +407,13 @@ reconcile_image_admission_policy_parameters() {
     .metadata.labels["kodex.dev/owner-intent"] == "true"
   ' <<<"$current" >/dev/null ||
     fail 'image admission policy parameters are not owned by Kodex'
-  kubectl --context "$context" -n "$namespace" delete \
-    "imageadmissionpolicyparameters.supplychain.kodex.dev/$name" \
-    --wait=true --timeout=3m >/dev/null
+  if [[ -n "${profile_mode:-}" ]]; then
+    portable_delete ImageAdmissionPolicyParameters "$name"
+  else
+    kubectl --context "$context" -n "$namespace" delete \
+      "imageadmissionpolicyparameters.supplychain.kodex.dev/$name" \
+      --wait=true --timeout=3m >/dev/null
+  fi
 }
 
 prepare_image_admission_preflight() {

@@ -74,11 +74,52 @@ class FixtureState(State):
 
 
 class StateTest(unittest.TestCase):
-    def test_admission_parameters_use_same_uid_rv_cas_for_preflight_and_update(self):
+    def test_changed_immutable_admission_parameters_require_drained_fail_closed_successor(self):
+        desired={'apiVersion':'supplychain.kodex.dev/v1alpha1','kind':'ImageAdmissionPolicyParameters',
+            'metadata':{'name':'kodex-image-admission-policy','namespace':'kodex-system','labels':{'app.kubernetes.io/part-of':'kodex'}},
+            'spec':{'orchestrationRevision':'synthetic-v2'}}
+        actual=live(desired);actual['spec']['orchestrationRevision']='synthetic-v1'
+        controller={'apiVersion':'apps/v1','kind':'Deployment','metadata':{'name':'image-admission-controller','namespace':'kodex-system','labels':{'app.kubernetes.io/part-of':'kodex'}},'spec':{'replicas':0},'status':{'replicas':0}}
+        binding={'apiVersion':'admissionregistration.k8s.io/v1','kind':'ValidatingAdmissionPolicyBinding',
+            'metadata':{'name':'kodex-image-admission-controller-jobs','labels':{'app.kubernetes.io/part-of':'kodex'}},
+            'spec':{'policyName':'kodex-image-admission-controller-jobs','validationActions':['Deny'],
+                    'paramRef':{'name':'kodex-image-admission-policy','namespace':'kodex-system','parameterNotFoundAction':'Deny'}}}
+        class ImmutableState(FixtureState):
+            def __init__(self):
+                super().__init__([actual,controller,binding]);self.jobs=[];self.claims=[]
+            def call(self,args,value=None):
+                if 'get'in args:return json.dumps({'items':self.jobs if 'jobs'in args else self.claims}).encode()
+                if args[0]=='delete':
+                    current=self.objects[key(desired)]
+                    assert value['preconditions']=={'uid':current['metadata']['uid'],'resourceVersion':current['metadata']['resourceVersion']}
+                    self.objects.pop(key(desired));self.writes.append((args,value));return b'{}'
+                result=super().call(args,value)
+                if args[0]=='create'and '--dry-run=server'not in args:self.objects[key(desired)]['metadata']['uid']='synthetic-successor'
+                return result
+            def path(self,r):return '/apis/supplychain.kodex.dev/v1alpha1/namespaces/kodex-system/imageadmissionpolicyparameters/kodex-image-admission-policy'
+        state=ImmutableState();inventory=state.inventory([desired]);state.preflight_apply(desired)
+        self.assertFalse(state.writes);self.assertIn('--dry-run=server',state.probes[0][0]);self.assertIn('generateName',state.probes[0][1]['metadata'])
+        with self.assertRaises(Rejected):state.apply(desired,inventory)
+        state.delete(desired,inventory);self.assertIsNone(inventory[key(desired)])
+        self.assertEqual(state.get(binding),binding)
+        state.apply(desired,inventory);verify_resource(desired,state.get(desired))
+        self.assertEqual(state.get(desired)['metadata']['uid'],'synthetic-successor')
+        self.assertEqual(sum(call[0][0]=='create'for call in state.writes),1)
+        for scenario in ('running','terminating','allow','active-job','workspace'):
+            blocked=ImmutableState();before=blocked.inventory([desired])
+            if scenario=='running':blocked.objects[key(controller)]['spec']['replicas']=1
+            elif scenario=='terminating':blocked.objects[key(controller)]['status']['replicas']=1
+            elif scenario=='allow':blocked.objects[key(binding)]['spec']['paramRef']['parameterNotFoundAction']='Allow'
+            elif scenario=='active-job':blocked.jobs=[{'status':{'active':1}}]
+            else:blocked.claims=[{'metadata':{'name':'synthetic-workspace'}}]
+            with self.assertRaises(Rejected):blocked.delete(desired,before)
+            self.assertFalse(blocked.writes)
+
+    def test_unchanged_admission_parameters_use_metadata_cas_and_exact_readback(self):
         desired={'apiVersion':'supplychain.kodex.dev/v1alpha1','kind':'ImageAdmissionPolicyParameters',
             'metadata':{'name':'synthetic-policy','namespace':'kodex-system','labels':{'app.kubernetes.io/part-of':'kodex'}},
             'spec':{'admissionImage':'registry.example.invalid/admission@sha256:'+'a'*64,'orchestrationRevision':'synthetic-v2'}}
-        actual=live(desired);actual['spec']['orchestrationRevision']='synthetic-v1'
+        actual=live(desired)
         actual['metadata']['managedFields']=[{'manager':'kodex-install','operation':'Update'}]
         state=FixtureState([actual]);inventory=state.inventory([desired]);state.preflight_apply(desired)
         self.assertFalse(state.writes);self.assertIn('patch',state.probes[0][0]);self.assertIn('--dry-run=server',state.probes[0][0])

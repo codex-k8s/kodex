@@ -1117,7 +1117,14 @@ payload не изменяется. Отсутствующая, immutable либ�
 upgrade без create/write. Штатная новая установка по-прежнему требует canonical
 empty seed и использует create-only bootstrap с readback после потерянного ответа.
 
-Existing ImageAdmissionPolicyParameters обновляется через тот же fenced
-UID/resourceVersion CAS, что и остальные security resources: без delete и
-force-conflicts, с exact spec readback. Server preflight проверяет custom
-resources уже обслуживаемых API; исключаются только ещё не установленные API.
+ImageAdmissionPolicyParameters имеет immutable spec. Для нового spec portable
+upgrade требует остановленного admission controller, terminal managed Jobs и
+отсутствия managed workspace PVC. Owned binding сохраняет parameterNotFoundAction
+Deny и validationActions Deny на протяжении замены. Прежний объект удаляется
+по UID/resourceVersion preconditions, foreground disappearance подтверждается,
+затем foundation создаёт ровно один successor с exact spec readback. Потерянный
+ответ требует reconciliation, force-conflicts не применяется. Preflight проверяет
+эти guards и create --dry-run=server с generateName; он не пытается обновить
+immutable spec. При неизменном spec metadata сохраняются через fenced CAS.
+Server preflight проверяет custom resources уже served API, исключая только
+ещё не установленные API.
