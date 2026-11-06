@@ -168,6 +168,15 @@ def schema_proof(state, mode):
     return sha(result.stdout)
 
 
+def verify_apply(state, resources, receipt):
+    """До первой rollout mutation проверяет genuine composite receipt, cluster/Jobs и полный033 catalog."""
+    require(isinstance(receipt, dict) and receipt.get('origin') == ORIGIN, 'UPGRADE_COMPLETION_ORIGIN_REQUIRED')
+    profile, _ = render_profile(resources)
+    completion.verify(state, resources, receipt)
+    proof = schema_proof(state, profile['schema_profile'])
+    return {'status': 'FORWARD_UPGRADE_APPLY_VERIFIED', 'schema_proof_sha256': proof, 'effects_replayed': False}
+
+
 def migration_execution(state, expected, actual):
     """Требует один настоящий terminal Job-owned Pod, неизменённый spec и фактический image digest."""
     pods = json.loads(state.call(['-n', 'kodex-system', 'get', 'pods', '-l', 'job-name=' + MIGRATION, '-o', 'json']))['items']
@@ -260,15 +269,29 @@ def write_new(path, raw):
 
 
 def main():
-    """prepare — чистый render; capture — отдельный read-only допуск после успешной forward migration."""
+    """prepare — render; capture и verify-apply проверяют реальный migration effect только чтением."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=('prepare', 'capture'))
+    parser.add_argument('mode', choices=('prepare', 'capture', 'verify-apply'))
     for flag in ('profile', 'previous-render', 'target-render', 'render', 'previous-receipt', 'output'):
-        parser.add_argument('--' + flag, type=Path, required=flag in ('previous-render', 'output'))
+        parser.add_argument('--' + flag, type=Path)
     parser.add_argument('--previous-receipt-sha256')
     parser.add_argument('--context')
+    completion.add_arguments(parser)
     args = parser.parse_args()
     try:
+        if args.mode == 'verify-apply':
+            require(args.render is not None and args.context and
+                    all(v is None for v in (args.profile, args.previous_render, args.target_render, args.previous_receipt,
+                                           args.previous_receipt_sha256, args.output)), 'UPGRADE_APPLY_ARGUMENTS_REQUIRED')
+            receipt = completion.from_arguments(args)
+            require(isinstance(receipt, dict) and receipt.get('origin') == ORIGIN, 'UPGRADE_COMPLETION_ORIGIN_REQUIRED')
+            resources = decode_render(completion.private_bytes(args.render, 8 << 20))
+            state = State(args.context);state.discover(resources)
+            print(json.dumps(verify_apply(state, resources, receipt)))
+            return
+        require(args.previous_render is not None and args.output is not None and
+                args.bootstrap_completion_receipt is None and args.bootstrap_completion_sha256 is None and
+                not args.allow_reconciled_bootstrap_completion, 'UPGRADE_PREPARATION_ARGUMENTS_REQUIRED')
         previous_raw = completion.private_bytes(args.previous_render, 8 << 20)
         if args.mode == 'prepare':
             require(args.profile is not None and args.target_render is not None and args.render is None and

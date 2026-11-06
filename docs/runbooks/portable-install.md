@@ -123,6 +123,22 @@ Goose Down для033 запрещён: возврат старого image не 
 
 ### Обновление bootstrap receipts при переходе032→033
 
+После настоящей forward migration и `capture` доступен отдельный optional
+`portable-release.sh --mode upgrade`. Требуются точный upgrade render,
+новый private preimage directory, composite receipt и явный
+`--allow-reconciled-bootstrap-completion`. Обычный `apply` сохраняет прежнее
+поведение новой установки. Upgrade проверяет cluster/namespace, пять
+bootstrap identities/specs и полный033 catalog до первой rollout mutation;
+receipt прежнего install или initial reconciliation вместо composite не подходит.
+
+В upgrade пять bootstrap effects не запускаются заново. Остальные foundation,
+authority publisher и workloads проходят штатные preflight/CAS/readback фазы.
+Source revision authority задаётся закреплённым render; history/fence не
+сбрасываются. Release materializer при существующем exact Job присоединяется к
+его выполнению, при отсутствии создаётся один раз. Failed/чужой/неизвестный Job
+требует отдельного reconciliation и не удаляется ради повтора. Capture output
+нового install не заменяет composite receipt после обновления.
+
 `tools/install/bootstrap_upgrade.py` задаёт отдельный optional profile
 `kodex.bootstrap-upgrade/v1`, `managed_by: git`. Он закрепляет SHA предыдущего и
 целевого raw render, оба source SHA, `from_schema_heads`/`to_schema_heads` и

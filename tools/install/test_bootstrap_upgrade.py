@@ -66,6 +66,21 @@ class UpgradeState(State):
 
 
 class UpgradeTests(unittest.TestCase):
+    def test_upgrade_apply_requires_real_composite_effects_and_fresh_schema_proof(self):
+        old, target, _, receipt, previous = self.prepared()
+        state = UpgradeState(target, previous)
+        composite = self.capture(state, target, old, receipt)
+        with patch.object(completion, 'verify_schemas'), patch.object(upgrade, 'schema_proof', return_value='f'*64) as proof:
+            result = upgrade.verify_apply(state, target, composite)
+            self.assertEqual(result['status'], 'FORWARD_UPGRADE_APPLY_VERIFIED')
+            proof.assert_called_once_with(state, 'backup')
+        for origin in ('LIVE_CAPTURE', 'RECONCILED_VERIFIED_PREFLIGHT'):
+            with self.assertRaises(Rejected):upgrade.verify_apply(state, target, {**composite, 'origin':origin})
+        state.current[upgrade.MIGRATION]['status']['conditions'] = [{'type':'Failed','status':'True'}]
+        with patch.object(completion, 'verify_schemas'), patch.object(upgrade, 'schema_proof') as proof, self.assertRaises(Rejected):
+            upgrade.verify_apply(state, target, composite)
+        proof.assert_not_called()
+
     def test_disabled_observability_profile_keeps_canonical_migration_contract(self):
         old, target, _, _, profile = fixture()
         old = observability_profile.transform(old, disabled=True)

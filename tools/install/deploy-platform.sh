@@ -8,7 +8,7 @@ fail() {
 
 usage() {
   printf '%s\n' \
-    "Usage: $0 --context <exact-context> --mode defer-public-tls|prepare-preflight|preflight|apply|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback" \
+    "Usage: $0 --context <exact-context> --mode defer-public-tls|prepare-preflight|preflight|apply|upgrade|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback" \
     '  --render <exact-release.yaml> --public-tls-mode deferred|enabled|external' \
     '  [--oidc-ca-file <pem> --ingress-controller <name> --ingress-namespace <name>]' >&2
   printf '%s\n' '  [--previous-render <yaml> --previous-render-sha256 <64-hex> --buildkit-runtime-profile standard|nested-userns; resume-workloads only]' >&2
@@ -60,12 +60,13 @@ while (($# > 0)); do
 done
 
 if ((${#completion_arguments[@]})); then
-  case "$mode" in prepare-preflight|preflight|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback) ;; *) fail 'completion receipt only applies to continuation or readback' ;; esac
+  case "$mode" in upgrade|prepare-preflight|preflight|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback) ;; *) fail 'completion receipt only applies to continuation or readback' ;; esac
 fi
+[[ "$mode" != upgrade || ${#completion_arguments[@]} -gt 0 ]] || fail 'upgrade requires forward migration completion receipt'
 [[ -z "$completion_output" || "$mode" == apply ]] || fail 'completion capture output requires fresh apply'
 [[ -n "$context" ]] || fail 'exact Kubernetes context is required'
 case "$mode" in
-  defer-public-tls|prepare-preflight|preflight|apply|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback) ;;
+  defer-public-tls|prepare-preflight|preflight|apply|upgrade|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback) ;;
   *) fail 'mode is invalid' ;;
 esac
 case "$clamav_mode" in enabled|disabled) ;; *) fail 'ClamAV mode is invalid' ;; esac
@@ -96,6 +97,9 @@ repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 if ((${#completion_arguments[@]})); then
   python3 "$repository_root/tools/install/authority_registry.py" verify-bootstrap \
     --render "$render_file" --context "$context" "${completion_arguments[@]}"
+fi
+if [[ "$mode" == upgrade ]]; then
+  python3 "$repository_root/tools/install/bootstrap_upgrade.py" verify-apply --render "$render_file" --context "$context" "${completion_arguments[@]}"
 fi
 if [[ "$component_image_requested" == true ]]; then
   python3 "$repository_root/tools/install/component_image_profile.py" --check --render "$render_file" "${component_arguments[@]}"
@@ -200,10 +204,17 @@ wait_statefulset() {
 
 apply_job() {
   local name=$1 job_file="$temporary_directory/job-$1.yaml"
+  if [[ "$mode" == upgrade ]]; then
+    case "$name" in
+      email-bridge-migration|internal-rpc-authority-migrate|control-plane-migrate|kodex-postgresql-runtime-credentials|control-plane-broker-bootstrap)
+        # Genuine composite receipt уже проверен до первой mutation; historical effects не повторяются.
+        return ;;
+    esac
+  fi
   JOB_NAME="$name" yq 'select(.kind == "Job" and .metadata.name == strenv(JOB_NAME))' \
     "$render_file" >"$job_file"
   [[ -s "$job_file" ]] || fail "release Job is absent: $name"
-  if [[ "$mode" == resume-workloads ]]; then
+  if [[ "$mode" == resume-workloads || "$mode" == upgrade ]]; then
     local presence
     presence=$(python3 "$repository_root/tools/install/authority_registry.py" existing-job \
       --context "$context" --render "$render_file" --job-name "$name") || fail 'existing bootstrap Job rejected'
@@ -874,7 +885,7 @@ if [[ "$mode" == preflight ]]; then
   exit 0
 fi
 
-if [[ "$mode" == apply ]]; then
+if [[ "$mode" == apply || "$mode" == upgrade ]]; then
   if [[ "$public_tls_mode" == deferred ]]; then
     defer_public_tls
   elif [[ "$public_tls_mode" == enabled ]]; then

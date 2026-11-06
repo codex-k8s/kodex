@@ -52,9 +52,9 @@ while (($#)); do
     --buildkit-runtime-profile) buildkit_profile="${2:-}"; shift 2 ;;
     --oidc-ca-file|--ingress-deployment|--ingress-controller|--ingress-namespace|--ingress-service) arguments+=("$1" "${2:-}"); shift 2 ;;
     --help)
-      printf '%s\n' 'Usage: portable-release.sh --mode plan|preflight|apply|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback --render <yaml> --render-sha256 <64-hex> [--context <exact-context>]' \
+      printf '%s\n' 'Usage: portable-release.sh --mode plan|preflight|apply|upgrade|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback --render <yaml> --render-sha256 <64-hex> [--context <exact-context>]' \
         '  [--oidc-ca-file <pem>] [--ingress-controller <name> --ingress-namespace <name>]' \
-        '  [--preimage-directory <new-private-directory>; required for apply]'
+        '  [--preimage-directory <new-private-directory>; required for apply/upgrade]'
       printf '%s\n' '  [--previous-render <yaml> --previous-render-sha256 <64-hex> --buildkit-runtime-profile standard|nested-userns; resume-workloads only]'
       printf '%s\n' '  [--clamav-mode enabled|disabled; default enabled]'
       printf '%s\n' '  [--repair-kubernetes-api-endpoints; explicit workload resume repair from pinned endpoint anchors]'
@@ -67,7 +67,10 @@ while (($#)); do
     *) fail 'unsupported argument' ;;
   esac
 done
-case "$mode" in plan|preflight|apply|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback) ;; *) fail 'mode is invalid' ;; esac
+case "$mode" in plan|preflight|apply|upgrade|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback) ;; *) fail 'mode is invalid' ;; esac
+if [[ "$mode" == upgrade ]]; then
+  [[ -n "$completion_receipt" && "$completion_sha" =~ ^[a-f0-9]{64}$ && "$allow_reconciled_completion" == true ]] || fail 'upgrade requires an explicit forward migration completion receipt'
+fi
 case "$clamav_mode" in enabled|disabled) ;; *) fail 'ClamAV mode is invalid' ;; esac
 [[ "$expected_sha" =~ ^[a-f0-9]{64}$ ]] || fail 'exact render digest is required'
 [[ -f "$render" && ! -L "$render" ]] || fail 'regular render file is required'
@@ -110,7 +113,7 @@ if [[ -n "$component_image_profile$component_image_sha$base_release_lock" ]]; th
   previous_arguments+=(--component-image-profile "$temporary/component-image.json" --component-image-profile-sha256 "$component_image_sha" --base-release-lock "$temporary/base-release-lock.json")
 fi
 if [[ -n "$completion_receipt$completion_sha" || "$allow_reconciled_completion" == true ]]; then
-  case "$mode" in preflight|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback) ;; *) fail 'completion receipt requires continuation or readback' ;; esac
+  case "$mode" in upgrade|preflight|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback) ;; *) fail 'completion receipt requires continuation or readback' ;; esac
   [[ -n "$completion_receipt" && "$completion_sha" =~ ^[a-f0-9]{64}$ ]] || fail 'exact completion receipt is required'
   # Проверка private mode/owner/hash до snapshot: cp не должен легализовать открытый input.
   python3 - "$root/tools/install" "$completion_receipt" "$completion_sha" "$allow_reconciled_completion" <<'PYLOAD'
@@ -122,6 +125,9 @@ PYLOAD
   cp -- "$completion_receipt" "$temporary/bootstrap-completion.json"
   completion_arguments=(--bootstrap-completion-receipt "$temporary/bootstrap-completion.json" --bootstrap-completion-sha256 "$completion_sha")
   [[ "$allow_reconciled_completion" != true ]] || completion_arguments+=(--allow-reconciled-bootstrap-completion)
+fi
+if [[ "$mode" == upgrade ]]; then
+  python3 "$root/tools/install/bootstrap_upgrade.py" verify-apply --render "$temporary/render.yaml" --context "$context" "${completion_arguments[@]}"
 fi
 if ((${#provider_profile_arguments[@]})); then
   python3 "$root/tools/install/provider_sandbox_profile.py" --check --render "$temporary/render.yaml" --profile "${provider_profile_arguments[1]}"
@@ -146,7 +152,7 @@ if [[ "$mode" == resume-workloads ]]; then
   timeout 180s python3 "$root/tools/install/authority_registry.py" preflight-workloads \
     --render "$temporary/render.yaml" --context "$context" "${previous_arguments[@]}" --clamav-mode "$clamav_mode" "${completion_arguments[@]}"
 fi
-if [[ "$mode" == apply || "$mode" == resume-authority-bootstrap || "$mode" == resume-authority-published || "$mode" == resume-workloads ]]; then
+if [[ "$mode" == apply || "$mode" == upgrade || "$mode" == resume-authority-bootstrap || "$mode" == resume-authority-published || "$mode" == resume-workloads ]]; then
   [[ -n "$preimage" && "$preimage" == /* && ! -e "$preimage" ]] || fail 'new absolute preimage directory is required'
   mkdir -m 0700 -- "$preimage"
   cp -- "$temporary/render.yaml" "$preimage/candidate-render.yaml"
@@ -175,6 +181,7 @@ if [[ "$mode" == apply || "$mode" == resume-authority-bootstrap || "$mode" == re
   fi
   # Preimage metadata не заменяет backup данных или разрешение на schema downgrade.
   phases=(prepare-preflight preflight apply)
+  [[ "$mode" != upgrade ]] || phases=(prepare-preflight preflight upgrade)
   [[ "$mode" != resume-authority-bootstrap ]] || phases=(prepare-preflight preflight resume-authority-bootstrap)
   [[ "$mode" != resume-authority-published ]] || phases=(prepare-preflight preflight resume-authority-published)
   [[ "$mode" != resume-workloads ]] || phases=(prepare-preflight preflight resume-workloads)
