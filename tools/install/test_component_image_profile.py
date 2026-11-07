@@ -48,6 +48,31 @@ def bundle_fixture():
 
 
 class Tests(unittest.TestCase):
+    def test_control_center_profile_changes_only_stateless_ui_image_and_provenance(self):
+        resources,original,_,lock_raw,_=fixture();lock=json.loads(lock_raw)
+        base='images.example.invalid/base/staff-control-center@sha256:'+'c'*64
+        lock['images'].append({'component':'staff-control-center','pull_ref':base});lock_raw=json.dumps(lock).encode()
+        configuration={**original,'component':'staff-control-center','base_release_lock_sha256':hashlib.sha256(lock_raw).hexdigest(),
+            'expected_image_ref':base,'image_ref':'images.example.invalid/fixed/staff-control-center@sha256:'+'d'*64}
+        ui={'apiVersion':'apps/v1','kind':'Deployment','metadata':{'name':'staff-control-center','namespace':'kodex-system',
+            'labels':{'app.kubernetes.io/part-of':'kodex'}},'spec':{'replicas':2,'template':{'metadata':{'labels':{'app':'staff-control-center'}},
+            'spec':{'serviceAccountName':'staff-control-center','containers':[{'name':'staff-control-center','image':base,
+                'env':[{'name':'EXISTING','value':'synthetic'}]}]}}}}
+        resources.append(ui);before=copy.deepcopy(resources);digest=hashlib.sha256(json.dumps(configuration).encode()).hexdigest()
+        profile.validate(configuration,lock,hashlib.sha256(lock_raw).hexdigest())
+        after=profile.transform(resources,configuration,digest);expected=copy.deepcopy(before)
+        expected[-1]['spec']['template']['spec']['containers'][0]['image']=configuration['image_ref']
+        expected[-1]['spec']['template']['metadata']['annotations']={profile.SOURCE:configuration['source_sha'],
+            profile.BASE:configuration['base_release_lock_sha256'],profile.PROFILE:digest}
+        self.assertEqual(resources,before);self.assertEqual(after,expected)
+        for variant in ('namespace','sidecar','container','foreign-image'):
+            changed=copy.deepcopy(resources);target=changed[-1]
+            if variant=='namespace':target['metadata']['namespace']='other'
+            elif variant=='sidecar':target['spec']['template']['spec']['containers'].append({'name':'foreign','image':base})
+            elif variant=='container':target['spec']['template']['spec']['containers'][0]['name']='foreign'
+            else:target['spec']['template']['spec']['containers'][0]['image']='images.example.invalid/foreign@sha256:'+'e'*64
+            with self.subTest(variant=variant),self.assertRaises(Rejected):profile.transform(changed,configuration,digest)
+
     def test_runtime_controller_profile_changes_only_pinned_container_and_provenance(self):
         resources, original, _, lock_raw, _ = fixture()
         base = 'images.example.invalid/base/runtime-controller@sha256:' + 'c'*64
@@ -207,7 +232,8 @@ pathlib.Path(os.environ['PROBE_ORIGINAL']).write_bytes(b'changed')
         with self.assertRaises(Rejected):profile.validate({k:v for k,v in broker.items()if k!='schema_heads'},lock,lock_sha)
         bundle['profiles'].append(copy.deepcopy(bundle['profiles'][0]))
         with self.assertRaisesRegex(Rejected,'UNIQUE_COMPONENT_PROFILE_REQUIRED'):profile.validate(bundle,lock,lock_sha)
-        bundle['profiles'].append(copy.deepcopy(bundle['profiles'][0]))
+        while len(bundle['profiles'])<=len(profile.COMPONENTS):
+            bundle['profiles'].append(copy.deepcopy(bundle['profiles'][0]))
         with self.assertRaisesRegex(Rejected,'BOUNDED_COMPONENT_PROFILES_REQUIRED'):profile.validate(bundle,lock,lock_sha)
 
     def test_control_plane_correction_preserves_other_components_and_requires_unchanged_schemas(self):

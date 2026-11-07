@@ -644,6 +644,13 @@ authority. Mutable tags, другой host, дополнительные пол�
 Поддерживается только явно перечисленный компонент; расширение набора требует
 отдельного проверенного контракта, а не произвольного имени workload из параметра.
 
+Для исправления только PWA доступен opt-in `staff-control-center`: заменяется
+только одноимённый container одноимённого Deployment в `kodex-system`. Сохраняются
+replicas, env, volumes, ServiceAccount, API/gateway/runtime images и bootstrap Jobs.
+Дополнительный sidecar закрыто отклоняется. Совместимость HTTP-контрактов и generated
+client должна быть проверена до выбора отдельного image; base lock и source остаются
+явно закреплёнными. Без component profile прежняя поставка не меняется.
+
 Материализовать новый render до apply:
 
 ```bash

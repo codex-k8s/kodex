@@ -16,7 +16,8 @@ COMPONENTS = {'egress-gateway': ('egress-gateway', 'egress-gateway'),
               'registry-pull-authorizer': ('kodex-image-registry-pull', 'pull-authorizer'),
               'control-plane': ('control-plane', 'control-plane'),
               'secret-broker': ('secret-broker', 'secret-broker'),
-              'runtime-controller': ('runtime-controller', 'runtime-controller')}
+              'runtime-controller': ('runtime-controller', 'runtime-controller'),
+              'staff-control-center': ('staff-control-center', 'staff-control-center')}
 RUNTIME_ENV = 'REGISTRY_PULL_RUNTIME_ENGINE'
 SOURCE = 'kodex.dev/component-source-sha'
 BASE = 'kodex.dev/component-base-lock-sha256'
@@ -149,7 +150,7 @@ def transform(resources, configuration, profile_sha256):
             selected[0]['metadata'].get('labels', {}).get('app.kubernetes.io/part-of') == 'kodex', 'OWNED_COMPONENT_DEPLOYMENT_REQUIRED')
     template = selected[0]['spec']['template']; containers = template['spec']['containers']
     target = [container for container in containers if container['name'] == container_name]
-    require(len(target) == 1 and (component != 'egress-gateway' or len(containers) == 1) and
+    require(len(target) == 1 and (component not in ('egress-gateway', 'staff-control-center') or len(containers) == 1) and
             target[0]['image'] in (configuration['expected_image_ref'], configuration['image_ref']), 'EXACT_COMPONENT_PREDECESSOR_REQUIRED')
     annotations = template.setdefault('metadata', {}).setdefault('annotations', {})
     for key, value in ((SOURCE, configuration['source_sha']), (BASE, configuration['base_release_lock_sha256']), (PROFILE, profile_sha256)):

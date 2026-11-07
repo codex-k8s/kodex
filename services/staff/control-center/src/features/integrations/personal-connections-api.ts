@@ -103,12 +103,14 @@ export async function loadPersonalConnections(
     !isRecord(page) ||
     !Array.isArray(page.items) ||
     page.items.length > 50 ||
-    typeof page.nextPageToken !== "string" ||
-    page.nextPageToken.length > 512
+    (page.nextPageToken !== undefined &&
+      (typeof page.nextPageToken !== "string" ||
+        page.nextPageToken.length > 512))
   )
     throw new Error("Personal connection page is invalid");
   return {
-    nextPageToken: page.nextPageToken,
+    // Контракт разрешает отсутствие курсора на последней странице; items остаётся обязательным.
+    nextPageToken: page.nextPageToken ?? "",
     items: page.items.map((item): PersonalIntegrationConnection => {
       if (
         !isRecord(item) ||

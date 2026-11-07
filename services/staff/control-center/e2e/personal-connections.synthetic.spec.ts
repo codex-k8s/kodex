@@ -32,6 +32,7 @@ async function setup(
   page: Page,
   initial: PersonalIntegrationConnection = connection,
   failSave = false,
+  empty = false,
 ) {
   const failures: string[] = [];
   let current = structuredClone(initial);
@@ -53,7 +54,8 @@ async function setup(
         url.pathname === "/api/v1/me/integration-connections" &&
         request.method() === "GET"
       ) {
-        await route.fulfill({ json: { items: [current], nextPageToken: "" } });
+        // Последняя страница намеренно использует wire-форму без optional курсора.
+        await route.fulfill({ json: { items: empty ? [] : [current] } });
         return;
       }
       if (
@@ -143,9 +145,11 @@ async function setup(
     });
   });
   await page.goto("/e2e/fixtures/personal-connections.html");
-  await expect(
-    page.getByRole("heading", { name: connection.name }),
-  ).toBeVisible();
+  if (!empty) {
+    await expect(
+      page.getByRole("heading", { name: connection.name }),
+    ).toBeVisible();
+  }
   return {
     failures,
     get writes() {
@@ -166,6 +170,26 @@ async function setup(
       };
     },
   };
+}
+
+for (const width of [1440, 390]) {
+  test(`пустой каталог без курсора показывает empty state, ${String(width)}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const fixture = await setup(page, connection, false, true);
+    await expect(
+      page.getByText("Доступных подключений пока нет.", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    expect(fixture.writes).toBe(0);
+    expect(fixture.failures).toEqual([]);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+  });
 }
 
 test("права Jira проверяются в контексте выбранной записи", async ({

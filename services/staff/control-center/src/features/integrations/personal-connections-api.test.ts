@@ -180,6 +180,47 @@ describe("личные подключения: HTTP boundary", () => {
         ),
       ).toThrow();
   });
+  it("принимает последнюю HTTP-страницу без optional курсора, включая пустой каталог", async () => {
+    for (const items of [[], [connection]]) {
+      const response = new Response(JSON.stringify({ items }), {
+        headers: { "Content-Type": "application/json" },
+      });
+      sdk.listPersonalIntegrationConnections.mockResolvedValueOnce({
+        data: await response.clone().json(),
+        response,
+      });
+      await expect(
+        loadPersonalConnections("", undefined, new AbortController().signal),
+      ).resolves.toEqual({ items, nextPageToken: "" });
+    }
+  });
+  it("сохраняет continuation и не скрывает malformed курсор либо отсутствующий каталог", async () => {
+    sdk.listPersonalIntegrationConnections.mockResolvedValueOnce({
+      data: { items: [connection], nextPageToken: "next-fixture" },
+      response: new Response(),
+    });
+    await expect(
+      loadPersonalConnections("", undefined, new AbortController().signal),
+    ).resolves.toEqual({ items: [connection], nextPageToken: "next-fixture" });
+    for (const data of [
+      {},
+      { nextPageToken: "" },
+      { items: null },
+      { items: [], nextPageToken: null },
+      { items: [], nextPageToken: 1 },
+      { items: [], nextPageToken: {} },
+      { items: [], nextPageToken: "x".repeat(513) },
+      { items: Array.from({ length: 51 }, () => connection) },
+    ]) {
+      sdk.listPersonalIntegrationConnections.mockResolvedValueOnce({
+        data,
+        response: new Response(),
+      });
+      await expect(
+        loadPersonalConnections("", undefined, new AbortController().signal),
+      ).rejects.toThrow();
+    }
+  });
   it("проверяет bounded catalog и соответствие binding подключению", async () => {
     sdk.listPersonalIntegrationConnections.mockResolvedValueOnce({
       data: { items: [{ ...connection, credential }], nextPageToken: "" },
