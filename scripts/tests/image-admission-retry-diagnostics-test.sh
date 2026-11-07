@@ -49,7 +49,11 @@ count=$((count + 1))
 printf '%s\n' "$count" >"$KODEX_TEST_BRIDGE_COUNT_FILE"
 stat -Lc '%a' /proc/self/fd/2 >>"${KODEX_TEST_STDERR_MODE_FILE:?}"
 if [[ ${KODEX_TEST_BRIDGE_MODE:-} == no-work ]]; then
-  printf 'rpc error: code = NotFound desc = no admission work\n' >&2
+  printf 'image admission bridge failed: NotFound\n' >&2
+  exit 1
+fi
+if [[ ${KODEX_TEST_BRIDGE_MODE:-} == canonical-unknown ]]; then
+  printf 'image admission bridge failed: Unknown\n' >&2
   exit 1
 fi
 if (( count > KODEX_TEST_BRIDGE_FAILURES )); then
@@ -82,6 +86,32 @@ CLAIM_RETRY_ATTEMPT_LIMIT=14
 CLAIM_RETRY_DELAY_SECONDS=0
 CLAIM_RETRY_DIAGNOSTIC_INTERVAL=6
 
+# Golden producer format закреплён также настоящим Go bridge test. Классификатор
+# проверяется для всех codes, а не только прежних искусственных RPC messages.
+classification_input="$temporary_directory/classification.stderr"
+while IFS='|' read -r code expected; do
+  printf 'image admission bridge failed: %s\n' "$code" >"$classification_input"
+  [[ $(classify_claim_retry_error "$classification_input") == "$expected" ]] ||
+    fail "canonical bridge code was not classified: $code"
+done <<'EOF'
+NotFound|no-work
+Unauthenticated|authorization
+PermissionDenied|authorization
+Unavailable|dependency-unavailable
+DeadlineExceeded|dependency-unavailable
+ResourceExhausted|dependency-unavailable
+Aborted|owner-state-conflict
+FailedPrecondition|owner-state-conflict
+AlreadyExists|owner-state-conflict
+Canceled|unclassified
+Unknown|unclassified
+InvalidArgument|unclassified
+OutOfRange|unclassified
+Unimplemented|unclassified
+Internal|unclassified
+DataLoss|unclassified
+EOF
+
 printf '0\n' >"$bridge_count_file"
 : >"$stderr_mode_file"
 : >"$sleep_log"
@@ -98,6 +128,30 @@ grep -Fq 'operation=claim attempt=1/14 class=no-work' "$temporary_directory/no-w
   fail 'no-work admission was not classified immediately'
 grep -Fq 'owner admission work is unavailable' "$temporary_directory/no-work.stderr" ||
   fail 'no-work admission did not fail closed'
+unset KODEX_TEST_BRIDGE_MODE
+
+# Пустой promotion polling так же не создаёт работу и не расходует весь budget.
+printf '0\n' >"$bridge_count_file"
+: >"$sleep_log"
+export KODEX_TEST_BRIDGE_MODE=no-work
+if (claim_promotion) 2>"$temporary_directory/no-promotion.stderr"; then
+  fail 'empty promotion cycle became successful work'
+fi
+[[ $(<"$bridge_count_file") == 1 && ! -s $sleep_log ]] || fail 'no-work promotion retried or slept'
+grep -Fq 'operation=claim-promotion attempt=1/14 class=no-work' "$temporary_directory/no-promotion.stderr" ||
+  fail 'no-work promotion was not classified immediately'
+unset KODEX_TEST_BRIDGE_MODE
+
+# Неизвестный canonical code не превращается в no-work и сохраняет прежний limit.
+printf '0\n' >"$bridge_count_file"
+: >"$sleep_log"
+export KODEX_TEST_BRIDGE_MODE=canonical-unknown
+if (claim_admission) 2>"$temporary_directory/unknown.stderr"; then
+  fail 'unknown bridge error became successful work'
+fi
+[[ $(<"$bridge_count_file") == 14 ]] || fail 'unknown bridge code escaped bounded retries'
+grep -Fq 'operation=claim attempt=14/14 class=unclassified' "$temporary_directory/unknown.stderr" ||
+  fail 'unknown bridge code lost its terminal diagnostic'
 unset KODEX_TEST_BRIDGE_MODE
 
 printf '0\n' >"$bridge_count_file"
@@ -130,7 +184,8 @@ grep -Fq 'owner promotion work is unavailable' "$temporary_directory/promotion.s
   fail 'promotion timeout did not fail closed'
 
 if grep -R -Fq 'raw-secret-must-not-leak' \
-  "$temporary_directory/no-work.stderr" "$temporary_directory/admission.stderr" "$temporary_directory/promotion.stderr"; then
+  "$temporary_directory/no-work.stderr" "$temporary_directory/no-promotion.stderr" \
+  "$temporary_directory/unknown.stderr" "$temporary_directory/admission.stderr" "$temporary_directory/promotion.stderr"; then
   fail 'raw bridge stderr reached operator diagnostics'
 fi
 if grep -vxq '600' "$stderr_mode_file"; then
