@@ -4,15 +4,15 @@ title: Egress gateway
 type: service
 status: approved
 owner: security
-version: 1.2.1
-updated: 2026-11-04
+version: 1.3.0
+updated: 2026-11-07
 ---
 
 # Egress gateway
 
 ## Startup с необязательными projections
 
-Отсутствующая или неподходящая mail/integration projection оставляет соответствующий
+Отсутствующая или неподходящая mail/integration либо включённая native projection оставляет соответствующий
 listener закрытым: readiness503, CONNECT не авторизуется, DNS/dial не выполняются.
 Такой listener получает ёмкость общего connection budget от основного listener;
 новый независимый бюджет не создаётся. Его parsing/timeouts и закрытая policy
@@ -48,6 +48,8 @@ CONNECT после наследования бюджета и запрет ра�
 | STT CONNECT port | `8081/TCP`, имя `stt-connect`; только профиль `openai-stt` и workload `stt-tts-service` |
 | Mail CONNECT port | `8082/TCP`, имя `mail-connect`; только `email-mail/email-bridge/email.transport`, отдельная immutable проекция |
 | OpenAPI CONNECT port | `8083/TCP`, имя `openapi-connect`; отдельный ClusterIP Service `egress-gateway-openapi` выбирает только Pod текущего поколения owner-проекции, остальные listener не переключаются |
+| Runtime CONNECT port | `8084/TCP`, имя `runtime-connect`; прежний authenticated runtime profile |
+| Optional native CONNECT port | `8085/TCP`, имя `native-connect`; отдельный Service `egress-gateway-native`, только integration-gateway и immutable operator pins; по умолчанию отсутствует |
 | Technical Service | `egress-gateway-technical.kodex-system.svc.cluster.local`; публикует и not-ready Pod для закрытого readback |
 | Technical port | `9090/TCP`, имя `metrics` |
 | Endpoint Pod labels | `app.kubernetes.io/name=egress-gateway`, `app.kubernetes.io/component=platform-egress` |
@@ -59,7 +61,7 @@ CONNECT после наследования бюджета и запрет ра�
 Consumer задаёт
 `HTTPS_PROXY=http://egress-gateway.kodex-system.svc.cluster.local:8080`.
 STT использует только порт `8081`; CNI не допускает этот workload к `8080`.
-Все четыре listener делят один глобальный connection budget. При rollout новые
+Все включённые listeners делят один глобальный connection budget. При rollout новые
 CONNECT и незавершённые рукопожатия закрываются сразу; установленные туннели
 получают общий bounded shutdown budget для завершения эффекта, затем
 принудительно закрываются. Listener ожидаются параллельно, поэтому один
@@ -93,6 +95,13 @@ rollout фиксируются отдельно в #1160/#1158.
 нулевое значение не является заявлением о существующем образе.
 
 ## Machine policy
+
+Опциональный [native-профиль](../../../docs/operations/native-integration-egress-2040.md)
+задаёт exact private/public pins для typed GitLab/Jira/Confluence, отдельный8085
+и generation selector, не меняя public DNS/OpenAPI rules либо model provider.
+Полный набор env listener/file/digest материализует штатный release renderer.
+Неверный optional файл закрывает только native listener; CA/SNI и личный
+credential binding сохраняются. Проверка: `make test-native-integration-egress`.
 
 Почтовые endpoints не добавляются в общий список HTTPS. Отдельный
 [runbook](../../../docs/operations/egress-mail-1029.md) задаёт closed

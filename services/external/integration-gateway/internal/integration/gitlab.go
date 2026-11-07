@@ -247,7 +247,7 @@ func (adapter *Adapter) executeGitLab(
 		}
 		return providerResult(request, "gitlab-pipeline:"+strconv.FormatInt(provider.ID, 10), projection)
 	default:
-		return adapter.executeGitLabCatalog(ctx, request, providerCall{BaseURL: configuration["base_url"], Path: projectPath, AuthScheme: "BEARER", Credential: request.Credential, Capability: capability}, canonicalInput)
+		return adapter.executeGitLabCatalog(ctx, request, providerCall{BaseURL: configuration["base_url"], Path: projectPath, AuthScheme: "BEARER", Credential: request.Credential, Capability: capability, Client: adapter.nativeHTTPClient}, canonicalInput)
 	}
 }
 
@@ -453,6 +453,7 @@ func (adapter *Adapter) gitLabJSON(ctx context.Context, request Request, capabil
 	return adapter.callProvider(ctx, providerCall{
 		BaseURL: configuration["base_url"], Method: method, Path: path, Query: query, Body: body,
 		AuthScheme: "BEARER", Credential: request.Credential, EffectKey: effectKey, Capability: capability,
+		Client:           adapter.nativeHTTPClient,
 		permissionEffect: request.permissionEffect,
 	})
 }

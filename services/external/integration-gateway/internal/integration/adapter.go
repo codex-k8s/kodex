@@ -54,6 +54,7 @@ const (
 type Config struct {
 	RPCProfile                                                       string
 	CredentialDirectory, ProxyURL, OpenAPIProxyURL, SyntheticBaseURL string
+	NativeProxyURL                                                   string
 	LocalOpenAPIBaseURL, LocalOpenAPICAFile                          string
 	EmailCAFile, EmailCertificateFile, EmailPrivateKeyFile           string
 	Timeout                                                          time.Duration
@@ -175,6 +176,7 @@ type Adapter struct {
 	githubHTTPClient    *http.Client
 	githubBaseURL       *url.URL
 	providerHTTPClient  *http.Client
+	nativeHTTPClient    *http.Client
 	openAPIHTTPClient   *http.Client
 	context7HTTPClient  *http.Client
 	localOpenAPIClient  *http.Client
@@ -229,6 +231,10 @@ func New(config Config) (*Adapter, error) {
 	}
 	providerTransport := githubTransport.Clone()
 	providerTransport.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS13}
+	nativeClient, err := newNativeHTTPClient(config.NativeProxyURL, providerTransport, config.Timeout)
+	if err != nil {
+		return nil, err
+	}
 	openAPITransport := providerTransport.Clone()
 	openAPITransport.Proxy = http.ProxyURL(openAPIProxy)
 	localOpenAPIBaseURL, localOpenAPIClient, err := newLocalOpenAPIClient(config)
@@ -245,6 +251,7 @@ func New(config Config) (*Adapter, error) {
 	}
 	return &Adapter{
 		proxyURL:           config.ProxyURL,
+		nativeHTTPClient:   nativeClient,
 		emailHTTPClient:    emailClient,
 		context7HTTPClient: context7Client,
 		credentials:        credentials, definitions: definitions,

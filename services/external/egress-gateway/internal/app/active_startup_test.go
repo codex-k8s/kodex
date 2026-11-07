@@ -20,9 +20,9 @@ import (
 	internalobservability "github.com/codex-k8s/kodex/services/external/egress-gateway/internal/observability"
 )
 
-// TestActiveStartupWithUnavailableOptionalProjections exercises all five listeners
+// TestActiveStartupWithUnavailableOptionalProjections exercises all six listeners
 // with the canonical 256-connection budget, local synthetic keys and no external API.
-// TestActiveStartupWithUnavailableOptionalProjections запускает пять listeners
+// TestActiveStartupWithUnavailableOptionalProjections запускает шесть listeners
 // с каноническим бюджетом256 и синтетическими ключами, без внешнего API.
 func TestActiveStartupWithUnavailableOptionalProjections(t *testing.T) {
 	directory := t.TempDir()
@@ -51,6 +51,7 @@ func TestActiveStartupWithUnavailableOptionalProjections(t *testing.T) {
 	config := Config{TechnicalAddress: "127.0.0.1:0", ConnectAddress: "127.0.0.1:0", STTConnectAddress: "127.0.0.1:0",
 		MailConnectAddress: "127.0.0.1:0", IntegrationConnectAddress: "127.0.0.1:0", RuntimeConnectAddress: "127.0.0.1:0",
 		MailPolicyFile: filepath.Join(directory, "missing-mail.json"), IntegrationPolicyFile: filepath.Join(directory, "missing-integration.json"),
+		NativeConnectAddress: "127.0.0.1:0", NativePolicyFile: filepath.Join(directory, "missing-native.json"),
 		RuntimeSigningKeyFile:     write("signing", []byte("synthetic-runtime-signing-material-0123456789")),
 		RuntimeProxyCACertificate: write("ca.crt", pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})),
 		RuntimeProxyCAPrivateKey:  write("ca.key", pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: private}))}

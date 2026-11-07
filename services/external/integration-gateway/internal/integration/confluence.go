@@ -308,7 +308,7 @@ func (adapter *Adapter) uploadConfluenceAttachment(ctx context.Context, request 
 	}
 	response, err := adapter.callProvider(ctx, providerCall{BaseURL: configuration["base_url"], Method: http.MethodPost,
 		Path: "/wiki/rest/api/content/" + url.PathEscape(input.PageID) + "/child/attachment", AuthScheme: configuration["auth_scheme"], Username: configuration["username"],
-		Credential: request.Credential, Capability: capability, EffectKey: request.EffectKey, MultipartBody: body.Bytes(), MultipartType: writer.FormDataContentType()})
+		Credential: request.Credential, Capability: capability, EffectKey: request.EffectKey, MultipartBody: body.Bytes(), MultipartType: writer.FormDataContentType(), Client: adapter.nativeHTTPClient})
 	if err != nil {
 		return Result{}, err
 	}

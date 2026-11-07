@@ -21,7 +21,7 @@ func TestParseAcceptsOnlyExactBodylessConnect(t *testing.T) {
 // TestParseAcceptsOnlyExactBodylessCompatibilityReadiness limits readiness to the exact path and ports.
 // TestParseAcceptsOnlyExactBodylessCompatibilityReadiness ограничивает готовность точным путём и портами.
 func TestParseAcceptsOnlyExactBodylessCompatibilityReadiness(t *testing.T) {
-	for _, port := range []string{"8080", "8081", "8082", "8083"} {
+	for _, port := range []string{"8080", "8081", "8082", "8083", "8085"} {
 		request, _, err := parseRequest(t, "GET /readyz HTTP/1.1\r\nHost: egress-gateway.kodex-system.svc.cluster.local:"+port+"\r\nConnection: close\r\n\r\n", 4096)
 		if err != nil || request.Kind != KindReadiness {
 			t.Fatalf("unexpected readiness request on %s: %+v, %v", port, request, err)

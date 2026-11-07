@@ -30,6 +30,9 @@ type Config struct {
 	RuntimeProxyCAPrivateKey  string `env:"EGRESS_GATEWAY_RUNTIME_PROXY_CA_PRIVATE_KEY_FILE"`
 	IntegrationPolicyFile     string `env:"EGRESS_GATEWAY_INTEGRATION_POLICY_FILE"`
 	IntegrationExpectedDigest string `env:"EGRESS_GATEWAY_INTEGRATION_POLICY_DIGEST"`
+	NativeConnectAddress      string `env:"EGRESS_GATEWAY_NATIVE_CONNECT_LISTEN"`
+	NativePolicyFile          string `env:"EGRESS_GATEWAY_NATIVE_POLICY_FILE"`
+	NativeExpectedDigest      string `env:"EGRESS_GATEWAY_NATIVE_POLICY_DIGEST"`
 	TechnicalAddress          string `env:"EGRESS_GATEWAY_TECHNICAL_LISTEN,required"`
 	ResolverConfig            string `env:"EGRESS_GATEWAY_RESOLV_CONF,required"`
 }
@@ -54,6 +57,12 @@ func (config Config) validate() error {
 		return errors.New("egress gateway mode is invalid")
 	}
 	paths := []string{config.PolicyFile, config.ResolverConfig}
+	if config.NativeConnectAddress != "" || config.NativePolicyFile != "" || config.NativeExpectedDigest != "" {
+		if config.Mode != "" || config.NativeConnectAddress == "" || config.NativePolicyFile == "" || config.NativeExpectedDigest == "" {
+			return errors.New("egress gateway native configuration is incomplete")
+		}
+		paths = append(paths, config.NativePolicyFile)
+	}
 	if config.Mode == "" {
 		paths = append(paths, config.MailPolicyFile, config.IntegrationPolicyFile, config.RuntimeSigningKeyFile,
 			config.RuntimeProxyCACertificate, config.RuntimeProxyCAPrivateKey)
@@ -71,6 +80,9 @@ func (config Config) validate() error {
 			struct{ address, port string }{config.IntegrationConnectAddress, "8083"},
 			struct{ address, port string }{config.RuntimeConnectAddress, "8084"})
 	}
+	if config.NativeConnectAddress != "" {
+		listeners = append(listeners, struct{ address, port string }{config.NativeConnectAddress, "8085"})
+	}
 	for _, listener := range listeners {
 		if _, port, err := net.SplitHostPort(listener.address); err != nil || port != listener.port {
 			return errors.New("egress gateway listen address is invalid")
@@ -84,6 +96,9 @@ func (config Config) validate() error {
 		return errors.New("egress gateway deployment expectation is invalid")
 	}
 	digests := []string{config.ExpectedDigest}
+	if config.NativeConnectAddress != "" {
+		digests = append(digests, config.NativeExpectedDigest)
+	}
 	if config.Mode == "" {
 		digests = append(digests, config.MailExpectedDigest, config.IntegrationExpectedDigest)
 	}

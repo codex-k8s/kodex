@@ -4,11 +4,13 @@ go 1.26.6
 
 require (
 	github.com/codex-k8s/kodex/libs/go/mailpolicy v0.0.0
+	github.com/codex-k8s/kodex/libs/go/runtimecontract v0.0.0
 	github.com/google/cel-go v0.30.0
 )
 
 require (
 	cel.dev/expr v0.25.1 // indirect
+	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/codex-k8s/kodex/libs/go/emailbridgeapi v0.0.0 // indirect
@@ -24,5 +26,7 @@ require (
 )
 
 replace github.com/codex-k8s/kodex/libs/go/mailpolicy => ../mailpolicy
+
+replace github.com/codex-k8s/kodex/libs/go/runtimecontract => ../runtimecontract
 
 replace github.com/codex-k8s/kodex/libs/go/emailbridgeapi => ../emailbridgeapi

@@ -375,7 +375,18 @@ func (server *Server) handle(client net.Conn) {
 	var upstream net.Conn
 	var snapshot dnsresolver.Snapshot
 	route := server.modelProviderRoute(target.Hostname)
-	if route != nil {
+	if native, ok := server.policy.(nativeIntegrationRouting); ok {
+		nativeRoute := native.NativeIntegrationRoute(target.Hostname)
+		if server.authenticated || nativeRoute == nil || nativeRoute.Hostname != target.Hostname || nativeRoute.Port != target.Port || nativeRoute.Validate() != nil {
+			server.metrics.Connection("rejected", "connect", "policy")
+			return
+		}
+		upstream, err = server.dialOperatorPins(server.context, nativeRoute.AddressCIDRs, duration(limits.DialTimeoutMilliseconds))
+		if err != nil {
+			server.metrics.Connection("failed", "dial", "unreachable")
+			return
+		}
+	} else if route != nil {
 		upstream, err = server.dialModelProvider(server.context, *route, duration(limits.DialTimeoutMilliseconds))
 		if err != nil {
 			server.metrics.Connection("failed", "dial", "unreachable")

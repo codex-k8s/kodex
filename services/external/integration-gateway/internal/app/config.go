@@ -41,6 +41,7 @@ type Config struct {
 	CredentialDirectory         string        `env:"INTEGRATION_GATEWAY_CREDENTIAL_DIRECTORY"`
 	EgressProxyURL              string        `env:"INTEGRATION_GATEWAY_EGRESS_PROXY_URL"`
 	OpenAPIProxyURL             string        `env:"INTEGRATION_GATEWAY_OPENAPI_PROXY_URL"`
+	NativeProxyURL              string        `env:"INTEGRATION_GATEWAY_NATIVE_PROXY_URL"`
 	SyntheticBaseURL            string        `env:"INTEGRATION_GATEWAY_SYNTHETIC_BASE_URL"`
 	LocalOpenAPIBaseURL         string        `env:"INTEGRATION_GATEWAY_LOCAL_OPENAPI_BASE_URL"`
 	LocalOpenAPICAFile          string        `env:"INTEGRATION_GATEWAY_LOCAL_OPENAPI_CA_FILE"`
@@ -113,6 +114,9 @@ func (config Config) validate() error {
 	openAPIProxy, err := url.Parse(config.OpenAPIProxyURL)
 	if err != nil || openAPIProxy.Scheme != "http" || openAPIProxy.Host != "egress-gateway-openapi.kodex-system.svc.cluster.local:8083" || openAPIProxy.Path != "" || openAPIProxy.User != nil || openAPIProxy.RawQuery != "" {
 		return errors.New("integration-gateway OpenAPI proxy is invalid")
+	}
+	if config.NativeProxyURL != "" && config.NativeProxyURL != "http://egress-gateway-native.kodex-system.svc.cluster.local:8085" {
+		return errors.New("integration-gateway native proxy is invalid")
 	}
 	synthetic, err := url.Parse(config.SyntheticBaseURL)
 	if err != nil || synthetic.Scheme != "http" || synthetic.Host != "integration-synthetic.kodex-system.svc.cluster.local:8080" ||

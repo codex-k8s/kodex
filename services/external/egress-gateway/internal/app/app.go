@@ -223,6 +223,22 @@ func runActive(
 		return err
 	}
 	current.connects = append(current.connects, integrationServer)
+	if config.NativeConnectAddress != "" {
+		nativeActive, nativeErr := integrationpolicy.LoadNativeFile(config.NativePolicyFile, config.NativeExpectedDigest, activePolicy)
+		if err := internalobservability.RegisterNativeReadiness(metrics.Register, nativeActive.Ready); err != nil {
+			return err
+		}
+		var nativeServer *gateway.Server
+		if nativeErr != nil {
+			nativeServer, err = gateway.NewReadinessOnly(runContext, config.NativeConnectAddress, nativeActive, business)
+		} else {
+			nativeServer, err = gateway.New(runContext, config.NativeConnectAddress, nativeActive, resolver, &gateway.NetDialer{}, nativeActive, business)
+		}
+		if err != nil {
+			return err
+		}
+		current.connects = append(current.connects, nativeServer)
+	}
 	connectResult, err := current.startConnects()
 	if err != nil {
 		return err
@@ -277,6 +293,9 @@ func runTechnicalOnly(
 	addresses := []string{config.ConnectAddress}
 	if config.Mode != "clamav" {
 		addresses = append(addresses, config.STTConnectAddress, config.MailConnectAddress, config.IntegrationConnectAddress)
+	}
+	if config.NativeConnectAddress != "" {
+		addresses = append(addresses, config.NativeConnectAddress)
 	}
 	for _, address := range addresses {
 		compatibility, err := gateway.NewReadinessOnly(runContext, address, currentState, business)

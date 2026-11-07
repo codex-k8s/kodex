@@ -139,7 +139,7 @@ func (adapter *Adapter) executeJiraCatalog(ctx context.Context, request Request,
 			return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 		}
 	}
-	call := providerCall{BaseURL: configuration["base_url"], AuthScheme: configuration["auth_scheme"], Username: configuration["username"], Credential: request.Credential, Capability: capability, Method: http.MethodGet}
+	call := providerCall{BaseURL: configuration["base_url"], AuthScheme: configuration["auth_scheme"], Username: configuration["username"], Credential: request.Credential, Capability: capability, Method: http.MethodGet, Client: adapter.nativeHTTPClient}
 	issuePath := "/rest/api/3/issue/" + url.PathEscape(in.IssueKey)
 	reference := request.Operation + ":" + request.EffectKey
 	switch request.Operation {

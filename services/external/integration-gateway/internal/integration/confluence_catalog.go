@@ -124,7 +124,7 @@ func (adapter *Adapter) executeConfluenceCatalog(ctx context.Context, request Re
 			return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 		}
 	}
-	call := providerCall{BaseURL: configuration["base_url"], AuthScheme: configuration["auth_scheme"], Username: configuration["username"], Credential: request.Credential, Capability: capability, Method: http.MethodGet}
+	call := providerCall{BaseURL: configuration["base_url"], AuthScheme: configuration["auth_scheme"], Username: configuration["username"], Credential: request.Credential, Capability: capability, Method: http.MethodGet, Client: adapter.nativeHTTPClient}
 	if request.Operation == "confluence.space.list" {
 		call.Path = "/wiki/api/v2/spaces/" + url.PathEscape(configuration["space_id"])
 		body, err := adapter.callProvider(ctx, call)
