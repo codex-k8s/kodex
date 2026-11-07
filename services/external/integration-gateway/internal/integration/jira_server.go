@@ -223,6 +223,9 @@ func (adapter *Adapter) executeJiraServer(ctx context.Context, request Request, 
 		if _, err := adapter.readJiraServerIssue(ctx, request, capability, configuration, value.IssueKey); err != nil {
 			return Result{}, err
 		}
+		if err := adapter.requireJiraServerWritePermission(ctx, request, capability, configuration, value.IssueKey); err != nil {
+			return Result{}, err
+		}
 		body, err := adapter.jiraServerJSON(ctx, request, capability, configuration, http.MethodPost, "/issue/"+url.PathEscape(value.IssueKey)+"/comment", nil,
 			map[string]string{"body": value.Body + "\n\n[kodex-effect:" + request.EffectKey + "]"}, request.EffectKey)
 		if err != nil {
@@ -240,8 +243,8 @@ func (adapter *Adapter) executeJiraServer(ctx context.Context, request Request, 
 	}
 }
 
-// createJiraServerIssue reconciles one exact effect label and payload before a single plaintext v2 create.
-// createJiraServerIssue сверяет единственную точную метку эффекта и payload перед одним plaintext v2 create.
+// createJiraServerIssue refuses prior marker evidence before a single plaintext v2 create; only explicit Recover can prove an existing effect.
+// createJiraServerIssue отклоняет прежнее marker evidence перед одним plaintext v2 create; лишь явный Recover подтверждает существующий effect.
 func (adapter *Adapter) createJiraServerIssue(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, input []byte) (Result, error) {
 	var value struct{ Summary, Description string }
 	if decodeProviderJSON(input, &value) != nil {
@@ -257,23 +260,11 @@ func (adapter *Adapter) createJiraServerIssue(ctx context.Context, request Reque
 	if err != nil {
 		return Result{}, err
 	}
-	if *page.Total > 1 {
-		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+	if *page.Total > 0 || len(page.Issues) > 0 {
+		return Result{}, &UnknownOutcomeError{}
 	}
-	if len(page.Issues) == 1 {
-		issue := page.Issues[0]
-		description := ""
-		if issue.Fields.Description != nil {
-			description = *issue.Fields.Description
-		}
-		found := false
-		for _, item := range issue.Fields.Labels {
-			found = found || item == label
-		}
-		if !found || issue.Fields.Summary != value.Summary || description != value.Description {
-			return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
-		}
-		return providerResult(request, "jira-issue:"+issue.Key, map[string]any{"id": issue.ID, "key": issue.Key})
+	if err := adapter.requireJiraServerWritePermission(ctx, request, capability, configuration, ""); err != nil {
+		return Result{}, err
 	}
 	fields := map[string]any{"project": map[string]string{"key": configuration["project_key"]},
 		"issuetype": map[string]string{"name": configuration["issue_type"]}, "summary": value.Summary, "labels": []string{label}}
@@ -333,6 +324,9 @@ func (adapter *Adapter) jiraServerTransitions(ctx context.Context, request Reque
 	}
 	if !allowed {
 		return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+	}
+	if err := adapter.requireJiraServerWritePermission(ctx, request, capability, configuration, value.IssueKey); err != nil {
+		return Result{}, err
 	}
 	if _, err := adapter.jiraServerJSON(ctx, request, capability, configuration, http.MethodPost, path, nil,
 		map[string]any{"transition": map[string]string{"id": value.TransitionID}}, request.EffectKey); err != nil {

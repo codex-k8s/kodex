@@ -10,10 +10,13 @@ import { activeDeploymentPods, isProvenStoppedPod } from './stable-archive-trans
 import { workflowPDLCCatalogDigest } from './workflow-pdlc-catalog.gen.mjs';
 import { workflowContentPageCatalogDigest } from './workflow-content-page-catalog.gen.mjs';
 import { platformOIDCIdentityCatalogDigest, platformOIDCIdentityBackupCatalogDigest } from './platform-oidc-identity-catalog.gen.mjs';
+import { personalCredentialsCatalogDigest, personalCredentialsBackupCatalogDigest, personalCredentialsPurgeGraph } from './personal-credentials-catalog.gen.mjs';
 
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'personal-credentials': {version:'20261106000100',file:'20261106000100_personal_integration_credentials.sql',annotation:'kodex.dev/cp-personal-credentials-migration-plan',previousVersion:20261105000100,emptyField:'personalCredentialsAbsent',preconditionFile:'personal-credentials-migration-precondition.sql',postconditionFile:'personal-credentials-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261106000100_personal_integration_credentials.sql'])},
+  'personal-credentials-backup': {version:'20261106000100',file:'20261106000100_personal_integration_credentials.sql',annotation:'kodex.dev/cp-personal-credentials-backup-migration-plan',previousVersion:20261105000100,emptyField:'personalCredentialsAbsent',preconditionFile:'personal-credentials-backup-migration-precondition.sql',postconditionFile:'personal-credentials-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261106000100_personal_integration_credentials.sql'])},
   'platform-oidc-identity': {version:'20261105000100',file:'20261105000100_platform_oidc_identity.sql',annotation:'kodex.dev/cp-platform-oidc-migration-plan',previousVersion:20261030000100,emptyField:'platformOIDCAbsent',preconditionFile:'platform-oidc-identity-migration-precondition.sql',postconditionFile:'platform-oidc-identity-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261105000100_platform_oidc_identity.sql'])},
   'platform-oidc-identity-backup': {version:'20261105000100',file:'20261105000100_platform_oidc_identity.sql',annotation:'kodex.dev/cp-platform-oidc-backup-migration-plan',previousVersion:20261030000100,emptyField:'platformOIDCAbsent',preconditionFile:'platform-oidc-identity-backup-migration-precondition.sql',postconditionFile:'platform-oidc-identity-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261105000100_platform_oidc_identity.sql'])},
   'workflow-content-page': {version:'20261030000100',file:'20261030000100_workflow_content_page.sql',annotation:'kodex.dev/cp-content-page-migration-plan',previousVersion:20261029000300,emptyField:'workflowContentPagePredecessor',preconditionFile:'workflow-content-page-migration-precondition.sql',postconditionFile:'workflow-content-page-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261030000100_workflow_content_page.sql'])},
@@ -316,6 +319,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(validWorkflowContentPageMigrationPrecondition(result,profile==='workflow-content-page-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'platform-oidc-identity' || profile === 'platform-oidc-identity-backup')
       ensure(validPlatformOIDCIdentityMigrationPrecondition(result,profile==='platform-oidc-identity-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if (profile === 'personal-credentials' || profile === 'personal-credentials-backup')
+      ensure(validPersonalCredentialsMigrationPrecondition(result,profile==='personal-credentials-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     return result;
   };
   const terminalJob = (actual, expected, expectedHash, expectedUID) => {
@@ -959,6 +964,8 @@ export function validWorkspaceBackupACLReadback(proof) {
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {
+    case 'personal-credentials': return validPersonalCredentialsMigrationPostcondition(proof);
+    case 'personal-credentials-backup': return validPersonalCredentialsBackupMigrationPostcondition(proof);
     case 'platform-oidc-identity': return validPlatformOIDCIdentityMigrationPostcondition(proof);
     case 'platform-oidc-identity-backup': return validPlatformOIDCIdentityBackupMigrationPostcondition(proof);
     case 'workflow-content-page': return validWorkflowContentPageMigrationPostcondition(proof);
@@ -1011,4 +1018,46 @@ export function validPlatformOIDCIdentityMigrationPrecondition(proof, backup=fal
 // Закрытый native entrypoint не смешивает plain и backup precondition.
 export function validPlatformOIDCIdentityBackupMigrationPrecondition(proof) {
   return validPlatformOIDCIdentityMigrationPrecondition(proof,true);
+}
+
+// Exact034 сверяет полный personal catalog, включая прежние затронутые relations и trigger
+// functions. Frozen033 не расширяется: историческая проекция допускается только после exact034.
+export function validPersonalCredentialsMigrationPostcondition(proof) {
+  return proof?.profile==='PERSONAL_INTEGRATION_CREDENTIALS_V1' && proof.gooseVersion===20261106000100 &&
+    proof.personalCredentialsCatalog===true && proof.personalCredentialsCatalogDigest===personalCredentialsCatalogDigest &&
+    validPlatformOIDCIdentityMigrationPostcondition(personalCredentialsPredecessorProof(proof,false));
+}
+
+// Backup034 отдельно закрепляет ровно SELECT восьми явно перечисленных personal/lineage tables.
+export function validPersonalCredentialsBackupMigrationPostcondition(proof) {
+  return proof?.profile==='PERSONAL_INTEGRATION_CREDENTIALS_BACKUP_V1' && proof.gooseVersion===20261106000100 &&
+    proof.personalCredentialsCatalog===true && proof.personalCredentialsCatalogDigest===personalCredentialsBackupCatalogDigest &&
+    validPlatformOIDCIdentityBackupMigrationPostcondition(personalCredentialsPredecessorProof(proof,true));
+}
+
+// Только exact034 catalog и фактический полный новый graph допускают историческую projection033.
+// Значения predecessor получены из того же проверенного graph за вычетом двух новых nodes;
+// само тело purge и все новые FK независимо закреплены в catalog, старые verifiers не меняются.
+function personalCredentialsPredecessorProof(proof,backup) {
+  const graph=personalCredentialsPurgeGraph;
+  if(proof.purgeNodes!==graph.nodeCount || proof.purgeEdges!==graph.edgeCount ||
+    proof.purgeNodeFingerprint!==graph.nodeFingerprint || proof.purgeEdgeFingerprint!==graph.edgeFingerprint) return null;
+  return {...proof,profile:backup?'PLATFORM_OIDC_IDENTITY_BACKUP_V1':'PLATFORM_OIDC_IDENTITY_V1',gooseVersion:20261105000100,
+    purgeNodes:graph.predecessorNodeCount,purgeEdges:graph.predecessorEdgeCount,
+    purgeNodeFingerprint:graph.predecessorNodeFingerprint,purgeEdgeFingerprint:graph.predecessorEdgeFingerprint};
+}
+
+// Precondition требует actual033 без следов034 и без незавершённых integration effects/tests.
+// Общий CLI дополнительно сверяет все прежние idle/claim fences перед единственным применением.
+export function validPersonalCredentialsMigrationPrecondition(proof, backup=false) {
+  const previous={...proof,profile:backup?'PLATFORM_OIDC_IDENTITY_BACKUP_V1':'PLATFORM_OIDC_IDENTITY_V1'};
+  return proof?.profile==='PERSONAL_INTEGRATION_CREDENTIALS_'+(backup?'BACKUP_':'')+'PREDECESSOR_V1' &&
+    proof.readOnly==='on' && proof.database==='control_plane' &&
+    proof.personalCredentialsAbsent===true && proof.activeIntegrationInvocations===0 && proof.activeIntegrationConnectionTests===0 &&
+    (backup?validPlatformOIDCIdentityBackupMigrationPostcondition(previous):validPlatformOIDCIdentityMigrationPostcondition(previous));
+}
+
+// Отдельный native entrypoint сохраняет закрытое различие normal и backup precondition.
+export function validPersonalCredentialsBackupMigrationPrecondition(proof) {
+  return validPersonalCredentialsMigrationPrecondition(proof,true);
 }

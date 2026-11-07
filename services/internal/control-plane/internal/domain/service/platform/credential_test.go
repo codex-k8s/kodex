@@ -49,7 +49,8 @@ func (repository *integrationCredentialRepository) GetIntegrationConnection(_ co
 		return *repository.connection, nil
 	}
 	return entity.IntegrationConnection{
-		Ref: ref, DefinitionKey: "github", Version: 3, CredentialSecretKey: "token", NextActions: []string{"CONFIGURE_CREDENTIAL"},
+		CredentialPolicy: entity.IntegrationCredentialProjectShared,
+		Ref:              ref, DefinitionKey: "github", Version: 3, CredentialSecretKey: "token", NextActions: []string{"CONFIGURE_CREDENTIAL"},
 	}, nil
 }
 
@@ -67,7 +68,8 @@ func TestConfigureIntegrationCredentialRequiresPublishedOpenAPIPin(t *testing.T)
 	}
 	base := definitions["openapi-mcp"]
 	repository := &integrationCredentialRepository{connection: &entity.IntegrationConnection{
-		Ref: "intconn_openapi", DefinitionKey: "openapi-mcp", DefinitionDigest: base.Digest,
+		CredentialPolicy: entity.IntegrationCredentialProjectShared,
+		Ref:              "intconn_openapi", DefinitionKey: "openapi-mcp", DefinitionDigest: base.Digest,
 		Version: 3, CredentialSecretKey: "token", NextActions: []string{"CONFIGURE_CREDENTIAL"},
 		Capabilities: []entity.IntegrationCapability{{Key: "openapi.read"}},
 	}}

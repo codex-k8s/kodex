@@ -15,6 +15,7 @@ export async function checkInteractionIdentities(
     definitionKey: "mattermost",
     name: "Mattermost synthetic",
     state: "CONNECTED",
+    credentialPolicy: "PROJECT_SHARED",
     credentialsConfigured: true,
     credentialsHint: "",
     capabilities: [],

@@ -1,0 +1,1006 @@
+openapi: 3.0.3
+info:
+  title: 'GitLab Self-Managed: ограниченный REST API v4'
+  version: 1.1.0
+  description: Самостоятельно описанный subset по официальным docs/source v19.2.9.
+    Только необходимые поля и операции; это не официальный полный OpenAPI и не grant.
+servers:
+- url: https://git.example.invalid/api/v4
+security:
+- bearerAuth: []
+x-provenance:
+  kind: independently-authored-verified-subset
+  documentedVersion: 19.2.9
+  upstreamSchemaCopied: false
+  sources:
+  - https://github.com/gitlabhq/gitlabhq/blob/v19.2.9/doc/api/personal_access_tokens.md
+  - https://github.com/gitlabhq/gitlabhq/blob/v19.2.9/doc/api/projects.md
+  - https://github.com/gitlabhq/gitlabhq/blob/v19.2.9/doc/api/protected_branches.md
+  - https://github.com/gitlabhq/gitlabhq/blob/v19.2.9/lib/api/issues.rb
+  - https://github.com/gitlabhq/gitlabhq/blob/v19.2.9/lib/api/branches.rb
+  - https://github.com/gitlabhq/gitlabhq/blob/v19.2.9/lib/api/merge_requests.rb
+  - https://github.com/gitlabhq/gitlabhq/blob/v19.2.9/lib/api/entities/personal_access_token.rb
+  - https://github.com/gitlabhq/gitlabhq/blob/v19.2.9/doc/api/issues.md
+  - https://github.com/gitlabhq/gitlabhq/blob/v19.2.9/doc/api/merge_requests.md
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    Version:
+      type: object
+      properties:
+        version:
+          type: string
+          minLength: 1
+          maxLength: 32
+      required:
+      - version
+      additionalProperties: true
+    CurrentUser:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          minimum: 1
+        state:
+          type: string
+          minLength: 1
+          maxLength: 64
+      required:
+      - id
+      - state
+      additionalProperties: true
+    TokenScope:
+      type: object
+      properties:
+        access:
+          type: string
+          minLength: 1
+          maxLength: 64
+        permissions:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 128
+          maxItems: 128
+        project_id:
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+        group_id:
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+      required:
+      - access
+      - permissions
+      - project_id
+      - group_id
+      additionalProperties: true
+    Token:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          minimum: 1
+        user_id:
+          type: integer
+          format: int64
+          minimum: 1
+        active:
+          type: boolean
+        revoked:
+          type: boolean
+        granular:
+          type: boolean
+        expires_at:
+          type: string
+          format: date
+          nullable: true
+        scopes:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 128
+          maxItems: 64
+        granular_scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/TokenScope'
+          maxItems: 128
+      required:
+      - id
+      - user_id
+      - active
+      - revoked
+      - granular
+      - expires_at
+      additionalProperties: true
+    Membership:
+      type: object
+      properties:
+        access_level:
+          type: integer
+          format: int64
+          minimum: 1
+      required:
+      - access_level
+      additionalProperties: true
+      nullable: true
+    Project:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          minimum: 1
+        path_with_namespace:
+          type: string
+          minLength: 1
+          maxLength: 255
+        archived:
+          type: boolean
+        permissions:
+          type: object
+          properties:
+            project_access:
+              $ref: '#/components/schemas/Membership'
+            group_access:
+              $ref: '#/components/schemas/Membership'
+          required: []
+          additionalProperties: true
+        issues_access_level:
+          type: string
+          minLength: 1
+          maxLength: 64
+        repository_access_level:
+          type: string
+          minLength: 1
+          maxLength: 64
+        merge_requests_access_level:
+          type: string
+          minLength: 1
+          maxLength: 64
+        marked_for_deletion_at:
+          type: string
+          nullable: true
+        marked_for_deletion_on:
+          type: string
+          nullable: true
+      required:
+      - id
+      - path_with_namespace
+      - archived
+      - permissions
+      additionalProperties: true
+    ProtectedRule:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        inherited:
+          type: boolean
+      required:
+      - name
+      additionalProperties: true
+    Commit:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 128
+      required:
+      - id
+      additionalProperties: true
+    Branch:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        commit:
+          $ref: '#/components/schemas/Commit'
+        protected:
+          type: boolean
+        default:
+          type: boolean
+      required:
+      - name
+      - commit
+      additionalProperties: true
+    Issue:
+      type: object
+      properties:
+        iid:
+          type: integer
+          format: int64
+          minimum: 1
+        id:
+          type: integer
+          format: int64
+          minimum: 1
+        project_id:
+          type: integer
+          format: int64
+          minimum: 1
+        title:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        state:
+          type: string
+          minLength: 1
+          maxLength: 32
+        description:
+          type: string
+          nullable: true
+        web_url:
+          type: string
+          minLength: 1
+          maxLength: 2048
+        author:
+          type: object
+          required:
+          - id
+          properties:
+            id:
+              type: integer
+              format: int64
+              minimum: 1
+          additionalProperties: true
+      required:
+      - iid
+      - title
+      - state
+      - web_url
+      additionalProperties: true
+    MergeRequest:
+      type: object
+      properties:
+        iid:
+          type: integer
+          format: int64
+          minimum: 1
+        title:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        state:
+          type: string
+          minLength: 1
+          maxLength: 32
+        description:
+          type: string
+          nullable: true
+        source_branch:
+          type: string
+          minLength: 1
+          maxLength: 255
+        target_branch:
+          type: string
+          minLength: 1
+          maxLength: 255
+        source_project_id:
+          type: integer
+          format: int64
+          minimum: 1
+        target_project_id:
+          type: integer
+          format: int64
+          minimum: 1
+        web_url:
+          type: string
+          minLength: 1
+          maxLength: 2048
+        author:
+          type: object
+          required:
+          - id
+          properties:
+            id:
+              type: integer
+              format: int64
+              minimum: 1
+          additionalProperties: true
+        id:
+          type: integer
+          format: int64
+          minimum: 1
+      required:
+      - iid
+      - title
+      - state
+      - web_url
+      additionalProperties: true
+    Pipeline:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          minimum: 1
+        status:
+          type: string
+          minLength: 1
+          maxLength: 64
+        ref:
+          type: string
+          minLength: 1
+          maxLength: 255
+        sha:
+          type: string
+          minLength: 1
+          maxLength: 128
+        web_url:
+          type: string
+          minLength: 1
+          maxLength: 2048
+      required:
+      - id
+      - status
+      - ref
+      - sha
+      - web_url
+      additionalProperties: true
+    RepositoryFile:
+      type: object
+      properties:
+        file_path:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        ref:
+          type: string
+          minLength: 1
+          maxLength: 255
+        blob_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        encoding:
+          type: string
+          enum:
+          - base64
+        content:
+          type: string
+          maxLength: 65536
+      required:
+      - file_path
+      - ref
+      - blob_id
+      - encoding
+      - content
+      additionalProperties: true
+    IssueInput:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        description:
+          type: string
+          maxLength: 65536
+      required:
+      - title
+      additionalProperties: false
+    BranchInput:
+      type: object
+      properties:
+        branch:
+          type: string
+          minLength: 1
+          maxLength: 255
+        ref:
+          type: string
+          minLength: 1
+          maxLength: 255
+      required:
+      - branch
+      - ref
+      additionalProperties: false
+    MergeRequestInput:
+      type: object
+      properties:
+        source_branch:
+          type: string
+          minLength: 1
+          maxLength: 255
+        target_branch:
+          type: string
+          minLength: 1
+          maxLength: 255
+        title:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        description:
+          type: string
+          maxLength: 65536
+      required:
+      - source_branch
+      - target_branch
+      - title
+      additionalProperties: false
+  parameters:
+    Project:
+      name: project
+      in: path
+      required: true
+      description: Один URL-encoded configured namespace/project; не произвольный
+        target из model input.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+    TokenID:
+      name: token_id
+      in: path
+      required: true
+      description: Только ID текущего токена из self metadata.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    Branch:
+      name: branch
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+    IssueIID:
+      name: issue_iid
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    MergeRequestIID:
+      name: merge_request_iid
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    PipelineID:
+      name: pipeline_id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    FilePath:
+      name: file_path
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 1024
+paths:
+  /version:
+    get:
+      operationId: gitlab.permission.version.read
+      description: Ограниченный проверяемый контракт; право вызова определяется Definition/Connection/Grant
+        и текущим ключом.
+      parameters: []
+      responses:
+        '200':
+          description: Успешный типизированный ответ.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Version'
+        default:
+          description: Отказ либо ошибка; payload не является доказательством прав.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /user:
+    get:
+      operationId: gitlab.permission.identity.read
+      description: Ограниченный проверяемый контракт; право вызова определяется Definition/Connection/Grant
+        и текущим ключом.
+      parameters: []
+      responses:
+        '200':
+          description: Успешный типизированный ответ.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUser'
+        default:
+          description: Отказ либо ошибка; payload не является доказательством прав.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /personal_access_tokens/self:
+    get:
+      operationId: gitlab.permission.token.self.read
+      description: Ограниченный проверяемый контракт; право вызова определяется Definition/Connection/Grant
+        и текущим ключом.
+      parameters: []
+      responses:
+        '200':
+          description: Успешный типизированный ответ.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Token'
+        default:
+          description: Отказ либо ошибка; payload не является доказательством прав.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /personal_access_tokens/{token_id}:
+    get:
+      operationId: gitlab.permission.token.details.read
+      description: Ограниченный проверяемый контракт; право вызова определяется Definition/Connection/Grant
+        и текущим ключом.
+      parameters:
+      - $ref: '#/components/parameters/TokenID'
+      responses:
+        '200':
+          description: Успешный типизированный ответ.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Token'
+        default:
+          description: Отказ либо ошибка; payload не является доказательством прав.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /projects/{project}:
+    get:
+      operationId: gitlab.project.metadata.read
+      description: Ограниченный проверяемый контракт; право вызова определяется Definition/Connection/Grant
+        и текущим ключом.
+      parameters:
+      - $ref: '#/components/parameters/Project'
+      responses:
+        '200':
+          description: Успешный типизированный ответ.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        default:
+          description: Отказ либо ошибка; payload не является доказательством прав.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /projects/{project}/protected_branches:
+    get:
+      operationId: gitlab.permission.branch_rules.read
+      description: Ограниченный проверяемый контракт; право вызова определяется Definition/Connection/Grant
+        и текущим ключом.
+      parameters:
+      - $ref: '#/components/parameters/Project'
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+      - name: per_page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+      responses:
+        '200':
+          description: Успешный типизированный ответ.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProtectedRule'
+                maxItems: 100
+        default:
+          description: Отказ либо ошибка; payload не является доказательством прав.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /projects/{project}/issues:
+    get:
+      operationId: gitlab.issue.list
+      description: Ограниченный проверяемый контракт; право вызова определяется Definition/Connection/Grant
+        и текущим ключом.
+      parameters:
+      - $ref: '#/components/parameters/Project'
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+      - name: per_page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+      - name: scope
+        in: query
+        required: false
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 1024
+      - name: state
+        in: query
+        required: false
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 1024
+      - name: search
+        in: query
+        required: false
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 1024
+      - name: in
+        in: query
+        required: false
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 1024
+      - name: order_by
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - created_at
+      - name: sort
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - asc
+          - desc
+      responses:
+        '200':
+          description: Успешный типизированный ответ.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Issue'
+                maxItems: 100
+        default:
+          description: Отказ либо ошибка; payload не является доказательством прав.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      operationId: gitlab.issue.create
+      description: Ограниченный проверяемый контракт; право вызова определяется Definition/Connection/Grant
+        и текущим ключом.
+      parameters:
+      - $ref: '#/components/parameters/Project'
+      responses:
+        '201':
+          description: Успешный типизированный ответ.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
+        default:
+          description: Отказ либо ошибка; payload не является доказательством прав.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IssueInput'
+  /projects/{project}/issues/{issue_iid}:
+    get:
+      operationId: gitlab.issue.read
+      description: Ограниченный проверяемый контракт; право вызова определяется Definition/Connection/Grant
+        и текущим ключом.
+      parameters:
+      - $ref: '#/components/parameters/Project'
+      - $ref: '#/components/parameters/IssueIID'
+      responses:
+        '200':
+          description: Успешный типизированный ответ.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
+        default:
+          description: Отказ либо ошибка; payload не является доказательством прав.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /projects/{project}/repository/branches:
+    post:
+      operationId: gitlab.branch.create
+      description: Ограниченный проверяемый контракт; право вызова определяется Definition/Connection/Grant
+        и текущим ключом.
+      parameters:
+      - $ref: '#/components/parameters/Project'
+      responses:
+        '201':
+          description: Успешный типизированный ответ.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Branch'
+        default:
+          description: Отказ либо ошибка; payload не является доказательством прав.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BranchInput'
+  /projects/{project}/repository/branches/{branch}:
+    get:
+      operationId: gitlab.branch.read
+      description: Ограниченный проверяемый контракт; право вызова определяется Definition/Connection/Grant
+        и текущим ключом.
+      parameters:
+      - $ref: '#/components/parameters/Project'
+      - $ref: '#/components/parameters/Branch'
+      responses:
+        '200':
+          description: Успешный типизированный ответ.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Branch'
+        default:
+          description: Отказ либо ошибка; payload не является доказательством прав.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /projects/{project}/merge_requests:
+    get:
+      operationId: gitlab.merge_request.list
+      description: Ограниченный проверяемый контракт; право вызова определяется Definition/Connection/Grant
+        и текущим ключом.
+      parameters:
+      - $ref: '#/components/parameters/Project'
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+      - name: per_page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+      - name: scope
+        in: query
+        required: false
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 1024
+      - name: state
+        in: query
+        required: false
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 1024
+      - name: search
+        in: query
+        required: false
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 1024
+      - name: in
+        in: query
+        required: false
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 1024
+      - name: source_branch
+        in: query
+        required: false
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 1024
+      - name: target_branch
+        in: query
+        required: false
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 1024
+      - name: order_by
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - created_at
+      - name: sort
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - asc
+          - desc
+      responses:
+        '200':
+          description: Успешный типизированный ответ.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MergeRequest'
+                maxItems: 100
+        default:
+          description: Отказ либо ошибка; payload не является доказательством прав.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      operationId: gitlab.merge_request.create
+      description: Ограниченный проверяемый контракт; право вызова определяется Definition/Connection/Grant
+        и текущим ключом.
+      parameters:
+      - $ref: '#/components/parameters/Project'
+      responses:
+        '201':
+          description: Успешный типизированный ответ.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MergeRequest'
+        default:
+          description: Отказ либо ошибка; payload не является доказательством прав.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MergeRequestInput'
+  /projects/{project}/merge_requests/{merge_request_iid}:
+    get:
+      operationId: gitlab.merge_request.read
+      description: Ограниченный проверяемый контракт; право вызова определяется Definition/Connection/Grant
+        и текущим ключом.
+      parameters:
+      - $ref: '#/components/parameters/Project'
+      - $ref: '#/components/parameters/MergeRequestIID'
+      responses:
+        '200':
+          description: Успешный типизированный ответ.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MergeRequest'
+        default:
+          description: Отказ либо ошибка; payload не является доказательством прав.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /projects/{project}/pipelines/{pipeline_id}:
+    get:
+      operationId: gitlab.pipeline.read
+      description: Ограниченный проверяемый контракт; право вызова определяется Definition/Connection/Grant
+        и текущим ключом.
+      parameters:
+      - $ref: '#/components/parameters/Project'
+      - $ref: '#/components/parameters/PipelineID'
+      responses:
+        '200':
+          description: Успешный типизированный ответ.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pipeline'
+        default:
+          description: Отказ либо ошибка; payload не является доказательством прав.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /projects/{project}/repository/files/{file_path}:
+    get:
+      operationId: gitlab.repository.file.read
+      description: Ограниченный проверяемый контракт; право вызова определяется Definition/Connection/Grant
+        и текущим ключом.
+      parameters:
+      - $ref: '#/components/parameters/Project'
+      - $ref: '#/components/parameters/FilePath'
+      - name: ref
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 255
+      responses:
+        '200':
+          description: Успешный типизированный ответ.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RepositoryFile'
+        default:
+          description: Отказ либо ошибка; payload не является доказательством прав.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true

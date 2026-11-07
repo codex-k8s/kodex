@@ -27,6 +27,7 @@ import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import EntityIcon from "@/shared/ui/EntityIcon.vue";
 import { useServerMessage } from "@/shared/ui/server-message";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import IntegrationCredentialPolicyControl from "./IntegrationCredentialPolicyControl.vue";
 
 const props = defineProps<{
   connections: readonly IntegrationConnection[];
@@ -51,6 +52,7 @@ const emit = defineEmits<{
   details: [connection: IntegrationConnection];
   "update:search": [query: string];
   more: [];
+  "policy-changed": [];
 }>();
 
 const { t } = useI18n();
@@ -75,7 +77,7 @@ function credentialLabel(connection: IntegrationConnection): string {
   if (needsBinding(connection))
     return t("integrations.openapiTemplateNeedsBinding");
   return (
-    connection.credentialsHint ||
+    serverMessage(connection.credentialsHint) ||
     t(
       connection.credentialsConfigured
         ? "integrations.credentialsConfigured"
@@ -189,6 +191,12 @@ function capabilityPreview(connection: IntegrationConnection): string {
             </td>
             <td><StatusBadge :state="connection.state" /></td>
             <td>
+              <IntegrationCredentialPolicyControl
+                :connection="connection"
+                :definition="definition(connection)"
+                :blocked="!!busyRef"
+                @changed="emit('policy-changed')"
+              />
               <StatusBadge
                 :state="
                   connection.credentialsConfigured && !needsBinding(connection)

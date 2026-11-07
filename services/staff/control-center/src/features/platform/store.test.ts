@@ -310,6 +310,7 @@ function integrationConnection(
     definitionKey: "github",
     name: "Основная организация",
     state: credentialsConfigured ? "CONNECTED" : "NOT_CONNECTED",
+    credentialPolicy: "PROJECT_SHARED",
     credentialsConfigured,
     credentialsHint: credentialsConfigured ? "••••••••" : "Не настроены",
     capabilities: [],

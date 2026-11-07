@@ -340,6 +340,15 @@ func exposesActorActions(workload string) bool {
 // существующей транзакции, сохраняя nominal payload checks и отклоняя неизвестные kinds как
 // Invalid; не создаёт generic lifecycle mutation либо commit.
 func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
+	if input.Kind == command.CompletePersonalIntegrationCredentialTest {
+		return repository.completePersonalCredentialTest(ctx, tx, scope, input)
+	}
+	if input.Kind == command.SetIntegrationCredentialPolicy {
+		return repository.setIntegrationCredentialPolicy(ctx, tx, scope, input)
+	}
+	if personalCredentialCommand(input.Kind) {
+		return repository.changePersonalCredential(ctx, tx, scope, input)
+	}
 	switch input.Kind {
 	case command.CreateMemoryRecord, command.ReviseMemoryRecord, command.ArchiveMemoryRecord, command.RestoreMemoryRecord, command.PurgeMemoryRecord:
 		return repository.changeMemoryRecord(ctx, tx, scope, input)
@@ -1310,6 +1319,9 @@ func (repository *Repository) changeAgentBinding(ctx context.Context, tx pgx.Tx,
 	}
 	if input.Kind == command.ChangeAgentGrant {
 		if payload.Enabled {
+			if err := repository.requireNoninteractiveAgentGrantCredentials(ctx, tx, scope, projectID, payload.AgentRef, payload.BindingRef); err != nil {
+				return commandOutcome{}, err
+			}
 			tag, err := tx.Exec(ctx, queryCommandsChangeagentbindingEnableIntegrationGrant, scope.organizationID, payload.BindingRef, payload.AgentRef)
 			if err != nil || tag.RowsAffected() != 1 {
 				return commandOutcome{}, errs.ErrNotFound
@@ -1515,6 +1527,8 @@ const (
 	// workflowInvalidInvariants задаёт общую закрытую workflow invariant failure category для
 	// structure, capability и profile checks.
 	workflowInvalidInvariants = "WORKFLOW_INVARIANTS"
+	// workflowInvalidTextBudget identifies aggregate workflow text exceeding its finite budget.
+	// workflowInvalidTextBudget обозначает совокупный текст workflow сверх конечного бюджета.
 	workflowInvalidTextBudget = "WORKFLOW_TEXT_BUDGET"
 )
 
@@ -1922,6 +1936,14 @@ func (repository *Repository) launchRunWithAttachmentPolicy(ctx context.Context,
 		runConcurrency = workflowVersion.Concurrency
 	default:
 		return commandOutcome{}, errs.ErrInvalid
+	}
+	var personalWorkflow *entity.WorkflowVersion
+	if payload.Target.Type == "WORKFLOW" {
+		personalWorkflow = &workflowVersion
+	}
+	if err := repository.requirePersonalLaunchCredentials(ctx, tx, scope, projectID,
+		personalLaunchTargets(targetAgentRefs, personalWorkflow), personalLaunchContext{source: source, sessionRef: payload.SessionRef, targetType: payload.Target.Type, targetRef: payload.Target.Ref}); err != nil {
+		return commandOutcome{}, err
 	}
 	var runtimeContractReady bool
 	if err := tx.QueryRow(ctx, queryCommandsLaunchrunValidateAgentRuntimeContract, pgx.StrictNamedArgs{

@@ -9,6 +9,7 @@ import (
 	"io"
 	"reflect"
 	"strings"
+	"unicode"
 )
 
 // maximumJSONDepth bounds token traversal before a package JSON document reaches typed decoding.
@@ -81,6 +82,14 @@ func parsePackageJSON(raw []byte) (Package, error) {
 // uniqueJSONValue traverses one bounded JSON value, rejecting repeated keys and unknown package fields outside inputSchema.
 // uniqueJSONValue обходит одно ограниченное значение JSON, отклоняя повторные ключи и неизвестные поля пакета вне inputSchema.
 func uniqueJSONValue(decoder *json.Decoder, depth int, schema bool) error {
+	return uniqueJSONValueWithKeyFold(decoder, depth, schema, false)
+}
+
+// uniqueJSONValueWithKeyFold shares the bounded traversal with optional case-fold collision
+// rejection for provider permission documents; package/schema field names remain case-sensitive.
+// uniqueJSONValueWithKeyFold разделяет bounded обход с необязательным отказом case-fold коллизий
+// provider permissions; имена package/schema полей остаются регистрозависимыми.
+func uniqueJSONValueWithKeyFold(decoder *json.Decoder, depth int, schema, fold bool) error {
 	if depth > maximumJSONDepth {
 		return errPackageJSON
 	}
@@ -98,17 +107,21 @@ func uniqueJSONValue(decoder *json.Decoder, depth int, schema bool) error {
 		for decoder.More() {
 			key, err := decoder.Token()
 			name, ok := key.(string)
-			if err != nil || !ok || seen[name] || !schema && !packageJSONKeys[name] {
+			identity := name
+			if fold {
+				identity = foldPermissionJSONKey(name)
+			}
+			if err != nil || !ok || seen[identity] || !schema && !packageJSONKeys[name] {
 				return errPackageJSON
 			}
-			seen[name] = true
-			if err := uniqueJSONValue(decoder, depth+1, schema || name == "inputSchema"); err != nil {
+			seen[identity] = true
+			if err := uniqueJSONValueWithKeyFold(decoder, depth+1, schema || name == "inputSchema", fold); err != nil {
 				return err
 			}
 		}
 	case '[':
 		for decoder.More() {
-			if err := uniqueJSONValue(decoder, depth+1, schema); err != nil {
+			if err := uniqueJSONValueWithKeyFold(decoder, depth+1, schema, fold); err != nil {
 				return err
 			}
 		}
@@ -120,4 +133,20 @@ func uniqueJSONValue(decoder *json.Decoder, depth int, schema bool) error {
 		return errPackageJSON
 	}
 	return nil
+}
+
+// foldPermissionJSONKey uses Unicode simple-fold cycles so typed JSON case aliases, including
+// non-ASCII variants, cannot turn two contradictory permission fields into a last-value win.
+// foldPermissionJSONKey использует Unicode simple-fold cycles, чтобы case aliases typed JSON,
+// включая не-ASCII варианты, не свели противоречивые поля прав к последнему значению.
+func foldPermissionJSONKey(name string) string {
+	characters := []rune(name)
+	for index, character := range characters {
+		canonical := character
+		for next := unicode.SimpleFold(character); next != character; next = unicode.SimpleFold(next) {
+			canonical = min(canonical, next)
+		}
+		characters[index] = canonical
+	}
+	return string(characters)
 }

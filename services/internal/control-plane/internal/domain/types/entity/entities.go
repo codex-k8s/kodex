@@ -1308,6 +1308,7 @@ type IntegrationGrant struct {
 // точную ревизию credentials, возможности, grants, проверки и жизненный цикл. Названия masked и public
 // сами произвольные вложенные значения автоматически не скрывают.
 type IntegrationConnection struct {
+	CredentialPolicy                                                        IntegrationCredentialPolicy
 	TestRequiresApproval                                                    bool
 	Ref, DefinitionKey, DefinitionName, Name, State, MaskedCredentialsState string
 	CredentialSecretKey                                                     string

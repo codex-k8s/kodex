@@ -59,6 +59,7 @@ const connection: IntegrationConnection = {
   definitionKey: definition.key,
   name: "Synthetic lifecycle",
   state: "CONNECTED",
+  credentialPolicy: "PROJECT_SHARED",
   credentialsConfigured: true,
   credentialsHint: "Не требуются",
   lastTestedAt: "2026-08-30T10:00:00Z",
@@ -76,6 +77,10 @@ const connection: IntegrationConnection = {
 
 const messages = {
   ru: {
+    serverMessages: {
+      INTEGRATION_CREDENTIAL_PERSONAL_REQUIRED:
+        "Каждый пользователь добавляет личный ключ в разделе «Мои подключения»",
+    },
     common: {
       actions: "Действия",
       noData: "Нет данных",
@@ -146,6 +151,24 @@ async function renderPanel(
 }
 
 describe("IntegrationConnectionsPanel", () => {
+  it("показывает полный локализованный статус personal policy вместо служебного ключа", async () => {
+    const html = await renderPanel(
+      [
+        {
+          ...connection,
+          credentialPolicy: "INITIATOR_REQUIRED",
+          credentialsConfigured: false,
+          credentialsHint: "i18n:INTEGRATION_CREDENTIAL_PERSONAL_REQUIRED",
+        },
+      ],
+      true,
+    );
+    expect(html).toContain(
+      "Каждый пользователь добавляет личный ключ в разделе «Мои подключения»",
+    );
+    expect(html).not.toContain("i18n:INTEGRATION_CREDENTIAL_PERSONAL_REQUIRED");
+    expect(html).not.toContain("Настроить учётные данные");
+  });
   it("не выдаёт число загруженных строк за точное общее количество", async () => {
     expect(await renderPanel([connection], true, true)).toContain(
       "Показано подключений: 1",

@@ -53,6 +53,9 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 		if payload.TargetVersion, payload.TargetDigest, err = repository.validateScheduleTarget(ctx, tx, scope.organizationID, projectID, payload.Target); err != nil {
 			return commandOutcome{}, err
 		}
+		if err := repository.requireNoninteractiveTargetCredentials(ctx, tx, scope, projectID, payload.Target, "SCHEDULE", payload.TargetDigest); err != nil {
+			return commandOutcome{}, err
+		}
 		ref, _ := newRef("sch")
 		revisionRef, _ := newRef("srev")
 		scheduleID, revisionID := uuid.NewString(), uuid.NewString()
@@ -172,6 +175,9 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 		if payload.TargetVersion, payload.TargetDigest, targetErr = repository.validateScheduleTarget(ctx, tx, scope.organizationID, projectID, payload.Target); targetErr != nil {
 			return commandOutcome{}, targetErr
 		}
+		if err := repository.requireNoninteractiveTargetCredentials(ctx, tx, scope, projectID, payload.Target, "SCHEDULE", payload.TargetDigest); err != nil {
+			return commandOutcome{}, err
+		}
 		payload.CronExpression = normalized.CronExpression
 		payload.TimeOfDay = normalized.TimeOfDay
 		payload.DayOfWeek = normalized.DayOfWeek
@@ -219,6 +225,11 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 			AutomationText: payload.AutomationText, PromptInputs: payload.PromptInputs,
 		}
 	} else {
+		if payload.Enabled {
+			if err := repository.requireNoninteractiveTargetCredentials(ctx, tx, scope, projectID, currentRevision.Target, "SCHEDULE", currentRevision.TargetDigest); err != nil {
+				return commandOutcome{}, err
+			}
+		}
 		next, nextErr := scheduleservice.NextWithPolicy(scheduleservice.Spec{
 			Preset: storedPreset, CronExpression: storedCron, Timezone: storedTimezone,
 			DSTGapPolicy: currentRevision.DSTGapPolicy, DSTFoldPolicy: currentRevision.DSTFoldPolicy,
@@ -491,6 +502,9 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		if err != nil {
 			return commandOutcome{}, err
 		}
+		if locked.credentialPolicy != entity.IntegrationCredentialProjectShared {
+			return commandOutcome{}, errs.ErrConflict
+		}
 		definition, err := repository.integrationPackage(ctx, tx, scope.organizationID, payload.Ref, locked.definitionKey, locked.definitionVersion, locked.definitionDigest)
 		if err != nil {
 			return commandOutcome{}, err
@@ -530,6 +544,9 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		locked, err := repository.lockIntegrationConnection(ctx, tx, scope.organizationID, payload.Ref)
 		if err != nil {
 			return commandOutcome{}, err
+		}
+		if locked.credentialPolicy != entity.IntegrationCredentialProjectShared {
+			return commandOutcome{}, errs.ErrConflict
 		}
 		var activeSSHDependency bool
 		if err := tx.QueryRow(ctx, querySSHComposeActiveDependency, pgx.StrictNamedArgs{"organization_id": scope.organizationID, "connection_ref": payload.Ref}).Scan(&activeSSHDependency); err != nil {
@@ -607,15 +624,16 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 // enablement, OCC version и точные definition pins для update/delete/credential/test решений;
 // credential value не хранится.
 type lockedIntegrationConnection struct {
+	credentialPolicy                                                              entity.IntegrationCredentialPolicy
 	id, definitionKey, lifecycleState, state, definitionVersion, definitionDigest string
 	enabled                                                                       bool
 	version                                                                       int64
 }
 
-// lockIntegrationConnection locks the exact active tenant/ref connection and reads eight
+// lockIntegrationConnection locks the exact active tenant/ref connection and reads nine
 // lifecycle/definition fields. Missing rows return zero/NotFound and scan failures
 // zero/Unavailable; the caller retains transaction ownership.
-// lockIntegrationConnection блокирует точный active tenant/ref connection и читает восемь
+// lockIntegrationConnection блокирует точный active tenant/ref connection и читает девять
 // lifecycle/definition fields. Отсутствие строки возвращает zero/NotFound, scan failure
 // zero/Unavailable; транзакцией владеет caller.
 func (repository *Repository) lockIntegrationConnection(
@@ -627,7 +645,7 @@ func (repository *Repository) lockIntegrationConnection(
 	err := tx.QueryRow(ctx, queryConfigurationChangeconnectionLock, pgx.StrictNamedArgs{
 		"organization_id": organizationID, "connection_ref": ref,
 	}).Scan(&item.id, &item.definitionKey, &item.lifecycleState, &item.state, &item.enabled,
-		&item.version, &item.definitionVersion, &item.definitionDigest)
+		&item.version, &item.definitionVersion, &item.definitionDigest, &item.credentialPolicy)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return lockedIntegrationConnection{}, errs.ErrNotFound
 	}
@@ -821,12 +839,12 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 		targetType, targetRef = "WORKFLOW", payload.WorkflowRef
 	}
 	var connectionID, definitionKey, connectionState, definitionVersion, definitionDigest string
-	var connectionEnabled bool
+	var connectionEnabled, configurationReady bool
 	var connectionVersion int64
 	var encodedConfiguration []byte
 	if err := tx.QueryRow(ctx, queryConfigurationChangeintegrationgrantSelectIntegrationConnectionsOrganizationIdRefEnabled, scope.organizationID, payload.ConnectionRef).Scan(
 		&connectionID, &definitionKey, &connectionEnabled, &connectionState, &connectionVersion,
-		&encodedConfiguration, &definitionVersion, &definitionDigest,
+		&encodedConfiguration, &definitionVersion, &definitionDigest, &configurationReady,
 	); errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrNotFound
 	} else if err != nil {
@@ -849,7 +867,7 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 	if connectionVersion != *input.Mutation.ExpectedVersion {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
-	if payload.Enabled && (!connectionEnabled || connectionState != "CONNECTED") {
+	if payload.Enabled && !configurationReady {
 		return commandOutcome{}, errs.ErrConflict
 	}
 	var projectID, projectRef, targetName string
@@ -871,6 +889,11 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 	}
 	if !capability.AllowsApprovalPolicy(payload.ApprovalPolicy) {
 		return commandOutcome{}, errs.ErrInvalid
+	}
+	if payload.Enabled && capability.Operation == "mattermost.inbound" {
+		if err := repository.requireNoninteractiveTargetCredentials(ctx, tx, scope, projectID, entity.RunTarget{Type: targetType, Ref: targetRef}, "INTEGRATION", ""); err != nil {
+			return commandOutcome{}, err
+		}
 	}
 	if payload.Enabled && capability.Operation == repositoryBundleOperation {
 		if input.Kind != command.ChangeIntegrationGrant {
@@ -990,22 +1013,7 @@ func validIntegrationCredentialInput(required bool, credential *entity.Integrati
 	if !required {
 		return credential == nil
 	}
-	if credential == nil || credential.Ref != "" || credential.Revision != 0 ||
-		uuid.Validate(credential.SecretUID) != nil || credential.SecretResourceVersion == "" ||
-		len(credential.SecretResourceVersion) > 128 || len(credential.ContentSHA256) != sha256.Size*2 ||
-		!strings.HasPrefix(credential.SecretRef, "kodex-system/kodex-integration-credentials#") {
-		return false
-	}
-	key := strings.TrimPrefix(credential.SecretRef, "kodex-system/kodex-integration-credentials#")
-	if key == "" || len(key) > 253 || strings.ContainsAny(key, "\x00/\\\r\n") {
-		return false
-	}
-	for _, character := range credential.ContentSHA256 {
-		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
-			return false
-		}
-	}
-	return true
+	return credential != nil && credential.Ref == "" && credential.Revision == 0 && credential.ValidDescriptor()
 }
 
 // validateIntegrationConfiguration normalizes at most fifty declared fields with a closed key set:
@@ -1289,6 +1297,10 @@ func (repository *Repository) addAssistantTurnWithAttachmentPolicy(ctx context.C
 	}
 	if input.Mutation.ExpectedVersion != nil && *input.Mutation.ExpectedVersion != version {
 		return commandOutcome{}, errs.ErrVersionMismatch
+	}
+	if err := repository.requirePersonalLaunchCredentials(ctx, tx, scope, projectID,
+		personalLaunchTargets([]string{identity.Ref}, nil), personalLaunchContext{source: "SYSTEM_ASSISTANT", assistantScope: identity.Scope}); err != nil {
+		return commandOutcome{}, err
 	}
 	dispatchPriority := int16(0)
 	if payload.DeliveryMode == "INTERRUPT_ACTIVE" {

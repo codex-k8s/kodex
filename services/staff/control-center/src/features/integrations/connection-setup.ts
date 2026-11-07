@@ -163,6 +163,7 @@ export function canConfigureCredential(
 ): boolean {
   const nextActions = connection.nextActions as readonly string[];
   return (
+    connection.credentialPolicy === "PROJECT_SHARED" &&
     definition?.available === true &&
     !connection.credentialsConfigured &&
     nextActions.includes("CONFIGURE_CREDENTIAL")

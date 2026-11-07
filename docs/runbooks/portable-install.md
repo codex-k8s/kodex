@@ -4,8 +4,8 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.5.2
-updated: 2026-11-06
+version: 1.5.3
+updated: 2026-11-07
 ---
 
 # Опциональный профиль внешней инфраструктуры
@@ -121,14 +121,22 @@ backup reader — `platform-oidc-identity-backup`. Оба требуют exact03
 восстанавливает этот закрытый набор атомарно и откатывает всю операцию при drift.
 Goose Down для033 запрещён: возврат старого image не отменяет schema/revocation.
 
-### Обновление bootstrap receipts при переходе032→033
+Forward034 добавляет персональные credentials независимо от выбранной policy.
+Для exact033 доступны `personal-credentials` и `personal-credentials-backup`.
+Они требуют полный033 catalog/idle fence и проверяют новый catalog вместе с
+полным графом project purge. Backup-reader получает только SELECT пяти новых
+и трёх изменённых таблиц; `restore-workspace-backup-acl` поддерживает exact034.
+Goose Down запрещён. Подробная матрица —
+[персональные подключения](../operations/personal-credentials-2033.md).
+
+### Обновление bootstrap receipts при переходах032→033 и033→034
 
 После настоящей forward migration и `capture` доступен отдельный optional
 `portable-release.sh --mode upgrade`. Требуются точный upgrade render,
 новый private preimage directory, composite receipt и явный
 `--allow-reconciled-bootstrap-completion`. Обычный `apply` сохраняет прежнее
 поведение новой установки. Upgrade проверяет cluster/namespace, пять
-bootstrap identities/specs и полный033 catalog до первой rollout mutation;
+bootstrap identities/specs и полный catalog целевой033/034 до первой rollout mutation;
 receipt прежнего install или initial reconciliation вместо composite не подходит.
 
 В upgrade пять bootstrap effects не запускаются заново. Остальные foundation,
@@ -142,7 +150,7 @@ Source revision authority задаётся закреплённым render; hist
 `tools/install/bootstrap_upgrade.py` задаёт отдельный optional profile
 `kodex.bootstrap-upgrade/v1`, `managed_by: git`. Он закрепляет SHA предыдущего и
 целевого raw render, оба source SHA, `from_schema_heads`/`to_schema_heads` и
-`schema_profile: plain|backup`. Поддержан exact032→033 при неизменных heads
+`schema_profile: plain|backup`. Поддержаны только exact032→033 и033→034 при неизменных heads
 internal-rpc-authority/email-bridge. Прежние install/resume modes и receipts
 сохраняют поведение без выбора этого профиля.
 
@@ -150,7 +158,9 @@ internal-rpc-authority/email-bridge. Прежние install/resume modes и rece
 проверяет byte pins и сохраняет четыре уже исполненных bootstrap Job из прежнего
 render. Их commands/arguments/env/volumes и остальные поля обязаны совпадать с
 целевыми; различаться могут только immutable images. Новая CP migration остаётся
-в target render с `backoffLimit=0`. Операция не запускает Jobs и не принимает
+в target render с `backoffLimit=0`. Предыдущая migration может иметь только
+штатный backoff2 новой установки либо backoff0 прежнего upgrade; прочие поля
+её effect обязаны совпадать. Операция не запускает Jobs и не принимает
 изменение bootstrap effect как обновление image. Результат содержит отдельный
 immutable ConfigMap с hash выбранного upgrade profile.
 
@@ -173,7 +183,8 @@ cluster/namespace UID, прежний pinned completion receipt и четыре 
 Job. Для новой CP migration нужны новый Job UID, terminal `Complete`, отсутствие
 предыдущих failures, один Job-owned Pod с неизменённым executable spec,
 действительный image digest и exit0 всех containers. Затем проверяются heads всех
-трёх БД и полный033 catalog штатным plain/backup verifier. Смена UID/spec либо
+трёх БД и полный catalog закреплённой целевой033/034 штатным plain/backup verifier.
+Предыдущий033 proof не подтверждает034. Смена UID/spec либо
 неуспешная проверка закрывает capture; schema version сама по себе недостаточна.
 
 Результат — receipt `FORWARD_MIGRATION_UPGRADE`: исторические rows сохраняются,
@@ -188,13 +199,15 @@ Capture не изменяет Kubernetes status и не означает зав�
 | PLANNED | Raw render/source/schema pins; неизменность четырёх effects | Offline `prepare`; никаких mutations |
 | QUIESCED | Exact target, preimage/backup и idle fence | Выполняет operator lifecycle перед migration |
 | MIGRATION UNKNOWN | Тот же Job/Pod UID и actual schema | Readback; новый create не выполняется |
-| MIGRATION COMPLETE | Terminal Job, actual Pod/image и полный033 catalog | Read-only `capture`, новый composite receipt |
+| MIGRATION COMPLETE | Terminal Job, actual Pod/image и полный целевой033/034 catalog | Read-only `capture`, новый composite receipt |
 | ROLLOUT/REJOIN | Новый render, profile и pinned receipt | Existing readback проверяет live UID/spec; отсутствующие known Jobs не повторяются |
 | FAILED/DRIFT | Неизвестный effect, extra Pod/privilege либо несовпадение pins | Закрытый отказ; backup/schema compatibility определяют дальнейший operator plan |
 
 Проверки: `test_bootstrap_upgrade.py` и прежние `test_bootstrap_completion.py`,
 включая missing TTL Jobs, foreign UID, mutated command/env/image, nonterminal Job,
-прошлый failure и schema rejection. Native033 schema/backup proof проверяется
+прошлый failure и schema rejection. Последовательный upgrade033→034 сохраняет
+четыре прежних effects и выбирает034 proof; пропуск032→034 и неизвестные
+версии отклоняются до cluster access. Native033/034 schema/backup proof проверяется
 отдельно на disposable PostgreSQL. Семантика terminal conditions сверена с
 [Kubernetes Job API v1.35](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/)
 и [Job controller](https://kubernetes.io/docs/concepts/workloads/controllers/job/):

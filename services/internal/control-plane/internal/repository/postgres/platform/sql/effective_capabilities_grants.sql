@@ -2,7 +2,10 @@
 SELECT grant_row.ref,grant_row.version,grant_row.capability_key,
  connection.ref,connection.version,connection.definition_key,
  connection.definition_version,connection.definition_digest,connection.name,
- grant_row.enabled AND connection.enabled AND connection.state='CONNECTED'
+ grant_row.enabled AND connection.enabled AND (
+   (connection.credential_policy='PROJECT_SHARED' AND connection.state='CONNECTED') OR
+   (connection.credential_policy='INITIATOR_REQUIRED' AND control_plane.integration_connection_configuration_ready(connection.id))
+ )
  AND connection.lifecycle_state='ACTIVE'
  AND definition.enabled AND definition.adapter_readiness='READY'
  AND (definition.adapter_owner,definition.execution_route) IN

@@ -70,10 +70,15 @@ type CredentialRevision struct {
 
 // Request carries the owner claim's definition, capability, scope, input, grant and credential pins to typed provider execution.
 // RU: Request передаёт привязки определения, возможности, области, входа, grant и credential из owner claim в типизированное provider-исполнение.
-// The private healthCheck flag is set only by Test; transported identifiers and digests are checked against the parsed executable package, not treated as authority.
-// RU: Закрытый healthCheck задаёт только Test; переданные идентификаторы и хеши сверяются с исполняемым пакетом, а не считаются источником полномочий.
+// The private healthCheck flag is set only by Test or registered personal READ probes;
+// transported identifiers and digests are checked against the executable package, not authority.
+// Закрытый healthCheck задают только Test либо registered personal READ probes; переданные
+// identifiers/digests сверяются с executable package и не считаются полномочиями.
 type Request struct {
 	healthCheck                                                       bool
+	permissionEffect                                                  *permissionEffectObservation
+	PersonalCredentialAdmission                                       bool
+	ResourcePermissionProfile                                         string
 	DefinitionPackage                                                 []byte
 	EmailExecution                                                    *emailapi.ExecutionBinding
 	DefinitionKey, DefinitionVersion, DefinitionDigest, ConnectionRef string
@@ -84,6 +89,16 @@ type Request struct {
 	Credential                                                        *CredentialRevision
 	GrantRef                                                          string
 	GrantVersion                                                      int64
+	PersonalReadProbeCapabilityKeys                                   []string
+	PersonalObservationProfiles, PersonalDeniedWriteCapabilityKeys    []string
+}
+
+// permissionEffectObservation tracks only the current registered personal adapter's HTTP
+// mutation boundary. It is not a persisted receipt or a proof usable after process/ACK loss.
+// permissionEffectObservation отслеживает только HTTP mutation boundary текущего registered
+// personal adapter. Это не durable receipt и не proof после потери процесса либо ACK.
+type permissionEffectObservation struct {
+	mutationAttempted bool
 }
 
 // Receipt binds an execution projection to the claimed effect, canonical input and provider reference with a digest of the safe response bytes.
@@ -108,6 +123,9 @@ type SafeError struct {
 	Code          string
 	HealthSummary string
 	Transient     bool
+	// AuthenticationHTTPStatus is populated only for observed401/403, never provider payload.
+	// AuthenticationHTTPStatus содержит только наблюдённые401/403, без provider payload.
+	AuthenticationHTTPStatus int
 }
 
 // Error exposes only the safe code, keeping auxiliary health metadata and provider details out of ordinary error strings.
@@ -267,6 +285,9 @@ func RequestFromTest(claim *controlplanev1.IntegrationConnectionTestClaim) Reque
 		DefinitionKey:     claim.GetDefinitionKey(), DefinitionVersion: claim.GetDefinitionVersion(),
 		DefinitionDigest: claim.GetDefinitionDigest(), ConnectionRef: claim.GetConnectionRef(),
 		Configuration: configuration, Credential: credentialFromProto(claim.GetCredentialRevision()),
+		PersonalReadProbeCapabilityKeys:   append([]string(nil), claim.GetPersonalReadProbeCapabilityKeys()...),
+		PersonalObservationProfiles:       personalObservationProfilesFromProto(claim.GetPersonalObservationProfiles()),
+		PersonalDeniedWriteCapabilityKeys: append([]string(nil), claim.GetPersonalDeniedWriteCapabilityKeys()...),
 	}
 }
 
@@ -284,6 +305,10 @@ func RequestFromInvocation(claim *controlplanev1.IntegrationInvocationClaim) Req
 	}
 	resourceScope := map[string]string{}
 	resourceKind, resourceScopeDigest := "", ""
+	resourcePermissionProfile := ""
+	if claim.GetResourcePermissionProfile() != 0 {
+		resourcePermissionProfile = strings.TrimPrefix(claim.GetResourcePermissionProfile().String(), "INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_")
+	}
 	if scope := claim.GetResourceScope(); scope != nil {
 		resourceScope = scope.GetValues()
 		resourceKind = strings.TrimPrefix(scope.GetKind().String(), "INTEGRATION_RESOURCE_KIND_")
@@ -301,6 +326,8 @@ func RequestFromInvocation(claim *controlplanev1.IntegrationInvocationClaim) Req
 		EffectKey: claim.GetEffectKey(), InputDigest: claim.GetInputDigest(), Configuration: configuration,
 		Input: input, Credential: credentialFromProto(claim.GetCredentialRevision()),
 		GrantRef: claim.GetGrantRef(), GrantVersion: claim.GetGrantVersion(),
+		PersonalCredentialAdmission: claim.GetCredentialAdmissionRequired(),
+		ResourcePermissionProfile:   resourcePermissionProfile,
 	}
 }
 
@@ -408,6 +435,10 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, e
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(capability.Execution.TimeoutSeconds)*time.Second)
 	defer cancel()
+	request.permissionEffect = nil
+	if request.PersonalCredentialAdmission && request.ResourcePermissionProfile != "" {
+		request.permissionEffect = &permissionEffectObservation{}
+	}
 	var result Result
 	switch definition.Spec.Adapter {
 	case "SYNTHETIC_HTTP":
@@ -445,6 +476,19 @@ func (adapter *Adapter) Recover(ctx context.Context, request Request) (Result, e
 	if err != nil {
 		return Result{}, err
 	}
+	if (definition.Metadata.Key == jiraServerDefinition && (request.Operation == "jira.issue.create" || request.Operation == "jira.issue.comment.write")) ||
+		(definition.Metadata.Key == confluenceServerDefinition && (request.Operation == "confluence.page.create" || request.Operation == "confluence.page.update")) {
+		ctx, cancel := context.WithTimeout(ctx, time.Duration(capability.Execution.TimeoutSeconds)*time.Second)
+		defer cancel()
+		result, err := adapter.recoverAtlassianServer(ctx, request, definition, capability, configuration, canonicalInput)
+		return validateExecutionResult(capability, request, result, err)
+	}
+	if definition.Spec.Adapter == "GITLAB" && (request.Operation == "gitlab.issue.create" || request.Operation == "gitlab.merge_request.create") {
+		ctx, cancel := context.WithTimeout(ctx, time.Duration(capability.Execution.TimeoutSeconds)*time.Second)
+		defer cancel()
+		result, err := adapter.recoverGitLabCreate(ctx, request, capability, configuration, canonicalInput)
+		return validateExecutionResult(capability, request, result, err)
+	}
 	if definition.Spec.Adapter != "SYNTHETIC_HTTP" || request.Operation != "synthetic.journal.write" {
 		if definition.Spec.Adapter == "GITHUB" && request.Operation == "github.pull_request.ready" {
 			ctx, cancel := context.WithTimeout(ctx, time.Duration(capability.Execution.TimeoutSeconds)*time.Second)
@@ -464,10 +508,16 @@ func (adapter *Adapter) Recover(ctx context.Context, request Request) (Result, e
 // RU: validateExecutionResult канонизирует выход схемой capability, пересчитывает хеш и сверяет привязки операции, эффекта, входа и provider-ссылки.
 // Invalid READ output returns a safe error; invalid non-READ output or receipt, and selected unavailable errors, remain UNKNOWN rather than implying no effect.
 // RU: Неверный READ-выход даёт безопасную ошибку; неверный non-READ выход либо квитанция и выбранные unavailable-ошибки остаются UNKNOWN, не означая отсутствия эффекта.
+// A registered personal object READ403 refuses that object; it does not invalidate identity.
+// Зарегистрированный personal object READ403 запрещает объект, не объявляя identity невалидной.
 func validateExecutionResult(capability integrationpackage.Capability, request Request, result Result, err error) (Result, error) {
 	if err != nil {
 		var safe *SafeError
-		if capability.Risk != "READ" && errors.As(err, &safe) &&
+		if capability.Risk == "READ" && request.PersonalCredentialAdmission && request.ResourcePermissionProfile != "" &&
+			errors.As(err, &safe) && safe.Code == "INTEGRATION_AUTH_REJECTED" && safe.AuthenticationHTTPStatus == http.StatusForbidden {
+			return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+		}
+		if capability.Risk != "READ" && (request.permissionEffect == nil || request.permissionEffect.mutationAttempted) && errors.As(err, &safe) &&
 			(safe.Code == "INTEGRATION_UNAVAILABLE" || safe.Code == "INTEGRATION_RESPONSE_INVALID") {
 			return Result{}, &UnknownOutcomeError{stage: "response_validation"}
 		}
@@ -549,6 +599,13 @@ func (adapter *Adapter) validateInvocation(request Request) (
 		!capability.AllowsApprovalPolicy(request.ApprovalPolicy) || capability.ResourceScope.Kind != request.ResourceKind ||
 		request.EffectKey == "" || len(request.InputDigest) != sha256.Size*2 {
 		return integrationpackage.Package{}, integrationpackage.Capability{}, nil, nil, &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
+	}
+	expectedProfile := ""
+	if request.PersonalCredentialAdmission {
+		expectedProfile = integrationpackage.CredentialResourcePermissionProfile(definition, capability)
+	}
+	if request.ResourcePermissionProfile != expectedProfile {
+		return integrationpackage.Package{}, integrationpackage.Capability{}, nil, nil, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 	}
 	configuration, err := normalizeStringMap(request.Configuration)
 	if err != nil || definition.ValidateConfiguration(configuration) != nil {
@@ -921,7 +978,7 @@ func githubError(response *github.Response, err error) error {
 func statusError(code int) error {
 	switch code {
 	case http.StatusUnauthorized, http.StatusForbidden:
-		return &SafeError{Code: "INTEGRATION_AUTH_REJECTED"}
+		return &SafeError{Code: "INTEGRATION_AUTH_REJECTED", AuthenticationHTTPStatus: code}
 	case http.StatusTooManyRequests:
 		return &SafeError{Code: "INTEGRATION_RATE_LIMITED"}
 	case http.StatusBadRequest, http.StatusNotFound, http.StatusConflict, http.StatusUnprocessableEntity:
@@ -977,4 +1034,20 @@ func mustURL(raw string) *url.URL {
 		panic(fmt.Sprintf("parse static URL: %v", err))
 	}
 	return parsed
+}
+
+// personalObservationProfilesFromProto preserves unknown typed values as invalid markers, so
+// mixed-version input closes before any external probe instead of silently dropping authority.
+// personalObservationProfilesFromProto сохраняет неизвестные typed values как invalid markers,
+// закрывая mixed-version input до внешних probes вместо молчаливого удаления authority.
+func personalObservationProfilesFromProto(profiles []controlplanev1.PersonalIntegrationCredentialObservationProfile) []string {
+	result := make([]string, 0, len(profiles))
+	for _, profile := range profiles {
+		value := "UNSUPPORTED"
+		if profile == controlplanev1.PersonalIntegrationCredentialObservationProfile_PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_GITLAB_PROJECT_WRITE_SCOPE_V1 {
+			value = integrationpackage.CredentialObservationGitLabProjectWriteScopeV1
+		}
+		result = append(result, value)
+	}
+	return result
 }

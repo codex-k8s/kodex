@@ -76,17 +76,7 @@ FROM pg_proc WHERE oid='control_plane.workflow_pdlc_result_valid(jsonb,jsonb,jso
 		"GRANT EXECUTE ON FUNCTION control_plane.workflow_pdlc_result_valid(jsonb,jsonb,jsonb[]) TO PUBLIC",
 		"ALTER FUNCTION control_plane.workflow_pdlc_result_valid(jsonb,jsonb,jsonb[]) VOLATILE",
 	} {
-		if _, err := observer.Exec(ctx, "BEGIN; "+mutation); err != nil {
-			t.Fatal("prepare content page catalog counterfactual")
-		}
-		results, readErr := observer.PgConn().Exec(ctx, string(proofSQL)).ReadAll()
-		failed := readErr != nil
-		for _, result := range results {
-			failed = failed || result.Err != nil
-		}
-		if _, err := observer.Exec(ctx, "ROLLBACK"); err != nil || !failed {
-			t.Fatal("content page proof accepted catalog drift")
-		}
+		assertControlPlaneCatalogMutationRejected(t, ctx, observer, proofSQL, mutation, "workflow PDLC schema catalog changed")
 	}
 	if err := goose.DownContext(ctx, database, "migrations"); err == nil {
 		t.Fatal("content page migration unexpectedly allowed Down")

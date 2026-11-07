@@ -13,7 +13,8 @@ func integrationGrantSnapshotFixture(t *testing.T, recipient string) map[string]
 	// This is the shape emitted by the CP caster after attachConnection, not an actual connection attachment.
 	// Это форма, которую CP caster выдаёт после attachConnection, а не настоящее подключение интеграции.
 	response := &cp.ListIntegrationConnectionsResponse{Connections: []*cp.IntegrationConnection{{
-		Ref: "con_fixture01", Version: 12, DefinitionKey: "context7", DefinitionVersion: "1.0",
+		CredentialPolicy: cp.IntegrationCredentialPolicy_INTEGRATION_CREDENTIAL_POLICY_PROJECT_SHARED,
+		Ref:              "con_fixture01", Version: 12, DefinitionKey: "context7", DefinitionVersion: "1.0",
 		Name: "Context7", State: cp.ConnectionState_CONNECTION_STATE_CONNECTED,
 		Grants: []*cp.IntegrationGrant{{
 			Ref: "igr_fixture01", Version: 1, ConnectionVersion: 12,

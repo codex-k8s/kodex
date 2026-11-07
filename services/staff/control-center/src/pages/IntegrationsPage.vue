@@ -25,6 +25,7 @@ import IntegrationApprovalPanel from "@/features/integrations/ui/IntegrationAppr
 import IntegrationCatalogPanel from "@/features/integrations/ui/IntegrationCatalogPanel.vue";
 import IntegrationPublicConfigurationFields from "@/features/integrations/ui/IntegrationPublicConfigurationFields.vue";
 import IntegrationCredentialField from "@/features/integrations/ui/IntegrationCredentialField.vue";
+import PersonalConnectionsPanel from "@/features/integrations/ui/PersonalConnectionsPanel.vue";
 import IntegrationConnectionsPanel from "@/features/integrations/ui/IntegrationConnectionsPanel.vue";
 import IntegrationGrantsPanel from "@/features/integrations/ui/IntegrationGrantsPanel.vue";
 import type { IntegrationGrantSelection } from "@/features/integrations/grant-candidates";
@@ -74,6 +75,8 @@ const serverMessage = useServerMessage();
 const { t } = useI18n();
 const fieldPrefix = `integration-connection-${useId()}`;
 const platform = usePlatformStore();
+const route = useRoute();
+const router = useRouter();
 const connectionSearch = ref("");
 const connectionEntries = ref<IntegrationConnection[]>([]);
 const connectionListRoot = ref<HTMLElement>();
@@ -193,7 +196,9 @@ watch(
     integrationsLoaded.value = false;
   },
 );
-const activeSection = ref<IntegrationsSection>("CONNECTIONS");
+const activeSection = ref<IntegrationsSection>(
+  route.query.section === "personal" ? "PERSONAL" : "CONNECTIONS",
+);
 const catalogSearch = ref("");
 const catalogCategory = ref("");
 const catalogDefinitions = ref<IntegrationDefinition[]>([]);
@@ -345,8 +350,6 @@ watch(
 const mailboxCredentialBusy = ref(false);
 const mailboxConfigurationBusy = ref(false);
 const mailboxConfigurationPanel = ref<{ canClose(): Promise<boolean> }>();
-const route = useRoute();
-const router = useRouter();
 const assistantForm = computed(() => route.query.assistantForm === "1");
 const integrationsLoaded = ref(false);
 const assistantCredentialDefinition = ref<IntegrationDefinition>();
@@ -688,7 +691,21 @@ const grantConnection = computed(() =>
 
 function selectSection(section: IntegrationsSection): void {
   activeSection.value = section;
+  void router.replace({
+    query: {
+      ...route.query,
+      section: section === "PERSONAL" ? "personal" : undefined,
+    },
+  });
 }
+watch(
+  () => route.query.section,
+  (section) => {
+    if (section === "personal") activeSection.value = "PERSONAL";
+    else if (activeSection.value === "PERSONAL")
+      activeSection.value = "CONNECTIONS";
+  },
+);
 
 function openConnection(definitionKey: string): void {
   const definition =
@@ -1218,7 +1235,7 @@ onBeforeUnmount(() => {
         </div>
 
         <AsyncState
-          v-if="activeSection !== 'APPROVALS'"
+          v-if="activeSection !== 'APPROVALS' && activeSection !== 'PERSONAL'"
           :loading="platform.loading.integrations"
           :problem="platform.problems.integrations"
           @retry="reloadIntegrationWorkspace"
@@ -1241,6 +1258,7 @@ onBeforeUnmount(() => {
               @update:search="connectionSearch = $event"
               @more="loadConnections(true)"
               @command="command"
+              @policy-changed="loadConnections()"
               @credential="openCredential"
               @edit="openEdit"
               @delete="openDelete"
@@ -1300,6 +1318,7 @@ onBeforeUnmount(() => {
           />
         </AsyncState>
 
+        <PersonalConnectionsPanel v-else-if="activeSection === 'PERSONAL'" />
         <IntegrationApprovalPanel v-else />
       </div>
 

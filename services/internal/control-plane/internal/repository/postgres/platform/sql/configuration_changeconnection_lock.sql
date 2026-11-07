@@ -6,7 +6,8 @@ SELECT id::text,
        enabled,
        version,
        definition_version,
-       definition_digest
+       definition_digest,
+       credential_policy
 FROM control_plane.integration_connections
 WHERE organization_id = @organization_id::uuid
   AND ref = @connection_ref

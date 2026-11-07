@@ -22,7 +22,11 @@ SELECT EXISTS (
                     AND g.capability_key=required.capability_key
                     AND g.enabled
                     AND c.enabled
-                    AND c.state='CONNECTED'
+                    AND ((c.credential_policy='PROJECT_SHARED' AND c.state='CONNECTED')
+                      OR (c.credential_policy='INITIATOR_REQUIRED'
+                        AND control_plane.integration_connection_configuration_ready(c.id)
+                        AND g.definition_version=c.definition_version
+                        AND g.definition_digest=c.definition_digest))
               )
           )
       )

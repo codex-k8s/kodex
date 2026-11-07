@@ -438,7 +438,9 @@ SELECT n.id::text,
              AND capability.value->>'operation' NOT IN ('mattermost.inbound','mattermost.gate_decisions')
              AND connection.enabled
              AND connection.lifecycle_state='ACTIVE'
-             AND connection.state = 'CONNECTED'
+             AND ((connection.credential_policy='PROJECT_SHARED' AND connection.state='CONNECTED')
+               OR (connection.credential_policy='INITIATOR_REQUIRED'
+                 AND control_plane.integration_connection_configuration_ready(connection.id)))
            ), '[]'::jsonb),
            CASE
                WHEN workflow_version.spec->>'ExecutionMode'='SERVER_DAG_V1'

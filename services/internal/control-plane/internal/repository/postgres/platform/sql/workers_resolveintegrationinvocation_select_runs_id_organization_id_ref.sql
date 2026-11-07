@@ -8,7 +8,9 @@ JOIN control_plane.runs root ON root.id=r.root_run_id
 JOIN control_plane.subjects initiator ON initiator.id=root.initiated_by
 JOIN control_plane.run_nodes n ON n.run_id=r.id
 JOIN control_plane.integration_connections c
-  ON c.organization_id=r.organization_id AND c.ref=$4 AND c.enabled AND c.state='CONNECTED'
+  ON c.organization_id=r.organization_id AND c.ref=$4 AND c.enabled
+ AND ((c.credential_policy='PROJECT_SHARED' AND c.state='CONNECTED')
+   OR (c.credential_policy='INITIATOR_REQUIRED' AND control_plane.integration_connection_configuration_ready(c.id)))
 JOIN control_plane.integration_grants g
   ON g.connection_id=c.id AND g.capability_key=$5
  AND g.target_kind='AGENT'

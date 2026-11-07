@@ -17,6 +17,7 @@ export function syntheticEmailEffectFixture(
     definitionKey: "email",
     name: connectionName,
     state: "CONNECTED",
+    credentialPolicy: "PROJECT_SHARED",
     credentialsConfigured: true,
     credentialsHint: "",
     capabilities: [],

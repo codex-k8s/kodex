@@ -23,7 +23,7 @@ func TestIntegrationGrantPublicProjectionKeepsParentPinAndNativeGrant(t *testing
 				ApprovalPolicy: cp.IntegrationApprovalPolicy_INTEGRATION_APPROVAL_POLICY_NONE,
 				ResourceScope:  &cp.IntegrationResourceScope{Kind: cp.IntegrationResourceKind_INTEGRATION_RESOURCE_KIND_HTTPS_RESOURCE},
 			}
-			connection := &cp.IntegrationConnection{Ref: "con_fixture01", Version: 12, Grants: []*cp.IntegrationGrant{grant}}
+			connection := &cp.IntegrationConnection{CredentialPolicy: cp.IntegrationCredentialPolicy_INTEGRATION_CREDENTIAL_POLICY_PROJECT_SHARED, Ref: "con_fixture01", Version: 12, Grants: []*cp.IntegrationGrant{grant}}
 			original := proto.Clone(connection)
 			value, err := ProtoMap(connection)
 			if err != nil {
@@ -55,7 +55,7 @@ func TestIntegrationGrantPublicProjectionKeepsParentPinAndNativeGrant(t *testing
 // TestIntegrationGrantPublicProjectionStillRejectsUnknownRisk проверяет сохранение отказа
 // неизвестному риску grant в публичной проекции при скрытии внутреннего pin подключения.
 func TestIntegrationGrantPublicProjectionStillRejectsUnknownRisk(t *testing.T) {
-	_, err := ProtoMap(&cp.IntegrationConnection{Ref: "con_fixture01", Version: 12, Grants: []*cp.IntegrationGrant{{
+	_, err := ProtoMap(&cp.IntegrationConnection{CredentialPolicy: cp.IntegrationCredentialPolicy_INTEGRATION_CREDENTIAL_POLICY_PROJECT_SHARED, Ref: "con_fixture01", Version: 12, Grants: []*cp.IntegrationGrant{{
 		Ref: "igr_fixture01", Version: 1, ConnectionVersion: 12, AgentRef: "agt_systemfixture",
 		TypedRisk: cp.IntegrationRisk(999),
 	}}})

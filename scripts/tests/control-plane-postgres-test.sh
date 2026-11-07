@@ -18,8 +18,44 @@ test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestInstructionCommandPr
 
 # Оба закрытых upgrade-сценария используют одну и ту же отдельную пустую БД.
 upgrade_test='^TestWorkflowReviewQAEvidenceForwardUpgrade$'
+# Явный metadata capture не является portable-release qualification либо install permission.
+if [[ "$test_pattern" == --personal-credentials-schema-capture ]]; then
+  [[ "${KODEX_PERSONAL_SCHEMA_CAPTURE:-}" == 1 ]] || fail 'personal schema capture requires explicit opt-in'
+  upgrade_test='^TestPersonalIntegrationCredentialCatalog$'
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --personal-credentials-catalog ]]; then
+  [[ "${KODEX_PERSONAL_SCHEMA_CAPTURE:-}" != 1 ]] || fail 'catalog qualification cannot use capture mode'
+  upgrade_test='^TestPersonalIntegrationCredentialCatalog$'
+  test_pattern=--review-qa-upgrade
+fi
 volume_owner=false
 owner_test='^TestWorkspaceWriterOwnerComponent$'
+# Явная disposable draft034 regression не расширяет штатный release/schema verifier.
+if [[ "$test_pattern" == --personal-credentials-assistant-regression ]]; then
+  volume_owner=true
+  owner_test='^(TestSystemAssistantIntegrationGrantsComponent|TestProjectAssistantIntegrationGrantsComponent|TestAssistantSessionResumeComponent)$'
+  upgrade_test='^TestPersonalIntegrationCredentialMigration$'
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --personal-credentials-invocation-regression ]]; then
+  volume_owner=true
+  owner_test='^(TestIntegrationAutonomousGitHubInvocationComponent|TestScopedIntegrationApprovalComponent|TestIntegrationGateFeedbackComponent|TestIntegrationGitHubHistoricalAdmissionComponent)$'
+  upgrade_test='^TestPersonalIntegrationCredentialMigration$'
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --personal-credentials-shared-regression ]]; then
+  volume_owner=true
+  owner_test='^TestBootstrapComponent$'
+  upgrade_test='^TestPersonalIntegrationCredentialMigration$'
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --personal-credentials-upgrade ]]; then
+  volume_owner=true
+  owner_test='^TestPersonalIntegrationCredentialsComponent$'
+  upgrade_test='^TestPersonalIntegrationCredentialMigration$'
+  test_pattern=--review-qa-upgrade
+fi
 if [[ "$test_pattern" == --pdlc-owner || "$test_pattern" == --pdlc-owner-legacy ]]; then
   volume_owner=true
   owner_test='^TestWorkflowPDLCFile(Intent|Result)OwnerComponent$'
@@ -291,6 +327,7 @@ fi
     -c 'SELECT max(version_id) FILTER (WHERE is_applied) FROM public.goose_db_version')
   case "$schema_version" in
     20261105000100) schema_proof=platform-oidc-identity-migration-postcondition.sql; schema_verifier=validPlatformOIDCIdentityMigrationPostcondition ;;
+    20261106000100) schema_proof=personal-credentials-migration-postcondition.sql; schema_verifier=validPersonalCredentialsMigrationPostcondition ;;
     20261030000100) schema_proof=workflow-content-page-migration-postcondition.sql; schema_verifier=validWorkflowContentPageMigrationPostcondition ;;
     20261029000300) schema_proof=workflow-pdlc-migration-postcondition.sql; schema_verifier=validWorkflowPDLCMigrationPostcondition ;;
     20261029000200) schema_proof=github-pr-migration-postcondition.sql; schema_verifier=validGitHubPRMigrationPostcondition ;;

@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 
 import type { AppProblem } from "@/shared/api/problem";
+import IntegrationCredentialPreflightNotice from "./IntegrationCredentialPreflightNotice.vue";
 
 const props = defineProps<{ problem?: AppProblem; compact?: boolean }>();
 const emit = defineEmits<{ retry: [] }>();
@@ -32,7 +33,11 @@ const message = computed(() => {
 </script>
 
 <template>
-  <section class="problem-notice" role="alert">
+  <IntegrationCredentialPreflightNotice
+    v-if="problem?.integrationCredentialIssues.length"
+    :issues="problem.integrationCredentialIssues"
+  />
+  <section v-else class="problem-notice" role="alert">
     <div>
       <strong>{{ heading }}</strong>
       <p>{{ message }}</p>

@@ -1738,6 +1738,7 @@ message IntegrationConnection {
   google.protobuf.Timestamp updated_at = 18;
   // Только адресный GetIntegrationConnection; omitted не означает ABSENT.
   IntegrationDefinitionConfigurationBinding definition_configuration_binding = 19;
+  IntegrationCredentialPolicy credential_policy = 20;
 }
 
 // Безопасные pins текущей связи; не являются grant на чтение или изменение.
@@ -4803,6 +4804,11 @@ message PreviewScheduleResponse {
   repeated TemplateVariable automation_variables = 8;
   SchedulePromptPreviewPin materialization_pin = 9;
 }
+// Наблюдение metadata не является подтверждением global WRITE permissions.
+enum PersonalIntegrationCredentialObservationProfile {
+  PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_UNSPECIFIED = 0;
+  PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_GITLAB_PROJECT_WRITE_SCOPE_V1 = 1;
+}
 message IntegrationConnectionTestClaim {
   string test_ref = 1;
   string connection_ref = 2;
@@ -4814,6 +4820,11 @@ message IntegrationConnectionTestClaim {
   string definition_version = 8;
   string definition_digest = 9;
   bytes definition_package = 10;
+  // Только personal verifier: exact owner-pinned READ keys. Отсутствие сохраняет health-only.
+  repeated string personal_read_probe_capability_keys = 11;
+  // Только personal verifier: owner-pinned metadata profiles и допустимые write denials.
+  repeated PersonalIntegrationCredentialObservationProfile personal_observation_profiles = 12;
+  repeated string personal_denied_write_capability_keys = 13;
 }
 message ClaimIntegrationConnectionTestsRequest {
   string workload_instance = 1;
@@ -4858,6 +4869,26 @@ enum IntegrationInvocationWorkMode {
   INTEGRATION_INVOCATION_WORK_MODE_EXECUTE = 1;
   INTEGRATION_INVOCATION_WORK_MODE_RECOVER_READ_ONLY = 2;
 }
+// Закрытый профиль проверки прав на объект; не подтверждает глобальный WRITE.
+enum IntegrationCredentialResourcePermissionProfile {
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_UNSPECIFIED = 0;
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_CONFLUENCE_SERVER_PAGE_UPDATE_V1 = 1;
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_JIRA_SERVER_ISSUE_CREATE_V1 = 2;
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_JIRA_SERVER_COMMENT_WRITE_V1 = 3;
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_JIRA_SERVER_TRANSITION_APPLY_V1 = 4;
+  // Штатный GET проверяет выбранный объект проекта; metadata не подтверждают чтение всех объектов.
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_GITLAB_PROJECT_OBJECT_READ_V1 = 5;
+  // Штатный Server GET проверяет задачу либо поиск в точном проекте текущим личным ключом.
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_JIRA_SERVER_PROJECT_OBJECT_READ_V1 = 6;
+  // Штатный Server GET проверяет выбранную страницу либо поиск в точном пространстве.
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_CONFLUENCE_SERVER_SPACE_OBJECT_READ_V1 = 7;
+  // Проверяет актуальные token scope и права точного проекта перед созданием Issue.
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_GITLAB_PROJECT_ISSUE_CREATE_V1 = 8;
+  // Дополнительно запрещает создание protected destination ref; правила защиты не меняются.
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_GITLAB_PROJECT_BRANCH_CREATE_V1 = 9;
+  // Проверяет source/target одного проекта; merge и изменение веток не разрешаются.
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_GITLAB_PROJECT_MERGE_REQUEST_CREATE_V1 = 10;
+}
 message IntegrationInvocationClaim {
   string invocation_ref = 1;
   string definition_key = 2;
@@ -4883,6 +4914,9 @@ message IntegrationInvocationClaim {
   // Без private key: immutable owner snapshot и initial signed permit.
   bytes ssh_compose_snapshot = 22;
   bytes ssh_compose_permit = 23;
+  // Personal mode выдаёт descriptor только через одноразовый owner begin.
+  bool credential_admission_required = 24;
+  IntegrationCredentialResourcePermissionProfile resource_permission_profile = 25;
 }
 
 // ClaimSSHComposeInvocationsRequest ограничивает отдельную SSH-очередь одним consumer slot.
@@ -9308,20 +9342,20 @@ message WorkflowRetryReadProof {
 
 // WorkflowReworkStepPreview содержит только публичные ключи и ограниченные счётчики.
 message WorkflowReworkStepPreview {
- string step_key = 1;
- int32 previous_attempt = 2;
- // zero означает исчерпанный бюджет, но не разрешение пятой попытки.
- int32 next_attempt = 3;
+  string step_key = 1;
+  int32 previous_attempt = 2;
+  // zero означает исчерпанный бюджет, но не разрешение пятой попытки.
+  int32 next_attempt = 3;
 }
 
 // WorkflowReworkPreview объясняет серверный план и не служит execution grant.
 message WorkflowReworkPreview {
- string schema = 1;
- string source_step_key = 2;
- int32 source_attempt = 3;
- repeated WorkflowReworkStepPreview authors = 4;
- repeated WorkflowReworkStepPreview rechecks = 5;
- string block_reason = 6;
+  string schema = 1;
+  string source_step_key = 2;
+  int32 source_attempt = 3;
+  repeated WorkflowReworkStepPreview authors = 4;
+  repeated WorkflowReworkStepPreview rechecks = 5;
+  string block_reason = 6;
 }
 
 message SSHComposeLeaseBinding {
@@ -9368,4 +9402,203 @@ message RuntimeModelProviderModel {
   string id = 1;
   int64 context_window_tokens = 2;
   int64 maximum_output_tokens = 3;
+}
+
+// Browser operations собственной привязки не возвращают Secret descriptor либо значение ключа.
+// Отдельный worker allowlist получает exact descriptors только через защищённые claim methods.
+service PersonalIntegrationCredentialService {
+  rpc ListPersonalIntegrationConnections(ListPersonalIntegrationConnectionsRequest) returns (ListPersonalIntegrationConnectionsResponse);
+  rpc GetPersonalIntegrationCredential(GetPersonalIntegrationCredentialRequest) returns (GetPersonalIntegrationCredentialResponse);
+  rpc CreatePersonalIntegrationCredential(CreatePersonalIntegrationCredentialRequest) returns (CreatePersonalIntegrationCredentialResponse);
+  rpc ConfigurePersonalIntegrationCredential(ConfigurePersonalIntegrationCredentialRequest) returns (ConfigurePersonalIntegrationCredentialResponse);
+  rpc RevokePersonalIntegrationCredential(RevokePersonalIntegrationCredentialRequest) returns (RevokePersonalIntegrationCredentialResponse);
+  // Отдельная операция управления Connection; не право читать чужие личные credentials.
+  rpc SetIntegrationCredentialPolicy(SetIntegrationCredentialPolicyRequest) returns (SetIntegrationCredentialPolicyResponse);
+  rpc TestPersonalIntegrationCredential(TestPersonalIntegrationCredentialRequest) returns (TestPersonalIntegrationCredentialResponse);
+  // Отдельные worker operations не входят в browser allowlist.
+  rpc ClaimPersonalIntegrationCredentialTests(ClaimPersonalIntegrationCredentialTestsRequest) returns (ClaimPersonalIntegrationCredentialTestsResponse);
+  rpc BeginPersonalIntegrationCredentialProbe(BeginPersonalIntegrationCredentialProbeRequest) returns (BeginPersonalIntegrationCredentialProbeResponse);
+  rpc CompletePersonalIntegrationCredentialTest(CompletePersonalIntegrationCredentialTestRequest) returns (CompletePersonalIntegrationCredentialTestResponse);
+  rpc BeginPersonalIntegrationInvocation(BeginPersonalIntegrationInvocationRequest) returns (BeginPersonalIntegrationInvocationResponse);
+}
+
+message BeginPersonalIntegrationInvocationRequest {
+  string invocation_ref = 1;
+  string lease_ref = 2;
+  string fence = 3;
+  int64 generation = 4;
+  string workload_instance = 5;
+}
+message BeginPersonalIntegrationInvocationResponse {
+  bool admitted = 1;
+  IntegrationCredentialRevision credential_revision = 2;
+  IntegrationInvocationWorkMode work_mode = 3;
+  IntegrationCredentialResourcePermissionProfile resource_permission_profile = 4;
+}
+
+enum IntegrationCredentialPolicy {
+  INTEGRATION_CREDENTIAL_POLICY_UNSPECIFIED = 0;
+  INTEGRATION_CREDENTIAL_POLICY_PROJECT_SHARED = 1;
+  INTEGRATION_CREDENTIAL_POLICY_INITIATOR_REQUIRED = 2;
+}
+
+enum PersonalIntegrationCredentialState {
+  PERSONAL_INTEGRATION_CREDENTIAL_STATE_UNSPECIFIED = 0;
+  PERSONAL_INTEGRATION_CREDENTIAL_STATE_NOT_CONFIGURED = 1;
+  PERSONAL_INTEGRATION_CREDENTIAL_STATE_CHECK_REQUIRED = 2;
+  PERSONAL_INTEGRATION_CREDENTIAL_STATE_CHECKING = 3;
+  PERSONAL_INTEGRATION_CREDENTIAL_STATE_READY = 4;
+  PERSONAL_INTEGRATION_CREDENTIAL_STATE_INVALID = 5;
+  PERSONAL_INTEGRATION_CREDENTIAL_STATE_REVOKED = 6;
+  // Производное состояние представления; не новый persistent lifecycle state.
+  PERSONAL_INTEGRATION_CREDENTIAL_STATE_EXPIRED = 7;
+}
+
+// Безопасная собственная проекция, не внутренний credential descriptor.
+message PersonalIntegrationCredentialView {
+  string connection_ref = 1;
+  string binding_ref = 2;
+  int64 version = 3;
+  IntegrationCredentialPolicy policy = 4;
+  PersonalIntegrationCredentialState state = 5;
+  bool credential_configured = 6;
+  google.protobuf.Timestamp expires_at = 7;
+  repeated string verified_capability_keys = 8;
+  repeated string denied_capability_keys = 9;
+  int64 connection_version = 10;
+}
+
+message GetPersonalIntegrationCredentialRequest {
+  string connection_ref = 1;
+}
+message GetPersonalIntegrationCredentialResponse {
+  PersonalIntegrationCredentialView credential = 1;
+}
+message CreatePersonalIntegrationCredentialRequest {
+  MutationContext mutation = 1;
+  string connection_ref = 2;
+  int64 expected_connection_version = 3;
+}
+message CreatePersonalIntegrationCredentialResponse {
+  PersonalIntegrationCredentialView credential = 1;
+}
+message ConfigurePersonalIntegrationCredentialRequest {
+  MutationContext mutation = 1;
+  string connection_ref = 2;
+  int64 expected_connection_version = 3;
+  bytes credential_value = 4;
+}
+message ConfigurePersonalIntegrationCredentialResponse {
+  PersonalIntegrationCredentialView credential = 1;
+}
+message RevokePersonalIntegrationCredentialRequest {
+  MutationContext mutation = 1;
+  string connection_ref = 2;
+}
+message RevokePersonalIntegrationCredentialResponse {
+  PersonalIntegrationCredentialView credential = 1;
+}
+
+message SetIntegrationCredentialPolicyRequest {
+  MutationContext mutation = 1;
+  string connection_ref = 2;
+  IntegrationCredentialPolicy policy = 3;
+}
+message SetIntegrationCredentialPolicyResponse {
+  IntegrationConnection connection = 1;
+}
+
+message PersonalIntegrationConnection {
+  string connection_ref = 1;
+  int64 connection_version = 2;
+  string name = 3;
+  string definition_key = 4;
+  IntegrationCredentialPolicy policy = 5;
+  bool enabled = 6;
+  // Отсутствует до явного создания собственной привязки, не скрытый shared fallback.
+  PersonalIntegrationCredentialView credential = 7;
+  // Недоступный adapter не скрывает собственную сохранённую привязку для отзыва.
+  bool available = 8;
+}
+message ListPersonalIntegrationConnectionsRequest {
+  PageRequest page = 1;
+  string query = 2;
+}
+message ListPersonalIntegrationConnectionsResponse {
+  repeated PersonalIntegrationConnection connections = 1;
+  PageInfo page = 2;
+}
+
+message TestPersonalIntegrationCredentialRequest {
+  MutationContext mutation = 1;
+  string connection_ref = 2;
+  int64 expected_connection_version = 3;
+}
+message TestPersonalIntegrationCredentialResponse {
+  PersonalIntegrationCredentialView credential = 1;
+}
+message ClaimPersonalIntegrationCredentialTestsRequest {
+  string workload_instance = 1;
+  int32 limit = 2;
+}
+message ClaimPersonalIntegrationCredentialTestsResponse {
+  repeated IntegrationConnectionTestClaim claims = 1;
+}
+message BeginPersonalIntegrationCredentialProbeRequest {
+  string test_ref = 1;
+  string lease_ref = 2;
+  string fence = 3;
+  int64 generation = 4;
+}
+message BeginPersonalIntegrationCredentialProbeResponse {
+  bool admitted = 1;
+}
+enum PersonalIntegrationCredentialTestResult {
+  PERSONAL_INTEGRATION_CREDENTIAL_TEST_RESULT_UNSPECIFIED = 0;
+  PERSONAL_INTEGRATION_CREDENTIAL_TEST_RESULT_AUTHENTICATED = 1;
+  PERSONAL_INTEGRATION_CREDENTIAL_TEST_RESULT_AUTH_REJECTED = 2;
+  PERSONAL_INTEGRATION_CREDENTIAL_TEST_RESULT_UNAVAILABLE = 3;
+}
+message CompletePersonalIntegrationCredentialTestRequest {
+  MutationContext mutation = 1;
+  string test_ref = 2;
+  string lease_ref = 3;
+  string fence = 4;
+  int64 generation = 5;
+  PersonalIntegrationCredentialTestResult result = 6;
+  // Фактически выполненные registered READ probes; owner сверяет keys с immutable job snapshot.
+  repeated string confirmed_capability_keys = 7;
+  // Наблюдённые отказы READ либо запрошенных write metadata; неизвестные права отсутствуют.
+  repeated string denied_capability_keys = 8;
+  repeated PersonalIntegrationCredentialObservationProfile observed_permission_profiles = 9;
+  // Только фактически наблюдённый provider expiry; отсутствие не означает бессрочность.
+  google.protobuf.Timestamp expires_at = 10;
+}
+message CompletePersonalIntegrationCredentialTestResponse {
+  string test_ref = 1;
+  string state = 2;
+  bool applied = 3;
+}
+
+// Полный безопасный список причин отказа до создания session/run. Не выдаёт execution authority.
+enum IntegrationCredentialPreflightProblem {
+  INTEGRATION_CREDENTIAL_PREFLIGHT_PROBLEM_UNSPECIFIED = 0;
+  INTEGRATION_CREDENTIAL_PREFLIGHT_PROBLEM_CREDENTIAL_MISSING = 1;
+  INTEGRATION_CREDENTIAL_PREFLIGHT_PROBLEM_CREDENTIAL_CHECK_REQUIRED = 2;
+  INTEGRATION_CREDENTIAL_PREFLIGHT_PROBLEM_CREDENTIAL_INVALID = 3;
+  INTEGRATION_CREDENTIAL_PREFLIGHT_PROBLEM_CREDENTIAL_INSUFFICIENT = 4;
+  INTEGRATION_CREDENTIAL_PREFLIGHT_PROBLEM_CREDENTIAL_PERMISSION_UNCONFIRMED = 5;
+  INTEGRATION_CREDENTIAL_PREFLIGHT_PROBLEM_CREDENTIAL_EXPIRED = 6;
+  INTEGRATION_CREDENTIAL_PREFLIGHT_PROBLEM_CREDENTIAL_REVOKED = 7;
+  INTEGRATION_CREDENTIAL_PREFLIGHT_PROBLEM_CREDENTIAL_INITIATOR_REQUIRED = 8;
+  INTEGRATION_CREDENTIAL_PREFLIGHT_PROBLEM_CREDENTIAL_CONNECTION_UNAVAILABLE = 9;
+}
+message IntegrationCredentialPreflightIssue {
+  string connection_ref = 1;
+  string capability_key = 2;
+  IntegrationCredentialPreflightProblem problem = 3;
+  string connection_name = 4;
+}
+message IntegrationCredentialPreflightDetail {
+  repeated IntegrationCredentialPreflightIssue issues = 1;
 }

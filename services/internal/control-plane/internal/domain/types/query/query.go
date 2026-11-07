@@ -12,6 +12,15 @@ type Page struct {
 	Token string
 }
 
+// PersonalIntegrationConnectionFilter selects a bounded self catalog. It has no tenant, project,
+// user or credential selector; current resource eligibility is resolved again for every page.
+// PersonalIntegrationConnectionFilter выбирает ограниченный собственный каталог. Tenant, project,
+// user либо credential selector отсутствуют; текущая доступность заново проверяется на каждой странице.
+type PersonalIntegrationConnectionFilter struct {
+	Query string
+	Page  Page
+}
+
 // AssistantConversationFilter extends the common resource filters with an
 // assistant scope and reference for listing eligible conversations.
 // AssistantConversationFilter дополняет общие условия областью и ссылкой

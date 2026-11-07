@@ -17,9 +17,9 @@ import (
 	"github.com/getkin/kin-openapi/routers/legacy"
 )
 
-// atlassianProviderContract reads only the repository-owned documented subset and disables external references.
-// atlassianProviderContract читает только repo-owned documented subset и запрещает внешние ссылки.
-func atlassianProviderContract(t *testing.T, key string) ([]byte, *openapi3.T) {
+// documentedProviderContract reads only the repository-owned documented subset and disables external references.
+// documentedProviderContract читает только repo-owned documented subset и запрещает внешние ссылки.
+func documentedProviderContract(t *testing.T, key string) ([]byte, *openapi3.T) {
 	t.Helper()
 	path := filepath.Join("..", "..", "..", "..", "..", "contracts", "integrations", "providers", key, "v1", "openapi.yaml")
 	raw, err := os.ReadFile(path)
@@ -40,16 +40,32 @@ func atlassianProviderContract(t *testing.T, key string) ([]byte, *openapi3.T) {
 func TestAtlassianProviderContractsMatchDefinitions(t *testing.T) {
 	for _, key := range []string{jiraServerDefinition, confluenceServerDefinition} {
 		t.Run(key, func(t *testing.T) {
-			raw, _ := atlassianProviderContract(t, key)
+			raw, _ := documentedProviderContract(t, key)
 			inspection, err := integrationpackage.InspectOpenAPI(t.Context(), raw)
 			if err != nil {
 				t.Fatal(err)
 			}
 			definition := serverDefinitionFixture(t, key)
-			if len(inspection.Operations) != len(definition.Spec.Capabilities) {
+			internalPrerequisites := 0
+			if key == jiraServerDefinition {
+				internalPrerequisites = 3
+			}
+			if len(inspection.Operations) != len(definition.Spec.Capabilities)+internalPrerequisites {
 				t.Fatal("provider/package operation coverage differs")
 			}
 			for _, operation := range inspection.Operations {
+				if key == jiraServerDefinition && operation.ID == "jira.permissions.read" && operation.Method == "GET" && operation.Path == "/rest/api/2/mypermissions" {
+					if _, exposed := definition.Capability(operation.ID); exposed {
+						t.Fatal("internal permission prerequisite became a user tool")
+					}
+					continue
+				}
+				if key == jiraServerDefinition && ((operation.ID == "jira.recovery.comments.read" && operation.Path == "/rest/api/2/issue/{issueKey}/comment") || (operation.ID == "jira.recovery.comment.read" && operation.Path == "/rest/api/2/issue/{issueKey}/comment/{commentId}")) && operation.Method == "GET" {
+					if _, exposed := definition.Capability(operation.ID); exposed {
+						t.Fatal("recovery prerequisite became an agent tool")
+					}
+					continue
+				}
 				if _, found := definition.Capability(operation.ID); !found {
 					t.Fatalf("unmapped provider operation: %s", operation.ID)
 				}
@@ -67,7 +83,7 @@ func validateAtlassianWireRequest(t *testing.T, invocation Request, request *htt
 	if request.Method != http.MethodGet && request.GetBody != nil {
 		t.Fatal("native mutation transport replay is enabled")
 	}
-	_, document := atlassianProviderContract(t, invocation.DefinitionKey)
+	_, document := documentedProviderContract(t, invocation.DefinitionKey)
 	router, err := legacy.NewRouter(document)
 	if err != nil {
 		t.Fatal(err)

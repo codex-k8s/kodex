@@ -55,7 +55,7 @@ func TestValidateIntegrationConfigurationUsesClosedTypedSchema(t *testing.T) {
 // явным правам управления и разрешений и состоянию подключения, тестирования либо отключения.
 func TestConnectionActionsAreServerOwnedAndPermissionAware(t *testing.T) {
 	t.Parallel()
-	connected := entity.IntegrationConnection{Enabled: true, State: "CONNECTED", MaskedCredentialsState: "CONFIGURED", CredentialSecretKey: "token"}
+	connected := entity.IntegrationConnection{CredentialPolicy: entity.IntegrationCredentialProjectShared, Enabled: true, State: "CONNECTED", MaskedCredentialsState: "CONFIGURED", CredentialSecretKey: "token"}
 	if got := connectionActions(connected, false, false); !reflect.DeepEqual(got, []string{"OPEN"}) {
 		t.Fatalf("read-only actor received mutation actions: %v", got)
 	}
@@ -149,7 +149,7 @@ func TestManagedMailboxCredentialActionsKeepOwnerBoundary(t *testing.T) {
 	}{
 		{"READY", true, true, true}, {"READY", true, false, false}, {"TESTING", true, true, false}, {"DISABLED", false, true, false},
 	} {
-		item := entity.IntegrationConnection{DefinitionKey: "email", State: scenario.state, Enabled: scenario.enabled}
+		item := entity.IntegrationConnection{CredentialPolicy: entity.IntegrationCredentialProjectShared, DefinitionKey: "email", State: scenario.state, Enabled: scenario.enabled}
 		found := false
 		for _, action := range connectionActions(item, scenario.manage, true) {
 			if action == "CONFIGURE_CREDENTIAL" {

@@ -1,6 +1,8 @@
+import { isRecord } from "@/shared/lib/exact-object";
 import type {
   Problem,
   PromptTemplateDiagnostic,
+  IntegrationCredentialPreflightIssue,
 } from "@/shared/api/generated/openapi/types.gen";
 import {
   assertOwnerRequest,
@@ -30,6 +32,7 @@ export class AppProblem extends Error {
   readonly detail?: string;
   readonly retryAfterSeconds?: number;
   readonly diagnostics: readonly PromptTemplateDiagnostic[];
+  readonly integrationCredentialIssues: readonly IntegrationCredentialPreflightIssue[];
 
   constructor(value: {
     status: number;
@@ -41,6 +44,7 @@ export class AppProblem extends Error {
     detail?: string;
     retryAfterSeconds?: number;
     diagnostics?: readonly PromptTemplateDiagnostic[];
+    integrationCredentialIssues?: readonly IntegrationCredentialPreflightIssue[];
   }) {
     super(value.code);
     this.name = "AppProblem";
@@ -53,6 +57,9 @@ export class AppProblem extends Error {
     this.detail = value.detail;
     this.retryAfterSeconds = value.retryAfterSeconds;
     this.diagnostics = value.diagnostics ?? [];
+    this.integrationCredentialIssues = (
+      value.integrationCredentialIssues ?? []
+    ).map((issue) => ({ ...issue }));
   }
 }
 
@@ -151,6 +158,69 @@ function promptDiagnostics(value: unknown): PromptTemplateDiagnostic[] {
   return valid ? diagnostics : [];
 }
 
+const integrationCredentialProblemCodes = new Set<string>([
+  "CREDENTIAL_MISSING",
+  "CREDENTIAL_CHECK_REQUIRED",
+  "CREDENTIAL_INVALID",
+  "CREDENTIAL_INSUFFICIENT",
+  "CREDENTIAL_PERMISSION_UNCONFIRMED",
+  "CREDENTIAL_EXPIRED",
+  "CREDENTIAL_REVOKED",
+  "CREDENTIAL_INITIATOR_REQUIRED",
+  "CREDENTIAL_CONNECTION_UNAVAILABLE",
+]);
+
+function integrationCredentialIssues(
+  value: unknown,
+): IntegrationCredentialPreflightIssue[] | undefined {
+  if (
+    !isRecord(value) ||
+    !isUnknownArray(value.integrationCredentialIssues) ||
+    value.integrationCredentialIssues.length < 1 ||
+    value.integrationCredentialIssues.length > 256
+  )
+    return undefined;
+  const result: IntegrationCredentialPreflightIssue[] = [];
+  const seen = new Set<string>();
+  for (const item of value.integrationCredentialIssues) {
+    if (
+      !isRecord(item) ||
+      Object.keys(item).some(
+        (key) =>
+          ![
+            "connectionRef",
+            "connectionName",
+            "capabilityKey",
+            "problem",
+          ].includes(key),
+      ) ||
+      typeof item.connectionRef !== "string" ||
+      !/^[A-Za-z0-9_-]{8,96}$/.test(item.connectionRef) ||
+      typeof item.capabilityKey !== "string" ||
+      !/^[A-Za-z0-9_.:-]{1,256}$/.test(item.capabilityKey) ||
+      typeof item.problem !== "string" ||
+      !integrationCredentialProblemCodes.has(item.problem) ||
+      (item.connectionName !== undefined &&
+        (typeof item.connectionName !== "string" ||
+          Array.from(item.connectionName).length > 200 ||
+          /[\r\n\0]/.test(item.connectionName)))
+    )
+      return undefined;
+    const key = `${item.connectionRef}:${item.capabilityKey}`;
+    if (seen.has(key)) return undefined;
+    seen.add(key);
+    result.push({
+      connectionRef: item.connectionRef,
+      capabilityKey: item.capabilityKey,
+      problem: item.problem as IntegrationCredentialPreflightIssue["problem"],
+      ...(typeof item.connectionName === "string" && item.connectionName
+        ? { connectionName: item.connectionName }
+        : {}),
+    });
+  }
+  return result;
+}
+
 export function normalizeProblem(
   value: unknown,
   response?: Response,
@@ -161,6 +231,24 @@ export function normalizeProblem(
       : (response?.status ?? 0);
   const code =
     isProblem(value) && typeof value.code === "string" ? value.code : "UNKNOWN";
+  const credentialIssues =
+    code === "INTEGRATION_CREDENTIALS_REQUIRED"
+      ? integrationCredentialIssues(value)
+      : [];
+  if (
+    code === "INTEGRATION_CREDENTIALS_REQUIRED" &&
+    (status !== 409 ||
+      (response && response.status !== 409) ||
+      !credentialIssues ||
+      !isRecord(value) ||
+      value.retryable !== false)
+  )
+    return new AppProblem({
+      status: 502,
+      code: "INVALID_UPSTREAM_RESPONSE",
+      retryable: false,
+      kind: "unavailable",
+    });
   const correlationId =
     isProblem(value) && typeof value.correlationId === "string"
       ? value.correlationId
@@ -209,6 +297,7 @@ export function normalizeProblem(
     ...(title ? { title } : {}),
     ...(detail ? { detail } : {}),
     diagnostics: promptDiagnostics(value),
+    integrationCredentialIssues: credentialIssues,
   });
 }
 

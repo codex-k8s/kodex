@@ -421,7 +421,10 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/ProjectPurgeRecoveryResolutionInput" }
+            schema:
+              {
+                $ref: "#/components/schemas/ProjectPurgeRecoveryResolutionInput",
+              }
       responses:
         "202":
           description: Решение сохранено; фоновая очистка продолжится отдельно
@@ -3426,14 +3429,55 @@ paths:
       tags: [RoleEnvironments]
       operationId: getOrganizationImageVulnerabilityReport
       description: Human OWNER/ADMIN читает полную безопасную owner projection. Исторический artifact без typed report возвращает UNAVAILABLE, без backfill либо side effects.
-      parameters: [{"$ref":"#/components/parameters/RecipeRef"},{"$ref":"#/components/parameters/ArtifactRef"},{"$ref":"#/components/parameters/PageSize"},{"$ref":"#/components/parameters/PageToken"},{"name":"packageQuery","in":"query","required":false,"schema":{"type":"string","minLength":0,"maxLength":160}},{"name":"severity","in":"query","required":false,"schema":{"$ref":"#/components/schemas/ImageVulnerabilitySeverity"}},{"name":"advisoryQuery","in":"query","required":false,"schema":{"type":"string","minLength":0,"maxLength":160}},{"name":"blockingOnly","in":"query","required":false,"schema":{"type":"boolean"}},{"name":"expectedReportSha256","in":"query","required":false,"schema":{"type":"string","pattern":"^[a-f0-9]{64}$"}}]
+      parameters:
+        [
+          { "$ref": "#/components/parameters/RecipeRef" },
+          { "$ref": "#/components/parameters/ArtifactRef" },
+          { "$ref": "#/components/parameters/PageSize" },
+          { "$ref": "#/components/parameters/PageToken" },
+          {
+            "name": "packageQuery",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "minLength": 0, "maxLength": 160 },
+          },
+          {
+            "name": "severity",
+            "in": "query",
+            "required": false,
+            "schema":
+              { "$ref": "#/components/schemas/ImageVulnerabilitySeverity" },
+          },
+          {
+            "name": "advisoryQuery",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "minLength": 0, "maxLength": 160 },
+          },
+          {
+            "name": "blockingOnly",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "boolean" },
+          },
+          {
+            "name": "expectedReportSha256",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          },
+        ]
       responses:
         "200":
           description: Exact report page, включая все severity и suppressed occurrences
-          headers: { Cache-Control: { schema: { type: string, enum: [no-store] } } }
+          headers:
+            { Cache-Control: { schema: { type: string, enum: [no-store] } } }
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/ImageVulnerabilityReportResponse" }
+              schema:
+                {
+                  $ref: "#/components/schemas/ImageVulnerabilityReportResponse",
+                }
         default: { $ref: "#/components/responses/Problem" }
 
   /api/v1/organization/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/risk-decision:
@@ -3441,19 +3485,30 @@ paths:
       tags: [RoleEnvironments]
       operationId: decideOrganizationImageAdmissionRisk
       description: Только explicit human OWNER/ADMIN. ACCEPT_RISK создаёт immutable decision и новую PENDING attempt, не меняет старый REJECTED receipt и не отменяет technical guards. PROJECT locator не заменяет административные полномочия.
-      parameters: [{"$ref":"#/components/parameters/RecipeRef"},{"$ref":"#/components/parameters/ArtifactRef"},{"$ref":"#/components/parameters/IfMatch"},{"$ref":"#/components/parameters/IdempotencyKey"},{"$ref":"#/components/parameters/CsrfToken"}]
+      parameters:
+        [
+          { "$ref": "#/components/parameters/RecipeRef" },
+          { "$ref": "#/components/parameters/ArtifactRef" },
+          { "$ref": "#/components/parameters/IfMatch" },
+          { "$ref": "#/components/parameters/IdempotencyKey" },
+          { "$ref": "#/components/parameters/CsrfToken" },
+        ]
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/ImageAdmissionRiskDecisionInput" }
+            schema:
+              { $ref: "#/components/schemas/ImageAdmissionRiskDecisionInput" }
       responses:
         "200":
           description: Durable immutable decision receipt и свежий owner artifact
           headers: { ETag: { $ref: "#/components/headers/ETag" } }
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/ImageAdmissionRiskDecisionResponse" }
+              schema:
+                {
+                  $ref: "#/components/schemas/ImageAdmissionRiskDecisionResponse",
+                }
         default: { $ref: "#/components/responses/Problem" }
 
   /api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/vulnerability-report:
@@ -3461,14 +3516,56 @@ paths:
       tags: [RoleEnvironments]
       operationId: getImageVulnerabilityReport
       description: Human OWNER/ADMIN читает полную безопасную owner projection. Исторический artifact без typed report возвращает UNAVAILABLE, без backfill либо side effects.
-      parameters: [{"$ref":"#/components/parameters/ProjectRef"},{"$ref":"#/components/parameters/RecipeRef"},{"$ref":"#/components/parameters/ArtifactRef"},{"$ref":"#/components/parameters/PageSize"},{"$ref":"#/components/parameters/PageToken"},{"name":"packageQuery","in":"query","required":false,"schema":{"type":"string","minLength":0,"maxLength":160}},{"name":"severity","in":"query","required":false,"schema":{"$ref":"#/components/schemas/ImageVulnerabilitySeverity"}},{"name":"advisoryQuery","in":"query","required":false,"schema":{"type":"string","minLength":0,"maxLength":160}},{"name":"blockingOnly","in":"query","required":false,"schema":{"type":"boolean"}},{"name":"expectedReportSha256","in":"query","required":false,"schema":{"type":"string","pattern":"^[a-f0-9]{64}$"}}]
+      parameters:
+        [
+          { "$ref": "#/components/parameters/ProjectRef" },
+          { "$ref": "#/components/parameters/RecipeRef" },
+          { "$ref": "#/components/parameters/ArtifactRef" },
+          { "$ref": "#/components/parameters/PageSize" },
+          { "$ref": "#/components/parameters/PageToken" },
+          {
+            "name": "packageQuery",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "minLength": 0, "maxLength": 160 },
+          },
+          {
+            "name": "severity",
+            "in": "query",
+            "required": false,
+            "schema":
+              { "$ref": "#/components/schemas/ImageVulnerabilitySeverity" },
+          },
+          {
+            "name": "advisoryQuery",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "minLength": 0, "maxLength": 160 },
+          },
+          {
+            "name": "blockingOnly",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "boolean" },
+          },
+          {
+            "name": "expectedReportSha256",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          },
+        ]
       responses:
         "200":
           description: Exact report page, включая все severity и suppressed occurrences
-          headers: { Cache-Control: { schema: { type: string, enum: [no-store] } } }
+          headers:
+            { Cache-Control: { schema: { type: string, enum: [no-store] } } }
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/ImageVulnerabilityReportResponse" }
+              schema:
+                {
+                  $ref: "#/components/schemas/ImageVulnerabilityReportResponse",
+                }
         default: { $ref: "#/components/responses/Problem" }
 
   /api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/risk-decision:
@@ -3476,19 +3573,31 @@ paths:
       tags: [RoleEnvironments]
       operationId: decideImageAdmissionRisk
       description: Только explicit human OWNER/ADMIN. ACCEPT_RISK создаёт immutable decision и новую PENDING attempt, не меняет старый REJECTED receipt и не отменяет technical guards. PROJECT locator не заменяет административные полномочия.
-      parameters: [{"$ref":"#/components/parameters/ProjectRef"},{"$ref":"#/components/parameters/RecipeRef"},{"$ref":"#/components/parameters/ArtifactRef"},{"$ref":"#/components/parameters/IfMatch"},{"$ref":"#/components/parameters/IdempotencyKey"},{"$ref":"#/components/parameters/CsrfToken"}]
+      parameters:
+        [
+          { "$ref": "#/components/parameters/ProjectRef" },
+          { "$ref": "#/components/parameters/RecipeRef" },
+          { "$ref": "#/components/parameters/ArtifactRef" },
+          { "$ref": "#/components/parameters/IfMatch" },
+          { "$ref": "#/components/parameters/IdempotencyKey" },
+          { "$ref": "#/components/parameters/CsrfToken" },
+        ]
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/ImageAdmissionRiskDecisionInput" }
+            schema:
+              { $ref: "#/components/schemas/ImageAdmissionRiskDecisionInput" }
       responses:
         "200":
           description: Durable immutable decision receipt и свежий owner artifact
           headers: { ETag: { $ref: "#/components/headers/ETag" } }
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/ImageAdmissionRiskDecisionResponse" }
+              schema:
+                {
+                  $ref: "#/components/schemas/ImageAdmissionRiskDecisionResponse",
+                }
         default: { $ref: "#/components/responses/Problem" }
 
   /api/v1/organization/runtime-secrets:
@@ -4094,16 +4203,23 @@ paths:
           schema: { type: integer, minimum: 1, maximum: 32, default: 16 }
         - name: expectedVersion
           in: query
-          schema: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+          schema:
+            {
+              type: integer,
+              format: int64,
+              minimum: 1,
+              maximum: 9007199254740991,
+            }
         - name: expectedManifestSha256
           in: query
-          schema: { type: string, pattern: '^[0-9a-f]{64}$' }
+          schema: { type: string, pattern: "^[0-9a-f]{64}$" }
       responses:
         "200":
           description: Manifest page до 24 КиБ с явной полнотой
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/RepositoryBundleManifestPage" }
+              schema:
+                { $ref: "#/components/schemas/RepositoryBundleManifestPage" }
         default: { $ref: "#/components/responses/Problem" }
   /api/v1/owner-gates/{gateRef}/resolution:
     post:
@@ -4787,6 +4903,167 @@ paths:
               schema: { $ref: "#/components/schemas/Schedule" }
         default: { $ref: "#/components/responses/Problem" }
 
+  /api/v1/integration-connections/{connectionRef}/credential-policy:
+    put:
+      tags: [Integrations]
+      operationId: setIntegrationCredentialPolicy
+      description: >-
+        Меняет только явную политику выбора credential при наличии права управления
+        подключением. Смена требует отключённого подключения без активных grants,
+        незавершённых внешних действий и активных зависимых корней. Личные ключи не копируются.
+      parameters:
+        - { $ref: "#/components/parameters/ConnectionRef" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/IfMatch" }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: "#/components/schemas/IntegrationCredentialPolicyInput" }
+      responses:
+        "200":
+          description: Подключение с сохранённой политикой
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IntegrationConnection" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /api/v1/me/integration-connections:
+    get:
+      tags: [Integrations]
+      operationId: listPersonalIntegrationConnections
+      description: >-
+        Видимые текущему пользователю подключения с собственными optional bindings.
+        Shared credentials не возвращаются. Чтение не создаёт личных привязок;
+        курсор не заменяет новую проверку доступа на каждой странице.
+      parameters:
+        - { $ref: "#/components/parameters/Query" }
+        - { $ref: "#/components/parameters/PageSize" }
+        - { $ref: "#/components/parameters/PageToken" }
+      responses:
+        "200":
+          description: Ограниченная страница личных подключений
+          content:
+            application/json:
+              schema:
+                {
+                  $ref: "#/components/schemas/PersonalIntegrationConnectionList",
+                }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /api/v1/me/integration-connections/{connectionRef}/credential:
+    get:
+      tags: [Integrations]
+      operationId: getPersonalIntegrationCredential
+      description: Только собственная привязка текущей серверной identity; значение ключа не возвращается.
+      parameters:
+        - { $ref: "#/components/parameters/ConnectionRef" }
+      responses:
+        "200":
+          description: Безопасное состояние собственного подключения
+          content:
+            application/json:
+              schema:
+                { $ref: "#/components/schemas/PersonalIntegrationCredential" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [Integrations]
+      operationId: createPersonalIntegrationCredential
+      parameters:
+        - { $ref: "#/components/parameters/ConnectionRef" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              {
+                $ref: "#/components/schemas/PersonalIntegrationCredentialCreateInput",
+              }
+      responses:
+        "201":
+          description: Пустая собственная привязка; credential ещё не записана
+          content:
+            application/json:
+              schema:
+                { $ref: "#/components/schemas/PersonalIntegrationCredential" }
+        default: { $ref: "#/components/responses/Problem" }
+    put:
+      tags: [Integrations]
+      operationId: configurePersonalIntegrationCredential
+      parameters:
+        - { $ref: "#/components/parameters/ConnectionRef" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/IfMatch" }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              {
+                $ref: "#/components/schemas/PersonalIntegrationCredentialConfigureInput",
+              }
+      responses:
+        "200":
+          description: Собственная credential записана без повторного раскрытия значения; требуется проверка
+          content:
+            application/json:
+              schema:
+                { $ref: "#/components/schemas/PersonalIntegrationCredential" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/me/integration-connections/{connectionRef}/credential/test:
+    post:
+      tags: [Integrations]
+      operationId: testPersonalIntegrationCredential
+      description: Только bounded READ health проверка собственной текущей revision; права записи не подтверждаются автоматически.
+      parameters:
+        - { $ref: "#/components/parameters/ConnectionRef" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/IfMatch" }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PersonalIntegrationCredentialCreateInput" }
+      responses:
+        "200":
+          description: Проверка поставлена в очередь; результат читается собственной безопасной проекцией
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PersonalIntegrationCredential" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /api/v1/me/integration-connections/{connectionRef}/credential/revoke:
+    post:
+      tags: [Integrations]
+      operationId: revokePersonalIntegrationCredential
+      description: Отзывает только собственную привязку; ранее начатые эффекты сохраняют receipt lifecycle.
+      parameters:
+        - { $ref: "#/components/parameters/ConnectionRef" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/IfMatch" }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              {
+                $ref: "#/components/schemas/PersonalIntegrationCredentialRevokeInput",
+              }
+      responses:
+        "200":
+          description: Новые вызовы с собственной credential закрыты; история сохранена
+          content:
+            application/json:
+              schema:
+                { $ref: "#/components/schemas/PersonalIntegrationCredential" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/v1/integration-definitions:
     get:
       tags: [Integrations]
@@ -5239,7 +5516,12 @@ paths:
       operationId: getSystemAssistantIntegrationGrantCandidates
       description: Exact общесистемный помощник назначается сервером; только активный владелец или администратор организации.
       parameters:
-        - { name: connectionRef, in: query, required: true, schema: { $ref: "#/components/schemas/OpaqueRef" } }
+        - {
+            name: connectionRef,
+            in: query,
+            required: true,
+            schema: { $ref: "#/components/schemas/OpaqueRef" },
+          }
         - { $ref: "#/components/parameters/Query" }
         - { $ref: "#/components/parameters/PageSize" }
         - { $ref: "#/components/parameters/PageToken" }
@@ -5248,7 +5530,10 @@ paths:
           description: Безопасные capabilities и точные server-owned grant pins
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/SystemAssistantIntegrationGrantCandidates" }
+              schema:
+                {
+                  $ref: "#/components/schemas/SystemAssistantIntegrationGrantCandidates",
+                }
         default: { $ref: "#/components/responses/Problem" }
   /api/v1/projects/{projectRef}/assistant/integration-grant-candidates:
     get:
@@ -5257,7 +5542,12 @@ paths:
       description: Собственный PROJECT помощник и origin подключения разрешаются сервером; каталог не требует существующего grant.
       parameters:
         - { $ref: "#/components/parameters/ProjectRef" }
-        - { name: connectionRef, in: query, required: true, schema: { $ref: "#/components/schemas/OpaqueRef" } }
+        - {
+            name: connectionRef,
+            in: query,
+            required: true,
+            schema: { $ref: "#/components/schemas/OpaqueRef" },
+          }
         - { $ref: "#/components/parameters/Query" }
         - { $ref: "#/components/parameters/PageSize" }
         - { $ref: "#/components/parameters/PageToken" }
@@ -5266,7 +5556,10 @@ paths:
           description: Exact профиль, подключение и capability policy
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/ProjectAssistantIntegrationGrantCandidates" }
+              schema:
+                {
+                  $ref: "#/components/schemas/ProjectAssistantIntegrationGrantCandidates",
+                }
         default: { $ref: "#/components/responses/Problem" }
   /api/v1/system-assistant/integration-grants:
     put:
@@ -5281,7 +5574,10 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/SystemAssistantIntegrationGrantInput" }
+            schema:
+              {
+                $ref: "#/components/schemas/SystemAssistantIntegrationGrantInput",
+              }
       responses:
         "200":
           description: Selected policy сохранена и аудирована в точном grant; активный effect блокирует изменение policy
@@ -9311,12 +9607,29 @@ components:
         retryable: { type: boolean }
         actualVersion: { type: integer, format: int64, minimum: 1 }
         winnerSummary: { type: string, maxLength: 300 }
+        integrationCredentialIssues:
+          type: array
+          minItems: 1
+          maxItems: 256
+          description: Полный список проблем личных подключений при INTEGRATION_CREDENTIALS_REQUIRED; отказ предшествует созданию session/run и не разрешает повтор внешнего действия.
+          items: { $ref: "#/components/schemas/IntegrationCredentialPreflightIssue" }
         diagnostics:
           {
             type: array,
             maxItems: 100,
             items: { $ref: "#/components/schemas/PromptTemplateDiagnostic" },
           }
+    IntegrationCredentialPreflightIssue:
+      type: object
+      additionalProperties: false
+      required: [connectionRef, capabilityKey, problem]
+      properties:
+        connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        connectionName: { type: string, maxLength: 200 }
+        capabilityKey: { type: string, minLength: 1, maxLength: 256, pattern: "^[A-Za-z0-9_.:-]+$" }
+        problem:
+          type: string
+          enum: [CREDENTIAL_MISSING, CREDENTIAL_CHECK_REQUIRED, CREDENTIAL_INVALID, CREDENTIAL_INSUFFICIENT, CREDENTIAL_PERMISSION_UNCONFIRMED, CREDENTIAL_EXPIRED, CREDENTIAL_REVOKED, CREDENTIAL_INITIATOR_REQUIRED, CREDENTIAL_CONNECTION_UNAVAILABLE]
     SpeechRateLimitProblem:
       allOf:
         - { $ref: "#/components/schemas/Problem" }
@@ -11213,20 +11526,51 @@ components:
       type: object
       additionalProperties: false
       description: Авторитетный снимок surviving purge receipt. Версия относится к восстановлению, а не к удалённому проекту. Не содержит имён файлов, ключей хранилища и содержимого.
-      required: [projectRef, version, snapshotDigest, state, unknownContentCount, cleanupPendingCount, projectPresent, canResolve, resolutionRef, projectVersion]
+      required:
+        [
+          projectRef,
+          version,
+          snapshotDigest,
+          state,
+          unknownContentCount,
+          cleanupPendingCount,
+          projectPresent,
+          canResolve,
+          resolutionRef,
+          projectVersion,
+        ]
       properties:
         projectRef: { $ref: "#/components/schemas/OpaqueRef" }
-        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        version:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
         snapshotDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
         state:
           type: string
-          enum: [WAITING_OWNER, QUEUED, OBSERVING, DELETED_CONFIRMED, NONE, BLOCKED]
+          enum:
+            [WAITING_OWNER, QUEUED, OBSERVING, DELETED_CONFIRMED, NONE, BLOCKED]
         unknownContentCount: { type: integer, format: int32, minimum: 0 }
         cleanupPendingCount: { type: integer, format: int32, minimum: 0 }
         projectPresent: { type: boolean }
         canResolve: { type: boolean }
-        resolutionRef: { type: string, maxLength: 96, description: Непрозрачная ссылка решения; пуста до принятия решения. }
-        projectVersion: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991, description: Ноль после удаления проекта; не используется в If-Match восстановления. }
+        resolutionRef:
+          {
+            type: string,
+            maxLength: 96,
+            description: Непрозрачная ссылка решения; пуста до принятия решения.,
+          }
+        projectVersion:
+          {
+            type: integer,
+            format: int64,
+            minimum: 0,
+            maximum: 9007199254740991,
+            description: Ноль после удаления проекта; не используется в If-Match восстановления.,
+          }
     ProjectPurgeRecoveryResolutionInput:
       type: object
       additionalProperties: false
@@ -12675,7 +13019,8 @@ components:
       additionalProperties: false
       required: [maxBytes, maxFiles]
       properties:
-        maxBytes: { type: integer, format: int64, minimum: 1, maximum: 1073741824 }
+        maxBytes:
+          { type: integer, format: int64, minimum: 1, maximum: 1073741824 }
         maxFiles: { type: integer, format: int64, minimum: 1, maximum: 100000 }
     RuntimeVolumeInput:
       type: object
@@ -12982,7 +13327,15 @@ components:
       type: object
       additionalProperties: false
       required:
-        [environmentRef, environmentVersion, projectRef, scopeKind, organizationRef, versionRef, digest]
+        [
+          environmentRef,
+          environmentVersion,
+          projectRef,
+          scopeKind,
+          organizationRef,
+          versionRef,
+          digest,
+        ]
       properties:
         environmentRef: { $ref: "#/components/schemas/OpaqueRef" }
         environmentVersion:
@@ -14523,16 +14876,42 @@ components:
           }
         activeArtifact: { $ref: "#/components/schemas/RoleImageArtifact" }
         promotionCandidate: { $ref: "#/components/schemas/RoleImageArtifact" }
-        admissionFailure: { $ref: "#/components/schemas/RoleImageAdmissionFailure" }
+        admissionFailure:
+          { $ref: "#/components/schemas/RoleImageAdmissionFailure" }
     RoleImageAdmissionFailure:
       type: object
       additionalProperties: false
-      required: [imageArtifactRef, version, recipeRef, recipeGeneration, buildRef, buildAttempt, scopeKind, organizationRef, projectRef, state, errorCode]
+      required:
+        [
+          imageArtifactRef,
+          version,
+          recipeRef,
+          recipeGeneration,
+          buildRef,
+          buildAttempt,
+          scopeKind,
+          organizationRef,
+          projectRef,
+          state,
+          errorCode,
+        ]
       properties:
         imageArtifactRef: { $ref: "#/components/schemas/OpaqueRef" }
-        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        version:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
         recipeRef: { $ref: "#/components/schemas/OpaqueRef" }
-        recipeGeneration: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        recipeGeneration:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
         buildRef: { $ref: "#/components/schemas/OpaqueRef" }
         buildAttempt: { type: integer, minimum: 1, maximum: 10 }
         scopeKind: { $ref: "#/components/schemas/RuntimeResourceScopeKind" }
@@ -14541,189 +14920,680 @@ components:
         state: { type: string, enum: [FAILED] }
         errorCode:
           type: string
-          enum: [ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND, ADMISSION_EVIDENCE_EXCEEDS_BOUND, ADMISSION_WORKER_FAILED, ADMISSION_LEASE_EXPIRED]
+          enum:
+            [
+              ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND,
+              ADMISSION_EVIDENCE_EXCEEDS_BOUND,
+              ADMISSION_WORKER_FAILED,
+              ADMISSION_LEASE_EXPIRED,
+            ]
     ImageVulnerabilitySeverity:
       type: "string"
-      enum: ["CRITICAL","HIGH","MEDIUM","LOW","NEGLIGIBLE","UNKNOWN"]
+      enum: ["CRITICAL", "HIGH", "MEDIUM", "LOW", "NEGLIGIBLE", "UNKNOWN"]
       description: "Закрытое значение; неизвестное не даёт новых полномочий."
     ImageVulnerabilityAdvisoryKind:
       type: "string"
-      enum: ["CVE","GHSA","GO","OTHER"]
+      enum: ["CVE", "GHSA", "GO", "OTHER"]
       description: "Закрытое значение; неизвестное не даёт новых полномочий."
     ImageVulnerabilityFixState:
       type: "string"
-      enum: ["FIXED","NOT_FIXED","WONT_FIX","UNKNOWN"]
+      enum: ["FIXED", "NOT_FIXED", "WONT_FIX", "UNKNOWN"]
       description: "Закрытое значение; неизвестное не даёт новых полномочий."
     ImageVulnerabilityReportState:
       type: "string"
-      enum: ["READY","UNAVAILABLE","FAILED"]
+      enum: ["READY", "UNAVAILABLE", "FAILED"]
       description: "Закрытое значение; неизвестное не даёт новых полномочий."
     ImageAdmissionRiskAction:
       type: "string"
-      enum: ["ACCEPT_RISK","REJECT_RISK"]
+      enum: ["ACCEPT_RISK", "REJECT_RISK"]
       description: "Закрытое значение; неизвестное не даёт новых полномочий."
     ImageAdmissionAttemptState:
       type: "string"
-      enum: ["PENDING","CLAIMED","ACCEPTED","REJECTED","FAILED","CANCELLED"]
+      enum:
+        ["PENDING", "CLAIMED", "ACCEPTED", "REJECTED", "FAILED", "CANCELLED"]
       description: "Закрытое значение; неизвестное не даёт новых полномочий."
     ImageVulnerabilitySeverityCount:
       type: "object"
       additionalProperties: false
       description: "Безопасная типизированная owner projection."
-      required: ["severity","matchCount"]
+      required: ["severity", "matchCount"]
       properties:
-        severity: {"$ref":"#/components/schemas/ImageVulnerabilitySeverity"}
-        matchCount: {"type":"integer","minimum":0,"maximum":4294967295}
+        severity: { "$ref": "#/components/schemas/ImageVulnerabilitySeverity" }
+        matchCount: { "type": "integer", "minimum": 0, "maximum": 4294967295 }
     ImageVulnerabilityFinding:
       type: "object"
       additionalProperties: false
       description: "Безопасная типизированная owner projection."
-      required: ["ref","packageName","installedVersion","ecosystem","advisoryId","advisoryKind","advisoryUrl","severity","fixState","fixedVersions","blocking","ignored","occurrences"]
+      required:
+        [
+          "ref",
+          "packageName",
+          "installedVersion",
+          "ecosystem",
+          "advisoryId",
+          "advisoryKind",
+          "advisoryUrl",
+          "severity",
+          "fixState",
+          "fixedVersions",
+          "blocking",
+          "ignored",
+          "occurrences",
+        ]
       properties:
-        ref: {"type":"string","pattern":"^[a-f0-9]{64}$"}
-        packageName: {"type":"string","minLength":1,"maxLength":320}
-        installedVersion: {"type":"string","minLength":0,"maxLength":256}
-        ecosystem: {"type":"string","minLength":0,"maxLength":320}
-        advisoryId: {"type":"string","minLength":1,"maxLength":160}
-        advisoryKind: {"$ref":"#/components/schemas/ImageVulnerabilityAdvisoryKind"}
-        advisoryUrl: {"type":"string","maxLength":512,"description":"Только server canonical NVD/GitHub/pkg.go.dev URL; OTHER пуст, raw URL запрещён."}
-        severity: {"$ref":"#/components/schemas/ImageVulnerabilitySeverity"}
-        fixState: {"$ref":"#/components/schemas/ImageVulnerabilityFixState"}
-        fixedVersions: {"type":"array","maxItems":128,"items":{"type":"string","minLength":0,"maxLength":256}}
-        blocking: {"type":"boolean"}
-        ignored: {"type":"boolean"}
-        occurrences: {"type":"integer","minimum":1,"maximum":4294967295}
+        ref: { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        packageName: { "type": "string", "minLength": 1, "maxLength": 320 }
+        installedVersion: { "type": "string", "minLength": 0, "maxLength": 256 }
+        ecosystem: { "type": "string", "minLength": 0, "maxLength": 320 }
+        advisoryId: { "type": "string", "minLength": 1, "maxLength": 160 }
+        advisoryKind:
+          { "$ref": "#/components/schemas/ImageVulnerabilityAdvisoryKind" }
+        advisoryUrl:
+          {
+            "type": "string",
+            "maxLength": 512,
+            "description": "Только server canonical NVD/GitHub/pkg.go.dev URL; OTHER пуст, raw URL запрещён.",
+          }
+        severity: { "$ref": "#/components/schemas/ImageVulnerabilitySeverity" }
+        fixState: { "$ref": "#/components/schemas/ImageVulnerabilityFixState" }
+        fixedVersions:
+          {
+            "type": "array",
+            "maxItems": 128,
+            "items": { "type": "string", "minLength": 0, "maxLength": 256 },
+          }
+        blocking: { "type": "boolean" }
+        ignored: { "type": "boolean" }
+        occurrences: { "type": "integer", "minimum": 1, "maximum": 4294967295 }
     ImageVulnerabilityReport:
       type: "object"
       additionalProperties: false
       description: "Безопасная типизированная owner projection."
-      required: ["scopeKind","organizationRef","projectRef","recipeRef","recipeVersion","recipeGeneration","buildRef","buildVersion","buildAttempt","artifactRef","artifactVersion","manifestDigest","admissionRevision","sourceAdmissionRevision","priorAdmissionReceiptSha256","priorEvidenceManifestDigest","vulnerabilityEvidenceSha256","sbomSha256","policyRevision","policySha256","state","version","projectionSha256","complete","matchCount","uniqueAdvisoryCount","blockingMatchCount","unresolvedNoFixMatchCount","suppressedMatchCount","severityCounts","nextActions"]
+      required:
+        [
+          "scopeKind",
+          "organizationRef",
+          "projectRef",
+          "recipeRef",
+          "recipeVersion",
+          "recipeGeneration",
+          "buildRef",
+          "buildVersion",
+          "buildAttempt",
+          "artifactRef",
+          "artifactVersion",
+          "manifestDigest",
+          "admissionRevision",
+          "sourceAdmissionRevision",
+          "priorAdmissionReceiptSha256",
+          "priorEvidenceManifestDigest",
+          "vulnerabilityEvidenceSha256",
+          "sbomSha256",
+          "policyRevision",
+          "policySha256",
+          "state",
+          "version",
+          "projectionSha256",
+          "complete",
+          "matchCount",
+          "uniqueAdvisoryCount",
+          "blockingMatchCount",
+          "unresolvedNoFixMatchCount",
+          "suppressedMatchCount",
+          "severityCounts",
+          "nextActions",
+        ]
       properties:
-        scopeKind: {"$ref":"#/components/schemas/RuntimeResourceScopeKind","description":"Область разрешена владельцем из сохранённого artifact."}
-        organizationRef: {"$ref":"#/components/schemas/OpaqueRef","description":"Проверенная организация, не actor input."}
-        projectRef: {"type":"string","minLength":0,"maxLength":128,"description":"Точный PROJECT locator; пустой только для ORGANIZATION."}
-        recipeRef: {"$ref":"#/components/schemas/OpaqueRef","description":"Owner-resolved рецепт."}
-        recipeVersion: {"type":"integer","format":"int64","minimum":0,"maximum":9007199254740991,"description":"Exact версия рецепта для owner OCC."}
-        recipeGeneration: {"type":"integer","format":"int64","minimum":0,"maximum":9007199254740991,"description":"Неизменяемое поколение recipe/build snapshot."}
-        buildRef: {"$ref":"#/components/schemas/OpaqueRef","description":"Latest COMPLETED build, разрешённый owner eligibility."}
-        buildVersion: {"type":"integer","format":"int64","minimum":0,"maximum":9007199254740991,"description":"Версия сохранённого immutable build snapshot."}
-        buildAttempt: {"type":"integer","minimum":0,"maximum":4294967295,"description":"Точная attempt исходной сборки."}
-        artifactRef: {"$ref":"#/components/schemas/OpaqueRef","description":"Принадлежащий той же scope artifact."}
-        artifactVersion: {"type":"integer","format":"int64","minimum":0,"maximum":9007199254740991,"description":"Текущая версия artifact; If-Match относится к ней."}
-        manifestDigest: {"type":"string","pattern":"^sha256:[a-f0-9]{64}$","description":"Exact image digest sha256:; tag не является authority."}
-        admissionRevision: {"type":"integer","format":"int64","minimum":0,"maximum":9007199254740991,"description":"Текущая owner revision admission projection."}
-        sourceAdmissionRevision: {"type":"integer","format":"int64","minimum":0,"maximum":9007199254740991,"description":"Original REJECTED terminal revision, закреплённая report."}
-        priorAdmissionReceiptSha256: {"type":"string","pattern":"^([a-f0-9]{64})?$","description":"SHA256 immutable предыдущей receipt."}
-        priorEvidenceManifestDigest: {"type":"string","pattern":"^(sha256:[a-f0-9]{64})?$","description":"Exact OCI manifest предыдущего evidence bundle."}
-        vulnerabilityEvidenceSha256: {"type":"string","pattern":"^([a-f0-9]{64})?$","description":"SHA256 исходных полных scanner bytes."}
-        sbomSha256: {"type":"string","pattern":"^([a-f0-9]{64})?$","description":"SHA256 исходных полных SBOM bytes."}
-        policyRevision: {"type":"integer","format":"int64","minimum":0,"maximum":9007199254740991,"description":"Version-pinned baseline policy."}
-        policySha256: {"type":"string","pattern":"^([a-f0-9]{64})?$","description":"Exact baseline policy digest."}
-        state: {"$ref":"#/components/schemas/ImageVulnerabilityReportState"}
-        version: {"type":"integer","format":"int64","minimum":0,"maximum":9007199254740991}
-        projectionSha256: {"type":"string","pattern":"^([a-f0-9]{64})?$"}
-        complete: {"type":"boolean","description":"Назначает полный canonical validator, не caller."}
-        matchCount: {"type":"integer","minimum":0,"maximum":4294967295}
-        uniqueAdvisoryCount: {"type":"integer","minimum":0,"maximum":4294967295}
-        blockingMatchCount: {"type":"integer","minimum":0,"maximum":4294967295}
-        unresolvedNoFixMatchCount: {"type":"integer","minimum":0,"maximum":4294967295}
-        suppressedMatchCount: {"type":"integer","minimum":0,"maximum":4294967295}
-        severityCounts: {"type":"array","minItems":6,"maxItems":6,"items":{"$ref":"#/components/schemas/ImageVulnerabilitySeverityCount"}}
-        nextActions: {"type":"array","uniqueItems":true,"maxItems":3,"items":{"type":"string","enum":["ACCEPT_RISK","REJECT_RISK","REBUILD_FOR_REPORT"]}}
+        scopeKind:
+          {
+            "$ref": "#/components/schemas/RuntimeResourceScopeKind",
+            "description": "Область разрешена владельцем из сохранённого artifact.",
+          }
+        organizationRef:
+          {
+            "$ref": "#/components/schemas/OpaqueRef",
+            "description": "Проверенная организация, не actor input.",
+          }
+        projectRef:
+          {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 128,
+            "description": "Точный PROJECT locator; пустой только для ORGANIZATION.",
+          }
+        recipeRef:
+          {
+            "$ref": "#/components/schemas/OpaqueRef",
+            "description": "Owner-resolved рецепт.",
+          }
+        recipeVersion:
+          {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Exact версия рецепта для owner OCC.",
+          }
+        recipeGeneration:
+          {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Неизменяемое поколение recipe/build snapshot.",
+          }
+        buildRef:
+          {
+            "$ref": "#/components/schemas/OpaqueRef",
+            "description": "Latest COMPLETED build, разрешённый owner eligibility.",
+          }
+        buildVersion:
+          {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Версия сохранённого immutable build snapshot.",
+          }
+        buildAttempt:
+          {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295,
+            "description": "Точная attempt исходной сборки.",
+          }
+        artifactRef:
+          {
+            "$ref": "#/components/schemas/OpaqueRef",
+            "description": "Принадлежащий той же scope artifact.",
+          }
+        artifactVersion:
+          {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Текущая версия artifact; If-Match относится к ней.",
+          }
+        manifestDigest:
+          {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$",
+            "description": "Exact image digest sha256:; tag не является authority.",
+          }
+        admissionRevision:
+          {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Текущая owner revision admission projection.",
+          }
+        sourceAdmissionRevision:
+          {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Original REJECTED terminal revision, закреплённая report.",
+          }
+        priorAdmissionReceiptSha256:
+          {
+            "type": "string",
+            "pattern": "^([a-f0-9]{64})?$",
+            "description": "SHA256 immutable предыдущей receipt.",
+          }
+        priorEvidenceManifestDigest:
+          {
+            "type": "string",
+            "pattern": "^(sha256:[a-f0-9]{64})?$",
+            "description": "Exact OCI manifest предыдущего evidence bundle.",
+          }
+        vulnerabilityEvidenceSha256:
+          {
+            "type": "string",
+            "pattern": "^([a-f0-9]{64})?$",
+            "description": "SHA256 исходных полных scanner bytes.",
+          }
+        sbomSha256:
+          {
+            "type": "string",
+            "pattern": "^([a-f0-9]{64})?$",
+            "description": "SHA256 исходных полных SBOM bytes.",
+          }
+        policyRevision:
+          {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Version-pinned baseline policy.",
+          }
+        policySha256:
+          {
+            "type": "string",
+            "pattern": "^([a-f0-9]{64})?$",
+            "description": "Exact baseline policy digest.",
+          }
+        state: { "$ref": "#/components/schemas/ImageVulnerabilityReportState" }
+        version:
+          {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+          }
+        projectionSha256: { "type": "string", "pattern": "^([a-f0-9]{64})?$" }
+        complete:
+          {
+            "type": "boolean",
+            "description": "Назначает полный canonical validator, не caller.",
+          }
+        matchCount: { "type": "integer", "minimum": 0, "maximum": 4294967295 }
+        uniqueAdvisoryCount:
+          { "type": "integer", "minimum": 0, "maximum": 4294967295 }
+        blockingMatchCount:
+          { "type": "integer", "minimum": 0, "maximum": 4294967295 }
+        unresolvedNoFixMatchCount:
+          { "type": "integer", "minimum": 0, "maximum": 4294967295 }
+        suppressedMatchCount:
+          { "type": "integer", "minimum": 0, "maximum": 4294967295 }
+        severityCounts:
+          {
+            "type": "array",
+            "minItems": 6,
+            "maxItems": 6,
+            "items":
+              {
+                "$ref": "#/components/schemas/ImageVulnerabilitySeverityCount",
+              },
+          }
+        nextActions:
+          {
+            "type": "array",
+            "uniqueItems": true,
+            "maxItems": 3,
+            "items":
+              {
+                "type": "string",
+                "enum": ["ACCEPT_RISK", "REJECT_RISK", "REBUILD_FOR_REPORT"],
+              },
+          }
     ImageVulnerabilityReportPageInfo:
       type: "object"
       additionalProperties: false
       description: "Безопасная типизированная owner projection."
       required: ["nextPageToken"]
       properties:
-        nextPageToken: {"type":"string","minLength":0,"maxLength":512}
+        nextPageToken: { "type": "string", "minLength": 0, "maxLength": 512 }
     ImageVulnerabilityReportResponse:
       type: "object"
       additionalProperties: false
       description: "Безопасная типизированная owner projection."
-      required: ["report","findings","page"]
+      required: ["report", "findings", "page"]
       properties:
-        report: {"$ref":"#/components/schemas/ImageVulnerabilityReport"}
-        findings: {"type":"array","maxItems":100,"items":{"$ref":"#/components/schemas/ImageVulnerabilityFinding"}}
-        page: {"$ref":"#/components/schemas/ImageVulnerabilityReportPageInfo"}
+        report: { "$ref": "#/components/schemas/ImageVulnerabilityReport" }
+        findings:
+          {
+            "type": "array",
+            "maxItems": 100,
+            "items":
+              { "$ref": "#/components/schemas/ImageVulnerabilityFinding" },
+          }
+        page:
+          { "$ref": "#/components/schemas/ImageVulnerabilityReportPageInfo" }
     ImageAdmissionRiskDecision:
       type: "object"
       additionalProperties: false
       description: "Безопасная типизированная owner projection."
-      required: ["ref","version","action","reason","decidedByActorRef","decidedAt","bindingSha256","scopeKind","organizationRef","projectRef","recipeRef","recipeVersion","recipeGeneration","buildRef","buildVersion","buildAttempt","artifactRef","artifactVersion","manifestDigest","admissionRevision","sourceAdmissionRevision","priorAdmissionReceiptSha256","priorEvidenceManifestDigest","vulnerabilityEvidenceSha256","sbomSha256","policyRevision","policySha256"]
+      required:
+        [
+          "ref",
+          "version",
+          "action",
+          "reason",
+          "decidedByActorRef",
+          "decidedAt",
+          "bindingSha256",
+          "scopeKind",
+          "organizationRef",
+          "projectRef",
+          "recipeRef",
+          "recipeVersion",
+          "recipeGeneration",
+          "buildRef",
+          "buildVersion",
+          "buildAttempt",
+          "artifactRef",
+          "artifactVersion",
+          "manifestDigest",
+          "admissionRevision",
+          "sourceAdmissionRevision",
+          "priorAdmissionReceiptSha256",
+          "priorEvidenceManifestDigest",
+          "vulnerabilityEvidenceSha256",
+          "sbomSha256",
+          "policyRevision",
+          "policySha256",
+        ]
       properties:
-        ref: {"$ref":"#/components/schemas/OpaqueRef"}
-        version: {"type":"integer","format":"int64","minimum":1,"maximum":9007199254740991}
-        action: {"$ref":"#/components/schemas/ImageAdmissionRiskAction"}
-        reason: {"type":"string","minLength":1,"maxLength":2048}
-        decidedByActorRef: {"$ref":"#/components/schemas/OpaqueRef"}
-        decidedAt: {"$ref":"#/components/schemas/Timestamp"}
-        bindingSha256: {"type":"string","pattern":"^[a-f0-9]{64}$"}
-        scopeKind: {"$ref":"#/components/schemas/RuntimeResourceScopeKind","description":"Область разрешена владельцем из сохранённого artifact."}
-        organizationRef: {"$ref":"#/components/schemas/OpaqueRef","description":"Проверенная организация, не actor input."}
-        projectRef: {"type":"string","minLength":0,"maxLength":128,"description":"Точный PROJECT locator; пустой только для ORGANIZATION."}
-        recipeRef: {"$ref":"#/components/schemas/OpaqueRef","description":"Owner-resolved рецепт."}
-        recipeVersion: {"type":"integer","format":"int64","minimum":0,"maximum":9007199254740991,"description":"Exact версия рецепта для owner OCC."}
-        recipeGeneration: {"type":"integer","format":"int64","minimum":0,"maximum":9007199254740991,"description":"Неизменяемое поколение recipe/build snapshot."}
-        buildRef: {"$ref":"#/components/schemas/OpaqueRef","description":"Latest COMPLETED build, разрешённый owner eligibility."}
-        buildVersion: {"type":"integer","format":"int64","minimum":0,"maximum":9007199254740991,"description":"Версия сохранённого immutable build snapshot."}
-        buildAttempt: {"type":"integer","minimum":0,"maximum":4294967295,"description":"Точная attempt исходной сборки."}
-        artifactRef: {"$ref":"#/components/schemas/OpaqueRef","description":"Принадлежащий той же scope artifact."}
-        artifactVersion: {"type":"integer","format":"int64","minimum":0,"maximum":9007199254740991,"description":"Текущая версия artifact; If-Match относится к ней."}
-        manifestDigest: {"type":"string","pattern":"^sha256:[a-f0-9]{64}$","description":"Exact image digest sha256:; tag не является authority."}
-        admissionRevision: {"type":"integer","format":"int64","minimum":0,"maximum":9007199254740991,"description":"Текущая owner revision admission projection."}
-        sourceAdmissionRevision: {"type":"integer","format":"int64","minimum":0,"maximum":9007199254740991,"description":"Original REJECTED terminal revision, закреплённая report."}
-        priorAdmissionReceiptSha256: {"type":"string","pattern":"^([a-f0-9]{64})?$","description":"SHA256 immutable предыдущей receipt."}
-        priorEvidenceManifestDigest: {"type":"string","pattern":"^(sha256:[a-f0-9]{64})?$","description":"Exact OCI manifest предыдущего evidence bundle."}
-        vulnerabilityEvidenceSha256: {"type":"string","pattern":"^([a-f0-9]{64})?$","description":"SHA256 исходных полных scanner bytes."}
-        sbomSha256: {"type":"string","pattern":"^([a-f0-9]{64})?$","description":"SHA256 исходных полных SBOM bytes."}
-        policyRevision: {"type":"integer","format":"int64","minimum":0,"maximum":9007199254740991,"description":"Version-pinned baseline policy."}
-        policySha256: {"type":"string","pattern":"^([a-f0-9]{64})?$","description":"Exact baseline policy digest."}
+        ref: { "$ref": "#/components/schemas/OpaqueRef" }
+        version:
+          {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+          }
+        action: { "$ref": "#/components/schemas/ImageAdmissionRiskAction" }
+        reason: { "type": "string", "minLength": 1, "maxLength": 2048 }
+        decidedByActorRef: { "$ref": "#/components/schemas/OpaqueRef" }
+        decidedAt: { "$ref": "#/components/schemas/Timestamp" }
+        bindingSha256: { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        scopeKind:
+          {
+            "$ref": "#/components/schemas/RuntimeResourceScopeKind",
+            "description": "Область разрешена владельцем из сохранённого artifact.",
+          }
+        organizationRef:
+          {
+            "$ref": "#/components/schemas/OpaqueRef",
+            "description": "Проверенная организация, не actor input.",
+          }
+        projectRef:
+          {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 128,
+            "description": "Точный PROJECT locator; пустой только для ORGANIZATION.",
+          }
+        recipeRef:
+          {
+            "$ref": "#/components/schemas/OpaqueRef",
+            "description": "Owner-resolved рецепт.",
+          }
+        recipeVersion:
+          {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Exact версия рецепта для owner OCC.",
+          }
+        recipeGeneration:
+          {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Неизменяемое поколение recipe/build snapshot.",
+          }
+        buildRef:
+          {
+            "$ref": "#/components/schemas/OpaqueRef",
+            "description": "Latest COMPLETED build, разрешённый owner eligibility.",
+          }
+        buildVersion:
+          {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Версия сохранённого immutable build snapshot.",
+          }
+        buildAttempt:
+          {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295,
+            "description": "Точная attempt исходной сборки.",
+          }
+        artifactRef:
+          {
+            "$ref": "#/components/schemas/OpaqueRef",
+            "description": "Принадлежащий той же scope artifact.",
+          }
+        artifactVersion:
+          {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Текущая версия artifact; If-Match относится к ней.",
+          }
+        manifestDigest:
+          {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$",
+            "description": "Exact image digest sha256:; tag не является authority.",
+          }
+        admissionRevision:
+          {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Текущая owner revision admission projection.",
+          }
+        sourceAdmissionRevision:
+          {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Original REJECTED terminal revision, закреплённая report.",
+          }
+        priorAdmissionReceiptSha256:
+          {
+            "type": "string",
+            "pattern": "^([a-f0-9]{64})?$",
+            "description": "SHA256 immutable предыдущей receipt.",
+          }
+        priorEvidenceManifestDigest:
+          {
+            "type": "string",
+            "pattern": "^(sha256:[a-f0-9]{64})?$",
+            "description": "Exact OCI manifest предыдущего evidence bundle.",
+          }
+        vulnerabilityEvidenceSha256:
+          {
+            "type": "string",
+            "pattern": "^([a-f0-9]{64})?$",
+            "description": "SHA256 исходных полных scanner bytes.",
+          }
+        sbomSha256:
+          {
+            "type": "string",
+            "pattern": "^([a-f0-9]{64})?$",
+            "description": "SHA256 исходных полных SBOM bytes.",
+          }
+        policyRevision:
+          {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Version-pinned baseline policy.",
+          }
+        policySha256:
+          {
+            "type": "string",
+            "pattern": "^([a-f0-9]{64})?$",
+            "description": "Exact baseline policy digest.",
+          }
     ImageAdmissionAttempt:
       type: "object"
       additionalProperties: false
       description: "Безопасная типизированная owner projection."
-      required: ["ref","version","number","state","artifactRef","decisionRef","fence","admissionReceiptSha256","evidenceManifestDigest"]
+      required:
+        [
+          "ref",
+          "version",
+          "number",
+          "state",
+          "artifactRef",
+          "decisionRef",
+          "fence",
+          "admissionReceiptSha256",
+          "evidenceManifestDigest",
+        ]
       properties:
-        ref: {"$ref":"#/components/schemas/OpaqueRef"}
-        version: {"type":"integer","format":"int64","minimum":1,"maximum":9007199254740991}
-        number: {"type":"integer","minimum":1,"maximum":4294967295}
-        state: {"$ref":"#/components/schemas/ImageAdmissionAttemptState"}
-        artifactRef: {"$ref":"#/components/schemas/OpaqueRef"}
-        decisionRef: {"type":"string","minLength":0,"maxLength":128}
-        fence: {"type":"integer","format":"int64","minimum":0,"maximum":9007199254740991}
-        admissionReceiptSha256: {"type":"string","pattern":"^([a-f0-9]{64})?$"}
-        evidenceManifestDigest: {"type":"string","pattern":"^(sha256:[a-f0-9]{64})?$"}
+        ref: { "$ref": "#/components/schemas/OpaqueRef" }
+        version:
+          {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+          }
+        number: { "type": "integer", "minimum": 1, "maximum": 4294967295 }
+        state: { "$ref": "#/components/schemas/ImageAdmissionAttemptState" }
+        artifactRef: { "$ref": "#/components/schemas/OpaqueRef" }
+        decisionRef: { "type": "string", "minLength": 0, "maxLength": 128 }
+        fence:
+          {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+          }
+        admissionReceiptSha256:
+          { "type": "string", "pattern": "^([a-f0-9]{64})?$" }
+        evidenceManifestDigest:
+          { "type": "string", "pattern": "^(sha256:[a-f0-9]{64})?$" }
     ImageAdmissionRiskDecisionInput:
       type: "object"
       additionalProperties: false
       description: "Все pins обязательны; actor/tenant назначает сервер. If-Match совпадает с expectedArtifactVersion, reason 1..2048 UTF8 bytes без controls."
-      required: ["expectedArtifactVersion","expectedAdmissionRevision","expectedRecipeVersion","expectedRecipeGeneration","expectedBuildRef","expectedBuildAttempt","manifestDigest","vulnerabilityEvidenceSha256","projectionSha256","priorAdmissionReceiptSha256","priorEvidenceManifestDigest","policyRevision","policySha256","action","reason"]
+      required:
+        [
+          "expectedArtifactVersion",
+          "expectedAdmissionRevision",
+          "expectedRecipeVersion",
+          "expectedRecipeGeneration",
+          "expectedBuildRef",
+          "expectedBuildAttempt",
+          "manifestDigest",
+          "vulnerabilityEvidenceSha256",
+          "projectionSha256",
+          "priorAdmissionReceiptSha256",
+          "priorEvidenceManifestDigest",
+          "policyRevision",
+          "policySha256",
+          "action",
+          "reason",
+        ]
       properties:
-        expectedArtifactVersion: {"type":"integer","format":"int64","minimum":1,"maximum":9007199254740991,"description":"OCC artifact; не доказательство владения."}
-        expectedAdmissionRevision: {"type":"integer","format":"int64","minimum":1,"maximum":9007199254740991,"description":"Exact current admission projection revision."}
-        expectedRecipeVersion: {"type":"integer","format":"int64","minimum":1,"maximum":9007199254740991,"description":"Exact current recipe version."}
-        expectedRecipeGeneration: {"type":"integer","format":"int64","minimum":1,"maximum":9007199254740991,"description":"Exact recipe generation исходного report."}
-        expectedBuildRef: {"$ref":"#/components/schemas/OpaqueRef","description":"Latest build locator проверяет владелец."}
-        expectedBuildAttempt: {"type":"integer","minimum":1,"maximum":4294967295,"description":"Exact immutable build attempt."}
-        manifestDigest: {"type":"string","pattern":"^sha256:[a-f0-9]{64}$","description":"Exact image digest, не источник authority."}
-        vulnerabilityEvidenceSha256: {"type":"string","pattern":"^[a-f0-9]{64}$","description":"SHA256 полного исходного report, показанного администратору."}
-        projectionSha256: {"type":"string","pattern":"^[a-f0-9]{64}$","description":"SHA256 полной safe projection, не hash видимой страницы."}
-        priorAdmissionReceiptSha256: {"type":"string","pattern":"^[a-f0-9]{64}$","description":"Exact original REJECTED receipt pin."}
-        priorEvidenceManifestDigest: {"type":"string","pattern":"^sha256:[a-f0-9]{64}$","description":"Exact original immutable evidence manifest."}
-        policyRevision: {"type":"integer","format":"int64","minimum":1,"maximum":9007199254740991,"description":"Текущая pinned baseline policy revision."}
-        policySha256: {"type":"string","pattern":"^[a-f0-9]{64}$","description":"Текущий exact baseline policy digest."}
-        action: {"$ref":"#/components/schemas/ImageAdmissionRiskAction","description":"Только human OWNER/ADMIN explicit ACCEPT_RISK или REJECT_RISK."}
-        reason: {"type":"string","minLength":1,"maxLength":2048,"description":"Обязательная bounded причина для audit, не shell."}
+        expectedArtifactVersion:
+          {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "description": "OCC artifact; не доказательство владения.",
+          }
+        expectedAdmissionRevision:
+          {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "description": "Exact current admission projection revision.",
+          }
+        expectedRecipeVersion:
+          {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "description": "Exact current recipe version.",
+          }
+        expectedRecipeGeneration:
+          {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "description": "Exact recipe generation исходного report.",
+          }
+        expectedBuildRef:
+          {
+            "$ref": "#/components/schemas/OpaqueRef",
+            "description": "Latest build locator проверяет владелец.",
+          }
+        expectedBuildAttempt:
+          {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4294967295,
+            "description": "Exact immutable build attempt.",
+          }
+        manifestDigest:
+          {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$",
+            "description": "Exact image digest, не источник authority.",
+          }
+        vulnerabilityEvidenceSha256:
+          {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "description": "SHA256 полного исходного report, показанного администратору.",
+          }
+        projectionSha256:
+          {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "description": "SHA256 полной safe projection, не hash видимой страницы.",
+          }
+        priorAdmissionReceiptSha256:
+          {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "description": "Exact original REJECTED receipt pin.",
+          }
+        priorEvidenceManifestDigest:
+          {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$",
+            "description": "Exact original immutable evidence manifest.",
+          }
+        policyRevision:
+          {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "description": "Текущая pinned baseline policy revision.",
+          }
+        policySha256:
+          {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "description": "Текущий exact baseline policy digest.",
+          }
+        action:
+          {
+            "$ref": "#/components/schemas/ImageAdmissionRiskAction",
+            "description": "Только human OWNER/ADMIN explicit ACCEPT_RISK или REJECT_RISK.",
+          }
+        reason:
+          {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048,
+            "description": "Обязательная bounded причина для audit, не shell.",
+          }
     ImageAdmissionRiskDecisionResponse:
       type: "object"
       additionalProperties: false
       description: "Безопасная типизированная owner projection."
-      required: ["decision","artifact"]
+      required: ["decision", "artifact"]
       properties:
-        decision: {"$ref":"#/components/schemas/ImageAdmissionRiskDecision"}
-        admissionAttempt: {"$ref":"#/components/schemas/ImageAdmissionAttempt"}
-        artifact: {"$ref":"#/components/schemas/RoleImageArtifact"}
+        decision: { "$ref": "#/components/schemas/ImageAdmissionRiskDecision" }
+        admissionAttempt:
+          { "$ref": "#/components/schemas/ImageAdmissionAttempt" }
+        artifact: { "$ref": "#/components/schemas/RoleImageArtifact" }
     RoleImageArtifactTool:
       type: object
       additionalProperties: false
@@ -14764,7 +15634,12 @@ components:
         manifestDigest: { type: string, pattern: "^sha256:[a-f0-9]{64}$" }
         provenanceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
         promotedReference: { type: string, minLength: 1, maxLength: 1000 }
-        admissionVerdict: { type: string, enum: [ACCEPTED, REJECTED, PENDING], description: PENDING обозначает только новую risk-bound attempt до terminal Record; прежний REJECTED остаётся историей. }
+        admissionVerdict:
+          {
+            type: string,
+            enum: [ACCEPTED, REJECTED, PENDING],
+            description: PENDING обозначает только новую risk-bound attempt до terminal Record; прежний REJECTED остаётся историей.,
+          }
         promotionState:
           {
             type: string,
@@ -14779,9 +15654,11 @@ components:
             maxItems: 128,
             items: { $ref: "#/components/schemas/RoleImageArtifactTool" },
           }
-        verifiedToolInventory: { $ref: "#/components/schemas/ImageToolInventory" }
+        verifiedToolInventory:
+          { $ref: "#/components/schemas/ImageToolInventory" }
         admissionAttempt: { $ref: "#/components/schemas/ImageAdmissionAttempt" }
-        riskDecision: { $ref: "#/components/schemas/ImageAdmissionRiskDecision" }
+        riskDecision:
+          { $ref: "#/components/schemas/ImageAdmissionRiskDecision" }
         promotedAt: { $ref: "#/components/schemas/Timestamp" }
         promotionReceiptSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
     ImageToolInventory:
@@ -14815,11 +15692,73 @@ components:
       additionalProperties: false
       required: [name, status, path, version, sha256, required]
       properties:
-        name: { type: string, enum: [bash, curl, git, gh, jq, yq, ripgrep, make, just, go, goimports, gofumpt, golangci-lint, staticcheck, goose, sqlc, buf, protoc, protoc-gen-go, protoc-gen-go-grpc, grpcurl, mockgen, oapi-codegen, node, npm, pnpm, yarn, typescript, eslint, prettier, vite, vue-tsc, vitest, playwright, chromium, playwright-mcp, wscat, codex, corepack, python3, pip, kubectl, kustomize, helm, buildctl, docker, shellcheck, hadolint, govulncheck, gitleaks] }
+        name:
+          {
+            type: string,
+            enum:
+              [
+                bash,
+                curl,
+                git,
+                gh,
+                jq,
+                yq,
+                ripgrep,
+                make,
+                just,
+                go,
+                goimports,
+                gofumpt,
+                golangci-lint,
+                staticcheck,
+                goose,
+                sqlc,
+                buf,
+                protoc,
+                protoc-gen-go,
+                protoc-gen-go-grpc,
+                grpcurl,
+                mockgen,
+                oapi-codegen,
+                node,
+                npm,
+                pnpm,
+                yarn,
+                typescript,
+                eslint,
+                prettier,
+                vite,
+                vue-tsc,
+                vitest,
+                playwright,
+                chromium,
+                playwright-mcp,
+                wscat,
+                codex,
+                corepack,
+                python3,
+                pip,
+                kubectl,
+                kustomize,
+                helm,
+                buildctl,
+                docker,
+                shellcheck,
+                hadolint,
+                govulncheck,
+                gitleaks,
+              ],
+          }
         required: { type: boolean }
         status: { type: string, enum: [VERIFIED, MISSING, PROBE_FAILED] }
-        path: { type: string, maxLength: 160, pattern: "^$|^/[A-Za-z0-9_./-]+$" }
-        version: { type: string, maxLength: 80, pattern: "^$|^v?[0-9]+(\\.[0-9]+){0,3}([-+][A-Za-z0-9.-]{1,48})?$" }
+        path:
+          { type: string, maxLength: 160, pattern: "^$|^/[A-Za-z0-9_./-]+$" }
+        version:
+          {
+            type: string,
+            maxLength: 80,
+            pattern: "^$|^v?[0-9]+(\\.[0-9]+){0,3}([-+][A-Za-z0-9.-]{1,48})?$",
+          }
         sha256: { type: string, pattern: "^$|^[a-f0-9]{64}$" }
     RoleImageRecipeCommandReceipt:
       type: object
@@ -15579,7 +16518,19 @@ components:
       description: Закрытый typed snapshot. Отношения accepted/results/evidence проверяются общим API validator и каждым PWA graph/event ingress; evidence разрешено только при accepted=false, reason=CHANGES_REQUIRED, results=[] и наличии отрицательного ARTIFACT_REVIEW/REVIEW/QA.
       required: [attempt, runRef, accepted, reason, results]
       properties:
-        effectiveState: { type: string, enum: [CURRENT, HISTORICAL, STALE_DEPENDENCY, REWORK_PENDING, WAITING_OWNER, BLOCKED] }
+        effectiveState:
+          {
+            type: string,
+            enum:
+              [
+                CURRENT,
+                HISTORICAL,
+                STALE_DEPENDENCY,
+                REWORK_PENDING,
+                WAITING_OWNER,
+                BLOCKED,
+              ],
+          }
         attempt: { type: integer, minimum: 1, maximum: 4 }
         runRef: { $ref: "#/components/schemas/OpaqueRef" }
         accepted: { type: boolean }
@@ -15676,14 +16627,31 @@ components:
       type: object
       additionalProperties: false
       description: Историческая SERVER lineage, проверенная владельцем; не разрешает retry и не принимает результат.
-      required: [workflowVersionRef, workflowVersionDigest, originNodeRef, stepKey, previousBusinessAttempt, businessAttempt]
+      required:
+        [
+          workflowVersionRef,
+          workflowVersionDigest,
+          originNodeRef,
+          stepKey,
+          previousBusinessAttempt,
+          businessAttempt,
+        ]
       properties:
         workflowVersionRef: { $ref: "#/components/schemas/OpaqueRef" }
-        workflowVersionDigest: { type: string, pattern: '^[a-f0-9]{64}(?![\s\S])' }
+        workflowVersionDigest:
+          { type: string, pattern: '^[a-f0-9]{64}(?![\s\S])' }
         originNodeRef: { $ref: "#/components/schemas/OpaqueRef" }
-        stepKey: { type: string, minLength: 1, maxLength: 96, pattern: '^[A-Za-z0-9_-]+(?![\s\S])' }
-        previousBusinessAttempt: { type: integer, format: int32, minimum: 1, maximum: 3 }
-        businessAttempt: { type: integer, format: int32, minimum: 2, maximum: 4 }
+        stepKey:
+          {
+            type: string,
+            minLength: 1,
+            maxLength: 96,
+            pattern: '^[A-Za-z0-9_-]+(?![\s\S])',
+          }
+        previousBusinessAttempt:
+          { type: integer, format: int32, minimum: 1, maximum: 3 }
+        businessAttempt:
+          { type: integer, format: int32, minimum: 2, maximum: 4 }
     RunEdge:
       type: object
       additionalProperties: false
@@ -15699,7 +16667,8 @@ components:
             enum: [DELEGATED_TO, CALLBACK_TO, RETRY_OF, CONTINUES, WAITING_FOR],
           }
         label: { type: string, maxLength: 120 }
-        serverWorkflowRetry: { $ref: "#/components/schemas/WorkflowRetryReadProof" }
+        serverWorkflowRetry:
+          { $ref: "#/components/schemas/WorkflowRetryReadProof" }
     RunDelta:
       type: object
       additionalProperties: false
@@ -15862,7 +16831,7 @@ components:
           type: string
           minLength: 8
           maxLength: 96
-          pattern: '^inv_[A-Za-z0-9_-]+$'
+          pattern: "^inv_[A-Za-z0-9_-]+$"
         execution: { $ref: "#/components/schemas/RunEventExecution" }
         message: { $ref: "#/components/schemas/RunMessage" }
         occurredAt: { $ref: "#/components/schemas/Timestamp" }
@@ -16162,12 +17131,27 @@ components:
         connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
         capabilityKey: { type: string, minLength: 1, maxLength: 160 }
         enabled: { type: boolean }
-        approvalPolicy: { type: string, enum: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED] }
-        approvalScopePaths: { type: array, uniqueItems: true, maxItems: 16, items: { type: string, minLength: 1, maxLength: 160 } }
+        approvalPolicy:
+          { type: string, enum: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED] }
+        approvalScopePaths:
+          {
+            type: array,
+            uniqueItems: true,
+            maxItems: 16,
+            items: { type: string, minLength: 1, maxLength: 160 },
+          }
     SystemAssistantIntegrationGrantCandidate:
       type: object
       additionalProperties: false
-      required: [capability, grantable, reason, currentGrantVersion, currentGrantEnabled, currentApprovalScopePaths]
+      required:
+        [
+          capability,
+          grantable,
+          reason,
+          currentGrantVersion,
+          currentGrantEnabled,
+          currentApprovalScopePaths,
+        ]
       properties:
         capability: { $ref: "#/components/schemas/IntegrationCapability" }
         grantable: { type: boolean }
@@ -16175,12 +17159,31 @@ components:
         currentGrantRef: { $ref: "#/components/schemas/OpaqueRef" }
         currentGrantVersion: { type: integer, format: int64, minimum: 0 }
         currentGrantEnabled: { type: boolean }
-        currentApprovalPolicy: { type: string, enum: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED] }
-        currentApprovalScopePaths: { type: array, uniqueItems: true, maxItems: 16, items: { type: string, minLength: 1, maxLength: 160 } }
+        currentApprovalPolicy:
+          { type: string, enum: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED] }
+        currentApprovalScopePaths:
+          {
+            type: array,
+            uniqueItems: true,
+            maxItems: 16,
+            items: { type: string, minLength: 1, maxLength: 160 },
+          }
     SystemAssistantIntegrationGrantCandidates:
       type: object
       additionalProperties: false
-      required: [scopeKind, organizationRef, assistantRef, assistantVersion, connectionRef, connectionVersion, definitionVersion, definitionDigest, items, total]
+      required:
+        [
+          scopeKind,
+          organizationRef,
+          assistantRef,
+          assistantVersion,
+          connectionRef,
+          connectionVersion,
+          definitionVersion,
+          definitionDigest,
+          items,
+          total,
+        ]
       properties:
         scopeKind: { type: string, enum: [ORGANIZATION] }
         organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -16190,13 +17193,36 @@ components:
         connectionVersion: { type: integer, format: int64, minimum: 1 }
         definitionVersion: { type: string, minLength: 1, maxLength: 100 }
         definitionDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
-        items: { type: array, maxItems: 100, items: { $ref: "#/components/schemas/SystemAssistantIntegrationGrantCandidate" } }
+        items:
+          {
+            type: array,
+            maxItems: 100,
+            items:
+              {
+                $ref: "#/components/schemas/SystemAssistantIntegrationGrantCandidate",
+              },
+          }
         total: { type: integer, format: int64, minimum: 0 }
         nextPageToken: { type: string, maxLength: 512 }
     ProjectAssistantIntegrationGrantCandidates:
       type: object
       additionalProperties: false
-      required: [scopeKind, organizationRef, projectRef, assistantProfileRef, profileVersion, assistantRef, assistantVersion, connectionRef, connectionVersion, definitionVersion, definitionDigest, items, total]
+      required:
+        [
+          scopeKind,
+          organizationRef,
+          projectRef,
+          assistantProfileRef,
+          profileVersion,
+          assistantRef,
+          assistantVersion,
+          connectionRef,
+          connectionVersion,
+          definitionVersion,
+          definitionDigest,
+          items,
+          total,
+        ]
       properties:
         scopeKind: { type: string, enum: [ORGANIZATION] }
         organizationRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -16209,7 +17235,15 @@ components:
         connectionVersion: { type: integer, format: int64, minimum: 1 }
         definitionVersion: { type: string, minLength: 1, maxLength: 100 }
         definitionDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
-        items: { type: array, maxItems: 100, items: { $ref: "#/components/schemas/SystemAssistantIntegrationGrantCandidate" } }
+        items:
+          {
+            type: array,
+            maxItems: 100,
+            items:
+              {
+                $ref: "#/components/schemas/SystemAssistantIntegrationGrantCandidate",
+              },
+          }
         total: { type: integer, format: int64, minimum: 0 }
         nextPageToken: { type: string, maxLength: 512 }
     RepositoryBundleArtifactPin:
@@ -16218,23 +17252,60 @@ components:
       required: [ref, revision, version, sha256, sizeBytes]
       properties:
         ref: { $ref: "#/components/schemas/OpaqueRef" }
-        revision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
-        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
-        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
-        sizeBytes: { type: integer, format: int64, minimum: 1, maximum: 1048576 }
+        revision:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        version:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+        sizeBytes:
+          { type: integer, format: int64, minimum: 1, maximum: 1048576 }
     RepositoryBundleFile:
       type: object
       additionalProperties: false
       required: [path, mode, bytes, sha256]
       properties:
         path: { type: string, minLength: 1, maxLength: 512 }
-        mode: { type: string, enum: ['100644', '100755'] }
+        mode: { type: string, enum: ["100644", "100755"] }
         bytes: { type: integer, format: int64, minimum: 0, maximum: 1048576 }
-        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
     RepositoryBundlePublication:
       type: object
       additionalProperties: false
-      required: [ref, version, projectRef, originRunRef, originRuntimeRevisionRef, invocationRef, gateRef, connectionRef, connectionVersion, grantRef, grantVersion, repositoryRef, baseCommitSha, proposalBranch, archive, manifest, approvalDigest, fileCount, totalBytes, state, createdAt, expiresAt]
+      required:
+        [
+          ref,
+          version,
+          projectRef,
+          originRunRef,
+          originRuntimeRevisionRef,
+          invocationRef,
+          gateRef,
+          connectionRef,
+          connectionVersion,
+          grantRef,
+          grantVersion,
+          repositoryRef,
+          baseCommitSha,
+          proposalBranch,
+          archive,
+          manifest,
+          approvalDigest,
+          fileCount,
+          totalBytes,
+          state,
+          createdAt,
+          expiresAt,
+        ]
       properties:
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         projectRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -16244,23 +17315,75 @@ components:
         gateRef: { $ref: "#/components/schemas/OpaqueRef" }
         connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
         grantRef: { $ref: "#/components/schemas/OpaqueRef" }
-        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
-        connectionVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
-        grantVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        version:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        connectionVersion:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        grantVersion:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
         archive: { $ref: "#/components/schemas/RepositoryBundleArtifactPin" }
         manifest: { $ref: "#/components/schemas/RepositoryBundleArtifactPin" }
         repositoryRef: { type: string, minLength: 3, maxLength: 201 }
         proposalBranch: { type: string, minLength: 1, maxLength: 128 }
-        baseCommitSha: { type: string, pattern: '^[0-9a-f]{40}$' }
-        approvalDigest: { type: string, pattern: '^[0-9a-f]{64}$' }
+        baseCommitSha: { type: string, pattern: "^[0-9a-f]{40}$" }
+        approvalDigest: { type: string, pattern: "^[0-9a-f]{64}$" }
         fileCount: { type: integer, minimum: 1, maximum: 256 }
-        totalBytes: { type: integer, format: int64, minimum: 0, maximum: 1048576 }
-        state: { type: string, enum: [WAITING_APPROVAL, QUEUED, CLAIMED, EFFECT_STARTED, UNKNOWN_OUTCOME, SUCCEEDED, REJECTED, CANCELLED, EXPIRED, FAILED] }
-        candidateCommitSha: { type: string, pattern: '^[0-9a-f]{40}$' }
-        candidateTreeSha: { type: string, pattern: '^[0-9a-f]{40}$' }
-        failureCode: { type: string, enum: [UNAVAILABLE, AUTHORITY_CHANGED, CONTENT_INVALID, BASE_INVALID, DEADLINE_EXCEEDED, BRANCH_CONFLICT, OUTCOME_UNCONFIRMED] }
+        totalBytes:
+          { type: integer, format: int64, minimum: 0, maximum: 1048576 }
+        state:
+          {
+            type: string,
+            enum:
+              [
+                WAITING_APPROVAL,
+                QUEUED,
+                CLAIMED,
+                EFFECT_STARTED,
+                UNKNOWN_OUTCOME,
+                SUCCEEDED,
+                REJECTED,
+                CANCELLED,
+                EXPIRED,
+                FAILED,
+              ],
+          }
+        candidateCommitSha: { type: string, pattern: "^[0-9a-f]{40}$" }
+        candidateTreeSha: { type: string, pattern: "^[0-9a-f]{40}$" }
+        failureCode:
+          {
+            type: string,
+            enum:
+              [
+                UNAVAILABLE,
+                AUTHORITY_CHANGED,
+                CONTENT_INVALID,
+                BASE_INVALID,
+                DEADLINE_EXCEEDED,
+                BRANCH_CONFLICT,
+                OUTCOME_UNCONFIRMED,
+              ],
+          }
         continuationState: { type: string, enum: [BLOCKED, CANCELLED] }
-        continuationCode: { type: string, enum: [CALLBACK_INPUT_TOO_LARGE, CONTINUATION_AUTHORITY_CHANGED] }
+        continuationCode:
+          {
+            type: string,
+            enum: [CALLBACK_INPUT_TOO_LARGE, CONTINUATION_AUTHORITY_CHANGED],
+          }
         continuationNodeRef: { $ref: "#/components/schemas/OpaqueRef" }
         createdAt: { type: string, format: date-time }
         expiresAt: { type: string, format: date-time }
@@ -16271,7 +17394,12 @@ components:
       required: [proposal, files, offset, nextOffset, complete]
       properties:
         proposal: { $ref: "#/components/schemas/RepositoryBundlePublication" }
-        files: { type: array, maxItems: 32, items: { $ref: "#/components/schemas/RepositoryBundleFile" } }
+        files:
+          {
+            type: array,
+            maxItems: 32,
+            items: { $ref: "#/components/schemas/RepositoryBundleFile" },
+          }
         offset: { type: integer, minimum: 0, maximum: 256 }
         nextOffset: { type: integer, minimum: 0, maximum: 256 }
         complete: { type: boolean }
@@ -16358,12 +17486,32 @@ components:
       additionalProperties: false
       required: [schema, sourceStepKey, sourceAttempt, authors, rechecks]
       properties:
-        schema: { type: string, enum: [kodex.workflow-upstream-rework-preview.v1] }
+        schema:
+          { type: string, enum: [kodex.workflow-upstream-rework-preview.v1] }
         sourceStepKey: { type: string, pattern: "^[A-Za-z0-9_-]{1,96}$" }
         sourceAttempt: { type: integer, minimum: 1, maximum: 4 }
-        authors: { type: array, minItems: 1, maxItems: 4, items: { $ref: "#/components/schemas/WorkflowReworkStepPreview" } }
-        rechecks: { type: array, maxItems: 12, items: { $ref: "#/components/schemas/WorkflowReworkStepPreview" } }
-        blockReason: { type: string, enum: [WORKFLOW_ATTEMPTS_EXHAUSTED, WORKFLOW_IRREVERSIBLE_EFFECT_REPAIR_REQUIRED] }
+        authors:
+          {
+            type: array,
+            minItems: 1,
+            maxItems: 4,
+            items: { $ref: "#/components/schemas/WorkflowReworkStepPreview" },
+          }
+        rechecks:
+          {
+            type: array,
+            maxItems: 12,
+            items: { $ref: "#/components/schemas/WorkflowReworkStepPreview" },
+          }
+        blockReason:
+          {
+            type: string,
+            enum:
+              [
+                WORKFLOW_ATTEMPTS_EXHAUSTED,
+                WORKFLOW_IRREVERSIBLE_EFFECT_REPAIR_REQUIRED,
+              ],
+          }
     OwnerGateDecisionConsequence:
       type: object
       additionalProperties: false
@@ -16479,19 +17627,50 @@ components:
     ArtifactRevision:
       type: object
       additionalProperties: false
-      required: [ref, artifactRef, revision, fileName, mediaType, sizeBytes, digest, scanState, source, previewAvailable, createdAt]
+      required:
+        [
+          ref,
+          artifactRef,
+          revision,
+          fileName,
+          mediaType,
+          sizeBytes,
+          digest,
+          scanState,
+          source,
+          previewAvailable,
+          createdAt,
+        ]
       properties:
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         artifactRef: { $ref: "#/components/schemas/OpaqueRef" }
-        revision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        revision:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
         fileName: { type: string, minLength: 1, maxLength: 255 }
         mediaType: { type: string, minLength: 1, maxLength: 160 }
-        sizeBytes: { type: integer, format: int64, minimum: 0, maximum: 536870912 }
+        sizeBytes:
+          { type: integer, format: int64, minimum: 0, maximum: 536870912 }
         digest: { type: string, pattern: "^sha256:[a-f0-9]{64}$" }
-        scanState: { type: string, enum: [PENDING, SCANNING, CLEAN, QUARANTINED, FAILED] }
+        scanState:
+          {
+            type: string,
+            enum: [PENDING, SCANNING, CLEAN, QUARANTINED, FAILED],
+          }
         source:
           type: string
-          enum: [CONTROL_CENTER, AGENT_RESULT, INTEGRATION_RESULT, KNOWLEDGE_SOURCE, INTERACTION_ATTACHMENT]
+          enum:
+            [
+              CONTROL_CENTER,
+              AGENT_RESULT,
+              INTEGRATION_RESULT,
+              KNOWLEDGE_SOURCE,
+              INTERACTION_ATTACHMENT,
+            ]
         previewAvailable: { type: boolean }
         createdAt: { $ref: "#/components/schemas/Timestamp" }
     ArtifactRevisionPage:
@@ -16499,8 +17678,19 @@ components:
       additionalProperties: false
       required: [items, total]
       properties:
-        items: { type: array, maxItems: 50, items: { $ref: "#/components/schemas/ArtifactRevision" } }
-        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        items:
+          {
+            type: array,
+            maxItems: 50,
+            items: { $ref: "#/components/schemas/ArtifactRevision" },
+          }
+        total:
+          {
+            type: integer,
+            format: int64,
+            minimum: 0,
+            maximum: 9007199254740991,
+          }
         nextPageToken: { type: string }
     ArtifactBindingInput:
       type: object
@@ -17153,7 +18343,8 @@ components:
         maximumConcurrentExecutions:
           { type: integer, format: int32, minimum: 1, maximum: 256 }
         usage: { $ref: "#/components/schemas/ProviderAccountUsage" }
-        financialSummary: { $ref: "#/components/schemas/ProviderFinancialSummary" }
+        financialSummary:
+          { $ref: "#/components/schemas/ProviderFinancialSummary" }
         financialEligible: { type: boolean }
         authorization: { $ref: "#/components/schemas/ProviderAuthorization" }
         deletion: { $ref: "#/components/schemas/ProviderAccountDeletion" }
@@ -17168,7 +18359,8 @@ components:
       additionalProperties: false
       required: [observation, receivedAt, version]
       properties:
-        observation: { $ref: "#/components/schemas/ProviderFinancialObservation" }
+        observation:
+          { $ref: "#/components/schemas/ProviderFinancialObservation" }
         receivedAt: { $ref: "#/components/schemas/Timestamp" }
         version: { type: integer, format: int64, minimum: 1 }
     ProviderFinancialObservation:
@@ -17182,7 +18374,14 @@ components:
         spendControlReached: { type: boolean }
         restriction:
           type: string
-          enum: [rate_limit_reached, workspace_owner_credits_depleted, workspace_member_credits_depleted, workspace_owner_usage_limit_reached, workspace_member_usage_limit_reached]
+          enum:
+            [
+              rate_limit_reached,
+              workspace_owner_credits_depleted,
+              workspace_member_credits_depleted,
+              workspace_owner_usage_limit_reached,
+              workspace_member_usage_limit_reached,
+            ]
         windows:
           type: array
           maxItems: 2
@@ -17194,8 +18393,10 @@ components:
       required: [usedPercent]
       properties:
         usedPercent: { type: integer, format: int32, minimum: 0, maximum: 100 }
-        durationMinutes: { type: integer, format: int64, minimum: 1, maximum: 5256000 }
-        resetsAt: { type: integer, format: int64, minimum: 0, maximum: 253402300799 }
+        durationMinutes:
+          { type: integer, format: int64, minimum: 1, maximum: 5256000 }
+        resetsAt:
+          { type: integer, format: int64, minimum: 0, maximum: 253402300799 }
     ProviderFinancialCredits:
       type: object
       additionalProperties: false
@@ -18052,7 +19253,11 @@ components:
         anyOf:
           - properties:
               kind: { enum: [SSH_TARGET] }
-              values: { not: { $ref: "#/components/schemas/SSHComposeResourceValues" } }
+              values:
+                {
+                  not:
+                    { $ref: "#/components/schemas/SSHComposeResourceValues" },
+                }
           - properties:
               kind: { not: { enum: [SSH_TARGET] } }
               values: { type: object, minProperties: 9 }
@@ -18083,17 +19288,44 @@ components:
       additionalProperties: false
       minProperties: 9
       maxProperties: 9
-      required: [project_ref, target_ref, owner, repository, address, user, host_key, published_port, runtime_image]
+      required:
+        [
+          project_ref,
+          target_ref,
+          owner,
+          repository,
+          address,
+          user,
+          host_key,
+          published_port,
+          runtime_image,
+        ]
       properties:
         project_ref: { $ref: "#/components/schemas/OpaqueRef" }
         target_ref: { type: string, pattern: "^ssh_[a-f0-9]{32}$" }
         owner: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$" }
-        repository: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$" }
+        repository:
+          { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$" }
         address: { type: string, minLength: 2, maxLength: 45 }
-        user: { type: string, pattern: "^[a-z_][a-z0-9_-]{0,31}$", not: { enum: [root] } }
-        host_key: { type: string, pattern: "^ssh-ed25519 [A-Za-z0-9+/]+={0,2}$", maxLength: 128 }
+        user:
+          {
+            type: string,
+            pattern: "^[a-z_][a-z0-9_-]{0,31}$",
+            not: { enum: [root] },
+          }
+        host_key:
+          {
+            type: string,
+            pattern: "^ssh-ed25519 [A-Za-z0-9+/]+={0,2}$",
+            maxLength: 128,
+          }
         published_port: { type: string, pattern: "^[1-9][0-9]{3,4}$" }
-        runtime_image: { type: string, pattern: "^[a-z0-9][a-z0-9./:_-]{0,240}@sha256:[a-f0-9]{64}$", maxLength: 313 }
+        runtime_image:
+          {
+            type: string,
+            pattern: "^[a-z0-9][a-z0-9./:_-]{0,240}@sha256:[a-f0-9]{64}$",
+            maxLength: 313,
+          }
     EmailMailboxReceiveProtocol: { type: string, enum: [IMAP, POP3] }
     EmailMailboxTLSMode: { type: string, enum: [IMPLICIT, STARTTLS] }
     EmailMailboxAuthMethod: { type: string, enum: [PASSWORD, OAUTHBEARER] }
@@ -18508,6 +19740,109 @@ components:
             minimum: 1,
             maximum: 9007199254740991,
           }
+    IntegrationCredentialPolicyInput:
+      type: object
+      additionalProperties: false
+      required: [policy]
+      properties:
+        policy: { type: string, enum: [PROJECT_SHARED, INITIATOR_REQUIRED] }
+    PersonalIntegrationConnection:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          connectionRef,
+          connectionVersion,
+          name,
+          definitionKey,
+          policy,
+          enabled,
+          available,
+        ]
+      properties:
+        connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        connectionVersion: { type: integer, format: int64, minimum: 1 }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        definitionKey: { type: string, minLength: 1, maxLength: 100 }
+        policy: { type: string, enum: [PROJECT_SHARED, INITIATOR_REQUIRED] }
+        enabled: { type: boolean }
+        credential:
+          { $ref: "#/components/schemas/PersonalIntegrationCredential" }
+        available:
+          type: boolean
+          description: Адаптер включён и поддерживает настройку ключа; false не скрывает собственный ключ для отзыва и не заменяет проверку полномочий.
+    PersonalIntegrationConnectionList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items: { $ref: "#/components/schemas/PersonalIntegrationConnection" }
+        nextPageToken: { type: string, maxLength: 512 }
+    PersonalIntegrationCredential:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          connectionRef,
+          bindingRef,
+          version,
+          connectionVersion,
+          policy,
+          state,
+          credentialConfigured,
+          verifiedCapabilityKeys,
+          deniedCapabilityKeys,
+        ]
+      properties:
+        connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        bindingRef: { $ref: "#/components/schemas/OpaqueRef" }
+        version: { type: integer, format: int64, minimum: 1 }
+        connectionVersion: { type: integer, format: int64, minimum: 1 }
+        policy: { type: string, enum: [PROJECT_SHARED, INITIATOR_REQUIRED] }
+        state:
+          {
+            type: string,
+            enum:
+              [
+                NOT_CONFIGURED,
+                CHECK_REQUIRED,
+                CHECKING,
+                READY,
+                INVALID,
+                REVOKED,
+                EXPIRED,
+              ],
+          }
+        credentialConfigured: { type: boolean }
+        expiresAt: { $ref: "#/components/schemas/Timestamp" }
+        verifiedCapabilityKeys:
+          type: array
+          maxItems: 256
+          items: { type: string, minLength: 1, maxLength: 100 }
+        deniedCapabilityKeys:
+          type: array
+          maxItems: 256
+          items: { type: string, minLength: 1, maxLength: 100 }
+    PersonalIntegrationCredentialCreateInput:
+      type: object
+      additionalProperties: false
+      required: [expectedConnectionVersion]
+      properties:
+        expectedConnectionVersion: { type: integer, format: int64, minimum: 1 }
+    PersonalIntegrationCredentialConfigureInput:
+      type: object
+      additionalProperties: false
+      required: [expectedConnectionVersion, value]
+      properties:
+        expectedConnectionVersion: { type: integer, format: int64, minimum: 1 }
+        value: { type: string, minLength: 1, maxLength: 16384, writeOnly: true }
+    PersonalIntegrationCredentialRevokeInput:
+      type: object
+      additionalProperties: false
+      properties: {}
     IntegrationCredentialInput:
       type: object
       additionalProperties: false
@@ -18564,11 +19899,14 @@ components:
           definitionVersion,
           definitionDigest,
           publicConfiguration,
+          credentialPolicy,
         ]
       properties:
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
         definitionKey: { type: string, maxLength: 100 }
+        credentialPolicy:
+          { type: string, enum: [PROJECT_SHARED, INITIATOR_REQUIRED] }
         name: { type: string, maxLength: 160 }
         state:
           {
@@ -18597,7 +19935,9 @@ components:
         publicConfiguration:
           { type: object, maxProperties: 50, additionalProperties: true }
         definitionConfigurationBinding:
-          { $ref: "#/components/schemas/IntegrationDefinitionConfigurationBinding" }
+          {
+            $ref: "#/components/schemas/IntegrationDefinitionConfigurationBinding",
+          }
         createdAt: { $ref: "#/components/schemas/Timestamp" }
         updatedAt: { $ref: "#/components/schemas/Timestamp" }
     IntegrationDefinitionConfigurationBinding:
@@ -18646,7 +19986,8 @@ components:
       required: [capabilityKey, enabled, approvalPolicy]
       properties:
         capabilityKey: { type: string, minLength: 1, maxLength: 100 }
-        approvalPolicy: { type: string, enum: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED] }
+        approvalPolicy:
+          { type: string, enum: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED] }
         agentRef: { $ref: "#/components/schemas/OpaqueRef" }
         workflowRef: { $ref: "#/components/schemas/OpaqueRef" }
         enabled: { type: boolean }
@@ -18819,7 +20160,8 @@ components:
     ProjectAssistantProfile:
       type: object
       additionalProperties: false
-      required: [ref, projectRef, agentRef, name, state, version, createdAt, updatedAt]
+      required:
+        [ref, projectRef, agentRef, name, state, version, createdAt, updatedAt]
       properties:
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         projectRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -18952,7 +20294,8 @@ components:
               resourceRef: { $ref: "#/components/schemas/OpaqueRef" }
               outcome: { type: string, enum: [APPLIED] }
               auditRef: { $ref: "#/components/schemas/OpaqueRef" }
-              artifactRevision: { $ref: "#/components/schemas/ArtifactRevision" }
+              artifactRevision:
+                { $ref: "#/components/schemas/ArtifactRevision" }
         conflicts:
           type: array
           maxItems: 32
@@ -19130,7 +20473,8 @@ components:
       properties:
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         name: { type: string, minLength: 1, maxLength: 160 }
-        financialSummary: { $ref: "#/components/schemas/ProviderFinancialSummary" }
+        financialSummary:
+          { $ref: "#/components/schemas/ProviderFinancialSummary" }
     ProviderFinancialOverview:
       type: object
       additionalProperties: false
@@ -19139,7 +20483,8 @@ components:
         accounts:
           type: array
           maxItems: 3
-          items: { $ref: "#/components/schemas/ProviderFinancialDisplayAccount" }
+          items:
+            { $ref: "#/components/schemas/ProviderFinancialDisplayAccount" }
         total: { type: integer, format: int64, minimum: 0 }
         exhausted: { type: integer, format: int64, minimum: 0 }
         unknown: { type: integer, format: int64, minimum: 0 }

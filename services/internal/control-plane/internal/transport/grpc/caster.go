@@ -875,7 +875,8 @@ func castConnection(value entity.IntegrationConnection) *controlplanev1.Integrat
 		credentialsHint = "i18n:INTEGRATION_CREDENTIAL_INVALID"
 	}
 	result := &controlplanev1.IntegrationConnection{
-		Ref: value.Ref, Version: value.Version, DefinitionKey: value.DefinitionKey, Name: value.Name,
+		CredentialPolicy: controlplanev1.IntegrationCredentialPolicy(controlplanev1.IntegrationCredentialPolicy_value["INTEGRATION_CREDENTIAL_POLICY_"+string(value.CredentialPolicy)]),
+		Ref:              value.Ref, Version: value.Version, DefinitionKey: value.DefinitionKey, Name: value.Name,
 		DefinitionVersion: value.DefinitionVersion, DefinitionDigest: value.DefinitionDigest,
 		State: connectionState(value.State), CredentialsConfigured: value.MaskedCredentialsState == "CONFIGURED",
 		CredentialsHint: credentialsHint, LastTestedAt: optionalTimestamp(value.LastTestedAt), LastTestOutcome: value.LastTestSummary,
@@ -884,6 +885,11 @@ func castConnection(value entity.IntegrationConnection) *controlplanev1.Integrat
 	}
 	if value.CredentialRevision != nil {
 		result.CredentialRevision = castIntegrationCredential(*value.CredentialRevision)
+	}
+	if value.CredentialPolicy == entity.IntegrationCredentialInitiatorRequired {
+		result.CredentialsConfigured = false
+		result.CredentialsHint = "i18n:INTEGRATION_CREDENTIAL_PERSONAL_REQUIRED"
+		result.CredentialRevision = nil
 	}
 	if value.DefinitionConfigurationBinding != nil {
 		binding := value.DefinitionConfigurationBinding

@@ -11,6 +11,7 @@ const connection = ref<IntegrationConnection>({
   definitionKey: "email",
   name: "Email",
   state: "CONNECTED",
+  credentialPolicy: "PROJECT_SHARED",
   credentialsConfigured: true,
   credentialsHint: "",
   capabilities: [],

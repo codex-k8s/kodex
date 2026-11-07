@@ -4,8 +4,8 @@ title: Герметичный и PostgreSQL-контуры Go
 type: guide
 status: approved
 owner: developer
-version: 1.0.4
-updated: 2026-10-28
+version: 1.0.5
+updated: 2026-11-07
 ---
 
 # Герметичный и PostgreSQL-контуры Go
@@ -171,6 +171,13 @@ typed аргументы `pgx.NamedArgs` и не смешивает нескол
 одном файле. Runtime error не включает SQL text, DSN или аргументы.
 
 ## Результаты
+
+Отрицательный schema/catalog сценарий вносит DDL лишь в собственной disposable
+транзакции. При проверке поставляемого SQL внутри неё удаляется только внешний
+BEGIN/ROLLBACK: ошибка параметров вложенной транзакции не доказывает отказ guard.
+Тест требует точные SQLSTATE и закрытую причину нужной проверки, затем откатывает
+counterfactual и заново выполняет полный положительный READ ONLY proof. Ошибки
+синтаксиса, доступа и изоляции не считаются успешной проверкой catalog drift.
 
 - `PASS` — точная команда завершилась успешно;
 - `FAIL` — test assertion, build, migration или оснастка завершились ошибкой;

@@ -8,6 +8,7 @@ import type {
 
 export type IntegrationsSection =
   | "CONNECTIONS"
+  | "PERSONAL"
   | "CATALOG"
   | "GRANTS"
   | "APPROVALS";

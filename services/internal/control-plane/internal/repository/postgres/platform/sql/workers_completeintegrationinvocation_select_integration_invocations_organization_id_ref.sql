@@ -3,7 +3,7 @@ SELECT i.id::text,i.ref,i.run_id::text,r.root_run_id::text,COALESCE(r.project_id
 	COALESCE(i.effect_fence_digest,''),i.generation,i.state,COALESCE(i.lease_ref,''),i.lease_expires_at,
 	i.effect_key,i.input_digest,COALESCE(receipt.ref,''),COALESCE(receipt.effect_key,''),
 	COALESCE(receipt.input_digest,''),COALESCE(receipt.provider_effect_ref,''),COALESCE(receipt.response_digest,''),
-	COALESCE(receipt.result_summary,'')
+	COALESCE(receipt.result_summary,''),i.claimed_recovery_read_only
 FROM control_plane.integration_invocations i
 JOIN control_plane.runs r ON r.id=i.run_id
 LEFT JOIN control_plane.projects p ON p.id=r.project_id

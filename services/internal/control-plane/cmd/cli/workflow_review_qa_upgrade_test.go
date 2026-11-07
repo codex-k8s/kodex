@@ -100,6 +100,10 @@ func readControlPlaneMigrationProof(t *testing.T, ctx context.Context, observer 
 	}
 	var verifier string
 	switch profile {
+	case "personal-credentials":
+		verifier = "validPersonalCredentialsMigration"
+	case "personal-credentials-backup":
+		verifier = "validPersonalCredentialsBackupMigration"
 	case "platform-oidc-identity":
 		verifier = "validPlatformOIDCIdentityMigration"
 	case "platform-oidc-identity-backup":

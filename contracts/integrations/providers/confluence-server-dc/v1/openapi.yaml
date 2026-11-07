@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  version: 1.0.0
+  version: 1.1.0
   description: Самостоятельно описанный ограниченный контракт по официальной документации;
     это не полный официальный OpenAPI и не grant.
   title: Confluence Server / Data Center — ограниченный REST v1
@@ -97,9 +97,31 @@ components:
               type: integer
               minimum: 1
               maximum: 2147483647
+            by:
+              $ref: '#/components/schemas/RecoveryAuthor'
           additionalProperties: true
           required:
           - number
+        operations:
+          description: Права текущего вызывающего только на эту страницу; не space-wide
+            WRITE.
+          type: array
+          maxItems: 32
+          items:
+            type: object
+            properties:
+              operation:
+                type: string
+                minLength: 1
+                maxLength: 64
+              targetType:
+                type: string
+                minLength: 1
+                maxLength: 64
+            required:
+            - operation
+            - targetType
+            additionalProperties: true
         ancestors:
           type: array
           items:
@@ -120,6 +142,12 @@ components:
           additionalProperties: true
           required:
           - storage
+        history:
+          type: object
+          properties:
+            createdBy:
+              $ref: '#/components/schemas/RecoveryAuthor'
+          additionalProperties: true
       additionalProperties: true
       required:
       - id
@@ -160,6 +188,113 @@ components:
       - size
       - results
       - _links
+    RecoveryAuthor:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+          - known
+        userKey:
+          type: string
+          minLength: 1
+          maxLength: 256
+      required:
+      - type
+      - userKey
+      additionalProperties: true
+    ContentVersion:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        type:
+          type: string
+          enum:
+          - page
+        title:
+          type: string
+        status:
+          type: string
+          enum:
+          - current
+          - historical
+        space:
+          type: object
+          properties:
+            key:
+              type: string
+          additionalProperties: true
+          required:
+          - key
+        version:
+          type: object
+          properties:
+            number:
+              type: integer
+              minimum: 1
+              maximum: 2147483647
+            by:
+              $ref: '#/components/schemas/RecoveryAuthor'
+          additionalProperties: true
+          required:
+          - number
+        operations:
+          description: Права текущего вызывающего только на эту страницу; не space-wide
+            WRITE.
+          type: array
+          maxItems: 32
+          items:
+            type: object
+            properties:
+              operation:
+                type: string
+                minLength: 1
+                maxLength: 64
+              targetType:
+                type: string
+                minLength: 1
+                maxLength: 64
+            required:
+            - operation
+            - targetType
+            additionalProperties: true
+        ancestors:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                minLength: 1
+                maxLength: 64
+            additionalProperties: true
+            required:
+            - id
+        body:
+          type: object
+          properties:
+            storage:
+              $ref: '#/components/schemas/Storage'
+          additionalProperties: true
+          required:
+          - storage
+        history:
+          type: object
+          properties:
+            createdBy:
+              $ref: '#/components/schemas/RecoveryAuthor'
+          additionalProperties: true
+      additionalProperties: true
+      required:
+      - id
+      - type
+      - title
+      - status
+      - space
+      - version
 paths:
   /rest/api/user/current:
     get:
@@ -446,13 +581,29 @@ paths:
         required: false
         schema:
           type: string
+      - name: version
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - current
+          - historical
       responses:
         '200':
-          description: Ограниченный успешный ответ провайдера.
+          description: Ограниченный typed readback; это не grant и не доказательство
+            отсутствия effect.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Page'
+                $ref: '#/components/schemas/ContentVersion'
         '400':
           description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
             повтор неизвестного write.
@@ -594,3 +745,7 @@ x-kodex-provenance:
   kind: AUTHORED_DOCUMENTED_SUBSET
   documented_version: 8.5.9
   tested_scope: Только current pages в exact space; synthetic REST v1 first vertical.
+x-provenance:
+  recoverySources:
+  - https://docs.atlassian.com/ConfluenceServer/rest/8.5.9/
+  - https://developer.atlassian.com/server/confluence/expansions-in-the-rest-api/

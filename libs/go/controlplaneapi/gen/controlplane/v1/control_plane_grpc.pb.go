@@ -15489,3 +15489,496 @@ var ProviderCredentialMaterializerService_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "controlplane/v1/control_plane.proto",
 }
+
+const (
+	PersonalIntegrationCredentialService_ListPersonalIntegrationConnections_FullMethodName        = "/controlplane.v1.PersonalIntegrationCredentialService/ListPersonalIntegrationConnections"
+	PersonalIntegrationCredentialService_GetPersonalIntegrationCredential_FullMethodName          = "/controlplane.v1.PersonalIntegrationCredentialService/GetPersonalIntegrationCredential"
+	PersonalIntegrationCredentialService_CreatePersonalIntegrationCredential_FullMethodName       = "/controlplane.v1.PersonalIntegrationCredentialService/CreatePersonalIntegrationCredential"
+	PersonalIntegrationCredentialService_ConfigurePersonalIntegrationCredential_FullMethodName    = "/controlplane.v1.PersonalIntegrationCredentialService/ConfigurePersonalIntegrationCredential"
+	PersonalIntegrationCredentialService_RevokePersonalIntegrationCredential_FullMethodName       = "/controlplane.v1.PersonalIntegrationCredentialService/RevokePersonalIntegrationCredential"
+	PersonalIntegrationCredentialService_SetIntegrationCredentialPolicy_FullMethodName            = "/controlplane.v1.PersonalIntegrationCredentialService/SetIntegrationCredentialPolicy"
+	PersonalIntegrationCredentialService_TestPersonalIntegrationCredential_FullMethodName         = "/controlplane.v1.PersonalIntegrationCredentialService/TestPersonalIntegrationCredential"
+	PersonalIntegrationCredentialService_ClaimPersonalIntegrationCredentialTests_FullMethodName   = "/controlplane.v1.PersonalIntegrationCredentialService/ClaimPersonalIntegrationCredentialTests"
+	PersonalIntegrationCredentialService_BeginPersonalIntegrationCredentialProbe_FullMethodName   = "/controlplane.v1.PersonalIntegrationCredentialService/BeginPersonalIntegrationCredentialProbe"
+	PersonalIntegrationCredentialService_CompletePersonalIntegrationCredentialTest_FullMethodName = "/controlplane.v1.PersonalIntegrationCredentialService/CompletePersonalIntegrationCredentialTest"
+	PersonalIntegrationCredentialService_BeginPersonalIntegrationInvocation_FullMethodName        = "/controlplane.v1.PersonalIntegrationCredentialService/BeginPersonalIntegrationInvocation"
+)
+
+// PersonalIntegrationCredentialServiceClient is the client API for PersonalIntegrationCredentialService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// Browser operations собственной привязки не возвращают Secret descriptor либо значение ключа.
+// Отдельный worker allowlist получает exact descriptors только через защищённые claim methods.
+type PersonalIntegrationCredentialServiceClient interface {
+	ListPersonalIntegrationConnections(ctx context.Context, in *ListPersonalIntegrationConnectionsRequest, opts ...grpc.CallOption) (*ListPersonalIntegrationConnectionsResponse, error)
+	GetPersonalIntegrationCredential(ctx context.Context, in *GetPersonalIntegrationCredentialRequest, opts ...grpc.CallOption) (*GetPersonalIntegrationCredentialResponse, error)
+	CreatePersonalIntegrationCredential(ctx context.Context, in *CreatePersonalIntegrationCredentialRequest, opts ...grpc.CallOption) (*CreatePersonalIntegrationCredentialResponse, error)
+	ConfigurePersonalIntegrationCredential(ctx context.Context, in *ConfigurePersonalIntegrationCredentialRequest, opts ...grpc.CallOption) (*ConfigurePersonalIntegrationCredentialResponse, error)
+	RevokePersonalIntegrationCredential(ctx context.Context, in *RevokePersonalIntegrationCredentialRequest, opts ...grpc.CallOption) (*RevokePersonalIntegrationCredentialResponse, error)
+	// Отдельная операция управления Connection; не право читать чужие личные credentials.
+	SetIntegrationCredentialPolicy(ctx context.Context, in *SetIntegrationCredentialPolicyRequest, opts ...grpc.CallOption) (*SetIntegrationCredentialPolicyResponse, error)
+	TestPersonalIntegrationCredential(ctx context.Context, in *TestPersonalIntegrationCredentialRequest, opts ...grpc.CallOption) (*TestPersonalIntegrationCredentialResponse, error)
+	// Отдельные worker operations не входят в browser allowlist.
+	ClaimPersonalIntegrationCredentialTests(ctx context.Context, in *ClaimPersonalIntegrationCredentialTestsRequest, opts ...grpc.CallOption) (*ClaimPersonalIntegrationCredentialTestsResponse, error)
+	BeginPersonalIntegrationCredentialProbe(ctx context.Context, in *BeginPersonalIntegrationCredentialProbeRequest, opts ...grpc.CallOption) (*BeginPersonalIntegrationCredentialProbeResponse, error)
+	CompletePersonalIntegrationCredentialTest(ctx context.Context, in *CompletePersonalIntegrationCredentialTestRequest, opts ...grpc.CallOption) (*CompletePersonalIntegrationCredentialTestResponse, error)
+	BeginPersonalIntegrationInvocation(ctx context.Context, in *BeginPersonalIntegrationInvocationRequest, opts ...grpc.CallOption) (*BeginPersonalIntegrationInvocationResponse, error)
+}
+
+type personalIntegrationCredentialServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewPersonalIntegrationCredentialServiceClient(cc grpc.ClientConnInterface) PersonalIntegrationCredentialServiceClient {
+	return &personalIntegrationCredentialServiceClient{cc}
+}
+
+func (c *personalIntegrationCredentialServiceClient) ListPersonalIntegrationConnections(ctx context.Context, in *ListPersonalIntegrationConnectionsRequest, opts ...grpc.CallOption) (*ListPersonalIntegrationConnectionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPersonalIntegrationConnectionsResponse)
+	err := c.cc.Invoke(ctx, PersonalIntegrationCredentialService_ListPersonalIntegrationConnections_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *personalIntegrationCredentialServiceClient) GetPersonalIntegrationCredential(ctx context.Context, in *GetPersonalIntegrationCredentialRequest, opts ...grpc.CallOption) (*GetPersonalIntegrationCredentialResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPersonalIntegrationCredentialResponse)
+	err := c.cc.Invoke(ctx, PersonalIntegrationCredentialService_GetPersonalIntegrationCredential_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *personalIntegrationCredentialServiceClient) CreatePersonalIntegrationCredential(ctx context.Context, in *CreatePersonalIntegrationCredentialRequest, opts ...grpc.CallOption) (*CreatePersonalIntegrationCredentialResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreatePersonalIntegrationCredentialResponse)
+	err := c.cc.Invoke(ctx, PersonalIntegrationCredentialService_CreatePersonalIntegrationCredential_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *personalIntegrationCredentialServiceClient) ConfigurePersonalIntegrationCredential(ctx context.Context, in *ConfigurePersonalIntegrationCredentialRequest, opts ...grpc.CallOption) (*ConfigurePersonalIntegrationCredentialResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConfigurePersonalIntegrationCredentialResponse)
+	err := c.cc.Invoke(ctx, PersonalIntegrationCredentialService_ConfigurePersonalIntegrationCredential_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *personalIntegrationCredentialServiceClient) RevokePersonalIntegrationCredential(ctx context.Context, in *RevokePersonalIntegrationCredentialRequest, opts ...grpc.CallOption) (*RevokePersonalIntegrationCredentialResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RevokePersonalIntegrationCredentialResponse)
+	err := c.cc.Invoke(ctx, PersonalIntegrationCredentialService_RevokePersonalIntegrationCredential_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *personalIntegrationCredentialServiceClient) SetIntegrationCredentialPolicy(ctx context.Context, in *SetIntegrationCredentialPolicyRequest, opts ...grpc.CallOption) (*SetIntegrationCredentialPolicyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetIntegrationCredentialPolicyResponse)
+	err := c.cc.Invoke(ctx, PersonalIntegrationCredentialService_SetIntegrationCredentialPolicy_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *personalIntegrationCredentialServiceClient) TestPersonalIntegrationCredential(ctx context.Context, in *TestPersonalIntegrationCredentialRequest, opts ...grpc.CallOption) (*TestPersonalIntegrationCredentialResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TestPersonalIntegrationCredentialResponse)
+	err := c.cc.Invoke(ctx, PersonalIntegrationCredentialService_TestPersonalIntegrationCredential_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *personalIntegrationCredentialServiceClient) ClaimPersonalIntegrationCredentialTests(ctx context.Context, in *ClaimPersonalIntegrationCredentialTestsRequest, opts ...grpc.CallOption) (*ClaimPersonalIntegrationCredentialTestsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimPersonalIntegrationCredentialTestsResponse)
+	err := c.cc.Invoke(ctx, PersonalIntegrationCredentialService_ClaimPersonalIntegrationCredentialTests_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *personalIntegrationCredentialServiceClient) BeginPersonalIntegrationCredentialProbe(ctx context.Context, in *BeginPersonalIntegrationCredentialProbeRequest, opts ...grpc.CallOption) (*BeginPersonalIntegrationCredentialProbeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BeginPersonalIntegrationCredentialProbeResponse)
+	err := c.cc.Invoke(ctx, PersonalIntegrationCredentialService_BeginPersonalIntegrationCredentialProbe_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *personalIntegrationCredentialServiceClient) CompletePersonalIntegrationCredentialTest(ctx context.Context, in *CompletePersonalIntegrationCredentialTestRequest, opts ...grpc.CallOption) (*CompletePersonalIntegrationCredentialTestResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CompletePersonalIntegrationCredentialTestResponse)
+	err := c.cc.Invoke(ctx, PersonalIntegrationCredentialService_CompletePersonalIntegrationCredentialTest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *personalIntegrationCredentialServiceClient) BeginPersonalIntegrationInvocation(ctx context.Context, in *BeginPersonalIntegrationInvocationRequest, opts ...grpc.CallOption) (*BeginPersonalIntegrationInvocationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BeginPersonalIntegrationInvocationResponse)
+	err := c.cc.Invoke(ctx, PersonalIntegrationCredentialService_BeginPersonalIntegrationInvocation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// PersonalIntegrationCredentialServiceServer is the server API for PersonalIntegrationCredentialService service.
+// All implementations must embed UnimplementedPersonalIntegrationCredentialServiceServer
+// for forward compatibility.
+//
+// Browser operations собственной привязки не возвращают Secret descriptor либо значение ключа.
+// Отдельный worker allowlist получает exact descriptors только через защищённые claim methods.
+type PersonalIntegrationCredentialServiceServer interface {
+	ListPersonalIntegrationConnections(context.Context, *ListPersonalIntegrationConnectionsRequest) (*ListPersonalIntegrationConnectionsResponse, error)
+	GetPersonalIntegrationCredential(context.Context, *GetPersonalIntegrationCredentialRequest) (*GetPersonalIntegrationCredentialResponse, error)
+	CreatePersonalIntegrationCredential(context.Context, *CreatePersonalIntegrationCredentialRequest) (*CreatePersonalIntegrationCredentialResponse, error)
+	ConfigurePersonalIntegrationCredential(context.Context, *ConfigurePersonalIntegrationCredentialRequest) (*ConfigurePersonalIntegrationCredentialResponse, error)
+	RevokePersonalIntegrationCredential(context.Context, *RevokePersonalIntegrationCredentialRequest) (*RevokePersonalIntegrationCredentialResponse, error)
+	// Отдельная операция управления Connection; не право читать чужие личные credentials.
+	SetIntegrationCredentialPolicy(context.Context, *SetIntegrationCredentialPolicyRequest) (*SetIntegrationCredentialPolicyResponse, error)
+	TestPersonalIntegrationCredential(context.Context, *TestPersonalIntegrationCredentialRequest) (*TestPersonalIntegrationCredentialResponse, error)
+	// Отдельные worker operations не входят в browser allowlist.
+	ClaimPersonalIntegrationCredentialTests(context.Context, *ClaimPersonalIntegrationCredentialTestsRequest) (*ClaimPersonalIntegrationCredentialTestsResponse, error)
+	BeginPersonalIntegrationCredentialProbe(context.Context, *BeginPersonalIntegrationCredentialProbeRequest) (*BeginPersonalIntegrationCredentialProbeResponse, error)
+	CompletePersonalIntegrationCredentialTest(context.Context, *CompletePersonalIntegrationCredentialTestRequest) (*CompletePersonalIntegrationCredentialTestResponse, error)
+	BeginPersonalIntegrationInvocation(context.Context, *BeginPersonalIntegrationInvocationRequest) (*BeginPersonalIntegrationInvocationResponse, error)
+	mustEmbedUnimplementedPersonalIntegrationCredentialServiceServer()
+}
+
+// UnimplementedPersonalIntegrationCredentialServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedPersonalIntegrationCredentialServiceServer struct{}
+
+func (UnimplementedPersonalIntegrationCredentialServiceServer) ListPersonalIntegrationConnections(context.Context, *ListPersonalIntegrationConnectionsRequest) (*ListPersonalIntegrationConnectionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPersonalIntegrationConnections not implemented")
+}
+func (UnimplementedPersonalIntegrationCredentialServiceServer) GetPersonalIntegrationCredential(context.Context, *GetPersonalIntegrationCredentialRequest) (*GetPersonalIntegrationCredentialResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetPersonalIntegrationCredential not implemented")
+}
+func (UnimplementedPersonalIntegrationCredentialServiceServer) CreatePersonalIntegrationCredential(context.Context, *CreatePersonalIntegrationCredentialRequest) (*CreatePersonalIntegrationCredentialResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreatePersonalIntegrationCredential not implemented")
+}
+func (UnimplementedPersonalIntegrationCredentialServiceServer) ConfigurePersonalIntegrationCredential(context.Context, *ConfigurePersonalIntegrationCredentialRequest) (*ConfigurePersonalIntegrationCredentialResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfigurePersonalIntegrationCredential not implemented")
+}
+func (UnimplementedPersonalIntegrationCredentialServiceServer) RevokePersonalIntegrationCredential(context.Context, *RevokePersonalIntegrationCredentialRequest) (*RevokePersonalIntegrationCredentialResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RevokePersonalIntegrationCredential not implemented")
+}
+func (UnimplementedPersonalIntegrationCredentialServiceServer) SetIntegrationCredentialPolicy(context.Context, *SetIntegrationCredentialPolicyRequest) (*SetIntegrationCredentialPolicyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetIntegrationCredentialPolicy not implemented")
+}
+func (UnimplementedPersonalIntegrationCredentialServiceServer) TestPersonalIntegrationCredential(context.Context, *TestPersonalIntegrationCredentialRequest) (*TestPersonalIntegrationCredentialResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TestPersonalIntegrationCredential not implemented")
+}
+func (UnimplementedPersonalIntegrationCredentialServiceServer) ClaimPersonalIntegrationCredentialTests(context.Context, *ClaimPersonalIntegrationCredentialTestsRequest) (*ClaimPersonalIntegrationCredentialTestsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimPersonalIntegrationCredentialTests not implemented")
+}
+func (UnimplementedPersonalIntegrationCredentialServiceServer) BeginPersonalIntegrationCredentialProbe(context.Context, *BeginPersonalIntegrationCredentialProbeRequest) (*BeginPersonalIntegrationCredentialProbeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BeginPersonalIntegrationCredentialProbe not implemented")
+}
+func (UnimplementedPersonalIntegrationCredentialServiceServer) CompletePersonalIntegrationCredentialTest(context.Context, *CompletePersonalIntegrationCredentialTestRequest) (*CompletePersonalIntegrationCredentialTestResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompletePersonalIntegrationCredentialTest not implemented")
+}
+func (UnimplementedPersonalIntegrationCredentialServiceServer) BeginPersonalIntegrationInvocation(context.Context, *BeginPersonalIntegrationInvocationRequest) (*BeginPersonalIntegrationInvocationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BeginPersonalIntegrationInvocation not implemented")
+}
+func (UnimplementedPersonalIntegrationCredentialServiceServer) mustEmbedUnimplementedPersonalIntegrationCredentialServiceServer() {
+}
+func (UnimplementedPersonalIntegrationCredentialServiceServer) testEmbeddedByValue() {}
+
+// UnsafePersonalIntegrationCredentialServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to PersonalIntegrationCredentialServiceServer will
+// result in compilation errors.
+type UnsafePersonalIntegrationCredentialServiceServer interface {
+	mustEmbedUnimplementedPersonalIntegrationCredentialServiceServer()
+}
+
+func RegisterPersonalIntegrationCredentialServiceServer(s grpc.ServiceRegistrar, srv PersonalIntegrationCredentialServiceServer) {
+	// If the following call panics, it indicates UnimplementedPersonalIntegrationCredentialServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&PersonalIntegrationCredentialService_ServiceDesc, srv)
+}
+
+func _PersonalIntegrationCredentialService_ListPersonalIntegrationConnections_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPersonalIntegrationConnectionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PersonalIntegrationCredentialServiceServer).ListPersonalIntegrationConnections(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PersonalIntegrationCredentialService_ListPersonalIntegrationConnections_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PersonalIntegrationCredentialServiceServer).ListPersonalIntegrationConnections(ctx, req.(*ListPersonalIntegrationConnectionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PersonalIntegrationCredentialService_GetPersonalIntegrationCredential_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPersonalIntegrationCredentialRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PersonalIntegrationCredentialServiceServer).GetPersonalIntegrationCredential(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PersonalIntegrationCredentialService_GetPersonalIntegrationCredential_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PersonalIntegrationCredentialServiceServer).GetPersonalIntegrationCredential(ctx, req.(*GetPersonalIntegrationCredentialRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PersonalIntegrationCredentialService_CreatePersonalIntegrationCredential_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreatePersonalIntegrationCredentialRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PersonalIntegrationCredentialServiceServer).CreatePersonalIntegrationCredential(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PersonalIntegrationCredentialService_CreatePersonalIntegrationCredential_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PersonalIntegrationCredentialServiceServer).CreatePersonalIntegrationCredential(ctx, req.(*CreatePersonalIntegrationCredentialRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PersonalIntegrationCredentialService_ConfigurePersonalIntegrationCredential_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfigurePersonalIntegrationCredentialRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PersonalIntegrationCredentialServiceServer).ConfigurePersonalIntegrationCredential(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PersonalIntegrationCredentialService_ConfigurePersonalIntegrationCredential_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PersonalIntegrationCredentialServiceServer).ConfigurePersonalIntegrationCredential(ctx, req.(*ConfigurePersonalIntegrationCredentialRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PersonalIntegrationCredentialService_RevokePersonalIntegrationCredential_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RevokePersonalIntegrationCredentialRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PersonalIntegrationCredentialServiceServer).RevokePersonalIntegrationCredential(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PersonalIntegrationCredentialService_RevokePersonalIntegrationCredential_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PersonalIntegrationCredentialServiceServer).RevokePersonalIntegrationCredential(ctx, req.(*RevokePersonalIntegrationCredentialRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PersonalIntegrationCredentialService_SetIntegrationCredentialPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetIntegrationCredentialPolicyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PersonalIntegrationCredentialServiceServer).SetIntegrationCredentialPolicy(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PersonalIntegrationCredentialService_SetIntegrationCredentialPolicy_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PersonalIntegrationCredentialServiceServer).SetIntegrationCredentialPolicy(ctx, req.(*SetIntegrationCredentialPolicyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PersonalIntegrationCredentialService_TestPersonalIntegrationCredential_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TestPersonalIntegrationCredentialRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PersonalIntegrationCredentialServiceServer).TestPersonalIntegrationCredential(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PersonalIntegrationCredentialService_TestPersonalIntegrationCredential_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PersonalIntegrationCredentialServiceServer).TestPersonalIntegrationCredential(ctx, req.(*TestPersonalIntegrationCredentialRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PersonalIntegrationCredentialService_ClaimPersonalIntegrationCredentialTests_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimPersonalIntegrationCredentialTestsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PersonalIntegrationCredentialServiceServer).ClaimPersonalIntegrationCredentialTests(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PersonalIntegrationCredentialService_ClaimPersonalIntegrationCredentialTests_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PersonalIntegrationCredentialServiceServer).ClaimPersonalIntegrationCredentialTests(ctx, req.(*ClaimPersonalIntegrationCredentialTestsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PersonalIntegrationCredentialService_BeginPersonalIntegrationCredentialProbe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BeginPersonalIntegrationCredentialProbeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PersonalIntegrationCredentialServiceServer).BeginPersonalIntegrationCredentialProbe(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PersonalIntegrationCredentialService_BeginPersonalIntegrationCredentialProbe_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PersonalIntegrationCredentialServiceServer).BeginPersonalIntegrationCredentialProbe(ctx, req.(*BeginPersonalIntegrationCredentialProbeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PersonalIntegrationCredentialService_CompletePersonalIntegrationCredentialTest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompletePersonalIntegrationCredentialTestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PersonalIntegrationCredentialServiceServer).CompletePersonalIntegrationCredentialTest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PersonalIntegrationCredentialService_CompletePersonalIntegrationCredentialTest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PersonalIntegrationCredentialServiceServer).CompletePersonalIntegrationCredentialTest(ctx, req.(*CompletePersonalIntegrationCredentialTestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PersonalIntegrationCredentialService_BeginPersonalIntegrationInvocation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BeginPersonalIntegrationInvocationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PersonalIntegrationCredentialServiceServer).BeginPersonalIntegrationInvocation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PersonalIntegrationCredentialService_BeginPersonalIntegrationInvocation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PersonalIntegrationCredentialServiceServer).BeginPersonalIntegrationInvocation(ctx, req.(*BeginPersonalIntegrationInvocationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// PersonalIntegrationCredentialService_ServiceDesc is the grpc.ServiceDesc for PersonalIntegrationCredentialService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var PersonalIntegrationCredentialService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "controlplane.v1.PersonalIntegrationCredentialService",
+	HandlerType: (*PersonalIntegrationCredentialServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ListPersonalIntegrationConnections",
+			Handler:    _PersonalIntegrationCredentialService_ListPersonalIntegrationConnections_Handler,
+		},
+		{
+			MethodName: "GetPersonalIntegrationCredential",
+			Handler:    _PersonalIntegrationCredentialService_GetPersonalIntegrationCredential_Handler,
+		},
+		{
+			MethodName: "CreatePersonalIntegrationCredential",
+			Handler:    _PersonalIntegrationCredentialService_CreatePersonalIntegrationCredential_Handler,
+		},
+		{
+			MethodName: "ConfigurePersonalIntegrationCredential",
+			Handler:    _PersonalIntegrationCredentialService_ConfigurePersonalIntegrationCredential_Handler,
+		},
+		{
+			MethodName: "RevokePersonalIntegrationCredential",
+			Handler:    _PersonalIntegrationCredentialService_RevokePersonalIntegrationCredential_Handler,
+		},
+		{
+			MethodName: "SetIntegrationCredentialPolicy",
+			Handler:    _PersonalIntegrationCredentialService_SetIntegrationCredentialPolicy_Handler,
+		},
+		{
+			MethodName: "TestPersonalIntegrationCredential",
+			Handler:    _PersonalIntegrationCredentialService_TestPersonalIntegrationCredential_Handler,
+		},
+		{
+			MethodName: "ClaimPersonalIntegrationCredentialTests",
+			Handler:    _PersonalIntegrationCredentialService_ClaimPersonalIntegrationCredentialTests_Handler,
+		},
+		{
+			MethodName: "BeginPersonalIntegrationCredentialProbe",
+			Handler:    _PersonalIntegrationCredentialService_BeginPersonalIntegrationCredentialProbe_Handler,
+		},
+		{
+			MethodName: "CompletePersonalIntegrationCredentialTest",
+			Handler:    _PersonalIntegrationCredentialService_CompletePersonalIntegrationCredentialTest_Handler,
+		},
+		{
+			MethodName: "BeginPersonalIntegrationInvocation",
+			Handler:    _PersonalIntegrationCredentialService_BeginPersonalIntegrationInvocation_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "controlplane/v1/control_plane.proto",
+}

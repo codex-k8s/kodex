@@ -2566,6 +2566,24 @@ func (e IntegrationConfigurationFieldValueType) Valid() bool {
 	}
 }
 
+// Defines values for IntegrationConnectionCredentialPolicy.
+const (
+	IntegrationConnectionCredentialPolicyINITIATORREQUIRED IntegrationConnectionCredentialPolicy = "INITIATOR_REQUIRED"
+	IntegrationConnectionCredentialPolicyPROJECTSHARED     IntegrationConnectionCredentialPolicy = "PROJECT_SHARED"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationConnectionCredentialPolicy enum.
+func (e IntegrationConnectionCredentialPolicy) Valid() bool {
+	switch e {
+	case IntegrationConnectionCredentialPolicyINITIATORREQUIRED:
+		return true
+	case IntegrationConnectionCredentialPolicyPROJECTSHARED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for IntegrationConnectionState.
 const (
 	IntegrationConnectionStateCONNECTED    IntegrationConnectionState = "CONNECTED"
@@ -2611,6 +2629,63 @@ func (e IntegrationConnectionCommandAction) Valid() bool {
 	case IntegrationConnectionCommandActionENABLE:
 		return true
 	case IntegrationConnectionCommandActionTEST:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IntegrationCredentialPolicyInputPolicy.
+const (
+	IntegrationCredentialPolicyInputPolicyINITIATORREQUIRED IntegrationCredentialPolicyInputPolicy = "INITIATOR_REQUIRED"
+	IntegrationCredentialPolicyInputPolicyPROJECTSHARED     IntegrationCredentialPolicyInputPolicy = "PROJECT_SHARED"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationCredentialPolicyInputPolicy enum.
+func (e IntegrationCredentialPolicyInputPolicy) Valid() bool {
+	switch e {
+	case IntegrationCredentialPolicyInputPolicyINITIATORREQUIRED:
+		return true
+	case IntegrationCredentialPolicyInputPolicyPROJECTSHARED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IntegrationCredentialPreflightIssueProblem.
+const (
+	IntegrationCredentialPreflightIssueProblemCREDENTIALCHECKREQUIRED         IntegrationCredentialPreflightIssueProblem = "CREDENTIAL_CHECK_REQUIRED"
+	IntegrationCredentialPreflightIssueProblemCREDENTIALCONNECTIONUNAVAILABLE IntegrationCredentialPreflightIssueProblem = "CREDENTIAL_CONNECTION_UNAVAILABLE"
+	IntegrationCredentialPreflightIssueProblemCREDENTIALEXPIRED               IntegrationCredentialPreflightIssueProblem = "CREDENTIAL_EXPIRED"
+	IntegrationCredentialPreflightIssueProblemCREDENTIALINITIATORREQUIRED     IntegrationCredentialPreflightIssueProblem = "CREDENTIAL_INITIATOR_REQUIRED"
+	IntegrationCredentialPreflightIssueProblemCREDENTIALINSUFFICIENT          IntegrationCredentialPreflightIssueProblem = "CREDENTIAL_INSUFFICIENT"
+	IntegrationCredentialPreflightIssueProblemCREDENTIALINVALID               IntegrationCredentialPreflightIssueProblem = "CREDENTIAL_INVALID"
+	IntegrationCredentialPreflightIssueProblemCREDENTIALMISSING               IntegrationCredentialPreflightIssueProblem = "CREDENTIAL_MISSING"
+	IntegrationCredentialPreflightIssueProblemCREDENTIALPERMISSIONUNCONFIRMED IntegrationCredentialPreflightIssueProblem = "CREDENTIAL_PERMISSION_UNCONFIRMED"
+	IntegrationCredentialPreflightIssueProblemCREDENTIALREVOKED               IntegrationCredentialPreflightIssueProblem = "CREDENTIAL_REVOKED"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationCredentialPreflightIssueProblem enum.
+func (e IntegrationCredentialPreflightIssueProblem) Valid() bool {
+	switch e {
+	case IntegrationCredentialPreflightIssueProblemCREDENTIALCHECKREQUIRED:
+		return true
+	case IntegrationCredentialPreflightIssueProblemCREDENTIALCONNECTIONUNAVAILABLE:
+		return true
+	case IntegrationCredentialPreflightIssueProblemCREDENTIALEXPIRED:
+		return true
+	case IntegrationCredentialPreflightIssueProblemCREDENTIALINITIATORREQUIRED:
+		return true
+	case IntegrationCredentialPreflightIssueProblemCREDENTIALINSUFFICIENT:
+		return true
+	case IntegrationCredentialPreflightIssueProblemCREDENTIALINVALID:
+		return true
+	case IntegrationCredentialPreflightIssueProblemCREDENTIALMISSING:
+		return true
+	case IntegrationCredentialPreflightIssueProblemCREDENTIALPERMISSIONUNCONFIRMED:
+		return true
+	case IntegrationCredentialPreflightIssueProblemCREDENTIALREVOKED:
 		return true
 	default:
 		return false
@@ -3901,6 +3976,75 @@ func (e PermissionRisk) Valid() bool {
 	case PermissionRiskREAD:
 		return true
 	case PermissionRiskWRITE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PersonalIntegrationConnectionPolicy.
+const (
+	PersonalIntegrationConnectionPolicyINITIATORREQUIRED PersonalIntegrationConnectionPolicy = "INITIATOR_REQUIRED"
+	PersonalIntegrationConnectionPolicyPROJECTSHARED     PersonalIntegrationConnectionPolicy = "PROJECT_SHARED"
+)
+
+// Valid indicates whether the value is a known member of the PersonalIntegrationConnectionPolicy enum.
+func (e PersonalIntegrationConnectionPolicy) Valid() bool {
+	switch e {
+	case PersonalIntegrationConnectionPolicyINITIATORREQUIRED:
+		return true
+	case PersonalIntegrationConnectionPolicyPROJECTSHARED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PersonalIntegrationCredentialPolicy.
+const (
+	PersonalIntegrationCredentialPolicyINITIATORREQUIRED PersonalIntegrationCredentialPolicy = "INITIATOR_REQUIRED"
+	PersonalIntegrationCredentialPolicyPROJECTSHARED     PersonalIntegrationCredentialPolicy = "PROJECT_SHARED"
+)
+
+// Valid indicates whether the value is a known member of the PersonalIntegrationCredentialPolicy enum.
+func (e PersonalIntegrationCredentialPolicy) Valid() bool {
+	switch e {
+	case PersonalIntegrationCredentialPolicyINITIATORREQUIRED:
+		return true
+	case PersonalIntegrationCredentialPolicyPROJECTSHARED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PersonalIntegrationCredentialState.
+const (
+	PersonalIntegrationCredentialStateCHECKING      PersonalIntegrationCredentialState = "CHECKING"
+	PersonalIntegrationCredentialStateCHECKREQUIRED PersonalIntegrationCredentialState = "CHECK_REQUIRED"
+	PersonalIntegrationCredentialStateEXPIRED       PersonalIntegrationCredentialState = "EXPIRED"
+	PersonalIntegrationCredentialStateINVALID       PersonalIntegrationCredentialState = "INVALID"
+	PersonalIntegrationCredentialStateNOTCONFIGURED PersonalIntegrationCredentialState = "NOT_CONFIGURED"
+	PersonalIntegrationCredentialStateREADY         PersonalIntegrationCredentialState = "READY"
+	PersonalIntegrationCredentialStateREVOKED       PersonalIntegrationCredentialState = "REVOKED"
+)
+
+// Valid indicates whether the value is a known member of the PersonalIntegrationCredentialState enum.
+func (e PersonalIntegrationCredentialState) Valid() bool {
+	switch e {
+	case PersonalIntegrationCredentialStateCHECKING:
+		return true
+	case PersonalIntegrationCredentialStateCHECKREQUIRED:
+		return true
+	case PersonalIntegrationCredentialStateEXPIRED:
+		return true
+	case PersonalIntegrationCredentialStateINVALID:
+		return true
+	case PersonalIntegrationCredentialStateNOTCONFIGURED:
+		return true
+	case PersonalIntegrationCredentialStateREADY:
+		return true
+	case PersonalIntegrationCredentialStateREVOKED:
 		return true
 	default:
 		return false
@@ -12076,10 +12220,11 @@ type IntegrationConfigurationFieldValueType string
 
 // IntegrationConnection defines model for IntegrationConnection.
 type IntegrationConnection struct {
-	Capabilities          []IntegrationCapability `json:"capabilities"`
-	CreatedAt             *Timestamp              `json:"createdAt,omitempty"`
-	CredentialsConfigured bool                    `json:"credentialsConfigured"`
-	CredentialsHint       string                  `json:"credentialsHint"`
+	Capabilities          []IntegrationCapability               `json:"capabilities"`
+	CreatedAt             *Timestamp                            `json:"createdAt,omitempty"`
+	CredentialPolicy      IntegrationConnectionCredentialPolicy `json:"credentialPolicy"`
+	CredentialsConfigured bool                                  `json:"credentialsConfigured"`
+	CredentialsHint       string                                `json:"credentialsHint"`
 
 	// DefinitionConfigurationBinding Авторитетная связь INTEGRATION_DEFINITION; MATCH содержит текущие глобальные pins для OCC, ABSENT разрешает явную проверку отсутствия. Pins не выдают права.
 	DefinitionConfigurationBinding *IntegrationDefinitionConfigurationBinding `json:"definitionConfigurationBinding,omitempty"`
@@ -12097,6 +12242,9 @@ type IntegrationConnection struct {
 	UpdatedAt                      *Timestamp                                 `json:"updatedAt,omitempty"`
 	Version                        int64                                      `json:"version"`
 }
+
+// IntegrationConnectionCredentialPolicy defines model for IntegrationConnection.CredentialPolicy.
+type IntegrationConnectionCredentialPolicy string
 
 // IntegrationConnectionState defines model for IntegrationConnection.State.
 type IntegrationConnectionState string
@@ -12126,6 +12274,25 @@ type IntegrationConnectionUpdateInput struct {
 type IntegrationCredentialInput struct {
 	Value *string `json:"value,omitempty"`
 }
+
+// IntegrationCredentialPolicyInput defines model for IntegrationCredentialPolicyInput.
+type IntegrationCredentialPolicyInput struct {
+	Policy IntegrationCredentialPolicyInputPolicy `json:"policy"`
+}
+
+// IntegrationCredentialPolicyInputPolicy defines model for IntegrationCredentialPolicyInput.Policy.
+type IntegrationCredentialPolicyInputPolicy string
+
+// IntegrationCredentialPreflightIssue defines model for IntegrationCredentialPreflightIssue.
+type IntegrationCredentialPreflightIssue struct {
+	CapabilityKey  string                                     `json:"capabilityKey"`
+	ConnectionName *string                                    `json:"connectionName,omitempty"`
+	ConnectionRef  OpaqueRef                                  `json:"connectionRef"`
+	Problem        IntegrationCredentialPreflightIssueProblem `json:"problem"`
+}
+
+// IntegrationCredentialPreflightIssueProblem defines model for IntegrationCredentialPreflightIssue.Problem.
+type IntegrationCredentialPreflightIssueProblem string
 
 // IntegrationDefinition defines model for IntegrationDefinition.
 type IntegrationDefinition struct {
@@ -13002,6 +13169,62 @@ type PermissionDefinitionPage struct {
 // PermissionRisk defines model for PermissionRisk.
 type PermissionRisk string
 
+// PersonalIntegrationConnection defines model for PersonalIntegrationConnection.
+type PersonalIntegrationConnection struct {
+	// Available Адаптер включён и поддерживает настройку ключа; false не скрывает собственный ключ для отзыва и не заменяет проверку полномочий.
+	Available         bool                                `json:"available"`
+	ConnectionRef     OpaqueRef                           `json:"connectionRef"`
+	ConnectionVersion int64                               `json:"connectionVersion"`
+	Credential        *PersonalIntegrationCredential      `json:"credential,omitempty"`
+	DefinitionKey     string                              `json:"definitionKey"`
+	Enabled           bool                                `json:"enabled"`
+	Name              string                              `json:"name"`
+	Policy            PersonalIntegrationConnectionPolicy `json:"policy"`
+}
+
+// PersonalIntegrationConnectionPolicy defines model for PersonalIntegrationConnection.Policy.
+type PersonalIntegrationConnectionPolicy string
+
+// PersonalIntegrationConnectionList defines model for PersonalIntegrationConnectionList.
+type PersonalIntegrationConnectionList struct {
+	Items         []PersonalIntegrationConnection `json:"items"`
+	NextPageToken *string                         `json:"nextPageToken,omitempty"`
+}
+
+// PersonalIntegrationCredential defines model for PersonalIntegrationCredential.
+type PersonalIntegrationCredential struct {
+	BindingRef             OpaqueRef                           `json:"bindingRef"`
+	ConnectionRef          OpaqueRef                           `json:"connectionRef"`
+	ConnectionVersion      int64                               `json:"connectionVersion"`
+	CredentialConfigured   bool                                `json:"credentialConfigured"`
+	DeniedCapabilityKeys   []string                            `json:"deniedCapabilityKeys"`
+	ExpiresAt              *Timestamp                          `json:"expiresAt,omitempty"`
+	Policy                 PersonalIntegrationCredentialPolicy `json:"policy"`
+	State                  PersonalIntegrationCredentialState  `json:"state"`
+	VerifiedCapabilityKeys []string                            `json:"verifiedCapabilityKeys"`
+	Version                int64                               `json:"version"`
+}
+
+// PersonalIntegrationCredentialPolicy defines model for PersonalIntegrationCredential.Policy.
+type PersonalIntegrationCredentialPolicy string
+
+// PersonalIntegrationCredentialState defines model for PersonalIntegrationCredential.State.
+type PersonalIntegrationCredentialState string
+
+// PersonalIntegrationCredentialConfigureInput defines model for PersonalIntegrationCredentialConfigureInput.
+type PersonalIntegrationCredentialConfigureInput struct {
+	ExpectedConnectionVersion int64   `json:"expectedConnectionVersion"`
+	Value                     *string `json:"value,omitempty"`
+}
+
+// PersonalIntegrationCredentialCreateInput defines model for PersonalIntegrationCredentialCreateInput.
+type PersonalIntegrationCredentialCreateInput struct {
+	ExpectedConnectionVersion int64 `json:"expectedConnectionVersion"`
+}
+
+// PersonalIntegrationCredentialRevokeInput defines model for PersonalIntegrationCredentialRevokeInput.
+type PersonalIntegrationCredentialRevokeInput = map[string]interface{}
+
 // PlatformCapability defines model for PlatformCapability.
 type PlatformCapability struct {
 	AvailableWithoutIntegration bool   `json:"availableWithoutIntegration"`
@@ -13042,11 +13265,14 @@ type Problem struct {
 	CorrelationId openapi_types.UUID          `json:"correlationId"`
 	Detail        *string                     `json:"detail,omitempty"`
 	Diagnostics   *[]PromptTemplateDiagnostic `json:"diagnostics,omitempty"`
-	Retryable     bool                        `json:"retryable"`
-	Status        int                         `json:"status"`
-	Title         string                      `json:"title"`
-	Type          string                      `json:"type"`
-	WinnerSummary *string                     `json:"winnerSummary,omitempty"`
+
+	// IntegrationCredentialIssues Полный список проблем личных подключений при INTEGRATION_CREDENTIALS_REQUIRED; отказ предшествует созданию session/run и не разрешает повтор внешнего действия.
+	IntegrationCredentialIssues *[]IntegrationCredentialPreflightIssue `json:"integrationCredentialIssues,omitempty"`
+	Retryable                   bool                                   `json:"retryable"`
+	Status                      int                                    `json:"status"`
+	Title                       string                                 `json:"title"`
+	Type                        string                                 `json:"type"`
+	WinnerSummary               *string                                `json:"winnerSummary,omitempty"`
 }
 
 // Project defines model for Project.
@@ -15703,16 +15929,19 @@ type SkillBundleSpecification struct {
 
 // SpeechRateLimitProblem defines model for SpeechRateLimitProblem.
 type SpeechRateLimitProblem struct {
-	ActualVersion *int64                       `json:"actualVersion,omitempty"`
-	Code          SpeechRateLimitProblemCode   `json:"code"`
-	CorrelationId openapi_types.UUID           `json:"correlationId"`
-	Detail        *string                      `json:"detail,omitempty"`
-	Diagnostics   *[]PromptTemplateDiagnostic  `json:"diagnostics,omitempty"`
-	Retryable     bool                         `json:"retryable"`
-	Status        SpeechRateLimitProblemStatus `json:"status"`
-	Title         string                       `json:"title"`
-	Type          string                       `json:"type"`
-	WinnerSummary *string                      `json:"winnerSummary,omitempty"`
+	ActualVersion *int64                      `json:"actualVersion,omitempty"`
+	Code          SpeechRateLimitProblemCode  `json:"code"`
+	CorrelationId openapi_types.UUID          `json:"correlationId"`
+	Detail        *string                     `json:"detail,omitempty"`
+	Diagnostics   *[]PromptTemplateDiagnostic `json:"diagnostics,omitempty"`
+
+	// IntegrationCredentialIssues Полный список проблем личных подключений при INTEGRATION_CREDENTIALS_REQUIRED; отказ предшествует созданию session/run и не разрешает повтор внешнего действия.
+	IntegrationCredentialIssues *[]IntegrationCredentialPreflightIssue `json:"integrationCredentialIssues,omitempty"`
+	Retryable                   bool                                   `json:"retryable"`
+	Status                      SpeechRateLimitProblemStatus           `json:"status"`
+	Title                       string                                 `json:"title"`
+	Type                        string                                 `json:"type"`
+	WinnerSummary               *string                                `json:"winnerSummary,omitempty"`
 }
 
 // SpeechRateLimitProblemCode defines model for SpeechRateLimitProblem.Code.
@@ -17253,6 +17482,13 @@ type ConfigureIntegrationConnectionCredentialParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// SetIntegrationCredentialPolicyParams defines parameters for SetIntegrationCredentialPolicy.
+type SetIntegrationCredentialPolicyParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
 // UnbindEmailMailboxConfigurationParams defines parameters for UnbindEmailMailboxConfiguration.
 type UnbindEmailMailboxConfigurationParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
@@ -17540,6 +17776,40 @@ type GetManagedConfigurationImpactParams struct {
 	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// ListPersonalIntegrationConnectionsParams defines parameters for ListPersonalIntegrationConnections.
+type ListPersonalIntegrationConnectionsParams struct {
+	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// CreatePersonalIntegrationCredentialParams defines parameters for CreatePersonalIntegrationCredential.
+type CreatePersonalIntegrationCredentialParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ConfigurePersonalIntegrationCredentialParams defines parameters for ConfigurePersonalIntegrationCredential.
+type ConfigurePersonalIntegrationCredentialParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// RevokePersonalIntegrationCredentialParams defines parameters for RevokePersonalIntegrationCredential.
+type RevokePersonalIntegrationCredentialParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// TestPersonalIntegrationCredentialParams defines parameters for TestPersonalIntegrationCredential.
+type TestPersonalIntegrationCredentialParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
 // ListMemoryRecordsParams defines parameters for ListMemoryRecords.
@@ -19076,6 +19346,9 @@ type CommandIntegrationConnectionJSONRequestBody = IntegrationConnectionCommand
 // ConfigureIntegrationConnectionCredentialJSONRequestBody defines body for ConfigureIntegrationConnectionCredential for application/json ContentType.
 type ConfigureIntegrationConnectionCredentialJSONRequestBody = IntegrationCredentialInput
 
+// SetIntegrationCredentialPolicyJSONRequestBody defines body for SetIntegrationCredentialPolicy for application/json ContentType.
+type SetIntegrationCredentialPolicyJSONRequestBody = IntegrationCredentialPolicyInput
+
 // ConfigureEmailMailboxCredentialJSONRequestBody defines body for ConfigureEmailMailboxCredential for application/json ContentType.
 type ConfigureEmailMailboxCredentialJSONRequestBody = EmailMailboxCredentialInput
 
@@ -19120,6 +19393,18 @@ type RejectManagedConfigurationGitWriteBackJSONRequestBody = ConfigurationWriteB
 
 // CopyGitManagedConfigurationJSONRequestBody defines body for CopyGitManagedConfiguration for application/json ContentType.
 type CopyGitManagedConfigurationJSONRequestBody = ManagedConfigurationCopyInput
+
+// CreatePersonalIntegrationCredentialJSONRequestBody defines body for CreatePersonalIntegrationCredential for application/json ContentType.
+type CreatePersonalIntegrationCredentialJSONRequestBody = PersonalIntegrationCredentialCreateInput
+
+// ConfigurePersonalIntegrationCredentialJSONRequestBody defines body for ConfigurePersonalIntegrationCredential for application/json ContentType.
+type ConfigurePersonalIntegrationCredentialJSONRequestBody = PersonalIntegrationCredentialConfigureInput
+
+// RevokePersonalIntegrationCredentialJSONRequestBody defines body for RevokePersonalIntegrationCredential for application/json ContentType.
+type RevokePersonalIntegrationCredentialJSONRequestBody = PersonalIntegrationCredentialRevokeInput
+
+// TestPersonalIntegrationCredentialJSONRequestBody defines body for TestPersonalIntegrationCredential for application/json ContentType.
+type TestPersonalIntegrationCredentialJSONRequestBody = PersonalIntegrationCredentialCreateInput
 
 // ReviseMemoryRecordJSONRequestBody defines body for ReviseMemoryRecord for application/json ContentType.
 type ReviseMemoryRecordJSONRequestBody = MemoryRecordSpecification
@@ -20696,6 +20981,9 @@ type ServerInterface interface {
 	// (PUT /api/v1/integration-connections/{connectionRef}/credential)
 	ConfigureIntegrationConnectionCredential(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params ConfigureIntegrationConnectionCredentialParams)
 
+	// (PUT /api/v1/integration-connections/{connectionRef}/credential-policy)
+	SetIntegrationCredentialPolicy(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params SetIntegrationCredentialPolicyParams)
+
 	// (DELETE /api/v1/integration-connections/{connectionRef}/email-mailbox/binding)
 	UnbindEmailMailboxConfiguration(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params UnbindEmailMailboxConfigurationParams)
 
@@ -20815,6 +21103,24 @@ type ServerInterface interface {
 
 	// (GET /api/v1/managed-configurations/{configurationRef}/revisions/{revisionRef}/impact)
 	GetManagedConfigurationImpact(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, revisionRef ConfigurationRevisionRef, params GetManagedConfigurationImpactParams)
+
+	// (GET /api/v1/me/integration-connections)
+	ListPersonalIntegrationConnections(w http.ResponseWriter, r *http.Request, params ListPersonalIntegrationConnectionsParams)
+
+	// (GET /api/v1/me/integration-connections/{connectionRef}/credential)
+	GetPersonalIntegrationCredential(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef)
+
+	// (POST /api/v1/me/integration-connections/{connectionRef}/credential)
+	CreatePersonalIntegrationCredential(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params CreatePersonalIntegrationCredentialParams)
+
+	// (PUT /api/v1/me/integration-connections/{connectionRef}/credential)
+	ConfigurePersonalIntegrationCredential(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params ConfigurePersonalIntegrationCredentialParams)
+
+	// (POST /api/v1/me/integration-connections/{connectionRef}/credential/revoke)
+	RevokePersonalIntegrationCredential(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params RevokePersonalIntegrationCredentialParams)
+
+	// (POST /api/v1/me/integration-connections/{connectionRef}/credential/test)
+	TestPersonalIntegrationCredential(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params TestPersonalIntegrationCredentialParams)
 
 	// (GET /api/v1/memory-records)
 	ListMemoryRecords(w http.ResponseWriter, r *http.Request, params ListMemoryRecordsParams)
@@ -29574,6 +29880,112 @@ func (siw *ServerInterfaceWrapper) ConfigureIntegrationConnectionCredential(w ht
 	handler.ServeHTTP(w, r)
 }
 
+// SetIntegrationCredentialPolicy operation middleware
+func (siw *ServerInterfaceWrapper) SetIntegrationCredentialPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetIntegrationCredentialPolicyParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetIntegrationCredentialPolicy(w, r, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // UnbindEmailMailboxConfiguration operation middleware
 func (siw *ServerInterfaceWrapper) UnbindEmailMailboxConfiguration(w http.ResponseWriter, r *http.Request) {
 
@@ -33238,6 +33650,504 @@ func (siw *ServerInterfaceWrapper) GetManagedConfigurationImpact(w http.Response
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetManagedConfigurationImpact(w, r, configurationRef, revisionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPersonalIntegrationConnections operation middleware
+func (siw *ServerInterfaceWrapper) ListPersonalIntegrationConnections(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListPersonalIntegrationConnectionsParams
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPersonalIntegrationConnections(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetPersonalIntegrationCredential operation middleware
+func (siw *ServerInterfaceWrapper) GetPersonalIntegrationCredential(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPersonalIntegrationCredential(w, r, connectionRef)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreatePersonalIntegrationCredential operation middleware
+func (siw *ServerInterfaceWrapper) CreatePersonalIntegrationCredential(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreatePersonalIntegrationCredentialParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreatePersonalIntegrationCredential(w, r, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ConfigurePersonalIntegrationCredential operation middleware
+func (siw *ServerInterfaceWrapper) ConfigurePersonalIntegrationCredential(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ConfigurePersonalIntegrationCredentialParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConfigurePersonalIntegrationCredential(w, r, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokePersonalIntegrationCredential operation middleware
+func (siw *ServerInterfaceWrapper) RevokePersonalIntegrationCredential(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RevokePersonalIntegrationCredentialParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokePersonalIntegrationCredential(w, r, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestPersonalIntegrationCredential operation middleware
+func (siw *ServerInterfaceWrapper) TestPersonalIntegrationCredential(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params TestPersonalIntegrationCredentialParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestPersonalIntegrationCredential(w, r, connectionRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -51322,6 +52232,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}", wrapper.UpdateIntegrationConnection)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/commands", wrapper.CommandIntegrationConnection)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/credential", wrapper.ConfigureIntegrationConnectionCredential)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/credential-policy", wrapper.SetIntegrationCredentialPolicy)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/email-mailbox/binding", wrapper.UnbindEmailMailboxConfiguration)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/email-mailbox/configuration", wrapper.GetEmailMailboxConfiguration)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/email-mailbox/configurations", wrapper.ListEmailMailboxConfigurations)
@@ -51362,6 +52273,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/managed-configurations/{configurationRef}/git-write-backs", wrapper.ListManagedConfigurationGitWriteBacks)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/managed-configurations/{configurationRef}/revisions", wrapper.ListManagedConfigurationHistory)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/managed-configurations/{configurationRef}/revisions/{revisionRef}/impact", wrapper.GetManagedConfigurationImpact)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/me/integration-connections", wrapper.ListPersonalIntegrationConnections)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/me/integration-connections/{connectionRef}/credential", wrapper.GetPersonalIntegrationCredential)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/me/integration-connections/{connectionRef}/credential", wrapper.CreatePersonalIntegrationCredential)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/me/integration-connections/{connectionRef}/credential", wrapper.ConfigurePersonalIntegrationCredential)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/me/integration-connections/{connectionRef}/credential/revoke", wrapper.RevokePersonalIntegrationCredential)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/me/integration-connections/{connectionRef}/credential/test", wrapper.TestPersonalIntegrationCredential)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/memory-records", wrapper.ListMemoryRecords)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/memory-records/{recordRef}", wrapper.GetMemoryRecord)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/memory-records/{recordRef}/archive", wrapper.ArchiveMemoryRecord)

@@ -57,8 +57,9 @@ const riskOperations = [
 ];
 
 function checkRiskContract(api, policy) {
-  // Ревизия102 добавляет standard OIDC identity; четыре risk bindings остаются прежними.
-  assert.equal(policy.policy_revision, 102, 'RISK_POLICY_REVISION');
+  // Ревизия103 сохраняет standard OIDC identity ревизии102 и добавляет собственные credentials;
+  // четыре risk bindings остаются прежними.
+  assert.equal(policy.policy_revision, 103, 'RISK_POLICY_REVISION');
   for (const [permission, operation, method] of riskOperations) {
     const bindings = policy.policy.operation_bindings.filter(item => item.operation_id === permission);
     assert.equal(bindings.length, 1, 'RISK_METHOD_EXACT_CALLER');

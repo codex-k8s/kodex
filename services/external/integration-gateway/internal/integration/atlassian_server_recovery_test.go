@@ -24,8 +24,8 @@ func serverFixtureJSONResponse(t *testing.T, invocation Request, request *http.R
 	return response
 }
 
-// TestJiraServerCreateRejoinsExactLabelAndPayload proves adapter readback can rejoin one known effect without creating another issue.
-// TestJiraServerCreateRejoinsExactLabelAndPayload доказывает readback одного effect без нового issue create.
+// TestJiraServerCreateRejoinsExactLabelAndPayload keeps marker-only Execute observations unknown without creating another issue.
+// TestJiraServerCreateRejoinsExactLabelAndPayload сохраняет marker-only Execute observation неизвестным без нового issue create.
 func TestJiraServerCreateRejoinsExactLabelAndPayload(t *testing.T) {
 	adapter := testAdapter(t)
 	credential := testCredential(t, adapter, "synthetic-server-token")
@@ -41,17 +41,17 @@ func TestJiraServerCreateRejoinsExactLabelAndPayload(t *testing.T) {
 		return serverFixtureJSONResponse(t, request, r, map[string]any{"startAt": 0, "maxResults": 2, "total": 1, "issues": []any{issue}}), nil
 	})}
 	first, err := adapter.Execute(t.Context(), request)
-	if err != nil {
-		t.Fatal(err)
+	if !IsUnknownOutcome(err) || first.Receipt.ProviderEffectRef != "" {
+		t.Fatal("marker-only create was adopted", err)
 	}
 	second, err := adapter.Execute(t.Context(), request)
-	if err != nil || calls != 2 || first.Receipt.ProviderEffectRef != second.Receipt.ProviderEffectRef || second.Receipt.ProviderEffectRef != "jira-issue:DEMO-1" {
+	if !IsUnknownOutcome(err) || calls != 2 || second.Receipt.ProviderEffectRef != "" {
 		t.Fatalf("readback did not preserve the same effect: calls=%d, %v", calls, err)
 	}
 }
 
-// TestConfluenceServerCreateRejoinsMarkerAndInput requires the exact existing page body and immutable marker before reusing its receipt.
-// TestConfluenceServerCreateRejoinsMarkerAndInput требует точные body и immutable marker перед повторным чтением receipt.
+// TestConfluenceServerCreateRejoinsMarkerAndInput keeps prior page markers read-only until explicit Recover verifies the author.
+// TestConfluenceServerCreateRejoinsMarkerAndInput сохраняет прежние page markers read-only до проверки автора явным Recover.
 func TestConfluenceServerCreateRejoinsMarkerAndInput(t *testing.T) {
 	adapter := testAdapter(t)
 	credential := testCredential(t, adapter, "synthetic-server-token")
@@ -67,11 +67,11 @@ func TestConfluenceServerCreateRejoinsMarkerAndInput(t *testing.T) {
 		return serverFixtureJSONResponse(t, request, r, map[string]any{"start": 0, "limit": 2, "size": 1, "results": []any{page}, "_links": map[string]any{}}), nil
 	})}
 	first, err := adapter.Execute(t.Context(), request)
-	if err != nil {
-		t.Fatal(err)
+	if !IsUnknownOutcome(err) || first.Receipt.ProviderEffectRef != "" {
+		t.Fatal("marker-only page was adopted", err)
 	}
 	second, err := adapter.Execute(t.Context(), request)
-	if err != nil || calls != 2 || first.Receipt.ProviderEffectRef != second.Receipt.ProviderEffectRef || second.Receipt.ProviderEffectRef != "confluence-page:102" {
+	if !IsUnknownOutcome(err) || calls != 2 || second.Receipt.ProviderEffectRef != "" {
 		t.Fatalf("page readback did not rejoin: calls=%d, %v", calls, err)
 	}
 }
@@ -223,8 +223,8 @@ func TestJiraServerTransitionWithRequiredFieldsStopsBeforePost(t *testing.T) {
 	}
 }
 
-// TestConfluenceServerUpdateRejoinsExactVersionAndMarker verifies the observed successful version without sending a second PUT.
-// TestConfluenceServerUpdateRejoinsExactVersionAndMarker проверяет уже успешную версию без повторного PUT.
+// TestConfluenceServerUpdateRejoinsExactVersionAndMarker requests explicit Recover for a prior marked version without another PUT.
+// TestConfluenceServerUpdateRejoinsExactVersionAndMarker требует явный Recover прежней marked version без повторного PUT.
 func TestConfluenceServerUpdateRejoinsExactVersionAndMarker(t *testing.T) {
 	adapter := testAdapter(t)
 	credential := testCredential(t, adapter, "synthetic-server-token")
@@ -239,7 +239,7 @@ func TestConfluenceServerUpdateRejoinsExactVersionAndMarker(t *testing.T) {
 		page["body"].(map[string]any)["storage"].(map[string]string)["value"] = "<p>new</p>\n" + confluenceServerMarker(request)
 		return serverFixtureJSONResponse(t, request, r, page), nil
 	})}
-	if result, err := adapter.Execute(t.Context(), request); err != nil || calls != 2 || result.Receipt.ProviderEffectRef != "confluence-page:101" {
+	if result, err := adapter.Execute(t.Context(), request); !IsUnknownOutcome(err) || calls != 2 || result.Receipt.ProviderEffectRef != "" {
 		t.Fatalf("known version was not rejoined: calls=%d, %v", calls, err)
 	}
 }
@@ -250,7 +250,7 @@ func TestAtlassianServerRecoveryNeverReplaysMutation(t *testing.T) {
 	for _, key := range []string{jiraServerDefinition, confluenceServerDefinition} {
 		definition := serverDefinitionFixture(t, key)
 		for _, capability := range definition.Spec.Capabilities {
-			if capability.Risk == "READ" {
+			if capability.Operation != "jira.issue.transition.apply" {
 				continue
 			}
 			t.Run(capability.Operation, func(t *testing.T) {

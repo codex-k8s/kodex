@@ -46,6 +46,7 @@ function connection(
     definitionKey: "github",
     name: "Основная организация",
     state: credentialsConfigured ? "CONNECTED" : "NOT_CONNECTED",
+    credentialPolicy: "PROJECT_SHARED",
     credentialsConfigured,
     credentialsHint: credentialsConfigured ? "••••••••" : "Не настроены",
     capabilities: [],
@@ -60,6 +61,13 @@ function connection(
 }
 
 describe("двухфазная настройка подключения", () => {
+  it("не предлагает общий ключ для персональной политики при устаревшем action hint", () => {
+    const personal = connection(3);
+    personal.credentialPolicy = "INITIATOR_REQUIRED";
+    expect(canConfigureCredential(definition("token"), personal)).toBe(false);
+    const shared = connection(3);
+    expect(canConfigureCredential(definition("token"), shared)).toBe(true);
+  });
   it("типизированно сериализует публичную конфигурацию и валидирует URL", () => {
     const fields: IntegrationDefinition["configurationFields"] = [
       {

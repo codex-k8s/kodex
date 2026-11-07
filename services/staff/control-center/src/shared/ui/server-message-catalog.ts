@@ -770,6 +770,62 @@ export const serverTokenTranslations = {
     "Учётные данные настроены",
     "Credentials configured",
   ],
+  INTEGRATION_CREDENTIAL_PERSONAL_REQUIRED: [
+    "Требуется личный ключ в разделе «Мои подключения»",
+    "A personal key is required in My connections",
+  ],
+  INTEGRATION_CREDENTIAL_POLICY_UPDATED: [
+    "Политика выбора учётных данных обновлена",
+    "Credential selection policy updated",
+  ],
+  INTEGRATION_CREDENTIALS_REQUIRED: [
+    "Перед запуском настройте все обязательные личные подключения",
+    "Configure all required personal connections before launch",
+  ],
+  PERSONAL_INTEGRATION_CREDENTIAL_CREATED: [
+    "Личное подключение создано; добавьте ключ и проверьте доступ",
+    "Personal connection created; add a key and verify access",
+  ],
+  PERSONAL_INTEGRATION_CREDENTIAL_CONFIGURED: [
+    "Личный ключ сохранён; требуется проверка доступа",
+    "Personal key saved; access verification required",
+  ],
+  PERSONAL_INTEGRATION_CREDENTIAL_REVOKED: [
+    "Личный ключ отозван для новых вызовов",
+    "Personal key revoked for new calls",
+  ],
+  PERSONAL_INTEGRATION_CREDENTIAL_TEST_QUEUED: [
+    "Проверка личного ключа поставлена в очередь",
+    "Personal key verification queued",
+  ],
+  PERSONAL_INTEGRATION_CREDENTIAL_TEST_COMPLETED: [
+    "Проверка личного ключа завершена",
+    "Personal key verification completed",
+  ],
+  PERSONAL_INTEGRATION_CREDENTIAL_TEST_CLAIMED: [
+    "Исполнитель получил проверку личного ключа",
+    "Worker claimed personal key verification",
+  ],
+  PERSONAL_INTEGRATION_CREDENTIAL_TEST_EXPIRED: [
+    "Срок проверки личного ключа истёк; повторите проверку",
+    "Personal key verification expired; verify again",
+  ],
+  PERSONAL_INTEGRATION_CREDENTIAL_TEST_CANCELLED: [
+    "Проверка личного ключа отменена из-за изменения доступа или настроек",
+    "Personal key verification cancelled after access or configuration changed",
+  ],
+  PERSONAL_INTEGRATION_CREDENTIAL_PROBE_ADMITTED: [
+    "Разрешена однократная проверка личного ключа",
+    "One personal key probe admitted",
+  ],
+  PERSONAL_INTEGRATION_CALL_ADMITTED: [
+    "Разрешён однократный вызов с личным подключением",
+    "One personal integration call admitted",
+  ],
+  PERSONAL_INTEGRATION_CALL_BLOCKED: [
+    "Вызов с личным подключением отклонён до внешнего действия",
+    "Personal integration call blocked before external work",
+  ],
   INTEGRATION_CREDENTIAL_INVALID: [
     "Учётные данные недействительны",
     "Credentials are invalid",

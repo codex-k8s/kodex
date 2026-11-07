@@ -27,7 +27,7 @@ func TestIntegrationDefinitionBindingHTTPPresenceAndPins(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			writer := httptest.NewRecorder()
-			writeMessage(writer, http.StatusOK, &cp.GetIntegrationConnectionResponse{Connection: &cp.IntegrationConnection{Ref: "icon_bindingfixture", Version: 1, DefinitionConfigurationBinding: test.binding}}, "connection", "")
+			writeMessage(writer, http.StatusOK, &cp.GetIntegrationConnectionResponse{Connection: &cp.IntegrationConnection{CredentialPolicy: cp.IntegrationCredentialPolicy_INTEGRATION_CREDENTIAL_POLICY_PROJECT_SHARED, Ref: "icon_bindingfixture", Version: 1, DefinitionConfigurationBinding: test.binding}}, "connection", "")
 			if writer.Code != http.StatusOK {
 				t.Fatalf("unexpected HTTP status: %d", writer.Code)
 			}
@@ -57,7 +57,7 @@ func TestIntegrationDefinitionBindingHTTPRejectsInvalidUnion(t *testing.T) {
 		{State: cp.IntegrationDefinitionConfigurationBinding_STATE_MATCH, ConfigurationRef: "mconf_fixture", RevisionRef: "mrev_fixture", BindingVersion: maximumSafeJSONInteger + 1},
 	} {
 		writer := httptest.NewRecorder()
-		writeMessage(writer, http.StatusOK, &cp.GetIntegrationConnectionResponse{Connection: &cp.IntegrationConnection{DefinitionConfigurationBinding: binding}}, "connection", "")
+		writeMessage(writer, http.StatusOK, &cp.GetIntegrationConnectionResponse{Connection: &cp.IntegrationConnection{CredentialPolicy: cp.IntegrationCredentialPolicy_INTEGRATION_CREDENTIAL_POLICY_PROJECT_SHARED, DefinitionConfigurationBinding: binding}}, "connection", "")
 		if writer.Code != http.StatusInternalServerError && writer.Code != http.StatusBadGateway {
 			t.Fatalf("invalid binding accepted: status=%d", writer.Code)
 		}

@@ -49,6 +49,12 @@ export default mergeConfig(base, {
             import.meta.url,
           ),
         ),
+        personalConnections: fileURLToPath(
+          new URL("./e2e/fixtures/personal-connections.html", import.meta.url),
+        ),
+        credentialPolicy: fileURLToPath(
+          new URL("./e2e/fixtures/credential-policy.html", import.meta.url),
+        ),
         resourceSelection: fileURLToPath(
           new URL("./e2e/fixtures/resource-selection.html", import.meta.url),
         ),

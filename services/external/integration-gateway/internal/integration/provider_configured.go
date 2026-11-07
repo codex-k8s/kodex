@@ -16,5 +16,6 @@ func (adapter *Adapter) configuredProviderJSON(ctx context.Context, request Requ
 		BaseURL: configuration["base_url"], Method: method, Path: path, Query: query, Body: body,
 		AuthScheme: configuration["auth_scheme"], Username: configuration["username"], Credential: request.Credential,
 		EffectKey: effectKey, Capability: capability,
+		permissionEffect: request.permissionEffect,
 	})
 }

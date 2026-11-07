@@ -288,7 +288,18 @@ export type Problem = {
     retryable: boolean;
     actualVersion?: number;
     winnerSummary?: string;
+    /**
+     * Полный список проблем личных подключений при INTEGRATION_CREDENTIALS_REQUIRED; отказ предшествует созданию session/run и не разрешает повтор внешнего действия.
+     */
+    integrationCredentialIssues?: Array<IntegrationCredentialPreflightIssue>;
     diagnostics?: Array<PromptTemplateDiagnostic>;
+};
+
+export type IntegrationCredentialPreflightIssue = {
+    connectionRef: OpaqueRef;
+    connectionName?: string;
+    capabilityKey: string;
+    problem: 'CREDENTIAL_MISSING' | 'CREDENTIAL_CHECK_REQUIRED' | 'CREDENTIAL_INVALID' | 'CREDENTIAL_INSUFFICIENT' | 'CREDENTIAL_PERMISSION_UNCONFIRMED' | 'CREDENTIAL_EXPIRED' | 'CREDENTIAL_REVOKED' | 'CREDENTIAL_INITIATOR_REQUIRED' | 'CREDENTIAL_CONNECTION_UNAVAILABLE';
 };
 
 export type SpeechRateLimitProblem = Problem & {
@@ -4604,6 +4615,54 @@ export type EmailMailboxCredential = {
     connectionVersion: number;
 };
 
+export type IntegrationCredentialPolicyInput = {
+    policy: 'PROJECT_SHARED' | 'INITIATOR_REQUIRED';
+};
+
+export type PersonalIntegrationConnection = {
+    connectionRef: OpaqueRef;
+    connectionVersion: number;
+    name: string;
+    definitionKey: string;
+    policy: 'PROJECT_SHARED' | 'INITIATOR_REQUIRED';
+    enabled: boolean;
+    credential?: PersonalIntegrationCredential;
+    /**
+     * Адаптер включён и поддерживает настройку ключа; false не скрывает собственный ключ для отзыва и не заменяет проверку полномочий.
+     */
+    available: boolean;
+};
+
+export type PersonalIntegrationConnectionList = {
+    items: Array<PersonalIntegrationConnection>;
+    nextPageToken?: string;
+};
+
+export type PersonalIntegrationCredential = {
+    connectionRef: OpaqueRef;
+    bindingRef: OpaqueRef;
+    version: number;
+    connectionVersion: number;
+    policy: 'PROJECT_SHARED' | 'INITIATOR_REQUIRED';
+    state: 'NOT_CONFIGURED' | 'CHECK_REQUIRED' | 'CHECKING' | 'READY' | 'INVALID' | 'REVOKED' | 'EXPIRED';
+    credentialConfigured: boolean;
+    expiresAt?: Timestamp;
+    verifiedCapabilityKeys: Array<string>;
+    deniedCapabilityKeys: Array<string>;
+};
+
+export type PersonalIntegrationCredentialCreateInput = {
+    expectedConnectionVersion: number;
+};
+
+export type PersonalIntegrationCredentialConfigureInput = {
+    expectedConnectionVersion: number;
+};
+
+export type PersonalIntegrationCredentialRevokeInput = {
+    [key: string]: never;
+};
+
 export type IntegrationCredentialInput = {
     value: string;
 };
@@ -4628,6 +4687,7 @@ export type IntegrationConnection = {
     ref: OpaqueRef;
     version: number;
     definitionKey: string;
+    credentialPolicy: 'PROJECT_SHARED' | 'INITIATOR_REQUIRED';
     name: string;
     state: 'NOT_CONNECTED' | 'TESTING' | 'CONNECTED' | 'DEGRADED' | 'DISABLED' | 'DELETED';
     credentialsConfigured: boolean;
@@ -4898,6 +4958,15 @@ export type EmailMailboxCredentialInputWritable = {
      * UTF-8 без обрезания пробелов; CA до 65536 bytes, username до 320, auth secret до 16384. PEM проверяет CP.
      */
     value: string;
+};
+
+export type PersonalIntegrationCredentialConfigureInputWritable = {
+    expectedConnectionVersion: number;
+    value: string;
+};
+
+export type PersonalIntegrationCredentialRevokeInputWritable = {
+    [key: string]: never;
 };
 
 /**
@@ -11672,6 +11741,221 @@ export type CommandScheduleResponses = {
 };
 
 export type CommandScheduleResponse = CommandScheduleResponses[keyof CommandScheduleResponses];
+
+export type SetIntegrationCredentialPolicyData = {
+    body: IntegrationCredentialPolicyInput;
+    headers: {
+        'Idempotency-Key': string;
+        'If-Match': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-connections/{connectionRef}/credential-policy';
+};
+
+export type SetIntegrationCredentialPolicyErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SetIntegrationCredentialPolicyError = SetIntegrationCredentialPolicyErrors[keyof SetIntegrationCredentialPolicyErrors];
+
+export type SetIntegrationCredentialPolicyResponses = {
+    /**
+     * Подключение с сохранённой политикой
+     */
+    200: IntegrationConnection;
+};
+
+export type SetIntegrationCredentialPolicyResponse = SetIntegrationCredentialPolicyResponses[keyof SetIntegrationCredentialPolicyResponses];
+
+export type ListPersonalIntegrationConnectionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/me/integration-connections';
+};
+
+export type ListPersonalIntegrationConnectionsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListPersonalIntegrationConnectionsError = ListPersonalIntegrationConnectionsErrors[keyof ListPersonalIntegrationConnectionsErrors];
+
+export type ListPersonalIntegrationConnectionsResponses = {
+    /**
+     * Ограниченная страница личных подключений
+     */
+    200: PersonalIntegrationConnectionList;
+};
+
+export type ListPersonalIntegrationConnectionsResponse = ListPersonalIntegrationConnectionsResponses[keyof ListPersonalIntegrationConnectionsResponses];
+
+export type GetPersonalIntegrationCredentialData = {
+    body?: never;
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/me/integration-connections/{connectionRef}/credential';
+};
+
+export type GetPersonalIntegrationCredentialErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetPersonalIntegrationCredentialError = GetPersonalIntegrationCredentialErrors[keyof GetPersonalIntegrationCredentialErrors];
+
+export type GetPersonalIntegrationCredentialResponses = {
+    /**
+     * Безопасное состояние собственного подключения
+     */
+    200: PersonalIntegrationCredential;
+};
+
+export type GetPersonalIntegrationCredentialResponse = GetPersonalIntegrationCredentialResponses[keyof GetPersonalIntegrationCredentialResponses];
+
+export type CreatePersonalIntegrationCredentialData = {
+    body: PersonalIntegrationCredentialCreateInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/me/integration-connections/{connectionRef}/credential';
+};
+
+export type CreatePersonalIntegrationCredentialErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreatePersonalIntegrationCredentialError = CreatePersonalIntegrationCredentialErrors[keyof CreatePersonalIntegrationCredentialErrors];
+
+export type CreatePersonalIntegrationCredentialResponses = {
+    /**
+     * Пустая собственная привязка; credential ещё не записана
+     */
+    201: PersonalIntegrationCredential;
+};
+
+export type CreatePersonalIntegrationCredentialResponse = CreatePersonalIntegrationCredentialResponses[keyof CreatePersonalIntegrationCredentialResponses];
+
+export type ConfigurePersonalIntegrationCredentialData = {
+    body: PersonalIntegrationCredentialConfigureInputWritable;
+    headers: {
+        'Idempotency-Key': string;
+        'If-Match': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/me/integration-connections/{connectionRef}/credential';
+};
+
+export type ConfigurePersonalIntegrationCredentialErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ConfigurePersonalIntegrationCredentialError = ConfigurePersonalIntegrationCredentialErrors[keyof ConfigurePersonalIntegrationCredentialErrors];
+
+export type ConfigurePersonalIntegrationCredentialResponses = {
+    /**
+     * Собственная credential записана без повторного раскрытия значения; требуется проверка
+     */
+    200: PersonalIntegrationCredential;
+};
+
+export type ConfigurePersonalIntegrationCredentialResponse = ConfigurePersonalIntegrationCredentialResponses[keyof ConfigurePersonalIntegrationCredentialResponses];
+
+export type TestPersonalIntegrationCredentialData = {
+    body: PersonalIntegrationCredentialCreateInput;
+    headers: {
+        'Idempotency-Key': string;
+        'If-Match': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/me/integration-connections/{connectionRef}/credential/test';
+};
+
+export type TestPersonalIntegrationCredentialErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type TestPersonalIntegrationCredentialError = TestPersonalIntegrationCredentialErrors[keyof TestPersonalIntegrationCredentialErrors];
+
+export type TestPersonalIntegrationCredentialResponses = {
+    /**
+     * Проверка поставлена в очередь; результат читается собственной безопасной проекцией
+     */
+    200: PersonalIntegrationCredential;
+};
+
+export type TestPersonalIntegrationCredentialResponse = TestPersonalIntegrationCredentialResponses[keyof TestPersonalIntegrationCredentialResponses];
+
+export type RevokePersonalIntegrationCredentialData = {
+    body: PersonalIntegrationCredentialRevokeInputWritable;
+    headers: {
+        'Idempotency-Key': string;
+        'If-Match': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/me/integration-connections/{connectionRef}/credential/revoke';
+};
+
+export type RevokePersonalIntegrationCredentialErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RevokePersonalIntegrationCredentialError = RevokePersonalIntegrationCredentialErrors[keyof RevokePersonalIntegrationCredentialErrors];
+
+export type RevokePersonalIntegrationCredentialResponses = {
+    /**
+     * Новые вызовы с собственной credential закрыты; история сохранена
+     */
+    200: PersonalIntegrationCredential;
+};
+
+export type RevokePersonalIntegrationCredentialResponse = RevokePersonalIntegrationCredentialResponses[keyof RevokePersonalIntegrationCredentialResponses];
 
 export type ListIntegrationDefinitionsData = {
     body?: never;

@@ -18,14 +18,19 @@ import (
 type confluenceServerPage struct {
 	ID, Type, Title, Status string
 	Space                   struct{ Key string }
-	Version                 struct{ Number int64 }
-	Body                    struct {
+	Version                 struct {
+		Number int64
+		By     atlassianRecoveryUser
+	}
+	History struct{ CreatedBy atlassianRecoveryUser }
+	Body    struct {
 		Storage struct {
 			Value          string
 			Representation string
 		}
 	}
-	Ancestors []struct{ ID string }
+	Ancestors  []struct{ ID string }
+	Operations []struct{ Operation, TargetType string }
 }
 
 // confluenceServerPages captures one bounded offset page; only a validated next offset can leave the adapter.
@@ -106,14 +111,20 @@ func (adapter *Adapter) readConfluenceServerPage(ctx context.Context, request Re
 		expansions = append(expansions, "space,version,ancestors,body.storage")
 	}
 	for _, expand := range expansions {
+		if request.ResourcePermissionProfile == integrationpackage.CredentialResourcePermissionConfluencePageUpdateV1 {
+			expand += ",operations"
+		}
 		body, err := adapter.confluenceServerJSON(ctx, request, capability, configuration, http.MethodGet,
 			"/content/"+url.PathEscape(pageID), url.Values{"expand": {expand}}, nil, "")
 		if err != nil {
 			return confluenceServerPage{}, err
 		}
 		var observed confluenceServerPage
+		if request.ResourcePermissionProfile == integrationpackage.CredentialResourcePermissionConfluencePageUpdateV1 && integrationpackage.ValidateCredentialPermissionJSON(body) != nil {
+			return confluenceServerPage{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+		}
 		if decodeProviderJSON(body, &observed) != nil || observed.ID != pageID || !eligibleConfluenceServerPage(observed, configuration) ||
-			expand == "space,version,ancestors,body.storage" && observed.Body.Storage.Representation != "storage" {
+			strings.Contains(expand, "body.storage") && observed.Body.Storage.Representation != "storage" {
 			return confluenceServerPage{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 		}
 		page = observed
@@ -175,16 +186,26 @@ func confluenceServerNext(configuration map[string]string, query url.Values, pag
 // searchConfluenceServerPages returns a scoped current-page list with verified offset metadata and next-link selectors.
 // searchConfluenceServerPages возвращает current pages заданного пространства с проверкой offset metadata и selectors.
 func (adapter *Adapter) searchConfluenceServerPages(ctx context.Context, request Request, capability integrationpackage.Capability,
-	configuration map[string]string, title string, offset, limit int, includeBody bool) (confluenceServerPages, string, error) {
+	configuration map[string]string, title string, offset, limit int, includeBody, includeProvenance bool) (confluenceServerPages, string, error) {
 	expand := "space,version,ancestors"
 	if includeBody {
 		expand += ",body.storage"
+	}
+	if includeProvenance {
+		expand += ",history"
 	}
 	query := url.Values{"spaceKey": {configuration["space_key"]}, "type": {"page"}, "status": {"current"},
 		"title": {title}, "start": {strconv.Itoa(offset)}, "limit": {strconv.Itoa(limit)}, "expand": {expand}}
 	body, err := adapter.confluenceServerJSON(ctx, request, capability, configuration, http.MethodGet, "/content", query, nil, "")
 	if err != nil {
 		return confluenceServerPages{}, "", err
+	}
+	if includeProvenance {
+		var fields map[string]json.RawMessage
+		var links map[string]json.RawMessage
+		if integrationpackage.ValidateCredentialPermissionJSON(body) != nil || json.Unmarshal(body, &fields) != nil || json.Unmarshal(fields["_links"], &links) != nil || links == nil {
+			return confluenceServerPages{}, "", &UnknownOutcomeError{}
+		}
 	}
 	var page confluenceServerPages
 	if decodeProviderJSON(body, &page) != nil || page.Start == nil || *page.Start != offset || page.Limit == nil ||
@@ -258,7 +279,7 @@ func (adapter *Adapter) executeConfluenceServer(ctx context.Context, request Req
 		if err != nil || value.Limit < 1 || value.Limit > 50 {
 			return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 		}
-		page, next, err := adapter.searchConfluenceServerPages(ctx, request, capability, configuration, value.Title, offset, value.Limit, false)
+		page, next, err := adapter.searchConfluenceServerPages(ctx, request, capability, configuration, value.Title, offset, value.Limit, false, false)
 		if err != nil {
 			return Result{}, err
 		}
@@ -310,7 +331,7 @@ func (adapter *Adapter) createConfluenceServerPage(ctx context.Context, request 
 		}
 	}
 	bodyValue := value.Body + "\n" + confluenceServerMarker(request)
-	existing, next, err := adapter.searchConfluenceServerPages(ctx, request, capability, configuration, value.Title, 0, 2, true)
+	existing, next, err := adapter.searchConfluenceServerPages(ctx, request, capability, configuration, value.Title, 0, 2, true, false)
 	if err != nil {
 		return Result{}, err
 	}
@@ -326,7 +347,7 @@ func (adapter *Adapter) createConfluenceServerPage(ctx context.Context, request 
 		if page.Title != value.Title || page.Body.Storage.Value != bodyValue || parent != value.ParentID {
 			return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 		}
-		return confluenceServerPageResult(request, page, false)
+		return Result{}, &UnknownOutcomeError{}
 	}
 	payload := map[string]any{"type": "page", "status": "current", "title": value.Title, "space": map[string]string{"key": configuration["space_key"]},
 		"body": map[string]any{"storage": map[string]string{"representation": "storage", "value": bodyValue}}}
@@ -352,9 +373,9 @@ func (adapter *Adapter) createConfluenceServerPage(ctx context.Context, request 
 }
 
 // updateConfluenceServerPage preserves unchanged fields, verifies expected version and sends only its next version.
-// A matching prior effect can be read back without another PUT; conflicts and unknown outcomes never trigger a blind write.
+// A matching prior marker requests strict Recover instead of adopting unverified provenance; no blind PUT is retried.
 // updateConfluenceServerPage сохраняет неизменяемые поля и отправляет только следующую ожидаемую версию.
-// Совпавший прежний effect читается без повторного PUT; конфликт и unknown outcome не вызывают слепую запись.
+// Совпавший marker требует строгого Recover вместо adoption непроверенного provenance; слепого повтора PUT нет.
 func (adapter *Adapter) updateConfluenceServerPage(ctx context.Context, request Request, capability integrationpackage.Capability,
 	configuration map[string]string, input []byte) (Result, error) {
 	var value struct {
@@ -379,9 +400,12 @@ func (adapter *Adapter) updateConfluenceServerPage(ctx context.Context, request 
 	if page.Version.Number == value.ExpectedVersion+1 && page.Title == value.Title &&
 		strings.HasSuffix(page.Body.Storage.Value, "\n"+marker) &&
 		(value.Body == page.Body.Storage.Value || value.Body+"\n"+marker == page.Body.Storage.Value) {
-		return confluenceServerPageResult(request, page, false)
+		return Result{}, &UnknownOutcomeError{}
 	}
 	if page.Version.Number != value.ExpectedVersion {
+		return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+	}
+	if request.ResourcePermissionProfile == integrationpackage.CredentialResourcePermissionConfluencePageUpdateV1 && !confluenceServerPageUpdateAllowed(page) {
 		return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 	}
 	payload := map[string]any{"id": value.PageID, "type": "page", "status": "current", "title": value.Title,
@@ -398,4 +422,27 @@ func (adapter *Adapter) updateConfluenceServerPage(ctx context.Context, request 
 		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 	}
 	return confluenceServerPageResult(request, updated, false)
+}
+
+// confluenceServerPageUpdateAllowed accepts one explicit update/page observation for the exact
+// freshly read page. Missing, oversized or ambiguous metadata cannot authorize a PUT; the
+// provider rechecks permissions on PUT and expected version still closes concurrent edits.
+// confluenceServerPageUpdateAllowed принимает одно явное update/page для точно прочитанной
+// страницы. Отсутствующие, избыточные либо неоднозначные metadata не разрешают PUT; provider
+// повторно проверяет права при PUT, а expected version закрывает concurrent edits.
+func confluenceServerPageUpdateAllowed(page confluenceServerPage) bool {
+	if len(page.Operations) == 0 || len(page.Operations) > 32 {
+		return false
+	}
+	seen := make(map[[2]string]bool, len(page.Operations))
+	allowed := false
+	for _, operation := range page.Operations {
+		key := [2]string{operation.Operation, operation.TargetType}
+		if len(operation.Operation) < 1 || len(operation.Operation) > 64 || len(operation.TargetType) < 1 || len(operation.TargetType) > 64 || seen[key] {
+			return false
+		}
+		seen[key] = true
+		allowed = allowed || key == [2]string{"update", "page"}
+	}
+	return allowed
 }

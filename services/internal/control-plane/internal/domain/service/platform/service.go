@@ -1529,6 +1529,13 @@ func (service *Service) executeResolved(ctx context.Context, input command.Comma
 			Ref, MaterializationRef, ContentSHA256 string
 		}{payload.Ref, payload.MaterializationRef, payload.CredentialRevision.ContentSHA256}
 	}
+	if input.Kind == command.ConfigurePersonalIntegrationCredential {
+		payload, ok := input.Payload.(command.PersonalIntegrationCredentialInput)
+		if !ok || payload.Credential == nil {
+			return command.Result{}, errs.ErrInvalid
+		}
+		intentPayload = personalCredentialConfigureIntent(payload)
+	}
 	input.Mutation.IntentDigest = digest(struct {
 		Kind    command.Kind
 		Payload any
@@ -1745,6 +1752,15 @@ func (service *Service) ClaimInteractionDeliveries(ctx context.Context, p value.
 // knownCommand recognizes only the explicit supported command kinds across several closed groups; unknown values return false. Membership does not validate payload shape, caller authority or lifecycle preconditions, which are enforced by subsequent command paths.
 // knownCommand распознаёт только явно поддерживаемые виды команд в нескольких закрытых группах; неизвестные значения дают false. Вхождение не проверяет форму payload, полномочия вызывающего или предусловия жизненного цикла — это проверяют последующие пути команд.
 func knownCommand(kind command.Kind) bool {
+	if kind == command.TestPersonalIntegrationCredential || kind == command.CompletePersonalIntegrationCredentialTest {
+		return true
+	}
+	if kind == command.SetIntegrationCredentialPolicy {
+		return true
+	}
+	if kind == command.CreatePersonalIntegrationCredential || kind == command.ConfigurePersonalIntegrationCredential || kind == command.RevokePersonalIntegrationCredential {
+		return true
+	}
 	switch kind {
 	case command.PrepareRoleImageGitWriteBack, command.PrepareIntegrationDefinitionGitWriteBack, command.ApproveManagedConfigurationGitWriteBack, command.RejectManagedConfigurationGitWriteBack, command.CancelManagedConfigurationGitWriteBack:
 		return true

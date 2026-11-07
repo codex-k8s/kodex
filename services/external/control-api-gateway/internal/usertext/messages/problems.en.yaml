@@ -312,6 +312,32 @@ INTEGRATION_CREDENTIAL_NOT_CONFIGURED:
   other: Credentials have not been configured yet
 INTEGRATION_CREDENTIAL_CONFIGURED:
   other: Credentials are configured and masked
+INTEGRATION_CREDENTIAL_PERSONAL_REQUIRED:
+  other: Each user configures a personal key in My connections
+INTEGRATION_CREDENTIAL_POLICY_UPDATED:
+  other: Credential selection policy updated
+PERSONAL_INTEGRATION_CREDENTIAL_CREATED:
+  other: Personal connection created; add a key and verify access
+PERSONAL_INTEGRATION_CREDENTIAL_CONFIGURED:
+  other: Personal key saved and masked; access verification required
+PERSONAL_INTEGRATION_CREDENTIAL_REVOKED:
+  other: Personal key revoked for new calls
+PERSONAL_INTEGRATION_CREDENTIAL_TEST_QUEUED:
+  other: Personal key verification queued
+PERSONAL_INTEGRATION_CREDENTIAL_TEST_COMPLETED:
+  other: Personal key verification completed
+PERSONAL_INTEGRATION_CREDENTIAL_TEST_CLAIMED:
+  other: Worker claimed personal key verification
+PERSONAL_INTEGRATION_CREDENTIAL_TEST_EXPIRED:
+  other: Personal key verification expired; verify again
+PERSONAL_INTEGRATION_CREDENTIAL_TEST_CANCELLED:
+  other: Personal key verification cancelled after access or configuration changed
+PERSONAL_INTEGRATION_CREDENTIAL_PROBE_ADMITTED:
+  other: One personal key probe admitted
+PERSONAL_INTEGRATION_CALL_ADMITTED:
+  other: One personal integration call admitted
+PERSONAL_INTEGRATION_CALL_BLOCKED:
+  other: Personal integration call blocked before external work
 INTEGRATION_CREDENTIAL_INVALID:
   other: Credentials are unavailable or rejected
 INTEGRATION_UNAVAILABLE:
@@ -1038,3 +1064,6 @@ WORKFLOW_REWORK_QUEUED:
   other: Fresh rework and dependent-check attempts have been scheduled
 WORKFLOW_GATE_SUPERSEDED:
   other: Previous result approval was superseded by approved rework
+
+INTEGRATION_CREDENTIALS_REQUIRED:
+  other: Configure all required personal connections before launch

@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
@@ -539,6 +540,10 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 		}
 		if operation.Type == "LAUNCH_RUN" {
 			if readinessErr := repository.validateAssistantLaunchReadiness(ctx, tx, scope, operation); readinessErr != nil {
+				var credentials *platformservice.IntegrationCredentialPreflightError
+				if errors.As(readinessErr, &credentials) {
+					return commandOutcome{}, readinessErr
+				}
 				problems = append(problems, fmt.Sprintf("operation-%d-runtime-unavailable", index+1))
 				continue
 			}
@@ -708,6 +713,7 @@ func (repository *Repository) validateAssistantLaunchReadiness(
 		return errs.ErrNotFound
 	}
 	targetAgentRefs := []string{}
+	var personalWorkflow *entity.WorkflowVersion
 	switch payload.Target.Type {
 	case "AGENT":
 		var targetName string
@@ -734,11 +740,16 @@ func (repository *Repository) validateAssistantLaunchReadiness(
 			return errs.ErrConflict
 		}
 		targetAgentRefs = append(targetAgentRefs, coordinatorRef)
+		personalWorkflow = &workflowVersion
 		for _, step := range workflowVersion.Steps {
 			targetAgentRefs = append(targetAgentRefs, step.AgentRef)
 		}
 	default:
 		return errs.ErrInvalid
+	}
+	if err := repository.requirePersonalLaunchCredentials(ctx, tx, scope, projectID,
+		personalLaunchTargets(targetAgentRefs, personalWorkflow), personalLaunchContext{source: payload.Source, sessionRef: payload.SessionRef, targetType: payload.Target.Type, targetRef: payload.Target.Ref}); err != nil {
+		return err
 	}
 	var runtimeContractReady bool
 	if err := tx.QueryRow(ctx, queryCommandsLaunchrunValidateAgentRuntimeContract, pgx.StrictNamedArgs{

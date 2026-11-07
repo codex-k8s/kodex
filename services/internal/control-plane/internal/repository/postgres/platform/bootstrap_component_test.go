@@ -4457,6 +4457,26 @@ func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repositor
 			t.Fatalf("unknown synthetic outcome was not claimed for read-only recovery: %#v, %v", claims, err)
 		}
 		recovery := claims[0]
+		// Recovery GET failure describes this attempt, never absence of the original mutation.
+		// Ошибка recovery GET описывает попытку, но не отсутствие исходного изменения.
+		failedCode := "INTEGRATION_REQUEST_REJECTED"
+		if expire {
+			failedCode = "INTEGRATION_AUTH_REJECTED"
+		}
+		_, err = service.Execute(ctx, command.Command{Kind: command.CompleteIntegrationInvocation, Principal: gateway, Mutation: value.Mutation{IdempotencyKey: key + "-recovery-read-error"}, Payload: command.IntegrationInvocationInput{InvocationRef: stringMap(recovery, "invocationRef"), LeaseRef: stringMap(recovery, "leaseRef"), Fence: stringMap(recovery, "fence"), Generation: recovery["generation"].(int64), SafeErrorCode: failedCode}})
+		if err != nil {
+			t.Fatal("record shared recovery read error", err)
+		}
+		unresolved, err := service.GetIntegrationInvocation(ctx, runtimeWorker, stringMap(unknown, "invocationRef"))
+		if err != nil || stringMap(unresolved, "state") != "UNKNOWN_OUTCOME" || stringMap(unresolved, "effectReceiptRef") != "" {
+			t.Fatal("shared recovery error fabricated effect failure/receipt", err)
+		}
+		priorRecovery := recovery
+		claims, err = service.ClaimIntegrationInvocations(ctx, gateway, "replacement-worker", 1)
+		if err != nil || len(claims) != 1 || stringMap(claims[0], "workMode") != "RECOVER_READ_ONLY" || stringMap(claims[0], "effectKey") != stringMap(priorRecovery, "effectKey") || claims[0]["generation"].(int64) != priorRecovery["generation"].(int64)+1 {
+			t.Fatal("shared recovery error enabled another Execute or changed effect", err)
+		}
+		recovery = claims[0]
 		recoverySummary := `{"journal":"effect-main","effect_key":"` + stringMap(recovery, "effectKey") + `","sequence":2,"value":"` + key + `","count":2}`
 		recoveryDigest := sha256.Sum256([]byte(recoverySummary))
 		_, err = service.Execute(ctx, command.Command{Kind: command.CompleteIntegrationInvocation, Principal: gateway,

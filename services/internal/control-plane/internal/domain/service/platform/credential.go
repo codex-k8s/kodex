@@ -74,6 +74,9 @@ func (service *Service) ConfigureIntegrationCredential(
 	if err != nil {
 		return entity.IntegrationConnection{}, err
 	}
+	if connection.CredentialPolicy != entity.IntegrationCredentialProjectShared {
+		return entity.IntegrationConnection{}, errs.ErrConflict
+	}
 	if connection.Version != *mutation.ExpectedVersion {
 		return entity.IntegrationConnection{}, errs.ErrVersionMismatch
 	}

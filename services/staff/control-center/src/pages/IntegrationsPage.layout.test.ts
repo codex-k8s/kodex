@@ -82,7 +82,9 @@ describe("IntegrationsPage layout", () => {
     expect(connectionsTemplate).toContain(
       ':label="credentialLabel(connection)"',
     );
-    expect(connectionsSource).toContain("connection.credentialsHint ||");
+    expect(connectionsSource).toContain(
+      "serverMessage(connection.credentialsHint)",
+    );
     expect(connectionsSource).toContain("grant.enabled");
   });
 

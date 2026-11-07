@@ -3,7 +3,7 @@ SELECT i.id::text,i.ref,i.generation,i.state,c.ref,c.definition_key,c.public_con
 	i.definition_version,i.definition_digest,i.operation,i.risk,i.approval_policy,i.resource_kind,i.resource_scope,
 	i.resource_scope_digest,i.effect_key,i.input_digest,
 	COALESCE(cr.ref,''),COALESCE(cr.revision,0),COALESCE(cr.secret_ref,''),COALESCE(cr.secret_uid::text,''),
-	COALESCE(cr.secret_resource_version,''),COALESCE(cr.content_sha256,''),cr.created_at,initiator.ref,
+	COALESCE(cr.secret_resource_version,''),COALESCE(cr.content_sha256,''),cr.created_at,initiator.ref,c.credential_policy,
 	COALESCE(approval.scope_paths,'{}'::text[]),COALESCE(approval.scope_digest,''),
 	COALESCE(approval.input_schema_digest,''),g.ref,i.grant_version,n.id::text,r.id::text,i.ssh_compose_snapshot
 FROM control_plane.integration_invocations i
@@ -15,7 +15,7 @@ JOIN control_plane.run_nodes n ON n.id=i.node_id AND n.state IN ('RUNNING','SUCC
 JOIN control_plane.runs r ON r.id=i.run_id
 JOIN control_plane.runs root ON root.id=r.root_run_id
 JOIN control_plane.subjects initiator ON initiator.id=root.initiated_by
-LEFT JOIN control_plane.integration_credential_revisions cr ON cr.id=c.credential_revision_id
+LEFT JOIN control_plane.integration_credential_revisions cr ON cr.id=c.credential_revision_id AND c.credential_policy='PROJECT_SHARED'
 LEFT JOIN control_plane.integration_approval_scopes approval ON approval.id=i.approval_scope_id
 WHERE i.organization_id=$1::uuid
   AND (c.definition_key='ssh-compose')=$5::boolean
@@ -67,13 +67,25 @@ WHERE i.organization_id=$1::uuid
         AND frozen.generation=(SELECT max(latest.generation) FROM control_plane.runtime_revisions latest
           WHERE latest.node_id=n.id AND latest.organization_id=i.organization_id))
   ))
-  AND (i.state='READY' OR (
+  AND (($6='' AND (i.state='READY' OR (
     i.state='UNKNOWN_OUTCOME'
     AND ((c.definition_key='synthetic' AND i.operation='synthetic.journal.write')
-      OR (c.definition_key='ssh-compose' AND i.operation='ssh.compose.deploy'))
-  ))
+      OR (c.definition_key='ssh-compose' AND i.operation='ssh.compose.deploy')
+      OR (c.definition_key='gitlab' AND i.operation=i.capability_key AND i.generation<4
+        AND i.operation IN ('gitlab.issue.create','gitlab.merge_request.create'))
+      OR (i.generation<4 AND i.operation=i.capability_key AND
+        ((c.definition_key='jira-server-dc' AND i.operation IN ('jira.issue.create','jira.issue.comment.write'))
+         OR (c.definition_key='confluence-server-dc' AND i.operation IN ('confluence.page.create','confluence.page.update')))))
+  ))) OR ($6<>'' AND i.ref=$6 AND i.state='RUNNING'))
   AND i.operation NOT IN ('mattermost.inbound','mattermost.gate_decisions','github.repository.bundle.publish')
-  AND c.enabled AND c.state='CONNECTED'
+  AND c.enabled AND (
+    (c.credential_policy='PROJECT_SHARED' AND c.state='CONNECTED') OR
+    (c.credential_policy='INITIATOR_REQUIRED'
+      AND control_plane.integration_connection_configuration_ready(c.id)
+      AND EXISTS (SELECT 1 FROM control_plane.integration_personal_invocation_credentials pin
+        WHERE pin.invocation_id=i.id AND pin.organization_id=i.organization_id
+          AND pin.connection_id=c.id AND pin.root_run_id=root.id AND pin.subject_id=root.initiated_by))
+  )
   AND d.enabled AND d.adapter_owner=$3 AND d.execution_route=$4 AND d.adapter_readiness='READY'
   AND c.definition_version=i.definition_version AND c.definition_digest=i.definition_digest
   AND g.definition_version=i.definition_version AND g.definition_digest=i.definition_digest

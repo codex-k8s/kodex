@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import { Clock3, PackageOpen, PlugZap, ShieldCheck } from "@lucide/vue";
+import {
+  Clock3,
+  KeyRound,
+  PackageOpen,
+  PlugZap,
+  ShieldCheck,
+} from "@lucide/vue";
 import { useI18n } from "vue-i18n";
 
 import type { IntegrationsSection } from "@/features/integrations/ui/model";
@@ -24,6 +30,7 @@ const tabs: Array<{
   count: "connections" | "packages" | "grants" | "unavailable";
 }> = [
   { key: "CONNECTIONS", icon: PlugZap, count: "connections" },
+  { key: "PERSONAL", icon: KeyRound, count: "unavailable" },
   { key: "CATALOG", icon: PackageOpen, count: "packages" },
   { key: "GRANTS", icon: ShieldCheck, count: "grants" },
   { key: "APPROVALS", icon: Clock3, count: "unavailable" },
@@ -57,7 +64,11 @@ const tabs: Array<{
       <span v-else-if="tab.count === 'grants'" class="tab-count">{{
         grantCount
       }}</span>
-      <span v-else class="tab-count tab-count--locked">—</span>
+      <span
+        v-else-if="tab.key !== 'PERSONAL'"
+        class="tab-count tab-count--locked"
+        >—</span
+      >
     </button>
   </nav>
 </template>

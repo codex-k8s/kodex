@@ -29,6 +29,7 @@ const connection: IntegrationConnection = {
   definitionKey: "mattermost",
   name: "Mattermost",
   state: "CONNECTED",
+  credentialPolicy: "PROJECT_SHARED",
   credentialsConfigured: true,
   credentialsHint: "",
   capabilities: [],

@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  version: 1.0.0
+  version: 1.2.0
   description: Самостоятельно описанный ограниченный контракт по официальной документации;
     это не полный официальный OpenAPI и не grant.
   title: Jira Server / Data Center — ограниченный REST v2
@@ -43,6 +43,8 @@ components:
           type: string
         displayName:
           type: string
+        active:
+          type: boolean
       additionalProperties: true
       required:
       - key
@@ -65,6 +67,10 @@ components:
               properties:
                 key:
                   type: string
+                id:
+                  type: string
+                  minLength: 1
+                  maxLength: 26
               additionalProperties: true
               required:
               - key
@@ -85,6 +91,16 @@ components:
               additionalProperties: true
               required:
               - name
+            creator:
+              $ref: '#/components/schemas/RecoveryAuthor'
+            issuetype:
+              type: object
+              properties:
+                name:
+                  type: string
+              required:
+              - name
+              additionalProperties: true
           additionalProperties: true
           required:
           - project
@@ -173,7 +189,118 @@ components:
       additionalProperties: true
       required:
       - transitions
+    RecoveryAuthor:
+      type: object
+      required:
+      - key
+      properties:
+        key:
+          type: string
+          minLength: 1
+          maxLength: 256
+      additionalProperties: true
+    RecoveryComment:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 26
+        body:
+          type: string
+        author:
+          $ref: '#/components/schemas/RecoveryAuthor'
+        updateAuthor:
+          $ref: '#/components/schemas/RecoveryAuthor'
+      required:
+      - id
+      - body
+      - author
+      - updateAuthor
+      additionalProperties: true
+    RecoveryComments:
+      type: object
+      properties:
+        startAt:
+          type: integer
+          minimum: 0
+        maxResults:
+          type: integer
+          minimum: 1
+        total:
+          type: integer
+          minimum: 0
+        comments:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/RecoveryComment'
+      required:
+      - startAt
+      - maxResults
+      - total
+      - comments
+      additionalProperties: true
 paths:
+  /rest/api/2/mypermissions:
+    get:
+      operationId: jira.permissions.read
+      description: Внутренняя предпосылка personal WRITE, не capability и не отдельный
+        tool. Runtime задаёт ровно projectKey для create либо issueKey для comment/transition.
+      parameters:
+      - name: projectKey
+        in: query
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 64
+      - name: issueKey
+        in: query
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 96
+      responses:
+        '200':
+          description: Права текущего пользователя только в запрошенном контексте.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - permissions
+                properties:
+                  permissions:
+                    type: object
+                    maxProperties: 1024
+                    additionalProperties:
+                      type: object
+                      required:
+                      - key
+                      - type
+                      - havePermission
+                      properties:
+                        key:
+                          type: string
+                        type:
+                          type: string
+                          enum:
+                          - GLOBAL
+                          - PROJECT
+                        havePermission:
+                          type: boolean
+                        deprecatedKey:
+                          type: boolean
+                      additionalProperties: true
+                additionalProperties: true
+        '401':
+          description: Аутентификация отклонена, внешний эффект не начинается.
+        '403':
+          description: Доступ к проверке отклонён, внешний эффект не начинается.
+        '404':
+          description: Контекст недоступен, внешний эффект не начинается.
+        '429':
+          description: Исчерпан лимит, автоматическая запись не выполняется.
   /rest/api/2/myself:
     get:
       operationId: jira.identity.read
@@ -527,6 +654,75 @@ paths:
               additionalProperties: false
               required:
               - body
+    get:
+      operationId: jira.recovery.comments.read
+      description: Только internal recovery prerequisite; в Definition capabilities
+        не публикуется.
+      parameters:
+      - name: issueKey
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Z][A-Z0-9_]*-[0-9]+$
+      - name: startAt
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+      - name: maxResults
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+      - name: orderBy
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - created
+      responses:
+        '200':
+          description: Ограниченный typed readback; это не grant и не доказательство
+            отсутствия effect.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecoveryComments'
+        '400':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '401':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '403':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '404':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '409':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '429':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '500':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '502':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '503':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '504':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
   /rest/api/2/issue/{issueKey}/transitions:
     get:
       operationId: jira.issue.transition.list
@@ -611,6 +807,62 @@ paths:
               additionalProperties: false
               required:
               - transition
+  /rest/api/2/issue/{issueKey}/comment/{commentId}:
+    get:
+      operationId: jira.recovery.comment.read
+      description: Только internal addressed recovery read.
+      parameters:
+      - name: issueKey
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Z][A-Z0-9_]*-[0-9]+$
+      - name: commentId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[1-9][0-9]*$
+          maxLength: 26
+      responses:
+        '200':
+          description: Ограниченный typed readback; это не grant и не доказательство
+            отсутствия effect.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecoveryComment'
+        '400':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '401':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '403':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '404':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '409':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '429':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '500':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '502':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '503':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
+        '504':
+          description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
+            повтор неизвестного write.
 x-kodex-context: Runtime добавляет только проверенный context_path из Connection;
   / означает корень. Контекст входит в resource scope.
 servers:
@@ -621,3 +873,7 @@ x-kodex-provenance:
   kind: AUTHORED_DOCUMENTED_SUBSET
   documented_version: 9.12.8
   tested_scope: Synthetic REST v2 first vertical; не заявляется полное покрытие Server/DC.
+x-provenance:
+  recoverySources:
+  - https://docs.atlassian.com/software/jira/docs/api/REST/9.12.8/
+  - https://docs.atlassian.com/software/jira/docs/api/9.12.8/com/atlassian/jira/issue/Issue.html
