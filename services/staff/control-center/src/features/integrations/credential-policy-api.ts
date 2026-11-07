@@ -52,7 +52,7 @@ export async function saveCredentialPolicy(
     !["PROJECT_SHARED", "INITIATOR_REQUIRED"].includes(policy) ||
     current.credentialPolicy === policy ||
     current.state !== "DISABLED" ||
-    !current.nextActions.includes("UPDATE") ||
+    !current.nextActions.includes("EDIT") ||
     current.grants.some((grant) => grant.enabled)
   )
     throw new Error("Integration credential policy change is unavailable");
