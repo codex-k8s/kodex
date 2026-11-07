@@ -115,6 +115,10 @@ test-management-surfaces:
 	@./scripts/tests/keycloak-group-reconcile-test.sh
 	@./scripts/tests/management-surfaces-test.sh
 
+.PHONY: test-install-workload-startup
+test-install-workload-startup:
+	@python3 scripts/tests/install-workload-startup-test.py
+
 test-install-contract:
 	@./scripts/tests/install-contract-test.sh
 	@./scripts/tests/ipv6-ingress-bridge-test.sh

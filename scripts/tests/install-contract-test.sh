@@ -364,14 +364,19 @@ jq -n -e '
 	(valid(true; "0"; {current:"value"}; ["current"]; ["current"]) | not) and
 	(valid(true; "1"; {_generation:"MQ==",unknown:"value"}; ["current"]; ["current"]) | not)
 ' >/dev/null || fail 'event-scoped authority placeholder contract is invalid'
-publisher_apply_line=$(grep -nE '^[[:space:]]+apply_render authority-publisher ' \
-	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)
-bootstrap_wait_line=$(grep -nE '^[[:space:]]+wait_authority_projections bootstrap$' \
-	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)
-workloads_apply_line=$(grep -nE '^[[:space:]]+apply_render workloads-before-role-image-builder ' \
-	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)
-materializer_apply_line=$(grep -nE '^[[:space:]]+apply_job release-artifact-materializer$' \
-	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)
+# Номера строк внутри shared helper не являются порядком его исполнения.
+# Здесь остаются только top-level barriers; сам helper проверяется исполнением.
+first_install_contract_line() {
+  local pattern=$1
+  awk -v pattern="$pattern" '$0 ~ pattern {print NR; found=1; exit} END {if (!found) exit 1}' \
+    "$repository_root/tools/install/deploy-platform.sh"
+}
+publisher_apply_line=$(first_install_contract_line '^[[:space:]]+apply_render authority-publisher ') ||
+  fail 'authority publisher startup call is absent'
+bootstrap_wait_line=$(first_install_contract_line '^[[:space:]]+wait_authority_projections bootstrap$') ||
+  fail 'bootstrap projection barrier is absent'
+workloads_start_line=$(first_install_contract_line '^[[:space:]]+apply_workloads_after_authority$') ||
+  fail 'shared workload startup call is absent'
 for job_terminal_contract in \
 	'.type == "Complete" and .status == "True"' \
 	'.type == "Failed" and .status == "True"' \
@@ -382,23 +387,20 @@ done
 if rg -Fq -- 'wait --for=condition=Complete' "$repository_root/tools/install/deploy-platform.sh"; then
 	fail 'release Job lifecycle still waits only for successful completion'
 fi
-builder_dependencies_wait_line=$(grep -nE \
-	'^[[:space:]]+for dependency in kodex-image-registry-pull kodex-buildkit; do$' \
-	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)
-role_image_builder_apply_line=$(grep -nE '^[[:space:]]+apply_render role-image-builder ' \
-	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)
-full_wait_line=$(grep -n '^wait_authority_projections all$' \
-	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)
-assistant_wait_line=$(grep -n '^wait_system_assistant$' \
-	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)
+full_wait_line=$(first_install_contract_line '^wait_authority_projections all$') ||
+  fail 'full authority readback barrier is absent'
+assistant_wait_line=$(first_install_contract_line '^wait_system_assistant$') ||
+  fail 'system assistant readback barrier is absent'
 [[ "$publisher_apply_line" -lt "$bootstrap_wait_line" &&
-	"$bootstrap_wait_line" -lt "$workloads_apply_line" &&
-	"$workloads_apply_line" -lt "$materializer_apply_line" &&
-	"$materializer_apply_line" -lt "$builder_dependencies_wait_line" &&
-	"$builder_dependencies_wait_line" -lt "$role_image_builder_apply_line" &&
-	"$role_image_builder_apply_line" -lt "$full_wait_line" &&
-	"$full_wait_line" -lt "$assistant_wait_line" ]] ||
-	fail 'authority bootstrap, materialization, role image builder and full readback phases are misordered'
+  "$bootstrap_wait_line" -lt "$workloads_start_line" &&
+  "$workloads_start_line" -lt "$full_wait_line" &&
+  "$full_wait_line" -lt "$assistant_wait_line" ]] ||
+  fail 'authority bootstrap, shared workload startup and full readback barriers are misordered'
+[[ $(grep -cE '^[[:space:]]+apply_workloads_after_authority$' \
+  "$repository_root/tools/install/deploy-platform.sh") == 4 ]] ||
+  fail 'fresh/upgrade and continuation startup paths differ from the qualified helper callers'
+python3 "$repository_root/scripts/tests/install-workload-startup-test.py" ||
+  fail 'shared workload startup lifecycle failed'
 for assistant_readback_contract in \
 	'pod/system-assistant-warm' \
 	'.status.phase == "Bound"' \
