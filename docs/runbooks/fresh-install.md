@@ -18,6 +18,14 @@ bare-metal узла уничтожает все Kubernetes workloads, PVC и con
 CI/CD delivery описаны в [отдельном профиле](portable-install.md). Прежние
 режимы этого runbook сохраняют defaults и собственное управление TLS/IdP.
 
+Перед допуском новой установки выполнить `make test-install-contract` на exact
+candidate. Узкий `make test-install-workload-startup` исполняет настоящий startup
+helper с synthetic manifests, закрытыми stubs и пустым PATH: startup consumers,
+control-plane/provider, materializer и registry/BuildKit gates проверяются вместе
+с остановкой после каждого обязательного отказа. К кластеру, сети и live credentials
+эта оснастка не обращается. PASS оснастки не заменяет fresh install, immutable
+images, bootstrap receipts и browser/runtime приёмку по #1977.
+
 ## 1. Два поддержанных сценария
 
 ### Пустой bare-metal сервер
