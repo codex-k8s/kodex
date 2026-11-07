@@ -25,6 +25,7 @@ usage() {
     '  [--oidc-authority-profile <oidc-authority-profile.json>; optional Git-owned authority mode]' \
     '  [--model-provider-configuration <json> --model-provider-default-model <model>]'  \
     '  [--authority-registry-configuration <json>]' \
+    '  [--native-integration-configuration <json> --native-integration-configuration-sha256 <64-hex>; optional operator routes]' \
     '  [--disable-observability; exporters only]' \
     '  [--clamav-mode enabled|disabled; default enabled, disabled blocks scan-required operations]' \
     '  [--disable-monitoring-resources; no Prometheus Operator resources]' \
@@ -37,6 +38,8 @@ usage() {
 provider_apparmor_profile=""
 provider_apparmor_profile_selected=false
 authority_registry_configuration=""
+native_integration_configuration=""
+native_integration_configuration_sha256=""
 deployment_profile=""
 oidc_authority_profile=""
 oidc_authority_profile_selected=false
@@ -76,6 +79,8 @@ while (($# > 0)); do
   case "$1" in
     --provider-apparmor-profile) provider_apparmor_profile="${2-}"; provider_apparmor_profile_selected=true; shift 2 ;;
     --authority-registry-configuration) authority_registry_configuration="${2:-}"; shift 2 ;;
+    --native-integration-configuration) native_integration_configuration="${2:-}"; shift 2 ;;
+    --native-integration-configuration-sha256) native_integration_configuration_sha256="${2:-}"; shift 2 ;;
     --model-provider-configuration) model_provider_configuration="${2:-}"; shift 2 ;;
     --model-provider-default-model) model_provider_default_model="${2:-}"; shift 2 ;;
     --deployment-profile) deployment_profile="${2:-}"; shift 2 ;;
@@ -675,7 +680,7 @@ yq -i '
   ); del(.metadata.namespace))
 ' "$rendered"
 
-if [[ -n "$deployment_profile" || -n "$oidc_authority_profile" ]]; then
+if [[ -n "$deployment_profile" || -n "$oidc_authority_profile" || -n "$native_integration_configuration$native_integration_configuration_sha256" ]]; then
   expected_schema_heads=$(python3 "$repository_root/tools/release/schema-heads.py")
   jq -e --argjson expected "$expected_schema_heads" '.schema_heads == $expected' "$lock_file" >/dev/null ||
     fail 'portable release lock schema pins differ from source'
@@ -698,6 +703,14 @@ if [[ -n "$oidc_authority_profile" ]]; then
     --profile "$oidc_authority_profile" --input "$rendered" --output "$temporary_directory/oidc-authority.yaml" ||
     fail 'OIDC authority profile render rejected'
   mv -- "$temporary_directory/oidc-authority.yaml" "$rendered"
+fi
+
+if [[ -n "$native_integration_configuration$native_integration_configuration_sha256" ]]; then
+  [[ -n "$native_integration_configuration" && "$native_integration_configuration_sha256" =~ ^[a-f0-9]{64}$ ]] ||
+    fail 'exact native integration configuration and digest are required'
+  python3 "$repository_root/tools/install/native_integration_egress.py" --render "$rendered" \
+    --configuration "$native_integration_configuration" --configuration-sha256 "$native_integration_configuration_sha256" ||
+    fail 'native integration profile render rejected'
 fi
 
 # Canonicalize duplicate resources before validation. The web-only aggregate may

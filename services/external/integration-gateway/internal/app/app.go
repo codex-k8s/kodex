@@ -65,6 +65,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	adapter, err := integration.New(integration.Config{
 		RPCProfile:          config.RPCProfile,
 		CredentialDirectory: config.CredentialDirectory, ProxyURL: config.EgressProxyURL, OpenAPIProxyURL: config.OpenAPIProxyURL,
+		NativeProxyURL:   config.NativeProxyURL,
 		SyntheticBaseURL: config.SyntheticBaseURL, LocalOpenAPIBaseURL: config.LocalOpenAPIBaseURL,
 		LocalOpenAPICAFile: config.LocalOpenAPICAFile, Timeout: config.OperationTimeout,
 		EmailCAFile: config.ControlPlaneCAFile, EmailCertificateFile: config.ControlPlaneCertificateFile, EmailPrivateKeyFile: config.ControlPlanePrivateKeyFile,

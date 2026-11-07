@@ -4,7 +4,7 @@ title: Integration gateway
 type: service
 status: approved
 owner: backend
-version: 2.8.0
+version: 2.9.0
 updated: 2026-11-07
 ---
 
@@ -20,6 +20,16 @@ updated: 2026-11-07
 approval policy, input и resource scope. Gateway принимает только совпадающие
 `definition_version`, `definition_digest`, grant scope и immutable input
 digest.
+
+Необязательный deployment input `INTEGRATION_GATEWAY_NATIVE_PROXY_URL` принимает
+только `http://egress-gateway-native.kodex-system.svc.cluster.local:8085`.
+Пустое значение сохраняет прежний transport. При включении весь native-каталог
+GitLab/Jira/Confluence, в том числе Server/DC, credential health и scope probes,
+использует отдельный exact-pinned CONNECT. Ошибка не допускает fallback к core,
+direct HTTP либо другому credential. GitHub/OpenAPI/Context7/email не переключаются.
+TLS hostname/CA, запрет redirects, grants, Human Gate и receipts прежние.
+Renderer, rollout и ограничения описаны в
+[native-профиле](../../../docs/operations/native-integration-egress-2040.md).
 
 UI/Git-managed packages передаются внутри каждой protected claim и проверяются
 по точным key/version/digest и compiled executable baseline. Они не заменяют

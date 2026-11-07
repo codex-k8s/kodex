@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.45
+version: 1.7.46
 updated: 2026-11-07
 ---
 
@@ -1708,6 +1708,20 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   OpenAPI вызов получает ограниченный отказ; прежний Pod с устаревшими pins
   не обслуживает запросы через Service. Остальные listener используют свой
   Service и не зависят от переключения OpenAPI selector.
+- Опциональный native CONNECT `egress-gateway-native:8085` отделён от public-DNS
+  OpenAPI. Только оператор установки задаёт immutable exact hostname443 и
+  canonical /32,/128 pins, включая RFC1918/ULA; prompt/Connection не расширяют
+  сетевой допуск. Loopback/link-local/metadata/multicast/mapped и широкие сети
+  запрещены. Default profile не меняется; неверный optional файл закрывает
+  только native listener с общим connection budget. Host/ClientHello SNI и
+  проверка CA/hostname потребителем обязательны, fallback отсутствует.
+  Новый Service выбирает точный digest поколения,8085 допускает только exact
+  AND peer integration-gateway в обе стороны. Проверяют полный desired/live
+  union: добавление точных upstream rules не сужает прежнее core исключение
+  на443, application-level allowlist остаётся обязательным. Credentials,
+  grants, Begin, Human Gate и effect receipts не превращаются в сетевую policy.
+  Lifecycle, ручная приёмка и отключение:
+  [OPS-DOC-NATIVE-INTEGRATION-EGRESS-2040](../operations/native-integration-egress-2040.md).
 - Закрытый Context7 adapter использует тот же owner-managed integration
   CONNECT listener `egress-gateway-openapi:8083`, а не общий SaaS listener
   `8080`. SHIPPED подключение без managed binding участвует в проекции только

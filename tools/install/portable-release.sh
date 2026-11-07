@@ -141,6 +141,7 @@ fi
 timeout 60s python3 "$root/tools/install/portable_preflight.py" --plan \
   --render "$temporary/render.yaml" --sha256 "$expected_sha"
 python3 "$root/tools/install/clamav_profile.py" --check --mode "$clamav_mode" --render "$temporary/render.yaml"
+python3 "$root/tools/install/native_integration_egress.py" --check --render "$temporary/render.yaml"
 [[ "$mode" != plan ]] || exit 0
 [[ "$(kubectl config current-context)" == "$context" ]] || fail 'current Kubernetes context mismatch'
 timeout 60s python3 "$root/tools/install/portable_preflight.py" \

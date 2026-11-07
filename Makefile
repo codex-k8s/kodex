@@ -52,7 +52,13 @@ test-portable-services-native:
 test-provider-sandbox-native:
 	@timeout 90s python3 -B tools/install/test_provider_sandbox_fence_native.py
 
+.PHONY: test-native-integration-egress
+test-native-integration-egress: check-go-toolchain
+	@timeout 30s python3 -B tools/install/test_native_integration_egress.py
+	@bash scripts/tests/native-integration-egress-test.sh
+
 test-web-only-release:
+	@timeout 30s python3 -B tools/install/test_native_integration_egress.py
 	@timeout 30s python3 -B tools/install/test_provider_sandbox_profile.py
 	@timeout 30s python3 -B tools/install/test_provider_sandbox_transition.py
 	@timeout 30s python3 -B tools/install/test_bootstrap_completion.py

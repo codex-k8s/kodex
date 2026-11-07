@@ -116,6 +116,22 @@ func RegisterIntegrationReadiness(register RegisterCollectors, ready func() (boo
 	}))
 }
 
+// RegisterNativeReadiness samples only the validity of the optional operator route projection.
+// No host, address, token state or API availability becomes a metric label or readiness claim.
+// RegisterNativeReadiness измеряет лишь корректность optional проекции маршрутов оператора.
+// Узел, адрес, состояние token либо доступность API не становятся metric label либо заявлением готовности.
+func RegisterNativeReadiness(register RegisterCollectors, ready func() (bool, string)) error {
+	return register(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace: "kodex", Subsystem: "egress_gateway", Name: "native_integration_ready",
+		Help: "Whether the optional immutable native integration route projection is valid.",
+	}, func() float64 {
+		if value, _ := ready(); value {
+			return 1
+		}
+		return 0
+	}))
+}
+
 // normalizeOutcome maps arbitrary connection outcomes to approved metric labels.
 // normalizeOutcome переводит произвольные исходы соединения в разрешённые метки метрик.
 func normalizeOutcome(value string) string {

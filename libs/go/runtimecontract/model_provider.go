@@ -103,7 +103,7 @@ func (config ModelProviderConfiguration) Validate() error {
 	if _, err := modelProviderEndpoint(config.BaseURL); err != nil {
 		return err
 	}
-	if !validModelProviderAddresses(config.AddressCIDRs) {
+	if !ValidOperatorAddressPins(config.AddressCIDRs) {
 		return ErrModelProviderConfiguration
 	}
 	models := map[string]bool{}
@@ -197,7 +197,7 @@ func (config ModelProviderConfiguration) Route() (ModelProviderRoute, error) {
 // Validate checks route metadata; a valid route alone is not evidence of a verified proxy grant.
 // Validate проверяет route metadata; корректный route сам по себе не доказывает verified proxy grant.
 func (route ModelProviderRoute) Validate() error {
-	if !sha256Pattern.MatchString(route.ConfigurationSHA256) || !validModelProviderAddresses(route.AddressCIDRs) {
+	if !sha256Pattern.MatchString(route.ConfigurationSHA256) || !ValidOperatorAddressPins(route.AddressCIDRs) {
 		return ErrModelProviderConfiguration
 	}
 	_, err := modelProviderEndpoint(route.BaseURL)
@@ -238,25 +238,6 @@ func (route ModelProviderRoute) AllowsAddress(address netip.Addr) bool {
 		}
 	}
 	return false
-}
-
-// validModelProviderAddresses accepts a bounded unique list of canonical unicast /32 or /128 pins.
-// validModelProviderAddresses принимает bounded unique list canonical unicast /32 или /128 pins.
-func validModelProviderAddresses(values []string) bool {
-	if len(values) < 1 || len(values) > 32 {
-		return false
-	}
-	addresses := map[netip.Addr]bool{}
-	for _, value := range values {
-		prefix, err := netip.ParsePrefix(value)
-		if err != nil || prefix.String() != value || prefix.Bits() != prefix.Addr().BitLen() ||
-			!prefix.Addr().IsGlobalUnicast() || prefix.Addr().IsLoopback() ||
-			prefix.Addr().IsLinkLocalUnicast() || prefix.Addr().Is4In6() || addresses[prefix.Addr()] {
-			return false
-		}
-		addresses[prefix.Addr()] = true
-	}
-	return true
 }
 
 // modelProviderEndpoint accepts one canonical HTTPS DNS base URL without credential or route aliases.
