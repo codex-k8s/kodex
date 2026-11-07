@@ -324,6 +324,11 @@ func (definition Package) validateConfiguration(configuration map[string]string,
 			return errors.New("integration configuration required field is missing")
 		}
 	}
+	if definition.Metadata.Key == "jira-server-dc" {
+		if _, err := ParseJiraCreateFields(configuration["issue_create_fields"]); err != nil {
+			return err
+		}
+	}
 	if definition.Spec.Adapter == string(AdapterOpenAPIMCP) && !allowUnboundTemplate {
 		for _, capability := range definition.Spec.Capabilities {
 			if capability.OpenAPI == nil ||
@@ -374,7 +379,19 @@ func (capability Capability) ValidateInput(raw []byte) ([]byte, error) {
 		}
 		return validateOpenAPIInput(raw, compiled)
 	}
-	return validateObject(raw, capability.InputFields, "input")
+	canonical, err := validateObject(raw, capability.InputFields, "input")
+	if err == nil && capability.Operation == "jira.issue.create" {
+		var value struct {
+			FieldsJSON string `json:"fields_json"`
+		}
+		if json.Unmarshal(canonical, &value) != nil {
+			return nil, errJiraCreateFields
+		}
+		if _, err := ParseJiraCreateValues(value.FieldsJSON); err != nil {
+			return nil, err
+		}
+	}
+	return canonical, err
 }
 
 // ValidateOutput canonicalizes only fields declared in the safe output projection.

@@ -13,6 +13,8 @@ import { workflowContentPageCatalogDigest } from './workflow-content-page-catalo
 import { platformOIDCIdentityCatalogDigest, platformOIDCIdentityBackupCatalogDigest } from './platform-oidc-identity-catalog.gen.mjs';
 import { personalCredentialsCatalogDigest, personalCredentialsBackupCatalogDigest, personalCredentialsPurgeGraph } from './personal-credentials-catalog.gen.mjs';
 import { validPersonalCredentialsMigrationPrecondition } from './control-plane-immutable-migration.mjs';
+import { validJiraCreateFieldsMigrationPrecondition, validJiraCreateFieldsMigrationPostcondition, validJiraCreateFieldsBackupMigrationPostcondition } from './control-plane-immutable-migration.mjs';
+import { jiraCreateFieldsCatalog } from './jira-create-fields-catalog.gen.mjs';
 import { validPlatformOIDCIdentityMigrationPostcondition, validPlatformOIDCIdentityMigrationPrecondition } from './control-plane-immutable-migration.mjs';
 import { validWorkflowContentPageMigrationPrecondition } from './control-plane-immutable-migration.mjs';
 import { waitMigrationMaintenance, immutableMigrationProfile, isImmutableMigrationProfile, validImmutableMigrationPostcondition, validProjectPurgeAuthorityMigrationPostcondition, validOwnerGateExpiryMigrationPostcondition, validRepositoryBundleMigrationPostcondition, validServerWorkflowMigrationPostcondition, validLegacyWorkflowReworkMigrationPostcondition, validWorkflowExceptionContextMigrationPrecondition, validWorkflowExceptionContextMigrationPostcondition, validWorkflowUpstreamReworkMigrationPrecondition, validWorkflowUpstreamReworkMigrationPostcondition, validWorkflowReviewQAEvidenceMigrationPostcondition, validSessionWorkspaceMigrationPostcondition, validWorkspaceCheckpointMigrationPostcondition, validSSHComposeMigrationPostcondition } from './control-plane-immutable-migration.mjs';
@@ -1253,5 +1255,30 @@ test('combined017 SSH CLI rejects partial schema active work and incomplete sour
   const f=cli(t,'workspace-volume-ssh',sourceCase);const result=f.run('plan');
   assert.notEqual(result.status,0);assert.match(result.stderr,sourceCase==='future'?/MIGRATION_NOT_SOURCE_HEAD/:/MIGRATION_SOURCE_CHAIN_INVALID/);
   assert.equal(f.read().calls.filter(a=>a.includes('create')||a.includes('patch')).length,0);
+ }
+});
+
+// Новые exact035 proofs не расширяют frozen034 и не принимают занятый predecessor.
+test('Jira create fields exact035 requires the complete normal or backup catalog',()=>{
+ for(const backup of [false,true]){
+  const previous=personalCredentialsProof(backup);
+  const proof={...previous,profile:'JIRA_CREATE_FIELDS_'+(backup?'BACKUP_':'')+'V1',gooseVersion:20261107000100,
+   personalCredentialsCatalogDigest:jiraCreateFieldsCatalog[backup?'backup':'normal']};
+  const valid=backup?validJiraCreateFieldsBackupMigrationPostcondition:validJiraCreateFieldsMigrationPostcondition;
+  assert.equal(valid(proof),true);
+  assert.equal(valid({...proof,personalCredentialsCatalogDigest:previous.personalCredentialsCatalogDigest}),false);
+  assert.equal(valid({...proof,gooseVersion:20261106000100}),false);
+  assert.equal(valid({...proof,purgeNodes:proof.purgeNodes+1}),false);
+  assert.equal(valid({...proof,personalCredentialsCatalog:false}),false);
+  assert.equal(valid({...proof,profile:backup?'JIRA_CREATE_FIELDS_V1':'JIRA_CREATE_FIELDS_BACKUP_V1'}),false);
+  const idle=Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions',
+   'pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','oldClaimSessions',
+   'activeIntegrationInvocations','activeIntegrationConnectionTests','activePersonalCredentialTests'].map(key=>[key,0]));
+  const pre={...previous,...idle,profile:'JIRA_CREATE_FIELDS_'+(backup?'BACKUP_':'')+'PREDECESSOR_V1'};
+  assert.equal(validJiraCreateFieldsMigrationPrecondition(pre,backup),true);
+  for(const key of Object.keys(idle)){
+   assert.equal(validJiraCreateFieldsMigrationPrecondition({...pre,[key]:1},backup),false,key);
+   const missing={...pre};delete missing[key];assert.equal(validJiraCreateFieldsMigrationPrecondition(missing,backup),false,key);
+  }
  }
 });

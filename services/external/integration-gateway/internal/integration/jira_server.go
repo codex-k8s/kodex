@@ -246,7 +246,7 @@ func (adapter *Adapter) executeJiraServer(ctx context.Context, request Request, 
 // createJiraServerIssue refuses prior marker evidence before a single plaintext v2 create; only explicit Recover can prove an existing effect.
 // createJiraServerIssue отклоняет прежнее marker evidence перед одним plaintext v2 create; лишь явный Recover подтверждает существующий effect.
 func (adapter *Adapter) createJiraServerIssue(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, input []byte) (Result, error) {
-	var value struct{ Summary, Description string }
+	var value jiraCreateIntent
 	if decodeProviderJSON(input, &value) != nil {
 		return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 	}
@@ -270,6 +270,11 @@ func (adapter *Adapter) createJiraServerIssue(ctx context.Context, request Reque
 		"issuetype": map[string]string{"name": configuration["issue_type"]}, "summary": value.Summary, "labels": []string{label}}
 	if value.Description != "" {
 		fields["description"] = value.Description
+	}
+	if configuration["issue_create_fields"] != "" || value.FieldsJSON != "" || value.ReporterSelf {
+		if err := adapter.prepareJiraCreateFields(ctx, request, capability, configuration, value, fields); err != nil {
+			return Result{}, err
+		}
 	}
 	body, err := adapter.jiraServerJSON(ctx, request, capability, configuration, http.MethodPost, "/issue", nil, map[string]any{"fields": fields}, request.EffectKey)
 	if err != nil {

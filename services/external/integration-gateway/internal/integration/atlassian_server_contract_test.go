@@ -48,12 +48,18 @@ func TestAtlassianProviderContractsMatchDefinitions(t *testing.T) {
 			definition := serverDefinitionFixture(t, key)
 			internalPrerequisites := 0
 			if key == jiraServerDefinition {
-				internalPrerequisites = 3
+				internalPrerequisites = 4
 			}
 			if len(inspection.Operations) != len(definition.Spec.Capabilities)+internalPrerequisites {
 				t.Fatal("provider/package operation coverage differs")
 			}
 			for _, operation := range inspection.Operations {
+				if key == jiraServerDefinition && operation.ID == "jira.create-metadata.read" && operation.Method == "GET" && operation.Path == "/rest/api/2/issue/createmeta/{projectKey}/issuetypes/{issueTypeId}" {
+					if _, exposed := definition.Capability(operation.ID); exposed {
+						t.Fatal("create metadata became an independent agent tool")
+					}
+					continue
+				}
 				if key == jiraServerDefinition && operation.ID == "jira.permissions.read" && operation.Method == "GET" && operation.Path == "/rest/api/2/mypermissions" {
 					if _, exposed := definition.Capability(operation.ID); exposed {
 						t.Fatal("internal permission prerequisite became a user tool")

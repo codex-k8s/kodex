@@ -106,3 +106,10 @@ READ_ONLY не меняет GitHub-состояние и не создаёт dom
 выполняется тем же exact commit/path до EOF, native consumer получает только
 проверенную страницу. Runtime/deploy proof этого пути принадлежит полному
 unit gateway и не заменяется schema/codegen PASS этой библиотеки.
+
+Опциональный контракт Jira Server/DC create fields принадлежит этому общему
+пакету: `ParseJiraCreateFields` проверяет operator allowlist при сохранении и
+исполнении, `ParseJiraCreateValues` сохраняет explicit scalar intent до Human Gate.
+Ограничения и lifecycle — [#2038](../../../docs/operations/jira-create-fields-2038.md).
+Исторические exact Jira1.0.0 pins разрешаются из frozen snapshot без наследования
+новых inputs и configuration; Cloud package не расширяется.

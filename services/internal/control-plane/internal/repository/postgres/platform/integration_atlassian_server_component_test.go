@@ -36,7 +36,11 @@ func TestAtlassianServerDefinitionsComponent(t *testing.T) {
 	for _, key := range []string{"jira-server-dc", "confluence-server-dc"} {
 		t.Run(key, func(t *testing.T) {
 			definition, exists := repository.integrationDefinitions[key]
-			if !exists || definition.Metadata.Version != "1.0.0" {
+			expectedVersion := "1.0.0"
+			if key == "jira-server-dc" {
+				expectedVersion = "1.1.0"
+			}
+			if !exists || definition.Metadata.Version != expectedVersion {
 				t.Fatal("Server definition missing from owner registry")
 			}
 			for _, contextPath := range []string{"/", "/suite"} {
@@ -53,7 +57,7 @@ func TestAtlassianServerDefinitionsComponent(t *testing.T) {
 					t.Fatalf("Server connection creation failed for context %q: %v", contextPath, err)
 				}
 				observed, err := service.GetIntegrationConnection(ctx, owner, created.Connection.Ref)
-				if err != nil || observed.DefinitionKey != key || observed.DefinitionVersion != "1.0.0" ||
+				if err != nil || observed.DefinitionKey != key || observed.DefinitionVersion != expectedVersion ||
 					observed.DefinitionDigest != definition.Digest || observed.PublicConfiguration["context_path"] != contextPath ||
 					observed.CredentialRevision != nil || len(observed.Grants) != 0 || observed.State != "NOT_CONNECTED" {
 					t.Fatalf("Server connection lost its exact pins or inherited access: %v", err)

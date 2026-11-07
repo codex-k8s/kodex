@@ -25,6 +25,7 @@ PRESERVED = tuple(name for name in completion.JOBS if name != MIGRATION)
 FORWARD_CONTRACTS = {
     20261105000100: (20261030000100, 'platform-oidc-identity-', 'validPlatformOIDCIdentity'),
     20261106000100: (20261105000100, 'personal-credentials-', 'validPersonalCredentials'),
+    20261107000100: (20261106000100, 'jira-create-fields-', 'validJiraCreateFields'),
 }
 
 

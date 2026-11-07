@@ -4,15 +4,15 @@ title: Опциональные Server/DC-профили Jira и Confluence
 type: operations
 status: approved
 owner: backend
-version: 1.0.0
-updated: 2026-11-05
+version: 1.1.0
+updated: 2026-11-07
 ---
 
 # Опциональный Server/DC
 
 Источник: [#2029](https://github.com/codex-k8s/kodex/issues/2029), в составе
 приёмки [#1830](https://github.com/codex-k8s/kodex/issues/1830).
-`jira-server-dc@1.0.0` и `confluence-server-dc@1.0.0` — отдельные определения
+`jira-server-dc@1.1.0` и `confluence-server-dc@1.0.0` — отдельные определения
 ограниченной первой вертикали. Существующие `jira` и `confluence` используют
 Cloud API и сохраняют прежние версии, digests и поведение. Тип размещения
 выбирает владелец подключения; ошибочный endpoint не переключает его молча.
@@ -43,7 +43,7 @@ scope, risk, Human Gate, output и retry policy; shipped registry генерир
 Все operation keys имеют соответствующий префикс `jira.` либо `confluence.`.
 Вызов может включать несколько фиксированных GET для проверки scope или
 поиска прежнего эффекта перед единственной записью. Поднабор не включает
-attachments, удаление, произвольный JQL/CQL, дополнительные поля Jira,
+attachments, удаление, произвольный JQL/CQL, произвольные дополнительные поля Jira,
 transition screens с обязательными полями, archived/draft pages и обход
 нестандартных plugin endpoints. Успешный identity/health GET не доказывает
 write permission и не обещает поддержку всего API.
@@ -141,3 +141,6 @@ image pins. Не удалять connections, secrets, receipts или истор
 rollback. Новых schema migrations нет; наличие новых pinned definitions
 не делает старый binary совместимым с их исполнением. Cloud connections
 не перенастраиваются автоматически.
+
+Ограниченные optional поля создания Jira1.1.0, переход035 и сохранение точных
+старых pins описаны отдельно в [#2038](jira-create-fields-2038.md).

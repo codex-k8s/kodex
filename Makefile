@@ -349,6 +349,7 @@ check-integration-package-codegen: check-go-toolchain
 		cd libs/go/integrationpackage && env -u GOFLAGS GOENV=off GOWORK=off go run ./cmd/packagegen \
 		-contracts ../../../contracts/integrations/v1/definitions -output "$$tmp"; \
 		gofmt -w "$$tmp"; cmp -s shipped_gen.go "$$tmp" || { echo 'integration package generated code is stale' >&2; exit 1; }
+	@python3 -B tools/release/generate-jira-create-fields-proof.py --check
 
 gen-openapi: gen-openapi-go gen-openapi-ts
 

@@ -18,6 +18,10 @@ test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestInstructionCommandPr
 
 # Оба закрытых upgrade-сценария используют одну и ту же отдельную пустую БД.
 upgrade_test='^TestWorkflowReviewQAEvidenceForwardUpgrade$'
+if [[ "$test_pattern" == --jira-create-fields-upgrade ]]; then
+  upgrade_test='^TestJiraCreateFieldsMigration$'
+  test_pattern=--review-qa-upgrade
+fi
 # Явный metadata capture не является portable-release qualification либо install permission.
 if [[ "$test_pattern" == --personal-credentials-schema-capture ]]; then
   [[ "${KODEX_PERSONAL_SCHEMA_CAPTURE:-}" == 1 ]] || fail 'personal schema capture requires explicit opt-in'
@@ -326,6 +330,7 @@ fi
   schema_version=$(psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" --no-password -X -qAt -v ON_ERROR_STOP=1 \
     -c 'SELECT max(version_id) FILTER (WHERE is_applied) FROM public.goose_db_version')
   case "$schema_version" in
+    20261107000100) schema_proof=jira-create-fields-migration-postcondition.sql; schema_verifier=validJiraCreateFieldsMigrationPostcondition ;;
     20261105000100) schema_proof=platform-oidc-identity-migration-postcondition.sql; schema_verifier=validPlatformOIDCIdentityMigrationPostcondition ;;
     20261106000100) schema_proof=personal-credentials-migration-postcondition.sql; schema_verifier=validPersonalCredentialsMigrationPostcondition ;;
     20261030000100) schema_proof=workflow-content-page-migration-postcondition.sql; schema_verifier=validWorkflowContentPageMigrationPostcondition ;;

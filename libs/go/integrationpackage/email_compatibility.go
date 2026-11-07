@@ -9,11 +9,16 @@ func (p Package) RequiresConnectionCredential() bool {
 	return p.Spec.Credential != nil && !(p.Metadata.Key == "email" && p.Spec.Adapter == "EMAIL_HTTPS" && p.Spec.AdapterOwner == string(OwnerIntegrationGateway) && p.Spec.ExecutionRoute == string(RouteManagedMCP))
 }
 
-// ResolveShippedRevision accepts current exact pins or explicitly frozen GitHub releases, preserving each historical policy rather than inheriting current authority.
-// ResolveShippedRevision допускает текущие точные pins либо явно закреплённые выпуски GitHub, сохраняя историческую политику вместо наследования текущих полномочий.
+// ResolveShippedRevision accepts current exact pins or explicitly frozen GitHub/Jira releases,
+// preserving historical policy rather than inheriting the current capability or input authority.
+// ResolveShippedRevision допускает текущие exact pins либо закреплённые выпуски GitHub/Jira,
+// сохраняя историческую политику без наследования новых capabilities или полномочий ввода.
 func ResolveShippedRevision(current Package, version, digest string) (Package, bool) {
 	if current.Metadata.Version == version && current.Digest == digest {
 		return current, true
+	}
+	if previous, ok := resolveJiraServerOneCompatibility(current, version, digest); ok {
+		return previous, true
 	}
 	return resolveGitHubSixCompatibility(current, version, digest)
 }
