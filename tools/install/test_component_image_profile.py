@@ -48,6 +48,39 @@ def bundle_fixture():
 
 
 class Tests(unittest.TestCase):
+    def test_runtime_controller_profile_changes_only_pinned_container_and_provenance(self):
+        resources, original, _, lock_raw, _ = fixture()
+        base = 'images.example.invalid/base/runtime-controller@sha256:' + 'c'*64
+        lock = json.loads(lock_raw)
+        lock['images'].append({'component': 'runtime-controller', 'pull_ref': base})
+        lock_raw = json.dumps(lock).encode()
+        config = {**original, 'component': 'runtime-controller',
+                  'base_release_lock_sha256': hashlib.sha256(lock_raw).hexdigest(),
+                  'expected_image_ref': base,
+                  'image_ref': 'images.example.invalid/fixed/runtime-controller@sha256:' + 'd'*64}
+        resources.append({'apiVersion': 'apps/v1', 'kind': 'Deployment',
+            'metadata': {'name': 'runtime-controller', 'namespace': 'kodex-system',
+                         'labels': {'app.kubernetes.io/part-of': 'kodex'}},
+            'spec': {'replicas': 2, 'template': {'spec': {
+                'serviceAccountName': 'runtime-controller',
+                'containers': [{'name': 'runtime-controller', 'image': base},
+                               {'name': 'authority', 'image': 'images.example.invalid/authority@sha256:' + 'e'*64}],
+                'volumes': [{'name': 'authority', 'emptyDir': {}}]}}}})
+        before = copy.deepcopy(resources)
+        profile.validate(config, lock, hashlib.sha256(lock_raw).hexdigest())
+        digest = hashlib.sha256(json.dumps(config).encode()).hexdigest()
+        after = profile.transform(resources, config, digest)
+        expected = copy.deepcopy(before)
+        expected[-1]['spec']['template']['spec']['containers'][0]['image'] = config['image_ref']
+        expected[-1]['spec']['template']['metadata'] = {'annotations': {
+            profile.SOURCE: config['source_sha'], profile.BASE: config['base_release_lock_sha256'],
+            profile.PROFILE: digest}}
+        self.assertEqual(resources, before)
+        self.assertEqual(after, expected)
+        foreign = copy.deepcopy(resources)
+        foreign[-1]['spec']['template']['spec']['containers'][0]['image'] = 'images.example.invalid/foreign@sha256:' + 'f'*64
+        with self.assertRaises(Rejected):profile.transform(foreign, config, digest)
+
     def test_pinned_predecessor_allows_only_whole_exact_deployment_states(self):
         registry=test_authority_registry.registry
         previous=registry.observability_profile.transform(registry.transform(test_authority_registry.fixture(),{'schema':'kodex.authority-registry/v1','source_revision':1}),True)
@@ -172,6 +205,8 @@ pathlib.Path(os.environ['PROBE_ORIGINAL']).write_bytes(b'changed')
         for heads in ({'control-plane':4},{'control-plane':True},{},None):
             with self.subTest(heads=heads),self.assertRaises(Rejected):profile.validate({**broker,'schema_heads':heads},lock,lock_sha)
         with self.assertRaises(Rejected):profile.validate({k:v for k,v in broker.items()if k!='schema_heads'},lock,lock_sha)
+        bundle['profiles'].append(copy.deepcopy(bundle['profiles'][0]))
+        with self.assertRaisesRegex(Rejected,'UNIQUE_COMPONENT_PROFILE_REQUIRED'):profile.validate(bundle,lock,lock_sha)
         bundle['profiles'].append(copy.deepcopy(bundle['profiles'][0]))
         with self.assertRaisesRegex(Rejected,'BOUNDED_COMPONENT_PROFILES_REQUIRED'):profile.validate(bundle,lock,lock_sha)
 

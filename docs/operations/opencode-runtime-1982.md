@@ -4,11 +4,34 @@ title: Опциональный OpenCode runtime
 type: operation
 status: draft
 owner: developer
-version: 0.1.0
-updated: 2026-11-02
+version: 0.1.1
+updated: 2026-11-07
 ---
 
 # Опциональный OpenCode runtime
+
+## Совместимость MCP-каталога
+
+`runtime-controller` публикует `required: []` для object schemas без обязательных
+полей. Значение `null` недопустимо: строгий MCP-клиент OpenCode отвергает весь
+каталог, хотя командная проверка `opencode mcp list` может завершиться с кодом0.
+Готовность проверяется по статусу подключения и реальному вызову разрешённого
+инструмента с результатом, а не только по успешному текстовому ответу модели.
+
+Синтетическая регрессия вызывает настоящий JSON-RPC `tools/list` для agent,
+SYSTEM и PROJECT профилей, проверяет вложенные input/output schemas и компилирует
+их. Пустой optional input остаётся допустимым; обязательные поля, ограничения
+длины и запрет неизвестных аргументов проверяются отдельно. Изменение формы
+каталога сохраняет прежнюю проверку прав при вызове инструментов.
+
+Для адресного обновления этого unit существующий опциональный
+`--component-image-profile` принимает `component: runtime-controller`. Профиль
+закрепляет полный прежний release lock, обе source SHA и прежний/новый immutable
+image в том же registry. Меняется только выбранный контейнер с provenance
+annotations; sidecars, service account, volumes и replica count сохраняются.
+Обычный render без профиля сохраняет прежние images. Допуск workload resume
+с прежними lifecycle/idle и authority-проверками остаётся обязательным; профиль
+сам по себе не разрешает перезапуск активного выполнения.
 
 Unit #1982 добавляет engine к существующей job `agent-runner`, сохраняя
 обычный Codex при отсутствии опции. Это полный путь конфигурации, account,

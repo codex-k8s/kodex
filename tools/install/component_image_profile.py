@@ -15,7 +15,8 @@ BUNDLE_SCHEMA = 'kodex.bootstrap-component-images/v1'
 COMPONENTS = {'egress-gateway': ('egress-gateway', 'egress-gateway'),
               'registry-pull-authorizer': ('kodex-image-registry-pull', 'pull-authorizer'),
               'control-plane': ('control-plane', 'control-plane'),
-              'secret-broker': ('secret-broker', 'secret-broker')}
+              'secret-broker': ('secret-broker', 'secret-broker'),
+              'runtime-controller': ('runtime-controller', 'runtime-controller')}
 RUNTIME_ENV = 'REGISTRY_PULL_RUNTIME_ENGINE'
 SOURCE = 'kodex.dev/component-source-sha'
 BASE = 'kodex.dev/component-base-lock-sha256'
