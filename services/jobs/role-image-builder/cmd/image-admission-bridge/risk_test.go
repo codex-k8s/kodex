@@ -37,7 +37,7 @@ func bridgeRiskFixture(t *testing.T, risk bool) (imageowner.Claim, imageowner.Ad
 	if risk {
 		blocking = 1
 		matches = append(matches, map[string]any{"artifact": map[string]any{"name": "example/pkg", "version": "v1.0.0", "type": "go-module"},
-			"vulnerability": map[string]any{"id": "GO-2026-1234", "severity": "High", "fix": map[string]any{"state": "fixed", "versions": []string{"v1.0.1"}}}})
+			"vulnerability": map[string]any{"id": "CVE-2099-0001", "severity": "High", "fix": map[string]any{"state": "fixed", "versions": []string{"v1.0.1"}}}})
 	}
 	source, _ := json.Marshal(map[string]any{"matches": matches, "ignoredMatches": []any{}, "kodexPolicy": map[string]any{
 		"schema": "kodex.dev/fix-available-high-or-critical/v1", "policyRevision": 6, "policySHA256": hex, "highOrCriticalMatchCount": blocking, "blockingMatchCount": blocking, "unresolvedNoFixMatchCount": 0}})
@@ -238,7 +238,12 @@ func TestBridgeDiagnosticNeverPrintsRemoteCredentialsOrPayload(t *testing.T) {
 	// privateDetail — намеренно похожий на закрытые данные искусственный текст;
 	// ниже проверяется его отсутствие во всех сформированных сообщениях.
 	const privateDetail = "private-fixture-token raw-report internal-url"
-	for _, code := range []codes.Code{codes.Internal, codes.Unavailable, codes.Unknown, codes.DataLoss, codes.InvalidArgument, codes.PermissionDenied} {
+	for _, code := range []codes.Code{
+		codes.Canceled, codes.Unknown, codes.InvalidArgument, codes.DeadlineExceeded,
+		codes.NotFound, codes.AlreadyExists, codes.PermissionDenied, codes.ResourceExhausted,
+		codes.FailedPrecondition, codes.Aborted, codes.OutOfRange, codes.Unimplemented,
+		codes.Internal, codes.Unavailable, codes.DataLoss, codes.Unauthenticated,
+	} {
 		for _, err := range []error{status.Error(code, privateDetail), fmt.Errorf("%s: %w", privateDetail, status.Error(code, privateDetail))} {
 			if bridgeDiagnostic(err) != "image admission bridge failed: "+code.String() {
 				t.Fatal("remote diagnostics leaked")

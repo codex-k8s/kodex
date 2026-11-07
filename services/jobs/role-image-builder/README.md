@@ -4,8 +4,8 @@ title: Сборка окружений ролей
 type: service
 status: approved
 owner: backend
-version: 1.1.1
-updated: 2026-10-15
+version: 1.1.2
+updated: 2026-11-08
 ---
 
 # role-image-builder
@@ -132,6 +132,17 @@ authority RPC. Реальный BuildKit solve получает отдельны
 `control-plane`, registry или phase workload не делает controller Pod
 неготовым; рабочая phase Job получает типизированный отказ и повторяется через
 ограниченный reconcile.
+
+Admission Job классифицирует закрытый вывод bridge
+`image admission bridge failed: <gRPC code>`; исходные remote errors не выводятся.
+`NotFound` обозначает пустой claim/claim-promotion: одна попытка, закрытый
+отрицательный результат и отсутствие sleep. Он не подтверждает выполнение
+admission либо promotion. Коды auth/dependency/conflict дают прежние закрытые
+классы; неизвестный код остаётся `unclassified` в прежнем bounded retry.
+Legacy RPC diagnostics сохраняют совместимость. Число попыток, интервалы,
+права и lease/receipt recovery не меняются. Регрессия #2042 проверяет настоящий
+формат producer, оба пустых polling cycle и отсутствие synthetic secret в stderr;
+это не заменяет installed image/admission/promotion qualification.
 
 Соседний `control-plane` не входит в Kubernetes readiness builder. Его
 недоступность переводит рабочий claim/build loop в отдельное degraded-состояние

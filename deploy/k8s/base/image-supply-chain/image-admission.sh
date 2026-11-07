@@ -470,13 +470,15 @@ classify_claim_retry_error() {
   error_file=$1
   if grep -Eiq 'x509|tls|certificate|handshake' "$error_file"; then
     printf '%s\n' transport-trust
-  elif grep -Eiq 'code = (Unauthenticated|PermissionDenied)' "$error_file"; then
+  # Bridge выдаёт только закрытый prefix+code, а не raw RPC message. Прежний
+  # формат остаётся совместимым; remote details не попадают в итоговую диагностику.
+  elif grep -Eiq '^image admission bridge failed: (Unauthenticated|PermissionDenied)$|code = (Unauthenticated|PermissionDenied)' "$error_file"; then
     printf '%s\n' authorization
-  elif grep -Eiq 'code = NotFound|no (image )?(admission|promotion) (work|claim)' "$error_file"; then
+  elif grep -Eiq '^image admission bridge failed: NotFound$|code = NotFound|no (image )?(admission|promotion) (work|claim)' "$error_file"; then
     printf '%s\n' no-work
-  elif grep -Eiq 'code = (Unavailable|DeadlineExceeded|ResourceExhausted)|context deadline exceeded|connection refused|no such host|transport is closing' "$error_file"; then
+  elif grep -Eiq '^image admission bridge failed: (Unavailable|DeadlineExceeded|ResourceExhausted)$|code = (Unavailable|DeadlineExceeded|ResourceExhausted)|context deadline exceeded|connection refused|no such host|transport is closing' "$error_file"; then
     printf '%s\n' dependency-unavailable
-  elif grep -Eiq 'code = (Aborted|FailedPrecondition|AlreadyExists)|conflict|stale|fence' "$error_file"; then
+  elif grep -Eiq '^image admission bridge failed: (Aborted|FailedPrecondition|AlreadyExists)$|code = (Aborted|FailedPrecondition|AlreadyExists)|conflict|stale|fence' "$error_file"; then
     printf '%s\n' owner-state-conflict
   elif grep -Eiq 'required image owner environment is invalid|image owner path is invalid|bounded image owner state' "$error_file"; then
     printf '%s\n' local-configuration
