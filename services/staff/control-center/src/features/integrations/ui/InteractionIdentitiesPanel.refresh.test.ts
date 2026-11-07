@@ -31,6 +31,7 @@ it("обновление того же подключения сохраняет
     definitionDigest: "a".repeat(64),
     name: "Подключение",
     state: "CONNECTED",
+    credentialPolicy: "PROJECT_SHARED",
     credentialsConfigured: true,
     credentialsHint: "",
     capabilities: [],

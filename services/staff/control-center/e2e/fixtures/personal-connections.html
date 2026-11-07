@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Проверка личных подключений</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, h, ref } from "vue";
+      import { createRouter, createMemoryHistory } from "vue-router";
+      import { i18n } from "../../src/app/i18n/index";
+      import { loadRuntimeConfig } from "../../src/shared/config/runtime";
+      import { configureApiClient } from "../../src/shared/api/client";
+      import { mutateWithRetry } from "../../src/shared/api/mutation";
+      import { asProblem } from "../../src/shared/api/problem";
+      import { createRun } from "../../src/shared/api/generated/openapi/sdk.gen";
+      import ProblemNotice from "../../src/shared/ui/ProblemNotice.vue";
+      import PersonalConnectionsPanel from "../../src/features/integrations/ui/PersonalConnectionsPanel.vue";
+      import "../../src/app/styles/base.css";
+      await loadRuntimeConfig();
+      configureApiClient();
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [
+          { path: "/", component: { render: () => null } },
+          {
+            path: "/integrations",
+            name: "integrations",
+            component: { render: () => null },
+          },
+        ],
+      });
+      await router.push("/");
+      await router.isReady();
+      const task = ref("");
+      const problem = ref();
+      const busy = ref(false);
+      async function launch(event) {
+        event.preventDefault();
+        if (busy.value) return;
+        busy.value = true;
+        problem.value = undefined;
+        try {
+          await mutateWithRetry((headers) =>
+            createRun({
+              headers: { ...headers },
+              body: {
+                projectRef: "prj_fixture01",
+                target: { type: "AGENT", ref: "agt_fixture01" },
+                task: task.value,
+              },
+            }),
+          );
+        } catch (error) {
+          problem.value = asProblem(error);
+        } finally {
+          busy.value = false;
+        }
+      }
+      createApp({
+        setup() {
+          return () =>
+            h("main", { style: "padding:24px;max-width:1000px;margin:auto;" }, [
+              h("form", { onSubmit: launch }, [
+                h(
+                  "label",
+                  { for: "synthetic-launch-task" },
+                  "Задача для synthetic запуска",
+                ),
+                h("textarea", {
+                  id: "synthetic-launch-task",
+                  value: task.value,
+                  onInput: (event) => {
+                    task.value = event.target.value;
+                  },
+                }),
+                h(
+                  "button",
+                  { class: "button", type: "submit", disabled: busy.value },
+                  "Проверить и запустить synthetic процесс",
+                ),
+              ]),
+              problem.value?.integrationCredentialIssues.length
+                ? h(ProblemNotice, {
+                    problem: problem.value,
+                  })
+                : null,
+              h(PersonalConnectionsPanel),
+            ]);
+        },
+      })
+        .use(router)
+        .use(i18n)
+        .mount("#app");
+    </script>
+  </body>
+</html>

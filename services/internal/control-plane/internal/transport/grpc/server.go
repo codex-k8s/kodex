@@ -45,6 +45,7 @@ const (
 // Server адаптирует generated control-plane RPC к platform и role-image domain services;
 // встроенные unimplemented servers сохраняют поведение неподдержанных RPC.
 type Server struct {
+	controlplanev1.UnimplementedPersonalIntegrationCredentialServiceServer
 	controlplanev1.UnimplementedOIDCSessionServiceServer
 	sttv1.UnimplementedTranscriptionAuthorityServiceServer
 	sttv1.UnimplementedTranscriptionPolicyProjectionServiceServer
@@ -286,6 +287,7 @@ func execute(ctx context.Context, service *platformservice.Service, method strin
 // codes и messages и выбранные закрытые reasons, отбрасывая произвольный error text и используя
 // Internal для неизвестной ошибки.
 func transportError(err error) error {
+	var preflight *platformservice.IntegrationCredentialPreflightError
 	switch {
 	case err == nil:
 		return nil
@@ -325,6 +327,8 @@ func transportError(err error) error {
 		return statusErrorWithReason(codes.FailedPrecondition, "legacy rework delivery is blocked", "LEGACY_REWORK_DELIVERY_BLOCKED")
 	case errors.Is(err, errs.ErrLegacyReworkReadLimit):
 		return statusErrorWithReason(codes.FailedPrecondition, "legacy rework exceeds readable input budget", "LEGACY_REWORK_READ_LIMIT")
+	case errors.As(err, &preflight):
+		return personalCredentialPreflightError(preflight)
 	case errors.Is(err, errs.ErrConflict):
 		return status.Error(codes.Aborted, "resource state changed")
 	case errors.Is(err, errs.ErrProviderCatalogTooLarge):

@@ -112,6 +112,7 @@ function connection(
     definitionKey,
     name: ref,
     state: "CONNECTED",
+    credentialPolicy: "PROJECT_SHARED",
     credentialsConfigured: true,
     credentialsHint: "configured",
     capabilities: definition(definitionKey).capabilities,

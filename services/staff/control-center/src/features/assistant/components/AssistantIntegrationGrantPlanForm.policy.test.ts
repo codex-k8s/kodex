@@ -89,6 +89,7 @@ async function setup(policy?: string) {
     definitionVersion: "1.0",
     definitionDigest: "a".repeat(64),
     state: "CONNECTED",
+    credentialPolicy: "PROJECT_SHARED",
     credentialsConfigured: true,
     credentialsHint: "",
     grants: [],

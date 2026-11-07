@@ -144,7 +144,7 @@ func TestIntegrationInputSchemaRequiresExactDigest(t *testing.T) {
 // публичных готовности и подсказки учётных данных в проекции со скрытием внутреннего описателя
 // ревизии и хранения секрета.
 func TestIntegrationConnectionDoesNotExposeInternalCredentialDescriptor(t *testing.T) {
-	value, err := messageMap(&cp.IntegrationConnection{Ref: "conn_fixture01", CredentialsConfigured: true, CredentialsHint: "configured", CredentialRevision: &cp.IntegrationCredentialRevision{Ref: "cred_fixture01", SecretRef: "internal-secret", SecretUid: "internal-uid", SecretResourceVersion: "123", ContentSha256: strings.Repeat("a", 64)}})
+	value, err := messageMap(&cp.IntegrationConnection{CredentialPolicy: cp.IntegrationCredentialPolicy_INTEGRATION_CREDENTIAL_POLICY_PROJECT_SHARED, Ref: "conn_fixture01", CredentialsConfigured: true, CredentialsHint: "configured", CredentialRevision: &cp.IntegrationCredentialRevision{Ref: "cred_fixture01", SecretRef: "internal-secret", SecretUid: "internal-uid", SecretResourceVersion: "123", ContentSha256: strings.Repeat("a", 64)}})
 	if err != nil || value["credentialsConfigured"] != true || value["credentialsHint"] != "configured" {
 		t.Fatal("public credential readiness lost")
 	}

@@ -1,4 +1,4 @@
-"""Явный forward032→033 profile: прежние bootstrap effects сохраняются, новая миграция подтверждается отдельно.
+"""Явные forward032→033 и033→034: прежние bootstrap effects сохраняются, новая миграция подтверждается отдельно.
 
 prepare не обращается к кластеру. capture выполняет только чтение реального Job/Pod
 и schema catalog; этот модуль не запускает миграцию, не удаляет Jobs и не создаёт
@@ -22,6 +22,10 @@ SCHEMA = 'kodex.bootstrap-upgrade/v1'
 ORIGIN = 'FORWARD_MIGRATION_UPGRADE'
 MIGRATION = 'control-plane-migrate'
 PRESERVED = tuple(name for name in completion.JOBS if name != MIGRATION)
+FORWARD_CONTRACTS = {
+    20261105000100: (20261030000100, 'platform-oidc-identity-', 'validPlatformOIDCIdentity'),
+    20261106000100: (20261105000100, 'personal-credentials-', 'validPersonalCredentials'),
+}
 
 
 def sha(raw):
@@ -43,7 +47,8 @@ def validate(profile):
     keys = {'control-plane', 'internal-rpc-authority', 'email-bridge'}
     require(isinstance(before, dict) and isinstance(after, dict) and set(before) == set(after) == keys and
             all(type(v) is int and v > 0 for heads in (before, after) for v in heads.values()), 'UPGRADE_SCHEMA_PINS_REJECTED')
-    require(before['control-plane'] == 20261030000100 and after['control-plane'] == 20261105000100 and
+    contract = FORWARD_CONTRACTS.get(after['control-plane'])
+    require(contract is not None and before['control-plane'] == contract[0] and
             all(before[key] == after[key] for key in keys - {'control-plane'}), 'UPGRADE_SCHEMA_PATH_REJECTED')
     return copy.deepcopy(profile)
 
@@ -115,7 +120,12 @@ def prepare(previous_raw, target_raw, profile):
     old, new = completion.desired_jobs(previous), completion.desired_jobs(target)
     for job in [*old.values(), *new.values()]: immutable_job(job)
     require(completion.fingerprint(old[MIGRATION]) != completion.fingerprint(new[MIGRATION]), 'UPGRADE_NEW_MIGRATION_REQUIRED')
-    require(without_images(old[MIGRATION]) == without_images(new[MIGRATION]), 'UPGRADE_MIGRATION_EFFECT_CHANGED')
+    old_migration, new_migration = without_images(old[MIGRATION]), without_images(new[MIGRATION])
+    for job in (old_migration, new_migration):
+        require(type(job['spec'].get('backoffLimit')) is int and job['spec']['backoffLimit'] in (0, 2),
+                'UPGRADE_MIGRATION_CONTRACT_REJECTED')
+        job['spec']['backoffLimit'] = 0
+    require(old_migration == new_migration, 'UPGRADE_MIGRATION_EFFECT_CHANGED')
     for name in PRESERVED:
         require(without_images(old[name]) == without_images(new[name]), 'UPGRADE_BOOTSTRAP_EFFECT_CHANGED')
     result = copy.deepcopy(target)
@@ -151,16 +161,18 @@ def render_profile(resources):
     return profile, sha(raw)
 
 
-def schema_proof(state, mode):
-    """Исполняет только fixed READ ONLY033 catalog proof и штатный exact validator; пароль/DSN не читаются."""
+def schema_proof(state, mode, version):
+    """Исполняет fixed READ ONLY proof закреплённого target033/034 и exact validator; пароль/DSN не читаются."""
     directory = Path(__file__).resolve().parent.parent / 'release'
     require(mode in ('plain', 'backup'), 'UPGRADE_SCHEMA_PROFILE_REJECTED')
-    query = (directory / ('platform-oidc-identity-' + ('backup-' if mode == 'backup' else '') + 'migration-postcondition.sql')).read_bytes()
+    require(type(version) is int and version in FORWARD_CONTRACTS, 'UPGRADE_SCHEMA_PATH_REJECTED')
+    _, prefix, validator = FORWARD_CONTRACTS[version]
+    query = (directory / (prefix + ('backup-' if mode == 'backup' else '') + 'migration-postcondition.sql')).read_bytes()
     result = subprocess.run(['kubectl', '--context', state.context, '--request-timeout=15s', '-n', 'kodex-system',
                              'exec', '-i', 'kodex-postgresql-0', '--', 'psql', '-XqAt', '-U', 'postgres', '-d', 'control_plane',
                              '-v', 'ON_ERROR_STOP=1'], input=query, capture_output=True, timeout=25)
     require(result.returncode == 0 and len(result.stdout) <= 1 << 20, 'UPGRADE_SCHEMA_CATALOG_REJECTED')
-    function = 'validPlatformOIDCIdentity' + ('Backup' if mode == 'backup' else '') + 'MigrationPostcondition'
+    function = validator + ('Backup' if mode == 'backup' else '') + 'MigrationPostcondition'
     verifier = "import {" + function + " as valid} from './control-plane-immutable-migration.mjs';let raw='';for await(const chunk of process.stdin)raw+=chunk;if(!valid(JSON.parse(raw)))process.exit(1);"
     checked = subprocess.run(['node', '--input-type=module', '-e', verifier], cwd=directory,
                              input=result.stdout, capture_output=True, timeout=10)
@@ -169,11 +181,11 @@ def schema_proof(state, mode):
 
 
 def verify_apply(state, resources, receipt):
-    """До первой rollout mutation проверяет genuine composite receipt, cluster/Jobs и полный033 catalog."""
+    """До первой rollout mutation проверяет genuine composite receipt, cluster/Jobs и exact target catalog."""
     require(isinstance(receipt, dict) and receipt.get('origin') == ORIGIN, 'UPGRADE_COMPLETION_ORIGIN_REQUIRED')
     profile, _ = render_profile(resources)
     completion.verify(state, resources, receipt)
-    proof = schema_proof(state, profile['schema_profile'])
+    proof = schema_proof(state, profile['schema_profile'], profile['to_schema_heads']['control-plane'])
     return {'status': 'FORWARD_UPGRADE_APPLY_VERIFIED', 'schema_proof_sha256': proof, 'effects_replayed': False}
 
 
@@ -246,7 +258,7 @@ def capture(state, resources, previous_resources, previous_receipt, previous_rec
     verify_resource(expected, actual)
     pod_uid, image_digest = migration_execution(state, expected, actual)
     verify_schemas(state, resources)
-    proof_digest = schema_proof(state, profile['schema_profile'])
+    proof_digest = schema_proof(state, profile['schema_profile'], profile['to_schema_heads']['control-plane'])
     again = state.get(expected)
     require(again is not None and again['metadata']['uid'] == actual['metadata']['uid'] and seal(again) == seal(actual) and
             completion.successful(again), 'UPGRADE_MIGRATION_READBACK_CHANGED')

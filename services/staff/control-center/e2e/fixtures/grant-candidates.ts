@@ -24,6 +24,7 @@ export async function checkGrantCandidates(
     definitionDigest: "b".repeat(64),
     name: "Каталог разрешений",
     state: "CONNECTED",
+    credentialPolicy: "PROJECT_SHARED",
     credentialsConfigured: true,
     credentialsHint: "Настроены",
     publicConfiguration: {},

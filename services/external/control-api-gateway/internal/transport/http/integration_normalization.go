@@ -25,6 +25,10 @@ var errPublicIntegrationShape = errors.New("public integration response is inval
 func normalizeIntegrationEnum(value any, descriptor protoreflect.EnumDescriptor) (any, error) {
 	prefix := ""
 	switch descriptor.FullName() {
+	case "controlplane.v1.IntegrationCredentialPolicy":
+		prefix = "INTEGRATION_CREDENTIAL_POLICY_"
+	case "controlplane.v1.PersonalIntegrationCredentialState":
+		prefix = "PERSONAL_INTEGRATION_CREDENTIAL_STATE_"
 	case "controlplane.v1.RepositoryBundlePublicationState":
 		prefix = "REPOSITORY_BUNDLE_PUBLICATION_STATE_"
 	case "controlplane.v1.IntegrationRisk":
@@ -65,10 +69,105 @@ func normalizeIntegrationEnum(value any, descriptor protoreflect.EnumDescriptor)
 // capabilities.
 func normalizeIntegrationShape(value map[string]any, descriptor protoreflect.MessageDescriptor) error {
 	switch descriptor.FullName() {
+	case "controlplane.v1.ListPersonalIntegrationConnectionsResponse":
+		items, ok := value["connections"].([]any)
+		page, pageOK := value["page"].(map[string]any)
+		if !ok || len(items) > 100 || !pageOK {
+			return errPublicIntegrationShape
+		}
+		if token, present := page["nextPageToken"]; present {
+			text, valid := token.(string)
+			if !valid || len(text) > 512 {
+				return errPublicIntegrationShape
+			}
+		}
+		seen := make(map[string]bool, len(items))
+		for _, item := range items {
+			connection, valid := item.(map[string]any)
+			if !valid {
+				return errPublicIntegrationShape
+			}
+			ref, _ := connection["connectionRef"].(string)
+			if ref == "" || seen[ref] {
+				return errPublicIntegrationShape
+			}
+			seen[ref] = true
+		}
+	case "controlplane.v1.PersonalIntegrationConnection":
+		ref, refOK := value["connectionRef"].(string)
+		version, versionOK := value["connectionVersion"].(float64)
+		name, nameOK := value["name"].(string)
+		definition, definitionOK := value["definitionKey"].(string)
+		_, enabledOK := value["enabled"].(bool)
+		_, availableOK := value["available"].(bool)
+		if !refOK || !fileTargetRef(ref) || !versionOK || version < 1 || version > float64(maximumSafeJSONInteger) || version != float64(int64(version)) ||
+			!nameOK || len(name) == 0 || len([]rune(name)) > 160 || !definitionOK || len(definition) == 0 || len(definition) > 100 || !enabledOK || !availableOK ||
+			(value["policy"] != "PROJECT_SHARED" && value["policy"] != "INITIATOR_REQUIRED") {
+			return errPublicIntegrationShape
+		}
+		if credential, present := value["credential"]; present {
+			binding, valid := credential.(map[string]any)
+			if !valid || binding["connectionRef"] != ref || binding["connectionVersion"] != version || binding["policy"] != value["policy"] {
+				return errPublicIntegrationShape
+			}
+		}
+	case "controlplane.v1.SetIntegrationCredentialPolicyResponse":
+		if _, ok := value["connection"].(map[string]any); !ok {
+			return errPublicIntegrationShape
+		}
+	case "controlplane.v1.TestPersonalIntegrationCredentialResponse", "controlplane.v1.GetPersonalIntegrationCredentialResponse", "controlplane.v1.CreatePersonalIntegrationCredentialResponse",
+		"controlplane.v1.ConfigurePersonalIntegrationCredentialResponse", "controlplane.v1.RevokePersonalIntegrationCredentialResponse":
+		if _, ok := value["credential"].(map[string]any); !ok {
+			return errPublicIntegrationShape
+		}
+	case "controlplane.v1.PersonalIntegrationCredentialView":
+		for _, key := range []string{"connectionRef", "bindingRef"} {
+			ref, ok := value[key].(string)
+			if !ok || !fileTargetRef(ref) {
+				return errPublicIntegrationShape
+			}
+		}
+		for _, key := range []string{"version", "connectionVersion"} {
+			version, ok := value[key].(float64)
+			if !ok || version < 1 || version > float64(maximumSafeJSONInteger) || version != float64(int64(version)) {
+				return errPublicIntegrationShape
+			}
+		}
+		if value["policy"] != "PROJECT_SHARED" && value["policy"] != "INITIATOR_REQUIRED" {
+			return errPublicIntegrationShape
+		}
+		switch value["state"] {
+		case "NOT_CONFIGURED", "CHECK_REQUIRED", "CHECKING", "READY", "INVALID", "REVOKED", "EXPIRED":
+		default:
+			return errPublicIntegrationShape
+		}
+		configured, configuredKnown := value["credentialConfigured"].(bool)
+		if !configuredKnown || value["state"] == "NOT_CONFIGURED" && configured ||
+			value["state"] != "NOT_CONFIGURED" && value["state"] != "REVOKED" && !configured {
+			return errPublicIntegrationShape
+		}
+		for _, key := range []string{"verifiedCapabilityKeys", "deniedCapabilityKeys"} {
+			items, ok := value[key].([]any)
+			if !ok || len(items) > 256 {
+				return errPublicIntegrationShape
+			}
+			for _, item := range items {
+				name, ok := item.(string)
+				if !ok || len(name) == 0 || len(name) > 100 || strings.TrimSpace(name) != name {
+					return errPublicIntegrationShape
+				}
+			}
+		}
 	case "controlplane.v1.OwnerGate":
 		return validateOwnerGateProjection(value)
 	case "controlplane.v1.IntegrationConnection":
 		delete(value, "credentialRevision")
+		if value["credentialPolicy"] != "PROJECT_SHARED" && value["credentialPolicy"] != "INITIATOR_REQUIRED" {
+			return errPublicIntegrationShape
+		}
+		if value["credentialPolicy"] == "INITIATOR_REQUIRED" && value["credentialsConfigured"] == true {
+			return errPublicIntegrationShape
+		}
 	case "controlplane.v1.IntegrationDefinitionConfigurationBinding":
 		switch value["state"] {
 		case "ABSENT":

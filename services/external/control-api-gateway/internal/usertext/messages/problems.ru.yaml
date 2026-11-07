@@ -312,6 +312,32 @@ INTEGRATION_CREDENTIAL_NOT_CONFIGURED:
   other: Учётные данные ещё не настроены
 INTEGRATION_CREDENTIAL_CONFIGURED:
   other: Учётные данные настроены и скрыты
+INTEGRATION_CREDENTIAL_PERSONAL_REQUIRED:
+  other: Каждый пользователь настраивает личный ключ в разделе «Мои подключения»
+INTEGRATION_CREDENTIAL_POLICY_UPDATED:
+  other: Политика выбора учётных данных обновлена
+PERSONAL_INTEGRATION_CREDENTIAL_CREATED:
+  other: Личное подключение создано; добавьте ключ и проверьте доступ
+PERSONAL_INTEGRATION_CREDENTIAL_CONFIGURED:
+  other: Личный ключ сохранён и скрыт; требуется проверка доступа
+PERSONAL_INTEGRATION_CREDENTIAL_REVOKED:
+  other: Личный ключ отозван для новых вызовов
+PERSONAL_INTEGRATION_CREDENTIAL_TEST_QUEUED:
+  other: Проверка личного ключа поставлена в очередь
+PERSONAL_INTEGRATION_CREDENTIAL_TEST_COMPLETED:
+  other: Проверка личного ключа завершена
+PERSONAL_INTEGRATION_CREDENTIAL_TEST_CLAIMED:
+  other: Исполнитель получил проверку личного ключа
+PERSONAL_INTEGRATION_CREDENTIAL_TEST_EXPIRED:
+  other: Срок проверки личного ключа истёк; повторите проверку
+PERSONAL_INTEGRATION_CREDENTIAL_TEST_CANCELLED:
+  other: Проверка личного ключа отменена из-за изменения доступа или настроек
+PERSONAL_INTEGRATION_CREDENTIAL_PROBE_ADMITTED:
+  other: Разрешена однократная проверка личного ключа
+PERSONAL_INTEGRATION_CALL_ADMITTED:
+  other: Разрешён однократный вызов с личным подключением
+PERSONAL_INTEGRATION_CALL_BLOCKED:
+  other: Вызов с личным подключением отклонён до внешнего действия
 INTEGRATION_CREDENTIAL_INVALID:
   other: Учётные данные недоступны или отклонены
 INTEGRATION_UNAVAILABLE:
@@ -1038,3 +1064,6 @@ WORKFLOW_REWORK_QUEUED:
   other: Назначены новые попытки доработки и зависимых проверок
 WORKFLOW_GATE_SUPERSEDED:
   other: Прежнее согласование утратило актуальность после одобренной доработки
+
+INTEGRATION_CREDENTIALS_REQUIRED:
+  other: Перед запуском настройте все обязательные личные подключения

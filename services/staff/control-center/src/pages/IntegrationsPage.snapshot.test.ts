@@ -25,6 +25,7 @@ const connection: IntegrationConnection = {
   definitionVersion: "1.0.0",
   definitionDigest: "a".repeat(64),
   state: "CONNECTED",
+  credentialPolicy: "PROJECT_SHARED",
   credentialsConfigured: true,
   credentialsHint: "configured",
   capabilities: [],

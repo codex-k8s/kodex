@@ -44,6 +44,13 @@ func STTPolicyProjectionOperations() map[string]string {
 // ControlAPIGatewayOperations возвращает закрытое соответствие операций владельца и RPC для control API gateway.
 func ControlAPIGatewayOperations() map[string]string {
 	return map[string]string{
+		"platform.personal-integrations.test":                               controlplanev1.PersonalIntegrationCredentialService_TestPersonalIntegrationCredential_FullMethodName,
+		"platform.personal-integrations.list":                               controlplanev1.PersonalIntegrationCredentialService_ListPersonalIntegrationConnections_FullMethodName,
+		"platform.integrations.credential-policy.set":                       controlplanev1.PersonalIntegrationCredentialService_SetIntegrationCredentialPolicy_FullMethodName,
+		"platform.personal-integrations.get":                                controlplanev1.PersonalIntegrationCredentialService_GetPersonalIntegrationCredential_FullMethodName,
+		"platform.personal-integrations.create":                             controlplanev1.PersonalIntegrationCredentialService_CreatePersonalIntegrationCredential_FullMethodName,
+		"platform.personal-integrations.configure":                          controlplanev1.PersonalIntegrationCredentialService_ConfigurePersonalIntegrationCredential_FullMethodName,
+		"platform.personal-integrations.revoke":                             controlplanev1.PersonalIntegrationCredentialService_RevokePersonalIntegrationCredential_FullMethodName,
 		"platform.oidc.session.resolve":                                     controlplanev1.OIDCSessionService_ResolveOIDCSession_FullMethodName,
 		"platform.oidc.session.closure.get":                                 controlplanev1.OIDCSessionService_GetOIDCSessionClosure_FullMethodName,
 		"platform.oidc.session.revoke":                                      controlplanev1.OIDCSessionService_RevokeOIDCSession_FullMethodName,
@@ -552,6 +559,10 @@ func SessionArchiveOperations() map[string]string {
 // IntegrationGatewayOperations регистрирует для шлюза задачи Git-конфигурации и методы исполнения runtime-интеграций.
 func IntegrationGatewayOperations() map[string]string {
 	return map[string]string{
+		"platform.personal-integration-calls.begin":       controlplanev1.PersonalIntegrationCredentialService_BeginPersonalIntegrationInvocation_FullMethodName,
+		"platform.personal-integration-tests.claim":       controlplanev1.PersonalIntegrationCredentialService_ClaimPersonalIntegrationCredentialTests_FullMethodName,
+		"platform.personal-integration-tests.begin":       controlplanev1.PersonalIntegrationCredentialService_BeginPersonalIntegrationCredentialProbe_FullMethodName,
+		"platform.personal-integration-tests.complete":    controlplanev1.PersonalIntegrationCredentialService_CompletePersonalIntegrationCredentialTest_FullMethodName,
 		"platform.repository-bundles.work.claim":          controlplanev1.RepositoryBundlePublicationService_ClaimRepositoryBundlePublications_FullMethodName,
 		"platform.repository-bundles.work.renew":          controlplanev1.RepositoryBundlePublicationService_RenewRepositoryBundlePublication_FullMethodName,
 		"platform.repository-bundles.work.begin":          controlplanev1.RepositoryBundlePublicationService_BeginRepositoryBundlePublication_FullMethodName,

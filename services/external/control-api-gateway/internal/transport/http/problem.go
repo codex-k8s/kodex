@@ -28,6 +28,9 @@ const (
 // writeRPCProblem maps gRPC status into closed HTTP status/code/retryability values without exposing upstream text. Typed local-authority cancellation becomes retryable unavailable; bare cancellation remains a request timeout.
 // writeRPCProblem отображает gRPC status в закрытые HTTP status/code/retryability без раскрытия внешнего текста. Типизированная отмена локального запроса полномочий становится повторяемой недоступностью; обычная отмена остаётся timeout запроса.
 func writeRPCProblem(writer http.ResponseWriter, err error) {
+	if writePersonalCredentialPreflightProblem(writer, err) {
+		return
+	}
 	code := status.Code(err)
 	statusCode, name, retryable := http.StatusInternalServerError, "INTERNAL", false
 	switch code {

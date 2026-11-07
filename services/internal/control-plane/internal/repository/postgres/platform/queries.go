@@ -2647,6 +2647,7 @@ func scanConnection(row rowScanner) (entity.IntegrationConnection, error) {
 		&credential.Ref, &credential.Revision,
 		&credential.SecretRef, &credential.SecretUID, &credential.SecretResourceVersion,
 		&credential.ContentSHA256, &credentialCreatedAt,
+		&item.CredentialPolicy,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.IntegrationConnection{}, errs.ErrNotFound
@@ -2654,6 +2655,9 @@ func scanConnection(row rowScanner) (entity.IntegrationConnection, error) {
 		return entity.IntegrationConnection{}, errs.ErrUnavailable
 	}
 	if json.Unmarshal(configuration, &item.PublicConfiguration) != nil || json.Unmarshal(capabilities, &item.Capabilities) != nil {
+		return entity.IntegrationConnection{}, errs.ErrUnavailable
+	}
+	if item.CredentialPolicy != entity.IntegrationCredentialProjectShared && item.CredentialPolicy != entity.IntegrationCredentialInitiatorRequired {
 		return entity.IntegrationConnection{}, errs.ErrUnavailable
 	}
 	if credential.Ref != "" && credentialCreatedAt != nil {
@@ -2703,10 +2707,10 @@ func connectionActions(item entity.IntegrationConnection, manageConnection, mana
 	if manageConnection {
 		actions = append(actions, "EDIT")
 	}
-	if manageConnection && (item.CredentialSecretKey != "" || item.DefinitionKey == "email") && item.State != "TESTING" {
+	if manageConnection && item.CredentialPolicy == entity.IntegrationCredentialProjectShared && (item.CredentialSecretKey != "" || item.DefinitionKey == "email") && item.State != "TESTING" {
 		actions = append(actions, "CONFIGURE_CREDENTIAL")
 	}
-	if manageConnection && !item.TestRequiresApproval && item.State != "TESTING" && item.MaskedCredentialsState == "CONFIGURED" {
+	if manageConnection && item.CredentialPolicy == entity.IntegrationCredentialProjectShared && !item.TestRequiresApproval && item.State != "TESTING" && item.MaskedCredentialsState == "CONFIGURED" {
 		actions = append(actions, "TEST")
 	}
 	if manageConnection {

@@ -32,7 +32,7 @@ func (f *completionFixture) CompleteIntegrationInvocation(_ context.Context, r *
 // Every report must preserve invocation, lease, generation and idempotency pins; only classified success may carry the exact effect receipt.
 // RU: Каждый отчёт обязан сохранять привязки invocation, lease, generation и идемпотентности; точная квитанция эффекта допустима только для классифицированного успеха.
 func TestEmailCompletionPreservesFenceAndUnknown(t *testing.T) {
-	for _, outcome := range []string{"success", "unknown", "denied", "stale-fence"} {
+	for _, outcome := range []string{"success", "unknown", "denied", "pre-effect-response", "pre-effect-timeout", "stale-fence"} {
 		t.Run(outcome, func(t *testing.T) {
 			fixture := &completionFixture{}
 			client := &controlplaneclient.Client{Runtime: fixture}
@@ -44,6 +44,10 @@ func TestEmailCompletionPreservesFenceAndUnknown(t *testing.T) {
 				operationErr = &integration.UnknownOutcomeError{}
 			case "denied":
 				operationErr = &integration.SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+			case "pre-effect-response":
+				operationErr = &integration.SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+			case "pre-effect-timeout":
+				operationErr = &integration.SafeError{Code: "INTEGRATION_UNAVAILABLE"}
 			case "stale-fence":
 				fixture.err = status.Error(codes.PermissionDenied, "stale fence")
 			}

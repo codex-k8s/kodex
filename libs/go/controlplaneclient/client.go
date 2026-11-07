@@ -84,6 +84,9 @@ type Config struct {
 // Client owns generated service clients and their authority-bearing connections.
 // Client владеет типизированными клиентами сервисов и их полномочными соединениями.
 type Client struct {
+	// PersonalCredentials uses protected method-specific bindings; browser and worker operation maps remain separate.
+	// PersonalCredentials использует защищённые method-specific привязки; browser и worker operation maps разделены.
+	PersonalCredentials     controlplanev1.PersonalIntegrationCredentialServiceClient
 	OIDCSessions            controlplanev1.OIDCSessionServiceClient
 	trustedCluster          bool
 	serviceIdentity         bool
@@ -202,6 +205,7 @@ func (client *Client) bindServices(protected *grpc.ClientConn) {
 	// Намеренно явные конструкторы разных generated-интерфейсов; эти вызовы
 	// не взаимозаменяемы и не являются повтором одной исполняемой операции.
 	client.Query = controlplanev1.NewPlatformQueryServiceClient(protected)
+	client.PersonalCredentials = controlplanev1.NewPersonalIntegrationCredentialServiceClient(protected)
 	client.OIDCSessions = controlplanev1.NewOIDCSessionServiceClient(protected)
 	client.Command = controlplanev1.NewPlatformCommandServiceClient(protected)
 	client.Assistant = controlplanev1.NewSystemAssistantServiceClient(protected)

@@ -21,6 +21,7 @@ import (
 // JSON and multipart bodies are mutually exclusive; Client optionally selects an already configured specialized transport.
 // RU: JSON и multipart body взаимоисключаемы; Client необязательно выбирает уже настроенный специализированный transport.
 type providerCall struct {
+	permissionEffect                                                                      *permissionEffectObservation
 	BaseURL, Method, Path, AuthScheme, AuthHeader, Username, EffectKey, IdempotencyHeader string
 	Query                                                                                 url.Values
 	Body                                                                                  any
@@ -170,6 +171,9 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 		client := adapter.providerHTTPClient
 		if call.Client != nil {
 			client = call.Client
+		}
+		if mutation && call.permissionEffect != nil {
+			call.permissionEffect.mutationAttempted = true
 		}
 		response, responseErr := client.Do(request)
 		if responseErr != nil {

@@ -69,6 +69,7 @@ function connection(
     definitionKey: definition.key,
     name: ref,
     state: "CONNECTED",
+    credentialPolicy: "PROJECT_SHARED",
     credentialsConfigured: true,
     credentialsHint: "ab***yz",
     capabilities: [],

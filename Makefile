@@ -161,6 +161,10 @@ test-workflow-artifact-query-postgres: check-go-toolchain
 test-control-plane-postgres:
 	@./scripts/tests/control-plane-postgres-test.sh
 
+.PHONY: test-personal-integration-credentials-postgres
+test-personal-integration-credentials-postgres: check-go-toolchain
+	@timeout --kill-after=10s 240s bash scripts/tests/control-plane-postgres-test.sh --personal-credentials-upgrade
+
 .PHONY: test-impact-owner-snapshot-upgrade
 test-impact-owner-snapshot-upgrade:
 	@./scripts/tests/impact-owner-snapshot-upgrade-test.sh
@@ -547,3 +551,15 @@ test-workspace-restore-owner-postgres: check-go-toolchain
 .PHONY: test-workspace-backup-upgrade-postgres
 test-workspace-backup-upgrade-postgres: check-go-toolchain
 	@timeout --kill-after=10s 300s bash scripts/tests/control-plane-postgres-test.sh --workspace-backup-upgrade
+
+.PHONY: test-personal-integration-shared-regression-postgres
+test-personal-integration-shared-regression-postgres: check-go-toolchain
+	@KODEX_TEST_POSTGRES_STORAGE=ram ./scripts/tests/control-plane-postgres-test.sh --personal-credentials-shared-regression
+
+.PHONY: test-personal-integration-invocation-regression-postgres
+test-personal-integration-invocation-regression-postgres: check-go-toolchain
+	@timeout --kill-after=10s 240s env KODEX_TEST_POSTGRES_STORAGE=ram ./scripts/tests/control-plane-postgres-test.sh --personal-credentials-invocation-regression
+
+.PHONY: test-personal-integration-assistant-regression-postgres
+test-personal-integration-assistant-regression-postgres: check-go-toolchain
+	@timeout --kill-after=10s 240s env KODEX_TEST_POSTGRES_STORAGE=ram ./scripts/tests/control-plane-postgres-test.sh --personal-credentials-assistant-regression

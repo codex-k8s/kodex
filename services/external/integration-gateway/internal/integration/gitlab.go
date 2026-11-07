@@ -173,6 +173,9 @@ func (adapter *Adapter) executeGitLab(
 		if decodeProviderJSON(canonicalInput, &input) != nil {
 			return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 		}
+		if err := adapter.requireGitLabPersonalWritePermission(ctx, request, capability, configuration, canonicalInput); err != nil {
+			return Result{}, err
+		}
 		body, err := adapter.gitLabJSON(ctx, request, capability, configuration, http.MethodPost, projectPath+"/repository/branches", nil,
 			map[string]any{"branch": input.Branch, "ref": input.Ref}, request.EffectKey)
 		if err != nil {
@@ -294,8 +297,8 @@ func (adapter *Adapter) gitLabIssueOperation(ctx context.Context, request Reques
 	return providerResult(request, "gitlab-issue:"+strconv.FormatInt(provider.IID, 10), projection)
 }
 
-// createGitLabIssue searches one page for the effect marker before creating an issue with that marker; this limited lookup does not provide global uniqueness or resolve an uncertain POST outcome.
-// createGitLabIssue ищет маркер эффекта на одной странице перед созданием задачи с этим маркером; ограниченный поиск не обеспечивает глобальную уникальность и не разрешает неопределённый исход POST.
+// createGitLabIssue checks one pre-create marker page and refuses ambiguous prior evidence; only strict read-only recovery may adopt an existing effect.
+// createGitLabIssue проверяет одну marker page до создания и отклоняет неоднозначное прежнее evidence; только строгий read-only recovery может принять существующий effect.
 func (adapter *Adapter) createGitLabIssue(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, canonicalInput []byte, projectPath string) (Result, error) {
 	var input struct {
 		Title       string `json:"title"`
@@ -316,8 +319,13 @@ func (adapter *Adapter) createGitLabIssue(ctx context.Context, request Request, 
 	}
 	for _, issue := range existing {
 		if strings.Contains(issue.Description, marker) {
-			return gitLabIssueResult(request, issue)
+			// A marker alone is not provenance; the owner may schedule strict read-only recovery.
+			// Один marker не является provenance; owner может назначить строгий read-only recovery.
+			return Result{}, &UnknownOutcomeError{}
 		}
+	}
+	if err := adapter.requireGitLabPersonalWritePermission(ctx, request, capability, configuration, canonicalInput); err != nil {
+		return Result{}, err
 	}
 	description := strings.TrimSpace(input.Description)
 	if description != "" {
@@ -376,6 +384,9 @@ func (adapter *Adapter) gitLabMergeRequestOperation(ctx context.Context, request
 	}
 	if decodeProviderJSON(canonicalInput, &input) != nil {
 		return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+	}
+	if err := adapter.requireGitLabPersonalWritePermission(ctx, request, capability, configuration, canonicalInput); err != nil {
+		return Result{}, err
 	}
 	marker := "[kodex-effect:" + request.EffectKey + "]"
 	description := strings.TrimSpace(input.Description)
@@ -442,6 +453,7 @@ func (adapter *Adapter) gitLabJSON(ctx context.Context, request Request, capabil
 	return adapter.callProvider(ctx, providerCall{
 		BaseURL: configuration["base_url"], Method: method, Path: path, Query: query, Body: body,
 		AuthScheme: "BEARER", Credential: request.Credential, EffectKey: effectKey, Capability: capability,
+		permissionEffect: request.permissionEffect,
 	})
 }
 

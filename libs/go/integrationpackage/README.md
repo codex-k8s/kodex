@@ -4,7 +4,39 @@
 дубли, aliases и дополнительные документы. Результат содержит SHA256 точного
 канонического JSON. Parse не выдаёт полномочий на исполнение.
 
+`CredentialReadProbes(package)` возвращает общий закрытый набор исполняемых READ
+descriptors для producer и consumer проверки credentials. Проверяются published
+health и зарегистрированные inputless READ/NONE operations; повтор операции не
+увеличивает число запросов. Owner и gateway используют один контракт каталога.
+Owner назначает допустимое подмножество в immutable verification snapshot/claim.
+Gateway исполняет только выданные keys; отсутствие поля сохраняет legacy health-only.
+Результат функции не является authorization либо доказательством внешних прав.
+Пользовательская identity, binding eligibility, preflight и принятие observations
+принадлежат control-plane; HTTP/auth, deadlines и классификация provider failures
+принадлежат integration-gateway. Библиотека не обращается к API, Secret backend
+или БД и не принимает решения по конкретному пользователю/credential.
+
 `LoadShipped` принимает только SHIPPED definitions из поставки.
+
+`CredentialResourcePermissionProfile(package, capability)` выбирает закрытый
+исполняемый контракт проверки прав на конкретный объект. Зарегистрированы
+Confluence Server/DC page.update и Jira Server/DC issue.create/comment.write/
+transition.apply, а также GitLab issue/branch/MR create с Human Gate. `CredentialResourcePermissionContractFor(key, cap)`
+даёт тот же закрытый профиль, operation/resource kind и fresh READ prerequisites
+для owner и consumer. Это не глобальный WRITE, HTTP-вызов или разрешение запуска:
+owner проверяет personal identity/key/grants, gateway проверяет exact object
+metadata перед записью, внешний API повторно применяет права и version.
+Неизвестный/отсутствующий обязательный профиль закрыто отклоняется consumer.
+`CredentialObservationRequests(package)` выводит exact metadata profile и допустимые
+write-denial keys из тех же executable tuples. Только GitLab пишет требование
+`GITLAB_PROJECT_WRITE_SCOPE_V1`; checked metadata не добавляют WRITE в verified
+capabilities. Owner закрепляет request в job/claim и принимает profile/denials
+только для current generation/lease/key/config. Отсутствие observation у старого
+worker оставляет новые writes unconfirmed; shared policy не меняется.
+`ValidateCredentialPermissionJSON(raw)` ограничивает размер/глубину и отклоняет
+дубли, Unicode case-fold коллизии и trailing JSON до typed permission decode.
+Форма provider metadata, HTTP/auth и решение по exact объекту остаются у gateway.
+Прежний package/schema parser сохраняет регистрозависимые имена полей.
 `NormalizeManagedRevision(raw, managedBy, shipped)` назначает UI/GIT origin из
 проверенного owner lineage и возвращает package и canonical JSON. Значение
 `managedBy` выбирает сервер; поле origin исходного документа не является

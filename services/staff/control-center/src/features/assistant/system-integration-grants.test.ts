@@ -47,6 +47,7 @@ const connection: IntegrationConnection = {
   definitionDigest: "a".repeat(64),
   name: "GitHub",
   state: "CONNECTED",
+  credentialPolicy: "PROJECT_SHARED",
   credentialsConfigured: true,
   credentialsHint: "",
   capabilities: [],

@@ -163,18 +163,21 @@ func runIntegrationLoop(control *controlplaneclient.Client, adapter *integration
 	}
 }
 
-// processIntegrationWork processes connection tests, invocations, source reads and writebacks in that order, returning completed work even on a later error.
-// RU: processIntegrationWork последовательно обрабатывает проверки подключений, вызовы, чтение источников и запись, сохраняя счётчик завершённого при последующей ошибке.
+// processIntegrationWork processes personal credential probes, shared connection tests, invocations, source reads and writebacks in that order, returning completed work even on a later error.
+// RU: processIntegrationWork последовательно обрабатывает личные проверки ключей, общие проверки подключений, вызовы, чтение источников и запись, сохраняя счётчик завершённого при последующей ошибке.
 // Invocation mode selects read-only recovery or execution; insufficient remaining lease time prevents either provider call.
 // RU: Режим вызова выбирает read-only восстановление либо исполнение; нехватка остатка аренды запрещает оба обращения к провайдеру.
 // External-operation metrics are recorded before owner completion, and an unknown provider outcome remains explicit rather than retried here.
 // RU: Метрики внешней операции учитываются до owner completion; неопределённый результат сохраняется явно и здесь не повторяется.
 func processIntegrationWork(ctx context.Context, control *controlplaneclient.Client, adapter *integration.Adapter, metrics *businessmetrics.Metrics, logger *slog.Logger, config Config, sshWorkers ...*sshComposeWorker) (int, error) {
+	processed, err := processPersonalCredentialTests(ctx, control.PersonalCredentials, adapter, config, func(success bool) { metrics.Operation(true, success, false) })
+	if err != nil {
+		return processed, err
+	}
 	tests, err := control.Runtime.ClaimIntegrationConnectionTests(ctx, &controlplanev1.ClaimIntegrationConnectionTestsRequest{WorkloadInstance: config.InstanceID, Limit: config.ClaimLimit})
 	if err != nil {
-		return 0, err
+		return processed, err
 	}
-	processed := 0
 	for _, claim := range tests.GetClaims() {
 		operation, cancel := context.WithTimeout(ctx, config.OperationTimeout)
 		var result string
@@ -200,18 +203,14 @@ func processIntegrationWork(ctx context.Context, control *controlplaneclient.Cli
 		return processed, err
 	}
 	for _, claim := range invocations.GetClaims() {
-		if claim.GetLease().GetExpiresAt().AsTime().Before(time.Now().Add(config.OperationTimeout + config.RequestTimeout)) {
-			return processed, errors.New("integration lease budget is insufficient")
+		execution, err := executeInvocationClaim(ctx, control.PersonalCredentials, adapter, claim, config)
+		if err != nil {
+			return processed, err
 		}
-		operation, cancel := context.WithTimeout(ctx, config.OperationTimeout)
-		var result integration.Result
-		var operationErr error
-		if claim.GetWorkMode() == controlplanev1.IntegrationInvocationWorkMode_INTEGRATION_INVOCATION_WORK_MODE_RECOVER_READ_ONLY {
-			result, operationErr = adapter.Recover(operation, integration.RequestFromInvocation(claim))
-		} else {
-			result, operationErr = adapter.Execute(operation, integration.RequestFromInvocation(claim))
+		if !execution.executed {
+			continue
 		}
-		cancel()
+		claim, result, operationErr := execution.claim, execution.result, execution.operationErr
 		metrics.Operation(false, operationErr == nil, integration.IsUnknownOutcome(operationErr))
 		if integration.IsUnknownOutcome(operationErr) {
 			logger.WarnContext(ctx, "integration invocation outcome unknown", "error_class", "integration_outcome_unknown", "stage", integration.UnknownOutcomeStage(operationErr))

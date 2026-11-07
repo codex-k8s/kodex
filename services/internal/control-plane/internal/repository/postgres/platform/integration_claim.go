@@ -33,6 +33,25 @@ type integrationInvocationCandidate struct {
 	sshSnapshot                                                                []byte
 	credential                                                                 entity.IntegrationCredentialRevision
 	credentialCreatedAt                                                        *time.Time
+	credentialPolicy                                                           entity.IntegrationCredentialPolicy
+}
+
+// scanIntegrationInvocationCandidate uses the same canonical projection for claim and begin.
+// No shorter begin reader may omit historical workflow, approval or RuntimeRevision predicates.
+// scanIntegrationInvocationCandidate использует одну canonical projection для claim и begin.
+// Сокращённый begin reader не исключает проверки historical workflow, approval и RuntimeRevision.
+func scanIntegrationInvocationCandidate(row pgx.Row, item *integrationInvocationCandidate) error {
+	return row.Scan(
+		&item.id, &item.ref, &item.generation, &item.state, &item.connectionRef, &item.definitionKey,
+		&item.configuration, &item.capabilityKey, &item.boundedInput, &item.definitionVersion,
+		&item.definitionDigest, &item.operation, &item.risk, &item.approvalPolicy,
+		&item.resourceKind, &item.resourceScope, &item.resourceScopeDigest, &item.effectKey,
+		&item.inputDigest, &item.credential.Ref, &item.credential.Revision, &item.credential.SecretRef,
+		&item.credential.SecretUID, &item.credential.SecretResourceVersion, &item.credential.ContentSHA256,
+		&item.credentialCreatedAt, &item.initiatorRef, &item.credentialPolicy,
+		&item.approvalScopePaths, &item.approvalScopeDigest, &item.approvalSchemaDigest,
+		&item.grantRef, &item.grantVersion, &item.nodeID, &item.runID, &item.sshSnapshot,
+	)
 }
 
 // claimIntegrationInvocationCandidateTx preserves the common adapter validation/claim pipeline.
@@ -44,6 +63,10 @@ type integrationInvocationCandidate struct {
 // становится durable admission block после отката частичных lease writes. Ordinary adapters
 // сохраняют прежние skip/error/lease переходы.
 func (repository *Repository) claimIntegrationInvocationCandidateTx(ctx context.Context, tx pgx.Tx, scope scope, principal value.Principal, instance string, sshLane bool, item integrationInvocationCandidate) (map[string]any, error) {
+	if (item.credentialPolicy != entity.IntegrationCredentialProjectShared && item.credentialPolicy != entity.IntegrationCredentialInitiatorRequired) ||
+		(item.credentialPolicy == entity.IntegrationCredentialInitiatorRequired && item.credential.Ref != "") {
+		return nil, errs.ErrForbidden
+	}
 	initiatorScope := scope
 	initiatorScope.actorRef = item.initiatorRef
 	if err := repository.requireAccess(ctx, tx, initiatorScope, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: item.connectionRef}); err != nil {
@@ -115,6 +138,10 @@ func (repository *Repository) claimIntegrationInvocationCandidateTx(ctx context.
 		"workMode": workMode,
 		"leaseRef": leaseRef, "fence": fence, "generation": generation, "expiresAt": expiresAt,
 	}
+	if item.credentialPolicy == entity.IntegrationCredentialInitiatorRequired {
+		claim["credentialAdmissionRequired"] = true
+		claim["resourcePermissionProfile"] = integrationpackage.CredentialResourcePermissionProfile(definition, capability)
+	}
 	if sshLane {
 		purpose := ""
 		if workMode == "RECOVER_READ_ONLY" {
@@ -131,7 +158,7 @@ func (repository *Repository) claimIntegrationInvocationCandidateTx(ctx context.
 		}
 		claim["sshSnapshot"], claim["sshPermit"], claim["expiresAt"] = prepared["snapshot"], prepared["permit"], prepared["expiresAt"]
 	}
-	if definition.RequiresConnectionCredential() && item.credential.Ref != "" && item.credentialCreatedAt != nil {
+	if item.credentialPolicy == entity.IntegrationCredentialProjectShared && definition.RequiresConnectionCredential() && item.credential.Ref != "" && item.credentialCreatedAt != nil {
 		item.credential.CreatedAt = *item.credentialCreatedAt
 		claim["credential"] = item.credential
 	}

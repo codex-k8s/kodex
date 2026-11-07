@@ -4,11 +4,13 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 2.2.23
-updated: 2026-11-05
+version: 2.2.24
+updated: 2026-11-06
 ---
 
 # Кодификация документов и задач
+
+- `OPS-DOC-PERSONAL-CREDENTIALS-2033` — [Персональные подключения и допуск запуска](../operations/personal-credentials-2033.md) (draft).
 
 - `RUN-INT-SERVER-2029` — [Опциональные Server/DC-профили Jira и Confluence](../operations/atlassian-server-profiles-2029.md).
 

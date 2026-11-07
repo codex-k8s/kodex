@@ -18,6 +18,107 @@ import { serverMessagesFor } from "@/shared/ui/server-message-catalog";
 import { additionalPermissionMessages } from "@/shared/ui/permission-message-catalog";
 
 const ru = {
+  credentialPolicy: {
+    title: "Чей ключ использовать",
+    choose: "Выбрать режим ключа",
+    description:
+      "Режим применяется к подключению и его инструментам. Ключи не копируются между пользователями и общим подключением.",
+    modes: {
+      PROJECT_SHARED: "Общий сервисный ключ",
+      INITIATOR_REQUIRED: "Личный ключ инициатора",
+    },
+    personalHelp:
+      "Каждый пользователь добавляет и проверяет свой ключ в «Мои подключения». Запуск без пригодного ключа блокируется сервером; общего запасного ключа нет.",
+    sharedHelp:
+      "Используйте явно разрешённую сервисную учётную запись. Её ключ настраивается отдельно; личные ключи пользователей не становятся общими.",
+    idleRequired:
+      "Для смены режима отключите подключение и его разрешения, завершите активные процессы и внешние операции. Сервер проверит эти условия повторно.",
+    loading: "Проверяем состояние подключения…",
+    refreshRequired:
+      "Результат записи не подтверждён. Обновите состояние перед новой попыткой; запись автоматически не повторяется.",
+    saved:
+      "Режим сохранён. Настройте соответствующий ключ и разрешения, затем включите подключение.",
+    refresh: "Обновить состояние",
+    save: "Сохранить режим",
+    myConnections: "Открыть «Мои подключения»",
+  },
+  personalConnections: {
+    preflight: {
+      title: "Для запуска нужны ваши подключения",
+      description:
+        "Процесс не создан. Исправьте все перечисленные подключения, затем повторите запуск.",
+      settings: "Открыть «Мои подключения» в новой вкладке",
+      reasons: {
+        CREDENTIAL_MISSING: "Добавьте личный ключ",
+        CREDENTIAL_CHECK_REQUIRED: "Проверьте сохранённый ключ",
+        CREDENTIAL_INVALID: "Внешняя система отклонила ключ",
+        CREDENTIAL_INSUFFICIENT: "Для операции недостаточно прав",
+        CREDENTIAL_PERMISSION_UNCONFIRMED:
+          "Права этой операции ещё не подтверждены",
+        CREDENTIAL_EXPIRED: "Замените истёкший ключ",
+        CREDENTIAL_REVOKED: "Ключ отозван; добавьте новый",
+        CREDENTIAL_INITIATOR_REQUIRED:
+          "Для автоматического запуска настройте разрешённое сервисное подключение",
+        CREDENTIAL_CONNECTION_UNAVAILABLE:
+          "Подключение или права доступа недоступны",
+      },
+    },
+    title: "Мои подключения",
+    description:
+      "Ваши личные ключи внешних систем. Они используются только от вашего имени; вход в платформу не предоставляет права во внешних системах.",
+    refresh: "Обновить",
+    search: "Найти подключение",
+    find: "Найти",
+    refreshRequired:
+      "Результат операции не подтверждён. Обновите сведения перед новым действием. Сохранение и проверка автоматически не повторяются.",
+    loading: "Загружаем личные подключения…",
+    empty: "Доступных подключений пока нет.",
+    unavailable:
+      "Подключение или адаптер отключены. Сохранённый личный ключ можно отозвать.",
+    expiry: "Подтверждённый срок действия: {value}",
+    confirmed: "Подтверждённые операции",
+    noneConfirmed: "Подтверждённых операций пока нет.",
+    denied: "Недостаточно прав для операций: {operations}",
+    permissionsHelp:
+      "Успешная проверка входа не подтверждает все права чтения и записи. Остальные права остаются непроверенными; внешний доступ может измениться.",
+    objectReadHelp:
+      "Чтение выбранного файла, задачи или страницы проверяет доступ при обращении к объекту. Готовый ключ позволяет запросить проверку, но не подтверждает чтение всех объектов. Отказ не переключает запрос на общий ключ.",
+    pageUpdateHelp:
+      "Обновление страницы проверяет личные права на выбранную страницу перед записью и требует согласования действия. Это не разрешение менять любые страницы; другие неподтверждённые операции блокируются.",
+    jiraWriteHelp:
+      "Перед созданием задачи проверяются права в выбранном проекте, перед комментарием и переходом — права на конкретную задачу. Каждая запись требует согласования; проверка ключа не означает разрешение менять все задачи.",
+    gitlabWriteHelp:
+      "Создание Issue, ветки или MR требует согласования. Перед записью проверяются актуальный токен, его ограничения и права в выбранном проекте. Защищённые ветки не создаются, автоматического merge нет. Это не общее разрешение на запись.",
+    replace: "Заменить ключ",
+    add: "Добавить ключ",
+    test: "Проверить доступ",
+    revoke: "Отозвать мой ключ",
+    key: "Личный ключ API",
+    keyHelp:
+      "Значение не показывается повторно. После отправки поле очищается. Ключ не выдаётся другим пользователям или в shell сотрудника.",
+    save: "Сохранить ключ",
+    cancel: "Отмена",
+    more: "Показать ещё",
+    policy: {
+      PROJECT_SHARED: "Общая сервисная учётная запись",
+      INITIATOR_REQUIRED: "Личный ключ инициатора",
+    },
+    states: {
+      NOT_CONFIGURED: "Личный ключ не добавлен",
+      CHECK_REQUIRED: "Нужна проверка доступа",
+      CHECKING: "Проверка выполняется; обновите сведения для результата",
+      READY: "Проверка ключа пройдена",
+      INVALID: "Внешняя система отклонила ключ",
+      REVOKED: "Ключ отозван для новых вызовов",
+      EXPIRED: "Срок действия ключа истёк",
+    },
+    success: {
+      SAVE: "Ключ сохранён. Выполните проверку доступа.",
+      TEST: "Проверка поставлена в очередь. Обновите сведения для результата.",
+      REVOKE:
+        "Ключ отозван для новых вызовов. Уже начатые внешние действия сохраняют свои результаты.",
+    },
+  },
   workflowResults: workflowResultMessages.ru,
   repositoryBundle: repositoryBundleMessages.ru,
   fileRevision: fileRevisionMessages.ru,
@@ -2737,6 +2838,7 @@ const ru = {
     tabsLabel: "Разделы интеграций",
     tabs: {
       CONNECTIONS: "Подключения",
+      PERSONAL: "Мои подключения",
       CATALOG: "Каталог пакетов",
       GRANTS: "Разрешения",
       APPROVALS: "Ожидают решения",
@@ -4746,6 +4848,108 @@ const ru = {
 
 const en = {
   ...ru,
+  credentialPolicy: {
+    title: "Whose key to use",
+    choose: "Choose credential mode",
+    description:
+      "The mode applies to the connection and its tools. Keys are not copied between users and the shared connection.",
+    modes: {
+      PROJECT_SHARED: "Shared service key",
+      INITIATOR_REQUIRED: "Initiator's personal key",
+    },
+    personalHelp:
+      "Each user adds and verifies their own key in My connections. The server blocks launch without a usable key; there is no shared fallback.",
+    sharedHelp:
+      "Use an explicitly authorized service identity. Configure its key separately; personal keys do not become shared.",
+    idleRequired:
+      "Disable the connection and its grants, then finish active processes and external operations before changing the mode. The server rechecks these conditions.",
+    loading: "Checking connection state…",
+    refreshRequired:
+      "The write result is unconfirmed. Refresh before another attempt; writes are not retried automatically.",
+    saved:
+      "Mode saved. Configure the appropriate key and grants, then enable the connection.",
+    refresh: "Refresh state",
+    save: "Save mode",
+    myConnections: "Open My connections",
+  },
+  personalConnections: {
+    preflight: {
+      title: "Your connections are required before launch",
+      description:
+        "No process was created. Resolve every listed connection, then launch again.",
+      settings: "Open My connections in a new tab",
+      reasons: {
+        CREDENTIAL_MISSING: "Add your personal key",
+        CREDENTIAL_CHECK_REQUIRED: "Verify your saved key",
+        CREDENTIAL_INVALID: "The external system rejected the key",
+        CREDENTIAL_INSUFFICIENT:
+          "This operation requires additional permissions",
+        CREDENTIAL_PERMISSION_UNCONFIRMED:
+          "Permissions for this operation have not been confirmed",
+        CREDENTIAL_EXPIRED: "Replace the expired key",
+        CREDENTIAL_REVOKED: "The key was revoked; add a new one",
+        CREDENTIAL_INITIATOR_REQUIRED:
+          "Configure an authorized service connection for an automated launch",
+        CREDENTIAL_CONNECTION_UNAVAILABLE:
+          "The connection or access permissions are unavailable",
+      },
+    },
+    title: "My connections",
+    description:
+      "Your personal keys for external systems. Platform sign-in does not grant external permissions.",
+    refresh: "Refresh",
+    search: "Find a connection",
+    find: "Find",
+    refreshRequired:
+      "The operation result is unconfirmed. Refresh before another action. Saves and probes are not retried automatically.",
+    loading: "Loading personal connections…",
+    empty: "No connections are available yet.",
+    unavailable:
+      "The connection or adapter is disabled. You can still revoke your saved personal key.",
+    expiry: "Confirmed expiry: {value}",
+    confirmed: "Confirmed operations",
+    noneConfirmed: "No operations have been confirmed yet.",
+    denied: "Insufficient permissions for: {operations}",
+    permissionsHelp:
+      "A successful identity probe does not confirm all read or write permissions. Other permissions remain unverified; external access may change.",
+    objectReadHelp:
+      "Reading a selected file, issue or page checks access when requesting that object. A ready key permits the check, not access to every object. A refusal never falls back to a shared key.",
+    pageUpdateHelp:
+      "Updating a page checks your permissions on the selected page before writing and requires action approval. This does not permit changes to every page; other unverified operations remain blocked.",
+    jiraWriteHelp:
+      "Creating an issue checks permissions in the selected project; commenting and transitioning check the selected issue. Every write requires approval; key verification does not permit changes to every issue.",
+    gitlabWriteHelp:
+      "Creating an issue, branch or MR requires approval. Each write checks the current token, its restrictions and access to the selected project. Protected branches are not created, and merging is never automatic. This is not a global write permission.",
+    replace: "Replace key",
+    add: "Add key",
+    test: "Verify access",
+    revoke: "Revoke my key",
+    key: "Personal API key",
+    keyHelp:
+      "The value is never shown again. The field is cleared on submission. The key is not given to other users or an agent shell.",
+    save: "Save key",
+    cancel: "Cancel",
+    more: "Show more",
+    policy: {
+      PROJECT_SHARED: "Shared service identity",
+      INITIATOR_REQUIRED: "Personal initiator key",
+    },
+    states: {
+      NOT_CONFIGURED: "Personal key not configured",
+      CHECK_REQUIRED: "Access verification required",
+      CHECKING: "Verification in progress; refresh for the result",
+      READY: "Key verification passed",
+      INVALID: "The external system rejected the key",
+      REVOKED: "Key revoked for new calls",
+      EXPIRED: "The key has expired",
+    },
+    success: {
+      SAVE: "Key saved. Verify access next.",
+      TEST: "Verification queued. Refresh for the result.",
+      REVOKE:
+        "Key revoked for new calls. Previously started external actions retain their outcomes.",
+    },
+  },
   workflowResults: workflowResultMessages.en,
   repositoryBundle: repositoryBundleMessages.en,
   fileRevision: fileRevisionMessages.en,
@@ -7472,6 +7676,7 @@ const en = {
     tabsLabel: "Integration sections",
     tabs: {
       CONNECTIONS: "Connections",
+      PERSONAL: "My connections",
       CATALOG: "Package catalog",
       GRANTS: "Grants",
       APPROVALS: "Pending decisions",

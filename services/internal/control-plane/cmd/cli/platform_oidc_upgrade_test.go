@@ -23,7 +23,7 @@ func TestPlatformOIDCIdentityMigration(t *testing.T) {
 		t.Fatal("prepare canonical backup SELECT before platform OIDC upgrade", err)
 	}
 	readControlPlaneMigrationProof(t, ctx, observer, "platform-oidc-identity-backup", "precondition")
-	if err := applyPostgresMigrations(ctx, database, "up"); err != nil {
+	if err := goose.UpToContext(ctx, database, "migrations", 20261105000100); err != nil {
 		t.Fatal("apply platform OIDC forward migration", err)
 	}
 	readControlPlaneMigrationProof(t, ctx, observer, "platform-oidc-identity-backup", "postcondition")
@@ -45,17 +45,7 @@ func TestPlatformOIDCIdentityMigration(t *testing.T) {
 		"ALTER SEQUENCE control_plane.oidc_identity_session_revisions CYCLE",
 		"ALTER TABLE control_plane.oidc_identity_sessions DISABLE TRIGGER USER",
 	} {
-		if _, err := observer.Exec(ctx, "BEGIN; "+mutation); err != nil {
-			t.Fatal("prepare platform OIDC catalog counterfactual", err)
-		}
-		results, readErr := observer.PgConn().Exec(ctx, string(proof)).ReadAll()
-		failed := readErr != nil
-		for _, result := range results {
-			failed = failed || result.Err != nil
-		}
-		if _, err := observer.Exec(ctx, "ROLLBACK"); err != nil || !failed {
-			t.Fatal("platform OIDC proof accepted catalog drift", err)
-		}
+		assertControlPlaneCatalogMutationRejected(t, ctx, observer, proof, mutation, "platform OIDC identity schema catalog changed")
 	}
 	if _, err := observer.Exec(ctx, "GRANT UPDATE ON control_plane.oidc_identity_sessions TO kodex_backup_reader"); err != nil {
 		t.Fatal("prepare unexpected backup write", err)

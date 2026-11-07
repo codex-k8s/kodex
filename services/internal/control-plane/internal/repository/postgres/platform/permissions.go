@@ -25,6 +25,15 @@ import (
 // capability/grant enablement и retry/publication/binding действия проходят свежие проверки до
 // сохранения устаревших прав receipt replay.
 func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, current scope, input command.Command) error {
+	if input.Kind == command.CompletePersonalIntegrationCredentialTest {
+		return repository.authorizePersonalCredentialTestCompletion(ctx, tx, current, input)
+	}
+	if input.Kind == command.SetIntegrationCredentialPolicy {
+		return repository.authorizeIntegrationCredentialPolicy(ctx, tx, current, input)
+	}
+	if personalCredentialCommand(input.Kind) {
+		return repository.authorizePersonalCredentialCommand(ctx, tx, current, input)
+	}
 	if cfgLifecycleCommand(input.Kind) {
 		return repository.authorizeCFGLifecycle(ctx, tx, current, input)
 	}

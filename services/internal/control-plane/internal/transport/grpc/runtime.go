@@ -961,6 +961,18 @@ func CastIntegrationConnectionTestClaim(item map[string]any) *controlplanev1.Int
 		DefinitionVersion: mapString(item, "definitionVersion"), DefinitionDigest: mapString(item, "definitionDigest"),
 	}
 	claim.DefinitionPackage, _ = item["definitionPackage"].([]byte)
+	keys, _ := item["personalReadProbeCapabilityKeys"].([]string)
+	claim.PersonalReadProbeCapabilityKeys = append([]string(nil), keys...)
+	profiles, _ := item["personalObservationProfiles"].([]string)
+	for _, profile := range profiles {
+		value := controlplanev1.PersonalIntegrationCredentialObservationProfile_PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_UNSPECIFIED
+		if profile == "GITLAB_PROJECT_WRITE_SCOPE_V1" {
+			value = controlplanev1.PersonalIntegrationCredentialObservationProfile_PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_GITLAB_PROJECT_WRITE_SCOPE_V1
+		}
+		claim.PersonalObservationProfiles = append(claim.PersonalObservationProfiles, value)
+	}
+	deniedKeys, _ := item["personalDeniedWriteCapabilityKeys"].([]string)
+	claim.PersonalDeniedWriteCapabilityKeys = append([]string(nil), deniedKeys...)
 	if credential, ok := item["credential"].(entity.IntegrationCredentialRevision); ok {
 		claim.CredentialRevision = castIntegrationCredential(credential)
 	}
@@ -992,9 +1004,26 @@ func CastIntegrationInvocationClaim(item map[string]any) *controlplanev1.Integra
 	}
 	claim.DefinitionPackage, _ = item["definitionPackage"].([]byte)
 	claim.SshComposeSnapshot, _ = item["sshSnapshot"].([]byte)
+	claim.CredentialAdmissionRequired, _ = item["credentialAdmissionRequired"].(bool)
+	claim.ResourcePermissionProfile = castIntegrationResourcePermissionProfile(mapString(item, "resourcePermissionProfile"))
 	claim.SshComposePermit, _ = item["sshPermit"].([]byte)
 	if credential, ok := item["credential"].(entity.IntegrationCredentialRevision); ok {
 		claim.CredentialRevision = castIntegrationCredential(credential)
 	}
 	return claim
+}
+
+// castIntegrationResourcePermissionProfile preserves unknown owner metadata as an invalid enum,
+// so a mismatched consumer cannot silently downgrade a mandatory check to the legacy profile.
+// castIntegrationResourcePermissionProfile сохраняет неизвестные owner metadata неверным enum,
+// чтобы несовместимый consumer не понизил обязательную проверку до прежнего профиля.
+func castIntegrationResourcePermissionProfile(profile string) controlplanev1.IntegrationCredentialResourcePermissionProfile {
+	if profile == "" {
+		return controlplanev1.IntegrationCredentialResourcePermissionProfile_INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_UNSPECIFIED
+	}
+	value, exists := controlplanev1.IntegrationCredentialResourcePermissionProfile_value["INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_"+profile]
+	if !exists || value == 0 {
+		return controlplanev1.IntegrationCredentialResourcePermissionProfile(-1)
+	}
+	return controlplanev1.IntegrationCredentialResourcePermissionProfile(value)
 }

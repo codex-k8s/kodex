@@ -3,6 +3,7 @@ import copy
 import json
 from pathlib import Path
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -14,8 +15,8 @@ from deployment_profile import Rejected
 from test_bootstrap_completion import State, uuid, write
 
 
-def fixture():
-    heads = {'control-plane': 20261030000100, 'internal-rpc-authority': 20260912000200, 'email-bridge': 20260905000200}
+def fixture(previous_version=20261030000100, target_version=20261105000100):
+    heads = {'control-plane': previous_version, 'internal-rpc-authority': 20260912000200, 'email-bridge': 20260905000200}
     resources = [{'apiVersion': 'v1', 'kind': 'ConfigMap', 'metadata': {'name': 'kodex-installation-profile', 'namespace': 'kodex-system',
                  'labels': {'app.kubernetes.io/part-of': 'kodex'}}, 'data': {'source.sha': 'a' * 40, 'schema-heads.json': json.dumps(heads)}}]
     for name in completion.JOBS:
@@ -26,12 +27,12 @@ def fixture():
                           'command': ['/usr/local/bin/control-plane-cli'], 'args': ['up'], 'env': [{'name': 'CONTROL_PLANE_POSTGRES_ADMIN_DSN_FILE',
                           'value': '/var/run/secrets/kodex/control-plane/postgres-migration/dsn'}]}]}}}})
     target = copy.deepcopy(resources)
-    target[0]['data'].update({'source.sha': 'b' * 40, 'schema-heads.json': json.dumps({**heads, 'control-plane': 20261105000100})})
+    target[0]['data'].update({'source.sha': 'b' * 40, 'schema-heads.json': json.dumps({**heads, 'control-plane': target_version})})
     for resource in target[1:]: resource['spec']['template']['spec']['containers'][0]['image'] = 'registry.example.invalid/kodex/cli@sha256:' + 'b' * 64
     before, after = yaml.safe_dump_all(resources).encode(), yaml.safe_dump_all(target).encode()
     profile = {'schema': upgrade.SCHEMA, 'managed_by': 'git', 'previous_render_sha256': upgrade.sha(before), 'target_render_sha256': upgrade.sha(after),
                'previous_source_sha': 'a' * 40, 'target_source_sha': 'b' * 40, 'from_schema_heads': heads,
-               'to_schema_heads': {**heads, 'control-plane': 20261105000100}, 'schema_profile': 'backup'}
+               'to_schema_heads': {**heads, 'control-plane': target_version}, 'schema_profile': 'backup'}
     return resources, target, before, after, profile
 
 
@@ -56,7 +57,7 @@ class UpgradeState(State):
                     'ownerReferences': [{'kind': 'Job', 'uid': uuid(99), 'controller': True}]},
                     'spec': {**copy.deepcopy(job['spec']['template']['spec']), 'nodeName': 'synthetic-node'},
                     'status': {'phase': 'Succeeded', 'containerStatuses': [{'name': 'migrate',
-                               'imageID': 'registry.example.invalid/kodex/cli@sha256:' + 'b' * 64, 'state': {'terminated': {'exitCode': 0}}}]}}
+                               'imageID': job['spec']['template']['spec']['containers'][0]['image'], 'state': {'terminated': {'exitCode': 0}}}]}}
 
     def call(self, args):
         if 'pods' in args:
@@ -73,7 +74,7 @@ class UpgradeTests(unittest.TestCase):
         with patch.object(completion, 'verify_schemas'), patch.object(upgrade, 'schema_proof', return_value='f'*64) as proof:
             result = upgrade.verify_apply(state, target, composite)
             self.assertEqual(result['status'], 'FORWARD_UPGRADE_APPLY_VERIFIED')
-            proof.assert_called_once_with(state, 'backup')
+            proof.assert_called_once_with(state, 'backup', 20261105000100)
         for origin in ('LIVE_CAPTURE', 'RECONCILED_VERIFIED_PREFLIGHT'):
             with self.assertRaises(Rejected):upgrade.verify_apply(state, target, {**composite, 'origin':origin})
         state.current[upgrade.MIGRATION]['status']['conditions'] = [{'type':'Failed','status':'True'}]
@@ -126,8 +127,63 @@ class UpgradeTests(unittest.TestCase):
         with patch.object(upgrade, 'verify_schemas') as heads, patch.object(upgrade, 'schema_proof', return_value='f' * 64) as proof:
             result = upgrade.capture(state, target, old, receipt, 'e' * 64)
         heads.assert_called_once_with(state, target)
-        proof.assert_called_once_with(state, 'backup')
+        proof.assert_called_once_with(state, 'backup', upgrade.render_profile(target)[0]['to_schema_heads']['control-plane'])
         return result
+
+    def test_second_upgrade_preserves_completed033_jobs_and_requires034_catalog(self):
+        _, old, _, _, _ = self.prepared()
+        previous = State(old)
+        controller_defaults(previous)
+        with patch.object(completion, 'verify_schemas'):
+            receipt = completion.capture(previous, old)
+        target = copy.deepcopy([r for r in old if not r['metadata']['name'].startswith('kodex-bootstrap-upgrade-')])
+        before_heads = json.loads(upgrade.installation(old)['schema-heads.json'])
+        after_heads = {**before_heads, 'control-plane': 20261106000100}
+        upgrade.installation(target).update({'source.sha': 'c' * 40, 'schema-heads.json': json.dumps(after_heads)})
+        for job in completion.desired_jobs(target).values():
+            job['spec']['template']['spec']['containers'][0]['image'] = 'registry.example.invalid/kodex/cli@sha256:' + 'c' * 64
+            job['spec']['backoffLimit'] = 2
+        before, after = yaml.safe_dump_all(old).encode(), yaml.safe_dump_all(target).encode()
+        profile = {'schema': upgrade.SCHEMA, 'managed_by': 'git', 'previous_render_sha256': upgrade.sha(before),
+                   'target_render_sha256': upgrade.sha(after), 'previous_source_sha': 'b' * 40, 'target_source_sha': 'c' * 40,
+                   'from_schema_heads': before_heads, 'to_schema_heads': after_heads, 'schema_profile': 'backup'}
+        prepared = upgrade.prepare(before, after, profile)
+        state = UpgradeState(prepared, previous)
+        composite = self.capture(state, prepared, old, receipt)
+        self.assertEqual(composite['evidence']['migration_image_digest'], 'c' * 64)
+        for name in upgrade.PRESERVED:
+            self.assertEqual(completion.desired_jobs(prepared)[name], completion.desired_jobs(old)[name])
+        with patch.object(completion, 'verify_schemas'), patch.object(upgrade, 'schema_proof', return_value='f' * 64) as proof:
+            upgrade.verify_apply(state, prepared, composite)
+            proof.assert_called_once_with(state, 'backup', 20261106000100)
+        for start, end in ((20261030000100, 20261106000100), (20261106000100, 20261105000100),
+                           (20261105000100, 20261107000100)):
+            with self.subTest(start=start, end=end), self.assertRaises(Rejected):
+                upgrade.validate({**profile, 'from_schema_heads': {**before_heads, 'control-plane': start},
+                                  'to_schema_heads': {**after_heads, 'control-plane': end}})
+
+    def test_schema_proof_selects_exact_version_and_profile_before_cluster_access(self):
+        directory = Path(upgrade.__file__).resolve().parent.parent / 'release'
+        state = SimpleNamespace(context='synthetic-context')
+        for version, prefix, validator in ((20261105000100, 'platform-oidc-identity-', 'validPlatformOIDCIdentity'),
+                                           (20261106000100, 'personal-credentials-', 'validPersonalCredentials')):
+            for mode in ('plain', 'backup'):
+                with self.subTest(version=version, mode=mode):
+                    responses = [SimpleNamespace(returncode=0, stdout=b'{"synthetic":true}'), SimpleNamespace(returncode=0)]
+                    with patch.object(upgrade.subprocess, 'run', side_effect=responses) as run:
+                        self.assertEqual(upgrade.schema_proof(state, mode, version), upgrade.sha(responses[0].stdout))
+                    query = (directory / (prefix + ('backup-' if mode == 'backup' else '') + 'migration-postcondition.sql')).read_bytes()
+                    self.assertEqual(run.call_args_list[0].kwargs['input'], query)
+                    expected = validator + ('Backup' if mode == 'backup' else '') + 'MigrationPostcondition'
+                    self.assertIn(expected + ' as valid', run.call_args_list[1].args[0][-1])
+                    for responses in ([SimpleNamespace(returncode=1, stdout=b'')],
+                                      [SimpleNamespace(returncode=0, stdout=b'{}'), SimpleNamespace(returncode=1)]):
+                        with patch.object(upgrade.subprocess, 'run', side_effect=responses), self.assertRaises(Rejected):
+                            upgrade.schema_proof(state, mode, version)
+        for mode, version in (('automatic', 20261106000100), ('plain', 20261107000100), ('backup', '20261106000100')):
+            with patch.object(upgrade.subprocess, 'run') as run, self.assertRaises(Rejected):
+                upgrade.schema_proof(state, mode, version)
+            run.assert_not_called()
 
     def test_prepare_keeps_four_effects_and_changes_no_other_resources(self):
         old, target, before, after, profile = fixture()

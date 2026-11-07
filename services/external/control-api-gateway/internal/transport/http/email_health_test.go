@@ -24,7 +24,7 @@ func TestEmailHealthPublicReadback(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, locale := range []string{"ru", "en"} {
-		value, err := ProtoMap(&cp.IntegrationConnection{LastTestOutcome: summary})
+		value, err := ProtoMap(&cp.IntegrationConnection{CredentialPolicy: cp.IntegrationCredentialPolicy_INTEGRATION_CREDENTIAL_POLICY_PROJECT_SHARED, LastTestOutcome: summary})
 		if err != nil {
 			t.Fatal(err)
 		}

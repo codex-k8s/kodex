@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import IntegrationCredentialPreflightNotice from "@/shared/ui/IntegrationCredentialPreflightNotice.vue";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import PromptTargetPreview from "@/features/agents/detail/PromptTargetPreview.vue";
 import type { PromptTarget } from "@/features/agents/detail/prompt-context";
@@ -935,7 +936,15 @@ watch(
               @checked="continuationPreviewChecked = $event"
             />
           </section>
-          <ProblemNotice v-if="problem" :problem="problem" compact />
+          <ProblemNotice
+            v-if="problem && !problem.integrationCredentialIssues.length"
+            :problem="problem"
+            compact
+          />
+          <IntegrationCredentialPreflightNotice
+            v-if="problem?.integrationCredentialIssues.length"
+            :issues="problem.integrationCredentialIssues"
+          />
         </div>
 
         <aside

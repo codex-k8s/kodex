@@ -1880,7 +1880,9 @@ type EmailMailboxInput struct {
 // транспортный ответ: каждая граница выбирает типизированное представление, а Duplicate не разрешает
 // повторить эффект.
 type Result struct {
-	ProjectPurgeRecovery *entity.ProjectPurgeRecovery
+	PersonalIntegrationCredentialTest *entity.PersonalIntegrationCredentialTestReceipt
+	PersonalIntegrationCredential     *entity.PersonalIntegrationCredential
+	ProjectPurgeRecovery              *entity.ProjectPurgeRecovery
 	// ExecutionDeadlineExpired reports that the owner committed expiry; late effects remain forbidden.
 	// ExecutionDeadlineExpired сообщает о зафиксированном владельцем истечении; поздние эффекты запрещены.
 	ExecutionDeadlineExpired bool `json:"executionDeadlineExpired,omitempty"`

@@ -311,6 +311,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	)
 	grpcServer := grpc.NewServer(serverOptions...)
 	controlplanev1.RegisterPlatformQueryServiceServer(grpcServer, transport)
+	controlplanev1.RegisterPersonalIntegrationCredentialServiceServer(grpcServer, transport)
 	sttv1.RegisterTranscriptionPolicyProjectionServiceServer(grpcServer, transport)
 	if config.RPCProfile == transportprofile.TrustedCluster {
 		sttv1.RegisterTranscriptionAuthorityServiceServer(grpcServer, transport)

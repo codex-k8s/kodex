@@ -1570,6 +1570,11 @@ func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context
 		}
 		return nil, serializableTransactionError(err, mapWriteError(err))
 	}
+	if resolvedRef == invocationRef {
+		if err := repository.pinPersonalInvocationCredentialTx(ctx, tx, scope.organizationID, resolvedRef); err != nil {
+			return nil, err
+		}
+	}
 	if sshSnapshot != nil && resolvedRef == invocationRef {
 		if capability.Operation == "ssh.compose.deploy" {
 			sshSnapshot.DeploymentRef, sshSnapshot.DeploymentInputDigest, sshSnapshot.DeploymentEffectKey = invocationRef, inputDigestHex, effectKey
@@ -1713,7 +1718,7 @@ func (repository *Repository) claimIntegrationInvocations(ctx context.Context, p
 	if sshLane {
 		candidateLimit = sshComposeAdmissionScanLimit
 	}
-	rows, err := tx.Query(ctx, queryWorkersClaimintegrationinvocationsSelectIntegrationInvocationsOrganizationIdState, scope.organizationID, candidateLimit, principal.CallerWorkload, route, sshLane)
+	rows, err := tx.Query(ctx, queryWorkersClaimintegrationinvocationsSelectIntegrationInvocationsOrganizationIdState, scope.organizationID, candidateLimit, principal.CallerWorkload, route, sshLane, "")
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
@@ -1721,17 +1726,7 @@ func (repository *Repository) claimIntegrationInvocations(ctx context.Context, p
 	candidates := make([]integrationInvocationCandidate, 0, candidateLimit)
 	for rows.Next() {
 		var item integrationInvocationCandidate
-		if err := rows.Scan(
-			&item.id, &item.ref, &item.generation, &item.state, &item.connectionRef, &item.definitionKey,
-			&item.configuration, &item.capabilityKey, &item.boundedInput, &item.definitionVersion,
-			&item.definitionDigest, &item.operation, &item.risk, &item.approvalPolicy,
-			&item.resourceKind, &item.resourceScope, &item.resourceScopeDigest, &item.effectKey,
-			&item.inputDigest, &item.credential.Ref, &item.credential.Revision, &item.credential.SecretRef,
-			&item.credential.SecretUID, &item.credential.SecretResourceVersion, &item.credential.ContentSHA256,
-			&item.credentialCreatedAt, &item.initiatorRef,
-			&item.approvalScopePaths, &item.approvalScopeDigest, &item.approvalSchemaDigest,
-			&item.grantRef, &item.grantVersion, &item.nodeID, &item.runID, &item.sshSnapshot,
-		); err != nil {
+		if err := scanIntegrationInvocationCandidate(rows, &item); err != nil {
 			rows.Close()
 			return nil, errs.ErrUnavailable
 		}
@@ -1865,15 +1860,20 @@ func (repository *Repository) completeIntegrationInvocationTx(ctx context.Contex
 	if (operation == repositoryBundleOperation) != bundle {
 		return commandOutcome{}, errs.ErrForbidden
 	}
+	personalPin, err := repository.lockPersonalInvocationCompletion(ctx, tx, scope, input.Principal.CallerWorkload, payload)
+	if err != nil {
+		return commandOutcome{}, err
+	}
 	var invocationID, invocationRef, runID, rootRunID, projectID, projectRef, nodeRef, storedDigest, state, leaseRef string
 	var effectKey, inputDigest, receiptRef, receiptEffectKey, receiptInputDigest string
 	var receiptProviderRef, receiptResponseDigest, receiptResult string
 	var generation int64
 	var expiresAt *time.Time
-	err := tx.QueryRow(ctx, queryWorkersCompleteintegrationinvocationSelectIntegrationInvocationsOrganizationIdRef, scope.organizationID, payload.InvocationRef, input.Principal.CallerWorkload).Scan(
+	var recoveryReadOnly bool
+	err = tx.QueryRow(ctx, queryWorkersCompleteintegrationinvocationSelectIntegrationInvocationsOrganizationIdRef, scope.organizationID, payload.InvocationRef, input.Principal.CallerWorkload).Scan(
 		&invocationID, &invocationRef, &runID, &rootRunID, &projectID, &projectRef, &nodeRef, &storedDigest,
 		&generation, &state, &leaseRef, &expiresAt, &effectKey, &inputDigest, &receiptRef,
-		&receiptEffectKey, &receiptInputDigest, &receiptProviderRef, &receiptResponseDigest, &receiptResult,
+		&receiptEffectKey, &receiptInputDigest, &receiptProviderRef, &receiptResponseDigest, &receiptResult, &recoveryReadOnly,
 	)
 	if err != nil {
 		return commandOutcome{}, errs.ErrNotFound
@@ -1902,7 +1902,11 @@ func (repository *Repository) completeIntegrationInvocationTx(ctx context.Contex
 	if err := repository.validateSSHComposeCompletion(ctx, tx, scope, invocationID, payload); err != nil {
 		return commandOutcome{}, err
 	}
-	if payload.UnknownOutcome {
+	// A failed recovery READ cannot prove that the earlier external mutation failed. The
+	// owner derives this mode from its locked lease, not the worker's completion payload.
+	// Ошибка recovery READ не доказывает отказ прежнего внешнего изменения. Owner выводит
+	// этот режим из заблокированного lease, а не из completion payload worker.
+	if payload.UnknownOutcome || recoveryReadOnly && !payload.Success {
 		next = "UNKNOWN_OUTCOME"
 	} else if !payload.Success {
 		next = "FAILED"
@@ -1927,6 +1931,9 @@ func (repository *Repository) completeIntegrationInvocationTx(ctx context.Contex
 		invocationID, next, payload.ResultSummary, truncate(payload.SafeErrorCode, 100), receiptID,
 	); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if err := requirePersonalVerificationAfterAuthFailure(ctx, tx, scope, personalPin, payload); err != nil {
+		return commandOutcome{}, err
 	}
 	if next == "SUCCEEDED" || next == "FAILED" {
 		if _, err := repository.scheduleIntegrationContinuation(ctx, tx, scope, invocationID, projectID); err != nil {
