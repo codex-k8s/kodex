@@ -1179,10 +1179,15 @@ func assistantExecutionTargetBranches(agentRef map[string]any) []map[string]any 
 }
 
 // objectSchema returns a closed object descriptor retaining the supplied properties
-// map and required slice, including nil required; it performs no validation or defensive copy.
+// map and nonnil required slice; nil is normalized to an empty JSON array for
+// strict MCP clients. It performs no argument validation or defensive copy.
 // objectSchema возвращает закрытый object descriptor с исходными properties map
-// и required slice, включая nil required; проверки и защитного копирования нет.
+// и required slice без nil: nil превращается в пустой JSON array для строгих
+// MCP-клиентов. Проверки аргументов и защитного копирования нет.
 func objectSchema(required []string, properties map[string]any) map[string]any {
+	if required == nil {
+		required = []string{}
+	}
 	return map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": properties}
 }
 
