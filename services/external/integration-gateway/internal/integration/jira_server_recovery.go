@@ -2,7 +2,9 @@ package integration
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"math/big"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -21,6 +23,7 @@ type jiraRecoveryProject struct{ ID, Key string }
 // External coordinates не назначают platform root initiator и не выбирают credential.
 type jiraRecoveryIssue struct {
 	ID, Key string
+	Custom  map[string]json.RawMessage `json:"-"`
 	Fields  struct {
 		Summary     string
 		Description *string
@@ -28,7 +31,27 @@ type jiraRecoveryIssue struct {
 		Project     jiraRecoveryProject
 		Creator     atlassianRecoveryUser
 		IssueType   struct{ Name string }
+		Reporter    struct{ Key, Name string }
 	}
+}
+
+// UnmarshalJSON retains requested custom values beside the typed projection. Its caller first
+// rejects ambiguous JSON; no unknown provider field can select a URL, credential or write target.
+// UnmarshalJSON сохраняет запрошенные custom values рядом с типизированной проекцией. Caller
+// предварительно отклоняет неоднозначный JSON; поля провайдера не выбирают URL, credential или цель.
+func (issue *jiraRecoveryIssue) UnmarshalJSON(raw []byte) error {
+	type plain jiraRecoveryIssue
+	var value plain
+	var root struct{ Fields map[string]json.RawMessage }
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(raw, &root); err != nil {
+		return err
+	}
+	value.Custom = root.Fields
+	*issue = jiraRecoveryIssue(value)
+	return nil
 }
 
 // jiraRecoveryComment keeps only fields required to attribute an exact marked comment.
@@ -73,7 +96,7 @@ func (adapter *Adapter) readJiraRecoveryIssue(ctx context.Context, request Reque
 	if !jiraIssueInProject(key, project.Key) {
 		return jiraRecoveryIssue{}, &UnknownOutcomeError{}
 	}
-	body, err := adapter.jiraServerJSON(ctx, request, capability, configuration, http.MethodGet, "/issue/"+url.PathEscape(key), url.Values{"fields": {"project,summary,description,labels,creator,issuetype"}}, nil, "")
+	body, err := adapter.jiraServerJSON(ctx, request, capability, configuration, http.MethodGet, "/issue/"+url.PathEscape(key), url.Values{"fields": {jiraCreateReadFields(configuration)}}, nil, "")
 	if err != nil {
 		return jiraRecoveryIssue{}, err
 	}
@@ -129,7 +152,7 @@ func jiraRecoveryCreateMatches(issue jiraRecoveryIssue, project jiraRecoveryProj
 // recoverJiraServerCreate исчерпывает finite exact-label search и сверяет тот же issue ID
 // адресным чтением. Partial search output не принимается, replacement issue не создаётся.
 func (adapter *Adapter) recoverJiraServerCreate(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, input []byte, userKey string, project jiraRecoveryProject) (Result, error) {
-	var value struct{ Summary, Description string }
+	var value jiraCreateIntent
 	if decodeProviderJSON(input, &value) != nil {
 		return Result{}, &UnknownOutcomeError{}
 	}
@@ -145,7 +168,7 @@ func (adapter *Adapter) recoverJiraServerCreate(ctx context.Context, request Req
 	seen := map[string]bool{}
 	exhausted := false
 	for iteration := 0; iteration < 5; iteration++ {
-		body, err := adapter.jiraServerJSON(ctx, request, capability, configuration, http.MethodGet, "/search", url.Values{"jql": {query}, "fields": {"project,summary,description,labels,creator,issuetype"}, "startAt": {strconv.Itoa(offset)}, "maxResults": {"50"}}, nil, "")
+		body, err := adapter.jiraServerJSON(ctx, request, capability, configuration, http.MethodGet, "/search", url.Values{"jql": {query}, "fields": {jiraCreateReadFields(configuration)}, "startAt": {strconv.Itoa(offset)}, "maxResults": {"50"}}, nil, "")
 		if err != nil {
 			return Result{}, err
 		}
@@ -159,7 +182,7 @@ func (adapter *Adapter) recoverJiraServerCreate(ctx context.Context, request Req
 		}
 		total = page.Total
 		for _, issue := range page.Issues {
-			if seen[issue.ID] || candidate != nil || !jiraRecoveryCreateMatches(issue, project, userKey, label, value.Summary, value.Description, configuration["issue_type"]) {
+			if seen[issue.ID] || candidate != nil || !jiraRecoveryCreateMatches(issue, project, userKey, label, value.Summary, value.Description, configuration["issue_type"]) || !jiraRecoveryCustomMatches(issue, configuration, value, userKey) {
 				return Result{}, &UnknownOutcomeError{}
 			}
 			seen[issue.ID] = true
@@ -179,10 +202,62 @@ func (adapter *Adapter) recoverJiraServerCreate(ctx context.Context, request Req
 	if err != nil {
 		return Result{}, err
 	}
-	if issue.ID != candidate.ID || !jiraRecoveryCreateMatches(issue, project, userKey, label, value.Summary, value.Description, configuration["issue_type"]) {
+	if issue.ID != candidate.ID || !jiraRecoveryCreateMatches(issue, project, userKey, label, value.Summary, value.Description, configuration["issue_type"]) || !jiraRecoveryCustomMatches(issue, configuration, value, userKey) {
 		return Result{}, &UnknownOutcomeError{}
 	}
 	return providerResult(request, "jira-issue:"+issue.Key, map[string]any{"id": issue.ID, "key": issue.Key})
+}
+
+// jiraRecoveryCustomMatches proves each explicitly approved scalar/option and self reporter from
+// immutable input/configuration. Missing or changed evidence stays UNKNOWN; metadata is not reread
+// and no create is retried after an uncertain external effect.
+// jiraRecoveryCustomMatches подтверждает каждое явно одобренное значение и self reporter по
+// неизменяемым input/configuration. Неточное evidence остаётся UNKNOWN; create не повторяется.
+func jiraRecoveryCustomMatches(issue jiraRecoveryIssue, configuration map[string]string, intent jiraCreateIntent, userKey string) bool {
+	expected, allowed, err := jiraCreateFieldValues(configuration, intent)
+	if err != nil || intent.ReporterSelf && issue.Fields.Reporter.Key != userKey {
+		return false
+	}
+	for id, value := range expected {
+		raw, exists := issue.Custom[id]
+		if !exists || string(raw) == "null" {
+			return false
+		}
+		switch allowed[id].Type {
+		case "OPTION":
+			var option struct{ ID string }
+			if json.Unmarshal(raw, &option) != nil || option.ID != value.(map[string]string)["id"] {
+				return false
+			}
+		case "NUMBER":
+			var number json.Number
+			if json.Unmarshal(raw, &number) != nil || len(number.String()) > 128 || len(raw) == 0 || raw[0] == '"' {
+				return false
+			}
+			if index := strings.IndexAny(number.String(), "eE"); index >= 0 {
+				exponent, err := strconv.Atoi(number.String()[index+1:])
+				if err != nil || exponent < -64 || exponent > 64 {
+					return false
+				}
+			}
+			actual, ok := new(big.Rat).SetString(number.String())
+			wanted, valid := new(big.Rat).SetString(value.(json.Number).String())
+			if !ok || !valid || actual.Cmp(wanted) != 0 {
+				return false
+			}
+		case "BOOLEAN":
+			var actual bool
+			if json.Unmarshal(raw, &actual) != nil || actual != value.(bool) {
+				return false
+			}
+		default:
+			var actual string
+			if json.Unmarshal(raw, &actual) != nil || actual != value.(string) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // jiraRecoveryCommentMatches attributes exactly one canonical body marker to the current key;

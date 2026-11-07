@@ -4,8 +4,8 @@ title: Integration gateway
 type: service
 status: approved
 owner: backend
-version: 2.7.0
-updated: 2026-11-05
+version: 2.8.0
+updated: 2026-11-07
 ---
 
 # integration-gateway
@@ -47,12 +47,14 @@ Git write-back и итоговый owner/profile цикл требуют отд�
   HTTPS bridge; POP3 предоставляет только ограниченный compatibility mode;
 - Mattermost остаётся за отдельным необязательным `interaction-gateway`.
 
-Server/DC выбирается отдельными packages `jira-server-dc@1.0.0` (8 операций)
+Server/DC выбирается отдельными packages `jira-server-dc@1.1.0` (8 операций)
 и `confluence-server-dc@1.0.0` (6 операций). Они используют Jira REST v2 и
 Confluence REST v1, явный `context_path` и точный project/space key. Старые Cloud
 definitions и закреплённые revisions не меняются. Ограниченные OpenAPI,
 provenance, lifecycle, доставка и ручная проверка описаны в
 [профиле Server/DC](../../../docs/operations/atlassian-server-profiles-2029.md).
+Опциональные обязательные поля создания, self reporter, exact recovery и совместимость
+старых pins описаны в [профиле полей Jira](../../../docs/operations/jira-create-fields-2038.md).
 
 Package также объявляет типизированные output fields, exact network
 destinations и health operation. Универсального HTTP passthrough нет: неизвестная

@@ -2,6 +2,7 @@ package platform
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"slices"
 	"testing"
@@ -31,7 +32,8 @@ func assertPersonalJiraResourcePermissions(t *testing.T, ctx context.Context, re
 	execute := newComponentCommandExecutor(t, ctx, service, "personal-jira-")
 	connection := execute(command.CreateConnection, owner, "connection", nil, command.ConnectionInput{
 		DefinitionKey: "jira-server-dc", Name: "Synthetic personal issues", PublicConfiguration: map[string]any{
-			"base_url": "https://issues.example.invalid", "context_path": "/tracker", "project_key": "DEMO", "issue_type": "Task", "auth_scheme": "BEARER"}}).Connection
+			"base_url": "https://issues.example.invalid", "context_path": "/tracker", "project_key": "DEMO", "issue_type": "Task", "auth_scheme": "BEARER",
+			"issue_create_fields": `{"hours":{"id":"customfield_11002","type":"NUMBER"},"epic":{"id":"customfield_11003","type":"ISSUE_KEY"}}`}}).Connection
 	connection = execute(command.SetConnectionEnabled, owner, "disable", &connection.Version, command.ConnectionInput{Ref: connection.Ref, Enabled: false}).Connection
 	owner.Permission = "platform.integrations.credential-policy.set"
 	connection = execute(command.SetIntegrationCredentialPolicy, owner, "policy", &connection.Version, command.IntegrationCredentialPolicyInput{ConnectionRef: connection.Ref, Policy: entity.IntegrationCredentialInitiatorRequired}).Connection
@@ -84,6 +86,9 @@ func assertPersonalJiraResourcePermissions(t *testing.T, ctx context.Context, re
 			t.Fatal("Jira profile missing or global WRITE fabricated")
 		}
 		input := map[string]any{"summary": "Synthetic issue", "description": "Synthetic body"}
+		if operation == "jira.issue.create" {
+			input["fields_json"], input["reporter_self"] = `{"hours":0,"epic":"DEMO-42"}`, true
+		}
 		if operation == "jira.issue.comment.write" {
 			input = map[string]any{"issue_key": "DEMO-1", "body": "Synthetic comment"}
 		} else if operation == "jira.issue.transition.apply" {
@@ -113,10 +118,41 @@ JOIN control_plane.integration_invocations invocation ON invocation.id=pin.invoc
 		if err != nil {
 			t.Fatal(err)
 		}
+		if operation == "jira.issue.create" {
+			if gate.IntegrationIntent == nil {
+				t.Fatal("Jira create gate omitted canonical intent")
+			}
+			preview, _ := json.Marshal(gate.IntegrationIntent.EffectPreview)
+			var observed map[string]any
+			if json.Unmarshal(preview, &observed) != nil || observed["contentComplete"] != true {
+				t.Fatal("Jira custom input preview is incomplete")
+			}
+			seen := map[string]bool{}
+			for _, item := range observed["fields"].([]any) {
+				field := item.(map[string]any)
+				key := field["key"].(string)
+				if key == "fields_json" || key == "reporter_self" {
+					if field["value"] != input[key] || field["opaque"] != false {
+						t.Fatal("native gate changed Jira create intent")
+					}
+					seen[key] = true
+				}
+			}
+			if len(seen) != 2 {
+				t.Fatal("native gate hid Jira custom fields or self reporter")
+			}
+		}
 		execute(command.ResolveOwnerGate, owner, "approve-"+operation, &gate.Version, command.GateResolutionInput{GateRef: gate.Ref, Decision: "APPROVE"})
 		work, err := service.ClaimIntegrationInvocations(ctx, gateway, "personal-jira-gateway", 1)
 		if err != nil || len(work) != 1 || stringMap(work[0], "invocationRef") != stringMap(invocation, "invocationRef") || stringMap(work[0], "resourcePermissionProfile") != contract.Profile || work[0]["credential"] != nil {
 			t.Fatal("personal Jira claim lost mandatory permission check", err)
+		}
+		if operation == "jira.issue.create" {
+			bounded, ok := work[0]["boundedInput"].(map[string]any)
+			configuration, configured := work[0]["configuration"].(map[string]any)
+			if !ok || !configured || bounded["fields_json"] != input["fields_json"] || bounded["reporter_self"] != true || configuration["issue_create_fields"] != connection.PublicConfiguration["issue_create_fields"] {
+				t.Fatal("worker claim changed approved Jira input or configuration snapshot")
+			}
 		}
 		request := &cp.BeginPersonalIntegrationInvocationRequest{InvocationRef: stringMap(work[0], "invocationRef"), LeaseRef: stringMap(work[0], "leaseRef"), Fence: stringMap(work[0], "fence"), Generation: runtimeRevisionMapInt64(work[0], "generation"), WorkloadInstance: "personal-jira-gateway"}
 		admitted, err := rpc.BeginPersonalIntegrationInvocation(personalRuntimeRPCContext(ctx), request)

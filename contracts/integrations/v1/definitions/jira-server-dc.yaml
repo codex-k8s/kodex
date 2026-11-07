@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: jira-server-dc
-  version: 1.0.0
+  version: 1.1.0
   origin: SHIPPED
 spec:
   name: Jira Server / Data Center
@@ -50,6 +50,11 @@ spec:
     format: PLAIN
     required: true
     maximumLength: 120
+  - key: issue_create_fields
+    type: STRING
+    format: PLAIN
+    required: false
+    maximumLength: 8192
   networkDestinations:
   - key: jira_api
     source: CONFIGURATION
@@ -233,7 +238,10 @@ spec:
       retryBackoffMilliseconds: 250
   - key: jira.issue.create
     name: Создать задачу
-    description: Создаёт задачу configured type с effect label после Human Gate.
+    description: Создаёт задачу настроенного типа с effect label после Human Gate.
+      Необязательный fields_json — JSON-строка явных значений aliases из issue_create_fields
+      подключения; например {"hours":0,"epic":"DEMO-42"}. reporter_self=true назначает
+      только текущего внешнего пользователя reporter. Без этих полей прежний режим сохраняется.
     operation: jira.issue.create
     risk: WRITE
     approvalPolicy: HUMAN_EACH_EFFECT
@@ -256,6 +264,14 @@ spec:
       format: PLAIN
       required: false
       maximumLength: 65536
+    - key: fields_json
+      type: STRING
+      format: PLAIN
+      required: false
+      maximumLength: 2048
+    - key: reporter_self
+      type: BOOLEAN
+      required: false
     outputFields:
     - key: id
       type: STRING

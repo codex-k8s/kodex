@@ -100,6 +100,10 @@ func readControlPlaneMigrationProof(t *testing.T, ctx context.Context, observer 
 	}
 	var verifier string
 	switch profile {
+	case "jira-create-fields":
+		verifier = "validJiraCreateFieldsMigration"
+	case "jira-create-fields-backup":
+		verifier = "validJiraCreateFieldsBackupMigration"
 	case "personal-credentials":
 		verifier = "validPersonalCredentialsMigration"
 	case "personal-credentials-backup":

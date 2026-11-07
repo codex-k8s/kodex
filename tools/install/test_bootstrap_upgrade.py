@@ -166,7 +166,8 @@ class UpgradeTests(unittest.TestCase):
         directory = Path(upgrade.__file__).resolve().parent.parent / 'release'
         state = SimpleNamespace(context='synthetic-context')
         for version, prefix, validator in ((20261105000100, 'platform-oidc-identity-', 'validPlatformOIDCIdentity'),
-                                           (20261106000100, 'personal-credentials-', 'validPersonalCredentials')):
+                                           (20261106000100, 'personal-credentials-', 'validPersonalCredentials'),
+                                           (20261107000100, 'jira-create-fields-', 'validJiraCreateFields')):
             for mode in ('plain', 'backup'):
                 with self.subTest(version=version, mode=mode):
                     responses = [SimpleNamespace(returncode=0, stdout=b'{"synthetic":true}'), SimpleNamespace(returncode=0)]
@@ -180,10 +181,26 @@ class UpgradeTests(unittest.TestCase):
                                       [SimpleNamespace(returncode=0, stdout=b'{}'), SimpleNamespace(returncode=1)]):
                         with patch.object(upgrade.subprocess, 'run', side_effect=responses), self.assertRaises(Rejected):
                             upgrade.schema_proof(state, mode, version)
-        for mode, version in (('automatic', 20261106000100), ('plain', 20261107000100), ('backup', '20261106000100')):
+        for mode, version in (('automatic', 20261106000100), ('plain', 20261108000100), ('backup', '20261106000100')):
             with patch.object(upgrade.subprocess, 'run') as run, self.assertRaises(Rejected):
                 upgrade.schema_proof(state, mode, version)
             run.assert_not_called()
+
+    def test_exact034_to035_preserves_completed_bootstrap_and_requires_new_catalog(self):
+        old, target, before, after, profile = fixture(20261106000100, 20261107000100)
+        previous = State(old)
+        controller_defaults(previous)
+        with patch.object(completion, 'verify_schemas'):
+            receipt = completion.capture(previous, old)
+        prepared = upgrade.prepare(before, after, profile)
+        state = UpgradeState(prepared, previous)
+        composite = self.capture(state, prepared, old, receipt)
+        self.assertEqual(composite['evidence']['migration_image_digest'], 'b' * 64)
+        for name in upgrade.PRESERVED:
+            self.assertEqual(completion.desired_jobs(prepared)[name], completion.desired_jobs(old)[name])
+        with patch.object(completion, 'verify_schemas'), patch.object(upgrade, 'schema_proof', return_value='f' * 64) as proof:
+            upgrade.verify_apply(state, prepared, composite)
+            proof.assert_called_once_with(state, 'backup', 20261107000100)
 
     def test_prepare_keeps_four_effects_and_changes_no_other_resources(self):
         old, target, before, after, profile = fixture()

@@ -11,10 +11,13 @@ import { workflowPDLCCatalogDigest } from './workflow-pdlc-catalog.gen.mjs';
 import { workflowContentPageCatalogDigest } from './workflow-content-page-catalog.gen.mjs';
 import { platformOIDCIdentityCatalogDigest, platformOIDCIdentityBackupCatalogDigest } from './platform-oidc-identity-catalog.gen.mjs';
 import { personalCredentialsCatalogDigest, personalCredentialsBackupCatalogDigest, personalCredentialsPurgeGraph } from './personal-credentials-catalog.gen.mjs';
+import { jiraCreateFieldsCatalog } from './jira-create-fields-catalog.gen.mjs';
 
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'jira-create-fields': {version:'20261107000100',file:'20261107000100_jira_create_fields_compatibility.sql',annotation:'kodex.dev/cp-jira-create-fields-migration-plan',previousVersion:20261106000100,emptyField:'personalCredentialsCatalog',preconditionFile:'jira-create-fields-migration-precondition.sql',postconditionFile:'jira-create-fields-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261107000100_jira_create_fields_compatibility.sql'])},
+  'jira-create-fields-backup': {version:'20261107000100',file:'20261107000100_jira_create_fields_compatibility.sql',annotation:'kodex.dev/cp-jira-create-fields-backup-migration-plan',previousVersion:20261106000100,emptyField:'personalCredentialsCatalog',preconditionFile:'jira-create-fields-backup-migration-precondition.sql',postconditionFile:'jira-create-fields-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261107000100_jira_create_fields_compatibility.sql'])},
   'personal-credentials': {version:'20261106000100',file:'20261106000100_personal_integration_credentials.sql',annotation:'kodex.dev/cp-personal-credentials-migration-plan',previousVersion:20261105000100,emptyField:'personalCredentialsAbsent',preconditionFile:'personal-credentials-migration-precondition.sql',postconditionFile:'personal-credentials-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261106000100_personal_integration_credentials.sql'])},
   'personal-credentials-backup': {version:'20261106000100',file:'20261106000100_personal_integration_credentials.sql',annotation:'kodex.dev/cp-personal-credentials-backup-migration-plan',previousVersion:20261105000100,emptyField:'personalCredentialsAbsent',preconditionFile:'personal-credentials-backup-migration-precondition.sql',postconditionFile:'personal-credentials-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261106000100_personal_integration_credentials.sql'])},
   'platform-oidc-identity': {version:'20261105000100',file:'20261105000100_platform_oidc_identity.sql',annotation:'kodex.dev/cp-platform-oidc-migration-plan',previousVersion:20261030000100,emptyField:'platformOIDCAbsent',preconditionFile:'platform-oidc-identity-migration-precondition.sql',postconditionFile:'platform-oidc-identity-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261105000100_platform_oidc_identity.sql'])},
@@ -321,6 +324,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(validPlatformOIDCIdentityMigrationPrecondition(result,profile==='platform-oidc-identity-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'personal-credentials' || profile === 'personal-credentials-backup')
       ensure(validPersonalCredentialsMigrationPrecondition(result,profile==='personal-credentials-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if (profile === 'jira-create-fields' || profile === 'jira-create-fields-backup')
+      ensure(validJiraCreateFieldsMigrationPrecondition(result,profile==='jira-create-fields-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     return result;
   };
   const terminalJob = (actual, expected, expectedHash, expectedUID) => {
@@ -964,6 +969,8 @@ export function validWorkspaceBackupACLReadback(proof) {
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {
+    case 'jira-create-fields': return validJiraCreateFieldsMigrationPostcondition(proof);
+    case 'jira-create-fields-backup': return validJiraCreateFieldsBackupMigrationPostcondition(proof);
     case 'personal-credentials': return validPersonalCredentialsMigrationPostcondition(proof);
     case 'personal-credentials-backup': return validPersonalCredentialsBackupMigrationPostcondition(proof);
     case 'platform-oidc-identity': return validPlatformOIDCIdentityMigrationPostcondition(proof);
@@ -1060,4 +1067,37 @@ export function validPersonalCredentialsMigrationPrecondition(proof, backup=fals
 // Отдельный native entrypoint сохраняет закрытое различие normal и backup precondition.
 export function validPersonalCredentialsBackupMigrationPrecondition(proof) {
   return validPersonalCredentialsMigrationPrecondition(proof,true);
+}
+
+// Exact035 сначала проверяет собственный полный catalog; только затем проецирует неизменённый034.
+// Старый verifier по-прежнему отвергает actual035, чужой digest и неполный successor.
+export function validJiraCreateFieldsMigrationPostcondition(proof, backup=false) {
+  return proof?.profile==='JIRA_CREATE_FIELDS_'+(backup?'BACKUP_':'')+'V1' &&
+    proof.gooseVersion===20261107000100 && proof.personalCredentialsCatalog===true &&
+    proof.personalCredentialsCatalogDigest===jiraCreateFieldsCatalog[backup?'backup':'normal'] &&
+    (backup?validPersonalCredentialsBackupMigrationPostcondition:validPersonalCredentialsMigrationPostcondition)({
+      ...proof,profile:'PERSONAL_INTEGRATION_CREDENTIALS_'+(backup?'BACKUP_':'')+'V1',gooseVersion:20261106000100,
+      personalCredentialsCatalogDigest:backup?personalCredentialsBackupCatalogDigest:personalCredentialsCatalogDigest,
+    });
+}
+
+// Backup035 имеет отдельную точку входа с exact SELECT ACL, без fallback на normal профиль.
+export function validJiraCreateFieldsBackupMigrationPostcondition(proof) {
+  return validJiraCreateFieldsMigrationPostcondition(proof,true);
+}
+
+// Forward035 разрешён лишь поверх actual034 и после завершения всех integration effects/probes.
+export function validJiraCreateFieldsMigrationPrecondition(proof, backup=false) {
+  return proof?.profile==='JIRA_CREATE_FIELDS_'+(backup?'BACKUP_':'')+'PREDECESSOR_V1' &&
+    proof.activeIntegrationInvocations===0 && proof.activeIntegrationConnectionTests===0 && proof.activePersonalCredentialTests===0 &&
+    ['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions',
+      'pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','oldClaimSessions'].every(key=>proof[key]===0) &&
+    (backup?validPersonalCredentialsBackupMigrationPostcondition:validPersonalCredentialsMigrationPostcondition)({
+      ...proof,profile:'PERSONAL_INTEGRATION_CREDENTIALS_'+(backup?'BACKUP_':'')+'V1',
+    });
+}
+
+// Отдельный backup precondition не позволяет принимать обычный catalog с отсутствующим SELECT.
+export function validJiraCreateFieldsBackupMigrationPrecondition(proof) {
+  return validJiraCreateFieldsMigrationPrecondition(proof,true);
 }
