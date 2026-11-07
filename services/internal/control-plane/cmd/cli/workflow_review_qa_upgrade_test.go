@@ -100,6 +100,10 @@ func readControlPlaneMigrationProof(t *testing.T, ctx context.Context, observer 
 	}
 	var verifier string
 	switch profile {
+	case "platform-oidc-identity":
+		verifier = "validPlatformOIDCIdentityMigration"
+	case "platform-oidc-identity-backup":
+		verifier = "validPlatformOIDCIdentityBackupMigration"
 	case "workflow-content-page":
 		verifier = "validWorkflowContentPageMigration"
 	case "workflow-content-page-backup":

@@ -1,0 +1,12 @@
+{
+  "policy": {
+    "schema": "kodex.oidc-identity-policy/v1",
+    "revision": 1,
+    "issuer": "https://identity.example.invalid/realm/synthetic",
+    "bootstrap_subjects": [
+      "20000000-0000-4000-8000-000000000001"
+    ],
+    "session_lifetime_seconds": 3600
+  },
+  "sha256": "992001b0b12b4763e54655ec7702e6d11c392922233eb862e6a9db0f1fbafeb0"
+}

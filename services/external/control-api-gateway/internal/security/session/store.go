@@ -77,17 +77,18 @@ type Store struct {
 // Claims is the cookie JSON payload carrying immutable identity/session/CSRF bindings and either a bounded bearer or family reference, with optional scoped elevation. Decryption and shape checks do not replace authoritative bearer/family/domain validation.
 // Claims — cookie JSON payload с immutable identity, session и CSRF bindings и ограниченным bearer либо family reference, с необязательным scoped elevation. Decryption и shape checks не заменяют authoritative bearer, family и domain validation.
 type Claims struct {
-	Subject         string     `json:"sub"`
-	OrganizationID  string     `json:"organization_id"`
-	OIDCSessionID   string     `json:"oidc_session_id"`
-	SessionRevision uint64     `json:"session_revision"`
-	SessionID       string     `json:"session_id"`
-	Bearer          string     `json:"bearer,omitempty"`
-	FamilyID        string     `json:"family_id,omitempty"`
-	CSRFHash        string     `json:"csrf_sha256"`
-	IssuedAt        int64      `json:"issued_at"`
-	ExpiresAt       int64      `json:"expires_at"`
-	Elevation       *Elevation `json:"elevation,omitempty"`
+	Subject             string     `json:"sub"`
+	OrganizationID      string     `json:"organization_id"`
+	OIDCSessionID       string     `json:"oidc_session_id"`
+	SessionRevision     uint64     `json:"session_revision"`
+	SessionID           string     `json:"session_id"`
+	Bearer              string     `json:"bearer,omitempty"`
+	FamilyID            string     `json:"family_id,omitempty"`
+	PlatformManagedOIDC bool       `json:"platform_managed_oidc,omitempty"`
+	CSRFHash            string     `json:"csrf_sha256"`
+	IssuedAt            int64      `json:"issued_at"`
+	ExpiresAt           int64      `json:"expires_at"`
+	Elevation           *Elevation `json:"elevation,omitempty"`
 }
 
 // Elevation carries exact short-lived sensitive-operation bindings inside a protected session; it is not a standalone bearer grant. Single use requires the authoritative server-owned session/family consumption path.
@@ -227,6 +228,9 @@ func (store *Store) Open(encoded string) (Claims, error) {
 // validCredentialCarrier requires a UUID-shaped family reference with no bearer, or a nonempty bounded bearer when no family is present. This is carrier-shape validation, not credential authenticity or expiry verification.
 // validCredentialCarrier требует UUID-подобный family reference без bearer либо непустой ограниченный bearer при отсутствии family. Проверяется carrier shape, а не подлинность credential и его expiry.
 func validCredentialCarrier(claims Claims) bool {
+	if claims.PlatformManagedOIDC && claims.FamilyID == "" {
+		return false
+	}
 	if claims.FamilyID != "" {
 		return uuid.Validate(claims.FamilyID) == nil && claims.Bearer == ""
 	}

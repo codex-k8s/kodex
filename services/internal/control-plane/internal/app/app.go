@@ -110,6 +110,9 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err := repository.ConfigureRuntimeSecrets(config.RuntimeSecretNamespace); err != nil {
 		return startupFailure(stageConfigureRuntimeSecrets, err)
 	}
+	if err := configureOIDCIdentityPolicy(repository, config); err != nil {
+		return errors.New("configure OIDC identity policy failed")
+	}
 	if err := repository.ConfigureRuntimeSecretStaging(config.RuntimeSecretStagingNamespace); err != nil {
 		return startupFailure(stageConfigureRuntimeSecretStaging, err)
 	}
@@ -229,7 +232,8 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	} else {
 		workerGrantTrustFiles := workerGrantTrustFilesFor(config)
 		proofService, err = authorityproof.New(startup, service, authorityproof.Config{
-			PolicyFile: config.AuthorityPolicyFile, SignerPrivateJWKFile: config.ProofSignerFile,
+			OIDCAuthorityMode: oidcverifier.AuthorityMode(config.OIDCAuthorityMode),
+			PolicyFile:        config.AuthorityPolicyFile, SignerPrivateJWKFile: config.ProofSignerFile,
 			SignerTrustFile:          config.ProofSignerTrustFile,
 			WorkerGrantTrustFiles:    workerGrantTrustFiles,
 			ReadinessWorkerGrantFile: config.ProviderApplicationGrantFile,
@@ -251,7 +255,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		refreshOIDC = proofService.RefreshOIDC
 		verifiedUnary = authorityclient.VerifierUnaryServerInterceptor(authority.Verifier())
 		verifiedStream = authorityclient.VerifierStreamServerInterceptor(authority.Verifier(), controlplanev1.RuntimeWorkService_StreamExecutionArtifact_FullMethodName)
-		verifiedUnary, verifiedStream, err = serviceIdentityReader(service, proofService, verifiedUnary, verifiedStream)
+		verifiedUnary, verifiedStream, err = serviceIdentityReaderWithOIDCMode(service, proofService, verifiedUnary, verifiedStream, oidcverifier.AuthorityMode(config.OIDCAuthorityMode))
 		if err != nil {
 			return startupFailure(stageConstructServiceIdentityReader, err)
 		}
@@ -324,6 +328,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	controlplanev1.RegisterWorkspaceVolumeWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterInteractionWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterAccessServiceServer(grpcServer, transport)
+	controlplanev1.RegisterOIDCSessionServiceServer(grpcServer, transport)
 	controlplanev1.RegisterRoleImageServiceServer(grpcServer, roleImageTransport)
 	if proofService != nil {
 		proofTransport, err := platformgrpc.NewAuthorityProofServer(proofService)

@@ -19,6 +19,20 @@ def published():
 
 
 class EmailBootstrap(unittest.TestCase):
+    def test_existing_only_upgrade_preserves_projection_without_seed_or_write(self):
+        for dry_run in (False,True):
+            with patch.object(projection.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout=json.dumps(published()).encode()))as run:
+                projection.reconcile(fixture()[:1],'synthetic-context',dry_run,existing_only=True)
+                self.assertEqual(run.call_count,1);self.assertIn('get',run.call_args.args[0])
+        for actual in (None,{**published(),'immutable':True}):
+            response=SimpleNamespace(returncode=0,stdout=b''if actual is None else json.dumps(actual).encode())
+            with patch.object(projection.subprocess,'run',return_value=response)as run,self.assertRaises(Rejected):
+                projection.reconcile(fixture()[:1],'synthetic-context',existing_only=True)
+            self.assertEqual(run.call_count,1)
+        with patch.object(projection.subprocess,'run')as run,self.assertRaises(Rejected):
+            projection.reconcile(fixture()[:1],'synthetic-context')
+        run.assert_not_called()
+
     def test_existing_publication_is_checked_without_write_or_payload_replacement(self):
         response = SimpleNamespace(returncode=0, stdout=json.dumps(published()).encode())
         with patch.object(projection.subprocess, 'run', return_value=response) as run:

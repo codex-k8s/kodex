@@ -7,8 +7,9 @@ fail() {
 }
 
 usage() {
+  printf '%s\n' '  [--assistant-readback-transport api-proxy|port-forward; default api-proxy]' >&2
   printf '%s\n' \
-    "Usage: $0 --context <exact-context> --mode defer-public-tls|prepare-preflight|preflight|apply|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback" \
+    "Usage: $0 --context <exact-context> --mode defer-public-tls|prepare-preflight|preflight|apply|upgrade|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback" \
     '  --render <exact-release.yaml> --public-tls-mode deferred|enabled|external' \
     '  [--oidc-ca-file <pem> --ingress-controller <name> --ingress-namespace <name>]' >&2
   printf '%s\n' '  [--previous-render <yaml> --previous-render-sha256 <64-hex> --buildkit-runtime-profile standard|nested-userns; resume-workloads only]' >&2
@@ -35,12 +36,17 @@ previous_component_image_requested=false
 component_arguments=()
 completion_arguments=()
 completion_output=""
+assistant_readback_transport=api-proxy
+# Upgrade и его preflight сохраняют опубликованную проекцию без seed Secret.
+email_projection_arguments=()
 
 while (($# > 0)); do
   case "$1" in
+    --assistant-readback-transport) assistant_readback_transport="${2:-}"; shift 2 ;;
     --bootstrap-completion-receipt|--bootstrap-completion-sha256) completion_arguments+=("$1" "${2:-}"); shift 2 ;;
     --allow-reconciled-bootstrap-completion) completion_arguments+=("$1"); shift ;;
     --bootstrap-completion-output) completion_output="${2:-}"; shift 2 ;;
+    --existing-email-projection-only) email_projection_arguments=(--existing-only); shift ;;
     --portable-inventory) portable_inventory="${2:-}"; shift 2 ;;
     --context) context="${2:-}"; shift 2 ;;
     --mode) mode="${2:-}"; shift 2 ;;
@@ -60,12 +66,14 @@ while (($# > 0)); do
 done
 
 if ((${#completion_arguments[@]})); then
-  case "$mode" in prepare-preflight|preflight|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback) ;; *) fail 'completion receipt only applies to continuation or readback' ;; esac
+  case "$mode" in upgrade|prepare-preflight|preflight|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback) ;; *) fail 'completion receipt only applies to continuation or readback' ;; esac
 fi
+[[ "$mode" != upgrade || ${#completion_arguments[@]} -gt 0 ]] || fail 'upgrade requires forward migration completion receipt'
 [[ -z "$completion_output" || "$mode" == apply ]] || fail 'completion capture output requires fresh apply'
 [[ -n "$context" ]] || fail 'exact Kubernetes context is required'
+case "$assistant_readback_transport" in api-proxy|port-forward) ;; *) fail 'assistant readback transport is invalid' ;; esac
 case "$mode" in
-  defer-public-tls|prepare-preflight|preflight|apply|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback) ;;
+  defer-public-tls|prepare-preflight|preflight|apply|upgrade|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback) ;;
   *) fail 'mode is invalid' ;;
 esac
 case "$clamav_mode" in enabled|disabled) ;; *) fail 'ClamAV mode is invalid' ;; esac
@@ -96,6 +104,9 @@ repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 if ((${#completion_arguments[@]})); then
   python3 "$repository_root/tools/install/authority_registry.py" verify-bootstrap \
     --render "$render_file" --context "$context" "${completion_arguments[@]}"
+fi
+if [[ "$mode" == upgrade ]]; then
+  python3 "$repository_root/tools/install/bootstrap_upgrade.py" verify-apply --render "$render_file" --context "$context" "${completion_arguments[@]}"
 fi
 if [[ "$component_image_requested" == true ]]; then
   python3 "$repository_root/tools/install/component_image_profile.py" --check --render "$render_file" "${component_arguments[@]}"
@@ -200,10 +211,17 @@ wait_statefulset() {
 
 apply_job() {
   local name=$1 job_file="$temporary_directory/job-$1.yaml"
+  if [[ "$mode" == upgrade ]]; then
+    case "$name" in
+      email-bridge-migration|internal-rpc-authority-migrate|control-plane-migrate|kodex-postgresql-runtime-credentials|control-plane-broker-bootstrap)
+        # Genuine composite receipt уже проверен до первой mutation; historical effects не повторяются.
+        return ;;
+    esac
+  fi
   JOB_NAME="$name" yq 'select(.kind == "Job" and .metadata.name == strenv(JOB_NAME))' \
     "$render_file" >"$job_file"
   [[ -s "$job_file" ]] || fail "release Job is absent: $name"
-  if [[ "$mode" == resume-workloads ]]; then
+  if [[ "$mode" == resume-workloads || "$mode" == upgrade ]]; then
     local presence
     presence=$(python3 "$repository_root/tools/install/authority_registry.py" existing-job \
       --context "$context" --render "$render_file" --job-name "$name") || fail 'existing bootstrap Job rejected'
@@ -263,8 +281,10 @@ ensure_seed_secret() {
 }
 
 ensure_email_projection_secret() {
+  local projection_arguments=("${email_projection_arguments[@]}")
+  [[ "$mode" != upgrade ]] || projection_arguments=(--existing-only)
   python3 "$repository_root/tools/install/email_projection.py" \
-    --render "$render_file" --context "$context" "$@" || fail 'email projection bootstrap rejected'
+    --render "$render_file" --context "$context" "${projection_arguments[@]}" "$@" || fail 'email projection bootstrap rejected'
 }
 
 preflight_seed_secret() {
@@ -369,7 +389,6 @@ prune_role_environment_configmaps() {
 }
 
 reconcile_image_admission_policy_parameters() {
-  [[ -z "${profile_mode:-}" ]] || return 0
   local name=kodex-image-admission-policy current expected current_spec expected_spec
   if ! current=$(kubectl --context "$context" -n "$namespace" get \
     "imageadmissionpolicyparameters.supplychain.kodex.dev/$name" -o json 2>/dev/null); then
@@ -392,9 +411,13 @@ reconcile_image_admission_policy_parameters() {
     .metadata.labels["kodex.dev/owner-intent"] == "true"
   ' <<<"$current" >/dev/null ||
     fail 'image admission policy parameters are not owned by Kodex'
-  kubectl --context "$context" -n "$namespace" delete \
-    "imageadmissionpolicyparameters.supplychain.kodex.dev/$name" \
-    --wait=true --timeout=3m >/dev/null
+  if [[ -n "${profile_mode:-}" ]]; then
+    portable_delete ImageAdmissionPolicyParameters "$name"
+  else
+    kubectl --context "$context" -n "$namespace" delete \
+      "imageadmissionpolicyparameters.supplychain.kodex.dev/$name" \
+      --wait=true --timeout=3m >/dev/null
+  fi
 }
 
 prepare_image_admission_preflight() {
@@ -759,11 +782,18 @@ wait_system_assistant() {
 			-l app.kubernetes.io/name=runtime-controller -o json 2>/dev/null || true)
 		leader_pod=$(jq -r --arg uid "$leader_uid" \
 			'[.items[]? | select(.metadata.uid == $uid) | .metadata.name] | first // ""' \
-			<<<"${pods_json:-{}}")
+			<<<"$pods_json")
 		if [[ -n "$leader_pod" ]]; then
-			endpoint="/api/v1/namespaces/$namespace/pods/${leader_pod}:9090/proxy/assistant/readyz"
-			if kubectl --context "$context" get --raw "$endpoint" >/dev/null 2>&1; then
-				return
+			if [[ "${assistant_readback_transport:-api-proxy}" == port-forward ]]; then
+				if python3 "$repository_root/tools/install/assistant_readback.py" --context "$context" \
+					--pod "$leader_pod" --pod-uid "$leader_uid" >/dev/null 2>&1; then
+					return
+				fi
+			else
+				endpoint="/api/v1/namespaces/$namespace/pods/${leader_pod}:9090/proxy/assistant/readyz"
+				if kubectl --context "$context" get --raw "$endpoint" >/dev/null 2>&1; then
+					return
+				fi
 			fi
 		fi
 		sleep 2
@@ -849,12 +879,15 @@ if [[ "$mode" == preflight ]]; then
      .metadata.name != strenv(KODEX_DEPLOY_PUBLIC_CERTIFICATE_NAME)) and
     .kind != "CustomResourceDefinition" and .kind != "Secret" and
     .kind != "Job" and (.kind != "ConfigMap" or .immutable != true)'
+  served_api_versions=$(kubectl --context "$context" --request-timeout=15s api-versions)
   # Переменные ниже принадлежат yq, не Bash.
   # shellcheck disable=SC2016
   while IFS= read -r api_version; do
     [[ "$api_version" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?/v[0-9][a-z0-9]*$ ]] ||
       fail "rendered CustomResourceDefinition API version is invalid: $api_version"
-    preflight_expression+=" and .apiVersion != \"$api_version\""
+    if ! rg -Fx -- "$api_version" <<<"$served_api_versions" >/dev/null; then
+      preflight_expression+=" and .apiVersion != \"$api_version\""
+    fi
   done < <(yq -N -r '
     select(.kind == "CustomResourceDefinition") |
     .spec.group as $group | .spec.versions[] | select(.served == true) |
@@ -874,7 +907,7 @@ if [[ "$mode" == preflight ]]; then
   exit 0
 fi
 
-if [[ "$mode" == apply ]]; then
+if [[ "$mode" == apply || "$mode" == upgrade ]]; then
   if [[ "$public_tls_mode" == deferred ]]; then
     defer_public_tls
   elif [[ "$public_tls_mode" == enabled ]]; then
@@ -1010,7 +1043,7 @@ failing_runtime_pods=$(kubectl --context "$context" -n "$runtime_namespace" get 
 [[ -z "$failing_runtime_pods" ]] || fail "failing runtime Pods remain: $failing_runtime_pods"
 if [[ -n "${profile_mode:-}" ]]; then
   timeout 180s python3 "$repository_root/tools/install/portable_state.py" readback \
-    --context "$context" --render "$render_file"
+    --context "$context" --render "$render_file" "${completion_arguments[@]}"
 fi
 printf 'Kodex platform deployment completed: %s render_sha256=%s\n' \
   "$mode" "$(sha256sum "$render_file" | awk '{print $1}')"

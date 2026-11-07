@@ -108,6 +108,7 @@ type SessionPurpose = session.LoginPurpose
 // Identity exposes verifier-bound organization, subject, OIDC/browser session and CSRF data, with expiry capped by both cookie and access token. It is not project authorization.
 // Identity предоставляет связанные проверкой организацию, субъекта, OIDC/browser-сессии и CSRF; срок ограничен cookie и access token. Это не разрешение на проект.
 type Identity struct {
+	closureComplete  bool
 	FamilyID         string
 	Subject          string
 	OrganizationID   string
@@ -334,7 +335,14 @@ func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
 				return
 			}
 		}
-		ctx, err := controlplaneclient.WithApplicationGrant(request.Context(), claims.Bearer)
+		ctx := request.Context()
+		var credentialErr error
+		if !identity.closureComplete {
+			ctx, credentialErr = controlplaneclient.WithApplicationGrant(ctx, claims.Bearer)
+		} else if !isPlatformLogout(request) {
+			credentialErr = ErrUnauthenticated
+		}
+		err = credentialErr
 		if err != nil {
 			writeProblem(writer, http.StatusUnauthorized, "UNAUTHENTICATED", false)
 			return
@@ -533,6 +541,9 @@ func (boundary *Boundary) VerifyAuthorization(ctx context.Context, authorization
 // IssueSession first applies subject rate, bearer lifetime and optional purpose/freshness checks, then selects ordinary or elevated cookie issuance using the verified principal.
 // IssueSession сначала проверяет частоту субъекта, срок bearer и при необходимости цель со свежестью входа, затем выдаёт обычную либо повышенную cookie по проверенному principal.
 func (boundary *Boundary) IssueSession(principal oidcauth.Principal, bearer string, purpose *SessionPurpose) (session.Claims, string, string, error) {
+	if principal.PlatformManagedOIDC {
+		return session.Claims{}, "", "", ErrUnauthenticated
+	}
 	elevation, err := boundary.sessionElevation(principal, purpose)
 	if err != nil {
 		return session.Claims{}, "", "", err
@@ -670,6 +681,9 @@ func (boundary *Boundary) consumeElevation(ctx context.Context, writer http.Resp
 // RevokeSession first revokes the family when present, then persists browser-session revocation; a family failure stops the second step. It does not log out of the identity provider.
 // RevokeSession сначала отзывает семейство при его наличии, затем фиксирует отзыв браузерной сессии; ошибка первого шага останавливает второй. Выход из провайдера входа здесь не выполняется.
 func (boundary *Boundary) RevokeSession(ctx context.Context, identity Identity) error {
+	if owner, ok := boundary.verifier.(platformSessionOwner); ok {
+		return boundary.revokePlatformSession(ctx, identity, owner)
+	}
 	if identity.FamilyID != "" {
 		if boundary.families == nil {
 			return ErrSessionValidationUnavailable
@@ -731,6 +745,13 @@ func (boundary *Boundary) authenticate(request *http.Request) (Identity, session
 	if err != nil {
 		return Identity{}, session.Claims{}, time.Time{}, err
 	}
+	_, platformConfigured := boundary.verifier.(platformSessionOwner)
+	if claims.PlatformManagedOIDC != platformConfigured {
+		return Identity{}, session.Claims{}, time.Time{}, ErrUnauthenticated
+	}
+	if platformConfigured && isPlatformLogout(request) {
+		return boundary.authenticatePlatformClosure(request, claims)
+	}
 	revoked, err := boundary.revocations.Revoked(request.Context(), claims.SessionID)
 	if err != nil {
 		return Identity{}, session.Claims{}, time.Time{}, availability.WithCause("auth_revocation_read", ErrSessionValidationUnavailable, err)
@@ -738,6 +759,7 @@ func (boundary *Boundary) authenticate(request *http.Request) (Identity, session
 	if revoked {
 		return Identity{}, session.Claims{}, time.Time{}, errors.New("owner session is revoked")
 	}
+	var familyPrincipal *oidcauth.Principal
 	if claims.FamilyID != "" {
 		if boundary.families == nil {
 			return Identity{}, session.Claims{}, time.Time{}, ErrSessionValidationUnavailable
@@ -747,6 +769,7 @@ func (boundary *Boundary) authenticate(request *http.Request) (Identity, session
 			return Identity{}, session.Claims{}, time.Time{}, availability.At("auth_family_read", err)
 		}
 		if family.BrowserSessionID != claims.SessionID || family.CSRFHash != claims.CSRFHash ||
+			family.Principal.PlatformManagedOIDC != claims.PlatformManagedOIDC ||
 			family.Principal.Subject != claims.Subject || family.Principal.OrganizationID != claims.OrganizationID ||
 			family.Principal.SessionID != claims.OIDCSessionID || family.Principal.SessionRevision != claims.SessionRevision {
 			return Identity{}, session.Claims{}, time.Time{}, ErrUnauthenticated
@@ -762,14 +785,19 @@ func (boundary *Boundary) authenticate(request *http.Request) (Identity, session
 		}
 		claims.Bearer, claims.Elevation = family.AccessToken, family.Elevation
 		claims.ExpiresAt = family.IdleExpiresAt.Unix()
+		familyPrincipal = &family.Principal
 	}
 	principal, err := boundary.verifier.VerifyToken(request.Context(), claims.Bearer)
-	if errors.Is(err, oidcauth.ErrSigningKeysUnavailable) {
+	if errors.Is(err, oidcauth.ErrSigningKeysUnavailable) || errors.Is(err, oidcauth.ErrIdentityStateUnavailable) {
 		return Identity{}, session.Claims{}, time.Time{}, availability.At("auth_oidc_verify", err)
 	}
 	if err != nil || principal.Subject != claims.Subject || principal.OrganizationID != claims.OrganizationID || principal.SessionID != claims.OIDCSessionID ||
-		principal.SessionRevision != claims.SessionRevision {
+		principal.SessionRevision != claims.SessionRevision || principal.PlatformManagedOIDC != claims.PlatformManagedOIDC {
 		return Identity{}, session.Claims{}, time.Time{}, errors.New("owner session binding is invalid")
+	}
+	if principal.PlatformManagedOIDC && (familyPrincipal == nil || principal.Issuer != familyPrincipal.Issuer ||
+		!principal.AuthenticatedAt.Equal(familyPrincipal.AuthenticatedAt) || !principal.PlatformSessionExpiresAt.Equal(familyPrincipal.PlatformSessionExpiresAt)) {
+		return Identity{}, session.Claims{}, time.Time{}, ErrUnauthenticated
 	}
 	identityExpiry := time.Unix(claims.ExpiresAt, 0).UTC()
 	if principal.ExpiresAt.Before(identityExpiry) {
@@ -839,7 +867,7 @@ func authenticationProblem(err error) (int, string, bool) {
 	if errors.Is(err, ErrSessionCSRFRejected) {
 		return http.StatusForbidden, "CSRF_REJECTED", false
 	}
-	if errors.Is(err, oidcauth.ErrSigningKeysUnavailable) || errors.Is(err, ErrSessionValidationUnavailable) ||
+	if errors.Is(err, oidcauth.ErrSigningKeysUnavailable) || errors.Is(err, oidcauth.ErrIdentityStateUnavailable) || errors.Is(err, ErrSessionValidationUnavailable) ||
 		errors.Is(err, browserstate.ErrUnavailable) || errors.Is(err, session.ErrRenewalPending) || errors.Is(err, browserstate.ErrConflict) {
 		return http.StatusServiceUnavailable, "UNAVAILABLE", true
 	}

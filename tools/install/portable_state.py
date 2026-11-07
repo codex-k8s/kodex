@@ -13,6 +13,7 @@ import yaml
 from deployment_profile import require, Rejected
 
 CAS_TARGETS = {
+    ('supplychain.kodex.dev/v1alpha1', 'ImageAdmissionPolicyParameters'): 'imageadmissionpolicyparameters.supplychain.kodex.dev',
     ('v1', 'ConfigMap'): 'configmaps',
     ('apps/v1', 'Deployment'): 'deployments.apps',
     ('batch/v1', 'CronJob'): 'cronjobs.batch',
@@ -255,7 +256,7 @@ def verify_resource(expected, actual):
         if field in expected:
             require(subset(expected[field], actual.get(field)), 'LIVE_RESOURCE_DRIFT')
     kind = expected['kind']
-    if kind in ('NetworkPolicy', 'Ingress', 'Middleware', 'ServersTransport', 'ValidatingAdmissionPolicy', 'ValidatingAdmissionPolicyBinding'):
+    if kind in ('NetworkPolicy', 'Ingress', 'Middleware', 'ServersTransport', 'ValidatingAdmissionPolicy', 'ValidatingAdmissionPolicyBinding', 'ImageAdmissionPolicyParameters'):
         require(policy_spec(actual) == policy_spec(expected), 'LIVE_SECURITY_SPEC_DRIFT')
         annotations = {k: v for k, v in actual['metadata'].get('annotations', {}).items()
                        if k != 'kubectl.kubernetes.io/last-applied-configuration'}
@@ -417,6 +418,13 @@ class State:
         actual = self.get(resource)
         if actual is not None:
             require(owner(actual) and not actual['metadata'].get('deletionTimestamp') and actual['metadata'].get('ownerReferences', []) == resource['metadata'].get('ownerReferences', []), 'FOREIGN_RESOURCE_COLLISION')
+        if resource['kind'] == 'ImageAdmissionPolicyParameters' and actual is not None and actual.get('spec') != resource.get('spec'):
+            self.admission_parameters_quiescent(resource)
+            probe = copy.deepcopy(resource)
+            probe['metadata'].pop('name')
+            probe['metadata']['generateName'] = 'kodex-preflight-'
+            self.call(['create', '--dry-run=server', '--field-manager=kodex-install', '-f', '-'], probe)
+            return
         if actual is not None and (resource['apiVersion'], resource['kind']) in CAS_TARGETS:
             self.cas_update(api_write_resource(resource, actual), actual, dry_run=True)
         else:
@@ -425,6 +433,8 @@ class State:
     def apply(self, resource, inventory):
         require(owner(resource), 'UNOWNED_RENDER_RESOURCE_REJECTED')
         actual = self.fenced_current(resource, inventory)
+        if resource['kind'] == 'ImageAdmissionPolicyParameters' and actual is not None:
+            require(actual.get('spec') == resource.get('spec'), 'IMMUTABLE_ADMISSION_PARAMETERS_RECONCILIATION_REQUIRED')
         if resource['kind'] == 'Lease':
             require(resource['metadata']['name'] == 'image-admission-controller-leader' and resource.get('spec') == {},
                     'UNREGISTERED_CONTROLLER_OWNED_LEASE')
@@ -441,7 +451,7 @@ class State:
             self.call(['apply', '--server-side', '--field-manager=kodex-install', '-f', '-'], desired)
         current = self.get(resource)
         require(current is not None and owner(current), 'WRITE_READBACK_REQUIRED')
-        if actual is not None and ((resource['apiVersion'], resource['kind']) in CAS_TARGETS or (resource['apiVersion'], resource['kind']) == ('apps/v1', 'StatefulSet')):
+        if resource['kind'] == 'ImageAdmissionPolicyParameters' or (actual is not None and ((resource['apiVersion'], resource['kind']) in CAS_TARGETS or (resource['apiVersion'], resource['kind']) == ('apps/v1', 'StatefulSet'))):
             verify_resource(resource, current)
         inventory[key(resource)] = {'uid': current['metadata']['uid'], 'seal': seal(current)}
 
@@ -449,6 +459,8 @@ class State:
         actual = self.fenced_current(resource, inventory)
         if actual is None:
             return
+        if resource['kind'] == 'ImageAdmissionPolicyParameters':
+            self.admission_parameters_quiescent(resource)
         metadata = actual['metadata']
         self.call(['delete', '--raw', self.path(resource), '-f', '-'], {
             'apiVersion': 'v1', 'kind': 'DeleteOptions', 'propagationPolicy': 'Foreground',
@@ -456,6 +468,22 @@ class State:
         # Завершение foreground deletion проверяется перед созданием successor.
         self.call(['wait', '--for=delete', '-f', '-', '--timeout=15s'], descriptor(resource))
         inventory[key(resource)] = None
+
+    def admission_parameters_quiescent(self, resource):
+        """Immutable successor требует остановленного producer и неизменённого fail-closed binding."""
+        require((resource['apiVersion'],resource['kind'],resource['metadata'].get('namespace'),resource['metadata']['name']) ==
+                ('supplychain.kodex.dev/v1alpha1','ImageAdmissionPolicyParameters','kodex-system','kodex-image-admission-policy'), 'EXACT_ADMISSION_PARAMETERS_REQUIRED')
+        controller=self.get({'apiVersion':'apps/v1','kind':'Deployment','metadata':{'namespace':'kodex-system','name':'image-admission-controller'}})
+        require(controller is not None and owner(controller) and controller.get('spec',{}).get('replicas',1)==0 and
+                controller.get('status',{}).get('replicas',0)==0, 'ADMISSION_CONTROLLER_MUST_BE_STOPPED')
+        binding=self.get({'apiVersion':'admissionregistration.k8s.io/v1','kind':'ValidatingAdmissionPolicyBinding',
+                          'metadata':{'name':'kodex-image-admission-controller-jobs'}})
+        require(binding is not None and owner(binding) and binding.get('spec',{}).get('policyName')=='kodex-image-admission-controller-jobs'and
+                binding['spec'].get('validationActions')==['Deny']and binding['spec'].get('paramRef')==
+                {'name':'kodex-image-admission-policy','namespace':'kodex-system','parameterNotFoundAction':'Deny'}, 'FAIL_CLOSED_ADMISSION_BINDING_REQUIRED')
+        jobs=json.loads(self.call(['-n','kodex-system','get','jobs','-l','kodex.dev/image-admission-orchestrated=true','-o','json']))['items']
+        claims=json.loads(self.call(['-n','kodex-system','get','pvc','-l','kodex.dev/image-admission-orchestrated=true','-o','json']))['items']
+        require(not claims and all(any(c.get('type')in('Complete','Failed')and c.get('status')=='True'for c in j.get('status',{}).get('conditions',[]))for j in jobs), 'ADMISSION_WORK_MUST_BE_DRAINED')
 
 
 def verify_schemas(state, resources):

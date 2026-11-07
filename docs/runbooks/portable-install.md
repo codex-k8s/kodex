@@ -4,8 +4,8 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.3.9
-updated: 2026-11-05
+version: 1.5.2
+updated: 2026-11-06
 ---
 
 # Опциональный профиль внешней инфраструктуры
@@ -47,7 +47,7 @@ CA материализуется прежним механизмом `kodex-oid
 той же доверенной CA. Системное доверие вместо выбранной CA не используется.
 TLS1.3 соответствует текущему verifier; несовместимый IdP — блокер, не downgrade.
 
-Поддержка внешнего IdP сохраняет текущий прикладной контракт токенов: RS256,
+По умолчанию (`claims`) поддержка внешнего IdP сохраняет прежний прикладной контракт токенов: RS256,
 точные issuer/audience, sub, sid, organization_id, положительный session_revision,
 jti, auth_time и существующие правила expiry/refresh. Наличие discovery не
 доказывает совместимость claims. Для ID token сохраняются audience клиента,
@@ -59,6 +59,178 @@ scope `kodex.owner` вместе с ролью `kodex-owner` в проверен
 становится owner по порядку входа. Группы сами по себе не выдают полномочий;
 прикладные bindings принадлежат control-plane. Несовместимые claims либо
 отсутствие owner mapping должны быть устранены отдельным согласованным изменением.
+
+### Прикладная authority на стороне платформы
+
+Опциональный `--oidc-authority-profile <json>` у `render-web-only.sh` выбирает
+независимый от bundled/external топологии контракт. Отсутствие flag сохраняет
+`claims`; неизвестный или пустой явно выбранный profile закрыто отклоняется.
+Проверяются exact source checkout, schema heads и release lock. Полученный render
+передаётся штатному `install.sh --portable-release` по точному digest.
+
+Пример несекретного Git-owned profile:
+
+```json
+{
+  "schema": "kodex.oidc-authority-profile/v1",
+  "managed_by": "git",
+  "mode": "platform-managed",
+  "policy": {
+    "schema": "kodex.oidc-identity-policy/v1",
+    "revision": 1,
+    "issuer": "https://identity.example.invalid/realm/synthetic",
+    "bootstrap_subjects": ["20000000-0000-5000-8000-000000000001"],
+    "session_lifetime_seconds": 3600
+  }
+}
+```
+
+`bootstrap_subjects` содержит **issuer-qualified UUID**, полученный функцией
+`oidcidentity.ScopedSubject` из независимо проверенных exact issuer и signed `sub`.
+Это не имя, email или raw UUID из Keycloak. Указанный UUID синтетический; перед
+live apply оператор явно выбирает проверенную identity владельца. Первый
+произвольный login не создаёт owner. Для остальных пользователей нужны явные
+действующие application bindings; AD/OIDC groups не являются готовым разрешением.
+
+В этом режиме нужны стандартные RS256 issuer/audience/sub/sid/jti/iat/auth_time/
+expiry и обычные state/nonce/PKCE, но не `organization_id`, `session_revision`,
+`kodex.owner` или `kodex-owner`. Organization/actor и revision сессии разрешает CP.
+Access и ID token проверяются независимо; вход не выдаёт credentials внешних API.
+
+Источник истины — profile в deployment Git. Renderer создаёт immutable ConfigMap
+с canonical policy, read-only mount только в CP, digest annotations обоих
+workloads и следующие новые параметры:
+
+- `CONTROL_PLANE_OIDC_AUTHORITY_MODE=platform-managed`;
+- `CONTROL_PLANE_OIDC_IDENTITY_POLICY_FILE=/etc/kodex/oidc-identity-policy/policy.json`;
+- `CONTROL_API_GATEWAY_OIDC_AUTHORITY_MODE=platform-managed`.
+
+UI не редактирует эту policy. CP хранит immutable revision/digest history;
+изменение content требует увеличения `revision`, удаление mode/file и rollback
+revision закрыто отклоняются. Прежние sessions после policy advancement требуют
+свежего входа. Generated ConfigMap не является вторым источником настройки.
+
+Forward migration `20261105000100` добавляет durable OIDC policy/session state
+независимо от выбранного authority mode. Для обновления exact032 используется
+immutable migration profile `platform-oidc-identity`, а при настроенном штатном
+backup reader — `platform-oidc-identity-backup`. Оба требуют exact032 catalog,
+отсутствия частичных объектов033 и прежнего idle/claim fence до остановки owner.
+После применения сверяются полный033 catalog и frozen032 predecessor. Backup
+вариант отдельно проверяет ровно SELECT новых четырёх таблиц; права на sequence
+не расширяются. Команда `restore-workspace-backup-acl` поддерживает exact033,
+восстанавливает этот закрытый набор атомарно и откатывает всю операцию при drift.
+Goose Down для033 запрещён: возврат старого image не отменяет schema/revocation.
+
+### Обновление bootstrap receipts при переходе032→033
+
+После настоящей forward migration и `capture` доступен отдельный optional
+`portable-release.sh --mode upgrade`. Требуются точный upgrade render,
+новый private preimage directory, composite receipt и явный
+`--allow-reconciled-bootstrap-completion`. Обычный `apply` сохраняет прежнее
+поведение новой установки. Upgrade проверяет cluster/namespace, пять
+bootstrap identities/specs и полный033 catalog до первой rollout mutation;
+receipt прежнего install или initial reconciliation вместо composite не подходит.
+
+В upgrade пять bootstrap effects не запускаются заново. Остальные foundation,
+authority publisher и workloads проходят штатные preflight/CAS/readback фазы.
+Source revision authority задаётся закреплённым render; history/fence не
+сбрасываются. Release materializer при существующем exact Job присоединяется к
+его выполнению, при отсутствии создаётся один раз. Failed/чужой/неизвестный Job
+требует отдельного reconciliation и не удаляется ради повтора. Capture output
+нового install не заменяет composite receipt после обновления.
+
+`tools/install/bootstrap_upgrade.py` задаёт отдельный optional profile
+`kodex.bootstrap-upgrade/v1`, `managed_by: git`. Он закрепляет SHA предыдущего и
+целевого raw render, оба source SHA, `from_schema_heads`/`to_schema_heads` и
+`schema_profile: plain|backup`. Поддержан exact032→033 при неизменных heads
+internal-rpc-authority/email-bridge. Прежние install/resume modes и receipts
+сохраняют поведение без выбора этого профиля.
+
+`prepare` выполняется offline на operator host: читает private0400/0600 inputs,
+проверяет byte pins и сохраняет четыре уже исполненных bootstrap Job из прежнего
+render. Их commands/arguments/env/volumes и остальные поля обязаны совпадать с
+целевыми; различаться могут только immutable images. Новая CP migration остаётся
+в target render с `backoffLimit=0`. Операция не запускает Jobs и не принимает
+изменение bootstrap effect как обновление image. Результат содержит отдельный
+immutable ConfigMap с hash выбранного upgrade profile.
+
+Secret seeds из canonical render исключаются при чтении предыдущего и целевого
+render, как в штатном apply. Upgrade output не переносит их payload и не
+перезаписывает работающие проекции; отдельный secret/material lifecycle остаётся
+владельцем этих ресурсов. Отключённая observability допускает только штатный
+`OTEL_SDK_DISABLED=true` рядом с DSN file reference; произвольные env/envFrom,
+дубликаты и другие значения отклоняются.
+
+Operator lifecycle отдельно проверяет target/namespace, provenance полного
+release lock/images и отсутствие активной работы, сохраняет preimage/backup,
+останавливает writers, выполняет exact migration precondition и единственный
+forward-up Job. Перед create нужно проверить, что прежний CP migration Job уже
+отсутствует; существующий Job требует reconciliation. При неизвестном результате
+create/up выполняется readback того же UID, без автоматического повторного apply.
+
+После успешной миграции `capture` на operator host с `kubectl` и `node` проверяет
+cluster/namespace UID, прежний pinned completion receipt и четыре сохранённых
+Job. Для новой CP migration нужны новый Job UID, terminal `Complete`, отсутствие
+предыдущих failures, один Job-owned Pod с неизменённым executable spec,
+действительный image digest и exit0 всех containers. Затем проверяются heads всех
+трёх БД и полный033 catalog штатным plain/backup verifier. Смена UID/spec либо
+неуспешная проверка закрывает capture; schema version сама по себе недостаточна.
+
+Результат — receipt `FORWARD_MIGRATION_UPGRADE`: исторические rows сохраняются,
+новая row получает только реально наблюдённые UID/seal/completion time. Значения
+Secret/DSN и business rows не читаются. Для последующего readback нужен явный
+`--allow-reconciled-bootstrap-completion`; receipt привязан к immutable profile
+целевого render. TTL-удаление подтверждённого Job не запускает его заново.
+Capture не изменяет Kubernetes status и не означает завершения rollout.
+
+| Состояние | Проверяемое действие | Результат/восстановление |
+|---|---|---|
+| PLANNED | Raw render/source/schema pins; неизменность четырёх effects | Offline `prepare`; никаких mutations |
+| QUIESCED | Exact target, preimage/backup и idle fence | Выполняет operator lifecycle перед migration |
+| MIGRATION UNKNOWN | Тот же Job/Pod UID и actual schema | Readback; новый create не выполняется |
+| MIGRATION COMPLETE | Terminal Job, actual Pod/image и полный033 catalog | Read-only `capture`, новый composite receipt |
+| ROLLOUT/REJOIN | Новый render, profile и pinned receipt | Existing readback проверяет live UID/spec; отсутствующие known Jobs не повторяются |
+| FAILED/DRIFT | Неизвестный effect, extra Pod/privilege либо несовпадение pins | Закрытый отказ; backup/schema compatibility определяют дальнейший operator plan |
+
+Проверки: `test_bootstrap_upgrade.py` и прежние `test_bootstrap_completion.py`,
+включая missing TTL Jobs, foreign UID, mutated command/env/image, nonterminal Job,
+прошлый failure и schema rejection. Native033 schema/backup proof проверяется
+отдельно на disposable PostgreSQL. Семантика terminal conditions сверена с
+[Kubernetes Job API v1.35](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/)
+и [Job controller](https://kubernetes.io/docs/concepts/workloads/controllers/job/):
+`Complete` после завершения Pods, отдельно от `SuccessCriteriaMet`.
+
+Подпись и provider expiry проверяются при каждом native admission. Типизированные
+`OIDCSessionService` requests пусты: actor, organization и revision выбираются
+по verified credential и owner state. Обычные HTTP/WS требуют current eligibility.
+Только отдельные self-closure RPC читают собственный существующий tombstone,
+включая revoked/disabled/application-expired состояние, пока provider bearer жив.
+Они не дают обычного application access и не создают user/session.
+
+Logout сохраняет `REVOKING` family CAS до owner command; refresh и обычные запросы
+сразу закрываются. CP атомарно пишет revoke и один audit, повтор читает тот же
+tombstone. После точного подтверждения family стирает tokens и хранит terminal
+receipt для повторного cookie cleanup. Origin/CSRF/If-Match обязательны и при
+повторе; receipt принимается лишь на exact DELETE session. Потерянный ответ не
+повторяет provider code/refresh. Истёкший bearer не получает обход expiry:
+незавершённое закрытие остаётся fail-closed и требует нового свежего входа.
+Новая platform-managed browser family запрашивает fresh authentication, чтобы
+не переоткрыть прежний revoked SID/auth_time. API bearer bootstrap сохраняется
+через отдельную encrypted family без фиктивного refresh token и без продления
+срока access token. Refresh не меняет authority mode или owner lifetime.
+
+Схема `20261105000100` forward-only. Policy/session high-watermarks и tombstones
+не удаляются при возврате image; старый image без доказанной schema/policy
+совместимости не является безопасным rollback. До миграции нужны согласованный
+plan/preimage/backup, maintenance fence и проверенный forward recovery. Нельзя
+переключать profile старым render либо исправлять policy SQL/sed внутри Pod.
+
+Проверки: `python3 -B -m unittest discover -s tools/install -p
+'test_oidc_authority_profile.py'`, native verifier/browser и gateway security
+`go test -race`, CP typed contracts/policy и disposable PostgreSQL
+`TestStandardOIDC.*Component`. Native registration/audit/revoke, layer tests,
+release render, normal browser E2E и installed acceptance учитываются отдельно;
+локальный PASS не означает установленную функцию.
 
 Внешний режим передаёт один client ID, scope и явные auth/token endpoints как в
 PWA runtime config, так и в server-side browser client. Никаких токенов в PWA
@@ -938,3 +1110,38 @@ PostgreSQL18 в Docker без сети и проверяет реальные lo
 provider-runtime, прежние security contexts остальных двух контейнеров warm Pod,
 readiness, настоящий turn/tool/resume и отрицательный путь.
 Откат приложения/схемы не входит в этот профиль; migrations не повторяются.
+
+Для forward upgrade существующая mailbox projection проверяется через
+`email_projection.py --existing-only`: seed Secret не нужен, опубликованный
+payload не изменяется. Отсутствующая, immutable либо чужая проекция блокирует
+upgrade без create/write. Штатная новая установка по-прежнему требует canonical
+empty seed и использует create-only bootstrap с readback после потерянного ответа.
+
+ImageAdmissionPolicyParameters имеет immutable spec. Для нового spec portable
+upgrade требует остановленного admission controller, terminal managed Jobs и
+отсутствия managed workspace PVC. Owned binding сохраняет parameterNotFoundAction
+Deny и validationActions Deny на протяжении замены. Прежний объект удаляется
+по UID/resourceVersion preconditions, foreground disappearance подтверждается,
+затем foundation создаёт ровно один successor с exact spec readback. Потерянный
+ответ требует reconciliation, force-conflicts не применяется. Preflight проверяет
+эти guards и create --dry-run=server с generateName; он не пытается обновить
+immutable spec. При неизменном spec metadata сохраняются через fenced CAS.
+Server preflight проверяет custom resources уже served API, исключая только
+ещё не установленные API.
+
+Для проверки `/assistant/readyz` текущего runtime-controller leader доступен
+явный флаг `--assistant-readback-transport api-proxy|port-forward` у
+`portable-release.sh` и `deploy-platform.sh`. По умолчанию используется прежний
+Kubernetes API Pod proxy. Если этот маршрут недоступен в выбранном CNI/egress
+профиле, `port-forward` проверяет тот же endpoint через кратковременный
+операторский канал Kubernetes с bind только `127.0.0.1` и случайным локальным
+портом. Нужны штатные права оператора на чтение Pod/Lease и `pods/portforward`;
+RBAC, NetworkPolicy и TLS Kubernetes не изменяются. Автоматического fallback нет.
+До и после HTTP204 проверяются точный UID готового Pod и текущий holder Lease.
+Redirect, чужой leader, неизвестный ответ и отказ канала закрывают проверку;
+процесс всегда завершается и join-ится. Готовность не заменяет turn/tool/resume.
+
+Composite bootstrap completion receipt передаётся во все вложенные readback
+вызовы. После штатного TTL старые completed bootstrap Jobs могут отсутствовать:
+точные исторические эффекты и актуальная schema подтверждаются квитанцией.
+Заключительная проверка не должна терять её или повторно создавать bootstrap.

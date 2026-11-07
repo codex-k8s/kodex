@@ -10,10 +10,10 @@ import (
 )
 
 // TestWorkflowContentPageMigration proves that only the intended function body changes,
-// preserving OID, authority and all twenty catalog entries through stock latest-up and
+// preserving OID, authority and all twenty catalog entries through the frozen032 upgrade and
 // backup SELECT restoration; replay is a no-op, while drift and Down fail closed.
 // TestWorkflowContentPageMigration доказывает изменение только нужного тела функции с
-// сохранением OID, полномочий и двадцати записей каталога через штатный latest-up и
+// сохранением OID, полномочий и двадцати записей каталога через frozen032 upgrade и
 // восстановление backup SELECT; повтор ничего не меняет, drift и Down закрыто отклоняются.
 func TestWorkflowContentPageMigration(t *testing.T) {
 	ctx, database, observer := newWorkflowUpgradeDatabase(t)
@@ -32,7 +32,7 @@ FROM pg_proc WHERE oid='control_plane.workflow_pdlc_result_valid(jsonb,jsonb,jso
 		t.Fatal("read content page predecessor identity")
 	}
 	for attempt := 0; attempt < 2; attempt++ {
-		if err := applyPostgresMigrations(ctx, database, "up"); err != nil {
+		if err := goose.UpToContext(ctx, database, "migrations", 20261030000100); err != nil {
 			t.Fatal("apply content page forward migration", err)
 		}
 		if err := observer.QueryRow(ctx, identity).Scan(&after); err != nil || !bytes.Equal(before, after) {

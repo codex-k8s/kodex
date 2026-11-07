@@ -24,6 +24,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/oidcverifier"
 	domainerrs "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/oidcprincipal"
 	"github.com/google/uuid"
 )
 
@@ -91,6 +92,7 @@ type Config struct {
 	WorkerGrantTrustFiles                             map[string]string
 	ReadinessWorkerGrantFile                          string
 	OIDC                                              oidcverifier.Config
+	OIDCAuthorityMode                                 oidcverifier.AuthorityMode
 	Now                                               func() time.Time
 }
 
@@ -146,6 +148,7 @@ type Service struct {
 	oidcIssuer       string
 	oidcAudience     string
 	now              func() time.Time
+	identityMode     oidcverifier.AuthorityMode
 }
 
 // policyDocument is this resolver's strict unsigned configuration envelope with version/ABI pins and
@@ -279,6 +282,15 @@ func New(ctx context.Context, owner AuthorityOwner, config Config) (*Service, er
 	if ctx == nil || owner == nil || config.PolicyFile == "" || config.SignerPrivateJWKFile == "" || config.SignerTrustFile == "" || len(config.WorkerGrantTrustFiles) == 0 {
 		return nil, errors.New("authority proof service configuration is invalid")
 	}
+	mode, valid := oidcverifier.ParseAuthorityMode(string(config.OIDCAuthorityMode))
+	if !valid {
+		return nil, errors.New("OIDC authority mode is invalid")
+	}
+	if mode == oidcverifier.PlatformManagedAuthorityMode {
+		if _, ok := owner.(platformrepo.StandardOIDCIdentityOwner); !ok {
+			return nil, errors.New("OIDC identity owner is unavailable")
+		}
+	}
 	raw, err := readBounded(config.PolicyFile)
 	if err != nil {
 		return nil, errors.New("read authority proof policy")
@@ -321,7 +333,8 @@ func New(ctx context.Context, owner AuthorityOwner, config Config) (*Service, er
 		return nil, errors.New("initialize authority OIDC verifier")
 	}
 	service := &Service{
-		owner: owner, oidc: oidc, policy: document, policyDigest: hex.EncodeToString(digest[:]),
+		identityMode: mode,
+		owner:        owner, oidc: oidc, policy: document, policyDigest: hex.EncodeToString(digest[:]),
 		signer: signer, signerGeneration: generation, signerThumbprint: thumbprint,
 		workerKeys: workerKeys, oidcIssuer: config.OIDC.Issuer, oidcAudience: config.OIDC.Audience,
 		readinessGrant: config.ReadinessWorkerGrantFile, now: config.Now,
@@ -417,11 +430,15 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 	actorRevision := uint64(1)
 	callerCredentialRevision := uint64(1)
 	var workerGrantExpiresAt time.Time
+	var platformCredentialExpiresAt time.Time
 	credentialDigest := sha256.Sum256([]byte(credential))
 	if producer.CallerWorkloadID == "control-api-gateway" {
-		verified, err := service.oidc.VerifyToken(ctx, credential)
-		if errors.Is(err, oidcverifier.ErrSigningKeysUnavailable) {
+		verified, err := service.verifyOIDCCredential(ctx, credential, principal)
+		if errors.Is(err, oidcverifier.ErrSigningKeysUnavailable) || errors.Is(err, domainerrs.ErrUnavailable) {
 			return ResolveResult{}, domainerrs.ErrUnavailable
+		}
+		if errors.Is(err, domainerrs.ErrForbidden) {
+			return ResolveResult{}, domainerrs.ErrForbidden
 		}
 		if err != nil {
 			return ResolveResult{}, domainerrs.ErrUnauthorized
@@ -430,9 +447,13 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 		principal.ExternalDisplayName, principal.ExternalEmailHint = verified.DisplayName, verified.EmailHint
 		principal.ExternalIssuer, principal.ExternalGroups = verified.Issuer, verified.Groups
 		principal.ExternalSessionRevision, principal.OwnerClaim = verified.SessionRevision, verified.OwnerClaim
+		principal.PlatformManagedOIDC, principal.ExternalIssuedAt, principal.ExternalSessionID = verified.PlatformManagedOIDC, verified.IssuedAt, verified.SessionID
 		principal.ExternalAuthenticatedAt, principal.ExternalACR, principal.ExternalAMR = verified.AuthenticatedAt, verified.ACR, append([]string(nil), verified.AMR...)
 		actorKind, actorSource, actorReference, actorRevision = "HUMAN", "OIDC_SESSION", verified.SessionID, verified.SessionRevision
 		callerCredentialRevision = verified.SessionRevision
+		if verified.PlatformManagedOIDC {
+			platformCredentialExpiresAt = verified.ExpiresAt
+		}
 	} else {
 		grant, err := service.verifyWorkerGrant(credential, producer)
 		if err != nil {
@@ -485,6 +506,14 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 	}
 	now := service.now().UTC().Truncate(time.Second)
 	expiresAt := now.Add(time.Duration(producer.AuthorityProofMaxAgeSeconds) * time.Second)
+	if !platformCredentialExpiresAt.IsZero() {
+		if platformCredentialExpiresAt.Before(expiresAt) {
+			expiresAt = platformCredentialExpiresAt.UTC().Truncate(time.Second)
+		}
+		if !expiresAt.After(now) {
+			return ResolveResult{}, domainerrs.ErrUnauthorized
+		}
+	}
 	if resolved.RuntimeExecution != nil {
 		expiresAt, err = runtimeExecutionProofExpiry(now, expiresAt, resolved.RuntimeExecution.ExpiresAt, workerGrantExpiresAt)
 		if err != nil {
@@ -571,6 +600,24 @@ func (service *Service) RefreshOIDC(ctx context.Context) error { return service.
 // VerifyToken передаёт проверку токена существующему кэшу OIDC и возвращает субъект без выпуска
 // доказательства и доменной авторизации владельцем.
 func (service *Service) VerifyToken(ctx context.Context, token string) (oidcverifier.Principal, error) {
+	if service.identityMode == oidcverifier.PlatformManagedAuthorityMode {
+		return oidcverifier.Principal{}, domainerrs.ErrUnauthorized
+	}
+	return service.oidc.VerifyToken(ctx, token)
+}
+
+// VerifyIdentity exposes only checked standard evidence to the admitted service-principal resolver, without choosing caller identity or application permissions.
+// VerifyIdentity выдаёт лишь проверенные standard evidence admitted service-principal resolver без выбора caller identity и application permissions.
+func (service *Service) VerifyIdentity(ctx context.Context, token string) (oidcverifier.VerifiedIdentity, error) {
+	return service.oidc.VerifyIdentity(ctx, token)
+}
+
+// verifyOIDCCredential resolves platform authority only with the already admitted proof producer and operation; legacy claims remain a separate mode.
+// verifyOIDCCredential разрешает platform authority только для уже admitted proof producer и operation; legacy claims остаются отдельным mode.
+func (service *Service) verifyOIDCCredential(ctx context.Context, token string, caller platformrepo.ProofPrincipalInput) (oidcverifier.Principal, error) {
+	if service.identityMode == oidcverifier.PlatformManagedAuthorityMode {
+		return oidcprincipal.Resolve(ctx, service.oidc, service.owner.(platformrepo.StandardOIDCIdentityOwner), caller, token)
+	}
 	return service.oidc.VerifyToken(ctx, token)
 }
 

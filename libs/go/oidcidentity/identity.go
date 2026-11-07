@@ -36,6 +36,27 @@ func Subject(issuer, raw string) (string, error) {
 	return canonicalize(issuer, "subject", raw)
 }
 
+// ScopedSubject always derives identity from exact issuer and case-sensitive printable ASCII subject, including UUID-shaped values.
+// It accepts bounded standard subjects of one to 255 bytes, preserves spaces and never applies the legacy UUID shortcut.
+// Issuer trust and token authenticity must be established separately before using the result.
+// ScopedSubject всегда выводит identity из точного issuer и регистрозависимого printable ASCII subject, включая UUID.
+// Допускает standard subjects длиной 1–255 байт, сохраняет пробелы и не применяет legacy UUID shortcut.
+// Доверие к issuer и подлинность token проверяются отдельно до использования результата.
+func ScopedSubject(issuer, raw string) (string, error) {
+	// invalidScopedSubject keeps rejection diagnostics independent of the supplied subject.
+	// invalidScopedSubject сохраняет diagnostic отказа независимо от переданного subject.
+	const invalidScopedSubject = "OIDC scoped subject is invalid"
+	if issuer == "" || strings.TrimSpace(issuer) != issuer || len(issuer) > 2048 || len(raw) < 1 || len(raw) > 255 {
+		return "", errors.New(invalidScopedSubject)
+	}
+	for _, character := range []byte(raw) {
+		if character < 0x20 || character > 0x7e {
+			return "", errors.New(invalidScopedSubject)
+		}
+	}
+	return uuid.NewSHA1(namespace, []byte(issuer+"\x00subject\x00"+raw)).String(), nil
+}
+
 // SessionID returns a canonical session UUID, isolating opaque inputs by exact
 // issuer and the session kind rather than trimming or normalizing their content.
 // SessionID возвращает канонический UUID сессии, разделяя opaque ввод по точному

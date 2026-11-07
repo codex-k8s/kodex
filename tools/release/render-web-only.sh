@@ -22,6 +22,7 @@ usage() {
     '  --oidc-namespace <name> --oidc-pod-name <label-value>' \
     '  --oidc-pod-component <label-value> --oidc-target-port <port>' \
     '  [--deployment-profile <deployment-profile.json>]' \
+    '  [--oidc-authority-profile <oidc-authority-profile.json>; optional Git-owned authority mode]' \
     '  [--model-provider-configuration <json> --model-provider-default-model <model>]'  \
     '  [--authority-registry-configuration <json>]' \
     '  [--disable-observability; exporters only]' \
@@ -37,6 +38,8 @@ provider_apparmor_profile=""
 provider_apparmor_profile_selected=false
 authority_registry_configuration=""
 deployment_profile=""
+oidc_authority_profile=""
+oidc_authority_profile_selected=false
 model_provider_configuration=""
 model_provider_default_model=""
 agent_runner_component=agent-runner
@@ -76,6 +79,7 @@ while (($# > 0)); do
     --model-provider-configuration) model_provider_configuration="${2:-}"; shift 2 ;;
     --model-provider-default-model) model_provider_default_model="${2:-}"; shift 2 ;;
     --deployment-profile) deployment_profile="${2:-}"; shift 2 ;;
+    --oidc-authority-profile) oidc_authority_profile="${2:-}"; oidc_authority_profile_selected=true; shift 2 ;;
     --lock) lock_file="${2:-}"; shift 2 ;;
     --lock-sha256) lock_sha256="${2:-}"; shift 2 ;;
     --output) output="${2:-}"; shift 2 ;;
@@ -111,6 +115,13 @@ done
 
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 repository_root=$(cd -- "$script_directory/../.." && pwd -P)
+if [[ "$oidc_authority_profile_selected" == true && -z "$oidc_authority_profile" ]]; then
+  fail 'OIDC authority profile path is required'
+fi
+if [[ -n "$oidc_authority_profile" ]]; then
+  python3 "$repository_root/tools/install/oidc_authority_profile.py" validate --profile "$oidc_authority_profile" ||
+    fail 'OIDC authority profile is invalid'
+fi
 if [[ -n "$model_provider_configuration" ]]; then
   python3 "$repository_root/tools/install/model-provider.py" validate --configuration "$model_provider_configuration" >/dev/null || fail 'model provider configuration is invalid'
   agent_runner_component=agent-runner-opencode
@@ -664,7 +675,7 @@ yq -i '
   ); del(.metadata.namespace))
 ' "$rendered"
 
-if [[ -n "$deployment_profile" ]]; then
+if [[ -n "$deployment_profile" || -n "$oidc_authority_profile" ]]; then
   expected_schema_heads=$(python3 "$repository_root/tools/release/schema-heads.py")
   jq -e --argjson expected "$expected_schema_heads" '.schema_heads == $expected' "$lock_file" >/dev/null ||
     fail 'portable release lock schema pins differ from source'
@@ -680,6 +691,13 @@ if [[ -n "$deployment_profile" ]]; then
     --output "$temporary_directory/profile.yaml" --public-host "$public_host" --release-lock "$lock_file" ||
     fail 'deployment profile render rejected'
   mv -- "$temporary_directory/profile.yaml" "$rendered"
+fi
+
+if [[ -n "$oidc_authority_profile" ]]; then
+  python3 "$repository_root/tools/install/oidc_authority_profile.py" render \
+    --profile "$oidc_authority_profile" --input "$rendered" --output "$temporary_directory/oidc-authority.yaml" ||
+    fail 'OIDC authority profile render rejected'
+  mv -- "$temporary_directory/oidc-authority.yaml" "$rendered"
 fi
 
 # Canonicalize duplicate resources before validation. The web-only aggregate may

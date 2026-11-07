@@ -1,0 +1,163 @@
+"""Проверки optional authority mode на обоих настоящих Kubernetes overlays, без живой среды и credentials."""
+import copy
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+import tempfile
+import unittest
+
+import yaml
+from deployment_profile import Rejected
+from oidc_authority_profile import policy_bytes, read_profile, transform, validate
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def fixture():
+    return {"schema": "kodex.oidc-authority-profile/v1", "managed_by": "git", "mode": "platform-managed",
+            "policy": {"schema": "kodex.oidc-identity-policy/v1", "revision": 1,
+                       "issuer": "https://identity.example.invalid/realm/synthetic",
+                       "bootstrap_subjects": ["20000000-0000-4000-8000-000000000001"], "session_lifetime_seconds": 3600}}
+
+
+class OIDCAuthorityProfileTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.renders = {}
+        for name in ("web-only", "web-with-mattermost"):
+            raw = subprocess.check_output(["kubectl", "kustomize", str(ROOT / "deploy/k8s/profiles" / name)], text=True, timeout=60)
+            resources = [v for v in yaml.safe_load_all(raw) if v]
+            for resource in resources:
+                if resource.get("kind") == "ConfigMap" and resource.get("metadata", {}).get("name") == "kodex-platform-endpoints":
+                    resource["data"]["oidcIssuer"] = fixture()["policy"]["issuer"]
+            cls.renders[name] = resources
+
+    def test_claims_is_unchanged_in_both_overlays(self):
+        profile = {"schema": "kodex.oidc-authority-profile/v1", "managed_by": "git", "mode": "claims"}
+        for resources in self.renders.values():
+            self.assertEqual(transform(resources, profile), resources)
+
+    def test_platform_changes_only_two_workloads_and_immutable_policy(self):
+        for resources in self.renders.values():
+            original = copy.deepcopy(resources)
+            result = transform(resources, fixture())
+            self.assertEqual(resources, original)
+            self.assertEqual(transform(resources, fixture()), result)
+            self.assertEqual(len(result), len(resources) + 1)
+            policy = result[-1]
+            self.assertTrue(policy["immutable"])
+            self.assertEqual(policy["kind"], "ConfigMap")
+            raw = policy["data"]["policy.json"].encode()
+            self.assertEqual(json.loads(raw), fixture()["policy"])
+            digest = hashlib.sha256(raw).hexdigest()
+            self.assertEqual(policy["metadata"]["annotations"]["kodex.dev/oidc-identity-policy-sha256"], digest)
+            for before, after in zip(resources, result):
+                name = before.get("metadata", {}).get("name")
+                if before.get("kind") != "Deployment" or name not in ("control-plane", "control-api-gateway"):
+                    self.assertEqual(before, after)
+                    continue
+                pod = after["spec"]["template"]["spec"]
+                container = next(c for c in pod["containers"] if c["name"] == name)
+                prefix = "CONTROL_PLANE" if name == "control-plane" else "CONTROL_API_GATEWAY"
+                env = {v["name"]: v for v in container["env"]}
+                self.assertEqual(env[prefix + "_OIDC_AUTHORITY_MODE"]["value"], "platform-managed")
+                self.assertEqual(after["spec"]["template"]["metadata"]["annotations"]["kodex.dev/oidc-identity-policy-sha256"], digest)
+                if name == "control-plane":
+                    volume = next(v for v in pod["volumes"] if v["name"] == "oidc-identity-policy")
+                    self.assertEqual(volume["configMap"]["name"], policy["metadata"]["name"])
+                    mount = next(v for v in container["volumeMounts"] if v["name"] == "oidc-identity-policy")
+                    self.assertTrue(mount["readOnly"])
+                    self.assertEqual(env[prefix + "_OIDC_IDENTITY_POLICY_FILE"]["value"], mount["mountPath"] + "/policy.json")
+                else:
+                    self.assertNotIn(prefix + "_OIDC_IDENTITY_POLICY_FILE", env)
+            self.assertEqual(list(yaml.safe_load_all(yaml.safe_dump_all(result))), result)
+
+    def test_unknown_authority_and_ambiguous_owner_inputs_fail_closed(self):
+        invalid = []
+        value = fixture(); value["mode"] = "automatic"; invalid.append(value)
+        value = fixture(); value["policy"]["organization_id"] = "client-selected"; invalid.append(value)
+        value = fixture(); value["policy"]["revision"] = True; invalid.append(value)
+        value = fixture(); value["policy"]["revision"] = 0; invalid.append(value)
+        value = fixture(); value["policy"]["bootstrap_subjects"] = []; invalid.append(value)
+        value = fixture(); value["policy"]["bootstrap_subjects"] *= 2; invalid.append(value)
+        value = fixture(); value["policy"]["bootstrap_subjects"] = ["synthetic-owner-name"]; invalid.append(value)
+        value = fixture(); value["policy"]["session_lifetime_seconds"] = 43201; invalid.append(value)
+        value = fixture(); value["policy"]["issuer"] = "http://identity.example.invalid"; invalid.append(value)
+        for value in invalid:
+            with self.assertRaises(Rejected):
+                validate(value)
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "profile.json"
+            path.write_text('{"schema":"one","schema":"two"}')
+            with self.assertRaises(Rejected):
+                read_profile(path)
+
+    def test_issuer_and_existing_config_collisions_are_not_overwritten(self):
+        for resources in self.renders.values():
+            profile = fixture(); profile["policy"]["issuer"] = "https://other.example.invalid"
+            with self.assertRaises(Rejected):
+                transform(resources, profile)
+            result = transform(resources, fixture())
+            with self.assertRaises(Rejected):
+                transform(result, fixture())
+
+    def test_policy_digest_matches_the_go_domain_fixture(self):
+        document = json.loads((ROOT / "services/internal/control-plane/internal/domain/types/value/testdata/oidc-identity-policy.json").read_text())
+        canonical = validate({"schema": "kodex.oidc-authority-profile/v1", "managed_by": "git", "mode": "platform-managed", "policy": document["policy"]})["policy"]
+        self.assertEqual(hashlib.sha256(policy_bytes(canonical)).hexdigest(), document["sha256"])
+
+    def test_issuer_source_is_resolved_without_changing_ownership(self):
+        for original in self.renders.values():
+            resources = copy.deepcopy(original)
+            for resource in resources:
+                if resource.get("kind") == "Deployment" and resource["metadata"]["name"] in ("control-plane", "control-api-gateway"):
+                    for container in resource["spec"]["template"]["spec"]["containers"]:
+                        for entry in container.get("env", []):
+                            if entry["name"].endswith("_OIDC_ISSUER"):
+                                entry.pop("valueFrom")
+                                entry["value"] = fixture()["policy"]["issuer"]
+            transform(resources, fixture())
+            transform(original, fixture())
+
+    def test_missing_ambiguous_or_secret_issuer_sources_fail_closed(self):
+        original = self.renders["web-only"]
+        variants = []
+        resources = copy.deepcopy(original)
+        resources[:] = [r for r in resources if not (r.get("kind") == "ConfigMap" and r["metadata"]["name"] == "kodex-platform-endpoints")]
+        variants.append(resources)
+        resources = copy.deepcopy(original)
+        conflicting = copy.deepcopy(next(r for r in resources if r.get("kind") == "ConfigMap" and r["metadata"]["name"] == "kodex-platform-endpoints"))
+        conflicting["data"]["oidcIssuer"] = "https://other.example.invalid"
+        resources.append(conflicting)
+        variants.append(resources)
+        for source in ("both", "secret"):
+            resources = copy.deepcopy(original)
+            deployment = next(r for r in resources if r.get("kind") == "Deployment" and r["metadata"]["name"] == "control-plane")
+            container = next(c for c in deployment["spec"]["template"]["spec"]["containers"] if c["name"] == "control-plane")
+            entry = next(e for e in container["env"] if e["name"] == "CONTROL_PLANE_OIDC_ISSUER")
+            if source == "both":
+                entry["value"] = fixture()["policy"]["issuer"]
+            else:
+                entry["valueFrom"] = {"secretKeyRef": {"name": "synthetic-secret", "key": "issuer"}}
+            variants.append(resources)
+        for resources in variants:
+            with self.assertRaises(Rejected):
+                transform(resources, fixture())
+
+    def test_cli_reports_fixed_rejection_code_without_input_values(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "profile.json"
+            document = fixture()
+            document["policy"]["bootstrap_subjects"] = ["synthetic-sensitive-input"]
+            path.write_text(json.dumps(document))
+            result = subprocess.run(
+                ["python3", "-B", str(ROOT / "tools/install/oidc_authority_profile.py"),
+                 "validate", "--profile", str(path)], capture_output=True, text=True, timeout=15)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(result.stderr.strip(), "OIDC authority profile rejected: OIDC_BOOTSTRAP_MAPPING_REJECTED")
+            self.assertNotIn("synthetic-sensitive-input", result.stdout + result.stderr)
+
+
+if __name__ == "__main__":
+    unittest.main()

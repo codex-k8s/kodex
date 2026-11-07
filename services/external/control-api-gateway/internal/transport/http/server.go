@@ -143,7 +143,7 @@ func (server *Server) CreateOwnerSession(writer http.ResponseWriter, request *ht
 	if body != nil && body.Purpose != nil {
 		purpose = sessionPurposeMap(body.Purpose)
 	}
-	claims, encoded, csrf, err := server.boundary.IssueSession(principal, bearer, purpose)
+	claims, encoded, csrf, err := server.boundary.IssueSessionContext(request.Context(), principal, bearer, purpose)
 	if err != nil {
 		switch {
 		case errors.Is(err, boundary.ErrRateLimited):

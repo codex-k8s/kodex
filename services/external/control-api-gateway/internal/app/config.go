@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/codex-k8s/kodex/libs/go/oidcverifier"
 )
 
 const (
@@ -45,6 +46,7 @@ type Config struct {
 	TLSCertificateFile                string        `env:"CONTROL_API_GATEWAY_TLS_CERTIFICATE_FILE"`
 	TLSPrivateKeyFile                 string        `env:"CONTROL_API_GATEWAY_TLS_PRIVATE_KEY_FILE"`
 	OIDCIssuer                        string        `env:"CONTROL_API_GATEWAY_OIDC_ISSUER"`
+	OIDCAuthorityMode                 string        `env:"CONTROL_API_GATEWAY_OIDC_AUTHORITY_MODE"`
 	OIDCAudience                      string        `env:"CONTROL_API_GATEWAY_OIDC_AUDIENCE"`
 	OIDCBrowserOrigin                 string        `env:"CONTROL_API_GATEWAY_OIDC_BROWSER_ORIGIN"`
 	OIDCBrowserClientID               string        `env:"CONTROL_API_GATEWAY_OIDC_BROWSER_CLIENT_ID" envDefault:"kodex-control-center"`
@@ -118,6 +120,9 @@ func loadConfig() (Config, error) {
 // validate checks the RPC profile, absolute cutoff/listener/path shape, HTTPS OIDC and origin relationships, pinned internal targets, TLS NATS shape and selected timeout/concurrency bounds. It does not read credentials, verify certificates or prove dependency readiness; later constructors apply their own constraints.
 // validate проверяет RPC profile, форму абсолютного cutoff, listeners и paths, связи HTTPS OIDC и origins, закреплённые internal targets, форму TLS NATS и выбранные timeout и concurrency bounds. Credentials не читаются, сертификаты и готовность dependencies не проверяются; последующие конструкторы применяют свои ограничения.
 func (config Config) validate() error {
+	if _, valid := oidcverifier.ParseAuthorityMode(config.OIDCAuthorityMode); !valid {
+		return errors.New("control API OIDC authority mode is invalid")
+	}
 	if config.RPCProfile != "" && config.RPCProfile != "trusted-cluster" {
 		return errors.New("control API RPC profile is invalid")
 	}

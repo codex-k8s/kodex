@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package controlplane.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
+
+// Только собственная session из independently verified bearer и durable CP state.
+// Request не выбирает actor, tenant, revision, issuer или bootstrap owner.
+service OIDCSessionService {
+  rpc ResolveOIDCSession(ResolveOIDCSessionRequest) returns (ResolveOIDCSessionResponse);
+  rpc GetOIDCSessionClosure(GetOIDCSessionClosureRequest) returns (GetOIDCSessionClosureResponse);
+  rpc RevokeOIDCSession(RevokeOIDCSessionRequest) returns (RevokeOIDCSessionResponse);
+}
+
+enum OIDCSessionState {
+  OIDC_SESSION_STATE_UNSPECIFIED = 0;
+  OIDC_SESSION_STATE_ACTIVE = 1;
+  OIDC_SESSION_STATE_REVOKED = 2;
+}
+
+// Authority принадлежит CP; response не содержит OIDC tokens или permissions.
+message OIDCSessionBinding {
+  string issuer = 1;
+  string subject = 2;
+  string organization_id = 3;
+  string session_id = 4;
+  uint64 revision = 5;
+  google.protobuf.Timestamp authenticated_at = 6;
+  google.protobuf.Timestamp absolute_expires_at = 7;
+  uint64 policy_revision = 8;
+  string policy_digest_sha256 = 9;
+  OIDCSessionState state = 10;
+}
+
+message ResolveOIDCSessionRequest {}
+message ResolveOIDCSessionResponse {
+  OIDCSessionBinding binding = 1;
+}
+
+// Читает лишь свою существующую session; не разрешает обычный API или refresh.
+message GetOIDCSessionClosureRequest {}
+message GetOIDCSessionClosureResponse {
+  OIDCSessionBinding binding = 1;
+}
+
+// Повтор с тем же verified identity tuple читает тот же tombstone без нового эффекта.
+message RevokeOIDCSessionRequest {}
+message RevokeOIDCSessionResponse {
+  OIDCSessionBinding binding = 1;
+}

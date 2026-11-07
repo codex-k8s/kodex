@@ -15,7 +15,7 @@ from portable_state import key, seal, verify_resource, verify_schemas
 JOBS = ('email-bridge-migration', 'internal-rpc-authority-migrate', 'control-plane-migrate',
         'kodex-postgresql-runtime-credentials', 'control-plane-broker-bootstrap')
 SCHEMA = 'kodex.bootstrap-completion/v1'
-ORIGINS = ('LIVE_CAPTURE', 'RECONCILED_VERIFIED_PREFLIGHT')
+ORIGINS = ('LIVE_CAPTURE', 'RECONCILED_VERIFIED_PREFLIGHT', 'FORWARD_MIGRATION_UPGRADE')
 
 
 def digest(raw):
@@ -87,7 +87,7 @@ def load(path, expected_sha256, allow_reconciled=False):
     require(isinstance(receipt, dict) and set(receipt) == {'schema', 'origin', 'cluster_uid', 'namespace_uid', 'created_at', 'jobs', 'evidence'} and
             receipt['schema'] == SCHEMA and receipt['origin'] in ORIGINS and uuid_value(receipt['cluster_uid']) and uuid_value(receipt['namespace_uid']), 'BOOTSTRAP_COMPLETION_RECEIPT_REJECTED')
     require(isinstance(receipt['created_at'], str) and re.fullmatch(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ', receipt['created_at']), 'COMPLETION_TIMESTAMP_REQUIRED')
-    require(type(allow_reconciled) is bool and (receipt['origin'] != ORIGINS[1] or allow_reconciled), 'EXPLICIT_RECONCILED_COMPLETION_REQUIRED')
+    require(type(allow_reconciled) is bool and (receipt['origin'] == ORIGINS[0] or allow_reconciled), 'EXPLICIT_RECONCILED_COMPLETION_REQUIRED')
     rows = receipt['jobs']
     require(isinstance(rows, list) and len(rows) == len(JOBS) and {r['name'] for r in rows} == set(JOBS), 'EXACT_COMPLETION_JOB_SET_REQUIRED')
     for row in rows:
@@ -95,14 +95,25 @@ def load(path, expected_sha256, allow_reconciled=False):
                 hex_value(row['desired_sha256']) and hex_value(row['observed_seal']), 'EXACT_COMPLETION_JOB_IDENTITY_REQUIRED')
         if receipt['origin'] == ORIGINS[0]:
             require(isinstance(row['completion_time'], str) and re.fullmatch(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ', row['completion_time']), 'LIVE_JOB_COMPLETION_TIME_REQUIRED')
-        else:
+        elif receipt['origin'] == ORIGINS[1]:
             require(row['completion_time'] is None, 'RECONCILED_COMPLETION_TIME_NOT_OBSERVED')
+        else:
+            require((row['completion_time'] is None and row['name'] != 'control-plane-migrate') or
+                    isinstance(row['completion_time'], str) and re.fullmatch(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ', row['completion_time']),
+                    'UPGRADE_COMPLETION_TIME_REJECTED')
     evidence = receipt['evidence']
     if receipt['origin'] == ORIGINS[0]:
         require(evidence == {}, 'LIVE_COMPLETION_EVIDENCE_REJECTED')
-    else:
+    elif receipt['origin'] == ORIGINS[1]:
         require(isinstance(evidence, dict) and set(evidence) == {'inventory_sha256', 'namespace_inventory_sha256', 'verification_sha256', 'verification_source_sha', 'verification_archive_sha256'} and
                 all(hex_value(v, 40 if k == 'verification_source_sha' else 64) for k, v in evidence.items()), 'RECONCILED_EVIDENCE_PINS_REQUIRED')
+    else:
+        fields = {'previous_receipt_sha256', 'previous_render_sha256', 'upgrade_profile_sha256', 'migration_job_uid',
+                  'migration_pod_uid', 'migration_image_digest', 'schema_proof_sha256'}
+        require(isinstance(evidence, dict) and set(evidence) == fields and
+                all(uuid_value(v) if k.endswith('_uid') else hex_value(v) for k, v in evidence.items()) and
+                next(r['job_uid'] for r in rows if r['name'] == 'control-plane-migrate') == evidence['migration_job_uid'],
+                'UPGRADE_COMPLETION_EVIDENCE_REJECTED')
     return receipt
 
 
@@ -121,6 +132,12 @@ def verify_jobs(state, resources, receipt=None):
     jobs = desired_jobs(resources)
     rows = {}
     if receipt is not None:
+        if receipt['origin'] == ORIGINS[2]:
+            import bootstrap_upgrade
+            profile, profile_digest = bootstrap_upgrade.render_profile(resources)
+            require(receipt['evidence']['upgrade_profile_sha256'] == profile_digest and
+                    receipt['evidence']['previous_render_sha256'] == profile['previous_render_sha256'],
+                    'UPGRADE_COMPLETION_PROFILE_DRIFT')
         require(identity(state) == {k: receipt[k] for k in ('cluster_uid', 'namespace_uid')}, 'COMPLETION_CLUSTER_IDENTITY_MISMATCH')
         rows = {row['name']: row for row in receipt['jobs']}
         require(set(rows) == set(JOBS) and all(rows[name]['desired_sha256'] == fingerprint(job) for name, job in jobs.items()), 'COMPLETION_JOB_SPEC_DRIFT')

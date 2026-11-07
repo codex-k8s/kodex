@@ -9,10 +9,13 @@ import { privateJournal } from '../dev/role-image-acceptance.mjs';
 import { activeDeploymentPods, isProvenStoppedPod } from './stable-archive-transition.mjs';
 import { workflowPDLCCatalogDigest } from './workflow-pdlc-catalog.gen.mjs';
 import { workflowContentPageCatalogDigest } from './workflow-content-page-catalog.gen.mjs';
+import { platformOIDCIdentityCatalogDigest, platformOIDCIdentityBackupCatalogDigest } from './platform-oidc-identity-catalog.gen.mjs';
 
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'platform-oidc-identity': {version:'20261105000100',file:'20261105000100_platform_oidc_identity.sql',annotation:'kodex.dev/cp-platform-oidc-migration-plan',previousVersion:20261030000100,emptyField:'platformOIDCAbsent',preconditionFile:'platform-oidc-identity-migration-precondition.sql',postconditionFile:'platform-oidc-identity-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261105000100_platform_oidc_identity.sql'])},
+  'platform-oidc-identity-backup': {version:'20261105000100',file:'20261105000100_platform_oidc_identity.sql',annotation:'kodex.dev/cp-platform-oidc-backup-migration-plan',previousVersion:20261030000100,emptyField:'platformOIDCAbsent',preconditionFile:'platform-oidc-identity-backup-migration-precondition.sql',postconditionFile:'platform-oidc-identity-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261105000100_platform_oidc_identity.sql'])},
   'workflow-content-page': {version:'20261030000100',file:'20261030000100_workflow_content_page.sql',annotation:'kodex.dev/cp-content-page-migration-plan',previousVersion:20261029000300,emptyField:'workflowContentPagePredecessor',preconditionFile:'workflow-content-page-migration-precondition.sql',postconditionFile:'workflow-content-page-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261030000100_workflow_content_page.sql'])},
   'workflow-content-page-backup': {version:'20261030000100',file:'20261030000100_workflow_content_page.sql',annotation:'kodex.dev/cp-content-page-backup-migration-plan',previousVersion:20261029000300,emptyField:'workflowContentPagePredecessor',preconditionFile:'workflow-content-page-backup-migration-precondition.sql',postconditionFile:'workflow-content-page-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261030000100_workflow_content_page.sql'])},
   'workflow-pdlc': {version:'20261029000300',file:'20261029000300_workflow_pdlc_evidence.sql',annotation:'kodex.dev/cp-workflow-pdlc-migration-plan',previousVersion:20261029000200,emptyField:'workflowPDLCAbsent',preconditionFile:'workflow-pdlc-migration-precondition.sql',postconditionFile:'workflow-pdlc-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261029000300_workflow_pdlc_evidence.sql'])},
@@ -311,6 +314,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(validWorkflowPDLCMigrationPrecondition(result,profile==='workflow-pdlc-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'workflow-content-page' || profile === 'workflow-content-page-backup')
       ensure(validWorkflowContentPageMigrationPrecondition(result,profile==='workflow-content-page-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if (profile === 'platform-oidc-identity' || profile === 'platform-oidc-identity-backup')
+      ensure(validPlatformOIDCIdentityMigrationPrecondition(result,profile==='platform-oidc-identity-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     return result;
   };
   const terminalJob = (actual, expected, expectedHash, expectedUID) => {
@@ -954,6 +959,8 @@ export function validWorkspaceBackupACLReadback(proof) {
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {
+    case 'platform-oidc-identity': return validPlatformOIDCIdentityMigrationPostcondition(proof);
+    case 'platform-oidc-identity-backup': return validPlatformOIDCIdentityBackupMigrationPostcondition(proof);
     case 'workflow-content-page': return validWorkflowContentPageMigrationPostcondition(proof);
     case 'workflow-content-page-backup': return validWorkflowContentPageBackupMigrationPostcondition(proof);
     case 'workflow-pdlc': return validWorkflowPDLCMigrationPostcondition(proof);
@@ -976,4 +983,32 @@ export function validImmutableMigrationPostcondition(profile, proof) {
     case 'repository-bundle': return validRepositoryBundleMigrationPostcondition(proof);
     default: return false;
   }
+}
+
+// Exact033 сверяет собственные tables/constraints/ACL/guards и полный неизменный predecessor032.
+// Только проверенный новый catalog позволяет историческую проекцию Goose version; старые verifiers не расширяются.
+export function validPlatformOIDCIdentityMigrationPostcondition(proof) {
+  return proof?.profile==='PLATFORM_OIDC_IDENTITY_V1' && proof.gooseVersion===20261105000100 &&
+    proof.platformOIDCCatalog===true && proof.platformOIDCCatalogDigest===platformOIDCIdentityCatalogDigest &&
+    validWorkflowContentPageMigrationPostcondition({...proof,profile:'WORKFLOW_CONTENT_PAGE_V1',gooseVersion:20261030000100});
+}
+
+// Backup033 сверяет отдельный полный catalog, включая ровно SELECT нового набора таблиц.
+export function validPlatformOIDCIdentityBackupMigrationPostcondition(proof) {
+  return proof?.profile==='PLATFORM_OIDC_IDENTITY_BACKUP_V1' && proof.backupReaderCatalog===true &&
+    proof.platformOIDCCatalogDigest===platformOIDCIdentityBackupCatalogDigest &&
+    validPlatformOIDCIdentityMigrationPostcondition({...proof,profile:'PLATFORM_OIDC_IDENTITY_V1',
+      platformOIDCCatalogDigest:platformOIDCIdentityCatalogDigest});
+}
+
+// Новый profile требует actual032 без следов033; idle/claim fence дополнительно проверяет CLI.
+export function validPlatformOIDCIdentityMigrationPrecondition(proof, backup=false) {
+  return proof?.profile==='PLATFORM_OIDC_IDENTITY_'+(backup?'BACKUP_':'')+'PREDECESSOR_V1' &&
+    proof.platformOIDCAbsent===true && (!backup || proof.backupReaderCatalog===true) &&
+    validWorkflowContentPageMigrationPostcondition({...proof,profile:'WORKFLOW_CONTENT_PAGE_V1'});
+}
+
+// Закрытый native entrypoint не смешивает plain и backup precondition.
+export function validPlatformOIDCIdentityBackupMigrationPrecondition(proof) {
+  return validPlatformOIDCIdentityMigrationPrecondition(proof,true);
 }

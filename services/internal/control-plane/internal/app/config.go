@@ -12,6 +12,7 @@ import (
 	"github.com/caarlos0/env/v11"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
+	"github.com/codex-k8s/kodex/libs/go/oidcverifier"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
@@ -133,6 +134,8 @@ type Config struct {
 	RoleRuntimeContractSHA256       string        `env:"CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_SHA256"`
 	WorkspaceStorageProfile         string        `env:"SESSION_WORKSPACE_STORAGE_PROFILE"`
 	OIDCIssuer                      string        `env:"CONTROL_PLANE_OIDC_ISSUER"`
+	OIDCAuthorityMode               string        `env:"CONTROL_PLANE_OIDC_AUTHORITY_MODE"`
+	OIDCIdentityPolicyFile          string        `env:"CONTROL_PLANE_OIDC_IDENTITY_POLICY_FILE"`
 	OIDCAudience                    string        `env:"CONTROL_PLANE_OIDC_AUDIENCE"`
 	OIDCJWKSURL                     string        `env:"CONTROL_PLANE_OIDC_JWKS_URL"`
 	OIDCConnectAddress              string        `env:"CONTROL_PLANE_OIDC_CONNECT_ADDRESS"`
@@ -243,6 +246,12 @@ func loadConfig() (Config, error) {
 // validate проверяет фиксированные границы RPC и идентичности, синтаксис путей, настройки хранилища/OIDC и бюджеты сервиса.
 // В обычном профиле RPC также проверяется каталог сокета полномочий; остальные указанные файлы и удалённые узлы не опрашиваются.
 func (config Config) validate() error {
+	mode, valid := oidcverifier.ParseAuthorityMode(config.OIDCAuthorityMode)
+	if !valid || mode == oidcverifier.PlatformManagedAuthorityMode &&
+		(!filepath.IsAbs(config.OIDCIdentityPolicyFile) || filepath.Clean(config.OIDCIdentityPolicyFile) != config.OIDCIdentityPolicyFile || strings.ContainsAny(config.OIDCIdentityPolicyFile, "\x00\r\n")) ||
+		mode == oidcverifier.ClaimsAuthorityMode && config.OIDCIdentityPolicyFile != "" {
+		return errors.New("OIDC authority configuration is invalid")
+	}
 	if config.SSHComposeSigningKeyFile != "" && (!filepath.IsAbs(config.SSHComposeSigningKeyFile) || filepath.Clean(config.SSHComposeSigningKeyFile) != config.SSHComposeSigningKeyFile) {
 		return errors.New("SSH Compose signing key path is invalid")
 	}

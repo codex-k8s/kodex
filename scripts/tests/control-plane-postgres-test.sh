@@ -41,6 +41,10 @@ if [[ "$test_pattern" == --content-page-upgrade ]]; then
   upgrade_test='^TestWorkflowContentPageMigration$'
   test_pattern=--review-qa-upgrade
 fi
+if [[ "$test_pattern" == --platform-oidc-upgrade ]]; then
+  upgrade_test='^TestPlatformOIDCIdentityMigration$'
+  test_pattern=--review-qa-upgrade
+fi
 if [[ "$test_pattern" == --github-pr-upgrade ]]; then
   upgrade_test='^(TestGitHubAutonomousForwardUpgrade|TestGitHubPRForwardUpgrade)$'
   test_pattern=--review-qa-upgrade
@@ -286,6 +290,7 @@ fi
   schema_version=$(psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" --no-password -X -qAt -v ON_ERROR_STOP=1 \
     -c 'SELECT max(version_id) FILTER (WHERE is_applied) FROM public.goose_db_version')
   case "$schema_version" in
+    20261105000100) schema_proof=platform-oidc-identity-migration-postcondition.sql; schema_verifier=validPlatformOIDCIdentityMigrationPostcondition ;;
     20261030000100) schema_proof=workflow-content-page-migration-postcondition.sql; schema_verifier=validWorkflowContentPageMigrationPostcondition ;;
     20261029000300) schema_proof=workflow-pdlc-migration-postcondition.sql; schema_verifier=validWorkflowPDLCMigrationPostcondition ;;
     20261029000200) schema_proof=github-pr-migration-postcondition.sql; schema_verifier=validGitHubPRMigrationPostcondition ;;

@@ -27,6 +27,9 @@ const sttModelCatalogOperation = "platform.stt.model-catalog.get"
 // организационное разрешение от разрешённого principal; каталог не требует включённого STT.
 // Возвращает owner authority без выдачи credential, изменения RPC-профиля и fallback после отказа.
 func (repository *Repository) ResolveProofAuthority(ctx context.Context, input platformrepo.ProofPrincipalInput) (platformrepo.ProofAuthority, error) {
+	if platformrepo.StandardOIDCClosureOperationAllowed(input.Operation) {
+		return repository.resolveStandardOIDCClosureProof(ctx, input)
+	}
 	if providerRenewalProofOperation(input.Operation) {
 		return repository.resolveProviderRenewalProof(ctx, input)
 	}

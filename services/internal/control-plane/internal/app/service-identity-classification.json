@@ -2192,6 +2192,21 @@
       "operation_id": "platform.runtime.execution.integration.outcomes.read",
       "source_binding_sha256": "9861398d34b3a3700b5478bac94b4cf9f0cfb8b868cc5e2c8c4819a86110567a",
       "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.oidc.session.closure.get",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED",
+      "source_binding_sha256": "61987d6b02114d4cfb21b7654d639e408617f55fd6fade55b1608980809c8e33"
+    },
+    {
+      "operation_id": "platform.oidc.session.resolve",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED",
+      "source_binding_sha256": "7dfa7deedbfba14d1c4fbbb3732f3db91690477f29115536d8acf41a73732bc0"
+    },
+    {
+      "operation_id": "platform.oidc.session.revoke",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED",
+      "source_binding_sha256": "0280e3ce6f2ef72e1166c505dd751cbc403d7cc51045ae107d15fac7f93edbde"
     }
   ]
 }

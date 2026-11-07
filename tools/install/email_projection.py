@@ -32,10 +32,10 @@ def verify_existing(value):
             value.get('immutable') is not True and set(value.get('data', {})) == {'mailboxes.json'}, 'EMAIL_PROJECTION_OWNER_REQUIRED')
 
 
-def reconcile(resources, context, dry_run=False):
+def reconcile(resources, context, dry_run=False, existing_only=False):
     if not any(r.get('kind') == 'Deployment' and r['metadata']['name'] == 'email-bridge' for r in resources):
         return
-    desired = seed(resources)
+    desired = None if existing_only else seed(resources)
     command = ['kubectl', '--context', context, '--request-timeout=20s', '-n', 'kodex-system']
     def current():
         response = subprocess.run(command + ['get', 'secret', NAME, '--ignore-not-found', '-o', 'json'], capture_output=True, timeout=25)
@@ -45,6 +45,7 @@ def reconcile(resources, context, dry_run=False):
     if existing is not None:
         verify_existing(existing)
         return
+    require(not existing_only, 'EXISTING_EMAIL_PROJECTION_REQUIRED')
     args = command + ['create', '--field-manager=kodex-install', '-f', '-']
     if dry_run:
         args.append('--dry-run=server')
@@ -63,11 +64,12 @@ def main():
     parser.add_argument('--render', type=Path, required=True)
     parser.add_argument('--context', required=True)
     parser.add_argument('--dry-run', action='store_true')
+    parser.add_argument('--existing-only', action='store_true')
     args = parser.parse_args()
     require(args.render.is_file() and not args.render.is_symlink(), 'REGULAR_RENDER_REQUIRED')
     raw = args.render.read_bytes()
     require(len(raw) <= 16 << 20, 'RENDER_SIZE_REJECTED')
-    reconcile(list(filter(None, yaml.safe_load_all(raw))), args.context, args.dry_run)
+    reconcile(list(filter(None, yaml.safe_load_all(raw))), args.context, args.dry_run, args.existing_only)
 
 
 if __name__ == '__main__':
