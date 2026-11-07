@@ -8,6 +8,7 @@ async function setup(
   page: Page,
   lostResponse = false,
   state: IntegrationConnection["state"] = "DISABLED",
+  readonly = false,
 ) {
   let current: IntegrationConnection = {
     ...structuredClone(policyConnection),
@@ -67,7 +68,10 @@ async function setup(
         }),
       });
   });
-  await page.goto("/e2e/fixtures/credential-policy.html");
+  await page.goto(
+    `/e2e/fixtures/credential-policy.html${readonly ? "?readonly" : ""}`,
+  );
+  if (readonly) return { writes: () => writes, failures };
   await page.getByRole("button", { name: "Выбрать режим ключа" }).click();
   await expect(
     page.getByRole("combobox", { name: "Чей ключ использовать" }),
@@ -101,6 +105,21 @@ test("режим общего/личного ключа меняется явн�
   ).toBeDisabled();
   expect(observed.writes()).toBe(2);
   expect(await page.locator('input[type="password"]').count()).toBe(0);
+  expect(observed.failures).toEqual([]);
+});
+
+test("без серверного EDIT режим ключа недоступен и запросов записи нет", async ({
+  page,
+}) => {
+  const observed = await setup(page, false, "DISABLED", true);
+  await expect(
+    page.getByRole("heading", { name: "Режим ключей synthetic подключения" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Выбрать режим ключа" }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("combobox")).toHaveCount(0);
+  expect(observed.writes()).toBe(0);
   expect(observed.failures).toEqual([]);
 });
 

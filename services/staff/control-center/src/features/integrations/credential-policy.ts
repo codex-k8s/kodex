@@ -12,7 +12,7 @@ export function credentialPolicySupported(
   definition?: IntegrationDefinition,
 ): boolean {
   return (
-    connection.nextActions.includes("UPDATE") &&
+    connection.nextActions.includes("EDIT") &&
     !!definition?.credentialSecretKey &&
     definition.adapterOwner === "integration-gateway" &&
     definition.executionRoute === "MANAGED_MCP" &&

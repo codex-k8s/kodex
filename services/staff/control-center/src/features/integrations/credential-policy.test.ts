@@ -72,7 +72,7 @@ const connection: IntegrationConnection = {
   credentialsHint: "Not configured",
   capabilities: [],
   grants: [],
-  nextActions: ["UPDATE", "ENABLE"],
+  nextActions: ["OPEN", "EDIT", "ENABLE", "DELETE"],
   publicConfiguration: {},
 };
 const selected: IntegrationConnection = {
@@ -182,9 +182,31 @@ describe("credential policy API", () => {
     ).rejects.toThrow();
     expect(sdk.setIntegrationCredentialPolicy).toHaveBeenCalledTimes(1);
   });
+  it.each<{ nextActions: IntegrationConnection["nextActions"] }>([
+    { nextActions: ["OPEN"] },
+    { nextActions: ["OPEN", "UPDATE"] },
+  ])(
+    "refuses a policy write without server EDIT: $nextActions",
+    async ({ nextActions }) => {
+      await expect(
+        saveCredentialPolicy(
+          { ...connection, nextActions },
+          "INITIATOR_REQUIRED",
+          new AbortController().signal,
+        ),
+      ).rejects.toThrow("Integration credential policy change is unavailable");
+      expect(sdk.setIntegrationCredentialPolicy).not.toHaveBeenCalled();
+    },
+  );
   it("does not offer personal policy for unsupported, stale or unauthorized packages", () => {
     expect(credentialPolicySupported(connection, definition)).toBe(true);
     expect(credentialPolicySupported(connection)).toBe(false);
+    expect(
+      credentialPolicySupported(
+        { ...connection, nextActions: ["OPEN", "UPDATE"] },
+        definition,
+      ),
+    ).toBe(false);
     expect(
       credentialPolicySupported({ ...connection, nextActions: [] }, definition),
     ).toBe(false);

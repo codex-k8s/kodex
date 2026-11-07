@@ -39,6 +39,6 @@ export const policyConnection: IntegrationConnection = {
   credentialsHint: "Not configured",
   capabilities: [],
   grants: [],
-  nextActions: ["UPDATE", "ENABLE"],
+  nextActions: ["OPEN", "EDIT", "ENABLE", "DELETE"],
   publicConfiguration: {},
 };
