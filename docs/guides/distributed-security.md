@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.44
-updated: 2026-11-04
+version: 1.7.45
+updated: 2026-11-07
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -19,7 +19,8 @@ readiness-only policy может наследовать ёмкость обще�
 отрицательный CONNECT и отсутствие умножения глобальной ёмкости.
 
 Опциональный bootstrap component image profile допускает адресный переход только
-stateless egress, registry pull-authorizer, control-plane либо secret-broker Deployment по exact source/digest с привязкой к исходному полному
+stateless egress, registry pull-authorizer, control-plane, secret-broker, runtime-controller
+либо staff-control-center Deployment по exact source/digest с привязкой к исходному полному
 release lock. Registry authority сохраняется; mutable tag, неизвестный predecessor,
 произвольный workload и любые дополнительные resource/security deltas отклоняются.
 Provenance фиксируется в Pod template annotations. Без явного профиля image delta
@@ -27,7 +28,7 @@ Provenance фиксируется в Pod template annotations. Без явног
 опубликованной authority history обязательны до и после продолжения. Этот механизм
 не объявляет новый полный release квалифицированным и не разрешает schema rollback.
 
-Набор component profiles ограничен этими четырьмя явно зарегистрированными целями;
+Набор component profiles ограничен шестью явно зарегистрированными целями;
 child profile сохраняет собственный canonical JSON SHA и прежнюю provenance при
 добавлении второй цели. У authorizer меняется только его image и явно проверенный
 runtime env; registry/guard containers, credentials и transport остаются прежними.
@@ -37,6 +38,10 @@ default Codex сохраняется. Неизвестный runtime, конфл
 компонента, другой registry и дополнительные resource/security deltas закрыты.
 У control-plane и secret-broker дополнительно обязательны неизменные schema heads исходного lock;
 меняется только основной container image/provenance, без migrations и sidecars.
+У PWA допускается только единственный container staff-control-center: нет изменений
+API-контрактов, runtime, credentials, ServiceAccount либо других ресурсов. Отсутствие
+optional cursor в HTTP-странице означает конец списка; отсутствие обязательного
+items остаётся ошибкой формы, null/нестроковый либо слишком длинный cursor отклоняется.
 
 Gateway model catalog сначала пересекает typed remote IDs с exact deployment
 allowlist. Невыбранные aliases не возвращаются, не используются как endpoint/model
