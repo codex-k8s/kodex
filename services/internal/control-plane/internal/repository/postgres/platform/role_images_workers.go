@@ -14,6 +14,35 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// buildCompletionReceipt preserves the existing JSON response pair for exact completion replay;
+// it also keeps partial values inside the bounded transaction loop until a successful commit.
+// buildCompletionReceipt сохраняет прежнюю JSON response pair для точного completion replay;
+// partial values остаются внутри bounded transaction loop до успешного commit.
+type buildCompletionReceipt struct {
+	Build    entity.ImageBuild
+	Artifact entity.ImageArtifact
+}
+
+// retryRoleImageWorkerTransaction adapts the role-image retry marker to the shared three-attempt
+// transaction loop. Plain availability, authority and OCC failures are not retried. Each callback
+// completes bounded rollback before returning; an unknown commit is safe only via exact receipts.
+// retryRoleImageWorkerTransaction адаптирует role-image retry marker к общему loop на три
+// попытки. Обычные availability, authority и OCC failures не повторяются. Каждый callback
+// завершает bounded rollback до возврата; неизвестный commit разрешается лишь exact receipts.
+func retryRoleImageWorkerTransaction[T any](ctx context.Context, operation func() (T, error)) (T, error) {
+	return retrySerializableTransaction(ctx, func() (T, error) {
+		if ctx.Err() != nil {
+			var zero T
+			return zero, errs.ErrUnavailable
+		}
+		result, err := operation()
+		if errors.Is(err, errRoleImageTransactionRetry) {
+			err = errors.Join(errSerializableTransactionRetry, err)
+		}
+		return result, err
+	})
+}
+
 // buildClaimReceipt stores the exact build/input snapshot, fence, credential generation and expiry
 // needed to reconstruct the original deterministic lease token on replay; it is not fresh liveness
 // proof.
@@ -302,18 +331,28 @@ func (repository *Repository) buildClaimFromReceipt(receipt buildClaimReceipt) e
 		LeaseExpiresAt: receipt.LeaseExpiresAt}
 }
 
-// RenewBuild locks the build and honors an exact renewal replay before live-claim validation;
+// RenewBuild retries the complete owner transaction only for explicitly classified rollback
+// or receipt-reconcilable commit failures, retaining the original principal, lease and deadline.
+// RenewBuild повторяет целую owner transaction только для явно классифицированного rollback
+// либо commit с проверяемым receipt, сохраняя исходные principal, lease и deadline.
+func (repository *Repository) RenewBuild(ctx context.Context, input roleimagerepo.BuildLeaseInput) (entity.ImageBuildClaim, error) {
+	return retryRoleImageWorkerTransaction(ctx, func() (entity.ImageBuildClaim, error) {
+		return repository.renewBuild(ctx, input)
+	})
+}
+
+// renewBuild locks the build and honors an exact renewal replay before live-claim validation;
 // otherwise rotates token/credential generation and expiry, stores the renewed immutable input and
 // commits without emitting a build event here.
-// RenewBuild блокирует build и принимает точный renewal replay до live-claim validation; иначе
+// renewBuild блокирует build и принимает точный renewal replay до live-claim validation; иначе
 // меняет token/credential generation и expiry, сохраняет renewed immutable input и фиксирует без
 // build event в этом методе.
-func (repository *Repository) RenewBuild(ctx context.Context, input roleimagerepo.BuildLeaseInput) (entity.ImageBuildClaim, error) {
+func (repository *Repository) renewBuild(ctx context.Context, input roleimagerepo.BuildLeaseInput) (result entity.ImageBuildClaim, resultErr error) {
 	current, tx, locked, operation, intent, err := repository.beginBuildMutation(ctx, input, "platform.role-images.builds.renew")
 	if err != nil {
 		return entity.ImageBuildClaim{}, err
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer rollbackAssistantLockedRead(ctx, tx, &resultErr)
 	var replay buildClaimReceipt
 	if found, receiptErr := repository.loadRoleImageReceipt(ctx, tx, current, operation,
 		input.IdempotencyKey, intent, &replay); receiptErr != nil {
@@ -357,17 +396,27 @@ func (repository *Repository) RenewBuild(ctx context.Context, input roleimagerep
 	return repository.buildClaimFromReceipt(receipt), nil
 }
 
-// ReportBuildProgress honors exact progress replay, validates the live fenced claim and stores
+// ReportBuildProgress retries the complete owner transaction only for explicitly classified rollback
+// or receipt-reconcilable commit failures, retaining the original principal, lease and deadline.
+// ReportBuildProgress повторяет целую owner transaction только для явно классифицированного rollback
+// либо commit с проверяемым receipt, сохраняя исходные principal, lease и deadline.
+func (repository *Repository) ReportBuildProgress(ctx context.Context, input roleimagerepo.BuildProgressInput) (entity.ImageBuild, error) {
+	return retryRoleImageWorkerTransaction(ctx, func() (entity.ImageBuild, error) {
+		return repository.reportBuildProgress(ctx, input)
+	})
+}
+
+// reportBuildProgress honors exact progress replay, validates the live fenced claim and stores
 // updated stage/percent, receipt and build-changed event in the caller-owned serializable
 // transaction.
-// ReportBuildProgress принимает точный progress replay, проверяет живой fenced claim и сохраняет
+// reportBuildProgress принимает точный progress replay, проверяет живой fenced claim и сохраняет
 // обновлённые stage/percent, receipt и build-changed event в serializable транзакции владельца.
-func (repository *Repository) ReportBuildProgress(ctx context.Context, input roleimagerepo.BuildProgressInput) (entity.ImageBuild, error) {
+func (repository *Repository) reportBuildProgress(ctx context.Context, input roleimagerepo.BuildProgressInput) (result entity.ImageBuild, resultErr error) {
 	current, tx, locked, operation, intent, err := repository.beginBuildMutation(ctx, input.BuildLeaseInput, "platform.role-images.builds.progress")
 	if err != nil {
 		return entity.ImageBuild{}, err
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer rollbackAssistantLockedRead(ctx, tx, &resultErr)
 	var replay entity.ImageBuild
 	if found, receiptErr := repository.loadRoleImageReceipt(ctx, tx, current, operation,
 		input.IdempotencyKey, roleImageBuildProgressDigest(input), &replay); receiptErr != nil {
@@ -390,28 +439,32 @@ func (repository *Repository) ReportBuildProgress(ctx context.Context, input rol
 	return repository.finishBuildMutation(ctx, tx, current, locked, operation, input.IdempotencyKey, intent, "IMAGE_BUILD_PROGRESS")
 }
 
-// CompleteBuild replays the saved build/artifact pair or verifies live claim plus exact staging
+// CompleteBuild retries the complete artifact/receipt/outbox transaction with unchanged input;
+// the paired result is discarded on any error, including bounded rollback cleanup failure.
+// CompleteBuild повторяет целую artifact/receipt/outbox transaction с неизменным input;
+// парный result отбрасывается при любой ошибке, включая отказ bounded rollback cleanup.
+func (repository *Repository) CompleteBuild(ctx context.Context, input roleimagerepo.BuildCompletionInput) (entity.ImageBuild, entity.ImageArtifact, error) {
+	result, err := retryRoleImageWorkerTransaction(ctx, func() (buildCompletionReceipt, error) {
+		build, artifact, err := repository.completeBuild(ctx, input)
+		return buildCompletionReceipt{Build: build, Artifact: artifact}, err
+	})
+	return result.Build, result.Artifact, err
+}
+
+// completeBuild replays the saved build/artifact pair or verifies live claim plus exact staging
 // and immutable input, then completes the build, clears its lease, inserts the bound artifact and
 // commits audit/receipt/event atomically.
-// CompleteBuild повторяет сохранённую пару build/artifact либо проверяет live claim, точные
+// completeBuild повторяет сохранённую пару build/artifact либо проверяет live claim, точные
 // staging и immutable input, затем завершает build, очищает lease, добавляет связанный artifact и
 // атомарно фиксирует audit/receipt/event.
-func (repository *Repository) CompleteBuild(ctx context.Context, input roleimagerepo.BuildCompletionInput) (entity.ImageBuild, entity.ImageArtifact, error) {
+func (repository *Repository) completeBuild(ctx context.Context, input roleimagerepo.BuildCompletionInput) (resultBuild entity.ImageBuild, resultArtifact entity.ImageArtifact, resultErr error) {
 	current, tx, locked, operation, _, err := repository.beginBuildMutation(ctx, input.BuildLeaseInput, "platform.role-images.builds.complete")
 	if err != nil {
 		return entity.ImageBuild{}, entity.ImageArtifact{}, err
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer rollbackAssistantLockedRead(ctx, tx, &resultErr)
 	intent := roleImageBuildCompletionDigest(input)
-	// completionReceipt stores both completed build and artifact as one replay result so retry cannot
-	// create a second artifact or return an incomplete completion pair.
-	// completionReceipt сохраняет завершённые build и artifact единым replay result, исключая второй
-	// artifact при повторе либо неполную completion pair.
-	type completionReceipt struct {
-		Build    entity.ImageBuild
-		Artifact entity.ImageArtifact
-	}
-	var replay completionReceipt
+	var replay buildCompletionReceipt
 	if found, receiptErr := repository.loadRoleImageReceipt(ctx, tx, current, operation,
 		input.IdempotencyKey, intent, &replay); receiptErr != nil {
 		return entity.ImageBuild{}, entity.ImageArtifact{}, receiptErr
@@ -452,9 +505,9 @@ func (repository *Repository) CompleteBuild(ctx context.Context, input roleimage
 	artifact, err := scanRoleImageArtifact(tx.QueryRow(ctx, queryRoleImagesGetActiveArtifact,
 		current.organizationID, artifactRef))
 	if err != nil {
-		return entity.ImageBuild{}, entity.ImageArtifact{}, errs.ErrUnavailable
+		return entity.ImageBuild{}, entity.ImageArtifact{}, serializableTransactionError(err, errs.ErrUnavailable)
 	}
-	receipt := completionReceipt{Build: locked.Build, Artifact: artifact}
+	receipt := buildCompletionReceipt{Build: locked.Build, Artifact: artifact}
 	if err := repository.auditRoleImage(ctx, tx, current, locked.ProjectID, operation,
 		"IMAGE_BUILD", locked.Build.Ref, "i18n:ROLE_IMAGE_BUILD_COMPLETED"); err != nil {
 		return entity.ImageBuild{}, entity.ImageArtifact{}, err
@@ -472,16 +525,26 @@ func (repository *Repository) CompleteBuild(ctx context.Context, input roleimage
 	return locked.Build, artifact, nil
 }
 
-// FailBuild replays a saved failure or validates the live claim, applies SQL failure state, clears
-// the local lease coordinates and commits the exact updated build with receipt/event.
-// FailBuild повторяет сохранённый failure либо проверяет live claim, применяет SQL failure state,
-// очищает локальные lease coordinates и фиксирует точный обновлённый build с receipt/event.
+// FailBuild retries the complete owner transaction only for explicitly classified rollback
+// or receipt-reconcilable commit failures, retaining the original principal, lease and deadline.
+// FailBuild повторяет целую owner transaction только для явно классифицированного rollback
+// либо commit с проверяемым receipt, сохраняя исходные principal, lease и deadline.
 func (repository *Repository) FailBuild(ctx context.Context, input roleimagerepo.BuildFailureInput) (entity.ImageBuild, error) {
+	return retryRoleImageWorkerTransaction(ctx, func() (entity.ImageBuild, error) {
+		return repository.failBuild(ctx, input)
+	})
+}
+
+// failBuild replays a saved failure or validates the live claim, applies SQL failure state, clears
+// the local lease coordinates and commits the exact updated build with receipt/event.
+// failBuild повторяет сохранённый failure либо проверяет live claim, применяет SQL failure state,
+// очищает локальные lease coordinates и фиксирует точный обновлённый build с receipt/event.
+func (repository *Repository) failBuild(ctx context.Context, input roleimagerepo.BuildFailureInput) (result entity.ImageBuild, resultErr error) {
 	current, tx, locked, operation, _, err := repository.beginBuildMutation(ctx, input.BuildLeaseInput, "platform.role-images.builds.fail")
 	if err != nil {
 		return entity.ImageBuild{}, err
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer rollbackAssistantLockedRead(ctx, tx, &resultErr)
 	intent := roleImageBuildFailureDigest(input)
 	var replay entity.ImageBuild
 	if found, receiptErr := repository.loadRoleImageReceipt(ctx, tx, current, operation,
@@ -526,12 +589,14 @@ func (repository *Repository) beginBuildMutation(ctx context.Context, input role
 	locked, err := scanLockedBuild(tx.QueryRow(ctx, queryRoleImagesLockBuild,
 		current.organizationID, input.BuildRef))
 	if errors.Is(err, pgx.ErrNoRows) {
-		_ = tx.Rollback(ctx)
-		return scope{}, nil, lockedBuild{}, "", "", errs.ErrNotFound
+		mapped := errs.ErrNotFound
+		rollbackAssistantLockedRead(ctx, tx, &mapped)
+		return scope{}, nil, lockedBuild{}, "", "", mapped
 	}
 	if err != nil {
-		_ = tx.Rollback(ctx)
-		return scope{}, nil, lockedBuild{}, "", "", errs.ErrUnavailable
+		mapped := serializableTransactionError(err, errs.ErrUnavailable)
+		rollbackAssistantLockedRead(ctx, tx, &mapped)
+		return scope{}, nil, lockedBuild{}, "", "", mapped
 	}
 	return current, tx, locked, operation, roleImageBuildLeaseDigest(input), nil
 }

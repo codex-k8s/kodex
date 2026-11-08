@@ -542,7 +542,7 @@ func (repository *Repository) loadRoleImageReceipt(ctx context.Context, tx pgx.T
 		return false, nil
 	}
 	if err != nil {
-		return false, errs.ErrUnavailable
+		return false, serializableTransactionError(err, errs.ErrUnavailable)
 	}
 	if storedIntent != intent {
 		return false, errs.ErrIdempotencyReuse
@@ -585,7 +585,7 @@ func (repository *Repository) auditRoleImage(ctx context.Context, tx pgx.Tx, cur
 	if _, err := tx.Exec(ctx, queryCommandsExecuteInsertAuditEventsRefProjectIdAction,
 		ref, current.organizationID, auditProjectID, current.actorID, action, resourceKind,
 		resourceRef, summary, current.correlationRef); err != nil {
-		return errs.ErrUnavailable
+		return serializableTransactionError(err, errs.ErrUnavailable)
 	}
 	return nil
 }
