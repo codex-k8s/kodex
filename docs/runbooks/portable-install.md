@@ -10,6 +10,11 @@ updated: 2026-11-08
 
 # Опциональный профиль внешней инфраструктуры
 
+Для замены images при прежних schema heads предусмотрен отдельный opt-in
+`kodex.bootstrap-upgrade/v2` с `SAME_SCHEMA_IMAGES`. Он сохраняет все пять
+bootstrap effects и требует прежний receipt вместе со свежим native catalog
+proof. Порядок и границы: [обновление без миграции](../operations/image-only-upgrade-2067.md).
+
 ## Обновление принадлежащего установщику ClusterIP Service
 
 Существующий ClusterIP Service обновляется через JSON Patch с UID/resourceVersion

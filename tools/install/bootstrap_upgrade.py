@@ -1,4 +1,4 @@
-"""Явные forward032→033 и033→034: прежние bootstrap effects сохраняются, новая миграция подтверждается отдельно.
+"""Явные forward migrations и отдельный same-schema профиль без повторного bootstrap.
 
 prepare не обращается к кластеру. capture выполняет только чтение реального Job/Pod
 и schema catalog; этот модуль не запускает миграцию, не удаляет Jobs и не создаёт
@@ -20,6 +20,9 @@ from portable_state import State, seal, verify_resource, verify_schemas, normali
 
 SCHEMA = 'kodex.bootstrap-upgrade/v1'
 ORIGIN = 'FORWARD_MIGRATION_UPGRADE'
+IMAGE_SCHEMA = 'kodex.bootstrap-upgrade/v2'
+IMAGE_ORIGIN = 'SAME_SCHEMA_IMAGE_UPGRADE'
+IMAGE_KIND = 'SAME_SCHEMA_IMAGES'
 MIGRATION = 'control-plane-migrate'
 PRESERVED = tuple(name for name in completion.JOBS if name != MIGRATION)
 FORWARD_CONTRACTS = {
@@ -36,11 +39,15 @@ def sha(raw):
 
 
 def validate(profile):
-    """Закрывает profile на один известный forward contract и два явно закреплённых render/source."""
+    """Закрывает отдельные forward и same-schema contracts на exact render/source и известную схему."""
     fields = {'schema', 'managed_by', 'previous_render_sha256', 'target_render_sha256',
               'previous_source_sha', 'target_source_sha', 'from_schema_heads', 'to_schema_heads', 'schema_profile'}
-    require(isinstance(profile, dict) and set(profile) == fields and profile['schema'] == SCHEMA and
+    require(isinstance(profile, dict), 'UPGRADE_PROFILE_REJECTED')
+    image_only = profile.get('schema') == IMAGE_SCHEMA
+    if image_only: fields.add('upgrade_kind')
+    require(set(profile) == fields and profile['schema'] in (SCHEMA, IMAGE_SCHEMA) and
             profile['managed_by'] == 'git' and profile['schema_profile'] in ('plain', 'backup'), 'UPGRADE_PROFILE_REJECTED')
+    require(not image_only or profile['upgrade_kind'] == IMAGE_KIND, 'UPGRADE_KIND_REJECTED')
     for field in ('previous_render_sha256', 'target_render_sha256', 'previous_source_sha', 'target_source_sha'):
         length = 40 if field.endswith('_sha') else 64
         require(completion.hex_value(profile[field], length) and profile[field] != '0' * length, 'UPGRADE_PIN_REJECTED')
@@ -50,8 +57,11 @@ def validate(profile):
     require(isinstance(before, dict) and isinstance(after, dict) and set(before) == set(after) == keys and
             all(type(v) is int and v > 0 for heads in (before, after) for v in heads.values()), 'UPGRADE_SCHEMA_PINS_REJECTED')
     contract = FORWARD_CONTRACTS.get(after['control-plane'])
-    require(contract is not None and before['control-plane'] == contract[0] and
-            all(before[key] == after[key] for key in keys - {'control-plane'}), 'UPGRADE_SCHEMA_PATH_REJECTED')
+    if image_only:
+        require(contract is not None and before == after, 'UPGRADE_SCHEMA_PATH_REJECTED')
+    else:
+        require(contract is not None and before['control-plane'] == contract[0] and
+                all(before[key] == after[key] for key in keys - {'control-plane'}), 'UPGRADE_SCHEMA_PATH_REJECTED')
     return copy.deepcopy(profile)
 
 
@@ -109,7 +119,7 @@ def decode_render(raw):
 
 
 def prepare(previous_raw, target_raw, profile):
-    """Сохраняет четыре неизменных bootstrap Job и оставляет только новую CP migration с backoffLimit=0."""
+    """Сохраняет четыре effects для forward или все пять для same-schema; режимы не смешиваются."""
     profile = validate(profile)
     require(sha(previous_raw) == profile['previous_render_sha256'] and sha(target_raw) == profile['target_render_sha256'],
             'UPGRADE_RENDER_PIN_MISMATCH')
@@ -120,8 +130,10 @@ def prepare(previous_raw, target_raw, profile):
         require(data.get('source.sha') == source and json.loads(data['schema-heads.json']) == heads,
                 'UPGRADE_INSTALLATION_PIN_MISMATCH')
     old, new = completion.desired_jobs(previous), completion.desired_jobs(target)
+    image_only = profile['schema'] == IMAGE_SCHEMA
     for job in [*old.values(), *new.values()]: immutable_job(job)
-    require(completion.fingerprint(old[MIGRATION]) != completion.fingerprint(new[MIGRATION]), 'UPGRADE_NEW_MIGRATION_REQUIRED')
+    if not image_only:
+        require(completion.fingerprint(old[MIGRATION]) != completion.fingerprint(new[MIGRATION]), 'UPGRADE_NEW_MIGRATION_REQUIRED')
     old_migration, new_migration = without_images(old[MIGRATION]), without_images(new[MIGRATION])
     for job in (old_migration, new_migration):
         require(type(job['spec'].get('backoffLimit')) is int and job['spec']['backoffLimit'] in (0, 2),
@@ -132,7 +144,7 @@ def prepare(previous_raw, target_raw, profile):
         require(without_images(old[name]) == without_images(new[name]), 'UPGRADE_BOOTSTRAP_EFFECT_CHANGED')
     result = copy.deepcopy(target)
     for index, resource in enumerate(result):
-        if resource.get('kind') == 'Job' and resource['metadata']['name'] in PRESERVED:
+        if resource.get('kind') == 'Job' and resource['metadata']['name'] in (completion.JOBS if image_only else PRESERVED):
             result[index] = copy.deepcopy(old[resource['metadata']['name']])
         elif resource.get('kind') == 'Job' and resource['metadata']['name'] == MIGRATION:
             resource['spec']['backoffLimit'] = 0
@@ -184,11 +196,16 @@ def schema_proof(state, mode, version):
 
 def verify_apply(state, resources, receipt):
     """До первой rollout mutation проверяет genuine composite receipt, cluster/Jobs и exact target catalog."""
-    require(isinstance(receipt, dict) and receipt.get('origin') == ORIGIN, 'UPGRADE_COMPLETION_ORIGIN_REQUIRED')
+    require(isinstance(receipt, dict) and receipt.get('origin') in (ORIGIN, IMAGE_ORIGIN), 'UPGRADE_COMPLETION_ORIGIN_REQUIRED')
     profile, _ = render_profile(resources)
+    require(receipt['origin'] == (IMAGE_ORIGIN if profile['schema'] == IMAGE_SCHEMA else ORIGIN),
+            'UPGRADE_COMPLETION_ORIGIN_REQUIRED')
     completion.verify(state, resources, receipt)
     proof = schema_proof(state, profile['schema_profile'], profile['to_schema_heads']['control-plane'])
-    return {'status': 'FORWARD_UPGRADE_APPLY_VERIFIED', 'schema_proof_sha256': proof, 'effects_replayed': False}
+    if receipt['origin'] == IMAGE_ORIGIN:
+        completion.verify(state, resources, receipt)
+    return {'status': 'SAME_SCHEMA_UPGRADE_APPLY_VERIFIED' if receipt['origin'] == IMAGE_ORIGIN else 'FORWARD_UPGRADE_APPLY_VERIFIED',
+            'schema_proof_sha256': proof, 'effects_replayed': False}
 
 
 def migration_execution(state, expected, actual):
@@ -226,7 +243,7 @@ def migration_execution(state, expected, actual):
 
 
 def capture(state, resources, previous_resources, previous_receipt, previous_receipt_sha256):
-    """Объединяет сохранённые четыре effects с независимо наблюдённой новой миграцией, не повторяя effects."""
+    """Сохраняет прежние effects; только forward требует отдельно наблюдённую новую миграцию."""
     profile, profile_digest = render_profile(resources)
     require(completion.hex_value(previous_receipt_sha256) and
             installation(previous_resources).get('source.sha') == profile['previous_source_sha'] and
@@ -237,6 +254,9 @@ def capture(state, resources, previous_resources, previous_receipt, previous_rec
     old, new = completion.desired_jobs(previous_resources), completion.desired_jobs(resources)
     rows = {r['name']: r for r in previous_receipt['jobs']}
     require(set(rows) == set(completion.JOBS), 'UPGRADE_PREVIOUS_COMPLETION_REQUIRED')
+    if profile['schema'] == IMAGE_SCHEMA:
+        return capture_images(state, resources, previous_resources, previous_receipt, previous_receipt_sha256,
+                              profile, profile_digest, old, new, rows)
     result = []
     for name in PRESERVED:
         require(completion.fingerprint(old[name]) == completion.fingerprint(new[name]) == rows[name]['desired_sha256'],
@@ -274,6 +294,24 @@ def capture(state, resources, previous_resources, previous_receipt, previous_rec
         'migration_image_digest': image_digest.removeprefix('sha256:'), 'schema_proof_sha256': proof_digest})
 
 
+def capture_images(state, resources, previous_resources, previous_receipt, previous_digest,
+                   profile, profile_digest, old, new, rows):
+    """Переносит настоящий receipt всех пяти effects: только чтение, без нового Job/Pod или migration UID."""
+    completion.verify(state, previous_resources, previous_receipt)
+    require(all(completion.fingerprint(old[name]) == completion.fingerprint(new[name]) == rows[name]['desired_sha256']
+                for name in completion.JOBS), 'UPGRADE_PRESERVED_COMPLETION_DRIFT')
+    # Проверяем target и повторно читаем identities после native catalog proof.
+    verify_schemas(state, resources)
+    proof = schema_proof(state, profile['schema_profile'], profile['to_schema_heads']['control-plane'])
+    completion.verify(state, previous_resources, previous_receipt)
+    result = completion.envelope(state, [copy.deepcopy(rows[name]) for name in completion.JOBS], IMAGE_ORIGIN,
+        {'previous_receipt_sha256': previous_digest, 'previous_render_sha256': profile['previous_render_sha256'],
+         'upgrade_profile_sha256': profile_digest, 'schema_proof_sha256': proof})
+    require(all(result[name] == previous_receipt[name] for name in ('cluster_uid', 'namespace_uid')),
+            'UPGRADE_CLUSTER_IDENTITY_MISMATCH')
+    return result
+
+
 def write_new(path, raw):
     """Не перезаписывает неизвестный результат; файлы operator evidence остаются private0600."""
     require(path.is_absolute() and path.parent.resolve() == path.parent and path.parent.stat().st_mode & 0o077 == 0,
@@ -298,7 +336,7 @@ def main():
                     all(v is None for v in (args.profile, args.previous_render, args.target_render, args.previous_receipt,
                                            args.previous_receipt_sha256, args.output)), 'UPGRADE_APPLY_ARGUMENTS_REQUIRED')
             receipt = completion.from_arguments(args)
-            require(isinstance(receipt, dict) and receipt.get('origin') == ORIGIN, 'UPGRADE_COMPLETION_ORIGIN_REQUIRED')
+            require(isinstance(receipt, dict) and receipt.get('origin') in (ORIGIN, IMAGE_ORIGIN), 'UPGRADE_COMPLETION_ORIGIN_REQUIRED')
             resources = decode_render(completion.private_bytes(args.render, 8 << 20))
             state = State(args.context);state.discover(resources)
             print(json.dumps(verify_apply(state, resources, receipt)))

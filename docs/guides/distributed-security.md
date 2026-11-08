@@ -81,6 +81,12 @@ Jobs при явно закреплённом receipt. Live schema/history/fence
 opt-in reconciled origin. Доверенный install operator отвечает за происхождение
 исторического evidence; неподтверждённый completion остаётся блокером.
 
+Замена immutable images при неизменной схеме использует отдельный явный
+same-schema contract: он сохраняет все пять прежних bootstrap effects,
+проверяет original cluster/namespace, fingerprints и native catalog, но не
+создаёт новую миграцию. Новый origin не заменяет forward receipt; закрытые
+режимы и порядок описаны в [#2067](../operations/image-only-upgrade-2067.md).
+
 ## Bootstrap consumers и опциональная observability
 
 Глобальная активация initial authority snapshot не может предшествовать запуску
