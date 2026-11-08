@@ -4,11 +4,30 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.5.5
+version: 1.5.6
 updated: 2026-11-08
 ---
 
 # Опциональный профиль внешней инфраструктуры
+
+## Promoted registry для BuildKit
+
+Trusted base и readiness могут использовать promoted pull endpoint. Его отдельная
+таблица в `kodex-buildkit-config/buildkitd.toml` использует существующие `pull-ca.pem`
+и `base-registry-client.crt/key`; проверка TLS и прежний узкий registry ACL сохраняются.
+SHA конфигурации закрепляется в Pod template BuildKit: обновление TOML требует
+нового daemon Pod, одного изменения смонтированного файла недостаточно.
+Формат проверен по [BuildKit v0.30.0](https://github.com/moby/buildkit/blob/v0.30.0/docs/buildkitd.toml.md).
+
+Fresh material содержит source/promoted aliases отдельно для node pull и BuildKit
+base reader. Каждая identity сохраняет собственный credential. Для существующего
+material directory явный `reconcile-pull-docker-config.sh --include-buildkit-base`
+обновляет только зарегистрированные файлы этих двух identities. До записи
+проверяется весь набор файлов; после сбоя нужно сверить их digest и завершить
+идемпотентное согласование, затем штатно материализовать projections и перечитать
+их у consumers. Ручная подмена Kubernetes Secret либо общий node credential
+вместо BuildKit credential не допускаются. Без флага прежний pull-only режим
+сохраняется. Успех render/согласования не заменяет настоящие build/push/admission.
 
 Issue #1979 — общая зависимость #1791. Квалификация полного immutable release,
 RoleImage и фактической новой установки принадлежит #1977. Этот профиль задаёт

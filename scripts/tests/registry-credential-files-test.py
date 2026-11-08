@@ -218,6 +218,29 @@ class InstallerCredentialFiles(unittest.TestCase):
             for target in targets:
                 self.assertEqual(json.loads(target.read_text()),{"auths":{internal:{"auth":auth},"pull.example.invalid":{"auth":auth}}})
                 self.assertEqual(target.stat().st_mode & 0o777,0o600)
+            buildkit_auth=base64.b64encode(b'synthetic-buildkit:distinct-synthetic-password').decode()
+            values.write_text(json.dumps([username,password,auth,buildkit_auth]))
+            buildkit_targets=[root/"registry/buildkit-base-pull/dockerconfig.json",
+                root/"material/kodex/image-registry/buildkit-base-pull/dockerconfigjson",
+                root/"projections/kodex-buildkit-tls/config.json",root/"projections/role-image-builder-base-pull/config.json",
+                root/"projections/kodex-image-registry-pull/buildkit-dockerconfig.json"]
+            for target in buildkit_targets:
+                target.parent.mkdir(mode=0o700,parents=True,exist_ok=True)
+                target.write_text(json.dumps({"auths":{internal:{"auth":buildkit_auth}}}));target.chmod(0o600)
+            command=[str(ROOT/"tools/install/reconcile-pull-docker-config.sh"),"--material-directory",str(root),
+                "--promoted-pull-host","pull.example.invalid","--include-buildkit-base"]
+            for _ in range(2):
+                result=subprocess.run(command,env=environment,capture_output=True,text=True)
+                self.assertEqual(result.returncode,0,result.stderr)
+            for group,identity in ((targets,auth),(buildkit_targets,buildkit_auth)):
+                for target in group:
+                    self.assertEqual(json.loads(target.read_text()),{"auths":{internal:{"auth":identity},"pull.example.invalid":{"auth":identity}}})
+                    self.assertEqual(target.stat().st_mode & 0o777,0o600)
+            before={str(path):path.read_bytes()for path in targets+buildkit_targets}
+            buildkit_targets[-1].unlink()
+            result=subprocess.run(command,env=environment,capture_output=True,text=True)
+            self.assertNotEqual(result.returncode,0)
+            for path in targets+buildkit_targets[:-1]: self.assertEqual(path.read_bytes(),before[str(path)])
 
     def test_node_registry_file_inputs_preserve_password_bytes_and_trim_only_trailing_lf(self):
         with tempfile.TemporaryDirectory(prefix="kodex-node-bootstrap-") as directory:

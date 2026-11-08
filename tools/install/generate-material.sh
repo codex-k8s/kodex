@@ -325,16 +325,16 @@ internal_staging_host=kodex-image-registry-staging-read.kodex-system.svc.cluster
 for name in pull buildkit-base-pull input-read; do
   create_registry_credential "$name" "$internal_pull_host"
 done
-# kubelet обращается к promoted registry по публичному имени, а внутренние
-# readiness-проверки используют Service DNS. Оба endpoint принадлежат одной
-# pull identity и должны присутствовать в одном Docker config.
-jq --arg internal "$internal_pull_host" --arg host "$promoted_pull_host" \
-  '.auths[$host] = {auth:.auths[$internal].auth}' \
-  "$output_directory/registry/pull/dockerconfig.json" \
-  >"$output_directory/registry/pull/dockerconfig.json.next"
-mv -- "$output_directory/registry/pull/dockerconfig.json.next" \
-  "$output_directory/registry/pull/dockerconfig.json"
-chmod 0600 "$output_directory/registry/pull/dockerconfig.json"
+# Каждый reader сохраняет собственный credential; два адреса не объединяют identities.
+for name in pull buildkit-base-pull; do
+  jq --arg internal "$internal_pull_host" --arg host "$promoted_pull_host" \
+    '.auths[$host] = {auth:.auths[$internal].auth}' \
+    "$output_directory/registry/$name/dockerconfig.json" \
+    >"$output_directory/registry/$name/dockerconfig.json.next"
+  mv -- "$output_directory/registry/$name/dockerconfig.json.next" \
+    "$output_directory/registry/$name/dockerconfig.json"
+  chmod 0600 "$output_directory/registry/$name/dockerconfig.json"
+done
 for name in staging-read evidence-probe evidence-admission evidence-promotion admin scanner signer admission promotion-staging; do
   create_registry_credential "$name" "$internal_staging_host"
 done

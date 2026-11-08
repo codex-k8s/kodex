@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import tomllib
 import unittest
 from unittest.mock import patch
 import registry_source as registry
@@ -37,9 +38,28 @@ def fixture():
         'kodex.dev/trusted-role-base-repository': admission['data']['trustedRoleBaseRepository'],
         'kodex.dev/trusted-role-base-digest': admission['data']['trustedRoleBaseDigest']}}, 'spec': {'containers': []}}})
         for name in ('control-plane', 'role-image-builder', 'kodex-buildkit')]
-    return (config, lock, [job, policy, admission, parameters, service, route, script, deployment, *consumers])
+    buildkit_config = {'apiVersion': 'v1', 'kind': 'ConfigMap', 'metadata': {'name': 'kodex-buildkit-config', 'namespace': 'kodex-system'},
+        'data': {'buildkitd.toml': '[worker.oci]\n  enabled = true\n'}}
+    return (config, lock, [job, policy, admission, parameters, service, route, script, deployment, buildkit_config, *consumers])
 
 class RegistrySource(unittest.TestCase):
+
+    def test_promoted_buildkit_tls_is_exact_and_config_digest_rolls_only_daemon(self):
+        config, lock, resources = fixture()
+        result = registry.transform(resources, config, lock)
+        text = registry.one(result, 'ConfigMap', 'kodex-buildkit-config')['data']['buildkitd.toml']
+        table = tomllib.loads(text)['registry']['kodex-image-registry-pull.kodex-system.svc.cluster.local']
+        self.assertEqual(table, {'ca': ['/var/run/secrets/kodex/buildkit/tls/pull-ca.pem'], 'keypair': [{
+            'cert': '/var/run/secrets/kodex/buildkit/tls/base-registry-client.crt',
+            'key': '/var/run/secrets/kodex/buildkit/tls/base-registry-client.key'}]})
+        sha = hashlib.sha256(text.encode()).hexdigest()
+        self.assertEqual(registry.one(result, 'Deployment', 'kodex-buildkit')['spec']['template']['metadata']['annotations']['kodex.dev/buildkit-config-sha256'], sha)
+        self.assertEqual(registry.transform(result, config, lock), result)
+        for suffix in ('\n[registry."kodex-image-registry-pull.kodex-system.svc.cluster.local"]\n insecure=true\n',
+                       "\n[registry.'kodex-image-registry-pull.kodex-system.svc.cluster.local']\n http=true\n"):
+            bad = copy.deepcopy(resources)
+            registry.one(bad, 'ConfigMap', 'kodex-buildkit-config')['data']['buildkitd.toml'] += suffix
+            with self.assertRaises(ValueError): registry.transform(bad, config, lock)
 
     def test_runtime_pull_policy_is_opt_in_and_rejects_lock_or_environment_conflict(self):
         config,lock,resources=fixture()
