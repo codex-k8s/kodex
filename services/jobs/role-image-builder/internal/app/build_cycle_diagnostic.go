@@ -5,6 +5,8 @@ import (
 	"errors"
 	"log/slog"
 
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
+
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -35,13 +37,25 @@ func buildCycleRPCCode(err error) codes.Code {
 }
 
 // reportBuildCycleDegraded emits the existing transition with one closed code and sends a fresh
-// sanitized error to telemetry. It never formats or unwraps the original error into either sink,
-// and does not retry a command, mint authority or alter the worker's cancel/join behavior.
+// sanitized error to telemetry. A typed SDK failure contributes its existing normalized enums;
+// raw causes, correlations and arbitrary diagnostic interfaces never enter either sink.
+// It does not retry a command, mint authority or alter the worker's cancel/join behavior.
 // reportBuildCycleDegraded записывает прежний переход с одним закрытым code и отправляет новую
-// безопасную error в telemetry. Исходная ошибка не форматируется и не раскрывается в этих sinks;
+// безопасную error в telemetry. Typed SDK failure добавляет уже нормализованные enums;
+// исходные causes, correlation и произвольные diagnostic interfaces в sinks не попадают;
 // команда не повторяется, authority не создаётся, cancel/join worker не меняется.
 func reportBuildCycleDegraded(ctx context.Context, logger *slog.Logger, capture func(context.Context, error), err error) {
 	code := buildCycleRPCCode(err).String()
-	logger.WarnContext(ctx, buildCycleDegradedMessage, "error_class", "control_plane_or_buildkit", "rpc_code", code)
-	capture(ctx, errors.New(buildCycleDegradedMessage+": "+code))
+	attributes := []any{"error_class", "control_plane_or_buildkit", "rpc_code", code}
+	message := buildCycleDegradedMessage + ": " + code
+	var local *authorityclient.LocalAuthorityError
+	if errors.As(err, &local) {
+		diagnostic := local.Diagnostic()
+		attributes = append(attributes, "authority_stage", string(diagnostic.Stage),
+			"dependency_code", diagnostic.Code.String(), "authority_reason", diagnostic.Reason.String(),
+			"authority_failure_stage", diagnostic.AuthorityStage.String())
+		message += " [" + diagnostic.String() + "]"
+	}
+	logger.WarnContext(ctx, buildCycleDegradedMessage, attributes...)
+	capture(ctx, errors.New(message))
 }
