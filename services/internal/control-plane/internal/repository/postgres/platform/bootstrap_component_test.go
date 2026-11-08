@@ -217,10 +217,10 @@ var (
 	//go:embed testdata/sql/bootstrap_component_effect_receipt_count.sql
 	bootstrapComponentEffectReceiptCountQuery string
 	// bootstrapComponentSequenceReadbackQuery embeds a read of platform_sequence and
-	// authority_proof_sequence from the singleton installation row. It snapshots durable counters for
+	// revision from the separate singleton proof counter. It snapshots durable counters for
 	// before/after assertions without advancing either sequence or deriving caller authority.
 	// bootstrapComponentSequenceReadbackQuery содержит чтение platform_sequence и
-	// authority_proof_sequence единственной строки установки. Получает устойчивые счётчики для
+	// revision отдельного singleton proof counter. Получает устойчивые счётчики для
 	// сравнения до/после, не увеличивая их и не выводя полномочия вызывающего.
 	//go:embed testdata/sql/bootstrap_component_sequence_readback.sql
 	bootstrapComponentSequenceReadbackQuery string

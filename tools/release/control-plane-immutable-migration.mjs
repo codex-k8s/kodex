@@ -12,10 +12,13 @@ import { workflowContentPageCatalogDigest } from './workflow-content-page-catalo
 import { platformOIDCIdentityCatalogDigest, platformOIDCIdentityBackupCatalogDigest } from './platform-oidc-identity-catalog.gen.mjs';
 import { personalCredentialsCatalogDigest, personalCredentialsBackupCatalogDigest, personalCredentialsPurgeGraph } from './personal-credentials-catalog.gen.mjs';
 import { jiraCreateFieldsCatalog } from './jira-create-fields-catalog.gen.mjs';
+import { authorityProofCounterCatalog } from './authority-proof-counter-catalog.gen.mjs';
 
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'authority-proof-counter': {version:'20261108000100',file:'20261108000100_authority_proof_counter.sql',annotation:'kodex.dev/cp-authority-proof-counter-migration-plan',previousVersion:20261107000100,emptyField:'authorityProofCounterAbsent',preconditionFile:'authority-proof-counter-migration-precondition.sql',postconditionFile:'authority-proof-counter-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261108000100_authority_proof_counter.sql'])},
+  'authority-proof-counter-backup': {version:'20261108000100',file:'20261108000100_authority_proof_counter.sql',annotation:'kodex.dev/cp-authority-proof-counter-backup-migration-plan',previousVersion:20261107000100,emptyField:'authorityProofCounterAbsent',preconditionFile:'authority-proof-counter-backup-migration-precondition.sql',postconditionFile:'authority-proof-counter-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261108000100_authority_proof_counter.sql'])},
   'jira-create-fields': {version:'20261107000100',file:'20261107000100_jira_create_fields_compatibility.sql',annotation:'kodex.dev/cp-jira-create-fields-migration-plan',previousVersion:20261106000100,emptyField:'personalCredentialsCatalog',preconditionFile:'jira-create-fields-migration-precondition.sql',postconditionFile:'jira-create-fields-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261107000100_jira_create_fields_compatibility.sql'])},
   'jira-create-fields-backup': {version:'20261107000100',file:'20261107000100_jira_create_fields_compatibility.sql',annotation:'kodex.dev/cp-jira-create-fields-backup-migration-plan',previousVersion:20261106000100,emptyField:'personalCredentialsCatalog',preconditionFile:'jira-create-fields-backup-migration-precondition.sql',postconditionFile:'jira-create-fields-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261107000100_jira_create_fields_compatibility.sql'])},
   'personal-credentials': {version:'20261106000100',file:'20261106000100_personal_integration_credentials.sql',annotation:'kodex.dev/cp-personal-credentials-migration-plan',previousVersion:20261105000100,emptyField:'personalCredentialsAbsent',preconditionFile:'personal-credentials-migration-precondition.sql',postconditionFile:'personal-credentials-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261106000100_personal_integration_credentials.sql'])},
@@ -326,6 +329,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(validPersonalCredentialsMigrationPrecondition(result,profile==='personal-credentials-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'jira-create-fields' || profile === 'jira-create-fields-backup')
       ensure(validJiraCreateFieldsMigrationPrecondition(result,profile==='jira-create-fields-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if (profile === 'authority-proof-counter' || profile === 'authority-proof-counter-backup')
+      ensure(validAuthorityProofCounterMigrationPrecondition(result,profile==='authority-proof-counter-backup',requireStopped), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     return result;
   };
   const terminalJob = (actual, expected, expectedHash, expectedUID) => {
@@ -969,6 +974,8 @@ export function validWorkspaceBackupACLReadback(proof) {
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {
+    case 'authority-proof-counter': return validAuthorityProofCounterMigrationPostcondition(proof);
+    case 'authority-proof-counter-backup': return validAuthorityProofCounterBackupMigrationPostcondition(proof);
     case 'jira-create-fields': return validJiraCreateFieldsMigrationPostcondition(proof);
     case 'jira-create-fields-backup': return validJiraCreateFieldsBackupMigrationPostcondition(proof);
     case 'personal-credentials': return validPersonalCredentialsMigrationPostcondition(proof);
@@ -1100,4 +1107,34 @@ export function validJiraCreateFieldsMigrationPrecondition(proof, backup=false) 
 // Отдельный backup precondition не позволяет принимать обычный catalog с отсутствующим SELECT.
 export function validJiraCreateFieldsBackupMigrationPrecondition(proof) {
   return validJiraCreateFieldsMigrationPrecondition(proof,true);
+}
+
+// Exact036 проверяет counter и frozen035 отдельно; исторический verifier не принимает новый head.
+export function validAuthorityProofCounterMigrationPostcondition(proof, backup=false) {
+  return proof?.profile==='AUTHORITY_PROOF_COUNTER_'+(backup?'BACKUP_':'')+'V1' &&
+    proof.gooseVersion===20261108000100 && proof.authorityProofCounterCatalog===true &&
+    proof.authorityProofCounterCatalogDigest===authorityProofCounterCatalog[backup?'backup':'normal'] &&
+    validJiraCreateFieldsMigrationPostcondition({...proof,
+      profile:'JIRA_CREATE_FIELDS_'+(backup?'BACKUP_':'')+'V1',gooseVersion:20261107000100},backup);
+}
+
+// Backup036 требует SELECT-only counter ACL и полный backup035, без normal fallback.
+export function validAuthorityProofCounterBackupMigrationPostcondition(proof) {
+  return validAuthorityProofCounterMigrationPostcondition(proof,true);
+}
+
+// Новый allocator запускается только после exact035, отсутствующего successor и joined work.
+export function validAuthorityProofCounterMigrationPrecondition(proof, backup=false, requireStopped=true) {
+  return proof?.profile==='AUTHORITY_PROOF_COUNTER_'+(backup?'BACKUP_':'')+'PREDECESSOR_V1' &&
+    proof.authorityProofCounterAbsent===true &&
+    Number.isSafeInteger(proof.oldClaimSessions) && proof.oldClaimSessions>=0 && (!requireStopped || proof.oldClaimSessions===0) &&
+    ['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions',
+      'pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks',
+      'activeIntegrationInvocations','activeIntegrationConnectionTests','activePersonalCredentialTests'].every(key=>proof[key]===0) &&
+    validJiraCreateFieldsMigrationPostcondition({...proof,profile:'JIRA_CREATE_FIELDS_'+(backup?'BACKUP_':'')+'V1'},backup);
+}
+
+// Отдельный entrypoint сохраняет различие predecessor normal/backup и его exact ACL.
+export function validAuthorityProofCounterBackupMigrationPrecondition(proof) {
+  return validAuthorityProofCounterMigrationPrecondition(proof,true);
 }

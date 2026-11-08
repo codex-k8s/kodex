@@ -167,8 +167,13 @@ var (
 	// queryAuthorizeProjectMembership возвращает ACTIVE проект и версию лишь при действующей по времени ACTIVE привязке субъекта либо OIDC-группы без require_owner, версия роли которой разрешает project.view в подходящей области.
 	//go:embed sql/proof_project_authorize_membership.sql
 	queryAuthorizeProjectMembership string
-	// queryNextAuthorityProofRevision advances the singleton authority-proof sequence and returns its new revision; creating a sequence number does not sign or grant a proof.
-	// queryNextAuthorityProofRevision увеличивает последовательность доказательств полномочий единственной установки и возвращает новую ревизию; номер сам не подписывает доказательство и не выдаёт grant.
+	// queryNextAuthorityProofRevision advances the dedicated durable proof counter seeded once by
+	// migration. Exhaustion or missing state returns no row; allocation never reseeds a lost watermark,
+	// never modifies the installation tuple used by platform events and does not sign or grant a proof.
+	// queryNextAuthorityProofRevision увеличивает отдельный durable proof counter, созданный один
+	// раз миграцией. Exhaustion либо отсутствующий state возвращают no row без повторного seed;
+	// allocation не
+	// меняет installation tuple событий платформы и не подписывает proof либо выдаёт grant.
 	//go:embed sql/proof_next_revision.sql
 	queryNextAuthorityProofRevision string
 	// queryAcceptWorkerGrantHighWatermark persists a worker grant high watermark, advancing only by credential generation/revision or accepting exact same issued/expiry replay; lower revisions are rejected.

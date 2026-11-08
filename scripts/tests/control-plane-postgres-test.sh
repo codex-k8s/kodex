@@ -14,10 +14,20 @@ storage_mode=${KODEX_TEST_POSTGRES_STORAGE:-disk}
 [[ "$storage_mode" == disk || "$storage_mode" == ram ]] || fail 'test PostgreSQL storage must be disk or ram'
 postgres_image='docker.io/library/postgres:18.3-alpine3.23@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7'
 upgrade_container_id=""
-test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestInstructionCommandProjectionComponent|TestIntegrationAutonomousGitHubInvocationComponent|TestIntegrationGitHubHistoricalAdmissionComponent|TestIntegrationGitHubBackupSchemaProofComponent|TestBootstrapComponent|TestConcurrentBootstrapComponent|TestWorkerGrantInstancesComponent|TestTrustedWorkloadGenerationComponent|TestServiceCredentialColdStartComponent|TestModelProviderBootstrapComponent|TestModelCatalogBootstrapMethodComponent|TestAssistantCredentialScopesComponent|TestAssistantParallelLifecycleComponent|TestProjectAssistantProfilesComponent|TestOrganizationRoleImagesComponent|TestOrganizationRuntimeEnvironmentComponent|TestOrganizationRuntimeSecretComponent|TestAssistantSystemRunProjectScopeComponent|TestRuntimeTerminalStorageComponent|TestRuntimeOverloadCompletionComponent|TestIntegrationGateFeedbackComponent|TestWorkflowMetadataDraftComponent|TestDeletedEnvironmentSecretRetentionComponent|TestHistoricalEnvironmentSecretAdmissionComponent|TestHistoricalSecretRecoveryConcurrencyComponent|TestWorkflowGateDecisionsComponent|TestCompletionReceiptComponent|TestUsageCompletenessComponent|TestRepositoryBundlePublicationComponent|TestCommitAckArtifactComponent|TestOwnerGateExpiryComponent|TestOwnerGateServerCompletionComponent|TestOwnerGateExpiryMigrationProofComponent|TestProjectPurgeAuthorityComponent|TestProjectPurgeAuthorityMigrationProofComponent|TestServerWorkflowMigrationProofComponent|TestOverviewEligibilityComponent|TestWorkflowExceptionContextComponent|TestWorkflowExceptionContextMigrationProofComponent)$'}}
+test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestAuthorityProofCounterOwnerConcurrencyComponent|TestRoleImageOwnerTransactionRetryComponent|TestRoleImageOwnerTransactionRetryBoundsComponent|TestInstructionCommandProjectionComponent|TestIntegrationAutonomousGitHubInvocationComponent|TestIntegrationGitHubHistoricalAdmissionComponent|TestIntegrationGitHubBackupSchemaProofComponent|TestBootstrapComponent|TestConcurrentBootstrapComponent|TestWorkerGrantInstancesComponent|TestTrustedWorkloadGenerationComponent|TestServiceCredentialColdStartComponent|TestModelProviderBootstrapComponent|TestModelCatalogBootstrapMethodComponent|TestAssistantCredentialScopesComponent|TestAssistantParallelLifecycleComponent|TestProjectAssistantProfilesComponent|TestOrganizationRoleImagesComponent|TestOrganizationRuntimeEnvironmentComponent|TestOrganizationRuntimeSecretComponent|TestAssistantSystemRunProjectScopeComponent|TestRuntimeTerminalStorageComponent|TestRuntimeOverloadCompletionComponent|TestIntegrationGateFeedbackComponent|TestWorkflowMetadataDraftComponent|TestDeletedEnvironmentSecretRetentionComponent|TestHistoricalEnvironmentSecretAdmissionComponent|TestHistoricalSecretRecoveryConcurrencyComponent|TestWorkflowGateDecisionsComponent|TestCompletionReceiptComponent|TestUsageCompletenessComponent|TestRepositoryBundlePublicationComponent|TestCommitAckArtifactComponent|TestOwnerGateExpiryComponent|TestOwnerGateServerCompletionComponent|TestOwnerGateExpiryMigrationProofComponent|TestProjectPurgeAuthorityComponent|TestProjectPurgeAuthorityMigrationProofComponent|TestServerWorkflowMigrationProofComponent|TestOverviewEligibilityComponent|TestWorkflowExceptionContextComponent|TestWorkflowExceptionContextMigrationProofComponent)$'}}
 
 # Оба закрытых upgrade-сценария используют одну и ту же отдельную пустую БД.
 upgrade_test='^TestWorkflowReviewQAEvidenceForwardUpgrade$'
+if [[ "$test_pattern" == --authority-proof-counter-upgrade ]]; then
+  command -v pg_dump >/dev/null && command -v pg_restore >/dev/null || fail 'proof counter recovery requires PostgreSQL dump/restore clients'
+  upgrade_test='^TestAuthorityProofCounterMigration$'
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --authority-proof-counter-fresh-install ]]; then
+  command -v pg_dump >/dev/null && command -v pg_restore >/dev/null || fail 'proof counter recovery requires PostgreSQL dump/restore clients'
+  upgrade_test='^TestAuthorityProofCounterFreshInstall$'
+  test_pattern=--review-qa-upgrade
+fi
 if [[ "$test_pattern" == --jira-create-fields-upgrade ]]; then
   upgrade_test='^TestJiraCreateFieldsMigration$'
   test_pattern=--review-qa-upgrade
@@ -35,6 +45,12 @@ if [[ "$test_pattern" == --personal-credentials-catalog ]]; then
 fi
 volume_owner=false
 owner_test='^TestWorkspaceWriterOwnerComponent$'
+if [[ "$test_pattern" == --authority-proof-counter-owner-regression ]]; then
+  volume_owner=true
+  upgrade_test='^TestAuthorityProofCounterOwnerRegressionSeed$'
+  owner_test='^(TestAuthorityProofCounterOwnerConcurrencyComponent|TestRoleImageOwnerTransactionRetryComponent|TestRoleImageOwnerTransactionRetryBoundsComponent)$'
+  test_pattern=--review-qa-upgrade
+fi
 # Явная disposable draft034 regression не расширяет штатный release/schema verifier.
 if [[ "$test_pattern" == --personal-credentials-assistant-regression ]]; then
   volume_owner=true
@@ -331,6 +347,7 @@ fi
     -c 'SELECT max(version_id) FILTER (WHERE is_applied) FROM public.goose_db_version')
   case "$schema_version" in
     20261107000100) schema_proof=jira-create-fields-migration-postcondition.sql; schema_verifier=validJiraCreateFieldsMigrationPostcondition ;;
+    20261108000100) schema_proof=authority-proof-counter-migration-postcondition.sql; schema_verifier=validAuthorityProofCounterMigrationPostcondition ;;
     20261105000100) schema_proof=platform-oidc-identity-migration-postcondition.sql; schema_verifier=validPlatformOIDCIdentityMigrationPostcondition ;;
     20261106000100) schema_proof=personal-credentials-migration-postcondition.sql; schema_verifier=validPersonalCredentialsMigrationPostcondition ;;
     20261030000100) schema_proof=workflow-content-page-migration-postcondition.sql; schema_verifier=validWorkflowContentPageMigrationPostcondition ;;

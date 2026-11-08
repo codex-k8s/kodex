@@ -4,8 +4,8 @@ title: PostgreSQL, именованные SQL-запросы и goose
 type: guide
 status: approved
 owner: developer
-version: 1.2.14
-updated: 2026-10-29
+version: 1.2.15
+updated: 2026-11-08
 ---
 
 # PostgreSQL, именованные SQL-запросы и goose
@@ -107,6 +107,14 @@ SQL не собирается конкатенацией пользовател�
   и отказами при изменении authority и lifecycle, а не только созданием функции.
 
 ## Транзакции
+
+Независимые горячие глобальные счётчики не размещаются в одной MVCC строке,
+если один из них меняется внутри SERIALIZABLE owner event transaction:
+разные колонки не изолируют tuple-level conflict. Durable proof watermark
+выделяется отдельным UPDATE-only allocator; отсутствие строки не разрешает
+runtime reseed. Перенос выполняется forward migration с сохранением watermark,
+остановкой старых issuers и закрытым legacy allocator. Старый image не является
+rollback. Полный lifecycle и квалификация: [#2062](../operations/authority-proof-counter-2062.md).
 
 Повторяющиеся разрешение scope и `BeginTx` внутри одного service adapter
 допустимо объединять только с сохранением точных server-selected `TxOptions`

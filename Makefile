@@ -175,6 +175,9 @@ test-workflow-artifact-query-postgres: check-go-toolchain
 	@timeout --kill-after=10s 240s bash scripts/tests/control-plane-postgres-test.sh '^TestWorkflowArtifactQueryBoundaryComponent$$'
 
 test-control-plane-postgres:
+	@python3 -B tools/release/generate-authority-proof-counter-proof.py --check
+	@bash scripts/tests/control-plane-postgres-test.sh --authority-proof-counter-upgrade
+	@bash scripts/tests/control-plane-postgres-test.sh --authority-proof-counter-fresh-install
 	@./scripts/tests/control-plane-postgres-test.sh
 
 .PHONY: test-personal-integration-credentials-postgres

@@ -167,7 +167,8 @@ class UpgradeTests(unittest.TestCase):
         state = SimpleNamespace(context='synthetic-context')
         for version, prefix, validator in ((20261105000100, 'platform-oidc-identity-', 'validPlatformOIDCIdentity'),
                                            (20261106000100, 'personal-credentials-', 'validPersonalCredentials'),
-                                           (20261107000100, 'jira-create-fields-', 'validJiraCreateFields')):
+                                           (20261107000100, 'jira-create-fields-', 'validJiraCreateFields'),
+                                           (20261108000100, 'authority-proof-counter-', 'validAuthorityProofCounter')):
             for mode in ('plain', 'backup'):
                 with self.subTest(version=version, mode=mode):
                     responses = [SimpleNamespace(returncode=0, stdout=b'{"synthetic":true}'), SimpleNamespace(returncode=0)]
@@ -181,7 +182,7 @@ class UpgradeTests(unittest.TestCase):
                                       [SimpleNamespace(returncode=0, stdout=b'{}'), SimpleNamespace(returncode=1)]):
                         with patch.object(upgrade.subprocess, 'run', side_effect=responses), self.assertRaises(Rejected):
                             upgrade.schema_proof(state, mode, version)
-        for mode, version in (('automatic', 20261106000100), ('plain', 20261108000100), ('backup', '20261106000100')):
+        for mode, version in (('automatic', 20261106000100), ('plain', 20261109000100), ('backup', '20261106000100')):
             with patch.object(upgrade.subprocess, 'run') as run, self.assertRaises(Rejected):
                 upgrade.schema_proof(state, mode, version)
             run.assert_not_called()

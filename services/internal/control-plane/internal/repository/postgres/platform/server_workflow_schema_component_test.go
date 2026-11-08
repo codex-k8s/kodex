@@ -66,16 +66,33 @@ func TestServerWorkflowMigrationProofComponent(t *testing.T) {
 					t.Fatal("apply disposable workflow schema drift")
 				}
 			}
-			// Profiles031/032 reject these drifts before inverse projection; older profiles retain
+			// Profiles031+ reject these drifts before inverse projection; older profiles retain
 			// their explicit false fields. An unrelated SQL/transport error is not acceptance.
-			// Профили031/032 отклоняют эти изменения до inverse projection; старые профили сохраняют
+			// Профили031+ отклоняют эти изменения до inverse projection; старые профили сохраняют
 			// явные false-поля. Другая ошибка SQL либо transport не считается успехом проверки.
 			version := workspaceComponentSchemaVersion(t, ctx, conn)
-			if (version == 20261029000300 || version == 20261030000100) &&
-				(fixture.name == "disabled-workflow-guard" || fixture.name == "public-workflow-execute") {
+			pdlcRejection := version >= 20261029000300 &&
+				(fixture.name == "disabled-workflow-guard" || fixture.name == "public-workflow-execute")
+			personalRejection := version >= 20261106000100 &&
+				(fixture.name == "disabled-ssh-snapshot-guard" || fixture.name == "public-ssh-execute" ||
+					fixture.name == "disabled-ssh-admission-guard" || fixture.name == "missing-ssh-admission-check")
+			if pdlcRejection || personalRejection {
 				filename := "workflow-pdlc-migration-postcondition.sql"
-				if version == 20261030000100 {
+				switch version {
+				case 20261030000100:
 					filename = "workflow-content-page-migration-postcondition.sql"
+				case 20261105000100:
+					filename = "platform-oidc-identity-migration-postcondition.sql"
+				case 20261106000100:
+					filename = "personal-credentials-migration-postcondition.sql"
+				case 20261107000100:
+					filename = "jira-create-fields-migration-postcondition.sql"
+				case 20261108000100:
+					filename = "authority-proof-counter-migration-postcondition.sql"
+				}
+				message := "workflow PDLC schema catalog changed"
+				if personalRejection {
+					message = "personal integration schema catalog changed"
 				}
 				source, err := os.ReadFile("../../../../../../../tools/release/" + filename)
 				if err != nil {
@@ -83,7 +100,7 @@ func TestServerWorkflowMigrationProofComponent(t *testing.T) {
 				}
 				_, err = conn.PgConn().Exec(ctx, string(source)).ReadAll()
 				var rejection *pgconn.PgError
-				if !errors.As(err, &rejection) || rejection.Code != "P0001" || rejection.Message != "workflow PDLC schema catalog changed" {
+				if !errors.As(err, &rejection) || rejection.Code != "P0001" || rejection.Message != message {
 					t.Fatal("altered PDLC catalog did not receive its exact closed rejection")
 				}
 				if _, err := conn.Exec(ctx, "ROLLBACK"); err != nil {
