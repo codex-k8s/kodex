@@ -33,7 +33,11 @@ def fixture():
     script.pop('spec')
     script['data'] = {'release-artifact-materializer.sh': 'synthetic-old-script'}
     deployment = resource('Deployment', 'kodex-image-registry-pull', {'template': {'spec': {'containers': [{'name': 'certificate-guard', 'env': [{'name': 'READBACK_IMAGE', 'value': 'synthetic-old-path'}]}, {'name': 'pull-authorizer', 'env': []}]}}})
-    return (config, lock, [job, policy, admission, parameters, service, route, script, deployment])
+    consumers = [resource('Deployment', name, {'template': {'metadata': {'annotations': {
+        'kodex.dev/trusted-role-base-repository': admission['data']['trustedRoleBaseRepository'],
+        'kodex.dev/trusted-role-base-digest': admission['data']['trustedRoleBaseDigest']}}, 'spec': {'containers': []}}})
+        for name in ('control-plane', 'role-image-builder', 'kodex-buildkit')]
+    return (config, lock, [job, policy, admission, parameters, service, route, script, deployment, *consumers])
 
 class RegistrySource(unittest.TestCase):
 
@@ -55,6 +59,9 @@ class RegistrySource(unittest.TestCase):
         config, lock, resources = fixture()
         data = next((v['data'] for v in resources if v['kind'] == 'ConfigMap' and v['metadata']['name'] == 'kodex-image-admission-policy'))
         data['trustedRoleBaseRepository'] = data['trustedRoleBaseRepository'].replace('/agent-runner', '/agent-runner-opencode')
+        for resource in resources:
+            if resource['kind'] == 'Deployment' and resource['metadata']['name'] in ('control-plane', 'role-image-builder', 'kodex-buildkit'):
+                resource['spec']['template']['metadata']['annotations']['kodex.dev/trusted-role-base-repository'] = data['trustedRoleBaseRepository']
         lock['images'][1]['component'] = 'agent-runner-opencode'
         job = next((v for v in resources if v['kind'] == 'Job'))
         for item in job['spec']['template']['spec']['containers'][0]['env']:
@@ -128,12 +135,28 @@ class RegistrySource(unittest.TestCase):
         result = registry.transform(resources, config, lock)
         data = next((r['data'] for r in result if r['kind'] == 'ConfigMap' and r['metadata']['name'] == 'kodex-image-admission-policy'))
         self.assertEqual(data['promotedPullRepository'], 'kodex-image-registry-pull.kodex-system.svc.cluster.local/kodex/roles')
+        expected_base = 'kodex-image-registry-pull.kodex-system.svc.cluster.local/kodex/agent-runner'
+        self.assertEqual(data['trustedRoleBaseRepository'], expected_base)
+        for name in ('control-plane', 'role-image-builder', 'kodex-buildkit'):
+            annotations = registry.one(result, 'Deployment', name)['spec']['template']['metadata']['annotations']
+            self.assertEqual(annotations['kodex.dev/trusted-role-base-repository'], expected_base)
+            self.assertEqual(annotations['kodex.dev/trusted-role-base-digest'], 'sha256:' + 'b' * 64)
         payload = {k: v for k, v in data.items() if k not in ('orchestrationRevision', 'policySHA256')}
         self.assertEqual(data['policySHA256'], hashlib.sha256((json.dumps(payload, sort_keys=True, separators=(',', ':'), ensure_ascii=False) + '\n').encode()).hexdigest())
         self.assertEqual(next((r['spec'] for r in result if r['kind'] == 'ImageAdmissionPolicyParameters')), data)
         self.assertFalse(any((r['kind'] == 'IngressRouteTCP' for r in result)))
         service = next((r for r in result if r['kind'] == 'Service'))
         self.assertIn({'name': 'internal-https', 'port': 443, 'targetPort': 'registry', 'protocol': 'TCP'}, service['spec']['ports'])
+
+    def test_foreign_trusted_base_or_consumer_digest_is_rejected(self):
+        for target in ('policy', 'control-plane', 'role-image-builder', 'kodex-buildkit'):
+            config, lock, resources = fixture()
+            if target == 'policy':
+                registry.one(resources, 'ConfigMap', 'kodex-image-admission-policy')['data']['trustedRoleBaseRepository'] = 'other.example.invalid/kodex/agent-runner'
+            else:
+                registry.one(resources, 'Deployment', target)['spec']['template']['metadata']['annotations']['kodex.dev/trusted-role-base-digest'] = 'sha256:' + 'f' * 64
+            with self.subTest(target=target), self.assertRaises(ValueError):
+                registry.transform(resources, config, lock)
 
     def test_unknown_fields_broad_selectors_and_source_mismatch_fail_closed(self):
         config, lock, resources = fixture()
