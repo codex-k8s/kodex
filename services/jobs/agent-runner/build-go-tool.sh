@@ -78,7 +78,7 @@ oras.land/oras-go/v2 v2.6.2
 golang.org/x/mod v0.40.0
 golang.org/x/net v0.60.0
 golang.org/x/text v0.39.0
-github.com/klauspost/compress v1.18.7
+github.com/klauspost/compress v1.20.2
 github.com/go-jose/go-jose/v4 v4.1.6
 go.opentelemetry.io/otel/sdk v1.45.0
 go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.45.0
