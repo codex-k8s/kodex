@@ -123,6 +123,11 @@ test-install-workload-startup:
 test-install-contract:
 	@./scripts/tests/install-contract-test.sh
 	@./scripts/tests/ipv6-ingress-bridge-test.sh
+	@$(MAKE) --no-print-directory test-scan-memory-budget
+
+.PHONY: test-scan-memory-budget
+test-scan-memory-budget:
+	@python3 scripts/tests/scan-memory-budget-test.py
 
 .PHONY: test-worker-strategy-upgrade
 test-worker-strategy-upgrade:

@@ -26,6 +26,7 @@ configMapGenerator:
   - name: kodex-image-admission
     files:
       - image-admission.sh
+      - scan-memory-budget.sh
       - provenance-policy.jq
       - vulnerability-policy.jq
   - name: kodex-registry-readiness
