@@ -120,3 +120,33 @@ Canonical owner policy, API/RBAC, image pins и credentials references сохр�
 для новых inputs используется новое имя, прежние потребители сохраняют старую
 проекцию до завершения rollout. Номер и содержательный digest политики определяет
 существующий canonical owner; профиль их не пересчитывает и не ослабляет.
+
+### Опциональный бюджет памяти сканирования образов
+
+Компонент `deploy/k8s/components/image-admission-memory-budget` добавляется в
+Kustomize overlay, который уже включает image supply chain. Он задаёт
+`scan-go-memory-limit-mib=1536` в ConfigMap `kodex-image-admission`.
+Без компонента прежний запуск сохраняется. Значение можно явно переопределить
+в своём overlay: целое число MiB от 128 до 65536, не более 75% конечного
+`/sys/fs/cgroup/memory.max`. Профиль требует cgroup v2; отсутствие/неверный limit
+закрывает scan до запуска инструмента. Default scan Job имеет жёсткий limit 2Gi;
+компонент его не увеличивает и не меняет requests/limits других фаз.
+
+Wrapper передаёт `GOMEMLIMIT` только Syft/Grype. Это мягкий бюджет Go runtime,
+а не жёсткий предел RSS и не гарантия отсутствия OOM. Полнота SBOM, catalogers,
+vulnerability policy, CA/mTLS, подпись, image subject и owner receipts сохраняются.
+ClamAV проверяет загружаемые файлы отдельно и этим компонентом не управляется.
+
+Оператор закрепляет source/render, применяет согласованный ConfigMap целиком и
+проверяет его data перед новой попыткой admission. При timeout сначала readback,
+без слепого повторного create/build. После технического отказа использовать штатный
+owner retry того же artifact, если он разрешён; не менять историю вручную.
+Успех wrapper-тестов не заменяет installed scan/admission. Для возврата удалить
+компонент/ключ бюджета и повторить render/apply; прежние receipts не переписываются.
+Проверки: `make test-scan-memory-budget` и image supply-chain fixtures.
+
+Проверены [документы Syft через Context7](https://github.com/anchore/syft/wiki/Configuration),
+[Go memory limit](https://go.dev/doc/gc-guide#Memory_limit) и
+[go.mod Syft v1.51.0](https://github.com/anchore/syft/blob/v1.51.0/go.mod).
+Документация main не доказывает поведение закреплённой версии; actual OOM/result
+проверяются отдельно на устанавливаемом образе.

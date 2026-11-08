@@ -1127,11 +1127,13 @@ case "${1:-}" in
     verify_image_and_provenance
     if [ "$risk_acceptance_sha256" = "" ]; then
     write_syft_registry_config "$staging_host" /identity/username /identity/password
-    syft --config /tmp/syft.json --from registry "$source_ref" \
+    /bin/sh /opt/kodex/scan-memory-budget.sh /opt/kodex/scan-go-memory-limit-mib \
+      /sys/fs/cgroup/memory.max syft --config /tmp/syft.json --from registry "$source_ref" \
       -o spdx-json=/work/sbom.json || fail "SBOM generation failed"
     compact_evidence_json /work/sbom.json
     GRYPE_CHECK_FOR_APP_UPDATE=false \
-      grype sbom:/work/sbom.json -o json >/work/vulnerability.raw.json ||
+      /bin/sh /opt/kodex/scan-memory-budget.sh /opt/kodex/scan-go-memory-limit-mib \
+      /sys/fs/cgroup/memory.max grype sbom:/work/sbom.json -o json >/work/vulnerability.raw.json ||
       fail "vulnerability scan failed"
     jq -e '.matches | type == "array"' /work/vulnerability.raw.json >/dev/null ||
       fail "vulnerability scan failed"
