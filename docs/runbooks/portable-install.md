@@ -4,8 +4,8 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.5.3
-updated: 2026-11-07
+version: 1.5.4
+updated: 2026-11-08
 ---
 
 # Опциональный профиль внешней инфраструктуры
@@ -501,6 +501,15 @@ promotion repositories сохраняют канонический `kodex/`. Mat
 отклоняются. `promotedPullRepository`, node readback, certificate-guard readback
 и `ImageAdmissionPolicyParameters` указывают на действительно материализованные
 repositories с exact digest. Policy hash пересчитывается вместе с projection.
+
+Каталог RoleImage использует тот же `--promoted-pull-host` и канонический
+namespace `kodex/` для standard и documents base. Source repository prefix
+остаётся источником публикации и не подменяет promoted namespace. Exact base
+reference/digest standard совпадают с platform default RoleImage: shipped-рецепт
+можно копировать без ослабления `CopyBootstrapSelection`. Копия ещё должна пройти
+обычную сборку, настоящий verified inventory, admission и promotion; исправление
+reference само по себе не даёт допуск и не закрывает #1850. OCI context сохраняет
+собственные immutable source pins.
 
 Штатный render вызывает этот шаг самостоятельно. Optional registry-source
 overlay использует тот же helper; запускать его нужно из полного pinned tools
