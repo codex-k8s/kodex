@@ -20,6 +20,32 @@ def one(resources, kind, name):
     require(len(found) == 1 and found[0]['metadata'].get('namespace') == 'kodex-system')
     return found[0]
 
+def bind_buildkit_registry(resources, host):
+    """Существующие CA/client identity, без insecure, нового секрета либо расширения registry ACL."""
+    require(isinstance(host, str) and re.fullmatch('[a-z0-9][a-z0-9.-]*[a-z0-9]', host))
+    config = one(resources, 'ConfigMap', 'kodex-buildkit-config')
+    require(set(config.get('data', {})) == {'buildkitd.toml'})
+    text = config['data']['buildkitd.toml']
+    require(isinstance(text, str) and len(text.encode()) <= 1 << 20)
+    marker = '# Kodex managed promoted registry TLS.\n'
+    block = ('\n' + marker + '[registry."' + host + '"]\n'
+        '  ca = ["/var/run/secrets/kodex/buildkit/tls/pull-ca.pem"]\n'
+        '  [[registry."' + host + '".keypair]]\n'
+        '    cert = "/var/run/secrets/kodex/buildkit/tls/base-registry-client.crt"\n'
+        '    key = "/var/run/secrets/kodex/buildkit/tls/base-registry-client.key"\n')
+    old_sha = hashlib.sha256(text.encode()).hexdigest()
+    if marker in text:
+        require(text.count(marker) == 1 and text.endswith(block))
+    else:
+        # Принимается только свободное имя таблицы, включая alternate TOML quoting.
+        require(not re.search(r'(?m)^\s*\[\[?\s*registry\s*\.\s*[\"\x27]' + re.escape(host) + r'[\"\x27]', text))
+        text = text.rstrip() + '\n' + block
+    config['data']['buildkitd.toml'] = text
+    annotations = one(resources, 'Deployment', 'kodex-buildkit')['spec']['template'].setdefault('metadata', {}).setdefault('annotations', {})
+    sha = hashlib.sha256(text.encode()).hexdigest()
+    require(annotations.get('kodex.dev/buildkit-config-sha256') in (None, old_sha, sha))
+    annotations['kodex.dev/buildkit-config-sha256'] = sha
+
 def bind(resources, lock):
     previous_runtime_profile = copy.deepcopy(resources)
     policy = one(resources, 'ConfigMap', 'kodex-image-admission-policy')
@@ -43,6 +69,7 @@ def bind(resources, lock):
     require(all((isinstance(v['digest'], str) and re.fullmatch('sha256:[a-f0-9]{64}', v['digest']) and (v['digest'] != 'sha256:' + '0' * 64) for v in [agent, control])))
     require(agent['digest'] == data['trustedRoleBaseDigest'])
     data['trustedRoleBaseRepository'] = promoted_base
+    bind_buildkit_registry(resources, host)
     for name in ('control-plane', 'role-image-builder', 'kodex-buildkit'):
         consumer = one(resources, 'Deployment', name)
         annotations = consumer['spec']['template'].setdefault('metadata', {}).setdefault('annotations', {})

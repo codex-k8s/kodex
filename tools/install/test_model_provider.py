@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import tomllib
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -52,6 +53,13 @@ class ModelProviderTests(unittest.TestCase):
         self.assertEqual(standard['baseImageReference'], 'pull.example.invalid/kodex/' + expected_component)
         self.assertEqual(documents['baseImageReference'], 'pull.example.invalid/kodex/role-base-documents')
         self.assertEqual(documents['available'], expected_component == 'agent-runner')
+        buildkit = next(r for r in resources if r['kind'] == 'Deployment' and r['metadata']['name'] == 'kodex-buildkit')
+        config = next(r for r in resources if r['kind'] == 'ConfigMap' and r['metadata']['name'] == 'kodex-buildkit-config')['data']['buildkitd.toml']
+        self.assertEqual(buildkit['spec']['template']['metadata']['annotations']['kodex.dev/buildkit-config-sha256'], hashlib.sha256(config.encode()).hexdigest())
+        transport = tomllib.loads(config)['registry']['pull.example.invalid']
+        self.assertNotIn('http', transport); self.assertNotIn('insecure', transport)
+        self.assertEqual(transport['ca'], ['/var/run/secrets/kodex/buildkit/tls/pull-ca.pem'])
+        self.assertEqual(len(transport['keypair']), 1)
         digest = hashlib.sha256(catalog_raw.encode()).hexdigest()
         self.assertTrue(catalog_map['immutable'])
         self.assertEqual(catalog_map['metadata']['name'], 'kodex-role-environments-' + digest[:12])
