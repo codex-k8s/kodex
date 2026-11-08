@@ -147,8 +147,7 @@ func runBuildLoop(run func(context.Context) error, state *runtimeState, config C
 			err := run(ctx)
 			if err != nil && !errors.Is(err, context.Canceled) && !degraded {
 				degraded = true
-				state.logger.WarnContext(ctx, "role image build delivery degraded", "error_class", "control_plane_or_buildkit")
-				state.telemetry.CaptureException(ctx, err)
+				reportBuildCycleDegraded(ctx, state.logger, state.telemetry.CaptureException, err)
 			} else if err == nil && degraded {
 				degraded = false
 				state.logger.InfoContext(ctx, "role image build delivery restored")
