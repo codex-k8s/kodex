@@ -1,4 +1,4 @@
--- Полный actual017 граф и отдельно inverse010; никакая actual FK не скрывается.
+-- Полный actual036 граф и отдельно inverse010; никакая actual FK не скрывается.
 WITH RECURSIVE nodes(relation_id) AS (
     SELECT 'control_plane.projects'::regclass::oid
     UNION
@@ -7,10 +7,10 @@ WITH RECURSIVE nodes(relation_id) AS (
     JOIN pg_namespace namespace_row ON namespace_row.oid=constraint_row.connamespace AND namespace_row.nspname='control_plane'
 ), server_nodes(relation_id) AS (
     SELECT relation_id FROM nodes WHERE relation_id NOT IN (
-        'control_plane.session_workspace_storage'::regclass,
-        'control_plane.session_workspace_volumes'::regclass,
-        'control_plane.session_workspace_volume_tasks'::regclass,
-        'control_plane.session_workspace_volume_attempts'::regclass
+        SELECT c.oid FROM pg_class c WHERE c.relnamespace='control_plane'::regnamespace
+          AND c.relname IN ('session_workspace_storage','session_workspace_volumes',
+            'session_workspace_volume_tasks','session_workspace_volume_attempts',
+            'integration_personal_invocation_admissions','integration_personal_invocation_credentials')
     )
 ), node_digest AS (
     SELECT count(*) AS count, md5(string_agg(namespace_row.nspname || '.' || class_row.relname,

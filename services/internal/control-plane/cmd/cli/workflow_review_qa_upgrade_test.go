@@ -100,6 +100,10 @@ func readControlPlaneMigrationProof(t *testing.T, ctx context.Context, observer 
 	}
 	var verifier string
 	switch profile {
+	case "authority-proof-counter":
+		verifier = "validAuthorityProofCounterMigration"
+	case "authority-proof-counter-backup":
+		verifier = "validAuthorityProofCounterBackupMigration"
 	case "jira-create-fields":
 		verifier = "validJiraCreateFieldsMigration"
 	case "jira-create-fields-backup":

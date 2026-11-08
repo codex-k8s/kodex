@@ -4,15 +4,20 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// queryIntegrationGitHubBackupFixture recreates only the approved backup-reader role and six SELECT grants inside the separately verified disposable fixture.
-// queryIntegrationGitHubBackupFixture воспроизводит только согласованную роль backup reader и шесть SELECT grants внутри отдельно проверенной disposable fixture.
+// queryIntegrationGitHubBackupFixture recreates only the approved backup-reader role and closed
+// workspace/OIDC/personal/counter SELECT grants inside the separately verified disposable fixture.
+// queryIntegrationGitHubBackupFixture воспроизводит только согласованную роль backup reader и
+// закрытые workspace/OIDC/personal/counter SELECT grants внутри проверенной disposable fixture.
 //
 //go:embed testdata/sql/integration_github_backup_fixture.sql
 var queryIntegrationGitHubBackupFixture string
@@ -47,12 +52,22 @@ func TestIntegrationGitHubBackupSchemaProofComponent(t *testing.T) {
 	if version == 20261030000100 {
 		filename, profile, catalogField = "workflow-content-page-backup-migration-postcondition.sql", "WORKFLOW_CONTENT_PAGE_BACKUP_V1", "githubPRCatalog"
 	}
+	switch version {
+	case 20261105000100:
+		filename, profile, catalogField = "platform-oidc-identity-backup-migration-postcondition.sql", "PLATFORM_OIDC_IDENTITY_BACKUP_V1", "githubPRCatalog"
+	case 20261106000100:
+		filename, profile, catalogField = "personal-credentials-backup-migration-postcondition.sql", "PERSONAL_INTEGRATION_CREDENTIALS_BACKUP_V1", "githubPRCatalog"
+	case 20261107000100:
+		filename, profile, catalogField = "jira-create-fields-backup-migration-postcondition.sql", "JIRA_CREATE_FIELDS_BACKUP_V1", "githubPRCatalog"
+	case 20261108000100:
+		filename, profile, catalogField = "authority-proof-counter-backup-migration-postcondition.sql", "AUTHORITY_PROOF_COUNTER_BACKUP_V1", "githubPRCatalog"
+	}
 	source, err := os.ReadFile("../../../../../../../tools/release/" + filename)
 	if err != nil {
 		t.Fatal("read shipped GitHub backup schema proof")
 	}
-	read := func() (map[string]any, error) {
-		results, err := admin.PgConn().Exec(ctx, string(source)).ReadAll()
+	read := func(statement []byte) (map[string]any, error) {
+		results, err := admin.PgConn().Exec(ctx, string(statement)).ReadAll()
 		if err != nil {
 			return nil, err
 		}
@@ -70,53 +85,51 @@ func TestIntegrationGitHubBackupSchemaProofComponent(t *testing.T) {
 		}
 		return proof, nil
 	}
-	proof, err := read()
+	proof, err := read(source)
 	if err != nil || proof["profile"] != profile || proof["gooseVersion"] != float64(version) || proof[catalogField] != true || proof["backupReaderCatalog"] != true {
 		t.Fatal("native GitHub successor did not preserve the full backup schema", err)
 	}
-	if (version == 20261029000200 || version == 20261029000300 || version == 20261030000100) && proof["githubAutonomousWrites"] != true {
+	if version >= 20261029000200 && proof["githubAutonomousWrites"] != true {
 		t.Fatal("native GitHub write guards are unconfirmed")
 	}
-	if (version == 20261029000300 || version == 20261030000100) && (proof["workflowPDLCCatalog"] != true || proof["workflowPDLCFunctions"] != float64(14)) {
+	if version >= 20261029000300 && (proof["workflowPDLCCatalog"] != true || proof["workflowPDLCFunctions"] != float64(14)) {
 		t.Fatal("native PDLC owner catalog is unconfirmed")
 	}
-	if version == 20261030000100 && proof["workflowContentPageCatalog"] != true {
+	if version >= 20261030000100 && proof["workflowContentPageCatalog"] != true {
 		t.Fatal("native content page catalog is unconfirmed")
 	}
-	if version == 20261029000200 || version == 20261029000300 || version == 20261030000100 {
-		if _, err := admin.Exec(ctx, "ALTER TABLE control_plane.integration_invocations DISABLE TRIGGER email_mailbox_gate_valid"); err != nil {
-			t.Fatal("prepare isolated disabled write guard")
-		}
-		proof, err = read()
-		if err != nil || proof["githubAutonomousWrites"] != false {
-			t.Fatal("disabled autonomous write guard was accepted")
-		}
-		if _, err := admin.Exec(ctx, "ALTER TABLE control_plane.integration_invocations ENABLE TRIGGER email_mailbox_gate_valid"); err != nil {
-			t.Fatal("restore isolated write guard")
-		}
-		if _, err := admin.Exec(ctx, queryIntegrationGitHubOldWriteConstraint); err != nil {
-			t.Fatal("prepare isolated old write CHECK")
-		}
-		proof, err = read()
-		if err != nil || proof["githubAutonomousWrites"] != false {
-			t.Fatal("old write CHECK was accepted as a complete autonomous upgrade")
-		}
+	// Каждая мутация живёт в собственной rollback transaction, чтобы старый CHECK не
+	// маскировал следующие ACL/trigger counterfactuals. Полный каталог читается повторно.
+	probes := []struct{ statement, rejectedField string }{
+		{"GRANT EXECUTE ON FUNCTION control_plane.integration_github_legacy_capabilities(text,text,text,text) TO PUBLIC", catalogField},
+		{"REVOKE SELECT ON control_plane.session_workspace_storage FROM kodex_backup_reader", "backupReaderCatalog"},
 	}
-	if _, err := admin.Exec(ctx, "GRANT EXECUTE ON FUNCTION control_plane.integration_github_legacy_capabilities(text,text,text,text) TO PUBLIC"); err != nil {
-		t.Fatal("prepare isolated public function grant")
+	if version >= 20261029000200 {
+		probes = append(probes,
+			struct{ statement, rejectedField string }{"ALTER TABLE control_plane.integration_invocations DISABLE TRIGGER email_mailbox_gate_valid", "githubAutonomousWrites"},
+			struct{ statement, rejectedField string }{queryIntegrationGitHubOldWriteConstraint, "githubAutonomousWrites"})
 	}
-	proof, err = read()
-	if err != nil || proof[catalogField] != false {
-		t.Fatal("public historical admission function was accepted")
-	}
-	if _, err := admin.Exec(ctx, "REVOKE EXECUTE ON FUNCTION control_plane.integration_github_legacy_capabilities(text,text,text,text) FROM PUBLIC; REVOKE SELECT ON control_plane.session_workspace_storage FROM kodex_backup_reader"); err != nil {
-		t.Fatal("prepare isolated missing backup SELECT")
-	}
-	if _, err := read(); err == nil {
-		t.Fatal("incomplete backup SELECT was accepted")
-	}
-	// Read-only proof с отказом может оставить transaction aborted; закрываем её до cleanup.
-	if _, err := admin.Exec(ctx, "ROLLBACK"); err != nil {
-		t.Fatal("close isolated rejected schema proof")
+	statement := strings.ReplaceAll(string(source), "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;", "")
+	statement = strings.TrimSuffix(strings.TrimSpace(statement), "ROLLBACK;")
+	for _, probe := range probes {
+		tx, err := admin.Begin(ctx)
+		if err != nil {
+			t.Fatal("begin isolated backup schema counterfactual")
+		}
+		if _, err := tx.Exec(ctx, probe.statement); err != nil {
+			_ = tx.Rollback(ctx)
+			t.Fatal("prepare isolated backup schema counterfactual")
+		}
+		proof, proofErr := read([]byte(statement))
+		rollbackErr := tx.Rollback(ctx)
+		var rejected *pgconn.PgError
+		if rollbackErr != nil || proofErr == nil && proof[probe.rejectedField] != false ||
+			proofErr != nil && (!errors.As(proofErr, &rejected) || rejected.Code != "P0001") {
+			t.Fatal("backup schema accepted drift or did not roll back")
+		}
+		proof, err = read(source)
+		if err != nil || proof[catalogField] != true || proof["backupReaderCatalog"] != true {
+			t.Fatal("backup counterfactual changed the canonical schema")
+		}
 	}
 }

@@ -976,6 +976,9 @@ func (repository *Repository) resolveClaimedProofAuthority(
 func (repository *Repository) NextAuthorityProofRevision(ctx context.Context) (uint64, error) {
 	var revision uint64
 	if err := repository.pool.QueryRow(ctx, queryNextAuthorityProofRevision).Scan(&revision); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, errs.ErrConflict
+		}
 		return 0, errs.ErrUnavailable
 	}
 	if revision == 0 || revision > 9007199254740991 {

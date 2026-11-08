@@ -4,11 +4,20 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.46
-updated: 2026-11-07
+version: 1.7.47
+updated: 2026-11-08
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
+
+Authority proof revision принадлежит устойчивому server-owned allocator и не
+конкурирует за одну строку с platform event sequence. Разделение storage не
+меняет подпись, issuer/generation/tenant/method admission либо consumer replay
+history. Отсутствующий counter и exhausted JS-safe range закрыты; runtime не
+получает INSERT/DELETE/TRUNCATE для reseed. Forward migration сохраняет старый
+watermark и запрещает legacy allocation, поэтому mixed-version restart и
+возврат старого image не являются безопасным rollback. Порядок и проверяемые
+границы: [#2062](../operations/authority-proof-counter-2062.md).
 
 Закрытый fallback необязательной integration/mail projection не должен останавливать
 остальные egress listeners из-за собственного default connection budget. Только
