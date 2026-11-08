@@ -58,6 +58,7 @@ test-native-integration-egress: check-go-toolchain
 	@bash scripts/tests/native-integration-egress-test.sh
 
 test-web-only-release:
+	@timeout 30s python3 -B tools/install/test_image_policy_inputs.py
 	@timeout 30s python3 -B tools/install/test_native_integration_egress.py
 	@timeout 30s python3 -B tools/install/test_provider_sandbox_profile.py
 	@timeout 30s python3 -B tools/install/test_provider_sandbox_transition.py

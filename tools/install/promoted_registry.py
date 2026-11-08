@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import yaml
 import provider_sandbox_profile
+import image_policy_inputs
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / 'deploy/k8s/base/image-supply-chain/release-artifact-materializer.sh'
 
@@ -114,6 +115,7 @@ def bind(resources, lock):
     require(parameters['apiVersion'] == 'supplychain.kodex.dev/v1alpha1')
     parameters['spec'] = copy.deepcopy(data)
     resources[:] = provider_sandbox_profile.rebase(resources, previous_runtime_profile)
+    resources[:] = image_policy_inputs.rebase(resources, previous_runtime_profile)
     return resources
 
 def main():

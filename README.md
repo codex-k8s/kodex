@@ -94,3 +94,29 @@ bundled и external OIDC, собственный TLS и внешний HTTPS pro
 ## Лицензия
 
 Код распространяется по [лицензии MIT](LICENSE).
+
+### Версионированные env inputs image policy
+
+По умолчанию `--image-policy-inputs-mode direct` сохраняет прежние ссылки на
+canonical ConfigMap. Для обновлений immutable policy доступен опциональный
+`versioned`: передайте `--image-policy-inputs-mode versioned` в
+`tools/release/render-web-only.sh` либо подготовьте render командой
+`python3 tools/install/image_policy_inputs.py --mode versioned --render desired.yaml`,
+затем закрепите новый SHA256 render и передайте
+`--image-policy-inputs-mode versioned` во все команды portable release, включая
+plan/preflight/readback. Профиль не применяется молча к уже закреплённому render.
+
+Профиль создаёт immutable env-проекцию с именем по содержимому canonical policy и
+меняет ссылки control-plane, role-image-builder, runtime-controller и registry-pull.
+Повторная materialization идемпотентна; изменённые inputs получают новое имя.
+Canonical owner policy, API/RBAC, image pins и credentials references сохраняются.
+Независимый runtime sandbox profile и его VAP binding не переключаются этим
+параметром. Старые проекции сохраняются до отдельного проверенного GC, чтобы
+не отнять inputs у ещё работающих Pod. Только render/readback не доказывает
+прочитанные процессом env: после rollout сверяйте безопасные metadata политики
+и проверяйте новую сборку/допуск без ручного изменения admission history.
+
+Это учитывает [поведение immutable ConfigMap](https://kubernetes.io/docs/concepts/configuration/configmap/#immutable-configmaps):
+для новых inputs используется новое имя, прежние потребители сохраняют старую
+проекцию до завершения rollout. Номер и содержательный digest политики определяет
+существующий canonical owner; профиль их не пересчитывает и не ослабляет.

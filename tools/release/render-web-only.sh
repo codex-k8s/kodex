@@ -31,6 +31,7 @@ usage() {
     '  [--disable-monitoring-resources; no Prometheus Operator resources]' \
     '  [--profile <web-only|web-with-mattermost>]' \
     '  [--ssh-compose-connection <public-connection.json>; repeatable]' \
+    '  [--image-policy-inputs-mode direct|versioned; default direct]' \
     '  [--provider-apparmor-profile <empty|kodex-provider-runtime>; optional runtime-only projection]' \
     '  [--mattermost-host <dns>; required for web-with-mattermost]' >&2
 }
@@ -70,6 +71,7 @@ oidc_pod_component=""
 oidc_target_port=""
 disable_observability=false
 clamav_mode=enabled
+image_policy_inputs_mode=direct
 disable_monitoring_resources=false
 mattermost_host=""
 profile="web-only"
@@ -77,6 +79,7 @@ ssh_compose_connections=()
 
 while (($# > 0)); do
   case "$1" in
+    --image-policy-inputs-mode) image_policy_inputs_mode="${2:-}"; shift 2 ;;
     --provider-apparmor-profile) provider_apparmor_profile="${2-}"; provider_apparmor_profile_selected=true; shift 2 ;;
     --authority-registry-configuration) authority_registry_configuration="${2:-}"; shift 2 ;;
     --native-integration-configuration) native_integration_configuration="${2:-}"; shift 2 ;;
@@ -127,6 +130,7 @@ if [[ -n "$oidc_authority_profile" ]]; then
   python3 "$repository_root/tools/install/oidc_authority_profile.py" validate --profile "$oidc_authority_profile" ||
     fail 'OIDC authority profile is invalid'
 fi
+case "$image_policy_inputs_mode" in direct|versioned) ;; *) fail 'image policy inputs mode is invalid' ;; esac
 if [[ -n "$model_provider_configuration" ]]; then
   python3 "$repository_root/tools/install/model-provider.py" validate --configuration "$model_provider_configuration" >/dev/null || fail 'model provider configuration is invalid'
   agent_runner_component=agent-runner-opencode
@@ -822,5 +826,8 @@ if [[ "$provider_apparmor_profile_selected" == true ]]; then
   python3 "$repository_root/tools/install/provider_sandbox_profile.py" --render "$output" --profile "$provider_apparmor_profile" ||
     fail 'provider sandbox profile render rejected'
 fi
+
+python3 "$repository_root/tools/install/image_policy_inputs.py" --render "$output" --mode "$image_policy_inputs_mode" ||
+  fail 'image policy inputs render rejected'
 
 printf 'Web-only render created: %s\n' "$output"
