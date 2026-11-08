@@ -243,6 +243,26 @@ tags запрещено.
 локальный отказ без typed RPC code; строка ошибки не считается доказательством
 типа. Диагностика не меняет lease, retry, cancel/join и допуск образа.
 
+`LocalAuthorityError` из общего SDK намеренно сводит постоянные ошибки к
+внешнему `Unauthenticated`. Для такого конкретного typed wrapper worker также
+пишет существующую нормализованную проекцию `authority_stage`, `dependency_code`,
+`authority_reason`, `authority_failure_stage`. Внешний `rpc_code` остаётся
+отдельным полем. Worker-level telemetry получает те же закрытые enums, не
+исходный cause, proof или correlation. Текст с похожими именами полей не
+считается typed diagnostic. Нормализация остаётся у SDK; worker её не копирует.
+
+Матрица границ #2054:
+
+| Вход | Локальное наблюдение | Выполнение и состояние |
+| --- | --- | --- |
+| SDK resolver/issuer failure, включая wrapped/joined | Внешний code и закрытые SDK stage/code/reason | Прежний degraded, без нового RPC/retry/event |
+| Обычная RPC/context error | Прежний canonical `rpc_code` | Прежние deadline, cancel/join и owner receipts |
+| Произвольный текст или неизвестный diagnostic interface | Без дополнительных authority-полей | Полномочия и допуск не меняются |
+
+Проверка использует настоящий SDK interceptor и synthetic отказы до downstream
+вызова. Она доказывает redaction/classification, а не live build/renew/complete.
+
+
 Опциональный `bootstrap-component-image` target `role-image-builder` меняет
 только main image и provenance annotations при точном immutable base lock.
 Grant agent, identity, replicas, mounts и другие компоненты сохраняются. Перед
