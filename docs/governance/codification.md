@@ -95,6 +95,7 @@ updated: 2026-07-28
 
 ## Реестр
 
+- `OPS-IMAGE-UPGRADE-2067` — [Обновление immutable images без повторного bootstrap](../operations/image-only-upgrade-2067.md).
 - `OPS-CP-IMMUTABLE-MIGRATION-1855` — [Адресная immutable-миграция outbox](../operations/control-plane-immutable-migration-1855.md).
 - `OPS-CODE-QUALITY-1823` — [Подготовка кода к построчному ревью](../operations/code-quality-1823.md).
 - `OPS-PROTOTYPE-HANDOFF-1031` — [Единый прототип перед построчным ревью](../operations/prototype-review-handoff-1031.md).

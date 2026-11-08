@@ -68,7 +68,7 @@ done
 if ((${#completion_arguments[@]})); then
   case "$mode" in upgrade|prepare-preflight|preflight|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback) ;; *) fail 'completion receipt only applies to continuation or readback' ;; esac
 fi
-[[ "$mode" != upgrade || ${#completion_arguments[@]} -gt 0 ]] || fail 'upgrade requires forward migration completion receipt'
+[[ "$mode" != upgrade || ${#completion_arguments[@]} -gt 0 ]] || fail 'upgrade requires verified completion receipt'
 [[ -z "$completion_output" || "$mode" == apply ]] || fail 'completion capture output requires fresh apply'
 [[ -n "$context" ]] || fail 'exact Kubernetes context is required'
 case "$assistant_readback_transport" in api-proxy|port-forward) ;; *) fail 'assistant readback transport is invalid' ;; esac
