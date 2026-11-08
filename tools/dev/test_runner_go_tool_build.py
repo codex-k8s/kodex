@@ -104,7 +104,12 @@ class RunnerGoToolBuild(unittest.TestCase):
         floors = {"github.com/getkin/kin-openapi": "v0.149.0", "golang.org/x/crypto": "v0.56.0",
                   "golang.org/x/oauth2": "v0.27.0", "google.golang.org/grpc": "v1.83.2",
                   "oras.land/oras-go/v2": "v2.6.2", "golang.org/x/mod": "v0.40.0",
-                  "golang.org/x/net": "v0.60.0", "golang.org/x/text": "v0.39.0", "github.com/klauspost/compress": "v1.18.7", "github.com/go-jose/go-jose/v4": "v4.1.6"}
+                  "golang.org/x/net": "v0.60.0", "golang.org/x/text": "v0.39.0", "github.com/klauspost/compress": "v1.20.2", "github.com/go-jose/go-jose/v4": "v4.1.6",
+                  "go.opentelemetry.io/otel/sdk": "v1.45.0",
+                  "go.opentelemetry.io/otel/exporters/otlp/otlptrace": "v1.45.0",
+                  "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc": "v1.45.0",
+                  "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp": "v1.45.0",
+                  "go.opentelemetry.io/otel/exporters/zipkin": "v1.45.0"}
         result = self.run_build(FIXTURE_DEPS=json.dumps({key: "v0.1.0" for key in floors}))
         self.assertEqual(result.returncode, 0, result.stderr)
         get = next(call["args"] for call in self.calls() if call["args"][0] == "get")
