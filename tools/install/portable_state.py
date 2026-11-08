@@ -15,6 +15,7 @@ from deployment_profile import require, Rejected
 CAS_TARGETS = {
     ('supplychain.kodex.dev/v1alpha1', 'ImageAdmissionPolicyParameters'): 'imageadmissionpolicyparameters.supplychain.kodex.dev',
     ('v1', 'ConfigMap'): 'configmaps',
+    ('v1', 'Service'): 'services',
     ('apps/v1', 'Deployment'): 'deployments.apps',
     ('batch/v1', 'CronJob'): 'cronjobs.batch',
     ('networking.k8s.io/v1', 'NetworkPolicy'): 'networkpolicies.networking.k8s.io',
@@ -205,11 +206,29 @@ def rbac_rules(resource):
     return [] if value is None else value
 
 
+def supports_cas(resource, actual):
+    """CAS разрешён существующим ClusterIP Service; прочие типы сохраняют прежний SSA путь."""
+    kind = (resource.get('apiVersion'), resource.get('kind'))
+    if kind == ('v1', 'Service'):
+        return (actual is not None and resource.get('spec', {}).get('type', 'ClusterIP') == 'ClusterIP'
+                and actual.get('spec', {}).get('type', 'ClusterIP') == 'ClusterIP')
+    return kind in CAS_TARGETS
+
+
 def api_write_resource(resource, actual=None):
     result = copy.deepcopy(resource)
     # API канонизирует deny-all [] в null. Другие правила не меняются.
     if result.get('kind') in ('Role', 'ClusterRole') and rbac_rules(result) == []:
         result['rules'] = None
+    if (result.get('apiVersion'), result.get('kind')) == ('v1', 'Service') and supports_cas(result, actual):
+        require(owner(result) and owner(actual) and key(result) == key(actual) and
+                actual['metadata'].get('ownerReferences', []) == result['metadata'].get('ownerReferences', []), 'FOREIGN_RESOURCE_COLLISION')
+        # Выделенная сетевая идентичность сохраняется при изменении desired selector.
+        for field in ('clusterIP', 'clusterIPs', 'ipFamilies', 'ipFamilyPolicy'):
+            if field in result['spec']:
+                require(field in actual['spec'] and result['spec'][field] == actual['spec'][field], 'SERVICE_ALLOCATION_DRIFT')
+            elif field in actual['spec']:
+                result['spec'][field] = copy.deepcopy(actual['spec'][field])
     if (result.get('apiVersion'), result.get('kind')) == ('apps/v1', 'StatefulSet') and actual is not None:
         require(owner(result) and owner(actual) and key(result) == key(actual) and actual['metadata'].get('ownerReferences', []) == result['metadata'].get('ownerReferences', []), 'FOREIGN_RESOURCE_COLLISION')
         wanted = result['spec'].get('volumeClaimTemplates', [])
@@ -387,7 +406,9 @@ class State:
 
     def cas_update(self, desired, actual, dry_run=False):
         kind = (desired['apiVersion'], desired['kind'])
-        require(kind in CAS_TARGETS, 'EXACT_CAS_KIND_REQUIRED')
+        require(kind in CAS_TARGETS and supports_cas(desired, actual), 'EXACT_CAS_KIND_REQUIRED')
+        if kind == ('v1', 'Service'):
+            desired = api_write_resource(desired, actual)
         require(owner(desired) and owner(actual) and key(desired) == key(actual) and actual['metadata'].get('ownerReferences', []) == desired['metadata'].get('ownerReferences', []), 'FOREIGN_RESOURCE_COLLISION')
         metadata = actual['metadata']
         patch = [{'op': 'test', 'path': '/metadata/uid', 'value': metadata['uid']},
@@ -425,7 +446,7 @@ class State:
             probe['metadata']['generateName'] = 'kodex-preflight-'
             self.call(['create', '--dry-run=server', '--field-manager=kodex-install', '-f', '-'], probe)
             return
-        if actual is not None and (resource['apiVersion'], resource['kind']) in CAS_TARGETS:
+        if actual is not None and supports_cas(resource, actual):
             self.cas_update(api_write_resource(resource, actual), actual, dry_run=True)
         else:
             self.call(['apply', '--server-side', '--dry-run=server', '--field-manager=kodex-install', '-f', '-'], api_write_resource(resource, actual))
@@ -444,14 +465,14 @@ class State:
         if actual is None:
             # Create, а не SSA upsert: появившийся после inventory объект не перезапишется.
             self.call(['create', '--field-manager=kodex-install', '-f', '-'], desired)
-        elif (desired['apiVersion'], desired['kind']) in CAS_TARGETS:
+        elif supports_cas(desired, actual):
             self.cas_update(desired, actual)
         else:
             desired['metadata']['resourceVersion'] = actual['metadata']['resourceVersion']
             self.call(['apply', '--server-side', '--field-manager=kodex-install', '-f', '-'], desired)
         current = self.get(resource)
         require(current is not None and owner(current), 'WRITE_READBACK_REQUIRED')
-        if resource['kind'] == 'ImageAdmissionPolicyParameters' or (actual is not None and ((resource['apiVersion'], resource['kind']) in CAS_TARGETS or (resource['apiVersion'], resource['kind']) == ('apps/v1', 'StatefulSet'))):
+        if resource['kind'] == 'ImageAdmissionPolicyParameters' or (actual is not None and (supports_cas(resource, actual) or (resource['apiVersion'], resource['kind']) == ('apps/v1', 'StatefulSet'))):
             verify_resource(resource, current)
         inventory[key(resource)] = {'uid': current['metadata']['uid'], 'seal': seal(current)}
 

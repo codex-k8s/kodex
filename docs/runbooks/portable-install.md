@@ -4,11 +4,31 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.5.6
+version: 1.5.7
 updated: 2026-11-08
 ---
 
 # Опциональный профиль внешней инфраструктуры
+
+## Обновление принадлежащего установщику ClusterIP Service
+
+Существующий ClusterIP Service обновляется через JSON Patch с UID/resourceVersion
+preconditions и прежним approved inventory fence. Это позволяет менять selector
+после Update без SSA conflict и без `--force-conflicts` или пересоздания Service.
+Выделенные `clusterIP`, `clusterIPs`, `ipFamilies` и `ipFamilyPolicy` сохраняются;
+явно заданное отличающееся значение отклоняется. Отсутствующий desired field не
+снимает сохранённую сетевую идентичность. Headless и существующий dual-stack
+обрабатываются тем же способом, без изменения состава IP families.
+
+Preflight использует тот же CAS с server dry-run. Чужой owner reference, другой
+UID, изменение spec после inventory либо гонка RV отклоняют запись. При неизвестном
+ACK сначала нужен readback; старый CAS не повторяется. Создание Service и прежние
+SSA-пути NodePort, LoadBalancer и ExternalName сохраняются. Изменение не расширяет
+RBAC, сетевые ACL, TLS или image admission. Контракт: #2064.
+
+Официальные источники, проверенные через Context7:
+[управление полями SSA](https://kubernetes.io/docs/reference/using-api/server-side-apply/),
+[Service v1 API](https://kubernetes.io/docs/reference/kubernetes-api/core/service-v1/).
 
 ## Promoted registry для BuildKit
 
