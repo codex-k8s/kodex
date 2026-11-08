@@ -204,6 +204,19 @@ environment policy. Наблюдаемость процесса использу
 готовность workload и terminal safe codes наблюдаются владельцем lifecycle —
 runtime-controller.
 
+## Обновление зависимостей полного образа
+
+Compiler и builder stages закреплены на Go1.26.10; Node.js24.22.1 задаётся
+через digest образа. Обновление выполняется согласованно с host installer,
+встроенным Go guard и release capability tools. `build-go-tool.sh` пересобирает
+CLI с нижними границами уязвимых зависимостей только для уже присутствующих
+модулей; более новая выбранная версия сохраняется.
+
+`npm-toolchain` хранит exact manifests/locks. Проверка установленного дерева
+различает поддержанные major Undici6 и8, включая зависимости внутри pnpm.
+Изменение lock либо успешный локальный тест не заменяет сборку полного образа
+и штатный SBOM/vulnerability/signature admission его точного digest.
+
 ## Локальная проверка
 
 ```bash

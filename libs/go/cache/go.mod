@@ -1,6 +1,6 @@
 module github.com/codex-k8s/kodex/libs/go/cache
 
-go 1.26.6
+go 1.26.10
 
 require (
 	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0

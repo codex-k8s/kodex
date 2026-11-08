@@ -48,7 +48,7 @@ export async function main(args,io={}){
   requireValue(fingerprint({labels:renderedSA.metadata.labels,automountServiceAccountToken:renderedSA.automountServiceAccountToken})===fingerprint({labels:liveSA.metadata.labels,automountServiceAccountToken:liveSA.automountServiceAccountToken})&&rotationPrerequisiteSpecSHA256(renderedEgress)===rotationPrerequisiteSpecSHA256(liveEgress)&&
    rotationPrerequisiteSpecSHA256(renderedIngress)===rotationPrerequisiteSpecSHA256(liveIngress),'RENDERED_ROTATION_PREREQUISITES_DRIFT');
   const old=inspect(publisherState.source),capability=privateJSON(options['--capability']);
-  requireValue(capability.version===1&&capability.protocol===1&&capability.revision===source.revision&&capability.go==='go1.26.6'&&sha.test(capability.publisherSHA256)&&Array.isArray(capability.migrations)&&capability.migrations.length>0,'EXACT_SOURCE_CAPABILITY_REQUIRED');
+  requireValue(capability.version===1&&capability.protocol===1&&capability.revision===source.revision&&capability.go==='go1.26.10'&&sha.test(capability.publisherSHA256)&&Array.isArray(capability.migrations)&&capability.migrations.length>0,'EXACT_SOURCE_CAPABILITY_REQUIRED');
   const currentExecutableSHA256=readPublisherExecutable(publisher,get('replicasets,pods',null).items,kube,options['--k3s-sudo']);
   plan={version:1,kind:'AUTHORITY_SOURCE_DELIVERY',intentID:randomUUID(),context:options['--context'],namespaceUID:ns.metadata.uid,source:source.path,revision:source.revision,capability,
    publisher:{uid:publisher.metadata.uid,resourceVersion:publisher.metadata.resourceVersion,beforeSpecSHA256:fingerprint(publisher.spec),beforeSource:publisherState.source,beforeRevision:old.revision,beforeExecutableSHA256:currentExecutableSHA256,

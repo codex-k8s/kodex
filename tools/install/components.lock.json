@@ -23,15 +23,15 @@
     },
     {
       "name": "go",
-      "version": "1.26.6",
-      "url": "https://go.dev/dl/go1.26.6.linux-amd64.tar.gz",
-      "sha256": "708effb774be8237570d0add163225abbdfaf4fca28b2611df167beba4feef89"
+      "version": "1.26.10",
+      "url": "https://go.dev/dl/go1.26.10.linux-amd64.tar.gz",
+      "sha256": "ccfe7ae822d2c2f41f4fe7c956199967a4dac22d0ee0d2b2bfdb440aab3b20c5"
     },
     {
       "name": "node",
-      "version": "24.17.0",
-      "url": "https://nodejs.org/dist/v24.17.0/node-v24.17.0-linux-x64.tar.xz",
-      "sha256": "ab343a1b747c7cbf3630dfd7dbf818c5423fab2eb4f5ad1afc896f6bd121a917"
+      "version": "24.22.1",
+      "url": "https://nodejs.org/dist/v24.22.1/node-v24.22.1-linux-x64.tar.xz",
+      "sha256": "6c172a9ab6718f7b801fb5a7bd486af2ee5e32758086a04b84fcce2aa77095e6"
     },
     {
       "name": "codex-cli",

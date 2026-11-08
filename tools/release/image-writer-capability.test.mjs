@@ -23,7 +23,7 @@ function fixture(native = false) {
 test("closed capability records exact source trees and canonical build recipe", () => {
   assert.equal(cap.target, "role-image-builder");
   assert.deepEqual(cap.capabilities, ["platform-worker-grant.v1", "platform-worker-grant.v2.pod-uid"]);
-  assert.equal(cap.build.toolchain, "go1.26.6");
+  assert.equal(cap.build.toolchain, "go1.26.10");
   for (const [path, tree] of Object.entries(cap.source.trees)) {
     assert.match(path, /^(services\/internal\/internal-rpc-authority|libs\/go\/[a-z]+)$/);
     assert.match(tree, /^[a-f0-9]{40}$/);

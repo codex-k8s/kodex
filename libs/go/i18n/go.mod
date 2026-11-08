@@ -1,6 +1,6 @@
 module github.com/codex-k8s/kodex/libs/go/i18n
 
-go 1.26.6
+go 1.26.10
 
 require github.com/nicksnyder/go-i18n/v2 v2.6.1
 

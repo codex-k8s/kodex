@@ -34,7 +34,7 @@ func TestSecretOwnerCompositionComponent(t *testing.T) {
 	if err := os.Chmod(directory, 0o700); err != nil {
 		t.Fatal("protect composition temporary directory")
 	}
-	environment := []string{"GOTOOLCHAIN=go1.26.6", "GOMAXPROCS=2", "GOWORK=off", "GOENV=off"}
+	environment := []string{"GOTOOLCHAIN=go1.26.10", "GOMAXPROCS=2", "GOWORK=off", "GOENV=off"}
 	for _, key := range []string{"PATH", "HOME", "GOCACHE", "GOMODCACHE", "TMPDIR", "XDG_CACHE_HOME"} {
 		if value := os.Getenv(key); value != "" {
 			environment = append(environment, key+"="+value)

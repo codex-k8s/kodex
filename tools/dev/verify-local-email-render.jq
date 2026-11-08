@@ -6,7 +6,7 @@ def mount($name; $path; $readonly):
 def one_handler:
   [keys[] | select(. == "exec" or . == "httpGet" or . == "tcpSocket" or . == "grpc")] | length == 1;
 def go_cache:
-  .image == "docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83" and
+  .image == "docker.io/library/golang:1.26.10-alpine@sha256:87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696" and
   .securityContext.readOnlyRootFilesystem == true and
   .securityContext.allowPrivilegeEscalation == false and
   .securityContext.capabilities.drop == ["ALL"] and

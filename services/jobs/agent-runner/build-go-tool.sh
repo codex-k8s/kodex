@@ -56,7 +56,7 @@ output_directory=$GOBIN
 export GOENV=off GOTOOLCHAIN=local GOWORK=off CGO_ENABLED=0 GOFLAGS='' GOMAXPROCS=4
 export GOPROXY=https://proxy.golang.org GOSUMDB=sum.golang.org
 export GOPRIVATE='' GONOPROXY='' GONOSUMDB='' GOINSECURE='' GOAUTH=off
-[ "$(go env GOVERSION)" = go1.26.6 ] || fail GO_TOOLCHAIN_MISMATCH
+[ "$(go env GOVERSION)" = go1.26.10 ] || fail GO_TOOLCHAIN_MISMATCH
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/kodex-go-tool.XXXXXXXX") || fail TEMPORARY_DIRECTORY_FAILED
 trap 'rm -rf "$scratch"' EXIT
 trap 'exit 1' HUP INT TERM
@@ -76,8 +76,15 @@ golang.org/x/oauth2 v0.27.0
 google.golang.org/grpc v1.83.2
 oras.land/oras-go/v2 v2.6.2
 golang.org/x/mod v0.40.0
-golang.org/x/net v0.56.0
-golang.org/x/text v0.39.0'
+golang.org/x/net v0.60.0
+golang.org/x/text v0.39.0
+github.com/klauspost/compress v1.18.7
+github.com/go-jose/go-jose/v4 v4.1.6
+go.opentelemetry.io/otel/sdk v1.45.0
+go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.45.0
+go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.45.0
+go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.45.0
+go.opentelemetry.io/otel/exporters/zipkin v1.45.0'
 
 version_at_least() {
   awk -v actual="$1" -v minimum="$2" 'BEGIN {
@@ -93,7 +100,7 @@ version_at_least() {
 }
 
 run_go MODULE_INITIALIZATION_FAILED mod init kodex.local/runner-tool
-run_go MODULE_SELECTION_FAILED mod edit -go=1.26.6 "-require=$module@$version"
+run_go MODULE_SELECTION_FAILED mod edit -go=1.26.10 "-require=$module@$version"
 if [ -n "$kubernetes_staging" ]; then
   set -- mod edit
   for staging_module in $kubernetes_staging; do
@@ -118,10 +125,10 @@ while :; do
   done <<EOF
 $floors
 EOF
-  # Новый релиз может добавить ещё один из восьми проверяемых модулей.
+  # Новый релиз может добавить ещё один из пятнадцати проверяемых модулей.
   # Повторяем только закрытый набор, а не подменяем весь upstream graph.
   [ "$pass" -eq 0 ] || [ "$changed" -ne 0 ] || break
-  [ "$pass" -lt 9 ] || fail DEPENDENCY_CLOSURE_UNSAFE
+  [ "$pass" -lt 16 ] || fail DEPENDENCY_CLOSURE_UNSAFE
   run_go DEPENDENCY_RESOLUTION_FAILED get "$package@$version"
   run_go MODULE_GRAPH_FAILED list -m -mod=mod -f '{{.Path}} {{.Version}} {{if .Replace}}REPLACED{{end}}' all
   cp "$scratch/go-output" "$scratch/selected-graph"
@@ -136,7 +143,7 @@ run_go TOOL_BUILD_FAILED "$@" "$package"
 run_go BUILD_METADATA_FAILED version -m "$scratch/$binary"
 cp "$scratch/go-output" "$scratch/metadata"
 awk -v module="$module" -v version="$version" -v package="$package" '
-  NR == 1 {if ($NF != "go1.26.6") exit 1}
+  NR == 1 {if ($NF != "go1.26.10") exit 1}
   $1 == "path" && $2 == package {path = 1}
   $1 == "mod" && $2 == module && $3 == version {selected = 1}
   $1 == "=>" {exit 1}

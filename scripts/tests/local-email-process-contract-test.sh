@@ -3,7 +3,7 @@ set -euo pipefail
 
 cache_root=${1:?primed local Go cache root is required}
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
-image=docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83
+image=docker.io/library/golang:1.26.10-alpine@sha256:87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696
 air_version=$(jq -er '.tools.air.version | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))' \
   "$root/tools/dev/components.lock.json")
 air_binary="$cache_root/go-tools/air-$air_version"

@@ -62,7 +62,7 @@ env -u PGPASSWORD -u PGSERVICE -u PGSERVICEFILE -u PGOPTIONS \
   cd -- "$repository_root/services/internal/control-plane"
   env -u GOFLAGS -u PGPASSWORD -u PGSERVICE -u PGSERVICEFILE -u PGOPTIONS -u PGHOST -u PGPORT -u PGUSER -u PGDATABASE \
     PGPASSFILE=/dev/null \
-    GOTOOLCHAIN=go1.26.6 GOMAXPROCS=2 GOENV=off GOWORK=off \
+    GOTOOLCHAIN=go1.26.10 GOMAXPROCS=2 GOENV=off GOWORK=off \
     KODEX_IMPACT_OWNER_SNAPSHOT_UPGRADE_DSN="postgresql://control_plane_migrator@127.0.0.1:${port}/control_plane_impact_upgrade?sslmode=disable" \
     KODEX_IMPACT_OWNER_SNAPSHOT_UPGRADE_DISPOSABLE=dedicated-loopback-container \
     timeout 180s go test -p 2 -count=1 -v -timeout=100s ./cmd/cli -run '^TestImpactOwnerSnapshotProtocolUpgrade$'

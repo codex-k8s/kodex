@@ -218,7 +218,7 @@ export function buildDeliveryPlan(snapshot,bundle,{context,k3sSudo,capability,in
  const targetImage=capability?.image,executableSHA256=capability?.executableSHA256;
  requireValue(typeof context==='string'&&context.length>0&&!/prod/i.test(context)&&typeof k3sSudo==='boolean'&&
   exact(capability,['version','profile','revision','go','image','executableSHA256','recipe'])&&capability.version===1&&
-  capability.profile==='image-admission-hold-delivery'&&capability.revision===bundle.revision&&capability.go==='go1.26.6'&&
+  capability.profile==='image-admission-hold-delivery'&&capability.revision===bundle.revision&&capability.go==='go1.26.10'&&
   image.test(targetImage)&&sha.test(executableSHA256)&&sha.test(snapshot.controllerExecutableSHA256??'')&&uid.test(intent),'INVALID_HOLD_DELIVERY_INPUT');
  requireValue(snapshot.clusterUID&&snapshot.namespaceUID&&snapshot.namespace?.metadata?.labels?.['app.kubernetes.io/part-of']==='kodex'&&
   snapshot.namespace.metadata.labels?.['kodex.dev/environment']==='staging','EXACT_STAGING_NAMESPACE_REQUIRED');
@@ -282,7 +282,7 @@ export function validateDeliveryPlan(plan,context,k3sSudo) {
  requireValue(plan.source===plan.bundle.source&&plan.revision===plan.bundle.revision&&exact(plan.desired,['jobsPolicySpec','releasePolicySpec','releaseBindingSpec'])&&
   exact(plan.capability,['version','profile','revision','go','image','executableSHA256','recipe'])&&plan.capability.version===1&&
   plan.capability.profile==='image-admission-hold-delivery'&&plan.capability.revision===plan.revision&&
-  plan.capability.go==='go1.26.6'&&plan.capability.image===plan.targetImage&&plan.capability.executableSHA256===plan.executableSHA256&&
+  plan.capability.go==='go1.26.10'&&plan.capability.image===plan.targetImage&&plan.capability.executableSHA256===plan.executableSHA256&&
   fingerprint(plan.desired.jobsPolicySpec)===fingerprint(plan.phaseTargets['policy-jobs'].after)&&
   fingerprint(plan.desired.releasePolicySpec)===fingerprint(plan.phaseTargets['policy-release'].after)&&
   fingerprint(plan.desired.releaseBindingSpec)===fingerprint(plan.phaseTargets['binding-release'].after),'HOLD_DELIVERY_PLAN_INVALID');

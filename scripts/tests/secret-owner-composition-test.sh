@@ -8,5 +8,5 @@ if [[ -n "${KODEX_CONTROL_PLANE_TEST_DSN:-}" || -n "${KODEX_CONTROL_PLANE_TEST_A
   printf 'Secret owner composition failed: external fixture credentials are forbidden\n' >&2
   exit 1
 fi
-export GOTOOLCHAIN=go1.26.6 GOMAXPROCS=2 GOWORK=off
+export GOTOOLCHAIN=go1.26.10 GOMAXPROCS=2 GOWORK=off
 exec timeout --signal=TERM --kill-after=15s 360s bash "$repository_root/scripts/tests/control-plane-postgres-test.sh" '^TestSecretOwnerCompositionComponent$'

@@ -14,7 +14,7 @@ const fields=['version','profile','revision','go','image','executableSHA256','re
 export function validateHoldCapability(value) {
  requireValue(value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join('\0')===[...fields].sort().join('\0')&&
   value.version===1&&value.profile==='image-admission-hold-delivery'&&/^[a-f0-9]{40}$/.test(value.revision??'')&&
-  value.go==='go1.26.6'&&imagePattern.test(value.image??'')&&/^[a-f0-9]{64}$/.test(value.executableSHA256??'')&&
+  value.go==='go1.26.10'&&imagePattern.test(value.image??'')&&/^[a-f0-9]{64}$/.test(value.executableSHA256??'')&&
   value.recipe==='CGO_ENABLED=0 GOWORK=off GOOS=linux GOARCH=amd64 GOAMD64=v1 go build -trimpath -buildvcs=false -ldflags="-s -w" ./cmd/image-admission-controller',
  'INVALID_HOLD_DELIVERY_CAPABILITY');
  return value;
@@ -28,7 +28,7 @@ function main(args) {
  try{lstatSync(output);throw new Error('CAPABILITY_OUTPUT_EXISTS');}catch(error){if(error.code!=='ENOENT')throw error;}
  const env={...process.env,GOENV:'off',GOFLAGS:'',GOTOOLCHAIN:'local',CGO_ENABLED:'0',GOWORK:'off',GOOS:'linux',GOARCH:'amd64',GOAMD64:'v1',GOMAXPROCS:'4'};
  const version=execFileSync('go',['env','GOVERSION'],{env,encoding:'utf8',stdio:'pipe',timeout:10_000}).trim();
- requireValue(version==='go1.26.6','EXACT_GO_VERSION_REQUIRED');
+ requireValue(version==='go1.26.10','EXACT_GO_VERSION_REQUIRED');
  const temporary=mkdtempSync(join(dirname(output),'image-admission-capability-')),binary=join(temporary,'image-admission-controller');
  try {
   execFileSync('go',['-C',join(source,'services/jobs/role-image-builder'),'build','-p','2','-trimpath','-buildvcs=false','-ldflags=-s -w','-o',binary,'./cmd/image-admission-controller'],

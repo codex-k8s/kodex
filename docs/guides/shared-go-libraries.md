@@ -452,7 +452,7 @@ Consumer явно владеет отдельным interruptible input и за�
 вместо передачи descriptor. Для Unix duplicate fd с nonblocking/poller
 проверяется поддержка deadline, blocking fallback закрыто запрещён.
 
-Согласно [Go1.26.6 NewFile и File.Close](https://pkg.go.dev/os@go1.26.6),
+Согласно [Go1.26.10 NewFile и File.Close](https://pkg.go.dev/os@go1.26.10),
 nonblocking descriptor позволяет создать pollable File, а отмена pending I/O
 через Close гарантируется для deadline-capable File. Участок проверяется
 настоящим child-process OS pipe: peer writer остаётся открытым, пока child

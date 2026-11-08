@@ -113,7 +113,7 @@ generation floor, lifecycle и порядок четырёх фаз сохран
 
 Источник canonical binary — `6fe0412154b09d37ec654f1dc394e5ca6de48a20`;
 прикладные исходники authority и шести локальных зависимостей идентичны checked
-main на момент #1304. Локальная Go1.26.6 linux/amd64/GOAMD64=v1 pure-Go сборка
+main на момент #1304. Локальная Go1.26.10 linux/amd64/GOAMD64=v1 pure-Go сборка
 по manifest recipe дала `39d06542b3dce25b294498e8b428d3969ee6de170e39e0dd9f4d2e0527149570`.
 Root зафиксировал такой же hash actual `/proc/PID/exe` для image из manifest.
 Это доказательство совпадения writer bytes с воспроизводимой сборкой, а не

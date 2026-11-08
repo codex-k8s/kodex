@@ -1,7 +1,7 @@
 import {materializeAuthorityJobDefaults} from './authority-job-defaults.mjs';
 import {fingerprint} from './scoped-release.mjs';
 
-export const authorityGoImage='docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83';
+export const authorityGoImage='docker.io/library/golang:1.26.10-alpine@sha256:87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696';
 export const authorityModule='services/internal/internal-rpc-authority';
 const sourceCommand=['/workspace/tools/dev/run-go-hot-reload.sh'];
 const jobCommand=['/workspace/tools/dev/run-go-command.sh'];

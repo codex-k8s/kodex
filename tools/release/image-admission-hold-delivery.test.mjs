@@ -66,7 +66,7 @@ function snapshot() {
 }
 
 function planAndState() {
- const state=snapshot(),desired=bundle(),capability={version:1,profile:'image-admission-hold-delivery',revision:desired.revision,go:'go1.26.6',image:nextImage,executableSHA256:executable,
+ const state=snapshot(),desired=bundle(),capability={version:1,profile:'image-admission-hold-delivery',revision:desired.revision,go:'go1.26.10',image:nextImage,executableSHA256:executable,
   recipe:'CGO_ENABLED=0 GOWORK=off GOOS=linux GOARCH=amd64 GOAMD64=v1 go build -trimpath -buildvcs=false -ldflags="-s -w" ./cmd/image-admission-controller'},
   plan=buildDeliveryPlan(state,desired,{context,k3sSudo:true,capability,
   intent:'88888888-8888-4888-8888-888888888888'});return {state,desired,plan};

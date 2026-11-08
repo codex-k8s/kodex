@@ -1,6 +1,6 @@
 # syntax=docker.io/docker/dockerfile:1.19.0@sha256:b6afd42430b15f2d2a4c5a02b919e98a525b785b1aaff16747d2f623364e39b6
 
-FROM docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83 AS build
+FROM docker.io/library/golang:1.26.10-alpine@sha256:87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696 AS build
 
 ENV GOTOOLCHAIN=local
 
@@ -41,7 +41,7 @@ COPY services/internal/control-plane/ services/internal/control-plane/
 
 WORKDIR /workspace/services/internal/control-plane
 
-RUN test "$(go env GOVERSION)" = "go1.26.6"
+RUN test "$(go env GOVERSION)" = "go1.26.10"
 RUN go mod download
 # Кэш и временные объекты компилятора не сохраняются в дисковых слоях builder.
 # Параллелизм ограничен одним компилятором; оба бинаря используют один RAM-кэш.

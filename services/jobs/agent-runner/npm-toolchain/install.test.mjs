@@ -133,7 +133,10 @@ function temporary(action) {
     rmSync(directory, { recursive: true });
   }
 }
-for (const [name, floor] of Object.entries(securityFloors)) {
+for (const [name, floor] of [
+  ...Object.entries(securityFloors),
+  ["undici", "8.12.2"],
+]) {
   test(`принимает exact fix ${name}, закрыто отклоняет прежнюю patch version`, () => {
     const old = floor.split(".").map(Number);
     if (old[2] > 0) old[2]--;
@@ -186,7 +189,7 @@ function installedFixture(directory) {
   const bundled = join(directory, "node_modules/pnpm/dist/node_modules");
   for (const [name, version] of [
     ["tar", "7.5.22"],
-    ["undici", "6.28.1"],
+    ["undici", "6.29.1"],
   ]) {
     mkdirSync(join(bundled, name), { recursive: true });
     writeFileSync(
@@ -202,7 +205,7 @@ test("проверяет фактические bundled tar и undici внутр
     installedFixture(directory);
     const versions = verifyInstalled(directory);
     assert.deepEqual(versions.tar, ["7.5.22"]);
-    assert.deepEqual(versions.undici, ["6.28.1"]);
+    assert.deepEqual(versions.undici, ["6.29.1"]);
   }));
 
 for (const [name, version] of [

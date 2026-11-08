@@ -28,12 +28,12 @@ with (root / "calls").open("a") as out: out.write(json.dumps(args) + "\n")
 if pathlib.Path(sys.argv[0]).name == "apk":
     assert args == ["add", "--no-cache", "ca-certificates", "git"]; sys.exit()
 if args == ["env", "GOVERSION"]:
-    print(os.environ.get("FIXTURE_GO", "go1.26.6")); sys.exit()
+    print(os.environ.get("FIXTURE_GO", "go1.26.10")); sys.exit()
 if args[:2] == ["mod", "init"]:
     sys.exit()
 if args[:2] == ["mod", "edit"]:
     requirements = [a.removeprefix("-require=").rsplit("@", 1) for a in args if a.startswith("-require=")]
-    if "-go=1.26.6" in args:
+    if "-go=1.26.10" in args:
         assert len(requirements) == 1
         (root / "identity").write_text(json.dumps(requirements[0]))
         (root / "staging").write_text("{}")
@@ -67,7 +67,7 @@ if args[:1] == ["get"]:
     dependencies = {**staging, "golang.org/x/net": "v0.49.0", "google.golang.org/grpc": "v1.79.3"}
     dependencies.update(json.loads((root / "floors").read_text()))
     # grpc floor допускает более высокий transitive net, а не конфликтует.
-    dependencies["golang.org/x/net"] = "v0.58.0"
+    dependencies["golang.org/x/net"] = "v0.62.0"
     (root / "dependencies").write_text(json.dumps(dependencies)); sys.exit()
 if args == ["mod", "verify"]:
     sys.exit(1 if os.environ.get("FIXTURE_VERIFY_FAIL") else 0)
@@ -88,14 +88,14 @@ if args[:1] == ["build"]:
     assert os.environ["GOSUMDB"] == "sum.golang.org"
     target = pathlib.Path(args[args.index("-o") + 1])
     runtime = {"gh": "gh version 2.95.0",
-               "kubectl": '{\n  "clientVersion": {\n    "gitVersion": "v1.36.2",\n    "goVersion": "go1.26.6"\n  }\n}',
-               "helm": "v4.2.1 go1.26.6"}[binary]
+               "kubectl": '{\n  "clientVersion": {\n    "gitVersion": "v1.36.2",\n    "goVersion": "go1.26.10"\n  }\n}',
+               "helm": "v4.2.1 go1.26.10"}[binary]
     target.write_text("#!" + sys.executable + "\nimport os, sys\n"
                       + "print(" + repr(runtime) + " if not os.environ.get('FIXTURE_RUNTIME_WRONG') else 'wrong')\n"
                       + "sys.exit(1 if os.environ.get('FIXTURE_RUNTIME_FAIL') else 0)\n")
     sys.exit()
 if args[:2] == ["version", "-m"]:
-    print(args[-1] + ": " + os.environ.get("FIXTURE_BINARY_GO", "go1.26.6"))
+    print(args[-1] + ": " + os.environ.get("FIXTURE_BINARY_GO", "go1.26.10"))
     print("\tpath\t" + (root / "package").read_text())
     print("\tmod\t" + module + "\t" + os.environ.get("FIXTURE_BINARY_VERSION", version) + "\th1:synthetic")
     deps = json.loads((root / "dependencies").read_text())
@@ -144,10 +144,10 @@ class PlatformCLI(unittest.TestCase):
                 get = [call for call in self.calls() if call[0] == "get"][-1]
                 self.assertEqual(get, ["get", selection])
                 constraints = [call for call in self.calls() if call[:2] == ["mod", "edit"]]
-                self.assertIn(["mod", "edit", "-require=golang.org/x/net@v0.56.0"], constraints)
+                self.assertIn(["mod", "edit", "-require=golang.org/x/net@v0.60.0"], constraints)
                 self.assertIn(["mod", "edit", "-require=google.golang.org/grpc@v1.83.2"], constraints)
                 dependencies = json.loads((self.directory / "dependencies").read_text())
-                self.assertEqual(dependencies["golang.org/x/net"], "v0.58.0")
+                self.assertEqual(dependencies["golang.org/x/net"], "v0.62.0")
 
     def test_kubernetes_canonical_staging_map_before_graph(self):
         result = self.build(SELECTIONS[1][0])
@@ -190,7 +190,7 @@ class PlatformCLI(unittest.TestCase):
         self.assertNotIn("runner-build", self.stage)
         self.assertNotIn("toolchain-build", self.stage)
         self.assertIn("ENV GOTOOLCHAIN=local", dockerfile.split(" AS build\n", 1)[1].split("\nFROM ", 1)[0])
-        self.assertIn("golang:1.26.6-alpine@sha256:", dockerfile.splitlines()[0])
+        self.assertIn("golang:1.26.10-alpine@sha256:", dockerfile.splitlines()[0])
         self.assertIn("COPY --from=platform-cli-build --chmod=0555 /out/kodex-platform/ /usr/local/bin/", dockerfile)
         for removed in ("cli/cli/releases/download/", "https://dl.k8s.io/release/",
                         "https://get.helm.sh/", "gh_arch", "kubectl_arch", "helm_arch"):

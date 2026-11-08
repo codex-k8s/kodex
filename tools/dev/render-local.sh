@@ -782,7 +782,7 @@ patch_go_container() {
   KIND="$kind" WORKLOAD="$workload" CONTAINER="$container" MODULE="$module" PACKAGE="$package" \
   COMMAND_ARGS="$command_args" BUILD_VOLUME="$build_volume" BUILD_CACHE_PATH="$build_cache_path" \
   AIR_DIGEST="$air_digest" \
-  GO_IMAGE='docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83' \
+  GO_IMAGE='docker.io/library/golang:1.26.10-alpine@sha256:87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696' \
   yq -i '
     with(select(.kind == strenv(KIND) and .metadata.name == strenv(WORKLOAD));
       .spec.template.spec.volumes = (((.spec.template.spec.volumes // []) |
@@ -831,7 +831,7 @@ patch_go_init_container() {
   install -d -m 0777 "$build_cache_path"
   WORKLOAD="$workload" CONTAINER="$container" MODULE="$module" PACKAGE="$package" \
   BUILD_VOLUME="$build_volume" BUILD_CACHE_PATH="$build_cache_path" \
-  GO_IMAGE='docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83' \
+  GO_IMAGE='docker.io/library/golang:1.26.10-alpine@sha256:87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696' \
   yq -i '
     with(select(.kind == "Deployment" and .metadata.name == strenv(WORKLOAD));
       .spec.template.spec.volumes = (((.spec.template.spec.volumes // []) |
@@ -873,7 +873,7 @@ patch_go_job() {
   add_development_volumes Job "$workload"
   WORKLOAD="$workload" CONTAINER="$container" MODULE="$module" PACKAGE="$package" \
   COMMAND_ARGS="$args_json" BUILD_VOLUME="$build_volume" BUILD_CACHE_PATH="$build_cache_path" \
-  GO_IMAGE='docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83' \
+  GO_IMAGE='docker.io/library/golang:1.26.10-alpine@sha256:87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696' \
   yq -i '
     with(select(.kind == "Job" and .metadata.name == strenv(WORKLOAD));
       .spec.template.spec.volumes = (((.spec.template.spec.volumes // []) |
@@ -1416,7 +1416,7 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
       any($deployment.spec.template.spec.containers[]?;
         .name == $containerName and
         .command == ["/workspace/tools/dev/run-go-hot-reload.sh"] and
-        .image == "docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83")))
+        .image == "docker.io/library/golang:1.26.10-alpine@sha256:87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696")))
 ' >/dev/null || fail 'Control Plane authority sidecars do not share the hot-reload source revision'
 yq -o=json -I=0 '.' "$output" | jq -s -e --arg runnerImage "$runtime_runner_image" '
   any(.[];

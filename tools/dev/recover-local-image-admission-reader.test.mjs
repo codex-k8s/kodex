@@ -262,7 +262,7 @@ test("Dockerfile-specific context закрывает все COPY targets и ис
     {
       env: {
         ...process.env,
-        GOTOOLCHAIN: "go1.26.6",
+        GOTOOLCHAIN: "go1.26.10",
         GOENV: "off",
         GOWORK: "off",
         GOFLAGS: "-mod=readonly",

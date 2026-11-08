@@ -15,7 +15,7 @@ function fixture() {
   oldHot.replicas = 1; oldHot.strategy = { type: "Recreate" }; delete oldHot.template.spec.nodeSelector;
   const main = oldHot.template.spec.containers[0];
   main.command = ["/workspace/tools/dev/run-go-hot-reload.sh"];
-  main.image = "docker.io/library/golang:1.26.6-alpine@sha256:" + "d".repeat(64);
+  main.image = "docker.io/library/golang:1.26.10-alpine@sha256:" + "d".repeat(64);
   main.env.push({ name: "GOCACHE", value: "/go/build-cache/cache" });
   main.volumeMounts.push({ name: "dev-source", mountPath: "/workspace", readOnly: true });
   oldHot.template.spec.volumes.push({ name: "dev-source", hostPath: { path: "/old/source", type: "Directory" } });

@@ -1,9 +1,10 @@
 module github.com/codex-k8s/kodex/libs/go/integrationpackage
 
-go 1.26.6
+go 1.26.10
 
 require (
 	github.com/getkin/kin-openapi v0.149.0
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	go.yaml.in/yaml/v3 v3.0.4
 )
 
@@ -13,6 +14,5 @@ require (
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/oasdiff/yaml v0.1.1 // indirect
 	github.com/oasdiff/yaml3 v0.0.14 // indirect
-	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
 	golang.org/x/text v0.14.0 // indirect
 )

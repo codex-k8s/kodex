@@ -22,7 +22,7 @@
     }
   },
   "build": {
-    "toolchain": "go1.26.6",
+    "toolchain": "go1.26.10",
     "environment": {
       "CGO_ENABLED": "0",
       "GOOS": "linux",

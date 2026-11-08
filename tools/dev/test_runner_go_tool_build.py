@@ -20,7 +20,7 @@ with (root / "calls").open("a") as stream:
         "private":os.environ.get("GOPRIVATE"), "insecure":os.environ.get("GOINSECURE"),
         "gomaxprocs":os.environ.get("GOMAXPROCS")}) + "\n")
 if args == ["env", "GOVERSION"]:
-    print(os.environ.get("FIXTURE_GO_VERSION", "go1.26.6")); sys.exit()
+    print(os.environ.get("FIXTURE_GO_VERSION", "go1.26.10")); sys.exit()
 if args[:2] == ["mod", "init"]:
     for name in ("identity", "constraints", "dependencies"):
         (root / name).unlink(missing_ok=True)
@@ -63,7 +63,7 @@ if args == ["mod", "verify"]:
 if args[:1] == ["build"]:
     pathlib.Path(args[args.index("-o") + 1]).write_text("synthetic binary"); sys.exit()
 if args[:2] == ["version", "-m"]:
-    print(args[-1], os.environ.get("FIXTURE_BINARY_GO", "go1.26.6"))
+    print(args[-1], os.environ.get("FIXTURE_BINARY_GO", "go1.26.10"))
     module, version = json.loads((root / "identity").read_text())
     print("\tpath\t" + (root / "package").read_text())
     print("\tmod\t" + module + "\t" + os.environ.get("FIXTURE_BINARY_VERSION", version) + "\th1:fixture")
@@ -100,11 +100,11 @@ class RunnerGoToolBuild(unittest.TestCase):
         path = self.root / "calls"
         return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
 
-    def test_all_eight_known_modules_upgrade_before_build_and_verified_metadata(self):
+    def test_all_known_modules_upgrade_before_build_and_verified_metadata(self):
         floors = {"github.com/getkin/kin-openapi": "v0.149.0", "golang.org/x/crypto": "v0.56.0",
                   "golang.org/x/oauth2": "v0.27.0", "google.golang.org/grpc": "v1.83.2",
                   "oras.land/oras-go/v2": "v2.6.2", "golang.org/x/mod": "v0.40.0",
-                  "golang.org/x/net": "v0.56.0", "golang.org/x/text": "v0.39.0"}
+                  "golang.org/x/net": "v0.60.0", "golang.org/x/text": "v0.39.0", "github.com/klauspost/compress": "v1.18.7", "github.com/go-jose/go-jose/v4": "v4.1.6"}
         result = self.run_build(FIXTURE_DEPS=json.dumps({key: "v0.1.0" for key in floors}))
         self.assertEqual(result.returncode, 0, result.stderr)
         get = next(call["args"] for call in self.calls() if call["args"][0] == "get")
@@ -133,9 +133,9 @@ class RunnerGoToolBuild(unittest.TestCase):
     def test_grpc_required_net_above_floor_resolves_without_exact_get_conflict(self):
         result = self.run_build(FIXTURE_DEPS=json.dumps({"google.golang.org/grpc": "v1.61.0",
                                                        "golang.org/x/net": "v0.33.0"}),
-                                FIXTURE_GRPC_NET_VERSION="v0.58.0")
+                                FIXTURE_GRPC_NET_VERSION="v0.62.0")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads((self.root / "dependencies").read_text())["golang.org/x/net"], "v0.58.0")
+        self.assertEqual(json.loads((self.root / "dependencies").read_text())["golang.org/x/net"], "v0.62.0")
 
     def test_nested_protoc_and_mock_modules_have_exact_main_identity(self):
         for selection, module in (("google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2", "google.golang.org/grpc/cmd/protoc-gen-go-grpc"),
@@ -146,17 +146,17 @@ class RunnerGoToolBuild(unittest.TestCase):
 
     def test_newly_introduced_unsafe_dependency_is_constrained_before_build(self):
         result = self.run_build(FIXTURE_DEPS=json.dumps({"google.golang.org/grpc": "v1.61.0"}),
-                                FIXTURE_GRPC_NET_VERSION="v0.58.0", FIXTURE_INTRODUCED_CRYPTO="1")
+                                FIXTURE_GRPC_NET_VERSION="v0.62.0", FIXTURE_INTRODUCED_CRYPTO="1")
         self.assertEqual(result.returncode, 0, result.stderr)
         dependencies = json.loads((self.root / "dependencies").read_text())
         self.assertEqual(dependencies["golang.org/x/crypto"], "v0.56.0")
-        self.assertEqual(dependencies["golang.org/x/net"], "v0.58.0")
+        self.assertEqual(dependencies["golang.org/x/net"], "v0.62.0")
         self.assertEqual(sum(call["args"][0] == "get" for call in self.calls()), 2)
 
     def test_nonconvergent_dependency_graph_is_bounded_and_never_built(self):
         result = self.run_build(FIXTURE_NONCONVERGENT="1")
         self.assertIn("DEPENDENCY_CLOSURE_UNSAFE", result.stderr)
-        self.assertLessEqual(sum(call["args"][0] == "get" for call in self.calls()), 9)
+        self.assertLessEqual(sum(call["args"][0] == "get" for call in self.calls()), 16)
         self.assertFalse(any(call["args"][0] == "build" for call in self.calls()))
         self.assertEqual(list(self.output.iterdir()), [])
 
