@@ -23,6 +23,28 @@ def fixture():
 
 
 class ModelProviderTests(unittest.TestCase):
+    def assert_role_catalog_authority(self, resources, expected_component):
+        deployment = next(item for item in resources if item['kind'] == 'Deployment' and item['metadata']['name'] == 'control-plane')
+        pod = deployment['spec']['template']
+        container = next(item for item in pod['spec']['containers'] if item['name'] == 'control-plane')
+        field = next(item for item in container['env'] if item['name'] == 'CONTROL_PLANE_DEFAULT_ROLE_IMAGE_REFERENCE')
+        selector = field['valueFrom']['configMapKeyRef']
+        parameters = next(item for item in resources if item['kind'] == 'ConfigMap' and item['metadata']['name'] == selector['name'])
+        default_image = parameters['data'][selector['key']]
+        catalog_map = next(item for item in resources if item['kind'] == 'ConfigMap' and item['metadata']['name'].startswith('kodex-role-environments-'))
+        catalog_raw = catalog_map['data']['catalog.json']
+        catalog = json.loads(catalog_raw)
+        standard = next(item for item in catalog['environments'] if item['key'] == 'standard')
+        documents = next(item for item in catalog['environments'] if item['key'] == 'documents')
+        self.assertEqual(standard['baseImageReference'] + '@' + standard['baseImageDigest'], default_image)
+        self.assertEqual(standard['baseImageReference'], 'pull.example.invalid/kodex/' + expected_component)
+        self.assertEqual(documents['baseImageReference'], 'pull.example.invalid/kodex/role-base-documents')
+        self.assertEqual(documents['available'], expected_component == 'agent-runner')
+        digest = hashlib.sha256(catalog_raw.encode()).hexdigest()
+        self.assertTrue(catalog_map['immutable'])
+        self.assertEqual(catalog_map['metadata']['name'], 'kodex-role-environments-' + digest[:12])
+        self.assertEqual(pod['metadata']['annotations']['kodex.dev/role-environments-sha256'], digest)
+
     def test_secret_is_file_only_and_configuration_is_closed(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
@@ -108,6 +130,7 @@ class ModelProviderTests(unittest.TestCase):
             catalog = next(json.loads(item['data']['catalog.json']) for item in resources if item['kind'] == 'ConfigMap' and item['metadata']['name'].startswith('kodex-role-environments-'))
             standard = next(item for item in catalog['environments'] if item['key'] == 'standard')
             self.assertTrue(standard['baseImageReference'].endswith('/agent-runner-opencode'))
+            self.assert_role_catalog_authority(resources, 'agent-runner-opencode')
             import provider_sandbox_profile
             for selected in (provider_sandbox_profile.PROFILE, ''):
                 rendered = subprocess.run(args + ['--provider-apparmor-profile', selected], cwd=ROOT, capture_output=True, timeout=150,
@@ -116,6 +139,26 @@ class ModelProviderTests(unittest.TestCase):
                 actual = list(filter(None, MODULE.yaml.safe_load_all(output.read_text())))
                 self.assertEqual(actual, provider_sandbox_profile.transform(resources, selected))
                 self.assertEqual(provider_sandbox_profile.active(actual), selected)
+            # Без optional provider остаются штатные Codex defaults с тем же authority.
+            baseline_args = list(args)
+            for option in ('--model-provider-configuration', '--model-provider-default-model'):
+                index = baseline_args.index(option)
+                del baseline_args[index:index + 2]
+            lock.pop('role_base_runtime_engine')
+            lock['registry']['repository_prefix'] = 'synthetic-source'
+            for image in lock['images']:
+                image['repository'] = 'synthetic-source/' + image['component']
+                image['pull_ref'] = lock['registry']['node_pull'] + '/' + image['repository'] + '@' + image['digest']
+            lock['role_image_input']['repository'] = 'synthetic-source/role-image-inputs'
+            lock['role_image_input']['pull_ref'] = lock['registry']['node_pull'] + '/' + lock['role_image_input']['repository'] + '@' + lock['role_image_input']['manifest_digest']
+            lock_path.write_text(json.dumps(lock))
+            baseline_args[baseline_args.index('--lock-sha256') + 1] = hashlib.sha256(lock_path.read_bytes()).hexdigest()
+            baseline = subprocess.run(baseline_args, cwd=ROOT, capture_output=True, timeout=150,
+                                      env={**os.environ, 'GOMAXPROCS': '2', 'GOFLAGS': '-p=1', 'GOWORK': 'off'})
+            self.assertEqual(baseline.returncode, 0, (baseline.stdout + baseline.stderr).decode()[-3000:])
+            baseline_resources = list(filter(None, MODULE.yaml.safe_load_all(output.read_text())))
+            self.assert_role_catalog_authority(baseline_resources, 'agent-runner')
+            self.assertFalse(any(item['kind'] == 'ConfigMap' and item['metadata']['name'].startswith('kodex-model-provider-') for item in baseline_resources))
 
 
 if __name__ == '__main__':

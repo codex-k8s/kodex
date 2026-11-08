@@ -550,8 +550,9 @@ role_environment_catalog=$(jq -cn \
   --arg manifest_digest "$role_input_manifest_digest" \
   --arg payload_sha256 "$role_input_payload_sha256" \
   --arg agent_runner_digest "$agent_runner_digest" \
-  --arg agent_runner_repository "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/$agent_runner_component" \
+  --arg agent_runner_repository "$promoted_pull_host/kodex/$agent_runner_component" \
   --argjson documents_available "$([[ "$agent_runner_component" == agent-runner ]] && printf true || printf false)" \
+  --arg documents_repository "$promoted_pull_host/kodex/role-base-documents" \
   --arg documents_digest "$role_base_documents_digest" '
   {schemaVersion:1,
    context:{sourceRef:"urn:kodex:release-source",sourceRevision:$source_revision,
@@ -570,7 +571,7 @@ role_environment_catalog=$(jq -cn \
       softwareMessageKeys:["role-environments.software.base","role-environments.software.pdf",
         "role-environments.software.ocr","role-environments.software.office"],recommended:false,available:$documents_available,
       customInstallationAllowed:false,
-      baseImageReference:"kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/role-base-documents",
+      baseImageReference:$documents_repository,
       baseImageDigest:$documents_digest,platforms:[{os:"linux",architecture:"amd64",variant:""}],packages:[],tools:[]}]}')
 role_environment_catalog_sha256=$(printf '%s' "$role_environment_catalog" | sha256sum | awk '{print $1}')
 role_environment_catalog_name="kodex-role-environments-${role_environment_catalog_sha256:0:12}"
