@@ -14,6 +14,7 @@ previous_sha=""
 buildkit_profile=standard
 repair_api_endpoints=false
 clamav_mode=enabled
+image_policy_inputs_mode=direct
 provider_profile_arguments=()
 previous_arguments=()
 arguments=()
@@ -40,6 +41,7 @@ while (($#)); do
     --preimage-directory) preimage="${2:-}"; shift 2 ;;
     --previous-render) previous_render="${2:-}"; shift 2 ;;
     --previous-render-sha256) previous_sha="${2:-}"; shift 2 ;;
+    --image-policy-inputs-mode) image_policy_inputs_mode="${2:-}"; shift 2 ;;
     --clamav-mode) clamav_mode="${2:-}"; shift 2 ;;
     --repair-kubernetes-api-endpoints) repair_api_endpoints=true; shift ;;
     --repair-egress-secret-access) repair_egress_secret_access=true; shift ;;
@@ -60,6 +62,7 @@ while (($#)); do
         '  [--oidc-ca-file <pem>] [--ingress-controller <name> --ingress-namespace <name>]' \
         '  [--preimage-directory <new-private-directory>; required for apply/upgrade]'
       printf '%s\n' '  [--previous-render <yaml> --previous-render-sha256 <64-hex> --buildkit-runtime-profile standard|nested-userns; resume-workloads only]'
+      printf '%s\n' '  [--image-policy-inputs-mode direct|versioned; default direct; materialized in pinned render]'
       printf '%s\n' '  [--clamav-mode enabled|disabled; default enabled]'
       printf '%s\n' '  [--repair-kubernetes-api-endpoints; explicit workload resume repair from pinned endpoint anchors]'
       printf '%s\n' '  [--bootstrap-completion-receipt <json> --bootstrap-completion-sha256 <64-hex> [--allow-reconciled-bootstrap-completion]; continuation/readback]'
@@ -77,6 +80,7 @@ assistant_readback_arguments=(--assistant-readback-transport "$assistant_readbac
 if [[ "$mode" == upgrade ]]; then
   [[ -n "$completion_receipt" && "$completion_sha" =~ ^[a-f0-9]{64}$ && "$allow_reconciled_completion" == true ]] || fail 'upgrade requires an explicit forward migration completion receipt'
 fi
+case "$image_policy_inputs_mode" in direct|versioned) ;; *) fail 'image policy inputs mode is invalid' ;; esac
 case "$clamav_mode" in enabled|disabled) ;; *) fail 'ClamAV mode is invalid' ;; esac
 [[ "$expected_sha" =~ ^[a-f0-9]{64}$ ]] || fail 'exact render digest is required'
 [[ -f "$render" && ! -L "$render" ]] || fail 'regular render file is required'
@@ -138,6 +142,7 @@ fi
 if ((${#provider_profile_arguments[@]})); then
   python3 "$root/tools/install/provider_sandbox_profile.py" --check --render "$temporary/render.yaml" --profile "${provider_profile_arguments[1]}"
 fi
+python3 "$root/tools/install/image_policy_inputs.py" --check --mode "$image_policy_inputs_mode" --render "$temporary/render.yaml"
 timeout 60s python3 "$root/tools/install/portable_preflight.py" --plan \
   --render "$temporary/render.yaml" --sha256 "$expected_sha"
 python3 "$root/tools/install/clamav_profile.py" --check --mode "$clamav_mode" --render "$temporary/render.yaml"

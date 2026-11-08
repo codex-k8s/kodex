@@ -153,11 +153,18 @@ class ModelProviderTests(unittest.TestCase):
             self.assert_role_catalog_authority(resources, 'agent-runner-opencode')
             import provider_sandbox_profile
             for selected in (provider_sandbox_profile.PROFILE, ''):
-                rendered = subprocess.run(args + ['--provider-apparmor-profile', selected], cwd=ROOT, capture_output=True, timeout=150,
+                policy_arguments = ['--image-policy-inputs-mode', 'versioned'] if selected == provider_sandbox_profile.PROFILE else []
+                rendered = subprocess.run(args + ['--provider-apparmor-profile', selected] + policy_arguments, cwd=ROOT, capture_output=True, timeout=150,
                                           env={**os.environ, 'GOMAXPROCS': '2', 'GOFLAGS': '-p=1', 'GOWORK': 'off'})
                 self.assertEqual(rendered.returncode, 0, 'optional provider sandbox render failed')
                 actual = list(filter(None, MODULE.yaml.safe_load_all(output.read_text())))
-                self.assertEqual(actual, provider_sandbox_profile.transform(resources, selected))
+                expected = provider_sandbox_profile.transform(resources, selected)
+                if policy_arguments:
+                    import copy, image_policy_inputs, promoted_registry
+                    expected = image_policy_inputs.transform(expected, 'versioned')
+                    self.assertTrue(image_policy_inputs.validate_render(actual))
+                    self.assertEqual(promoted_registry.bind(copy.deepcopy(actual), lock), actual)
+                self.assertEqual(actual, expected)
                 self.assertEqual(provider_sandbox_profile.active(actual), selected)
             # Без optional provider остаются штатные Codex defaults с тем же authority.
             baseline_args = list(args)

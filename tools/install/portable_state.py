@@ -506,7 +506,9 @@ def verify_schemas(state, resources):
 
 def verify_readback(state, resources, completion=None):
     import provider_sandbox_profile
+    import image_policy_inputs
     provider_sandbox_profile.validate_render(resources)
+    image_policy_inputs.validate_render(resources)
     verify_resource_set(state, resources, completion)
 
 
