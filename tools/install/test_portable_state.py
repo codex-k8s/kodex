@@ -74,6 +74,68 @@ class FixtureState(State):
 
 
 class StateTest(unittest.TestCase):
+    def test_owned_clusterip_selector_change_uses_fenced_patch_without_losing_allocations(self):
+        for allocation in ({'clusterIP':'192.0.2.10','clusterIPs':['192.0.2.10'],'ipFamilies':['IPv4'],'ipFamilyPolicy':'SingleStack'},
+                           {'clusterIP':'None','clusterIPs':['None'],'ipFamilies':['IPv4'],'ipFamilyPolicy':'SingleStack'},
+                           {'clusterIP':'192.0.2.10','clusterIPs':['192.0.2.10','2001:db8::10'],'ipFamilies':['IPv4','IPv6'],'ipFamilyPolicy':'PreferDualStack'}):
+            with self.subTest(allocation=allocation):
+                desired={'apiVersion':'v1','kind':'Service','metadata':{'name':'synthetic-egress','namespace':'kodex-system',
+                    'labels':{'app.kubernetes.io/part-of':'kodex'}},'spec':{'selector':{'app':'egress','generation':'new'},'ports':[{'port':8080}]}}
+                actual=live(desired);actual['spec'].update(copy.deepcopy(allocation));actual['spec']['selector']['generation']='old'
+                actual['metadata']['managedFields']=[{'manager':'kodex-install','operation':'Update','apiVersion':'v1'}]
+                class SelectorConflictState(FixtureState):
+                    def call(self,args,value=None):
+                        if args[0]=='apply':raise Rejected('SYNTHETIC_SSA_SELECTOR_CONFLICT')
+                        return super().call(args,value)
+                state=SelectorConflictState([actual]);inventory=state.inventory([desired])
+                state.preflight_apply(desired);self.assertFalse(state.writes)
+                self.assertIn('patch',state.probes[0][0]);self.assertIn('--dry-run=server',state.probes[0][0])
+                state.apply(desired,inventory);result=state.get(desired);verify_resource(desired,result)
+                self.assertEqual(result['metadata']['uid'],actual['metadata']['uid'])
+                self.assertEqual(result['spec']['selector'],desired['spec']['selector'])
+                for field,value in allocation.items():self.assertEqual(result['spec'][field],value)
+                args,body=state.writes[0];self.assertEqual(len(state.writes),1)
+                self.assertEqual(body[:2],[{'op':'test','path':'/metadata/uid','value':'test-uid'},
+                                          {'op':'test','path':'/metadata/resourceVersion','value':'1'}])
+                self.assertNotIn('--force-conflicts',args);self.assertNotIn('delete',args)
+                self.assertEqual(inventory[key(desired)]['seal'],seal(result))
+                # Поздний ответ не даёт права повторить старый CAS.
+                with self.assertRaises(Rejected):state.cas_update(desired,actual)
+
+    def test_clusterip_allocation_owner_inventory_and_resource_version_drift_block_writes(self):
+        desired={'apiVersion':'v1','kind':'Service','metadata':{'name':'synthetic-service','namespace':'kodex-system',
+            'labels':{'app.kubernetes.io/part-of':'kodex'}},'spec':{'selector':{'app':'new'},'ports':[{'port':8080}]}}
+        actual=live(desired);actual['spec'].update(clusterIP='192.0.2.10',clusterIPs=['192.0.2.10'],ipFamilies=['IPv4'],ipFamilyPolicy='SingleStack')
+        for field,value in [('clusterIP','192.0.2.20'),('clusterIPs',['192.0.2.20']),('ipFamilies',['IPv6']),('ipFamilyPolicy','RequireDualStack')]:
+            wrong=copy.deepcopy(desired);wrong['spec'][field]=value;state=FixtureState([actual])
+            with self.subTest(field=field),self.assertRaisesRegex(Rejected,'SERVICE_ALLOCATION_DRIFT'):state.preflight_apply(wrong)
+            self.assertFalse(state.probes);self.assertFalse(state.writes)
+        for mutation in ('uid','spec','owner','owner-reference','rv'):
+            with self.subTest(mutation=mutation):
+                state=FixtureState([actual]);inventory=state.inventory([desired]);changed=state.objects[key(desired)]
+                if mutation=='uid':changed['metadata']['uid']='replacement'
+                if mutation=='spec':changed['spec']['selector']={'app':'foreign'}
+                if mutation=='owner':changed['metadata']['labels']['app.kubernetes.io/part-of']='foreign'
+                if mutation=='owner-reference':changed['metadata']['ownerReferences']=[{'uid':'foreign','kind':'Deployment'}]
+                if mutation=='rv':
+                    class RaceState(FixtureState):
+                        def cas_update(self,wanted,before,dry_run=False):
+                            self.objects[key(desired)]['metadata']['resourceVersion']='2'
+                            return super().cas_update(wanted,before,dry_run)
+                    state=RaceState([actual]);inventory=state.inventory([desired])
+                with self.assertRaises(Rejected):state.apply(desired,inventory)
+                self.assertFalse(state.writes)
+
+    def test_other_service_types_and_new_clusterip_keep_previous_paths(self):
+        for kind in ('NodePort','LoadBalancer','ExternalName'):
+            desired={'apiVersion':'v1','kind':'Service','metadata':{'name':'synthetic-service','namespace':'kodex-system',
+                'labels':{'app.kubernetes.io/part-of':'kodex'}},'spec':{'type':kind,'ports':[{'port':8080}]}}
+            actual=live(desired);state=FixtureState([actual]);inventory=state.inventory([desired]);state.preflight_apply(desired)
+            self.assertEqual(state.probes[0][0][0],'apply')
+            state.apply(desired,inventory);self.assertEqual(state.writes[0][0][0],'apply')
+        desired['spec']={'ports':[{'port':8080}]};state=FixtureState([]);inventory=state.inventory([desired])
+        state.apply(desired,inventory);self.assertEqual(state.writes[0][0][0],'create')
+
     def test_changed_immutable_admission_parameters_require_drained_fail_closed_successor(self):
         desired={'apiVersion':'supplychain.kodex.dev/v1alpha1','kind':'ImageAdmissionPolicyParameters',
             'metadata':{'name':'kodex-image-admission-policy','namespace':'kodex-system','labels':{'app.kubernetes.io/part-of':'kodex'}},
