@@ -4,8 +4,8 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.67
-updated: 2026-10-30
+version: 1.1.68
+updated: 2026-11-08
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
@@ -624,6 +624,15 @@ credential revision/authentication, lease/token/attempt/fence/OCC и payload
 authority и изменённый intent закрыто отклоняются. Сохранённые receipt hashes
 не переписываются и не получают fallback decoder: cutover выполняется при
 отсутствии активных сборок, последующие команды используют новые keys.
+
+Для worker-команд сборки RoleImage известный rollback40001/40P01 повторяет
+всю owner transaction после bounded cleanup, с прежними principal/key/intent,
+OCC/attempt/fence/token и исходным deadline. Предел — три попытки; обычная
+недоступность, cleanup failure и authority/lease rejection не дают права повтора.
+Receipt и обязательные audit/outbox атомарны. Неизвестный commit разрешается
+только через exact scoped receipt этого owner path без внешних действий;
+BuildKit/push и новый attempt автоматически не запускаются. Матрица и native
+проверка: [#2050](../operations/role-image-worker-transactions-2050.md).
 
 Полученный batch runtime claims продлевается с момента получения ответа, а
 не только после последовательной материализации Pod. Каждый keeper немедленно
