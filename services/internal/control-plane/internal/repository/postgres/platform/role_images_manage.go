@@ -312,6 +312,16 @@ func (repository *Repository) Manage(ctx context.Context, input roleimagerepo.Ma
 // transition, audit, managed source lineage, event и receipt в одной serializable транзакции;
 // source visibility вычисляется повторно перед выдачей.
 func (repository *Repository) manageScopedRoleImage(ctx context.Context, input roleimagerepo.ManageInput) (roleimagerepo.ManageResult, error) {
+	return retryRoleImageWorkerTransaction(ctx, func() (roleimagerepo.ManageResult, error) {
+		return repository.manageScopedRoleImageOnce(ctx, input)
+	})
+}
+
+// manageScopedRoleImageOnce owns one fresh authorized transaction, finishes bounded rollback
+// before another attempt and never retries an unknown commit acknowledgement.
+// manageScopedRoleImageOnce владеет одной свежей authorized transaction, завершает bounded
+// rollback до следующей попытки и не повторяет неизвестный commit acknowledgement.
+func (repository *Repository) manageScopedRoleImageOnce(ctx context.Context, input roleimagerepo.ManageInput) (_ roleimagerepo.ManageResult, resultErr error) {
 	current, err := repository.resolveScope(ctx, input.Principal)
 	if err != nil {
 		return roleimagerepo.ManageResult{}, err
@@ -320,7 +330,7 @@ func (repository *Repository) manageScopedRoleImage(ctx context.Context, input r
 	if err != nil {
 		return roleimagerepo.ManageResult{}, errs.ErrUnavailable
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer rollbackAssistantLockedRead(ctx, tx, &resultErr)
 	if input.ScopeKind == "ORGANIZATION" {
 		if err := repository.requireOrganizationRoleImageAccess(ctx, tx, current); err != nil {
 			return roleimagerepo.ManageResult{}, err
@@ -337,7 +347,7 @@ func (repository *Repository) manageScopedRoleImage(ctx context.Context, input r
 		if err := repository.projectRoleImageManageSource(ctx, tx, current, &replay, input.ScopeKind); err != nil {
 			return roleimagerepo.ManageResult{}, err
 		}
-		if err := committed(tx, ctx); err != nil {
+		if err := commitRoleImageOwnerTransaction(ctx, tx); err != nil {
 			return roleimagerepo.ManageResult{}, err
 		}
 		return replay, nil
@@ -377,7 +387,7 @@ func (repository *Repository) manageScopedRoleImage(ctx context.Context, input r
 	if err := repository.projectRoleImageManageSource(ctx, tx, current, &result, input.ScopeKind); err != nil {
 		return roleimagerepo.ManageResult{}, err
 	}
-	if err := committed(tx, ctx); err != nil {
+	if err := commitRoleImageOwnerTransaction(ctx, tx); err != nil {
 		return roleimagerepo.ManageResult{}, err
 	}
 	return result, nil

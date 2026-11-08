@@ -300,7 +300,7 @@ func lockRoleImageArtifact(ctx context.Context, tx pgx.Tx, current scope, artifa
 		return lockedArtifact{}, errs.ErrNotFound
 	}
 	if err != nil {
-		return lockedArtifact{}, errs.ErrUnavailable
+		return lockedArtifact{}, serializableTransactionError(err, errs.ErrUnavailable)
 	}
 	return artifact, nil
 }
