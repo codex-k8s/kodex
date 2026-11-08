@@ -234,3 +234,17 @@ digest. Уже promoted digest не удалять и policy revision не от�
 Queued/claimed attempts закрыть только update/archive recipe либо штатным
 worker terminal path; ручное изменение PostgreSQL, claims, leases или registry
 tags запрещено.
+
+## Закрытая диагностика worker
+
+При переходе build loop в degraded журнал содержит прежний `error_class` и
+канонический `rpc_code`. Raw status message, body, principal и error chain
+не попадают в worker log либо worker-level telemetry. `Unknown` также обозначает
+локальный отказ без typed RPC code; строка ошибки не считается доказательством
+типа. Диагностика не меняет lease, retry, cancel/join и допуск образа.
+
+Опциональный `bootstrap-component-image` target `role-image-builder` меняет
+только main image и provenance annotations при точном immutable base lock.
+Grant agent, identity, replicas, mounts и другие компоненты сохраняются. Перед
+адресным deployment необходимо завершить активную сборку и проверить owner
+leases; готовый Pod не доказывает build/renew/complete. См. #2052 и #1977.
