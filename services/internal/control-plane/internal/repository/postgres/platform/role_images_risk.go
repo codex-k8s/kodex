@@ -89,7 +89,7 @@ func (repository *Repository) hydrateImageRiskHistory(ctx context.Context, queri
 	var attemptJSON []byte
 	var decisionJSON string
 	if err := querier.QueryRow(ctx, queryRoleImageRiskHistoryView, pgx.StrictNamedArgs{"organization_id": current.organizationID, "artifact_ref": artifact.Ref}).Scan(&attemptJSON, &decisionJSON); err != nil {
-		return errs.ErrUnavailable
+		return serializableTransactionError(err, errs.ErrUnavailable)
 	}
 	if err := json.Unmarshal(attemptJSON, &artifact.AdmissionAttempt); err != nil {
 		return errs.ErrConflict
@@ -557,7 +557,7 @@ func (repository *Repository) matchImageAdmissionAttempt(ctx context.Context, tx
 		return errs.ErrForbidden
 	}
 	if err != nil {
-		return errs.ErrUnavailable
+		return serializableTransactionError(err, errs.ErrUnavailable)
 	}
 	if stored.Attempt.Ref != ref || stored.Attempt.Number != number || stored.Attempt.State != state {
 		return errs.ErrForbidden
@@ -581,7 +581,7 @@ func (repository *Repository) validateAdmissionVulnerabilityReport(ctx context.C
 	}
 	stored, err := repository.readImageAdmissionAttempt(ctx, tx, current, locked.ID, locked.Artifact.Ref)
 	if err != nil {
-		return errs.ErrUnavailable
+		return serializableTransactionError(err, errs.ErrUnavailable)
 	}
 	if stored.RiskSHA != input.RiskAcceptanceSHA256 {
 		return errs.ErrForbidden

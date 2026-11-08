@@ -248,6 +248,16 @@ func (repository *Repository) admissionClaimFromReceipt(receipt admissionClaimRe
 // проверяет живой token/fence/policy и связанные inventory/report, затем атомарно сохраняет
 // вердикт, историю уязвимостей, квитанцию и событие изменения рецепта; commit выполняется здесь.
 func (repository *Repository) RecordAdmission(ctx context.Context, input roleimagerepo.AdmissionRecordInput) (entity.ImageArtifact, error) {
+	return retryRoleImageWorkerTransaction(ctx, func() (entity.ImageArtifact, error) {
+		return repository.recordAdmission(ctx, input)
+	})
+}
+
+// recordAdmission reacquires the exact scope, receipt and live artifact/attempt in a fresh
+// transaction; rollback is bounded independently of caller cancellation and commit stays explicit.
+// recordAdmission заново получает точные scope, receipt и live artifact/attempt в свежей
+// transaction; rollback ограничен независимо от caller cancellation, commit остаётся явным.
+func (repository *Repository) recordAdmission(ctx context.Context, input roleimagerepo.AdmissionRecordInput) (_ entity.ImageArtifact, resultErr error) {
 	if input.ExpectedAdmissionAttemptRef == "" || input.ExpectedAdmissionAttempt == 0 {
 		return entity.ImageArtifact{}, errs.ErrForbidden
 	}
@@ -261,13 +271,13 @@ func (repository *Repository) RecordAdmission(ctx context.Context, input roleima
 	if err != nil {
 		return entity.ImageArtifact{}, errs.ErrUnavailable
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer rollbackAssistantLockedRead(ctx, tx, &resultErr)
 	var replay entity.ImageArtifact
 	if found, receiptErr := repository.loadRoleImageReceipt(ctx, tx, current, operation,
 		input.IdempotencyKey, intent, &replay); receiptErr != nil {
 		return entity.ImageArtifact{}, receiptErr
 	} else if found {
-		if err := committed(tx, ctx); err != nil {
+		if err := commitRoleImageOwnerTransaction(ctx, tx); err != nil {
 			return entity.ImageArtifact{}, err
 		}
 		return replay, nil
@@ -284,7 +294,7 @@ func (repository *Repository) RecordAdmission(ctx context.Context, input roleima
 	}
 	var currentArtifact bool
 	if err := tx.QueryRow(ctx, queryRoleImagesAdmissionCurrent, pgx.StrictNamedArgs{"organization_id": current.organizationID, "artifact_id": locked.ID}).Scan(&currentArtifact); err != nil {
-		return entity.ImageArtifact{}, errs.ErrUnavailable
+		return entity.ImageArtifact{}, serializableTransactionError(err, errs.ErrUnavailable)
 	}
 	if !currentArtifact {
 		return entity.ImageArtifact{}, errs.ErrForbidden
@@ -343,7 +353,7 @@ func (repository *Repository) RecordAdmission(ctx context.Context, input roleima
 		int64(locked.Artifact.RecipeVersion), input.Verdict); err != nil {
 		return entity.ImageArtifact{}, err
 	}
-	if err := committed(tx, ctx); err != nil {
+	if err := commitRoleImageOwnerTransaction(ctx, tx); err != nil {
 		return entity.ImageArtifact{}, err
 	}
 	return locked.Artifact, nil

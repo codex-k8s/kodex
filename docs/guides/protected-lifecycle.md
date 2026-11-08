@@ -4,11 +4,18 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.68
+version: 1.1.69
 updated: 2026-11-08
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Owner-команды рецепта и запись допуска образа повторяют целую SERIALIZABLE
+транзакцию только после известного abort и завершённого rollback. Каждая попытка
+заново проверяет actor/tenant, managed source, OCC и live attempt/fence/policy;
+build/scan/push не входят в callback. Неизвестный COMMIT и отказ cleanup не
+повторяются автоматически. Прежние receipts и события сохраняются атомарно;
+точные границы и матрица: [#2060](../operations/role-image-owner-transactions-2060.md).
 
 Перегрузка модели сохраняется отдельным закрытым кодом только после проверки
 структурированного terminal failure и exact execution binding. Текст модели,
