@@ -28,14 +28,13 @@ def bind(resources, lock):
     require(isinstance(host, str) and re.fullmatch('[a-z0-9][a-z0-9.-]*[a-z0-9]', host))
     require(data['promotionRepository'] == 'kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003/kodex/roles')
     base = 'kodex-image-registry.kodex-system.svc.cluster.local:5000/'
-    require(data['trustedRoleBaseRepository'].startswith(base))
-    destination = data['trustedRoleBaseRepository'].removeprefix(base)
-    require(destination in ['kodex/agent-runner', 'kodex/agent-runner-opencode'])
-    component = destination.split('/')[-1]
     engine = lock.get('role_base_runtime_engine', 'codex')
-    require(engine in ('codex', 'opencode') and (component == 'agent-runner-opencode') == (engine == 'opencode'))
-    if component == 'agent-runner-opencode':
-        require(lock.get('role_base_runtime_engine') == 'opencode')
+    require(engine in ('codex', 'opencode'))
+    component = 'agent-runner-opencode' if engine == 'opencode' else 'agent-runner'
+    destination = 'kodex/' + component
+    promoted_base = host + '/' + destination
+    accepted_bases = (base + destination, promoted_base)
+    require(data['trustedRoleBaseRepository'] in accepted_bases)
     agents = [v for v in lock['images'] if v['component'] == component]
     controls = [v for v in lock['images'] if v['component'] == 'control-plane']
     require(len(agents) == 1 and len(controls) == 1)
@@ -43,6 +42,16 @@ def bind(resources, lock):
     control = controls[0]
     require(all((isinstance(v['digest'], str) and re.fullmatch('sha256:[a-f0-9]{64}', v['digest']) and (v['digest'] != 'sha256:' + '0' * 64) for v in [agent, control])))
     require(agent['digest'] == data['trustedRoleBaseDigest'])
+    data['trustedRoleBaseRepository'] = promoted_base
+    for name in ('control-plane', 'role-image-builder', 'kodex-buildkit'):
+        consumer = one(resources, 'Deployment', name)
+        annotations = consumer['spec']['template'].setdefault('metadata', {}).setdefault('annotations', {})
+        current_base = annotations.get('kodex.dev/trusted-role-base-repository')
+        current_digest = annotations.get('kodex.dev/trusted-role-base-digest')
+        require(current_base in accepted_bases or name == 'control-plane' and current_base is None)
+        require(current_digest == agent['digest'] or name == 'control-plane' and current_digest is None)
+        annotations['kodex.dev/trusted-role-base-repository'] = promoted_base
+        annotations['kodex.dev/trusted-role-base-digest'] = agent['digest']
     data['promotedPullRepository'] = host + '/kodex/roles'
     data['nodeReadbackImage'] = host + '/' + destination + '@' + agent['digest']
     job = one(resources, 'Job', 'release-artifact-materializer')

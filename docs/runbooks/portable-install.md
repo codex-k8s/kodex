@@ -4,7 +4,7 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.5.4
+version: 1.5.5
 updated: 2026-11-08
 ---
 
@@ -510,6 +510,15 @@ reference/digest standard совпадают с platform default RoleImage: ship
 обычную сборку, настоящий verified inventory, admission и promotion; исправление
 reference само по себе не даёт допуск и не закрывает #1850. OCI context сохраняет
 собственные immutable source pins.
+
+Та же exact promoted repository/digest пара назначается trusted runtime base в
+admission parameters и rollout annotations control-plane, role-image-builder и
+BuildKit. Иначе каталог может пройти копирование, а сборщик отклонит свою
+configured trusted base при запуске. Helper принимает только прежний exact source
+alias либо уже согласованный promoted alias выбранного lock runtime; произвольный
+host, другой компонент или digest отклоняются. Повторный bind идемпотентен,
+policy hash и параметры пересчитываются вместе. Source context и materializer
+source references остаются отдельными; их полномочия и проверка inventory прежние.
 
 Штатный render вызывает этот шаг самостоятельно. Optional registry-source
 overlay использует тот же helper; запускать его нужно из полного pinned tools

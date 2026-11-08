@@ -37,6 +37,18 @@ class ModelProviderTests(unittest.TestCase):
         standard = next(item for item in catalog['environments'] if item['key'] == 'standard')
         documents = next(item for item in catalog['environments'] if item['key'] == 'documents')
         self.assertEqual(standard['baseImageReference'] + '@' + standard['baseImageDigest'], default_image)
+        self.assertEqual(parameters['data']['trustedRoleBaseRepository'], standard['baseImageReference'])
+        self.assertEqual(parameters['data']['trustedRoleBaseDigest'], standard['baseImageDigest'])
+        for name in ('control-plane', 'role-image-builder', 'kodex-buildkit'):
+            consumer = next(item for item in resources if item['kind'] == 'Deployment' and item['metadata']['name'] == name)
+            annotations = consumer['spec']['template']['metadata']['annotations']
+            self.assertEqual(annotations['kodex.dev/trusted-role-base-repository'], standard['baseImageReference'])
+            if name != 'control-plane':
+                self.assertEqual(annotations['kodex.dev/trusted-role-base-digest'], standard['baseImageDigest'])
+            if name == 'role-image-builder':
+                container = next(item for item in consumer['spec']['template']['spec']['containers'] if item['name'] == name)
+                reference = next(item for item in container['env'] if item['name'] == 'ROLE_IMAGE_BUILDER_TRUSTED_ROLE_BASE_REPOSITORY')
+                self.assertEqual(reference['valueFrom']['fieldRef']['fieldPath'], "metadata.annotations['kodex.dev/trusted-role-base-repository']")
         self.assertEqual(standard['baseImageReference'], 'pull.example.invalid/kodex/' + expected_component)
         self.assertEqual(documents['baseImageReference'], 'pull.example.invalid/kodex/role-base-documents')
         self.assertEqual(documents['available'], expected_component == 'agent-runner')
