@@ -1,5 +1,5 @@
 # syntax=docker.io/docker/dockerfile:1.19.0@sha256:b6afd42430b15f2d2a4c5a02b919e98a525b785b1aaff16747d2f623364e39b6
-FROM docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83 AS build
+FROM docker.io/library/golang:1.26.10-alpine@sha256:87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696 AS build
 ENV GOTOOLCHAIN=local
 WORKDIR /workspace
 COPY libs/go/emailbridgeapi/ libs/go/emailbridgeapi/
@@ -13,7 +13,7 @@ COPY libs/go/grpcserver/ libs/go/grpcserver/
 COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
 COPY services/internal/email-bridge/ services/internal/email-bridge/
 WORKDIR /workspace/services/internal/email-bridge
-RUN test "$(go env GOVERSION)" = "go1.26.6"
+RUN test "$(go env GOVERSION)" = "go1.26.10"
 RUN go mod download
 ARG VERSION=dev
 RUN CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w -X main.version=${VERSION}" -o /out/email-bridge ./cmd/email-bridge

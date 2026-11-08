@@ -4,7 +4,7 @@ set -euo pipefail
 # Отдельный target не запускает сервис и не меняет финальный runtime-образ.
 task_root=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)
 module_root="$task_root/services/internal/stt-tts-service"
-module_cache=$(GOENV=off GOTOOLCHAIN=go1.26.6 go env GOMODCACHE)
+module_cache=$(GOENV=off GOTOOLCHAIN=go1.26.10 go env GOMODCACHE)
 unit_cache=${KODEX_CQ_STT_CACHE:-$(mktemp -d /tmp/kodex-cq1823-stt-cache-XXXXXX)}
 build_context=$(mktemp -d /tmp/kodex-cq1823-stt-image-XXXXXX)
 trap 'rm -rf -- "$build_context"' EXIT

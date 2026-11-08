@@ -80,7 +80,7 @@ export function validateFreshnessWatch(job,lines,now=Date.now(),capability,inspe
   ['freshness-status','freshness-watch'].includes(c.args?.[2])&&c.args?.[0]==='services/internal/internal-rpc-authority'&&c.args?.[1]==='./cmd/cli','EXACT_FRESHNESS_READBACK_JOB_REQUIRED');
  const mount=c.volumeMounts?.find(m=>m.mountPath==='/workspace');
  const source=p.volumes?.find(v=>v.name===mount?.name)?.hostPath;
- requireValue(c.image==='docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83'&&p.containers.length===1&&p.automountServiceAccountToken===false&&mount?.readOnly===true&&!mount.subPath&&!mount.subPathExpr&&source?.type==='Directory'&&capability?.protocol===2&&inspect(source.path).revision===capability.revision,'EXACT_FRESHNESS_READBACK_SOURCE_REQUIRED');
+ requireValue(c.image==='docker.io/library/golang:1.26.10-alpine@sha256:87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696'&&p.containers.length===1&&p.automountServiceAccountToken===false&&mount?.readOnly===true&&!mount.subPath&&!mount.subPathExpr&&source?.type==='Directory'&&capability?.protocol===2&&inspect(source.path).revision===capability.revision,'EXACT_FRESHNESS_READBACK_SOURCE_REQUIRED');
  const rows=lines.trim().split('\n').filter(line=>line.startsWith('{')).map(line=>JSON.parse(line));const last=rows.at(-1);
  requireValue(last&&[1,2].includes(last.version)&&Number.isFinite(Date.parse(last.observedAt))&&now-Date.parse(last.observedAt)>=0&&now-Date.parse(last.observedAt)<=5000,'FRESH_POLICY_READBACK_REQUIRED');
  return last.version;

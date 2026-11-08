@@ -1,6 +1,6 @@
 module github.com/codex-k8s/kodex/libs/go/integrationegresspolicy
 
-go 1.26.6
+go 1.26.10
 
 require (
 	github.com/codex-k8s/kodex/libs/go/mailpolicy v0.0.0

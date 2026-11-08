@@ -405,7 +405,7 @@ DB и S3 objects не переключаются/не изменяются.
 
 ```sh
 make test-scoped-backup-drill
-GOTOOLCHAIN=go1.26.6 GOMAXPROCS=2 \
+GOTOOLCHAIN=go1.26.10 GOMAXPROCS=2 \
   go -C services/jobs/backup-controller test -p 1 ./...
 ```
 

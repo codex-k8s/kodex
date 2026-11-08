@@ -5,7 +5,7 @@ FROM docker.io/anchore/syft:v1.51.0@sha256:678bfa565b60f747aac0f8e964fe5588a2444
 FROM docker.io/anchore/grype:v0.117.0@sha256:ddf9e9f204049f3a4a0955ef70873cabab6a31432125ad4f20a490b54950a253 AS grype
 FROM docker.io/regclient/regctl:v0.11.5@sha256:dbe356c6cf9f8f85e302b9e47fed481ef3f1b04807350e99b02ab2cadee0a993 AS regctl
 
-FROM docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83 AS build
+FROM docker.io/library/golang:1.26.10-alpine@sha256:87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696 AS build
 ENV GOTOOLCHAIN=local
 WORKDIR /workspace
 COPY libs/go/ libs/go/

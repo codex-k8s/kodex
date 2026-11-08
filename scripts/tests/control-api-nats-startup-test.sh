@@ -57,6 +57,6 @@ trap cleanup EXIT
 (
   cd "$repository_root/services/external/control-api-gateway"
   KODEX_API_NATS_TEST_DIRECTORY="$fixture_directory" KODEX_API_NATS_TEST_CONTAINER="$fixture_container" KODEX_API_NATS_TEST_IMAGE="$fixture_image" \
-    GOTOOLCHAIN=go1.26.6 GOMAXPROCS=2 timeout --kill-after=5s 110s go test -p=1 -count=1 -timeout=90s ./internal/app -run '^TestNATSStartupDiagnosticComponent$' -v
+    GOTOOLCHAIN=go1.26.10 GOMAXPROCS=2 timeout --kill-after=5s 110s go test -p=1 -count=1 -timeout=90s ./internal/app -run '^TestNATSStartupDiagnosticComponent$' -v
 )
 echo 'Control API native NATS JWT and TLS diagnostics completed'

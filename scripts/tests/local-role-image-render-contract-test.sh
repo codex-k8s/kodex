@@ -266,7 +266,7 @@ integration_image=registry.local.kodex/kodex/integration-hot-reload@sha256:66666
 "$source_root/tools/dev/verify-local-integration-render.sh" "$render" "$integration_image"
 integration_negative="$temporary_directory/integration-negative.yaml"
 for mutation in \
-  '(select(.kind == "Deployment" and .metadata.name == "integration-gateway") | .spec.template.spec.containers[] | select(.name == "integration-gateway") | .image) = "docker.io/library/golang:1.26.6-alpine"' \
+  '(select(.kind == "Deployment" and .metadata.name == "integration-gateway") | .spec.template.spec.containers[] | select(.name == "integration-gateway") | .image) = "docker.io/library/golang:1.26.10-alpine"' \
   '(select(.kind == "Deployment" and .metadata.name == "integration-gateway") | .spec.template.spec.containers[] | select(.name == "integration-gateway") | .securityContext.readOnlyRootFilesystem) = false' \
   '(select(.kind == "Deployment" and .metadata.name == "integration-gateway") | .spec.template.spec.volumes[] | select(.name == "configuration-writeback-scratch") | .emptyDir) = {}'; do
   yq "$mutation" "$render" >"$integration_negative"

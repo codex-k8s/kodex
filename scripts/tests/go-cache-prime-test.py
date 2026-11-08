@@ -71,7 +71,7 @@ class CachePrime(unittest.TestCase):
         for module in library.MODULES:
             target = self.source / module
             target.mkdir(parents=True)
-            (target / "go.mod").write_text(f"module github.com/codex-k8s/kodex/{module}\n\ngo 1.26.6\n")
+            (target / "go.mod").write_text(f"module github.com/codex-k8s/kodex/{module}\n\ngo 1.26.10\n")
             (target / "go.sum").write_text("")
         (self.source / "README.md").write_text("fixture")
         (self.source / "tools/dev").mkdir(parents=True)

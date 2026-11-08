@@ -29,7 +29,7 @@ ORIGINS = (
     "https://github.com/codex-k8s/kodex.git",
     "git@github.com:codex-k8s/kodex.git",
 )
-GO_VERSION = "go1.26.6"
+GO_VERSION = "go1.26.10"
 
 
 class Failure(Exception):

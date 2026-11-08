@@ -1,6 +1,6 @@
 module github.com/codex-k8s/kodex/libs/go/integrationgatewayauth
 
-go 1.26.6
+go 1.26.10
 
 require (
 	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0
@@ -20,7 +20,7 @@ require (
 	github.com/lestrrat-go/option/v2 v2.0.0 // indirect
 	github.com/segmentio/asm v1.2.1 // indirect
 	github.com/valyala/fastjson v1.6.10 // indirect
-	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
 )
 
 replace github.com/codex-k8s/kodex/libs/go/internalrpcauth => ../internalrpcauth

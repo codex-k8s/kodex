@@ -78,6 +78,13 @@ temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 guard_source="$temporary_directory/kodex-go-toolchain-guard.go"
 printf '%s' "$guard_payload" | base64 -d >"$guard_source"
+# Скрытый payload обязан проверять тот же compiler, что и весь release cohort.
+expected_go=$(awk '$1 == "GO_TOOLCHAIN" && $2 == ":=" { print $3 }' "$repository_root/Makefile")
+guard_versions=$(grep -Eo 'go[0-9]+\.[0-9]+\.[0-9]+' "$guard_source" | sort -u)
+[[ -n "$expected_go" && "$guard_versions" == "$expected_go" ]] || {
+  printf 'Embedded Go guard version differs from release toolchain\n' >&2
+  exit 1
+}
 if rg -q 'mattercodex|matter-codex' "$guard_source"; then
   printf 'Agent runner toolchain guard contains a retired runtime name\n' >&2
   exit 1

@@ -1,6 +1,6 @@
 module github.com/codex-k8s/kodex/libs/go/emailbridgeapi
 
-go 1.26.6
+go 1.26.10
 
 require (
 	github.com/oapi-codegen/runtime v1.7.0

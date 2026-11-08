@@ -317,7 +317,7 @@ class BuildLocalRunnerProfile(unittest.TestCase):
 
     def test_security_refresh_and_native_browser_are_source_pinned_before_runner(self):
         full = (ROOT / "services/jobs/agent-runner/Dockerfile").read_text().split(" AS full-runtime\n", 1)[1]
-        self.assertIn('ARG KODEX_TOOLCHAIN_SECURITY_REVISION=20261005', full)
+        self.assertIn('ARG KODEX_TOOLCHAIN_SECURITY_REVISION=20261108', full)
         self.assertIn('LABEL kodex.dev/toolchain-security-revision=${KODEX_TOOLCHAIN_SECURITY_REVISION}', full)
         self.assertLess(full.index('APT::Update::Error-Mode=any update'), full.index('apt-get upgrade -y --no-install-recommends'))
         self.assertLess(full.index('apt-get upgrade -y --no-install-recommends'), full.index('apt-get install -y --no-install-recommends'))
@@ -362,8 +362,8 @@ class BuildLocalRunnerProfile(unittest.TestCase):
     def test_security_revision_changes_real_source_input_and_cache_identity(self):
         self._assert_cache_identity_changes(
             'services/jobs/agent-runner/Dockerfile',
-            'KODEX_TOOLCHAIN_SECURITY_REVISION=20261005',
-            'KODEX_TOOLCHAIN_SECURITY_REVISION=20261006',
+            'KODEX_TOOLCHAIN_SECURITY_REVISION=20261108',
+            'KODEX_TOOLCHAIN_SECURITY_REVISION=20261109',
             'security fixture',
         )
 

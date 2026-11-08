@@ -132,7 +132,7 @@ python3 tools/dev/prime-go-cache.py prime --profile staging-hot-reload \
 `--module` можно повторить для ограниченного списка из закрытого реестра
 `tools/dev/go_cache.py`: 12 основных Go deployables и optional interaction-gateway.
 Runner/RoleImage binaries в этот source-cache workflow не входят. Plan читает
-Git/module metadata и проверяет Go 1.26.6; shared cache не меняется, сеть не нужна.
+Git/module metadata и проверяет Go 1.26.10; shared cache не меняется, сеть не нужна.
 Prime повторяет проверки и берёт общий `.go-prime.lock`; lock timeout не запускает
 вторую подготовку. Бюджет рабочих команд до 1800 секунд, ожидания lock — 600 секунд;
 после timeout/сигнала дочерний процесс завершается до закрытия cache permissions.

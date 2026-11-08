@@ -11,7 +11,7 @@ timeout 30s docker run --rm --pull=never --network none \
   --mount "type=bind,src=$root,dst=/workspace,readonly" \
   --tmpfs /tmp:rw,nosuid,nodev,size=67108864,mode=1777 \
   --entrypoint /bin/sh "$image" -ec '
-    test "$(go env GOVERSION)" = go1.26.6
+    test "$(go env GOVERSION)" = go1.26.10
     test "$(/usr/bin/git --version)" = "git version 2.52.0"
     test -s /etc/ssl/certs/ca-certificates.crt
     test -x /usr/libexec/git-core/git-remote-https

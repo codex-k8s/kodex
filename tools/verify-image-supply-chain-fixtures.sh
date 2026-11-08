@@ -931,8 +931,8 @@ jq -cn --arg image "$image_digest" --arg provenance "$provenance_sha" --arg sha 
   '{schema:"kodex.dev/image-tool-inventory-binding/v1",imageDigest:$image,provenanceSHA256:$provenance,platforms:[{platformDigest:$image,manifestSHA256:$sha,manifest:$manifest[0]}]}' \
   >"$evidence_source/tool-inventory.json"
 (cd "$repository_root/services/jobs/role-image-builder" &&
-  GOTOOLCHAIN=go1.26.6 go build "${fixture_go_args[@]}" -o "$temporary_directory/bin/image-tool-inventory-validator" ./cmd/image-tool-inventory-validator &&
-  GOTOOLCHAIN=go1.26.6 go build "${fixture_go_args[@]}" -o "$temporary_directory/bin/image-vulnerability-report-validator" ./cmd/image-vulnerability-report-validator)
+  GOTOOLCHAIN=go1.26.10 go build "${fixture_go_args[@]}" -o "$temporary_directory/bin/image-tool-inventory-validator" ./cmd/image-tool-inventory-validator &&
+  GOTOOLCHAIN=go1.26.10 go build "${fixture_go_args[@]}" -o "$temporary_directory/bin/image-vulnerability-report-validator" ./cmd/image-vulnerability-report-validator)
 export PATH="$temporary_directory/bin:$PATH"
 sbom_sha=$(sha256sum "$evidence_source/sbom.json" | awk '{print $1}')
 jq --argjson policy_revision "$policy_revision" --arg policy_sha256 "$policy_sha256" \

@@ -13,7 +13,7 @@ import { workloadPods } from '../dev/component-manifest.mjs';
 
 const namespace = 'kodex-system', templateName = 'internal-rpc-authority-migrate';
 const modulePath = 'services/internal/internal-rpc-authority';
-const image = 'docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83';
+const image = 'docker.io/library/golang:1.26.10-alpine@sha256:87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696';
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const sha = /^[a-f0-9]{64}$/;
 function requireValue(ok, code) { if (!ok) throw new Error(code); }
@@ -150,7 +150,7 @@ async function main(args) {
       requireValue(inventory.some(item=>item.kind==='Deployment'&&item.metadata.name===name),'REQUIRED_AUTHORITY_DEPLOYMENT_MISSING');
     const actual=authorityConsumers(inventory);
     const capability=command==='plan'?JSON.parse(readFileSync(options['--capability'],'utf8')):plan.capability;
-    requireValue(capability?.version===1&&capability.protocol===2&&capability.revision===plan.revision&&sha.test(capability.binaries?.issuer)&&sha.test(capability.binaries?.verifier)&&['issuer','verifier'].every(role=>sha.test(capability.imageBinaries?.[role]))&&capability.imageVersion===plan.revision&&capability.go==='go1.26.6'&&
+    requireValue(capability?.version===1&&capability.protocol===2&&capability.revision===plan.revision&&sha.test(capability.binaries?.issuer)&&sha.test(capability.binaries?.verifier)&&['issuer','verifier'].every(role=>sha.test(capability.imageBinaries?.[role]))&&capability.imageVersion===plan.revision&&capability.go==='go1.26.10'&&
       capability.recipe==='CGO_ENABLED=0 GOWORK=off GOOS=linux GOARCH=amd64 GOAMD64=v1 go build -trimpath -buildvcs=false ./cmd/internal-rpc-authority-{issuer,verifier}','EXACT_AUTHORITY_CAPABILITY_REQUIRED');
     const verifyExecutables=()=>{for(const consumer of actual) {
       const pod=inventory.find(item=>item.kind==='Pod'&&item.metadata.uid===consumer.podUID);

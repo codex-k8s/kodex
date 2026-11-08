@@ -20,10 +20,17 @@ export const securityFloors = {
   "brace-expansion": "5.0.11",
   "ip-address": "10.3.1",
   "js-yaml": "4.3.2",
-  pnpm: "11.28.2",
+  pnpm: "11.28.11",
   tar: "7.5.21",
-  undici: "6.28.1",
+  undici: "6.29.1",
+  vite: "8.1.6",
+  vue: "3.5.42",
+  "@vue/server-renderer": "3.5.42",
+  joi: "18.3.1",
+  "follow-redirects": "1.16.2",
 };
+// Разные поддержанные major одного пакета проверяются независимо.
+const majorSecurityFloors = { undici: { 8: "8.12.2" } };
 export const commands = {
   codex: "@openai/codex",
   tsc: "typescript",
@@ -60,7 +67,8 @@ function entries(value) {
 }
 export function checkVersion(name, version) {
   if (!VERSION.test(version ?? "")) fail("NPM_VERSION_INVALID");
-  const floor = securityFloors[name];
+  const floor =
+    majorSecurityFloors[name]?.[version.split(".")[0]] ?? securityFloors[name];
   if (!floor || version.split(".")[0] !== floor.split(".")[0]) return;
   const actual = version.split(".").map(Number),
     minimum = floor.split(".").map(Number);

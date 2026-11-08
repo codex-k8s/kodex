@@ -2,7 +2,7 @@
 
 ARG ADMISSION_TOOLS_IMAGE=admission-tools.invalid/kodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
 
-FROM docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83 AS build
+FROM docker.io/library/golang:1.26.10-alpine@sha256:87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696 AS build
 ENV GOTOOLCHAIN=local
 ARG VERSION=dev
 WORKDIR /workspace
@@ -32,7 +32,7 @@ COPY libs/go/securefile/ libs/go/securefile/
 COPY libs/go/runtimecontract/ libs/go/runtimecontract/
 COPY services/jobs/role-image-builder/ services/jobs/role-image-builder/
 WORKDIR /workspace/services/jobs/role-image-builder
-RUN test "$(go env GOVERSION)" = "go1.26.6"
+RUN test "$(go env GOVERSION)" = "go1.26.10"
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -ldflags="-s -w -X main.version=${VERSION}" \
     -o /out/role-image-builder ./cmd/role-image-builder

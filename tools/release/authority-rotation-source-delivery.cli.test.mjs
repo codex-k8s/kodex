@@ -16,7 +16,7 @@ test('CLI plan связывает проверенный --source без нес�
  const directory=mkdtempSync(join(tmpdir(),'asp-'));chmodSync(directory,0o700);t.after(()=>rmSync(directory,{recursive:true,force:true}));
  const source='/srv/kodex-dev/next',revision='a'.repeat(40),before=publisher(),rendered=migration(),{sa,egress,ingress}=prerequisites();
  const output=join(directory,'plan.json'),capabilityPath=join(directory,'capability.json');
- writeFileSync(capabilityPath,JSON.stringify({version:1,protocol:1,revision,go:'go1.26.6',publisherSHA256:'b'.repeat(64),migrations:[{name:'fixture.sql',sha256:'c'.repeat(64)}]}),{mode:0o600});
+ writeFileSync(capabilityPath,JSON.stringify({version:1,protocol:1,revision,go:'go1.26.10',publisherSHA256:'b'.repeat(64),migrations:[{name:'fixture.sql',sha256:'c'.repeat(64)}]}),{mode:0o600});
  const registry={metadata:{uid:uidB},data:{registry:'18'}};let dryRuns=0;
  const io={inspectSource:path=>({revision:path===source?revision:'c'.repeat(40)}),sourcePublisherExecutable:()=> 'd'.repeat(64),run:(command,args,input)=>{
   if(command==='yq')return JSON.stringify([rendered,sa,egress,ingress]);

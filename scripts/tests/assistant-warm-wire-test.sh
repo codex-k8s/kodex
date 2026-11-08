@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-export GOTOOLCHAIN=go1.26.6 GOMAXPROCS=2 GOWORK=off
+export GOTOOLCHAIN=go1.26.10 GOMAXPROCS=2 GOWORK=off
 
 # Только synthetic owner PostgreSQL; agents/provider/STT не запускаются.
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)

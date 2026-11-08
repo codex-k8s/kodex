@@ -11,7 +11,7 @@ try {
  const source=realpathSync(options['--source']),output=resolve(options['--output']);
  if(inspectSource(source).revision!==options['--revision']||output.startsWith(source+'/'))throw new Error('EXACT_CLEAN_SOURCE_REQUIRED');
  const env={...process.env,GOENV:'off',GOFLAGS:'',GOTOOLCHAIN:'local',CGO_ENABLED:'0',GOWORK:'off',GOOS:'linux',GOARCH:'amd64',GOAMD64:'v1',GOMAXPROCS:'4'};
- const go=execFileSync('go',['env','GOVERSION'],{env,encoding:'utf8',stdio:'pipe',timeout:10_000}).trim();if(go!=='go1.26.6')throw new Error('EXACT_GO_VERSION_REQUIRED');
+ const go=execFileSync('go',['env','GOVERSION'],{env,encoding:'utf8',stdio:'pipe',timeout:10_000}).trim();if(go!=='go1.26.10')throw new Error('EXACT_GO_VERSION_REQUIRED');
  const temporary=mkdtempSync(join(dirname(output),'authority-source-build-'));
  try {
   const binary=join(temporary,'publisher');
