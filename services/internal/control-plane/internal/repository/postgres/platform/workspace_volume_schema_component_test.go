@@ -49,9 +49,13 @@ func readWorkspaceVolumeSchemaProof(t *testing.T, ctx context.Context, conn *pgx
 	case 20261108000100:
 		profile, filename = "AUTHORITY_PROOF_COUNTER_V1", "authority-proof-counter-migration-postcondition.sql"
 	case 20261109000100:
-		profile, filename = "INTEGRATION_RESOURCE_POLICIES_V1", "integration-resource-policies-migration-postcondition.sql"
+		profile, filename = "WORKSPACE_SCHEMA_REGRESSION_V1", "workspace_schema_regression.sql"
 	}
-	source, err := os.ReadFile("../../../../../../../tools/release/" + filename)
+	path := "../../../../../../../tools/release/" + filename
+	if version == 20261109000100 {
+		path = "testdata/sql/" + filename
+	}
+	source, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal("read shipped current workspace schema proof")
 	}
@@ -111,12 +115,22 @@ func workspaceComponentSchemaVersion(t *testing.T, ctx context.Context, conn *pg
 // Counterfactual callers проверяют свой false predicate до этой проверки исключительно canonical schema.
 func assertWorkspaceVolumeSchemaCanonical(t *testing.T, actual map[string]any) {
 	t.Helper()
-	if actual["profile"] == "INTEGRATION_RESOURCE_POLICIES_V1" && actual["integrationResourcePoliciesCatalog"] != true {
-		t.Error("actual integration resource policies catalog is unconfirmed")
+	if actual["profile"] == "WORKSPACE_SCHEMA_REGRESSION_V1" {
+		for key, expected := range map[string]any{
+			"purgeNodes": float64(111), "purgeEdges": float64(306), "workspacePurgeGuard": true,
+			"purgeNodeFingerprint": "3eb558fae167872ba6bd17bc68f7a303", "purgeEdgeFingerprint": "19782286a860f9e05cdaad7b6e5f8ef3",
+			"sshComposeProfile": "SSH_COMPOSE_V1", "sshColumns": true, "sshConstraints": true,
+			"sshFunctions": true, "sshTriggers": true, "sshRuntimeColumns": true,
+		} {
+			if actual[key] != expected {
+				t.Errorf("workspace regression mismatch: field=%s", key)
+			}
+		}
+		return
 	}
 	nodes, edges := float64(109), float64(303)
 	switch actual["profile"] {
-	case "INTEGRATION_RESOURCE_POLICIES_V1", "AUTHORITY_PROOF_COUNTER_V1", "JIRA_CREATE_FIELDS_V1", "PERSONAL_INTEGRATION_CREDENTIALS_V1", "PLATFORM_OIDC_IDENTITY_V1":
+	case "AUTHORITY_PROOF_COUNTER_V1", "JIRA_CREATE_FIELDS_V1", "PERSONAL_INTEGRATION_CREDENTIALS_V1", "PLATFORM_OIDC_IDENTITY_V1":
 		for _, field := range []string{"restoreCatalog", "githubPRCatalog", "githubAutonomousWrites", "workflowPDLCCatalog", "workflowContentPageCatalog", "platformOIDCCatalog"} {
 			if actual[field] != true {
 				t.Errorf("actual successor workspace catalog is unconfirmed: field=%s", field)
@@ -128,7 +142,7 @@ func assertWorkspaceVolumeSchemaCanonical(t *testing.T, actual map[string]any) {
 				t.Error("actual personal credentials catalog or graph is unconfirmed")
 			}
 		}
-		if (actual["profile"] == "AUTHORITY_PROOF_COUNTER_V1" || actual["profile"] == "INTEGRATION_RESOURCE_POLICIES_V1") && actual["authorityProofCounterCatalog"] != true {
+		if actual["profile"] == "AUTHORITY_PROOF_COUNTER_V1" && actual["authorityProofCounterCatalog"] != true {
 			t.Error("actual authority proof counter catalog is unconfirmed")
 		}
 	}

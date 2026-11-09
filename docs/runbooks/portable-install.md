@@ -1241,22 +1241,41 @@ Composite bootstrap completion receipt передаётся во все влож
 
 ### Переход036→037 и backup reader
 
-Штатный forward upgrade регистрирует037 (`20261109000100`) отдельно для
-`plain` и `backup`; применять SQL вручную вместо operator lifecycle не нужно.
-Должны совпасть exact source/render/schema pins, сохранённые bootstrap effects,
-реальный завершённый migration Job/Pod и полный native schema proof.
+Forward update037 (`20261109000100`) использует обычную Goose-миграцию.
+Operator сохраняет source/render/schema pins, прежние bootstrap receipts и
+подтверждает новый migration Job/Pod. Исторические миграции не переписываются.
 
-Predecessor backup profile037 поддерживает два полных036 каталога:
-исторический restore с9SELECT grants и bootstrap-вариант, в котором backup
-reader уже получил SELECT на `integration_grants` и `integration_approval_scopes`.
-Во втором случае добавлены только две owner-issued nongrantable SELECT;
-все остальные owner/ACL/columns/functions/triggers/purge pins совпадают.
-Частичный вариант, WRITE, grant option или другой grantor не принимаются.
-Normal и post037 profiles сохраняют собственные exact catalogs. Проверка
-не выдаёт и не отзывает разрешения в рабочей БД для подгонки под шаблон.
+Перед обновлением проверяются версия036, owner затронутых таблиц,
+доступность proof watermark, отсутствие объектов037 и незавершённой работы.
+Количество уже выданных backup SELECT не фиксируется снимком каталога:
+безопасный SELECT на подмножестве таблиц не меняет смысл миграции.
+WRITE, grant option, посторонний grantor и membership backup reader
+отклоняются. Режим `backup` дополнительно требует штатную backup identity.
 
-Сборка runtime images и последующая квалификация tools-only installer могут
-иметь разные exact source pins только при проверенном полном diff, который
-не меняет runtime/контракты/миграции. Полный набор immutable images и собственная
-приёмка новой установки остаются обязательными; qualification scripts сами
-по себе не подтверждают установленную функцию и не являются rollback БД.
+После миграции readback037 проверяет её колонки/defaults, CHECK, функции,
+triggers, owner/ACL и watermark. `backup` дополнительно требует SELECT на
+явно перечисленных таблицах. Ответ имеет профиль `INTEGRATION_RESOURCE_POLICIES_V2`
+либо `INTEGRATION_RESOURCE_POLICIES_BACKUP_V2`; это проверка условий и результата
+текущей миграции, а не аттестация всего исторического каталога PostgreSQL.
+
+`restore-workspace-backup-acl` на037 сохраняет проверку maintenance identity,
+idle workspace boundary и известного schema head. В одной транзакции он
+проверяет текущие объекты и возвращает только штатный SELECT и default SELECT.
+Временного REVOKE для подгонки под schema snapshot больше нет. Ошибка откатывает
+всю транзакцию; неизвестный результат сначала выясняется readback.
+
+Квалификация включает disposable upgrade, повторный `up`, свежую установку,
+реальные `pg_dump`/`pg_restore` и функциональные owner-тесты персональных прав,
+согласований и recovery. Регрессии прежних workflow/SSH исполняются отдельными
+тестами и не копируются в каждую новую проверку установщика. Команды:
+
+```bash
+bash scripts/tests/control-plane-postgres-test.sh --integration-resource-policies-upgrade
+bash scripts/tests/control-plane-postgres-test.sh --integration-resource-policies-fresh-install
+bash scripts/tests/control-plane-postgres-test.sh --integration-resource-policies-owner
+```
+
+Изменение embedded restore SQL меняет исполняемый control-plane CLI: требуется
+новый immutable image. Прежняя сборка не получает исправление от обновления
+installer scripts. Результат проверок не означает выполненный rollout либо
+безопасность возврата к старому image после forward migration.

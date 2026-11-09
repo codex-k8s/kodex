@@ -23,9 +23,9 @@ const (
 	workspaceBackupCleanupBudget = 30 * time.Second
 )
 
-// workspaceBackupStatements embeds only generated, fixed maintenance SQL and a read-only version selector.
+// workspaceBackupStatements embeds only fixed maintenance SQL and a read-only version selector.
 // No caller-supplied query, role, schema or target table can enter this registry.
-// workspaceBackupStatements встраивает только generated fixed maintenance SQL и read-only selector версии.
+// workspaceBackupStatements встраивает только fixed maintenance SQL и read-only selector версии.
 // Caller не может передать в реестр запрос, роль, схему или целевую таблицу.
 //
 //go:embed workspace_backup_sql/*.sql
@@ -61,9 +61,9 @@ func executeWorkspaceBackupStatement(ctx context.Context, database *sql.DB, file
 	return tx.Commit()
 }
 
-// restoreWorkspaceBackupACL admits only known committed schema heads and then validates the actual catalog in the write transaction.
+// restoreWorkspaceBackupACL admits only known committed schema heads and then validates the applicable schema and privileges in the write transaction.
 // A late failure preserves the prior grants by rollback; an unknown schema never receives a compatibility fallback.
-// restoreWorkspaceBackupACL принимает только известные committed schema heads и проверяет actual catalog в write transaction.
+// restoreWorkspaceBackupACL принимает только известные committed schema heads и проверяет applicable schema и privileges в write transaction.
 // Поздний отказ сохраняет прежние grants через rollback; неизвестная схема не получает compatibility fallback.
 func restoreWorkspaceBackupACL(ctx context.Context, database *sql.DB) error {
 	selector, err := workspaceBackupStatements.ReadFile("workspace_backup_sql/version.sql")
