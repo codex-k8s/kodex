@@ -1,7 +1,13 @@
 package app
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
+	"strings"
 	"testing"
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -11,6 +17,50 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// TestInvocationFailureLogIsClosedAndSingle checks the worker boundary against wrapped untrusted diagnostics and distinguishes local rejection from an observed provider response.
+// TestInvocationFailureLogIsClosedAndSingle проверяет границу worker с обёрнутой недоверенной диагностикой и отличает локальный отказ от наблюдённого HTTP-ответа.
+func TestInvocationFailureLogIsClosedAndSingle(t *testing.T) {
+	for _, fixture := range []struct {
+		name, class, level string
+		err                error
+		status             int
+	}{
+		{name: "success"},
+		{name: "local rejection", class: "INTEGRATION_REQUEST_REJECTED", level: "INFO", err: &integration.SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}},
+		{name: "provider rejection", class: "INTEGRATION_REQUEST_REJECTED", level: "INFO", err: fmt.Errorf("synthetic-private-detail: %w", &integration.SafeError{Code: "INTEGRATION_REQUEST_REJECTED", ProviderHTTPStatus: 422}), status: 422},
+		{name: "authentication", class: "INTEGRATION_AUTH_REJECTED", level: "INFO", err: &integration.SafeError{Code: "INTEGRATION_AUTH_REJECTED", ProviderHTTPStatus: 401}, status: 401},
+		{name: "transport", class: "INTEGRATION_UNAVAILABLE", level: "WARN", err: errors.New("synthetic-private-detail")},
+		{name: "unknown", class: "integration_outcome_unknown", level: "WARN", err: &integration.UnknownOutcomeError{}},
+		{name: "unclassified safe code", class: "INTEGRATION_UNAVAILABLE", level: "WARN", err: &integration.SafeError{Code: "synthetic-private-detail"}},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			var output bytes.Buffer
+			logger := slog.New(slog.NewJSONHandler(&output, &slog.HandlerOptions{Level: slog.LevelDebug}))
+			logInvocationOutcome(t.Context(), logger, fixture.err)
+			if fixture.err == nil {
+				if output.Len() != 0 {
+					t.Fatal("success emitted a failure")
+				}
+				return
+			}
+			var event map[string]any
+			if strings.Count(output.String(), "\n") != 1 || json.Unmarshal(output.Bytes(), &event) != nil || strings.Contains(output.String(), "synthetic-private-detail") {
+				t.Fatal("failure diagnostics leaked or were duplicated")
+			}
+			if event["error_class"] != fixture.class || event["level"] != fixture.level {
+				t.Fatal("closed classification or severity changed")
+			}
+			if fixture.name == "unknown" {
+				if event["stage"] != "unclassified" || event["provider_http_status"] != nil {
+					t.Fatal("unknown outcome changed its existing diagnostic")
+				}
+			} else if event["provider_http_status"] != float64(fixture.status) {
+				t.Fatal("observed status was lost or invented")
+			}
+		})
+	}
+}
 
 // completionFixture captures invocation completion requests and injects an owner RPC failure without a live transport or mutation.
 // RU: completionFixture сохраняет запросы завершения вызова и подставляет ошибку owner RPC без живого транспорта и изменения состояния.

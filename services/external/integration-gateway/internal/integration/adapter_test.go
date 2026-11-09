@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -326,6 +327,28 @@ func TestOutcomeExposesOnlySafeCode(t *testing.T) {
 	if UnknownOutcomeStage(&UnknownOutcomeError{stage: "raw provider response"}) != "unclassified" ||
 		UnknownOutcomeStage(errors.New("raw provider response")) != "not_unknown" {
 		t.Fatal("untrusted diagnostic stage escaped into logs")
+	}
+}
+
+// TestObservedProviderHTTPStatus preserves classification through wrapping and excludes invented or successful HTTP observations.
+// TestObservedProviderHTTPStatus сохраняет классификацию через обёртку и исключает выдуманные либо успешные HTTP-наблюдения.
+func TestObservedProviderHTTPStatus(t *testing.T) {
+	t.Parallel()
+	for _, code := range []int{302, 400, 401, 403, 404, 409, 422, 429, 500, 503} {
+		err := statusError(code)
+		_, before := Outcome(err)
+		wrapped := fmt.Errorf("private provider diagnostics must not escape: %w", err)
+		_, after := Outcome(wrapped)
+		if ObservedProviderHTTPStatus(wrapped) != code || before != after || IsUnknownOutcome(wrapped) {
+			t.Fatal("numeric observation changed classification or was lost through wrapping")
+		}
+	}
+	for _, err := range []error{nil, errors.New("private transport detail"), &UnknownOutcomeError{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}, &SafeError{Code: "INTEGRATION_AUTH_REJECTED", AuthenticationHTTPStatus: 401},
+		&SafeError{Code: "INTEGRATION_AUTH_REJECTED", ProviderHTTPStatus: -1}, &SafeError{Code: "INTEGRATION_AUTH_REJECTED", ProviderHTTPStatus: 200},
+		&SafeError{Code: "INTEGRATION_AUTH_REJECTED", ProviderHTTPStatus: 600}} {
+		if ObservedProviderHTTPStatus(err) != 0 {
+			t.Fatal("invented provider response status")
+		}
 	}
 }
 

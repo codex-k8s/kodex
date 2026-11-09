@@ -216,7 +216,7 @@ func (adapter *Adapter) gitLabPermissionGET(ctx context.Context, request Request
 	body, err := adapter.gitLabJSON(ctx, request, capability, configuration, http.MethodGet, path, query, nil, "")
 	var safe *SafeError
 	if errors.As(err, &safe) && safe.Code == "INTEGRATION_AUTH_REJECTED" && safe.AuthenticationHTTPStatus == http.StatusForbidden {
-		return nil, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+		return nil, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED", ProviderHTTPStatus: safe.ProviderHTTPStatus}
 	}
 	return body, err
 }

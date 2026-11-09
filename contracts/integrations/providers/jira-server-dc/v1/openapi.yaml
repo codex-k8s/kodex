@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  version: 1.3.0
+  version: 1.3.1
   description: Самостоятельно описанный ограниченный контракт по официальной документации;
     это не полный официальный OpenAPI и не grant.
   title: Jira Server / Data Center — ограниченный REST v2
@@ -679,13 +679,23 @@ paths:
                       required:
                       - key
                     issuetype:
-                      type: object
-                      properties:
-                        name:
-                          type: string
-                      additionalProperties: false
-                      required:
-                      - name
+                      oneOf:
+                      - type: object
+                        properties:
+                          id:
+                            type: string
+                            pattern: '^[0-9]+$'
+                            maxLength: 64
+                        additionalProperties: false
+                        required:
+                        - id
+                      - type: object
+                        properties:
+                          name:
+                            type: string
+                        additionalProperties: false
+                        required:
+                        - name
                     summary:
                       type: string
                       maxLength: 512

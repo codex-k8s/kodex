@@ -47,6 +47,13 @@ type jiraCreateMetadataPage struct {
 	Values                     []jiraCreateMetadataField
 }
 
+// jiraCreateScreen binds the resolved non-subtask type ID to the complete field metadata checked before create.
+// jiraCreateScreen связывает найденный ID обычного типа с полной metadata полей, проверяемых перед созданием.
+type jiraCreateScreen struct {
+	IssueTypeID string
+	Fields      map[string]jiraCreateMetadataField
+}
+
 // jiraCreateFieldValues resolves explicit aliases under the pinned connection allowlist. It cannot
 // overwrite project/type/labels, choose another reporter, or accept an unconfigured custom field.
 // jiraCreateFieldValues разрешает явные aliases по закреплённому allowlist подключения. Нельзя
@@ -123,10 +130,10 @@ func jiraCreateMetadataNext(page jiraCreateMetadataPage, offset int, dialect *st
 }
 
 // readJiraCreateMetadata resolves the exact configured non-subtask type in the configured project,
-// then exhausts only its fixed Server create-metadata endpoint within the existing operation budget.
+// then exhausts its fixed metadata endpoint and preserves that exact type ID for the single POST.
 // readJiraCreateMetadata находит точный настроенный обычный тип в разрешённом проекте и исчерпывает
-// только его фиксированный Server create-metadata endpoint в прежнем бюджете операции.
-func (adapter *Adapter) readJiraCreateMetadata(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string) (map[string]jiraCreateMetadataField, error) {
+// только его metadata endpoint, сохраняя точный ID типа для единственного POST.
+func (adapter *Adapter) readJiraCreateMetadata(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string) (*jiraCreateScreen, error) {
 	raw, err := adapter.jiraServerJSON(ctx, request, capability, configuration, http.MethodGet, "/project/"+url.PathEscape(configuration["project_key"]), nil, nil, "")
 	if err != nil {
 		return nil, err
@@ -185,7 +192,7 @@ func (adapter *Adapter) readJiraCreateMetadata(ctx context.Context, request Requ
 			result[field.FieldID] = field
 		}
 		if done {
-			return result, nil
+			return &jiraCreateScreen{IssueTypeID: typeID, Fields: result}, nil
 		}
 		offset = next
 	}
@@ -233,12 +240,12 @@ func (adapter *Adapter) prepareJiraCreateFields(ctx context.Context, request Req
 			return err
 		}
 	}
-	metadata, err := adapter.readJiraCreateMetadata(ctx, request, capability, configuration)
+	screen, err := adapter.readJiraCreateMetadata(ctx, request, capability, configuration)
 	if err != nil {
 		return err
 	}
 	for id, value := range custom {
-		field, exists := metadata[id]
+		field, exists := screen.Fields[id]
 		if !exists || !jiraCreateSchemaMatches(allowed[id], field) {
 			return &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 		}
@@ -272,7 +279,7 @@ func (adapter *Adapter) prepareJiraCreateFields(ctx context.Context, request Req
 		}
 		fields["reporter"] = map[string]string{"name": user.Name}
 	}
-	for id, field := range metadata {
+	for id, field := range screen.Fields {
 		_, supplied := fields[id]
 		if *field.Required && !supplied {
 			return &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
@@ -295,7 +302,7 @@ func (adapter *Adapter) prepareJiraCreateFields(ctx context.Context, request Req
 		}
 	}
 	for id := range fields {
-		if _, exists := metadata[id]; !exists {
+		if _, exists := screen.Fields[id]; !exists {
 			return &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 		}
 	}
@@ -306,6 +313,7 @@ func (adapter *Adapter) prepareJiraCreateFields(ctx context.Context, request Req
 			}
 		}
 	}
+	fields["issuetype"] = map[string]string{"id": screen.IssueTypeID}
 	return nil
 }
 

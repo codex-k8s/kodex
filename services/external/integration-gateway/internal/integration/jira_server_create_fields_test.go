@@ -68,10 +68,13 @@ func jiraCreateFieldsInvocation(t *testing.T, adapter *Adapter) Request {
 // TestJiraServerCreateFieldsHTTPBoundary исполняет typed adapter по OpenAPI, включая две страницы,
 // self identity и scope recheck; после отказа POST недостижим.
 func TestJiraServerCreateFieldsHTTPBoundary(t *testing.T) {
-	for _, scenario := range []string{"offset", "start", "start no total", "missing required", "option denied", "wrong schema", "metadata duplicate", "total drift", "foreign epic", "inactive self", "permission denied", "401", "403", "404", "429", "timeout"} {
+	for _, scenario := range []string{"offset", "start", "start no total", "renamed type", "localized type", "missing type", "ambiguous type", "subtask only", "missing required", "option denied", "wrong schema", "metadata duplicate", "total drift", "foreign epic", "inactive self", "permission denied", "401", "403", "404", "429", "timeout"} {
 		t.Run(scenario, func(t *testing.T) {
 			adapter := testAdapter(t)
 			request := jiraCreateFieldsInvocation(t, adapter)
+			if scenario == "localized type" {
+				request.Configuration["issue_type"] = "Синтетический тип"
+			}
 			posts, reads := 0, 0
 			adapter.providerHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 				reads++
@@ -86,7 +89,14 @@ func TestJiraServerCreateFieldsHTTPBoundary(t *testing.T) {
 				case "/mypermissions":
 					value = map[string]any{"permissions": map[string]any{"CREATE_ISSUES": map[string]any{"key": "CREATE_ISSUES", "type": "PROJECT", "havePermission": scenario != "permission denied"}}}
 				case "/project/DEMO":
-					value = map[string]any{"id": "1", "key": "DEMO", "name": "Synthetic", "issueTypes": []any{map[string]any{"id": "3", "name": "Task", "subtask": false}}}
+					types := []any{map[string]any{"id": "3", "name": request.Configuration["issue_type"], "subtask": scenario == "subtask only"}}
+					if scenario == "missing type" {
+						types[0].(map[string]any)["name"] = "Another type"
+					}
+					if scenario == "ambiguous type" {
+						types = append(types, map[string]any{"id": "4", "name": request.Configuration["issue_type"], "subtask": false})
+					}
+					value = map[string]any{"id": "1", "key": "DEMO", "name": "Synthetic", "issueTypes": types}
 				case "/issue/createmeta/DEMO/issuetypes/3":
 					if scenario == "timeout" {
 						return nil, context.DeadlineExceeded
@@ -144,6 +154,14 @@ func TestJiraServerCreateFieldsHTTPBoundary(t *testing.T) {
 						t.Fatal("invalid create body")
 					}
 					f := body.Fields
+					issueType := f["issuetype"].(map[string]any)
+					if scenario == "renamed type" && issueType["name"] == "Task" {
+						// После metadata сервер уже переименовал тип; его ID остался прежним.
+						return &http.Response{StatusCode: 400, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(`{"errors":{"issuetype":"stale name"}}`)), Request: r}, nil
+					}
+					if len(issueType) != 1 || issueType["id"] != "3" {
+						t.Fatal("POST lost the issue type ID validated by create metadata")
+					}
 					if f["customfield_11002"] != float64(0) || f["customfield_11005"] != false || f["customfield_11003"] != "DEMO-42" || f["customfield_11004"] != "synthetic" || f["customfield_11001"].(map[string]any)["id"] != "21001" || f["reporter"].(map[string]any)["name"] != "synthetic-login" {
 						t.Fatal("approved explicit field values changed")
 					}
@@ -159,7 +177,7 @@ func TestJiraServerCreateFieldsHTTPBoundary(t *testing.T) {
 				return serverFixtureJSONResponse(t, request, r, value), nil
 			})}
 			result, err := adapter.Execute(t.Context(), request)
-			if scenario == "offset" || scenario == "start" || scenario == "start no total" {
+			if scenario == "offset" || scenario == "start" || scenario == "start no total" || scenario == "renamed type" || scenario == "localized type" {
 				if err != nil || posts != 1 || result.Receipt.ProviderEffectRef != "jira-issue:DEMO-1" {
 					t.Fatal("opt-in create failed", err, posts)
 				}

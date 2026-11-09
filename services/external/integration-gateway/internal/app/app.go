@@ -213,9 +213,7 @@ func processIntegrationWork(ctx context.Context, control *controlplaneclient.Cli
 		}
 		claim, result, operationErr := execution.claim, execution.result, execution.operationErr
 		metrics.Operation(false, operationErr == nil, integration.IsUnknownOutcome(operationErr))
-		if integration.IsUnknownOutcome(operationErr) {
-			logger.WarnContext(ctx, "integration invocation outcome unknown", "error_class", "integration_outcome_unknown", "stage", integration.UnknownOutcomeStage(operationErr))
-		}
+		logInvocationOutcome(ctx, logger, operationErr)
 		if err := completeInvocation(ctx, control, claim, result, operationErr); err != nil {
 			return processed, err
 		}
@@ -233,6 +231,30 @@ func processIntegrationWork(ctx context.Context, control *controlplaneclient.Cli
 	}
 	bundles, err := processRepositoryBundleWork(ctx, control.RepositoryBundles, adapter, metrics, config)
 	return processed + bundles, err
+}
+
+// logInvocationOutcome records one closed failure class and an observed numeric HTTP status at the worker boundary.
+// Provider bodies, headers and wrapped error strings are never logged; unknown effects retain their existing warning and cannot authorize a resend.
+// logInvocationOutcome записывает один закрытый класс отказа и наблюдённый числовой HTTP-статус на границе worker.
+// Тела, заголовки и строки обёрнутых ошибок не логируются; неизвестный эффект сохраняет прежнее предупреждение и не разрешает повтор.
+func logInvocationOutcome(ctx context.Context, logger *slog.Logger, operationErr error) {
+	if operationErr == nil {
+		return
+	}
+	if integration.IsUnknownOutcome(operationErr) {
+		logger.WarnContext(ctx, "integration invocation outcome unknown", "error_class", "integration_outcome_unknown", "stage", integration.UnknownOutcomeStage(operationErr))
+		return
+	}
+	_, code := integration.Outcome(operationErr)
+	level := slog.LevelWarn
+	switch code {
+	case "INTEGRATION_REQUEST_REJECTED", "INTEGRATION_AUTH_REJECTED", "INTEGRATION_RATE_LIMITED", "INTEGRATION_CONFIGURATION_INVALID", "INTEGRATION_CAPABILITY_UNSUPPORTED":
+		level = slog.LevelInfo
+	case "INTEGRATION_UNAVAILABLE", "INTEGRATION_RESPONSE_INVALID":
+	default:
+		code = "INTEGRATION_UNAVAILABLE"
+	}
+	logger.Log(ctx, level, "integration invocation failed", "error_class", code, "provider_http_status", integration.ObservedProviderHTTPStatus(operationErr))
 }
 
 // completeTest reports the adapter's classified outcome with the exact test lease, fence and generation, rejecting a missing lease locally.

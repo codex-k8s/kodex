@@ -293,3 +293,11 @@ adapter, проверяет exact local NetworkPolicy и доказывает о
 в release profiles. PostgreSQL component test `TestBootstrapComponent` содержит
 lifecycle-сценарии READ без gate, WRITE до Human Gate без claim, REJECT без
 effect receipt, APPROVE с одной receipt и exact retry/readback без нового claim.
+
+### Jira Server/DC: тип задачи и диагностика отказа
+
+При opt-in дополнительных полей адаптер связывает полную create metadata с найденным ID обычного типа и отправляет `issuetype.id` в единственном POST. Имя остаётся настройкой выбора типа; переименование между GET и POST не переключает запрос на другой ID. Без opt-in сохраняется прежний путь с `issuetype.name`. Это поддержанные Jira Server формы, описанные в [Jira REST API examples](https://developer.atlassian.com/server/jira/platform/jira-rest-api-examples/) и [REST 9.12.8](https://docs.atlassian.com/software/jira/docs/api/REST/9.12.8/). Ограниченный provider OpenAPI принимает ровно одну из этих форм; новых tools или прав нет.
+
+Worker записывает один закрытый класс отказа и числовой `provider_http_status`. Ноль означает, что ошибка не несёт наблюдённого HTTP-статуса (например, локальная проверка либо transport error); это не доказательство отсутствия сетевого запроса. Прежняя auth-классификация по token metadata не выдаётся за фактический HTTP-ответ. Исходные error strings, response bodies, URL и auth headers в диагностике отсутствуют. `UNKNOWN_OUTCOME` сохраняет прежний закрытый stage; лог не разрешает повторить write. После неопределённого ответа нужен обычный exact readback.
+
+Ручная проверка: в разрешённом synthetic проекте настроить собственный обычный тип, optional fields и personal credential; проверить exact Human Gate preview, один POST и receipt. При отказе сверить закрытый класс/HTTP-статус и внешнее состояние перед новым решением. Synthetic PASS не заменяет эту живую проверку.
