@@ -28,14 +28,29 @@ def backup_catalog(catalog):
     return selected
 
 
-def schema_guard(reader, catalog):
+def schema_guard(reader, catalog, alternate_acl=None):
     """Сверяет точный full catalog, включая ABI, triggers, ограничения, ACL и purge graph."""
     query = reader.rstrip()
     assert query.endswith(');')
     query = query[:-2] + ') INTO v_actual;'
-    return ('DO $resource_policy_catalog$\nDECLARE v_actual jsonb;\nBEGIN\n' + query +
+    guard = ('DO $resource_policy_catalog$\nDECLARE v_actual jsonb;\nBEGIN\n' + query +
             '\nIF v_actual IS DISTINCT FROM $expected_resource_policy$' + canonical(catalog) +
             "$expected_resource_policy$::jsonb THEN\n RAISE EXCEPTION 'integration resource policy schema catalog changed';\nEND IF;\nEND $resource_policy_catalog$;\n")
+
+    if alternate_acl is not None:
+        assert set(alternate_acl)=={'integration_grants','integration_approval_scopes'}
+        alternative='v_expected'
+        for name in sorted(alternate_acl):
+            baseline=catalog['tables'][name]['acl']
+            expected=copy.deepcopy(baseline)+[['kodex_backup_reader','control_plane_owner','SELECT',False]]
+            expected.sort(key=lambda row:(row[0]=='PUBLIC',row[0],row[2]))
+            assert alternate_acl[name]==expected
+            alternative="jsonb_set("+alternative+",'{tables,"+name+",acl}',$alternate_acl$"+canonical(expected)+"$alternate_acl$::jsonb)"
+        before='IF v_actual IS DISTINCT FROM $expected_resource_policy$'+canonical(catalog)+'$expected_resource_policy$::jsonb THEN'
+        after='v_expected := $expected_resource_policy$'+canonical(catalog)+'$expected_resource_policy$::jsonb;\nIF v_actual IS DISTINCT FROM v_expected AND v_actual IS DISTINCT FROM '+alternative+' THEN'
+        assert guard.count(before)==1
+        guard=guard.replace('DECLARE v_actual jsonb;','DECLARE v_actual jsonb; v_expected jsonb;',1).replace(before,after,1)
+    return guard
 
 
 def replace_catalog(source, guard):
@@ -103,8 +118,9 @@ def outputs():
     before, after = manifest['predecessorCatalog'], manifest['catalog']
     validate_authored_delta(before, after)
     expected_backup_before=backup_catalog(before)
-    # Frozen036 не выдавал backup reader SELECT двум прежним approval/grant tables.
-    #037 добавляет их только через собственный проверенный restore, а не через fallback.
+    # Frozen036 restore выдавал9из11 SELECT; прежний backup bootstrap мог
+    # выдать их всем existing tables. Допускаются только два полных exact catalogs,
+    # отличающиеся этими двумя owner-issued nongrantable SELECT, без WRITE.
     for name in ('integration_approval_scopes','integration_grants'):
         expected_backup_before['tables'][name]['acl']=before['tables'][name]['acl']
     assert manifest['backupPredecessorCatalog']==expected_backup_before
@@ -127,7 +143,8 @@ def outputs():
         pre = previous.replace(tag, "'INTEGRATION_RESOURCE_POLICIES_"+('BACKUP_' if backup else '')+"PREDECESSOR_V1'")
         marker = "SET LOCAL search_path=pg_catalog;"
         assert pre.count(marker) >= 1
-        pre = pre.replace(marker, marker+'\n'+schema_guard(reader, pre_catalog), 1)
+        alternate={name:backup_catalog(before)['tables'][name]['acl'] for name in ('integration_grants','integration_approval_scopes')} if backup else None
+        pre = pre.replace(marker, marker+'\n'+schema_guard(reader, pre_catalog, alternate), 1)
         pre = pre.replace(END, idle+absent+END, 1)
         result[PREFIX+suffix+'migration-precondition.sql'] = '-- Generated: generate-integration-resource-policies-proof.py; frozen036 and full037 predecessor.\n'+pre
         post = replace_volume_catalog(replace_catalog(previous, schema_guard(reader, post_catalog)), manifest)
