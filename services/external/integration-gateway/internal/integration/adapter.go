@@ -443,7 +443,7 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, e
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(capability.Execution.TimeoutSeconds)*time.Second)
 	defer cancel()
 	request.permissionEffect = nil
-	if request.PersonalCredentialAdmission && request.ResourcePermissionProfile != "" {
+	if request.PersonalCredentialAdmission && request.ResourcePermissionProfile != "" || capability.ResourceScope.Kind == "GITLAB_SCOPE" {
 		request.permissionEffect = &permissionEffectObservation{}
 	}
 	var result Result
@@ -493,6 +493,12 @@ func (adapter *Adapter) Recover(ctx context.Context, request Request) (Result, e
 	if definition.Spec.Adapter == "GITLAB" && (request.Operation == "gitlab.issue.create" || request.Operation == "gitlab.merge_request.create") {
 		ctx, cancel := context.WithTimeout(ctx, time.Duration(capability.Execution.TimeoutSeconds)*time.Second)
 		defer cancel()
+		if capability.ResourceScope.Kind == "GITLAB_SCOPE" {
+			configuration, canonicalInput, err = adapter.resolveGitLabScopedProject(ctx, request, capability, configuration, canonicalInput)
+			if err != nil {
+				return Result{}, err
+			}
+		}
 		result, err := adapter.recoverGitLabCreate(ctx, request, capability, configuration, canonicalInput)
 		return validateExecutionResult(capability, request, result, err)
 	}

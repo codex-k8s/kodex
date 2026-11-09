@@ -219,7 +219,7 @@ var (
 	// resourceKinds lists the exact external resource scopes supported by published capabilities.
 	// resourceKinds перечисляет точные области внешних ресурсов, поддержанные опубликованными возможностями.
 	resourceKinds = map[ResourceKind]struct{}{
-		"SYNTHETIC_JOURNAL": {}, "GITHUB_REPOSITORY": {}, "GITLAB_PROJECT": {},
+		"SYNTHETIC_JOURNAL": {}, "GITHUB_REPOSITORY": {}, "GITLAB_PROJECT": {}, "GITLAB_SCOPE": {},
 		"JIRA_PROJECT": {}, "CONFLUENCE_SPACE": {}, "EMAIL_SENDER": {},
 		"MATTERMOST_CHANNEL": {}, "HTTPS_RESOURCE": {}, "SSH_TARGET": {},
 	}

@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: confluence
-  version: 1.2.1
+  version: 1.3.0
   origin: SHIPPED
 spec:
   name: Confluence
@@ -28,7 +28,12 @@ spec:
       operation: confluence.space.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Область подключения"
+        requiredInputPaths: []
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields: []
       outputFields:
@@ -42,7 +47,12 @@ spec:
       operation: confluence.page.search
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Область подключения"
+        requiredInputPaths: []
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 512}
@@ -59,7 +69,12 @@ spec:
       operation: confluence.page.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Страница"
+        requiredInputPaths: ["/page_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {key: page_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 64}
@@ -76,12 +91,17 @@ spec:
       operation: confluence.page.create
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Родительская страница"
+        requiredInputPaths: ["/parent_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 512}
         - {key: body, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
-        - {key: parent_id, type: STRING, format: IDENTIFIER, required: false, maximumLength: 64}
+        - {key: parent_id, type: STRING, format: PLAIN, allowEmpty: true, required: false, maximumLength: 64}
       outputFields:
         - {key: id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 64}
         - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 512}
@@ -94,7 +114,12 @@ spec:
       operation: confluence.page.update
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Страница"
+        requiredInputPaths: ["/page_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {key: page_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 64}
@@ -113,7 +138,12 @@ spec:
       operation: confluence.attachment.upload
       risk: SENSITIVE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Страница"
+        requiredInputPaths: ["/page_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {key: page_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 64}
@@ -131,7 +161,12 @@ spec:
       operation: confluence.space.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Область подключения"
+        requiredInputPaths: []
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields: []
       outputFields:
@@ -145,7 +180,12 @@ spec:
       operation: confluence.page.descendant.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Страница"
+        requiredInputPaths: ["/page_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -162,7 +202,12 @@ spec:
       operation: confluence.page.comment.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Страница"
+        requiredInputPaths: ["/page_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -180,7 +225,12 @@ spec:
       operation: confluence.page.comment.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Страница"
+        requiredInputPaths: ["/comment_id", "/page_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -199,7 +249,12 @@ spec:
       operation: confluence.page.comment.create
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Страница"
+        requiredInputPaths: ["/page_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -219,7 +274,12 @@ spec:
       operation: confluence.page.comment.update
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Страница"
+        requiredInputPaths: ["/comment_id", "/page_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -240,7 +300,12 @@ spec:
       operation: confluence.page.comment.delete
       risk: DESTRUCTIVE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Страница"
+        requiredInputPaths: ["/comment_id", "/page_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -255,7 +320,12 @@ spec:
       operation: confluence.attachment.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Страница"
+        requiredInputPaths: ["/page_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -272,7 +342,12 @@ spec:
       operation: confluence.attachment.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Страница"
+        requiredInputPaths: ["/page_id", "/attachment_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
@@ -291,7 +366,12 @@ spec:
       operation: confluence.attachment.delete
       risk: DESTRUCTIVE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Страница"
+        requiredInputPaths: ["/page_id", "/attachment_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
       inputFields:
         - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}

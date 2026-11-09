@@ -180,7 +180,7 @@ func TestRuntimeEnvelopeIntegrationReasonsMatchActualValidator(t *testing.T) {
 	}
 	for want, mutate := range map[string]func(*runtimecontract.RunnerInput){
 		"ENVELOPE_INTEGRATION_REFS":     func(input *runtimecontract.RunnerInput) { input.IntegrationGrants[0].GrantVersion = 0 },
-		"ENVELOPE_INTEGRATION_APPROVAL": func(input *runtimecontract.RunnerInput) { input.IntegrationGrants[0].ApprovalPolicy = "HUMAN_SCOPED" },
+		"ENVELOPE_INTEGRATION_APPROVAL": func(input *runtimecontract.RunnerInput) { input.IntegrationGrants[0].ApprovalPolicy = "UNSUPPORTED" },
 		"ENVELOPE_INTEGRATION_TEXT": func(input *runtimecontract.RunnerInput) {
 			input.IntegrationGrants[0].CapabilityDescription = strings.Repeat("я", 1001)
 		},

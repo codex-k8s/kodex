@@ -28,19 +28,20 @@ import (
 // personalProcessResumeState передаёт отдельному test process лишь synthetic refs и ожидаемые
 // digests. Значения credentials и loopback disposable DSN в файл не сериализуются.
 type personalProcessResumeState struct {
-	ParentPID        int
-	ConversationRef  string
-	SessionRef       string
-	RunRef           string
-	ConnectionRef    string
-	CredentialRef    string
-	ActorID          string
-	NativeSessionID  string
-	ExpectNative     bool
-	OriginalReadRef  string
-	OriginalReadHash string
-	FirstMessage     string
-	Attempt          string
+	GitLabDefinitionVersion string `json:"gitLabDefinitionVersion"`
+	ParentPID               int
+	ConversationRef         string
+	SessionRef              string
+	RunRef                  string
+	ConnectionRef           string
+	CredentialRef           string
+	ActorID                 string
+	NativeSessionID         string
+	ExpectNative            bool
+	OriginalReadRef         string
+	OriginalReadHash        string
+	FirstMessage            string
+	Attempt                 string
 }
 
 // personalProcessRead performs the actual owner invocation/claim/Begin RPC/receipt cycle and
@@ -118,6 +119,7 @@ func runPersonalResumeChild(t *testing.T, ctx context.Context, repository *Repos
 		t.Fatal("protect process-resume state directory")
 	}
 	path := filepath.Join(directory, "state.json")
+	state.GitLabDefinitionVersion = repository.integrationDefinitions["gitlab"].Metadata.Version
 	raw, err := json.Marshal(state)
 	if err != nil || os.WriteFile(path, raw, 0o600) != nil {
 		t.Fatal("write synthetic process-resume state")
@@ -177,7 +179,13 @@ func TestPersonalCredentialProcessResumeChild(t *testing.T) {
 		t.Fatal("open child isolated pool")
 	}
 	defer pool.Close()
-	repository := newSyntheticRuntimeComponentRepository(t, ctx, pool)
+	repository := newSyntheticRuntimeComponentRepository(t, ctx, pool, func(r *Repository) {
+		if state.GitLabDefinitionVersion == "1.2.1" {
+			r.integrationDefinitions["gitlab"] = historicalGitLabPersonalFixture(t, r.integrationDefinitions["gitlab"])
+		} else if state.GitLabDefinitionVersion != "2.0.0" {
+			t.Fatal("unknown process fixture GitLab version")
+		}
+	})
 	service, err := platformservice.New(repository)
 	if err != nil {
 		t.Fatal(err)

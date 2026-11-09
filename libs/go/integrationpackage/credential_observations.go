@@ -13,7 +13,7 @@ const CredentialObservationGitLabProjectWriteScopeV1 = "GITLAB_PROJECT_WRITE_SCO
 func CredentialObservationRequests(definition Package) (profiles, deniedWriteKeys []string) {
 	for _, capability := range definition.Spec.Capabilities {
 		contract, exists := CredentialResourcePermissionContractFor(definition.Metadata.Key, capability.Key)
-		if !exists || contract.RequiredObservationProfile == "" || CredentialResourcePermissionProfile(definition, capability) == "" {
+		if !exists || contract.RequiredObservationProfile == "" || CredentialResourcePermissionProfile(definition, capability) != contract.Profile {
 			continue
 		}
 		if len(profiles) == 0 {

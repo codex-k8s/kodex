@@ -383,6 +383,7 @@
             "SYNTHETIC_JOURNAL",
             "GITHUB_REPOSITORY",
             "GITLAB_PROJECT",
+            "GITLAB_SCOPE",
             "JIRA_PROJECT",
             "CONFLUENCE_SPACE",
             "EMAIL_SENDER",
@@ -530,6 +531,64 @@
         },
         "resourceScope": {
           "$ref": "#/$defs/resourceScope"
+        },
+        "approvalScope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "requiredInputPaths"
+          ],
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "allowedLifetimes": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 2,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "ROOT_RUN",
+                  "INITIATOR_RESOURCE"
+                ]
+              }
+            },
+            "requiredInputPaths": {
+              "type": "array",
+              "maxItems": 16,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 256,
+                "pattern": "^/"
+              }
+            },
+            "limits": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "durationSeconds",
+                "maxEffects"
+              ],
+              "properties": {
+                "durationSeconds": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 604800
+                },
+                "maxEffects": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 10000
+                }
+              }
+            }
+          }
         },
         "inputFields": {
           "type": "array",

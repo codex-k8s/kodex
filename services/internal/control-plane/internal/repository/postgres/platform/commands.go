@@ -340,6 +340,9 @@ func exposesActorActions(workload string) bool {
 // существующей транзакции, сохраняя nominal payload checks и отклоняя неизвестные kinds как
 // Invalid; не создаёт generic lifecycle mutation либо commit.
 func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
+	if input.Kind == command.RevokeIntegrationApprovalConsent {
+		return repository.revokeIntegrationApprovalConsentTx(ctx, tx, scope, input)
+	}
 	if input.Kind == command.CompletePersonalIntegrationCredentialTest {
 		return repository.completePersonalCredentialTest(ctx, tx, scope, input)
 	}
@@ -3174,6 +3177,9 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 	if !contains(allowed, payload.Decision) {
 		return commandOutcome{}, errs.ErrForbidden
 	}
+	if payload.IntegrationApproval != nil && (integrationInvocationID == "" || integrationApprovalPolicy != "HUMAN_SCOPED" || payload.Decision != "APPROVE") {
+		return commandOutcome{}, errs.ErrInvalid
+	}
 	attachmentSet, err := repository.resolveFinalizedAttachmentSet(ctx, tx, scope, projectID, payload.AttachmentSetRef, "OWNER_GATE_MESSAGE", false)
 	if err != nil {
 		return commandOutcome{}, err
@@ -3183,7 +3189,7 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 			return commandOutcome{}, err
 		}
 		if integrationApprovalPolicy == "HUMAN_SCOPED" && payload.Decision == "APPROVE" {
-			if err := repository.approveIntegrationScope(ctx, tx, scope, gateID, integrationInvocationID, rootRunID, projectID); err != nil {
+			if err := repository.approveIntegrationScope(ctx, tx, scope, gateID, integrationInvocationID, rootRunID, projectID, payload.IntegrationApproval); err != nil {
 				return commandOutcome{}, err
 			}
 		}

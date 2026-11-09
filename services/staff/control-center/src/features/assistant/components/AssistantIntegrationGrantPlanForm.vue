@@ -107,6 +107,7 @@ const approvalScopeValid = computed(() =>
     ? validApprovalScopeSelection(
         approvalScopePaths.value,
         availableApprovalScopePaths.value,
+        candidate.value?.capability.approvalScope?.requiredInputPaths,
       )
     : approvalScopePaths.value.length === 0,
 );

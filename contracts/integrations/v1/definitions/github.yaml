@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: github
-  version: 6.3.0
+  version: 6.4.0
   origin: SHIPPED
 spec:
   name: GitHub
@@ -48,7 +48,12 @@ spec:
       operation: github.repository.metadata.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Область подключения"
+        requiredInputPaths: []
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -70,7 +75,12 @@ spec:
       operation: github.issue.create
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Область подключения"
+        requiredInputPaths: []
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -92,7 +102,12 @@ spec:
       operation: github.issue.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Область подключения"
+        requiredInputPaths: []
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -115,7 +130,12 @@ spec:
       operation: github.issue.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Задача"
+        requiredInputPaths: ["/issue_number"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -137,7 +157,12 @@ spec:
       operation: github.issue.comment.create
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Задача"
+        requiredInputPaths: ["/issue_number"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -158,7 +183,12 @@ spec:
       operation: github.issue.update
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Задача"
+        requiredInputPaths: ["/issue_number"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -182,7 +212,12 @@ spec:
       operation: github.repository.content.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Репозиторий и файл или ветка"
+        requiredInputPaths: ["/path", "/ref"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -213,7 +248,12 @@ spec:
       operation: github.repository.content.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Репозиторий и файл или ветка"
+        requiredInputPaths: ["/path", "/ref"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -280,7 +320,12 @@ spec:
       operation: github.repository.content.create
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Репозиторий и файл или ветка"
+        requiredInputPaths: ["/path", "/branch"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -303,7 +348,12 @@ spec:
       operation: github.repository.content.update
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Репозиторий и файл или ветка"
+        requiredInputPaths: ["/path", "/branch"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -327,7 +377,12 @@ spec:
       operation: github.repository.content.delete
       risk: DESTRUCTIVE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Репозиторий и файл или ветка"
+        requiredInputPaths: ["/path", "/branch"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -350,7 +405,12 @@ spec:
       operation: github.branch.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Область подключения"
+        requiredInputPaths: []
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -372,7 +432,12 @@ spec:
       operation: github.branch.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Репозиторий и файл или ветка"
+        requiredInputPaths: ["/branch"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -393,7 +458,12 @@ spec:
       operation: github.branch.create
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Репозиторий и файл или ветка"
+        requiredInputPaths: ["/branch"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -415,7 +485,12 @@ spec:
       operation: github.branch.delete
       risk: DESTRUCTIVE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Репозиторий и файл или ветка"
+        requiredInputPaths: ["/branch"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -434,7 +509,12 @@ spec:
       operation: github.commit.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Область подключения"
+        requiredInputPaths: []
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -458,7 +538,12 @@ spec:
       operation: github.commit.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Область подключения"
+        requiredInputPaths: []
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -484,7 +569,12 @@ spec:
       operation: github.pull_request.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Область подключения"
+        requiredInputPaths: []
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -509,7 +599,12 @@ spec:
       operation: github.pull_request.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Pull request"
+        requiredInputPaths: ["/pull_request_number"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -538,7 +633,12 @@ spec:
       operation: github.pull_request.create
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Исходная и целевая ветки"
+        requiredInputPaths: ["/head", "/base"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -569,7 +669,12 @@ spec:
       operation: github.pull_request.update
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Pull request"
+        requiredInputPaths: ["/pull_request_number"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -600,7 +705,12 @@ spec:
       operation: github.pull_request.merge
       risk: DESTRUCTIVE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Pull request"
+        requiredInputPaths: ["/pull_request_number"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -623,7 +733,12 @@ spec:
       operation: github.pull_request.review.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Pull request"
+        requiredInputPaths: ["/pull_request_number"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -646,7 +761,12 @@ spec:
       operation: github.pull_request.review.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Pull request"
+        requiredInputPaths: ["/pull_request_number", "/review_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -669,7 +789,12 @@ spec:
       operation: github.pull_request.review.create
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Pull request, commit и тип review"
+        requiredInputPaths: ["/pull_request_number", "/event"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -694,7 +819,12 @@ spec:
       operation: github.issue.comment.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Задача"
+        requiredInputPaths: ["/issue_number"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -717,7 +847,12 @@ spec:
       operation: github.issue.comment.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Задача"
+        requiredInputPaths: ["/issue_number", "/comment_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -738,7 +873,12 @@ spec:
       operation: github.issue.comment.update
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Задача"
+        requiredInputPaths: ["/issue_number", "/comment_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -760,7 +900,12 @@ spec:
       operation: github.issue.comment.delete
       risk: DESTRUCTIVE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Задача"
+        requiredInputPaths: ["/issue_number", "/comment_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -780,7 +925,12 @@ spec:
       operation: github.check_run.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Область подключения"
+        requiredInputPaths: []
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -803,7 +953,12 @@ spec:
       operation: github.check_run.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Область подключения"
+        requiredInputPaths: ["/check_run_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -828,7 +983,12 @@ spec:
       operation: github.actions.workflow.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Область подключения"
+        requiredInputPaths: []
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -850,7 +1010,12 @@ spec:
       operation: github.actions.workflow.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "CI workflow или job"
+        requiredInputPaths: ["/workflow_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -872,7 +1037,12 @@ spec:
       operation: github.actions.workflow.dispatch
       risk: SENSITIVE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "CI workflow или job"
+        requiredInputPaths: ["/workflow_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -893,7 +1063,12 @@ spec:
       operation: github.actions.run.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Область подключения"
+        requiredInputPaths: []
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -917,7 +1092,12 @@ spec:
       operation: github.actions.run.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "CI workflow или job"
+        requiredInputPaths: ["/run_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -943,7 +1123,12 @@ spec:
       operation: github.actions.run.rerun
       risk: SENSITIVE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "CI workflow или job"
+        requiredInputPaths: ["/run_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -962,7 +1147,12 @@ spec:
       operation: github.actions.run.cancel
       risk: DESTRUCTIVE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "CI workflow или job"
+        requiredInputPaths: ["/run_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -981,7 +1171,12 @@ spec:
       operation: github.actions.job.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "CI workflow или job"
+        requiredInputPaths: ["/run_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -1004,7 +1199,12 @@ spec:
       operation: github.actions.job.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "CI workflow или job"
+        requiredInputPaths: ["/run_id", "/job_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -1039,7 +1239,12 @@ spec:
       operation: github.pull_request.file.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Pull request"
+        requiredInputPaths: ["/pull_request_number"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope: {kind: GITHUB_REPOSITORY, connectionFields: [owner, repository]}
       inputFields:
         - {key: pull_request_number, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
@@ -1066,7 +1271,12 @@ spec:
       operation: github.pull_request.comment.create
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Pull request"
+        requiredInputPaths: ["/pull_request_number"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -1088,7 +1298,12 @@ spec:
       operation: github.pull_request.comment.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Pull request"
+        requiredInputPaths: ["/pull_request_number"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -1112,7 +1327,12 @@ spec:
       operation: github.pull_request.comment.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Pull request"
+        requiredInputPaths: ["/pull_request_number", "/comment_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -1134,7 +1354,12 @@ spec:
       operation: github.pull_request.comment.update
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Pull request"
+        requiredInputPaths: ["/pull_request_number", "/comment_id"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope:
         kind: GITHUB_REPOSITORY
         connectionFields: [owner, repository]
@@ -1156,7 +1381,12 @@ spec:
       operation: github.pull_request.ready
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Pull request"
+        requiredInputPaths: ["/pull_request_number", "/expected_head_sha"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope: {kind: GITHUB_REPOSITORY, connectionFields: [owner, repository]}
       inputFields:
         - {key: pull_request_number, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}

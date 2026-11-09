@@ -143,18 +143,19 @@ type ResourceScope struct {
 // Capability binds one operation to risk, approval, scope, typed fields and execution limits.
 // Capability связывает операцию с риском, подтверждением, областью, типизированными полями и лимитами исполнения.
 type Capability struct {
-	Key                     string        `yaml:"key" json:"key"`
-	Name                    string        `yaml:"name" json:"name"`
-	Description             string        `yaml:"description" json:"description"`
-	Operation               string        `yaml:"operation" json:"operation"`
-	Risk                    string        `yaml:"risk" json:"risk"`
-	ApprovalPolicy          string        `yaml:"approvalPolicy" json:"approvalPolicy"`
-	AllowedApprovalPolicies []string      `yaml:"allowedApprovalPolicies" json:"allowedApprovalPolicies"`
-	ResourceScope           ResourceScope `yaml:"resourceScope" json:"resourceScope"`
-	InputFields             []Field       `yaml:"inputFields" json:"inputFields"`
-	OutputFields            []Field       `yaml:"outputFields" json:"outputFields"`
-	Execution               Execution     `yaml:"execution" json:"execution"`
-	OpenAPI                 *OpenAPIHTTP  `yaml:"openapi,omitempty" json:"openapi,omitempty"`
+	Key                     string                 `yaml:"key" json:"key"`
+	Name                    string                 `yaml:"name" json:"name"`
+	Description             string                 `yaml:"description" json:"description"`
+	Operation               string                 `yaml:"operation" json:"operation"`
+	Risk                    string                 `yaml:"risk" json:"risk"`
+	ApprovalPolicy          string                 `yaml:"approvalPolicy" json:"approvalPolicy"`
+	AllowedApprovalPolicies []string               `yaml:"allowedApprovalPolicies" json:"allowedApprovalPolicies"`
+	ResourceScope           ResourceScope          `yaml:"resourceScope" json:"resourceScope"`
+	ApprovalScope           *ApprovalScopeContract `yaml:"approvalScope,omitempty" json:"approvalScope,omitempty"`
+	InputFields             []Field                `yaml:"inputFields" json:"inputFields"`
+	OutputFields            []Field                `yaml:"outputFields" json:"outputFields"`
+	Execution               Execution              `yaml:"execution" json:"execution"`
+	OpenAPI                 *OpenAPIHTTP           `yaml:"openapi,omitempty" json:"openapi,omitempty"`
 }
 
 // OpenAPIHTTP pins an imported operation to a source digest, literal server, method and closed input;
@@ -329,6 +330,17 @@ func (definition Package) validateConfiguration(configuration map[string]string,
 			return err
 		}
 	}
+	for _, capability := range definition.Spec.Capabilities {
+		if capability.ResourceScope.Kind == "GITLAB_SCOPE" {
+			if definition.Metadata.Key != "gitlab" || definition.Spec.Adapter != string(AdapterGitLab) {
+				return errGitLabResourceScope
+			}
+			if _, err := capability.gitLabScopeValues(configuration); err != nil {
+				return err
+			}
+			break
+		}
+	}
 	if definition.Spec.Adapter == string(AdapterOpenAPIMCP) && !allowUnboundTemplate {
 		for _, capability := range definition.Spec.Capabilities {
 			if capability.OpenAPI == nil ||
@@ -347,6 +359,9 @@ func (definition Package) validateConfiguration(configuration map[string]string,
 // отсутствующее или пустое поле закрывает операцию, не расширяя её область.
 // ResourceScope строит exact scope только из проверенной connection configuration.
 func (capability Capability) ResourceScopeValues(configuration map[string]string) (map[string]string, error) {
+	if capability.ResourceScope.Kind == "GITLAB_SCOPE" {
+		return capability.gitLabScopeValues(configuration)
+	}
 	result := make(map[string]string, len(capability.ResourceScope.ConnectionFields))
 	for _, key := range capability.ResourceScope.ConnectionFields {
 		value, exists := configuration[key]
@@ -766,6 +781,9 @@ func validate(result *Package) error {
 			return err
 		}
 		if _, err := validateFields(capability.OutputFields); err != nil {
+			return err
+		}
+		if err := capability.validateApprovalScopeContract(); err != nil {
 			return err
 		}
 		if result.Spec.Adapter == string(AdapterOpenAPIMCP) {

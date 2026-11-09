@@ -285,7 +285,7 @@ func (execution *ConfigurationWriteBackExecution) validateInput(operation string
 	if err != nil {
 		return errWriteBackGit
 	}
-	_, err = capability.ValidateInput(raw)
+	_, err = validateNativeConfigurationInput(execution.definition, capability, execution.configuration, execution.work.GetProposal().GetRepositoryRef(), raw)
 	if err != nil {
 		return writeBackFailure(cp.ManagedConfigurationGitWriteBackFailure_MANAGED_CONFIGURATION_GIT_WRITE_BACK_FAILURE_CONTENT_INVALID)
 	}

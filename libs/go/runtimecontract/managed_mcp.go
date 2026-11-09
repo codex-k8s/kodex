@@ -145,7 +145,7 @@ func (profile ManagedMCPProfile) boundGrants(grants []RunnerIntegrationGrant) (R
 		}
 	}
 	if count != 2 || resolve.Ref == "" || query.Ref == "" || resolve.Risk != "READ" || query.Risk != "READ" ||
-		resolve.ApprovalPolicy != "NONE" || query.ApprovalPolicy != "NONE" ||
+		!containsString([]string{"NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"}, resolve.ApprovalPolicy) || !containsString([]string{"NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"}, query.ApprovalPolicy) ||
 		resolve.Operation != Context7ResolveCapability || query.Operation != Context7QueryCapability ||
 		resolve.ConnectionRef != query.ConnectionRef || resolve.ConnectionVersion != query.ConnectionVersion ||
 		resolve.DefinitionVersion != query.DefinitionVersion || resolve.DefinitionDigest != query.DefinitionDigest {

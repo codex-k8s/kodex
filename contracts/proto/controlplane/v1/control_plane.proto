@@ -64,6 +64,7 @@ service PlatformQueryService {
   rpc GetRunGraph(GetRunGraphRequest) returns (GetRunGraphResponse);
   rpc ListRunEvents(ListRunEventsRequest) returns (ListRunEventsResponse);
   rpc ListOwnerGates(ListOwnerGatesRequest) returns (ListOwnerGatesResponse);
+  rpc ListIntegrationApprovalConsents(ListIntegrationApprovalConsentsRequest) returns (ListIntegrationApprovalConsentsResponse);
   rpc GetOwnerGate(GetOwnerGateRequest) returns (GetOwnerGateResponse);
   rpc ListArtifacts(ListArtifactsRequest) returns (ListArtifactsResponse);
   rpc GetArtifact(GetArtifactRequest) returns (GetArtifactResponse);
@@ -217,6 +218,7 @@ service PlatformCommandService {
   rpc CancelRun(CancelRunRequest) returns (CancelRunResponse);
   rpc RetryRun(RetryRunRequest) returns (RetryRunResponse);
   rpc ResolveOwnerGate(ResolveOwnerGateRequest) returns (ResolveOwnerGateResponse);
+  rpc RevokeIntegrationApprovalConsent(RevokeIntegrationApprovalConsentRequest) returns (RevokeIntegrationApprovalConsentResponse);
   // UploadAgentAvatar резервирует object key до materialization и атомарно
   // публикует Artifact, binding и новую версию Agent либо компенсирует object.
   rpc UploadAgentAvatar(stream UploadAgentAvatarRequest) returns (UploadAgentAvatarResponse);
@@ -835,6 +837,8 @@ enum IntegrationResourceKind {
   INTEGRATION_RESOURCE_KIND_EMAIL_SENDER = 7;
   INTEGRATION_RESOURCE_KIND_HTTPS_RESOURCE = 8;
   INTEGRATION_RESOURCE_KIND_SSH_TARGET = 9;
+  // Versioned GitLab project/group/instance boundary; project operations дополнительно закрепляют exact provider project ID.
+  INTEGRATION_RESOURCE_KIND_GITLAB_SCOPE = 10;
 }
 
 // IntegrationDefinitionOrigin фиксирует источник immutable definition revision.
@@ -1630,6 +1634,24 @@ message IntegrationCapability {
   string input_schema = 11;
   string input_schema_sha256 = 12;
   repeated IntegrationApprovalPolicy allowed_approval_policies = 13;
+  // Необязательные versioned metadata; отсутствие сохраняет legacy semantics путей и срока.
+  IntegrationApprovalScopeContract approval_scope = 14;
+}
+
+// Предметная identity и верхние bounds согласования; не сохранённое разрешение.
+message IntegrationApprovalScopeContract {
+  string name = 1;
+  repeated string required_input_paths = 2;
+  int64 max_duration_seconds = 3;
+  int64 max_effects = 4;
+  repeated IntegrationApprovalScopeLifetime allowed_lifetimes = 5;
+}
+
+// Согласование остаётся внутри root либо явно привязывается к тому же initiator/resource.
+enum IntegrationApprovalScopeLifetime {
+  INTEGRATION_APPROVAL_SCOPE_LIFETIME_UNSPECIFIED = 0;
+  INTEGRATION_APPROVAL_SCOPE_LIFETIME_ROOT_RUN = 1;
+  INTEGRATION_APPROVAL_SCOPE_LIFETIME_INITIATOR_RESOURCE = 2;
 }
 
 message IntegrationConfigurationField {
@@ -2932,6 +2954,15 @@ message ResolveOwnerGateRequest {
   reserved 5;
   reserved "artifact_refs";
   string attachment_set_ref = 6;
+  // Явный выбор только для APPROVE/HUMAN_SCOPED; отсутствие сохраняет legacy defaults.
+  IntegrationApprovalConsentSelection integration_approval = 7;
+}
+
+// Выбор человека; initiator, tenant и объект разрешаются сервером из текущего intent.
+message IntegrationApprovalConsentSelection {
+  int64 duration_seconds = 1;
+  int64 max_effects = 2;
+  IntegrationApprovalScopeLifetime lifetime = 3;
 }
 message ResolveOwnerGateResponse {
   OwnerGate gate = 1;
@@ -4888,6 +4919,8 @@ enum IntegrationCredentialResourcePermissionProfile {
   INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_GITLAB_PROJECT_BRANCH_CREATE_V1 = 9;
   // Проверяет source/target одного проекта; merge и изменение веток не разрешаются.
   INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_GITLAB_PROJECT_MERGE_REQUEST_CREATE_V1 = 10;
+  // Fresh scoped object/token checks; health подтверждает только identity, не global WRITE.
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_GITLAB_SCOPED_RESOURCE_V2 = 11;
 }
 message IntegrationInvocationClaim {
   string invocation_ref = 1;
@@ -9602,3 +9635,40 @@ message IntegrationCredentialPreflightIssue {
 message IntegrationCredentialPreflightDetail {
   repeated IntegrationCredentialPreflightIssue issues = 1;
 }
+
+// Собственное согласование не содержит credential либо перенесённый worker grant.
+message IntegrationApprovalConsent {
+ string ref = 1;
+ int64 version = 2;
+ string connection_ref = 3;
+ string connection_name = 4;
+ string capability_key = 5;
+ string agent_ref = 6;
+ string root_run_ref = 7;
+ IntegrationApprovalScopeLifetime lifetime = 8;
+ IntegrationApprovalConsentState state = 9;
+ repeated string scope_paths = 10;
+ string scope_values_json = 11;
+ int64 max_effects = 12;
+ int64 reserved_effects = 13;
+ google.protobuf.Timestamp created_at = 14;
+ google.protobuf.Timestamp expires_at = 15;
+ google.protobuf.Timestamp revoked_at = 16;
+}
+enum IntegrationApprovalConsentState {
+ INTEGRATION_APPROVAL_CONSENT_STATE_UNSPECIFIED = 0;
+ INTEGRATION_APPROVAL_CONSENT_STATE_ACTIVE = 1;
+ INTEGRATION_APPROVAL_CONSENT_STATE_EXPIRED = 2;
+ INTEGRATION_APPROVAL_CONSENT_STATE_EXHAUSTED = 3;
+ INTEGRATION_APPROVAL_CONSENT_STATE_REVOKED = 4;
+}
+message ListIntegrationApprovalConsentsRequest { PageRequest page = 1; }
+message ListIntegrationApprovalConsentsResponse {
+ repeated IntegrationApprovalConsent consents = 1;
+ PageInfo page = 2;
+}
+message RevokeIntegrationApprovalConsentRequest {
+ MutationContext mutation = 1;
+ string consent_ref = 2;
+}
+message RevokeIntegrationApprovalConsentResponse { IntegrationApprovalConsent consent = 1; }

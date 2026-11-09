@@ -22,6 +22,9 @@ import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
+import IntegrationApprovalConsentFields from "@/features/workboard/components/IntegrationApprovalConsentFields.vue";
+import { validIntegrationConsent } from "@/features/workboard/integration-approval-consent";
+import type { IntegrationApprovalConsentSelection } from "@/shared/api/generated/openapi/types.gen";
 import IntegrationIntentPreview from "@/features/workboard/components/IntegrationIntentPreview.vue";
 import { useGateCatalog } from "@/features/workboard/gate-catalog";
 import { useGateProjects } from "@/features/workboard/gate-projects";
@@ -559,6 +562,9 @@ function clearValidation(gateRef: string): void {
   Reflect.deleteProperty(validationMessages.value, gateRef);
 }
 
+const integrationConsents = ref<
+  Record<string, IntegrationApprovalConsentSelection>
+>({});
 async function decide(gate: OwnerGate): Promise<void> {
   const decision =
     decisionDrafts.value[gate.ref] ?? decisionActionLayout(gate).primary;
@@ -569,6 +575,19 @@ async function decide(gate: OwnerGate): Promise<void> {
   )
     return;
   if (decision === "APPROVE" && !bundleManifestReady(gate)) return;
+  if (
+    decision === "APPROVE" &&
+    !validIntegrationConsent(
+      gate.integrationIntent,
+      integrationConsents.value[gate.ref],
+    )
+  )
+    return;
+  const selectedIntegrationConsent = integrationConsents.value[gate.ref];
+  const integrationApproval =
+    decision === "APPROVE" && selectedIntegrationConsent
+      ? { ...selectedIntegrationConsent }
+      : undefined;
   const comment = comments.value[gate.ref]?.trim() ?? "";
   if (requiresDecisionComment(decision) && !comment) {
     validationMessages.value[gate.ref] =
@@ -591,6 +610,7 @@ async function decide(gate: OwnerGate): Promise<void> {
       decision,
       ...(comment ? { comment } : {}),
       ...(attachmentSetRef ? { attachmentSetRef } : {}),
+      ...(integrationApproval ? { integrationApproval } : {}),
     });
     selectedAttachmentComposer.value?.clear();
     successMessage.value = t("decisions.applied", {
@@ -1019,6 +1039,14 @@ const serverMessage = useServerMessage();
             :intent="selected.gate.integrationIntent"
           />
 
+          <IntegrationApprovalConsentFields
+            v-if="selected.canResolve && selected.gate.integrationIntent"
+            :key="`${selected.gate.ref}:${selected.gate.version}`"
+            v-model="integrationConsents[selected.gate.ref]"
+            :intent="selected.gate.integrationIntent"
+            :disabled="busyRef === selected.gate.ref"
+          />
+
           <section
             class="decision-audit"
             aria-labelledby="decision-audit-title"
@@ -1146,7 +1174,11 @@ const serverMessage = useServerMessage();
                   busyRef === selected.gate.ref ||
                   !attachmentsReady(selected.gate.ref) ||
                   (selectedDecision === 'APPROVE' &&
-                    !bundleManifestReady(selected.gate))
+                    (!bundleManifestReady(selected.gate) ||
+                      !validIntegrationConsent(
+                        selected.gate.integrationIntent,
+                        integrationConsents[selected.gate.ref],
+                      )))
                 "
                 :aria-busy="busyRef === selected.gate.ref"
                 @click="decide(selected.gate)"

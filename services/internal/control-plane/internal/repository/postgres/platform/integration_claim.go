@@ -97,6 +97,9 @@ func (repository *Repository) claimIntegrationInvocationCandidateTx(ctx context.
 			schemaDigest != item.approvalSchemaDigest {
 			return nil, errs.ErrForbidden
 		}
+		if err := lockIntegrationApprovalCallTx(ctx, tx, scope.organizationID, item.id); err != nil {
+			return nil, err
+		}
 	}
 	leaseRef, _ := newRef("lea")
 	fence, _ := newRef("eff")

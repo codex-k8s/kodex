@@ -61,7 +61,7 @@ func TestJiraCreateFieldsRemainOptInAndHistoricallyPinned(t *testing.T) {
 		t.Fatal("old pinned definition rejected")
 	}
 	migration, err := os.ReadFile("../../../services/internal/control-plane/cmd/cli/migrations/20261107000100_jira_create_fields_compatibility.sql")
-	if err != nil || !strings.Contains(string(migration), current.Digest) || !strings.Contains(string(migration), old.Digest) {
+	if err != nil || !strings.Contains(string(migration), legacyPolicyPackage(t, "jira-server-dc", "1.1.0").Digest) || !strings.Contains(string(migration), old.Digest) {
 		t.Fatal("SQL compatibility pins differ from executable packages")
 	}
 	if _, ok := ResolveShippedRevision(current, "1.0.0", current.Digest); ok {

@@ -14,6 +14,7 @@ export interface IntegrationGrantPlanPolicyFields {
   readonly paths: readonly string[];
   readonly allowedPolicies: readonly SystemAssistantIntegrationGrantInput["approvalPolicy"][];
   readonly allowedPaths: readonly string[];
+  readonly requiredPaths?: readonly string[];
 }
 
 // Меняет только редактируемые параметры плана через callback вызывающей формы.
@@ -57,12 +58,27 @@ export function useIntegrationGrantPlanPolicy(
       )
     )
       return;
-    changed("approvalScopePaths", []);
+    changed(
+      "approvalScopePaths",
+      selected === "HUMAN_SCOPED"
+        ? [
+            ...(candidate.value?.capability.approvalScope?.requiredInputPaths ??
+              []),
+          ].sort()
+        : [],
+    );
     changed("approvalPolicy", selected);
   }
   // Неизвестный путь игнорируется; выбор копируется, удаляет дубли и сортируется.
   function togglePath(path: string, checked: boolean): void {
     if (!allowedPaths.value.includes(path)) return;
+    if (
+      !checked &&
+      candidate.value?.capability.approvalScope?.requiredInputPaths.includes(
+        path,
+      )
+    )
+      return;
     changed(
       "approvalScopePaths",
       checked
@@ -76,6 +92,8 @@ export function useIntegrationGrantPlanPolicy(
     paths: paths.value,
     allowedPolicies: allowedPolicies.value,
     allowedPaths: allowedPaths.value,
+    requiredPaths:
+      candidate.value?.capability.approvalScope?.requiredInputPaths,
   }));
   return {
     policy,

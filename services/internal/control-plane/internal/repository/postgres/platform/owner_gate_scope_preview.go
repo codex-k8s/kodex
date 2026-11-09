@@ -60,7 +60,16 @@ func integrationScopedGatePreview(capability integrationpackage.Capability, inpu
 		}
 		selected = redacted
 	}
-	return map[string]any{"selected": selected, "mutablePaths": mutable, "scopeDigest": resolved.Digest}, nil
+	limits, err := capability.ResolvedApprovalScopeLimits()
+	if err != nil {
+		return nil, errs.ErrUnavailable
+	}
+	lifetimes, err := capability.ApprovalScopeLifetimes()
+	if err != nil {
+		return nil, errs.ErrUnavailable
+	}
+	return map[string]any{"selected": selected, "mutablePaths": mutable, "scopeDigest": resolved.Digest,
+		"consentPolicy": map[string]any{"maxDurationSeconds": limits.DurationSeconds, "maxEffects": limits.MaxEffects, "allowedLifetimes": lifetimes}}, nil
 }
 
 // collectApprovalSchemaPaths recursively walks sorted object properties, escaping JSON Pointer

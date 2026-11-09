@@ -19,7 +19,7 @@ func CredentialReadProbes(definition Package) []Capability {
 		switch definition.Spec.Adapter {
 		case "GITLAB":
 			switch capability.Operation {
-			case "gitlab.issue.list", "gitlab.branch.list", "gitlab.commit.list", "gitlab.repository.tree.list", "gitlab.merge_request.list", "gitlab.pipeline.list", "gitlab.job.list":
+			case "gitlab.project.list", "gitlab.issue.list", "gitlab.branch.list", "gitlab.commit.list", "gitlab.repository.tree.list", "gitlab.merge_request.list", "gitlab.pipeline.list", "gitlab.job.list":
 				registered = true
 			}
 		case "JIRA":

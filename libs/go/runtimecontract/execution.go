@@ -534,7 +534,6 @@ func validIntegrationGrants(grants []RunnerIntegrationGrant) bool {
 		if !opaqueReferencePattern.MatchString(grant.Ref) || !opaqueReferencePattern.MatchString(grant.ConnectionRef) ||
 			grant.GrantVersion < 1 || grant.ConnectionVersion < 1 ||
 			!containsString([]string{"NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"}, grant.ApprovalPolicy) ||
-			grant.Risk == "READ" && grant.ApprovalPolicy != "NONE" ||
 			grant.DefinitionKey == "" || len(grant.DefinitionKey) > 128 ||
 			grant.ConnectionName == "" || len(grant.ConnectionName) > 160 ||
 			grant.CapabilityKey == "" || len(grant.CapabilityKey) > 255 ||

@@ -30,7 +30,7 @@ WITH RECURSIVE attempts AS (
           AND resolve.ref=@resolve_ref AND resolve.version=@resolve_version
           AND query.ref=@query_ref AND query.version=@query_version
           AND resolve.enabled AND query.enabled AND resolve.risk='READ' AND query.risk='READ'
-          AND resolve.approval_policy='NONE' AND query.approval_policy='NONE'
+          AND resolve.approval_policy IN ('NONE','HUMAN_EACH_EFFECT','HUMAN_SCOPED') AND query.approval_policy IN ('NONE','HUMAN_EACH_EFFECT','HUMAN_SCOPED')
           AND resolve.capability_key='context7.library.resolve' AND query.capability_key='context7.docs.query'
           AND resolve.definition_version=c.definition_version AND query.definition_version=c.definition_version
           AND resolve.definition_digest=c.definition_digest AND query.definition_digest=c.definition_digest

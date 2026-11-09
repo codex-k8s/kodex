@@ -22,7 +22,7 @@ import (
 func TestPersonalCredentialReadProbeHTTPBoundary(t *testing.T) {
 	for _, rejection := range []int{0, http.StatusForbidden, http.StatusUnauthorized, http.StatusNotFound} {
 		t.Run(http.StatusText(rejection), func(t *testing.T) {
-			adapter := testAdapter(t)
+			adapter := legacyGitLabTestAdapter(t)
 			credential := testCredential(t, adapter, "synthetic-personal-token")
 			calls := 0
 			adapter.providerHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
@@ -87,7 +87,7 @@ func TestPersonalCredentialReadProbeHTTPBoundary(t *testing.T) {
 func TestPersonalCredentialServerIdentityProbe(t *testing.T) {
 	for _, key := range []string{jiraServerDefinition, confluenceServerDefinition} {
 		t.Run(key, func(t *testing.T) {
-			adapter := testAdapter(t)
+			adapter := legacyGitLabTestAdapter(t)
 			credential := testCredential(t, adapter, "synthetic-server-token")
 			op := "jira.project.read"
 			if key == confluenceServerDefinition {
@@ -127,7 +127,7 @@ func TestPersonalCredentialServerIdentityProbe(t *testing.T) {
 // неизвестные, повторные либо не содержащие health наборы до любого HTTP-запроса.
 func TestPersonalCredentialProbeOwnerPins(t *testing.T) {
 	for _, keys := range [][]string{nil, {"gitlab.issue.create"}, {"gitlab.issue.list"}, {"gitlab.project.metadata.read", "gitlab.project.metadata.read"}} {
-		adapter := testAdapter(t)
+		adapter := legacyGitLabTestAdapter(t)
 		credential := testCredential(t, adapter, "synthetic-personal-token")
 		calls := 0
 		adapter.providerHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {

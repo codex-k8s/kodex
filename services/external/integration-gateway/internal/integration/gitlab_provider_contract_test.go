@@ -25,7 +25,7 @@ func TestGitLabProviderSubsetContract(t *testing.T) {
 	if err != nil || len(inspection.Operations) != 16 || len(document.Paths.Map()) != 14 {
 		t.Fatal("GitLab subset coverage changed", err)
 	}
-	definition := testAdapter(t).definitions["gitlab"]
+	definition := legacyGitLabTestAdapter(t).definitions["gitlab"]
 	internal := map[string]bool{"gitlab.permission.version.read": true, "gitlab.permission.identity.read": true,
 		"gitlab.permission.token.self.read": true, "gitlab.permission.token.details.read": true, "gitlab.permission.branch_rules.read": true}
 	for _, operation := range inspection.Operations {
@@ -106,7 +106,7 @@ func gitLabWireValidator(t *testing.T, invocation Request) func(*http.Request, *
 func TestGitLabSubsetObjectReadWire(t *testing.T) {
 	for _, operation := range []string{"gitlab.repository.file.read", "gitlab.issue.read", "gitlab.merge_request.read", "gitlab.pipeline.read"} {
 		t.Run(operation, func(t *testing.T) {
-			adapter := testAdapter(t)
+			adapter := legacyGitLabTestAdapter(t)
 			credential := testCredential(t, adapter, "synthetic-gitlab-personal-key")
 			var input map[string]any
 			if json.Unmarshal([]byte(catalogInputs()[operation]), &input) != nil {

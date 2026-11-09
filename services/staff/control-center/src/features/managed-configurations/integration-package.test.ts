@@ -27,7 +27,7 @@ describe("IntegrationPackage canonical schema", () => {
       }
     }
     visit(packageSchema);
-    expect(patterns).toHaveLength(4);
+    expect(patterns).toHaveLength(5);
     const samples = [
       "a",
       "a-b",
@@ -40,6 +40,10 @@ describe("IntegrationPackage canonical schema", () => {
       "a-",
       "a b",
       "a/b",
+      "/project_id",
+      "/merge_request_iid",
+      "/query/issue",
+      "/",
       "github.com",
       "1.2.3",
       "0.1.0",

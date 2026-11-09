@@ -47,9 +47,18 @@ export function approvalScopeOptions(rawSchema?: string): string[] {
 export function validApprovalScopeSelection(
   selected: readonly string[],
   choices: readonly string[],
+  required?: readonly string[],
 ): boolean {
-  if (selected.length === 0 || selected.length > 16) return false;
+  if ((selected.length === 0 && required === undefined) || selected.length > 16)
+    return false;
   const allowed = new Set(choices);
+  if (
+    required !== undefined &&
+    (required.length > 16 ||
+      new Set(required).size !== required.length ||
+      required.some((path) => !allowed.has(path) || !selected.includes(path)))
+  )
+    return false;
   return (
     new Set(selected).size === selected.length &&
     selected.every((path) => allowed.has(path))

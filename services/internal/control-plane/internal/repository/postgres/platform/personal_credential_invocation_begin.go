@@ -84,6 +84,11 @@ func (repository *Repository) BeginPersonalIntegrationInvocation(ctx context.Con
 	if candidate.credentialPolicy != entity.IntegrationCredentialInitiatorRequired || candidate.credential.Ref != "" || candidate.ref != input.InvocationRef {
 		return empty, errs.ErrForbidden
 	}
+	if candidate.approvalPolicy == "HUMAN_SCOPED" {
+		if err := lockIntegrationApprovalCallTx(ctx, tx, current.organizationID, candidate.id); err != nil {
+			return empty, denyUnstartedPersonalInvocationTx(ctx, tx, current, input, err)
+		}
+	}
 	fence := sha256.Sum256([]byte(input.Fence))
 	fenceDigest := hex.EncodeToString(fence[:])
 	selection, selected := choice.selection, choice.context

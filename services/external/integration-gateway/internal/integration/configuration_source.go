@@ -191,7 +191,7 @@ func (adapter *Adapter) validateConfigurationSource(work *cp.ManagedConfiguratio
 	if err != nil {
 		return invalid()
 	}
-	if _, err := capability.ValidateInput(raw); err != nil {
+	if _, err := validateNativeConfigurationInput(definition, capability, configuration, work.GetRepositoryRef(), raw); err != nil {
 		return invalid()
 	}
 	return request, definition, configuration, nil

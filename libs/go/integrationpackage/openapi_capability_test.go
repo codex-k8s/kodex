@@ -74,11 +74,11 @@ func TestOpenAPIPackageScopedApprovalRequiresManagedPins(t *testing.T) {
 	if !ok || write.ValidateApprovalScopePaths([]string{"/path/id"}) != nil {
 		t.Fatal("scoped write binding is invalid")
 	}
-	shipped, err := LoadShipped()
+	_, err = LoadShipped()
 	if err != nil {
 		t.Fatal(err)
 	}
-	legacy := shipped["github"]
+	legacy := legacyPolicyPackage(t, "github", "6.3.0")
 	for index := range legacy.Spec.Capabilities {
 		if legacy.Spec.Capabilities[index].Risk != string(RiskRead) {
 			legacy.Spec.Capabilities[index].ApprovalPolicy = string(ApprovalHumanScoped)
@@ -199,4 +199,30 @@ func parseOpenAPITestPackage(t *testing.T, value Package) Package {
 		t.Fatal(err)
 	}
 	return parsed
+}
+
+// TestOpenAPIExplicitIdentityEnablesConfiguredHumanPolicy preserves GET/read-only and bounded write semantics while requiring an explicit owner object identity for optional approval choices.
+// TestOpenAPIExplicitIdentityEnablesConfiguredHumanPolicy сохраняет GET/read-only и bounded write semantics, требуя explicit owner object identity для optional approval choices.
+func TestOpenAPIExplicitIdentityEnablesConfiguredHumanPolicy(t *testing.T) {
+	base := openAPIPackageFixture(t)
+	for _, policy := range []string{"NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"} {
+		candidate := reparseManaged(t, base)
+		for index := range candidate.Spec.Capabilities {
+			capability := &candidate.Spec.Capabilities[index]
+			capability.AllowedApprovalPolicies = []string{"NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"}
+			capability.ApprovalPolicy = policy
+			if capability.Operation == candidate.Spec.HealthCheck.Operation {
+				capability.ApprovalPolicy = "NONE"
+			}
+			paths := []string{}
+			if capability.Risk != "READ" {
+				paths = []string{"/path/id"}
+			}
+			capability.ApprovalScope = &ApprovalScopeContract{Name: "typed-object", RequiredInputPaths: paths}
+		}
+		raw, _ := json.Marshal(candidate)
+		if _, err := Parse(raw); err != nil {
+			t.Fatal("explicit OpenAPI scoped policy rejected", policy, err)
+		}
+	}
 }

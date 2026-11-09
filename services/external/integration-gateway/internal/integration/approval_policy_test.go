@@ -1,13 +1,19 @@
 package integration
 
-import "testing"
+import (
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
+	"testing"
+)
 
 // TestInvocationSelectedApprovalPolicyIsClosedBeforeEffects checks allowed selected policies and grant pins, then rejects autonomous approving reviews and unapproved writes at invocation validation without a provider call.
 // TestInvocationSelectedApprovalPolicyIsClosedBeforeEffects проверяет допустимые выбранные политики и версии гранта, затем отклоняет автономные одобряющие ревью и неподтверждённые записи при проверке вызова без обращения к провайдеру.
 func TestInvocationSelectedApprovalPolicyIsClosedBeforeEffects(t *testing.T) {
 	t.Parallel()
 	adapter := testAdapter(t)
-	definition := adapter.definitions["github"]
+	definition, ok := integrationpackage.ResolveShippedRevision(adapter.definitions["github"], "6.3.0", "72833e586647539dc1b33bbefa80605c22c6847cc7689fe0a626e28d64c55af5")
+	if !ok {
+		t.Fatal("historical policy package unavailable")
+	}
 	credential := testCredential(t, adapter, "policy-fixture-token")
 	input := map[string]any{"pull_request_number": 7, "sha": "fixture-sha", "event": "COMMENT"}
 	for _, policy := range []string{"NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"} {

@@ -498,6 +498,15 @@ func castIntegrationCapability(value entity.IntegrationCapability) *controlplane
 	for _, field := range value.InputFields {
 		result.InputFields = append(result.InputFields, castIntegrationField(field))
 	}
+	if value.ApprovalScope != nil {
+		result.ApprovalScope = &controlplanev1.IntegrationApprovalScopeContract{Name: value.ApprovalScope.Name,
+			RequiredInputPaths: append([]string{}, value.ApprovalScope.RequiredInputPaths...),
+			MaxDurationSeconds: value.ApprovalScope.MaxDurationSeconds, MaxEffects: value.ApprovalScope.MaxEffects}
+		for _, lifetime := range value.ApprovalScope.AllowedLifetimes {
+			result.ApprovalScope.AllowedLifetimes = append(result.ApprovalScope.AllowedLifetimes,
+				controlplanev1.IntegrationApprovalScopeLifetime(controlplanev1.IntegrationApprovalScopeLifetime_value["INTEGRATION_APPROVAL_SCOPE_LIFETIME_"+lifetime]))
+		}
+	}
 	return result
 }
 

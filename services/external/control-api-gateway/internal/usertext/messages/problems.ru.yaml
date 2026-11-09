@@ -861,7 +861,7 @@ PERMISSION_IMAGE_SOURCE_MANAGE_DESCRIPTION:
 SYSTEM_ROLE_IMAGE_SOURCE_ACCESS:
   other: Системной роли добавлен отдельный допуск к исходникам образов ролей
 RUNTIME_CLAIM_ELIGIBILITY_CHANGED:
-  other: 'Запуск остановлен: изменились необходимые разрешения или зависимости'
+  other: "Запуск остановлен: изменились необходимые разрешения или зависимости"
 PROVIDER_ACCOUNT_DELETION_REQUESTED:
   other: Удаление учётной записи провайдера запрошено
 PROVIDER_ACCOUNT_VERIFICATION_REQUESTED:
@@ -1067,3 +1067,8 @@ WORKFLOW_GATE_SUPERSEDED:
 
 INTEGRATION_CREDENTIALS_REQUIRED:
   other: Перед запуском настройте все обязательные личные подключения
+
+INTEGRATION_APPROVAL_REVOKED:
+  other: Временное разрешение отозвано; новые действия требуют согласования
+INTEGRATION_APPROVAL_EXPIRED:
+  other: Срок временного разрешения истёк; действие не началось

@@ -24,5 +24,8 @@ BEGIN
    EXECUTE format('GRANT SELECT ON control_plane.%I TO kodex_backup_reader',target);
   END IF;
  END LOOP;
+ IF EXISTS(SELECT 1 FROM public.goose_db_version WHERE version_id=20261109000100 AND is_applied) THEN
+  GRANT SELECT ON control_plane.integration_grants,control_plane.integration_approval_scopes TO kodex_backup_reader;
+ END IF;
 END $successor_backup$;
 COMMIT;

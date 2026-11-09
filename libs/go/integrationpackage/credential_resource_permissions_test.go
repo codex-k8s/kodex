@@ -11,6 +11,9 @@ func TestCredentialResourcePermissionProfile(t *testing.T) {
 	}
 	for _, key := range []string{"confluence-server-dc", "confluence", "jira-server-dc", "gitlab"} {
 		definition := definitions[key]
+		if key == "gitlab" {
+			definition = legacyGitLabPackage(t)
+		}
 		for _, capability := range definition.Spec.Capabilities {
 			want := ""
 			if contract, exists := credentialObjectReadContract(key, capability.Key); exists {

@@ -1,3 +1,4 @@
+import { integrationResourcePoliciesCatalog } from './integration-resource-policies-catalog.gen.mjs';
 import { validateStableReceipt } from './stable-image-publication.mjs';
 import { fingerprint } from './scoped-release.mjs';
 import { createHash, randomUUID } from 'node:crypto';
@@ -17,6 +18,8 @@ import { authorityProofCounterCatalog } from './authority-proof-counter-catalog.
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'integration-resource-policies': {version:'20261109000100',file:'20261109000100_integration_resource_policies.sql',annotation:'kodex.dev/cp-integration-resource-policies-migration-plan',previousVersion:20261108000100,emptyField:'integrationResourcePoliciesAbsent',preconditionFile:'integration-resource-policies-migration-precondition.sql',postconditionFile:'integration-resource-policies-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261109000100_integration_resource_policies.sql'])},
+  'integration-resource-policies-backup': {version:'20261109000100',file:'20261109000100_integration_resource_policies.sql',annotation:'kodex.dev/cp-integration-resource-policies-backup-migration-plan',previousVersion:20261108000100,emptyField:'integrationResourcePoliciesAbsent',preconditionFile:'integration-resource-policies-backup-migration-precondition.sql',postconditionFile:'integration-resource-policies-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261109000100_integration_resource_policies.sql'])},
   'authority-proof-counter': {version:'20261108000100',file:'20261108000100_authority_proof_counter.sql',annotation:'kodex.dev/cp-authority-proof-counter-migration-plan',previousVersion:20261107000100,emptyField:'authorityProofCounterAbsent',preconditionFile:'authority-proof-counter-migration-precondition.sql',postconditionFile:'authority-proof-counter-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261108000100_authority_proof_counter.sql'])},
   'authority-proof-counter-backup': {version:'20261108000100',file:'20261108000100_authority_proof_counter.sql',annotation:'kodex.dev/cp-authority-proof-counter-backup-migration-plan',previousVersion:20261107000100,emptyField:'authorityProofCounterAbsent',preconditionFile:'authority-proof-counter-backup-migration-precondition.sql',postconditionFile:'authority-proof-counter-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261108000100_authority_proof_counter.sql'])},
   'jira-create-fields': {version:'20261107000100',file:'20261107000100_jira_create_fields_compatibility.sql',annotation:'kodex.dev/cp-jira-create-fields-migration-plan',previousVersion:20261106000100,emptyField:'personalCredentialsCatalog',preconditionFile:'jira-create-fields-migration-precondition.sql',postconditionFile:'jira-create-fields-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261107000100_jira_create_fields_compatibility.sql'])},
@@ -329,6 +332,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(validPersonalCredentialsMigrationPrecondition(result,profile==='personal-credentials-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'jira-create-fields' || profile === 'jira-create-fields-backup')
       ensure(validJiraCreateFieldsMigrationPrecondition(result,profile==='jira-create-fields-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if (profile === 'integration-resource-policies' || profile === 'integration-resource-policies-backup')
+      ensure(validIntegrationResourcePoliciesMigrationPrecondition(result,profile==='integration-resource-policies-backup',requireStopped), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'authority-proof-counter' || profile === 'authority-proof-counter-backup')
       ensure(validAuthorityProofCounterMigrationPrecondition(result,profile==='authority-proof-counter-backup',requireStopped), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     return result;
@@ -974,6 +979,8 @@ export function validWorkspaceBackupACLReadback(proof) {
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {
+    case 'integration-resource-policies': return validIntegrationResourcePoliciesMigrationPostcondition(proof);
+    case 'integration-resource-policies-backup': return validIntegrationResourcePoliciesBackupMigrationPostcondition(proof);
     case 'authority-proof-counter': return validAuthorityProofCounterMigrationPostcondition(proof);
     case 'authority-proof-counter-backup': return validAuthorityProofCounterBackupMigrationPostcondition(proof);
     case 'jira-create-fields': return validJiraCreateFieldsMigrationPostcondition(proof);
@@ -1138,3 +1145,25 @@ export function validAuthorityProofCounterMigrationPrecondition(proof, backup=fa
 export function validAuthorityProofCounterBackupMigrationPrecondition(proof) {
   return validAuthorityProofCounterMigrationPrecondition(proof,true);
 }
+
+// Exact037 проверяет собственный полный catalog до явной projection прежних неизменных036 invariants.
+export function validIntegrationResourcePoliciesMigrationPostcondition(proof,backup=false){
+ return proof?.profile==='INTEGRATION_RESOURCE_POLICIES_'+(backup?'BACKUP_':'')+'V1' && proof.gooseVersion===20261109000100 &&
+  proof.integrationResourcePoliciesCatalog===true && proof.integrationResourcePoliciesCatalogDigest===integrationResourcePoliciesCatalog[backup?'backup':'normal'] &&
+  proof.personalCredentialsCatalogDigest===integrationResourcePoliciesCatalog[backup?'backup':'normal'] &&
+  validAuthorityProofCounterMigrationPostcondition({...proof,profile:'AUTHORITY_PROOF_COUNTER_'+(backup?'BACKUP_':'')+'V1',gooseVersion:20261108000100,personalCredentialsCatalogDigest:jiraCreateFieldsCatalog[backup?'backup':'normal']},backup);
+}
+
+// Backup037 требует отдельный SELECT-only catalog и не принимает обычный proof.
+export function validIntegrationResourcePoliciesBackupMigrationPostcondition(proof){return validIntegrationResourcePoliciesMigrationPostcondition(proof,true);}
+
+// Нормальное обновление037 требует exact036, полного predecessor catalog и завершённых owner graphs/effects/probes.
+export function validIntegrationResourcePoliciesMigrationPrecondition(proof,backup=false,requireStopped=true){
+ return proof?.profile==='INTEGRATION_RESOURCE_POLICIES_'+(backup?'BACKUP_':'')+'PREDECESSOR_V1' && proof.integrationResourcePoliciesAbsent===true &&
+  Number.isSafeInteger(proof.oldClaimSessions) && proof.oldClaimSessions>=0 && (!requireStopped || proof.oldClaimSessions===0) &&
+  ['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','activeIntegrationInvocations','activeIntegrationConnectionTests','activePersonalCredentialTests'].every(key=>proof[key]===0) &&
+  validAuthorityProofCounterMigrationPostcondition({...proof,profile:'AUTHORITY_PROOF_COUNTER_'+(backup?'BACKUP_':'')+'V1'},backup);
+}
+
+// Отдельная точка backup precondition сохраняет закрытый ACL profile.
+export function validIntegrationResourcePoliciesBackupMigrationPrecondition(proof){return validIntegrationResourcePoliciesMigrationPrecondition(proof,true);}

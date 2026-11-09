@@ -43,13 +43,13 @@ func (definition Package) CollaborativeWrite(capability Capability) bool {
 	}
 }
 
-// ValidateInvocationApprovalPolicy rejects unauthorized selections and allows autonomous review only for COMMENT input.
-// ValidateInvocationApprovalPolicy отклоняет неразрешённый выбор и допускает автономное ревью лишь с входным событием COMMENT.
+// ValidateInvocationApprovalPolicy rejects selections outside the exact versioned contract; legacy GitHub reviews retain their COMMENT-only autonomous profile.
+// ValidateInvocationApprovalPolicy отклоняет выбор вне точного versioned contract; legacy GitHub reviews сохраняют автономный профиль только COMMENT.
 func (definition Package) ValidateInvocationApprovalPolicy(capability Capability, selected string, canonicalInput []byte) error {
 	if !capability.AllowsApprovalPolicy(selected) {
 		return errApprovalPolicy
 	}
-	if selected == string(ApprovalNone) && capability.Operation == "github.pull_request.review.create" {
+	if selected == string(ApprovalNone) && capability.Operation == "github.pull_request.review.create" && capability.ApprovalScope == nil {
 		var input struct {
 			Event string `json:"event"`
 		}
@@ -60,8 +60,10 @@ func (definition Package) ValidateInvocationApprovalPolicy(capability Capability
 	return nil
 }
 
-// validCapabilityApprovalPolicies enforces bounded, nonduplicate choices with stricter read and write rules per adapter.
-// validCapabilityApprovalPolicies обеспечивает ограниченный выбор без дублей и отдельные правила чтения и записи по адаптеру.
+// validCapabilityApprovalPolicies preserves legacy restrictions while an explicit typed scope contract permits owner-configured policies independently of risk.
+// validCapabilityApprovalPolicies сохраняет legacy restrictions; явный typed scope contract допускает owner-configured policies независимо от риска.
+// Metadata alone grants no invocation authority: exact shipped/managed revision checks, selected grant policy and native permits remain mandatory.
+// Metadata сами не разрешают вызов: обязательны exact shipped/managed revision checks, выбранная grant policy и native permits.
 func validCapabilityApprovalPolicies(definition *Package, capability Capability) bool {
 	if !validApprovalPolicy(capability.ApprovalPolicy) || len(capability.AllowedApprovalPolicies) < 1 ||
 		len(capability.AllowedApprovalPolicies) > 3 || !capability.AllowsApprovalPolicy(capability.ApprovalPolicy) {
@@ -73,6 +75,9 @@ func validCapabilityApprovalPolicies(definition *Package, capability Capability)
 			return false
 		}
 		seen[policy] = true
+		if capability.ApprovalScope != nil {
+			continue
+		}
 		if capability.Risk == string(RiskRead) && policy != string(ApprovalNone) {
 			return false
 		}

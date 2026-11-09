@@ -1371,6 +1371,15 @@ type RunCommandInput struct{ RunRef, Reason string }
 // авторизации дают проверенный principal и версионное изменение, не строка решения.
 type GateResolutionInput struct {
 	GateRef, Decision, Comment, AttachmentSetRef string
+	IntegrationApproval                          *IntegrationApprovalSelection `json:"integrationApproval,omitempty"`
+}
+
+// IntegrationApprovalSelection contains only a human's requested bounds; trusted root identity and object scope are assigned by the owner transaction.
+// IntegrationApprovalSelection содержит лишь запрошенные человеком bounds; trusted root identity и object scope назначаются owner transaction.
+type IntegrationApprovalSelection struct {
+	DurationSeconds int64  `json:"durationSeconds"`
+	MaxEffects      int64  `json:"maxEffects"`
+	Lifetime        string `json:"lifetime"`
 }
 
 // ArtifactBindingInput selects an exact artifact/agent binding and proposed enablement, leaving
@@ -1880,6 +1889,7 @@ type EmailMailboxInput struct {
 // транспортный ответ: каждая граница выбирает типизированное представление, а Duplicate не разрешает
 // повторить эффект.
 type Result struct {
+	IntegrationApprovalConsent        *entity.IntegrationApprovalConsent `json:"integrationApprovalConsent,omitempty"`
 	PersonalIntegrationCredentialTest *entity.PersonalIntegrationCredentialTestReceipt
 	PersonalIntegrationCredential     *entity.PersonalIntegrationCredential
 	ProjectPurgeRecovery              *entity.ProjectPurgeRecovery

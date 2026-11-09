@@ -79,12 +79,18 @@ defineEmits<{
     <fieldset v-if="fields.policy === 'HUMAN_SCOPED'">
       <legend>{{ $t("integrations.approvalScopeTitle") }}</legend>
       <p>{{ $t("integrations.approvalScopeHelp") }}</p>
+      <p
+        v-if="!fields.allowedPaths.length && fields.requiredPaths !== undefined"
+      >
+        {{ $t("integrations.approvalScopeConnectionOnly") }}
+      </p>
       <label v-for="path in fields.allowedPaths" :key="path"
         ><input
           type="checkbox"
           :checked="fields.paths.includes(path)"
           :disabled="
             disabled ||
+            fields.requiredPaths?.includes(path) ||
             (!fields.paths.includes(path) && fields.paths.length >= 16)
           "
           @change="

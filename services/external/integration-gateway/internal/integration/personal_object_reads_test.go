@@ -26,7 +26,7 @@ func TestPersonalObjectReadsExecuteCurrentScopedGet(t *testing.T) {
 		for _, operation := range operations {
 			for _, scenario := range []string{"allowed", "401", "403", "404", "old profile", "foreign profile", "shared403"} {
 				t.Run(operation+"/"+scenario, func(t *testing.T) {
-					adapter := testAdapter(t)
+					adapter := legacyGitLabTestAdapter(t)
 					credential := testCredential(t, adapter, "synthetic-server-token")
 					var request Request
 					if definition == "gitlab" {

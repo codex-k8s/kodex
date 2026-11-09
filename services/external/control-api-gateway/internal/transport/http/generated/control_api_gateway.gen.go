@@ -2404,6 +2404,84 @@ func (e InstructionVersionState) Valid() bool {
 	}
 }
 
+// Defines values for IntegrationApprovalConsentLifetime.
+const (
+	IntegrationApprovalConsentLifetimeINITIATORRESOURCE IntegrationApprovalConsentLifetime = "INITIATOR_RESOURCE"
+	IntegrationApprovalConsentLifetimeROOTRUN           IntegrationApprovalConsentLifetime = "ROOT_RUN"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationApprovalConsentLifetime enum.
+func (e IntegrationApprovalConsentLifetime) Valid() bool {
+	switch e {
+	case IntegrationApprovalConsentLifetimeINITIATORRESOURCE:
+		return true
+	case IntegrationApprovalConsentLifetimeROOTRUN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IntegrationApprovalConsentState.
+const (
+	IntegrationApprovalConsentStateACTIVE    IntegrationApprovalConsentState = "ACTIVE"
+	IntegrationApprovalConsentStateEXHAUSTED IntegrationApprovalConsentState = "EXHAUSTED"
+	IntegrationApprovalConsentStateEXPIRED   IntegrationApprovalConsentState = "EXPIRED"
+	IntegrationApprovalConsentStateREVOKED   IntegrationApprovalConsentState = "REVOKED"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationApprovalConsentState enum.
+func (e IntegrationApprovalConsentState) Valid() bool {
+	switch e {
+	case IntegrationApprovalConsentStateACTIVE:
+		return true
+	case IntegrationApprovalConsentStateEXHAUSTED:
+		return true
+	case IntegrationApprovalConsentStateEXPIRED:
+		return true
+	case IntegrationApprovalConsentStateREVOKED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IntegrationApprovalConsentSelectionLifetime.
+const (
+	IntegrationApprovalConsentSelectionLifetimeINITIATORRESOURCE IntegrationApprovalConsentSelectionLifetime = "INITIATOR_RESOURCE"
+	IntegrationApprovalConsentSelectionLifetimeROOTRUN           IntegrationApprovalConsentSelectionLifetime = "ROOT_RUN"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationApprovalConsentSelectionLifetime enum.
+func (e IntegrationApprovalConsentSelectionLifetime) Valid() bool {
+	switch e {
+	case IntegrationApprovalConsentSelectionLifetimeINITIATORRESOURCE:
+		return true
+	case IntegrationApprovalConsentSelectionLifetimeROOTRUN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IntegrationApprovalScopeContractAllowedLifetimes.
+const (
+	INITIATORRESOURCE IntegrationApprovalScopeContractAllowedLifetimes = "INITIATOR_RESOURCE"
+	ROOTRUN           IntegrationApprovalScopeContractAllowedLifetimes = "ROOT_RUN"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationApprovalScopeContractAllowedLifetimes enum.
+func (e IntegrationApprovalScopeContractAllowedLifetimes) Valid() bool {
+	switch e {
+	case INITIATORRESOURCE:
+		return true
+	case ROOTRUN:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for IntegrationCandidateReason.
 const (
 	IntegrationCandidateReasonCONNECTIONUNAVAILABLE IntegrationCandidateReason = "CONNECTION_UNAVAILABLE"
@@ -2482,6 +2560,7 @@ const (
 	IntegrationCapabilityResourceKindEMAILSENDER       IntegrationCapabilityResourceKind = "EMAIL_SENDER"
 	IntegrationCapabilityResourceKindGITHUBREPOSITORY  IntegrationCapabilityResourceKind = "GITHUB_REPOSITORY"
 	IntegrationCapabilityResourceKindGITLABPROJECT     IntegrationCapabilityResourceKind = "GITLAB_PROJECT"
+	IntegrationCapabilityResourceKindGITLABSCOPE       IntegrationCapabilityResourceKind = "GITLAB_SCOPE"
 	IntegrationCapabilityResourceKindHTTPSRESOURCE     IntegrationCapabilityResourceKind = "HTTPS_RESOURCE"
 	IntegrationCapabilityResourceKindJIRAPROJECT       IntegrationCapabilityResourceKind = "JIRA_PROJECT"
 	IntegrationCapabilityResourceKindMATTERMOSTCHANNEL IntegrationCapabilityResourceKind = "MATTERMOST_CHANNEL"
@@ -2499,6 +2578,8 @@ func (e IntegrationCapabilityResourceKind) Valid() bool {
 	case IntegrationCapabilityResourceKindGITHUBREPOSITORY:
 		return true
 	case IntegrationCapabilityResourceKindGITLABPROJECT:
+		return true
+	case IntegrationCapabilityResourceKindGITLABSCOPE:
 		return true
 	case IntegrationCapabilityResourceKindHTTPSRESOURCE:
 		return true
@@ -2983,6 +3064,7 @@ const (
 	IntegrationResourceScopeKindEMAILSENDER       IntegrationResourceScopeKind = "EMAIL_SENDER"
 	IntegrationResourceScopeKindGITHUBREPOSITORY  IntegrationResourceScopeKind = "GITHUB_REPOSITORY"
 	IntegrationResourceScopeKindGITLABPROJECT     IntegrationResourceScopeKind = "GITLAB_PROJECT"
+	IntegrationResourceScopeKindGITLABSCOPE       IntegrationResourceScopeKind = "GITLAB_SCOPE"
 	IntegrationResourceScopeKindHTTPSRESOURCE     IntegrationResourceScopeKind = "HTTPS_RESOURCE"
 	IntegrationResourceScopeKindJIRAPROJECT       IntegrationResourceScopeKind = "JIRA_PROJECT"
 	IntegrationResourceScopeKindMATTERMOSTCHANNEL IntegrationResourceScopeKind = "MATTERMOST_CHANNEL"
@@ -3000,6 +3082,8 @@ func (e IntegrationResourceScopeKind) Valid() bool {
 	case IntegrationResourceScopeKindGITHUBREPOSITORY:
 		return true
 	case IntegrationResourceScopeKindGITLABPROJECT:
+		return true
+	case IntegrationResourceScopeKindGITLABSCOPE:
 		return true
 	case IntegrationResourceScopeKindHTTPSRESOURCE:
 		return true
@@ -4845,25 +4929,25 @@ func (e ProviderAccountCreateInputDefinitionKey) Valid() bool {
 
 // Defines values for ProviderAccountDeletionSafeReason.
 const (
-	ACCOUNTDELETED              ProviderAccountDeletionSafeReason = "ACCOUNT_DELETED"
-	CREDENTIALCLEANUPFAILED     ProviderAccountDeletionSafeReason = "CREDENTIAL_CLEANUP_FAILED"
-	CREDENTIALCLEANUPINPROGRESS ProviderAccountDeletionSafeReason = "CREDENTIAL_CLEANUP_IN_PROGRESS"
-	CREDENTIALCLEANUPPENDING    ProviderAccountDeletionSafeReason = "CREDENTIAL_CLEANUP_PENDING"
-	WAITINGFORDEPENDENCIES      ProviderAccountDeletionSafeReason = "WAITING_FOR_DEPENDENCIES"
+	ProviderAccountDeletionSafeReasonACCOUNTDELETED              ProviderAccountDeletionSafeReason = "ACCOUNT_DELETED"
+	ProviderAccountDeletionSafeReasonCREDENTIALCLEANUPFAILED     ProviderAccountDeletionSafeReason = "CREDENTIAL_CLEANUP_FAILED"
+	ProviderAccountDeletionSafeReasonCREDENTIALCLEANUPINPROGRESS ProviderAccountDeletionSafeReason = "CREDENTIAL_CLEANUP_IN_PROGRESS"
+	ProviderAccountDeletionSafeReasonCREDENTIALCLEANUPPENDING    ProviderAccountDeletionSafeReason = "CREDENTIAL_CLEANUP_PENDING"
+	ProviderAccountDeletionSafeReasonWAITINGFORDEPENDENCIES      ProviderAccountDeletionSafeReason = "WAITING_FOR_DEPENDENCIES"
 )
 
 // Valid indicates whether the value is a known member of the ProviderAccountDeletionSafeReason enum.
 func (e ProviderAccountDeletionSafeReason) Valid() bool {
 	switch e {
-	case ACCOUNTDELETED:
+	case ProviderAccountDeletionSafeReasonACCOUNTDELETED:
 		return true
-	case CREDENTIALCLEANUPFAILED:
+	case ProviderAccountDeletionSafeReasonCREDENTIALCLEANUPFAILED:
 		return true
-	case CREDENTIALCLEANUPINPROGRESS:
+	case ProviderAccountDeletionSafeReasonCREDENTIALCLEANUPINPROGRESS:
 		return true
-	case CREDENTIALCLEANUPPENDING:
+	case ProviderAccountDeletionSafeReasonCREDENTIALCLEANUPPENDING:
 		return true
-	case WAITINGFORDEPENDENCIES:
+	case ProviderAccountDeletionSafeReasonWAITINGFORDEPENDENCIES:
 		return true
 	default:
 		return false
@@ -11781,6 +11865,9 @@ type GateResolution struct {
 	AttachmentSetRef *OpaqueRef             `json:"attachmentSetRef,omitempty"`
 	Comment          *string                `json:"comment,omitempty"`
 	Decision         GateResolutionDecision `json:"decision"`
+
+	// IntegrationApproval Явный выбор человека только для APPROVE/HUMAN_SCOPED; identity и объект определяет сервер.
+	IntegrationApproval *IntegrationApprovalConsentSelection `json:"integrationApproval,omitempty"`
 }
 
 // GateResolutionDecision defines model for GateResolution.Decision.
@@ -12165,6 +12252,60 @@ type InstructionVersionPage struct {
 	NextPageToken *string              `json:"nextPageToken,omitempty"`
 }
 
+// IntegrationApprovalConsent defines model for IntegrationApprovalConsent.
+type IntegrationApprovalConsent struct {
+	AgentRef        OpaqueRef                          `json:"agentRef"`
+	CapabilityKey   string                             `json:"capabilityKey"`
+	ConnectionName  string                             `json:"connectionName"`
+	ConnectionRef   OpaqueRef                          `json:"connectionRef"`
+	CreatedAt       time.Time                          `json:"createdAt"`
+	ExpiresAt       time.Time                          `json:"expiresAt"`
+	Lifetime        IntegrationApprovalConsentLifetime `json:"lifetime"`
+	MaxEffects      int64                              `json:"maxEffects"`
+	Ref             string                             `json:"ref"`
+	ReservedEffects int64                              `json:"reservedEffects"`
+	RevokedAt       *time.Time                         `json:"revokedAt,omitempty"`
+	RootRunRef      OpaqueRef                          `json:"rootRunRef"`
+	ScopePaths      []string                           `json:"scopePaths"`
+	ScopeValuesJSON string                             `json:"scopeValuesJSON"`
+	State           IntegrationApprovalConsentState    `json:"state"`
+	Version         int64                              `json:"version"`
+}
+
+// IntegrationApprovalConsentLifetime defines model for IntegrationApprovalConsent.Lifetime.
+type IntegrationApprovalConsentLifetime string
+
+// IntegrationApprovalConsentState defines model for IntegrationApprovalConsent.State.
+type IntegrationApprovalConsentState string
+
+// IntegrationApprovalConsentList defines model for IntegrationApprovalConsentList.
+type IntegrationApprovalConsentList struct {
+	Items         []IntegrationApprovalConsent `json:"items"`
+	NextPageToken *string                      `json:"nextPageToken,omitempty"`
+}
+
+// IntegrationApprovalConsentSelection Явный выбор человека только для APPROVE/HUMAN_SCOPED; identity и объект определяет сервер.
+type IntegrationApprovalConsentSelection struct {
+	DurationSeconds int64                                       `json:"durationSeconds"`
+	Lifetime        IntegrationApprovalConsentSelectionLifetime `json:"lifetime"`
+	MaxEffects      int64                                       `json:"maxEffects"`
+}
+
+// IntegrationApprovalConsentSelectionLifetime defines model for IntegrationApprovalConsentSelection.Lifetime.
+type IntegrationApprovalConsentSelectionLifetime string
+
+// IntegrationApprovalScopeContract Предметная identity и верхние границы human consent; не сохранённое разрешение.
+type IntegrationApprovalScopeContract struct {
+	AllowedLifetimes   []IntegrationApprovalScopeContractAllowedLifetimes `json:"allowedLifetimes"`
+	MaxDurationSeconds int64                                              `json:"maxDurationSeconds"`
+	MaxEffects         int64                                              `json:"maxEffects"`
+	Name               string                                             `json:"name"`
+	RequiredInputPaths []string                                           `json:"requiredInputPaths"`
+}
+
+// IntegrationApprovalScopeContractAllowedLifetimes defines model for IntegrationApprovalScopeContract.AllowedLifetimes.
+type IntegrationApprovalScopeContractAllowedLifetimes string
+
 // IntegrationCandidateReason defines model for IntegrationCandidateReason.
 type IntegrationCandidateReason string
 
@@ -12173,15 +12314,18 @@ type IntegrationCapability struct {
 	AllowedApprovalPolicies []IntegrationCapabilityAllowedApprovalPolicies `json:"allowedApprovalPolicies"`
 	ApprovalPolicy          IntegrationCapabilityApprovalPolicy            `json:"approvalPolicy"`
 	ApprovalRequired        bool                                           `json:"approvalRequired"`
-	Description             string                                         `json:"description"`
-	InputFields             []IntegrationConfigurationField                `json:"inputFields"`
-	InputSchema             *string                                        `json:"inputSchema,omitempty"`
-	InputSchemaSha256       *string                                        `json:"inputSchemaSha256,omitempty"`
-	Key                     string                                         `json:"key"`
-	Name                    string                                         `json:"name"`
-	Operation               string                                         `json:"operation"`
-	ResourceKind            IntegrationCapabilityResourceKind              `json:"resourceKind"`
-	Risk                    IntegrationCapabilityRisk                      `json:"risk"`
+
+	// ApprovalScope Предметная identity и верхние границы human consent; не сохранённое разрешение.
+	ApprovalScope     *IntegrationApprovalScopeContract `json:"approvalScope,omitempty"`
+	Description       string                            `json:"description"`
+	InputFields       []IntegrationConfigurationField   `json:"inputFields"`
+	InputSchema       *string                           `json:"inputSchema,omitempty"`
+	InputSchemaSha256 *string                           `json:"inputSchemaSha256,omitempty"`
+	Key               string                            `json:"key"`
+	Name              string                            `json:"name"`
+	Operation         string                            `json:"operation"`
+	ResourceKind      IntegrationCapabilityResourceKind `json:"resourceKind"`
+	Risk              IntegrationCapabilityRisk         `json:"risk"`
 }
 
 // IntegrationCapabilityAllowedApprovalPolicies defines model for IntegrationCapability.AllowedApprovalPolicies.
@@ -17778,6 +17922,19 @@ type GetManagedConfigurationImpactParams struct {
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// ListIntegrationApprovalConsentsParams defines parameters for ListIntegrationApprovalConsents.
+type ListIntegrationApprovalConsentsParams struct {
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// RevokeIntegrationApprovalConsentParams defines parameters for RevokeIntegrationApprovalConsent.
+type RevokeIntegrationApprovalConsentParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
 // ListPersonalIntegrationConnectionsParams defines parameters for ListPersonalIntegrationConnections.
 type ListPersonalIntegrationConnectionsParams struct {
 	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
@@ -19393,6 +19550,9 @@ type RejectManagedConfigurationGitWriteBackJSONRequestBody = ConfigurationWriteB
 
 // CopyGitManagedConfigurationJSONRequestBody defines body for CopyGitManagedConfiguration for application/json ContentType.
 type CopyGitManagedConfigurationJSONRequestBody = ManagedConfigurationCopyInput
+
+// RevokeIntegrationApprovalConsentJSONRequestBody defines body for RevokeIntegrationApprovalConsent for application/json ContentType.
+type RevokeIntegrationApprovalConsentJSONRequestBody = PersonalIntegrationCredentialRevokeInput
 
 // CreatePersonalIntegrationCredentialJSONRequestBody defines body for CreatePersonalIntegrationCredential for application/json ContentType.
 type CreatePersonalIntegrationCredentialJSONRequestBody = PersonalIntegrationCredentialCreateInput
@@ -21103,6 +21263,12 @@ type ServerInterface interface {
 
 	// (GET /api/v1/managed-configurations/{configurationRef}/revisions/{revisionRef}/impact)
 	GetManagedConfigurationImpact(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, revisionRef ConfigurationRevisionRef, params GetManagedConfigurationImpactParams)
+
+	// (GET /api/v1/me/integration-approval-consents)
+	ListIntegrationApprovalConsents(w http.ResponseWriter, r *http.Request, params ListIntegrationApprovalConsentsParams)
+
+	// (POST /api/v1/me/integration-approval-consents/{consentRef}/revoke)
+	RevokeIntegrationApprovalConsent(w http.ResponseWriter, r *http.Request, consentRef string, params RevokeIntegrationApprovalConsentParams)
 
 	// (GET /api/v1/me/integration-connections)
 	ListPersonalIntegrationConnections(w http.ResponseWriter, r *http.Request, params ListPersonalIntegrationConnectionsParams)
@@ -33650,6 +33816,164 @@ func (siw *ServerInterfaceWrapper) GetManagedConfigurationImpact(w http.Response
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetManagedConfigurationImpact(w, r, configurationRef, revisionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListIntegrationApprovalConsents operation middleware
+func (siw *ServerInterfaceWrapper) ListIntegrationApprovalConsents(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListIntegrationApprovalConsentsParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListIntegrationApprovalConsents(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeIntegrationApprovalConsent operation middleware
+func (siw *ServerInterfaceWrapper) RevokeIntegrationApprovalConsent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "consentRef" -------------
+	var consentRef string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "consentRef", r.PathValue("consentRef"), &consentRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "consentRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RevokeIntegrationApprovalConsentParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeIntegrationApprovalConsent(w, r, consentRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -52273,6 +52597,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/managed-configurations/{configurationRef}/git-write-backs", wrapper.ListManagedConfigurationGitWriteBacks)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/managed-configurations/{configurationRef}/revisions", wrapper.ListManagedConfigurationHistory)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/managed-configurations/{configurationRef}/revisions/{revisionRef}/impact", wrapper.GetManagedConfigurationImpact)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/me/integration-approval-consents", wrapper.ListIntegrationApprovalConsents)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/me/integration-approval-consents/{consentRef}/revoke", wrapper.RevokeIntegrationApprovalConsent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/me/integration-connections", wrapper.ListPersonalIntegrationConnections)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/me/integration-connections/{connectionRef}/credential", wrapper.GetPersonalIntegrationCredential)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/me/integration-connections/{connectionRef}/credential", wrapper.CreatePersonalIntegrationCredential)

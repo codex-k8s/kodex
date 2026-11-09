@@ -26,13 +26,16 @@ import (
 // isolated pool, deadline, seed, tracer и principals; helper не читает credentials и не вызывает
 // внешнего provider. При успехе исходная caller error остаётся nil, как после всех четырёх
 // успешных шагов.
-func newSyntheticRuntimeComponentRepository(t *testing.T, ctx context.Context, pool *pgxpool.Pool) *Repository {
+func newSyntheticRuntimeComponentRepository(t *testing.T, ctx context.Context, pool *pgxpool.Pool, configure ...func(*Repository)) *Repository {
 	t.Helper()
 	r, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
 	if err != nil {
 		t.Fatal(err)
 	}
 	configureSyntheticRuntimeComponentRepository(t, r)
+	for _, customize := range configure {
+		customize(r)
+	}
 	if err = r.Bootstrap(ctx); err != nil {
 		t.Fatal(err)
 	}

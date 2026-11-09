@@ -110,7 +110,7 @@ func validateOwnerGateProjection(gate map[string]any) error {
 		return errOwnerGateShape
 	}
 	switch scope["kind"] {
-	case "SYNTHETIC_JOURNAL", "GITHUB_REPOSITORY", "MATTERMOST_CHANNEL", "GITLAB_PROJECT", "JIRA_PROJECT", "CONFLUENCE_SPACE", "EMAIL_SENDER", "HTTPS_RESOURCE", "SSH_TARGET":
+	case "SYNTHETIC_JOURNAL", "GITHUB_REPOSITORY", "MATTERMOST_CHANNEL", "GITLAB_PROJECT", "GITLAB_SCOPE", "JIRA_PROJECT", "CONFLUENCE_SPACE", "EMAIL_SENDER", "HTTPS_RESOURCE", "SSH_TARGET":
 	default:
 		return errOwnerGateShape
 	}

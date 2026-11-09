@@ -171,7 +171,7 @@ func main() {
 		Operations: controlplaneclient.SecretDraftGatewayOperations(), AuthoritySources: []string{"OIDC_SESSION", "DOMAIN_STATE"},
 		TargetWorkloadID: secretBrokerID, TargetSPIFFEID: secretBrokerPeer, TargetAudience: secretBrokerAudience, TargetTLSServerName: secretBrokerTLS,
 	})
-	value := document{Version: 1, PolicyRevision: 103, Policy: policy{
+	value := document{Version: 1, PolicyRevision: 104, Policy: policy{
 		AuthorityABIVersion: 2,
 		TrustDomain:         "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
@@ -275,7 +275,7 @@ func requiredProjects(operations map[string]string) map[string]struct{} {
 // operationRequestProfile выбирает точные требования привязки перед общими правилами.
 func operationRequestProfile(operationID, fullMethod string) requestProfile {
 	switch operationID {
-	case "platform.personal-integrations.list":
+	case "platform.personal-integrations.list", "platform.integration-approval-consents.list":
 		return requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
 	case "platform.personal-integration-tests.claim", "platform.personal-integration-tests.begin", "platform.personal-integration-calls.begin":
 		return requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
@@ -285,7 +285,7 @@ func operationRequestProfile(operationID, fullMethod string) requestProfile {
 		return requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "REQUIRED", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
 	case "platform.personal-integrations.create":
 		return requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "REQUIRED", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
-	case "platform.personal-integrations.configure", "platform.personal-integrations.revoke", "platform.personal-integrations.test", "platform.integrations.credential-policy.set":
+	case "platform.integration-approval-consents.revoke", "platform.personal-integrations.configure", "platform.personal-integrations.revoke", "platform.personal-integrations.test", "platform.integrations.credential-policy.set":
 		return requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "REQUIRED", Version: "REQUIRED", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
 	}
 	// Полный nested execution/catalog pin покрывается canonical Proto digest.

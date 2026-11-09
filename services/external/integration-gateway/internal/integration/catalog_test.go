@@ -19,6 +19,9 @@ import (
 // catalogInputs задаёт корректные синтетические входы каждой объявленной операции управляемого MCP, позволяя тестам каталога обнаружить операцию без собственного положительного сценария.
 func catalogInputs() map[string]string {
 	return map[string]string{
+		"gitlab.scope.health.read":             `{}`,
+		"gitlab.project.list":                  `{}`,
+		"gitlab.repository.search":             `{"ref":"main","search":"synthetic","limit":1,"cursor":2}`,
 		"https_json.resource.read":             `{}`,
 		"github.pull_request.file.list":        `{"pull_request_number":3,"limit":1,"cursor":2,"expected_head_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","expected_base_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","expected_changed_files":3}`,
 		"gitlab.merge_request.diff.list":       `{"merge_request_iid":3,"limit":1,"cursor":2}`,
@@ -269,6 +272,30 @@ func TestEveryAdvertisedOperation(t *testing.T) {
 // catalogResponse выбирает синтетические ответы провайдеров и проверяет ограниченные маршруты, страницы и сериализацию почтовой команды с привязкой; неподдерживаемый провайдер завершает тест ошибкой вместо общего успеха.
 func catalogResponse(t *testing.T, provider, operation string, r *http.Request) string {
 	t.Helper()
+	if provider == "gitlab" {
+		if r.URL.Path == "/api/v4/user" && r.Method == http.MethodGet {
+			return `{"id":7}`
+		}
+		if r.URL.Path == "/api/v4/projects/1" || strings.HasPrefix(r.URL.Path, "/api/v4/projects/1/") {
+			// The fixture accepts exactly one numeric alias, matching GitLab's project API, while dedicated scoped tests assert the actual wire ID.
+			// Fixture принимает один exact numeric alias по GitLab project API; dedicated scoped tests проверяют actual wire ID.
+			clone := r.Clone(r.Context())
+			address := *r.URL
+			clone.URL = &address
+			suffix := strings.TrimPrefix(address.Path, "/api/v4/projects/1")
+			address.Path, address.RawPath = "/api/v4/projects/group/project"+suffix, "/api/v4/projects/group%2Fproject"+suffix
+			return catalogResponse(t, provider, operation, clone)
+		}
+		if r.URL.Path == "/api/v4/projects/group/project" && r.Method == http.MethodGet {
+			return `{"id":1,"path_with_namespace":"group/project","default_branch":"main","visibility":"private","archived":false,"namespace":{"id":10,"full_path":"group","kind":"group"}}`
+		}
+		if r.URL.Path == "/api/v4/projects/group/project/search" && r.Method == http.MethodGet {
+			if r.URL.Query().Get("scope") != "blobs" || r.URL.Query().Get("search_type") != "basic" || r.URL.Query().Get("ref") != "main" {
+				t.Fatal("repository search changed its fixed scope/ref")
+			}
+			return `[{"project_id":1,"path":"a.txt","ref":"main","data":"synthetic","startline":1}]`
+		}
+	}
 	if body, ok := confluenceExtendedResponse(t, operation, r); ok {
 		return body
 	}
@@ -567,6 +594,9 @@ func TestReadOperationsHandleRateLimits(t *testing.T) {
 				return
 			}
 			expectedCalls := 2
+			if capability.ResourceScope.Kind == "GITLAB_SCOPE" && operation != "gitlab.project.list" {
+				expectedCalls = 3
+			}
 			if operation == "github.pull_request.file.list" {
 				expectedCalls = 4
 			}

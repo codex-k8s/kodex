@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: context7
-  version: 1.0.0
+  version: 1.1.0
   origin: SHIPPED
 spec:
   name: Context7
@@ -30,7 +30,12 @@ spec:
       operation: context7.library.resolve
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Библиотека и запрос документации"
+        requiredInputPaths: ["/library_name", "/query"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope: {kind: HTTPS_RESOURCE, connectionFields: [base_url]}
       inputFields:
         - {key: library_name, type: STRING, format: PLAIN, required: true, maximumLength: 200}
@@ -44,7 +49,12 @@ spec:
       operation: context7.docs.query
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Библиотека и запрос документации"
+        requiredInputPaths: ["/library_id", "/query"]
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope: {kind: HTTPS_RESOURCE, connectionFields: [base_url]}
       inputFields:
         - {key: library_id, type: STRING, format: PLAIN, required: true, maximumLength: 512}

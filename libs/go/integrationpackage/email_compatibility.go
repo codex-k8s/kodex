@@ -17,8 +17,5 @@ func ResolveShippedRevision(current Package, version, digest string) (Package, b
 	if current.Metadata.Version == version && current.Digest == digest {
 		return current, true
 	}
-	if previous, ok := resolveJiraServerOneCompatibility(current, version, digest); ok {
-		return previous, true
-	}
-	return resolveGitHubSixCompatibility(current, version, digest)
+	return resolveHistoricalPolicyRevision(current, version, digest)
 }

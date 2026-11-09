@@ -1755,7 +1755,7 @@ func knownCommand(kind command.Kind) bool {
 	if kind == command.TestPersonalIntegrationCredential || kind == command.CompletePersonalIntegrationCredentialTest {
 		return true
 	}
-	if kind == command.SetIntegrationCredentialPolicy {
+	if kind == command.SetIntegrationCredentialPolicy || kind == command.RevokeIntegrationApprovalConsent {
 		return true
 	}
 	if kind == command.CreatePersonalIntegrationCredential || kind == command.ConfigurePersonalIntegrationCredential || kind == command.RevokePersonalIntegrationCredential {

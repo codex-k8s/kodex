@@ -8,11 +8,11 @@ import (
 // TestApprovalPolicyAllowedSetIsRequiredAndClosed rejects missing defaults, expansions, and autonomous destructive writes.
 // TestApprovalPolicyAllowedSetIsRequiredAndClosed отклоняет отсутствие default, расширение прав и автономные разрушительные записи.
 func TestApprovalPolicyAllowedSetIsRequiredAndClosed(t *testing.T) {
-	definitions, err := LoadShipped()
+	_, err := LoadShipped()
 	if err != nil {
 		t.Fatal(err)
 	}
-	github := definitions["github"]
+	github := legacyPolicyPackage(t, "github", "6.3.0")
 	for _, policy := range []string{"NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"} {
 		capability, _ := github.Capability("github.pull_request.create")
 		if !capability.AllowsApprovalPolicy(policy) {
@@ -54,11 +54,11 @@ func TestApprovalPolicyAllowedSetIsRequiredAndClosed(t *testing.T) {
 // TestAutonomousReviewOnlyAllowsComment forbids APPROVE and REQUEST_CHANGES without an effect-level human decision.
 // TestAutonomousReviewOnlyAllowsComment запрещает APPROVE и REQUEST_CHANGES без решения человека для конкретного действия.
 func TestAutonomousReviewOnlyAllowsComment(t *testing.T) {
-	definitions, err := LoadShipped()
+	_, err := LoadShipped()
 	if err != nil {
 		t.Fatal(err)
 	}
-	github := definitions["github"]
+	github := legacyPolicyPackage(t, "github", "6.3.0")
 	capability, _ := github.Capability("github.pull_request.review.create")
 	for _, event := range []string{"COMMENT", "APPROVE", "REQUEST_CHANGES", "", "UNKNOWN"} {
 		raw, _ := json.Marshal(map[string]string{"event": event})
@@ -74,11 +74,11 @@ func TestAutonomousReviewOnlyAllowsComment(t *testing.T) {
 // TestManagedRevisionCannotExpandAllowedPolicySet permits narrowing a managed revision but not widening read authority.
 // TestManagedRevisionCannotExpandAllowedPolicySet разрешает сужение управляемой ревизии, но не расширение прав чтения.
 func TestManagedRevisionCannotExpandAllowedPolicySet(t *testing.T) {
-	definitions, err := LoadShipped()
+	_, err := LoadShipped()
 	if err != nil {
 		t.Fatal(err)
 	}
-	github := definitions["github"]
+	github := legacyPolicyPackage(t, "github", "6.3.0")
 	candidate := github
 	candidate.Metadata.Origin = OriginUI
 	candidate.Spec.Capabilities = append([]Capability{}, github.Spec.Capabilities...)

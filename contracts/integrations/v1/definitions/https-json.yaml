@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: https-json
-  version: 1.0.1
+  version: 1.1.0
   origin: SHIPPED
 spec:
   name: HTTPS JSON (чтение)
@@ -26,7 +26,12 @@ spec:
       operation: https_json.resource.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
+      allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+      approvalScope:
+        name: "Область подключения"
+        requiredInputPaths: []
+        limits: {"durationSeconds": 604800, "maxEffects": 10000}
+        allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
       resourceScope: {kind: HTTPS_RESOURCE, connectionFields: [base_url, resource_path]}
       inputFields: []
       outputFields:

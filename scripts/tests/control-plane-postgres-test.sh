@@ -18,6 +18,20 @@ test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestAuthorityProofCounte
 
 # Оба закрытых upgrade-сценария используют одну и ту же отдельную пустую БД.
 upgrade_test='^TestWorkflowReviewQAEvidenceForwardUpgrade$'
+if [[ "$test_pattern" == --integration-resource-policies-upgrade ]]; then
+  command -v pg_dump >/dev/null && command -v pg_restore >/dev/null || fail 'resource policy recovery requires PostgreSQL dump/restore clients'
+  upgrade_test='^TestIntegrationResourcePolicyMigration$'
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --integration-resource-policies-fresh-install ]]; then
+  upgrade_test='^TestIntegrationResourcePolicyFreshInstall$'
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --integration-resource-policies-schema-capture ]]; then
+  [[ "${KODEX_RESOURCE_POLICY_SCHEMA_CAPTURE:-}" == 1 ]] || fail 'resource policy schema capture requires explicit opt-in'
+  upgrade_test='^TestIntegrationResourcePolicyCatalog$'
+  test_pattern=--review-qa-upgrade
+fi
 if [[ "$test_pattern" == --authority-proof-counter-upgrade ]]; then
   command -v pg_dump >/dev/null && command -v pg_restore >/dev/null || fail 'proof counter recovery requires PostgreSQL dump/restore clients'
   upgrade_test='^TestAuthorityProofCounterMigration$'
@@ -44,7 +58,15 @@ if [[ "$test_pattern" == --personal-credentials-catalog ]]; then
   test_pattern=--review-qa-upgrade
 fi
 volume_owner=false
-owner_test='^TestWorkspaceWriterOwnerComponent$'
+if [[ "$test_pattern" == --integration-resource-policies-owner ]]; then
+  volume_owner=true
+  upgrade_test='^TestIntegrationResourcePolicyOwnerRegressionSeed$'
+  owner_test='^(TestScopedIntegrationApprovalComponent|TestIntegrationGateFeedbackComponent|TestIntegrationAutonomousGitHubInvocationComponent|TestIntegrationGitHubHistoricalAdmissionComponent|TestPersonalIntegrationCredentialsComponent|TestIntegrationResourcePoliciesComponent|TestPersonalGitLabScopedPolicyComponent|TestIntegrationHealthSnapshotComponent|TestManagedMCPStartupRecoveryComponent|TestManagedMCPHealthReadbackComponent)$'
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$upgrade_test" != '^TestIntegrationResourcePolicyOwnerRegressionSeed$' ]]; then
+  owner_test='^TestWorkspaceWriterOwnerComponent$'
+fi
 if [[ "$test_pattern" == --authority-proof-counter-owner-regression ]]; then
   volume_owner=true
   upgrade_test='^TestAuthorityProofCounterOwnerRegressionSeed$'
@@ -347,6 +369,7 @@ fi
     -c 'SELECT max(version_id) FILTER (WHERE is_applied) FROM public.goose_db_version')
   case "$schema_version" in
     20261107000100) schema_proof=jira-create-fields-migration-postcondition.sql; schema_verifier=validJiraCreateFieldsMigrationPostcondition ;;
+    20261109000100) schema_proof=integration-resource-policies-migration-postcondition.sql; schema_verifier=validIntegrationResourcePoliciesMigrationPostcondition ;;
     20261108000100) schema_proof=authority-proof-counter-migration-postcondition.sql; schema_verifier=validAuthorityProofCounterMigrationPostcondition ;;
     20261105000100) schema_proof=platform-oidc-identity-migration-postcondition.sql; schema_verifier=validPlatformOIDCIdentityMigrationPostcondition ;;
     20261106000100) schema_proof=personal-credentials-migration-postcondition.sql; schema_verifier=validPersonalCredentialsMigrationPostcondition ;;

@@ -37,6 +37,7 @@ func TestIntegrationGitHubHistoricalAdmissionComponent(t *testing.T) {
 		{"6.0.0", "537a92f2e304a5d670bf0bacc5dfae7d805b981aba5b262d2eb423b1afaaf44e"},
 		{"6.1.0", "057959121df2b88db45d9b0dba438a7ff39824992fcf1c13120a44162071c79f"},
 		{"6.2.0", "96809e1f78320bc5788eb0e39c672818d8b37d03efbf91f1f083936161eb7a13"},
+		{"6.3.0", "72833e586647539dc1b33bbefa80605c22c6847cc7689fe0a626e28d64c55af5"},
 		{current.Metadata.Version, current.Digest},
 	} {
 		t.Run(historical.version, func(t *testing.T) {
@@ -75,15 +76,18 @@ func TestIntegrationGitHubHistoricalAdmissionComponent(t *testing.T) {
 			}
 			var raw []byte
 			if historical.version != current.Metadata.Version {
-				if err := pool.QueryRow(ctx, "SELECT control_plane.integration_github_legacy_capabilities($1,$2,$3,$4)", current.Metadata.Version, current.Digest, historical.version, historical.digest).Scan(&raw); err != nil {
+				if err := pool.QueryRow(ctx, "SELECT control_plane.integration_policy_legacy_capabilities('github',$1,$2,$3,$4)", current.Metadata.Version, current.Digest, historical.version, historical.digest).Scan(&raw); err != nil {
 					t.Fatal("read exact historical admission metadata")
 				}
-				var actual []map[string]string
-				expected := make([]map[string]string, 0, len(previous.Spec.Capabilities))
+				var actual []map[string]any
+				expected := make([]map[string]any, 0, len(previous.Spec.Capabilities))
 				for _, capability := range previous.Spec.Capabilities {
-					expected = append(expected, map[string]string{"key": capability.Key, "name": capability.Name, "operation": capability.Operation, "risk": capability.Risk})
+					expected = append(expected, map[string]any{"key": capability.Key, "name": capability.Name, "operation": capability.Operation, "risk": capability.Risk, "approvalPolicy": capability.ApprovalPolicy, "allowedApprovalPolicies": capability.AllowedApprovalPolicies, "resourceKind": capability.ResourceScope.Kind})
 				}
-				if json.Unmarshal(raw, &actual) != nil || !reflect.DeepEqual(actual, expected) {
+				encodedExpected, _ := json.Marshal(expected)
+				var canonicalExpected []map[string]any
+				_ = json.Unmarshal(encodedExpected, &canonicalExpected)
+				if json.Unmarshal(raw, &actual) != nil || !reflect.DeepEqual(actual, canonicalExpected) {
 					t.Fatal("historical SQL admission differs from the immutable package snapshot")
 				}
 			}

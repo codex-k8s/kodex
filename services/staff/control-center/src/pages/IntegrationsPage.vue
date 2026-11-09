@@ -23,8 +23,13 @@ import {
 import { loadExactIntegrationDefinition } from "@/features/integrations/definition-lookup";
 import IntegrationApprovalPanel from "@/features/integrations/ui/IntegrationApprovalPanel.vue";
 import IntegrationCatalogPanel from "@/features/integrations/ui/IntegrationCatalogPanel.vue";
+import {
+  gitLabScopeForm,
+  changeGitLabScopeField,
+} from "@/features/integrations/gitlab-scope-form";
 import IntegrationPublicConfigurationFields from "@/features/integrations/ui/IntegrationPublicConfigurationFields.vue";
 import IntegrationCredentialField from "@/features/integrations/ui/IntegrationCredentialField.vue";
+import PersonalApprovalConsentsPanel from "@/features/integrations/ui/PersonalApprovalConsentsPanel.vue";
 import PersonalConnectionsPanel from "@/features/integrations/ui/PersonalConnectionsPanel.vue";
 import IntegrationConnectionsPanel from "@/features/integrations/ui/IntegrationConnectionsPanel.vue";
 import IntegrationGrantsPanel from "@/features/integrations/ui/IntegrationGrantsPanel.vue";
@@ -661,9 +666,17 @@ const showsCredentialInput = computed(
     dialogMode.value === "CREDENTIAL" ||
     (dialogMode.value !== "EDIT" && requiresCredential.value),
 );
+const visibleConfigurationFields = computed(() =>
+  gitLabScopeForm(selectedDefinition.value, form.configuration),
+);
 const preparedConfiguration = computed(() =>
   prepareConnectionConfiguration(
-    selectedDefinition.value?.configurationFields ?? [],
+    (selectedDefinition.value?.configurationFields ?? []).map(
+      (field) =>
+        visibleConfigurationFields.value.find(
+          (item) => item.key === field.key,
+        ) ?? field,
+    ),
     form.configuration,
   ),
 );
@@ -1318,7 +1331,9 @@ onBeforeUnmount(() => {
           />
         </AsyncState>
 
-        <PersonalConnectionsPanel v-else-if="activeSection === 'PERSONAL'" />
+        <div v-else-if="activeSection === 'PERSONAL'" class="stack">
+          <PersonalConnectionsPanel /><PersonalApprovalConsentsPanel />
+        </div>
         <IntegrationApprovalPanel v-else />
       </div>
 
@@ -1651,12 +1666,20 @@ onBeforeUnmount(() => {
           </div>
           <IntegrationPublicConfigurationFields
             v-if="dialogMode !== 'CREDENTIAL' && configurationMode === 'FORM'"
-            :fields="selectedDefinition.configurationFields"
+            :fields="visibleConfigurationFields"
             :values="form.configuration"
             :problems="configurationErrorMessages"
             :submitted="formSubmitted"
             :disabled="busy"
-            @change="(key, value) => (form.configuration[key] = value)"
+            @change="
+              (key, value) =>
+                changeGitLabScopeField(
+                  selectedDefinition,
+                  form.configuration,
+                  key,
+                  value,
+                )
+            "
           />
           <section
             v-if="dialogMode === 'CREDENTIAL'"

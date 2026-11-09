@@ -88,7 +88,7 @@ func ResolveIntegrationCredential(
 		copy := *shared
 		return entity.IntegrationCredentialSelection{Credential: &copy}, nil
 	}
-	resourceContract, resourceCheck := integrationpackage.CredentialResourcePermissionContractFor(requirement.DefinitionKey, requirement.CapabilityKey)
+	resourceContract, resourceCheck := integrationpackage.CredentialResourcePermissionContractForProfile(requirement.DefinitionKey, requirement.CapabilityKey, requirement.ResourcePermissionProfile)
 	if resourceCheck && requirement.ResourcePermissionProfile != resourceContract.Profile || !resourceCheck && requirement.ResourcePermissionProfile != "" {
 		return entity.IntegrationCredentialSelection{}, errs.ErrInvalid
 	}

@@ -17,6 +17,9 @@ func TestCredentialObjectReadContracts(t *testing.T) {
 		"confluence-server-dc": {"confluence.page.search", "confluence.page.read"},
 	} {
 		definition := definitions[key]
+		if key == "gitlab" {
+			definition = legacyGitLabPackage(t)
+		}
 		for _, operation := range operations {
 			capability, exists := definition.Capability(operation)
 			if !exists || CredentialResourcePermissionProfile(definition, capability) == "" {
@@ -28,7 +31,7 @@ func TestCredentialObjectReadContracts(t *testing.T) {
 			}
 			for _, change := range []func(*Package, *Capability){
 				func(_ *Package, c *Capability) { c.Risk = "WRITE" },
-				func(_ *Package, c *Capability) { c.ApprovalPolicy = "HUMAN_EACH_EFFECT" },
+				func(_ *Package, c *Capability) { c.ApprovalPolicy = "UNKNOWN" },
 				func(_ *Package, c *Capability) { c.ResourceScope.Kind = "OTHER" },
 				func(p *Package, _ *Capability) { p.Spec.Adapter = "OTHER" },
 				func(_ *Package, c *Capability) { c.Operation = "other.read" },

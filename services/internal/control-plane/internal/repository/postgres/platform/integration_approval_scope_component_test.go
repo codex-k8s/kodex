@@ -34,6 +34,18 @@ import (
 // Отложенные cancellation/pool close ограничивают ресурсы; делегированный scoped-approval scenario
 // проверяет состояние владельца без запуска provider, image build или внешнего transport.
 func TestScopedIntegrationApprovalComponent(t *testing.T) {
+	runScopedIntegrationApprovalComponent(t, false)
+}
+
+// TestIntegrationResourcePoliciesComponent exercises optional bounded cross-run consent, self catalog/revoke and queued expiry on the real owner graph without external calls.
+// TestIntegrationResourcePoliciesComponent проверяет optional bounded cross-run consent, self catalog/revoke и queued expiry на реальном owner graph без внешних вызовов.
+func TestIntegrationResourcePoliciesComponent(t *testing.T) {
+	runScopedIntegrationApprovalComponent(t, true)
+}
+
+// runScopedIntegrationApprovalComponent shares only the disposable owner setup; legacy and opt-in policy scenarios retain independent databases and state.
+// runScopedIntegrationApprovalComponent разделяет лишь disposable owner setup; legacy и opt-in policy scenarios используют независимые БД и состояние.
+func runScopedIntegrationApprovalComponent(t *testing.T, configurable bool) {
 	dsn := isolatedAssistantComponentDSN(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
@@ -61,7 +73,7 @@ func TestScopedIntegrationApprovalComponent(t *testing.T) {
 		}
 	}
 	seedObservedCatalogFixture(t, ctx, repository)
-	testScopedIntegrationApproval(t, ctx, repository, pool)
+	testScopedIntegrationApproval(t, ctx, repository, pool, configurable)
 }
 
 // resolveIntegrationEffectTestPrincipals resolves and returns application owner, runtime execution
@@ -112,7 +124,7 @@ func resolveIntegrationEffectTestPrincipals(t *testing.T, ctx context.Context, r
 // переживает поздние grant revisions. Retired executable packages запрещают OPEN reads/approval;
 // после отмены run terminal history читается безопасно без decision actions и расширения схемы.
 // Отложенная очистка восстанавливает definition в памяти; внешний effect не отправляется.
-func testScopedIntegrationApproval(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
+func testScopedIntegrationApproval(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool, configurable bool) {
 	t.Helper()
 	original := repository.integrationDefinitions["synthetic"]
 	modified := original
@@ -122,6 +134,9 @@ func testScopedIntegrationApproval(t *testing.T, ctx context.Context, repository
 		if modified.Spec.Capabilities[index].Key == "synthetic.journal.write" {
 			modified.Spec.Capabilities[index].ApprovalPolicy = "HUMAN_SCOPED"
 			modified.Spec.Capabilities[index].AllowedApprovalPolicies = []string{"HUMAN_SCOPED"}
+			if configurable {
+				modified.Spec.Capabilities[index].ApprovalScope = &integrationpackage.ApprovalScopeContract{Name: "journal-action", RequiredInputPaths: []string{"/action"}, Limits: &integrationpackage.ApprovalScopeLimits{DurationSeconds: 86400, MaxEffects: 100}, AllowedLifetimes: []string{"ROOT_RUN", "INITIATOR_RESOURCE"}}
+			}
 		}
 	}
 	raw, err := json.Marshal(modified)
@@ -347,9 +362,13 @@ func testScopedIntegrationApproval(t *testing.T, ctx context.Context, repository
 		t.Fatal("scoped approval preview lost mutable fields")
 	}
 	gateVersion := int64(1)
+	var consentSelection *command.IntegrationApprovalSelection
+	if configurable {
+		consentSelection = &command.IntegrationApprovalSelection{DurationSeconds: 600, MaxEffects: 100, Lifetime: "INITIATOR_RESOURCE"}
+	}
 	approved, err := service.Execute(ctx, command.Command{Kind: command.ResolveOwnerGate, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "scoped-approve", ExpectedVersion: &gateVersion},
-		Payload:  command.GateResolutionInput{GateRef: stringMap(first, "gateRef"), Decision: "APPROVE"}})
+		Payload:  command.GateResolutionInput{GateRef: stringMap(first, "gateRef"), Decision: "APPROVE", IntegrationApproval: consentSelection}})
 	if err != nil || approved.Gate == nil || approved.Gate.State != "APPROVED" {
 		t.Fatalf("approve scoped effect: %v", err)
 	}
@@ -425,6 +444,29 @@ FROM control_plane.outbox_events WHERE ordering_key=$1`, "run:"+run.Run.Ref, pri
 		stringMap(second, "invocationRef") == stringMap(first, "invocationRef") {
 		t.Fatalf("same typed scope did not reuse approval: state=%q err=%v", stringMap(second, "state"), err)
 	}
+	if configurable {
+		nextRun, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "consent-second-root"}, Payload: command.LaunchRunInput{ProjectRef: project.Project.Ref, Title: "Same initiator resource", Task: "Synthetic cross-root consent", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}}})
+		if err != nil || nextRun.Run == nil {
+			t.Fatal("prepare second root consent", err)
+		}
+		nextExecution, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: runtimeWorker, Mutation: value.Mutation{IdempotencyKey: "consent-second-root-claim"}, Payload: command.LeaseInput{WorkloadInstance: "consent-next-root", Limit: 8}})
+		if err != nil {
+			t.Fatal("claim second root consent", err)
+		}
+		var nextItem map[string]any
+		for _, item := range nextExecution.RuntimeItems {
+			if stringMap(item, "runRef") == nextRun.Run.Ref {
+				nextItem = item
+			}
+		}
+		if nextItem == nil {
+			t.Fatal("second root execution absent")
+		}
+		reused, err := service.ResolveIntegrationInvocation(ctx, runtimeWorker, map[string]string{"run_ref": stringMap(nextItem, "runRef"), "node_ref": stringMap(nextItem, "nodeRef"), "connection_ref": connection.Connection.Ref, "capability_key": "synthetic.journal.write", "idempotency_key": "consent-cross-root-effect"}, map[string]any{"action": "UPDATE", "value": "different body in same scope"})
+		if err != nil || stringMap(reused, "state") != "READY" || stringMap(reused, "gateRef") != "" {
+			t.Fatal("same initiator resource consent did not cross root", err)
+		}
+	}
 	if _, err := pool.Exec(ctx, `UPDATE control_plane.integration_approval_scopes
 SET reserved_effects=max_effects WHERE origin_gate_id=(SELECT id FROM control_plane.owner_gates WHERE ref=$1)`,
 		stringMap(first, "gateRef")); err != nil {
@@ -433,6 +475,9 @@ SET reserved_effects=max_effects WHERE origin_gate_id=(SELECT id FROM control_pl
 	exhausted, err := call("scoped-exhausted", "UPDATE", "fourth")
 	if err != nil || stringMap(exhausted, "state") != "WAITING_APPROVAL" || stringMap(exhausted, "gateRef") == "" {
 		t.Fatalf("exhausted scope skipped a new gate: state=%q err=%v", stringMap(exhausted, "state"), err)
+	}
+	if configurable {
+		testIntegrationApprovalSelfLifecycle(t, ctx, repository, pool, service, owner, viewer, gateway, first, second, exhausted, gateVersion)
 	}
 	changed, err := call("scoped-changed", "DELETE", "third")
 	if err != nil || stringMap(changed, "state") != "WAITING_APPROVAL" || stringMap(changed, "gateRef") == "" {
@@ -453,7 +498,7 @@ SET reserved_effects=max_effects WHERE origin_gate_id=(SELECT id FROM control_pl
 		Payload: command.IntegrationGrantInput{ApprovalPolicy: "HUMAN_SCOPED", ConnectionRef: connection.Connection.Ref,
 			CapabilityKey: "synthetic.journal.write", AgentRef: agent.Ref, Enabled: true,
 			ApprovalScopePaths: []string{"/value"}}})
-	if !errors.Is(err, domainerrs.ErrConflict) {
+	if !errors.Is(err, domainerrs.ErrConflict) && !(configurable && errors.Is(err, domainerrs.ErrInvalid)) {
 		t.Fatalf("active scoped grant path change was accepted: %v", err)
 	}
 	revoked, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner,

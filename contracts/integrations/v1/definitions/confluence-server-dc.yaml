@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: confluence-server-dc
-  version: 1.0.0
+  version: 1.1.0
   origin: SHIPPED
 spec:
   name: Confluence Server / Data Center
@@ -63,8 +63,12 @@ spec:
     operation: confluence.identity.read
     risk: READ
     approvalPolicy: NONE
-    allowedApprovalPolicies:
-    - NONE
+    allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+    approvalScope:
+      name: "Область подключения"
+      requiredInputPaths: []
+      limits: {"durationSeconds": 604800, "maxEffects": 10000}
+      allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
     resourceScope:
       kind: CONFLUENCE_SPACE
       connectionFields:
@@ -99,8 +103,12 @@ spec:
     operation: confluence.space.read
     risk: READ
     approvalPolicy: NONE
-    allowedApprovalPolicies:
-    - NONE
+    allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+    approvalScope:
+      name: "Область подключения"
+      requiredInputPaths: []
+      limits: {"durationSeconds": 604800, "maxEffects": 10000}
+      allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
     resourceScope:
       kind: CONFLUENCE_SPACE
       connectionFields:
@@ -135,8 +143,12 @@ spec:
     operation: confluence.page.search
     risk: READ
     approvalPolicy: NONE
-    allowedApprovalPolicies:
-    - NONE
+    allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+    approvalScope:
+      name: "Область подключения"
+      requiredInputPaths: []
+      limits: {"durationSeconds": 604800, "maxEffects": 10000}
+      allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
     resourceScope:
       kind: CONFLUENCE_SPACE
       connectionFields:
@@ -187,8 +199,12 @@ spec:
     operation: confluence.page.read
     risk: READ
     approvalPolicy: NONE
-    allowedApprovalPolicies:
-    - NONE
+    allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+    approvalScope:
+      name: "Страница"
+      requiredInputPaths: ["/page_id"]
+      limits: {"durationSeconds": 604800, "maxEffects": 10000}
+      allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
     resourceScope:
       kind: CONFLUENCE_SPACE
       connectionFields:
@@ -239,8 +255,12 @@ spec:
     operation: confluence.page.create
     risk: WRITE
     approvalPolicy: HUMAN_EACH_EFFECT
-    allowedApprovalPolicies:
-    - HUMAN_EACH_EFFECT
+    allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+    approvalScope:
+      name: "Родительская страница"
+      requiredInputPaths: ["/parent_id"]
+      limits: {"durationSeconds": 604800, "maxEffects": 10000}
+      allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
     resourceScope:
       kind: CONFLUENCE_SPACE
       connectionFields:
@@ -260,7 +280,8 @@ spec:
       maximumLength: 65536
     - key: parent_id
       type: STRING
-      format: IDENTIFIER
+      allowEmpty: true
+      format: PLAIN
       required: false
       maximumLength: 64
     outputFields:
@@ -296,8 +317,12 @@ spec:
     operation: confluence.page.update
     risk: WRITE
     approvalPolicy: HUMAN_EACH_EFFECT
-    allowedApprovalPolicies:
-    - HUMAN_EACH_EFFECT
+    allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+    approvalScope:
+      name: "Страница"
+      requiredInputPaths: ["/page_id"]
+      limits: {"durationSeconds": 604800, "maxEffects": 10000}
+      allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
     resourceScope:
       kind: CONFLUENCE_SPACE
       connectionFields:
