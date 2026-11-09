@@ -223,12 +223,14 @@ func (adapter *Adapter) searchConfluenceServerPages(ctx context.Context, request
 	return page, next, err
 }
 
-// confluenceServerPageResult exposes a bounded projection after the caller has verified space and page eligibility.
-// confluenceServerPageResult выдаёт ограниченную проекцию после проверки пространства и страницы вызывающим.
+// confluenceServerPageResult exposes a bounded projection after verified space/page eligibility,
+// normalizing only CRLF in returned storage text; raw page state remains intact for write recovery.
+// confluenceServerPageResult выдаёт bounded projection после проверки space/page, заменяя только
+// CRLF возвращаемого storage text; исходная страница сохраняется для write recovery.
 func confluenceServerPageResult(request Request, page confluenceServerPage, includeBody bool) (Result, error) {
 	output := map[string]any{"id": page.ID, "title": page.Title, "version": page.Version.Number, "status": page.Status}
 	if includeBody {
-		output["body"] = page.Body.Storage.Value
+		output["body"] = strings.ReplaceAll(page.Body.Storage.Value, "\r\n", "\n")
 	}
 	return providerResult(request, "confluence-page:"+page.ID, output)
 }

@@ -207,7 +207,9 @@ func (adapter *Adapter) executeJiraServer(ctx context.Context, request Request, 
 		}
 		output := map[string]any{"key": issue.Key, "summary": issue.Fields.Summary, "status": issue.Fields.Status.Name}
 		if issue.Fields.Description != nil && *issue.Fields.Description != "" {
-			output["description"] = *issue.Fields.Description
+			// Canonicalize paired line endings only; output validation still rejects lone CR and NUL.
+			// Канонизируем только парные окончания строк; output validation сохраняет запрет одиночного CR и NUL.
+			output["description"] = strings.ReplaceAll(*issue.Fields.Description, "\r\n", "\n")
 		}
 		return providerResult(request, "jira-issue:"+issue.Key, output)
 	case "jira.issue.create":
