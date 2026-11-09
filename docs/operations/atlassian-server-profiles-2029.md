@@ -4,8 +4,8 @@ title: Опциональные Server/DC-профили Jira и Confluence
 type: operations
 status: approved
 owner: backend
-version: 1.1.0
-updated: 2026-11-07
+version: 1.1.1
+updated: 2026-11-09
 ---
 
 # Опциональный Server/DC
@@ -73,6 +73,23 @@ preflight продолжают принадлежать control-plane. Ново�
 доверенную CA и прежний защищённый secret transport. Redirect, plaintext,
 `insecureSkipVerify`, IP literal и произвольный внешний `$ref` не разрешаются.
 Provider next links никогда не становятся HTTP destination.
+
+## Многострочный текст ответа
+
+В `jira.issue.read` поле `description` и в `confluence.page.read` поле `body`
+возвращаются с каноническими окончаниями строк LF: парные CRLF заменяются на LF
+перед прежней проверкой capability output и вычислением response digest.
+Обычный LF, Unicode и содержимое текста сохраняются. Одиночный CR, NUL,
+превышение размера и неверные идентификаторы по-прежнему закрыто отклоняются.
+Нормализация не применяется к URL, HTTP headers, input, source state либо
+сырой странице для write reconciliation; версия, marker и сравнение исходного
+body перед записью используют прежние значения.
+
+Это совместимость текстовой проекции ([#2071](https://github.com/codex-k8s/kodex/issues/2071)),
+а не новый endpoint или дополнительное разрешение. Синтетические проверки
+выполняют `Adapter.Execute` для обоих профилей, проверяют receipt digest,
+неизменный input/effect, CRLF/LF, Unicode, empty, NUL, одиночный CR, размер
+и отказ для чужого project/space до повторного storage fetch.
 
 ## Authority и жизненный цикл
 
