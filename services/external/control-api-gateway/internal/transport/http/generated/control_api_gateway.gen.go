@@ -6040,6 +6040,24 @@ func (e RoleImageRecipeCommandAction) Valid() bool {
 	}
 }
 
+// Defines values for RunQueueReason.
+const (
+	RunQueueReasonREQUESTEXCEEDSCAPACITY RunQueueReason = "REQUEST_EXCEEDS_CAPACITY"
+	RunQueueReasonWAITINGRESOURCES       RunQueueReason = "WAITING_RESOURCES"
+)
+
+// Valid indicates whether the value is a known member of the RunQueueReason enum.
+func (e RunQueueReason) Valid() bool {
+	switch e {
+	case RunQueueReasonREQUESTEXCEEDSCAPACITY:
+		return true
+	case RunQueueReasonWAITINGRESOURCES:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RunSource.
 const (
 	RunSourceAGENTDELEGATION RunSource = "AGENT_DELEGATION"
@@ -6211,6 +6229,24 @@ func (e RunCommandAction) Valid() bool {
 	case RunCommandActionCANCEL:
 		return true
 	case RunCommandActionRETRY:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunDeltaQueueReason.
+const (
+	RunDeltaQueueReasonREQUESTEXCEEDSCAPACITY RunDeltaQueueReason = "REQUEST_EXCEEDS_CAPACITY"
+	RunDeltaQueueReasonWAITINGRESOURCES       RunDeltaQueueReason = "WAITING_RESOURCES"
+)
+
+// Valid indicates whether the value is a known member of the RunDeltaQueueReason enum.
+func (e RunDeltaQueueReason) Valid() bool {
+	switch e {
+	case RunDeltaQueueReasonREQUESTEXCEEDSCAPACITY:
+		return true
+	case RunDeltaQueueReasonWAITINGRESOURCES:
 		return true
 	default:
 		return false
@@ -14684,12 +14720,15 @@ type Run struct {
 	NextActions           []NextAction     `json:"nextActions"`
 	ParentRunRef          *OpaqueRef       `json:"parentRunRef,omitempty"`
 	ProjectRef            *OpaqueRef       `json:"projectRef,omitempty"`
-	Ref                   OpaqueRef        `json:"ref"`
-	ResultSummary         *string          `json:"resultSummary,omitempty"`
-	RetryOfRunRef         *OpaqueRef       `json:"retryOfRunRef,omitempty"`
-	RootRunRef            OpaqueRef        `json:"rootRunRef"`
-	SafeErrorCode         *string          `json:"safeErrorCode,omitempty"`
-	SafeErrorMessage      *string          `json:"safeErrorMessage,omitempty"`
+
+	// QueueReason Серверная причина ожидания до claim; отсутствует после допуска и в terminal.
+	QueueReason      *RunQueueReason `json:"queueReason,omitempty"`
+	Ref              OpaqueRef       `json:"ref"`
+	ResultSummary    *string         `json:"resultSummary,omitempty"`
+	RetryOfRunRef    *OpaqueRef      `json:"retryOfRunRef,omitempty"`
+	RootRunRef       OpaqueRef       `json:"rootRunRef"`
+	SafeErrorCode    *string         `json:"safeErrorCode,omitempty"`
+	SafeErrorMessage *string         `json:"safeErrorMessage,omitempty"`
 
 	// SessionReadiness Текущие session-gates в одном защищённом read snapshot. NO_SESSION_BLOCKER не доказывает глобальную claim readiness. Отсутствие проекции не означает готовность.
 	SessionReadiness *RunSessionReadiness `json:"sessionReadiness,omitempty"`
@@ -14704,6 +14743,9 @@ type Run struct {
 	Version          int64                `json:"version"`
 	union            json.RawMessage
 }
+
+// RunQueueReason Серверная причина ожидания до claim; отсутствует после допуска и в terminal.
+type RunQueueReason string
 
 // RunSource defines model for Run.Source.
 type RunSource string
@@ -14768,21 +14810,27 @@ type RunCommandAction string
 
 // RunDelta defines model for RunDelta.
 type RunDelta struct {
-	ArtifactRefs      []OpaqueRef   `json:"artifactRefs"`
-	FinishedAt        *Timestamp    `json:"finishedAt,omitempty"`
-	GateRefs          []OpaqueRef   `json:"gateRefs"`
-	GraphRevision     int64         `json:"graphRevision"`
-	LastEventSequence int64         `json:"lastEventSequence"`
-	NextActions       []NextAction  `json:"nextActions"`
-	Ref               OpaqueRef     `json:"ref"`
-	ResultSummary     *string       `json:"resultSummary,omitempty"`
-	SafeErrorCode     *string       `json:"safeErrorCode,omitempty"`
-	SafeErrorMessage  *string       `json:"safeErrorMessage,omitempty"`
-	StartedAt         *Timestamp    `json:"startedAt,omitempty"`
-	State             RunDeltaState `json:"state"`
-	Usage             TokenUsage    `json:"usage"`
-	Version           int64         `json:"version"`
+	ArtifactRefs      []OpaqueRef  `json:"artifactRefs"`
+	FinishedAt        *Timestamp   `json:"finishedAt,omitempty"`
+	GateRefs          []OpaqueRef  `json:"gateRefs"`
+	GraphRevision     int64        `json:"graphRevision"`
+	LastEventSequence int64        `json:"lastEventSequence"`
+	NextActions       []NextAction `json:"nextActions"`
+
+	// QueueReason Полный серверный снимок причины ожидания; отсутствие очищает прежнее значение.
+	QueueReason      *RunDeltaQueueReason `json:"queueReason,omitempty"`
+	Ref              OpaqueRef            `json:"ref"`
+	ResultSummary    *string              `json:"resultSummary,omitempty"`
+	SafeErrorCode    *string              `json:"safeErrorCode,omitempty"`
+	SafeErrorMessage *string              `json:"safeErrorMessage,omitempty"`
+	StartedAt        *Timestamp           `json:"startedAt,omitempty"`
+	State            RunDeltaState        `json:"state"`
+	Usage            TokenUsage           `json:"usage"`
+	Version          int64                `json:"version"`
 }
+
+// RunDeltaQueueReason Полный серверный снимок причины ожидания; отсутствие очищает прежнее значение.
+type RunDeltaQueueReason string
 
 // RunDeltaState defines model for RunDelta.State.
 type RunDeltaState string
@@ -20456,6 +20504,13 @@ func (t Run) MarshalJSON() ([]byte, error) {
 		}
 	}
 
+	if t.QueueReason != nil {
+		object["queueReason"], err = json.Marshal(t.QueueReason)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'queueReason': %w", err)
+		}
+	}
+
 	object["ref"], err = json.Marshal(t.Ref)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling 'ref': %w", err)
@@ -20679,6 +20734,13 @@ func (t *Run) UnmarshalJSON(b []byte) error {
 		err = json.Unmarshal(raw, &t.ProjectRef)
 		if err != nil {
 			return fmt.Errorf("error reading 'projectRef': %w", err)
+		}
+	}
+
+	if raw, found := object["queueReason"]; found {
+		err = json.Unmarshal(raw, &t.QueueReason)
+		if err != nil {
+			return fmt.Errorf("error reading 'queueReason': %w", err)
 		}
 	}
 

@@ -20,7 +20,8 @@ SELECT root.ref,
            WHERE gate.root_run_id = root.id
        ), '{}'::text[]),
        root.started_at,
-       root.finished_at
+       root.finished_at,
+       CASE WHEN root.state = 'QUEUED' THEN COALESCE(root.presentation_metadata->>'runtimeQueueReason', '') ELSE '' END
 FROM control_plane.runs root
 WHERE root.organization_id = $1::uuid
   AND root.id = $2::uuid

@@ -96,7 +96,7 @@ func TestTrackInitializationKeepsCallbackWinner(t *testing.T) {
 	runtime := trackingRuntime(client, turns, coordinator)
 	runtime.terminalGrace = time.Second
 	go func() { <-turns.observed; coordinator.Complete(input.LeaseRef) }()
-	runtime.track(context.Background(), input, done, false, time.Time{})
+	runtime.track(context.Background(), input, done, false, time.Time{}, time.Time{})
 	if client.count() != 0 || turns.deletions.Load() != 0 {
 		t.Fatal("init fallback replaced callback winner")
 	}
@@ -142,7 +142,7 @@ func TestTrackInitializationRestartsGraceForReplacementUID(t *testing.T) {
 	}}
 	runtime := trackingRuntime(client, turns, coordinator)
 	runtime.terminalGrace = grace
-	runtime.track(t.Context(), input, done, false, time.Time{})
+	runtime.track(t.Context(), input, done, false, time.Time{}, time.Time{})
 	if client.count() != 1 || turns.deletions.Load() != 1 {
 		t.Fatal("replacement produced duplicate completion")
 	}

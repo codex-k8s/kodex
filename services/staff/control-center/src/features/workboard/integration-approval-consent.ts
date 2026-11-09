@@ -47,12 +47,15 @@ export function integrationConsentPolicy(
 export function defaultIntegrationConsent(
   policy: ConsentPolicy,
 ): IntegrationApprovalConsentSelection {
+  const firstLifetime = policy.allowedLifetimes[0];
+  if (!firstLifetime)
+    throw new Error("Approval consent policy has no lifetime");
   return {
     durationSeconds: Math.min(86400, policy.maxDurationSeconds),
     maxEffects: Math.min(100, policy.maxEffects),
     lifetime: policy.allowedLifetimes.includes("ROOT_RUN")
       ? "ROOT_RUN"
-      : policy.allowedLifetimes[0]!,
+      : firstLifetime,
   };
 }
 

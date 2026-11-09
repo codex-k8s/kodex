@@ -40,3 +40,27 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: runtime-controller
+
+---
+# Только контроллер читает requests/allocatable; агенты не получают cluster-wide права.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: runtime-controller-capacity-observer
+rules:
+  - apiGroups: [""]
+    resources: [nodes, pods]
+    verbs: [list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: runtime-controller-capacity-observer
+subjects:
+  - kind: ServiceAccount
+    name: runtime-controller
+    namespace: kodex-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: runtime-controller-capacity-observer

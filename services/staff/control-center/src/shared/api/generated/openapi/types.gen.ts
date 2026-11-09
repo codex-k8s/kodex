@@ -3213,6 +3213,10 @@ export type Run = ({
     projectRef?: OpaqueRef;
     assistantPin?: AssistantRunPin;
     sessionReadiness?: RunSessionReadiness;
+    /**
+     * Серверная причина ожидания до claim; отсутствует после допуска и в terminal.
+     */
+    readonly queueReason?: 'WAITING_RESOURCES' | 'REQUEST_EXCEEDS_CAPACITY';
     sessionRef: OpaqueRef;
     rootRunRef: OpaqueRef;
     parentRunRef?: OpaqueRef;
@@ -3346,6 +3350,10 @@ export type RunDelta = {
     ref: OpaqueRef;
     version: number;
     state: 'QUEUED' | 'RUNNING' | 'WAITING_HUMAN' | 'CANCELLING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
+    /**
+     * Полный серверный снимок причины ожидания; отсутствие очищает прежнее значение.
+     */
+    readonly queueReason?: 'WAITING_RESOURCES' | 'REQUEST_EXCEEDS_CAPACITY';
     graphRevision: number;
     lastEventSequence: number;
     resultSummary?: string;
@@ -4998,6 +5006,136 @@ export type ProviderFinancialOverview = {
     validUntil: string;
 };
 
+export type RunWritable = ({
+    target?: {
+        type?: 'AGENT' | 'WORKFLOW';
+    };
+} | {
+    source?: 'SYSTEM_ASSISTANT';
+    target?: {
+        type?: 'SYSTEM_ASSISTANT';
+    };
+}) & {
+    ref: OpaqueRef;
+    version: number;
+    projectRef?: OpaqueRef;
+    assistantPin?: AssistantRunPin;
+    sessionReadiness?: RunSessionReadiness;
+    sessionRef: OpaqueRef;
+    rootRunRef: OpaqueRef;
+    parentRunRef?: OpaqueRef;
+    retryOfRunRef?: OpaqueRef;
+    target: RunTarget;
+    title: string;
+    titleSource: 'SERVER_DEFAULT' | 'AGENT_PROPOSED' | 'USER_EDITED';
+    activitySummary: string;
+    inputSummary?: string;
+    state: 'QUEUED' | 'RUNNING' | 'WAITING_HUMAN' | 'CANCELLING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
+    source: 'CONTROL_CENTER' | 'SYSTEM_ASSISTANT' | 'SCHEDULE' | 'INTEGRATION' | 'AGENT_DELEGATION' | 'MATTERMOST';
+    initiator: UserSummary;
+    attempt: number;
+    graphRevision: number;
+    lastEventSequence: number;
+    currentActivity?: string;
+    resultSummary?: string;
+    safeErrorCode?: string;
+    safeErrorMessage?: string;
+    usage: TokenUsage;
+    inputAttachmentSetRef?: OpaqueRef;
+    artifactRefs: Array<OpaqueRef>;
+    gateRefs: Array<OpaqueRef>;
+    createdAt: Timestamp;
+    startedAt?: Timestamp;
+    finishedAt?: Timestamp;
+    nextActions: Array<NextAction>;
+    incidents?: Array<Incident>;
+};
+
+export type RunDeltaWritable = {
+    ref: OpaqueRef;
+    version: number;
+    state: 'QUEUED' | 'RUNNING' | 'WAITING_HUMAN' | 'CANCELLING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
+    graphRevision: number;
+    lastEventSequence: number;
+    resultSummary?: string;
+    safeErrorCode?: string;
+    safeErrorMessage?: string;
+    usage: TokenUsage;
+    artifactRefs: Array<OpaqueRef>;
+    gateRefs: Array<OpaqueRef>;
+    startedAt?: Timestamp;
+    finishedAt?: Timestamp;
+    nextActions: Array<NextAction>;
+};
+
+export type RunEventWritable = {
+    ref: OpaqueRef;
+    runRef: OpaqueRef;
+    sequence: number;
+    type: 'RUN_CREATED' | 'RUN_STATE_CHANGED' | 'RUN_METADATA_UPDATED' | 'NODE_ADDED' | 'NODE_STATE_CHANGED' | 'EDGE_ADDED' | 'TURN_QUEUED' | 'TURN_STARTED' | 'TURN_PROGRESS' | 'TURN_COMPLETED' | 'DELEGATION_CREATED' | 'CALLBACK_DELIVERED' | 'OWNER_GATE_OPENED' | 'OWNER_GATE_RESOLVED' | 'ARTIFACT_AVAILABLE' | 'INCIDENT_LINKED' | 'TOOL_CALL_RECORDED' | 'PLAN_UPDATED';
+    nodeRef?: OpaqueRef;
+    edgeRef?: OpaqueRef;
+    gateRef?: OpaqueRef;
+    artifactRef?: OpaqueRef;
+    summary: string;
+    serviceCode?: RunEventServiceCode;
+    progress?: string;
+    runState?: 'QUEUED' | 'RUNNING' | 'WAITING_HUMAN' | 'CANCELLING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
+    nodeState?: 'PLANNED' | 'QUEUED' | 'RUNNING' | 'WAITING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'SKIPPED';
+    actor?: RunEventActor;
+    messageKind?: 'STATE' | 'USER_MESSAGE' | 'ASSISTANT_MESSAGE' | 'INTERMEDIATE_MESSAGE' | 'FINAL_MESSAGE' | 'TOOL_CALL' | 'PLAN_UPDATE' | 'ARTIFACT' | 'INCIDENT' | 'OWNER_GATE';
+    toolCall?: RunToolCall;
+    /**
+     * Server-owned invocation binding только для новых INTEGRATION_ACTION_* completion-событий; не authority и не ссылка на общий агрегат.
+     */
+    integrationInvocationRef?: string;
+    execution?: RunEventExecution;
+    message?: RunMessage;
+    occurredAt: Timestamp;
+    graphRevision: number;
+    run: RunDeltaWritable;
+    node?: RunNode;
+    edge?: RunEdge;
+    gate?: OwnerGate;
+    artifact?: Artifact;
+    incident?: Incident;
+};
+
+export type RunWorkspaceWritable = {
+    run: RunWritable;
+    graph: RunGraph;
+};
+
+export type RunPageWritable = {
+    items: Array<RunWritable>;
+    total: number;
+    nextPageToken?: string;
+};
+
+export type RunEventPageWritable = {
+    items: Array<RunEventWritable>;
+    currentSequence: number;
+    complete: boolean;
+};
+
+export type GateResolutionReceiptWritable = {
+    gate: OwnerGate;
+    run: RunWritable;
+    graph: RunGraph;
+};
+
+export type ScheduleRunOccurrenceWritable = {
+    scheduleRef: OpaqueRef;
+    scheduleRevisionRef: OpaqueRef;
+    scheduleRevision: number;
+    run: RunWritable;
+};
+
+export type ScheduleRunOccurrencePageWritable = {
+    items: Array<ScheduleRunOccurrenceWritable>;
+    nextPageToken: string;
+};
+
 export type EmailMailboxCredentialInputWritable = {
     kind: EmailMailboxCredentialKind;
     /**
@@ -5013,6 +5151,16 @@ export type PersonalIntegrationCredentialConfigureInputWritable = {
 
 export type PersonalIntegrationCredentialRevokeInputWritable = {
     [key: string]: never;
+};
+
+export type OverviewWritable = {
+    projectCount: number;
+    agentCount: number;
+    activeRunCount: number;
+    pendingGateCount: number;
+    activeRuns: Array<RunWritable>;
+    pendingGates: Array<OwnerGate>;
+    recentArtifacts: Array<Artifact>;
 };
 
 /**

@@ -16,6 +16,7 @@ import {
 import type { Run } from "@/shared/api/generated/openapi/types.gen";
 import { runPath } from "@/shared/routes";
 import SafeSummary from "@/shared/ui/SafeSummary.vue";
+import { runtimeQueueMessage } from "@/shared/ui/runtime-queue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const props = withDefaults(
@@ -25,6 +26,7 @@ const props = withDefaults(
     compact: false,
   },
 );
+const queueMessage = computed(() => runtimeQueueMessage(props.run));
 const executor = computed(() => runExecutor(props.run)?.trim() || undefined);
 const titleKey = computed(() => runDefaultTaskTitleKey(props.run));
 const link = computed(() =>
@@ -62,7 +64,7 @@ const sourceIcon = computed(() => {
         {{ titleKey ? $t(titleKey) : run.title }}
       </h3>
       <SafeSummary
-        :content="run.currentActivity ?? run.resultSummary"
+        :content="queueMessage ?? run.currentActivity ?? run.resultSummary"
         :fallback="run.target.displayName"
       />
       <dl class="run-work-item__actors">
@@ -95,7 +97,11 @@ const sourceIcon = computed(() => {
       </dl>
     </div>
     <div class="run-work-item__aside">
-      <StatusBadge :state="run.state" />
+      <StatusBadge
+        :state="run.state"
+        :label="queueMessage ? $t('states.QUEUED') : undefined"
+        :tone="queueMessage ? 'warning' : undefined"
+      />
       <time :datetime="run.createdAt">{{
         new Date(run.createdAt).toLocaleString()
       }}</time>

@@ -57,6 +57,7 @@ type Config struct {
 // Projection хранит проверенные размещение Secret, привязки UID/версии/содержимого и точное соответствие ключей выполнения.
 // В нём только метаданные; байты учётных данных остаются в Secret под управлением брокера.
 type Projection struct {
+	ExpiresAt                                                              time.Time
 	Namespace, SecretName, SecretUID, SecretResourceVersion, ContentSHA256 string
 	ProviderAuthKey                                                        string
 	RuntimeSecretKeys                                                      map[string]string
@@ -228,6 +229,7 @@ func projectionFromDescriptor(input runtimecontract.RunnerInput, descriptor *sec
 		}
 	}
 	return Projection{
+		ExpiresAt: descriptor.GetExpiresAt().AsTime(),
 		Namespace: descriptor.GetNamespace(), SecretName: descriptor.GetSecretName(), SecretUID: descriptor.GetSecretUid(),
 		SecretResourceVersion: descriptor.GetSecretResourceVersion(), ContentSHA256: descriptor.GetContentSha256(),
 		ProviderAuthKey: descriptor.GetProviderAuthKey(), RuntimeSecretKeys: keys,

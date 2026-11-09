@@ -846,6 +846,7 @@ type AssistantRunPin struct {
 // assistant/readiness views. Текст и изменяемые коллекции форма автоматически не скрывает, не
 // замораживает и не авторизует.
 type Run struct {
+	QueueReason                                                          string
 	Ref, ProjectRef, SessionRef, RootRunRef, ParentRunRef, RetryOfRunRef string
 	InputAttachmentSetRef                                                string
 	Title, Task, State, Source, ResultSummary, SafeErrorCode             string
@@ -906,6 +907,7 @@ type WorkflowRetryReadProof struct {
 // событий, использование, ссылки и сроки для realtime-проекции; потребитель по-прежнему связывает
 // данные с точным запуском и монотонной версией.
 type RunDelta struct {
+	QueueReason                                                string `json:",omitempty"`
 	Ref, State, ResultSummary, SafeErrorCode, SafeErrorMessage string
 	Version, GraphRevision, EventSequence                      int64
 	Usage                                                      TokenUsage

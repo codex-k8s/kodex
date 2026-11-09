@@ -146,6 +146,7 @@ export function reduceRunEvent(
   if (run) {
     run.version = event.run.version;
     run.state = event.run.state;
+    Object.assign(run, { queueReason: event.run.queueReason });
     run.graphRevision = event.run.graphRevision;
     run.lastEventSequence = event.run.lastEventSequence;
     run.resultSummary = event.run.resultSummary;

@@ -672,6 +672,7 @@ func usageFromProto(value *controlplanev1.TokenUsage) entity.TokenUsage {
 // castRun отображает происхождение запуска, сессии, корня и повтора, потребление, инциденты, ссылки вложений и шлюзов, готовность и необязательную привязку помощника из авторизованного снимка; происхождение не создаёт и исполнение не меняет.
 func castRun(value entity.Run) *controlplanev1.Run {
 	result := &controlplanev1.Run{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, SessionRef: value.SessionRef, RootRunRef: value.RootRunRef, ParentRunRef: value.ParentRunRef, RetryOfRunRef: value.RetryOfRunRef, Target: castRunTarget(value.Target), Title: value.Title, TitleSource: value.TitleSource, ActivitySummary: value.ActivitySummary, InputSummary: value.Task, State: runState(value.State), Source: runSource(value.Source), Initiator: &controlplanev1.UserSummary{DisplayName: value.InitiatorName}, Attempt: value.Attempt, GraphRevision: value.GraphRevision, LastEventSequence: value.EventSequence, ResultSummary: value.ResultSummary, SafeErrorCode: value.SafeErrorCode, SafeErrorMessage: value.SafeErrorMessage, Usage: castTokenUsage(value.Usage), InputAttachmentSetRef: value.InputAttachmentSetRef, ArtifactRefs: value.ArtifactRefs, GateRefs: value.GateRefs, CreatedAt: timestamp(value.CreatedAt), StartedAt: optionalTimestamp(value.StartedAt), FinishedAt: optionalTimestamp(value.FinishedAt), NextActions: nextActions(value.NextActions)}
+	result.QueueReason = castRuntimeQueueReason(value.State, value.QueueReason)
 	for _, incident := range value.Incidents {
 		result.Incidents = append(result.Incidents, castIncident(incident))
 	}
@@ -708,7 +709,7 @@ func castRunDelta(value *entity.RunDelta) *controlplanev1.RunDelta {
 	if value == nil {
 		return nil
 	}
-	return &controlplanev1.RunDelta{Ref: value.Ref, Version: value.Version, State: runState(value.State), GraphRevision: value.GraphRevision, LastEventSequence: value.EventSequence, ResultSummary: value.ResultSummary, SafeErrorCode: value.SafeErrorCode, SafeErrorMessage: value.SafeErrorMessage, Usage: castTokenUsage(value.Usage), ArtifactRefs: value.ArtifactRefs, GateRefs: value.GateRefs, StartedAt: optionalTimestamp(value.StartedAt), FinishedAt: optionalTimestamp(value.FinishedAt), NextActions: nextActions(value.NextActions)}
+	return &controlplanev1.RunDelta{QueueReason: castRuntimeQueueReason(value.State, value.QueueReason), Ref: value.Ref, Version: value.Version, State: runState(value.State), GraphRevision: value.GraphRevision, LastEventSequence: value.EventSequence, ResultSummary: value.ResultSummary, SafeErrorCode: value.SafeErrorCode, SafeErrorMessage: value.SafeErrorMessage, Usage: castTokenUsage(value.Usage), ArtifactRefs: value.ArtifactRefs, GateRefs: value.GateRefs, StartedAt: optionalTimestamp(value.StartedAt), FinishedAt: optionalTimestamp(value.FinishedAt), NextActions: nextActions(value.NextActions)}
 }
 
 // castEvent projects event actor, message kind, graph sequence and optional typed deltas/tool call/execution/message, preserving zero historical tool revision; payload safety and lineage are checked by producers.
@@ -1155,4 +1156,20 @@ func castAdministration(value repository.Administration) *controlplanev1.Adminis
 		result.Incidents = append(result.Incidents, castIncident(item))
 	}
 	return result
+}
+
+// castRuntimeQueueReason exposes only closed owner reasons while the run is actually queued.
+// Nil preserves optional-field absence in ordinary, running, terminal and historical projections.
+// castRuntimeQueueReason выдаёт только закрытые причины владельца для настоящего QUEUED запуска.
+// nil сохраняет отсутствие optional поля в обычных, running, terminal и исторических проекциях.
+func castRuntimeQueueReason(state, reason string) *string {
+	if state != "QUEUED" {
+		return nil
+	}
+	switch reason {
+	case "WAITING_RESOURCES", "REQUEST_EXCEEDS_CAPACITY":
+		return &reason
+	default:
+		return nil
+	}
 }

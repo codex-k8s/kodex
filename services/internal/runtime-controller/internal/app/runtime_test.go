@@ -38,13 +38,15 @@ type runtimeWorkClientStub struct {
 // claimBatchClient сохраняет запрошенный размер пакета и возвращает пустой список выполнений, отделяя проверку размера заявки от размещения.
 type claimBatchClient struct {
 	controlplanev1.RuntimeWorkServiceClient
-	limit int32
+	limit            int32
+	observedCapacity *controlplanev1.RuntimeSchedulingCapacity
 }
 
 // ClaimExecution captures only the limit and returns an empty synthetic response without changing capacity or issuing authority.
 // ClaimExecution сохраняет только лимит и возвращает пустой синтетический ответ без изменения ёмкости или выдачи полномочий.
 func (client *claimBatchClient) ClaimExecution(_ context.Context, request *controlplanev1.ClaimExecutionRequest, _ ...grpc.CallOption) (*controlplanev1.ClaimExecutionResponse, error) {
 	client.limit = request.Limit
+	client.observedCapacity = request.GetSchedulingCapacity()
 	return &controlplanev1.ClaimExecutionResponse{}, nil
 }
 
@@ -164,7 +166,7 @@ func TestTrackShutdownWaitsForReceiptWithoutDeletingCallbackMaterial(t *testing.
 	runtime.terminalGrace = time.Second
 	ctx, cancel := context.WithCancel(t.Context())
 	finished := make(chan struct{})
-	go func() { runtime.track(ctx, input, done, false, time.Time{}); close(finished) }()
+	go func() { runtime.track(ctx, input, done, false, time.Time{}, time.Time{}); close(finished) }()
 	cancel()
 	<-turns.stopped
 	if turns.deletions.Load() != 0 || client.count() != 0 {
@@ -196,7 +198,7 @@ func TestTrackDrainHonorsOwnerRenewalDenial(t *testing.T) {
 	runtime.config.LeaseRenewInterval = time.Millisecond
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	runtime.track(ctx, input, done, false, time.Time{})
+	runtime.track(ctx, input, done, false, time.Time{}, time.Time{})
 	if turns.deletions.Load() != 1 || client.count() != 0 {
 		t.Fatal("revoked lease was extended or completed with fabricated result")
 	}
@@ -257,7 +259,7 @@ func TestTrackAcceptsCallbackDuringTerminalGrace(t *testing.T) {
 		<-turns.observed
 		coordinator.Complete(input.LeaseRef)
 	}()
-	runtime.track(t.Context(), input, done, false, time.Time{})
+	runtime.track(t.Context(), input, done, false, time.Time{}, time.Time{})
 
 	if client.count() != 0 {
 		t.Fatalf("failure completion count = %d, want 0", client.count())
@@ -287,7 +289,7 @@ func TestTrackRetriesFailureCompletionBeforeCleanup(t *testing.T) {
 	turns := &turnLifecycleStub{observation: workload.TurnPodObservation{State: "FAILED", DiagnosticCode: "ROLE_RUNTIME_EXITED_NONZERO"}}
 	runtime := trackingRuntime(client, turns, coordinator)
 
-	runtime.track(t.Context(), input, done, false, time.Time{})
+	runtime.track(t.Context(), input, done, false, time.Time{}, time.Time{})
 
 	if client.count() != 3 {
 		t.Fatalf("failure completion count = %d, want 3", client.count())
@@ -341,7 +343,7 @@ func TestTrackMemoryFailurePreservesOwnerCompletionAndCleanup(t *testing.T) {
 	client := &runtimeWorkClientStub{}
 	turns := &turnLifecycleStub{observation: workload.TurnPodObservation{State: "FAILED", DiagnosticCode: workload.TurnPodMemoryDiagnostic}}
 	runtime := trackingRuntime(client, turns, coordinator)
-	runtime.track(t.Context(), input, done, false, time.Time{})
+	runtime.track(t.Context(), input, done, false, time.Time{}, time.Time{})
 	if client.count() != 1 || turns.deletions.Load() != 1 {
 		t.Fatal("memory failure changed completion cardinality or cleanup")
 	}
@@ -366,7 +368,7 @@ func TestTrackEvictedFailurePreservesOwnerCompletionAndCleanup(t *testing.T) {
 	runtime := trackingRuntime(client, turns, coordinator)
 	var logs bytes.Buffer
 	runtime.logger = slog.New(slog.NewJSONHandler(&logs, nil))
-	runtime.track(t.Context(), input, done, false, time.Time{})
+	runtime.track(t.Context(), input, done, false, time.Time{}, time.Time{})
 	if client.count() != 1 || turns.deletions.Load() != 1 {
 		t.Fatal("eviction changed completion cardinality or cleanup")
 	}
@@ -527,7 +529,7 @@ func TestTrackPinnedWorkflowDeadlineDoesNotUseShorterFallback(t *testing.T) {
 	runtime := trackingRuntime(client, turns, coordinator)
 	runtime.config.ExecutionTimeout = time.Millisecond
 	finished := make(chan struct{})
-	go func() { runtime.track(t.Context(), input, done, false, time.Time{}); close(finished) }()
+	go func() { runtime.track(t.Context(), input, done, false, time.Time{}, time.Time{}); close(finished) }()
 	time.Sleep(20 * time.Millisecond)
 	coordinator.Complete(input.LeaseRef)
 	select {
@@ -552,7 +554,7 @@ func TestTrackExpiredWorkflowDeadlineClosesWithTimeoutAndJoins(t *testing.T) {
 	client := &runtimeWorkClientStub{}
 	turns := &turnLifecycleStub{}
 	runtime := trackingRuntime(client, turns, coordinator)
-	runtime.track(t.Context(), input, done, false, time.Time{})
+	runtime.track(t.Context(), input, done, false, time.Time{}, time.Time{})
 	client.mu.Lock()
 	defer client.mu.Unlock()
 	if turns.stops.Load() != 1 || turns.deletions.Load() != 1 || len(client.requests) != 1 || client.requests[0].SafeErrorCode != "RUNTIME_TIMEOUT" {
@@ -572,7 +574,7 @@ func TestWorkflowDeadlineOwnerDenialClosesRevokedPodWithoutRetry(t *testing.T) {
 	client := &runtimeWorkClientStub{complete: func(int) error { return status.Error(codes.PermissionDenied, "lease revoked") }}
 	turns := &turnLifecycleStub{}
 	runtime := trackingRuntime(client, turns, coordinator)
-	runtime.track(t.Context(), input, done, false, time.Time{})
+	runtime.track(t.Context(), input, done, false, time.Time{}, time.Time{})
 	if client.count() != 1 || turns.deletions.Load() != 1 || turns.stops.Load() != 2 {
 		t.Fatal("owner expiry denial retained old Pod or retried authority")
 	}
@@ -580,5 +582,63 @@ func TestWorkflowDeadlineOwnerDenialClosesRevokedPodWithoutRetry(t *testing.T) {
 	case <-done:
 	default:
 		t.Fatal("revoked tracker not joined")
+	}
+}
+
+// TestRuntimeStartupDeadlineStopsPendingWithoutRequeue bounds a created Pod by its original credential expiry.
+// It sends one fenced failure after stopping, releases local capacity, and never claims a replacement execution.
+// TestRuntimeStartupDeadlineStopsPendingWithoutRequeue ограничивает созданный Pod исходным сроком credentials.
+// После остановки отправляется один fenced failure, локальная ёмкость освобождается без claim замены.
+func TestRuntimeStartupDeadlineStopsPendingWithoutRequeue(t *testing.T) {
+	input := runtimeTrackingInput()
+	coordinator := callback.NewCoordinator()
+	done := coordinator.Register(input)
+	client := &runtimeWorkClientStub{}
+	turns := &turnLifecycleStub{observation: workload.TurnPodObservation{State: "STARTING"}}
+	runtime := trackingRuntime(client, turns, coordinator)
+	runtime.track(t.Context(), input, done, false, time.Now().Add(time.Second), time.Now().Add(5*time.Millisecond))
+	if turns.stops.Load() != 1 || client.count() != 1 || len(runtime.capacity) != 0 {
+		t.Fatal("startup deadline failed to stop and finalize once")
+	}
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	if client.requests[0].ResultSummary != "i18n:RUNTIME_STARTUP_TIMEOUT" || client.requests[0].Success {
+		t.Fatal("startup failure was misreported")
+	}
+}
+
+// schedulingObserverStub supplies a bounded synthetic observation or error without Kubernetes access.
+// schedulingObserverStub выдаёт ограниченный синтетический снимок либо ошибку без доступа к Kubernetes.
+type schedulingObserverStub struct{ err error }
+
+// SchedulingCapacity returns explicit zero capacity; an injected failure must prevent the claim RPC entirely.
+// SchedulingCapacity возвращает явно нулевую ёмкость; подставленная ошибка запрещает сам claim RPC.
+func (observer schedulingObserverStub) SchedulingCapacity(context.Context) (*controlplanev1.RuntimeSchedulingCapacity, error) {
+	if observer.err != nil {
+		return nil, observer.err
+	}
+	return &controlplanev1.RuntimeSchedulingCapacity{ObservedAt: timestamppb.Now(), Overhead: &controlplanev1.RuntimeNodeCapacity{CpuMilli: 50, MemoryBytes: 128 << 20, PodSlots: 1}}, nil
+}
+
+// TestResourceQueueObservationFailureHasNoLegacyFallback checks the controller's actual claim boundary.
+// An error issues no RPC; successful zero capacity stays present instead of silently becoming legacy admission.
+// TestResourceQueueObservationFailureHasNoLegacyFallback проверяет настоящую границу claim контроллера.
+// Ошибка не выпускает RPC; нулевая ёмкость передаётся явно вместо незаметного legacy допуска.
+func TestResourceQueueObservationFailureHasNoLegacyFallback(t *testing.T) {
+	for _, failed := range []bool{true, false} {
+		client := &claimBatchClient{}
+		observer := schedulingObserverStub{}
+		if failed {
+			observer.err = context.DeadlineExceeded
+		}
+		runtime := &runtime{control: client, scheduling: observer, capacity: make(chan struct{}, 16), config: Config{ResourceAwareQueue: true, RequestTimeout: time.Second}}
+		_, err := runtime.claim(t.Context())
+		if failed {
+			if err == nil || client.limit != 0 {
+				t.Fatal("observation failure fell back to claim")
+			}
+		} else if err != nil || client.observedCapacity == nil || len(client.observedCapacity.Nodes) != 0 {
+			t.Fatal("empty observation lost its closed meaning")
+		}
 	}
 }

@@ -54,6 +54,7 @@ var sha256TextPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 // Config хранит идентичность runtime-controller, пути защищённых подключений, правила образа/выполнения и ограниченные настройки запуска.
 // Значения ссылаются на смонтированные учётные данные; разбор структуры их не читает и не создаёт нагрузки.
 type Config struct {
+	ResourceAwareQueue             bool          `env:"RUNTIME_CONTROLLER_RESOURCE_AWARE_QUEUE"`
 	RPCProfile                     string        `env:"KODEX_RPC_PROFILE"`
 	Environment                    string        `env:"DEPLOYMENT_ENVIRONMENT"`
 	ControlNamespace               string        `env:"POD_NAMESPACE"`
@@ -107,7 +108,8 @@ type Config struct {
 // В отличие от ошибки разбора окружения, ошибка проверки возвращает заполненную конфигурацию; файл dotenv не читается.
 func loadConfig() (Config, error) {
 	config := Config{
-		Environment: "development", ControlNamespace: defaultControlNamespace, RuntimeNamespace: defaultRuntimeNamespace,
+		ResourceAwareQueue: true,
+		Environment:        "development", ControlNamespace: defaultControlNamespace, RuntimeNamespace: defaultRuntimeNamespace,
 		TechnicalListen: ":9090", CallbackListen: ":8444", CallbackTLSServerName: callbackTLSServerName,
 		CallbackServerCertificateFile:  "/var/run/secrets/kodex/runtime-controller/callback-server/tls.crt",
 		CallbackServerPrivateKeyFile:   "/var/run/secrets/kodex/runtime-controller/callback-server/tls.key",

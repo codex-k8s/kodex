@@ -383,7 +383,17 @@ func assistantRuntimeState(input controlplanev1.AssistantRuntimeState) string {
 // ClaimExecution передаёт workload и лимит отдельной команде получения работы и преобразует каждый
 // возвращённый claim исполнения.
 func (server *Server) ClaimExecution(ctx context.Context, request *controlplanev1.ClaimExecutionRequest) (*controlplanev1.ClaimExecutionResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_ClaimExecution_FullMethodName, command.ClaimExecution, nil, command.LeaseInput{WorkloadInstance: request.GetWorkloadInstance(), Limit: request.GetLimit()})
+	payload := command.LeaseInput{WorkloadInstance: request.GetWorkloadInstance(), Limit: request.GetLimit()}
+	if capacity := request.GetSchedulingCapacity(); capacity != nil {
+		if capacity.GetObservedAt() == nil || capacity.GetObservedAt().CheckValid() != nil || len(capacity.GetNodes()) > 512 {
+			return nil, transportError(errs.ErrInvalid)
+		}
+		payload.SchedulingCapacity = &command.RuntimeSchedulingCapacity{ObservedAt: capacity.GetObservedAt().AsTime(), Overhead: castSchedulingBudget(capacity.GetOverhead())}
+		for _, node := range capacity.GetNodes() {
+			payload.SchedulingCapacity.Nodes = append(payload.SchedulingCapacity.Nodes, castSchedulingBudget(node))
+		}
+	}
+	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_ClaimExecution_FullMethodName, command.ClaimExecution, nil, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -1026,4 +1036,12 @@ func castIntegrationResourcePermissionProfile(profile string) controlplanev1.Int
 		return controlplanev1.IntegrationCredentialResourcePermissionProfile(-1)
 	}
 	return controlplanev1.IntegrationCredentialResourcePermissionProfile(value)
+}
+
+// castSchedulingBudget copies scalar resource observations; owner validation remains mandatory.
+// It never reads names, configuration or credential contents from Kubernetes.
+// castSchedulingBudget копирует числовые наблюдения ресурсов; проверка владельцем обязательна.
+// Имена, конфигурация и содержимое credentials Kubernetes не читаются.
+func castSchedulingBudget(node *controlplanev1.RuntimeNodeCapacity) command.RuntimeNodeCapacity {
+	return command.RuntimeNodeCapacity{CPU: node.GetCpuMilli(), Memory: node.GetMemoryBytes(), Ephemeral: node.GetEphemeralStorageBytes(), Pods: node.GetPodSlots(), TotalCPU: node.GetTotalCpuMilli(), TotalMemory: node.GetTotalMemoryBytes(), TotalEphemeral: node.GetTotalEphemeralStorageBytes(), TotalPods: node.GetTotalPodSlots()}
 }

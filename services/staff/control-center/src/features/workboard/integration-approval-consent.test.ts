@@ -17,7 +17,8 @@ const bounded = {
 describe("выбор ограниченного подтверждения", () => {
   it("оставляет default в исходном запуске и допускает явные сутки для объекта", () => {
     const i = intent(bounded);
-    const p = integrationConsentPolicy(i)!;
+    const p = integrationConsentPolicy(i);
+    if (!p) throw new Error("Synthetic consent policy must be valid");
     expect(defaultIntegrationConsent(p)).toEqual({
       durationSeconds: 86400,
       maxEffects: 100,

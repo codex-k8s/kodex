@@ -16443,6 +16443,11 @@ components:
         projectRef: { $ref: "#/components/schemas/OpaqueRef" }
         assistantPin: { $ref: "#/components/schemas/AssistantRunPin" }
         sessionReadiness: { $ref: "#/components/schemas/RunSessionReadiness" }
+        queueReason:
+          type: string
+          readOnly: true
+          enum: [WAITING_RESOURCES, REQUEST_EXCEEDS_CAPACITY]
+          description: Серверная причина ожидания до claim; отсутствует после допуска и в terminal.
         sessionRef: { $ref: "#/components/schemas/OpaqueRef" }
         rootRunRef: { $ref: "#/components/schemas/OpaqueRef" }
         parentRunRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -16776,6 +16781,11 @@ components:
                 CANCELLED,
               ],
           }
+        queueReason:
+          type: string
+          readOnly: true
+          enum: [WAITING_RESOURCES, REQUEST_EXCEEDS_CAPACITY]
+          description: Полный серверный снимок причины ожидания; отсутствие очищает прежнее значение.
         graphRevision: { type: integer, format: int64, minimum: 1 }
         lastEventSequence: { type: integer, format: int64, minimum: 1 }
         resultSummary: { type: string, maxLength: 4000 }

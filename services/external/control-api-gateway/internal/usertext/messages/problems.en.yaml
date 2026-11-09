@@ -1,3 +1,11 @@
+RUNTIME_WAITING_CAPACITY:
+  other: "Queued: waiting for available resources. Execution will start automatically."
+RUNTIME_REQUEST_EXCEEDS_CAPACITY:
+  other: "Queued: the resource request exceeds every eligible node. Adjust the environment or add capacity."
+WORKLOAD_STARTING:
+  other: "Preparing execution runtime"
+RUNTIME_STARTUP_TIMEOUT:
+  other: "The runtime did not become ready before its startup deadline. The run stopped without an automatic retry."
 INTERNAL:
   other: Internal error
 AUTOMATION_VARIABLE_NAME:
