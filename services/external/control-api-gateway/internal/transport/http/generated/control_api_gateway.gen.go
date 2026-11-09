@@ -6042,16 +6042,16 @@ func (e RoleImageRecipeCommandAction) Valid() bool {
 
 // Defines values for RunQueueReason.
 const (
-	REQUESTEXCEEDSCAPACITY RunQueueReason = "REQUEST_EXCEEDS_CAPACITY"
-	WAITINGRESOURCES       RunQueueReason = "WAITING_RESOURCES"
+	RunQueueReasonREQUESTEXCEEDSCAPACITY RunQueueReason = "REQUEST_EXCEEDS_CAPACITY"
+	RunQueueReasonWAITINGRESOURCES       RunQueueReason = "WAITING_RESOURCES"
 )
 
 // Valid indicates whether the value is a known member of the RunQueueReason enum.
 func (e RunQueueReason) Valid() bool {
 	switch e {
-	case REQUESTEXCEEDSCAPACITY:
+	case RunQueueReasonREQUESTEXCEEDSCAPACITY:
 		return true
-	case WAITINGRESOURCES:
+	case RunQueueReasonWAITINGRESOURCES:
 		return true
 	default:
 		return false
@@ -6229,6 +6229,24 @@ func (e RunCommandAction) Valid() bool {
 	case RunCommandActionCANCEL:
 		return true
 	case RunCommandActionRETRY:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunDeltaQueueReason.
+const (
+	RunDeltaQueueReasonREQUESTEXCEEDSCAPACITY RunDeltaQueueReason = "REQUEST_EXCEEDS_CAPACITY"
+	RunDeltaQueueReasonWAITINGRESOURCES       RunDeltaQueueReason = "WAITING_RESOURCES"
+)
+
+// Valid indicates whether the value is a known member of the RunDeltaQueueReason enum.
+func (e RunDeltaQueueReason) Valid() bool {
+	switch e {
+	case RunDeltaQueueReasonREQUESTEXCEEDSCAPACITY:
+		return true
+	case RunDeltaQueueReasonWAITINGRESOURCES:
 		return true
 	default:
 		return false
@@ -14792,21 +14810,27 @@ type RunCommandAction string
 
 // RunDelta defines model for RunDelta.
 type RunDelta struct {
-	ArtifactRefs      []OpaqueRef   `json:"artifactRefs"`
-	FinishedAt        *Timestamp    `json:"finishedAt,omitempty"`
-	GateRefs          []OpaqueRef   `json:"gateRefs"`
-	GraphRevision     int64         `json:"graphRevision"`
-	LastEventSequence int64         `json:"lastEventSequence"`
-	NextActions       []NextAction  `json:"nextActions"`
-	Ref               OpaqueRef     `json:"ref"`
-	ResultSummary     *string       `json:"resultSummary,omitempty"`
-	SafeErrorCode     *string       `json:"safeErrorCode,omitempty"`
-	SafeErrorMessage  *string       `json:"safeErrorMessage,omitempty"`
-	StartedAt         *Timestamp    `json:"startedAt,omitempty"`
-	State             RunDeltaState `json:"state"`
-	Usage             TokenUsage    `json:"usage"`
-	Version           int64         `json:"version"`
+	ArtifactRefs      []OpaqueRef  `json:"artifactRefs"`
+	FinishedAt        *Timestamp   `json:"finishedAt,omitempty"`
+	GateRefs          []OpaqueRef  `json:"gateRefs"`
+	GraphRevision     int64        `json:"graphRevision"`
+	LastEventSequence int64        `json:"lastEventSequence"`
+	NextActions       []NextAction `json:"nextActions"`
+
+	// QueueReason Полный серверный снимок причины ожидания; отсутствие очищает прежнее значение.
+	QueueReason      *RunDeltaQueueReason `json:"queueReason,omitempty"`
+	Ref              OpaqueRef            `json:"ref"`
+	ResultSummary    *string              `json:"resultSummary,omitempty"`
+	SafeErrorCode    *string              `json:"safeErrorCode,omitempty"`
+	SafeErrorMessage *string              `json:"safeErrorMessage,omitempty"`
+	StartedAt        *Timestamp           `json:"startedAt,omitempty"`
+	State            RunDeltaState        `json:"state"`
+	Usage            TokenUsage           `json:"usage"`
+	Version          int64                `json:"version"`
 }
+
+// RunDeltaQueueReason Полный серверный снимок причины ожидания; отсутствие очищает прежнее значение.
+type RunDeltaQueueReason string
 
 // RunDeltaState defines model for RunDelta.State.
 type RunDeltaState string

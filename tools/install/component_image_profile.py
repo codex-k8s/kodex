@@ -18,6 +18,7 @@ COMPONENTS = {'egress-gateway': ('egress-gateway', 'egress-gateway'),
               'secret-broker': ('secret-broker', 'secret-broker'),
               'runtime-controller': ('runtime-controller', 'runtime-controller'),
               'integration-gateway': ('integration-gateway', 'integration-gateway'),
+              'control-api-gateway': ('control-api-gateway', 'control-api-gateway'),
               'role-image-builder': ('role-image-builder', 'role-image-builder'),
               'staff-control-center': ('staff-control-center', 'staff-control-center')}
 RUNTIME_ENV = 'REGISTRY_PULL_RUNTIME_ENGINE'

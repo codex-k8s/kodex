@@ -340,3 +340,40 @@ it("закрывает invalid accepted/evidence до mutation графа и с�
   expect(reduceRunEvent(state, event)).toBe("invalid");
   expect(state).toEqual(before);
 });
+
+describe("причина ресурсной очереди в realtime", () => {
+  it("получает причину владельца и очищает её при допуске без перезагрузки", () => {
+    const value = projection();
+    const base = delegationEvent();
+    const queued: RunEvent = {
+      ...base,
+      runState: "QUEUED",
+      run: { ...base.run, state: "QUEUED", queueReason: "WAITING_RESOURCES" },
+    };
+    expect(reduceRunEvent(value, queued)).toBe("applied");
+    expect(value.runs[rootRunRef]?.queueReason).toBe("WAITING_RESOURCES");
+    const started: RunEvent = {
+      ...queued,
+      ref: "event_000003",
+      sequence: 3,
+      graphRevision: 4,
+      type: "TURN_STARTED",
+      runState: "RUNNING",
+      nodeState: "RUNNING",
+      edge: undefined,
+      edgeRef: undefined,
+      node: queued.node ? { ...queued.node, state: "RUNNING" } : undefined,
+      run: {
+        ...queued.run,
+        version: 2,
+        state: "RUNNING",
+        queueReason: undefined,
+        graphRevision: 4,
+        lastEventSequence: 3,
+      },
+    };
+    expect(reduceRunEvent(value, started)).toBe("applied");
+    expect(value.runs[rootRunRef]?.state).toBe("RUNNING");
+    expect(value.runs[rootRunRef]?.queueReason).toBeUndefined();
+  });
+});

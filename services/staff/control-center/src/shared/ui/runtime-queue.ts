@@ -4,7 +4,7 @@ import type { Run } from "@/shared/api/generated/openapi/types.gen";
 export function runtimeQueueMessage(
   run?: Pick<Run, "state" | "queueReason">,
 ): string | undefined {
-  if (!run || !["QUEUED", "RUNNING"].includes(run.state)) return undefined;
+  if (!run || run.state !== "QUEUED") return undefined;
   switch (run.queueReason) {
     case "WAITING_RESOURCES":
       return "i18n:RUNTIME_WAITING_CAPACITY";

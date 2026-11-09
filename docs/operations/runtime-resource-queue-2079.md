@@ -90,20 +90,24 @@ session, provider capacity и workflow dependency predicates сохранены.
 
 ## Интерфейс
 
-`Run.queueReason` — отдельное optional read-only поле Proto/OpenAPI. Источник —
+`Run.queueReason` и `RunDelta.queueReason` — optional read-only поля Proto/OpenAPI. Источник —
 server-owned `runtimeQueueReason` в существующей presentation metadata, а не
 текст модели. В списке и карточке показаны «В очереди» и объяснение ожидания либо
 слишком большого запроса. После допуска маркер удаляется; terminal-проекция его
 не возвращает. В графе каждого ожидающего execution node остаётся QUEUED и
 локализованная `progressSummary`. Используется существующий readback/realtime,
-без локального таймера, который выдумывает успешный запуск.
+без локального таймера, который выдумывает успешный запуск. Новый delta без
+причины явно очищает прежнее значение; список также очищает optional поле при
+авторитетном readback. RUNNING никогда не подменяется QUEUED старым текстом.
 
 ## Обновление, проверка и возврат
 
 Новой миграции нет. Требуется совместимый набор immutable образов control-plane,
 control-api-gateway, runtime-controller и staff-control-center из одной версии
-контрактов; RoleImage input ABI не меняется. Сначала обновляются control-plane и
-gateway, затем RBAC/controller и UI. Не менять кандидат посреди приёмки.
+контрактов; RoleImage input ABI не меняется. Адресный bootstrap-профиль
+`component_image_profile.py` поддерживает также `control-api-gateway`, сохраняя
+sidecars, сертификаты и прочие поля Deployment. Сначала обновляются control-plane и
+gateway, затем UI и RBAC/controller. Не менять кандидат посреди приёмки.
 
 1. Выполнить unit/controller tests, PostgreSQL `TestRuntimeResourceQueueComponent`,
    Proto/OpenAPI codegen, UI unit/typecheck/build и оба применимых render профиля.

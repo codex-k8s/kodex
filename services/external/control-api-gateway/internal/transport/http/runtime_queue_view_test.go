@@ -38,3 +38,17 @@ func TestRuntimeQueueHTTPProjection(t *testing.T) {
 		}
 	}
 }
+
+// TestRuntimeQueueEventProjection preserves the structured owner reason through the shared event JSON normalizer.
+// TestRuntimeQueueEventProjection сохраняет структурированную причину владельца через общий normalizer событий.
+func TestRuntimeQueueEventProjection(t *testing.T) {
+	reason := "WAITING_RESOURCES"
+	value, err := messageMap(&cp.RunEvent{Run: &cp.RunDelta{Ref: "run_fixture01", Version: 2, State: cp.RunState_RUN_STATE_QUEUED, GraphRevision: 3, LastEventSequence: 2, QueueReason: &reason}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, ok := value["run"].(map[string]any)
+	if !ok || run["state"] != "QUEUED" || run["queueReason"] != reason {
+		t.Fatal("realtime queue reason lost during JSON normalization")
+	}
+}

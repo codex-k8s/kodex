@@ -2589,7 +2589,7 @@ func (repository *Repository) readRunEventDelta(ctx context.Context, tx pgx.Tx, 
 	if err := tx.QueryRow(ctx, queryCommandsEmitruneventSelectRunDelta, organizationID, rootRunID).Scan(
 		&run.Ref, &run.State, &run.ResultSummary, &run.SafeErrorCode, &run.SafeErrorMessage,
 		&run.GraphRevision, &run.EventSequence, &run.Version, &usage, &run.ArtifactRefs, &run.GateRefs,
-		&run.StartedAt, &run.FinishedAt,
+		&run.StartedAt, &run.FinishedAt, &run.QueueReason,
 	); err != nil {
 		return entity.RunEventDelta{}, fmt.Errorf("read run event delta: %w", errs.ErrUnavailable)
 	}

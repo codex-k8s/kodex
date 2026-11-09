@@ -907,6 +907,7 @@ type WorkflowRetryReadProof struct {
 // событий, использование, ссылки и сроки для realtime-проекции; потребитель по-прежнему связывает
 // данные с точным запуском и монотонной версией.
 type RunDelta struct {
+	QueueReason                                                string `json:",omitempty"`
 	Ref, State, ResultSummary, SafeErrorCode, SafeErrorMessage string
 	Version, GraphRevision, EventSequence                      int64
 	Usage                                                      TokenUsage

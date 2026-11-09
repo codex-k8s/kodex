@@ -12300,7 +12300,9 @@ type RunDelta struct {
 	// next_actions вычислены control-plane с учётом lifecycle и полномочий actor.
 	NextActions []NextAction `protobuf:"varint,13,rep,packed,name=next_actions,json=nextActions,proto3,enum=controlplane.v1.NextAction" json:"next_actions,omitempty"`
 	// usage — агрегированный server-observed расход root Run на этой sequence.
-	Usage         *TokenUsage `protobuf:"bytes,14,opt,name=usage,proto3" json:"usage,omitempty"`
+	Usage *TokenUsage `protobuf:"bytes,14,opt,name=usage,proto3" json:"usage,omitempty"`
+	// Серверная причина ожидания; отсутствие в новом снимке очищает прежнюю причину.
+	QueueReason   *string `protobuf:"bytes,15,opt,name=queue_reason,json=queueReason,proto3,oneof" json:"queue_reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -12431,6 +12433,13 @@ func (x *RunDelta) GetUsage() *TokenUsage {
 		return x.Usage
 	}
 	return nil
+}
+
+func (x *RunDelta) GetQueueReason() string {
+	if x != nil && x.QueueReason != nil {
+		return *x.QueueReason
+	}
+	return ""
 }
 
 type RunEvent struct {
@@ -88987,7 +88996,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x0ftarget_node_ref\x18\x04 \x01(\tR\rtargetNodeRef\x120\n" +
 	"\x04type\x18\x05 \x01(\x0e2\x1c.controlplane.v1.RunEdgeTypeR\x04type\x12\x14\n" +
 	"\x05label\x18\x06 \x01(\tR\x05label\x12[\n" +
-	"\x15server_workflow_retry\x18\a \x01(\v2'.controlplane.v1.WorkflowRetryReadProofR\x13serverWorkflowRetry\"\xe8\x04\n" +
+	"\x15server_workflow_retry\x18\a \x01(\v2'.controlplane.v1.WorkflowRetryReadProofR\x13serverWorkflowRetry\"\xa1\x05\n" +
 	"\bRunDelta\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12/\n" +
@@ -89005,7 +89014,9 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\vfinished_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"finishedAt\x12>\n" +
 	"\fnext_actions\x18\r \x03(\x0e2\x1b.controlplane.v1.NextActionR\vnextActions\x121\n" +
-	"\x05usage\x18\x0e \x01(\v2\x1b.controlplane.v1.TokenUsageR\x05usage\"\xc4\t\n" +
+	"\x05usage\x18\x0e \x01(\v2\x1b.controlplane.v1.TokenUsageR\x05usage\x12&\n" +
+	"\fqueue_reason\x18\x0f \x01(\tH\x00R\vqueueReason\x88\x01\x01B\x0f\n" +
+	"\r_queue_reason\"\xc4\t\n" +
 	"\bRunEvent\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x17\n" +
 	"\arun_ref\x18\x02 \x01(\tR\x06runRef\x12\x1a\n" +
@@ -100956,6 +100967,7 @@ func file_controlplane_v1_control_plane_proto_init() {
 		(*RunTarget_SystemAssistantRef)(nil),
 	}
 	file_controlplane_v1_control_plane_proto_msgTypes[22].OneofWrappers = []any{}
+	file_controlplane_v1_control_plane_proto_msgTypes[27].OneofWrappers = []any{}
 	file_controlplane_v1_control_plane_proto_msgTypes[28].OneofWrappers = []any{}
 	file_controlplane_v1_control_plane_proto_msgTypes[60].OneofWrappers = []any{}
 	file_controlplane_v1_control_plane_proto_msgTypes[61].OneofWrappers = []any{}

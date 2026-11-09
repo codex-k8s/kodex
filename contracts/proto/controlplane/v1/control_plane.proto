@@ -1314,6 +1314,8 @@ message RunDelta {
   repeated NextAction next_actions = 13;
   // usage — агрегированный server-observed расход root Run на этой sequence.
   TokenUsage usage = 14;
+  // Серверная причина ожидания; отсутствие в новом снимке очищает прежнюю причину.
+  optional string queue_reason = 15;
 }
 
 message RunEvent {

@@ -11,13 +11,19 @@ describe("серверная ресурсная очередь", () => {
     ).toBe("i18n:RUNTIME_WAITING_CAPACITY");
     expect(
       runtimeQueueMessage({
-        state: "RUNNING",
+        state: "QUEUED",
         queueReason: "REQUEST_EXCEEDS_CAPACITY",
       }),
     ).toBe("i18n:RUNTIME_REQUEST_EXCEEDS_CAPACITY");
   });
   it("не выдаёт обычный запуск или завершение за ожидание", () => {
     expect(runtimeQueueMessage({ state: "RUNNING" })).toBeUndefined();
+    expect(
+      runtimeQueueMessage({
+        state: "RUNNING",
+        queueReason: "WAITING_RESOURCES",
+      }),
+    ).toBeUndefined();
     expect(
       runtimeQueueMessage({
         state: "CANCELLED",

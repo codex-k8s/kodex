@@ -20,6 +20,7 @@ func TestRuntimeQueueViewPreservesOptionalPresence(t *testing.T) {
 		{"QUEUED", "WAITING_RESOURCES", true},
 		{"QUEUED", "REQUEST_EXCEEDS_CAPACITY", true},
 		{"RUNNING", "", false},
+		{"RUNNING", "WAITING_RESOURCES", false},
 		{"CANCELLED", "WAITING_RESOURCES", false},
 		{"SUCCEEDED", "REQUEST_EXCEEDS_CAPACITY", false},
 		{"QUEUED", "UNKNOWN_PRIVATE_DIAGNOSTIC", false},
@@ -35,6 +36,17 @@ func TestRuntimeQueueViewPreservesOptionalPresence(t *testing.T) {
 		reason, present := value["queueReason"]
 		if present != test.present || present && reason != test.reason {
 			t.Fatal("queue reason presence violated public optional enum contract")
+		}
+	}
+}
+
+// TestRuntimeQueueDeltaPresence proves the durable realtime projection uses the same closed optional field as HTTP reads.
+// TestRuntimeQueueDeltaPresence проверяет тот же закрытый optional field в долговечной realtime-проекции и HTTP чтении.
+func TestRuntimeQueueDeltaPresence(t *testing.T) {
+	for _, state := range []string{"QUEUED", "RUNNING", "CANCELLED"} {
+		delta := castRunDelta(&entity.RunDelta{State: state, QueueReason: "WAITING_RESOURCES"})
+		if (delta.QueueReason != nil) != (state == "QUEUED") {
+			t.Fatal("realtime queue reason has incorrect presence")
 		}
 	}
 }

@@ -416,7 +416,7 @@ export const usePlatformStore = defineStore("platform", () => {
     for (const value of values) {
       const current = runs[value.ref];
       if (current && current.version <= value.version)
-        Object.assign(current, value);
+        Object.assign(current, value, { queueReason: value.queueReason });
       else if (!current) runs[value.ref] = value;
     }
   }

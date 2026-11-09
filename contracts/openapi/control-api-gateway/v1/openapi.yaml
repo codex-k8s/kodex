@@ -16781,6 +16781,11 @@ components:
                 CANCELLED,
               ],
           }
+        queueReason:
+          type: string
+          readOnly: true
+          enum: [WAITING_RESOURCES, REQUEST_EXCEEDS_CAPACITY]
+          description: Полный серверный снимок причины ожидания; отсутствие очищает прежнее значение.
         graphRevision: { type: integer, format: int64, minimum: 1 }
         lastEventSequence: { type: integer, format: int64, minimum: 1 }
         resultSummary: { type: string, maxLength: 4000 }

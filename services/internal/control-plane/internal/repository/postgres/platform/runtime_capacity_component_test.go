@@ -8,6 +8,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
@@ -79,6 +80,19 @@ func TestRuntimeResourceQueueComponent(t *testing.T) {
 		t.Fatal("later blocked run was left falsely running")
 	}
 	execute(command.CancelRun, owner, "cancel-peer", &peer.Version, command.RunCommandInput{RunRef: peer.Ref})
+	events, _, _, err := service.ListRunEvents(ctx, owner, query.Filter{ResourceRef: bigRun.Ref, Limit: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundQueued := false
+	for _, event := range events {
+		if event.Delta.Run != nil && event.Delta.Run.QueueReason == "WAITING_RESOURCES" {
+			foundQueued = true
+		}
+	}
+	if !foundQueued {
+		t.Fatal("owner queue reason absent from durable realtime delta")
+	}
 	firstSequence := read.EventSequence
 	if len(claim("same-wait", 1<<30)) != 0 {
 		t.Fatal("waiting demand claimed")
@@ -114,6 +128,13 @@ func TestRuntimeResourceQueueComponent(t *testing.T) {
 	read, err = service.GetRun(ctx, owner, bigRun.Ref)
 	if err != nil || read.QueueReason != "" || read.State != "RUNNING" || read.StartedAt == nil {
 		t.Fatal("queue reason survived admission")
+	}
+	events, _, _, err = service.ListRunEvents(ctx, owner, query.Filter{ResourceRef: bigRun.Ref, Limit: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) == 0 || events[len(events)-1].Delta.Run == nil || events[len(events)-1].Delta.Run.State != "RUNNING" || events[len(events)-1].Delta.Run.QueueReason != "" {
+		t.Fatal("admission did not clear durable realtime queue reason")
 	}
 	execute(command.CancelRun, owner, "stop-admitted", &read.Version, command.RunCommandInput{RunRef: bigRun.Ref})
 	cancelled := launch(large, "cancelled-run")
