@@ -604,7 +604,9 @@ SELECT n.id::text,
        runtime_environment.volumes_digest,
        runtime_environment.network_digest,
        runtime_environment.rbac_digest,
-       COALESCE(session_storage.codex_session_id::text, '')
+       COALESCE(session_storage.codex_session_id::text, ''),
+       scheduling.fits,
+       scheduling.possible
 FROM control_plane.run_nodes n
 JOIN control_plane.runs r ON r.id = n.run_id
 JOIN control_plane.runs root ON root.id = r.root_run_id
@@ -730,6 +732,27 @@ LEFT JOIN LATERAL (
       AND artifact.role_runtime_contract_sha256 = $4
     LIMIT 1
 ) role_image ON true
+CROSS JOIN LATERAL (
+    SELECT ($6::jsonb IS NULL
+        OR EXISTS (
+            SELECT 1 FROM jsonb_array_elements($6::jsonb->'nodes') budget
+            WHERE (budget->>'cpu')::bigint >= (runtime_environment.resource_policy->>'cpu_request_milli')::bigint + ($6::jsonb#>>'{overhead,cpu}')::bigint
+              AND (budget->>'memory')::bigint >= (runtime_environment.resource_policy->>'memory_request_mib')::bigint * 1048576 + ($6::jsonb#>>'{overhead,memory}')::bigint
+              AND (budget->>'ephemeral')::bigint >= (runtime_environment.resource_policy->>'ephemeral_storage_request_mib')::bigint * 1048576 + ($6::jsonb#>>'{overhead,ephemeral}')::bigint
+              AND (budget->>'pods')::bigint >= ($6::jsonb#>>'{overhead,pods}')::bigint
+        )
+    ) AS fits,
+       ($6::jsonb IS NULL
+        OR jsonb_array_length($6::jsonb->'nodes') = 0
+        OR EXISTS (
+            SELECT 1 FROM jsonb_array_elements($6::jsonb->'nodes') budget
+            WHERE (budget->>'totalCpu')::bigint >= (runtime_environment.resource_policy->>'cpu_request_milli')::bigint + ($6::jsonb#>>'{overhead,cpu}')::bigint
+              AND (budget->>'totalMemory')::bigint >= (runtime_environment.resource_policy->>'memory_request_mib')::bigint * 1048576 + ($6::jsonb#>>'{overhead,memory}')::bigint
+              AND (budget->>'totalEphemeral')::bigint >= (runtime_environment.resource_policy->>'ephemeral_storage_request_mib')::bigint * 1048576 + ($6::jsonb#>>'{overhead,ephemeral}')::bigint
+              AND (budget->>'totalPods')::bigint >= ($6::jsonb#>>'{overhead,pods}')::bigint
+        )
+    ) AS possible
+) scheduling
 WHERE n.organization_id = $1::uuid
   AND (workspace_storage.id IS NULL OR ($5='SESSION_WORKSPACE_V2' AND workspace_storage.state IN ('EMPTY','CHECKPOINT_READY','RESTORED')))
   AND n.type = 'AGENT_EXECUTION'
@@ -871,7 +894,12 @@ WHERE n.organization_id = $1::uuid
         AND earlier.type = 'AGENT_EXECUTION'
         AND earlier.state IN ('QUEUED', 'RUNNING', 'WAITING')
   )
-ORDER BY CASE WHEN a.system_key = 'system-assistant' THEN 0 ELSE 1 END,
+ORDER BY scheduling.fits DESC,
+         CASE WHEN NOT scheduling.fits AND n.progress_summary IS DISTINCT FROM
+                   CASE WHEN scheduling.possible THEN 'i18n:RUNTIME_WAITING_CAPACITY'
+                        ELSE 'i18n:RUNTIME_REQUEST_EXCEEDS_CAPACITY' END
+              THEN 0 ELSE 1 END,
+         CASE WHEN a.system_key = 'system-assistant' THEN 0 ELSE 1 END,
          n.created_at
 FOR UPDATE OF n SKIP LOCKED
 LIMIT $2;

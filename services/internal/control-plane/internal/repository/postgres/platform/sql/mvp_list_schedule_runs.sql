@@ -2,7 +2,7 @@
 SELECT schedule.ref, revision.ref, revision.revision,
        run.ref, COALESCE(project.ref, ''), session.ref, root.ref, COALESCE(parent.ref, ''),
        COALESCE(retry.ref, ''), run.title, run.title_source,
-       COALESCE(run.presentation_metadata->>'activitySummary', ''), run.task, run.state, run.source,
+       COALESCE(run.presentation_metadata->>'activitySummary', ''), CASE WHEN run.state IN ('QUEUED','RUNNING') THEN COALESCE(run.presentation_metadata->>'runtimeQueueReason','') ELSE '' END, run.task, run.state, run.source,
        run.result_summary, run.safe_error_code, run.safe_error_message, subject.display_name,
        run.target_type, run.target_ref, COALESCE(agent.name, workflow.name, assistant.name, run.target_ref),
        COALESCE(agent.version, workflow.version, assistant.version, 0),

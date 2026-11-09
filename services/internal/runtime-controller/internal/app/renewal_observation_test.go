@@ -269,7 +269,7 @@ func TestRenewalObservationPrecedesTrackAndDrainDeletionWithoutChangingFailures(
 				runtime.config.LeaseRenewInterval, runtime.inspectInterval, runtime.terminalGrace = time.Millisecond, time.Hour, time.Second
 				wantStops := int32(1)
 				if phase == renewalPhaseTrack {
-					runtime.track(t.Context(), input, done, false, time.Time{})
+					runtime.track(t.Context(), input, done, false, time.Time{}, time.Time{})
 				} else {
 					wantStops = 2
 					parent, cancel := context.WithCancel(t.Context())

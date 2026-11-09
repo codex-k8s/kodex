@@ -1611,6 +1611,7 @@ type AssistantInstructionsInput struct{ Instructions string }
 // необязательные наблюдения о ходе и финансах. Эти наблюдения не дают права захватить работу,
 // согласовать расходы или обойти истёкшую аренду.
 type LeaseInput struct {
+	SchedulingCapacity                *RuntimeSchedulingCapacity
 	Financial                         *entity.ProviderFinancialSummary
 	WorkloadInstance, LeaseRef, Fence string
 	Generation                        int64
@@ -1955,4 +1956,29 @@ type Result struct {
 // текстовым подтверждением отправки или разрешением повторить отправку с неизвестным исходом.
 type EmailReconciliationInput struct {
 	ReceiptRef, ExpectedReceiptDigest, Outcome, Note string
+}
+
+// RuntimeNodeCapacity carries nonnegative requests available on one eligible node.
+// Names and Pod contents remain private to the Kubernetes adapter; this is not authority.
+// RuntimeNodeCapacity передаёт неотрицательные доступные requests одного пригодного узла.
+// Имена и содержимое Pod остаются в Kubernetes adapter; это не полномочия.
+type RuntimeNodeCapacity struct {
+	CPU            int64 `json:"cpu"`
+	Memory         int64 `json:"memory"`
+	Ephemeral      int64 `json:"ephemeral"`
+	Pods           int64 `json:"pods"`
+	TotalCPU       int64 `json:"totalCpu"`
+	TotalMemory    int64 `json:"totalMemory"`
+	TotalEphemeral int64 `json:"totalEphemeral"`
+	TotalPods      int64 `json:"totalPods"`
+}
+
+// RuntimeSchedulingCapacity is a fresh, bounded scheduling observation from the controller.
+// A nil pointer preserves legacy admission; an empty node list admits no cold execution.
+// RuntimeSchedulingCapacity — свежий ограниченный снимок планировщика от контроллера.
+// nil сохраняет прежний допуск; пустой список узлов не допускает новое холодное исполнение.
+type RuntimeSchedulingCapacity struct {
+	ObservedAt time.Time
+	Nodes      []RuntimeNodeCapacity
+	Overhead   RuntimeNodeCapacity
 }

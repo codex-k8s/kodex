@@ -6,6 +6,19 @@ import {
 
 // Закрытый реестр безопасных сообщений владельца состояния: ru, en.
 export const serverTokenTranslations = {
+  RUNTIME_WAITING_CAPACITY: [
+    "В очереди: ожидает свободных ресурсов. Запуск начнётся автоматически.",
+    "Queued: waiting for available resources. Execution will start automatically.",
+  ],
+  RUNTIME_REQUEST_EXCEEDS_CAPACITY: [
+    "В очереди: запрос ресурсов превышает ёмкость любого доступного узла. Измените окружение или добавьте ресурсы.",
+    "Queued: the resource request exceeds every eligible node. Adjust the environment or add capacity.",
+  ],
+  RUNTIME_STARTUP_TIMEOUT: [
+    "Исполнитель не успел подготовиться. Запуск остановлен без автоматического повтора.",
+    "The runtime did not become ready before its startup deadline. The run stopped without an automatic retry.",
+  ],
+  WORKLOAD_STARTING: ["Подготовка исполнителя", "Preparing execution runtime"],
   INTEGRATION_APPROVAL_REVOKED: [
     "Временное разрешение отозвано; новые действия требуют согласования",
     "Temporary approval revoked; new actions require consent",

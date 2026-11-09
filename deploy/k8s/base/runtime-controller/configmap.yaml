@@ -1,6 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  RUNTIME_CONTROLLER_RESOURCE_AWARE_QUEUE: "true"
   name: runtime-controller-runtime
 data:
   RUNTIME_CONTROLLER_TECHNICAL_LISTEN: ":9090"

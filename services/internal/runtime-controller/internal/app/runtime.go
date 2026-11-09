@@ -114,11 +114,20 @@ type warmDeactivator interface {
 	DeactivateWarm(context.Context) error
 }
 
+// schedulingObserver provides only a fresh bounded capacity descriptor, never a grant or credential.
+// schedulingObserver предоставляет лишь свежий ограниченный снимок ёмкости, не grant либо credentials.
+type schedulingObserver interface {
+	// SchedulingCapacity returns a bounded resource observation or an error that prevents claims.
+	// SchedulingCapacity возвращает ограниченный снимок либо ошибку, запрещающую claims.
+	SchedulingCapacity(context.Context) (*controlplanev1.RuntimeSchedulingCapacity, error)
+}
+
 // runtime coordinates owner claims, materialization, warm compatibility and independent per-turn trackers.
 // Its capacity channel bounds concurrency; tracker lifetime and warm-cache locking are local control mechanisms, not sources of owner authority.
 // runtime координирует заявки владельца, размещение, совместимость прогретой среды и независимое отслеживание ходов.
 // Канал ёмкости ограничивает параллелизм; время жизни отслеживания и блокировка прогретого кэша — локальные механизмы, а не источники полномочий владельца.
 type runtime struct {
+	scheduling        schedulingObserver
 	control           controlplanev1.RuntimeWorkServiceClient
 	credentials       credentialMaterializer
 	manager           *workload.Manager
@@ -143,7 +152,7 @@ type runtime struct {
 // newRuntime связывает уже созданные клиенты, менеджер и координатор и задаёт параллелизм, наблюдение и расписание доставки ошибок.
 // Горутины не запускаются, заявка не запрашивается; предполагается, что переданная конфигурация уже проверена.
 func newRuntime(control controlplanev1.RuntimeWorkServiceClient, credentials credentialMaterializer, manager *workload.Manager, coordinator *callback.Coordinator, config Config, assistant *serviceruntime.Readiness, logger *slog.Logger) *runtime {
-	return &runtime{control: control, credentials: credentials, manager: manager, warmDeactivator: manager, turns: manager, coordinator: coordinator, config: config, assistant: assistant, logger: logger,
+	return &runtime{scheduling: manager, control: control, credentials: credentials, manager: manager, warmDeactivator: manager, turns: manager, coordinator: coordinator, config: config, assistant: assistant, logger: logger,
 		capacity: make(chan struct{}, config.MaximumConcurrentTurns), inspectInterval: defaultTurnInspectionInterval,
 		terminalGrace: defaultTerminalCallbackGrace, completionRetries: defaultFailureCompletionRetryDelays[:]}
 }
@@ -321,8 +330,18 @@ func (runtime *runtime) claim(ctx context.Context) (int, error) {
 	if limit < 1 {
 		return 0, nil
 	}
+	claimRequest := &controlplanev1.ClaimExecutionRequest{WorkloadInstance: runtime.config.PodUID, Limit: int32(limit)}
+	if runtime.config.ResourceAwareQueue {
+		observation, cancelObservation := context.WithTimeout(ctx, runtime.config.RequestTimeout)
+		observed, err := runtime.scheduling.SchedulingCapacity(observation)
+		cancelObservation()
+		if err != nil {
+			return 0, err
+		}
+		claimRequest.SchedulingCapacity = observed
+	}
 	request, cancel := context.WithTimeout(ctx, runtime.config.RequestTimeout)
-	response, err := runtime.control.ClaimExecution(request, &controlplanev1.ClaimExecutionRequest{WorkloadInstance: runtime.config.PodUID, Limit: int32(limit)})
+	response, err := runtime.control.ClaimExecution(request, claimRequest)
 	cancel()
 	if err != nil {
 		return 0, err
@@ -354,6 +373,7 @@ func (runtime *runtime) claim(ctx context.Context) (int, error) {
 		runtime.capacity <- struct{}{}
 		done := runtime.coordinator.Register(input)
 		warmExecution := false
+		startupDeadline := time.Time{}
 		if input.IsSystemAssistant() {
 			runtime.warmMu.RLock()
 			warmCompatibility, warmTicket := runtime.warmCompatibility, runtime.warmTicket
@@ -383,6 +403,7 @@ func (runtime *runtime) claim(ctx context.Context) (int, error) {
 			projectionContext, cancelProjection := context.WithTimeout(keeper.ctx, runtime.config.RequestTimeout)
 			projection, projectionErr := runtime.credentials.Materialize(projectionContext, input)
 			cancelProjection()
+			startupDeadline = projection.ExpiresAt
 			failureStage := "credential_projection"
 			if projectionErr == nil {
 				failureStage = "ensure_turn"
@@ -422,7 +443,7 @@ func (runtime *runtime) claim(ctx context.Context) (int, error) {
 		runtime.trackers.Add(1)
 		go func() {
 			defer runtime.trackers.Done()
-			runtime.track(ctx, input, done, warmExecution, keeper.confirmedUntil)
+			runtime.track(ctx, input, done, warmExecution, keeper.confirmedUntil, startupDeadline)
 		}()
 	}
 	return len(response.GetExecutions()), nil
@@ -462,7 +483,7 @@ func warmFileProjectionEligible(input runtimecontract.RunnerInput) bool {
 // It observes exact Pods, renews only owner-confirmed lease authority, preserves callback grace and memory diagnostics, and distinguishes leadership loss from graceful execution shutdown.
 // track владеет одним зарезервированным местом ёмкости до завершения обратного вызова, очистки при отзыве или ограниченного завершающего запасного пути.
 // Наблюдаются точные Pod, продлеваются только подтверждённые владельцем полномочия, сохраняются период ожидания обратного вызова и диагностика памяти, а потеря лидерства отличается от мягкого завершения выполнения.
-func (runtime *runtime) track(parent context.Context, input runtimecontract.RunnerInput, done <-chan struct{}, warmExecution bool, confirmedUntil time.Time) {
+func (runtime *runtime) track(parent context.Context, input runtimecontract.RunnerInput, done <-chan struct{}, warmExecution bool, confirmedUntil time.Time, startupDeadline time.Time) {
 	defer func() { <-runtime.capacity }()
 	execution, cancel := input.BoundExecutionDeadline(parent, runtime.config.ExecutionTimeout)
 	defer cancel()
@@ -473,12 +494,18 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 	expiry := time.NewTimer(time.Hour)
 	defer expiry.Stop()
 	expired := resetLeaseExpiry(expiry, confirmedUntil)
+	if startupDeadline.IsZero() {
+		startupDeadline = time.Now().Add(2 * time.Minute)
+	}
+	startup := time.NewTimer(max(time.Until(startupDeadline), time.Nanosecond))
+	defer startup.Stop()
+	startupExpired := startup.C
 	var terminalObservedAt time.Time
 	terminalDiagnostic := ""
 	terminalInitializationKey := ""
 	var terminalInitialization *workload.InitializationObservation
 	progress, cancelProgress := leaseBoundedRequest(execution, runtime.config.RequestTimeout, confirmedUntil)
-	_ = runtime.progress(progress, input, "WORKLOAD_SCHEDULED")
+	_ = runtime.progress(progress, input, "WORKLOAD_STARTING")
 	cancelProgress()
 	for {
 		select {
@@ -496,6 +523,18 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 			return
 		case <-expired:
 			runtime.closeRevokedTurn(parent, input, done)
+			return
+		case <-startupExpired:
+			// The original projection deadline cannot be renewed into permission to wait indefinitely.
+			// Исходный срок проекции не продлевается в разрешение на бесконечное ожидание.
+			stop, stopCancel := context.WithTimeout(context.WithoutCancel(parent), runtime.config.RequestTimeout)
+			stopErr := runtime.turns.StopTurn(stop, input.LeaseRef)
+			stopCancel()
+			if stopErr != nil {
+				runtime.closeRevokedTurn(parent, input, done)
+				return
+			}
+			runtime.completeFailure(context.WithoutCancel(parent), input, "RUNTIME_STARTUP_TIMEOUT", "STARTUP_DEADLINE_EXCEEDED")
 			return
 		case <-renew.C:
 			select {
@@ -520,6 +559,13 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 			request, cancelRequest := leaseBoundedRequest(execution, runtime.config.RequestTimeout, confirmedUntil)
 			observation, err := runtime.turns.ObserveTurnPod(request, input, warmExecution)
 			cancelRequest()
+			if err == nil && observation.State == "READY" && startupExpired != nil {
+				startup.Stop()
+				startupExpired = nil
+				started, startedCancel := leaseBoundedRequest(execution, runtime.config.RequestTimeout, confirmedUntil)
+				_ = runtime.progress(started, input, "WORKLOAD_SCHEDULED")
+				startedCancel()
+			}
 			if err != nil || !terminalTurnState(observation.State) {
 				terminalObservedAt = time.Time{}
 				terminalDiagnostic = ""

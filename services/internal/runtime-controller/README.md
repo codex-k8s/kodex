@@ -4,8 +4,8 @@ title: runtime-controller
 type: service
 status: approved
 owner: developer
-version: 3.3.0
-updated: 2026-10-07
+version: 3.4.0
+updated: 2026-11-09
 ---
 
 # runtime-controller
@@ -13,6 +13,15 @@ updated: 2026-10-07
 `runtime-controller` материализует server-owned execution attempts в
 Kubernetes. Он не владеет Project, Agent, Session, Turn, Run lifecycle,
 Human Gate, integration grant или terminal result.
+
+## Ресурсная очередь
+
+`RUNTIME_CONTROLLER_RESOURCE_AWARE_QUEUE=true` проверяет requests свободных узлов
+до owner claim и размещения credentials. Ожидающая работа остаётся в PostgreSQL,
+а интерфейс получает серверную причину очереди. `false` сохраняет прежний режим.
+Kubernetes остаётся окончательным планировщиком; исходный срок credential
+проекции ограничивает startup Pod. Полная матрица, настройки и порядок обновления:
+[ресурсный допуск runtime](../../../docs/operations/runtime-resource-queue-2079.md).
 
 ## Кто запускает агентов
 

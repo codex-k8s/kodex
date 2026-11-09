@@ -230,7 +230,7 @@ func callbackRecoveryFixture() (runtimecontract.RunnerInput, *leaseRecoveryClien
 func TestTrackRecoveryDoesNotDeleteSuccessfulCallback(t *testing.T) {
 	input, client, turns, runtime, done := callbackRecoveryFixture()
 	runtime.config.RequestTimeout, runtime.config.LeaseRenewInterval, runtime.inspectInterval = 100*time.Millisecond, time.Millisecond, time.Hour
-	runtime.track(t.Context(), input, done, false, time.Now().Add(time.Second))
+	runtime.track(t.Context(), input, done, false, time.Now().Add(time.Second), time.Time{})
 	if client.calls.Load() != 2 || turns.stops.Load() != 0 || turns.deletions.Load() != 0 || client.count() != 0 || len(runtime.capacity) != 0 {
 		t.Fatal("transient RPC deleted callback material or produced synthetic completion")
 	}
@@ -248,7 +248,7 @@ func TestTrackExpiryStopsWithoutWaitingForRenewTicker(t *testing.T) {
 	turns := &turnLifecycleStub{}
 	runtime := trackingRuntime(client, turns, coordinator)
 	runtime.inspectInterval = time.Hour
-	runtime.track(t.Context(), input, done, false, time.Now().Add(10*time.Millisecond))
+	runtime.track(t.Context(), input, done, false, time.Now().Add(10*time.Millisecond), time.Time{})
 	if turns.stops.Load() != 1 || turns.deletions.Load() != 1 || client.count() != 0 {
 		t.Fatal("expiry waited for periodic renew or fabricated owner completion")
 	}

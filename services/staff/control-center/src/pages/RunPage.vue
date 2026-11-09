@@ -88,6 +88,7 @@ import PageFrame from "@/shared/ui/PageFrame.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
+import { runtimeQueueMessage } from "@/shared/ui/runtime-queue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 const verifiedBundleManifests = ref<Record<string, number>>({});
 function requiresBundleManifest(gate: OwnerGate): boolean {
@@ -160,8 +161,10 @@ function safeRuntimeText(
   return presentRuntimeText(value, serverMessage, messageKind);
 }
 
+const queueMessage = computed(() => runtimeQueueMessage(run.value));
 const runSubtitle = computed(
   () =>
+    safeRuntimeText(queueMessage.value) ??
     safeRuntimeText(run.value?.currentActivity) ??
     run.value?.target.displayName,
 );
@@ -924,7 +927,12 @@ onBeforeUnmount(() => {
       ><div v-if="run" class="run-statuses">
         <span>
           <small>{{ $t("common.status") }}</small>
-          <StatusBadge v-if="lifecycleState" :state="lifecycleState" />
+          <StatusBadge
+            v-if="lifecycleState"
+            :state="lifecycleState"
+            :label="queueMessage ? $t('states.QUEUED') : undefined"
+            :tone="queueMessage ? 'warning' : undefined"
+          />
         </span>
         <span v-if="resultOutcomeState">
           <small>{{ $t("common.result") }}</small>
@@ -1045,7 +1053,11 @@ onBeforeUnmount(() => {
               <strong :title="run.target.displayName">{{
                 run.target.displayName
               }}</strong>
-              <StatusBadge :state="run.state" />
+              <StatusBadge
+                :state="run.state"
+                :label="queueMessage ? $t('states.QUEUED') : undefined"
+                :tone="queueMessage ? 'warning' : undefined"
+              />
               <button
                 type="button"
                 class="run-canvas-summary__toggle icon-button"

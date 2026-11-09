@@ -3213,6 +3213,10 @@ export type Run = ({
     projectRef?: OpaqueRef;
     assistantPin?: AssistantRunPin;
     sessionReadiness?: RunSessionReadiness;
+    /**
+     * Серверная причина ожидания до claim; отсутствует после допуска и в terminal.
+     */
+    readonly queueReason?: 'WAITING_RESOURCES' | 'REQUEST_EXCEEDS_CAPACITY';
     sessionRef: OpaqueRef;
     rootRunRef: OpaqueRef;
     parentRunRef?: OpaqueRef;
@@ -4998,6 +5002,80 @@ export type ProviderFinancialOverview = {
     validUntil: string;
 };
 
+export type RunWritable = ({
+    target?: {
+        type?: 'AGENT' | 'WORKFLOW';
+    };
+} | {
+    source?: 'SYSTEM_ASSISTANT';
+    target?: {
+        type?: 'SYSTEM_ASSISTANT';
+    };
+}) & {
+    ref: OpaqueRef;
+    version: number;
+    projectRef?: OpaqueRef;
+    assistantPin?: AssistantRunPin;
+    sessionReadiness?: RunSessionReadiness;
+    sessionRef: OpaqueRef;
+    rootRunRef: OpaqueRef;
+    parentRunRef?: OpaqueRef;
+    retryOfRunRef?: OpaqueRef;
+    target: RunTarget;
+    title: string;
+    titleSource: 'SERVER_DEFAULT' | 'AGENT_PROPOSED' | 'USER_EDITED';
+    activitySummary: string;
+    inputSummary?: string;
+    state: 'QUEUED' | 'RUNNING' | 'WAITING_HUMAN' | 'CANCELLING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
+    source: 'CONTROL_CENTER' | 'SYSTEM_ASSISTANT' | 'SCHEDULE' | 'INTEGRATION' | 'AGENT_DELEGATION' | 'MATTERMOST';
+    initiator: UserSummary;
+    attempt: number;
+    graphRevision: number;
+    lastEventSequence: number;
+    currentActivity?: string;
+    resultSummary?: string;
+    safeErrorCode?: string;
+    safeErrorMessage?: string;
+    usage: TokenUsage;
+    inputAttachmentSetRef?: OpaqueRef;
+    artifactRefs: Array<OpaqueRef>;
+    gateRefs: Array<OpaqueRef>;
+    createdAt: Timestamp;
+    startedAt?: Timestamp;
+    finishedAt?: Timestamp;
+    nextActions: Array<NextAction>;
+    incidents?: Array<Incident>;
+};
+
+export type RunWorkspaceWritable = {
+    run: RunWritable;
+    graph: RunGraph;
+};
+
+export type RunPageWritable = {
+    items: Array<RunWritable>;
+    total: number;
+    nextPageToken?: string;
+};
+
+export type GateResolutionReceiptWritable = {
+    gate: OwnerGate;
+    run: RunWritable;
+    graph: RunGraph;
+};
+
+export type ScheduleRunOccurrenceWritable = {
+    scheduleRef: OpaqueRef;
+    scheduleRevisionRef: OpaqueRef;
+    scheduleRevision: number;
+    run: RunWritable;
+};
+
+export type ScheduleRunOccurrencePageWritable = {
+    items: Array<ScheduleRunOccurrenceWritable>;
+    nextPageToken: string;
+};
+
 export type EmailMailboxCredentialInputWritable = {
     kind: EmailMailboxCredentialKind;
     /**
@@ -5013,6 +5091,16 @@ export type PersonalIntegrationCredentialConfigureInputWritable = {
 
 export type PersonalIntegrationCredentialRevokeInputWritable = {
     [key: string]: never;
+};
+
+export type OverviewWritable = {
+    projectCount: number;
+    agentCount: number;
+    activeRunCount: number;
+    pendingGateCount: number;
+    activeRuns: Array<RunWritable>;
+    pendingGates: Array<OwnerGate>;
+    recentArtifacts: Array<Artifact>;
 };
 
 /**

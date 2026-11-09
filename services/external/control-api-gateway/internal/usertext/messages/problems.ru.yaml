@@ -1,3 +1,11 @@
+RUNTIME_WAITING_CAPACITY:
+  other: "В очереди: ожидает свободных ресурсов. Запуск начнётся автоматически."
+RUNTIME_REQUEST_EXCEEDS_CAPACITY:
+  other: "В очереди: запрос ресурсов превышает ёмкость любого доступного узла. Измените окружение или добавьте ресурсы."
+WORKLOAD_STARTING:
+  other: "Подготовка исполнителя"
+RUNTIME_STARTUP_TIMEOUT:
+  other: "Исполнитель не успел подготовиться. Запуск остановлен без автоматического повтора."
 AUTOMATION_VARIABLE_NAME:
   other: Название Автоматизации
 PROJECT_ASSISTANT_ROLE:

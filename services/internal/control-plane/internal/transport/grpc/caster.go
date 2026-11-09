@@ -672,6 +672,9 @@ func usageFromProto(value *controlplanev1.TokenUsage) entity.TokenUsage {
 // castRun отображает происхождение запуска, сессии, корня и повтора, потребление, инциденты, ссылки вложений и шлюзов, готовность и необязательную привязку помощника из авторизованного снимка; происхождение не создаёт и исполнение не меняет.
 func castRun(value entity.Run) *controlplanev1.Run {
 	result := &controlplanev1.Run{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, SessionRef: value.SessionRef, RootRunRef: value.RootRunRef, ParentRunRef: value.ParentRunRef, RetryOfRunRef: value.RetryOfRunRef, Target: castRunTarget(value.Target), Title: value.Title, TitleSource: value.TitleSource, ActivitySummary: value.ActivitySummary, InputSummary: value.Task, State: runState(value.State), Source: runSource(value.Source), Initiator: &controlplanev1.UserSummary{DisplayName: value.InitiatorName}, Attempt: value.Attempt, GraphRevision: value.GraphRevision, LastEventSequence: value.EventSequence, ResultSummary: value.ResultSummary, SafeErrorCode: value.SafeErrorCode, SafeErrorMessage: value.SafeErrorMessage, Usage: castTokenUsage(value.Usage), InputAttachmentSetRef: value.InputAttachmentSetRef, ArtifactRefs: value.ArtifactRefs, GateRefs: value.GateRefs, CreatedAt: timestamp(value.CreatedAt), StartedAt: optionalTimestamp(value.StartedAt), FinishedAt: optionalTimestamp(value.FinishedAt), NextActions: nextActions(value.NextActions)}
+	if (value.State == "QUEUED" || value.State == "RUNNING") && (value.QueueReason == "WAITING_RESOURCES" || value.QueueReason == "REQUEST_EXCEEDS_CAPACITY") {
+		result.QueueReason = &value.QueueReason
+	}
 	for _, incident := range value.Incidents {
 		result.Incidents = append(result.Incidents, castIncident(incident))
 	}

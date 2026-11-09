@@ -417,6 +417,8 @@ func toolCapabilityMatches(tool, capability string, integration, configurationAs
 // и Secret descriptors являются внутренними candidate data, не источниками permission или secret
 // values; до claim output выполняются свежие eligibility и materialization.
 type claimableExecution struct {
+	schedulingFits, schedulingPossible bool
+
 	nodeID, nodeRef, runID, runRef, rootRunID, projectID, projectRef                             string
 	initiatorRef, initiatorName, organizationRef, organizationName, projectName                  string
 	sessionID, sessionRef, task, source, workflowRef, automationRef, workflowStepKey             string
@@ -488,6 +490,10 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 	if !ok || payload.WorkloadInstance == "" || payload.Limit < 1 || payload.Limit > 32 {
 		return commandOutcome{}, errs.ErrInvalid
 	}
+	capacityJSON, err := runtimeCapacityJSON(payload.SchedulingCapacity, payload.Limit, time.Now())
+	if err != nil {
+		return commandOutcome{}, err
+	}
 	expired, err := repository.expireRuntimeClaimLeases(ctx, tx, scope, input)
 	if err != nil {
 		return commandOutcome{}, err
@@ -507,9 +513,14 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 	}
 	terminalStorage = append(terminalStorage, deadlineFailures...)
 	readinessChanged := false
+	capacityWaitingChanged := false
+	queryLimit := payload.Limit
+	if payload.SchedulingCapacity != nil {
+		queryLimit = 16
+	}
 	rows, err := tx.Query(ctx, queryRuntimeClaimExecutionSelectClaimableAgentExecutions,
-		scope.organizationID, payload.Limit, repository.roleImages.RoleRuntimeContractRevision,
-		repository.roleImages.RoleRuntimeContractSHA256, repository.roleImages.WorkspaceStorageProfile)
+		scope.organizationID, queryLimit, repository.roleImages.RoleRuntimeContractRevision,
+		repository.roleImages.RoleRuntimeContractSHA256, repository.roleImages.WorkspaceStorageProfile, capacityJSON)
 	if err != nil {
 		return commandOutcome{}, fmt.Errorf("select claimable executions: %v: %w", err, errs.ErrUnavailable)
 	}
@@ -549,7 +560,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			&candidate.rawEnvironmentValues, &candidate.rawSecretProjections, &candidate.rawEnvironmentTools,
 			&candidate.rawResourcePolicy, &candidate.rawVolumePolicy, &candidate.rawNetworkPolicy, &candidate.rawKubernetesAccessProfile,
 			&candidate.resourcesDigest, &candidate.volumesDigest, &candidate.networkDigest, &candidate.rbacDigest,
-			&candidate.codexSessionID); err != nil {
+			&candidate.codexSessionID, &candidate.schedulingFits, &candidate.schedulingPossible); err != nil {
 			return commandOutcome{}, fmt.Errorf("scan claimable execution: %v: %w", err, errs.ErrUnavailable)
 		}
 		claimable = append(claimable, candidate)
@@ -589,7 +600,33 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 	}
 	claimedRoots := make(map[string]string)
 	for _, candidate := range claimable {
+		if len(items) >= int(payload.Limit) {
+			break
+		}
 		if failedRoots[candidate.rootRunID] {
+			continue
+		}
+		if !candidate.schedulingFits {
+			reason := "i18n:RUNTIME_WAITING_CAPACITY"
+			queueReason := "WAITING_RESOURCES"
+			if !candidate.schedulingPossible {
+				reason = "i18n:RUNTIME_REQUEST_EXCEEDS_CAPACITY"
+				queueReason = "REQUEST_EXCEEDS_CAPACITY"
+			}
+			var changed bool
+			var queueRunState string
+			if err := tx.QueryRow(ctx, queryRuntimeCapacityWait, pgx.StrictNamedArgs{"organization_id": scope.organizationID, "node_id": candidate.nodeID, "reason": reason, "queue_reason": queueReason}).Scan(&changed, &queueRunState); err != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			if changed {
+				if _, err := repository.emitRunEvent(ctx, tx, scope, candidate.projectID, candidate.rootRunID, candidate.nodeRef, "NODE_STATE_CHANGED", candidate.nodeRef, "", "", "", reason, queueRunState, "QUEUED"); err != nil {
+					return commandOutcome{}, err
+				}
+				capacityWaitingChanged = true
+				if firstRunRef == "" {
+					firstProjectID, firstProjectRef, firstRunRef = candidate.projectID, candidate.projectRef, candidate.runRef
+				}
+			}
 			continue
 		}
 		admitted, err := admitServerWorkflowClaimTx(ctx, tx, scope, candidate.rootRunID)
@@ -1222,7 +1259,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 	if firstRunRef == "" && expired {
 		firstRunRef = scope.organizationRef
 	}
-	return commandOutcome{result: command.Result{RuntimeItems: items}, projectID: firstProjectID, projectRef: firstProjectRef, resourceKind: "RUNTIME_CLAIM", resourceRef: firstRunRef, summary: "i18n:RUNTIME_WORK_CLAIMS_MATERIALIZED", runtimeGraphChanged: expired || len(failedRoots) > 0, runtimeReadinessChanged: readinessChanged}, nil
+	return commandOutcome{result: command.Result{RuntimeItems: items}, projectID: firstProjectID, projectRef: firstProjectRef, resourceKind: "RUNTIME_CLAIM", resourceRef: firstRunRef, summary: "i18n:RUNTIME_WORK_CLAIMS_MATERIALIZED", runtimeGraphChanged: expired || len(failedRoots) > 0 || capacityWaitingChanged, runtimeReadinessChanged: readinessChanged}, nil
 }
 
 // commitProviderCredentialRefresh requires a live lease and exact previous credential ref/hash,

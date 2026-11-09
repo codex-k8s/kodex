@@ -846,6 +846,7 @@ type AssistantRunPin struct {
 // assistant/readiness views. Текст и изменяемые коллекции форма автоматически не скрывает, не
 // замораживает и не авторизует.
 type Run struct {
+	QueueReason                                                          string
 	Ref, ProjectRef, SessionRef, RootRunRef, ParentRunRef, RetryOfRunRef string
 	InputAttachmentSetRef                                                string
 	Title, Task, State, Source, ResultSummary, SafeErrorCode             string

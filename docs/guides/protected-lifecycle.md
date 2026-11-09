@@ -4,11 +4,19 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.69
+version: 1.1.70
 updated: 2026-11-08
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Ресурсное ожидание до claim не создаёт RuntimeRevision, lease либо проекцию
+credentials. Очередь остаётся у владельца, а не в памяти controller; root без
+активных execution nodes может вернуться в QUEUED. Допуск заново проверяет обычные
+grants/initiator/session/account и создаёт единственный свежий execution.
+Исходный срок credentials ограничивает подготовку Pod и не продлевается renewal
+аренды. Матрица и границы наблюдения Kubernetes:
+[#2079](../operations/runtime-resource-queue-2079.md).
 
 Owner-команды рецепта и запись допуска образа повторяют целую SERIALIZABLE
 транзакцию только после известного abort и завершённого rollback. Каждая попытка

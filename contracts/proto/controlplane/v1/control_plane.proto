@@ -1179,6 +1179,9 @@ message Run {
   AssistantRunPin assistant_pin = 33;
   // Текущий авторитетный read-only snapshot session gates, только GetRun.
   RunSessionReadiness session_readiness = 34;
+  // Только owner задаёт WAITING_RESOURCES или REQUEST_EXCEEDS_CAPACITY до claim.
+  // Пустая строка означает отсутствие ресурсного ожидания.
+  optional string queue_reason = 35;
 }
 
 // WorkflowAcceptedResult — доказательство, принятое владельцем, а не заявление модели.
@@ -4217,9 +4220,35 @@ message WorkLease {
   google.protobuf.Timestamp expires_at = 4;
 }
 
+// RuntimeNodeCapacity содержит только свободные requests одного пригодного узла.
+// Имена узлов и содержимое Pod не покидают Kubernetes adapter.
+message RuntimeNodeCapacity {
+  // CPU в millicores, память/диск в байтах; отрицательные значения запрещены.
+  int64 cpu_milli = 1;
+  int64 memory_bytes = 2;
+  int64 ephemeral_storage_bytes = 3;
+  int64 pod_slots = 4;
+  // Полная ёмкость пригодного узла позволяет отличить ожидание от слишком большого запроса.
+  int64 total_cpu_milli = 5;
+  int64 total_memory_bytes = 6;
+  int64 total_ephemeral_storage_bytes = 7;
+  int64 total_pod_slots = 8;
+}
+
+// RuntimeSchedulingCapacity — ограниченное наблюдение планировщика, не authority.
+// Отсутствие сохраняет legacy claim. Пустой nodes означает отсутствие ёмкости.
+message RuntimeSchedulingCapacity {
+  google.protobuf.Timestamp observed_at = 1;
+  repeated RuntimeNodeCapacity nodes = 2;
+  // Requests служебных контейнеров добавляются к политике окружения.
+  RuntimeNodeCapacity overhead = 3;
+}
+
 message ClaimExecutionRequest {
   string workload_instance = 1;
   int32 limit = 2;
+  // Новый controller передаёт свежий снимок и запрашивает ровно один claim.
+  RuntimeSchedulingCapacity scheduling_capacity = 3;
 }
 message ClaimedExecution {
   Run run = 1;

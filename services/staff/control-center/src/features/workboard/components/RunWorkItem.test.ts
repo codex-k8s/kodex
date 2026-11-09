@@ -372,3 +372,20 @@ describe("RunWorkItem", () => {
     expect(source).toContain("run-work-item__aside");
   });
 });
+
+describe("очередь в списке запусков", () => {
+  it("показывает причину и статус до начала выполнения", async () => {
+    const html = await render(
+      fixture({ state: "QUEUED", queueReason: "WAITING_RESOURCES" }),
+    );
+    expect(html).toContain("В очереди");
+    expect(html).toContain("Запуск начнётся автоматически");
+    expect(html).not.toContain("WAITING_RESOURCES");
+  });
+  it("не сохраняет ожидание после отмены", async () => {
+    const html = await render(
+      fixture({ state: "CANCELLED", queueReason: "WAITING_RESOURCES" }),
+    );
+    expect(html).not.toContain("Запуск начнётся автоматически");
+  });
+});

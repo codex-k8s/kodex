@@ -3,6 +3,11 @@ package platform
 import _ "embed"
 
 var (
+	// queryRuntimeCapacityWait records a changed queue reason without minting execution authority.
+	// queryRuntimeCapacityWait записывает изменённую причину ожидания без выпуска полномочий исполнения.
+	//go:embed sql/runtime_capacity_wait.sql
+	queryRuntimeCapacityWait string
+
 	// queryRuntimeClaimexecutionExpireStaleLeases embeds tenant-scoped expiry of overdue CLAIMED leases and requeues their nodes only while run and root remain active, returning expired lease/run references; grant revocation and events require the owner transaction.
 	// queryRuntimeClaimexecutionExpireStaleLeases содержит истечение просроченных CLAIMED аренд организации и возврат узлов в очередь лишь при активных запуске и корне с возвратом ссылок аренд и запусков; отзыв разрешений и события обеспечивает транзакция владельца.
 	//go:embed sql/runtime_claimexecution_expire_stale_leases.sql
