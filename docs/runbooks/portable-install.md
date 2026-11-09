@@ -4,11 +4,21 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.5.7
-updated: 2026-11-08
+version: 1.5.8
+updated: 2026-11-09
 ---
 
 # Опциональный профиль внешней инфраструктуры
+
+## Compiler stages вспомогательных образов
+
+Release preflight проверяет закреплённую Go toolchain во всех `Dockerfile` и
+`*.Dockerfile` под `services/` и `infra/`. В покрытие входит
+`infra/admission-tools/Dockerfile`: canonical builder собирает этот helper до
+основного списка компонентов. Его compiler должен соответствовать Go floor
+модулей; `GOTOOLCHAIN=local` и проверка фактической версии сохраняются.
+Проверка: `scripts/tests/go-toolchain-contract-test.sh`; synthetic regression
+проверяет также отклонение устаревшего helper compiler до запуска Docker.
 
 Для замены images при прежних schema heads предусмотрен отдельный opt-in
 `kodex.bootstrap-upgrade/v2` с `SAME_SCHEMA_IMAGES`. Он сохраняет все пять

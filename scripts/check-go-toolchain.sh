@@ -36,6 +36,7 @@ while IFS= read -r dockerfile; do
     fail "GOTOOLCHAIN is not fixed in ${dockerfile#"$repository_root"/}"
   [[ "$(rg -c -F 'RUN test "$(go env GOVERSION)" = "go1.26.10"' "$dockerfile")" == "${#go_stages[@]}" ]] ||
     fail "builder does not verify its Go version in ${dockerfile#"$repository_root"/}"
-done < <(find "$repository_root/services" -name Dockerfile -type f -print | sort)
+done < <(find "$repository_root/services" "$repository_root/infra" -type f \
+  \( -name Dockerfile -o -name '*.Dockerfile' \) -print | sort)
 
 printf 'Go toolchain check passed: go%s\n' "$expected_version"
