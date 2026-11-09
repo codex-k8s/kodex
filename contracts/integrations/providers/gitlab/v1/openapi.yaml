@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: 'GitLab Self-Managed: ограниченный REST API v4'
-  version: 1.1.0
+  version: 1.2.0
   description: Самостоятельно описанный subset по официальным docs/source v19.2.9.
     Только необходимые поля и операции; это не официальный полный OpenAPI и не grant.
 servers:
@@ -15,6 +15,7 @@ x-provenance:
   sources:
   - https://github.com/gitlabhq/gitlabhq/blob/v19.2.9/doc/api/personal_access_tokens.md
   - https://github.com/gitlabhq/gitlabhq/blob/v19.2.9/doc/api/projects.md
+  - https://github.com/gitlabhq/gitlabhq/blob/v19.2.9/doc/api/groups.md
   - https://github.com/gitlabhq/gitlabhq/blob/v19.2.9/doc/api/protected_branches.md
   - https://github.com/gitlabhq/gitlabhq/blob/v19.2.9/lib/api/issues.rb
   - https://github.com/gitlabhq/gitlabhq/blob/v19.2.9/lib/api/branches.rb
@@ -434,6 +435,13 @@ components:
       - target_branch
       - title
       additionalProperties: false
+    GroupIdentity:
+      type: object
+      required: [id, full_path]
+      properties:
+        id: {type: integer, format: int64, minimum: 1}
+        full_path: {type: string, minLength: 1, maxLength: 255}
+      additionalProperties: true
   parameters:
     Project:
       name: project
@@ -1004,3 +1012,24 @@ paths:
               schema:
                 type: object
                 additionalProperties: true
+  /groups/{group}:
+    get:
+      operationId: gitlab.permission.group.read
+      description: Только canonical identity группы; репозитории читаются отдельным пагинируемым инструментом.
+      parameters:
+      - name: group
+        in: path
+        required: true
+        schema: {type: string, minLength: 1, maxLength: 255}
+      - name: with_projects
+        in: query
+        required: true
+        schema: {type: boolean, enum: [false]}
+      responses:
+        '200':
+          description: Canonical identity без вложенного каталога проектов
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GroupIdentity'}
+        default:
+          description: Отказ провайдера; credentials и сырые ответы не возвращаются модельному tool.

@@ -645,7 +645,8 @@ readback принимает только эквивалентные пустые
 ### Адресная замена immutable bootstrap image
 
 В рамках #1977 доступен **опциональный** профиль stateless компонента
-`egress-gateway`, `registry-pull-authorizer` либо `control-plane`. По умолчанию он отсутствует; bundled/external identity и TLS
+`egress-gateway`, `registry-pull-authorizer`, `control-plane` либо
+`integration-gateway`. По умолчанию он отсутствует; bundled/external identity и TLS
 выбираются независимо. Stateful компоненты, миграции, RoleImage, admission policy,
 authority history и credentials этот профиль не меняет. Это продолжение частичного
 bootstrap, а не квалификация полного нового релиза или общий production upgrade.

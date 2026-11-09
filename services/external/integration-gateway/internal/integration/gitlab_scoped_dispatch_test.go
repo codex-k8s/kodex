@@ -134,3 +134,56 @@ func TestGitLabScopedInvocationFailureBeforeMutation(t *testing.T) {
 		})
 	}
 }
+
+// TestGitLabLargeGroupHealthReadsIdentityOnly keeps personal verification bounded when a provider embeds a large project catalog by default.
+// TestGitLabLargeGroupHealthReadsIdentityOnly сохраняет ограниченную личную проверку, когда провайдер по умолчанию вкладывает большой каталог проектов.
+func TestGitLabLargeGroupHealthReadsIdentityOnly(t *testing.T) {
+	for _, ignoresProjection := range []bool{false, true} {
+		t.Run(map[bool]string{false: "metadata-only", true: "oversized-response-rejected"}[ignoresProjection], func(t *testing.T) {
+			adapter := testAdapter(t)
+			request := scopedGitLabTestRequest(t, adapter, "gitlab.scope.health.read", map[string]string{
+				"base_url": "https://git.example.invalid", "scope_kind": "GROUP", "group_path": "team/sample",
+			}, map[string]any{})
+			request.Credential = testCredential(t, adapter, "synthetic-gitlab-personal-key")
+			request.CapabilityKey, request.Operation, request.GrantRef, request.GrantVersion = "", "", "", 0
+			validateWire := gitLabWireValidator(t, request)
+			groupCalls, identityCalls := 0, 0
+			adapter.nativeHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				if r.Method != http.MethodGet || r.URL.Host != "git.example.invalid" || r.Header.Get("Authorization") != "Bearer synthetic-gitlab-personal-key" {
+					t.Fatal("group identity lookup crossed its read-only transport boundary")
+				}
+				body := ""
+				switch r.URL.Path {
+				case "/api/v4/groups/team/sample":
+					groupCalls++
+					body = `{"id":10,"full_path":"team/sample"}`
+					if ignoresProjection || r.URL.Query().Get("with_projects") != "false" {
+						body = `{"id":10,"full_path":"team/sample","projects":[{"description":"` + strings.Repeat("x", maximumResponseBytes+1) + `"}]}`
+					}
+				case "/api/v4/user":
+					identityCalls++
+					body = `{"id":7,"state":"active"}`
+				default:
+					t.Fatal("group health requested project content or an unknown endpoint")
+				}
+				response := &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(body)), Request: r}
+				if !ignoresProjection && len(body) <= maximumResponseBytes {
+					validateWire(r, response)
+				}
+				return response, nil
+			})}
+			result, err := adapter.VerifyPersonalCredential(t.Context(), request)
+			if ignoresProjection {
+				var safe *SafeError
+				if !errors.As(err, &safe) || safe.Code != "INTEGRATION_RESPONSE_INVALID" || len(result.ConfirmedCapabilityKeys) != 0 || identityCalls != 0 {
+					t.Fatal("oversized group response bypassed the existing body limit", err)
+				}
+			} else if err != nil || !slices.Equal(result.ConfirmedCapabilityKeys, []string{"gitlab.scope.health.read"}) || identityCalls != 1 {
+				t.Fatal("large group failed its bounded identity-only health check", err)
+			}
+			if groupCalls != 1 {
+				t.Fatal("group health repeated the lookup or followed embedded projects")
+			}
+		})
+	}
+}
