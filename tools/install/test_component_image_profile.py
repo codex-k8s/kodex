@@ -70,6 +70,44 @@ class Tests(unittest.TestCase):
             else:bad.append(copy.deepcopy(bad[-1]))
             with self.subTest(change=change),self.assertRaises(Rejected):profile.transform(bad,configuration,digest)
 
+    def test_integration_gateway_profile_preserves_sidecars_configuration_and_other_images(self):
+        resources, original, _, lock_raw, _ = fixture()
+        lock = json.loads(lock_raw)
+        base = 'images.example.invalid/base/integration-gateway@sha256:' + 'c'*64
+        lock['images'].append({'component': 'integration-gateway', 'pull_ref': base})
+        lock_raw = json.dumps(lock).encode()
+        configuration = {**original, 'component': 'integration-gateway',
+            'base_release_lock_sha256': hashlib.sha256(lock_raw).hexdigest(),
+            'expected_image_ref': base,
+            'image_ref': 'images.example.invalid/fixed/integration-gateway@sha256:' + 'd'*64}
+        resources.append({'apiVersion': 'apps/v1', 'kind': 'Deployment',
+            'metadata': {'name': 'integration-gateway', 'namespace': 'kodex-system',
+                         'labels': {'app.kubernetes.io/part-of': 'kodex'}},
+            'spec': {'replicas': 3, 'template': {'spec': {'serviceAccountName': 'integration-gateway',
+                'containers': [{'name': 'integration-gateway', 'image': base,
+                                'env': [{'name': 'UNCHANGED', 'value': 'synthetic'}]},
+                               {'name': 'guard', 'image': 'images.example.invalid/guard@sha256:' + 'e'*64}],
+                'initContainers': [{'name': 'grant-agent', 'image': 'images.example.invalid/grant@sha256:' + 'f'*64}]}}}})
+        before = copy.deepcopy(resources)
+        digest = hashlib.sha256(json.dumps(configuration).encode()).hexdigest()
+        profile.validate(configuration, lock, hashlib.sha256(lock_raw).hexdigest())
+        after = profile.transform(resources, configuration, digest)
+        expected = copy.deepcopy(before)
+        expected[-1]['spec']['template']['spec']['containers'][0]['image'] = configuration['image_ref']
+        expected[-1]['spec']['template']['metadata'] = {'annotations': {
+            profile.SOURCE: configuration['source_sha'], profile.BASE: configuration['base_release_lock_sha256'],
+            profile.PROFILE: digest}}
+        self.assertEqual(resources, before)
+        self.assertEqual(after, expected)
+        for variant in ('namespace', 'container', 'foreign-image'):
+            changed = copy.deepcopy(resources)
+            target = changed[-1]
+            if variant == 'namespace': target['metadata']['namespace'] = 'other'
+            elif variant == 'container': target['spec']['template']['spec']['containers'][0]['name'] = 'other'
+            else: target['spec']['template']['spec']['containers'][0]['image'] = 'images.example.invalid/foreign@sha256:' + '1'*64
+            with self.subTest(variant=variant), self.assertRaises(Rejected):
+                profile.transform(changed, configuration, digest)
+
     def test_control_center_profile_changes_only_stateless_ui_image_and_provenance(self):
         resources,original,_,lock_raw,_=fixture();lock=json.loads(lock_raw)
         base='images.example.invalid/base/staff-control-center@sha256:'+'c'*64

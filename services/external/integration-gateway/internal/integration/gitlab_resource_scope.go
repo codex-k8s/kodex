@@ -89,7 +89,7 @@ func (adapter *Adapter) resolveGitLabScopedProject(ctx context.Context, request 
 // readGitLabScopedGroup resolves only the configured group through a fixed GET and rejects identity aliases, missing IDs and path changes.
 // readGitLabScopedGroup получает только настроенную группу фиксированным GET и отклоняет identity aliases, отсутствующие IDs и изменение пути.
 func (adapter *Adapter) readGitLabScopedGroup(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, scope integrationpackage.GitLabResourceScope) (gitLabScopedGroupMetadata, error) {
-	body, err := adapter.gitLabJSON(ctx, request, capability, configuration, http.MethodGet, "/api/v4/groups/"+url.PathEscape(scope.GroupPath), nil, nil, "")
+	body, err := adapter.gitLabJSON(ctx, request, capability, configuration, http.MethodGet, "/api/v4/groups/"+url.PathEscape(scope.GroupPath), url.Values{"with_projects": {"false"}}, nil, "")
 	if err != nil {
 		return gitLabScopedGroupMetadata{}, err
 	}

@@ -22,12 +22,12 @@ import (
 func TestGitLabProviderSubsetContract(t *testing.T) {
 	raw, document := documentedProviderContract(t, "gitlab")
 	inspection, err := integrationpackage.InspectOpenAPI(t.Context(), raw)
-	if err != nil || len(inspection.Operations) != 16 || len(document.Paths.Map()) != 14 {
+	if err != nil || len(inspection.Operations) != 17 || len(document.Paths.Map()) != 15 {
 		t.Fatal("GitLab subset coverage changed", err)
 	}
 	definition := legacyGitLabTestAdapter(t).definitions["gitlab"]
 	internal := map[string]bool{"gitlab.permission.version.read": true, "gitlab.permission.identity.read": true,
-		"gitlab.permission.token.self.read": true, "gitlab.permission.token.details.read": true, "gitlab.permission.branch_rules.read": true}
+		"gitlab.permission.token.self.read": true, "gitlab.permission.token.details.read": true, "gitlab.permission.branch_rules.read": true, "gitlab.permission.group.read": true}
 	for _, operation := range inspection.Operations {
 		_, exposed := definition.Capability(operation.ID)
 		if internal[operation.ID] {

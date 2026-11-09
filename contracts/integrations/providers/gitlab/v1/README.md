@@ -38,3 +38,9 @@ consumer требует полный exact author/project/payload/unique marker 
 readback. Пустой/неполный/изменённый ответ не разрешает повторный POST.
 Branch existence не доказывает creation provenance: auto-recovery branch
 не включён. Ошибка recovery READ сохраняет UNKNOWN на стороне owner.
+
+Subset 1.2.0 добавляет внутреннее чтение canonical identity группы с обязательным
+`with_projects=false`. Вложенный каталог проектов не запрашивается; project discovery
+сохраняет отдельную pagination. Проверены ограниченный ответ и закрытый отказ, если
+провайдер игнорирует параметр и превышает прежний HTTP body budget. Контракт
+`gitlab.permission.group.read` не является дополнительным модельным инструментом.
