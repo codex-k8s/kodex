@@ -127,7 +127,7 @@ class UpgradeTests(unittest.TestCase):
         with patch.object(upgrade, 'verify_schemas') as heads, patch.object(upgrade, 'schema_proof', return_value='f' * 64) as proof:
             result = upgrade.capture(state, target, old, receipt, 'e' * 64)
         heads.assert_called_once_with(state, target)
-        proof.assert_called_once_with(state, 'backup', upgrade.render_profile(target)[0]['to_schema_heads']['control-plane'])
+        proof.assert_called_once_with(state, upgrade.render_profile(target)[0]['schema_profile'], upgrade.render_profile(target)[0]['to_schema_heads']['control-plane'])
         return result
 
     def test_second_upgrade_preserves_completed033_jobs_and_requires034_catalog(self):
@@ -168,7 +168,8 @@ class UpgradeTests(unittest.TestCase):
         for version, prefix, validator in ((20261105000100, 'platform-oidc-identity-', 'validPlatformOIDCIdentity'),
                                            (20261106000100, 'personal-credentials-', 'validPersonalCredentials'),
                                            (20261107000100, 'jira-create-fields-', 'validJiraCreateFields'),
-                                           (20261108000100, 'authority-proof-counter-', 'validAuthorityProofCounter')):
+                                           (20261108000100, 'authority-proof-counter-', 'validAuthorityProofCounter'),
+                                           (20261109000100, 'integration-resource-policies-', 'validIntegrationResourcePolicies')):
             for mode in ('plain', 'backup'):
                 with self.subTest(version=version, mode=mode):
                     responses = [SimpleNamespace(returncode=0, stdout=b'{"synthetic":true}'), SimpleNamespace(returncode=0)]
@@ -182,7 +183,7 @@ class UpgradeTests(unittest.TestCase):
                                       [SimpleNamespace(returncode=0, stdout=b'{}'), SimpleNamespace(returncode=1)]):
                         with patch.object(upgrade.subprocess, 'run', side_effect=responses), self.assertRaises(Rejected):
                             upgrade.schema_proof(state, mode, version)
-        for mode, version in (('automatic', 20261106000100), ('plain', 20261109000100), ('backup', '20261106000100')):
+        for mode, version in (('automatic', 20261106000100), ('plain', 20261110000100), ('backup', '20261106000100')):
             with patch.object(upgrade.subprocess, 'run') as run, self.assertRaises(Rejected):
                 upgrade.schema_proof(state, mode, version)
             run.assert_not_called()
@@ -202,6 +203,25 @@ class UpgradeTests(unittest.TestCase):
         with patch.object(completion, 'verify_schemas'), patch.object(upgrade, 'schema_proof', return_value='f' * 64) as proof:
             upgrade.verify_apply(state, prepared, composite)
             proof.assert_called_once_with(state, 'backup', 20261107000100)
+
+    def test_exact036_to037_preserves_effects_and_checks_actual_schema_before_apply(self):
+        for mode in ('plain','backup'):
+            with self.subTest(mode=mode):
+                old,target,before,after,profile=fixture(20261108000100,20261109000100)
+                profile['schema_profile']=mode
+                previous=State(old);controller_defaults(previous)
+                with patch.object(completion,'verify_schemas'):
+                    receipt=completion.capture(previous,old)
+                prepared=upgrade.prepare(before,after,profile)
+                state=UpgradeState(prepared,previous)
+                composite=self.capture(state,prepared,old,receipt)
+                for name in upgrade.PRESERVED:self.assertEqual(completion.desired_jobs(prepared)[name],completion.desired_jobs(old)[name])
+                with patch.object(completion,'verify_schemas'),patch.object(upgrade,'schema_proof',return_value='f'*64) as proof:
+                    result=upgrade.verify_apply(state,prepared,composite)
+                    self.assertEqual(result['status'],'FORWARD_UPGRADE_APPLY_VERIFIED')
+                    proof.assert_called_once_with(state,mode,20261109000100)
+                with patch.object(completion,'verify_schemas'),patch.object(upgrade,'schema_proof',side_effect=Rejected('SYNTHETIC_SCHEMA_FAILURE')):
+                    with self.assertRaises(Rejected):upgrade.verify_apply(state,prepared,composite)
 
     def test_prepare_keeps_four_effects_and_changes_no_other_resources(self):
         old, target, before, after, profile = fixture()

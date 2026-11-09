@@ -32,6 +32,28 @@ func testIntegrationResourcePolicyQualification(t *testing.T, backup bool) {
 		profile += "-backup"
 	}
 	readControlPlaneMigrationProof(t, ctx, observer, profile, "precondition")
+	if backup {
+		// Исторический backup bootstrap мог заранее выдать SELECT этим existing tables.
+		if _, err := observer.Exec(ctx, "SET ROLE control_plane_owner; GRANT SELECT ON control_plane.integration_grants,control_plane.integration_approval_scopes TO kodex_backup_reader; RESET ROLE"); err != nil {
+			t.Fatal(err)
+		}
+		readControlPlaneMigrationProof(t, ctx, observer, profile, "precondition")
+		for _, statement := range []string{
+			"SET ROLE control_plane_owner; REVOKE SELECT ON control_plane.integration_approval_scopes FROM kodex_backup_reader RESTRICT; RESET ROLE",
+			"SET ROLE control_plane_owner; GRANT SELECT,UPDATE ON control_plane.integration_approval_scopes TO kodex_backup_reader; RESET ROLE",
+			"SET ROLE control_plane_owner; REVOKE UPDATE ON control_plane.integration_approval_scopes FROM kodex_backup_reader RESTRICT; GRANT SELECT ON control_plane.integration_approval_scopes TO kodex_backup_reader WITH GRANT OPTION; RESET ROLE",
+		} {
+			if _, err := observer.Exec(ctx, statement); err != nil {
+				t.Fatal(err)
+			}
+			assertResourcePolicyPredecessorRejected(t, ctx, observer, profile)
+		}
+		if _, err := observer.Exec(ctx, "SET ROLE control_plane_owner; REVOKE SELECT,UPDATE ON control_plane.integration_approval_scopes FROM kodex_backup_reader RESTRICT; REVOKE SELECT ON control_plane.integration_grants FROM kodex_backup_reader RESTRICT; RESET ROLE"); err != nil {
+			t.Fatal(err)
+		}
+		readControlPlaneMigrationProof(t, ctx, observer, profile, "precondition")
+	}
+
 	if err := goose.UpToContext(ctx, database, "migrations", 20261109000100); err != nil {
 		t.Fatal("apply resource policy037", err)
 	}
@@ -175,4 +197,20 @@ func TestIntegrationResourcePolicyMigration(t *testing.T) {
 // TestIntegrationResourcePolicyFreshInstall квалифицирует normal fresh-install profile без подмены backup ACL profile.
 func TestIntegrationResourcePolicyFreshInstall(t *testing.T) {
 	testIntegrationResourcePolicyQualification(t, false)
+}
+
+// assertResourcePolicyPredecessorRejected requires a closed catalog rejection and rolls back only the read-only proof; caller's synthetic ACL setup remains explicit.
+// assertResourcePolicyPredecessorRejected требует закрытый catalog rejection и откатывает лишь read-only proof; synthetic ACL setup остаётся явным у caller.
+func assertResourcePolicyPredecessorRejected(t *testing.T, ctx context.Context, observer *pgx.Conn, profile string) {
+	t.Helper()
+	raw, err := os.ReadFile("../../../../../tools/release/" + profile + "-migration-precondition.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, proofErr := observer.PgConn().Exec(ctx, string(raw)).ReadAll()
+	_, rollbackErr := observer.Exec(ctx, "ROLLBACK")
+	var rejected *pgconn.PgError
+	if !errors.As(proofErr, &rejected) || rejected.Code != "P0001" || rollbackErr != nil {
+		t.Fatal("predecessor accepted partial SELECT or backup WRITE/grant option", proofErr, rollbackErr)
+	}
 }

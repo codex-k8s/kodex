@@ -1237,3 +1237,26 @@ Composite bootstrap completion receipt передаётся во все влож
 вызовы. После штатного TTL старые completed bootstrap Jobs могут отсутствовать:
 точные исторические эффекты и актуальная schema подтверждаются квитанцией.
 Заключительная проверка не должна терять её или повторно создавать bootstrap.
+
+
+### Переход036→037 и backup reader
+
+Штатный forward upgrade регистрирует037 (`20261109000100`) отдельно для
+`plain` и `backup`; применять SQL вручную вместо operator lifecycle не нужно.
+Должны совпасть exact source/render/schema pins, сохранённые bootstrap effects,
+реальный завершённый migration Job/Pod и полный native schema proof.
+
+Predecessor backup profile037 поддерживает два полных036 каталога:
+исторический restore с9SELECT grants и bootstrap-вариант, в котором backup
+reader уже получил SELECT на `integration_grants` и `integration_approval_scopes`.
+Во втором случае добавлены только две owner-issued nongrantable SELECT;
+все остальные owner/ACL/columns/functions/triggers/purge pins совпадают.
+Частичный вариант, WRITE, grant option или другой grantor не принимаются.
+Normal и post037 profiles сохраняют собственные exact catalogs. Проверка
+не выдаёт и не отзывает разрешения в рабочей БД для подгонки под шаблон.
+
+Сборка runtime images и последующая квалификация tools-only installer могут
+иметь разные exact source pins только при проверенном полном diff, который
+не меняет runtime/контракты/миграции. Полный набор immutable images и собственная
+приёмка новой установки остаются обязательными; qualification scripts сами
+по себе не подтверждают установленную функцию и не являются rollback БД.

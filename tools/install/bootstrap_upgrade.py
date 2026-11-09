@@ -30,6 +30,7 @@ FORWARD_CONTRACTS = {
     20261106000100: (20261105000100, 'personal-credentials-', 'validPersonalCredentials'),
     20261107000100: (20261106000100, 'jira-create-fields-', 'validJiraCreateFields'),
     20261108000100: (20261107000100, 'authority-proof-counter-', 'validAuthorityProofCounter'),
+    20261109000100: (20261108000100, 'integration-resource-policies-', 'validIntegrationResourcePolicies'),
 }
 
 
